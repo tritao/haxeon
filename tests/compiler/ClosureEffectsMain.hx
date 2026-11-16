@@ -8,7 +8,8 @@ import compiler.Frontend;
 class ClosureEffectsMain {
 	// A fact is observed through a nullable reference: reading `value.n` needs the null check to still hold. (A nullable
 	// Int would read as 0 without one, as in Haxe.)
-	static final prelude = "class Box { public final n:Int; public function new(n:Int) this.n = n; } class Holder { public var value:Null<Box> = new Box(5); public function new() {} } ";
+	static final prelude =
+		"class Box { public final n:Int; public function new(n:Int) this.n = n; } class Holder { public var value:Null<Box> = new Box(5); public function new() {} } ";
 
 	static function main():Void {
 		expectCompiles("a local function without effects keeps a field fact",
@@ -29,7 +30,8 @@ class ClosureEffectsMain {
 		expectError("a local function that calls an impure function clears the fact",
 			"var h = new Holder(); var poke = function():Void { reset(h); }; if (h.value != null) { poke(); var z:Int = h.value.n; return z; } return 0;",
 			"function reset(h:Holder):Void { h.value = null; } ");
-		expectError("a function value that is not a known local clears the fact", "return run(function():Void {}, new Holder()); ",
+		expectError("a function value that is not a known local clears the fact",
+			"return run(function():Void {}, new Holder()); ",
 			"function run(callback:() -> Void, h:Holder):Int { if (h.value != null) { callback(); var z:Int = h.value.n; return z; } return 0; } ");
 		expectError("a reassigned local function is not a known body",
 			"var h = new Holder(); var f = function():Void {}; f = function():Void { h.value = null; }; if (h.value != null) { f(); var z:Int = h.value.n; return z; } return 0;");

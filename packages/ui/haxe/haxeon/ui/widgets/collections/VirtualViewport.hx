@@ -22,9 +22,9 @@ class VirtualViewport {
 	 */
 	public function new(itemCount:Int, itemExtent:Float, viewportExtent:Float, offset:Float,
 			leadingOverscan:Int = 1, trailingOverscan:Int = 1) {
-		if (itemCount < 0 || itemExtent <= 0.0 || viewportExtent <= 0.0 ||
-			!finite(itemExtent) || !finite(viewportExtent) || !finite(offset) || offset < 0.0 ||
-			leadingOverscan < 0 || trailingOverscan < 0)
+		if (itemCount < 0 || itemExtent <= 0.0 || viewportExtent <= 0.0 || !finite(itemExtent)
+			|| !finite(viewportExtent) || !finite(offset) || offset < 0.0 || leadingOverscan < 0
+			|| trailingOverscan < 0)
 			throw "Virtual viewport requires finite non-negative dimensions and overscan";
 		this.itemCount = itemCount;
 		this.itemExtent = itemExtent;

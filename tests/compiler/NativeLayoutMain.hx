@@ -29,7 +29,8 @@ class NativeLayoutMain {
 				'Float32 descriptor rounding must produce IEEE-754 bits for ${test.value}');
 		expect(compiler.types.NativeTypeDescriptor.float32DefaultBits(3.4028235677973366e38) == null,
 			"Float32 descriptor rounding must reject the overflow midpoint");
-		var source = '@:value @:repr("C") class Pair { public var tag:UInt8; public var value:Int64; public var ratio:Float32; } '
+		var source =
+			'@:value @:repr("C") class Pair { public var tag:UInt8; public var value:Int64; public var ratio:Float32; } '
 			+ '@:value @:repr("C") class Outer { public var first:Pair; public var second:Pair; } '
 			+ '@:value @:repr("C") class LongValue { public var value:CLong; } '
 			+ 'function pairSize():Int return sizeof<Pair>(); '
@@ -44,7 +45,8 @@ class NativeLayoutMain {
 			longValue = requireClass(typed.classes, "LongValue");
 		if (!pair.isNativeValue || pair.isValue || pair.nativeLayouts.length < 2)
 			throw "C-represented values must be distinct typed declarations with per-ABI layouts";
-		switch compiler.types.DeclarationIndex.validated(program).resolve(compiler.syntax.Ast.AstType.NamedType("Pair")) {
+		switch compiler.types.DeclarationIndex.validated(program)
+			.resolve(compiler.syntax.Ast.AstType.NamedType("Pair")) {
 			case CompilerType.TInstance(NominalKind.NativeValue, "Pair", []):
 			case _:
 				throw "native value declarations resolved as managed classes";
@@ -60,7 +62,8 @@ class NativeLayoutMain {
 			&& descriptorField(pairDescriptor.fields, "value").offset == field(pair64.fields, "value").offset
 			&& descriptorField(pairDescriptor.fields, "ratio").offset == field(pair64.fields, "ratio").offset,
 			"descriptor source data must agree with sizeof, alignof, and offsetof layout facts");
-		expect(outerDescriptor.fields.length == 2 && descriptorField(outerDescriptor.fields, "first").fields.length == 3,
+		expect(outerDescriptor.fields.length == 2
+			&& descriptorField(outerDescriptor.fields, "first").fields.length == 3,
 			"descriptor artifact must recursively describe nested records whether queried directly or not");
 		var descriptorBytes = compiler.types.NativeTypeDescriptorCodec.encode(typed.nativeTypeDescriptors),
 			decodedDescriptors = compiler.types.NativeTypeDescriptorCodec.decode(descriptorBytes);
@@ -69,15 +72,19 @@ class NativeLayoutMain {
 			&& descriptorBytes.get(2) == 68
 			&& descriptorBytes.get(3) == compiler.types.NativeTypeDescriptorCodec.FORMAT_VERSION,
 			"descriptor binary artifact must carry its magic and format version");
-		expect(compiler.types.NativeTypeDescriptorCodec.toJson(decodedDescriptors) == compiler.types.NativeTypeDescriptorCodec.toJson(typed.nativeTypeDescriptors),
+		expect(compiler.types.NativeTypeDescriptorCodec.toJson(decodedDescriptors)
+			== compiler.types.NativeTypeDescriptorCodec.toJson(typed.nativeTypeDescriptors),
 			"descriptor binary round-trip must preserve the stable JSON representation");
 		var unsupportedDescriptorVersion = descriptorBytes.sub(0, descriptorBytes.length);
 		unsupportedDescriptorVersion.set(3, compiler.types.NativeTypeDescriptorCodec.FORMAT_VERSION + 1);
-		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(unsupportedDescriptorVersion), "Unsupported");
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(unsupportedDescriptorVersion),
+			"Unsupported");
 		var legacyDescriptorVersion = descriptorBytes.sub(0, descriptorBytes.length);
 		legacyDescriptorVersion.set(3, 1);
-		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(legacyDescriptorVersion), "Unsupported");
-		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(descriptorBytes.sub(0, descriptorBytes.length - 1)), "Truncated");
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(legacyDescriptorVersion),
+			"Unsupported");
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.decode(descriptorBytes.sub(0,
+			descriptorBytes.length - 1)), "Truncated");
 		// portable-abi32 is the Wasm32 C ABI, which aligns 64-bit integers to eight bytes.
 		expect(pair32.size == 24
 			&& pair32.alignment == 8
@@ -122,28 +129,36 @@ class NativeLayoutMain {
 		var targetCompiler = new Compiler();
 		targetCompiler.configure("native-layout-wasm32", "native-layout-wasm32", ["target=wasm32"]);
 		targetCompiler.update("NativeLayoutMain.hx",
-			'@:value @:repr("C") class Pair { public var tag:UInt8; public var value:Int64; public var ratio:Float32; } ' +
-			'function main():Int return sizeof<Pair>();');
+			'@:value @:repr("C") class Pair { public var tag:UInt8; public var value:Int64; public var ratio:Float32; } '
+			+ 'function main():Int return sizeof<Pair>();');
 		var compiled = targetCompiler.compile("NativeLayoutMain"),
 			compiledPair = requireClass(targetCompiler.lastTypedProgram.classes, "Pair");
-		expect(requireLayout(compiledPair.nativeLayouts, "portable-abi32").size == 24 && compiled.module.ints.indexOf(24) >= 0,
+		expect(requireLayout(compiledPair.nativeLayouts, "portable-abi32").size == 24
+			&& compiled.module.ints.indexOf(24) >= 0,
 			"CLI target selection must reach typing and lower layout intrinsics as constants");
 		var hxiTargetCompiler = new Compiler();
-		hxiTargetCompiler.addFfiInterface("native-layout-target.hxi", 'interface target @target("x86_64-pc-windows-msvc") { }');
-		expect(hxiTargetCompiler.nativeLayoutTarget() == "x86_64-pc-windows-msvc", "the registered HXI target must select source-declared C record layouts");
+		hxiTargetCompiler.addFfiInterface("native-layout-target.hxi",
+			'interface target @target("x86_64-pc-windows-msvc") { }');
+		expect(hxiTargetCompiler.nativeLayoutTarget() == "x86_64-pc-windows-msvc",
+			"the registered HXI target must select source-declared C record layouts");
 		hxiTargetCompiler.update("Target.hx",
-			'@:value @:repr("C") class LongRecord { public var value:CLong; } ' + 'function main():Int return sizeof<LongRecord>();');
+			'@:value @:repr("C") class LongRecord { public var value:CLong; } '
+			+ 'function main():Int return sizeof<LongRecord>();');
 		var hxiCompiled = hxiTargetCompiler.compile("Target"),
 			hxiLongRecord = requireClass(hxiTargetCompiler.lastTypedProgram.classes, "LongRecord");
-		expect(requireLayout(hxiLongRecord.nativeLayouts, "x86_64-pc-windows-msvc").size == 4 && hxiCompiled.module.ints.indexOf(4) >= 0,
+		expect(requireLayout(hxiLongRecord.nativeLayouts, "x86_64-pc-windows-msvc").size == 4
+			&& hxiCompiled.module.ints.indexOf(4) >= 0,
 			"the registered HXI target must reach record layout and query constant folding");
 		var cachedLayoutCompiler = new Compiler();
-		cachedLayoutCompiler.configure("native-layout-cached", "native-layout-cached", ["native-abi-target=portable-abi64"]);
-		cachedLayoutCompiler.update("Transform.hx", '@:value @:repr("C") class Transform { public var x:Float; public var y:Float; public var z:Float; }');
+		cachedLayoutCompiler.configure("native-layout-cached", "native-layout-cached",
+			["native-abi-target=portable-abi64"]);
+		cachedLayoutCompiler.update("Transform.hx",
+			'@:value @:repr("C") class Transform { public var x:Float; public var y:Float; public var z:Float; }');
 		var cachedMain = 'class Main { static function main():Int return sizeof<Transform>() == 24 ? 42 : 1; }';
 		cachedLayoutCompiler.update("Main.hx", cachedMain);
 		cachedLayoutCompiler.compile("Main");
-		cachedLayoutCompiler.update("Main.hx", StringTools.replace(cachedMain, "sizeof<Transform>() == 24", "alignof<Transform>() == 8"));
+		cachedLayoutCompiler.update("Main.hx",
+			StringTools.replace(cachedMain, "sizeof<Transform>() == 24", "alignof<Transform>() == 8"));
 		var cachedLayoutCompiled = cachedLayoutCompiler.compile("Main"),
 			cachedTransform = requireClass(cachedLayoutCompiler.lastTypedProgram.classes, "Transform");
 		expect(requireLayout(cachedTransform.nativeLayouts, "portable-abi64").size == 24
@@ -152,7 +167,8 @@ class NativeLayoutMain {
 		var descriptorCompiler = new Compiler();
 		descriptorCompiler.configure("type-info-cache", "type-info-cache", ["native-abi-target=portable-abi64"]);
 		descriptorCompiler.update("Record.hx", "struct Record { public var x:Int; }");
-		descriptorCompiler.update("Main.hx", "class Main { static function main():Int return typeInfo<Record>().hash.length; }");
+		descriptorCompiler.update("Main.hx",
+			"class Main { static function main():Int return typeInfo<Record>().hash.length; }");
 		var firstDescriptorCompile = descriptorCompiler.compile("Main"),
 			firstDescriptorHash = findDescriptorHash(firstDescriptorCompile.module.strings);
 		if (firstDescriptorHash == null)
@@ -162,29 +178,34 @@ class NativeLayoutMain {
 			changedDescriptorHash = findDescriptorHash(changedDescriptorCompile.module.strings);
 		expect(changedDescriptorHash != null && changedDescriptorHash != firstDescriptorHash,
 			'changing a struct schema must change the emitted typeInfo hash: before=$firstDescriptorHash after=$changedDescriptorHash retyped=${changedDescriptorCompile.retyped}');
-		expect(changedDescriptorCompile.retyped.indexOf("Main.main") >= 0, "changing a struct schema must retype callers of typeInfo");
+		expect(changedDescriptorCompile.retyped.indexOf("Main.main") >= 0,
+			"changing a struct schema must retype callers of typeInfo");
 		var descriptorInvalidated = false;
 		for (artifact in changedDescriptorCompile.invalidations)
 			if (artifact.artifact == "Main.main")
 				for (reason in artifact.reasons)
-					if (reason.kind == compiler.semantic.Invalidation.InvalidationKind.StructuralDependency && reason.cause == "Record")
+					if (reason.kind == compiler.semantic.Invalidation.InvalidationKind.StructuralDependency
+						&& reason.cause == "Record")
 						descriptorInvalidated = true;
-		expect(descriptorInvalidated, "changing a struct schema must report the typeInfo layout dependency invalidation");
+		expect(descriptorInvalidated,
+			"changing a struct schema must report the typeInfo layout dependency invalidation");
 		var defaultCompiler = new Compiler();
 		defaultCompiler.configure("descriptor-defaults", "descriptor-defaults", ["native-abi-target=portable-abi64"]);
 		defaultCompiler.update("model/Leaf.hx",
-			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int> = null; " +
-			"public var ratio:Float32 = 0.1; public var unsignedByte:UInt8 = 250; public var signedByte:Int8 = -128; " +
-			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int> = null; "
+			+ "public var ratio:Float32 = 0.1; public var unsignedByte:UInt8 = 250; public var signedByte:Int8 = -128; "
+			+ "public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
 		defaultCompiler.update("model/Root.hx", "package model; struct Root { public var leaf:Leaf; }");
-		defaultCompiler.update("Main.hx", "import model.Root; class Main { static function main():Int return typeInfo<Root>().hash.length; }");
+		defaultCompiler.update("Main.hx",
+			"import model.Root; class Main { static function main():Int return typeInfo<Root>().hash.length; }");
 		defaultCompiler.compile("Main");
 		var defaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
 			defaultLeaf = descriptorField(defaultRoot.fields, "leaf");
 		var defaultJson = compiler.types.NativeTypeDescriptorCodec.toJson([defaultRoot]);
 		expect(defaultJson.indexOf("0.100000001490116119384765625") >= 0,
 			"Float32 descriptor JSON must emit enough decimal digits to preserve the exact binary32 value");
-		expect(defaultLeaf.defaultValue == null, "a nested field without a source initializer must be explicitly absent");
+		expect(defaultLeaf.defaultValue == null,
+			"a nested field without a source initializer must be explicitly absent");
 		var zeroDefault = descriptorField(defaultLeaf.fields, "zero").defaultValue,
 			absentDefault = descriptorField(defaultLeaf.fields, "absent").defaultValue,
 			nullDefault = descriptorField(defaultLeaf.fields, "nullable").defaultValue,
@@ -203,7 +224,8 @@ class NativeLayoutMain {
 			&& Type.enumEq(unsignedByteDefault.value, IntValue(250))
 			&& float32Default != null
 			&& float32Default.type == "Float"
-			&& Type.enumEq(float32Default.value, NativeTypeAnnotationValue.FloatValue(haxe.io.FPHelper.i32ToFloat(0x3DCCCCCD)))
+			&& Type.enumEq(float32Default.value,
+			NativeTypeAnnotationValue.FloatValue(haxe.io.FPHelper.i32ToFloat(0x3DCCCCCD)))
 			&& signedByteDefault != null
 			&& Type.enumEq(signedByteDefault.value, IntValue(-128))
 			&& unsignedWordDefault != null
@@ -211,15 +233,17 @@ class NativeLayoutMain {
 			&& signedWordDefault != null
 			&& Type.enumEq(signedWordDefault.value, IntValue(-32768)),
 			"fixed-width 8-bit and 16-bit integer scalar defaults must preserve their signed and unsigned bounds");
-		var defaultRoundTrip = compiler.types.NativeTypeDescriptorCodec.decode(compiler.types.NativeTypeDescriptorCodec.encode([defaultRoot])),
+		var defaultRoundTrip = compiler.types.NativeTypeDescriptorCodec
+			.decode(compiler.types.NativeTypeDescriptorCodec.encode([defaultRoot])),
 			roundTripLeaf = descriptorField(requireDescriptor(defaultRoundTrip, "model.Root").fields, "leaf");
-		expect(compiler.types.NativeTypeDescriptorCodec.toJson(defaultRoundTrip) == compiler.types.NativeTypeDescriptorCodec.toJson([defaultRoot])
+		expect(compiler.types.NativeTypeDescriptorCodec.toJson(defaultRoundTrip)
+			== compiler.types.NativeTypeDescriptorCodec.toJson([defaultRoot])
 			&& descriptorField(roundTripLeaf.fields, "zero").defaultValue.type == "Int"
 			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "zero").defaultValue.value, IntValue(0))
 			&& descriptorField(roundTripLeaf.fields, "absent").defaultValue == null
 			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "nullable").defaultValue.value, NullValue)
 			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "ratio").defaultValue.value,
-				NativeTypeAnnotationValue.FloatValue(haxe.io.FPHelper.i32ToFloat(0x3DCCCCCD)))
+			NativeTypeAnnotationValue.FloatValue(haxe.io.FPHelper.i32ToFloat(0x3DCCCCCD)))
 			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "unsignedByte").defaultValue.value, IntValue(250))
 			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "signedByte").defaultValue.value, IntValue(-128))
 			&& Type.enumEq(descriptorField(roundTripLeaf.fields, "unsignedWord").defaultValue.value, IntValue(65535))
@@ -238,12 +262,15 @@ class NativeLayoutMain {
 			}
 		Reflect.setField(malformedNarrowDescriptor, "fields", malformedNarrowFields);
 		Reflect.setField(malformedNarrowDescriptor, "hash",
-			compiler.types.NativeTypeDescriptor.contentHash(malformedNarrowDescriptor.type, malformedNarrowDescriptor.name, malformedNarrowDescriptor.type,
-				malformedNarrowDescriptor.sourceKind, malformedNarrowDescriptor.interfaces, malformedNarrowDescriptor.flat,
-				malformedNarrowDescriptor.portable, malformedNarrowDescriptor.size, malformedNarrowDescriptor.alignment,
-				malformedNarrowDescriptor.annotations, malformedNarrowDescriptor.annotationValues, malformedNarrowDescriptor.fields,
-				malformedNarrowDescriptor.arguments));
-		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.encode([cast malformedNarrowDescriptor]), "does not match its semantic type");
+			compiler.types.NativeTypeDescriptor.contentHash(malformedNarrowDescriptor.type,
+			malformedNarrowDescriptor.name, malformedNarrowDescriptor.type,
+			malformedNarrowDescriptor.sourceKind, malformedNarrowDescriptor.interfaces, malformedNarrowDescriptor.flat,
+			malformedNarrowDescriptor.portable, malformedNarrowDescriptor.size, malformedNarrowDescriptor.alignment,
+			malformedNarrowDescriptor.annotations, malformedNarrowDescriptor.annotationValues,
+			malformedNarrowDescriptor.fields,
+			malformedNarrowDescriptor.arguments));
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec
+			.encode([cast malformedNarrowDescriptor]), "does not match its semantic type");
 		var malformedFloat32Descriptor:Dynamic = Reflect.copy(narrowDescriptor),
 			malformedFloat32Fields = narrowDescriptor.fields.copy();
 		for (index in 0...malformedFloat32Fields.length)
@@ -256,51 +283,64 @@ class NativeLayoutMain {
 			}
 		Reflect.setField(malformedFloat32Descriptor, "fields", malformedFloat32Fields);
 		Reflect.setField(malformedFloat32Descriptor, "hash",
-			compiler.types.NativeTypeDescriptor.contentHash(malformedFloat32Descriptor.type, malformedFloat32Descriptor.name, malformedFloat32Descriptor.type,
-				malformedFloat32Descriptor.sourceKind, malformedFloat32Descriptor.interfaces, malformedFloat32Descriptor.flat,
-				malformedFloat32Descriptor.portable, malformedFloat32Descriptor.size, malformedFloat32Descriptor.alignment,
-				malformedFloat32Descriptor.annotations, malformedFloat32Descriptor.annotationValues, malformedFloat32Descriptor.fields,
-				malformedFloat32Descriptor.arguments));
-		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec.encode([cast malformedFloat32Descriptor]),
+			compiler.types.NativeTypeDescriptor.contentHash(malformedFloat32Descriptor.type,
+			malformedFloat32Descriptor.name, malformedFloat32Descriptor.type,
+			malformedFloat32Descriptor.sourceKind, malformedFloat32Descriptor.interfaces,
+			malformedFloat32Descriptor.flat,
+			malformedFloat32Descriptor.portable, malformedFloat32Descriptor.size, malformedFloat32Descriptor.alignment,
+			malformedFloat32Descriptor.annotations, malformedFloat32Descriptor.annotationValues,
+			malformedFloat32Descriptor.fields,
+			malformedFloat32Descriptor.arguments));
+		expectDescriptorCodecError(() -> compiler.types.NativeTypeDescriptorCodec
+			.encode([cast malformedFloat32Descriptor]),
 			"does not match its semantic type");
 		var originalDefaultHash = defaultRoot.hash;
 		defaultCompiler.update("model/Leaf.hx",
-			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int> = null; " +
-			"public var ratio:Float32 = 0.1; public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; " +
-			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int> = null; "
+			+ "public var ratio:Float32 = 0.1; public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; "
+			+ "public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
 		var changedDefaultCompile = defaultCompiler.compile("Main"),
-			changedDefaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
-			changedUnsignedByte = descriptorField(descriptorField(changedDefaultRoot.fields, "leaf").fields, "unsignedByte").defaultValue;
+			changedDefaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors,
+				"model.Root"),
+			changedUnsignedByte = descriptorField(descriptorField(changedDefaultRoot.fields, "leaf").fields,
+				"unsignedByte").defaultValue;
 		expect(changedUnsignedByte != null
 			&& Type.enumEq(changedUnsignedByte.value, IntValue(251))
 			&& changedDefaultRoot.hash != originalDefaultHash,
 			"changing a nested narrow scalar default must change the recursive descriptor value and hash");
-		expect(changedDefaultCompile.retyped.indexOf("Main.main") >= 0, "changing a field default in an imported module must invalidate typeInfo callers");
+		expect(changedDefaultCompile.retyped.indexOf("Main.main") >= 0,
+			"changing a field default in an imported module must invalidate typeInfo callers");
 		defaultCompiler.update("model/Leaf.hx",
-			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int>; " +
-			"public var ratio:Float32 = 0.1; public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; " +
-			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int>; "
+			+ "public var ratio:Float32 = 0.1; public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; "
+			+ "public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
 		var absentDefaultCompile = defaultCompiler.compile("Main"),
 			absentDefaultRoot = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
-			absentNullable = descriptorField(descriptorField(absentDefaultRoot.fields, "leaf").fields, "nullable").defaultValue;
+			absentNullable = descriptorField(descriptorField(absentDefaultRoot.fields, "leaf").fields,
+				"nullable").defaultValue;
 		expect(absentNullable == null && absentDefaultRoot.hash != changedDefaultRoot.hash,
 			"removing an explicit null initializer must produce an absent default and change the nested descriptor hash");
-		expect(absentDefaultCompile.retyped.indexOf("Main.main") >= 0, "removing an imported field default must invalidate typeInfo callers");
+		expect(absentDefaultCompile.retyped.indexOf("Main.main") >= 0,
+			"removing an imported field default must invalidate typeInfo callers");
 		var beforeFloat32Change = absentDefaultRoot.hash;
 		defaultCompiler.update("model/Leaf.hx",
-			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int>; " +
-			"public var ratio:Float32 = 0.2; public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; " +
-			"public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
+			"package model; struct Leaf { public var zero:Int = 0; public var absent:String; public var nullable:Null<Int>; "
+			+ "public var ratio:Float32 = 0.2; public var unsignedByte:UInt8 = 251; public var signedByte:Int8 = -128; "
+			+ "public var unsignedWord:UInt16 = 65535; public var signedWord:Int16 = -32768; }");
 		var changedFloat32Compile = defaultCompiler.compile("Main"),
-			changedFloat32Root = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors, "model.Root"),
-			changedFloat32 = descriptorField(descriptorField(changedFloat32Root.fields, "leaf").fields, "ratio").defaultValue;
+			changedFloat32Root = requireDescriptor(defaultCompiler.lastTypedProgram.nativeTypeDescriptors,
+				"model.Root"),
+			changedFloat32 = descriptorField(descriptorField(changedFloat32Root.fields, "leaf").fields,
+				"ratio").defaultValue;
 		expect(changedFloat32 != null
-			&& Type.enumEq(changedFloat32.value, NativeTypeAnnotationValue.FloatValue(haxe.io.FPHelper.i32ToFloat(0x3E4CCCCD)))
+			&& Type.enumEq(changedFloat32.value,
+			NativeTypeAnnotationValue.FloatValue(haxe.io.FPHelper.i32ToFloat(0x3E4CCCCD)))
 			&& changedFloat32Root.hash != beforeFloat32Change
 			&& changedFloat32Compile.retyped.indexOf("Main.main") >= 0,
 			"changing a nested Float32 default must round to its declared precision and invalidate descriptor callers");
 		if ([
-			for (object in compiler.ir.IrProgramAssembler.objectsFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed))
+			for (object in compiler.ir.IrProgramAssembler.objectsFrom(compiler.ir.IrGenerator.forProgram(typed,
+				compiler.ir.TargetProfile.portable), typed))
 				if (object.name == "Pair" || object.name == "Outer") object
 		].length != 0)
 			throw "native value records must not be emitted as HashLink objects or HSTRUCT values";
@@ -325,36 +365,49 @@ class NativeLayoutMain {
 			}
 		}
 		expectError('@:value @:repr("C") class Bad { public var label:String; }', "not an unmanaged native field type");
-		expectError('@:value @:repr("C") class Bad { public var values:Array<Int>; }', "not an unmanaged native field type");
+		expectError('@:value @:repr("C") class Bad { public var values:Array<Int>; }',
+			"not an unmanaged native field type");
 		expectError('@:value @:repr("C") class Bad { public function new() {} }', "instance methods or constructors");
 		expectError('@:value @:repr("C") class Bad { public var self:Bad; }', "by-value layout cycle");
 		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function consume(value:Pair):Void {}',
 			"cannot be passed or stored as a Haxe runtime value yet");
 		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function make():Pair return new Pair();',
 			"cannot be returned as a Haxe runtime value yet");
-		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function bad():Int return offsetof<Pair>("missing");', 'has no field "missing"');
+		expectError('@:value @:repr("C") class Pair { public var x:Int32; } function bad():Int return offsetof<Pair>("missing");',
+			'has no field "missing"');
 		expectError('function bad():Int return sizeof<String>();', "no fixed native ABI layout");
-		expectError('function bad():Int return offsetof<Int32>("x");', "requires a flat struct or native value record type");
-		expectError('function bad():Int return typeInfo<String>().size;', "typeInfo requires a struct or legacy C value record");
-		expectError('struct Bad { public var count:Int = next(); } function next():Int return 1;', "executable and computed defaults are unsupported");
-		expectError('struct Bad { public var value:UInt8 = 256; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
-		expectError('struct Bad { public var value:UInt8 = -1; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
-		expectError('struct Bad { public var value:Int8 = 128; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
-		expectError('struct Bad { public var value:UInt16 = 65536; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
-		expectError('struct Bad { public var value:Int16 = -32769; } function main():Int return typeInfo<Bad>().hash.length;', "outside the range");
-		expectError('struct Bad { public var value:Float32 = 3.5e38; } function main():Int return typeInfo<Bad>().hash.length;', "unsupported default");
+		expectError('function bad():Int return offsetof<Int32>("x");',
+			"requires a flat struct or native value record type");
+		expectError('function bad():Int return typeInfo<String>().size;',
+			"typeInfo requires a struct or legacy C value record");
+		expectError('struct Bad { public var count:Int = next(); } function next():Int return 1;',
+			"executable and computed defaults are unsupported");
+		expectError('struct Bad { public var value:UInt8 = 256; } function main():Int return typeInfo<Bad>().hash.length;',
+			"outside the range");
+		expectError('struct Bad { public var value:UInt8 = -1; } function main():Int return typeInfo<Bad>().hash.length;',
+			"outside the range");
+		expectError('struct Bad { public var value:Int8 = 128; } function main():Int return typeInfo<Bad>().hash.length;',
+			"outside the range");
+		expectError('struct Bad { public var value:UInt16 = 65536; } function main():Int return typeInfo<Bad>().hash.length;',
+			"outside the range");
+		expectError('struct Bad { public var value:Int16 = -32769; } function main():Int return typeInfo<Bad>().hash.length;',
+			"outside the range");
+		expectError('struct Bad { public var value:Float32 = 3.5e38; } function main():Int return typeInfo<Bad>().hash.length;',
+			"unsupported default");
 		expectError('class Managed { public var x:Int32; }', "only appear in value structs");
 		expectError('enum Managed { Value(value:Int32); }', "cannot be stored in a Haxe enum yet");
 	}
 
-	static function requireClass(classes:Array<compiler.types.TypedAst.TypedClass>, name:String):compiler.types.TypedAst.TypedClass {
+	static function requireClass(classes:Array<compiler.types.TypedAst.TypedClass>,
+			name:String):compiler.types.TypedAst.TypedClass {
 		for (declaration in classes)
 			if (declaration.name == name)
 				return declaration;
 		throw 'Missing typed class "$name"';
 	}
 
-	static function requireLayout(layouts:Array<compiler.types.TypedAst.TypedNativeLayout>, target:String):compiler.types.TypedAst.TypedNativeLayout {
+	static function requireLayout(layouts:Array<compiler.types.TypedAst.TypedNativeLayout>,
+			target:String):compiler.types.TypedAst.TypedNativeLayout {
 		for (layout in layouts)
 			if (layout.target == target)
 				return layout;
@@ -385,7 +438,8 @@ class NativeLayoutMain {
 		return null;
 	}
 
-	static function field(fields:Array<compiler.types.TypedAst.TypedNativeFieldLayout>, name:String):compiler.types.TypedAst.TypedNativeFieldLayout {
+	static function field(fields:Array<compiler.types.TypedAst.TypedNativeFieldLayout>,
+			name:String):compiler.types.TypedAst.TypedNativeFieldLayout {
 		for (layout in fields)
 			if (layout.name == name)
 				return layout;
@@ -412,7 +466,8 @@ class NativeLayoutMain {
 
 	static function expectError(source:String, expected:String):Void {
 		try {
-			Typer.typeLibrary(new Parser(new Lexer(new SourceFile("invalid-native-layout.hx", source)).tokenize()).parseProgram());
+			Typer.typeLibrary(new Parser(new Lexer(new SourceFile("invalid-native-layout.hx", source)).tokenize())
+				.parseProgram());
 			throw 'expected native layout error containing "$expected"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.message.indexOf(expected) < 0)

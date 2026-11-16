@@ -16,8 +16,10 @@ class InvalidationMain {
 
 		compiler.update("Leaf.hx", "function value(?offset:Int = 0):Int return 42 + offset;");
 		var changed = compiler.compile("Main");
-		expect(changed.metrics.invalidatedArtifacts == changed.invalidations.length, "invalidation artifact metric disagreed with details");
-		expect(changed.metrics.invalidationReasons >= changed.metrics.invalidatedArtifacts, "invalidation reason metric was incomplete");
+		expect(changed.metrics.invalidatedArtifacts == changed.invalidations.length,
+			"invalidation artifact metric disagreed with details");
+		expect(changed.metrics.invalidationReasons >= changed.metrics.invalidatedArtifacts,
+			"invalidation reason metric was incomplete");
 		expectReason(changed.invalidations, "Leaf.value", SignatureChanged, "Leaf.value");
 		expectReason(changed.invalidations, "Middle.value", DependencySignature, "Leaf.value");
 		expectReason(changed.invalidations, "main", DependencySignature, "Middle.value");
@@ -70,15 +72,18 @@ class InvalidationMain {
 		closures.compile("Main");
 		closures.update("Main.hx", closureSource("v * a", 1));
 		var lambdaEdit = closures.compile("Main");
-		expect(Lambdas.among(lambdaEdit.retyped, "Main.run") == 1, "editing a function retypes the lambda inside it: " + lambdaEdit.retyped);
+		expect(Lambdas.among(lambdaEdit.retyped, "Main.run") == 1,
+			"editing a function retypes the lambda inside it: " + lambdaEdit.retyped);
 		closures.update("Main.hx", closureSource("v * a", 2));
 		var otherEdit = closures.compile("Main");
-		expect(Lambdas.among(otherEdit.retyped, "Main.run") == 0, "editing another function leaves the lambda alone: " + otherEdit.retyped);
+		expect(Lambdas.among(otherEdit.retyped, "Main.run") == 0,
+			"editing another function leaves the lambda alone: " + otherEdit.retyped);
 
 		Sys.println("PASS: structured invalidation reasons");
 	}
 
-	static function expectReason(invalidations:Array<InvalidatedArtifact>, artifact:String, kind:InvalidationKind, cause:String):Void {
+	static function expectReason(invalidations:Array<InvalidatedArtifact>, artifact:String, kind:InvalidationKind,
+			cause:String):Void {
 		for (entry in invalidations)
 			if (entry.artifact == artifact)
 				for (reason in entry.reasons)

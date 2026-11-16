@@ -1,2 +1,5 @@
 import haxeon.ui.LayoutPositioning;
-function main():Int { var state:Int = LayoutPositioning.Absolute; return 42; }
+function main():Int {
+	var state:Int = LayoutPositioning.Absolute;
+	return 42;
+}

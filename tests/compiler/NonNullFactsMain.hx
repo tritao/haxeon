@@ -11,7 +11,7 @@ class NonNullFactsMain {
 		if (!value)
 			throw message;
 
-	static function check(b:IrBuilder, receiver:IrValue):{block:Int, index:Int} {
+	static function check(b:IrBuilder, receiver:IrValue): {block: Int, index: Int} {
 		b.call(IrReceiverCheck.NAME, [receiver], Void);
 		return {block: b.currentBlock().id, index: b.currentBlock().instructions.length - 1};
 	}
@@ -89,7 +89,8 @@ class NonNullFactsMain {
 			var phiCheck = check(b, value);
 			b.returnValue(b.constInt(42));
 			facts = new IrNonNullFacts(new IrFunction("phi", b.arguments, I32, b.blocks, Ordinary));
-			expect(facts.has(phiCheck.block, phiCheck.index) == bothFresh, "phi requires a non-null value on every incoming edge");
+			expect(facts.has(phiCheck.block, phiCheck.index) == bothFresh,
+				"phi requires a non-null value on every incoming edge");
 		}
 
 		b = new IrBuilder();
@@ -122,7 +123,8 @@ class NonNullFactsMain {
 		var freshInHandler = check(b, allocatedValue);
 		b.returnValue(b.constInt(42));
 		facts = new IrNonNullFacts(new IrFunction("freshHandler", b.arguments, I32, b.blocks, Ordinary));
-		expect(facts.has(freshInHandler.block, freshInHandler.index), "fresh SSA values remain non-null across exception regions");
+		expect(facts.has(freshInHandler.block, freshInHandler.index),
+			"fresh SSA values remain non-null across exception regions");
 
 		b = new IrBuilder();
 		receiver = b.argument("receiver", Obj("Box"));
@@ -164,8 +166,9 @@ class NonNullFactsMain {
 			block = new IrBlock(4096),
 			provenance = SourceProvenance.generated("sparse-identities");
 		for (instruction in [
-			            new Located(NewObject(fresh, "Box"), provenance),            new Located(FieldGet(first, fresh, "value"), provenance),
-			new Located(FieldGet(second, receiver, "value"), provenance), new Located(Call(done, IrReceiverCheck.NAME, [receiver]), provenance)
+			new Located(NewObject(fresh, "Box"), provenance), new Located(FieldGet(first, fresh, "value"), provenance),
+			new Located(FieldGet(second, receiver, "value"), provenance),
+			new Located(Call(done, IrReceiverCheck.NAME, [receiver]), provenance)
 		])
 			block.instructions.push(instruction);
 		block.terminator = new Located(Return(second), provenance);
@@ -173,7 +176,8 @@ class NonNullFactsMain {
 		for (checked in [false, true]) {
 			var facts = new IrNonNullFacts(fn, checked);
 			expect(facts.has(block.id, 1), "sparse fresh identity stays non-null");
-			expect(!facts.has(block.id, 2) && facts.has(block.id, 3) == checked, "sparse receiver facts follow the checked target policy");
+			expect(!facts.has(block.id, 2) && facts.has(block.id, 3) == checked,
+				"sparse receiver facts follow the checked target policy");
 		}
 	}
 
@@ -206,11 +210,13 @@ class NonNullFactsMain {
 				before = compiler.compilation.AllocationMeter.sample();
 			var facts = new IrNonNullFacts(fn, checked),
 				bytes = compiler.compilation.AllocationMeter.sample().bytes - before.bytes;
-			expect(bytes > 0 && bytes < 8 * 1024 * 1024, 'Non-null fact propagation allocated $bytes bytes for 128 blocks');
+			expect(bytes > 0 && bytes < 8 * 1024 * 1024,
+				'Non-null fact propagation allocated $bytes bytes for 128 blocks');
 			for (i in 0...freshReads.length) {
 				var freshRead = freshReads[i], unknownRead = unknownReads[i];
 				expect(facts.has(freshRead.block, freshRead.index), "fresh phi facts cross word and block boundaries");
-				expect(facts.has(unknownRead.block, unknownRead.index) == (checked && i > 0), "unknown receiver facts require an earlier checked dereference");
+				expect(facts.has(unknownRead.block, unknownRead.index) == (checked && i > 0),
+					"unknown receiver facts require an earlier checked dereference");
 			}
 		}
 	}

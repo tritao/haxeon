@@ -37,7 +37,8 @@ class MessagePackFrameReader {
 	public function feed(bytes:Bytes, offset:Int, length:Int, budget:Int = 65536):Int {
 		if (failed)
 			throw new MessagePackError("Frame reader failed; start a fresh connection");
-		if (bytes == null || offset < 0 || length < 0 || offset > bytes.length || length > bytes.length - offset || budget < 0)
+		if (bytes == null || offset < 0 || length < 0 || offset > bytes.length || length > bytes.length - offset
+			|| budget < 0)
 			throw new MessagePackError("Invalid frame input range");
 		var limit = Std.int(Math.min(length, budget));
 		var consumed = 0;

@@ -64,7 +64,8 @@ class IrInlineEnumCaseAccess {
 		return readLeaf(builder, value, slot(entry, [Std.string(index)], false, true));
 	}
 
-	function write(builder:IrBuilder, target:IrValue, entry:IrInlineEnumCaseShape, path:Array<String>, value:IrValue):Void {
+	function write(builder:IrBuilder, target:IrValue, entry:IrInlineEnumCaseShape, path:Array<String>,
+			value:IrValue):Void {
 		switch value.type {
 			case Nullable(inner) if (isValue(inner) || primitive(inner)):
 				var absent = builder.createBlock(),
@@ -87,13 +88,15 @@ class IrInlineEnumCaseAccess {
 			case Obj(name) if (isValue(value.type)):
 				var object = requireObject(name);
 				for (field in object.fields)
-					write(builder, target, entry, path.concat([field.name]), builder.fieldGet(value, field.name, field.type));
+					write(builder, target, entry, path.concat([field.name]),
+						builder.fieldGet(value, field.name, field.type));
 			default:
 				writeLeaf(builder, target, slot(entry, path, false, false), value);
 		}
 	}
 
-	function read(builder:IrBuilder, source:IrValue, entry:IrInlineEnumCaseShape, path:Array<String>, type:IrType):IrValue {
+	function read(builder:IrBuilder, source:IrValue, entry:IrInlineEnumCaseShape, path:Array<String>,
+			type:IrType):IrValue {
 		return switch type {
 			case Nullable(inner) if (isValue(inner) || primitive(inner)):
 				var flag = words.read(builder, source, slot(entry, path, true, false));
@@ -106,7 +109,8 @@ class IrInlineEnumCaseAccess {
 					absentBlock = builder.currentBlock();
 				builder.jump(done);
 				builder.select(present);
-				var payload = primitive(inner) ? readLeaf(builder, source, slot(entry, path, false, true)) : read(builder, source, entry, path, inner);
+				var payload = primitive(inner) ? readLeaf(builder, source,
+					slot(entry, path, false, true)) : read(builder, source, entry, path, inner);
 				var wrapped = builder.toDyn(payload, type),
 					presentBlock = builder.currentBlock();
 				builder.jump(done);
@@ -115,7 +119,8 @@ class IrInlineEnumCaseAccess {
 			case Obj(name) if (isValue(type)):
 				var result = builder.valueInit(name);
 				for (field in requireObject(name).fields)
-					builder.fieldSet(result, field.name, read(builder, source, entry, path.concat([field.name]), field.type));
+					builder.fieldSet(result, field.name,
+						read(builder, source, entry, path.concat([field.name]), field.type));
 				result;
 			default: readLeaf(builder, source, slot(entry, path, false, false));
 		};
@@ -129,7 +134,8 @@ class IrInlineEnumCaseAccess {
 	}
 
 	function readLeaf(builder:IrBuilder, source:IrValue, leaf:IrValueLaneSlot):IrValue
-		return leaf.isReference ? IrInlineEnumReferenceAccess.read(builder, source, leaf.index, leaf.type) : words.read(builder, source, leaf);
+		return leaf.isReference ? IrInlineEnumReferenceAccess.read(builder, source, leaf.index,
+			leaf.type) : words.read(builder, source, leaf);
 
 	function getCase(index:Int):IrInlineEnumCaseShape {
 		if (index < 0 || index >= shape.cases.length)
@@ -137,9 +143,11 @@ class IrInlineEnumCaseAccess {
 		return shape.cases[index];
 	}
 
-	static function slot(entry:IrInlineEnumCaseShape, path:Array<String>, presence:Bool, nullablePayload:Bool):IrValueLaneSlot {
+	static function slot(entry:IrInlineEnumCaseShape, path:Array<String>, presence:Bool,
+			nullablePayload:Bool):IrValueLaneSlot {
 		for (candidate in entry.payload.slots) {
-			if (candidate.isPresence != presence || candidate.nullablePayload != nullablePayload || candidate.path.length != path.length)
+			if (candidate.isPresence != presence || candidate.nullablePayload != nullablePayload
+				|| candidate.path.length != path.length)
 				continue;
 			var same = true;
 			for (index in 0...path.length)
@@ -155,7 +163,8 @@ class IrInlineEnumCaseAccess {
 
 	function isValue(type:IrType):Bool
 		return switch type {
-			case Obj(name): var object = objects.get(name); object != null && object.isValue;
+			case Obj(name): var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 

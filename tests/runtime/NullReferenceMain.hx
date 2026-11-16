@@ -26,7 +26,8 @@ class NullReferenceMain {
 			var rejectedPrimitive = false;
 			try {
 				var invalid = configuredCompiler();
-				invalid.update("Invalid.hx", 'function invalid():$primitive return null; function main():Int return 0;');
+				invalid.update("Invalid.hx",
+					'function invalid():$primitive return null; function main():Int return 0;');
 				invalid.compile("Invalid");
 			} catch (_:CompileError) {
 				rejectedPrimitive = true;

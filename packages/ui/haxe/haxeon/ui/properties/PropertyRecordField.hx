@@ -8,7 +8,9 @@ class PropertyRecordField {
 	public final optional:Bool;
 	final initialJson:String;
 	public function new(name:String, structure:PropertyStructure, optional:Bool = false, initial:Dynamic = null) {
-		this.name = name; this.structure = structure; this.optional = optional;
+		this.name = name;
+		this.structure = structure;
+		this.optional = optional;
 		initialJson = haxe.Json.stringify(initial);
 	}
 	public function initialValue():Dynamic return haxe.Json.parse(initialJson);

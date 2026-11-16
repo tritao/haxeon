@@ -33,7 +33,8 @@ class IrClosedEnumTagAbi {
 			case Array(inner) if (changes(inner)): Array(physical(inner));
 			case Iterator(inner) if (changes(inner)): Iterator(physical(inner));
 			case Nullable(inner) if (changes(inner)): Nullable(physical(inner));
-			case Function(args, result) if (changes(type)): Function([for (arg in args) physical(arg)], physical(result));
+			case Function(args, result) if (changes(type)): Function([for (arg in args) physical(arg)],
+				physical(result));
 			default: type;
 		};
 
@@ -100,7 +101,8 @@ class IrClosedEnumTagAbi {
 					switch located.value {
 						case Intrinsic(_, operation, _):
 							switch operation {
-								case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type),
+								case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type),
+									InlineEnumBox(type),
 									InlineEnumUnbox(type): escape(type);
 							}
 						case TypeValue(out, type):
@@ -122,9 +124,9 @@ class IrClosedEnumTagAbi {
 								if (target != null)
 									for (index in 0...args.length)
 										if (index < target.arguments.length && switch target.arguments[index].type {
-												case Dyn: true;
-												default: false;
-											})
+											case Dyn: true;
+											default: false;
+										})
 											escape(args[index].type);
 							}
 
@@ -136,16 +138,23 @@ class IrClosedEnumTagAbi {
 						case CallClosure(_, closure, args):
 							switch closure.type {
 								case Dyn: for (a in args)
-										escape(a.type);
+									escape(a.type);
 								default:
 							}
-						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), StaticDataAddress(_, _), PointerOffset(_, _, _),
-							MemoryLoad(_, _, _, _), MemoryStore(_, _, _), ConstBool(_, _), ConstNull(_), IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _),
-							FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _), GlobalSet(_, _), Add(_, _, _), Sub(_, _, _),
-							Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _),
-							ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _), StaticClosure(_, _),
-							InstanceClosure(_, _, _), Upcast(_, _), ClassId(_, _), MethodCall(_, _, _, _, _), NewObject(_, _), ValueInit(_),
-							FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), IteratorNew(_, _),
+						case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _),
+							StaticDataAddress(_, _), PointerOffset(_, _, _),
+							MemoryLoad(_, _, _, _), MemoryStore(_, _, _), ConstBool(_, _), ConstNull(_),
+							IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _),
+							FloatToFloat(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), GlobalGet(_, _),
+							GlobalSet(_, _), Add(_, _, _), Sub(_, _, _),
+							Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitXor(_, _, _), BitOr(_, _, _),
+							ShiftLeft(_, _, _),
+							ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
+							Equal(_, _, _), StaticClosure(_, _),
+							InstanceClosure(_, _, _), Upcast(_, _), ClassId(_, _), MethodCall(_, _, _, _, _),
+							NewObject(_, _), ValueInit(_),
+							FieldGet(_, _, _), FieldSet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
+							IteratorNew(_, _),
 							IteratorHasNext(_, _), IteratorNext(_, _), MakeEnum(_, _, _, _), EnumField(_, _, _, _):
 					}
 				if (block.terminator != null)
@@ -178,58 +187,48 @@ class IrClosedEnumTagAbi {
 		result.cNatives = [for (native in program.cNatives) projectCNative(native)];
 		result.functions = [for (fn in program.functions) projectFunction(fn)];
 		// Only the selected tag carriers change; native placement and optional payload widths stay intact.
-		result.objects = [
-			for (object in program.objects)
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					fields: [
-						for (field in object.fields)
-							{
-								name: field.name,
-								type: physical(field.type),
-								nativeLayout: field.nativeLayout,
-								scalarStorage: field.scalarStorage,
-								nullableScalarStorage: field.nullableScalarStorage
-							}
-					],
-					methods: object.methods
-				}
-		];
-		result.interfaces = [
-			for (entry in program.interfaces)
-				{
-					name: entry.name,
-					bases: entry.bases,
-					methods: [
-						for (method in entry.methods)
-							{
-								name: method.name,
-								arguments: [for (argument in method.arguments) physical(argument)],
-								result: physical(method.result)
-							}
-					]
-				}
-		];
-		result.enums = [
-			for (entry in program.enums)
-				{
-					name: entry.name,
-					isRecursive: entry.isRecursive,
-					inlineStorage: entry.inlineStorage,
-					cases: [
-						for (enumCase in entry.cases)
-							{name: enumCase.name, params: [for (type in enumCase.params) physical(type)]}
-					]
-				}
-		];
-		result.staticFields = [
-			for (field in program.staticFields)
-				{name: field.name, type: physical(field.type)}
-		];
+		result.objects = [for (object in program.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					fields:[for (field in object.fields)
+					{
+						name:field.name,
+							type:physical(field.type),
+							nativeLayout:field.nativeLayout,
+							scalarStorage:field.scalarStorage,
+							nullableScalarStorage:field.nullableScalarStorage
+					}],
+						methods:object.methods
+			}];
+		result.interfaces = [for (entry in program.interfaces)
+			{
+				name:entry.name,
+					bases:entry.bases,
+					methods:[for (method in entry.methods)
+					{
+						name:method.name,
+							arguments:[for (argument in method.arguments) physical(argument)],
+							result:physical(method.result)
+					}]
+			}];
+		result.enums = [for (entry in program.enums)
+			{
+				name:entry.name,
+					isRecursive:entry.isRecursive,
+					inlineStorage:entry.inlineStorage,
+					cases:[for (enumCase in entry.cases)
+					{
+						name:enumCase.name, params:[for (type in enumCase.params) physical(type)]
+					}]
+			}];
+		result.staticFields = [for (field in program.staticFields)
+			{
+				name:field.name, type:physical(field.type)
+			}];
 		result.positionalFingerprints = program.positionalFingerprints;
 		result.parameterDefaults = program.parameterDefaults;
 		result.positionalPlaces = program.positionalPlaces;
@@ -259,10 +258,9 @@ class IrClosedEnumTagAbi {
 					case MakeEnum(output, name, constructor, []) if (closed.exists(name)):
 						instruction = ConstInt(output, constructor + 1);
 					case ConstNull(output) if (switch output.type {
-							case I32: true;
-							default: false;
-						}):
-						instruction = ConstInt(output, 0);
+						case I32: true;
+						default: false;
+					}): instruction = ConstInt(output, 0);
 					case TypeValue(output, type) if (changes(type)):
 						instruction = TypeValue(output, physical(type));
 					default:
@@ -281,18 +279,17 @@ class IrClosedEnumTagAbi {
 				}, terminator.provenance);
 			blocks.push(copy);
 		}
-		var bindings:Array<IrDebugBinding> = [
-			for (binding in fn.debugBindings)
-				{
-					identity: binding.identity,
-					name: binding.name,
-					value: use(binding.value),
-					path: binding.path,
-					scopeStart: binding.scopeStart,
-					scopeEnd: binding.scopeEnd
-				}
-		];
-		return new IrFunction(fn.name, arguments, physical(fn.result), blocks, fn.kind, bindings, fn.inlineHint, fn.retention);
+		var bindings:Array<IrDebugBinding> = [for (binding in fn.debugBindings)
+			{
+				identity:binding.identity,
+					name:binding.name,
+					value:use(binding.value),
+					path:binding.path,
+					scopeStart:binding.scopeStart,
+					scopeEnd:binding.scopeEnd
+			}];
+		return new IrFunction(fn.name, arguments, physical(fn.result), blocks, fn.kind, bindings, fn.inlineHint,
+			fn.retention);
 	}
 
 	function projectNative(native:IrNative):IrNative

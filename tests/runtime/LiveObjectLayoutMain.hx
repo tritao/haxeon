@@ -20,19 +20,25 @@ class LiveObjectLayoutMain {
 		addsFields();
 		readdsFields();
 		migratesWhileThreadsRun();
-		refuses("a field changes type", edited(), edit("ticks:Int = 100", "ticks:Float = 100.0", "ticks++;", "ticks += 1.0;", "return total + ticks;",
+		refuses("a field changes type", edited(),
+			edit("ticks:Int = 100", "ticks:Float = 100.0", "ticks++;", "ticks += 1.0;", "return total + ticks;",
 			"return total + Std.int(ticks);"), ObjectFieldTypeChanged("App.ticks"));
-		refuses("an added method overrides another added one", original(), added("Base", "public function label():Int return 1;")
-			.split("class Widget extends Base {\n").join("class Widget extends Base {\n  override public function label():Int return 2;\n"),
+		refuses("an added method overrides another added one", original(),
+			added("Base", "public function label():Int return 1;")
+			.split("class Widget extends Base {\n")
+			.join("class Widget extends Base {\n  override public function label():Int return 2;\n"),
 			ObjectMethodDispatchChanged("Base.label"));
-		refuses("an added method overrides an existing one", original(), added("Widget", "override public function grow():Int return 7;"),
+		refuses("an added method overrides an existing one", original(),
+			added("Widget", "override public function grow():Int return 7;"),
 			ObjectMethodDispatchChanged("Widget.grow"));
 		refuses("toString is added", original(), added("Model", "public function toString():String return \"model\";"),
 			ObjectMethodDispatchChanged("Model.__string"));
-		refuses("an override is removed", original(), edited().split("  override public function shrink():Int return 5;\n").join(""),
+		refuses("an override is removed", original(),
+			edited().split("  override public function shrink():Int return 5;\n").join(""),
 			ObjectMethodDispatchChanged("Widget.shrink"));
 		BackendAssembly.liveFieldReserve = 1;
-		refuses("more fields are added than the class reserves", original(), added("Model", "var first:Int = 1;\n  var second:Int = 2;"),
+		refuses("more fields are added than the class reserves", original(),
+			added("Model", "var first:Int = 1;\n  var second:Int = 2;"),
 			ObjectFieldReserveExhausted("Model"));
 		BackendAssembly.liveFieldReserve = 4;
 		Sys.println("PASS: added and removed fields patch running objects, and the edits a patch cannot make reload with their reasons");
@@ -105,8 +111,8 @@ class LiveObjectLayoutMain {
 			.join("  override public function describe():Int return id * 100 + size + tag.length;\n")
 			.split("  var count:Int = 0;\n")
 			.join("  var count:Int = 0;\n  var saved:Array<String> = [\"a\", \"b\"];\n  var bonus:Int;\n  var order:Int->Int = twice;\n"
-				+ "  static function twice(value:Int):Int return value * 2;\n"
-				+ "  public function savedCount():Int return order(saved.length) + bonus;\n")
+			+ "  static function twice(value:Int):Int return value * 2;\n"
+			+ "  public function savedCount():Int return order(saved.length) + bonus;\n")
 			.split("    count++;\n    return count;\n")
 			.join("    count++;\n    bonus += 10;\n    return count + savedCount();\n")
 			.split("  public var onTick:Null<Void->Int> = null;\n")
@@ -120,7 +126,8 @@ class LiveObjectLayoutMain {
 	static function counted(members:String):String
 		return edited().split("class App {\n")
 			.join("class Counter {\n  var n:Int = 0;\n" + members + "  public function new() {}\n"
-				+ "  public function next():Int {\n    n += " + (members == "" ? "1" : "step") + ";\n    return n;\n  }\n}\nclass App {\n")
+			+ "  public function next():Int {\n    n += " + (members == "" ? "1" : "step")
+			+ ";\n    return n;\n  }\n}\nclass App {\n")
 			.split("  var ticks:Int = 100;\n")
 			.join("  var ticks:Int = 100;\n  var counter:Counter = new Counter();\n")
 			.split("    return total + ticks;\n")
@@ -177,8 +184,10 @@ class LiveObjectLayoutMain {
 		revision = patch(compiler, live, revision, counted(""), "adding a class and a field holding one");
 		expect("the tick with the added class", Runtime.callInt(live, main), 7 + 4 + 40 + 113 + 105 + 1);
 		// The class the last patch appended has reserved slots too.
-		revision = patch(compiler, live, revision, counted("  var step:Int = 5;\n"), "adding a field to an appended class");
-		expect("the tick after the appended class gained a field", Runtime.callInt(live, main), 8 + 4 + 50 + 113 + 106 + 6);
+		revision = patch(compiler, live, revision, counted("  var step:Int = 5;\n"),
+			"adding a field to an appended class");
+		expect("the tick after the appended class gained a field", Runtime.callInt(live, main),
+			8 + 4 + 50 + 113 + 106 + 6);
 		Runtime.dispose(live);
 	}
 
@@ -194,7 +203,8 @@ class LiveObjectLayoutMain {
 			+ "  public static var first:Null<Box> = null;\n"
 			+ "  public static var second:Null<Box> = null;\n"
 			+ "}\n"
-			+ "function main():Int {\n  if (Boxes.first == null) Boxes.first = new Box();\n  var box:Box = Boxes.first;\n" + main + "}\n"
+			+ "function main():Int {\n  if (Boxes.first == null) Boxes.first = new Box();\n  var box:Box = Boxes.first;\n"
+			+ main + "}\n"
 			+ "function later():Int {\n" + later + "}\n";
 
 	/**
@@ -204,7 +214,8 @@ class LiveObjectLayoutMain {
 	 */
 	static function readdsFields():Void {
 		var withItems = "  box.items.push(0);\n  return box.items.length;\n",
-			reading = "  var box:Null<Box> = Boxes.second;\n  return box == null ? -1 : box.items == null ? -2 : box.items.length;\n";
+			reading =
+				"  var box:Null<Box> = Boxes.second;\n  return box == null ? -1 : box.items == null ? -2 : box.items.length;\n";
 		var compiler = compiler();
 		compiler.update("Main.hx", boxes(true, false, withItems, "  return 0;\n"));
 		var build = compiler.compile("Main"),
@@ -214,7 +225,8 @@ class LiveObjectLayoutMain {
 		expect("the first push", Runtime.callInt(live, main), 2);
 		expect("the second push", Runtime.callInt(live, main), 3);
 		var revision = patch(compiler, live, build.revision,
-			boxes(false, false, "  return 0;\n", "  if (Boxes.second == null) Boxes.second = new Box();\n  return 0;\n"), "removing a field");
+			boxes(false, false, "  return 0;\n",
+			"  if (Boxes.second == null) Boxes.second = new Box();\n  return 0;\n"), "removing a field");
 		expect("making a box without the field", Runtime.callInt(live, later), 0);
 		revision = patch(compiler, live, revision, boxes(true, false, withItems, reading), "adding the field back");
 		expect("the old box after its field came back", Runtime.callInt(live, main), 2);
@@ -224,7 +236,8 @@ class LiveObjectLayoutMain {
 		if (failing.requiresReload || failing.patchBytes == null)
 			throw "adding a field whose initializer throws required a reload";
 		try
-			Runtime.patchSet(live, new PatchSet(revision, failing.revision, failing.patchBytes, failing.changedFunctions))
+			Runtime.patchSet(live,
+				new PatchSet(revision, failing.revision, failing.patchBytes, failing.changedFunctions))
 		catch (error:RuntimeError) {
 			status = error.status;
 			message = error.message;
@@ -246,18 +259,19 @@ class LiveObjectLayoutMain {
 	static function migratesWhileThreadsRun():Void {
 		function source(field:String, check:String):String
 			return "import sys.thread.Thread;\n"
-				+ "class Item {\n  public var value:Int;\n" + field + "  public function new(value:Int) this.value = value;\n"
+				+ "class Item {\n  public var value:Int;\n" + field
+				+ "  public function new(value:Int) this.value = value;\n"
 				+ "  public function check():Int " + check + "\n}\n"
 				+ "class Work {\n  public static var failure = \"\";\n  public static var stop = false;\n  public static var done = false;\n  public static var unset = 0;\n  public static var unsetMade = 0;\n"
-				// The Int array literal makes the module import what the added field's initializer needs.
-				+ "  public static var rounds = 0;\n  public static var kept:Array<Item> = [];\n  public static var lasting:Array<Item> = [];\n"
-				// The worker's loop never returns, so it reaches the patched check through a closure, whose slot the patch redirects.
-				+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n  public static var make:Int->Item = i -> new Item(i);\n}\n"
-				// `lasting` lives through every patch, so the worker checks objects made before it while the migration runs;
-				// `kept` is replaced every round, so collections free objects the migration found.
-				+ "function start():Int {\n  Work.lasting = [for (i in 0...3000) new Item(i)];\n"
-				// A worker that throws records why and stops, so the test reports it instead of waiting for rounds that never come.
-				+ "  Thread.create(function() {\n    try {\n    while (!Work.stop) {\n"
+			// The Int array literal makes the module import what the added field's initializer needs.
+			+ "  public static var rounds = 0;\n  public static var kept:Array<Item> = [];\n  public static var lasting:Array<Item> = [];\n"
+			// The worker's loop never returns, so it reaches the patched check through a closure, whose slot the patch redirects.
+			+ "  public static var sample:Array<Int> = [7];\n  public static var check:Item->Int = item -> item.check();\n  public static var make:Int->Item = i -> new Item(i);\n}\n"
+			// `lasting` lives through every patch, so the worker checks objects made before it while the migration runs;
+			// `kept` is replaced every round, so collections free objects the migration found.
+			+ "function start():Int {\n  Work.lasting = [for (i in 0...3000) new Item(i)];\n"
+			// A worker that throws records why and stops, so the test reports it instead of waiting for rounds that never come.
+			+ "  Thread.create(function() {\n    try {\n    while (!Work.stop) {\n"
 				+ "      var checkOf:Item->Int = Work.check;\n      var makeOf:Int->Item = Work.make;\n      var fresh = [for (i in 0...2000) makeOf(i)];\n"
 				+ "      for (item in Work.kept) Work.unsetMade += checkOf(item);\n"
 				+ "      for (item in Work.lasting) Work.unset += checkOf(item);\n"
@@ -270,10 +284,10 @@ class LiveObjectLayoutMain {
 				+ "function finish():Int {\n  Work.stop = true;\n  while (!Work.done) Sys.sleep(0.001);\n  return Work.unset;\n}\n"
 				+ "function main():Int return 0;\n";
 		var without = source("", "return 0;"),
-			// A slow initializer on many objects keeps the migration long enough for an unsynchronized worker to see it.
-			with = source("  var tags:Array<Int> = Item.tagsFor();\n  static function tagsFor():Array<Int> {\n"
-				+ "    var tags = [];\n    for (i in 0...300) tags.push(i);\n    return tags;\n  }\n",
-				"return tags == null || tags.length != 300 ? 1 : 0;");
+		// A slow initializer on many objects keeps the migration long enough for an unsynchronized worker to see it.
+		with = source("  var tags:Array<Int> = Item.tagsFor();\n  static function tagsFor():Array<Int> {\n"
+			+ "    var tags = [];\n    for (i in 0...300) tags.push(i);\n    return tags;\n  }\n",
+			"return tags == null || tags.length != 300 ? 1 : 0;");
 		var compiler = compiler();
 		compiler.update("Main.hx", without);
 		var build = compiler.compile("Main"),
@@ -286,10 +300,12 @@ class LiveObjectLayoutMain {
 			revision = patch(compiler, live, revision, with, 'adding a field while a thread runs (cycle $cycle)');
 			// Let the worker check objects the migration reached and ones the new constructor made.
 			waitForRounds(live, build.functionIds, before + 20);
-			revision = patch(compiler, live, revision, without, 'removing the field while a thread runs (cycle $cycle)');
+			revision = patch(compiler, live, revision, without,
+				'removing the field while a thread runs (cycle $cycle)');
 		}
 		var unsetMade = Runtime.callInt(live, build.functionIds.get("Main.unsetMade"));
-		expect("checks of objects made before a patch that found the added field unset", Runtime.callInt(live, build.functionIds.get("Main.finish")),
+		expect("checks of objects made before a patch that found the added field unset",
+			Runtime.callInt(live, build.functionIds.get("Main.finish")),
 			0);
 		// A thread stopped inside old code finishes it after the commit: a construction it was in the middle of makes an object
 		// without the added field, one per patch at most for this worker (see LIVE_PATCHING.md, "Threads").
@@ -318,7 +334,8 @@ class LiveObjectLayoutMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw '$label required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
-				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ") + ' revision ${changed.revision} base ${changed.baseRevision} changed ${changed.changedFunctions.length} regenerated ${changed.regenerated.length}';
+				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ")
+				+ ' revision ${changed.revision} base ${changed.baseRevision} changed ${changed.changedFunctions.length} regenerated ${changed.regenerated.length}';
 		Runtime.patchSet(live, new PatchSet(revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		return changed.revision;
 	}

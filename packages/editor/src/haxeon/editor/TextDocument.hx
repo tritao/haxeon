@@ -131,13 +131,13 @@ class TextDocumentBuffer {
 		var last = segmentAt(end);
 		var localStart = start - codepointStarts[first];
 		var localEnd = end - codepointStarts[last];
-		var changed = segments[first].sliceCodepoints(0, localStart) + inserted +
-			segments[last].sliceCodepoints(localEnd, segments[last].codepointCount);
+		var changed = segments[first].sliceCodepoints(0,
+			localStart) + inserted + segments[last].sliceCodepoints(localEnd, segments[last].codepointCount);
 		var replacementSegments = split(changed);
 		// A trailing empty segment belongs only at the document end. The next
 		// retained segment already owns the paragraph after this newline.
-		if (last + 1 < segments.length && replacementSegments.length > 0 &&
-			replacementSegments[replacementSegments.length - 1].codepointCount == 0)
+		if (last + 1 < segments.length && replacementSegments.length > 0
+			&& replacementSegments[replacementSegments.length - 1].codepointCount == 0)
 			replacementSegments.pop();
 		var result:Array<TextOffsetMap> = [];
 		for (index in 0...first)
@@ -151,7 +151,8 @@ class TextDocumentBuffer {
 		cachedText = null;
 		revision++;
 		reindex();
-		lastEdit = new TextDocumentEdit(revision, start, end, start + TextOffsetMap.countCodepoints(inserted), previousCount);
+		lastEdit = new TextDocumentEdit(revision, start, end, start + TextOffsetMap.countCodepoints(inserted),
+			previousCount);
 		return true;
 	}
 
@@ -217,8 +218,7 @@ class TextDocumentBuffer {
 		if (number < 0 || number >= paragraphCount())
 			throw "Paragraph index is outside the document";
 		var first = segmentAtPrefix(paragraphStarts, number);
-		while (first > 0 && paragraphStarts[first - 1] +
-			segments[first - 1].paragraphCount() - 1 >= number)
+		while (first > 0 && paragraphStarts[first - 1] + segments[first - 1].paragraphCount() - 1 >= number)
 			first--;
 		var firstRange = segments[first].paragraphRangeAtIndex(number - paragraphStarts[first]);
 		var start = codepointStarts[first] + firstRange.start;

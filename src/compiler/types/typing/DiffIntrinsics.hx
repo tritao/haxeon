@@ -11,27 +11,39 @@ import compiler.types.Type.NominalKind;
 import compiler.types.typing.KeyPathTyping.KeyPathField;
 
 /** A stored field and its semantic type in the instantiation that declared it. */
-typedef ConformanceField = {final declaration:AstClass; final field:AstField; final type:CompilerType;}
-typedef ConformanceMethod = {final declaration:AstClass; final method:AstFunction; final type:CompilerType;}
+typedef ConformanceField = {
+	final declaration:AstClass;
+	final field:AstField;
+	final type:CompilerType;
+}
+typedef ConformanceMethod = {
+	final declaration:AstClass;
+	final method:AstFunction;
+	final type:CompilerType;
+}
 
 /** Compiler expansion for Diffable field masks, class copies, and snapshot fingerprints. */
 class DiffIntrinsics {
 
 	public static function handles(name:String):Bool
 		return switch name {
-			case "Diff.copy", "haxeon.Diff.copy", "Diff.mask", "haxeon.Diff.mask", "Diff.apply", "haxeon.Diff.apply", "Diff.bit",
+			case "Diff.copy", "haxeon.Diff.copy", "Diff.mask", "haxeon.Diff.mask", "Diff.apply", "haxeon.Diff.apply",
+				"Diff.bit",
 				"haxeon.Diff.bit", "Diff.all", "haxeon.Diff.all", "Diff.fingerprint", "haxeon.Diff.fingerprint": true;
 			default: false;
 		};
 
 	public static function expand(session:TypingSession, name:String, arguments:Array<AstExpression>, span:SourceSpan,
-			typeOf:AstExpression->CompilerType, pathOf:AstExpression->compiler.types.TypedAst.TypedExpression):AstExpression {
+			typeOf:AstExpression->CompilerType,
+			pathOf:AstExpression->compiler.types.TypedAst.TypedExpression):AstExpression {
 		var operation = name.substr(name.lastIndexOf(".") + 1);
 		switch operation {
 			case "fingerprint":
 				expectArguments(name, arguments, 1, span);
-				var type = typeOf(arguments[0]), declaration = classOf(session, type, name, span),
-					value = hold(session, "fingerprint-value", span), hash = hold(session, "fingerprint-hash", span),
+				var type = typeOf(arguments[0]),
+					declaration = classOf(session, type, name, span),
+					value = hold(session, "fingerprint-value", span),
+					hash = hold(session, "fingerprint-hash", span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(value, null, arguments[0], span),
 						VarDeclaration(hash, IntType, IntegerLiteral(17, span), span)
@@ -40,7 +52,9 @@ class DiffIntrinsics {
 				for (entry in conformanceFields(session, type)) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsHash(session, fieldType))
-						fail("E1025", 'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable', field.span);
+						fail("E1025",
+							'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable',
+							field.span);
 					var fieldValue = Member(Variable(value, span), field.name, span),
 						fieldHash = Call("haxeon.Hashing.hash", [fieldValue], span),
 						mixed = Add(Mul(Variable(hash, span), IntegerLiteral(31, span), span), fieldHash, span);
@@ -49,10 +63,15 @@ class DiffIntrinsics {
 				return BlockExpression(statements, Variable(hash, span), span);
 			case "bit":
 				expectArguments(name, arguments, 1, span);
-				var path:Null<{final root:CompilerType; final fields:Array<KeyPathField>;}> = switch arguments[0] {
+				var path:Null<{
+					final root:CompilerType;
+					final fields:Array<KeyPathField>;
+				}> = switch arguments[0] {
 					case KeyPathLiteral(root, fields, fieldSpan):
 						var resolved = KeyPathTyping.diffField(session, root, fields, fieldSpan);
-						{root: resolved.root, fields: resolved.fields};
+						{
+							root:resolved.root, fields:resolved.fields
+						};
 					case _:
 						var resolved = KeyPathTyping.known(session, pathOf(arguments[0]));
 						resolved == null ? null : {root: resolved.root, fields: resolved.fields};
@@ -75,10 +94,15 @@ class DiffIntrinsics {
 				expectArguments(name, arguments, 1, span);
 				var type = typeOf(arguments[0]), declaration = classOf(session, type, name, span);
 				if (session.relations.isStruct(type))
-					fail("E1009", '$name is unnecessary for struct "${declaration.name}"; bind the value to a local to copy it', span);
+					fail("E1009",
+						'$name is unnecessary for struct "${declaration.name}"; bind the value to a local to copy it',
+						span);
 				if (declaration.typeParameters.length > 0)
-					fail("E1009", '$name does not support generic class "${compiler.semantic.SemanticSignature.display(type)}"', span);
-				var source = hold(session, "copy-source", span), result = hold(session, "copy-result", span),
+					fail("E1009",
+						'$name does not support generic class "${compiler.semantic.SemanticSignature.display(type)}"',
+						span);
+				var source = hold(session, "copy-source", span),
+					result = hold(session, "copy-result", span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(source, null, arguments[0], span),
 						VarDeclaration(result, null, New(declaration.name, [], span), span)
@@ -86,14 +110,19 @@ class DiffIntrinsics {
 				for (entry in conformanceFields(session, type)) {
 					var field = entry.field;
 					if (!isWritable(field))
-						fail("E1009", '$name cannot copy immutable field "${field.name}" of "${compiler.semantic.SemanticSignature.display(type)}"', span);
-					statements.push(FieldAssignment(Variable(result, span), field.name, Member(Variable(source, span), field.name, span), span));
+						fail("E1009",
+							'$name cannot copy immutable field "${field.name}" of "${compiler.semantic.SemanticSignature.display(type)}"',
+							span);
+					statements.push(FieldAssignment(Variable(result, span), field.name,
+						Member(Variable(source, span), field.name, span), span));
 				}
 				return BlockExpression(statements, Variable(result, span), span);
 			case "mask":
 				expectArguments(name, arguments, 2, span);
 				var declaration = classOf(session, typeOf(arguments[0]), name, span),
-					left = hold(session, "left", span), right = hold(session, "right", span), mask = hold(session, "mask", span),
+					left = hold(session, "left", span),
+					right = hold(session, "right", span),
+					mask = hold(session, "mask", span),
 					fields = maskedFields(session, declaration, name, span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(left, null, arguments[0], span),
@@ -102,12 +131,16 @@ class DiffIntrinsics {
 					];
 				for (index in 0...fields.length)
 					statements.push(If(differs(left, right, fields[index].name, span),
-						[Assignment(mask, BitOr(Variable(mask, span), IntegerLiteral(1 << index, span), span), span)], [], span));
+						[Assignment(mask, BitOr(Variable(mask, span), IntegerLiteral(1 << index, span), span), span)],
+						[], span));
 				return BlockExpression(statements, Variable(mask, span), span);
 			case "apply":
 				expectArguments(name, arguments, 3, span);
 				var declaration = classOf(session, typeOf(arguments[0]), name, span),
-					target = hold(session, "target", span), before = hold(session, "before", span), after = hold(session, "after", span), mask = hold(session, "mask", span),
+					target = hold(session, "target", span),
+					before = hold(session, "before", span),
+					after = hold(session, "after", span),
+					mask = hold(session, "mask", span),
 					fields = maskedFields(session, declaration, name, span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(target, null, Call("$value.place", [arguments[0]], span), span),
@@ -118,9 +151,11 @@ class DiffIntrinsics {
 				for (index in 0...fields.length) {
 					var field = fields[index];
 					if (!isWritable(field))
-						fail("E1009", '$name cannot assign immutable field "${field.name}" of "${declaration.name}"', span);
+						fail("E1009", '$name cannot assign immutable field "${field.name}" of "${declaration.name}"',
+							span);
 					statements.push(If(differs(before, after, field.name, span), [
-						FieldAssignment(Variable(target, span), field.name, Member(Variable(after, span), field.name, span), span),
+						FieldAssignment(Variable(target, span), field.name,
+							Member(Variable(after, span), field.name, span), span),
 						Assignment(mask, BitOr(Variable(mask, span), IntegerLiteral(1 << index, span), span), span)
 					], [], span));
 				}
@@ -152,8 +187,12 @@ class DiffIntrinsics {
 					if (declaration.base != null)
 						collect(session.declarations.resolve(declaration.base, declaration.span, substitutions));
 					for (field in storedFields(declaration))
-						result.push({declaration: declaration, field: field,
-							type: session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span, substitutions)});
+						result.push({
+							declaration: declaration,
+							field: field,
+							type: session.declarations.resolve(session.declarations.resolvedFieldType(name, field),
+								field.span, substitutions)
+						});
 				default: throw 'Expected a class in value conformance traversal: $current';
 			}
 		}
@@ -162,23 +201,31 @@ class DiffIntrinsics {
 	}
 
 	/** Resolve the closest handwritten conformance method with its instantiated owner type. */
-	public static function conformanceMethod(session:TypingSession, type:CompilerType, methodName:String):Null<ConformanceMethod> {
+	public static function conformanceMethod(session:TypingSession, type:CompilerType,
+			methodName:String):Null<ConformanceMethod> {
 		return switch type {
 			case TInstance(NominalKind.Class, name, arguments):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null) throw 'Missing value type declaration "$name"';
 				var found:Null<AstFunction> = null;
-				for (method in declaration.methods) if (method.name == methodName) { found = method; break; }
-				if (found != null) {declaration: declaration, method: found, type: type};
+				for (method in declaration.methods) if (method.name == methodName) {
+					found = method;
+					break;
+				}
+				if (found != null) {
+					declaration:declaration, method:found, type:type
+				};
 				else if (declaration.base == null) null;
 				else {
 					var substitutions:Map<String, CompilerType> = [];
 					for (index in 0...declaration.typeParameters.length) {
 						var parameter = declaration.typeParameters[index],
 							argument = index < arguments.length ? arguments[index] : TTypeParameter(name, parameter);
-						substitutions.set(parameter, argument); substitutions.set(name + "." + parameter, argument);
+						substitutions.set(parameter, argument);
+						substitutions.set(name + "." + parameter, argument);
 					}
-					conformanceMethod(session, session.declarations.resolve(declaration.base, declaration.span, substitutions), methodName);
+					conformanceMethod(session,
+						session.declarations.resolve(declaration.base, declaration.span, substitutions), methodName);
 				}
 			default: null;
 		};
@@ -208,8 +255,10 @@ class DiffIntrinsics {
 		};
 	}
 
-	static function maskedFields(session:TypingSession, declaration:AstClass, name:String, span:SourceSpan):Array<AstField> {
-		var type = TInstance(NominalKind.Class, declaration.name, [for (parameter in declaration.typeParameters) TTypeParameter(declaration.name, parameter)]),
+	static function maskedFields(session:TypingSession, declaration:AstClass, name:String,
+			span:SourceSpan):Array<AstField> {
+		var type = TInstance(NominalKind.Class, declaration.name,
+			[for (parameter in declaration.typeParameters) TTypeParameter(declaration.name, parameter)]),
 			fields = [for (entry in conformanceFields(session, type)) entry.field];
 		if (fields.length > 32)
 			fail("E1009", '$name supports at most 32 fields; "${declaration.name}" has ${fields.length}', span);
@@ -218,9 +267,12 @@ class DiffIntrinsics {
 
 	static function classOf(session:TypingSession, type:CompilerType, name:String, span:SourceSpan):AstClass {
 		var className = switch type {
-			case TInstance(NominalKind.Class, className, _) if (DeclaredConformance.has(session, type, "Diffable")): className;
+			case TInstance(NominalKind.Class, className,
+				_) if (DeclaredConformance.has(session, type, "Diffable")): className;
 			default:
-				fail("E1009", '$name requires Diffable conformance for "${compiler.semantic.SemanticSignature.display(type)}"', span);
+				fail("E1009",
+					'$name requires Diffable conformance for "${compiler.semantic.SemanticSignature.display(type)}"',
+					span);
 				"";
 		};
 		return classNamed(session, className, span);
@@ -249,7 +301,8 @@ class DiffIntrinsics {
 
 	static function expectArguments(name:String, arguments:Array<AstExpression>, count:Int, span:SourceSpan):Void
 		if (arguments.length != count)
-			fail("E1008", 'Function "$name" expects $count argument${count == 1 ? "" : "s"}, got ${arguments.length}', span);
+			fail("E1008", 'Function "$name" expects $count argument${count == 1 ? "" : "s"}, got ${arguments.length}',
+				span);
 
 	static function differs(left:String, right:String, field:String, span:SourceSpan):AstExpression
 		return NotEqual(Member(Variable(left, span), field, span), Member(Variable(right, span), field, span), span);

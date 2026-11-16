@@ -96,14 +96,13 @@ class XmlParserException {
 }
 
 class Parser {
-	static var escapes:Map<String, String> = {
-		var h = new Map<String, String>();
-		h.set("lt", "<");
-		h.set("gt", ">");
-		h.set("amp", "&");
-		h.set("quot", '"');
-		h.set("apos", "'");
-		h;
+	static var escapes:Map<String, String> = {var h = new Map<String, String>();
+	h.set("lt", "<");
+	h.set("gt", ">");
+	h.set("amp", "&");
+	h.set("quot", '"');
+	h.set("apos", "'");
+	h;
 	}
 
 	/**
@@ -168,7 +167,8 @@ class Parser {
 						start = p + 1;
 					}
 				case S.CDATA:
-					if (c == ']'.code && StringTools.fastCodeAt(str, p + 1) == ']'.code && StringTools.fastCodeAt(str, p + 2) == '>'.code) {
+					if (c == ']'.code && StringTools.fastCodeAt(str, p + 1) == ']'.code
+						&& StringTools.fastCodeAt(str, p + 2) == '>'.code) {
 						var child = Xml.createCData(str.substr(start, p - start));
 						addChild(child);
 						p += 2;
@@ -184,14 +184,17 @@ class Parser {
 								p += 5;
 								state = S.CDATA;
 								start = p + 1;
-							} else if (StringTools.fastCodeAt(str, p + 1) == 'D'.code || StringTools.fastCodeAt(str, p + 1) == 'd'.code) {
+							} else if (StringTools.fastCodeAt(str, p + 1) == 'D'.code
+								|| StringTools.fastCodeAt(str, p + 1) == 'd'.code) {
 								if (str.substr(p + 2, 6).toUpperCase() != "OCTYPE")
 									throw new XmlParserException("Expected <!DOCTYPE", str, p);
 								p += 8;
 								state = S.DOCTYPE;
 								start = p + 1;
-							} else if (StringTools.fastCodeAt(str, p + 1) != '-'.code || StringTools.fastCodeAt(str, p + 2) != '-'.code) throw new XmlParserException("Expected <!--",
-								str, p); else {
+							} else if (StringTools.fastCodeAt(str, p + 1) != '-'.code || StringTools.fastCodeAt(str,
+								p + 2) != '-'.code) throw new XmlParserException("Expected <!--",
+								str, p);
+							else {
 								p += 2;
 								state = S.COMMENT;
 								start = p + 1;
@@ -271,7 +274,8 @@ class Parser {
 							start = p + 1;
 						case '>'.code | '<'.code if (strict):
 							// HTML allows these in attributes values
-							throw new XmlParserException("Invalid unescaped " + String.fromCharCode(c) + " in attribute value", str, p);
+							throw new XmlParserException("Invalid unescaped " + String.fromCharCode(c)
+								+ " in attribute value", str, p);
 						case _ if (c == attrValQuote):
 							buf.addSub(str, start, p - start);
 							var val = buf.toString();
@@ -317,7 +321,8 @@ class Parser {
 						continue;
 					}
 				case S.COMMENT:
-					if (c == '-'.code && StringTools.fastCodeAt(str, p + 1) == '-'.code && StringTools.fastCodeAt(str, p + 2) == '>'.code) {
+					if (c == '-'.code && StringTools.fastCodeAt(str, p + 1) == '-'.code
+						&& StringTools.fastCodeAt(str, p + 2) == '>'.code) {
 						addChild(Xml.createComment(str.substr(start, p - start)));
 						p += 2;
 						state = S.BEGIN;
@@ -342,7 +347,8 @@ class Parser {
 					if (c == ';'.code) {
 						var s = str.substr(start, p - start);
 						if (StringTools.fastCodeAt(s, 0) == '#'.code) {
-							var c = StringTools.fastCodeAt(s, 1) == 'x'.code ? Std.parseInt("0" + s.substr(1, s.length - 1)) : Std.parseInt(s.substr(1, s.length - 1));
+							var c = StringTools.fastCodeAt(s, 1) == 'x'.code ? Std.parseInt("0" + s.substr(1,
+								s.length - 1)) : Std.parseInt(s.substr(1, s.length - 1));
 							#if wasm
 							// Wasm strings hold UTF-8 bytes, like upstream's non-unicode targets.
 							if (c >= 128) {
@@ -383,7 +389,8 @@ class Parser {
 						state = escapeNext;
 					} else if (!isValidChar(c) && c != "#".code) {
 						if (strict)
-							throw new XmlParserException("Invalid character in entity: " + String.fromCharCode(c), str, p);
+							throw new XmlParserException("Invalid character in entity: " + String.fromCharCode(c), str,
+								p);
 						buf.addChar("&".code);
 						buf.addSub(str, start, p - start);
 						p--;
@@ -421,7 +428,8 @@ class Parser {
 	}
 
 	static inline function isValidChar(c:Int):Bool {
-		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code) || c == ':'.code || c == '.'.code
+		return (c >= 'a'.code && c <= 'z'.code) || (c >= 'A'.code && c <= 'Z'.code) || (c >= '0'.code && c <= '9'.code)
+			|| c == ':'.code || c == '.'.code
 			|| c == '_'.code || c == '-'.code;
 	}
 }

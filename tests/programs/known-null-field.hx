@@ -11,7 +11,9 @@ class State {
 		failure = "changed";
 }
 
-typedef Record = {var failure:Null<String>;};
+typedef Record = {
+	var failure:Null<String>;
+};
 
 function instanceRead(state:State):Int {
 	if (state.failure != null)

@@ -11,7 +11,8 @@ class FlagsMain {
 	static function makeCompiler(target:String, inlining:Bool):Compiler {
 		var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		c.addStandardLibrarySourceRoot("stdlib");
-		c.configure("flags-" + target + inlining, "flags", CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+		c.configure("flags-" + target + inlining, "flags",
+			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		return c;
 	}
 
@@ -35,24 +36,30 @@ class FlagsMain {
 		rejected(declaration + 'function main():Int { var value:Int=Access.Read; return 42; }', "Type mismatch");
 		rejected(declaration + 'function main():Int { var value=Access.Read|1; return 42; }', "same flags type");
 		// Flags combine their values, so a switch over them has no fixed set to cover.
-		rejected(declaration + 'function main():Int { var access = Access.Read; return switch access { case Read: 42; case Write: 1; }; }',
+		rejected(declaration
+			+ 'function main():Int { var access = Access.Read; return switch access { case Read: 42; case Write: 1; }; }',
 			"requires a default branch");
-		rejected('enum abstract Access(Int) from Int implements Flags { var A=1; } function main():Int return 42;', "cannot declare implicit");
-		rejected('enum abstract Access(Int) to Int implements Flags { var A=1; } function main():Int return 42;', "cannot declare implicit");
-		rejected('enum abstract Access(String) implements Flags { var A="x"; } function main():Int return 42;', "requires an Int");
-		rejected('enum abstract Access(Int) implements Flags { var Invalid=3; } function main():Int return 42;', "without a declared single-bit");
-		rejected(declaration + 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
+		rejected('enum abstract Access(Int) from Int implements Flags { var A=1; } function main():Int return 42;',
+			"cannot declare implicit");
+		rejected('enum abstract Access(Int) to Int implements Flags { var A=1; } function main():Int return 42;',
+			"cannot declare implicit");
+		rejected('enum abstract Access(String) implements Flags { var A="x"; } function main():Int return 42;',
+			"requires an Int");
+		rejected('enum abstract Access(Int) implements Flags { var Invalid=3; } function main():Int return 42;',
+			"without a declared single-bit");
+		rejected(declaration
+			+ 'function accepts<T:Flags>(value:T):Int return 42; function main():Int return accepts(1);', "constraint");
 		for (name in [
-			// The UI's own Flags types; the accessibility flags are the generated native ones, covered with the other native flags.
-			"haxeon.ui.core.UiModifier",
+		// The UI's own Flags types; the accessibility flags are the generated native ones, covered with the other native flags.
+		"haxeon.ui.core.UiModifier",
 			"haxeon.ui.core.UiDirtyFlag",
 			"haxeon.ui.style.StyleState",
-			"haxeon.ui.style.StyleImpact"
-		]) {
+			"haxeon.ui.style.StyleImpact"]) {
 			var local = name.substr(name.lastIndexOf(".") + 1),
 				header = 'import $name; ';
 			rejected(header + 'function main():Int { var value:$local=0; return 42; }', "Type mismatch", true);
-			rejected(header + 'function main():Int { var value:Int=$local.empty(); return value; }', "Type mismatch", true);
+			rejected(header + 'function main():Int { var value:Int=$local.empty(); return value; }', "Type mismatch",
+				true);
 		}
 		var inherited = makeCompiler("hl", true);
 		inherited.update("Main.hx",
@@ -79,7 +86,8 @@ class FlagsMain {
 	static function incremental():Void {
 		var c = makeCompiler("hl", true);
 		c.update("Access.hx", 'enum abstract Access(Int) implements Flags { var A=1; }');
-		c.update("Main.hx", 'function main():Int { try { return Access.fromRaw(3).rawValue(); }catch(error:Dynamic){return 0;} }');
+		c.update("Main.hx",
+			'function main():Int { try { return Access.fromRaw(3).rawValue(); }catch(error:Dynamic){return 0;} }');
 		function result():Int
 			return new compiler.ir.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
@@ -97,8 +105,10 @@ class FlagsMain {
 		c.addFfiInterface("native_flags.hxi",
 			'interface native_flags @target("portable-abi64") @library("native_flags") { flags Bits8 : u8 { LOW=1; HIGH=128; } flags Bits16 : u16 { LOW=1; HIGH=32768; } flags Bits32 : u32 { LOW=1; HIGH=0x80000000; } flags Bits64 : u64 { LOW=1; HIGH=1<<63; } }');
 		var source = sys.io.File.getContent("tests/programs/flags.hx"),
-			nativeChecks = 'if (native_flags.__hxi_flags_from_native_Bits8(-1).rawValue()!=129 || native_flags.__hxi_flags_from_native_Bits16(-1).rawValue()!=32769 || native_flags.__hxi_flags_from_native_Bits32(-1).rawValue()!=-2147483647 || haxe.Int64.compare(native_flags.__hxi_flags_from_native_Bits64(haxe.Int64.ofInt(-1)),haxe.Int64.make(-2147483648,1))!=0) return -20;';
-		source = source.replace("var value=Access.fromRaw(index&7);", nativeChecks + "var value=Access.fromRaw(index&7);");
+			nativeChecks =
+				'if (native_flags.__hxi_flags_from_native_Bits8(-1).rawValue()!=129 || native_flags.__hxi_flags_from_native_Bits16(-1).rawValue()!=32769 || native_flags.__hxi_flags_from_native_Bits32(-1).rawValue()!=-2147483647 || haxe.Int64.compare(native_flags.__hxi_flags_from_native_Bits64(haxe.Int64.ofInt(-1)),haxe.Int64.make(-2147483648,1))!=0) return -20;';
+		source = source.replace("var value=Access.fromRaw(index&7);",
+			nativeChecks + "var value=Access.fromRaw(index&7);");
 		source = "import native_flags.*;\n" + source;
 		source = source.replace("function main():Int {",
 			'function main():Int { var nativeRejected=false; try { Bits32.fromRaw(2); } catch(error:Dynamic) {nativeRejected=true;} if(!nativeRejected)return -21;');
@@ -208,7 +218,8 @@ class FlagsMain {
 			p.functions.push(new IrFunction("rawEntry", b.arguments, Void, b.blocks, Ordinary));
 			p.entryPoint = "rawEntry";
 		}
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p, {target: HashLink, debugNames: true})
+		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p,
+			{target: HashLink, debugNames: true})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				debugNames: true,
@@ -217,13 +228,17 @@ class FlagsMain {
 			}).bytes;
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var js =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("raw semantics"); const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
-				+
-				'e["Probe.perform"](2);for(const n of [8,1024]){const before=count();if(e["Probe.perform"](n)!==n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
-				+
-				'for(const n of [8,1024]){const measures=[],bytes=e["haxeon.memory.allocated_bytes"];for(const checked of [false,true]){e["Probe.scalarChecks"](2,checked);const before=count(),beforeBytes=bytes?bytes():0;if(e["Probe.scalarChecks"](n,checked)!==n)throw Error("scalar map semantics");measures.push({objects:count()-before,bytes:bytes?bytes()-beforeBytes:null});}console.log("scalar map",n,JSON.stringify(measures));if(measures[1].objects>measures[0].objects||measures[1].bytes>measures[0].bytes)throw Error("checked map read allocated more");}';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
+				+ 'e["Probe.perform"](2);for(const n of [8,1024]){const before=count();if(e["Probe.perform"](n)!==n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
+				+ 'for(const n of [8,1024]){const measures=[],bytes=e["haxeon.memory.allocated_bytes"];for(const checked of [false,true]){e["Probe.scalarChecks"](2,checked);const before=count(),beforeBytes=bytes?bytes():0;if(e["Probe.scalarChecks"](n,checked)!==n)throw Error("scalar map semantics");measures.push({objects:count()-before,bytes:bytes?bytes()-beforeBytes:null});}console.log("scalar map",n,JSON.stringify(measures));if(measures[1].objects>measures[0].objects||measures[1].bytes>measures[0].bytes)throw Error("checked map read allocated more");}';
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"--expose-gc",
+				"-e",
+				js,
+				path
+			]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();
 			child.close();
@@ -250,8 +265,8 @@ class FlagsMain {
 						throw "Checked scalar-map read allocated more than its cast baseline";
 					Sys.println('scalar map hl $n: ${baseline.allocations}/${allocated(baseline)} -> ${checked.allocations}/${allocated(checked)} objects/bytes');
 				}
-			else
-				Sys.print(output);
+					else
+					Sys.print(output);
 		} catch (error:Dynamic) {
 			cleanup(stem);
 			throw error;

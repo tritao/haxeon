@@ -14,7 +14,8 @@ class IrValueConstructors {
 				case Obj(name): objects.get(name);
 				default: null;
 			};
-			if (owner == null || !owner.isValue || fn.name != owner.name + ".new" || fn.blocks.length == 0 || fn.blocks.length > 16)
+			if (owner == null || !owner.isValue || fn.name != owner.name + ".new" || fn.blocks.length == 0
+				|| fn.blocks.length > 16)
 				continue;
 			var safe = true, count = 0;
 			for (block in fn.blocks)
@@ -158,7 +159,8 @@ class IrValueConstructors {
 					var callee:IrFunction = cast constructors.get(name),
 						single:IrBlock = callee.blocks[0],
 						returned = straightLineResult(callee, args.length);
-					if (returned == null) null; else {
+					if (returned == null) null;
+					else {
 						if (next < 0)
 							next = firstFreeValue(fn);
 						var mapping:Map<Int, IrValue> = [],
@@ -168,7 +170,8 @@ class IrValueConstructors {
 						for (instruction in single.instructions) {
 							var result = IrOperands.output(instruction.value);
 							if (result != null)
-								mapping.set(result.id, result.id == returned.id ? out : new IrValue(next++, result.name, result.type));
+								mapping.set(result.id,
+									result.id == returned.id ? out : new IrValue(next++, result.name, result.type));
 							var mapped = IrInliner.remap(instruction.value, value -> {
 								var found = mapping.get(value.id);
 								if (found == null)

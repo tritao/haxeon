@@ -28,7 +28,8 @@ class ClosureMain {
 			arguments: [IrType.I32],
 			result: IrType.Void
 		});
-		program.functions.push(new IrFunction("twice", twiceBuilder.arguments, IrType.I32, twiceBuilder.blocks, Ordinary));
+		program.functions.push(new IrFunction("twice", twiceBuilder.arguments, IrType.I32, twiceBuilder.blocks,
+			Ordinary));
 		program.functions.push(new IrFunction("main", [], IrType.I32, mainBuilder.blocks, Ordinary));
 		var entryBuilder = new IrBuilder(),
 			mainResult = entryBuilder.call("main", [], IrType.I32),

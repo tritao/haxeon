@@ -18,17 +18,25 @@ class IrInlineEnumStorage {
 		if (name == null) return;
 		var object = objects.get(name);
 		if (declaration.isRecursive == true || name != IrInlineEnumLayout.VALUE_PREFIX + declaration.name
-			|| object == null || !object.isValue || object.base != null || object.interfaces.length != 0 || object.methods.length != 0)
+			|| object == null || !object.isValue || object.base != null || object.interfaces.length != 0
+			|| object.methods.length != 0)
 			throw 'Invalid inline storage for enum "${declaration.name}"';
-		if (object.fields.length == 0 || object.fields[0].name != "tag" || !IrVerifier.sameType(object.fields[0].type, I32))
+		if (object.fields.length == 0 || object.fields[0].name != "tag"
+			|| !IrVerifier.sameType(object.fields[0].type, I32))
 			throw 'Inline enum storage "$name" requires an Int tag';
 		var scalar = 0, reference = 0, width = 0, referencesStarted = false;
 		for (index in 1...object.fields.length) {
 			var field = object.fields[index];
 			if (!referencesStarted && field.name == 'scalar$scalar') {
-				var bits = switch field.type { case I32: 32; case I64: 64; default: 0; };
-				if (bits == 0 || width != 0 && bits != width) throw 'Invalid scalar word in inline enum storage "$name"';
-				width = bits; scalar++;
+				var bits = switch field.type {
+					case I32: 32;
+					case I64: 64;
+					default: 0;
+				};
+				if (bits == 0 || width != 0
+					&& bits != width) throw 'Invalid scalar word in inline enum storage "$name"';
+				width = bits;
+				scalar++;
 			} else {
 				referencesStarted = true;
 				if (field.name != 'reference$reference' || !IrValueLaneReference.isCarrier(field.type))

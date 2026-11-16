@@ -28,10 +28,16 @@ private class Results implements SearchPickerModel {
 	public function count():Int return value == "" ? 50000 : 2;
 	public function labelAt(index:Int):String return "Result " + index;
 	public function enabledAt(index:Int):Bool return index != 1;
-	public function setQuery(value:String):Void { this.value = value; selected = 0; }
+	public function setQuery(value:String):Void {
+		this.value = value;
+		selected = 0;
+	}
 	public function activate(index:Int):Void accepted = index;
 	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void {
-		if (key == UiKey.Enter) { activate(selected); return; }
+		if (key == UiKey.Enter) {
+			activate(selected);
+			return;
+		}
 		var delta = key == UiKey.Up || key == UiKey.PageUp ? -1 : 1;
 		var steps = key == UiKey.PageUp || key == UiKey.PageDown ? pageSize : 1;
 		selected = (selected + delta * steps + count()) % count();
@@ -43,7 +49,8 @@ class SearchPickerTests {
 	static function row(root:RenderNode, label:String):RenderNode {
 		var found:RenderNode = null;
 		root.walk(function(node) {
-			if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem && node.semantics.label == label) found = node;
+			if (node.semantics != null && node.semantics.role == AccessibilityRole.CollectionItem
+				&& node.semantics.label == label) found = node;
 		});
 		if (found == null) throw "Missing result: " + label;
 		return found;
@@ -62,21 +69,25 @@ class SearchPickerTests {
 		check(scheduler.revision == revision && scheduler.rebuildingCount == 0 && !scheduler.needsFrame,
 			"Waiting tooltip invalidated the view before its deadline");
 		check(scheduler.waitSeconds() == 0.8, "Tooltip did not expose its wake deadline");
-		scheduler.advance(0.4); check(!visible, "Shared tooltip ignored its initial delay");
+		scheduler.advance(0.4);
+		check(!visible, "Shared tooltip ignored its initial delay");
 		check(scheduler.revision == revision && scheduler.rebuildingCount == 0,
 			"Counting down a tooltip rebuilt its owner");
-		scheduler.advance(0.41); check(visible, "Shared tooltip delay never completed");
+		scheduler.advance(0.41);
+		check(visible, "Shared tooltip delay never completed");
 		check(scheduler.revision > revision && scheduler.activeCount == 0,
 			"Tooltip deadline did not invalidate its visible state");
 		revision = scheduler.revision;
-		delay.start(); delay.cancel();
+		delay.start();
+		delay.cancel();
 		check(!visible && scheduler.revision == revision && scheduler.activeCount == 0,
 			"Cancelling a waiting tooltip scheduled an unrelated rebuild");
 		delay.dispose();
 		var placement = haxeon.ui.widgets.overlays.Tooltip.place(390, 40, 0, 400);
 		check(390 + placement.x + placement.width + 20 <= 394, "Shared tooltip escaped its bounds");
 		var runtime = Runtime.start();
-		var fonts = FontCollection.create(); fonts.addSystemFallbacks();
+		var fonts = FontCollection.create();
+		fonts.addSystemFallbacks();
 		var ui = new UiContext(null, fonts);
 		var model = new Results(), built = 0, rowBuildPasses = 0, previousBuildPass = -1;
 		var picker = new SearchPicker("results", model, function(context, index, selected, hovered, revision) {
@@ -85,7 +96,9 @@ class SearchPickerTests {
 				rowBuildPasses++;
 				previousBuildPass = context.buildFeedbackPass;
 			}
-			var style = new LayoutStyle(); style.width = LayoutAxis.grow(); style.height = LayoutAxis.fixed(32);
+			var style = new LayoutStyle();
+			style.width = LayoutAxis.grow();
+			style.height = LayoutAxis.fixed(32);
 			return new Text(model.labelAt(index), style);
 		}, function() {}, function() {});
 		var frame = new LayoutFrame(720, 480);
@@ -99,7 +112,8 @@ class SearchPickerTests {
 		check(focus != null && focus.styleType == "text-field", "Picker did not focus its input");
 		var focusedNode:RenderNode = cast focus;
 		var focusSemantics:Semantics = cast focusedNode.semantics;
-		check(focusSemantics.states.contains(AccessibilityState.Focused), "Focused input state was not applied during submit");
+		check(focusSemantics.states.contains(AccessibilityState.Focused),
+			"Focused input state was not applied during submit");
 		ui.key(UiEventKind.KeyDown, UiKey.Up);
 		root = ui.submit(picker, frame);
 		root = ui.submit(picker, frame);
@@ -113,16 +127,21 @@ class SearchPickerTests {
 		check(model.query() == "filter" && model.selected == 0, "Typing escaped the search input");
 		var first = row(root, "Result 0"), disabled = row(root, "Result 1");
 		var disabledSemantics:haxeon.ui.semantics.Semantics = cast disabled.semantics;
-		check(disabledSemantics.states.contains(AccessibilityState.Disabled), "Disabled result lost its accessible state");
-		click(ui, first, 1); check(model.accepted == -1, "Secondary click accepted a result");
-		click(ui, disabled, 0); check(model.accepted == -1, "Disabled result was accepted");
-		click(ui, first, 0); check(model.accepted == 0, "Primary click did not accept its result");
+		check(disabledSemantics.states.contains(AccessibilityState.Disabled),
+			"Disabled result lost its accessible state");
+		click(ui, first, 1);
+		check(model.accepted == -1, "Secondary click accepted a result");
+		click(ui, disabled, 0);
+		check(model.accepted == -1, "Disabled result was accepted");
+		click(ui, first, 0);
+		check(model.accepted == 0, "Primary click did not accept its result");
 		ui.dispose();
 
 		ui = new UiContext(null, fonts);
 		var commands = new CommandRegistry(), calls = 0, dismissals = 0;
 		commands.register(new Command("enabled", "Enabled command", function() calls++));
-		commands.register(new Command("disabled", "Disabled command", function() calls++, null, function() return false));
+		commands.register(new Command("disabled", "Disabled command", function() calls++, null,
+			function() return false));
 		var palette = new CommandPalette("palette", commands, null, 0, 0, "", function() dismissals++);
 		palette.centered = true;
 		root = ui.submit(palette, new LayoutFrame(480, 360));
@@ -134,7 +153,9 @@ class SearchPickerTests {
 		ui.key(UiEventKind.KeyDown, UiKey.Down);
 		ui.key(UiEventKind.KeyDown, UiKey.Enter);
 		check(calls == 1 && dismissals == 1, "Palette failed to skip disabled commands and invoke once");
-		ui.dispose(); fonts.dispose(); runtime.dispose();
+		ui.dispose();
+		fonts.dispose();
+		runtime.dispose();
 		Sys.println("PASS: picker virtualization, input focus, reveal, filtering, paging, disabled/primary activation and command palette integration");
 		return 0;
 	}

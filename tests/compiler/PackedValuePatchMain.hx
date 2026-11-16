@@ -9,7 +9,8 @@ import runtime.Runtime;
 /** A value embedded in an object gives HashLink a packed parameterized type in the loaded prefix. */
 class PackedValuePatchMain {
 	static final point = 'struct Point { public var value:Int; public function new(value:Int) this.value=value; }';
-	static final mainSource = 'class Holder { public var point:Point; public function new() {} } class Main { static function main():Int { var h=new Holder(); h.point=new Point(40); return h.point.value; } }';
+	static final mainSource =
+		'class Holder { public var point:Point; public function new() {} } class Main { static function main():Int { var h=new Holder(); h.point=new Point(40); return h.point.value; } }';
 
 	static function main():Void {
 		for (inlining in [false, true])
@@ -19,7 +20,8 @@ class PackedValuePatchMain {
 
 	static function check(inlining:Bool):Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
-		compiler.configure('packed-patch-' + inlining, 'packed-patch', CompilerDriver.targetDefines('hl').concat(['haxeon-inline=' + (inlining ? 1 : 0)]));
+		compiler.configure('packed-patch-' + inlining, 'packed-patch',
+			CompilerDriver.targetDefines('hl').concat(['haxeon-inline=' + (inlining ? 1 : 0)]));
 		compiler.addSourceRoot('stdlib');
 		compiler.update('Point.hx', point);
 		compiler.update('Main.hx', mainSource);

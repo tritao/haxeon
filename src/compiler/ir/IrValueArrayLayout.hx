@@ -13,7 +13,8 @@ class IrValueArrayLayout {
 	/** Non-null struct arrays need to distinguish grown, unwritten slots from initialized values. */
 	public final hasValidity:Bool;
 
-	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget, ?enums:Array<IrEnum>) {
+	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
+			?enums:Array<IrEnum>) {
 		this.element = element;
 		switch element {
 			case EnumTag(_):
@@ -24,15 +25,23 @@ class IrValueArrayLayout {
 			default:
 		}
 		var name = switch element {
-			case Obj(value): hasValidity = true; storage = element; value;
-			case Nullable(Obj(value)): hasValidity = false; storage = element; value;
+			case Obj(value): hasValidity = true;
+				storage = element;
+				value;
+			case Nullable(Obj(value)): hasValidity = false;
+				storage = element;
+				value;
 			case Nullable(Enum(_)): throw "Nullable enums must use their canonical Enum IR type";
 			case Enum(value):
 				var resolved = enums == null ? null : IrInlineEnumStorage.resolve(enums, objects, value);
 				if (resolved == null) throw 'Enum "$value" has no inline storage';
 				// Enum null is tag zero, not an additional optional wrapper or validity bit.
-				hasValidity = false; storage = resolved;
-				switch resolved { case Obj(name): name; default: throw "Invalid enum value record"; };
+				hasValidity = false;
+				storage = resolved;
+				switch resolved {
+					case Obj(name): name;
+					default: throw "Invalid enum value record";
+				};
 			default: throw 'A value array requires a struct element';
 		};
 		var object = objects.get(name);

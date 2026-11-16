@@ -15,7 +15,8 @@ class RawRepresentableGenerator {
 	public static inline final PREFIX = "$raw-representable:";
 
 	public static function conforms(session:TypingSession, declaration:AstEnumAbstract):Bool
-		return DeclaredConformance.has(session, TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
+		return DeclaredConformance.has(session,
+			TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
 			"RawRepresentable");
 
 	public static function name(owner:String, method:String):String
@@ -31,10 +32,13 @@ class RawRepresentableGenerator {
 				BodyTyper.fail("E1025", "RawRepresentable requires an Int or String enum abstract", declaration.span);
 		}
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
-			BodyTyper.fail("E1025", "RawRepresentable enum abstracts cannot declare implicit from/to conversions", declaration.span);
+			BodyTyper.fail("E1025", "RawRepresentable enum abstracts cannot declare implicit from/to conversions",
+				declaration.span);
 		for (value in declaration.values) {
 			if (value.name == "rawValue" || value.name == "fromRaw" || value.name == "toString")
-				BodyTyper.fail("E1000", 'Constant "${declaration.name}.${value.name}" conflicts with a synthesized RawRepresentable member', value.span);
+				BodyTyper.fail("E1000",
+					'Constant "${declaration.name}.${value.name}" conflicts with a synthesized RawRepresentable member',
+					value.span);
 			if (InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value)) == null)
 				BodyTyper.fail("E1002", "RawRepresentable requires compile-time constant raw values", value.span);
 		}
@@ -58,7 +62,8 @@ class RawRepresentableGenerator {
 	 * `toString` names the value as a Haxe enum constructor prints (`Button`); the first of several names for one raw value
 	 * wins. A raw value outside the declared set, such as a newer native code, prints as `Owner(raw)`.
 	 */
-	static function nameStatements(typer:BodyTyper, declaration:AstEnumAbstract, raw:CompilerType, rawValue:TypedExpression,
+	static function nameStatements(typer:BodyTyper, declaration:AstEnumAbstract, raw:CompilerType,
+			rawValue:TypedExpression,
 			span:SourceSpan):Array<TypedStatement> {
 		function text(value:String):TypedExpression
 			return new TypedExpression(TStringLiteral(value), TString, span);
@@ -71,20 +76,24 @@ class RawRepresentableGenerator {
 			if (seen.exists(key))
 				continue;
 			seen.set(key, true);
-			statements.push(TIf(new TypedExpression(TEqual(rawValue, constant), TBool, span), [TReturn(text(value.name), span)], [], span));
+			statements.push(TIf(new TypedExpression(TEqual(rawValue, constant), TBool, span),
+				[TReturn(text(value.name), span)], [], span));
 		}
 		var shown = switch raw {
 			case TString: rawValue;
-			default: new TypedExpression(TCall("__std_string", [new TypedExpression(TToDynamic(rawValue), TDynamic, span)]), TString, span);
+			default: new TypedExpression(TCall("__std_string",
+				[new TypedExpression(TToDynamic(rawValue), TDynamic, span)]), TString, span);
 		};
 		var owner = compiler.QualifiedName.last(declaration.name);
-		statements.push(TReturn(new TypedExpression(TAdd(text(owner + "("), new TypedExpression(TAdd(shown, text(")")), TString, span)), TString,
+		statements.push(TReturn(new TypedExpression(TAdd(text(owner + "("),
+			new TypedExpression(TAdd(shown, text(")")), TString, span)), TString,
 			span), span));
 		return statements;
 	}
 
 	/** Drain only newly requested members when dependency completion makes another pass. */
-	public static function generate(session:TypingSession, typer:BodyTyper, generated:Map<String, TypedFunction>):Array<TypedFunction> {
+	public static function generate(session:TypingSession, typer:BodyTyper,
+			generated:Map<String, TypedFunction>):Array<TypedFunction> {
 		var pending = [
 			for (name in session.rawRepresentableRequests.keys())
 				if (!generated.exists(name)) name
@@ -106,14 +115,17 @@ class RawRepresentableGenerator {
 					case "toString": TString;
 					default: TNullable(nominal);
 				},
-				statements:Array<TypedStatement> = [];
+					statements:Array<TypedStatement> = [];
 			if (request.method == "rawValue")
 				statements.push(TReturn(new TypedExpression(TAbiCast(input), raw, span), span));
 			else if (request.method == "toString")
-				statements = nameStatements(typer, declaration, raw, new TypedExpression(TAbiCast(input), raw, span), span);
+				statements = nameStatements(typer, declaration, raw, new TypedExpression(TAbiCast(input), raw, span),
+					span);
 			else {
-				var present = new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)), outputType, span),
-					missing = TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), outputType, span), span),
+				var present = new TypedExpression(TNullableWrap(new TypedExpression(TAbiCast(input), nominal, span)),
+					outputType, span),
+					missing = TReturn(new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+						outputType, span), span),
 					cases:Array<compiler.types.TypedAst.TypedSwitchCase> = [],
 					seen:Map<Int, Bool> = [];
 				for (value in declaration.values) {
@@ -143,7 +155,8 @@ class RawRepresentableGenerator {
 								span: span
 							});
 						default:
-							statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span), [TReturn(present, span)], [], span));
+							statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span),
+								[TReturn(present, span)], [], span));
 					}
 				}
 				switch raw {
@@ -154,22 +167,21 @@ class RawRepresentableGenerator {
 				}
 			}
 
-			var fn:TypedFunction = {
-				name: helper, role: ProviderFunction(nominal, compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.RawRepresentable, request.method)),
+			var fn:TypedFunction = {name: helper, role: ProviderFunction(nominal, compiler.Provides.ProviderOperations
+				.detailed(compiler.Provides.ProviderOperation.RawRepresentable, request.method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,
 				isStatic: true,
 				isConstructor: false,
-				// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
-				isInline: request.method != "toString",
+			// A name lookup has a branch per value: keep it one call, not a copy at every string conversion.
+			isInline: request.method != "toString",
 				arguments: [{name: "value", type: inputType}],
 				result: outputType,
 				statements: statements,
 				cells: [],
 				cellCaptures: [],
-				span: span
-			};
+				span: span};
 			generated.set(helper, fn);
 			result.push(fn);
 		}

@@ -147,7 +147,8 @@ class TextLayout extends NativeKitUIResource {
 	public function measure():TextMetrics {
 		var measured = NativeKitUI.nkui_text_layout_measure(nativeHandle());
 		UiResult.check(measured.status, "textLayout.measure");
-		return new TextMetrics(measured.out_metrics.get_x(), measured.out_metrics.get_y(), measured.out_metrics.get_width(),
+		return new TextMetrics(measured.out_metrics.get_x(), measured.out_metrics.get_y(),
+			measured.out_metrics.get_width(),
 			measured.out_metrics.get_height());
 	}
 
@@ -289,8 +290,8 @@ class TextLayout extends NativeKitUIResource {
 			var geometry = graphemeGeometry;
 			var cached = geometry == null ? null : geometry.get(cursor);
 			var canonicalStart = cursor != first || (firstPosition.offset == cursor && firstPosition.affinity == 0);
-			if (cached != null && cached.end <= last && canonicalStart &&
-				(cached.end != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
+			if (cached != null && cached.end <= last && canonicalStart
+				&& (cached.end != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
 				result.push(cached);
 				cursor = cached.end;
 				continue;
@@ -311,14 +312,14 @@ class TextLayout extends NativeKitUIResource {
 			var right = Math.max(Math.max(startTopX, startBottomX), Math.max(endTopX, endBottomX));
 			var top = Math.min(startCaret.y + startCaret.ascender, endCaret.y + endCaret.ascender);
 			var bottom = Math.max(startCaret.y + startCaret.descender, endCaret.y + endCaret.descender);
-			if (Math.isFinite(left) && Math.isFinite(top) && Math.isFinite(right) &&
-				Math.isFinite(bottom) && right > left && bottom > top)
-			{
+			if (Math.isFinite(left) && Math.isFinite(top) && Math.isFinite(right) && Math.isFinite(bottom)
+				&& right > left && bottom > top)
+				{
 				var rect = new TextRangeRect(cursor, next, left, top, right - left, bottom - top,
 					startCaret.direction != TextDirection.Rtl);
 				result.push(rect);
-				if (wholeGrapheme && canonicalStart && cached == null && cachedGraphemes < maximumCachedGraphemes &&
-					(next != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
+				if (wholeGrapheme && canonicalStart && cached == null && cachedGraphemes < maximumCachedGraphemes
+					&& (next != last || (lastPosition.offset == last && lastPosition.affinity == 0))) {
 					if (geometry == null) {
 						geometry = new Map();
 						graphemeGeometry = geometry;
@@ -381,7 +382,8 @@ class TextLayout extends NativeKitUIResource {
 	public function moveWord(offset:Int, direction:Int, macStyle:Bool = false):Int {
 		if (offset < 0 || (direction != -1 && direction != 1))
 			throw "Text word movement arguments are invalid";
-		var behavior:NativeKitUI.TextNavigationBehavior = macStyle ? NativeKitUI.TextNavigationBehavior.Macos : NativeKitUI.TextNavigationBehavior.Standard;
+		var behavior:NativeKitUI.TextNavigationBehavior = macStyle
+			? NativeKitUI.TextNavigationBehavior.Macos : NativeKitUI.TextNavigationBehavior.Standard;
 		var result = NativeKitUI.nkui_text_layout_move_word(nativeHandle(), offset,
 			direction, behavior);
 		UiResult.check(result.status, "textLayout.moveWord");
@@ -392,7 +394,8 @@ class TextLayout extends NativeKitUIResource {
 	public function moveParagraph(offset:Int, direction:Int, macStyle:Bool = false):Int {
 		if (offset < 0 || (direction != -1 && direction != 1))
 			throw "Text paragraph movement arguments are invalid";
-		var behavior:NativeKitUI.TextNavigationBehavior = macStyle ? NativeKitUI.TextNavigationBehavior.Macos : NativeKitUI.TextNavigationBehavior.Standard;
+		var behavior:NativeKitUI.TextNavigationBehavior = macStyle
+			? NativeKitUI.TextNavigationBehavior.Macos : NativeKitUI.TextNavigationBehavior.Standard;
 		var result = NativeKitUI.nkui_text_layout_move_paragraph(nativeHandle(), offset,
 			direction, behavior);
 		UiResult.check(result.status, "textLayout.moveParagraph");

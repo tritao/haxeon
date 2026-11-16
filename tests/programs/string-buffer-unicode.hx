@@ -11,7 +11,8 @@ function main():Int {
 	var text = "h\u00E9llo\u263A";
 	if (text.charAt(1) != "\u00E9" || text.charAt(5) != "\u263A" || text.charAt(6) != "" || text.charAt(-1) != "")
 		return 2;
-	if (String.fromCharCode(0x263A) != "\u263A" || String.fromCharCode(0xE9) != "\u00E9" || text.charAt(5).charCodeAt(0) != 0x263A)
+	if (String.fromCharCode(0x263A) != "\u263A" || String.fromCharCode(0xE9) != "\u00E9"
+		|| text.charAt(5).charCodeAt(0) != 0x263A)
 		return 3;
 	return 42;
 }

@@ -39,7 +39,8 @@ class WasmGcContext {
 	final enumCaseGlobals:Map<String, Int> = [];
 	var enumTagAdapters:Null<Map<String, {box:Null<String>, unbox:Null<String>}>>;
 
-	public function new(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, globals:Map<String, Int>, methods:Map<String, String>) {
+	public function new(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, globals:Map<String, Int>,
+			methods:Map<String, String>) {
 		this.module = module;
 		this.plan = plan;
 		this.functions = functions;

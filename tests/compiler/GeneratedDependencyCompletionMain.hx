@@ -14,7 +14,8 @@ class GeneratedDependencyCompletionMain {
 			for (_ in 0...2)
 				if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 42)
 					throw "Generated dependencies were not completed on a cold or cached build";
-			compiler.update("Main.hx", StringTools.replace(source, "read() == Hashing.hash(key)", "read() != Hashing.hash(key)"));
+			compiler.update("Main.hx",
+				StringTools.replace(source, "read() == Hashing.hash(key)", "read() != Hashing.hash(key)"));
 			if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 1)
 				throw "Generated dependencies retained a stale enum method";
 		}

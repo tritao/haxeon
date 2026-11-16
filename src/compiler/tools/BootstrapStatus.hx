@@ -100,8 +100,14 @@ class BootstrapStatus {
 	static function inspect(path:String):FileStatus {
 		var source = File.getContent(path),
 			file = new SourceFile(path, source);
-		var pressure = featurePressure(source), lexed = false, parsed = false, functions = 0, failedStage:Null<String> = null, line:Null<Int> = null,
-			column:Null<Int> = null, error:Null<String> = null;
+		var pressure = featurePressure(source),
+			lexed = false,
+			parsed = false,
+			functions = 0,
+			failedStage:Null<String> = null,
+			line:Null<Int> = null,
+			column:Null<Int> = null,
+			error:Null<String> = null;
 		try {
 			var tokens = new Lexer(file).tokenize();
 			lexed = true;
@@ -143,10 +149,11 @@ class BootstrapStatus {
 		};
 	}
 
-	static function sourceLocation(source:SourceFile, offset:Int):{line:Int, column:Int}
-		return source.lineColumnAt(offset);
+	static function sourceLocation(source:SourceFile, offset:Int): {line: Int,
+		column: Int} return source.lineColumnAt(offset);
 
-	static function inspectProject(roots:Array<String>, paths:Array<String>, files:Array<FileStatus>, entryModule:String):ProjectStatus {
+	static function inspectProject(roots:Array<String>, paths:Array<String>, files:Array<FileStatus>,
+			entryModule:String):ProjectStatus {
 		var parseFailures = files.length - countFiles(files, function(file) return file.parsed);
 		if (parseFailures > 0)
 			return {
@@ -194,26 +201,24 @@ class BootstrapStatus {
 				pressure.set(name, (pressure.get(name) == null ? 0 : pressure.get(name)) + count);
 		var ordered = [for (name in pressure.keys()) name];
 		ordered.sort(Reflect.compare);
-		var sortedPressure = [for (name in ordered) {name: name, occurrences: pressure.get(name)}];
-		return {
-			roots: roots,
+		var sortedPressure = [for (name in ordered) {
+			name:name, occurrences:pressure.get(name)
+		}];
+		return {roots: roots,
 			files: files.length,
 			lexed: countFiles(files, function(file) return file.lexed),
 			parsed: countFiles(files, function(file) return file.parsed),
 			functions: sumFunctions(files),
 			project: project,
 			featurePressure: sortedPressure,
-			failures: [
-				for (file in files)
-					if (file.error != null) {
-						path: file.path,
-						failedStage: file.failedStage,
-						line: file.line,
-						column: file.column,
-						error: file.error
-					}
-			]
-		};
+			failures: [for (file in files)
+			if (file.error != null) {
+				path:file.path,
+					failedStage:file.failedStage,
+					line:file.line,
+					column:file.column,
+					error:file.error
+			}]};
 	}
 
 	static function printSummary(report:BootstrapReport, files:Array<FileStatus>):Void {
@@ -284,7 +289,8 @@ class BootstrapStatus {
 			var before = found == 0 ? 0 : source.charCodeAt(found - 1);
 			var afterPosition = found + word.length;
 			var after = afterPosition >= source.length ? 0 : source.charCodeAt(afterPosition);
-			if ((word.charAt(0) == "@" || !isIdentifierPart(before)) && (word.charAt(0) == "@" || !isIdentifierPart(after)))
+			if ((word.charAt(0) == "@" || !isIdentifierPart(before))
+				&& (word.charAt(0) == "@" || !isIdentifierPart(after)))
 				count++;
 			offset = afterPosition;
 		}

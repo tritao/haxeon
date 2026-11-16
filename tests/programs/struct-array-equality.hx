@@ -5,7 +5,12 @@ struct ArrayEqualityItem implements Equatable {
 }
 
 function main():Int {
-	var values = [new ArrayEqualityItem(1), new ArrayEqualityItem(2), new ArrayEqualityItem(12), new ArrayEqualityItem(3)];
+	var values = [
+		new ArrayEqualityItem(1),
+		new ArrayEqualityItem(2),
+		new ArrayEqualityItem(12),
+		new ArrayEqualityItem(3)
+	];
 	if (values.indexOf(new ArrayEqualityItem(22)) != 1 || !values.contains(new ArrayEqualityItem(13))) return 1;
 	if (!values.remove(new ArrayEqualityItem(22)) || values.length != 3 || values[1].value != 12) return 2;
 	if (values.remove(new ArrayEqualityItem(9)) || values.indexOf(new ArrayEqualityItem(9)) != -1) return 3;

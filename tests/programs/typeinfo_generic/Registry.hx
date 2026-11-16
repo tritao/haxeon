@@ -17,8 +17,10 @@ class Component<T> {
 	public final nestedFieldAlignment:Null<Int>;
 	public final nestedFieldOffset:Null<Int>;
 
-	public function new(identity:String, name:String, hash:String, size:Null<Int>, alignment:Null<Int>, fieldType:String, fieldSize:Null<Int>,
-			fieldAlignment:Null<Int>, fieldOffset:Null<Int>, nestedFieldType:String, nestedFieldSize:Null<Int>, nestedFieldAlignment:Null<Int>,
+	public function new(identity:String, name:String, hash:String, size:Null<Int>, alignment:Null<Int>,
+			fieldType:String, fieldSize:Null<Int>,
+			fieldAlignment:Null<Int>, fieldOffset:Null<Int>, nestedFieldType:String, nestedFieldSize:Null<Int>,
+			nestedFieldAlignment:Null<Int>,
 			nestedFieldOffset:Null<Int>) {
 		this.identity = identity;
 		this.name = name;
@@ -41,7 +43,8 @@ class Registry {
 		var info = typeInfo<T>(), first = info.fields[0], nested = first;
 		if (first.fields.length > 0)
 			nested = first.fields[0];
-		return new Component<T>(info.type, info.name, info.hash, info.size, info.alignment, first.type, first.size, first.alignment, first.offset,
+		return new Component<T>(info.type, info.name, info.hash, info.size, info.alignment, first.type, first.size,
+			first.alignment, first.offset,
 			nested.type, nested.size, nested.alignment, nested.offset);
 	}
 

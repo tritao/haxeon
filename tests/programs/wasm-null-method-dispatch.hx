@@ -11,7 +11,9 @@ class NullDispatchBox<T> {
 	}
 }
 
-class NullDispatchProbe { public static var entered:Int = 0; }
+class NullDispatchProbe {
+	public static var entered:Int = 0;
+}
 
 function missingBox():NullDispatchBox<NullDispatchValue> {
 	var value:Dynamic = null;

@@ -2,9 +2,9 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 
 class GenericCallbackContextMain {
-	static final declarations = 'class Item { public var value:Int; public function new() value = 41; public function dispose():Void value++; } '
-		+
-		'class Factory<C> { public function new() {} public function make<T>(tag:C, create:Void->T, dispose:T->Void):T { var value = create(); dispose(value); return value; } } '
+	static final declarations =
+		'class Item { public var value:Int; public function new() value = 41; public function dispose():Void value++; } '
+		+ 'class Factory<C> { public function new() {} public function make<T>(tag:C, create:Void->T, dispose:T->Void):T { var value = create(); dispose(value); return value; } } '
 		+ 'class Resources { public static function make<T>(create:Void->T, dispose:T->Void):T { var value = create(); dispose(value); return value; } '
 		+ 'public static function reversed<T>(dispose:T->Void, create:Void->T):T { var value = create(); dispose(value); return value; } '
 		+ 'public static function implicit():Int return make(function() return new Item(), function(value) { value.dispose(); }).value; } ';
@@ -21,7 +21,8 @@ class GenericCallbackContextMain {
 		accepted('Resources.make(function() return new Item(), function(value) { value.dispose(); }).value');
 		accepted('Resources.reversed(function(value) { value.dispose(); }, function() return new Item()).value');
 		accepted('new Factory<String>().make("tag", function() return new Item(), function(value) { value.dispose(); }).value');
-		var valid = declarations + 'function main():Int return Resources.make(function() return new Item(), function(value) { value.dispose(); }).value;';
+		var valid = declarations
+			+ 'function main():Int return Resources.make(function() return new Item(), function(value) { value.dispose(); }).value;';
 		var compiler = new Compiler();
 		compiler.update("Main.hx", valid);
 		compiler.compile("Main");

@@ -39,8 +39,7 @@ function main():Int {
 		a < 8,
 		!(a < 7),
 		a <= 7,
-		b<a, a>
-		b,
+		b < a, a > b,
 		a >= 7,
 		!(a > 7),
 		s < "y",

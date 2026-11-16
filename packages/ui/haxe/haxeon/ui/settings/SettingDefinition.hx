@@ -153,8 +153,40 @@ class SettingDefinition {
 		return words.join(" ");
 	}
 
-	static final ACRONYMS:Array<String> = ["2d", "3d", "api", "cpu", "fps", "gpu", "id", "io", "lsp", "msaa", "ssh", "ssl", "tls", "ui", "url", "xr"];
-	static final SMALL_WORDS:Array<String> = ["a", "an", "and", "as", "at", "by", "for", "in", "of", "on", "or", "the", "to", "with"];
+	static final ACRONYMS:Array<String> = [
+		"2d",
+		"3d",
+		"api",
+		"cpu",
+		"fps",
+		"gpu",
+		"id",
+		"io",
+		"lsp",
+		"msaa",
+		"ssh",
+		"ssl",
+		"tls",
+		"ui",
+		"url",
+		"xr"
+	];
+	static final SMALL_WORDS:Array<String> = [
+		"a",
+		"an",
+		"and",
+		"as",
+		"at",
+		"by",
+		"for",
+		"in",
+		"of",
+		"on",
+		"or",
+		"the",
+		"to",
+		"with"
+	];
 
 	static function validPath(path:String):Bool {
 		if (path == null || path.length == 0)

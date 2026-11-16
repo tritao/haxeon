@@ -34,7 +34,9 @@ class NativeInputAdapter {
 		cursor = new NativeCursorController(source);
 		attachedEvents = null;
 		eventSubscription = null;
-		eventListener = function(event) { consume(event); };
+		eventListener = function(event) {
+			consume(event);
+		};
 		pointerX = 0.0;
 		pointerY = 0.0;
 	}
@@ -60,7 +62,9 @@ class NativeInputAdapter {
 				// Unsupported capture must not interrupt logical event routing.
 			}
 		});
-		context.setCursorHandler(function(shape) { cursor.apply(shape); });
+		context.setCursorHandler(function(shape) {
+			cursor.apply(shape);
+		});
 	}
 
 	/** Stops routing events from the attached pump. */
@@ -95,12 +99,15 @@ class NativeInputAdapter {
 				pointerY = y;
 				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue()));
 				if (action == InputAction.Press)
-					context.pointerDown(x / coordinateScale, y / coordinateScale, button.rawValue(), UiModifier.fromRaw(modifiers.rawValue()));
+					context.pointerDown(x / coordinateScale, y / coordinateScale, button.rawValue(),
+						UiModifier.fromRaw(modifiers.rawValue()));
 				else if (action == InputAction.Release)
-					context.pointerUp(x / coordinateScale, y / coordinateScale, button.rawValue(), UiModifier.fromRaw(modifiers.rawValue()));
+					context.pointerUp(x / coordinateScale, y / coordinateScale, button.rawValue(),
+						UiModifier.fromRaw(modifiers.rawValue()));
 				action == InputAction.Press || action == InputAction.Release;
 			case PointerScroll(eventSource, deltaX, deltaY) if (matches(eventSource)):
-				context.scroll(pointerX / coordinateScale, pointerY / coordinateScale, deltaX / coordinateScale, deltaY / coordinateScale, pointerModifiers);
+				context.scroll(pointerX / coordinateScale, pointerY / coordinateScale, deltaX / coordinateScale,
+					deltaY / coordinateScale, pointerModifiers);
 				true;
 			case PointerEnter(eventSource, entered) if (matches(eventSource)):
 				if (!entered)
@@ -111,9 +118,9 @@ class NativeInputAdapter {
 					var button = context.events.capturedPointerButton();
 					try {
 						if (button != null)
-							context.pointerReenter(
-								NativeKit.nk_pointer_button_get_state_checked(window, NativeKitTypes.NativeKitTypesEnumDecoders.decodePointerButton(button)) ==
-								InputAction.Press, pointerX / coordinateScale, pointerY / coordinateScale);
+							context.pointerReenter(NativeKit.nk_pointer_button_get_state_checked(window,
+								NativeKitTypes.NativeKitTypesEnumDecoders.decodePointerButton(button))
+								== InputAction.Press, pointerX / coordinateScale, pointerY / coordinateScale);
 					} catch (_:Dynamic) {}
 				}
 				true;
@@ -153,15 +160,19 @@ class NativeInputAdapter {
 				var routedId = touchPointerId(pointerId);
 				var data = new UiTouchData(tool, pressure, tiltX, tiltY);
 				if (action == TouchAction.Begin)
-					context.pointerDown(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
+					context.pointerDown(x / coordinateScale, y / coordinateScale, 0,
+						UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
 				else if (action == TouchAction.Move)
-					context.pointerMove(x / coordinateScale, y / coordinateScale, UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
+					context.pointerMove(x / coordinateScale, y / coordinateScale,
+						UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
 				else if (action == TouchAction.End)
-					context.pointerUp(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
+					context.pointerUp(x / coordinateScale, y / coordinateScale, 0,
+						UiModifier.fromRaw(modifiers.rawValue()), routedId, data);
 				else if (action == TouchAction.Cancel)
-					context.pointerCancel(routedId, x / coordinateScale, y / coordinateScale, UiModifier.fromRaw(modifiers.rawValue()), data);
-				action == TouchAction.Begin || action == TouchAction.Move ||
-					action == TouchAction.End || action == TouchAction.Cancel;
+					context.pointerCancel(routedId, x / coordinateScale, y / coordinateScale,
+						UiModifier.fromRaw(modifiers.rawValue()), data);
+				action == TouchAction.Begin || action == TouchAction.Move || action == TouchAction.End
+					|| action == TouchAction.Cancel;
 			case _:
 				false;
 		}
@@ -217,11 +228,9 @@ class NativeInputAdapter {
 		return pointerId | 0x80000000;
 
 	static function fromCodepoint(codepoint:Int):String {
-		if (codepoint < 0 || codepoint > 0x10ffff ||
-			(codepoint >= 0xd800 && codepoint <= 0xdfff))
+		if (codepoint < 0 || codepoint > 0x10ffff || (codepoint >= 0xd800 && codepoint <= 0xdfff))
 			codepoint = 0xfffd;
-		var bytes = haxe.io.Bytes.alloc(codepoint <= 0x7f ? 1 : codepoint <= 0x7ff ? 2 :
-			codepoint <= 0xffff ? 3 : 4);
+		var bytes = haxe.io.Bytes.alloc(codepoint <= 0x7f ? 1 : codepoint <= 0x7ff ? 2 : codepoint <= 0xffff ? 3 : 4);
 		if (bytes.length == 1)
 			bytes.set(0, codepoint);
 		else if (bytes.length == 2) {

@@ -3,7 +3,8 @@ import compiler.Diagnostic.CompileError;
 import compiler.runtime.CompilerIntrinsics;
 
 class PrimitiveStringEffectsMain {
-	static final helpers = 'class Support { public static var view:View; public static function measure(text:String):Int { '
+	static final helpers =
+		'class Support { public static var view:View; public static function measure(text:String):Int { '
 		+ 'var lower = text.toLowerCase(), index = lower.indexOf("x"); return index < 0 ? 1 : 2; } }';
 	static final view = 'class Box { public var entries:Array<Int> = [1, 2]; public function new() {} } '
 		+ 'class View { public var provider:Null<Box>; var lines:Array<String> = ["x"]; var query(get, never):String; '

@@ -9,7 +9,7 @@ class NativeSpanView {
 	public function new(base:hl.Bytes, length:Int, owner:Null<NativeSpanOwner>) {
 		if (length < 0)
 			throw "Native span length must not be negative";
-		if (length > 0 && (cast base : RawPtr<Int>).isNull())
+		if (length > 0 && (cast base:RawPtr<Int>).isNull())
 			throw "Native span with elements needs an address";
 		this.base = base;
 		this.length = length;
@@ -68,11 +68,11 @@ abstract NativeSpan<T>(NativeSpanView) {
 
 	/** The number of elements. */
 	public inline function length():Int
-		return (cast this : NativeSpanView).length;
+		return (cast this:NativeSpanView).length;
 
 	/** Whether the elements may still be read. */
 	public inline function isOpen():Bool
-		return (cast this : NativeSpanView).isOpen();
+		return (cast this:NativeSpanView).isOpen();
 
 	/** The element at `index`. */
 	public inline function get(index:Int):T

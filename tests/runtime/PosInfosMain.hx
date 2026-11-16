@@ -11,7 +11,8 @@ class PosInfosMain {
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
-		var source = "import haxe.PosInfos;\nfunction position(?pos:PosInfos):PosInfos { if (pos == null) throw \"missing\"; return pos; }\nfunction main():Int {\n\treturn position().lineNumber;\n}\n";
+		var source =
+			"import haxe.PosInfos;\nfunction position(?pos:PosInfos):PosInfos { if (pos == null) throw \"missing\"; return pos; }\nfunction main():Int {\n\treturn position().lineNumber;\n}\n";
 		compiler.update("Position.hx", source);
 		var initial = compiler.compile("Position");
 		File.saveBytes(arguments[0], HlWriter.encode(initial.module).flatten());

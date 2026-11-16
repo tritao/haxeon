@@ -50,7 +50,8 @@ class HttpEventDecoder {
 			var value = EventBytes.readUtf8Slice(header.get_value_bytes(), 0,
 				header.get_value_size(), 0);
 			if (name == null || value == null)
-				throw BindingError.invalidData("HttpEventDecoder.response", "NativeKit HTTP response contains an invalid UTF-8 header");
+				throw BindingError.invalidData("HttpEventDecoder.response",
+					"NativeKit HTTP response contains an invalid UTF-8 header");
 			headers.push(new HttpHeader(name, value));
 		}
 		return new HttpResponse(view.get_status_code(), view.get_flags(),

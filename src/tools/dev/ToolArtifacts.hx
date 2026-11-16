@@ -117,7 +117,12 @@ class ToolArtifacts {
 		var temporary = Path.join([
 			directory,
 			'.${Path.withoutDirectory(output)}.${Std.int(Sys.time() * 1000) % 100000000}-${Std.random(1000000)}.hl'
-		]), arguments = ["--cwd", home, "common.hxml"];
+		]),
+			arguments = [
+				"--cwd",
+				home,
+				"common.hxml"
+			];
 		for (classPath in request.classPaths)
 			arguments = arguments.concat(["-cp", classPath]);
 		for (define in request.defines)
@@ -210,7 +215,7 @@ class ToolArtifacts {
 			FileSystem.createDirectory(path)
 		catch (_:Dynamic)
 			if (!FileSystem.exists(path))
-				throw 'Could not create $path';
+			throw 'Could not create $path';
 	}
 
 	static function removeQuietly(path:String):Void {

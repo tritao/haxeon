@@ -26,7 +26,8 @@ class SourceLineMap {
 			prefix++;
 		}
 		var suffix = 0;
-		while (suffix < a.length - prefix && suffix < b.length - prefix && a[a.length - 1 - suffix] == b[b.length - 1 - suffix]) {
+		while (suffix < a.length - prefix && suffix < b.length - prefix
+			&& a[a.length - 1 - suffix] == b[b.length - 1 - suffix]) {
 			result.set(a.length - suffix, b.length - suffix);
 			suffix++;
 		}
@@ -48,16 +49,21 @@ class SourceLineMap {
 	}
 
 	static function lines(text:String):Array<String>
-		return [for (line in text.split("\n")) StringTools.endsWith(line, "\r") ? line.substr(0, line.length - 1) : line];
+		return [for (line in text.split("\n")) StringTools.endsWith(line, "\r") ? line.substr(0,
+			line.length - 1) : line];
 
 	/** The longest common subsequence of the lines `a[aFrom...aFrom+aCount]` and `b[bFrom...bFrom+bCount]`, as index pairs. */
-	static function commonLines(a:Array<String>, aFrom:Int, aCount:Int, b:Array<String>, bFrom:Int, bCount:Int):Array<{old:Int, now:Int}> {
+	static function commonLines(a:Array<String>, aFrom:Int, aCount:Int, b:Array<String>, bFrom:Int, bCount:Int):Array<{
+		old:Int,
+		now:Int
+	}> {
 		var width = bCount + 1, table:Array<Int> = [for (_ in 0...(aCount + 1) * width) 0];
 		var i = aCount - 1;
 		while (i >= 0) {
 			var j = bCount - 1;
 			while (j >= 0) {
-				table[i * width + j] = a[aFrom + i] == b[bFrom + j] ? table[(i + 1) * width + j + 1] + 1 : max(table[(i + 1) * width + j],
+				table[i * width + j] = a[aFrom + i] == b[bFrom + j]
+					? table[(i + 1) * width + j + 1] + 1 : max(table[(i + 1) * width + j],
 					table[i * width + j + 1]);
 				j--;
 			}
@@ -78,10 +84,13 @@ class SourceLineMap {
 	}
 
 	/** Pairs, in order, the old and new lines of one changed stretch that read most alike, to maximize the total likeness. */
-	static function pairSimilar(a:Array<String>, aFrom:Int, aCount:Int, b:Array<String>, bFrom:Int, bCount:Int, result:Map<Int, Int>):Void {
+	static function pairSimilar(a:Array<String>, aFrom:Int, aCount:Int, b:Array<String>, bFrom:Int, bCount:Int,
+			result:Map<Int, Int>):Void {
 		if (aCount <= 0 || bCount <= 0 || aCount > MAX_GAP_LINES || bCount > MAX_GAP_LINES)
 			return;
-		var width = bCount + 1, best:Array<Float> = [for (_ in 0...(aCount + 1) * width) 0.0], likeness:Array<Float> = [for (_ in 0...aCount * bCount) 0.0];
+		var width = bCount + 1,
+			best:Array<Float> = [for (_ in 0...(aCount + 1) * width) 0.0],
+			likeness:Array<Float> = [for (_ in 0...aCount * bCount) 0.0];
 		for (i in 0...aCount)
 			for (j in 0...bCount)
 				likeness[i * bCount + j] = similarity(a[aFrom + i], b[bFrom + j]);
@@ -89,7 +98,8 @@ class SourceLineMap {
 		while (i >= 0) {
 			var j = bCount - 1;
 			while (j >= 0) {
-				var skip = Math.max(best[(i + 1) * width + j], best[i * width + j + 1]), alike = likeness[i * bCount + j];
+				var skip = Math.max(best[(i + 1) * width + j], best[i * width + j + 1]),
+					alike = likeness[i * bCount + j];
 				best[i * width + j] = alike >= SIMILAR ? Math.max(skip, best[(i + 1) * width + j + 1] + alike) : skip;
 				j--;
 			}
@@ -120,7 +130,8 @@ class SourceLineMap {
 		for (i in 0...a.length) {
 			current[0] = 0;
 			for (j in 0...b.length)
-				current[j + 1] = a.charCodeAt(i) == b.charCodeAt(j) ? previous[j] + 1 : max(previous[j + 1], current[j]);
+				current[j + 1] = a.charCodeAt(i) == b.charCodeAt(j) ? previous[j] + 1 : max(previous[j + 1],
+					current[j]);
 			var swap = previous;
 			previous = current;
 			current = swap;

@@ -22,7 +22,8 @@ class WasmClosureVerificationOrderMain {
 					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				compiler.update("Main.hx", source);
 				compiler.compile("Main");
-				compiler.update("Main.hx", StringTools.replace(source, "Census.run(128) == 128", "Census.run(64) == 64"));
+				compiler.update("Main.hx",
+					StringTools.replace(source, "Census.run(128) == 128", "Census.run(64) == 64"));
 				var changed = compiler.compile("Main");
 				if (changed.metrics.linkedFunctions == 0)
 					throw "Closure ordering test did not exercise fresh recomputation of linked functions";

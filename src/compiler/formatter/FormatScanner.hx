@@ -53,7 +53,8 @@ class FormatScanner {
 			}
 			if (code == " ".code || code == "\t".code) {
 				var whitespaceEnd = position + 1;
-				while (whitespaceEnd < source.length && (source.get(whitespaceEnd) == " ".code || source.get(whitespaceEnd) == "\t".code))
+				while (whitespaceEnd < source.length
+					&& (source.get(whitespaceEnd) == " ".code || source.get(whitespaceEnd) == "\t".code))
 					whitespaceEnd++;
 				push(result, FormatTokenKind.Whitespace, position, whitespaceEnd);
 				position = whitespaceEnd;
@@ -70,19 +71,22 @@ class FormatScanner {
 				while (lineEnd < source.length && source.get(lineEnd) != "\r".code && source.get(lineEnd) != "\n".code)
 					lineEnd++;
 				var lineText = file.slice(position, lineEnd),
-					lineKind = StringTools.startsWith(lineText, "///") ? FormatTokenKind.DocComment : FormatTokenKind.LineComment;
+					lineKind = StringTools.startsWith(lineText, "///")
+						? FormatTokenKind.DocComment : FormatTokenKind.LineComment;
 				push(result, lineKind, position, lineEnd);
 				position = lineEnd;
 				continue;
 			}
 			if (code == "/".code && position + 1 < source.length && source.get(position + 1) == "*".code) {
 				var blockEnd = position + 2;
-				while (blockEnd + 1 < source.length && !(source.get(blockEnd) == "*".code && source.get(blockEnd + 1) == "/".code))
+				while (blockEnd + 1 < source.length
+					&& !(source.get(blockEnd) == "*".code && source.get(blockEnd + 1) == "/".code))
 					blockEnd++;
 				if (blockEnd + 1 < source.length)
 					blockEnd += 2;
 				var blockText = file.slice(position, blockEnd),
-					blockKind = StringTools.startsWith(blockText, "/**") ? FormatTokenKind.DocComment : FormatTokenKind.BlockComment;
+					blockKind = StringTools.startsWith(blockText, "/**")
+						? FormatTokenKind.DocComment : FormatTokenKind.BlockComment;
 				push(result, blockKind, position, blockEnd);
 				position = blockEnd;
 				continue;
@@ -117,7 +121,8 @@ class FormatScanner {
 					&& position < source.length
 					&& (source.get(position) == "x".code || source.get(position) == "X".code)) {
 					position++;
-					while (position < source.length && (isHexDigit(source.get(position)) || source.get(position) == "_".code))
+					while (position < source.length
+						&& (isHexDigit(source.get(position)) || source.get(position) == "_".code))
 						position++;
 					push(result, FormatTokenKind.Syntax(TokenKind.Integer), start, position);
 					continue;
@@ -125,18 +130,23 @@ class FormatScanner {
 				while (position < source.length && (isDigit(source.get(position)) || source.get(position) == "_".code))
 					position++;
 				var numberKind = TokenKind.Integer;
-				if (position + 1 < source.length && source.get(position) == ".".code && isDigit(source.get(position + 1))) {
+				if (position + 1 < source.length && source.get(position) == ".".code
+					&& isDigit(source.get(position + 1))) {
 					numberKind = TokenKind.Float;
 					position++;
-					while (position < source.length && (isDigit(source.get(position)) || source.get(position) == "_".code))
+					while (position < source.length
+						&& (isDigit(source.get(position)) || source.get(position) == "_".code))
 						position++;
 				}
-				if (position < source.length && (source.get(position) == "e".code || source.get(position) == "E".code)) {
+				if (position < source.length
+					&& (source.get(position) == "e".code || source.get(position) == "E".code)) {
 					numberKind = TokenKind.Float;
 					position++;
-					if (position < source.length && (source.get(position) == "+".code || source.get(position) == "-".code))
+					if (position < source.length
+						&& (source.get(position) == "+".code || source.get(position) == "-".code))
 						position++;
-					while (position < source.length && (isDigit(source.get(position)) || source.get(position) == "_".code))
+					while (position < source.length
+						&& (isDigit(source.get(position)) || source.get(position) == "_".code))
 						position++;
 				}
 				push(result, FormatTokenKind.Syntax(numberKind), start, position);
@@ -184,12 +194,14 @@ class FormatScanner {
 			case "<": twoCharacter("=", TokenKind.LessEqual, TokenKind.Less);
 			case ">": twoCharacter("=", TokenKind.GreaterEqual, TokenKind.Greater);
 			case "!": twoCharacter("=", TokenKind.NotEqual, TokenKind.Not);
-			case "&": if (consume("&")) TokenKind.AndAnd else if (consume("=")) TokenKind.AndAssign else TokenKind.Ampersand;
+			case "&": if (consume("&")) TokenKind.AndAnd else if (consume("=")) TokenKind.AndAssign
+				else TokenKind.Ampersand;
 			case "|": if (consume("|")) TokenKind.OrOr else if (consume("=")) TokenKind.OrAssign else TokenKind.Pipe;
 			case "^": if (consume("=")) TokenKind.XorAssign else TokenKind.Caret;
-			case "+": if (consume("=")) TokenKind.PlusAssign else if (consume("+")) TokenKind.Increment else TokenKind.Plus;
-			case "-": if (consume(">")) TokenKind.Arrow else if (consume("=")) TokenKind.MinusAssign else if (consume("-")) TokenKind.Decrement else
-					TokenKind.Minus;
+			case "+": if (consume("=")) TokenKind.PlusAssign else if (consume("+")) TokenKind.Increment
+				else TokenKind.Plus;
+			case "-": if (consume(">")) TokenKind.Arrow else if (consume("=")) TokenKind.MinusAssign
+				else if (consume("-")) TokenKind.Decrement else TokenKind.Minus;
 			case "*": if (consume("=")) TokenKind.StarAssign else TokenKind.Star;
 			case "/": if (consume("=")) TokenKind.SlashAssign else TokenKind.Slash;
 			case "%": if (consume("=")) TokenKind.PercentAssign else TokenKind.Percent;
@@ -216,7 +228,8 @@ class FormatScanner {
 					position++;
 				continue;
 			}
-			if (quote == "'".code && current == "$".code && position < source.length && source.get(position) == "{".code) {
+			if (quote == "'".code && current == "$".code && position < source.length
+				&& source.get(position) == "{".code) {
 				position++;
 				scanInterpolation();
 				continue;
@@ -244,7 +257,8 @@ class FormatScanner {
 				}
 				if (next == "*".code) {
 					position++;
-					while (position + 1 < source.length && !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
+					while (position + 1 < source.length
+						&& !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
 						position++;
 					if (position + 1 < source.length)
 						position += 2;
@@ -377,8 +391,9 @@ class FormatScanner {
 	public static function directiveName(text:String):String {
 		var index = 0;
 		while (index < text.length
-			&& (text.charCodeAt(index) == "#".code || text.charCodeAt(index) == " ".code || text.charCodeAt(index) == "\t".code
-				|| text.charCodeAt(index) == "\r".code))
+			&& (text.charCodeAt(index) == "#".code || text.charCodeAt(index) == " ".code
+			|| text.charCodeAt(index) == "\t".code
+			|| text.charCodeAt(index) == "\r".code))
 			index++;
 		var start = index;
 		while (index < text.length) {

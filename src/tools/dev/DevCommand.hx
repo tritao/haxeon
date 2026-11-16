@@ -51,7 +51,12 @@ class DevCommand {
 	}
 
 	static function test(arguments:Array<String>, home:String):Int {
-		var mode:Null<String> = null, jobs = Std.parseInt(Sys.getEnv("TEST_JOBS") ?? ""), gate = false, list = false, only:Array<String> = [], index = 0;
+		var mode:Null<String> = null,
+			jobs = Std.parseInt(Sys.getEnv("TEST_JOBS") ?? ""),
+			gate = false,
+			list = false,
+			only:Array<String> = [],
+			index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			switch argument {

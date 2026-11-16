@@ -22,9 +22,13 @@ class WasmDeepStructureMain {
 			var binary = new WasmBackend().compile(program, {target: target, debugNames: false});
 			var path = 'out/wasm-deep-structure-$target.wasm';
 			File.saveBytes(path, binary.bytes);
-			var process = new Process("node", ["-e", 'const fs=require("fs"); '
-				+ 'const instance=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1])),{}); '
-				+ 'if(instance.exports.main()!==42) throw Error("wrong result");', path]);
+			var process = new Process("node", [
+				"-e",
+				'const fs=require("fs"); '
+					+ 'const instance=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1])),{}); '
+					+ 'if(instance.exports.main()!==42) throw Error("wrong result");',
+				path
+			]);
 			var error = process.stderr.readAll().toString(), status = process.exitCode();
 			process.close();
 			if (sys.FileSystem.exists(path)) sys.FileSystem.deleteFile(path);

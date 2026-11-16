@@ -15,8 +15,8 @@ class ViewportCamera implements Observable {
 
 	public function new(zoom:Float = 1.0, panX:Float = 0.0, panY:Float = 0.0,
 			minZoom:Float = 0.01, maxZoom:Float = 100.0) {
-		if (!finite(zoom) || !finite(panX) || !finite(panY) || !finite(minZoom) ||
-			!finite(maxZoom) || minZoom <= 0.0 || maxZoom < minZoom)
+		if (!finite(zoom) || !finite(panX) || !finite(panY) || !finite(minZoom) || !finite(maxZoom) || minZoom <= 0.0
+			|| maxZoom < minZoom)
 			throw "Viewport camera values must be finite and ordered";
 		this.minZoom = minZoom;
 		this.maxZoom = maxZoom;
@@ -71,9 +71,9 @@ class ViewportCamera implements Observable {
 	/** Fits a content rectangle into a viewport, preserving its center. */
 	public function fit(contentWidth:Float, contentHeight:Float, viewportWidth:Float,
 			viewportHeight:Float, margin:Float = 16.0):Bool {
-		if (!finite(contentWidth) || !finite(contentHeight) || !finite(viewportWidth) ||
-			!finite(viewportHeight) || contentWidth <= 0.0 || contentHeight <= 0.0 ||
-			viewportWidth <= 0.0 || viewportHeight <= 0.0 || margin < 0.0)
+		if (!finite(contentWidth) || !finite(contentHeight) || !finite(viewportWidth) || !finite(viewportHeight)
+			|| contentWidth <= 0.0 || contentHeight <= 0.0 || viewportWidth <= 0.0 || viewportHeight <= 0.0
+			|| margin < 0.0)
 			throw "Viewport fit dimensions must be finite and positive";
 		var availableWidth = Math.max(1.0, viewportWidth - margin * 2.0);
 		var availableHeight = Math.max(1.0, viewportHeight - margin * 2.0);

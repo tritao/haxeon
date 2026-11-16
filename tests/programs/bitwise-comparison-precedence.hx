@@ -4,5 +4,5 @@ enum abstract Flag(Int) from Int to Int {
 
 function main():Int {
 	var flags = 2;
-	return flags & (Answer : Int) != 0 ? 42 : 0;
+	return flags & (Answer:Int) != 0 ? 42 : 0;
 }

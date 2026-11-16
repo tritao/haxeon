@@ -64,10 +64,16 @@ function main():Int {
 		child:Dynamic = Reflect.field(dynamicAnonymous, "child"),
 		nested:Dynamic = Reflect.field(child, "nested");
 	var anonymousBefore:AnonymousIntent = cast Reflect.field(nested, "intent");
-	if (switch anonymousBefore { case AnonymousSelected("before"): false; default: true; }) return 8;
+	if (switch anonymousBefore {
+		case AnonymousSelected("before"): false;
+		default: true;
+	}) return 8;
 	Reflect.setField(nested, "intent", AnonymousSelected("after"));
 	var anonymousAfter:AnonymousIntent = cast Reflect.field(nested, "intent");
-	if (switch anonymousAfter { case AnonymousSelected("after"): false; default: true; }) return 9;
+	if (switch anonymousAfter {
+		case AnonymousSelected("after"): false;
+		default: true;
+	}) return 9;
 	var anonymousFields = Reflect.fields(nested);
 	if (anonymousFields.length != 1 || anonymousFields[0] != "intent") return 10;
 	return 42;

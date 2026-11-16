@@ -11,7 +11,8 @@ class BindingErrorTests {
 		var argument = false;
 		try TransportInterop.options(0) catch (error:BindingError) {
 			argument = error.kind == BindingErrorKind.InvalidArgument && error.code == BindingErrorKind.InvalidArgument
-				&& error.domain == "haxeon-bindings" && error.operation == "TransportInterop.options" && error.diagnostic != null;
+				&& error.domain == "haxeon-bindings" && error.operation == "TransportInterop.options"
+				&& error.diagnostic != null;
 		}
 		var malformed = false;
 		try EventBytes.readU32(haxe.io.Bytes.alloc(0), 0) catch (error:BindingError) {
@@ -22,7 +23,8 @@ class BindingErrorTests {
 		try TransportInterop.options(0) catch (error:PlatformError) base = error.domain == "haxeon-bindings";
 		var backend = false;
 		try TransportInterop.receive(TransportHandle.invalid(), 8) catch (error:NativeKitError) {
-			backend = error.domain == "nativekit" && error.result == Result.ErrorInvalidHandle && error.operation == "TransportInterop.receive";
+			backend = error.domain == "nativekit" && error.result == Result.ErrorInvalidHandle
+				&& error.operation == "TransportInterop.receive";
 		}
 		return argument && malformed && base && backend;
 	}

@@ -84,9 +84,12 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 				throw '$haxelibPath "dependencies" must be an object';
 			for (dependencyName in Reflect.fields(rawDependencies)) {
 				var dependencyVersion:Dynamic = Reflect.field(rawDependencies, dependencyName);
-				if (!Std.isOfType(dependencyVersion, String) || (cast dependencyVersion : String).length == 0)
+				if (!Std.isOfType(dependencyVersion, String) || (cast dependencyVersion:String).length == 0)
 					throw '$haxelibPath dependency "$dependencyName" must have an exact version for reproducible import';
-				Reflect.setField(dependencies, dependencyName, {haxelib: dependencyName, version: cast dependencyVersion});
+				Reflect.setField(dependencies, dependencyName, {
+					haxelib: dependencyName,
+					version: cast dependencyVersion
+				});
 			}
 		}
 		var generated:Dynamic = {
@@ -114,15 +117,15 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 		if (value == null)
 			return false;
 		if (Std.isOfType(value, String))
-			return (cast value : String).length > 0;
+			return (cast value:String).length > 0;
 		if (Std.isOfType(value, Array))
-			return (cast value : Array<Dynamic>).length > 0;
+			return (cast value:Array<Dynamic>).length > 0;
 		return true;
 	}
 
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value:Dynamic = Reflect.field(raw, field);
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw '$path requires a non-empty "$field" string';
 		return cast value;
 	}

@@ -140,10 +140,12 @@ class DockNodeTools {
 			case [Panel(firstId), Panel(secondId)]: firstId == secondId;
 			case [Tabs(firstIds, firstActive), Tabs(secondIds, secondActive)]:
 				firstActive == secondActive && sameIds(firstIds, secondIds);
-			case [Split(firstAxis, firstRatio, firstLeft, firstRight),
-				Split(secondAxis, secondRatio, secondLeft, secondRight)]:
-				firstAxis == secondAxis && firstRatio == secondRatio && same(firstLeft, secondLeft) &&
-					same(firstRight, secondRight);
+			case [
+				Split(firstAxis, firstRatio, firstLeft, firstRight),
+				Split(secondAxis, secondRatio, secondLeft, secondRight)
+			]:
+				firstAxis == secondAxis && firstRatio == secondRatio && same(firstLeft, secondLeft)
+					&& same(firstRight, secondRight);
 			default: false;
 		};
 	}
@@ -194,9 +196,9 @@ class DockNodeTools {
 
 	/** Moves or inserts a panel relative to the target panel. */
 	public static function dock(node:DockNode, panelId:String, targetPanelId:String,
-		zone:DockDropZone):DockNode {
-		if (node == null || panelId == null || targetPanelId == null || panelId == targetPanelId ||
-			!contains(node, targetPanelId))
+			zone:DockDropZone):DockNode {
+		if (node == null || panelId == null || targetPanelId == null || panelId == targetPanelId
+			|| !contains(node, targetPanelId))
 			return normalize(node);
 		var without = contains(node, panelId) ? remove(node, panelId) : clone(node);
 		return normalize(insert(without, panelId, targetPanelId, zone));
@@ -204,7 +206,7 @@ class DockNodeTools {
 
 	/** Updates a split addressed by a child-index path from the root. */
 	public static function setSplitRatio(node:DockNode, path:Array<Int>, ratio:Float,
-		depth:Int = 0):DockNode {
+			depth:Int = 0):DockNode {
 		if (node == null || path == null || depth < 0)
 			return normalize(node);
 		if (depth == path.length)
@@ -215,8 +217,8 @@ class DockNodeTools {
 		return switch (node) {
 			case Split(axis, current, first, second):
 				var branch = path[depth];
-				branch == 0 ? Split(axis, current, setSplitRatio(first, path, ratio, depth + 1), second) :
-					branch == 1 ? Split(axis, current, first, setSplitRatio(second, path, ratio, depth + 1)) : node;
+				branch == 0 ? Split(axis, current, setSplitRatio(first, path, ratio, depth + 1), second) : branch == 1
+					? Split(axis, current, first, setSplitRatio(second, path, ratio, depth + 1)) : node;
 			default: node;
 		};
 	}
@@ -228,7 +230,7 @@ class DockNodeTools {
 	}
 
 	static function validateNode(node:DockNode, known:Map<String, Bool>,
-		seen:Map<String, Bool>):Null<String> {
+			seen:Map<String, Bool>):Null<String> {
 		if (node == null)
 			return "Dock layout contains a null node";
 		return switch (node) {
@@ -257,7 +259,7 @@ class DockNodeTools {
 	}
 
 	static function validatePanel(id:String, known:Map<String, Bool>,
-		seen:Map<String, Bool>):Null<String> {
+			seen:Map<String, Bool>):Null<String> {
 		if (id == null || id.length == 0)
 			return "Dock panels require stable IDs";
 		if (known != null && !known.exists(id))
@@ -269,7 +271,7 @@ class DockNodeTools {
 	}
 
 	static function insert(node:DockNode, panelId:String, targetPanelId:String,
-		zone:DockDropZone):DockNode {
+			zone:DockDropZone):DockNode {
 		return switch (node) {
 			case Empty: Empty;
 			case Panel(id):

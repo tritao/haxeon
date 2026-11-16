@@ -22,23 +22,32 @@ typedef WasmGcMapHelpers = {
 
 /** Lowers specialized Haxe maps to GC structs: dense typed key and value arrays in insertion order, plus a hash index of entry positions. */
 class WasmGcMaps {
-	public static function add(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, native:IrNative, mapName:String, operation:String):Int {
+	public static function add(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, native:IrNative,
+			mapName:String, operation:String):Int {
 		var map = plan.mapPlan(mapName),
 			mapType = plan.mapType(mapName),
 			mapReference = Ref({nullable: true, heap: Type(mapType)}),
 			name = '__${mapName}_$operation';
 		return switch operation {
 			case "alloc": addAlloc(module, name, plan, map, mapType, mapReference);
-			case "set": addSet(module, name, plan, map, mapType, mapReference, ensureHelpers(module, functions, plan, mapName));
-			case "exists": addExists(module, name, plan, map, mapType, mapReference, ensureHelpers(module, functions, plan, mapName).find);
-			case "get": addGet(module, name, plan, map, mapType, mapReference, ensureHelpers(module, functions, plan, mapName).find);
+			case "set": addSet(module, name, plan, map, mapType, mapReference,
+				ensureHelpers(module, functions, plan, mapName));
+			case "exists": addExists(module, name, plan, map, mapType, mapReference,
+				ensureHelpers(module, functions, plan, mapName).find);
+			case "get": addGet(module, name, plan, map, mapType, mapReference,
+				ensureHelpers(module, functions, plan, mapName).find);
 			case "keys": addProjectionForNative(module, name, plan, native, map, mapType, mapReference, true);
 			case "values": addProjectionForNative(module, name, plan, native, map, mapType, mapReference, false);
-			case "remove": addRemove(module, name, plan, map, mapType, mapReference, ensureHelpers(module, functions, plan, mapName));
+			case "remove": addRemove(module, name, plan, map, mapType, mapReference,
+				ensureHelpers(module, functions, plan, mapName));
 			case "clear": addClear(module, name, plan, map, mapType, mapReference);
 			case "copy": addCopy(module, name, plan, map, mapType, mapReference);
 			case "size": module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: [I32]}, [],
-					[LocalGet(0), StructGet(mapType, 0), Return]));
+				[
+					LocalGet(0),
+					StructGet(mapType, 0),
+					Return
+				]));
 			default: throw 'Unknown Wasm GC map operation "$operation"';
 		};
 	}
@@ -46,7 +55,8 @@ class WasmGcMaps {
 	public static function projectionName(nativeName:String, outputType:IrType):String
 		return '__haxeon_gc_map_projection_${nativeName}_${WasmGcTypePlan.typeKey(outputType)}';
 
-	public static function addProjectionForCall(module:WasmModule, plan:WasmGcTypePlan, native:IrNative, mapName:String, operation:String,
+	public static function addProjectionForCall(module:WasmModule, plan:WasmGcTypePlan, native:IrNative, mapName:String,
+			operation:String,
 			outputType:IrType):Int {
 		var map = plan.mapPlan(mapName),
 			mapType = plan.mapType(mapName),
@@ -54,7 +64,8 @@ class WasmGcMaps {
 			keys = operation == "keys";
 		if (operation != "keys" && operation != "values")
 			throw 'Wasm GC native ${native.name} is not a map projection';
-		return addProjection(module, projectionName(native.name, outputType), plan, map, mapType, mapReference, outputType, keys);
+		return addProjection(module, projectionName(native.name, outputType), plan, map, mapType, mapReference,
+			outputType, keys);
 	}
 
 	/**
@@ -63,7 +74,8 @@ class WasmGcMaps {
 	 * Deleting a slot shifts later members of its probe run back, so there are no tombstones and a lookup stops at
 	 * the first empty slot.
 	 */
-	static function ensureHelpers(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, mapName:String):WasmGcMapHelpers {
+	static function ensureHelpers(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan,
+			mapName:String):WasmGcMapHelpers {
 		var prefix = '__haxeon_gc_map_';
 		var map = plan.mapPlan(mapName),
 			mapType = plan.mapType(mapName),
@@ -76,7 +88,10 @@ class WasmGcMaps {
 				nullable: false,
 				heap: Type(indexType)
 			}),
-			stringEqual = (switch (map.keyType) { case Bytes: true; default: false; }) ? ensureStringEqual(module, functions, plan) : -1;
+			stringEqual = (switch (map.keyType) {
+				case Bytes: true;
+				default: false;
+			}) ? ensureStringEqual(module, functions, plan) : -1;
 		/** The key stored at the entry whose position the instructions leave on the stack. */
 		function keyAt(mapLocal:Int, entry:Array<WasmInstruction>):Array<WasmInstruction>
 			return [
@@ -94,7 +109,10 @@ class WasmGcMaps {
 			return index;
 		}
 		// hash(key): a multiplicative mix for Int keys, FNV-1a over the bytes for String keys, then folded
-		var hash = if ((switch (map.keyType) { case Bytes: true; default: false; })) define(prefix + 'hash_' + mapName, {parameters: [keyValue], results: [I32]}, [
+		var hash = if ((switch (map.keyType) {
+			case Bytes: true;
+			default: false;
+		})) define(prefix + 'hash_' + mapName, {parameters: [keyValue], results: [I32]}, [
 			{type: I32},
 			{type: I32},
 			{type: I32},
@@ -167,7 +185,12 @@ class WasmGcMaps {
 		]);
 		// findSlot(map, key): the index slot holding the key, or -1
 		var findSlot = define(prefix + 'find_slot_' + mapName, {parameters: [mapReference, keyValue], results: [I32]},
-			[{type: indexReference}, {type: I32}, {type: I32}, {type: I32}], [
+			[
+				{type: indexReference},
+				{type: I32},
+				{type: I32},
+				{type: I32}
+			], [
 				LocalGet(0),
 				StructGet(mapType, 4),
 				LocalSet(2),
@@ -193,50 +216,62 @@ class WasmGcMaps {
 				I32Const(-1),
 				Return,
 				End
-			].concat(keyAt(0, [LocalGet(5), I32Const(1), I32Sub]))
-			.concat([LocalGet(1)])
-			.concat(stringEqual >= 0 ? [Call(stringEqual)] : [I32Eq])
-			.concat([
-				If(null),
-				LocalGet(4),
-				Return,
-				End,
-				LocalGet(4),
+			].concat(keyAt(0, [
+				LocalGet(5),
 				I32Const(1),
-				I32Add,
-				LocalGet(3),
-				I32And,
-				LocalSet(4),
-				Br(0),
-				End,
-				End,
-				I32Const(-1),
-				Return
-			]));
+				I32Sub
+			]))
+				.concat([LocalGet(1)])
+				.concat(stringEqual >= 0 ? [Call(stringEqual)] : [I32Eq])
+				.concat([
+					If(null),
+					LocalGet(4),
+					Return,
+					End,
+					LocalGet(4),
+					I32Const(1),
+					I32Add,
+					LocalGet(3),
+					I32And,
+					LocalSet(4),
+					Br(0),
+					End,
+					End,
+					I32Const(-1),
+					Return
+				]));
 		// find(map, key): the entry position, or -1
-		var find = define(prefix + 'find_' + mapName, {parameters: [mapReference, keyValue], results: [I32]}, [{type: I32}], [
-			LocalGet(0),
-			LocalGet(1),
-			Call(findSlot),
-			LocalSet(2),
-			LocalGet(2),
-			I32Const(0),
-			I32LtS,
-			If(I32),
-			I32Const(-1),
-			Else,
-			LocalGet(0),
-			StructGet(mapType, 4),
-			LocalGet(2),
-			ArrayGet(indexType),
-			I32Const(1),
-			I32Sub,
-			End,
-			Return
-		]);
+		var find = define(prefix + 'find_' + mapName, {parameters: [mapReference, keyValue], results: [I32]},
+			[{type: I32}], [
+				LocalGet(0),
+				LocalGet(1),
+				Call(findSlot),
+				LocalSet(2),
+				LocalGet(2),
+				I32Const(0),
+				I32LtS,
+				If(I32),
+				I32Const(-1),
+				Else,
+				LocalGet(0),
+				StructGet(mapType, 4),
+				LocalGet(2),
+				ArrayGet(indexType),
+				I32Const(1),
+				I32Sub,
+				End,
+				Return
+			]);
 		// insertSlot(map, key, entry): records the entry in the first free slot of the key's probe run
-		var insertSlot = define(prefix + 'insert_slot_' + mapName, {parameters: [mapReference, keyValue, I32], results: []},
-			[{type: indexReference}, {type: I32}, {type: I32}], [
+		var insertSlot = define(prefix + 'insert_slot_' + mapName, {
+			parameters: [mapReference, keyValue, I32],
+			results: []
+		},
+			[
+				{type: indexReference},
+				{type: I32},
+				{type: I32}
+			], [
 				LocalGet(0),
 				StructGet(mapType, 4),
 				LocalSet(3),
@@ -305,7 +340,7 @@ class WasmGcMaps {
 			End,
 			End,
 			Return
-			]));
+		]));
 		// removeSlot(map, slot): empties the slot and moves back every later member of its probe run that would
 		// otherwise become unreachable
 		var removeSlot = define(prefix + 'remove_slot_' + mapName, {parameters: [mapReference, I32], results: []}, [
@@ -343,13 +378,16 @@ class WasmGcMaps {
 			LocalGet(6),
 			I32Eqz,
 			BrIf(1)
-		].concat(keyAt(0, [LocalGet(6), I32Const(1), I32Sub])).concat([
-			Call(hash),
+		].concat(keyAt(0, [
+			LocalGet(6),
+			I32Const(1),
+			I32Sub
+		])).concat([Call(hash),
 			LocalGet(3),
 			I32And,
 			LocalSet(7),
-			// the member stays when its home slot lies cyclically in (hole, here]
-			LocalGet(4),
+		// the member stays when its home slot lies cyclically in (hole, here]
+		LocalGet(4),
 			LocalGet(5),
 			I32LeS,
 			If(I32),
@@ -385,8 +423,7 @@ class WasmGcMaps {
 			LocalGet(4),
 			I32Const(0),
 			ArraySet(indexType),
-			Return
-			]));
+			Return]));
 		return {
 			hash: hash,
 			findSlot: findSlot,
@@ -401,8 +438,7 @@ class WasmGcMaps {
 		var name = "__haxeon_gc_bytes_equal", result = functions.get(name);
 		if (result != null)
 			return result;
-		var body:Array<WasmInstruction> = [
-			LocalGet(0),
+		var body:Array<WasmInstruction> = [LocalGet(0),
 			RefIsNull,
 			LocalGet(1),
 			RefIsNull,
@@ -426,8 +462,8 @@ class WasmGcMaps {
 			LocalSet(4),
 			Block(null),
 			Loop(null),
-			// Unequal lengths end the scan at once, before it can index past the shorter key.
-			LocalGet(4),
+		// Unequal lengths end the scan at once, before it can index past the shorter key.
+		LocalGet(4),
 			LocalGet(2),
 			I32LtS,
 			LocalGet(5),
@@ -464,15 +500,23 @@ class WasmGcMaps {
 			End,
 			LocalGet(5),
 			End,
-			Return
-		];
-		result = module.addFunction(new WasmFunction(name, {parameters: [plan.valueType(Bytes), plan.valueType(Bytes)], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+			Return];
+		result = module.addFunction(new WasmFunction(name, {
+			parameters: [plan.valueType(Bytes), plan.valueType(Bytes)],
+			results: [I32]
+		},
+			[
+				{type: I32},
+				{type: I32},
+				{type: I32},
+				{type: I32}
+			], body));
 		functions.set(name, result);
 		return result;
 	}
 
-	static function addAlloc(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType):Int {
+	static function addAlloc(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType):Int {
 		var body:Array<WasmInstruction> = [I32Const(0), I32Const(8)];
 		appendNewArray(body, plan, map.keyType, [I32Const(8)]);
 		appendNewArray(body, plan, map.valueType, [I32Const(8)]);
@@ -486,7 +530,8 @@ class WasmGcMaps {
 		return module.addFunction(new WasmFunction(name, {parameters: [], results: [mapReference]}, [], body));
 	}
 
-	static function addSet(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType,
+	static function addSet(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType,
 			helpers:WasmGcMapHelpers):Int {
 		var keyArray = plan.arrayType(map.keyType),
 			valueArray = plan.arrayType(map.valueType),
@@ -529,7 +574,10 @@ class WasmGcMaps {
 			StructGet(mapType, 2),
 			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
 			RefCast({nullable: false, heap: Type(keyStorage)})
-		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
+		], [I32Const(0)], [
+			LocalGet(0),
+			StructGet(mapType, 0)
+		]);
 		appendArrayCopy(body, valueStorage, [
 			LocalGet(7),
 			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
@@ -539,9 +587,11 @@ class WasmGcMaps {
 			StructGet(mapType, 3),
 			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
 			RefCast({nullable: false, heap: Type(valueStorage)})
-		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
-		body = body.concat([
+		], [I32Const(0)], [
 			LocalGet(0),
+			StructGet(mapType, 0)
+		]);
+		body = body.concat([LocalGet(0),
 			LocalGet(5),
 			StructSet(mapType, 1),
 			LocalGet(0),
@@ -550,8 +600,8 @@ class WasmGcMaps {
 			LocalGet(0),
 			LocalGet(7),
 			StructSet(mapType, 3),
-			// the larger arrays need a larger index, holding the entries already there
-			LocalGet(0),
+		// the larger arrays need a larger index, holding the entries already there
+		LocalGet(0),
 			Call(helpers.rebuild),
 			End,
 			LocalGet(0),
@@ -587,26 +637,41 @@ class WasmGcMaps {
 				nullable: false,
 				heap: Type(valueStorage)
 			}),
-			LocalGet(4),
-			LocalGet(2),
-			ArraySet(valueStorage),
-			Return
-		]);
+				LocalGet(4),
+				LocalGet(2),
+				ArraySet(valueStorage),
+				Return]);
 		return module.addFunction(new WasmFunction(name,
-			{parameters: [mapReference, plan.valueType(map.keyType), plan.valueType(map.valueType)], results: []}, [
-			{type: I32},
-			{type: I32},
-			{type: I32},
-			{type: Ref({nullable: false, heap: Type(keyArray)})},
-			{type: Ref({nullable: false, heap: Type(valueArray)})}
-		], body));
+			{
+				parameters: [mapReference, plan.valueType(map.keyType), plan.valueType(map.valueType)],
+				results: []
+			}, [
+				{type: I32},
+				{type: I32},
+				{type: I32},
+				{type: Ref({nullable: false, heap: Type(keyArray)})},
+				{type: Ref({nullable: false, heap: Type(valueArray)})}
+			], body));
 	}
 
-	static function addExists(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType, find:Int):Int
-		return module.addFunction(new WasmFunction(name, {parameters: [mapReference, plan.valueType(map.keyType)], results: [I32]}, [],
-			[LocalGet(0), LocalGet(1), Call(find), I32Const(-1), I32Eq, I32Eqz, Return]));
+	static function addExists(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType, find:Int):Int
+		return module.addFunction(new WasmFunction(name, {
+			parameters: [mapReference, plan.valueType(map.keyType)],
+			results: [I32]
+		}, [],
+			[
+				LocalGet(0),
+				LocalGet(1),
+				Call(find),
+				I32Const(-1),
+				I32Eq,
+				I32Eqz,
+				Return
+			]));
 
-	static function addGet(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType, find:Int):Int {
+	static function addGet(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType, find:Int):Int {
 		var valueArray = plan.arrayType(map.valueType),
 			valueStorage = plan.arrayStorageType(map.valueType),
 			body:Array<WasmInstruction> = [
@@ -635,15 +700,31 @@ class WasmGcMaps {
 				nullable: true,
 				heap: Any
 			});
-		if ((switch (map.valueType) { case I32: true; default: false; }) || (switch (map.valueType) { case Bool: true; default: false; }) || (switch (map.valueType) { case I64: true; default: false; }) || (switch (map.valueType) { case F64: true; default: false; }))
+		if ((switch (map.valueType) {
+			case I32: true;
+			default: false;
+		}) || (switch (map.valueType) {
+			case Bool: true;
+			default: false;
+		}) || (switch (map.valueType) {
+			case I64: true;
+			default: false;
+		}) || (switch (map.valueType) {
+			case F64: true;
+			default: false;
+		}))
 			body.push(StructNew(plan.boxedPrimitiveType(map.valueType)));
 		body.push(Return);
-		return module.addFunction(new WasmFunction(name, {parameters: [mapReference, plan.valueType(map.keyType)], results: [resultType]}, [{type: I32}],
+		return module.addFunction(new WasmFunction(name, {
+			parameters: [mapReference, plan.valueType(map.keyType)],
+			results: [resultType]
+		}, [{type: I32}],
 			body));
 	}
 
 	/** A new map with the same entries: arrays of the source's capacity, the used prefix copied, no rehash. */
-	static function addCopy(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType):Int {
+	static function addCopy(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType):Int {
 		var keyArray = plan.arrayType(map.keyType),
 			valueArray = plan.arrayType(map.valueType),
 			keyStorage = plan.arrayStorageType(map.keyType),
@@ -662,7 +743,10 @@ class WasmGcMaps {
 			StructGet(mapType, 2),
 			StructGet(keyArray, WasmGcTypePlan.arrayDataFieldIndex()),
 			RefCast({nullable: false, heap: Type(keyStorage)})
-		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
+		], [I32Const(0)], [
+			LocalGet(0),
+			StructGet(mapType, 0)
+		]);
 		appendArrayCopy(body, valueStorage, [
 			LocalGet(2),
 			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
@@ -672,7 +756,10 @@ class WasmGcMaps {
 			StructGet(mapType, 3),
 			StructGet(valueArray, WasmGcTypePlan.arrayDataFieldIndex()),
 			RefCast({nullable: false, heap: Type(valueStorage)})
-		], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
+		], [I32Const(0)], [
+			LocalGet(0),
+			StructGet(mapType, 0)
+		]);
 		var indexType = plan.mapIndexTypeIndex;
 		body = body.concat([
 			LocalGet(0),
@@ -706,7 +793,8 @@ class WasmGcMaps {
 		], body));
 	}
 
-	static function addClear(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType):Int {
+	static function addClear(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType):Int {
 		var body:Array<WasmInstruction> = [
 			I32Const(0),
 			LocalSet(1),
@@ -721,8 +809,7 @@ class WasmGcMaps {
 		];
 		appendMapArrayDefault(body, plan, mapType, 2, map.keyType, [LocalGet(1)]);
 		appendMapArrayDefault(body, plan, mapType, 3, map.valueType, [LocalGet(1)]);
-		body = body.concat([
-			LocalGet(1),
+		body = body.concat([LocalGet(1),
 			I32Const(1),
 			I32Add,
 			LocalSet(1),
@@ -732,39 +819,44 @@ class WasmGcMaps {
 			LocalGet(0),
 			I32Const(0),
 			StructSet(mapType, 0),
-			// an index of the same length with every slot empty
-			LocalGet(0),
+		// an index of the same length with every slot empty
+		LocalGet(0),
 			LocalGet(0),
 			StructGet(mapType, 4),
 			ArrayLen,
 			ArrayNewDefault(plan.mapIndexTypeIndex),
 			StructSet(mapType, 4),
-			Return
-		]);
-		return module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: []}, [{type: I32}], body));
+			Return]);
+		return module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: []}, [{type: I32}],
+			body));
 	}
 
-	static function addProjectionForNative(module:WasmModule, name:String, plan:WasmGcTypePlan, native:IrNative, map:WasmGcMapTypePlan, mapType:Int,
+	static function addProjectionForNative(module:WasmModule, name:String, plan:WasmGcTypePlan, native:IrNative,
+			map:WasmGcMapTypePlan, mapType:Int,
 			mapReference:WasmValueType, keys:Bool):Int {
 		return addProjection(module, name, plan, map, mapType, mapReference, native.result, keys);
 	}
 
-	static function addProjection(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType,
+	static function addProjection(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan,
+			mapType:Int, mapReference:WasmValueType,
 			outputType:IrType, keys:Bool):Int {
 		var element = switch outputType {
 			case Array(element): element;
 			default: throw 'Wasm GC map projection $name must return an array';
-		}, sourceElement = keys ? map.keyType : map.valueType, array = plan.arrayType(element), storage = plan.arrayStorageType(element), sourceArray = plan.arrayType(sourceElement), sourceStorage = plan.arrayStorageType(sourceElement), mapField = keys ? 2 : 3, body:Array<WasmInstruction> = [
-			LocalGet(0),
-			StructGet(mapType, 0),
-			LocalGet(0),
-			StructGet(mapType, 0),
-			I32Const(8),
-			I32Add,
-			ArrayNewDefault(storage),
-			I32Const(plan.runtimeTypeIds.id(element)),
-			StructNew(array),
-			LocalSet(1)
+		}, sourceElement = keys ? map.keyType : map.valueType, array = plan.arrayType(element),
+			storage = plan.arrayStorageType(element), sourceArray = plan.arrayType(sourceElement),
+			sourceStorage = plan.arrayStorageType(sourceElement), mapField = keys ? 2 : 3,
+			body:Array<WasmInstruction> = [
+				LocalGet(0),
+				StructGet(mapType, 0),
+				LocalGet(0),
+				StructGet(mapType, 0),
+				I32Const(8),
+				I32Add,
+				ArrayNewDefault(storage),
+				I32Const(plan.runtimeTypeIds.id(element)),
+				StructNew(array),
+				LocalSet(1)
 			];
 		if (compiler.ir.IrVerifier.sameType(sourceElement, element)) {
 			appendArrayCopy(body, storage, [
@@ -776,7 +868,10 @@ class WasmGcMaps {
 				StructGet(mapType, mapField),
 				StructGet(sourceArray, WasmGcTypePlan.arrayDataFieldIndex()),
 				RefCast({nullable: false, heap: Type(sourceStorage)})
-			], [I32Const(0)], [LocalGet(0), StructGet(mapType, 0)]);
+			], [I32Const(0)], [
+				LocalGet(0),
+				StructGet(mapType, 0)
+			]);
 		} else {
 			var targetReference = switch plan.valueType(element) {
 				case Ref(reference): reference;
@@ -818,11 +913,18 @@ class WasmGcMaps {
 			]);
 		}
 		body = body.concat([LocalGet(1), Return]);
-		return module.addFunction(new WasmFunction(name, {parameters: [mapReference], results: [plan.valueType(outputType)]},
-			[{type: Ref({nullable: false, heap: Type(array)})}, {type: I32}], body));
+		return module.addFunction(new WasmFunction(name, {
+			parameters: [mapReference],
+			results: [plan.valueType(outputType)]
+		},
+			[
+				{type: Ref({nullable: false, heap: Type(array)})},
+				{type: I32}
+			], body));
 	}
 
-	static function addRemove(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int, mapReference:WasmValueType,
+	static function addRemove(module:WasmModule, name:String, plan:WasmGcTypePlan, map:WasmGcMapTypePlan, mapType:Int,
+			mapReference:WasmValueType,
 			helpers:WasmGcMapHelpers):Int {
 		var keyArray = plan.arrayType(map.keyType),
 			valueArray = plan.arrayType(map.valueType),
@@ -903,11 +1005,20 @@ class WasmGcMaps {
 		appendMapArrayDefault(body, plan, mapType, 2, map.keyType, [LocalGet(4)]);
 		appendMapArrayDefault(body, plan, mapType, 3, map.valueType, [LocalGet(4)]);
 		body = body.concat([LocalGet(0), LocalGet(4), StructSet(mapType, 0), I32Const(1), End, Return]);
-		return module.addFunction(new WasmFunction(name, {parameters: [mapReference, plan.valueType(map.keyType)], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}, {type: I32}], body));
+		return module.addFunction(new WasmFunction(name, {
+			parameters: [mapReference, plan.valueType(map.keyType)],
+			results: [I32]
+		},
+			[
+				{type: I32},
+				{type: I32},
+				{type: I32},
+				{type: I32}
+			], body));
 	}
 
-	static function appendMapArrayDefault(body:Array<WasmInstruction>, plan:WasmGcTypePlan, mapType:Int, mapField:Int, element:IrType,
+	static function appendMapArrayDefault(body:Array<WasmInstruction>, plan:WasmGcTypePlan, mapType:Int, mapField:Int,
+			element:IrType,
 			index:Array<WasmInstruction>):Void {
 		var arrayType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element);
@@ -932,7 +1043,8 @@ class WasmGcMaps {
 		body.push(ArraySet(storageType));
 	}
 
-	static function appendNewArray(body:Array<WasmInstruction>, plan:WasmGcTypePlan, element:IrType, capacity:Array<WasmInstruction>):Void {
+	static function appendNewArray(body:Array<WasmInstruction>, plan:WasmGcTypePlan, element:IrType,
+			capacity:Array<WasmInstruction>):Void {
 		for (instruction in capacity)
 			body.push(instruction);
 		for (instruction in capacity)
@@ -944,7 +1056,8 @@ class WasmGcMaps {
 		body.push(StructNew(plan.arrayType(element)));
 	}
 
-	static function appendArrayCopy(body:Array<WasmInstruction>, storage:Int, destination:Array<WasmInstruction>, destinationIndex:Array<WasmInstruction>,
+	static function appendArrayCopy(body:Array<WasmInstruction>, storage:Int, destination:Array<WasmInstruction>,
+			destinationIndex:Array<WasmInstruction>,
 			source:Array<WasmInstruction>, sourceIndex:Array<WasmInstruction>, length:Array<WasmInstruction>):Void {
 		for (instruction in destination)
 			body.push(instruction);

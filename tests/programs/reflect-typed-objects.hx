@@ -16,8 +16,11 @@ class Derived extends Base {
 }
 
 function main():Int {
-	var record:Dynamic = true ? {answer: 42, name: "record"} : null;
-	if (!Reflect.hasField(record, "answer") || Std.int(Reflect.field(record, "answer")) != 42 || Reflect.hasField(record, "missing"))
+	var record:Dynamic = true ? {
+		answer:42, name:"record"
+	} : null;
+	if (!Reflect.hasField(record, "answer") || Std.int(Reflect.field(record, "answer")) != 42
+		|| Reflect.hasField(record, "missing"))
 		return 1;
 	var derived:Dynamic = new Derived();
 	if (Std.int(Reflect.field(derived, "id")) != 7 || Reflect.field(derived, "label") != "derived")

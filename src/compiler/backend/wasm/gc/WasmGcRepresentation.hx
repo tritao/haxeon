@@ -40,7 +40,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	}
 
 	public function forFunction(context:WasmFunctionRepresentationContext):WasmGcRepresentation {
-		var functionContext = new WasmGcFunctionContext(gc, context.irFunction, context.exceptionTag, context.allocateLocal);
+		var functionContext = new WasmGcFunctionContext(gc, context.irFunction, context.exceptionTag,
+			context.allocateLocal);
 		return forFunctionContext(functionContext);
 	}
 
@@ -153,7 +154,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
+	public function fieldGet(object:IrValue, fieldName:String, destination:Int,
+			objectLocal:Int):Array<WasmInstruction> {
 		if (StringTools.startsWith(fieldName, WasmScalarAbi.RESULT_FIELD_PREFIX)) {
 			var index = Std.parseInt(fieldName.substr(WasmScalarAbi.RESULT_FIELD_PREFIX.length)),
 				results = functionState().scalarResults.get(object.id);
@@ -183,7 +185,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return plan.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver, method));
 
 	/** Turn an uncaught method exception into receiver state plus the original exception. */
-	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>, tag:Null<Int>):Null<Array<WasmInstruction>> {
+	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>,
+			tag:Null<Int>):Null<Array<WasmInstruction>> {
 		var signature = plan.scalarSignatures.get(fn.name);
 		if (signature == null || !signature.throwsReceiver)
 			return null;
@@ -210,7 +213,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		for (field in fields) {
 			if (candidate == null) {
 				result.push(LocalGet(scalarValueLocal(locals, receiver.id)));
-				result.push(StructGet(plan.objectType(requireObjectName(receiver.type)), plan.objectFieldIndex(requireObjectName(receiver.type), field.name)));
+				result.push(StructGet(plan.objectType(requireObjectName(receiver.type)),
+					plan.objectFieldIndex(requireObjectName(receiver.type), field.name)));
 			} else
 				result.push(LocalGet(scalarFieldLocal(candidate, field.name)));
 		}
@@ -222,9 +226,9 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				for (slot in plan.values.leaves(signature.result))
 					for (instruction in zeroValue(slot.type))
 						result.push(instruction);
-			else
-				for (instruction in zeroValue(signature.result))
-					result.push(instruction);
+					else
+						for (instruction in zeroValue(signature.result))
+							result.push(instruction);
 		}
 		result.push(LocalGet(exception));
 		result.push(I32Const(1));
@@ -234,7 +238,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return result;
 	}
 
-	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>,
 			functionIndex:Int):Array<WasmInstruction> {
 		var signature = plan.scalarSignatures.get(name);
 		if (signature == null)
@@ -257,7 +262,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue, outputLocal:Int,
+	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue,
+			outputLocal:Int,
 			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		var resultType = switch type {
 			case Function(_, result): result;
@@ -312,7 +318,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue, outputLocal:Int, arguments:Array<IrValue>,
+	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue,
+			outputLocal:Int, arguments:Array<IrValue>,
 			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		var virtual = plan.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
 		if (virtual == null)
@@ -347,7 +354,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					for (_ in plan.scalarValueTypes(argument))
 						body.push(LocalGet(argumentLocals[argumentIndex++]));
 				} else {
-					body = body.concat(virtualArgument(arguments[argumentIndex], argument, argumentLocals[argumentIndex]));
+					body = body.concat(virtualArgument(arguments[argumentIndex], argument,
+						argumentLocals[argumentIndex]));
 					argumentIndex++;
 				}
 			}
@@ -409,7 +417,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return switch instruction {
 			case ValueInit(out):
 				var candidate = functionState().scalarLocals.get(out);
-				if (candidate == null) null; else {
+				if (candidate == null) null;
+				else {
 					var body:Array<WasmInstruction> = [];
 					for (field in candidate.declarations) {
 						for (instruction in zeroValue(field.type))
@@ -420,13 +429,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				}
 			case FieldGet(out, owner, name):
 				var candidate = functionState().scalarLocals.get(owner);
-				if (candidate == null) null; else if (name == WasmFlattenValueFields.CHECK_FIELD) []; else [
+				if (candidate == null) null;
+				else if (name == WasmFlattenValueFields.CHECK_FIELD)[];
+				else [
 					LocalGet(scalarFieldLocal(candidate, name)),
 					LocalSet(scalarValueLocal(locals, out.id))
 				];
 			case FieldSet(owner, name, value):
 				var candidate = functionState().scalarLocals.get(owner);
-				if (candidate == null) null; else {
+				if (candidate == null) null;
+				else {
 					var body:Array<WasmInstruction> = [LocalGet(scalarValueLocal(locals, value.id))];
 					appendFieldNarrowing(body, plan.objectField(candidate.typeName, name));
 					body.push(LocalSet(scalarFieldLocal(candidate, name)));
@@ -436,7 +448,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		};
 	}
 
-	static function scalarFieldLocal(candidate:compiler.backend.wasm.WasmScalarLocals.WasmScalarLocal, name:String):Int {
+	static function scalarFieldLocal(candidate:compiler.backend.wasm.WasmScalarLocals.WasmScalarLocal,
+			name:String):Int {
 		var local = candidate.fields.get(name);
 		if (local == null)
 			throw 'Missing scalar Wasm GC field "$name"';
@@ -450,7 +463,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return local;
 	}
 
-	function nativeFieldGet(field:IrObjectField, destination:Int, objectName:String, objectLocal:Int):Array<WasmInstruction> {
+	function nativeFieldGet(field:IrObjectField, destination:Int, objectName:String,
+			objectLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
 			throw 'Flat Wasm GC field "${field.name}" is missing layout metadata';
@@ -477,7 +491,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			default: false;
 		})) {
 			if (native.size == 4)
-				load = loadBytesI32(data, offset, 4, native.signed).concat([native.signed ? I64ExtendI32S : I64ExtendI32U]);
+				load = loadBytesI32(data, offset, 4,
+					native.signed).concat([native.signed ? I64ExtendI32S : I64ExtendI32U]);
 			else if (native.size == 8)
 				load = loadBytesI64(data, offset, 8, false);
 			else
@@ -499,7 +514,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function nativeFieldSet(field:IrObjectField, objectName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+	function nativeFieldSet(field:IrObjectField, objectName:String, objectLocal:Int,
+			valueLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
 			throw 'Flat Wasm GC field "${field.name}" is missing layout metadata';
@@ -567,7 +583,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function inlineRecordGet(field:IrObjectField, destination:Int, objectName:String, objectLocal:Int):Array<WasmInstruction> {
+	function inlineRecordGet(field:IrObjectField, destination:Int, objectName:String,
+			objectLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
 			throw 'Inline flat Wasm GC field "${field.name}" is missing layout metadata';
@@ -594,17 +611,19 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	function inlineRecordSet(field:IrObjectField, objectName:String, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
+	function inlineRecordSet(field:IrObjectField, objectName:String, objectLocal:Int,
+			valueLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
 			throw 'Inline flat Wasm GC field "${field.name}" is missing layout metadata';
 		var childName = switch field.type {
 			case Obj(name): name;
 			case _: throw 'Inline flat Wasm GC field "${field.name}" is not a source struct';
-		}, parentData = allocateLocal(Ref({nullable: true, heap: Type(plan.byteArrayTypeIndex)})), childData = allocateLocal(Ref({
-			nullable: true,
-			heap: Type(plan.byteArrayTypeIndex)
-		})), parentOffset = allocateLocal(I32), childOffset = allocateLocal(I32), body:Array<WasmInstruction> = [];
+		}, parentData = allocateLocal(Ref({nullable: true, heap: Type(plan.byteArrayTypeIndex)})),
+			childData = allocateLocal(Ref({
+				nullable: true,
+				heap: Type(plan.byteArrayTypeIndex)
+			})), parentOffset = allocateLocal(I32), childOffset = allocateLocal(I32), body:Array<WasmInstruction> = [];
 		body = body.concat(objectPayloadLocation(objectName, objectLocal, native.offset, parentData, parentOffset));
 		body = body.concat(objectPayloadLocation(childName, valueLocal, 0, childData, childOffset));
 		for (byteIndex in 0...native.size)
@@ -623,7 +642,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function objectPayloadLocation(objectName:String, objectLocal:Int, fieldOffset:Int, data:Int, offset:Int):Array<WasmInstruction> {
+	function objectPayloadLocation(objectName:String, objectLocal:Int, fieldOffset:Int, data:Int,
+			offset:Int):Array<WasmInstruction> {
 		return [
 			LocalGet(objectLocal),
 			StructGet(plan.objectType(objectName), 1),
@@ -693,7 +713,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			default:
 		}
 		var boxed = switch value.type {
-			case I32, Bool, I64, F32, F64, TypeRef, RawPtr, Abstract("native_callback"): plan.boxedPrimitiveType(value.type);
+			case I32, Bool, I64, F32, F64, TypeRef, RawPtr,
+				Abstract("native_callback"): plan.boxedPrimitiveType(value.type);
 			default: null;
 		};
 		if (boxed == null)
@@ -702,7 +723,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				// that wrapper; SafeCast still refuses to recover a native pointer from Dynamic.
 				case Abstract("native_pointer"):
 					[LocalGet(valueLocal), LocalSet(destination)];
-				case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes, Dyn, Abstract(_), Virtual(_):
+				case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes, Dyn, Abstract(_),
+					Virtual(_):
 					[LocalGet(valueLocal), LocalSet(destination)];
 				default:
 					throw 'Wasm GC cannot convert $value.type to Dynamic yet';
@@ -780,35 +802,36 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			};
 		}
 		var closureCast = switch output.type {
-			case Function(_, _): gc.functions.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signatureId(plan, output.type)));
+			case Function(_, _): gc.functions
+				.get(WasmGcClosureAdapters.castName(WasmGcClosureAdapters.signatureId(plan, output.type)));
 			default: null;
 		};
 		if (closureCast != null)
-			// A closure created with another signature is wrapped so calls at this type reach it (WasmGcClosureAdapters).
-			return [
-				LocalGet(valueLocal),
-				RefCast({nullable: true, heap: Type(plan.closureTypeIndex)}),
-				LocalTee(destination),
-				RefIsNull,
-				I32Eqz,
-				If(null),
-				LocalGet(destination),
-				Call(closureCast),
-				LocalSet(destination),
-				End
-			];
+		// A closure created with another signature is wrapped so calls at this type reach it (WasmGcClosureAdapters).
+		return [
+			LocalGet(valueLocal),
+			RefCast({nullable: true, heap: Type(plan.closureTypeIndex)}),
+			LocalTee(destination),
+			RefIsNull,
+			I32Eqz,
+			If(null),
+			LocalGet(destination),
+			Call(closureCast),
+			LocalSet(destination),
+			End
+		];
 		return switch output.type {
 			case Abstract("native_pointer") if ((switch (value.type) {
 				case Dyn: true;
 				default: false;
 			})):
-				// Dynamic stores the managed wrapper, not its raw address. RefCast checks that the
-				// value is a native-pointer wrapper before a typed HXI call can use it.
-				[
-					LocalGet(valueLocal),
-					RefCast({nullable: true, heap: Type(plan.nativePointerTypeIndex)}),
-					LocalSet(destination)
-				];
+			// Dynamic stores the managed wrapper, not its raw address. RefCast checks that the
+			// value is a native-pointer wrapper before a typed HXI call can use it.
+			[
+				LocalGet(valueLocal),
+				RefCast({nullable: true, heap: Type(plan.nativePointerTypeIndex)}),
+				LocalSet(destination)
+			];
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes:
 				var target = switch plan.valueType(output.type) {
 					case Ref(reference): reference;
@@ -818,8 +841,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case Virtual(interfaceName):
 				var implementors = plan.interfaceImplementors(interfaceName),
 					instructions:Array<WasmInstruction> = [
-						LocalGet(valueLocal),             RefIsNull, If(null),
-						LocalGet(valueLocal), LocalSet(destination),     Else
+						LocalGet(valueLocal), RefIsNull, If(null),
+						LocalGet(valueLocal), LocalSet(destination), Else
 					];
 				if (implementors.length == 0)
 					instructions.push(Unreachable);
@@ -844,14 +867,14 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				case Dyn: true;
 				default: false;
 			})):
-				// Abstracts with a concrete GC layout (maps, byte streams) narrow from anyref.
-				switch plan.valueType(output.type) {
-					case Ref(reference) if ((switch (reference.heap) {
-						case Any: false;
-						default: true;
-					})): [LocalGet(valueLocal), RefCast(reference), LocalSet(destination)];
-					default: [LocalGet(valueLocal), LocalSet(destination)];
-				}
+			// Abstracts with a concrete GC layout (maps, byte streams) narrow from anyref.
+			switch plan.valueType(output.type) {
+				case Ref(reference) if ((switch (reference.heap) {
+					case Any: false;
+					default: true;
+				})): [LocalGet(valueLocal), RefCast(reference), LocalSet(destination)];
+				default: [LocalGet(valueLocal), LocalSet(destination)];
+			}
 			case Dyn, Abstract(_):
 				[LocalGet(valueLocal), LocalSet(destination)];
 			case _ if (compiler.ir.IrVerifier.sameType(output.type, value.type)):
@@ -864,13 +887,15 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
 		return switch value.type {
 			case Abstract("native_pointer"): throw "Wasm GC cannot cast a borrowed native pointer to a virtual interface";
-			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes, Dyn, Abstract(_), Virtual(_):
+			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes, Dyn, Abstract(_),
+				Virtual(_):
 				[LocalGet(valueLocal), LocalSet(destination)];
 			default:
 				throw 'Wasm GC cannot convert $value.type to a virtual interface yet';
 		};
 
-	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
+	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int,
+			rightLocal:Int):Array<WasmInstruction> {
 		return switch left.type {
 			case Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Bytes, ManagedBytes:
 				[LocalGet(leftLocal), LocalGet(rightLocal), RefEq, LocalSet(output)];
@@ -884,9 +909,12 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				[LocalGet(leftLocal), LocalGet(rightLocal), I32Eq, LocalSet(output)];
 			case Dyn, Nullable(_), Abstract(_), Virtual(_):
 				[
-					 LocalGet(leftLocal), RefCast({nullable: true, heap: Eq}),
-					LocalGet(rightLocal), RefCast({nullable: true, heap: Eq}),
-					               RefEq,                    LocalSet(output)
+					LocalGet(leftLocal), RefCast({nullable: true, heap: Eq}),
+					LocalGet(rightLocal), RefCast({
+						nullable: true,
+						heap: Eq
+					}),
+					RefEq, LocalSet(output)
 				];
 			case Void:
 				throw "Wasm GC cannot compare void values";
@@ -946,7 +974,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			RefEq,
 			LocalSet(output)
 		]);
-		instructions = instructions.concat(mixedNumberEqual(output, leftLocal, rightLocal)).concat(nullaryEnumEqual(output, leftLocal, rightLocal));
+		instructions = instructions.concat(mixedNumberEqual(output, leftLocal,
+			rightLocal)).concat(nullaryEnumEqual(output, leftLocal, rightLocal));
 		instructions.push(End);
 		for (_ in boxedTypes)
 			instructions.push(End);
@@ -1017,7 +1046,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				if (position > 0)
 					instructions.push(LocalGet(leftLocal));
 				if (position > 0)
-					instructions = instructions.concat([RefCast({nullable: false, heap: Type(base)}), StructGet(base, 0)]);
+					instructions = instructions.concat([
+						RefCast({nullable: false, heap: Type(base)}),
+						StructGet(base, 0)
+					]);
 				instructions = instructions.concat([I32Const(nullary[position]), I32Eq]);
 				if (position > 0)
 					instructions.push(I32Or);
@@ -1098,14 +1130,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return instructions;
 	}
 
-	function dynamicTypeTest(valueLocal:Int, typeLocal:Int, outputLocal:Int, exact:Bool = false):Array<WasmInstruction> {
+	function dynamicTypeTest(valueLocal:Int, typeLocal:Int, outputLocal:Int,
+			exact:Bool = false):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [I32Const(0), LocalSet(outputLocal)];
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I32, plan.boxedPrimitiveType(I32));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bool, plan.boxedPrimitiveType(Bool));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, F64, plan.boxedPrimitiveType(F64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, I64, plan.boxedPrimitiveType(I64));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, RawPtr, plan.boxedPrimitiveType(RawPtr));
-		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract("native_callback"), plan.boxedPrimitiveType(Abstract("native_callback")));
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract("native_callback"),
+			plan.boxedPrimitiveType(Abstract("native_callback")));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, TypeRef, plan.boxedPrimitiveType(TypeRef));
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Bytes, plan.bytesTypeIndex);
 		appendTypeTest(body, valueLocal, typeLocal, outputLocal, ManagedBytes, plan.managedBytesTypeIndex);
@@ -1113,7 +1147,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		mapNames.sort(Reflect.compare);
 		for (name in mapNames)
 			appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract(name), plan.mapType(name));
-		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract("native_pointer"), plan.nativePointerTypeIndex);
+		appendTypeTest(body, valueLocal, typeLocal, outputLocal, Abstract("native_pointer"),
+			plan.nativePointerTypeIndex);
 		var iteratorTypes:Map<String, Bool> = [];
 		for (fn in plan.program.functions)
 			for (block in fn.blocks)
@@ -1123,7 +1158,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 							switch type {
 								case Iterator(element) if (!iteratorTypes.exists(IrTypeIdentity.text(type))):
 									iteratorTypes.set(IrTypeIdentity.text(type), true);
-									appendTypeTest(body, valueLocal, typeLocal, outputLocal, type, plan.iteratorType(element));
+									appendTypeTest(body, valueLocal, typeLocal, outputLocal, type,
+										plan.iteratorType(element));
 								default:
 							}
 						default:
@@ -1219,7 +1255,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return concatStrings(left, right, destination);
 
 	/** Read a field through its existing constructor type; formatting stays in the shared helper. */
-	public function enumStringAccessorBody(typeName:String, constructor:Int, fields:Array<IrType>):Array<WasmInstruction> {
+	public function enumStringAccessorBody(typeName:String, constructor:Int,
+			fields:Array<IrType>):Array<WasmInstruction> {
 		var constructorType = plan.enumConstructorType(typeName, constructor),
 			result = allocateLocal(plan.valueType(Dyn));
 		var body:Array<WasmInstruction> = [];
@@ -1632,7 +1669,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function dynamicIntegerString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
 		var boxType = plan.boxedPrimitiveType(I32),
-			body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), If(null)];
+			body:Array<WasmInstruction> = [
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(boxType)}),
+				If(null)
+			];
 		body = body.concat(integerString(valueLocal, boxType, outputLocal));
 		body.push(End);
 		return body;
@@ -1762,7 +1803,18 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Add,
 			ArrayGetUnsigned(plan.byteArrayTypeIndex),
 			LocalSet(character)
-		], belowLength:Array<WasmInstruction> = [LocalGet(index), LocalGet(length), I32LtS], advance:Array<WasmInstruction> = [LocalGet(index), I32Const(1), I32Add, LocalSet(index)];
+		],
+			belowLength:Array<WasmInstruction> = [
+				LocalGet(index),
+				LocalGet(length),
+				I32LtS
+			],
+			advance:Array<WasmInstruction> = [
+				LocalGet(index),
+				I32Const(1),
+				I32Add,
+				LocalSet(index)
+			];
 		// I64Const takes a 32-bit operand: build Int64.MIN and MIN / 10 at run time.
 		var body:Array<WasmInstruction> = [
 			I64Const(1),
@@ -1803,7 +1855,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Or,
 			I32Eqz,
 			BrIf(1)
-		]).concat(advance).concat([Br(0), End, End]);
+		]).concat(advance).concat([
+			Br(0),
+			End,
+			End
+		]);
 		body = body.concat(belowLength).concat([If(null)]).concat(loadCharacter);
 		body = body.concat([
 			LocalGet(character),
@@ -1815,7 +1871,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Eq,
 			I32Or,
 			If(null)
-		]).concat(advance).concat([End, End]);
+		]).concat(advance).concat([
+			End,
+			End
+		]);
 		// At least one digit is required.
 		body = body.concat(failWhen(belowLength.concat([I32Eqz])));
 		body = body.concat([Block(null), Loop(null)])
@@ -1839,7 +1898,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body = body.concat(failWhen([LocalGet(value), LocalGet(limit), I64LtS]));
 		body = body.concat([LocalGet(value), I64Const(10), I64Mul, LocalSet(value)]);
 		body = body.concat(failWhen([LocalGet(value), LocalGet(minimum), LocalGet(digit), I64Add, I64LtS]));
-		body = body.concat([LocalGet(value), LocalGet(digit), I64Sub, LocalSet(value)]).concat(advance).concat([Br(0), End, End]);
+		body = body.concat([LocalGet(value), LocalGet(digit), I64Sub, LocalSet(value)]).concat(advance).concat([
+			Br(0),
+			End,
+			End
+		]);
 		body = body.concat([LocalGet(negative), I32Eqz, If(null)]);
 		body = body.concat(failWhen([LocalGet(value), LocalGet(minimum), I64Eq]));
 		return body.concat([
@@ -1866,7 +1929,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructGet(plan.bytesTypeIndex, 0),
 				LocalGet(stringLocal),
 				StructGet(plan.bytesTypeIndex, 1)
-			].concat(position).concat([I32Add, ArrayGetUnsigned(plan.byteArrayTypeIndex)]);
+			].concat(position).concat([
+				I32Add,
+				ArrayGetUnsigned(plan.byteArrayTypeIndex)
+			]);
 		for (entry in [
 			{string: valueLocal, length: valueLength},
 			{string: affixLocal, length: affixLength}
@@ -1883,7 +1949,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				LocalSet(entry.length)
 			]);
 		body = body.concat([I32Const(0), LocalSet(outputLocal), I32Const(0), LocalSet(index)]);
-		body = body.concat(suffix ? [LocalGet(valueLength), LocalGet(affixLength), I32Sub, LocalSet(start)] : [I32Const(0), LocalSet(start)]);
+		body = body.concat(suffix ? [LocalGet(valueLength), LocalGet(affixLength), I32Sub, LocalSet(start)] : [
+			I32Const(0),
+			LocalSet(start)
+		]);
 		body = body.concat([
 			LocalGet(affixLength),
 			LocalGet(valueLength),
@@ -2025,7 +2094,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	function dynamicBooleanString(valueLocal:Int, outputLocal:Int):Array<WasmInstruction> {
 		var boxType = plan.boxedPrimitiveType(Bool),
-			body:Array<WasmInstruction> = [LocalGet(valueLocal), RefTest({nullable: false, heap: Type(boxType)}), If(null)];
+			body:Array<WasmInstruction> = [
+				LocalGet(valueLocal),
+				RefTest({nullable: false, heap: Type(boxType)}),
+				If(null)
+			];
 		body = body.concat([
 			LocalGet(valueLocal),
 			RefCast({nullable: false, heap: Type(boxType)}),
@@ -2039,7 +2112,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function appendTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, haxeType:IrType, wasmType:Int):Void {
+	function appendTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int,
+			haxeType:IrType, wasmType:Int):Void {
 		body.push(LocalGet(typeLocal));
 		body.push(I32Const(plan.runtimeTypeIds.id(haxeType)));
 		body.push(I32Eq);
@@ -2066,7 +2140,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		body.push(End);
 	}
 
-	function appendInterfaceTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int, interfaceName:String):Void {
+	function appendInterfaceTypeTest(body:Array<WasmInstruction>, valueLocal:Int, typeLocal:Int, outputLocal:Int,
+			interfaceName:String):Void {
 		body.push(LocalGet(typeLocal));
 		body.push(I32Const(plan.runtimeTypeIds.id(Virtual(interfaceName))));
 		body.push(I32Eq);
@@ -2137,7 +2212,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				RefCast({nullable: false, heap: Type(objectType)})
 			]);
 			for (argumentIndex in 0...argumentLocals.length)
-				instructions = instructions.concat(virtualArgument(arguments[argumentIndex], target.argumentTypes[argumentIndex + 1],
+				instructions = instructions.concat(virtualArgument(arguments[argumentIndex],
+					target.argumentTypes[argumentIndex + 1],
 					argumentLocals[argumentIndex]));
 			instructions.push(Call(target.functionIndex));
 			if ((switch (output.type) {
@@ -2225,7 +2301,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		]);
 	}
 
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__runtime_string_from_ascii" || name == "runtime.RuntimeData.stringFromAscii") {
 			if ((switch (output.type) {
 				case Bytes: false;
@@ -2234,13 +2311,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 3
 				|| !Type.enumEq(arguments[0].type, Array(I32))
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC runtime string.fromAscii signature";
 			return stringFromAscii(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
@@ -2383,13 +2460,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case F64: false;
-					default: true;
-				})
+				case F64: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case F64: false;
-					default: true;
-				})
+				case F64: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC Math.min/max signature";
 			return [
@@ -2505,13 +2582,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case Dyn: false;
-					default: true;
-				})
+				case Dyn: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case TypeRef: false;
-					default: true;
-				})
+				case TypeRef: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw 'Invalid Wasm GC $name signature';
 			return dynamicTypeTest(argumentLocals[0], argumentLocals[1], outputLocal, name == "__std_is_exact_type");
@@ -2542,10 +2619,11 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			];
 			var type = WasmDynamicCalls.callbackType();
 			return body.concat(switch callClosure(WasmGcClosureAdapters.signature(gc.module, plan, type),
-				WasmGcClosureAdapters.instanceType(gc.module, plan, type), [arguments[1]], closure, outputLocal, [argumentLocals[1]]) {
-				case Handled(code): code;
-				default: throw "Missing varargs call lowering";
-			});
+				WasmGcClosureAdapters.instanceType(gc.module, plan, type), [arguments[1]], closure, outputLocal,
+				[argumentLocals[1]]) {
+					case Handled(code): code;
+					default: throw "Missing varargs call lowering";
+				});
 		}
 		if (name == "fun_compare") {
 			if ((switch (output.type) {
@@ -2555,13 +2633,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 2
 				|| argumentLocals.length != 2
 				|| (switch (arguments[0].type) {
-					case Dyn: false;
-					default: true;
-				})
+				case Dyn: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Dyn: false;
-					default: true;
-				}))
+				case Dyn: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC Reflect.compareMethods signature";
 			var left = argumentLocals[0],
 				right = argumentLocals[1],
@@ -2652,13 +2730,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 2
 				|| argumentLocals.length != 2
 				|| (switch (arguments[0].type) {
-					case Dyn: false;
-					default: true;
-				})
+				case Dyn: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Dyn: false;
-					default: true;
-				}))
+				case Dyn: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC dynamic equality signature";
 			return dynamicEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
 		}
@@ -2706,8 +2784,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes UTF-8 write signature";
 			var length = allocateLocal(I32);
-			var body:Array<WasmInstruction> = [LocalGet(argumentLocals[2]), StructGet(plan.bytesTypeIndex, 2), LocalSet(length)];
-			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1], length));
+			var body:Array<WasmInstruction> = [
+				LocalGet(argumentLocals[2]),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(length)
+			];
+			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1],
+				length));
 			return body.concat([
 				LocalGet(argumentLocals[0]),
 				StructGet(plan.managedBytesTypeIndex, 0),
@@ -2745,13 +2828,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC Bytes.get signature";
 			return managedByteGet(argumentLocals[0], argumentLocals[1], outputLocal);
@@ -2763,17 +2846,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes.set signature";
 			return managedByteSet(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
@@ -2785,29 +2868,31 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 5
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[3].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[4].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 5)
 				throw "Invalid Wasm GC Bytes.blit signature";
-			var body = checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1], argumentLocals[4]);
-			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[2], argumentLocals[3], argumentLocals[4]));
+			var body = checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1],
+				argumentLocals[4]);
+			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[2], argumentLocals[3],
+				argumentLocals[4]));
 			return body.concat([
 				LocalGet(argumentLocals[0]),
 				StructGet(plan.managedBytesTypeIndex, 0),
@@ -2832,13 +2917,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI small integer getter signature";
 			var width = name == "getI8" || name == "getU8" ? 8 : 16,
@@ -2876,17 +2961,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC HXI small integer setter signature";
 			// Byte-array stores keep the low eight bits of the value.
@@ -2913,13 +2998,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC Bytes.getInt32 signature";
 			return managedByteGetI32(argumentLocals[0], argumentLocals[1], outputLocal);
@@ -2931,17 +3016,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes.setInt32 signature";
 			return managedByteSetI32(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
@@ -2953,17 +3038,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case F64: false;
-					default: true;
-				})
+				case F64: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes.setFloat signature";
 			var floatBitsLocal = allocateLocal(I32);
@@ -2981,13 +3066,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI i64 getter signature";
 			return managedByteGetI64(argumentLocals[0], argumentLocals[1], outputLocal);
@@ -2999,17 +3084,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I64: false;
-					default: true;
-				})
+				case I64: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC HXI i64 setter signature";
 			return managedByteSetI64(argumentLocals[0], argumentLocals[1], argumentLocals[2]);
@@ -3021,13 +3106,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI f32 getter signature";
 			var bits = allocateLocal(I32),
@@ -3041,13 +3126,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC HXI f64 getter signature";
 			var bits = allocateLocal(I64),
@@ -3061,21 +3146,22 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case F64: false;
-					default: true;
-				})
+				case F64: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC HXI f64 setter signature";
 			var bits = allocateLocal(I64);
-			return [LocalGet(argumentLocals[2]), I64ReinterpretF64, LocalSet(bits)].concat(managedByteSetI64(argumentLocals[0], argumentLocals[1], bits));
+			return [LocalGet(argumentLocals[2]), I64ReinterpretF64,
+				LocalSet(bits)].concat(managedByteSetI64(argumentLocals[0], argumentLocals[1], bits));
 		}
 		if (name == "structCopy") {
 			if ((switch (output.type) {
@@ -3084,21 +3170,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 4
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[3].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 4)
 				throw "Invalid Wasm GC HXI struct copy signature";
 			return managedBytesCopy(argumentLocals[0], argumentLocals[1], argumentLocals[2], argumentLocals[3]);
@@ -3110,21 +3196,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 4
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[3].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 4)
 				throw "Invalid Wasm GC HXI pointer copy signature";
 			return managedBytesCopyPointer(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
@@ -3136,17 +3222,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC HXI borrowed-byte field setter signature";
 			var rootsType = plan.arrayType(ManagedBytes),
@@ -3215,21 +3301,21 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 4
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[3].type) {
-					case Bool: false;
-					default: true;
-				})
+				case Bool: false;
+				default: true;
+			})
 				|| argumentLocals.length != 4)
 				throw "Invalid Wasm GC HXI UTF-8 field setter signature";
 			var rootsType = plan.arrayType(ManagedBytes),
@@ -3301,22 +3387,22 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw 'Invalid Wasm GC $name signature';
 			return name == "__bytes_view"
 				|| name == "structSlice" ? managedBytesView(argumentLocals[0], argumentLocals[1], argumentLocals[2],
-					outputLocal) : managedBytesSub(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
+				outputLocal) : managedBytesSub(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
 		if (name == "__bytes_compare") {
 			if ((switch (output.type) {
@@ -3325,13 +3411,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw "Invalid Wasm GC Bytes.compare signature";
 			return managedBytesCompare(argumentLocals[0], argumentLocals[1], outputLocal);
@@ -3354,17 +3440,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 3
 				|| (switch (arguments[0].type) {
-					case ManagedBytes: false;
-					default: true;
-				})
+				case ManagedBytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| argumentLocals.length != 3)
 				throw "Invalid Wasm GC Bytes.getString signature";
 			return managedBytesGetString(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
@@ -3378,7 +3464,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				default: true;
 			}))
 				throw "Invalid Wasm GC string length signature";
-			return compiler.backend.wasm.WasmUtf16Strings.length(stringByteLength(argumentLocals[0]), index -> stringByteAt(argumentLocals[0], index),
+			return compiler.backend.wasm.WasmUtf16Strings.length(stringByteLength(argumentLocals[0]),
+				index -> stringByteAt(argumentLocals[0], index),
 				() -> allocateLocal(I32), outputLocal);
 		}
 		if (name == "__string_char_code_at")
@@ -3397,13 +3484,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 2
 				|| argumentLocals.length != 2
 				|| (switch (arguments[0].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				}))
+				case Bytes: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC string equality signature";
 			return bytesEqual(outputLocal, argumentLocals[0], argumentLocals[1]);
 		}
@@ -3447,13 +3534,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			})
 				|| arguments.length != 2
 				|| (switch (arguments[0].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| argumentLocals.length != 2)
 				throw 'Invalid Wasm GC $name signature';
 			return stringAffix(argumentLocals[0], argumentLocals[1], outputLocal, name == "__string_ends_with");
@@ -3466,13 +3553,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 2
 				|| argumentLocals.length != 2
 				|| (switch (arguments[0].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				}))
+				case Bytes: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC full string comparison signature";
 			return stringCompare(argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -3485,19 +3572,20 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != expectedArguments
 				|| argumentLocals.length != expectedArguments
 				|| (switch (arguments[0].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (expectedArguments == 3 && (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})))
+				case I32: false;
+				default: true;
+			})))
 				throw 'Invalid Wasm GC $name signature';
-			return stringIndexOf(argumentLocals[0], argumentLocals[1], expectedArguments == 3 ? argumentLocals[2] : null, outputLocal);
+			return stringIndexOf(argumentLocals[0], argumentLocals[1],
+				expectedArguments == 3 ? argumentLocals[2] : null, outputLocal);
 		}
 		if (name == "__string_last_index_of" || name == "__string_last_index_of_from") {
 			var expectedArguments = name == "__string_last_index_of" ? 2 : 3;
@@ -3508,19 +3596,20 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != expectedArguments
 				|| argumentLocals.length != expectedArguments
 				|| (switch (arguments[0].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (expectedArguments == 3 && (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				})))
+				case I32: false;
+				default: true;
+			})))
 				throw 'Invalid Wasm GC $name signature';
-			return stringLastIndexOf(argumentLocals[0], argumentLocals[1], expectedArguments == 3 ? argumentLocals[2] : null, outputLocal);
+			return stringLastIndexOf(argumentLocals[0], argumentLocals[1],
+				expectedArguments == 3 ? argumentLocals[2] : null, outputLocal);
 		}
 		if (name == "__string_to_lower_case" || name == "__string_to_upper_case") {
 			if ((switch (output.type) {
@@ -3541,10 +3630,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					case Bytes: false;
 					default: true;
 				})
-				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				}))
+					|| (switch (arguments[1].type) {
+				case Bytes: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC String.split signature";
 			return stringSplit(argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -3556,17 +3645,17 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 3
 				|| argumentLocals.length != 3
 				|| (switch (arguments[0].type) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case I32: false;
-					default: true;
-				})
+				case I32: false;
+				default: true;
+			})
 				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				}))
+				case I32: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC String.substring signature";
 			return stringSubstring(argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
@@ -3581,13 +3670,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				|| arguments.length != 2
 				|| argumentLocals.length != 2
 				|| (switch (requireArrayElement(arguments[0].type)) {
-					case Bytes: false;
-					default: true;
-				})
+				case Bytes: false;
+				default: true;
+			})
 				|| (switch (arguments[1].type) {
-					case Bytes: false;
-					default: true;
-				}))
+				case Bytes: false;
+				default: true;
+			}))
 				throw "Invalid Wasm GC Array<String>.join signature";
 			return arrayJoinBytes(argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -3616,7 +3705,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			var element = requireArrayElement(arguments[0].type),
 				resultElement = requireArrayElement(output.type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_copy_" + suffix || WasmGcTypePlan.typeKey(resultElement) != WasmGcTypePlan.typeKey(element))
+			if (name != "__array_copy_" + suffix
+				|| WasmGcTypePlan.typeKey(resultElement) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array copy "$name" does not match its $element array';
 			return arrayCopy(element, argumentLocals[0], outputLocal);
 		}
@@ -3652,7 +3742,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				StructGet(arrayType, WasmGcTypePlan.arrayLengthFieldIndex()),
 				LocalSet(lengthLocal)
 			];
-			body = body.concat(requireHandled(arraySet(array, new IrValue(-1, "push-index", I32), value, arrayLocal, lengthLocal, argumentLocals[1])));
+			body = body.concat(requireHandled(arraySet(array, new IrValue(-1, "push-index", I32), value, arrayLocal,
+				lengthLocal, argumentLocals[1])));
 			body = body.concat([LocalGet(lengthLocal), I32Const(1), I32Add, LocalSet(outputLocal)]);
 			return body;
 		}
@@ -3664,7 +3755,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC array unshift signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_unshift_" + suffix || WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
+			if (name != "__array_unshift_" + suffix
+				|| WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array unshift "$name" does not match its $element array';
 			return arrayUnshift(element, argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -3679,7 +3771,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC array insert signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_insert_" + suffix || WasmGcTypePlan.typeKey(arguments[2].type) != WasmGcTypePlan.typeKey(element))
+			if (name != "__array_insert_" + suffix
+				|| WasmGcTypePlan.typeKey(arguments[2].type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array insert "$name" does not match its $element array';
 			return arrayInsert(element, argumentLocals[0], argumentLocals[1], argumentLocals[2]);
 		}
@@ -3744,7 +3837,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				default: true;
 			}))
 				throw 'Wasm GC array splice "$name" requires I32 bounds, got ${Std.string(arguments[1].type)} and ${Std.string(arguments[2].type)}';
-			return arraySplice(element, resultElement, argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
+			return arraySplice(element, resultElement, argumentLocals[0], argumentLocals[1], argumentLocals[2],
+				outputLocal);
 		}
 		if (StringTools.startsWith(name, "__array_remove_at_")) {
 			if (arguments.length != 2 || argumentLocals.length != 2)
@@ -3762,7 +3856,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC array remove signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_remove_" + suffix || WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
+			if (name != "__array_remove_" + suffix
+				|| WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array remove "$name" does not match its $element array';
 			return arrayRemove(element, argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -3774,7 +3869,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw 'Invalid Wasm GC array indexOf signature for "$name"';
 			var element = requireArrayElement(arguments[0].type),
 				suffix = arrayNativeSuffix(element);
-			if (name != "__array_index_of_" + suffix || WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
+			if (name != "__array_index_of_" + suffix
+				|| WasmGcTypePlan.typeKey(arguments[1].type) != WasmGcTypePlan.typeKey(element))
 				throw 'Wasm GC array indexOf "$name" does not match its $element array';
 			return arrayIndexOf(element, argumentLocals[0], argumentLocals[1], outputLocal);
 		}
@@ -3789,10 +3885,10 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 					case I32: false;
 					default: true;
 				})
-				|| (switch (arguments[2].type) {
-					case I32: false;
-					default: true;
-				}))
+					|| (switch (arguments[2].type) {
+				case I32: false;
+				default: true;
+			}))
 				throw 'Wasm GC array slice "$name" does not match its $element array';
 			return arraySlice(element, argumentLocals[0], argumentLocals[1], argumentLocals[2], outputLocal);
 		}
@@ -3893,16 +3989,20 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			case F64: [LocalGet(left), LocalGet(right), F64Eq, LocalSet(destination)];
 			case I64: [LocalGet(left), LocalGet(right), I64Eq, LocalSet(destination)];
 			case Ref({heap: Any}): [
-					 LocalGet(left), RefCast({nullable: true, heap: Eq}),
-					LocalGet(right), RefCast({nullable: true, heap: Eq}),
-					          RefEq,               LocalSet(destination)
-				];
+				LocalGet(left), RefCast({nullable: true, heap: Eq}),
+				LocalGet(right), RefCast({
+					nullable: true,
+					heap: Eq
+				}),
+				RefEq, LocalSet(destination)
+			];
 			case Ref(_): [LocalGet(left), LocalGet(right), RefEq, LocalSet(destination)];
 			default: [LocalGet(left), LocalGet(right), I32Eq, LocalSet(destination)];
 		};
 	}
 
-	function arraySlice(element:IrType, arrayLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {
+	function arraySlice(element:IrType, arrayLocal:Int, startArgument:Int, endArgument:Int,
+			destination:Int):Array<WasmInstruction> {
 		var wrapperType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element),
 			length = allocateLocal(I32),
@@ -4505,7 +4605,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function arraySplice(element:IrType, resultElement:IrType, arrayLocal:Int, startArgument:Int, countArgument:Int, destination:Int):Array<WasmInstruction> {
+	function arraySplice(element:IrType, resultElement:IrType, arrayLocal:Int, startArgument:Int, countArgument:Int,
+			destination:Int):Array<WasmInstruction> {
 		var wrapperType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element),
 			resultWrapperType = plan.arrayType(resultElement),
@@ -4706,7 +4807,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			End
 		];
 
-	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult {
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int,
+			indexLocal:Int):WasmLoweringResult {
 		var element = requireArrayElement(array.type),
 			wrapperType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element);
@@ -4722,7 +4824,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):WasmLoweringResult {
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int,
+			valueLocal:Int):WasmLoweringResult {
 		var element = requireArrayElement(array.type),
 			wrapperType = plan.arrayType(element),
 			storageType = plan.arrayStorageType(element),
@@ -4893,7 +4996,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult {
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int,
+			iteratorLocal:Int):WasmLoweringResult {
 		var element = requireIteratorElement(iterator.type),
 			iteratorType = plan.iteratorType(element),
 			arrayType = plan.arrayType(element),
@@ -4943,7 +5047,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult {
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		if (arguments.length == 0) {
 			var global = gc.enumCaseGlobal(typeName, constructor);
 			return [
@@ -4975,7 +5080,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):WasmLoweringResult {
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int,
+			valueLocal:Int):WasmLoweringResult {
 		var typeName = requireEnumName(value.type),
 			constructorType = plan.enumConstructorType(typeName, constructor),
 			fieldIndex = plan.enumFieldIndex(typeName, constructor, field);
@@ -4987,7 +5093,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function staticClosure(name:String, type:IrType, tableSlots:Map<String, Int>, destination:Int):WasmLoweringResult {
+	public function staticClosure(name:String, type:IrType, tableSlots:Map<String, Int>,
+			destination:Int):WasmLoweringResult {
 		// The receiver-query intrinsic compares the known target slot and never reads its marker operand.
 		if (gc.closureProbeTargets.exists(name))
 			return [RefNull(Type(plan.closureTypeIndex)), LocalSet(destination)];
@@ -5019,7 +5126,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function instanceClosure(name:String, type:IrType, tableSlots:Map<String, Int>, receiverLocal:Int, destination:Int):WasmLoweringResult {
+	public function instanceClosure(name:String, type:IrType, tableSlots:Map<String, Int>, receiverLocal:Int,
+			destination:Int):WasmLoweringResult {
 		var tableSlot = tableSlots.get(WasmGcModuleBuilder.gcClosureThunkName(name));
 		if (tableSlot == null)
 			throw 'Wasm GC instance closure target "$name" has no stable table slot';
@@ -5032,7 +5140,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		];
 	}
 
-	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int, destination:Int,
+	public function callClosure(staticType:Int, instanceType:Null<Int>, arguments:Array<IrValue>, closureLocal:Int,
+			destination:Int,
 			argumentLocals:Array<Int>):WasmLoweringResult {
 		var body:Array<WasmInstruction> = [];
 		if (instanceType == null) {
@@ -5330,7 +5439,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function managedBytesView(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int, destination:Int):Array<WasmInstruction> {
+	function managedBytesView(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int,
+			destination:Int):Array<WasmInstruction> {
 		var body = checkedByteRange(plan.managedBytesTypeIndex, bytesLocal, offsetLocal, lengthLocal);
 		body = body.concat([
 			LocalGet(bytesLocal),
@@ -5374,7 +5484,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function managedBytesCopy(destinationLocal:Int, destinationOffsetLocal:Int, sourceLocal:Int, lengthLocal:Int):Array<WasmInstruction> {
+	function managedBytesCopy(destinationLocal:Int, destinationOffsetLocal:Int, sourceLocal:Int,
+			lengthLocal:Int):Array<WasmInstruction> {
 		var sourceOffsetLocal = allocateLocal(I32),
 			body = checkedByteRange(plan.managedBytesTypeIndex, destinationLocal, destinationOffsetLocal, lengthLocal);
 		body.push(I32Const(0));
@@ -5399,7 +5510,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function managedBytesCopyPointer(bytesLocal:Int, pointerOffsetLocal:Int, lengthOffsetLocal:Int, destination:Int):Array<WasmInstruction> {
+	function managedBytesCopyPointer(bytesLocal:Int, pointerOffsetLocal:Int, lengthOffsetLocal:Int,
+			destination:Int):Array<WasmInstruction> {
 		var pointer = allocateLocal(I32),
 			length = allocateLocal(I32),
 			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)})),
@@ -5645,7 +5757,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function managedBytesGetString(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int, destination:Int):Array<WasmInstruction> {
+	function managedBytesGetString(bytesLocal:Int, offsetLocal:Int, lengthLocal:Int,
+			destination:Int):Array<WasmInstruction> {
 		var body = checkedByteRange(plan.managedBytesTypeIndex, bytesLocal, offsetLocal, lengthLocal),
 			storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
 		body = body.concat([
@@ -5671,7 +5784,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function checkedByteRange(wrapperType:Int, bytesLocal:Int, offsetLocal:Int, lengthLocal:Int):Array<WasmInstruction> {
+	function checkedByteRange(wrapperType:Int, bytesLocal:Int, offsetLocal:Int,
+			lengthLocal:Int):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [LocalGet(offsetLocal), I32Const(0), I32LtS, If(null)];
 		body = body.concat(trapInstructions());
 		body = body.concat([End, LocalGet(lengthLocal), I32Const(0), I32LtS, If(null)]);
@@ -5727,7 +5841,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function stringCharCodeAt(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+	function stringCharCodeAt(output:IrValue, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if ((switch (output.type) {
 			case I32: false;
 			default: true;
@@ -5735,15 +5850,16 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			|| arguments.length != 2
 			|| argumentLocals.length != 2
 			|| (switch (arguments[0].type) {
-				case Bytes: false;
-				default: true;
-			})
+			case Bytes: false;
+			default: true;
+		})
 			|| (switch (arguments[1].type) {
-				case I32: false;
-				default: true;
-			}))
+			case I32: false;
+			default: true;
+		}))
 			throw "Invalid Wasm GC string charCodeAt signature";
-		return compiler.backend.wasm.WasmUtf16Strings.charCodeAt(stringByteLength(argumentLocals[0]), index -> stringByteAt(argumentLocals[0], index),
+		return compiler.backend.wasm.WasmUtf16Strings.charCodeAt(stringByteLength(argumentLocals[0]),
+			index -> stringByteAt(argumentLocals[0], index),
 			() -> allocateLocal(I32), argumentLocals[1], destination);
 	}
 
@@ -5761,7 +5877,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			ArrayGetUnsigned(plan.byteArrayTypeIndex)
 		];
 
-	function stringFromCharCode(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+	function stringFromCharCode(output:IrValue, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if ((switch (output.type) {
 			case Bytes: false;
 			default: true;
@@ -5802,7 +5919,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	function stringCharAt(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+	function stringCharAt(output:IrValue, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if ((switch (output.type) {
 			case Bytes: false;
 			default: true;
@@ -5810,13 +5928,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			|| arguments.length != 2
 			|| argumentLocals.length != 2
 			|| (switch (arguments[0].type) {
-				case Bytes: false;
-				default: true;
-			})
+			case Bytes: false;
+			default: true;
+		})
 			|| (switch (arguments[1].type) {
-				case I32: false;
-				default: true;
-			}))
+			case I32: false;
+			default: true;
+		}))
 			throw "Invalid Wasm GC string charAt signature";
 		var valueLocal = argumentLocals[0],
 			indexLocal = argumentLocals[1],
@@ -5850,7 +5968,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body.concat(stringSubstring(valueLocal, start, end, destination));
 	}
 
-	function stringConcat(output:IrValue, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):Array<WasmInstruction> {
+	function stringConcat(output:IrValue, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		if ((switch (output.type) {
 			case Bytes: false;
 			default: true;
@@ -5858,13 +5977,13 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			|| arguments.length != 2
 			|| argumentLocals.length != 2
 			|| (switch (arguments[0].type) {
-				case Bytes: false;
-				default: true;
-			})
+			case Bytes: false;
+			default: true;
+		})
 			|| (switch (arguments[1].type) {
-				case Bytes: false;
-				default: true;
-			}))
+			case Bytes: false;
+			default: true;
+		}))
 			throw "Invalid Wasm GC string concatenation signature";
 		return concatStrings(argumentLocals[0], argumentLocals[1], destination);
 	}
@@ -6107,7 +6226,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 	function stringLastIndexOf(value:Int, needle:Int, start:Null<Int>, destination:Int):Array<WasmInstruction>
 		return stringSearch(value, needle, start, destination, true);
 
-	function stringSearch(value:Int, needle:Int, start:Null<Int>, destination:Int, reverse:Bool):Array<WasmInstruction> {
+	function stringSearch(value:Int, needle:Int, start:Null<Int>, destination:Int,
+			reverse:Bool):Array<WasmInstruction> {
 		return [
 			I32Const(-1),
 			LocalSet(destination),
@@ -6119,41 +6239,49 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 			I32Eqz,
 			I32And,
 			If(null)
-		].concat(compiler.backend.wasm.WasmUtf16Strings.indexOf(stringByteLength(value), i -> stringByteAt(value, i), stringByteLength(needle),
+		].concat(compiler.backend.wasm.WasmUtf16Strings.indexOf(stringByteLength(value), i -> stringByteAt(value, i),
+			stringByteLength(needle),
 			i -> stringByteAt(needle, i), () -> allocateLocal(I32), start, reverse, destination))
 			.concat([End]);
 	}
 
-	function stringSubstring(valueLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {
+	function stringSubstring(valueLocal:Int, startArgument:Int, endArgument:Int,
+			destination:Int):Array<WasmInstruction> {
 		var storage = allocateLocal(Ref({nullable: false, heap: Type(plan.byteArrayTypeIndex)}));
-		return compiler.backend.wasm.WasmUtf16Strings.substring(stringByteLength(valueLocal), index -> stringByteAt(valueLocal, index),
-			() -> allocateLocal(I32), startArgument, endArgument, size -> [LocalGet(size), ArrayNewDefault(plan.byteArrayTypeIndex), LocalSet(storage)],
-			(sourceOffset, targetOffset, size) -> [
-				LocalGet(storage),
-				LocalGet(targetOffset),
-				LocalGet(valueLocal),
-				StructGet(plan.bytesTypeIndex, 0),
-				LocalGet(valueLocal),
-				StructGet(plan.bytesTypeIndex, 1),
-				LocalGet(sourceOffset),
-				I32Add,
+		return compiler.backend.wasm.WasmUtf16Strings.substring(stringByteLength(valueLocal),
+			index -> stringByteAt(valueLocal, index),
+			() -> allocateLocal(I32), startArgument, endArgument, size -> [
 				LocalGet(size),
-				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
-			], (offset, byte) -> [
-				LocalGet(storage),
-				LocalGet(offset),
-				LocalGet(byte),
-				ArraySet(plan.byteArrayTypeIndex)
-			], size -> [
-				LocalGet(storage),
-				I32Const(0),
-				LocalGet(size),
-				StructNew(plan.bytesTypeIndex),
-				LocalSet(destination)
-			]);
+				ArrayNewDefault(plan.byteArrayTypeIndex),
+				LocalSet(storage)
+			],
+				(sourceOffset, targetOffset, size) -> [
+					LocalGet(storage),
+					LocalGet(targetOffset),
+					LocalGet(valueLocal),
+					StructGet(plan.bytesTypeIndex, 0),
+					LocalGet(valueLocal),
+					StructGet(plan.bytesTypeIndex, 1),
+					LocalGet(sourceOffset),
+					I32Add,
+					LocalGet(size),
+					ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
+				], (offset, byte) -> [
+					LocalGet(storage),
+					LocalGet(offset),
+					LocalGet(byte),
+					ArraySet(plan.byteArrayTypeIndex)
+				], size -> [
+					LocalGet(storage),
+					I32Const(0),
+					LocalGet(size),
+					StructNew(plan.bytesTypeIndex),
+					LocalSet(destination)
+				]);
 	}
 
-	function stringByteSubstring(valueLocal:Int, startArgument:Int, endArgument:Int, destination:Int):Array<WasmInstruction> {
+	function stringByteSubstring(valueLocal:Int, startArgument:Int, endArgument:Int,
+			destination:Int):Array<WasmInstruction> {
 		var valueLength = allocateLocal(I32),
 			start = allocateLocal(I32),
 			end = allocateLocal(I32),
@@ -6310,7 +6438,8 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return body;
 	}
 
-	static function appendSplitPart(body:Array<WasmInstruction>, plan:WasmGcTypePlan, arrayType:Int, arrayStorage:Int, sourceLocal:Int, resultLocal:Int,
+	static function appendSplitPart(body:Array<WasmInstruction>, plan:WasmGcTypePlan, arrayType:Int, arrayStorage:Int,
+			sourceLocal:Int, resultLocal:Int,
 			countLocal:Int, startLocal:Int, endLocal:Int):Void {
 		body.push(LocalGet(resultLocal));
 		body.push(StructGet(arrayType, WasmGcTypePlan.arrayDataFieldIndex()));

@@ -48,9 +48,11 @@ class StringConversion {
 				var present = EnumAbstractValues.nameOf(session, new TypedExpression(TCast(value), inner, span), span);
 				if (present == null)
 					return null;
-				var absent = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+				var absent = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+					value.type, span),
 					isAbsent = new TypedExpression(TEqual(value, absent), TBool, span);
-				return new TypedExpression(TConditional(isAbsent, new TypedExpression(TStringLiteral("null"), TString, span), present), TString, span);
+				return new TypedExpression(TConditional(isAbsent,
+					new TypedExpression(TStringLiteral("null"), TString, span), present), TString, span);
 			case TNullable(_):
 				return null;
 			default:

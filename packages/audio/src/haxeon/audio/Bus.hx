@@ -72,16 +72,14 @@ class Bus {
 	/** Schedules the bus to start at an absolute process-wide audio time in PCM frames. */
 	public function scheduleStart(timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_bus_schedule_start(value, timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_bus_schedule_start(value, timeFrames),
 			"audio.bus.scheduleStart");
 	}
 
 	/** Schedules the bus to stop at an absolute process-wide audio time in PCM frames. */
 	public function scheduleStop(timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_bus_schedule_stop(value, timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_bus_schedule_stop(value, timeFrames),
 			"audio.bus.scheduleStop");
 	}
 
@@ -115,18 +113,16 @@ class Bus {
 	/** Fades the bus between linear gains over a duration in PCM frames. */
 	public function fade(volumeBegin:Float, volumeEnd:Float, durationFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_bus_fade(value, volumeBegin, volumeEnd, durationFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_bus_fade(value, volumeBegin, volumeEnd, durationFrames),
 			"audio.bus.fade");
 	}
 
 	/** Fades the bus at an absolute process-wide audio time in PCM frames. */
 	public function fadeAt(volumeBegin:Float, volumeEnd:Float, durationFrames:haxe.Int64,
-		timeFrames:haxe.Int64):Void {
+			timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_bus_fade_at(value, volumeBegin, volumeEnd, durationFrames,
-				timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_bus_fade_at(value, volumeBegin, volumeEnd, durationFrames,
+			timeFrames),
 			"audio.bus.fadeAt");
 	}
 
@@ -214,19 +210,22 @@ class Bus {
 		return effect;
 	}
 
-    /** Attenuates this bus from post-fader key audio without mixing it in. */
-    public function addDucking(key:Bus):BusEffect {
-        ensureLive();
-        if (key==null) throw BindingError.invalidArgument("Bus.addDucking", "Ducking requires a key bus");
-        var made=NativeKitAudio.nk_audio_bus_effect_create_ducking(value,key.nativeHandle());
-        AudioResult.check(made.status,"audio.bus.addDucking");
-        var effect=new BusEffect(made.out_effect); retainEffect(effect); return effect;
-    }
+	/** Attenuates this bus from post-fader key audio without mixing it in. */
+	public function addDucking(key:Bus):BusEffect {
+		ensureLive();
+		if (key == null) throw BindingError.invalidArgument("Bus.addDucking", "Ducking requires a key bus");
+		var made = NativeKitAudio.nk_audio_bus_effect_create_ducking(value, key.nativeHandle());
+		AudioResult.check(made.status, "audio.bus.addDucking");
+		var effect = new BusEffect(made.out_effect);
+		retainEffect(effect);
+		return effect;
+	}
 
 	/** Adds an independent post-fader route to a shared return bus. */
 	public function addSend(destination:Bus, volume:Float = 0.0):BusSend {
 		ensureLive();
-		if (destination == null) throw BindingError.invalidArgument("Bus.addSend", "Audio send destination must not be null");
+		if (destination == null) throw BindingError.invalidArgument("Bus.addSend",
+			"Audio send destination must not be null");
 		var made = NativeKitAudio.nk_audio_bus_send_create(value, destination.nativeHandle(), volume);
 		AudioResult.check(made.status, "audio.bus.addSend");
 		// Applications may dispose borrowed sends while retaining their source bus.
@@ -251,14 +250,15 @@ class Bus {
 		return effect;
 	}
 
-    function retainEffect(effect:BusEffect):Void {
-        // Repeated application-owned effect replacement must not grow wrapper retention.
-        var index=0;
-        while(index<effects.length) {
-            if(effects[index].isDisposed()) effects.splice(index,1); else index++;
-        }
-        effects.push(effect);
-    }
+	function retainEffect(effect:BusEffect):Void {
+		// Repeated application-owned effect replacement must not grow wrapper retention.
+		var index = 0;
+		while (index < effects.length) {
+			if (effects[index].isDisposed()) effects.splice(index, 1);
+			else index++;
+		}
+		effects.push(effect);
+	}
 
 	public function dispose():Void {
 		if (disposed)

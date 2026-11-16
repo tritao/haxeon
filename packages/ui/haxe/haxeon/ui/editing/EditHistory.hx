@@ -165,18 +165,18 @@ class EditHistory implements Observable {
 				for (operation in operations)
 					operation.apply();
 			}, function() {
-				var index = operations.length - 1;
-				while (index >= 0) {
-					operations[index].undo();
-					index--;
-				}
-			}, transaction.coalesceKey, function(next) {
-				if (next == null || next.transactionOperations == null)
-					return false;
-				for (operation in next.transactionOperations)
-					operations.push(operation);
-				return true;
-			}, operations, estimatedBytes, affectsPersistence);
+			var index = operations.length - 1;
+			while (index >= 0) {
+				operations[index].undo();
+				index--;
+			}
+		}, transaction.coalesceKey, function(next) {
+			if (next == null || next.transactionOperations == null)
+				return false;
+			for (operation in next.transactionOperations)
+				operations.push(operation);
+			return true;
+		}, operations, estimatedBytes, affectsPersistence);
 		composite.transactionOperations = operations;
 		pushApplied(composite, composite.coalesceKey);
 		return true;
@@ -203,18 +203,19 @@ class EditHistory implements Observable {
 			var previous = undoStack[undoStack.length - 1];
 			if (previous.coalesceKey == coalesceKey && previous.affectsPersistence == operation.affectsPersistence) {
 				var previousBytes = previous.estimatedRetainedBytes;
-				var transactionMergeOverBudget = maxEstimatedBytes > 0 &&
-					previous.transactionOperations != null && operation.transactionOperations != null &&
-					saturatedAdd(previousBytes, operation.estimatedRetainedBytes) > maxEstimatedBytes;
+				var transactionMergeOverBudget = maxEstimatedBytes > 0 && previous.transactionOperations != null
+					&& operation.transactionOperations != null
+					&& saturatedAdd(previousBytes, operation.estimatedRetainedBytes) > maxEstimatedBytes;
 				if (!transactionMergeOverBudget && previous.mergeFrom(operation)) {
 					var mergedBytes = previous.transactionOperations != null && operation.transactionOperations != null
 						? saturatedAdd(previousBytes, operation.estimatedRetainedBytes)
 						: (previousBytes > operation.estimatedRetainedBytes
-							? previousBytes : operation.estimatedRetainedBytes);
+						? previousBytes : operation.estimatedRetainedBytes);
 					previous.setEstimatedRetainedBytes(mergedBytes);
 					estimatedRetainedBytes = saturatedAdd(estimatedRetainedBytes - previousBytes, mergedBytes);
 					previous.afterStateToken = nextStateToken++;
-					previous.afterPersistentToken = previous.affectsPersistence ? nextPersistentToken++ : persistentStateToken;
+					previous.afterPersistentToken = previous.affectsPersistence
+						? nextPersistentToken++ : persistentStateToken;
 					persistentStateToken = previous.afterPersistentToken;
 					stateToken = previous.afterStateToken;
 					clearRedoStack();
@@ -251,9 +252,8 @@ class EditHistory implements Observable {
 		var removeCount = 0;
 		var remainingBytes = estimatedRetainedBytes;
 		var remainingOperations = undoStack.length + redoStack.length;
-		while (removeCount < undoStack.length - 1 &&
-			((maxOperations > 0 && remainingOperations > maxOperations) ||
-			 (maxEstimatedBytes > 0 && remainingBytes > maxEstimatedBytes))) {
+		while (removeCount < undoStack.length - 1 && ((maxOperations > 0 && remainingOperations > maxOperations)
+			|| (maxEstimatedBytes > 0 && remainingBytes > maxEstimatedBytes))) {
 			remainingBytes -= undoStack[removeCount].estimatedRetainedBytes;
 			remainingOperations--;
 			removeCount++;

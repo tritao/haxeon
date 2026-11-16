@@ -1,5 +1,10 @@
-enum NameValue { Entry(value:String); Other; }
-class PatternBase { public static inline final INHERITED = "inherited"; }
+enum NameValue {
+	Entry(value:String);
+	Other;
+}
+class PatternBase {
+	public static inline final INHERITED = "inherited";
+}
 class PatternCheck extends PatternBase {
 	static inline final MATCH = "match";
 	static var captured = "static";

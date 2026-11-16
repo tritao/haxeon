@@ -116,7 +116,8 @@ class Scope {
 		facts = new FlowFacts(parent == null ? null : parent.facts);
 	}
 
-	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String, receiver:Bool = false,
+	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String,
+			receiver:Bool = false,
 			?localFunction:LocalFunction, ?declaration:String):Void {
 		if (definitions != null && definitions.values.exists(name))
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
@@ -259,7 +260,8 @@ class Scope {
 		}
 	}
 
-	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String, ?bindingId:String,
+	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String,
+			?bindingId:String,
 			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):Void {
 		// A capture is the same variable as the one it captures, so it keeps that declaration's identity.
 		define(name, type, span, true, bindingId, false, localFunction, declaration);
@@ -390,7 +392,8 @@ class Scope {
 
 	public function cellClass(name:String):Null<String> {
 		var own = captured;
-		return own != null && own.cellClasses.exists(name) ? own.cellClasses.get(name) : (parent == null ? null : parent.cellClass(name));
+		return own != null && own.cellClasses.exists(name)
+			? own.cellClasses.get(name) : (parent == null ? null : parent.cellClass(name));
 	}
 
 	public function requireCellClass(name:String):String {
@@ -420,7 +423,8 @@ class Scope {
 
 	function resolveDeclaredById(id:String, fallback:CompilerType):CompilerType {
 		var own = captured;
-		return own != null && own.storageTypes.exists(id) ? own.storageTypes.get(id) : (parent == null ? fallback : parent.resolveDeclaredById(id, fallback));
+		return own != null && own.storageTypes.exists(id)
+			? own.storageTypes.get(id) : (parent == null ? fallback : parent.resolveDeclaredById(id, fallback));
 	}
 
 	public function resolveId(name:String):Null<String> {

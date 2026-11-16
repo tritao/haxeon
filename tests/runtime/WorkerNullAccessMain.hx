@@ -11,9 +11,11 @@ class WorkerNullAccessMain {
 			CompilerIntrinsics.register(compiler);
 			compiler.addStandardLibrarySourceRoot("stdlib");
 			compiler.configure("worker-null", "test", ["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);
-			var input = inlineEnabled ? StringTools.replace(source, 'stack.indexOf("resolveTarget") >= 0', "true") : source;
+			var input = inlineEnabled ? StringTools.replace(source, 'stack.indexOf("resolveTarget") >= 0',
+				"true") : source;
 			for (revision in 0...2) {
-				compiler.update("WorkerNullAccess.hx", revision == 0 ? input : StringTools.replace(input, "return 42;", "return 43;"));
+				compiler.update("WorkerNullAccess.hx",
+					revision == 0 ? input : StringTools.replace(input, "return 42;", "return 43;"));
 				var result = compiler.compile("WorkerNullAccess");
 				var path = "out/worker-null-access.hl";
 				File.saveBytes(path, HlWriter.encode(result.module).flatten());

@@ -58,7 +58,8 @@ class WasmCAbi {
 
 	final floatResult:Bool;
 
-	function new(directArguments:Array<Null<WasmCScalar>>, directResult:Null<WasmCScalar>, indirectResult:Bool, floatArguments:Array<Bool>, floatResult:Bool) {
+	function new(directArguments:Array<Null<WasmCScalar>>, directResult:Null<WasmCScalar>, indirectResult:Bool,
+			floatArguments:Array<Bool>, floatResult:Bool) {
 		this.directArguments = directArguments;
 		this.directResult = directResult;
 		this.indirectResult = indirectResult;
@@ -90,18 +91,17 @@ class WasmCAbi {
 			return new WasmCAbi(plain, null, false, unconverted, false);
 		if (argumentDescriptors.length != native.arguments.length)
 			throw 'C native "${native.name}" signature has ${argumentDescriptors.length} arguments, not ${native.arguments.length}';
-		var directArguments = [
-			for (index in 0...argumentDescriptors.length)
-				switch native.argumentModes[index] {
-					case FixedValue(_, _, _):
-						singleScalar(argumentDescriptors[index]);
-					case _:
-						null;
-				}
-		], floatArguments = [
-			for (index in 0...argumentDescriptors.length)
-				(switch (native.argumentModes[index]) { case Value: true; default: false; }) && argumentDescriptors[index] == FLOAT
-			];
+		var directArguments = [for (index in 0...argumentDescriptors.length)
+			switch native.argumentModes[index] {
+				case FixedValue(_, _, _):
+					singleScalar(argumentDescriptors[index]);
+				case _:
+					null;
+			}], floatArguments = [for (index in 0...argumentDescriptors.length)
+				(switch (native.argumentModes[index]) {
+			case Value: true;
+			default: false;
+		}) && argumentDescriptors[index] == FLOAT];
 		if (native.fixedResult == null)
 			return new WasmCAbi(directArguments, null, false, floatArguments, floatResult);
 		var directResult = singleScalar(split[1]);
@@ -110,15 +110,16 @@ class WasmCAbi {
 
 	/** The import's Wasm parameter and result types, given the types of its IR arguments and result. */
 	public function importType(parameters:Array<WasmValueType>, results:Array<WasmValueType>):WasmFunctionType {
-		var lowered = [
-			for (index in 0...parameters.length) {
-				var direct = directArguments[index];
-				direct != null ? direct.type : floatArguments[index] ? WasmValueType.F32 : parameters[index];
-			}
-		];
+		var lowered = [for (index in 0...parameters.length) {
+			var direct = directArguments[index];
+			direct != null ? direct.type : floatArguments[index] ? WasmValueType.F32 : parameters[index];
+		}];
 		if (indirectResult)
 			return {parameters: [WasmValueType.I32].concat(lowered), results: []};
-		return {parameters: lowered, results: directResult != null ? [directResult.type] : floatResult ? [WasmValueType.F32] : results};
+		return {
+			parameters: lowered,
+			results: directResult != null ? [directResult.type] : floatResult ? [WasmValueType.F32] : results
+		};
 	}
 
 	/** Converts argument `index`, already on the stack as its Wasm value, to its C form. */

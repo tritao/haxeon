@@ -25,19 +25,26 @@ class CHeaderImporter {
 	static final sourceCache:Map<String, haxe.io.Bytes> = [];
 	static final sourceFiles:Map<String, SourceFile> = [];
 
-	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String, ?interfaceName:String,
+	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang",
+			?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>):HxiInterface {
-		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders, null, null);
+		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders,
+			null, null);
 	}
 
 	/** C importer entry point with the shared Clang frontend options. */
-	public static function importHeaderWithOptions(header:String, target:String, includes:Array<String>, clang:String = "clang", ?library:String,
-			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>, ?compileCommands:String):HxiInterface {
-		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders, defines, compileCommands);
+	public static function importHeaderWithOptions(header:String, target:String, includes:Array<String>,
+			clang:String = "clang", ?library:String,
+			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>,
+			?compileCommands:String):HxiInterface {
+		return importHeaderModel(header, target, includes, clang, library, interfaceName, dependencies, excludedHeaders,
+			defines, compileCommands);
 	}
 
-	static function importHeaderModel(header:String, target:String, includes:Array<String>, clang:String, ?library:String, ?interfaceName:String,
-			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>, ?compileCommands:String):HxiInterface {
+	static function importHeaderModel(header:String, target:String, includes:Array<String>, clang:String,
+			?library:String, ?interfaceName:String,
+			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>,
+			?compileCommands:String):HxiInterface {
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
 			throw 'Invalid HXI interface name "$interfaceName"';
 		if (dependencies != null)
@@ -54,7 +61,10 @@ class CHeaderImporter {
 			clang: clang,
 			compileCommands: compileCommands,
 			useHostTarget: false
-		}), layouts = frontend.layouts, declarations:Array<Dynamic> = [], roots = [FileSystem.fullPath(Path.directory(header))];
+		}),
+			layouts = frontend.layouts,
+			declarations:Array<Dynamic> = [],
+			roots = [FileSystem.fullPath(Path.directory(header))];
 		var excluded = [];
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
@@ -74,9 +84,11 @@ class CHeaderImporter {
 			if (alias == null)
 				throw '${declarationLocation(declaration)}: annotated enum "$enumName" has no matching typedef';
 			if (isFlags) {
-				if (representation != "u8" && representation != "u16" && representation != "u32" && representation != "u64")
+				if (representation != "u8" && representation != "u16" && representation != "u32"
+					&& representation != "u64")
 					throw '${declarationLocation(declaration)}: annotated flags "$enumName" must use an unsigned 8-, 16-, 32-, or 64-bit fixed-width integer typedef';
-			} else if (representation != "i8" && representation != "u8" && representation != "i16" && representation != "u16" && representation != "i32"
+			} else if (representation != "i8" && representation != "u8" && representation != "i16"
+				&& representation != "u16" && representation != "i32"
 				&& representation != "u32")
 				throw '${declarationLocation(declaration)}: annotated enum "$enumName" must use an 8-, 16-, or 32-bit fixed-width integer typedef';
 			Reflect.setField(declaration, "_hxiEnumRepresentation", representation);
@@ -106,7 +118,8 @@ class CHeaderImporter {
 			documentation:Map<String, HxiDocumentation> = [],
 			enumGroups:Map<String, Int> = [];
 		for (declaration in declarations) {
-			var imported = importDeclaration(declaration, layouts, handleNames, handleRecords, handleDestroySymbols, documentation);
+			var imported = importDeclaration(declaration, layouts, handleNames, handleRecords, handleDestroySymbols,
+				documentation);
 			if (imported != null)
 				switch imported {
 					case Enumeration(name, representation, flags, values, span):
@@ -125,10 +138,12 @@ class CHeaderImporter {
 								// Anonymous C groups need not have a stable AST order across targets.
 								// Raw values, rather than declaration order, define this native domain.
 								combined.sort(function(left, right) {
-									var order = flags ? Int64.ucompare(left.value, right.value) : Int64.compare(left.value, right.value);
+									var order = flags ? Int64.ucompare(left.value,
+										right.value) : Int64.compare(left.value, right.value);
 									return order == 0 ? Reflect.compare(left.name, right.name) : order;
 								});
-								hxiDeclarations[index] = Enumeration(name, representation, flags, combined, previousSpan);
+								hxiDeclarations[index] = Enumeration(name, representation, flags, combined,
+									previousSpan);
 							default: throw "C enum group index does not name an enum";
 						}
 					default:
@@ -136,11 +151,13 @@ class CHeaderImporter {
 				}
 		}
 		var source = sourceFile(FileSystem.fullPath(header));
-		return new HxiInterface(interfaceName == null ? moduleName(header) : interfaceName, target, library, dependencies == null ? [] : dependencies.copy(),
+		return new HxiInterface(interfaceName == null ? moduleName(header) : interfaceName, target, library,
+			dependencies == null ? [] : dependencies.copy(),
 			hxiDeclarations, source.span(0, source.bytes.length), documentation);
 	}
 
-	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String, excluded:Array<String>):String {
+	static function collect(node:Dynamic, output:Array<Dynamic>, roots:Array<String>, currentFile:String,
+			excluded:Array<String>):String {
 		if (node == null)
 			return currentFile;
 		var locationFile:String = locationPath(node);
@@ -160,27 +177,34 @@ class CHeaderImporter {
 		var userDeclaration = annotatedEnumName != null
 			|| annotatedFlagsName != null
 			|| (name != null
-				&& !StringTools.startsWith(name, "__")
-				&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl" || kind == "EnumConstantDecl"));
-		if (userDeclaration && isUserDeclaration(node, roots, currentFile) && excluded.indexOf(pathKey(currentFile)) < 0)
+			&& !StringTools.startsWith(name, "__")
+			&& (kind == "TypedefDecl" || kind == "RecordDecl" || kind == "FunctionDecl" || kind == "EnumDecl"
+			|| kind == "EnumConstantDecl"));
+		if (userDeclaration && isUserDeclaration(node, roots, currentFile)
+			&& excluded.indexOf(pathKey(currentFile)) < 0)
 			output.push(node);
 		var inner:Array<Dynamic> = field(node, "inner");
-		if (inner != null && !(kind == "EnumDecl" && (name != null || annotatedEnumName != null || annotatedFlagsName != null)))
+		if (inner != null
+			&& !(kind == "EnumDecl" && (name != null || annotatedEnumName != null || annotatedFlagsName != null)))
 			for (child in inner)
 				currentFile = collect(child, output, roots, currentFile, excluded);
 		return currentFile;
 	}
 
-	static function importDeclaration(node:Dynamic, layouts:Map<String, CLayout>, handleNames:Map<String, Bool>, handleRecords:Map<String, Dynamic>,
-			handleDestroySymbols:Map<String, String>, documentation:Map<String, HxiDocumentation>):Null<HxiDeclaration> {
+	static function importDeclaration(node:Dynamic, layouts:Map<String, CLayout>, handleNames:Map<String, Bool>,
+			handleRecords:Map<String, Dynamic>,
+			handleDestroySymbols:Map<String, String>,
+			documentation:Map<String, HxiDocumentation>):Null<HxiDeclaration> {
 		var kind:String = field(node, "kind"),
 			name:String = field(node, "name"),
 			type:Dynamic = field(node, "type");
 		switch kind {
 			case "EnumDecl":
-				var enumName:String = field(node, "_hxiEnumName"), annotatedRepresentation:String = field(node, "_hxiEnumRepresentation"),
+				var enumName:String = field(node, "_hxiEnumName"),
+					annotatedRepresentation:String = field(node, "_hxiEnumRepresentation"),
 					fixed:Dynamic = field(node, "fixedUnderlyingType"),
-					representation = annotatedRepresentation == null ? (fixed == null ? "c_int" : mapType(field(fixed, "qualType"))) : annotatedRepresentation,
+					representation = annotatedRepresentation == null
+						? (fixed == null ? "c_int" : mapType(field(fixed, "qualType"))) : annotatedRepresentation,
 					values = [
 						for (child in children(node))
 							if (field(child, "kind") == "EnumConstantDecl") child
@@ -202,10 +226,12 @@ class CHeaderImporter {
 						Reflect.setField(entry, "_hxiFile", field(node, "_hxiFile"));
 					addDocumentation(documentation, '$enumName.$entryName', entry, previousEnd);
 					previousEnd = endOffset(entry);
-					entries.push({name: entryName, value: parseProjectedInt64(projectedValue), span: sourceSpan(entry)});
+					entries.push({name: entryName, value: parseProjectedInt64(projectedValue),
+						span: sourceSpan(entry)});
 					nextValue = Int64.add(parseProjectedInt64(projectedValue), Int64.parseString("1"));
 				}
-				return Enumeration(enumName, typeFromProjection(representation), field(node, "_hxiFlags") == true, entries, sourceSpan(node));
+				return Enumeration(enumName, typeFromProjection(representation), field(node, "_hxiFlags") == true,
+					entries, sourceSpan(node));
 			case "EnumConstantDecl":
 				var value = projectedConstantValue(node);
 				if (value == null)
@@ -246,7 +272,8 @@ class CHeaderImporter {
 							metadata: [],
 							span: sourceSpan(node)
 						});
-					return Callback(name, parameters, typeFromProjection(mapType(callback.result)), callback.callConvention, sourceSpan(node));
+					return Callback(name, parameters, typeFromProjection(mapType(callback.result)),
+						callback.callConvention, sourceSpan(node));
 				}
 				if (field(node, "_hxiEnumAlias") == true)
 					return null;
@@ -258,7 +285,8 @@ class CHeaderImporter {
 			case "RecordDecl":
 				if (handleNames.exists(name))
 					return null;
-				var fields:Array<Dynamic> = [for (child in children(node)) if (field(child, "kind") == "FieldDecl") child];
+				var fields:Array<Dynamic> =
+					[for (child in children(node)) if (field(child, "kind") == "FieldDecl") child];
 				if (fields.length == 0)
 					return null;
 				var layout = layouts.get(name),
@@ -299,12 +327,14 @@ class CHeaderImporter {
 						span: sourceSpan(entry)
 					});
 				}
-				return Structure(name, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align, modelFields, sourceSpan(node));
+				return Structure(name, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align, modelFields,
+					sourceSpan(node));
 			case "FunctionDecl":
 				if (field(node, "variadic") == true)
 					throw '${declarationLocation(node)}: unsupported variadic function "$name"';
 				var parameters = [for (child in children(node)) if (field(child, "kind") == "ParmVarDecl") child],
-					rawSignature:String = withoutMacroQualifier(field(type, "qualType"), field(type, "desugaredQualType")),
+					rawSignature:String = withoutMacroQualifier(field(type, "qualType"),
+						field(type, "desugaredQualType")),
 					callConvention = callingConvention(rawSignature),
 					signature = stripCallingConvention(rawSignature),
 					result = StringTools.trim(signature.substring(0, signature.indexOf("("))),
@@ -312,7 +342,8 @@ class CHeaderImporter {
 					borrowed = hasAnnotation(node, "hxi:borrowed"),
 					owned = hasAnnotation(node, "hxi:owned");
 				addDocumentation(documentation, name, node);
-				var modelParameters:Array<HxiParameter> = queriedArraysNullable([for (parameter in parameters) parameterModel(parameter)]),
+				var modelParameters:Array<HxiParameter> =
+					queriedArraysNullable([for (parameter in parameters) parameterModel(parameter)]),
 					resultMetadata:Map<String, Array<String>> = [],
 					ownership:HxiOwnership = Unspecified,
 					handleDisposition:HxiHandleDisposition = Unspecified;
@@ -341,7 +372,8 @@ class CHeaderImporter {
 					span: span,
 					metadata: resultMetadata
 				};
-				return Function(name, modelParameters, typeFromProjection(borrowedUtf8 ? "utf8" : mapType(result)), null, false, callConvention, policy,
+				return Function(name, modelParameters, typeFromProjection(borrowedUtf8 ? "utf8" : mapType(result)),
+					null, false, callConvention, policy,
 					sourceSpan(node));
 			case _:
 				return null;
@@ -353,26 +385,25 @@ class CHeaderImporter {
 		first, so its pointer is nullable, as an output buffer's is.
 	**/
 	static function queriedArraysNullable(parameters:Array<HxiParameter>):Array<HxiParameter> {
-		return [
-			for (parameter in parameters)
-				switch parameter.direction {
-					case OutArray(count)
-						if (Lambda.exists(parameters, candidate -> candidate.name == count && candidate.direction.match(InOut))
-							&& !parameter.type.match(Nullable(_))):
-						{
-							name: parameter.name,
-							type: Nullable(parameter.type),
-							direction: parameter.direction,
-							ownership: parameter.ownership,
-							handleDisposition: parameter.handleDisposition,
-							retained: parameter.retained,
-							metadata: parameter.metadata,
-							span: parameter.span
-						};
-					case _:
-						parameter;
-				}
-		];
+		return [for (parameter in parameters)
+			switch parameter.direction {
+				case OutArray(count)
+					if (Lambda.exists(parameters,
+					candidate -> candidate.name == count && candidate.direction.match(InOut))
+					&& !parameter.type.match(Nullable(_))):
+					{
+						name: parameter.name,
+						type: Nullable(parameter.type),
+						direction: parameter.direction,
+						ownership: parameter.ownership,
+						handleDisposition: parameter.handleDisposition,
+						retained: parameter.retained,
+						metadata: parameter.metadata,
+						span: parameter.span
+					};
+				case _:
+					parameter;
+			}];
 	}
 
 	static function parameterModel(parameter:Dynamic):HxiParameter {
@@ -401,13 +432,13 @@ class CHeaderImporter {
 			projected = "utf8";
 		else {
 			if (switch direction.direction {
-					case OutBuffer(_): true;
-					case _: false;
-				}) {
+				case OutBuffer(_): true;
+				case _: false;
+			}) {
 				var desugared:String = field(type, "desugaredQualType");
 				if (desugared != null)
 					qualified = desugared;
-				}
+			}
 			// Clang prints a nullability-attributed pointer with the annotation
 			// macro inside its type; the desugared type is the plain pointer.
 			var attributedArray = false;
@@ -439,7 +470,10 @@ class CHeaderImporter {
 		};
 	}
 
-	static function parameterDirection(parameter:Dynamic):{direction:HxiParameterDirection, metadata:Map<String, Array<String>>} {
+	static function parameterDirection(parameter:Dynamic): {
+		direction: HxiParameterDirection,
+		metadata: Map<String, Array<String>>
+	} {
 		var file:String = field(parameter, "_hxiFile"),
 			metadata:Map<String, Array<String>> = [];
 		if (file == null || !FileSystem.exists(file))
@@ -484,7 +518,8 @@ class CHeaderImporter {
 						offset:Dynamic = field(expansion, "offset"),
 						expansionFile:String = field(expansion, "file");
 					if (offset != null) {
-						var invocation = byteSlice(File.getBytes(expansionFile == null ? file : expansionFile), offset, offset + 256),
+						var invocation = byteSlice(File.getBytes(expansionFile == null ? file : expansionFile), offset,
+							offset + 256),
 							pattern = ~/^[A-Za-z_][A-Za-z0-9_]*\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/;
 						if (pattern.match(invocation))
 							argument = pattern.matched(1);
@@ -517,7 +552,8 @@ class CHeaderImporter {
 				end:Dynamic = field(range, "end"),
 				spellingBegin:Dynamic = field(begin, "spellingLoc"),
 				spellingEnd:Dynamic = field(end, "spellingLoc");
-			var annotation = sourceRange(file, spellingBegin == null ? begin : spellingBegin, spellingEnd == null ? end : spellingEnd),
+			var annotation = sourceRange(file, spellingBegin == null ? begin : spellingBegin,
+				spellingEnd == null ? end : spellingEnd),
 				pattern = ~/hxi:initial_capacity=([0-9]+)/;
 			if (annotation.indexOf("hxi:initial_capacity") < 0)
 				continue;
@@ -582,14 +618,16 @@ class CHeaderImporter {
 			return Array(element, length);
 		}
 		return switch value {
-			case "void" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" | "bool32" | "isize" | "usize" | "f32" | "f64" | "utf8" | "c_char" |
-				"c_schar" | "c_uchar" | "c_bool" | "c_short" | "c_ushort" | "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_long_long" | "c_ulong_long" |
-				"c_wchar" | "c_size": Primitive(value);
+			case "void" | "i8" | "u8" | "i16" | "u16" | "i32" | "u32" | "i64" | "u64" | "bool32" | "isize" | "usize"
+				| "f32" | "f64" | "utf8" | "c_char" | "c_schar" | "c_uchar" | "c_bool" | "c_short" | "c_ushort"
+				| "c_int" | "c_uint" | "c_long" | "c_ulong" | "c_long_long" | "c_ulong_long" | "c_wchar"
+				| "c_size": Primitive(value);
 			case _: Named(value);
 		};
 	}
 
-	static function addDocumentation(documentation:Map<String, HxiDocumentation>, name:String, node:Dynamic, ?notBefore:Int):Void {
+	static function addDocumentation(documentation:Map<String, HxiDocumentation>, name:String, node:Dynamic,
+			?notBefore:Int):Void {
 		var raw = documentationText(node, notBefore);
 		if (raw == null)
 			return;
@@ -648,7 +686,8 @@ class CHeaderImporter {
 		return output.toString();
 	}
 
-	static function validateHandle(name:String, qualified:String, layouts:Map<String, CLayout>, records:Map<String, Dynamic>):Void {
+	static function validateHandle(name:String, qualified:String, layouts:Map<String, CLayout>,
+			records:Map<String, Dynamic>):Void {
 		if (!StringTools.startsWith(qualified, "struct ")) {
 			if (mapType(qualified) != "u32")
 				throw 'Handle "$name" must use uint32_t storage';
@@ -660,7 +699,8 @@ class CHeaderImporter {
 		if (layout == null || layout.size != 4 || layout.align != 4 || record == null)
 			throw 'Handle "$name" must have a 4-byte, 4-byte-aligned record representation';
 		var fields:Array<Dynamic> = [for (child in children(record)) if (field(child, "kind") == "FieldDecl") child];
-		if (fields.length != 1 || field(fields[0], "name") != "id" || mapType(field(field(fields[0], "type"), "qualType")) != "u32")
+		if (fields.length != 1 || field(fields[0], "name") != "id"
+			|| mapType(field(field(fields[0], "type"), "qualType")) != "u32")
 			throw 'Handle "$name" must contain one uint32_t field named id';
 	}
 
@@ -796,7 +836,8 @@ class CHeaderImporter {
 			spellingBegin:Dynamic = field(begin, "spellingLoc"),
 			spellingEnd:Dynamic = field(end, "spellingLoc"),
 			file:String = field(node, "_hxiFile");
-		return sourceRange(file, spellingBegin == null ? begin : spellingBegin, spellingEnd == null ? end : spellingEnd);
+		return sourceRange(file, spellingBegin == null ? begin : spellingBegin,
+			spellingEnd == null ? end : spellingEnd);
 	}
 
 	static function expansionArgument(node:Dynamic, annotation:Dynamic, ?argumentPattern:String):Null<String> {
@@ -811,7 +852,8 @@ class CHeaderImporter {
 			file = field(node, "_hxiFile");
 		// Clang reports byte offsets; slice the raw bytes so non-ASCII text earlier in the header cannot shift them.
 		var invocation = byteSlice(File.getBytes(file), offset, offset + 256),
-			argument = new EReg("^[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*(" + (argumentPattern == null ? "[A-Za-z_][A-Za-z0-9_]*" : argumentPattern) + ")\\s*\\)",
+			argument = new EReg("^[A-Za-z_][A-Za-z0-9_]*\\s*\\(\\s*("
+				+ (argumentPattern == null ? "[A-Za-z_][A-Za-z0-9_]*" : argumentPattern) + ")\\s*\\)",
 				"");
 		return argument.match(invocation) ? argument.matched(1) : null;
 	}
@@ -854,7 +896,8 @@ class CHeaderImporter {
 		var arguments = StringTools.trim(pattern.matched(2));
 		return {
 			result: StringTools.trim(pattern.matched(1)),
-			arguments: arguments == "" || arguments == "void" ? [] : [for (argument in arguments.split(",")) StringTools.trim(argument)],
+			arguments: arguments == ""
+				|| arguments == "void" ? [] : [for (argument in arguments.split(",")) StringTools.trim(argument)],
 			callConvention: callConvention
 		};
 	}
@@ -932,7 +975,8 @@ class CHeaderImporter {
 			case "intptr_t": "isize";
 			case "uintptr_t": "usize";
 			case "size_t": "usize";
-			default: StringTools.startsWith(value, "struct ") ? value.substring(7) : StringTools.startsWith(value, "enum ") ? value.substring(5) : value;
+			default: StringTools.startsWith(value, "struct ") ? value.substring(7) : StringTools.startsWith(value,
+				"enum ") ? value.substring(5) : value;
 		}
 	}
 
@@ -1058,7 +1102,8 @@ class CHeaderImporter {
 		return value == null ? null : Reflect.field(value, name);
 
 	static function key(value:Dynamic):String
-		return Std.string(field(value, "kind")) + ":" + Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
+		return Std.string(field(value, "kind")) + ":"
+			+ Std.string(field(value, "name") == null ? field(value, "_hxiEnumName") : field(value, "name"));
 
 	static function moduleName(path:String):String {
 		var name = StringTools.replace(path, "\\", "/").split("/").pop();

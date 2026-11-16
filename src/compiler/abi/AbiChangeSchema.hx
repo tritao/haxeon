@@ -29,7 +29,8 @@ class AbiChangeSchema {
 			case InterfaceAdded(name): record("interface_added", "interface", name);
 			case EnumChanged(name): record("enum_changed", "enum", name);
 			case GlobalLayoutChanged(name): record("global_layout_changed", "global", name);
-			case GeneratedFunctionsRenumbered(group): record("generated_functions_renumbered", "generated_function_group", group);
+			case GeneratedFunctionsRenumbered(group): record("generated_functions_renumbered",
+				"generated_function_group", group);
 			case AssemblyLayoutChanged(detail): record("assembly_layout_changed", "module", detail);
 		};
 
@@ -41,19 +42,25 @@ class AbiChangeSchema {
 		return switch record.code {
 			case "function_added": requireKind(record, "function", FunctionAdded(record.entityId));
 			case "function_removed": requireKind(record, "function", FunctionRemoved(record.entityId));
-			case "function_signature_changed": requireKind(record, "function", FunctionSignatureChanged(record.entityId));
+			case "function_signature_changed": requireKind(record, "function",
+				FunctionSignatureChanged(record.entityId));
 			case "object_added": requireKind(record, "object", ObjectAdded(record.entityId));
 			case "object_removed": requireKind(record, "object", ObjectRemoved(record.entityId));
 			case "object_layout_changed": requireKind(record, "object", ObjectLayoutChanged(record.entityId));
-			case "object_field_type_changed": requireKind(record, "object_field", ObjectFieldTypeChanged(record.entityId));
-			case "object_field_reserve_exhausted": requireKind(record, "object", ObjectFieldReserveExhausted(record.entityId));
-			case "object_method_dispatch_changed": requireKind(record, "object_method", ObjectMethodDispatchChanged(record.entityId));
-			case "closure_layout_changed": requireKind(record, "closure_environment", ClosureLayoutChanged(record.entityId));
+			case "object_field_type_changed": requireKind(record, "object_field",
+				ObjectFieldTypeChanged(record.entityId));
+			case "object_field_reserve_exhausted": requireKind(record, "object",
+				ObjectFieldReserveExhausted(record.entityId));
+			case "object_method_dispatch_changed": requireKind(record, "object_method",
+				ObjectMethodDispatchChanged(record.entityId));
+			case "closure_layout_changed": requireKind(record, "closure_environment",
+				ClosureLayoutChanged(record.entityId));
 			case "interface_changed": requireKind(record, "interface", InterfaceChanged(record.entityId));
 			case "interface_added": requireKind(record, "interface", InterfaceAdded(record.entityId));
 			case "enum_changed": requireKind(record, "enum", EnumChanged(record.entityId));
 			case "global_layout_changed": requireKind(record, "global", GlobalLayoutChanged(record.entityId));
-			case "generated_functions_renumbered": requireKind(record, "generated_function_group", GeneratedFunctionsRenumbered(record.entityId));
+			case "generated_functions_renumbered": requireKind(record, "generated_function_group",
+				GeneratedFunctionsRenumbered(record.entityId));
 			case "assembly_layout_changed": requireKind(record, "module", AssemblyLayoutChanged(record.entityId));
 			case unknown: throw 'Unknown ABI change code "$unknown"';
 		};

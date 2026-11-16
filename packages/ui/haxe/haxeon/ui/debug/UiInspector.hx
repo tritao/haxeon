@@ -47,7 +47,8 @@ class UiInspector {
 		return result;
 	}
 
-	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>, ignoredInteractionStates:StyleState = StyleState.empty()):String {
+	public static function dump(root:Null<RenderNode>, focused:Null<WidgetId>,
+			ignoredInteractionStates:StyleState = StyleState.empty()):String {
 		// Dumps do not use inspection entries or rule provenance. Keep the full public snapshot unchanged.
 		return formatDump(collect(root, focused, null, null, false), ignoredInteractionStates);
 	}
@@ -58,9 +59,9 @@ class UiInspector {
 			var prefix = "";
 			for (_ in 0...record.depth)
 				prefix += "  ";
-			var line = prefix + "#" + Std.string(record.id) + " " + visualName(record.visualKind) +
-				" [" + number(record.bounds.x) + "," + number(record.bounds.y) + " " +
-				number(record.bounds.width) + "x" + number(record.bounds.height) + "]";
+			var line = prefix + "#" + Std.string(record.id) + " " + visualName(record.visualKind) + " ["
+				+ number(record.bounds.x) + "," + number(record.bounds.y) + " " + number(record.bounds.width) + "x"
+				+ number(record.bounds.height) + "]";
 			if (!record.visible)
 				line += " hidden";
 			if (record.focused)
@@ -84,8 +85,8 @@ class UiInspector {
 			if (record.maskPasses > 0)
 				line += " maskPasses=" + Std.string(record.maskPasses);
 			if (record.estimatedIntermediateTargets > 0)
-				line += " rtTargets=" + Std.string(record.estimatedIntermediateTargets) +
-					" rtBytes=" + number(record.estimatedRenderTargetBytes);
+				line += " rtTargets=" + Std.string(record.estimatedIntermediateTargets) + " rtBytes="
+					+ number(record.estimatedRenderTargetBytes);
 			var states = record.interactionStates.remove(ignoredInteractionStates);
 			if (!states.isEmpty())
 				line += " states=" + interactionStateNames(states);
@@ -95,7 +96,8 @@ class UiInspector {
 				line += " z=" + Std.string(record.zIndex);
 			var role = record.role;
 			if (role != null)
-				line += " role=" + Std.string(role.rawValue()) + " states=" + Std.string(record.semanticStates.rawValue());
+				line += " role=" + Std.string(role.rawValue()) + " states="
+					+ Std.string(record.semanticStates.rawValue());
 			if (record.label != null && record.label.length > 0)
 				line += ' label="' + escape(record.label) + '"';
 			if (record.value != null)
@@ -148,22 +150,19 @@ class UiInspector {
 		var isolated = isolationReasons.length > 0;
 		var ownArea = paintBounds.width * paintBounds.height;
 		var backdropArea = bounds.width * bounds.height;
-		var estimatedBytes = (isolated ? ownArea : 0.0) * 4.0 +
-			ownArea * foregroundEffectPasses * 4.0 +
-			maskPasses * ownArea * 4.0 +
-			backdropArea * backdropEffectPasses * 4.0;
-		var estimatedIntermediateTargets = (isolated ? 1 : 0) + foregroundEffectPasses +
-			maskPasses + backdropEffectPasses;
+		var estimatedBytes = (isolated ? ownArea : 0.0) * 4.0 + ownArea * foregroundEffectPasses * 4.0 + maskPasses
+			* ownArea * 4.0 + backdropArea * backdropEffectPasses * 4.0;
+		var estimatedIntermediateTargets = (isolated ? 1 : 0) + foregroundEffectPasses + maskPasses
+			+ backdropEffectPasses;
 		var effectDescriptions = describeEffects(effects);
 		var backdropEffectDescriptions = describeEffects(backdropEffects);
 		output.push(new UiNodeSnapshot(node.id.value, parentId, depth,
 			node.layout.visualKind, bounds, clip, content,
 			geometry != null && geometry.visible, node.enabled, node.focusable,
 			focused != null && focused.equals(node.id),
-			(node.states).contains(StyleState.Hovered) ||
-				hovered != null && hovered.equals(node.id),
-			(node.states).contains(StyleState.Pressed) ||
-				pressed != null && pressed.equals(node.id), node.layout.style.zIndex,
+			(node.states).contains(StyleState.Hovered) || hovered != null && hovered.equals(node.id),
+			(node.states).contains(StyleState.Pressed) || pressed != null && pressed.equals(node.id),
+			node.layout.style.zIndex,
 			role, semantics == null ? haxeon.ui.semantics.AccessibilityState.empty() : semantics.states,
 			semantics == null ? null : semantics.label,
 			semantics == null ? null : semantics.value,
@@ -172,7 +171,7 @@ class UiInspector {
 			styleEntries, matchingStyleRules, isolated, overflow, paintBounds,
 			effectPasses, estimatedBytes,
 			new UiNodeEffectInfo(effectDescriptions, backdropEffectDescriptions,
-				backdropEffectPasses, maskPasses, isolationReasons, estimatedIntermediateTargets)));
+			backdropEffectPasses, maskPasses, isolationReasons, estimatedIntermediateTargets)));
 		if (recursive) for (child in node.children)
 			append(child, node.id.value, depth + 1, focused, hovered, pressed, output, true, includeStyleDetails);
 	}
@@ -184,8 +183,8 @@ class UiInspector {
 		var colorPending = false;
 		for (effect in chain.effects) {
 			switch effect.kind {
-				case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate |
-					EffectKind.HueRotate | EffectKind.ColorMatrix:
+				case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate | EffectKind.HueRotate
+					| EffectKind.ColorMatrix:
 					colorPending = true;
 				case EffectKind.Blur | EffectKind.DropShadow:
 					if (colorPending) {

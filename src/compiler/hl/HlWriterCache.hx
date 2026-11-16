@@ -40,7 +40,8 @@ class HlWriterCache {
 	 * The encoded opcode source-span group of a function, if `locations` is the array it was encoded from, for the same stable id, and every
 	 * file it names has the index it had then (the file table is built from all groups, so it can shift).
 	 */
-	public function spanGroup(locations:Array<HlDebugLocation>, stableId:Int, fileIndices:Map<String, Int>):Null<Bytes> {
+	public function spanGroup(locations:Array<HlDebugLocation>, stableId:Int,
+			fileIndices:Map<String, Int>):Null<Bytes> {
 		var entry = spanGroups.get(locations);
 		if (entry == null || entry.stableId != stableId)
 			return null;
@@ -50,7 +51,8 @@ class HlWriterCache {
 		return entry.bytes;
 	}
 
-	public function setSpanGroup(locations:Array<HlDebugLocation>, stableId:Int, bytes:Bytes, fileIndices:Map<String, Int>):Void {
+	public function setSpanGroup(locations:Array<HlDebugLocation>, stableId:Int, bytes:Bytes,
+			fileIndices:Map<String, Int>):Void {
 		var paths:Array<String> = [], indices:Array<Int> = [], previous = "";
 		for (location in locations)
 			if (location.path != previous) {

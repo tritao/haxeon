@@ -19,53 +19,46 @@ class IrNullableErasure {
 		result.cNatives = [for (native in program.cNatives) eraseCNative(native)];
 		result.functions = [for (fn in program.functions) eraseFunction(fn)];
 		// Payload-width semantics have already been lowered before a nullable field becomes an opaque Dynamic slot.
-		result.objects = [
-			for (object in program.objects)
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					fields: [
-						for (field in object.fields)
-							{name: field.name, type: IrTypeTools.erase(field.type), nativeLayout: field.nativeLayout, scalarStorage: field.scalarStorage,
-								nullableScalarStorage: null}
-					],
-					methods: object.methods
-				}
-		];
-		result.interfaces = [
-			for (entry in program.interfaces)
-				{
-					name: entry.name,
-					bases: entry.bases,
-					methods: [
-						for (method in entry.methods)
-							{
-								name: method.name,
-								arguments: [for (argument in method.arguments) IrTypeTools.erase(argument)],
-								result: IrTypeTools.erase(method.result)
-							}
-					]
-				}
-		];
-		result.enums = [
-			for (entry in program.enums)
-				{
-					name: entry.name,
-					isRecursive: entry.isRecursive,
-					inlineStorage: entry.inlineStorage,
-					cases: [
-						for (enumCase in entry.cases)
-							{name: enumCase.name, params: [for (type in enumCase.params) IrTypeTools.erase(type)]}
-					]
-				}
-		];
-		result.staticFields = [
-			for (field in program.staticFields)
-				{name: field.name, type: IrTypeTools.erase(field.type)}
-		];
+		result.objects = [for (object in program.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					fields:[for (field in object.fields)
+					{
+						name:field.name, type:IrTypeTools.erase(field.type), nativeLayout:field.nativeLayout,
+							scalarStorage:field.scalarStorage,
+							nullableScalarStorage:null
+					}],
+						methods:object.methods
+			}];
+		result.interfaces = [for (entry in program.interfaces)
+			{
+				name:entry.name,
+					bases:entry.bases,
+					methods:[for (method in entry.methods)
+					{
+						name:method.name,
+							arguments:[for (argument in method.arguments) IrTypeTools.erase(argument)],
+							result:IrTypeTools.erase(method.result)
+					}]
+			}];
+		result.enums = [for (entry in program.enums)
+			{
+				name:entry.name,
+					isRecursive:entry.isRecursive,
+					inlineStorage:entry.inlineStorage,
+					cases:[for (enumCase in entry.cases)
+					{
+						name:enumCase.name, params:[for (type in enumCase.params) IrTypeTools.erase(type)]
+					}]
+			}];
+		result.staticFields = [for (field in program.staticFields)
+			{
+				name:field.name, type:IrTypeTools.erase(field.type)
+			}];
 		return result;
 	}
 
@@ -147,7 +140,8 @@ class IrNullableErasure {
 			var known = values.get(value.id);
 			if (known != null)
 				return known;
-			var replacement = IrTypeTools.containsNullable(value.type) ? new IrValue(value.id, value.name, IrTypeTools.erase(value.type)) : value;
+			var replacement = IrTypeTools.containsNullable(value.type) ? new IrValue(value.id, value.name,
+				IrTypeTools.erase(value.type)) : value;
 			values.set(value.id, replacement);
 			return replacement;
 		}
@@ -176,17 +170,15 @@ class IrNullableErasure {
 				}, terminator.provenance);
 			blocks.push(copy);
 		}
-		var bindings:Array<IrDebugBinding> = [
-			for (binding in fn.debugBindings)
-				{
-					identity: binding.identity,
-					name: binding.name,
-					value: use(binding.value),
-					path: binding.path,
-					scopeStart: binding.scopeStart,
-					scopeEnd: binding.scopeEnd
-				}
-		];
+		var bindings:Array<IrDebugBinding> = [for (binding in fn.debugBindings)
+			{
+				identity:binding.identity,
+					name:binding.name,
+					value:use(binding.value),
+					path:binding.path,
+					scopeStart:binding.scopeStart,
+					scopeEnd:binding.scopeEnd
+			}];
 		return fn.withBlocks(blocks, bindings, arguments, IrTypeTools.erase(fn.result));
 	}
 

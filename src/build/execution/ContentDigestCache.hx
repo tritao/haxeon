@@ -55,7 +55,8 @@ class ContentDigestCache {
 			// long-lived process may change; absolute paths, the common case, skip that syscall.
 			var stat = FileSystem.stat(path),
 				key = Path.isAbsolute(path) ? path : FileSystem.fullPath(path),
-				signature = stat.dev + ":" + stat.ino + ":" + stat.size + ":" + stat.mtime.getTime() + ":" + stat.ctime.getTime(),
+				signature = stat.dev + ":" + stat.ino + ":" + stat.size + ":" + stat.mtime.getTime() + ":"
+					+ stat.ctime.getTime(),
 				entry = entries.get(key);
 			if (entry != null && entry.signature == signature && (!persistent || settled(stat, entry.hashedAt)))
 				return release(entry.digest);

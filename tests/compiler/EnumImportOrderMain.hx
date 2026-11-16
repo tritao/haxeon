@@ -2,8 +2,10 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 
 class EnumImportOrderMain {
-	static final forward = 'import a.First; import b.Second; function main():Int { var value = Item; return value == b.Second.Item ? 7 : 0; }';
-	static final reverse = 'import b.Second; import a.First; function main():Int { var value = Item; return value == a.First.Item ? 9 : 0; }';
+	static final forward =
+		'import a.First; import b.Second; function main():Int { var value = Item; return value == b.Second.Item ? 7 : 0; }';
+	static final reverse =
+		'import b.Second; import a.First; function main():Int { var value = Item; return value == a.First.Item ? 9 : 0; }';
 
 	static function compiler():Compiler {
 		var result = new Compiler();
@@ -25,7 +27,9 @@ class EnumImportOrderMain {
 		run(compiler(), reverse, 9);
 		run(result, forward, 7);
 		// An explicit expected enum still wins over the imported default.
-		run(result, 'import a.First; import b.Second; function main():Int { var value:a.First = Item; return value == a.First.Item ? 5 : 0; }', 5);
+		run(result,
+			'import a.First; import b.Second; function main():Int { var value:a.First = Item; return value == a.First.Item ? 5 : 0; }',
+			5);
 		result.update("Main.hx",
 			'import a.First; import b.Second; function accept(value:a.First):Int return 0; function main():Int { var value = Item; return accept(value); }');
 		try

@@ -39,14 +39,17 @@ class GraphicsPage {
 			"Focused, inspectable graphics examples backed by the same retained renderer.");
 		items.push(explorer.keyed("graphics-card", explorer.panel("graphics-card", [
 			explorer.keyed("heading", explorer.heading("Explore one graphics system at a time")),
-			explorer.keyed("copy", explorer.caption("Use the Graphics Lab catalog entries for paths and paints, multilingual text shaping, image layers, and retained rendering. Every focused preview participates in layout, inspection, accessibility reporting, and headless visual coverage.")),
+			explorer.keyed("copy",
+				explorer.caption("Use the Graphics Lab catalog entries for paths and paints, multilingual text shaping, image layers, and retained rendering. Every focused preview participates in layout, inspection, accessibility reporting, and headless visual coverage.")),
 			explorer.keyed("launch", explorer.button("Open full Graphics Lab", "open-graphics-lab",
 				explorer.onOpenGraphics)),
-			explorer.keyed("hint", explorer.caption("The full lab remains the combined renderer stress scene. Press Escape to return."))
+			explorer.keyed("hint",
+				explorer.caption("The full lab remains the combined renderer stress scene. Press Escape to return."))
 		])));
 		items.push(explorer.keyed("graphics-pipeline", explorer.panel("graphics-pipeline", [
 			explorer.keyed("heading", explorer.heading("One compositor, two authoring levels")),
-			explorer.keyed("copy", explorer.caption("Haxeon previews compose CanvasView with ordinary UI. The full lab exercises the lower-level typed graphics API directly. Both produce retained display lists consumed by the NativeKit rendering dependency."))
+			explorer.keyed("copy",
+				explorer.caption("Haxeon previews compose CanvasView with ordinary UI. The full lab exercises the lower-level typed graphics API directly. Both produce retained display lists consumed by the NativeKit rendering dependency."))
 		])));
 	}
 
@@ -71,11 +74,13 @@ class GraphicsPage {
 			explorer.keyed("hebrew", explorer.text("שלום עולם — טקסט דו־כיווני")),
 			explorer.keyed("japanese", explorer.text("こんにちは世界 — Haxeon UI")),
 			explorer.keyed("emoji", explorer.text("Fallback clusters stay together: 👋 🌍 ✨")),
-			explorer.keyed("hint", explorer.caption("Try this: inspect each text node, then compare its resolved geometry and semantic label."))
+			explorer.keyed("hint",
+				explorer.caption("Try this: inspect each text node, then compare its resolved geometry and semantic label."))
 		])));
 		items.push(explorer.keyed("text-geometry", explorer.panel("text-geometry", [
 			explorer.keyed("heading", explorer.heading("Caret and selection geometry")),
-			explorer.keyed("copy", explorer.caption("The Text & Input page exposes interactive caret movement, selection, clipboard, and IME composition. This entry isolates the shaping inputs used by those controls."))
+			explorer.keyed("copy",
+				explorer.caption("The Text & Input page exposes interactive caret movement, selection, clipboard, and IME composition. This entry isolates the shaping inputs used by those controls."))
 		])));
 	}
 
@@ -101,14 +106,17 @@ class GraphicsPage {
 			"Native indexed meshes render with perspective and depth, then composite into ordinary UI layout.");
 		items.push(explorer.keyed("cube-view", explorer.panel("cube-view", [
 			explorer.keyed("heading", explorer.heading("Live perspective viewport")),
-			explorer.keyed("copy", explorer.caption("A retained native surface continuously rotates an indexed cube with depth-tested face occlusion.")),
+			explorer.keyed("copy",
+				explorer.caption("A retained native surface continuously rotates an indexed cube with depth-tested face occlusion.")),
 			explorer.keyed("preview", new CubeView("live-cube", 0.38,
 				"Live rotating perspective cube", cubeStyle(explorer), true, 0.10)),
-			explorer.keyed("try", explorer.caption("Try this: inspect the viewport and resize the split pane while it rotates."))
+			explorer.keyed("try",
+				explorer.caption("Try this: inspect the viewport and resize the split pane while it rotates."))
 		])));
 		items.push(explorer.keyed("3d-pipeline", explorer.panel("3d-pipeline", [
 			explorer.keyed("heading", explorer.heading("Mesh to depth pass to sampled surface to compositor")),
-			explorer.keyed("copy", explorer.caption("The producer submits 24 colored vertices and 36 indices with a model-view-projection matrix. The NativeKit rendering dependency draws offscreen with depth testing and Haxeon samples the result in its display list."))
+			explorer.keyed("copy",
+				explorer.caption("The producer submits 24 colored vertices and 36 indices with a model-view-projection matrix. The NativeKit rendering dependency draws offscreen with depth testing and Haxeon samples the result in its display list."))
 		])));
 	}
 
@@ -129,7 +137,8 @@ class GraphicsPage {
 			"Compare intrinsic aspect fitting, clipped composition, opacity, and scalable image frames.");
 		items.push(explorer.keyed("image-fit", explorer.panel("image-fit", [
 			explorer.keyed("heading", explorer.heading("Fit modes")),
-			explorer.keyed("copy", explorer.caption("Contain preserves the whole image, Cover fills and clips, and Stretch maps directly to the bounds.")),
+			explorer.keyed("copy",
+				explorer.caption("Contain preserves the whole image, Cover fills and clips, and Stretch maps directly to the bounds.")),
 			explorer.keyed("previews", new Row("image-fit-row", [
 				explorer.keyed("contain", fitSample(explorer, "contain", ImageFit.Contain)),
 				explorer.keyed("cover", fitSample(explorer, "cover", ImageFit.Cover)),
@@ -138,7 +147,8 @@ class GraphicsPage {
 		])));
 		items.push(explorer.keyed("image-layers", explorer.panel("image-layers", [
 			explorer.keyed("heading", explorer.heading("Layers and opacity")),
-			explorer.keyed("copy", explorer.caption("Independent sampled images retain their own bounds and opacity, then composite in source order.")),
+			explorer.keyed("copy",
+				explorer.caption("Independent sampled images retain their own bounds and opacity, then composite in source order.")),
 			explorer.keyed("preview", new LayeredImageView("layered-preview", [
 				new ImageLayer(explorer.demoImage, 0.0, 0.0, 1.0, 1.0),
 				new ImageLayer(explorer.demoOverlayImage, 0.76, 0.14, 0.14, 0.72, 0.72)
@@ -146,7 +156,8 @@ class GraphicsPage {
 		])));
 		items.push(explorer.keyed("image-assets", explorer.panel("image-assets", [
 			explorer.keyed("heading", explorer.heading("Decoded assets and sampling")),
-			explorer.keyed("copy", explorer.caption("The left preview is decoded from a PNG file. Magnified textures compare linear interpolation with nearest-texel sampling.")),
+			explorer.keyed("copy",
+				explorer.caption("The left preview is decoded from a PNG file. Magnified textures compare linear interpolation with nearest-texel sampling.")),
 			explorer.keyed("previews", new Row("image-assets-row", [
 				explorer.keyed("decoded", imageSample(explorer, "Decoded PNG", explorer.demoLoadedImage,
 					ImageFit.Contain)),
@@ -158,7 +169,8 @@ class GraphicsPage {
 		])));
 		items.push(explorer.keyed("nine-slice", explorer.panel("nine-slice", [
 			explorer.keyed("heading", explorer.heading("Nine-slice scaling")),
-			explorer.keyed("copy", explorer.caption("Corners retain their source size while edges and the center stretch to fill a wide destination.")),
+			explorer.keyed("copy",
+				explorer.caption("Corners retain their source size while edges and the center stretch to fill a wide destination.")),
 			explorer.keyed("preview", new NineSliceView("nine-slice-preview", explorer.demoNineSliceImage,
 				10.0, 10.0, 10.0, 10.0, "Blue nine-slice frame", wideImageStyle(explorer)))
 		])));
@@ -212,12 +224,18 @@ class GraphicsPage {
 			"See what Haxeon retains, reuses, and submits each frame.");
 		items.push(explorer.keyed("pipeline", explorer.panel("pipeline", [
 			explorer.keyed("heading", explorer.heading("Submit → resolve → retain → render")),
-			explorer.keyed("copy", explorer.caption("Stable widget IDs preserve state. Layout resolves geometry. Custom paint compiles into display lists. Unchanged submissions and paint caches can be reused across frames.")),
-			explorer.keyed("hint", explorer.caption("Open Inspect and select the preview to compare Haxe identity, resolved geometry, and paint participation."))
+			explorer.keyed("copy",
+				explorer.caption("Stable widget IDs preserve state. Layout resolves geometry. Custom paint compiles into display lists. Unchanged submissions and paint caches can be reused across frames.")),
+			explorer.keyed("hint",
+				explorer.caption("Open Inspect and select the preview to compare Haxe identity, resolved geometry, and paint participation."))
 		])));
 		items.push(explorer.keyed("frame-preview", demoPanel(explorer, "Frame workload",
 			"A compact visualization of retained work: layout, paint compilation, and compositor submission.",
-			preview(explorer, "frame", ["Layout 72%", "Paint 46%", "Submit 88%"]))));
+			preview(explorer, "frame", [
+				"Layout 72%",
+				"Paint 46%",
+				"Submit 88%"
+			]))));
 		items.push(explorer.keyed("retained-revisions", retainedRevisionDemo(explorer)));
 	}
 
@@ -226,35 +244,33 @@ class GraphicsPage {
 		var rendererStats:RendererStats = explorer.latestRendererStats();
 		var submitSummary = metrics == null
 			? "Submit metrics become available after the first presented frame."
-			: 'submit=${metrics.nativeLayoutSubmitted ? "native layout" : "reused geometry"}' +
-				' · geometry changed=${metrics.resolvedGeometryChangedNodes}' +
-				' · geometry reused=${metrics.resolvedGeometryReusedNodes}' +
-				' · paint=${metrics.paintedNodes} rebuilt / ${metrics.paintSkippedNodes} skipped';
-		var cacheSummary = 'raster cache hits=${rendererStats.rasterCacheHits}' +
-			' · misses=${rendererStats.rasterCacheMisses}' +
-			' · entries=${rendererStats.rasterCacheEntries}';
+			: 'submit=${metrics.nativeLayoutSubmitted ? "native layout" : "reused geometry"}'
+			+ ' · geometry changed=${metrics.resolvedGeometryChangedNodes}'
+			+ ' · geometry reused=${metrics.resolvedGeometryReusedNodes}'
+			+ ' · paint=${metrics.paintedNodes} rebuilt / ${metrics.paintSkippedNodes} skipped';
+		var cacheSummary = 'raster cache hits=${rendererStats.rasterCacheHits}'
+			+ ' · misses=${rendererStats.rasterCacheMisses}' + ' · entries=${rendererStats.rasterCacheEntries}';
 		var offset = explorer.state.retainedLayerOffset;
 		var metricsStyle = new LayoutStyle();
 		metricsStyle.width = LayoutAxis.stretch();
 		metricsStyle.childGap = 4.0;
-		return explorer.panel("retained-revisions-panel", [
-			explorer.keyed("heading", explorer.heading("Revision-aware retained work")),
-			explorer.keyed("copy", explorer.caption(
-			"This custom layer is raster-cached and has a stylesheet opacity. Move it to exercise composite and hit-geometry invalidation while the subtree pixels remain reusable.")),
+		return explorer.panel("retained-revisions-panel",
+			[explorer.keyed("heading", explorer.heading("Revision-aware retained work")),
+			explorer.keyed("copy",
+			explorer.caption("This custom layer is raster-cached and has a stylesheet opacity. Move it to exercise composite and hit-geometry invalidation while the subtree pixels remain reusable.")),
 			explorer.keyed("metrics", new Column("retained-revisions-metrics", [
 				explorer.keyed("submit", explorer.caption(submitSummary)),
 				explorer.keyed("cache", explorer.caption(cacheSummary))
 			], metricsStyle)),
-			explorer.keyed("preview", retainedRevisionPreview(explorer, offset)),
-			explorer.keyed("controls", new Row("retained-revisions-controls", [
-				explorer.keyed("move", explorer.button(offset == 0.0 ? "Move cached layer" : "Reset cached layer",
+				explorer.keyed("preview", retainedRevisionPreview(explorer, offset)),
+				explorer.keyed("controls", new Row("retained-revisions-controls",
+				[explorer.keyed("move", explorer.button(offset == 0.0 ? "Move cached layer" : "Reset cached layer",
 				"move-cached-layer", function() {
 					explorer.state.retainedLayerOffset = offset == 0.0 ? 42.0 : 0.0;
 				})),
-				explorer.keyed("hint", explorer.caption(
-					"Expected: transform changes update composition and picking, while raster cache hits continue rising."))
-		], controlsStyle(explorer)))
-		]);
+					explorer.keyed("hint",
+					explorer.caption("Expected: transform changes update composition and picking, while raster cache hits continue rising."))],
+					controlsStyle(explorer)))]);
 	}
 
 	static function retainedRevisionPreview(explorer:UiExplorer, offset:Float):CanvasView {
@@ -271,9 +287,8 @@ class GraphicsPage {
 			for (index in 0...18) {
 				var column = index % 6;
 				var row = Std.int(index / 6);
-				var color = index % 3 == 0 ? Color.rgba(0.18, 0.48, 0.82, 1.0) :
-					index % 3 == 1 ? Color.rgba(0.16, 0.70, 0.46, 1.0) :
-					Color.rgba(0.50, 0.28, 0.72, 1.0);
+				var color = index % 3 == 0 ? Color.rgba(0.18, 0.48, 0.82, 1.0) : index % 3 == 1 ? Color.rgba(0.16, 0.70,
+					0.46, 1.0) : Color.rgba(0.50, 0.28, 0.72, 1.0);
 				canvas.fillRect(new Rect(12.0 + column * 48.0, 14.0 + row * 36.0,
 					32.0, 22.0), color);
 			}
@@ -296,13 +311,17 @@ class GraphicsPage {
 			explorer.keyed("heading", explorer.heading(title)),
 			explorer.keyed("copy", explorer.caption(copy)),
 			explorer.keyed("preview", preview),
-			explorer.keyed("try", explorer.caption("Try this: inspect the preview, resize the catalog pane, and switch themes."))
+			explorer.keyed("try",
+				explorer.caption("Try this: inspect the preview, resize the catalog pane, and switch themes."))
 		]);
 	}
 
 	static function preview(explorer:UiExplorer, key:String, labels:Array<String>):View {
-		var colors:Array<Color> = [Color.rgba(0.18, 0.48, 0.82, 1.0),
-			Color.rgba(0.20, 0.66, 0.50, 1.0), Color.rgba(0.52, 0.30, 0.74, 1.0)];
+		var colors:Array<Color> = [
+			Color.rgba(0.18, 0.48, 0.82, 1.0),
+			Color.rgba(0.20, 0.66, 0.50, 1.0),
+			Color.rgba(0.52, 0.30, 0.74, 1.0)
+		];
 		var children:Array<KeyedView> = [];
 		for (index in 0...labels.length)
 			children.push(explorer.keyed(key + "-" + index,
@@ -376,26 +395,26 @@ class GraphicsPage {
 						canvas.fillRectIfPositive(new Rect(bounds.x + column * size,
 							bounds.y + row * size, Math.min(size, bounds.width - column * size),
 							Math.min(size, bounds.height - row * size)),
-							(row + column) % 2 == 0 ? UiExplorer.color(0.82, 0.85, 0.90) :
-							UiExplorer.color(0.96, 0.97, 0.99));
+							(row + column) % 2 == 0 ? UiExplorer.color(0.82, 0.85, 0.90) : UiExplorer.color(0.96, 0.97,
+							0.99));
 				canvas.fillLinearGradientRect(bounds, bounds.x, bounds.y,
 					bounds.x + bounds.width, bounds.y, [
-					new GradientStop(0.0, Color.rgba(0.18, 0.48, 0.82, 1.0)),
-					new GradientStop(1.0, Color.rgba(0.18, 0.48, 0.82, 0.0))
-				]);
+						new GradientStop(0.0, Color.rgba(0.18, 0.48, 0.82, 1.0)),
+						new GradientStop(1.0, Color.rgba(0.18, 0.48, 0.82, 0.0))
+					]);
 			} else if (kind == 1) {
 				canvas.fillLinearGradientRect(bounds, bounds.x, bounds.y,
 					bounds.x + bounds.width, bounds.y + bounds.height, [
-					new GradientStop(0.0, Color.rgba(0.16, 0.66, 0.48, 1.0)),
-					new GradientStop(0.5, Color.rgba(0.50, 0.30, 0.76, 1.0)),
-					new GradientStop(1.0, Color.rgba(0.94, 0.40, 0.55, 1.0))
-				]);
+						new GradientStop(0.0, Color.rgba(0.16, 0.66, 0.48, 1.0)),
+						new GradientStop(0.5, Color.rgba(0.50, 0.30, 0.76, 1.0)),
+						new GradientStop(1.0, Color.rgba(0.94, 0.40, 0.55, 1.0))
+					]);
 			} else
 				canvas.fillLinearGradientRect(bounds, bounds.x, bounds.y,
 					bounds.x + bounds.width, bounds.y, [
-					new GradientStop(0.0, Color.rgba(0.18, 0.48, 0.82, 1.0)),
-					new GradientStop(1.0, Color.rgba(0.16, 0.70, 0.46, 1.0))
-				]);
+						new GradientStop(0.0, Color.rgba(0.18, 0.48, 0.82, 1.0)),
+						new GradientStop(1.0, Color.rgba(0.16, 0.70, 0.46, 1.0))
+					]);
 		}, previewStyle(explorer), key + " linear gradient preview");
 	}
 }

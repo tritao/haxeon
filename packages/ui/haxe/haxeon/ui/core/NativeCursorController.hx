@@ -74,8 +74,7 @@ class NativeCursorController {
 			return available;
 		capabilityChecked = true;
 		var capabilities = NativeKit.nk_get_capabilities();
-		available = haxe.Int64.compare(
-			haxe.Int64.and(capabilities, Capabilities.cursor()), haxe.Int64.ofInt(0)) != 0;
+		available = haxe.Int64.compare(haxe.Int64.and(capabilities, Capabilities.cursor()), haxe.Int64.ofInt(0)) != 0;
 		return available;
 	}
 

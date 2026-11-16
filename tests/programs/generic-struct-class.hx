@@ -16,9 +16,15 @@ class Owner {
 struct Payload implements MeasuredOwnerValue implements ValueSlot<Int> {
 	public var number:Int;
 	public var owner:Owner;
-	public function new(number:Int, owner:Owner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:Owner) {
+		this.number = number;
+		this.owner = owner;
+	}
 	public function measure():Int return number;
-	public function advance():Int { number++; return number; }
+	public function advance():Int {
+		number++;
+		return number;
+	}
 	public function get():Int return number;
 	public function set(value:Int):Void number = value;
 }
@@ -26,13 +32,19 @@ struct Payload implements MeasuredOwnerValue implements ValueSlot<Int> {
 struct OtherPayload {
 	public var number:Int;
 	public var owner:Owner;
-	public function new(number:Int, owner:Owner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:Owner) {
+		this.number = number;
+		this.owner = owner;
+	}
 }
 
 class Box<T> {
 	public var value:T;
 	public final marker:Int;
-	public function new(value:T) { this.value = value; marker = 7; }
+	public function new(value:T) {
+		this.value = value;
+		marker = 7;
+	}
 	public function get():T return value;
 	public function replace(value:T):Void this.value = value;
 }
@@ -50,10 +62,13 @@ class Concrete extends Box<Payload> {
 class Pair<A, B> {
 	public var first:A;
 	public var second:B;
-	public function new(first:A, second:B) { this.first = first; this.second = second; }
+	public function new(first:A, second:B) {
+		this.first = first;
+		this.second = second;
+	}
 }
 
-class Meter<T:MeasuredOwnerValue> {
+class Meter < T:MeasuredOwnerValue > {
 	public var value:T;
 	public function new(value:T) this.value = value;
 	public function measure():Int return value.measure();
@@ -77,7 +92,9 @@ function main():Int {
 	var dynamicUnboxed:Payload = cast dynamicMeasured;
 	if (dynamicUnboxed.number != 24 || dynamicUnboxed.owner != owner) return 25;
 	var wrongCastCaught = false;
-	try { var wrong:OtherPayload = cast dynamicMeasured; } catch (_:Dynamic) wrongCastCaught = true;
+	try {
+		var wrong:OtherPayload = cast dynamicMeasured;
+	} catch (_:Dynamic) wrongCastCaught = true;
 	if (!wrongCastCaught) return 28;
 	var slot:ValueSlot<Int> = meter.value;
 	slot.set(35);

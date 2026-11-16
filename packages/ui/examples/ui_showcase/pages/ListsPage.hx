@@ -26,20 +26,20 @@ class ListsPage {
 		explorer.pageHeading(items, "Scrolling & Data",
 			"A model-backed ListView with a real 10,000-item data set, stable keys, semantics, and explicit visible-range reporting.");
 		var first = Std.int(explorer.state.listController.offsetY / UiExplorer.LIST_ROW_HEIGHT) + 1;
-		var last = Std.int((explorer.state.listController.offsetY +
-			Math.max(0.0, explorer.state.listController.viewportHeight)) / UiExplorer.LIST_ROW_HEIGHT) + 1;
+		var last = Std.int((explorer.state.listController.offsetY + Math.max(0.0,
+			explorer.state.listController.viewportHeight)) / UiExplorer.LIST_ROW_HEIGHT) + 1;
 		if (last > UiExplorer.LIST_COUNT)
 			last = UiExplorer.LIST_COUNT;
 		if (first > UiExplorer.LIST_COUNT)
 			first = UiExplorer.LIST_COUNT;
-		items.push(explorer.keyed("list-status", explorer.panel("list-status", [
-			StatusBadge.build("status", 'Rendering rows ${first}–${last} / ${UiExplorer.LIST_COUNT}',
-				UiExplorer.color(0.35, 0.85, 0.69)),
-			explorer.keyed("copy", explorer.caption("Scroll inside the list. ListView materializes only the viewport window and a small overscan as Haxe widgets.")),
+		items.push(explorer.keyed("list-status", explorer.panel("list-status",
+			[StatusBadge.build("status", 'Rendering rows ${first}–${last} / ${UiExplorer.LIST_COUNT}',
+			UiExplorer.color(0.35, 0.85, 0.69)),
+			explorer.keyed("copy",
+			explorer.caption("Scroll inside the list. ListView materializes only the viewport window and a small overscan as Haxe widgets.")),
 			explorer.keyed("jump", explorer.button("Jump to row 415", "jump-row", function() {
 				explorer.listView.scrollTo(414);
-			}))
-		])));
+			}))])));
 		items.push(explorer.keyed("list-view", explorer.listView));
 	}
 }
@@ -79,9 +79,9 @@ private class ShowcaseListModel implements ListViewModel {
 		rowStyle.padding = new Insets(8.0, 7.0, 8.0, 7.0);
 		rowStyle.background = explorer.state.lightTheme
 			? (index % 2 == 0 ? UiExplorer.color(0.98, 0.99, 1.0)
-				: UiExplorer.color(0.91, 0.94, 0.98))
+			: UiExplorer.color(0.91, 0.94, 0.98))
 			: (index % 2 == 0 ? UiExplorer.color(0.11, 0.14, 0.20)
-				: UiExplorer.color(0.13, 0.16, 0.23));
+			: UiExplorer.color(0.13, 0.16, 0.23));
 		return new Text('ROW ${index + 1}  ·  virtual item', rowStyle);
 	}
 

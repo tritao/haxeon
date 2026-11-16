@@ -34,11 +34,9 @@ class DesktopUiHostOptions extends UiHostOptions {
 	public function new() super();
 
 	public function validate():Void {
-		if (title == null || title.length == 0 || width <= 0 || height <= 0 ||
-			minimumWidth < 0 || minimumHeight < 0 ||
-			eventQueueCapacity <= 0 || targetFps <= 0.0 || frameLimit < 0 ||
-			captureSeconds < 0.0 || !Math.isFinite(captureSeconds) ||
-			eventHistoryLimit < 0)
+		if (title == null || title.length == 0 || width <= 0 || height <= 0 || minimumWidth < 0 || minimumHeight < 0
+			|| eventQueueCapacity <= 0 || targetFps <= 0.0 || frameLimit < 0 || captureSeconds < 0.0
+			|| !Math.isFinite(captureSeconds) || eventHistoryLimit < 0)
 			throw "Desktop UI host options are invalid";
 		if (captureDirectory != null && captureDirectory.length == 0)
 			throw "Desktop UI capture directory cannot be empty";

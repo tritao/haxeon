@@ -7,12 +7,14 @@ import compiler.Diagnostic.CompileError;
  * the type in the module itself, or never using the name keeps the current behaviour.
  */
 class ImportShadowingMain {
-	static final NATIVE = "package native; enum abstract Kind(Int) to Int { var One = 1; } enum abstract Other(Int) to Int { var Two = 2; }";
+	static final NATIVE =
+		"package native; enum abstract Kind(Int) to Int { var One = 1; } enum abstract Other(Int) to Int { var Two = 2; }";
 	static final OWN = "package app; enum abstract Kind(Int) to Int { var One = 1; }";
 
 	static function main():Void {
 		// Used through the module import: ambiguous, at the use.
-		rejected('package app; import native.Types; class User { public static function value():Int { var kind:Kind = Kind.One; return kind; } }', "User.hx",
+		rejected('package app; import native.Types; class User { public static function value():Int { var kind:Kind = Kind.One; return kind; } }',
+			"User.hx",
 			'Type name "Kind" is ambiguous: this package declares app.Kind');
 		// Never used: no error, even with the module import.
 		accepted('package app; import native.Types; class User { public static function value():Int return Other.Two; }');
@@ -25,7 +27,8 @@ class ImportShadowingMain {
 		accepted('package app; import native.Types; class User { public static function value():Int { var Kind = 3; return Kind; } }');
 		// A module imported under an alias is a namespace: its types are Native.Kind, and nothing comes in by its bare name.
 		accepted('package app; import native.Types as Native; class User { public static function value():Int { var own:Kind = Kind.One; var native:Native.Kind = Native.Kind.One; return own + native; } }');
-		rejectedAs('package app; import native.Types as Native; class User { public static function value():Int return Other.Two; }', "E1005");
+		rejectedAs('package app; import native.Types as Native; class User { public static function value():Int return Other.Two; }',
+			"E1005");
 		Sys.println("PASS: a whole-module import cannot silently shadow a same-package type, and an aliased module is a namespace");
 	}
 

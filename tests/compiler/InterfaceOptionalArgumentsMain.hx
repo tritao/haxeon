@@ -3,7 +3,8 @@ import compiler.Diagnostic.CompileError;
 
 class InterfaceOptionalArgumentsMain {
 	static final declaration = "interface Service { public function value(required:Int, ?suffix:String):Int; }";
-	static final implementation = "class Impl implements Service { public function new() {} public function value(required:Int, ?suffix:String):Int return required + (suffix == null ? 2 : suffix.length); }";
+	static final implementation =
+		"class Impl implements Service { public function new() {} public function value(required:Int, ?suffix:String):Int return required + (suffix == null ? 2 : suffix.length); }";
 	static final valid = "function main():Int { var service:Service = new Impl(); return service.value(40); }";
 
 	static function compiler():Compiler {

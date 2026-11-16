@@ -16,7 +16,7 @@ class ColorAttachment {
 	public var action:AttachmentAction;
 
 	public function new(image:Image, action:AttachmentAction,
-		resolveImage:Null<Image> = null) {
+			resolveImage:Null<Image> = null) {
 		this.image = image;
 		this.action = action;
 		this.resolveImage = resolveImage;
@@ -36,9 +36,10 @@ class RenderPassDesc {
 	}
 
 	public function color(image:Image, action:AttachmentAction,
-		resolveImage:Null<Image> = null):RenderPassDesc {
+			resolveImage:Null<Image> = null):RenderPassDesc {
 		if (colors.length >= 4)
-			throw BindingError.invalidArgument("RenderPassDesc.color", "GPU render passes support at most four color attachments");
+			throw BindingError.invalidArgument("RenderPassDesc.color",
+				"GPU render passes support at most four color attachments");
 		colors.push(new ColorAttachment(image, action, resolveImage));
 		return this;
 	}
@@ -58,7 +59,8 @@ class RenderPassDesc {
 			var source = colors[index];
 			var attachment = new nkgpu_color_attachment();
 			attachment.set_image(source.image.nativeHandle());
-			attachment.set_resolve_image(source.resolveImage == null ? nkgpu_image.invalid() : source.resolveImage.nativeHandle());
+			attachment.set_resolve_image(source.resolveImage == null
+				? nkgpu_image.invalid() : source.resolveImage.nativeHandle());
 			attachment.set_action(source.action.nativeValue());
 			value.set_colors(index, attachment);
 		}

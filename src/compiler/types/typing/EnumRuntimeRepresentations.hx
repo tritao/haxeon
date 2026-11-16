@@ -26,14 +26,18 @@ class EnumRuntimeRepresentations {
 			case TInstance(NominalKind.Enum, _, arguments):
 				if (arguments.length > 0 && !session.representation.containsTypeParameter(type, [])) {
 					var name = EnumRuntimeType.name(type);
-					if (!requested.exists(name)) { requested.set(name, type); queue.push(type); }
+					if (!requested.exists(name)) {
+						requested.set(name, type);
+						queue.push(type);
+					}
 				}
-				// Arguments contribute to identity, not necessarily storage. The instantiated
-				// payloads are discovered when this declaration is drained below.
+			// Arguments contribute to identity, not necessarily storage. The instantiated
+			// payloads are discovered when this declaration is drained below.
 			case TInstance(_, _, _):
 			case TAbstract(_, _, representation): discover(representation, seen);
 			case TNullable(element), TArray(element), TIterator(element): discover(element, seen);
-			case TMap(key, value), TKeyPath(key, value, _): discover(key, seen); discover(value, seen);
+			case TMap(key, value), TKeyPath(key, value, _): discover(key, seen);
+				discover(value, seen);
 			case TFunction(arguments, result):
 				for (argument in arguments) discover(argument, seen);
 				discover(result, seen);
@@ -55,23 +59,28 @@ class EnumRuntimeRepresentations {
 				&& retained.exists(declaration.name)
 				&& session.enumDecls.exists(declaration.specializationOrigin)
 				&& session.representation.typeNamesExist(declaration.specializationArguments))
-				discover(TInstance(NominalKind.Enum, declaration.specializationOrigin, declaration.specializationArguments));
+				discover(TInstance(NominalKind.Enum, declaration.specializationOrigin,
+					declaration.specializationArguments));
 
 	public function declaration(index:Int):TypedEnum {
-		var type = queue[index], origin = switch type { case TInstance(_, name, _): name; default: throw "Invalid enum request"; };
+		var type = queue[index], origin = switch type {
+			case TInstance(_, name, _): name;
+			default: throw "Invalid enum request";
+		};
 		var source = session.enumDecls.get(origin);
 		if (source == null) throw 'Missing enum declaration "$origin"';
-		var arguments = switch type { case TInstance(_, _, arguments): arguments; default: []; };
-		return {
-			name: EnumRuntimeType.name(type), specializationOrigin: origin, specializationArguments: arguments,
+		var arguments = switch type {
+			case TInstance(_, _, arguments): arguments;
+			default: [];
+		};
+		return {name: EnumRuntimeType.name(type), specializationOrigin: origin, specializationArguments: arguments,
 			isRecursive: isRecursive(origin),
 			equatable: DeclaredConformance.has(session, type, "Equatable"),
 			hashable: DeclaredConformance.has(session, type, "Hashable"), metadata: source.metadata,
 			cases: [for (constructor in source.cases) {
-				name: constructor.name, metadata: constructor.metadata, span: constructor.span,
-				params: [for (parameter in constructor.params) storage(source.typeParameters, parameter, type)]
-			}], span: source.span
-		};
+				name:constructor.name, metadata:constructor.metadata, span:constructor.span,
+					params:[for (parameter in constructor.params) storage(source.typeParameters, parameter, type)]
+			}], span: source.span};
 	}
 
 	public function storage(parameters:Array<String>, parameter:AstEnumParameter, instance:CompilerType):CompilerType {

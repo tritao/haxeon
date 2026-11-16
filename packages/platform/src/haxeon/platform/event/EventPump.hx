@@ -103,6 +103,7 @@ class EventPump {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw BindingError.disposed("EventPump.ensureLive", "NativeKit event pump has been disposed with its runtime");
+			throw BindingError.disposed("EventPump.ensureLive",
+				"NativeKit event pump has been disposed with its runtime");
 	}
 }

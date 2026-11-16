@@ -15,7 +15,7 @@ class Resource {
 	public final displayName:Null<String>;
 
 	public function new(uri:String, ?mimeType:String, ?displayName:String,
-		?flags:ResourceFlags) {
+			?flags:ResourceFlags) {
 		if (uri == null || uri.length == 0)
 			throw BindingError.invalidArgument("Resource.new", "NativeKit resource URI must not be empty");
 		this.flags = flags == null ? ResourceFlags.Readable : flags;

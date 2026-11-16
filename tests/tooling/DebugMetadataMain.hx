@@ -104,8 +104,10 @@ class DebugMetadataMain {
 		var originalLocations = fn.debugLocations.copy();
 		for (index in 0...3) {
 			var location = originalLocations[index];
-			fn.debugLocations[index] = new compiler.hl.HlFunction.HlDebugLocation(index == 1 ? "second-source.hx" : "first-source.hx", location.line,
-				location.column, location.endLine, location.endColumn, location.sourceHash, location.start, location.end, location.flags);
+			fn.debugLocations[index] = new compiler.hl.HlFunction.HlDebugLocation(index == 1
+				? "second-source.hx" : "first-source.hx", location.line,
+				location.column, location.endLine, location.endColumn, location.sourceHash, location.start,
+				location.end, location.flags);
 		}
 		var mixedPaths = HlWriter.encode(code).flatten(),
 			mixedCache = new HlWriterCache();
@@ -124,9 +126,11 @@ class DebugMetadataMain {
 		var stableBySlot:Map<Int, Int> = [
 			for (compiledFunction in code.functions)
 				compiledFunction.functionIndex => compiledFunction.functionIndex
-		], patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16),
-			[for (compiledFunction in code.functions) compiledFunction.functionIndex], stableBySlot, 0, 1, code.ints.length, code.floats.length,
-			code.strings.length, code.types.length));
+		],
+			patch = HlPatchReader.decode(HlPatchWriter.encode(code, haxe.io.Bytes.alloc(16),
+				[for (compiledFunction in code.functions) compiledFunction.functionIndex], stableBySlot, 0, 1,
+				code.ints.length, code.floats.length,
+				code.strings.length, code.types.length));
 		for (index in 0...patch.functions.length) {
 			var actual = patch.functions[index].debug,
 				expected = code.functions[index].debugLocations;
@@ -158,19 +162,23 @@ class DebugMetadataMain {
 		compiler.update("unused.hx", "function unused():Int return 0;");
 		var result = compiler.compile("snapshot"),
 			snapshots = result.module.sourceSnapshots;
-		if (snapshots.length != 1 || snapshots[0].sourceHash != source.contentHash() || snapshots[0].content.toString() != text)
+		if (snapshots.length != 1 || snapshots[0].sourceHash != source.contentHash()
+			|| snapshots[0].content.toString() != text)
 			throw "Compiler did not retain the reachable source snapshot";
 		var sections = [
 			for (section in result.module.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS) section
 		];
-		if (sections.length != 1 || sections[0].version != 1 || !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
+		if (sections.length != 1 || sections[0].version != 1
+			|| !sections[0].payload.equals(HlWriter.encodeSourceSnapshots(snapshots)))
 			throw "Compiler did not emit the canonical source snapshot section";
 		if (HlWriter.encode(result.module).flatten().compare(HlWriter.encode(result.module).flatten()) != 0)
 			throw "HLB source snapshot encoding is not deterministic";
 		var stableBySlot:Map<Int, Int> = [for (fn in result.module.functions) fn.functionIndex => fn.functionIndex],
-			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16), [for (fn in result.module.functions) fn.functionIndex],
-				stableBySlot, 0, 1, result.module.ints.length, result.module.floats.length, result.module.strings.length, result.module.types.length));
+			patch = HlPatchReader.decode(HlPatchWriter.encode(result.module, Bytes.alloc(16),
+				[for (fn in result.module.functions) fn.functionIndex],
+				stableBySlot, 0, 1, result.module.ints.length, result.module.floats.length,
+				result.module.strings.length, result.module.types.length));
 		if (patch.sourceSnapshots.length != 1
 			|| patch.sourceSnapshots[0].sourceHash != source.contentHash()
 			|| patch.sourceSnapshots[0].content.toString() != text)

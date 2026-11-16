@@ -33,13 +33,11 @@ class IrEnumTagStorage {
 		for (name in names) {
 			var box = boxes.get(name), unbox = unboxes.get(name);
 			if (box == null) {
-				do
-					box = "$haxeon_enum_tag_box_" + nextBox++ while (occupied.exists(box));
+				do box = "$haxeon_enum_tag_box_" + nextBox++ while (occupied.exists(box));
 				occupied.set(box, true);
 			}
 			if (unbox == null) {
-				do
-					unbox = "$haxeon_enum_tag_unbox_" + nextUnbox++ while (occupied.exists(unbox));
+				do unbox = "$haxeon_enum_tag_unbox_" + nextUnbox++ while (occupied.exists(unbox));
 				occupied.set(unbox, true);
 			}
 			result.set(name, {box: box, unbox: unbox});
@@ -48,7 +46,7 @@ class IrEnumTagStorage {
 	}
 
 	/** Request the checked boundary when a later helper introduces a tag escape. */
-	public static function request(program:IrProgram, name:String):{box:String, unbox:String} {
+	public static function request(program:IrProgram, name:String): {box: String, unbox: String} {
 		var symbols = adapterNames(program).get(name);
 		if (symbols == null)
 			throw 'Unknown enum tag adapter type "$name"';

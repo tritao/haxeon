@@ -6,28 +6,28 @@ package sys.thread;
  * `wait` says so instead of hanging; `timedWait` times out at once.
  */
 class Condition {
-  public function new() {}
+	public function new() {}
 
-  public function acquire():Void {}
-  public function release():Void {}
-  public function signal():Void {}
-  public function broadcast():Void {}
-  public function wait():Void throw "Condition.wait would block forever on a single-threaded target";
-  public function timedWait(timeout:Float):Bool return false;
+	public function acquire():Void {}
+	public function release():Void {}
+	public function signal():Void {}
+	public function broadcast():Void {}
+	public function wait():Void throw "Condition.wait would block forever on a single-threaded target";
+	public function timedWait(timeout:Float):Bool return false;
 }
 #else
 /** Recursive mutex and condition variable backed by HashLink. */
 class Condition {
-  final handle:hl.Abstract<"hl_condition">;
+	final handle:hl.Abstract<"hl_condition">;
 
-  public function new() handle = nativeConditionAlloc();
+	public function new() handle = nativeConditionAlloc();
 
-  public function acquire():Void nativeConditionAcquire(handle);
-  public function release():Void nativeConditionRelease(handle);
-  public function signal():Void nativeConditionSignal(handle);
-  public function broadcast():Void nativeConditionBroadcast(handle);
-  public function wait():Void nativeConditionWait(handle);
-  public function timedWait(timeout:Float):Bool return nativeConditionTimedWait(handle, timeout);
+	public function acquire():Void nativeConditionAcquire(handle);
+	public function release():Void nativeConditionRelease(handle);
+	public function signal():Void nativeConditionSignal(handle);
+	public function broadcast():Void nativeConditionBroadcast(handle);
+	public function wait():Void nativeConditionWait(handle);
+	public function timedWait(timeout:Float):Bool return nativeConditionTimedWait(handle, timeout);
 }
 
 @:hlNative("std", "condition_alloc")

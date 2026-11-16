@@ -46,15 +46,18 @@ class EnumRecursion {
 			var instance = TInstance(NominalKind.Enum, declaration.name, arguments);
 			add("enum:" + declaration.name, declaration.name, declaration.typeParameters,
 				[for (constructor in declaration.cases) for (parameter in constructor.params)
-					session.representation.enumParameterType(declaration.typeParameters, parameter, instance)]);
+				session.representation.enumParameterType(declaration.typeParameters, parameter, instance)]);
 		}
 		for (declaration in session.classDecls) {
 			var arguments = [for (parameter in declaration.typeParameters) TTypeParameter(declaration.name, parameter)];
 			if (!session.relations.isValueClass(TInstance(NominalKind.Class, declaration.name, arguments))) continue;
-			var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, arguments);
+			var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
+				arguments);
 			var payloads = [for (field in declaration.fields) if (!field.isStatic)
-				session.representation.semanticType(session.declarations.resolvedFieldType(declaration.name, field), field.span, substitutions)];
-			if (declaration.base != null) payloads.push(session.representation.semanticType(declaration.base, declaration.span, substitutions));
+				session.representation.semanticType(session.declarations.resolvedFieldType(declaration.name, field),
+				field.span, substitutions)];
+			if (declaration.base != null) payloads.push(session.representation.semanticType(declaration.base,
+				declaration.span, substitutions));
 			add("value:" + declaration.name, declaration.name, declaration.typeParameters, payloads);
 		}
 		// A generic wrapper exposes only the arguments which reach a stored payload.
@@ -75,23 +78,29 @@ class EnumRecursion {
 	function add(key:String, name:String, parameters:Array<String>, payloads:Array<CompilerType>):Void
 		nodes.set(key, {key: key, name: name, parameters: parameters, payloads: payloads, used: []});
 
-	function visit(type:CompilerType, current:PayloadDependencyNode, dependencies:Null<Map<String, Bool>>):Void switch type {
+	function visit(type:CompilerType, current:PayloadDependencyNode,
+			dependencies:Null<Map<String, Bool>>):Void switch type {
 		case TTypeParameter(owner, parameter) if (owner == current.name):
-			if (!current.used.exists(parameter)) { current.used.set(parameter, true); changed = true; }
+			if (!current.used.exists(parameter)) {
+				current.used.set(parameter, true);
+				changed = true;
+			}
 		case TInstance(kind, name, arguments):
 			var key = (kind == NominalKind.Enum ? "enum:" : "value:") + name;
 			var node = kind == NominalKind.Enum || kind == NominalKind.Class ? nodes.get(key) : null;
 			if (node != null) {
 				if (dependencies != null) dependencies.set(key, true);
 				for (index in 0...arguments.length)
-					if (index < node.parameters.length && node.used.exists(node.parameters[index])) visit(arguments[index], current, dependencies);
+					if (index < node.parameters.length
+						&& node.used.exists(node.parameters[index])) visit(arguments[index], current, dependencies);
 			}
 		case TAbstract(_, _, representation), TNullable(representation):
 			visit(representation, current, dependencies);
 		case TArray(element), TIterator(element) if (kind == BoxedDescriptor):
 			visit(element, current, dependencies);
 		case TMap(key, value), TKeyPath(key, value, _) if (kind == BoxedDescriptor):
-			visit(key, current, dependencies); visit(value, current, dependencies);
+			visit(key, current, dependencies);
+			visit(value, current, dependencies);
 		case TFunction(arguments, result) if (kind == BoxedDescriptor):
 			for (argument in arguments) visit(argument, current, dependencies);
 			visit(result, current, dependencies);

@@ -24,7 +24,8 @@ class ExternTyper {
 		this.lowerType = lowerType;
 	}
 
-	public function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String, ?resultOverride:CompilerType,
+	public function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String,
+			?resultOverride:CompilerType,
 			allowStubBody:Bool = false):TypedNative {
 		if (fn.statements.length != 0 && !allowStubBody)
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);

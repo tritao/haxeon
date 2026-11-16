@@ -4,7 +4,7 @@ import Hashable;
 import haxeon.Hashing;
 
 /** Dense entries and open-addressed buckets for keys with declared value equality. */
-class HashMap<K:Hashable, V> {
+class HashMap < K:Hashable, V > {
 	var keySlots:Null<Array<K>>;
 	var valueSlots:Null<Array<V>>;
 	var hashes:Null<Array<Int>>;
@@ -73,7 +73,8 @@ class HashMap<K:Hashable, V> {
 			return;
 		}
 		if ((occupied + 1) * 2 >= currentBuckets.length)
-			currentBuckets = rebuild((keys.length + 1) * 2 < currentBuckets.length ? currentBuckets.length : currentBuckets.length * 2, keys, currentHashes);
+			currentBuckets = rebuild((keys.length + 1) * 2 < currentBuckets.length
+				? currentBuckets.length : currentBuckets.length * 2, keys, currentHashes);
 		at = insertionBucket(currentBuckets, hash);
 		if (currentBuckets[at] == 0) occupied++;
 		currentBuckets[at] = keys.length + 1;
@@ -96,7 +97,8 @@ class HashMap<K:Hashable, V> {
 		var at = bucketFor(key, Hashing.hash(key));
 		if (at < 0) return false;
 		var keys = keySlots, values = valueSlots, currentHashes = hashes, currentBuckets = buckets;
-		if (keys == null || values == null || currentHashes == null || currentBuckets == null) throw "Invalid map storage";
+		if (keys == null || values == null || currentHashes == null
+			|| currentBuckets == null) throw "Invalid map storage";
 		var entry = currentBuckets[at] - 1, last = keys.length - 1;
 		currentBuckets[at] = -1;
 		if (entry != last) {
@@ -124,9 +126,18 @@ class HashMap<K:Hashable, V> {
 		occupied = 0;
 	}
 
-	public function size():Int { var keys = keySlots; return keys == null ? 0 : keys.length; }
-	public function keys():Array<K> { var keys = keySlots; return keys == null ? [] : keys.copy(); }
-	public function values():Array<V> { var values = valueSlots; return values == null ? [] : values.copy(); }
+	public function size():Int {
+		var keys = keySlots;
+		return keys == null ? 0 : keys.length;
+	}
+	public function keys():Array<K> {
+		var keys = keySlots;
+		return keys == null ? [] : keys.copy();
+	}
+	public function values():Array<V> {
+		var values = valueSlots;
+		return values == null ? [] : values.copy();
+	}
 
 	public function copy():HashMap<K, V> {
 		var result = new HashMap<K, V>(), keys = keySlots, values = valueSlots;

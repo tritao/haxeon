@@ -24,32 +24,32 @@ class WasmTarget {
 	public static function forBackend(target:BackendTarget, ?debugNames:Bool = true):WasmTargetConfig {
 		return switch target {
 			case Wasm32: {
-					target: target,
-					referenceModel: Linear32,
-					exceptions: true,
-					bulkMemory: true,
-					simd: false,
-					threads: false,
-					debugNames: debugNames
-				};
+				target: target,
+				referenceModel: Linear32,
+				exceptions: true,
+				bulkMemory: true,
+				simd: false,
+				threads: false,
+				debugNames: debugNames
+			};
 			case Wasm64: {
-					target: target,
-					referenceModel: Linear64,
-					exceptions: false,
-					bulkMemory: true,
-					simd: false,
-					threads: false,
-					debugNames: debugNames
-				};
+				target: target,
+				referenceModel: Linear64,
+				exceptions: false,
+				bulkMemory: true,
+				simd: false,
+				threads: false,
+				debugNames: debugNames
+			};
 			case WasmGc: {
-					target: target,
-					referenceModel: Gc,
-					exceptions: true,
-					bulkMemory: true,
-					simd: false,
-					threads: false,
-					debugNames: debugNames
-				};
+				target: target,
+				referenceModel: Gc,
+				exceptions: true,
+				bulkMemory: true,
+				simd: false,
+				threads: false,
+				debugNames: debugNames
+			};
 			case HashLink: throw "HashLink is not a Wasm target";
 		};
 	}
@@ -57,7 +57,8 @@ class WasmTarget {
 	public static function isReference(type:IrType):Bool
 		return switch type {
 			case Abstract("native_callback"): false;
-			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _), Nullable(_): true;
+			case Bytes, ManagedBytes, Dyn, Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_),
+				Function(_, _), Nullable(_): true;
 			default: false;
 		};
 }

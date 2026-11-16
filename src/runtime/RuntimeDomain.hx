@@ -87,7 +87,8 @@ class RuntimeDomain {
 			return;
 		}
 		if (!active)
-			throw new RuntimeError(RuntimeStatus.Incompatible, 'Runtime domain "$name" requires explicit shutdown after failure');
+			throw new RuntimeError(RuntimeStatus.Incompatible,
+				'Runtime domain "$name" requires explicit shutdown after failure');
 		var previous = current,
 			candidate = new OwnedGeneration(plugin, module),
 			state:Null<Bytes> = null;
@@ -130,7 +131,8 @@ class RuntimeDomain {
 		catch (error:Dynamic) {
 			retirementBacklog.push(previous);
 			lastCleanupError = Std.string(error);
-			throw new RuntimeError(RuntimeStatus.Exception, 'Runtime domain "$name" published generation $generation but retirement failed: $lastCleanupError');
+			throw new RuntimeError(RuntimeStatus.Exception,
+				'Runtime domain "$name" published generation $generation but retirement failed: $lastCleanupError');
 		}
 	}
 

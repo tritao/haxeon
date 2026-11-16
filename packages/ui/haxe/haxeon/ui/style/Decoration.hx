@@ -17,8 +17,7 @@ class Decoration {
 		this.kind = kind;
 
 	/** Paints this decoration in node-local coordinates; the base value paints nothing. */
-	public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void
-		{}
+	public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {}
 
 	/** Returns an independent value copy when the decoration has mutable state. */
 	public function copy():Decoration

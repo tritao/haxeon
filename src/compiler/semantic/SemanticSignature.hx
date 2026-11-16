@@ -11,7 +11,9 @@ import compiler.types.Type.NominalKind;
 class SemanticSignature {
 	/** Final controls field writes; it does not change the anonymous object layout. */
 	public static function anonymousTypeName(fields:Array<compiler.types.Type.AnonymousField>):String
-		return '$' + 'anon:' + anonymousFields([for (field in fields) {name: field.name, type: field.type, optional: field.optional, isFinal: false}]);
+		return '$' + 'anon:' + anonymousFields([for (field in fields) {
+			name:field.name, type:field.type, optional:field.optional, isFinal:false
+		}]);
 
 	/**
 	 * A structure that contains itself cannot be spelled out from its fields, since the spelling would never end.
@@ -55,7 +57,8 @@ class SemanticSignature {
 			case TRange: "Range";
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
-			case TAbstract(name, arguments, _): 'abstract:$name<${[for (argument in arguments) type(argument)].join(",")}>';
+			case TAbstract(name, arguments,
+				_): 'abstract:$name<${[for (argument in arguments) type(argument)].join(",")}>';
 			case TInstance(kind, name, arguments):
 				var prefix = switch kind {
 					case NominalKind.Class: "class";
@@ -70,8 +73,10 @@ class SemanticSignature {
 			case TArray(element): 'Array<${type(element)}>';
 			case TIterator(element): 'Iterator<${type(element)}>';
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
-			case TKeyPath(root, value, writable): (writable ? "WritableKeyPath<" : "KeyPath<") + type(root) + "," + type(value) + ">";
-			case TFunction(arguments, result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
+			case TKeyPath(root, value,
+				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + type(root) + "," + type(value) + ">";
+			case TFunction(arguments,
+				result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
 			case TAnonymous(name, _): name;
 		};
 
@@ -99,8 +104,10 @@ class SemanticSignature {
 			case TArray(element): 'Array<${display(element)}>';
 			case TIterator(element): 'Iterator<${display(element)}>';
 			case TMap(key, value): 'Map<${display(key)},${display(value)}>';
-			case TKeyPath(root, value, writable): (writable ? "WritableKeyPath<" : "KeyPath<") + display(root) + "," + display(value) + ">";
-			case TFunction(arguments, result): '(${[for (argument in arguments) display(argument)].join(",")})->${display(result)}';
+			case TKeyPath(root, value,
+				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + display(root) + "," + display(value) + ">";
+			case TFunction(arguments,
+				result): '(${[for (argument in arguments) display(argument)].join(",")})->${display(result)}';
 			case TAnonymous(name, _): name;
 		};
 
@@ -114,9 +121,11 @@ class SemanticSignature {
 			+ (fn.isOverride == true ? " override" : "")
 			+ (fn.isPublic == null ? "" : fn.isPublic ? " public" : " private")
 			+ (typeParameters == null
-				|| typeParameters.length == 0 ? "" : '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
+			|| typeParameters.length == 0 ? ""
+			: '<${[for (parameter in typeParameters) parameter + parsedConstraint(fn, parameter, definitions)].join(",")}>')
 			+ "(" // Whether an argument may be omitted is part of the signature: callers are checked against the arity range.
-			+ [for (argument in fn.arguments) parsedArgument(argument, definitions)].join(",") + ")->" + parsedType(fn.result, definitions, []);
+			+ [for (argument in fn.arguments) parsedArgument(argument, definitions)].join(",") + ")->"
+			+ parsedType(fn.result, definitions, []);
 	}
 
 	/**
@@ -144,7 +153,8 @@ class SemanticSignature {
 	public static function parsed(type:AstType, aliases:Array<AstTypeAlias>):String
 		return parsedType(type, [for (alias in aliases) alias.name => alias.type], []);
 
-	public static function parsedParameters(parameters:Array<String>, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+	public static function parsedParameters(parameters:Array<String>,
+			constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
 			aliases:Array<AstTypeAlias>):String {
 		var definitions:Map<String, AstType> = [for (alias in aliases) alias.name => alias.type];
 		return [
@@ -153,7 +163,8 @@ class SemanticSignature {
 		].join(",");
 	}
 
-	static function parsedParameterConstraint(parameter:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+	static function parsedParameterConstraint(parameter:String,
+			constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
 			definitions:Map<String, AstType>):String {
 		if (constraints == null)
 			return "";
@@ -175,16 +186,19 @@ class SemanticSignature {
 			case InferredType: "_";
 			case NativeAbstractType(declaration, tag): '$declaration<"$tag">';
 			case NamedType(name):
-				if (!aliases.exists(name) || resolving.exists(name)) name; else {
+				if (!aliases.exists(name) || resolving.exists(name)) name;
+				else {
 					var alias = aliases.get(name);
 					resolving.set(name, true);
 					var result = parsedType(alias, aliases, resolving);
 					resolving.remove(name);
 					result;
 				}
-			case AppliedType(name, arguments): '$name<${[for (argument in arguments) parsedType(argument, aliases, resolving)].join(",")}>';
+			case AppliedType(name,
+				arguments): '$name<${[for (argument in arguments) parsedType(argument, aliases, resolving)].join(",")}>';
 			case ArrayType(element): 'Array<${parsedType(element, aliases, resolving)}>';
-			case MapType(key, value): 'Map<${parsedType(key, aliases, resolving)},${parsedType(value, aliases, resolving)}>';
+			case MapType(key,
+				value): 'Map<${parsedType(key, aliases, resolving)},${parsedType(value, aliases, resolving)}>';
 			case NullableType(element): 'Null<${parsedType(element, aliases, resolving)}>';
 			case FunctionType(arguments, result):
 				'(${[for (argument in arguments) parsedType(argument, aliases, resolving)].join(",")})->${parsedType(result, aliases, resolving)}';

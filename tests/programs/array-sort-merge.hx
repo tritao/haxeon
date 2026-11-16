@@ -114,7 +114,9 @@ function valuesStable(random:Random):Bool {
 }
 
 function recordsStable():Bool {
-	var records = [for (index in 0...50) {key: (index * 7) % 4, index: index}];
+	var records = [for (index in 0...50) {
+		key:(index * 7) % 4, index:index
+	}];
 	records.sort((a, b) -> a.key - b.key);
 	for (index in 1...records.length) {
 		var previous = records[index - 1], current = records[index];
@@ -148,7 +150,7 @@ function stringsSort():Bool {
 }
 
 function floatsSort():Bool {
-	var values = [for (index in 0...40) ((index * 13) % 40) * 0.5];
+	var values = [for (index in 0...40)((index * 13) % 40) * 0.5];
 	values.sort((a, b) -> a < b ? -1 : a > b ? 1 : 0);
 	for (index in 0...values.length)
 		if (values[index] != index * 0.5)
@@ -194,7 +196,8 @@ function complexityBounded(random:Random):Bool {
 		sortedCalls = comparisons([for (index in 0...length) index]),
 		reversedCalls = comparisons([for (index in 0...length) length - index]),
 		equalCalls = comparisons([for (_ in 0...length) 1]);
-	return randomCalls > 0 && randomCalls <= bound && reversedCalls > 0 && reversedCalls <= bound && sortedCalls > 0 && sortedCalls < 2 * length
+	return randomCalls > 0 && randomCalls <= bound && reversedCalls > 0 && reversedCalls <= bound && sortedCalls > 0
+		&& sortedCalls < 2 * length
 		&& equalCalls > 0 && equalCalls < 2 * length;
 }
 

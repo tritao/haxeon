@@ -30,8 +30,7 @@ class CustomEffect extends VisualEffect {
 		if (other == null || other.kind != EffectKind.Custom)
 			return false;
 		var value:CustomEffect = cast other;
-		if (value == null || definition != value.definition ||
-			parameters.length != value.parameters.length)
+		if (value == null || definition != value.definition || parameters.length != value.parameters.length)
 			return false;
 		for (index in 0...parameters.length)
 			if (parameters[index] != value.parameters[index])
@@ -43,8 +42,7 @@ class CustomEffect extends VisualEffect {
 		if (other == null || other.kind != EffectKind.Custom)
 			return VisualEffect.discrete(this, other, amount);
 		var value:CustomEffect = cast other;
-		if (value == null || definition != value.definition ||
-			parameters.length != value.parameters.length)
+		if (value == null || definition != value.definition || parameters.length != value.parameters.length)
 			return amount < 0.5 ? copy() : value == null ? copy() : value.copy();
 		var result:Array<EffectParameter> = [];
 		for (index in 0...parameters.length)

@@ -24,7 +24,8 @@ typedef ScalarReplacementResult = {
 @:allow(compiler.ir.IrNestedScalarReplacement)
 class IrScalarReplacement {
 	/** Run independently of inlining, without mutating the source function held by incremental compilation. */
-	public static function rewrite(fn:IrFunction, objects:IrObjectTable, forcePhis = false, constructFields = false):IrFunction {
+	public static function rewrite(fn:IrFunction, objects:IrObjectTable, forcePhis = false,
+			constructFields = false):IrFunction {
 		// Both replacement and in-place construction require a value allocation. Avoid
 		// copying blocks and collecting operands for the other functions in the program.
 		var candidate = false;
@@ -77,7 +78,8 @@ class IrScalarReplacement {
 		return fn.withBlocks(blocks, bindings);
 	}
 
-	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, forcePhis = false):ScalarReplacementResult {
+	public static function run(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int,
+			forcePhis = false):ScalarReplacementResult {
 		var substitutions:Map<Int, IrValue> = [];
 		var candidates = findCandidates(blocks, objects);
 		if (candidates.length == 0)
@@ -106,15 +108,18 @@ class IrScalarReplacement {
 			};
 			var descriptor = objects.get(candidate.typeName);
 			if (descriptor != null && hasValueField(descriptor, objects)) {
-				nextValue = IrNestedScalarReplacement.tryReplace(blocks, objects, candidate.object, candidate.typeName, candidate.block, candidate.position,
+				nextValue = IrNestedScalarReplacement.tryReplace(blocks, objects, candidate.object, candidate.typeName,
+					candidate.block, candidate.position,
 					hasHandlers, substitutions, nextValue, forcePhis);
 				continue;
 			}
 			if (descriptor == null || !knownFields(blocks, candidate.object, descriptor))
 				continue;
-			if (!usesAreFieldAccesses(blocks, candidate.object, candidate.block, candidate.position, hasHandlers, graph))
+			if (!usesAreFieldAccesses(blocks, candidate.object, candidate.block, candidate.position, hasHandlers,
+				graph))
 				continue;
-			nextValue = replace(blocks, graph, frontier, children, candidate, descriptor, substitutions, nextValue, forcePhis);
+			nextValue = replace(blocks, graph, frontier, children, candidate, descriptor, substitutions, nextValue,
+				forcePhis);
 		}
 		return {substitutions: substitutions, nextValue: nextValue};
 	}
@@ -124,7 +129,8 @@ class IrScalarReplacement {
 		for (block in blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case FieldGet(_, target, name), FieldSet(target, name, _) if (target.id == object.id && !names.exists(name)):
+					case FieldGet(_, target, name),
+						FieldSet(target, name, _) if (target.id == object.id && !names.exists(name)):
 						return false;
 					default:
 				}
@@ -137,7 +143,8 @@ class IrScalarReplacement {
 	 * same snapshot. Unsupported escapes retain the original allocation. A simple store-only construction also
 	 * has a direct path that writes its fields into the parent's slot.
 	 */
-	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int, substitutions:Map<Int, IrValue>):Int {
+	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, nextValue:Int,
+			substitutions:Map<Int, IrValue>):Int {
 		var stored:Map<Int, Bool> = [];
 		for (block in blocks)
 			for (located in block.instructions)
@@ -155,13 +162,15 @@ class IrScalarReplacement {
 						var typeName = compiler.ir.IrTypeTools.valueObjectName(object.type);
 						var descriptor = objects.get(typeName);
 						if (descriptor != null && descriptor.isValue && stored.exists(object.id)) {
-							nextValue = IrNestedScalarReplacement.constructInPlace(blocks, objects, object, typeName, block, position, substitutions,
+							nextValue = IrNestedScalarReplacement.constructInPlace(blocks, objects, object, typeName,
+								block, position, substitutions,
 								nextValue);
 							if (allocationPosition(block, object) < 0)
 								continue;
 							if (!hasValueField(descriptor, objects)) {
 								var store = storeOnly(blocks, block, position, object);
-								if (store != null && parentSlotIsInline(store.destination, store.field, typeName, objects)) {
+								if (store != null
+									&& parentSlotIsInline(store.destination, store.field, typeName, objects)) {
 									nextValue = placeInSlot(block, position, object, descriptor, store, nextValue);
 									continue;
 								}
@@ -176,7 +185,11 @@ class IrScalarReplacement {
 	}
 
 	/** The single store of `object` into another object's field, when every other use is a write to one of its own fields. */
-	static function storeOnly(blocks:Array<IrBlock>, home:IrBlock, allocation:Int, object:IrValue):Null<{position:Int, destination:IrValue, field:String}> {
+	static function storeOnly(blocks:Array<IrBlock>, home:IrBlock, allocation:Int, object:IrValue):Null<{
+		position:Int,
+		destination:IrValue,
+		field:String
+	}> {
 		var found:Null<{position:Int, destination:IrValue, field:String}> = null;
 		for (block in blocks) {
 			for (position in 0...block.instructions.length) {
@@ -200,7 +213,8 @@ class IrScalarReplacement {
 					return null;
 				switch instruction {
 					case FieldSet(target, _, value) if (target.id == object.id && value.id != object.id):
-					case FieldSet(target, name, value) if (value.id == object.id && target.id != object.id && uses == 1 && found == null):
+					case FieldSet(target, name,
+						value) if (value.id == object.id && target.id != object.id && uses == 1 && found == null):
 						found = {position: position, destination: target, field: name};
 					default:
 						return null;
@@ -248,7 +262,11 @@ class IrScalarReplacement {
 		return false;
 	}
 
-	static function placeInSlot(block:IrBlock, allocation:Int, object:IrValue, descriptor:IrObject, store:{position:Int, destination:IrValue, field:String},
+	static function placeInSlot(block:IrBlock, allocation:Int, object:IrValue, descriptor:IrObject, store: {
+		position: Int,
+		destination: IrValue,
+		field: String
+	},
 			nextValue:Int):Int {
 		// The latest write to each field before the store is the value the copy would have carried.
 		var written:Map<String, IrValue> = [];
@@ -260,7 +278,8 @@ class IrScalarReplacement {
 			}
 		var provenance = block.instructions[store.position].provenance;
 		var slot = new IrValue(nextValue++, store.field, Obj(descriptor.name));
-		var emitted:Array<Located<IrInstruction>> = [new Located(FieldGet(slot, store.destination, store.field), provenance)];
+		var emitted:Array<Located<IrInstruction>> = [new Located(FieldGet(slot, store.destination, store.field),
+			provenance)];
 		for (field in descriptor.fields) {
 			var value = written.get(field.name);
 			if (value == null) {
@@ -350,7 +369,8 @@ class IrScalarReplacement {
 	 * Every use of `object` is a field read or a write to one of its fields, after the allocation, and in the same
 	 * block as the allocation when the function has exception handling.
 	 */
-	static function usesAreFieldAccesses(blocks:Array<IrBlock>, object:IrValue, home:IrBlock, allocation:Int, singleBlock:Bool, graph:IrGraph):Bool {
+	static function usesAreFieldAccesses(blocks:Array<IrBlock>, object:IrValue, home:IrBlock, allocation:Int,
+			singleBlock:Bool, graph:IrGraph):Bool {
 		for (block in blocks) {
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value;
@@ -407,7 +427,8 @@ class IrScalarReplacement {
 				continue;
 			for (pred in preds) {
 				var runner = pred, guard = 0;
-				while (graph.immediate.exists(runner) && runner != graph.immediate.get(id) && guard <= graph.order.length) {
+				while (graph.immediate.exists(runner) && runner != graph.immediate.get(id)
+					&& guard <= graph.order.length) {
 					var entries = frontier.get(runner);
 					if (entries.indexOf(id) < 0)
 						entries.push(id);
@@ -434,13 +455,14 @@ class IrScalarReplacement {
 		return children;
 	}
 
-	static function replace(blocks:Array<IrBlock>, graph:IrGraph, frontier:Map<Int, Array<Int>>, children:Map<Int, Array<Int>>, candidate:{
-		object:IrValue,
-		typeName:String,
-		block:IrBlock,
-		position:Int
-	}, descriptor:IrObject, substitutions:Map<Int, IrValue>,
-			nextValue:Int, forcePhis = false):Int {
+	static function replace(blocks:Array<IrBlock>, graph:IrGraph, frontier:Map<Int, Array<Int>>,
+			children:Map<Int, Array<Int>>, candidate: {
+				object: IrValue,
+				typeName: String,
+				block: IrBlock,
+				position: Int
+			}, descriptor:IrObject, substitutions:Map<Int, IrValue>,
+					nextValue:Int, forcePhis = false):Int {
 		var object = candidate.object, home = candidate.block;
 		var fieldTypes:Map<String, IrType> = [],
 			fields:Map<String, IrObjectField> = [];
@@ -529,7 +551,7 @@ class IrScalarReplacement {
 		// Rename along the dominator tree from the allocation's block.
 		var work:Array<{blockId:Int, incoming:Map<String, IrValue>}> = [{blockId: home.id, incoming: []}];
 		while (work.length > 0) {
-			var pending:{blockId:Int, incoming:Map<String, IrValue>} = cast work.pop(),
+			var pending: {blockId: Int, incoming: Map<String, IrValue>} = cast work.pop(),
 				blockId = pending.blockId,
 				incoming = pending.incoming;
 			var block = graph.blocks.get(blockId);
@@ -574,7 +596,10 @@ class IrScalarReplacement {
 				if (phis.exists(successor))
 					for (name => output in phis.get(successor)) {
 						var known = current.get(name);
-						phiInputs.get(successor).get(name).push({block: blockId, value: known == null ? zeroFor(name) : known});
+						phiInputs.get(successor).get(name).push({
+							block: blockId,
+							value: known == null ? zeroFor(name) : known
+						});
 					}
 			var descendants:Array<Int> = cast children.get(blockId);
 			var index = descendants.length;
@@ -614,7 +639,11 @@ class IrScalarReplacement {
 	}
 
 	/** A scalar replacement must preserve the narrowing of a stored native-width field. */
-	static function normalizeStore(block:IrBlock, value:IrValue, field:IrObjectField, origin:Located<IrInstruction>, next:Int):{value:IrValue, next:Int} {
+	static function normalizeStore(block:IrBlock, value:IrValue, field:IrObjectField, origin:Located<IrInstruction>,
+			next:Int): {
+				value: IrValue,
+				next: Int
+			} {
 		var native = IrFieldStorage.scalar(field),
 			width = native == null ? 0 : native.size,
 			bits = switch value.type {
@@ -628,7 +657,8 @@ class IrScalarReplacement {
 				result = new IrValue(next++, "$scalar-extend", value.type);
 			block.instructions.push(new Located(ConstInt(shift, bits - width * 8), origin.provenance));
 			block.instructions.push(new Located(ShiftLeft(shifted, value, shift), origin.provenance));
-			block.instructions.push(new Located(native.signed ? ShiftRight(result, shifted, shift) : UnsignedShiftRight(result, shifted, shift),
+			block.instructions.push(new Located(native.signed ? ShiftRight(result, shifted,
+				shift) : UnsignedShiftRight(result, shifted, shift),
 				origin.provenance));
 			return {value: result, next: next};
 		}

@@ -50,7 +50,8 @@ class MessagePackSchema {
 			var artifact:Dynamic = haxe.Json.parse(json),
 				formatVersion:Dynamic = Reflect.field(artifact, "formatVersion"),
 				descriptorsValue:Dynamic = Reflect.field(artifact, "descriptors");
-			if ((formatVersion != FORMAT_VERSION && formatVersion != LEGACY_FORMAT_VERSION) || !Std.isOfType(descriptorsValue, Array))
+			if ((formatVersion != FORMAT_VERSION && formatVersion != LEGACY_FORMAT_VERSION)
+				|| !Std.isOfType(descriptorsValue, Array))
 				throw new MessagePackError("Unsupported writer descriptor artifact format or missing descriptors");
 			var descriptors:Array<Dynamic> = cast descriptorsValue;
 			if (descriptors.length > MAX_ITEMS)
@@ -107,7 +108,8 @@ class MessagePackSchema {
 		Null means the field has no source initializer; an explicit nullable null
 		is `{type: "Null", value: null}`.
 	 */
-	public function fieldDefaultValue(hash:String, type:String, fieldPath:Array<String>):Null<MessagePackSchemaDefaultValue> {
+	public function fieldDefaultValue(hash:String, type:String,
+			fieldPath:Array<String>):Null<MessagePackSchemaDefaultValue> {
 		var descriptor = descriptors.get(descriptorKey(hash, type));
 		if (descriptor == null)
 			throw new MessagePackError('Writer descriptor "$type" with hash "$hash" is unavailable');
@@ -197,7 +199,8 @@ class MessagePackSchema {
 		if (open <= prefixLength || length <= open + 1 || !StringTools.endsWith(value, ">"))
 			return false;
 		var name = value.substring(prefixLength, open);
-		if (name.length == 0 || StringTools.startsWith(name, ".") || StringTools.endsWith(name, ".") || name.indexOf("..") >= 0)
+		if (name.length == 0 || StringTools.startsWith(name, ".") || StringTools.endsWith(name, ".")
+			|| name.indexOf("..") >= 0)
 			return false;
 		var depth = 0;
 		for (index in open...length) {
@@ -231,7 +234,8 @@ class MessagePackSchema {
 			names.set(name, true);
 			var flat = fieldBool(node, "flat");
 			fieldBool(node, "portable");
-			validateLayout(flat, fieldNullableInt(node, "size"), fieldNullableInt(node, "alignment"), fieldNullableInt(node, "offset"));
+			validateLayout(flat, fieldNullableInt(node, "size"), fieldNullableInt(node, "alignment"),
+				fieldNullableInt(node, "offset"));
 			var annotations = fieldArray(node, "annotations");
 			checkItems(annotations.length);
 			for (annotation in annotations)
@@ -264,7 +268,8 @@ class MessagePackSchema {
 			throw new MessagePackError('Writer descriptor Float32 default is not finite at "${fieldString(node, "name")}"');
 		var valid = switch type {
 			case "Int": Std.isOfType(constant, Int) && integerDefaultTypeAccepted(node, cast constant);
-			case "Float": (Std.isOfType(constant, Int) || Std.isOfType(constant, Float)) && Math.isFinite(cast constant) && defaultTypeAccepted(node, "Float");
+			case "Float": (Std.isOfType(constant, Int) || Std.isOfType(constant, Float)) && Math.isFinite(cast constant)
+				&& defaultTypeAccepted(node, "Float");
 			case "String": Std.isOfType(constant, String) && defaultTypeAccepted(node, "String");
 			case "Bool": Std.isOfType(constant, Bool) && defaultTypeAccepted(node, "Bool");
 			case "Null": constant == null && nullableDefaultType(node);
@@ -425,7 +430,8 @@ class MessagePackSchema {
 				if (name.length == 0 || type.length == 0 || names.exists(name))
 					throw new MessagePackError("Writer annotation argument is incomplete or duplicated");
 				names.set(name, true);
-				if (value != null && !Std.isOfType(value, String) && !Std.isOfType(value, Bool) && !Std.isOfType(value, Int) && !Std.isOfType(value, Float))
+				if (value != null && !Std.isOfType(value, String) && !Std.isOfType(value, Bool)
+					&& !Std.isOfType(value, Int) && !Std.isOfType(value, Float))
 					throw new MessagePackError("Writer annotation value is not a supported scalar constant");
 				if (Std.isOfType(value, Float) && !Math.isFinite(cast value))
 					throw new MessagePackError("Writer annotation value is non-finite");

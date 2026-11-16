@@ -23,7 +23,8 @@ class UtestUpstreamProbeMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		compiler.configure("utest-upstream-probe", "utest-upstream-probe", ["haxe=4.3.7", "haxe_ver=4.3.7", "hl", "sys"]);
+		compiler.configure("utest-upstream-probe", "utest-upstream-probe",
+			["haxe=4.3.7", "haxe_ver=4.3.7", "hl", "sys"]);
 		compiler.update("haxe/PosInfos.hx", File.getContent("stdlib/haxe/PosInfos.hx"));
 		for (path in paths) {
 			var relative = path.substring(upstreamRoot.length + 1, path.length);
@@ -38,7 +39,8 @@ class UtestUpstreamProbeMain {
 		} catch (error:CompileError) {
 			var message = error.diagnostic.message;
 			if (Sys.args().indexOf("--locations") >= 0)
-				message = error.diagnostic.span.file.path + ":" + error.diagnostic.span.file.lineAt(error.diagnostic.span.start) + ": " + message;
+				message = error.diagnostic.span.file.path + ":"
+					+ error.diagnostic.span.file.lineAt(error.diagnostic.span.start) + ": " + message;
 			row(module, "blocked", error.diagnostic.code, message);
 		} catch (error:Dynamic) {
 			row(module, "blocked", "internal", Std.string(error));

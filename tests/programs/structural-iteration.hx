@@ -132,7 +132,10 @@ function rebind<T>(values:Iterable<T>, replacement:Iterable<T>):Int {
 	return Lambda.count(values);
 }
 
-typedef ReadonlyIterator = {final hasNext:() -> Bool; final next:() -> Int;};
+typedef ReadonlyIterator = {
+	final hasNext:() -> Bool;
+	final next:() -> Int;
+};
 
 function acceptReadonly(it:ReadonlyIterator):Int
 	return it.next();
@@ -179,11 +182,10 @@ function main():Int {
 		return 9;
 	var factoryCalls = 0;
 	var iteratorCalls = 0;
-	var collection = {
-		iterator: function() {
-			iteratorCalls++;
-			return new Counter();
-		}
+	var collection = {iterator: function() {
+		iteratorCalls++;
+		return new Counter();
+	}
 	};
 	var factory = function() {
 		factoryCalls++;
@@ -213,8 +215,8 @@ function main():Int {
 	var nested = [
 		for (x in new Collection())
 			for (y in new Collection())
-				if (x == y)
-					x + y
+			if (x == y)
+			x + y
 	];
 	if (nested.length != 4 || nested[3] != 8)
 		return 13;
@@ -231,7 +233,8 @@ function main():Int {
 		return 16;
 	if (!Lambda.has(["one", "two"], "two") || Lambda.find(["one", "two"], x -> x.length == 3) != "one")
 		return 17;
-	if (reassign([1], new Collection()) != 4 || rebind([1], new Collection()) != 4 || storedAlias([1], new Collection()) != 4)
+	if (reassign([1], new Collection()) != 4 || rebind([1], new Collection()) != 4
+		|| storedAlias([1], new Collection()) != 4)
 		return 18;
 	var fieldValues = [for (x in new GenericFields<String>(["a", "bb"])) x.length];
 	if (fieldValues[1] != 2 || interfaceLoop(new NamedCounter()) != 10)

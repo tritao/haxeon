@@ -9,9 +9,8 @@ class LinearGradientPaint extends Paint {
 		super(value);
 
 	public static function create(startX:Float, startY:Float, endX:Float, endY:Float,
-		stops:Array<GradientStop>):LinearGradientPaint {
-		if (stops == null || stops.length < 2 ||
-			stops.length > NativeKitUIConstants.NKUI_GRADIENT_MAX_STOPS)
+			stops:Array<GradientStop>):LinearGradientPaint {
+		if (stops == null || stops.length < 2 || stops.length > NativeKitUIConstants.NKUI_GRADIENT_MAX_STOPS)
 			throw "Linear gradients require between two and eight stops";
 		var nativeStops:Array<nkui_gradient_stop> = [];
 		for (stop in stops) {

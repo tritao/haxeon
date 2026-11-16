@@ -59,4 +59,9 @@ enum CompilerType {
 }
 
 /** Resolved field contract used to compare structural anonymous types. */
-typedef AnonymousField = {final name:String; final type:CompilerType; final optional:Bool; final isFinal:Bool;}
+typedef AnonymousField = {
+	final name:String;
+	final type:CompilerType;
+	final optional:Bool;
+	final isFinal:Bool;
+}

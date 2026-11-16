@@ -12,7 +12,8 @@ function main():Int {
 		return 3;
 	if (Sha256.encode("é") != "4a99557e4033c3539de2eb65472017cad5f9557f7a0625a09f1c3f6e2ba69c4c")
 		return 4;
-	if (Sha256.encode("The quick brown fox jumps over the lazy dog") != "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592")
+	if (Sha256.encode("The quick brown fox jumps over the lazy dog")
+		!= "d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592")
 		return 5;
 	{
 		var input = Bytes.alloc(0);
@@ -182,7 +183,8 @@ function main():Int {
 	var backing = Bytes.alloc(200);
 	for (i in 0...backing.length)
 		backing.set(i, (i * 37 + 11) & 255);
-	if (hex(Sha256.make(Bytes.view(backing, 3, 129))) != "c3d99f5d1568687700c609edc2f4aba431b0fcb4eda97737964714890e167fe2")
+	if (hex(Sha256.make(Bytes.view(backing, 3, 129)))
+		!= "c3d99f5d1568687700c609edc2f4aba431b0fcb4eda97737964714890e167fe2")
 		return 12;
 	return 42;
 }

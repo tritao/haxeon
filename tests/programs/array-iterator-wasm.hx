@@ -22,7 +22,8 @@ function main():Int {
 		return 0;
 
 	var booleans = [false, true], booleanIterator = booleans.iterator();
-	if (!booleanIterator.hasNext() || booleanIterator.next() || booleanIterator.next() != true || booleanIterator.hasNext())
+	if (!booleanIterator.hasNext() || booleanIterator.next() || booleanIterator.next() != true
+		|| booleanIterator.hasNext())
 		return 0;
 
 	var fractions = [0.5, 1.5], fractionIterator = fractions.iterator();

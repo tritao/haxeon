@@ -29,9 +29,8 @@ class Readback {
 
 	/** Starts a tightly packed readback of an image rectangle. */
 	public static function begin(image:Image, x:Int, y:Int, width:Int, height:Int,
-		mipLevel:Int = 0, layer:Int = 0):Readback {
-		if (image == null || width <= 0 || height <= 0 || x < 0 || y < 0 ||
-			mipLevel < 0 || layer < 0)
+			mipLevel:Int = 0, layer:Int = 0):Readback {
+		if (image == null || width <= 0 || height <= 0 || x < 0 || y < 0 || mipLevel < 0 || layer < 0)
 			throw BindingError.invalidArgument("Readback.begin", "GPU readback region is invalid");
 		var renderer = image.rendererOwner();
 		renderer.ensureResourceOperation();

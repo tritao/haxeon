@@ -61,7 +61,10 @@ class IrTypeTools {
 	 * another kind, so that a value typed as `Null<Int>` really is an Int box (or null).
 	 */
 	public static function compatible(expected:IrType, actual:IrType):Bool
-		return IrTypeIdentity.same(expected, actual) || ((switch (expected) { case Dyn: true; default: false; }) && nullableElement(actual) != null);
+		return IrTypeIdentity.same(expected, actual) || ((switch (expected) {
+			case Dyn: true;
+			default: false;
+		}) && nullableElement(actual) != null);
 
 	static function changed(original:IrType, replacement:IrType, element:IrType):IrType
 		return IrTypeIdentity.same(erase(element), element) ? original : replacement;

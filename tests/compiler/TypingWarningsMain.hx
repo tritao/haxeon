@@ -21,7 +21,8 @@ class TypingWarningsMain {
 			throw 'W1001 should offer to write the default out, got ${fix == null ? "no fix" : fix.edits[0].replacement}';
 
 		// Another function's body changes; the warned one is reused, not typed again, and keeps its warning.
-		compiler.update("Main.hx", source("var m = [\"a\" => 40]; return m.get(\"a\") + other();", "function other():Int { return 2; }"));
+		compiler.update("Main.hx",
+			source("var m = [\"a\" => 40]; return m.get(\"a\") + other();", "function other():Int { return 2; }"));
 		var reuse = compiler.compile("Main");
 		if (reuse.retyped.indexOf("main") >= 0)
 			throw 'main was typed again, so this does not test reuse: ${reuse.retyped}';
@@ -38,13 +39,14 @@ class TypingWarningsMain {
 		// Explicit checks and joins that keep the null do not warn.
 		compiler.update("Main.hx",
 			source("var xs = [1]; var top = xs.pop(); if (top == null) return 0; var kept = true ? xs.pop() : 5; return top + other() + (kept == null ? 0 : 1);",
-				quiet));
+			quiet));
 		warnings = compile(compiler);
 		if (warnings.length != 0)
 			throw 'checked values warned: ${describe(warnings)}';
 
 		// A warned function that is deleted takes its warning with it.
-		compiler.update("Main.hx", "function helper():Int { var m = [\"a\" => 1]; return m.get(\"a\"); } function main():Int return helper();");
+		compiler.update("Main.hx",
+			"function helper():Int { var m = [\"a\" => 1]; return m.get(\"a\"); } function main():Int return helper();");
 		if (compile(compiler).length != 1)
 			throw "the helper's warning was not reported";
 		compiler.update("Main.hx", "function main():Int return 42;");

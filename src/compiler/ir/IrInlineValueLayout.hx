@@ -36,7 +36,8 @@ class IrInlineValueLayout {
 		return result;
 	}
 
-	function append(type:IrType, path:Array<String>, visiting:Array<String>, nativeLayout:Null<IrObjectFieldNativeLayout>, scalarStorage:Null<IrScalarStorage>,
+	function append(type:IrType, path:Array<String>, visiting:Array<String>,
+			nativeLayout:Null<IrObjectFieldNativeLayout>, scalarStorage:Null<IrScalarStorage>,
 			nullableScalarStorage:Null<IrScalarStorage>,
 			result:Array<IrInlineValueSlot>):Void {
 		switch type {
@@ -50,10 +51,17 @@ class IrInlineValueLayout {
 				if (object == null)
 					throw 'Missing value object "$name"';
 				for (field in object.fields)
-					append(field.type, path.concat([field.name]), next, field.nativeLayout, IrFieldStorage.scalar(field), field.nullableScalarStorage, result);
+					append(field.type, path.concat([field.name]), next, field.nativeLayout,
+						IrFieldStorage.scalar(field), field.nullableScalarStorage, result);
 			default:
-				result.push({path: path.copy(), type: type, isPresence: false, nativeLayout: nativeLayout, scalarStorage: scalarStorage,
-					nullableScalarStorage: nullableScalarStorage});
+				result.push({
+					path: path.copy(),
+					type: type,
+					isPresence: false,
+					nativeLayout: nativeLayout,
+					scalarStorage: scalarStorage,
+					nullableScalarStorage: nullableScalarStorage
+				});
 		}
 	}
 

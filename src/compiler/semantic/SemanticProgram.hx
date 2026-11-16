@@ -38,7 +38,7 @@ class SemanticProgram {
 
 	/** Build a semantic snapshot only through the requested declaration stage. */
 	public static function analyzeThrough(program:AstProgram, through:DeclarationStage):SemanticProgram {
-		if ((through : Int) > (SignatureTyped : Int))
+		if ((through:Int) > (SignatureTyped:Int))
 			throw "Semantic analysis cannot type bodies or finalize without Typer";
 		var started = Sys.time() * 1000.0;
 		var inferred = SignatureInference.inferProgram(program);
@@ -47,13 +47,13 @@ class SemanticProgram {
 			lifecycle = new DeclarationLifecycle(declarations),
 			shapesAt = declaredAt,
 			signaturesAt = declaredAt;
-		if ((through : Int) >= (ShapeConnected : Int)) {
+		if ((through:Int) >= (ShapeConnected:Int)) {
 			declarations.connectShapes();
 			lifecycle.advanceAll(ShapeConnected);
 			shapesAt = Sys.time() * 1000.0;
 			signaturesAt = shapesAt;
 		}
-		if ((through : Int) >= (SignatureTyped : Int)) {
+		if ((through:Int) >= (SignatureTyped:Int)) {
 			declarations.validateProgramSignatures(inferred);
 			lifecycle.advanceAll(SignatureTyped);
 			signaturesAt = Sys.time() * 1000.0;
@@ -145,34 +145,33 @@ class SemanticProgram {
 				if (selected.exists(name))
 					nextSignatures.set(name, withOwnerTypeParameters(method, decl.typeParameters));
 			}
-		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations, new DeclarationLifecycle(declarations, SignatureTyped), {
-			declarationMs: 0.0,
-			shapeConnectionMs: 0.0,
-			signatureTypingMs: 0.0
-		});
+		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations,
+			new DeclarationLifecycle(declarations, SignatureTyped), {
+				declarationMs: 0.0,
+				shapeConnectionMs: 0.0,
+				signatureTypingMs: 0.0
+			});
 	}
 
 	static function withInitializers(fields:Array<compiler.syntax.Ast.AstField>,
 			current:Array<compiler.syntax.Ast.AstField>):Array<compiler.syntax.Ast.AstField> {
 		var currentByName = [for (field in current) field.name => field];
-		return [
-			for (field in fields) {
-				var replacement = currentByName.get(field.name);
-				replacement == null ? field : {
-					name: field.name,
-					isPublic: field.isPublic,
-					metadata: replacement.metadata,
-					type: field.type,
-					initializer: replacement.initializer,
-					readAccess: field.readAccess,
-					writeAccess: field.writeAccess,
-					isStatic: field.isStatic,
-					isInline: field.isInline,
-					isFinal: field.isFinal,
-					span: replacement.span
-				};
-			}
-		];
+		return [for (field in fields) {
+			var replacement = currentByName.get(field.name);
+			replacement == null ? field : {
+				name: field.name,
+				isPublic: field.isPublic,
+				metadata: replacement.metadata,
+				type: field.type,
+				initializer: replacement.initializer,
+				readAccess: field.readAccess,
+				writeAccess: field.writeAccess,
+				isStatic: field.isStatic,
+				isInline: field.isInline,
+				isFinal: field.isFinal,
+				span: replacement.span
+			};
+		}];
 	}
 
 	static function copyWithMethods<T>(declaration:T, methods:Array<AstFunction>):T {
@@ -184,19 +183,17 @@ class SemanticProgram {
 	static function withBody(signature:AstFunction, body:AstFunction):AstFunction {
 		// Preserve validated declaration attributes (notably inline) when only source syntax changes.
 		var result:Dynamic = Reflect.copy(signature);
-		Reflect.setField(result, "arguments", [
-			for (index in 0...signature.arguments.length) {
-				var argument = signature.arguments[index],
-					current = body.arguments[index];
-				{
-					name: argument.name,
-					type: argument.type,
-					optional: argument.optional,
-					defaultValue: current.defaultValue,
-					span: current.span
-				};
-			}
-		]);
+		Reflect.setField(result, "arguments", [for (index in 0...signature.arguments.length) {
+			var argument = signature.arguments[index],
+				current = body.arguments[index];
+			{
+				name:argument.name,
+					type:argument.type,
+					optional:argument.optional,
+					defaultValue:current.defaultValue,
+					span:current.span
+			};
+		}]);
 		Reflect.setField(result, "metadata", body.metadata);
 		Reflect.setField(result, "span", body.span);
 		Reflect.setField(result, "statements", body.statements);
@@ -204,13 +201,17 @@ class SemanticProgram {
 	}
 
 	function new(program:AstProgram, declarations:DeclarationIndex, ?preparedSignatures:Map<String, AstFunction>,
-			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations, ?preparedLifecycle:DeclarationLifecycle,
+			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations,
+			?preparedLifecycle:DeclarationLifecycle,
 			?preparedLifecycleMetrics:SemanticLifecycleMetrics) {
 		this.program = program;
 		this.declarations = declarations;
 		relations = preparedRelations == null ? new TypeRelations(declarations) : preparedRelations;
-		lifecycle = preparedLifecycle == null ? new DeclarationLifecycle(declarations, SignatureTyped) : preparedLifecycle;
-		lifecycleMetrics = preparedLifecycleMetrics == null ? {declarationMs: 0.0, shapeConnectionMs: 0.0, signatureTypingMs: 0.0} : preparedLifecycleMetrics;
+		lifecycle = preparedLifecycle == null ? new DeclarationLifecycle(declarations,
+			SignatureTyped) : preparedLifecycle;
+		lifecycleMetrics = preparedLifecycleMetrics == null ? {
+			declarationMs:0.0, shapeConnectionMs:0.0, signatureTypingMs:0.0
+		} : preparedLifecycleMetrics;
 		if (preparedSignatures != null && preparedMethodInfo != null) {
 			signatures = preparedSignatures;
 			methodInfo = preparedMethodInfo;
@@ -218,7 +219,8 @@ class SemanticProgram {
 		}
 		signatures = [];
 		methodInfo = [];
-		fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures, methodInfo);
+		fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures,
+			methodInfo);
 	}
 
 	/**
@@ -232,7 +234,8 @@ class SemanticProgram {
 		return signatures;
 	}
 
-	public static function fillSignatures(interfaces:Array<AstInterface>, classes:Array<AstClass>, abstracts:Array<AstAbstract>, functions:Array<AstFunction>,
+	public static function fillSignatures(interfaces:Array<AstInterface>, classes:Array<AstClass>,
+			abstracts:Array<AstAbstract>, functions:Array<AstFunction>,
 			signatures:Map<String, AstFunction>, methodInfo:Null<Map<String, SemanticMethodInfo>>):Void {
 		for (decl in interfaces)
 			for (method in decl.methods) {
@@ -246,7 +249,11 @@ class SemanticProgram {
 				var name = decl.name + "." + method.name;
 				signatures.set(name, method);
 				if (methodInfo != null)
-					methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
+					methodInfo.set(name, {
+						owner: decl.name,
+						isStatic: method.isStatic,
+						isConstructor: method.name == "new"
+					});
 			}
 		for (decl in abstracts)
 			for (method in decl.methods) {
@@ -254,7 +261,11 @@ class SemanticProgram {
 					signature = withOwnerTypeParameters(method, decl.typeParameters);
 				signatures.set(name, signature);
 				if (methodInfo != null)
-					methodInfo.set(name, {owner: decl.name, isStatic: method.isStatic, isConstructor: method.name == "new"});
+					methodInfo.set(name, {
+						owner: decl.name,
+						isStatic: method.isStatic,
+						isConstructor: method.name == "new"
+					});
 			}
 		for (fn in functions)
 			signatures.set(fn.name, fn);

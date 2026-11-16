@@ -22,7 +22,8 @@ class LiveLoweringReuseMain {
 		File.saveContent(lib, "class Lib { public static function twice(value:Int):Int { return value * 2; } }");
 		File.saveContent(edited, "class Edited { public static function value():Int { return Lib.twice(3); } }");
 		File.saveContent(other, "class Other { public static function value():Int { return Lib.twice(5); } }");
-		File.saveContent(main, "class Main { public static function main():Int { return Edited.value() + Other.value(); } }");
+		File.saveContent(main,
+			"class Main { public static function main():Int { return Edited.value() + Other.value(); } }");
 		var args = [
 			"--target=hl",
 			"--entry=Main",
@@ -33,13 +34,15 @@ class LiveLoweringReuseMain {
 			lib,
 			edited,
 			other
-		], session = new CompilerSession();
+		],
+			session = new CompilerSession();
 		function compile()
 			return CompilerDriver.compile(CompilerArguments.parse(args), _ -> {}, session);
 		var initial = compile();
 		File.saveContent(edited, "class Edited { public static function value():Int { return Lib.twice(4); } }");
 		var changed = compile();
-		expect(functionByName(initial, "Edited.value") != functionByName(changed, "Edited.value"), "the edited function must be lowered again");
+		expect(functionByName(initial, "Edited.value") != functionByName(changed, "Edited.value"),
+			"the edited function must be lowered again");
 		expect(functionByName(initial, "Other.value") == functionByName(changed, "Other.value"),
 			"a function in an untouched file must keep its lowering, even if it inlined the same code as the edited function");
 		for (path in FileSystem.readDirectory(root))

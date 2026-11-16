@@ -1,4 +1,6 @@
-enum EscapeValue implements Equatable { Item(value:Int); }
+enum EscapeValue implements Equatable {
+	Item(value:Int);
+}
 
 class EnumEscapeCensus {
 	static var values:Array<EscapeValue>;

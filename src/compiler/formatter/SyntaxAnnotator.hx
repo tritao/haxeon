@@ -69,8 +69,8 @@ class SyntaxAnnotator {
 		var typeArgumentOpens:Map<Int, Bool> = [],
 			typeArgumentCloses:Map<Int, Bool> = [],
 			declarationCommas:Map<Int, Bool> = [],
-			// Type argument lists open around the current token: their commas separate types, never declarations.
-			typeArgumentDepth = 0;
+		// Type argument lists open around the current token: their commas separate types, never declarations.
+		typeArgumentDepth = 0;
 
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]))
@@ -245,7 +245,8 @@ class SyntaxAnnotator {
 						return true;
 				default:
 					// A comment between the fields of a typedef body can only be kept by laying the fields out one per line.
-					if (inTypedef && depth == 1 && (token.kind.match(FormatTokenKind.DocComment) || token.kind.match(FormatTokenKind.LineComment)))
+					if (inTypedef && depth == 1 && (token.kind.match(FormatTokenKind.DocComment)
+						|| token.kind.match(FormatTokenKind.LineComment)))
 						return true;
 			}
 		}

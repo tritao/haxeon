@@ -51,20 +51,24 @@ class LiveRestartMain {
 		var restarted = new CompilerSession();
 		// A live run warms its new worker with the unchanged program; that must not make the running app reload.
 		var warmup = build(restarted, 1);
-		expect(warmup.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
+		expect(warmup.moduleIdentity == first.moduleIdentity,
+			"a restarted session must keep the published module's identity");
 		expect(warmup.requiresReload == false && (warmup.revision == first.revision || warmup.patchAvailable == true),
 			"warming a restarted session must not force a reload");
 		var edit = build(restarted, 2);
-		expect(edit.moduleIdentity == first.moduleIdentity, "a restarted session must keep the published module's identity");
+		expect(edit.moduleIdentity == first.moduleIdentity,
+			"a restarted session must keep the published module's identity");
 		expect(edit.revision == warmup.revision + 1, "a restarted session must continue the published revisions");
-		expect(edit.patchAvailable == true && edit.requiresReload == false, "the first edit after a restart must patch, not reload");
+		expect(edit.patchAvailable == true && edit.requiresReload == false,
+			"the first edit after a restart must patch, not reload");
 		expect(Std.string(edit.changedFunctions) == Std.string(warm.changedFunctions),
 			"the first edit after a restart must patch what a warm session patches: "
 			+ Std.string(edit.changedFunctions)
 			+ " against "
 			+ Std.string(warm.changedFunctions));
 		var next = build(restarted, 3);
-		expect(next.moduleIdentity == first.moduleIdentity && next.patchAvailable == true && next.requiresReload == false,
+		expect(next.moduleIdentity == first.moduleIdentity && next.patchAvailable == true
+			&& next.requiresReload == false,
 			"edits after the first must keep patching");
 		expect(restarted.recordLiveState(), "the resumed session must record its own publications");
 		// History a resumed session recorded (its constant pools included) resumes again.

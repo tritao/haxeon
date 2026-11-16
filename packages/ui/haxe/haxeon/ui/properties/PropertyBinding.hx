@@ -52,12 +52,19 @@ class PropertyBinding {
 				var commit:PropertyCommitter = descriptor.commit;
 				result = commit(context, value, coalesceKey);
 			}
-			catch (error:Dynamic) { result = Rejected(Std.string(error)); }
+				catch (error:Dynamic) {
+				result = Rejected(Std.string(error));
+			}
 			if (result == null) result = Rejected("Property committer returned no result");
-			switch result { case Pending(null): result = Rejected("Property committer returned no completion"); default: }
+			switch result {
+				case Pending(null): result = Rejected("Property committer returned no completion");
+				default:
+			}
 			report(value, result);
 			switch result {
-				case Pending(edit): edit.onComplete(done -> { report(value, done); });
+				case Pending(edit): edit.onComplete(done -> {
+						report(value, done);
+					});
 				default:
 			}
 			return result;
@@ -67,7 +74,8 @@ class PropertyBinding {
 			try {
 				descriptor.write(context, value);
 			} catch (error:Dynamic) {
-				return report(value, PropertyEditResult.Rejected(error == null ? "Property edit failed" : Std.string(error)));
+				return report(value,
+					PropertyEditResult.Rejected(error == null ? "Property edit failed" : Std.string(error)));
 			}
 			return report(value, PropertyEditResult.Applied);
 		}
@@ -88,7 +96,8 @@ class PropertyBinding {
 		try {
 			context.document.apply(operation, key);
 		} catch (error:Dynamic) {
-			return report(value, PropertyEditResult.Rejected(error == null ? "Property edit failed" : Std.string(error)));
+			return report(value,
+				PropertyEditResult.Rejected(error == null ? "Property edit failed" : Std.string(error)));
 		}
 		return report(value, PropertyEditResult.Applied);
 	}
@@ -96,8 +105,8 @@ class PropertyBinding {
 	function report(value:PropertyValue, result:PropertyEditResult):PropertyEditResult {
 		var observer = context.onPropertyEdit;
 		if (observer != null)
-			observer({id:descriptor.id, label:descriptor.label,
-				value:Std.string(value), result:Std.string(result)});
+			observer({id: descriptor.id, label: descriptor.label,
+				value: Std.string(value), result: Std.string(result)});
 		return result;
 	}
 }

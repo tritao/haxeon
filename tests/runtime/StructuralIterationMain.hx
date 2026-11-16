@@ -35,9 +35,11 @@ class StructuralIterationMain {
 							}
 				}
 			if (checked < 2)
-				throw "Allocation regression checks did not inspect both concrete loops: " + [for (fn in result.ir.functions) fn.name].join(", ");
+				throw "Allocation regression checks did not inspect both concrete loops: "
+					+ [for (fn in result.ir.functions) fn.name].join(", ");
 			for (target in [Wasm32, WasmGc]) {
-				File.saveBytes(SuiteOutput.path('structural-iteration-$target-' + (incremental ? "incremental" : "clean") + ".wasm"),
+				File.saveBytes(SuiteOutput.path('structural-iteration-$target-'
+					+ (incremental ? "incremental" : "clean") + ".wasm"),
 					new WasmBackend().compile(result.ir, {
 						target: target,
 						debugNames: true
@@ -63,7 +65,8 @@ class StructuralIterationMain {
 			try
 				invalidCompiler.compile("Main")
 			catch (error:compiler.Diagnostic.CompileError) {
-				if (error.diagnostic.code != "E1014" && error.diagnostic.code != "E1009" && error.diagnostic.code != "E1002")
+				if (error.diagnostic.code != "E1014" && error.diagnostic.code != "E1009"
+					&& error.diagnostic.code != "E1002")
 					throw error;
 				rejected = true;
 			}

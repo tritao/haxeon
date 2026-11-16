@@ -35,6 +35,8 @@ function main():Int {
 	} catch (error:Dynamic) {
 		boundsCaught = true;
 	}
-	return bytes.length == 6 && bytes.get(2) == 7 && bytes.get(3) == 42 && copy.get(0) == 9 && copy.compare(expected) == 0
-		&& word.getInt32(0) == -2147483647 && text.toString() == "ok" && text.getString(1, 1) == "k" && comparison < 0 && boundsCaught ? 42 : 0;
+	return bytes.length == 6 && bytes.get(2) == 7 && bytes.get(3) == 42 && copy.get(0) == 9
+		&& copy.compare(expected) == 0
+		&& word.getInt32(0) == -2147483647 && text.toString() == "ok" && text.getString(1, 1) == "k" && comparison < 0
+		&& boundsCaught ? 42 : 0;
 }

@@ -16,21 +16,33 @@ class FfiImportMain {
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--manifest="))
 				manifestPath = arg.substring(arg.indexOf("=") + 1);
-		var manifest:Null<ResolvedFfiImport> = manifestPath == null ? null : FfiImportManifest.resolve(manifestPath, Path.directory(manifestPath)),
-			config = manifest == null ? null : manifest.config, target = config == null
-				|| config.target == null ? "" : config.target, output = "",
-			language = config == null ? "c" : config.language, profile = config == null ? "default" : config.profile,
-			standard = config == null ? "c11" : config.standard, clang = config == null ? "clang" : config.clang,
-			compileCommands:Null<String> = manifest == null ? null : manifest.compileCommands, library:Null<String> = config == null ? null : config.library,
+		var manifest:Null<ResolvedFfiImport> = manifestPath == null ? null : FfiImportManifest.resolve(manifestPath,
+			Path.directory(manifestPath)),
+			config = manifest == null ? null : manifest.config,
+			target = config == null
+				|| config.target == null ? "" : config.target,
+			output = "",
+			language = config == null ? "c" : config.language,
+			profile = config == null ? "default" : config.profile,
+			standard = config == null ? "c11" : config.standard,
+			clang = config == null ? "clang" : config.clang,
+			compileCommands:Null<String> = manifest == null ? null : manifest.compileCommands,
+			library:Null<String> = config == null ? null : config.library,
 			interfaceName:Null<String> = config == null ? null : config.interfaceName,
-			includes:Array<String> = manifest == null ? [] : manifest.includes.copy(), defines:Array<String> = config == null ? [] : config.defines.copy(),
+			includes:Array<String> = manifest == null ? [] : manifest.includes.copy(),
+			defines:Array<String> = config == null ? [] : config.defines.copy(),
 			dependencies:Array<String> = config == null ? [] : config.dependencies.copy(),
 			sourceLabel:Null<String> = config == null ? null : config.sourceLabel,
-			excludedHeaders:Array<String> = manifest == null ? [] : manifest.excludedHeaders.copy(), paths:Array<String> = [],
-			cxxSelections:Array<String> = config == null ? [] : config.cxxSelections.copy(), trivialValues = config == null ? false : config.trivialValues,
-			cxxLifetimes = config == null ? false : config.lifetimes, cxxVirtual = config == null ? false : config.virtualDispatch,
-			cxxOwnership:Map<String, String> = config == null ? [] : config.cxxOwnership.copy(), cxxThunksPath:Null<String> = null,
-			haxeOutputDir:Null<String> = null, haxeSourceManifestPath:Null<String> = null;
+			excludedHeaders:Array<String> = manifest == null ? [] : manifest.excludedHeaders.copy(),
+			paths:Array<String> = [],
+			cxxSelections:Array<String> = config == null ? [] : config.cxxSelections.copy(),
+			trivialValues = config == null ? false : config.trivialValues,
+			cxxLifetimes = config == null ? false : config.lifetimes,
+			cxxVirtual = config == null ? false : config.virtualDispatch,
+			cxxOwnership:Map<String, String> = config == null ? [] : config.cxxOwnership.copy(),
+			cxxThunksPath:Null<String> = null,
+			haxeOutputDir:Null<String> = null,
+			haxeSourceManifestPath:Null<String> = null;
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--manifest="))
 				continue;
@@ -121,10 +133,13 @@ class FfiImportMain {
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
 			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
-		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library, interfaceName, dependencies,
-			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual, cxxThunksPath != null,
+		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library,
+			interfaceName, dependencies,
+			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual,
+			cxxThunksPath != null,
 			cxxSelections.length == 0 ? null : cxxSelections, cxxOwnership) : null,
-			model = cxxResult == null ? CHeaderImporter.importHeaderWithOptions(paths[0], target, includes, clang, library, interfaceName, dependencies,
+			model = cxxResult == null ? CHeaderImporter.importHeaderWithOptions(paths[0], target, includes, clang,
+				library, interfaceName, dependencies,
 				excludedHeaders, defines, compileCommands) : cxxResult.hxi,
 			label = sourceLabel == null ? paths[0] : sourceLabel,
 			headerComment = '// Generated by Haxeon from $label for $target. Do not edit.';

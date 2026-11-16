@@ -54,7 +54,7 @@ class AudioCue {
 
 	/** Creates a cue containing one clip. */
 	public static function fromClip(clip:Clip, events:EventPump, ?bus:Bus,
-		?voiceOptions:VoiceOptions, maxVoices:Int = 8):AudioCue {
+			?voiceOptions:VoiceOptions, maxVoices:Int = 8):AudioCue {
 		var options = new AudioCueOptions(voiceOptions);
 		options.maxVoices = maxVoices;
 		return new AudioCue([clip], events, bus, options);
@@ -62,12 +62,12 @@ class AudioCue {
 
 	/** Creates a cue containing one or more clip variants. */
 	public static function fromClips(clips:Array<Clip>, events:EventPump, ?bus:Bus,
-		?options:AudioCueOptions):AudioCue {
+			?options:AudioCueOptions):AudioCue {
 		return new AudioCue(clips, events, bus, options);
 	}
 
 	private function new(clips:Array<Clip>, events:EventPump, bus:Null<Bus>,
-		options:Null<AudioCueOptions>) {
+			options:Null<AudioCueOptions>) {
 		if (clips == null || clips.length == 0)
 			throw BindingError.invalidArgument("AudioCue.new", "Audio cue must contain at least one clip");
 		if (events == null)
@@ -384,29 +384,32 @@ class AudioCue {
 		if (options.voiceOptions == null)
 			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue voice options must not be null");
 		if (options.maxVoices < 0)
-			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue maximum voice count must be non-negative");
+			throw BindingError.invalidArgument("AudioCue.validateOptions",
+				"Audio cue maximum voice count must be non-negative");
 		if (options.priority < 0)
 			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue priority must be non-negative");
-		if (!finite(options.volumeMin) || !finite(options.volumeMax) || options.volumeMin < 0.0 ||
-			options.volumeMax < options.volumeMin)
-			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue volume range must be finite, non-negative, and ordered");
-		if (!finite(options.pitchMin) || !finite(options.pitchMax) || options.pitchMin <= 0.0 ||
-			options.pitchMax < options.pitchMin)
-			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue pitch range must be finite, positive, and ordered");
-		if (options.selection != AudioCueSelection.Random &&
-			options.selection != AudioCueSelection.RoundRobin)
+		if (!finite(options.volumeMin) || !finite(options.volumeMax) || options.volumeMin < 0.0
+			|| options.volumeMax < options.volumeMin)
+			throw BindingError.invalidArgument("AudioCue.validateOptions",
+				"Audio cue volume range must be finite, non-negative, and ordered");
+		if (!finite(options.pitchMin) || !finite(options.pitchMax) || options.pitchMin <= 0.0
+			|| options.pitchMax < options.pitchMin)
+			throw BindingError.invalidArgument("AudioCue.validateOptions",
+				"Audio cue pitch range must be finite, positive, and ordered");
+		if (options.selection != AudioCueSelection.Random && options.selection != AudioCueSelection.RoundRobin)
 			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue selection strategy is invalid");
-		if (options.overflow != AudioCueOverflow.Drop &&
-			options.overflow != AudioCueOverflow.StealOldest)
+		if (options.overflow != AudioCueOverflow.Drop && options.overflow != AudioCueOverflow.StealOldest)
 			throw BindingError.invalidArgument("AudioCue.validateOptions", "Audio cue overflow policy is invalid");
 	}
 
 	function validatePlayback(effectiveVolume:Float, effectivePitch:Float,
-		effectivePriority:Int):Void {
+			effectivePriority:Int):Void {
 		if (!finite(volume) || volume < 0.0 || !finite(effectiveVolume) || effectiveVolume < 0.0)
-			throw BindingError.invalidArgument("AudioCue.validatePlayback", "Audio cue volume must be finite and non-negative");
+			throw BindingError.invalidArgument("AudioCue.validatePlayback",
+				"Audio cue volume must be finite and non-negative");
 		if (!finite(pitch) || pitch <= 0.0 || !finite(effectivePitch) || effectivePitch <= 0.0)
-			throw BindingError.invalidArgument("AudioCue.validatePlayback", "Audio cue pitch must be finite and positive");
+			throw BindingError.invalidArgument("AudioCue.validatePlayback",
+				"Audio cue pitch must be finite and positive");
 		if (effectivePriority < 0)
 			throw BindingError.invalidArgument("AudioCue.validatePlayback", "Audio cue priority must be non-negative");
 	}

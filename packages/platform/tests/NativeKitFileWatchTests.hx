@@ -28,7 +28,8 @@ class NativeKitFileWatchTests {
 
 			File.saveContent(root + "/build/inner/hidden.txt", "hidden");
 			File.saveContent(root + "/a/b/deep.txt", "deep");
-			await(events, () -> changed(received, root + "/a/b/deep.txt"), "a change deep in the tree was not reported");
+			await(events, () -> changed(received, root + "/a/b/deep.txt"),
+				"a change deep in the tree was not reported");
 			// The excluded change was written first, so it would have arrived before the deep one.
 			if (changed(received, root + "/build/inner/hidden.txt"))
 				throw "a change in an excluded subtree was reported";

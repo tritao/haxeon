@@ -6,13 +6,16 @@ import compiler.runtime.CompilerIntrinsics;
 /** A write through one name invalidates refinements of the same field through aliases. */
 class FieldAliasFlowMain {
 	static function main():Void {
-		var compiler = new Compiler(), source = 'class Cell { public var item:Null<Int>; public var keep:Null<Int>; '
-			+ 'public function new() { item=null; keep=9; } } '
-			+ 'function main():Int { var first=new Cell(); var alias=first; first.item=null; first.keep=9; alias.item=41; '
-			+ 'return first.item == null ? 0 : first.item + first.keep; }';
+		var compiler = new Compiler(),
+			source = 'class Cell { public var item:Null<Int>; public var keep:Null<Int>; '
+				+ 'public function new() { item=null; keep=9; } } '
+				+ 'function main():Int { var first=new Cell(); var alias=first; first.item=null; first.keep=9; alias.item=41; '
+				+ 'return first.item == null ? 0 : first.item + first.keep; }';
 		for (expected in [50, 51, 50]) {
-			compiler.update("Main.hx", expected == 51 ? StringTools.replace(source, "alias.item=41", "alias.item=42") : source);
-			var compiled = compiler.compile("Main"), interpreted = new IrInterpreter(compiled.ir).run("main"),
+			compiler.update("Main.hx",
+				expected == 51 ? StringTools.replace(source, "alias.item=41", "alias.item=42") : source);
+			var compiled = compiler.compile("Main"),
+				interpreted = new IrInterpreter(compiled.ir).run("main"),
 				native = GeneratedProgramRunner.exitCode(compiled);
 			if (interpreted != expected || native != expected)
 				throw 'field alias flow expected $expected, interpreter=$interpreted, HashLink=$native';

@@ -8,17 +8,19 @@ import compiler.syntax.Ast.AstStatement;
 
 /** Canonicalizes module-relative syntax into compiler-wide declaration names. */
 class ModuleCanonicalizer {
-	public static function canonicalFunction(fn:AstFunction, module:String, entry:String, moduleLocals:LocalScope, ?explicitName:String,
+	public static function canonicalFunction(fn:AstFunction, module:String, entry:String, moduleLocals:LocalScope,
+			?explicitName:String,
 			?moduleAliases:AliasTable):AstFunction {
 		var locals = moduleLocals, aliases = moduleAliases;
-		var name = explicitName != null ? explicitName : module == entry && fn.name == "main" ? "main" : module + "." + fn.name,
+		var name = explicitName != null ? explicitName : module == entry
+			&& fn.name == "main" ? "main" : module + "." + fn.name,
 			typeParameters = fn.typeParameters,
-			functionAliases = aliases == null || typeParameters == null || typeParameters.length == 0 ? aliases : copyAliases(aliases);
+			functionAliases = aliases == null || typeParameters == null
+				|| typeParameters.length == 0 ? aliases : copyAliases(aliases);
 		if (functionAliases != null && typeParameters != null)
 			for (parameter in typeParameters)
 				functionAliases.set(parameter, parameter);
-		return {
-			name: name,
+		return {name: name,
 			isStatic: fn.isStatic,
 			isPublic: fn.isPublic,
 			isOverride: fn.isOverride,
@@ -26,28 +28,24 @@ class ModuleCanonicalizer {
 			isInline: fn.isInline,
 			metadata: fn.metadata,
 			typeParameters: fn.typeParameters,
-			typeConstraints: fn.typeConstraints == null ? null : [
-				for (constraint in fn.typeConstraints)
-					{
-						parameter: constraint.parameter,
-						type: canonicalType(constraint.type, functionAliases, fn.typeParameters),
-						span: constraint.span
-					}
-			],
-			arguments: [
-				for (argument in fn.arguments)
-					{
-						name: argument.name,
-						type: canonicalType(argument.type, functionAliases, fn.typeParameters),
-						span: argument.span,
-						optional: argument.optional,
-						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, functionAliases)
-					}
-			],
+			typeConstraints: fn.typeConstraints == null ? null : [for (constraint in fn.typeConstraints)
+			{
+				parameter:constraint.parameter,
+					type:canonicalType(constraint.type, functionAliases, fn.typeParameters),
+					span:constraint.span
+			}],
+				arguments: [for (argument in fn.arguments)
+				{
+			name:argument.name,
+				type:canonicalType(argument.type, functionAliases, fn.typeParameters),
+				span:argument.span,
+				optional:argument.optional,
+				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, functionAliases)
+		}],
 			result: canonicalType(fn.result, functionAliases, fn.typeParameters),
 			span: fn.span,
-			statements: canonicalBlock(fn.statements, module, entry, locals, functionAliases, [for (argument in fn.arguments) argument.name])
-		};
+			statements: canonicalBlock(fn.statements, module, entry, locals, functionAliases,
+			[for (argument in fn.arguments) argument.name])};
 	}
 
 	/**
@@ -57,22 +55,25 @@ class ModuleCanonicalizer {
 		any module declaration or import of the same name, so it is left for the
 		typer to resolve by scope.
 	**/
-	public static function canonicalBlock(statements:Array<AstStatement>, module:String, entry:String, locals:LocalScope, ?aliases:AliasTable,
+	public static function canonicalBlock(statements:Array<AstStatement>, module:String, entry:String,
+			locals:LocalScope, ?aliases:AliasTable,
 			?bound:Array<Null<String>>):Array<AstStatement>
 		return canonicalScope(statements, null, module, entry, locals, aliases, bound).statements;
 
 	/** A block and its value expression, which sees the block's locals. */
-	static function canonicalScope(statements:Array<AstStatement>, value:Null<AstExpression>, module:String, entry:String, locals:LocalScope,
-			aliases:Null<AliasTable>, bound:Null<Array<Null<String>>>):{
-		statements:Array<AstStatement>,
-		value:Null<AstExpression>
-	} {
+	static function canonicalScope(statements:Array<AstStatement>, value:Null<AstExpression>, module:String,
+			entry:String, locals:LocalScope,
+			aliases:Null<AliasTable>, bound:Null<Array<Null<String>>>): {
+				statements: Array<AstStatement>,
+				value: Null<AstExpression>
+			} {
 		var scope = bound == null ? locals : bindNames(locals, bound),
 			owned = scope != locals,
 			result:Array<AstStatement> = [];
 		for (statement in statements) {
 			var declared = switch statement {
-				case VarDeclaration(name, _, _, _) | ScopedDeclaration(name, _, _, _) | UninitializedDeclaration(name, _, _): name;
+				case VarDeclaration(name, _, _, _) | ScopedDeclaration(name, _, _, _) | UninitializedDeclaration(name,
+					_, _): name;
 				case _: null;
 			}
 			// A local function sees itself; any other initializer sees what was in scope before it.
@@ -96,7 +97,10 @@ class ModuleCanonicalizer {
 				scope.set(declared, false);
 			}
 		}
-		return {statements: result, value: value == null ? null : canonicalExpression(value, module, entry, scope, aliases)};
+		return {
+			statements: result,
+			value: value == null ? null : canonicalExpression(value, module, entry, scope, aliases)
+		};
 	}
 
 	/** `locals` with `names` bound: each maps to false, neither qualified as a module declaration nor resolved as an import. */
@@ -129,7 +133,8 @@ class ModuleCanonicalizer {
 		return primaryName == declarationName ? moduleName : moduleName + "." + declarationName;
 	}
 
-	public static function addDeclaredTypeAliases(aliases:AliasTable, program:compiler.syntax.Ast.AstProgram, packageName:Null<String>):Void {
+	public static function addDeclaredTypeAliases(aliases:AliasTable, program:compiler.syntax.Ast.AstProgram,
+			packageName:Null<String>):Void {
 		for (alias in program.aliases)
 			aliases.set(alias.name, qualifiedTypeName(packageName, alias.name));
 		for (enumDecl in program.enums)
@@ -144,7 +149,8 @@ class ModuleCanonicalizer {
 			aliases.set(classDecl.name, qualifiedTypeName(packageName, classDecl.name));
 	}
 
-	public static function canonicalAlias(alias:compiler.syntax.Ast.AstTypeAlias, aliases:AliasTable, packageName:Null<String>):compiler.syntax.Ast.AstTypeAlias
+	public static function canonicalAlias(alias:compiler.syntax.Ast.AstTypeAlias, aliases:AliasTable,
+			packageName:Null<String>):compiler.syntax.Ast.AstTypeAlias
 		return {
 			name: qualifiedTypeName(packageName, alias.name),
 			metadata: alias.metadata,
@@ -155,73 +161,68 @@ class ModuleCanonicalizer {
 			span: alias.span
 		};
 
-	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:AliasTable, packageName:Null<String>, module:String,
+	public static function canonicalEnum(enumDecl:compiler.syntax.Ast.AstEnum, aliases:AliasTable,
+			packageName:Null<String>, module:String,
 			entry:String, locals:LocalScope):compiler.syntax.Ast.AstEnum {
 		var enumAliases = aliases.child();
 		for (parameter in enumDecl.typeParameters) enumAliases.set(parameter, parameter);
-		return {
-			name: qualifiedTypeName(packageName, enumDecl.name),
+		return {name: qualifiedTypeName(packageName, enumDecl.name),
 			typeParameters: enumDecl.typeParameters,
 			typeConstraints: canonicalConstraints(enumDecl.typeConstraints, aliases, enumDecl.typeParameters),
-			conformances: enumDecl.conformances == null ? [] : [for (type in enumDecl.conformances) canonicalType(type, aliases, enumDecl.typeParameters)],
-			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module, entry, locals, method.name, enumAliases)],
+			conformances: enumDecl.conformances == null
+			? [] : [for (type in enumDecl.conformances) canonicalType(type, aliases, enumDecl.typeParameters)],
+			methods: enumDecl.methods == null ? [] : [for (method in enumDecl.methods) canonicalFunction(method, module,
+			entry, locals, method.name, enumAliases)],
 			metadata: enumDecl.metadata,
-			cases: [
-				for (caseDecl in enumDecl.cases)
+			cases: [for (caseDecl in enumDecl.cases)
+			{
+				name:caseDecl.name,
+					metadata:caseDecl.metadata,
+					params:[for (param in caseDecl.params)
 					{
-						name: caseDecl.name,
-						metadata: caseDecl.metadata,
-						params: [
-							for (param in caseDecl.params)
-								{
-									name: param.name,
-									type: canonicalType(param.type, aliases, enumDecl.typeParameters),
-									optional: param.optional,
-									span: param.span
-								}
-						],
-						span: caseDecl.span
-					}
-			],
-			span: enumDecl.span
-		};
+						name:param.name,
+							type:canonicalType(param.type, aliases, enumDecl.typeParameters),
+							optional:param.optional,
+							span:param.span
+					}],
+						span:caseDecl.span
+			}],
+				span: enumDecl.span};
 	}
 
-	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:AliasTable, packageName:Null<String>, module:String,
+	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:AliasTable,
+			packageName:Null<String>, module:String,
 			entry:String, locals:LocalScope):compiler.syntax.Ast.AstEnumAbstract
-		return {
-			name: qualifiedTypeName(packageName, decl.name),
+		return {name: qualifiedTypeName(packageName, decl.name),
 			metadata: canonicalMetadata(decl.metadata, module, entry, locals, aliases),
-			conformances: decl.conformances == null ? [] : [for (type in decl.conformances) canonicalType(type, aliases)],
+			conformances: decl.conformances == null
+			? [] : [for (type in decl.conformances) canonicalType(type, aliases)],
 			underlying: canonicalType(decl.underlying, aliases),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],
-			values: [
-				for (value in decl.values)
-					{
-						name: value.name,
-						value: canonicalExpression(value.value, module, entry, locals, aliases),
-						span: value.span
-					}
-			],
-			span: decl.span
-		};
+			values: [for (value in decl.values)
+			{
+				name:value.name,
+					value:canonicalExpression(value.value, module, entry, locals, aliases),
+					span:value.span
+			}],
+				span: decl.span};
 
-	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String, entry:String, locals:LocalScope,
+	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String,
+			entry:String, locals:LocalScope,
 			aliases:AliasTable):Array<compiler.syntax.Ast.AstMetadata>
-		return [
-			for (annotation in metadata)
-				{
-					name: resolveTypeName(annotation.name, aliases),
-					arguments: [
+		return [for (annotation in metadata)
+			{
+				name:resolveTypeName(annotation.name, aliases),
+					arguments:[
 						for (argument in annotation.arguments)
 							canonicalExpression(argument, module, entry, locals, aliases)
 					],
-					span: annotation.span
-				}
-		];
+						span:annotation.span
+			}];
 
-	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable, packageName:Null<String>, module:String, entry:String,
+	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable,
+			packageName:Null<String>, module:String, entry:String,
 			locals:LocalScope):compiler.syntax.Ast.AstAbstract
 		return {
 			name: qualifiedTypeName(packageName, decl.name),
@@ -239,7 +240,8 @@ class ModuleCanonicalizer {
 			span: decl.span
 		};
 
-	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String, entry:String,
+	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String,
+			entry:String,
 			moduleLocals:LocalScope, name:String, moduleAliases:AliasTable):AstFunction {
 		var locals = moduleLocals, aliases = moduleAliases;
 		var parameters = combinedTypeParameters(ownerTypeParameters, method.typeParameters),
@@ -247,8 +249,7 @@ class ModuleCanonicalizer {
 		if (parameters.length > 0)
 			for (parameter in parameters)
 				methodAliases.set(parameter, parameter);
-		return {
-			name: name,
+		return {name: name,
 			isStatic: method.isStatic,
 			isPublic: method.isPublic,
 			isOverride: method.isOverride,
@@ -256,82 +257,73 @@ class ModuleCanonicalizer {
 			isInline: method.isInline,
 			metadata: method.metadata,
 			typeParameters: method.typeParameters,
-			typeConstraints: method.typeConstraints == null ? null : [
-				for (constraint in method.typeConstraints)
-					{
-						parameter: constraint.parameter,
-						type: canonicalType(constraint.type, methodAliases, parameters),
-						span: constraint.span
-					}
-			],
-			arguments: [
-				for (argument in method.arguments)
-					{
-						name: argument.name,
-						type: canonicalType(argument.type, methodAliases, parameters),
-						span: argument.span,
-						optional: argument.optional,
-						defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, methodAliases)
-					}
-			],
+			typeConstraints: method.typeConstraints == null ? null : [for (constraint in method.typeConstraints)
+			{
+				parameter:constraint.parameter,
+					type:canonicalType(constraint.type, methodAliases, parameters),
+					span:constraint.span
+			}],
+				arguments: [for (argument in method.arguments)
+				{
+			name:argument.name,
+				type:canonicalType(argument.type, methodAliases, parameters),
+				span:argument.span,
+				optional:argument.optional,
+				defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals, methodAliases)
+		}],
 			result: canonicalType(method.result, methodAliases, parameters),
 			span: method.span,
-			statements: canonicalBlock(method.statements, module, entry, locals, methodAliases, [for (argument in method.arguments) argument.name])
-		};
+			statements: canonicalBlock(method.statements, module, entry, locals, methodAliases,
+			[for (argument in method.arguments) argument.name])};
 	}
 
 	public static function canonicalInterface(interfaceDecl:compiler.syntax.Ast.AstInterface, aliases:AliasTable,
 			packageName:Null<String>):compiler.syntax.Ast.AstInterface
-		return {
-			name: qualifiedTypeName(packageName, interfaceDecl.name),
+		return {name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
 			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
 			bases: [
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
 			],
-			methods: [
-				for (method in interfaceDecl.methods)
-					{
-						name: method.name,
-						isStatic: false,
-						typeParameters: method.typeParameters,
-						typeConstraints: method.typeConstraints == null ? null : [
-							for (constraint in method.typeConstraints)
-								{
-									parameter: constraint.parameter,
-									type: canonicalType(constraint.type, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-									span: constraint.span
-								}
-						],
-						arguments: [
-							for (argument in method.arguments)
-								{
-									name: argument.name,
-									type: canonicalType(argument.type, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-									span: argument.span,
-									optional: argument.optional,
-									defaultValue: argument.defaultValue
-								}
-						],
-						result: canonicalType(method.result, aliases, combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
-						statements: [],
-						span: method.span
-					}
-			],
-			span: interfaceDecl.span
-		};
-
-	static function canonicalConstraints(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, aliases:AliasTable,
-			typeParameters:Array<String>):Null<Array<compiler.syntax.Ast.AstTypeConstraint>>
-		return constraints == null ? null : [
-			for (constraint in constraints)
+				methods: [for (method in interfaceDecl.methods)
 				{
-					parameter: constraint.parameter,
-					type: canonicalType(constraint.type, aliases, typeParameters),
-					span: constraint.span
-				}
-		];
+					name:method.name,
+						isStatic:false,
+						typeParameters:method.typeParameters,
+						typeConstraints:method.typeConstraints == null
+						? null : [for (constraint in method.typeConstraints)
+						{
+							parameter:constraint.parameter,
+								type:canonicalType(constraint.type, aliases,
+								combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
+								span:constraint.span
+						}],
+							arguments:[for (argument in method.arguments)
+							{
+						name:argument.name,
+							type:canonicalType(argument.type, aliases,
+							combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
+							span:argument.span,
+							optional:argument.optional,
+							defaultValue:argument.defaultValue
+					}],
+						result:canonicalType(method.result, aliases,
+						combinedTypeParameters(interfaceDecl.typeParameters, method.typeParameters)),
+						statements:[],
+						span:method.span
+				}],
+					span: interfaceDecl.span};
+
+	static function canonicalConstraints(constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+			aliases:AliasTable,
+			typeParameters:Array<String>):Null<Array<compiler.syntax.Ast.AstTypeConstraint>>
+		return constraints == null ? null : [for (constraint in constraints)
+			{
+				parameter:constraint.parameter,
+					type:canonicalType(constraint.type, aliases, typeParameters),
+					span:constraint.span
+			}];
 
 	public static function astTypeName(type:compiler.syntax.Ast.AstType):String
 		return switch type {
@@ -344,15 +336,17 @@ class ModuleCanonicalizer {
 			case InferredType: "_";
 			case NativeAbstractType(declaration, tag): '$declaration<"$tag">';
 			case NamedType(name): name;
-			case AppliedType(name, arguments): '$name<${[for (argument in arguments) astTypeName(argument)].join(",")}>';
+			case AppliedType(name,
+				arguments): '$name<${[for (argument in arguments) astTypeName(argument)].join(",")}>';
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
 			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
 			case NullableType(element): 'Null<${astTypeName(element)}>';
-			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',') + ')->' + astTypeName(result);
+			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',')
+				+ ')->' + astTypeName(result);
 			case AnonymousType(fields): '{' + [
-					for (field in fields)
-						(field.optional ? "?" : "") + field.name + ":" + astTypeName(field.type)
-				].join(',') + '}';
+				for (field in fields)
+					(field.optional ? "?" : "") + field.name + ":" + astTypeName(field.type)
+			].join(',') + '}';
 		};
 
 	/**
@@ -375,144 +369,184 @@ class ModuleCanonicalizer {
 		return imported == null ? name : imported;
 	}
 
-	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:LocalScope, ?aliases:AliasTable):AstStatement
+	public static function canonicalStatement(s:AstStatement, module:String, entry:String, locals:LocalScope,
+			?aliases:AliasTable):AstStatement
 		return switch s {
 			case ErrorStatement(_): s;
 			case UninitializedDeclaration(n, t, span): UninitializedDeclaration(n, canonicalType(t, aliases), span);
 			case VarDeclaration(n, t, e,
-				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+				span): VarDeclaration(n, t == null ? null : canonicalType(t, aliases),
+				canonicalExpression(e, module, entry, locals, aliases), span);
 			case ScopedDeclaration(n, t, e, span):
-				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases),
+					canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e,
-				span): Assignment(canonicalAssignmentTarget(n, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+				span): Assignment(canonicalAssignmentTarget(n, locals, aliases),
+				canonicalExpression(e, module, entry, locals, aliases), span);
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
-					canonicalExpression(offset, module, entry, locals, aliases), canonicalExpression(e, module, entry, locals, aliases), span);
+				canonicalExpression(offset, module, entry, locals, aliases),
+				canonicalExpression(e, module, entry, locals, aliases), span);
 			case FieldAssignment(object, field, e,
 				span): FieldAssignment(canonicalExpression(object, module, entry, locals, aliases), field,
-					canonicalExpression(e, module, entry, locals, aliases), span);
+				canonicalExpression(e, module, entry, locals, aliases), span);
 			case Return(e, span): Return(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Throw(e, span): Throw(canonicalExpression(e, module, entry, locals, aliases), span);
 			case Defer(body, span): Defer(canonicalBlock(body, module, entry, locals, aliases), span);
-			case Try(tryBranch, catches, span): Try(canonicalBlock(tryBranch, module, entry, locals, aliases), [
-					for (catchClause in catches)
-						{
-							name: catchClause.name,
-							type: canonicalType(catchClause.type, aliases),
-							statements: canonicalBlock(catchClause.statements, module, entry, locals, aliases, [catchClause.name]),
-							span: catchClause.span
-						}
-				], span);
+			case Try(tryBranch, catches, span): Try(canonicalBlock(tryBranch, module, entry, locals, aliases),
+				[for (catchClause in catches)
+				{
+						name:catchClause.name,
+							type:canonicalType(catchClause.type, aliases),
+							statements:canonicalBlock(catchClause.statements, module, entry, locals, aliases,
+							[catchClause.name]),
+							span:catchClause.span
+					}], span);
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
 			case Increment(name, delta, span): Increment(name, delta, span);
 			case If(c, y, n,
-				span): If(canonicalExpression(c, module, entry, locals, aliases), canonicalBlock(y, module, entry, locals, aliases),
-					canonicalBlock(n, module, entry, locals, aliases), span);
-			case While(c, b, span): While(canonicalExpression(c, module, entry, locals, aliases), canonicalBlock(b, module, entry, locals, aliases), span);
-			case DoWhile(b, c, span): DoWhile(canonicalBlock(b, module, entry, locals, aliases), canonicalExpression(c, module, entry, locals, aliases), span);
+				span): If(canonicalExpression(c, module, entry, locals, aliases),
+				canonicalBlock(y, module, entry, locals, aliases),
+				canonicalBlock(n, module, entry, locals, aliases), span);
+			case While(c, b, span): While(canonicalExpression(c, module, entry, locals, aliases),
+				canonicalBlock(b, module, entry, locals, aliases), span);
+			case DoWhile(b, c, span): DoWhile(canonicalBlock(b, module, entry, locals, aliases),
+				canonicalExpression(c, module, entry, locals, aliases), span);
 			case ForIn(name, valueName, iterable, body,
 				span): ForIn(name, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					canonicalBlock(body, module, entry, locals, aliases, [name, valueName]), span);
+				canonicalBlock(body, module, entry, locals, aliases, [
+					name,
+					valueName
+				]), span);
 			case Switch(expression, cases, defaultBranch, hasDefault, span):
-				Switch(canonicalExpression(expression, module, entry, locals, aliases), [
-					for (switchCase in cases)
-						{
-							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
-							guard: canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
-							statements: canonicalBlock(switchCase.statements, module, entry, locals, aliases),
-							span: switchCase.span
-						}
-				], canonicalBlock(defaultBranch, module, entry, locals, aliases), hasDefault,
-					span);
+				Switch(canonicalExpression(expression, module, entry, locals, aliases), [for (switchCase in cases)
+					{
+						value:canonicalExpression(switchCase.value, module, entry, locals, aliases),
+							guard:canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
+							statements:canonicalBlock(switchCase.statements, module, entry, locals, aliases),
+							span:switchCase.span
+					}], canonicalBlock(defaultBranch, module, entry, locals, aliases), hasDefault,
+						span);
 			case Expression(e, span): Expression(canonicalExpression(e, module, entry, locals, aliases), span);
 		}
 
-	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:LocalScope, ?aliases:AliasTable):AstExpression
+	public static function canonicalExpression(e:AstExpression, module:String, entry:String, locals:LocalScope,
+			?aliases:AliasTable):AstExpression
 		return switch e {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
+				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_): e;
 			case Variable(name, span):
-				var imported = importedReference(name, locals, aliases), resolved = imported != null ? imported
-					: name.indexOf(".") < 0 && locals.get(name) == true ? (module == entry && name == "main" ? "main" : module + "." + name) : name;
-				resolved == name ? e : Variable(resolved, new compiler.Source.SourceSpan(span.file, span.start, span.end, span.isBareReference,
+				var imported = importedReference(name, locals, aliases),
+					resolved = imported != null ? imported
+						: name.indexOf(".") < 0 && locals.get(name) == true
+						? (module == entry && name == "main" ? "main" : module + "." + name) : name;
+				resolved == name ? e : Variable(resolved,
+					new compiler.Source.SourceSpan(span.file, span.start, span.end, span.isBareReference,
 					span.referenceName == null ? name : span.referenceName));
 			case Member(object, name, s):
 				var qualifiedName = expressionPath(e),
 					imported = qualifiedName == null ? null : importedReference(qualifiedName, locals, aliases);
-				if (imported != null) Variable(imported, s); else Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
-			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Div(a, b, s): Div(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Mod(a, b, s): Mod(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case BitAnd(a, b, s): BitAnd(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case BitXor(a, b, s): BitXor(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case BitOr(a, b, s): BitOr(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+				if (imported != null) Variable(imported, s);
+				else Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
+			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Sub(a, b, s): Sub(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Mul(a, b, s): Mul(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Div(a, b, s): Div(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Mod(a, b, s): Mod(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case BitAnd(a, b, s): BitAnd(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case BitXor(a, b, s): BitXor(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case BitOr(a, b, s): BitOr(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case ShiftLeft(a, b,
-				s): ShiftLeft(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+				s): ShiftLeft(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case ShiftRight(a, b,
-				s): ShiftRight(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+				s): ShiftRight(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case UnsignedShiftRight(a, b, s):
-				UnsignedShiftRight(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+				UnsignedShiftRight(canonicalExpression(a, module, entry, locals, aliases),
+					canonicalExpression(b, module, entry, locals, aliases), s);
 			case Negate(value, s): Negate(canonicalExpression(value, module, entry, locals, aliases), s);
-			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case Less(a, b, s): Less(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case LessEqual(a, b,
-				s): LessEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Greater(a, b, s): Greater(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+				s): LessEqual(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Greater(a, b, s): Greater(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case GreaterEqual(a, b,
-				s): GreaterEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Equal(a, b, s): Equal(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case NotEqual(a, b, s): NotEqual(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+				s): GreaterEqual(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Equal(a, b, s): Equal(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case NotEqual(a, b, s): NotEqual(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case Not(value, s): Not(canonicalExpression(value, module, entry, locals, aliases), s);
-			case And(a, b, s): And(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
-			case Or(a, b, s): Or(canonicalExpression(a, module, entry, locals, aliases), canonicalExpression(b, module, entry, locals, aliases), s);
+			case And(a, b, s): And(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
+			case Or(a, b, s): Or(canonicalExpression(a, module, entry, locals, aliases),
+				canonicalExpression(b, module, entry, locals, aliases), s);
 			case Conditional(predicate, whenTrue, whenFalse, s):
-				Conditional(canonicalExpression(predicate, module, entry, locals, aliases), canonicalExpression(whenTrue, module, entry, locals, aliases),
+				Conditional(canonicalExpression(predicate, module, entry, locals, aliases),
+					canonicalExpression(whenTrue, module, entry, locals, aliases),
 					canonicalExpression(whenFalse, module, entry, locals, aliases), s);
 			case BlockExpression(statements, value, s):
 				var block = canonicalScope(statements, value, module, entry, locals, aliases, null);
 				BlockExpression(block.statements, block.value, s);
-			case ThrowExpression(value, s): ThrowExpression(canonicalExpression(value, module, entry, locals, aliases), s);
-			case Capture(name, pattern, s): Capture(name, canonicalExpression(pattern, module, entry, locals, aliases), s);
+			case ThrowExpression(value, s): ThrowExpression(canonicalExpression(value, module, entry, locals, aliases),
+				s);
+			case Capture(name, pattern, s): Capture(name, canonicalExpression(pattern, module, entry, locals, aliases),
+				s);
 			case Cast(value, target, s):
-				Cast(canonicalExpression(value, module, entry, locals, aliases), canonicalOptionalType(target, aliases), s);
+				Cast(canonicalExpression(value, module, entry, locals, aliases), canonicalOptionalType(target, aliases),
+					s);
 			case SwitchExpression(subject, cases, fallback, s):
-				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases), [
-					for (switchCase in cases)
-						{
-							value: canonicalExpression(switchCase.value, module, entry, locals, aliases),
-							guard: canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
-							result: canonicalExpression(switchCase.result, module, entry, locals, aliases),
-							span: switchCase.span
-						}
-				], canonicalOptionalExpression(fallback, module, entry, locals, aliases), s);
-			case ObjectLiteral(fields, s): ObjectLiteral([
-					for (field in fields)
-						{name: field.name, value: canonicalExpression(field.value, module, entry, locals, aliases), span: field.span}
-				], s);
-			case ArrayLiteral(values, s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
-			case MapLiteral(entries, s): MapLiteral([
-					for (mapEntry in entries)
-						{
-							key: canonicalExpression(mapEntry.key, module, entry, locals, aliases),
-							value: canonicalExpression(mapEntry.value, module, entry, locals, aliases),
-							span: mapEntry.span
-						}
-				], s);
+				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases),
+					[for (switchCase in cases)
+					{
+						value:canonicalExpression(switchCase.value, module, entry, locals, aliases),
+							guard:canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
+							result:canonicalExpression(switchCase.result, module, entry, locals, aliases),
+							span:switchCase.span
+					}], canonicalOptionalExpression(fallback, module, entry, locals, aliases), s);
+			case ObjectLiteral(fields, s): ObjectLiteral([for (field in fields)
+				{
+						name:field.name, value:canonicalExpression(field.value, module, entry, locals, aliases),
+							span:field.span
+					}], s);
+			case ArrayLiteral(values,
+				s): ArrayLiteral([for (value in values) canonicalExpression(value, module, entry, locals, aliases)], s);
+			case MapLiteral(entries, s): MapLiteral([for (mapEntry in entries)
+				{
+						key:canonicalExpression(mapEntry.key, module, entry, locals, aliases),
+							value:canonicalExpression(mapEntry.value, module, entry, locals, aliases),
+							span:mapEntry.span
+					}], s);
 			case ArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, s):
 				var inner = bindNames(locals, [keyName, valueName]);
 				ArrayComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					canonicalOptionalExpression(predicate, module, entry, inner, aliases), canonicalExpression(value, module, entry, inner, aliases),
+					canonicalOptionalExpression(predicate, module, entry, inner, aliases),
+					canonicalExpression(value, module, entry, inner, aliases),
 					flattened, s);
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, s):
 				var inner = bindNames(locals, [keyName, valueName]);
 				MapComprehension(keyName, valueName, canonicalExpression(iterable, module, entry, locals, aliases),
-					canonicalOptionalExpression(predicate, module, entry, inner, aliases), canonicalExpression(key, module, entry, inner, aliases),
+					canonicalOptionalExpression(predicate, module, entry, inner, aliases),
+					canonicalExpression(key, module, entry, inner, aliases),
 					canonicalExpression(value, module, entry, inner, aliases), s);
 			case Range(start, rangeEnd,
-				s): Range(canonicalExpression(start, module, entry, locals, aliases), canonicalExpression(rangeEnd, module, entry, locals, aliases), s);
+				s): Range(canonicalExpression(start, module, entry, locals, aliases),
+				canonicalExpression(rangeEnd, module, entry, locals, aliases), s);
 			case Call(name, args, s):
 				var resolved = name;
 				var dot = name.indexOf("."),
@@ -528,14 +562,16 @@ class ModuleCanonicalizer {
 						aliases) : canonicalExpression(args[index], module, entry, locals, aliases)
 				], resolved == name ? s : new compiler.Source.SourceSpan(s.file, s.start, s.end, s.isBareReference,
 					s.referenceName == null ? name : s.referenceName));
-			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field, s);
+			case NativeLayoutQuery(kind, type, field, s): NativeLayoutQuery(kind, canonicalType(type, aliases), field,
+				s);
 			case KeyPathLiteral(root, fields, s):
 				var pathRoot = root, pathFields = fields;
 				switch root {
 					case NamedType(name):
 						var candidate = name;
 						while (candidate.length > 0) {
-							if (aliases != null && aliases.exists(candidate) && !aliases.exists(EXPRESSION_ONLY_PREFIX + candidate)) {
+							if (aliases != null && aliases.exists(candidate)
+								&& !aliases.exists(EXPRESSION_ONLY_PREFIX + candidate)) {
 								pathRoot = NamedType(resolveTypeName(candidate, aliases));
 								var suffix = name.substr(candidate.length);
 								pathFields = (suffix.length == 0 ? [] : suffix.substr(1).split(".")).concat(fields);
@@ -551,39 +587,46 @@ class ModuleCanonicalizer {
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case MethodCall(object, name, args,
 				s): MethodCall(canonicalExpression(object, module, entry, locals, aliases), name,
-					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
-			case New(typeName, args, s): New(resolveTypeName(typeName, aliases), [for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+				[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
+			case New(typeName, args, s): New(resolveTypeName(typeName, aliases),
+				[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
 			case NewGeneric(typeName, typeArguments, args, s):
-				NewGeneric(resolveTypeName(typeName, aliases), [for (type in typeArguments) canonicalType(type, aliases)],
+				NewGeneric(resolveTypeName(typeName, aliases),
+					[for (type in typeArguments) canonicalType(type, aliases)],
 					[for (a in args) canonicalExpression(a, module, entry, locals, aliases)], s);
-			case NewArray(element, length, s): NewArray(canonicalType(element, aliases), canonicalExpression(length, module, entry, locals, aliases), s);
+			case NewArray(element, length, s): NewArray(canonicalType(element, aliases),
+				canonicalExpression(length, module, entry, locals, aliases), s);
 			case NewMap(key, value, s): NewMap(canonicalType(key, aliases), canonicalType(value, aliases), s);
 			case Index(array, offset,
-				s): Index(canonicalExpression(array, module, entry, locals, aliases), canonicalExpression(offset, module, entry, locals, aliases), s);
-			case PostfixIncrement(target, delta, s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
+				s): Index(canonicalExpression(array, module, entry, locals, aliases),
+				canonicalExpression(offset, module, entry, locals, aliases), s);
+			case PostfixIncrement(target, delta,
+				s): PostfixIncrement(canonicalExpression(target, module, entry, locals, aliases), delta, s);
 			case Lambda(arguments, body, identity, s):
-				Lambda([
-					for (argument in arguments)
-						{
-							name: argument.name,
-							type: canonicalType(argument.type, aliases),
-							span: argument.span,
-							// A local function's optional parameters and defaults let calls omit them.
-							optional: argument.optional,
-							defaultValue: canonicalOptionalExpression(argument.defaultValue, module, entry, locals, aliases)
-						}
-				],
-					canonicalBlock(body, module, entry, locals, aliases, [for (argument in arguments) argument.name]), identity, s);
+				Lambda([for (argument in arguments)
+					{
+						name:argument.name,
+							type:canonicalType(argument.type, aliases),
+							span:argument.span,
+						// A local function's optional parameters and defaults let calls omit them.
+						optional:argument.optional,
+							defaultValue:canonicalOptionalExpression(argument.defaultValue, module, entry, locals,
+							aliases)
+					}],
+						canonicalBlock(body, module, entry, locals, aliases,
+						[for (argument in arguments) argument.name]), identity, s);
 		}
 
-	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String, locals:LocalScope,
+	public static function canonicalOptionalExpression(e:Null<AstExpression>, module:String, entry:String,
+			locals:LocalScope,
 			aliases:Null<AliasTable>):Null<AstExpression> {
 		if (e == null)
 			return null;
 		return canonicalExpression(e, module, entry, locals, aliases);
 	}
 
-	public static function canonicalOptionalType(type:Null<compiler.syntax.Ast.AstType>, aliases:Null<AliasTable>):Null<compiler.syntax.Ast.AstType> {
+	public static function canonicalOptionalType(type:Null<compiler.syntax.Ast.AstType>,
+			aliases:Null<AliasTable>):Null<compiler.syntax.Ast.AstType> {
 		if (type == null)
 			return null;
 		return canonicalType(type, aliases);
@@ -646,7 +689,8 @@ class ModuleCanonicalizer {
 	 * The second argument of `Std.isOfType` and its siblings names a type. A bare name reaches here as an expression, so
 	 * an imported enum constructor of the same name (`Bool`, `Int`) must not capture it.
 	 */
-	static function canonicalTypeArgument(e:AstExpression, module:String, entry:String, locals:LocalScope, aliases:Null<AliasTable>):AstExpression
+	static function canonicalTypeArgument(e:AstExpression, module:String, entry:String, locals:LocalScope,
+			aliases:Null<AliasTable>):AstExpression
 		return switch e {
 			case Variable(name, _) if (aliases != null && aliases.exists(EXPRESSION_ONLY_PREFIX + name)): e;
 			default: canonicalExpression(e, module, entry, locals, aliases);
@@ -661,32 +705,32 @@ class ModuleCanonicalizer {
 			case _: null;
 		};
 
-	public static function canonicalType(type:compiler.syntax.Ast.AstType, aliases:Null<AliasTable>, ?typeParameters:Array<String>):compiler.syntax.Ast.AstType
+	public static function canonicalType(type:compiler.syntax.Ast.AstType, aliases:Null<AliasTable>,
+			?typeParameters:Array<String>):compiler.syntax.Ast.AstType
 		return switch type {
 			case NativeAbstractType(declaration, tag): NativeAbstractType(resolveTypeName(declaration, aliases), tag);
 			case NamedType(name): NamedType(typeParameters != null
-					&& typeParameters.indexOf(name) >= 0 ? name : resolveTypeName(name, aliases));
+				&& typeParameters.indexOf(name) >= 0 ? name : resolveTypeName(name, aliases));
 			case AppliedType(name, arguments): AppliedType(resolveTypeName(name, aliases), [
-					for (argument in arguments)
-						canonicalType(argument, aliases, typeParameters)
-				]);
+				for (argument in arguments)
+					canonicalType(argument, aliases, typeParameters)
+			]);
 			case ArrayType(element): ArrayType(canonicalType(element, aliases, typeParameters));
-			case MapType(key, value): MapType(canonicalType(key, aliases, typeParameters), canonicalType(value, aliases, typeParameters));
+			case MapType(key, value): MapType(canonicalType(key, aliases, typeParameters),
+				canonicalType(value, aliases, typeParameters));
 			case NullableType(element): NullableType(canonicalType(element, aliases, typeParameters));
 			case FunctionType(arguments,
 				result): FunctionType([for (argument in arguments) canonicalType(argument, aliases, typeParameters)],
-					canonicalType(result, aliases, typeParameters));
-			case AnonymousType(fields): AnonymousType([
-					for (field in fields)
-						{
-							name: field.name,
-							type: canonicalType(field.type, aliases, typeParameters),
-							optional: field.optional,
-							isFinal: field.isFinal,
-							metadata: field.metadata,
-							span: field.span
-						}
-				]);
+				canonicalType(result, aliases, typeParameters));
+			case AnonymousType(fields): AnonymousType([for (field in fields)
+				{
+						name:field.name,
+							type:canonicalType(field.type, aliases, typeParameters),
+							optional:field.optional,
+							isFinal:field.isFinal,
+							metadata:field.metadata,
+							span:field.span
+					}]);
 			default: type;
 		};
 }

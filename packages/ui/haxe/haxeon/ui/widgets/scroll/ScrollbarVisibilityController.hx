@@ -130,8 +130,8 @@ class ScrollbarVisibilityController implements DelayedAnimation implements Retai
 	function held():Bool return viewportHovered || hovered || dragging || focused;
 
 	function animating():Bool {
-		return available && policy == ScrollbarVisibility.Auto &&
-			(opacity != targetOpacity || (!held() && targetOpacity > 0));
+		return available && policy == ScrollbarVisibility.Auto
+			&& (opacity != targetOpacity || (!held() && targetOpacity > 0));
 	}
 
 	/** The idle grace after a fade-in changes nothing on screen, so it needs a wake, not frames. */

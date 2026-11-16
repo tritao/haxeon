@@ -25,8 +25,7 @@ class EnumAbstractDeclaredTypeMain {
 			+ "function returnRight():Right return Shared;\n"
 			+ "function returned():Int return returnRight();\n"
 			+ "function switchCall():Int return switch returnRight() { case Shared: 7; default: 0; }\n"
-			+
-			"class Holder { public static final left:Left = Shared; public static final right:Right = Shared; public static var current:Right = Right.Shared; "
+			+ "class Holder { public static final left:Left = Shared; public static final right:Right = Shared; public static var current:Right = Right.Shared; "
 			+ "public var own:Left = Shared; public function new() {} }\n"
 			+ "function fields():Int return Holder.left * 1000 + Holder.right;\n"
 			+ "function switchField():Int return switch Holder.current { case Shared: 5; default: 0; }\n"
@@ -35,8 +34,7 @@ class EnumAbstractDeclaredTypeMain {
 			+ "function callSwitchRight():Int return switchRight(20);\n"
 			+ "function callEqualLeft():Int return equalLeft(1);\n"
 			+ "function callNotEqualRight():Int return notEqualRight(20);\n"
-			+
-			"function main():Int return callSwitchLeft() + callSwitchRight() + callEqualLeft() + callNotEqualRight() + passLeft() + passRight() + localLeft() + localRight() + returned() + switchCall() + fields() + switchField() + switchMember();");
+			+ "function main():Int return callSwitchLeft() + callSwitchRight() + callEqualLeft() + callNotEqualRight() + passLeft() + passRight() + localLeft() + localRight() + returned() + switchCall() + fields() + switchField() + switchMember();");
 		var result = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(result.module).flatten(), result.runtimeIdentity);
 		function call(name:String, expected:Int):Void {
@@ -63,7 +61,8 @@ class EnumAbstractDeclaredTypeMain {
 		compiler = new Compiler();
 		compiler.update("Left.hx", "enum abstract Left(Int) from Int to Int { var Shared = 1; }");
 		compiler.update("Right.hx", "enum abstract Right(Int) from Int to Int { var Shared = 20; }");
-		compiler.update("Main.hx", "function take(v:Int):Int return v; function main():Int return take(Shared) + Left.Shared + Right.Shared;");
+		compiler.update("Main.hx",
+			"function take(v:Int):Int return v; function main():Int return take(Shared) + Left.Shared + Right.Shared;");
 		var rejected = false;
 		try {
 			compiler.compile("Main");

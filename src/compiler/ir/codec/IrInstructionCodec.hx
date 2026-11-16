@@ -494,10 +494,12 @@ class IrInstructionCodec {
 				ClassId(readValue(input, values), readValue(input, values));
 			case "MethodCall":
 				arity(4);
-				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), false);
+				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength),
+					readValues(input, values), false);
 			case "TerminalMethodCall":
 				arity(4);
-				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength), readValues(input, values), true);
+				MethodCall(readValue(input, values), readValue(input, values), readText(input, totalLength),
+					readValues(input, values), true);
 			case "NewObject":
 				arity(2);
 				NewObject(readValue(input, values), readText(input, totalLength));
@@ -530,7 +532,8 @@ class IrInstructionCodec {
 				IteratorNext(readValue(input, values), readValue(input, values));
 			case "MakeEnum":
 				arity(4);
-				MakeEnum(readValue(input, values), readText(input, totalLength), readInt(input), readValues(input, values));
+				MakeEnum(readValue(input, values), readText(input, totalLength), readInt(input),
+					readValues(input, values));
 			case "EnumIndex":
 				arity(2);
 				EnumIndex(readValue(input, values), readValue(input, values));
@@ -688,7 +691,8 @@ class IrInstructionCodec {
 		writeValue(output, second);
 	}
 
-	static function writeThreeValues(output:BytesOutput, name:String, first:IrValue, second:IrValue, third:IrValue):Void {
+	static function writeThreeValues(output:BytesOutput, name:String, first:IrValue, second:IrValue,
+			third:IrValue):Void {
 		begin(output, name, 3);
 		writeValue(output, first);
 		writeValue(output, second);

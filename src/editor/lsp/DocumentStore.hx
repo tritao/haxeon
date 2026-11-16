@@ -65,7 +65,8 @@ class LspDocument {
 					if (rawLength != utf16Length(replaced, 0, replaced.length))
 						throw "LSP document change rangeLength does not match the replaced text";
 				}
-				candidate = view.snapshot.slice(0, startOffset) + text + view.snapshot.slice(endOffset, view.snapshot.bytes.length);
+				candidate = view.snapshot.slice(0, startOffset) + text + view.snapshot.slice(endOffset,
+					view.snapshot.bytes.length);
 			}
 		}
 		this.version = version;
@@ -74,7 +75,7 @@ class LspDocument {
 		return true;
 	}
 
-	static function positionField(value:Dynamic, name:String):{line:Int, character:Int} {
+	static function positionField(value:Dynamic, name:String): {line: Int, character: Int} {
 		var position:Dynamic = Reflect.field(value, name);
 		if (position == null)
 			throw 'Missing field "$name"';

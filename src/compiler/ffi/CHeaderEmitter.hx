@@ -108,7 +108,8 @@ class CHeaderEmitter {
 			case TypeRef: "Type";
 			case Array(element): 'Array<${typeName(element)}>';
 			case Iterator(element): 'Iterator<${typeName(element)}>';
-			case Function(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
+			case Function(arguments,
+				result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case Enum(name): 'Enum<$name>';
 			case Obj(name): 'Object<$name>';
 			case Abstract(name): 'Abstract<$name>';
@@ -119,7 +120,8 @@ class CHeaderEmitter {
 		var output = new StringBuf();
 		for (index in 0...value.length) {
 			var code = value.charCodeAt(index),
-				valid = code >= "0".code && code <= "9".code || code >= "A".code && code <= "Z".code || code >= "a".code && code <= "z".code;
+				valid = code >= "0".code && code <= "9".code || code >= "A".code && code <= "Z".code || code >= "a".code
+					&& code <= "z".code;
 			if (uppercase && code >= "a".code && code <= "z".code)
 				code = code - "a".code + "A".code;
 			output.addChar(valid ? code : "_".code);

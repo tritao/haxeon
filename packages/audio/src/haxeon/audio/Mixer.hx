@@ -117,7 +117,8 @@ class Mixer {
 	/** Sets the process-wide listener forward direction. */
 	public static function setListenerDirection(direction:Vector3):Void {
 		if (direction == null)
-			throw BindingError.invalidArgument("Mixer.setListenerDirection", "Audio listener direction must not be null");
+			throw BindingError.invalidArgument("Mixer.setListenerDirection",
+				"Audio listener direction must not be null");
 		AudioResult.check(NativeKitAudio.nk_audio_listener_set_direction(direction.nativeValue()),
 			"audio.listener.setDirection");
 	}

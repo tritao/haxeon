@@ -25,7 +25,8 @@ class Surface {
 	/** Creates a non-owning view of a surface managed by a raw NativeKit host. */
 	public static function borrowNativeHandle(value:SurfaceHandle):Surface {
 		if (!value.isValid())
-			throw BindingError.invalidArgument("Surface.borrowNativeHandle", "Cannot borrow a null NativeKit surface handle");
+			throw BindingError.invalidArgument("Surface.borrowNativeHandle",
+				"Cannot borrow a null NativeKit surface handle");
 		return new Surface(value, false);
 	}
 
@@ -70,7 +71,8 @@ class Surface {
 	/** Releases a borrowed wrapper without destroying its host-owned surface. */
 	public function releaseBorrowed():Void {
 		if (ownsHandle)
-			throw BindingError.invalidState("Surface.releaseBorrowed", "Cannot release a borrowed view of an owned NativeKit surface");
+			throw BindingError.invalidState("Surface.releaseBorrowed",
+				"Cannot release a borrowed view of an owned NativeKit surface");
 		dispose();
 	}
 
@@ -105,6 +107,6 @@ private class SurfaceFrameHandler {
 		this.handler = handler;
 
 	public function invoke(_surface:SurfaceHandle, width:Int, height:Int,
-		_userData:Null<hl.Abstract<"native_pointer">>):Void
+			_userData:Null<hl.Abstract<"native_pointer">>):Void
 		handler(width, height);
 }

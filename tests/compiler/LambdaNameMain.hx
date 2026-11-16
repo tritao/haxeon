@@ -4,20 +4,24 @@ import compiler.semantic.LambdaName;
 class LambdaNameMain {
 	static function main():Void {
 		var name = LambdaName.of("demo.Main.run", "run#2");
-		expect(name == "$lambda:demo.Main.run:run#2" && LambdaName.is(name), "a lambda name reads $lambda:<enclosing>:<member>#<ordinal>");
+		expect(name == "$lambda:demo.Main.run:run#2" && LambdaName.is(name),
+			"a lambda name reads $lambda:<enclosing>:<member>#<ordinal>");
 		expect(LambdaName.enclosing(name) == "demo.Main.run", "the enclosing function is read back");
-		expect(LambdaName.enclosing("demo.Main.run") == null && !LambdaName.is("demo.Main.run"), "a plain function is not a lambda");
+		expect(LambdaName.enclosing("demo.Main.run") == null && !LambdaName.is("demo.Main.run"),
+			"a plain function is not a lambda");
 
 		var nested = LambdaName.of(name, "run#0");
 		expect(LambdaName.enclosing(nested) == name, "the enclosing name of a nested lambda is the outer lambda");
-		expect(LambdaName.outermost(nested) == "demo.Main.run", "the outermost function is found through every level of nesting");
+		expect(LambdaName.outermost(nested) == "demo.Main.run",
+			"the outermost function is found through every level of nesting");
 		expect(LambdaName.outermost("demo.Main.run") == "demo.Main.run", "a function is its own outermost function");
 
 		// A generic specialization's name contains colons; the enclosing name is everything up to the last one.
 		var specialization = "$generic:demo.Box.get[layout]<class:demo.Item>",
 			inSpecialization = LambdaName.of(specialization, "get#0");
 		expect(LambdaName.enclosing(inSpecialization) == specialization, "colons inside the enclosing name are kept");
-		expect(LambdaName.outermost(LambdaName.of(inSpecialization, "get#1")) == specialization, "nesting inside a specialization resolves to it");
+		expect(LambdaName.outermost(LambdaName.of(inSpecialization, "get#1")) == specialization,
+			"nesting inside a specialization resolves to it");
 
 		expect(PositionalName.is(nested)
 			&& PositionalName.group(nested) == "$lambda:" + name + ":run"
@@ -33,10 +37,12 @@ class LambdaNameMain {
 		expect(!PositionalName.is("demo.Main.run"), "a declared function is not positionally named");
 
 		var copy = LambdaName.of("demo.Main.run", LambdaName.variant("run#2", 1));
-		expect(copy == "$lambda:demo.Main.run:run~1#2" && PositionalName.ordinal(copy) == 2 && PositionalName.group(copy) != PositionalName.group(name),
+		expect(copy == "$lambda:demo.Main.run:run~1#2" && PositionalName.ordinal(copy) == 2
+			&& PositionalName.group(copy) != PositionalName.group(name),
 			"a copy of a lambda is a sibling group of its own and keeps a numeric ordinal");
 
-		expect(LambdaName.variant("run", 2) == "run~2", "a variant of an identity without an ordinal keeps the whole identity");
+		expect(LambdaName.variant("run", 2) == "run~2",
+			"a variant of an identity without an ordinal keeps the whole identity");
 
 		expect(LambdaName.enclosing("$lambda:") == null
 			&& LambdaName.enclosing("$lambda:x") == null, "a malformed name has no enclosing function");

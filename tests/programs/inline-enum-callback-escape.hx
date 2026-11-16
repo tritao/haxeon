@@ -4,7 +4,7 @@ enum TextIntent {
 }
 
 class CallbackOwner {
-	public var callback:Null<(TextIntent, CallbackLayout)->Bool>;
+	public var callback:Null<(TextIntent, CallbackLayout) -> Bool>;
 
 	public function new() {}
 }
@@ -20,7 +20,7 @@ struct CallbackLayout {
 }
 
 class CallbackField {
-	public var onEdit:Null<(TextIntent, CallbackLayout)->Bool>;
+	public var onEdit:Null<(TextIntent, CallbackLayout) -> Bool>;
 	public var owner:CallbackOwner;
 
 	public function new() {}
@@ -49,7 +49,7 @@ class Census {
 		};
 		var escaped:Dynamic = Reflect.field(field, "onEdit");
 		Reflect.setField(field, "onEdit", escaped);
-		var wrong:(String, CallbackLayout)->Bool = function(_, _) return true;
+		var wrong:(String, CallbackLayout) -> Bool = function(_, _) return true;
 		var rejected = false;
 		try Reflect.setField(field, "onEdit", wrong) catch (_:Dynamic) rejected = true;
 		if (!rejected) throw "Reflection accepted a closure with the wrong enum argument type";

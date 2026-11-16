@@ -7,16 +7,16 @@ import sys.thread.Thread;
   should have one that says what it does ("exo.git.reader"). Linux keeps the first 15 bytes.
 **/
 class Threads {
-  /** Starts a thread named name that runs call. */
-  public static function create(name:String, call:Void->Void):Thread {
-    return Thread.create(function() {
-      nameCurrent(name);
-      call();
-    });
-  }
+	/** Starts a thread named name that runs call. */
+	public static function create(name:String, call:Void->Void):Thread {
+		return Thread.create(function() {
+			nameCurrent(name);
+			call();
+		});
+	}
 
-  /** Names the calling thread. */
-  public static function nameCurrent(name:String):Void nativeThreadName(name);
+	/** Names the calling thread. */
+	public static function nameCurrent(name:String):Void nativeThreadName(name);
 }
 
 #if wasm

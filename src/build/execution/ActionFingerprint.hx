@@ -31,7 +31,8 @@ private class FingerprintFields {
 
 /** Conservative project-local fingerprints for process actions. */
 class ActionFingerprint {
-	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>, ?digests:ContentDigestCache, compiledInputs:Bool = false):String {
+	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>,
+			?digests:ContentDigestCache, compiledInputs:Bool = false):String {
 		if (digests == null)
 			digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
@@ -61,7 +62,8 @@ class ActionFingerprint {
 	}
 
 	/** Read the compiler's dependency report rather than guessing which source-root modules it loaded. */
-	static function appendCompilerInputs(fields:FingerprintFields, arguments:Array<String>, buildRoot:String, digests:ContentDigestCache, compiledInputs:Bool):Void {
+	static function appendCompilerInputs(fields:FingerprintFields, arguments:Array<String>, buildRoot:String,
+			digests:ContentDigestCache, compiledInputs:Bool):Void {
 		for (argument in arguments) {
 			if (!StringTools.startsWith(argument, "--inputs-output="))
 				continue;
@@ -102,7 +104,8 @@ class ActionFingerprint {
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
-	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>, ?digests:ContentDigestCache):String {
+	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>,
+			?digests:ContentDigestCache):String {
 		if (digests == null)
 			digests = new ContentDigestCache();
 		var fields = new FingerprintFields();
@@ -163,7 +166,8 @@ class ActionFingerprint {
 	static function recordPath(buildRoot:String, action:ExecutionAction):String
 		return Path.join([buildRoot, ".haxeon", "actions", Sha256.encode(action.id.key()) + ".json"]);
 
-	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>, buildRoot:String, digests:ContentDigestCache):Void {
+	static function appendPath(fields:FingerprintFields, path:String, visitedDirectories:Map<String, Bool>,
+			buildRoot:String, digests:ContentDigestCache):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$path');
 			return;
@@ -194,7 +198,8 @@ class ActionFingerprint {
 		fields.push(digests.file(path));
 	}
 
-	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String, visitedDirectories:Map<String, Bool>,
+	static function appendPortablePath(fields:FingerprintFields, path:String, relative:String,
+			visitedDirectories:Map<String, Bool>,
 			digests:ContentDigestCache):Void {
 		if (!FileSystem.exists(path)) {
 			fields.push('missing:$relative');
@@ -224,7 +229,8 @@ class ActionFingerprint {
 		fields.push('file:$relative:${digests.file(path)}');
 	}
 
-	static function appendCommand(fields:FingerprintFields, command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>,
+	static function appendCommand(fields:FingerprintFields, command:String, arguments:Array<String>, cwd:String,
+			environment:Map<String, String>,
 			digests:ContentDigestCache):Void {
 		fields.add('command:$command');
 		fields.add('cwd:${Path.normalize(FileSystem.fullPath(cwd))}');
@@ -261,7 +267,8 @@ class ActionFingerprint {
 			fields.add('environment:$key=${environment.get(key)}');
 	}
 
-	static function appendPortableCommand(fields:FingerprintFields, command:String, arguments:Array<String>, environment:Map<String, String>,
+	static function appendPortableCommand(fields:FingerprintFields, command:String, arguments:Array<String>,
+			environment:Map<String, String>,
 			action:ExecutionAction, digests:ContentDigestCache):Void {
 		fields.add('command:${Path.withoutDirectory(command)}');
 		var executable = resolveTool(command);
@@ -278,7 +285,8 @@ class ActionFingerprint {
 	static function ignoredDirectoryEntry(name:String, path:String, buildRoot:String):Bool {
 		if (!FileSystem.isDirectory(path))
 			return name == ".git";
-		if (name == ".git" || name == ".tools" || name == "build" || name == "out" || StringTools.startsWith(name, "cmake-build-"))
+		if (name == ".git" || name == ".tools" || name == "build" || name == "out"
+			|| StringTools.startsWith(name, "cmake-build-"))
 			return true;
 		if (buildRoot == null || buildRoot.length == 0)
 			return false;
@@ -298,7 +306,10 @@ class ActionFingerprint {
 				if (!StringTools.startsWith(markerContent, "gitdir:"))
 					return;
 				var configured = StringTools.trim(markerContent.substr(7));
-				gitDirectory = Path.normalize(Path.isAbsolute(configured) ? configured : Path.join([directory, configured]));
+				gitDirectory = Path.normalize(Path.isAbsolute(configured) ? configured : Path.join([
+					directory,
+					configured
+				]));
 			}
 			var headPath = Path.join([gitDirectory, "HEAD"]);
 			if (!FileSystem.exists(headPath))
@@ -344,7 +355,8 @@ class ActionFingerprint {
 		if (path == null)
 			return command;
 		var extensions = ProcessRunner.environmentValue("PATHEXT"),
-			suffixes = Sys.systemName() == "Windows" ? [""].concat((extensions == null ? ".COM;.EXE;.BAT;.CMD" : extensions).split(";")) : [""];
+			suffixes = Sys.systemName() == "Windows"
+				? [""].concat((extensions == null ? ".COM;.EXE;.BAT;.CMD" : extensions).split(";")) : [""];
 		for (directory in path.split(Sys.systemName() == "Windows" ? ";" : ":"))
 			for (suffix in suffixes) {
 				var candidate = Path.join([directory, command + suffix]);

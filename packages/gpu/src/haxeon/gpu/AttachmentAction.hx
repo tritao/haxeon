@@ -19,7 +19,7 @@ class AttachmentAction {
 	public var clearStencil:Int;
 
 	public function new(loadAction:LoadAction = LoadAction.Load,
-		storeAction:StoreAction = StoreAction.Store) {
+			storeAction:StoreAction = StoreAction.Store) {
 		this.loadAction = loadAction;
 		this.storeAction = storeAction;
 		clearRed = 0.0;

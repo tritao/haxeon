@@ -1,2 +1,5 @@
 import haxeon.ui.ImageFilter;
-function main():Int { var state:ImageFilter="invalid"; return 42; }
+function main():Int {
+	var state:ImageFilter = "invalid";
+	return 42;
+}

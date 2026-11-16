@@ -28,7 +28,9 @@ class DockWorkspaceModel implements Observable {
 		if (callback == null || listeners.contains(callback))
 			return function() {};
 		listeners.push(callback);
-		return function() { listeners.remove(callback); };
+		return function() {
+			listeners.remove(callback);
+		};
 	}
 
 	public function register(panel:DockPanelDescriptor):Void {
@@ -46,7 +48,8 @@ class DockWorkspaceModel implements Observable {
 	public function setPanelBadge(panelId:String, count:Int):Bool {
 		var panel = get(panelId);
 		if (panel == null || count < 0 || panel.badgeCount == count) return false;
-		panel.setBadgeCount(count); return true;
+		panel.setBadgeCount(count);
+		return true;
 	}
 
 	public function get(panelId:String):Null<DockPanelDescriptor>
@@ -104,8 +107,7 @@ class DockWorkspaceModel implements Observable {
 			return false;
 		if (isOpen(panelId))
 			return activate(panelId);
-		var target = targetPanelId != null && isOpen(targetPanelId) ? targetPanelId :
-			DockNodeTools.firstPanel(root);
+		var target = targetPanelId != null && isOpen(targetPanelId) ? targetPanelId : DockNodeTools.firstPanel(root);
 		if (target == null) {
 			root = DockNode.Panel(panelId);
 			activePanelId = panelId;
@@ -129,8 +131,8 @@ class DockWorkspaceModel implements Observable {
 	}
 
 	public function canDock(panelId:String, targetPanelId:String, zone:DockDropZone):Bool {
-		if (get(panelId) == null || get(targetPanelId) == null || zone == null ||
-			panelId == targetPanelId || !isOpen(targetPanelId)) return false;
+		if (get(panelId) == null || get(targetPanelId) == null || zone == null || panelId == targetPanelId
+			|| !isOpen(targetPanelId)) return false;
 		return switch zone {
 			case Center | TabBefore | TabAfter: canShareTabs(panelId, targetPanelId);
 			case Left | Right | Top | Bottom: true;
@@ -162,8 +164,8 @@ class DockWorkspaceModel implements Observable {
 				var result = DockNode.Empty;
 				for (index in 0...groups.length) {
 					var group = groups[groups.length - index - 1];
-					var leaf = group.length == 1 ? DockNode.Panel(group[0]) :
-						DockNode.Tabs(group, group.indexOf(active) >= 0 ? active : group[0]);
+					var leaf = group.length == 1 ? DockNode.Panel(group[0]) : DockNode.Tabs(group,
+						group.indexOf(active) >= 0 ? active : group[0]);
 					result = index == 0 ? leaf : DockNode.Split(DockSplitAxis.Vertical, 0.72, leaf, result);
 				}
 				result;
@@ -192,13 +194,16 @@ class DockWorkspaceModel implements Observable {
 	}
 
 	/** Resize the nearest horizontal split; supply the mounted layout's divider and minimum extents. */
-	public function setPanelWidth(panelId:String, width:Float, workspaceWidth:Float, dividerExtent:Float = 0.0, minimumExtent:Float = 0.0):Bool {
-		if (width <= 0 || workspaceWidth <= 0 || width - width != 0 || workspaceWidth - workspaceWidth != 0 ||
-			dividerExtent < 0 || minimumExtent < 0 || dividerExtent - dividerExtent != 0 || minimumExtent - minimumExtent != 0)
+	public function setPanelWidth(panelId:String, width:Float, workspaceWidth:Float, dividerExtent:Float = 0.0,
+			minimumExtent:Float = 0.0):Bool {
+		if (width <= 0 || workspaceWidth <= 0 || width - width != 0 || workspaceWidth - workspaceWidth != 0
+			|| dividerExtent < 0 || minimumExtent < 0 || dividerExtent - dividerExtent != 0
+			|| minimumExtent - minimumExtent != 0)
 			return false;
 		return resizePanelWidth(root, panelId, width, workspaceWidth, dividerExtent, minimumExtent, []);
 	}
-	function resizePanelWidth(node:DockNode, id:String, width:Float, extent:Float, divider:Float, minimum:Float, path:Array<Int>):Bool {
+	function resizePanelWidth(node:DockNode, id:String, width:Float, extent:Float, divider:Float, minimum:Float,
+			path:Array<Int>):Bool {
 		return switch node {
 			case Split(axis, ratio, first, second):
 				var inFirst = DockNodeTools.contains(first, id), inSecond = DockNodeTools.contains(second, id);
@@ -206,9 +211,12 @@ class DockWorkspaceModel implements Observable {
 				else {
 					var branch = inFirst ? 0 : 1;
 					path.push(branch);
-					var firstExtent = Math.max(minimum, Math.min(ratio * extent, Math.max(minimum, extent - minimum - divider)));
-					var childExtent = axis == DockSplitAxis.Horizontal ? (inFirst ? firstExtent : Math.max(0.0, extent - firstExtent - divider)) : extent;
-					var found = resizePanelWidth(inFirst ? first : second, id, width, childExtent, divider, minimum, path);
+					var firstExtent = Math.max(minimum,
+						Math.min(ratio * extent, Math.max(minimum, extent - minimum - divider)));
+					var childExtent = axis == DockSplitAxis.Horizontal
+						? (inFirst ? firstExtent : Math.max(0.0, extent - firstExtent - divider)) : extent;
+					var found = resizePanelWidth(inFirst ? first : second, id, width, childExtent, divider, minimum,
+						path);
 					path.pop();
 					if (found) true;
 					else if (axis == DockSplitAxis.Horizontal) {
@@ -239,8 +247,8 @@ class DockWorkspaceModel implements Observable {
 		if (DockNodeTools.validate(snapshot.root, panelMap()) != null)
 			return false;
 		root = normalizeGroups(snapshot.root);
-		activePanelId = snapshot.activePanelId != null && isOpen(snapshot.activePanelId) ?
-			snapshot.activePanelId : DockNodeTools.firstPanel(root);
+		activePanelId = snapshot.activePanelId != null
+			&& isOpen(snapshot.activePanelId) ? snapshot.activePanelId : DockNodeTools.firstPanel(root);
 		touch();
 		return true;
 	}
@@ -261,8 +269,8 @@ class DockWorkspaceModel implements Observable {
 		if (DockNodeTools.validate(compatible, panelMap()) != null)
 			return false;
 		root = normalizeGroups(compatible);
-		activePanelId = snapshot.activePanelId != null && isOpen(snapshot.activePanelId) ?
-			snapshot.activePanelId : DockNodeTools.firstPanel(root);
+		activePanelId = snapshot.activePanelId != null
+			&& isOpen(snapshot.activePanelId) ? snapshot.activePanelId : DockNodeTools.firstPanel(root);
 		touch();
 		return true;
 	}

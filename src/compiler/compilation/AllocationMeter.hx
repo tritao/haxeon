@@ -56,6 +56,7 @@ class AllocationMeter {
 
 	#if (hl && !haxeon)
 	@:hlNative("std", "gc_detailed_stats")
-	static function detailedStats(bytes:hl.Ref<Float>, count:hl.Ref<Float>, collections:hl.Ref<Float>, markMicros:hl.Ref<Float>):Void {}
+	static function detailedStats(bytes:hl.Ref<Float>, count:hl.Ref<Float>, collections:hl.Ref<Float>,
+			markMicros:hl.Ref<Float>):Void {}
 	#end
 }

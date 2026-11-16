@@ -17,7 +17,7 @@ class JitNarrowIntegersMain {
 		return a >= b;
 
 	static function toFloat(v:hl.I64):Float
-		return (cast v : Float);
+		return (cast v:Float);
 
 	static function check(ok:Bool, message:String):Void {
 		if (!ok) {

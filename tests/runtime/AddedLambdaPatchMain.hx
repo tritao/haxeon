@@ -41,12 +41,14 @@ class AddedLambdaPatchMain {
 		var before = Runtime.callInt(live, mainId);
 		if (before != 4141)
 			throw 'The program returned $before instead of 4141 before the edit';
-		compiler.update("Main.hx", program("    var minus = (x:Int) -> x - 4;\n    handlers.push(minus);\n", "x * scale + 1"));
+		compiler.update("Main.hx",
+			program("    var minus = (x:Int) -> x - 4;\n    handlers.push(minus);\n", "x * scale + 1"));
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw 'Adding a lambda required a reload (requiresReload ${changed.requiresReload}, patch ${changed.patchBytes != null}): '
 				+ [for (reason in changed.reloadReasons) Std.string(reason)].join(", ");
-		Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		// The kept panel's two closures: 11, and the edited 31. A new panel: 11 + 6 + 31.
 		var after = Runtime.callInt(live, mainId);
 		if (after != 4248)

@@ -168,7 +168,8 @@ class Target {
 		};
 
 	public function equals(other:Target):Bool
-		return osName(os) == osName(other.os) && archName(arch) == archName(other.arch) && abiName(abi) == abiName(other.abi);
+		return osName(os) == osName(other.os) && archName(arch) == archName(other.arch)
+			&& abiName(abi) == abiName(other.abi);
 
 	public function isWasm():Bool
 		return os == TargetOs.Wasm || arch == TargetArch.Wasm32 || abi == TargetAbi.Wasm;

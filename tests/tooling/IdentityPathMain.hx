@@ -18,7 +18,8 @@ class IdentityPathMain {
 		var root = FileSystem.fullPath(".") + "/out/identity-path-test-" + Std.random(0x3fffffff);
 		FileSystem.createDirectory(root);
 		var files = [
-			"Main" => 'import haxeon.build.CodeIdentity;
+			"Main"
+				=> 'import haxeon.build.CodeIdentity;
 class Main {
 	static function main():Int {
 		Sys.println(CodeIdentity.ofModule("Main"));
@@ -39,7 +40,12 @@ class Main {
 			File.saveContent(root + "/" + name + ".hx", text);
 		var graph = root + "/graph.txt";
 		Sys.putEnv("HAXEON_IDENTITY_GRAPH", graph);
-		CompilerDriver.compile(CompilerArguments.parse(["--target=hl", "--entry=Main", "--root=" + root, "--output=" + root + "/out.hl"]
+		CompilerDriver.compile(CompilerArguments.parse([
+			"--target=hl",
+			"--entry=Main",
+			"--root=" + root,
+			"--output=" + root + "/out.hl"
+		]
 			.concat([for (name in names) root + "/" + name + ".hx"])), _ -> {}, new CompilerSession());
 		expect(FileSystem.exists(graph), "the compiler wrote the import graph");
 		var text = File.getContent(graph);
@@ -52,19 +58,28 @@ class Main {
 		expect(lines.indexOf("X\tY") >= 0 && lines.indexOf("Y\tX") >= 0, "a cycle is two edges");
 
 		var toC = IdentityPath.report(text, "Main", "C");
-		expect(toC.indexOf("covers ") >= 0 && toC.indexOf(" modules (itself included).") > 0, "Main's closure is reported: " + toC);
-		expect(toC.indexOf("Shortest import path (2 edges):\n  Main -> D\n  D -> C") >= 0, "shortest path Main to C: " + toC);
-		expect(toC.indexOf("import C directly (2):") >= 0 && toC.indexOf("B -> C") >= 0 && toC.indexOf("D -> C") >= 0, "both importers of C: " + toC);
+		expect(toC.indexOf("covers ") >= 0 && toC.indexOf(" modules (itself included).") > 0,
+			"Main's closure is reported: " + toC);
+		expect(toC.indexOf("Shortest import path (2 edges):\n  Main -> D\n  D -> C") >= 0,
+			"shortest path Main to C: " + toC);
+		expect(toC.indexOf("import C directly (2):") >= 0 && toC.indexOf("B -> C") >= 0 && toC.indexOf("D -> C") >= 0,
+			"both importers of C: " + toC);
 		var fromA = IdentityPath.report(text, "A", "C");
-		expect(fromA.indexOf("covers 3 modules") >= 0 && fromA.indexOf("Shortest import path (2 edges):\n  A -> B\n  B -> C") >= 0, "from A: " + fromA);
+		expect(fromA.indexOf("covers 3 modules") >= 0
+			&& fromA.indexOf("Shortest import path (2 edges):\n  A -> B\n  B -> C") >= 0, "from A: " + fromA);
 		expect(IdentityPath.report(text, "A", "E").indexOf("does not depend on E") >= 0, "A does not reach E");
-		expect(IdentityPath.report(text, "C", "Main").indexOf("does not depend on Main") >= 0, "a leaf reaches nothing");
-		expect(IdentityPath.report(text, "X", "Y").indexOf("Shortest import path (1 edges):\n  X -> Y") >= 0, "cycle, one way");
-		expect(IdentityPath.report(text, "Y", "X").indexOf("Shortest import path (1 edges):\n  Y -> X") >= 0, "cycle, the other way");
+		expect(IdentityPath.report(text, "C", "Main").indexOf("does not depend on Main") >= 0,
+			"a leaf reaches nothing");
+		expect(IdentityPath.report(text, "X", "Y").indexOf("Shortest import path (1 edges):\n  X -> Y") >= 0,
+			"cycle, one way");
+		expect(IdentityPath.report(text, "Y", "X").indexOf("Shortest import path (1 edges):\n  Y -> X") >= 0,
+			"cycle, the other way");
 		expect(IdentityPath.report(text, "Z", "Y").indexOf("covers 3 modules") >= 0, "Z reaches Z, X, Y");
 		expect(IdentityPath.report(text, "Nope", "C").indexOf('"Nope" is not in the program') >= 0, "unknown source");
-		expect(IdentityPath.report(text, "Main", "Nope").indexOf('"Nope" is not in the program') >= 0, "unknown target");
-		expect(IdentityPath.report(text, "Main", "Main").indexOf("0 edges") >= 0, "a module reaches itself in zero edges");
+		expect(IdentityPath.report(text, "Main", "Nope").indexOf('"Nope" is not in the program') >= 0,
+			"unknown target");
+		expect(IdentityPath.report(text, "Main", "Main").indexOf("0 edges") >= 0,
+			"a module reaches itself in zero edges");
 
 		deleteTree(root);
 		Sys.println("PASS: identity-path (" + checks + " checks)");

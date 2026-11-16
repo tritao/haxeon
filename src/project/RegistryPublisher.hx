@@ -10,7 +10,10 @@ class RegistryPublisher {
 	public static function publish(manifestPath:String, registry:String, version:String, registryRoot:String):String {
 		if (!isExactVersion(version))
 			throw 'Registry publication requires an exact SemVer version, got "$version"';
-		var absoluteManifest = Path.normalize(Path.isAbsolute(manifestPath) ? manifestPath : Path.join([Sys.getCwd(), manifestPath]));
+		var absoluteManifest = Path.normalize(Path.isAbsolute(manifestPath) ? manifestPath : Path.join([
+			Sys.getCwd(),
+			manifestPath
+		]));
 		if (!FileSystem.exists(absoluteManifest))
 			throw 'Project file not found: $absoluteManifest';
 		var packageRoot = Path.directory(absoluteManifest),
@@ -22,7 +25,8 @@ class RegistryPublisher {
 		copyTree(packageRoot, destination, "");
 		var checksum = checksumTree(destination);
 		File.saveContent(Path.join([destination, ".haxeon-checksum"]), checksum + "\n");
-		RegistryIndex.appendRelease(Path.join([registryDirectory, "index.json"]), manifest.packageName, version, checksum, manifest.compatibility,
+		RegistryIndex.appendRelease(Path.join([registryDirectory, "index.json"]), manifest.packageName, version,
+			checksum, manifest.compatibility,
 			manifest.native);
 		return checksum;
 	}
@@ -68,7 +72,8 @@ class RegistryPublisher {
 	}
 
 	static function isExactVersion(value:String):Bool {
-		if (value.length == 0 || value.indexOf(".") < 0 || value.indexOf("<") >= 0 || value.indexOf(">") >= 0 || value.indexOf("^") >= 0
+		if (value.length == 0 || value.indexOf(".") < 0 || value.indexOf("<") >= 0 || value.indexOf(">") >= 0
+			|| value.indexOf("^") >= 0
 			|| value.indexOf("~") >= 0 || value.indexOf("*") >= 0 || value.indexOf(" ") >= 0 || value.indexOf(",") >= 0)
 			return false;
 		for (part in value.split("."))

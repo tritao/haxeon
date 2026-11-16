@@ -25,8 +25,7 @@ class BytesOutput extends Output {
 	override public function writeInt32(x:Int):Void
 		if (bigEndian)
 			super.writeInt32(x)
-		else
-			b.addInt32(x);
+				else b.addInt32(x);
 
 	override public function writeString(s:String, ?encoding:Encoding):Void
 		b.addString(s);

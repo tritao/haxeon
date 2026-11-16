@@ -171,8 +171,10 @@ class InputFiles {
 	static function answer(path:String, kind:String):String {
 		try {
 			return switch kind {
-				case "bytes": FileSystem.exists(path) && !FileSystem.isDirectory(path) ? digest(File.getBytes(path)) : "missing";
-				case "text": FileSystem.exists(path) && !FileSystem.isDirectory(path) ? digest(Bytes.ofString(File.getContent(path))) : "missing";
+				case "bytes": FileSystem.exists(path)
+					&& !FileSystem.isDirectory(path) ? digest(File.getBytes(path)) : "missing";
+				case "text": FileSystem.exists(path)
+					&& !FileSystem.isDirectory(path) ? digest(Bytes.ofString(File.getContent(path))) : "missing";
 				case "exists": FileSystem.exists(path) ? "1" : "0";
 				case "directory": FileSystem.exists(path) && FileSystem.isDirectory(path) ? "1" : "0";
 				case "listing":

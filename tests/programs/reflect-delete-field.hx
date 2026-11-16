@@ -15,7 +15,8 @@ function main():Int {
 	if (fields.join(",") != "first,third" || Std.int(Reflect.field(record, "third")) != 3)
 		return 4;
 	var decoded:Dynamic = haxe.Json.parse('{"keep":true,"drop":false}');
-	if (!Reflect.deleteField(decoded, "drop") || Reflect.hasField(decoded, "drop") || Reflect.field(decoded, "keep") != true)
+	if (!Reflect.deleteField(decoded, "drop") || Reflect.hasField(decoded, "drop")
+		|| Reflect.field(decoded, "keep") != true)
 		return 5;
 	return 42;
 }

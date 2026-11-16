@@ -14,7 +14,8 @@ class NativeManifest {
 	public final cmake:Null<NativeCMakeManifest>;
 	public final supportedTargets:Array<String>;
 
-	public function new(sources:Array<String>, includeDirs:Array<String>, ?standard:String, ?cmake:NativeCMakeManifest, ?supportedTargets:Array<String>) {
+	public function new(sources:Array<String>, includeDirs:Array<String>, ?standard:String, ?cmake:NativeCMakeManifest,
+			?supportedTargets:Array<String>) {
 		this.sources = sources.copy();
 		this.includeDirs = includeDirs.copy();
 		this.standard = standard;
@@ -34,7 +35,8 @@ class NativeCMakeManifest {
 	/** Required runtime library names produced by an aggregate CMake target. */
 	public final libraries:Array<String>;
 
-	public function new(source:String, target:String, ?inputs:Array<String>, ?library:String, ?libraries:Array<String>) {
+	public function new(source:String, target:String, ?inputs:Array<String>, ?library:String,
+			?libraries:Array<String>) {
 		this.source = source;
 		this.target = target;
 		this.inputs = inputs == null ? [] : inputs.copy();
@@ -81,8 +83,10 @@ class InstrumentManifest {
 
 	public static inline final DEFAULT_MIN_CALL_MICROS = 1.0;
 
-	public function new(?haxeInclude:Array<String>, ?haxeExclude:Array<String>, ?nativeInclude:Array<String>, ?nativeExclude:Array<String>,
-			boundaryImports:String = "blocking", ?boundaryExtra:Array<String>, dxgi:Bool = true, d3d11:Bool = true, vulkan:Bool = true,
+	public function new(?haxeInclude:Array<String>, ?haxeExclude:Array<String>, ?nativeInclude:Array<String>,
+			?nativeExclude:Array<String>,
+			boundaryImports:String = "blocking", ?boundaryExtra:Array<String>, dxgi:Bool = true, d3d11:Bool = true,
+			vulkan:Bool = true,
 			minCallMicros:Float = DEFAULT_MIN_CALL_MICROS) {
 		this.haxeInclude = haxeInclude == null ? ["*"] : haxeInclude.copy();
 		this.haxeExclude = haxeExclude == null ? [] : haxeExclude.copy();
@@ -128,10 +132,14 @@ class PackageManifest {
 	/** The instrumented build's scope; the defaults instrument everything. */
 	public final instrument:InstrumentManifest;
 
-	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>, sourceRoots:Array<String>,
-			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String, defines:Array<String>, outputDir:String,
-			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>, androidApplicationId:String,
-			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>, ?instrument:InstrumentManifest) {
+	function new(version:Int, packageName:String, entry:Null<String>, legacySources:Array<String>,
+			sourceRoots:Array<String>,
+			unscopedSourceRoots:Array<String>, scopeSourceRoots:Bool, workspace:Array<String>, target:String,
+			defines:Array<String>, outputDir:String,
+			dependencies:Map<String, PackageDependency>, native:Null<NativeManifest>, ffi:Null<FfiManifest>,
+			androidApplicationId:String,
+			androidAppLabel:String, compatibility:PackageCompatibility, inlineEnabled:Null<Bool>,
+			?instrument:InstrumentManifest) {
 		this.version = version;
 		this.packageName = packageName;
 		this.packageId = new PackageId(packageName);
@@ -168,7 +176,8 @@ class PackageManifest {
 		if (version != 1)
 			throw 'Unsupported haxeon.json version "$rawVersion"';
 		var packageData:Dynamic = Reflect.field(raw, "package"),
-			packageName = packageData == null ? Path.withoutDirectory(Path.directory(path)) : requiredString(packageData, "name", path),
+			packageName = packageData == null
+				? Path.withoutDirectory(Path.directory(path)) : requiredString(packageData, "name", path),
 			entry = optionalNullableString(raw, "entry", path),
 			legacySources = stringArray(raw, "sources", path, []),
 			sourceRoots = stringArray(raw, "sourceRoots", path, ["src"]),
@@ -201,7 +210,8 @@ class PackageManifest {
 			dependencyNames.sort(Reflect.compare);
 			for (name in dependencyNames) {
 				var dependency:Dynamic = Reflect.field(rawDependencies, name);
-				dependencies.set(name, new PackageDependency(new PackageId(name), PackageSourceCodec.parse(dependency, name, '$path dependency "$name"')));
+				dependencies.set(name, new PackageDependency(new PackageId(name),
+					PackageSourceCodec.parse(dependency, name, '$path dependency "$name"')));
 			}
 		}
 		var nativeData:Dynamic = Reflect.field(raw, "native"),
@@ -236,7 +246,8 @@ class PackageManifest {
 					seen.set(name, true);
 				}
 				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),
-					requiredString(cmakeData, "target", '$path native.cmake'), stringArray(cmakeData, "inputs", '$path native.cmake', []), library, libraries);
+					requiredString(cmakeData, "target", '$path native.cmake'),
+					stringArray(cmakeData, "inputs", '$path native.cmake', []), library, libraries);
 			}
 			if (nativeSources.length == 0 && cmake == null)
 				throw '$path "native" requires "sources" or "cmake"';
@@ -271,8 +282,10 @@ class PackageManifest {
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 		}
-		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots, scopeSourceRoots, workspace, target, defines,
-			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled, parseInstrument(raw, path));
+		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
+			scopeSourceRoots, workspace, target, defines,
+			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
+			parseInstrument(raw, path));
 	}
 
 	static function parseInstrument(raw:Dynamic, path:String):Null<InstrumentManifest> {
@@ -295,19 +308,22 @@ class PackageManifest {
 		if (imports != "blocking" && imports != "none")
 			throw '$path "instrument.boundary.imports" must be "blocking" or "none"';
 		var minCall:Dynamic = Reflect.field(data, "minCallMicros");
-		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall : Float) < 0 || (minCall : Float) > 4000000))
+		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall:Float) < 0 || (minCall:Float) > 4000000))
 			throw '$path "instrument.minCallMicros" must be a number from 0 to 4000000';
-		return new InstrumentManifest(stringArray(haxe, "include", context, ["*"]), stringArray(haxe, "exclude", context, []),
+		return new InstrumentManifest(stringArray(haxe, "include", context, ["*"]),
+			stringArray(haxe, "exclude", context, []),
 			stringArray(native, "include", context, ["**"]), stringArray(native, "exclude", context, []), imports,
-			stringArray(boundary, "extra", context, []), optionalBool(boundary, "dxgi", true, context), optionalBool(boundary, "d3d11", true, context),
-			optionalBool(boundary, "vulkan", true, context), minCall == null ? InstrumentManifest.DEFAULT_MIN_CALL_MICROS : (minCall : Float));
+			stringArray(boundary, "extra", context, []), optionalBool(boundary, "dxgi", true, context),
+			optionalBool(boundary, "d3d11", true, context),
+			optionalBool(boundary, "vulkan", true, context),
+			minCall == null ? InstrumentManifest.DEFAULT_MIN_CALL_MICROS : (minCall:Float));
 	}
 
 	static function isObject(value:Dynamic):Bool
 		return value != null && Reflect.isObject(value) && !Std.isOfType(value, Array);
 
 	static function requiredValueString(value:Dynamic, field:String, path:String):String {
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw '$path requires a non-empty "$field" string';
 		return cast value;
 	}
@@ -346,7 +362,7 @@ class PackageManifest {
 		if (!Std.isOfType(value, Array))
 			throw '$path "$field" must be an array of strings';
 		var result:Array<String> = [];
-		for (item in (cast value : Array<Dynamic>))
+		for (item in (cast value:Array<Dynamic>))
 			result.push(requiredValueString(item, field, '$path "$field"'));
 		return result;
 	}

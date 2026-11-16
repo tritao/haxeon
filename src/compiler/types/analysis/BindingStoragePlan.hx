@@ -59,7 +59,8 @@ class BindingStoragePlan {
 		return cells.get(bindingId);
 	}
 
-	public function requestBinding(bindingId:String, cellPrefix:String, kind:CellStorageKind, type:CompilerType):String {
+	public function requestBinding(bindingId:String, cellPrefix:String, kind:CellStorageKind,
+			type:CompilerType):String {
 		if (!cells.exists(bindingId)) {
 			cells.set(bindingId, cellName(cellPrefix));
 			types.set(bindingId, type);

@@ -43,7 +43,8 @@ class Pipeline {
 	public static function beginCompute(renderer:Renderer, shader:Shader):PipelineBuilder {
 		renderer.ensureResourceOperation();
 		if (shader.rendererOwner() != renderer)
-			throw BindingError.invalidArgument("Pipeline.beginCompute", "GPU compute pipeline shader belongs to a different renderer");
+			throw BindingError.invalidArgument("Pipeline.beginCompute",
+				"GPU compute pipeline shader belongs to a different renderer");
 		var made = NativeKitGpu.nkgpu_pipeline_begin_compute(renderer.nativeHandle(), shader.nativeHandle());
 		GpuResult.check(made.status, "pipeline.beginCompute");
 		return new PipelineBuilder(renderer, made.out_builder);
@@ -106,8 +107,10 @@ class PipelineBuilder {
 	public function attribute(location:Int, bufferIndex:Int, offset:Int, format:VertexFormat):PipelineBuilder {
 		ensureLive();
 		if (location < 0 || bufferIndex < 0 || offset < 0)
-			throw BindingError.invalidArgument("PipelineBuilder.attribute", "GPU vertex attribute indices and offset must be non-negative");
-		GpuResult.check(NativeKitGpu.nkgpu_pipeline_attribute(value, location, bufferIndex, offset, format), "pipeline.attribute");
+			throw BindingError.invalidArgument("PipelineBuilder.attribute",
+				"GPU vertex attribute indices and offset must be non-negative");
+		GpuResult.check(NativeKitGpu.nkgpu_pipeline_attribute(value, location, bufferIndex, offset, format),
+			"pipeline.attribute");
 		return this;
 	}
 

@@ -24,7 +24,8 @@ class JsonObject {
 	}
 
 	static function isObject(candidate:Dynamic):Bool
-		return candidate != null && !Std.isOfType(candidate, String) && !Std.isOfType(candidate, Array) && !Std.isOfType(candidate, Bool)
+		return candidate != null && !Std.isOfType(candidate, String) && !Std.isOfType(candidate, Array)
+			&& !Std.isOfType(candidate, Bool)
 			&& !Std.isOfType(candidate, Float) && !Std.isOfType(candidate, Int);
 
 	/** Canonical JSON text for this object. */

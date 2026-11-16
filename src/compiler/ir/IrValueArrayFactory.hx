@@ -15,7 +15,8 @@ class IrValueArrayFactory {
 
 	final suffix:String;
 
-	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget, slotNamespace:Int, ?enums:Array<IrEnum>) {
+	public function new(objects:IrObjectTable, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
+			slotNamespace:Int, ?enums:Array<IrEnum>) {
 		this.element = element;
 		layout = new IrValueArrayLayout(objects, element, pointerBits, target, enums);
 		helpers = new IrValueArraySlotHelpers(slotNamespace, element, layout.lanes);
@@ -51,15 +52,18 @@ class IrValueArrayFactory {
 		builder.call(setBridgeNative(), [array].concat(closures(builder)), Void);
 		builder.returnValue(array);
 		var allocate = new IrFunction(allocateName(), builder.arguments, arrayType, builder.blocks,
-			Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, allocateName())));
+			Provider(TypeKey.of(element),
+			ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, allocateName())));
 		var retype = new IrBuilder(),
 			input = retype.argument("array", Array(Dyn));
-		var retyped = retype.call(retypeNative(), [input].concat(layoutArguments(retype)).concat(closures(retype)), arrayType);
+		var retyped = retype.call(retypeNative(), [input].concat(layoutArguments(retype)).concat(closures(retype)),
+			arrayType);
 		retype.returnValue(retyped);
 		return [
 			allocate,
 			new IrFunction(retypeName(), retype.arguments, arrayType, retype.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, retypeName())))
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, retypeName())))
 		].concat(bridge.functions());
 	}
 

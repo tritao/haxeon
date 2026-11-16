@@ -38,8 +38,10 @@ class InlinerResolvedEnumCallMain {
 				caller.returnValue(caller.call("adapter", [callerInput], resultType));
 				program.functions = [
 					new IrFunction("main", caller.arguments, resultType, caller.blocks, Ordinary),
-					new IrFunction("adapter", adapter.arguments, resultType, adapter.blocks, GeneratedHelper, null, true),
-					new IrFunction("resolved_provider", provider.arguments, resultType, provider.blocks, EnumTagAdapter(tag, box))
+					new IrFunction("adapter", adapter.arguments, resultType, adapter.blocks, GeneratedHelper, null,
+						true),
+					new IrFunction("resolved_provider", provider.arguments, resultType, provider.blocks,
+						EnumTagAdapter(tag, box))
 				];
 				IrVerifier.verify(program);
 				var cache = new IrInlineCache();

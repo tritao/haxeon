@@ -94,7 +94,9 @@ class Surface {
 	}
 
 	@:allow(Renderer)
-	function rendererDisposed(renderer:Renderer):Void { renderers.remove(renderer); }
+	function rendererDisposed(renderer:Renderer):Void {
+		renderers.remove(renderer);
+	}
 
 	@:allow(Renderer)
 	function windowOwner():Window

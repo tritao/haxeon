@@ -49,7 +49,8 @@ class StableLambdaPatchMain {
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null)
 				throw 'Adding ${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
-			Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			Runtime.patchSet(live,
+				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			if (Runtime.callInt(live, mainId) != edit.expected)
 				throw 'After ${edit.label} the patched module did not run the edited code';
 			build = changed;

@@ -26,15 +26,18 @@ class ImplicitConstructorMain {
 		];
 		var added = ImplicitConstructors.add(classes);
 		expect([for (entry in added) entry.owner].join(",") == "Middle,Leaf,IntBox",
-			"constructors are added to derived classes without one, found: " + [for (entry in added) entry.owner].join(","));
+			"constructors are added to derived classes without one, found: "
+			+ [for (entry in added) entry.owner].join(","));
 		expect(argumentTypes(classes, "Middle") == "Int,String", "Middle takes the arguments of Base");
 		expect(argumentTypes(classes, "Leaf") == "Int,String", "and Leaf the ones Middle forwards");
-		expect(argumentTypes(classes, "IntBox") == "Int", "a generic base's parameter is replaced by what the class extends it with");
+		expect(argumentTypes(classes, "IntBox") == "Int",
+			"a generic base's parameter is replaced by what the class extends it with");
 		expect(argumentTypes(classes, "Plain") == "", "a class with no base gets nothing");
 
 		// A base constructor is not needed for the chain to be constructed: initializers count.
 		var withInitializer = [declared("A", null, [], [], true), declared("B", "A", [], [])];
-		expect(ImplicitConstructors.add(withInitializer).length == 1, "a base with only field initializers still has a constructor to run");
+		expect(ImplicitConstructors.add(withInitializer).length == 1,
+			"a base with only field initializers still has a constructor to run");
 
 		// Editing the base's constructor retypes the derived one.
 		var compiler = new Compiler();
@@ -42,7 +45,8 @@ class ImplicitConstructorMain {
 		compiler.update("Derived.hx", "class Derived extends Base {}");
 		compiler.update("Main.hx", "function main():Int { var d = new Derived(40); return d.n + 2; }");
 		compiler.compile("Main");
-		compiler.update("Base.hx", "class Base { public var n:Int; public function new(n:Int, extra:Int = 0) { this.n = n + extra; } }");
+		compiler.update("Base.hx",
+			"class Base { public var n:Int; public function new(n:Int, extra:Int = 0) { this.n = n + extra; } }");
 		var changed = compiler.compile("Main");
 		var retyped = false;
 		for (entry in changed.invalidations)
@@ -76,7 +80,8 @@ class ImplicitConstructorMain {
 		chain.update("Leaf.hx", "class Leaf extends Middle {}");
 		chain.update("Main.hx", "function main():Int { var d = new Leaf(40); return d.n + 2; }");
 		expectValue(chain, "a chain of implicit constructors");
-		chain.update("Base.hx", "class Base { public var n:Int; public function new(n:Int, k:Int = 2) { this.n = n + k - 2; } }");
+		chain.update("Base.hx",
+			"class Base { public var n:Int; public function new(n:Int, k:Int = 2) { this.n = n + k - 2; } }");
 		expectValue(chain, "a base constructor that gains an optional argument");
 		chain.update("Middle.hx", "class Middle extends Base { public function new(n:Int) { super(n, 2); } }");
 		expectValue(chain, "a middle class that then writes its own constructor");
@@ -102,7 +107,8 @@ class ImplicitConstructorMain {
 		expect(value == 42, label + " returned " + value + " instead of 42");
 	}
 
-	static function declared(name:String, base:Null<String>, arguments:Array<String>, typeParameters:Array<String>, initializer:Bool = false):AstClass {
+	static function declared(name:String, base:Null<String>, arguments:Array<String>, typeParameters:Array<String>,
+			initializer:Bool = false):AstClass {
 		var source = "class "
 			+ name
 			+ (typeParameters.length > 0 ? "<" + typeParameters.join(", ") + ">" : "")
@@ -110,9 +116,10 @@ class ImplicitConstructorMain {
 			+ " {"
 			+ (initializer ? " public var items:Array<Int> = [1];" : "")
 			+ (arguments.length > 0 ? " public function new("
-				+ [for (index in 0...arguments.length) "a" + index + ":" + arguments[index]].join(", ") + ") {}" : "")
+			+ [for (index in 0...arguments.length) "a" + index + ":" + arguments[index]].join(", ") + ") {}" : "")
 			+ " }";
-		return new compiler.syntax.Parser(new compiler.syntax.Lexer(new compiler.Source.SourceFile(name + ".hx", source)).tokenize()).parseProgram()
+		return new compiler.syntax.Parser(new compiler.syntax.Lexer(new compiler.Source.SourceFile(name + ".hx",
+			source)).tokenize()).parseProgram()
 			.classes[0];
 	}
 

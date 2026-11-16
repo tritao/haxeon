@@ -98,7 +98,10 @@ class InlineEnumReferenceMain {
 		var absent = pick.fieldGet(storage, "reference0", IrValueLaneReference.type());
 		pick.jump(done);
 		pick.select(done);
-		var selected = pick.phi(IrValueLaneReference.type(), [{block: retained.id, value: present}, {block: empty.id, value: absent}]);
+		var selected = pick.phi(IrValueLaneReference.type(), [
+			{block: retained.id, value: present},
+			{block: empty.id, value: absent}
+		]);
 		pick.returnValue(pick.call(IrValueLaneReference.UNPACK, [selected], Obj("Source")));
 		p.functions.push(new IrFunction("pick", pick.arguments, Obj("Source"), pick.blocks, Ordinary));
 		var entry = new IrBuilder();
@@ -127,7 +130,8 @@ class InlineEnumReferenceMain {
 			throw "Reference leaves must use two non-boxing casts";
 		checkRejected("Dynamic escape", function(b) return b.toDyn(b.constNull(IrValueLaneReference.type())), Dyn,
 			"A value lane reference cannot escape its operation");
-		checkRejected("function return", function(b) return b.constNull(IrValueLaneReference.type()), IrValueLaneReference.type(),
+		checkRejected("function return", function(b) return b.constNull(IrValueLaneReference.type()),
+			IrValueLaneReference.type(),
 			"A value lane reference cannot be returned");
 		checkRejected("mismatched field", function(b) {
 			b.fieldGet(b.newObject("Source"), "code", IrValueLaneReference.type());
@@ -141,17 +145,22 @@ class InlineEnumReferenceMain {
 			compiler.backend.Backend.BackendTarget.WasmGc
 		]) {
 			p.entryPoint = target == HashLink ? "entry" : "main";
-			var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true})
+			var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+				target: target,
+				debugNames: true
+			})
 				.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 					target: target,
 					debugNames: true,
 					wasmGcAllocationCount: target == WasmGc,
 					wasmMemoryStats: target == Wasm32
 				}).bytes;
-			var path = tempRoot() + "/" + uniqueStem + "reference-payload-" + Std.string(target) + (target == HashLink ? ".hl" : ".wasm");
+			var path = tempRoot() + "/" + uniqueStem + "reference-payload-" + Std.string(target)
+				+ (target == HashLink ? ".hl" : ".wasm");
 			sys.io.File.saveBytes(path, bytes);
 			var command = target == HashLink ? "scripts/hl" : "node";
-			var js = 'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const count=e.__allocation_count||e["haxeon.memory.allocation_count"];const before=count();if(e.main()!==42)throw Error("reference payload");if(count()-before>1)throw Error("reference-slot box allocation: "+(count()-before));console.log(count()-before);';
+			var js =
+				'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const count=e.__allocation_count||e["haxeon.memory.allocation_count"];const before=count();if(e.main()!==42)throw Error("reference payload");if(count()-before>1)throw Error("reference-slot box allocation: "+(count()-before));console.log(count()-before);';
 			var child = new sys.io.Process(command, target == HashLink ? [path] : ["-e", js, path]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
@@ -206,7 +215,8 @@ class InlineEnumReferenceMain {
 			var restored = IrInlineEnumReferenceAccess.read(check, saved, 0, Obj("RootSource"));
 			check.returnValue(check.fieldGet(restored, "code", I32));
 			p.functions = [
-				new IrFunction("prepareRoot", prepare.arguments, Void, prepare.blocks, Ordinary, null, false, compiler.ir.IrFunction.IrRetention.Expose),
+				new IrFunction("prepareRoot", prepare.arguments, Void, prepare.blocks, Ordinary, null, false,
+					compiler.ir.IrFunction.IrRetention.Expose),
 				new IrFunction("checkRoot", check.arguments, I32, check.blocks, Ordinary)
 			];
 			if (target == HashLink) {
@@ -241,13 +251,24 @@ class InlineEnumReferenceMain {
 				p.entryPoint = "entry";
 			}
 			IrVerifier.verify(p);
-			var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true})
+			var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+				target: target,
+				debugNames: true
+			})
 				.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {target: target, debugNames: true}).bytes;
-			var path = tempRoot() + "/" + uniqueStem + "gc-roots-" + Std.string(target) + (target == HashLink ? ".hl" : ".wasm");
+			var path = tempRoot() + "/" + uniqueStem + "gc-roots-" + Std.string(target)
+				+ (target == HashLink ? ".hl" : ".wasm");
 			sys.io.File.saveBytes(path, bytes);
 			try {
-				var js = 'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;e.prepareRoot();for(let i=0;i<3;i++)global.gc();if(e.main()!==42)throw Error("reference payload lost its only root");';
-				var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : ["--expose-gc", "-e", js, path]);
+				var js =
+					'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;e.prepareRoot();for(let i=0;i<3;i++)global.gc();if(e.main()!==42)throw Error("reference payload lost its only root");';
+				var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node",
+					target == HashLink ? [path] : [
+						"--expose-gc",
+						"-e",
+						js,
+						path
+					]);
 				var out = child.stdout.readAll().toString(),
 					err = child.stderr.readAll().toString(),
 					code = child.exitCode();

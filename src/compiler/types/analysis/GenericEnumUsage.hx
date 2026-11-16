@@ -19,7 +19,8 @@ class GenericEnumUsage extends BindingWalker {
 		return scan.found;
 	}
 
-	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
+	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
+			initializer:Null<AstExpression>):Void {
 		if (type != null && test(type)) found = true;
 	}
 

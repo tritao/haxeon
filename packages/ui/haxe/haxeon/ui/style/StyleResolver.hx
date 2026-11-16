@@ -72,13 +72,17 @@ class StyleResolver {
 		return cacheEntryCount;
 
 	/** Bounded-run diagnostics for retained styles and transition state. */
-	public function diagnosticCounts():{styles:Int, localStyles:Int, targets:Int, animations:Int} {
+	public function diagnosticCounts(): {styles: Int, localStyles: Int, targets: Int, animations: Int} {
 		var targetCount = 0;
 		var animationCount = 0;
 		for (_ in targets.keys()) targetCount++;
 		for (_ in activeAnimations.keys()) animationCount++;
-		return {styles: cacheEntryCount, localStyles: localFingerprintCount,
-			targets: targetCount, animations: animationCount};
+		return {
+			styles: cacheEntryCount,
+			localStyles: localFingerprintCount,
+			targets: targetCount,
+			animations: animationCount
+		};
 	}
 
 	/** Drops resolved styles while retaining animation state and counters. */
@@ -169,8 +173,8 @@ class StyleResolver {
 	}
 
 	function hasTransitions(theme:Null<StyleSheet>, application:Null<StyleSheet>):Bool
-		return (theme != null && theme.transitions.length > 0) ||
-			(application != null && application.transitions.length > 0);
+		return (theme != null && theme.transitions.length > 0)
+			|| (application != null && application.transitions.length > 0);
 
 	function cacheHash(targetHash:Int, states:StyleState, parentKey:String,
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
@@ -223,9 +227,9 @@ class StyleResolver {
 			if (!property.inherited)
 				continue;
 			var declaration = parent.declaration(property);
-			result += property.name + "=" + (declaration != null ? "present:" : "absent:") +
-				(declaration != null ? declaration : StyleValue.defaults()[property.slot]).key() +
-				"@" + sourceKey(parent.source(property)) + ";";
+			result += property.name + "=" + (declaration != null ? "present:" : "absent:")
+				+ (declaration != null ? declaration : StyleValue.defaults()[property.slot]).key() + "@"
+				+ sourceKey(parent.source(property)) + ";";
 		}
 		parent.rememberInheritedKey(result);
 		return result;
@@ -237,7 +241,10 @@ class StyleResolver {
 		var cached = localFingerprints.get(fingerprint);
 		if (cached != null && sameLayoutStyle(local, cached.snapshot)) return cached.key;
 		var key = "local#" + nextLocalFingerprint++;
-		if (localFingerprintCount >= MaxCacheEntries) { localFingerprints.clear(); localFingerprintCount = 0; }
+		if (localFingerprintCount >= MaxCacheEntries) {
+			localFingerprints.clear();
+			localFingerprintCount = 0;
+		}
 		localFingerprints.set(fingerprint, new StyleResolverLocalFingerprint(local.copy(), key));
 		localFingerprintCount++;
 		return key;
@@ -257,8 +264,8 @@ class StyleResolver {
 		return haxeon.Diff.mask(left, right) == 0;
 
 	static function sourceKey(source:Null<StyleSource>):String
-		return source == null ? "none" : stringKey(source.stylesheet) + "|" + stringKey(source.selector) +
-			"|" + source.rule + "|" + stringKey(source.layer);
+		return source == null ? "none" : stringKey(source.stylesheet) + "|" + stringKey(source.selector) + "|"
+			+ source.rule + "|" + stringKey(source.layer);
 
 
 	/**
@@ -434,7 +441,7 @@ class StyleResolver {
 		handled |= bit;
 		if ((changed & bit) != 0)
 			result.setNumber(StyleProperty.TransformOriginY, local.transformOriginY, source);
-			localFieldsHandled = handled;
+		localFieldsHandled = handled;
 	}
 
 
@@ -455,8 +462,13 @@ class StyleResolver {
 				var current:StyleValue = animatedValues.get(key);
 				stop(key);
 				var animation = new StyleTransitionAnimation(current, next, transition.duration, transition.easing,
-					function(value) { animatedValues.set(key, value); },
-					function() { animatedValues.set(key, next); activeAnimations.remove(key); });
+					function(value) {
+						animatedValues.set(key, value);
+					},
+						function() {
+					animatedValues.set(key, next);
+					activeAnimations.remove(key);
+				});
 				activeAnimations.set(key, animation);
 				scheduler.track(animation);
 			}
@@ -530,12 +542,9 @@ class StyleResolverCacheEntry {
 			themeIdentity:Int, themeRevision:Int, applicationIdentity:Int,
 			applicationRevision:Int, localKey:String, environmentIdentity:Int,
 			environmentRevision:Int, localTextColor:Null<Color>):Bool
-		return this.target.sameSelector(target) && this.states == states &&
-			this.parentKey == parentKey && this.themeIdentity == themeIdentity &&
-			this.themeRevision == themeRevision &&
-			this.applicationIdentity == applicationIdentity &&
-			this.applicationRevision == applicationRevision && this.localKey == localKey &&
-			this.environmentIdentity == environmentIdentity &&
-			this.environmentRevision == environmentRevision &&
-			this.localTextColor == localTextColor;
+		return this.target.sameSelector(target) && this.states == states && this.parentKey == parentKey
+			&& this.themeIdentity == themeIdentity && this.themeRevision == themeRevision
+			&& this.applicationIdentity == applicationIdentity && this.applicationRevision == applicationRevision
+			&& this.localKey == localKey && this.environmentIdentity == environmentIdentity
+			&& this.environmentRevision == environmentRevision && this.localTextColor == localTextColor;
 }

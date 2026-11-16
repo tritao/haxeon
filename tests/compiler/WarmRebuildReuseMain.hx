@@ -13,18 +13,23 @@ import haxe.io.Bytes;
  * and compared inside the compiler, which throws on a difference.
  */
 class WarmRebuildReuseMain {
-	static final boxSource = "class Box<T> { public var value:T; public var spare:Int; public function new(value:T) this.value = value; public function get():T return value; }";
+	static final boxSource =
+		"class Box<T> { public var value:T; public var spare:Int; public function new(value:T) this.value = value; public function get():T return value; }";
 	static final shapeSource = "enum Shape { Circle(radius:Int); Square(side:Int); }";
 
 	/** `step` is recursive so it is not inlined into `of` or `main`: a function nothing reaches is not in the module, and the scenarios below edit functions that are. */
-	static final areaSource = "class Area { public static function of(shape:Shape):Int return step(shape, 0); static function step(shape:Shape, n:Int):Int return n > 0 ? step(shape, n - 1) : switch shape { case Circle(radius): 3 * radius * radius; case Square(side): side * side; }; }";
+	static final areaSource =
+		"class Area { public static function of(shape:Shape):Int return step(shape, 0); static function step(shape:Shape, n:Int):Int return n > 0 ? step(shape, n - 1) : switch shape { case Circle(radius): 3 * radius * radius; case Square(side): side * side; }; }";
 
-	static final libSource = "class Lib { public static function add(a:Int, b:Int):Int return a + b; public static function name():String return \"lib\"; public static function boxed():Int return new Box<Int>(3).get(); }";
+	static final libSource =
+		"class Lib { public static function add(a:Int, b:Int):Int return a + b; public static function name():String return \"lib\"; public static function boxed():Int return new Box<Int>(3).get(); }";
 
 	/** Field initializers register anonymous types (`{}`) when they are typed, which a warm build does not do again for an unchanged class. */
-	static final configSource = "class Config { public static var empty:Dynamic = {}; public var data:Dynamic = {a: 1}; public function new() {} }";
+	static final configSource =
+		"class Config { public static var empty:Dynamic = {}; public var data:Dynamic = {a: 1}; public function new() {} }";
 
-	static final mainSource = "class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)); return total == 18 && Lib.name().length == 3 && new Config().data != null && Config.empty != null ? 42 : 1; } }";
+	static final mainSource =
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)); return total == 18 && Lib.name().length == 3 && new Config().data != null && Config.empty != null ? 42 : 1; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -40,47 +45,58 @@ class WarmRebuildReuseMain {
 		var failures:Array<String> = [];
 		attempt(failures, "second build without an edit", true, files -> {});
 		attempt(failures, "second build without an edit, checked", true, files -> {}, true);
-		edit(failures, "after a body edit", files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
+		edit(failures, "after a body edit",
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "return a + b;", "return a + b + 0;")));
 		edit(failures, "after a signature edit",
-			files -> files.set("Lib.hx", StringTools.replace(libSource, "add(a:Int, b:Int)", "add(a:Int, b:Int, c:Int = 0)")));
+			files -> files.set("Lib.hx",
+			StringTools.replace(libSource, "add(a:Int, b:Int)", "add(a:Int, b:Int, c:Int = 0)")));
 		edit(failures, "after a new generic specialization", files -> {
 			files.set("Lib.hx",
-				StringTools.replace(libSource, "return new Box<Int>(3).get();", "return new Box<Int>(3).get() + new Box<String>(\"x\").get().length - 1;"));
+				StringTools.replace(libSource, "return new Box<Int>(3).get();",
+				"return new Box<Int>(3).get() + new Box<String>(\"x\").get().length - 1;"));
 		});
 		edit(failures, "after adding a function",
 			files -> files.set("Lib.hx",
-				StringTools.replace(libSource, "public static function name()", "public static function extra():Int return 7; public static function name()")));
+			StringTools.replace(libSource, "public static function name()",
+			"public static function extra():Int return 7; public static function name()")));
 		edit(failures, "after removing a module", files -> {
 			files.remove("Area.hx");
 			files.set("Main.hx", StringTools.replace(mainSource, " + Area.of(Circle(2))", " + 12"));
 		});
-		edit(failures, "after a new constant in a function early in the layout, which shifts the constant tables of the functions after it",
+		edit(failures,
+			"after a new constant in a function early in the layout, which shifts the constant tables of the functions after it",
 			files -> files.set("Box.hx",
-				StringTools.replace(boxSource, "public function get():T return value;",
-					"public function get():T { spare = spare + 123456789; return value; }")),
+			StringTools.replace(boxSource, "public function get():T return value;",
+			"public function get():T { spare = spare + 123456789; return value; }")),
 			true);
-		edit(failures, "after a new function early in the layout, which shifts the function indices of the functions after it", files -> {
-			files.set("Area.hx",
-				StringTools.replace(areaSource, "public static function of(",
+		edit(failures,
+			"after a new function early in the layout, which shifts the function indices of the functions after it",
+			files -> {
+				files.set("Area.hx",
+					StringTools.replace(areaSource, "public static function of(",
 					"public static function again(shape:Shape, n:Int):Int return n > 0 ? again(shape, n - 1) : 7; public static function of("));
-			files.set("Main.hx", StringTools.replace(mainSource, "Area.of(Circle(2))", "Area.of(Circle(2)) + Area.again(Circle(1), 0) - 7"));
-		}, true);
+				files.set("Main.hx", StringTools.replace(mainSource, "Area.of(Circle(2))",
+					"Area.of(Circle(2)) + Area.again(Circle(1), 0) - 7"));
+			}, true);
 		edit(failures, "after a new string constant",
 			files -> files.set("Lib.hx",
-				StringTools.replace(libSource, "return \"lib\";",
-					"return \"lib\";" + " public static function shifted():String return \"a-constant-that-shifts-the-string-table\";")));
+			StringTools.replace(libSource, "return \"lib\";",
+			"return \"lib\";"
+			+ " public static function shifted():String return \"a-constant-that-shifts-the-string-table\";")));
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");
 	}
 
 	/** An edit is built in a warm session twice: as it is, and with HAXEON_CHECK_REUSE=1, which also lowers every function afresh and compares. */
-	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void, shifts:Bool = false):Void {
+	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void,
+			shifts:Bool = false):Void {
 		attempt(failures, label, false, change, false, shifts);
 		attempt(failures, label + ", checked", false, change, true, shifts);
 	}
 
-	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void, ?check:Bool = false,
+	static function attempt(failures:Array<String>, label:String, expectReuse:Bool, change:Map<String, String>->Void,
+			?check:Bool = false,
 			?shifts:Bool = false):Void {
 		var checkBefore = Sys.getEnv("HAXEON_CHECK_REUSE");
 		try {

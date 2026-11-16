@@ -14,7 +14,10 @@ struct Value implements Readable {
 		this.owner = owner;
 	}
 	public function read():Int return x;
-	public function advance():Int { x++; return x; }
+	public function advance():Int {
+		x++;
+		return x;
+	}
 	public function twice():Int return x * 2;
 }
 

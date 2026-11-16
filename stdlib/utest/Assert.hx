@@ -24,7 +24,8 @@ class Assert {
 
 	public static function equals<T>(expected:T, actual:T, message:String = "", ?pos:PosInfos):Bool {
 		if (expected != actual)
-			Assert.fail(message == "" ? "expected " + Std.string(expected) + " but it is " + Std.string(actual) : message, pos);
+			Assert.fail(message == ""
+				? "expected " + Std.string(expected) + " but it is " + Std.string(actual) : message, pos);
 		return true;
 	}
 
@@ -46,13 +47,15 @@ class Assert {
 		return true;
 	}
 
-	public static function floatEquals(expected:Float, actual:Float, approximation:Float = 0.00001, message:String = "", ?pos:PosInfos):Bool {
+	public static function floatEquals(expected:Float, actual:Float, approximation:Float = 0.00001, message:String = "",
+			?pos:PosInfos):Bool {
 		var difference = actual - expected;
 		if (difference < 0.0)
 			difference = -difference;
 		var equal = Math.isNaN(expected) ? Math.isNaN(actual) : !Math.isNaN(actual) && difference <= approximation;
 		if (!equal)
-			Assert.fail(message == "" ? "expected " + Std.string(expected) + " but it is " + Std.string(actual) : message, pos);
+			Assert.fail(message == ""
+				? "expected " + Std.string(expected) + " but it is " + Std.string(actual) : message, pos);
 		return true;
 	}
 

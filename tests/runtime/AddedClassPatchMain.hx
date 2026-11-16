@@ -14,7 +14,8 @@ import runtime.Runtime;
  */
 class AddedClassPatchMain {
 	static function main():Void {
-		var program = (classes:String, score:String, lambda:String, extra:String) -> "interface Scorer { function score():Int; }\n"
+		var program = (classes:String, score:String, lambda:String,
+			extra:String) -> "interface Scorer { function score():Int; }\n"
 			+ "class Panel implements Scorer {\n"
 			+ "  public var keys:Array<String>;\n"
 			+ "  public function new() keys = [\"a\", \"b\", \"c\"];\n"
@@ -74,7 +75,8 @@ class AddedClassPatchMain {
 		// Counter, Wide, Fixed, Heavy and the new lambda's environment; Weighted.
 		if (objects < 5 || virtuals < 1)
 			throw 'The patch appends $objects object and $virtuals virtual types instead of at least 5 and 1';
-		Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		// Panel: Counter(3).bump() = 13. The stored closure is the one made before the edit: 10 + 5. The new f: 1 * 2 + 5.
 		// Wide: Counter(4).bump() + 100 = 114. Fixed: 7. Heavy, through the new interface Weighted: 9.
 		var expected = 13 * 1000 + 15 * 10 + 7 + 114 * 100000 + 7 * 10000000 + 9;
@@ -103,8 +105,10 @@ class AddedClassPatchMain {
 			" + total(new Wide()) * 100000 + total(new Fixed(7)) * 10000000 + weigh(new Heavy())"));
 		var edited = compiler.compile("Main");
 		if (edited.requiresReload || edited.patchBytes == null)
-			throw 'Editing an added class required a reload: ' + [for (reason in edited.reloadReasons) Std.string(reason)].join(", ");
-		Runtime.patchSet(live, new PatchSet(changed.revision, edited.revision, edited.patchBytes, edited.changedFunctions));
+			throw 'Editing an added class required a reload: '
+				+ [for (reason in edited.reloadReasons) Std.string(reason)].join(", ");
+		Runtime.patchSet(live,
+			new PatchSet(changed.revision, edited.revision, edited.patchBytes, edited.changedFunctions));
 		expected = 23 * 1000 + 15 * 10 + 7 + 124 * 100000 + 7 * 10000000 + 9;
 		after = Runtime.callInt(live, mainId);
 		if (after != expected)

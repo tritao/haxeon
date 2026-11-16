@@ -21,11 +21,13 @@ class WasmExceptionLowering {
 				fn = module.functions[index];
 			if (fn.encodedBody != null)
 				continue;
-			module.setFunction(functionIndex, new WasmFunction(fn.name, fn.type, fn.locals, lowerSequence(fn.body, payloadType)));
+			module.setFunction(functionIndex,
+				new WasmFunction(fn.name, fn.type, fn.locals, lowerSequence(fn.body, payloadType)));
 		}
 	}
 
-	static function lowerSequence(instructions:Array<WasmInstruction>, payloadType:WasmValueType):Array<WasmInstruction> {
+	static function lowerSequence(instructions:Array<WasmInstruction>,
+			payloadType:WasmValueType):Array<WasmInstruction> {
 		var result:Array<WasmInstruction> = [], index = 0;
 		while (index < instructions.length) {
 			switch instructions[index] {
@@ -56,7 +58,8 @@ class WasmExceptionLowering {
 						case Catch(value): value;
 						default: throw "Wasm exception lowering lost a catch tag";
 					}, protectedBody = lowerSequence(instructions.slice(index + 1, catchIndex),
-						payloadType), catchBody = lowerSequence(instructions.slice(catchIndex + 1, endIndex), payloadType);
+						payloadType),
+						catchBody = lowerSequence(instructions.slice(catchIndex + 1, endIndex), payloadType);
 					shiftExternalBranches(protectedBody, 2);
 					result.push(Block(null));
 					result.push(Block(payloadType));

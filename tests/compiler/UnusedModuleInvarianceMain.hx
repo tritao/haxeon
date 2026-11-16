@@ -7,7 +7,8 @@ import compiler.runtime.CompilerIntrinsics;
  * and once with it as a root module.
  */
 class UnusedModuleInvarianceMain {
-	static final unused = "class UnusedReflect { public static function peek(object:Dynamic):Dynamic return Reflect.field(object, \"x\"); "
+	static final unused =
+		"class UnusedReflect { public static function peek(object:Dynamic):Dynamic return Reflect.field(object, \"x\"); "
 		+ "public static function poke(object:Dynamic):Void Reflect.setField(object, \"x\", 1); }";
 
 	static function build(withModule:Bool):compiler.Compiler.CompileResult {
@@ -27,7 +28,7 @@ class UnusedModuleInvarianceMain {
 		return [
 			for (block in fn.blocks)
 				for (located in block.instructions)
-					Std.string(located.value)
+				Std.string(located.value)
 		].join("\n");
 
 	static function storage(result:compiler.Compiler.CompileResult):String

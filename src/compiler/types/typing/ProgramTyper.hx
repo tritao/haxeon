@@ -37,12 +37,15 @@ class ProgramTyper {
 	public function new(bodyTyper:BodyTyper) {
 		this.bodyTyper = bodyTyper;
 		this.session = bodyTyper.session;
-		this.externTyper = new ExternTyper(argument -> bodyTyper.argumentType(argument), (type, span) -> bodyTyper.lowerType(type, span));
+		this.externTyper = new ExternTyper(argument -> bodyTyper.argumentType(argument),
+			(type, span) -> bodyTyper.lowerType(type, span));
 		this.assembler = new TypedProgramAssembler(session, function(type) bodyTyper.registerAnonymousTypes(type));
 	}
 
-	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool, entryPoint:Null<String>,
-			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts, ?retained:RetainedFromPrevious):MeasuredTypedProgram {
+	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
+			entryPoint:Null<String>,
+			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts,
+			?retained:RetainedFromPrevious):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
@@ -80,9 +83,13 @@ class ProgramTyper {
 				if (classDecl.isExtern == true || defaultLibrary != null) {
 					for (method in classDecl.methods) {
 						if (!method.isStatic)
-							BodyTyper.fail("E1021", 'Extern instance method "${classDecl.name}.${method.name}" is not supported yet', method.span);
-						var nativeName = method.name.indexOf(".") >= 0 ? method.name : classDecl.name + "." + method.name;
-						typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null, defaultLibrary != null));
+							BodyTyper.fail("E1021",
+								'Extern instance method "${classDecl.name}.${method.name}" is not supported yet',
+								method.span);
+						var nativeName = method.name.indexOf(".") >= 0
+							? method.name : classDecl.name + "." + method.name;
+						typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null,
+							defaultLibrary != null));
 					}
 				}
 			}
@@ -91,13 +98,18 @@ class ProgramTyper {
 				if (abstractDecl.isExtern == true) {
 					var defaultLibrary = externTyper.nativeLibrary(abstractDecl.name, abstractDecl.metadata);
 					for (method in abstractDecl.methods) {
-						var nativeName = method.name.indexOf(".") >= 0 ? method.name : abstractDecl.name + "." + method.name;
+						var nativeName = method.name.indexOf(".") >= 0
+							? method.name : abstractDecl.name + "." + method.name;
 						var receiverType = method.isStatic
-							|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-								BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
-						var resultOverride = method.name == "new" ? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
-							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters)) : null;
-						typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary, resultOverride));
+							|| method.name == "new" ? null : session.declarations.resolve(abstractDecl.underlying,
+							abstractDecl.span,
+							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters));
+						var resultOverride = method.name == "new"
+							? session.declarations.resolve(abstractDecl.underlying, abstractDecl.span,
+							BodyTyper.declarationTypeSubstitutions(abstractDecl.name, abstractDecl.typeParameters))
+							: null;
+						typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary,
+							resultOverride));
 					}
 				}
 		if (cachedMetadata == null) {
@@ -153,58 +165,58 @@ class ProgramTyper {
 			})))
 				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
 		}
-		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [
-			for (enumDecl in program.enums)
+		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [for (enumDecl in program.enums)
+			{
+				name:enumDecl.name,
+					isRecursive:session.enumRepresentations.isRecursive(enumDecl.name),
+					equatable:DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
+					"Equatable"),
+					hashable:DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []),
+					"Hashable"),
+					metadata:enumDecl.metadata,
+					cases:[for (caseDecl in enumDecl.cases)
+					{
+						name:caseDecl.name,
+							metadata:caseDecl.metadata,
+							params:[
+								for (param in caseDecl.params)
+									session.representation.enumStorageType(enumDecl.typeParameters, param,
+									TInstance(NominalKind.Enum, enumDecl.name, []))
+							],
+								span:caseDecl.span
+					}],
+						span:enumDecl.span
+			}] : [
+				for (declaration in cachedMetadata.enums)
+					if (declaration.specializationOrigin == null) declaration
+			], typedInterfaces:Array<TypedInterface> = cachedMetadata == null
+				? [for (interfaceDecl in program.interfaces)
 				{
-					name: enumDecl.name,
-					isRecursive: session.enumRepresentations.isRecursive(enumDecl.name),
-					equatable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []), "Equatable"),
-					hashable: DeclaredConformance.has(session, TInstance(NominalKind.Enum, enumDecl.name, []), "Hashable"),
-					metadata: enumDecl.metadata,
-					cases: [
-						for (caseDecl in enumDecl.cases)
-							{
-								name: caseDecl.name,
-								metadata: caseDecl.metadata,
-								params: [
-									for (param in caseDecl.params)
-										session.representation.enumStorageType(enumDecl.typeParameters, param, TInstance(NominalKind.Enum, enumDecl.name, []))
-								],
-								span: caseDecl.span
-							}
-					],
-					span: enumDecl.span
-				}
-		] : [
-			for (declaration in cachedMetadata.enums)
-				if (declaration.specializationOrigin == null) declaration
-			], typedInterfaces:Array<TypedInterface> = cachedMetadata == null ? [
-			for (interfaceDecl in program.interfaces)
-				{
-					name: interfaceDecl.name,
-					bases: [
-						for (base in interfaceDecl.bases)
-							if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
-					],
-					methods: [
-						for (method in interfaceDecl.methods)
-							{
-								name: method.name,
-								arguments: [
-									for (argument in method.arguments)
-										session.representation.resolveMethodArgument(TInstance(NominalKind.Interface, interfaceDecl.name,
-											[for (_ in interfaceDecl.typeParameters) TDynamic]),
-											interfaceDecl.name, argument)
-											.physical],
-								result: erasureType(interfaceDecl, method.result, method.span)
-							}
-					]
-				}
-			] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
+			name:interfaceDecl.name,
+				bases:[
+					for (base in interfaceDecl.bases)
+						if (!StructProperties.isConstraintSyntax(base)) BodyTyper.inheritanceName(base)
+				],
+					methods:[for (method in interfaceDecl.methods)
+					{
+						name:method.name,
+							arguments:[
+								for (argument in method.arguments)
+									session.representation.resolveMethodArgument(TInstance(NominalKind.Interface,
+									interfaceDecl.name,
+									[for (_ in interfaceDecl.typeParameters) TDynamic]),
+									interfaceDecl.name, argument)
+									.physical
+							],
+								result:erasureType(interfaceDecl, method.result, method.span)
+					}]
+		}] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null ? [
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true
-					&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected, true)
-			] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected), typedFunctions:Array<TypedFunction> = [];
+				&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) typeClass(classDecl, selected,
+				true)
+		] : refreshCachedClasses(program.classes, cachedMetadata.classes, selected),
+			typedFunctions:Array<TypedFunction> = [];
 		// Unchanged code keeps the generic owners and generated classes it uses, whether or not the declaration metadata of the
 		// previous program is reused. Owners are asked for again and typed from the current declarations, so a program that
 		// gained or changed declarations still has every owner its unchanged callers refer to. With reused metadata the
@@ -221,7 +233,8 @@ class ProgramTyper {
 				for (caseDecl in enumDecl.cases)
 					for (parameter in caseDecl.params)
 						if (NativeLayout.containsNativeLayoutType(parameter))
-							BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet', caseDecl.span);
+							BodyTyper.fail("E1022", 'Native layout types cannot be stored in a Haxe enum yet',
+								caseDecl.span);
 		if (cachedMetadata == null)
 			for (interfaceIndex in 0...typedInterfaces.length) {
 				var interfaceDecl = typedInterfaces[interfaceIndex],
@@ -231,9 +244,11 @@ class ProgramTyper {
 						parsedMethod = parsed.methods[methodIndex];
 					for (argument in method.arguments)
 						if (NativeLayout.containsNativeLayoutType(argument))
-							BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet', parsedMethod.span);
+							BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in an interface yet',
+								parsedMethod.span);
 					if (NativeLayout.containsNativeLayoutType(method.result))
-						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet', parsedMethod.span);
+						BodyTyper.fail("E1022", 'Native layout types cannot be returned by value in an interface yet',
+							parsedMethod.span);
 				}
 			}
 		if (cachedMetadata == null)
@@ -260,15 +275,19 @@ class ProgramTyper {
 					&& method.isStatic
 					&& !BodyTyper.isGeneric(BodyTyper.requiredMapValue(session.signatures, name))
 					&& (selected == null || selected.exists(name)))
-					typedFunctions.push(bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name), abstractDecl.name, true));
+					typedFunctions.push(bodyTyper.typeFunction(BodyTyper.requiredMapValue(session.signatures, name),
+						abstractDecl.name, true));
 			}
 		var functionBodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterFunctionBodies = AllocationMeter.sample();
 		// Field and signature types can request owners without a construction expression. A
 		// generated owner's fields and methods can request further owners, so drain to a fixed point.
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
-		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration], ownerIndex = 0, generatedIndex = 0,
-			pathClassIndex = 0, enumIndex = 0;
+		var ownerDeclarations = [for (declaration in program.classes) declaration.name => declaration],
+			ownerIndex = 0,
+			generatedIndex = 0,
+			pathClassIndex = 0,
+			enumIndex = 0;
 		var keyPaths = new KeyPathRuntime(session, typedClasses);
 		function drainRuntimeTypes():Void
 			while (true) {
@@ -311,7 +330,8 @@ class ProgramTyper {
 		// Keep the concrete enum operations available for those raw runtime descriptors.
 		var reflectedClassIndex = 0;
 		function requestFieldReflection(classDecl:TypedClass):Void {
-			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : typedFunctions.length > 0 ? typedFunctions[0].name : null;
+			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : typedFunctions.length > 0
+				? typedFunctions[0].name : null;
 			if (origin != null)
 				for (field in classDecl.fields)
 					EnumDynamicBox.requestReflectedTypes(session, field.type, origin, field.span);
@@ -338,9 +358,12 @@ class ProgramTyper {
 			rawMethods:Map<String, TypedFunction> = [],
 			flagMethods:Map<String, TypedFunction> = [];
 		function requestCount():Int
-			return Lambda.count(session.flagsRequests) + Lambda.count(session.rawRepresentableRequests) + Lambda.count(session.valueEqualityRequests)
-				+ Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests) + Lambda.count(session.enumMethodRequests)
-				+ Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests) + Lambda.count(session.jsonCodecRequests)
+			return Lambda.count(session.flagsRequests) + Lambda.count(session.rawRepresentableRequests)
+				+ Lambda.count(session.valueEqualityRequests)
+				+ Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
+				+ Lambda.count(session.enumMethodRequests)
+				+ Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests)
+				+ Lambda.count(session.jsonCodecRequests)
 				+ Lambda.count(session.keyPathDefinitions) + session.representation.genericOwnerRequestCount()
 				+ session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
 		while (true) {
@@ -414,14 +437,16 @@ class ProgramTyper {
 		equalityNames.sort(Reflect.compare);
 		for (name in equalityNames)
 			typedFunctions.push(equalities.get(name));
-		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null, program.classes);
+		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null,
+			program.classes);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);
 		var nativeTypeDescriptors = bodyTyper.expressionTyper.nativeTypeDescriptors();
 		var generatedDoneAt = Sys.time() * 1000.0;
 		var allocationAfterGenerated = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(BodyTyped);
 		var bodyTransitionDoneAt = Sys.time() * 1000.0;
-		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions, typedNatives, nativeTypeDescriptors);
+		var result:TypedProgram = assembler.assemble(typedEnums, typedInterfaces, typedClasses, typedFunctions,
+			typedNatives, nativeTypeDescriptors);
 		var assemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterAssembly = AllocationMeter.sample();
 		semantic.lifecycle.advanceAll(Finalized);
@@ -442,7 +467,8 @@ class ProgramTyper {
 					AllocationMeter.delta("typer-no-return", allocationAfterSetup, allocationAfterNoReturn),
 					AllocationMeter.delta("typer-metadata", allocationAfterNoReturn, allocationAfterMetadata),
 					AllocationMeter.delta("typer-class-bodies", allocationAfterMetadata, allocationAfterClassBodies),
-					AllocationMeter.delta("typer-function-bodies", allocationAfterClassBodies, allocationAfterFunctionBodies),
+					AllocationMeter.delta("typer-function-bodies", allocationAfterClassBodies,
+						allocationAfterFunctionBodies),
 					AllocationMeter.delta("typer-generated", allocationAfterFunctionBodies, allocationAfterGenerated),
 					AllocationMeter.delta("typer-assembly", allocationAfterGenerated, allocationAfterAssembly),
 					AllocationMeter.delta("typer-finalize", allocationAfterAssembly, allocationAfterFinalize)
@@ -507,7 +533,8 @@ class ProgramTyper {
 				if (cached.specializationArguments != null
 					&& session.classDecls.exists(cached.specializationOrigin)
 					&& session.representation.typeNamesExist(cached.specializationArguments))
-					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin, cached.specializationArguments));
+					session.representation.genericOwner(TInstance(NominalKind.Class, cached.specializationOrigin,
+						cached.specializationArguments));
 			} else if (!session.classDecls.exists(cached.name)) {
 				carried.push({
 					name: cached.name,
@@ -528,7 +555,8 @@ class ProgramTyper {
 		return carried;
 	}
 
-	function refreshCachedClasses(parsed:Array<AstClass>, cached:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
+	function refreshCachedClasses(parsed:Array<AstClass>, cached:Array<TypedClass>,
+			selected:Null<Map<String, Bool>>):Array<TypedClass> {
 		if (selected == null)
 			return cached;
 		var parsedByName = [for (decl in parsed) decl.name => decl];
@@ -543,34 +571,34 @@ class ProgramTyper {
 				dot = name.indexOf(".", dot + 1);
 			}
 		}
-		return [
-			for (cachedClass in cached) {
-				var declaration = parsedByName.get(cachedClass.name);
-				var changed = owners.exists(cachedClass.name) || (declaration != null && declaration.span.file != cachedClass.span.file);
-				if (!changed || !parsedByName.exists(cachedClass.name)) cachedClass else {
-					var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
-						cachedMethods = [for (method in cachedClass.methods) method.name => method];
-					var methods = [
-						for (method in refreshed.methods)
-							selected.exists(method.name) ? method : cachedMethods.exists(method.name) ? cachedMethods.get(method.name) : method
-					];
-					{
-						name: refreshed.name,
-						genericParameters: refreshed.genericParameters,
-						isValue: refreshed.isValue,
-						isFlat: refreshed.isFlat,
-						isPortable: refreshed.isPortable,
-						isNativeValue: refreshed.isNativeValue,
-						nativeLayouts: cachedClass.nativeLayouts,
-						base: refreshed.base,
-						interfaces: refreshed.interfaces,
-						fields: refreshed.fields,
-						methods: methods,
-						span: refreshed.span
-					};
-				}
+		return [for (cachedClass in cached) {
+			var declaration = parsedByName.get(cachedClass.name);
+			var changed = owners.exists(cachedClass.name)
+				|| (declaration != null && declaration.span.file != cachedClass.span.file);
+			if (!changed || !parsedByName.exists(cachedClass.name)) cachedClass else {
+				var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
+					cachedMethods = [for (method in cachedClass.methods) method.name => method];
+				var methods = [
+					for (method in refreshed.methods)
+						selected.exists(method.name) ? method : cachedMethods.exists(method.name)
+						? cachedMethods.get(method.name) : method
+				];
+				{
+					name:refreshed.name,
+						genericParameters:refreshed.genericParameters,
+						isValue:refreshed.isValue,
+						isFlat:refreshed.isFlat,
+						isPortable:refreshed.isPortable,
+						isNativeValue:refreshed.isNativeValue,
+						nativeLayouts:cachedClass.nativeLayouts,
+						base:refreshed.base,
+						interfaces:refreshed.interfaces,
+						fields:refreshed.fields,
+						methods:methods,
+						span:refreshed.span
+				};
 			}
-		];
+		}];
 	}
 
 	function bindCachedNativeLayouts(classes:Array<TypedClass>):Void
@@ -595,11 +623,15 @@ class ProgramTyper {
 			]);
 			for (capability in ["Hashable", "Equatable"])
 				if (session.relations.isAssignable(actual, TInstance(NominalKind.Interface, capability, [])))
-					BodyTyper.fail("E1025", 'Class "${classDecl.name}" cannot conform to $capability; use a struct for value equality', classDecl.span);
+					BodyTyper.fail("E1025",
+						'Class "${classDecl.name}" cannot conform to $capability; use a struct for value equality',
+						classDecl.span);
 		}
 
 		if (isStruct && isNativeValue)
-			BodyTyper.fail("E1022", 'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields', classDecl.span);
+			BodyTyper.fail("E1022",
+				'Struct "${classDecl.name}" does not use @:repr; native layout is inferred from its fields',
+				classDecl.span);
 		if (isStruct && classDecl.typeParameters.length > 0)
 			BodyTyper.fail("E1022", 'Generic struct "${classDecl.name}" is not supported yet', classDecl.span);
 		if (isValue)
@@ -613,17 +645,22 @@ class ProgramTyper {
 		if (isNativeValue) {
 			for (field in classDecl.fields) {
 				if (field.isStatic)
-					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare static fields', field.span);
+					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare static fields',
+						field.span);
 				if (field.initializer != null)
-					BodyTyper.fail("E1022", 'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
+					BodyTyper.fail("E1022",
+						'Native value field "${classDecl.name}.${field.name}" cannot have an initializer', field.span);
 			}
 			for (method in classDecl.methods)
 				if (!method.isStatic)
-					BodyTyper.fail("E1022", 'Native value record "${classDecl.name}" cannot declare instance methods or constructors', method.span);
+					BodyTyper.fail("E1022",
+						'Native value record "${classDecl.name}" cannot declare instance methods or constructors',
+						method.span);
 		}
 		var fields:Array<TypedField> = [],
 			fieldNames:Map<String, Bool> = [],
-			erasedSubstitutions = specialization == null ? session.representation.erasedNominalSubstitutions(classDecl.name) : specialization.substitutions;
+			erasedSubstitutions = specialization == null
+				? session.representation.erasedNominalSubstitutions(classDecl.name) : specialization.substitutions;
 		for (field in classDecl.fields) {
 			if (specialization != null && field.isStatic)
 				continue;
@@ -632,15 +669,18 @@ class ProgramTyper {
 			if (field.isInline && !field.isStatic)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" must be static', field.span);
 			if (field.isInline && field.initializer == null)
-				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer', field.span);
-			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name, field), field.span, erasedSubstitutions);
+				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer',
+					field.span);
+			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name,
+				field), field.span, erasedSubstitutions);
 			if ((switch (type) {
 				case TVoid: true;
 				default: false;
 			}))
 				BodyTyper.fail("E1002", 'Field "${classDecl.name}.${field.name}" cannot have type Void', field.span);
 			if (!requestedValue && !isNativeValue && NativeLayout.containsUnsupportedRuntimeValueType(type))
-				BodyTyper.fail("E1022", 'Native layout types can only appear in value structs or native value record fields', field.span);
+				BodyTyper.fail("E1022",
+					'Native layout types can only appear in value structs or native value record fields', field.span);
 			var initializer:Null<TypedExpression> = null,
 				initializerContextWarnings:Null<Array<compiler.Diagnostic>> = null,
 				inlineValue:Null<TypedExpression> = null,
@@ -649,18 +689,22 @@ class ProgramTyper {
 				if (field.isInline) {
 					var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
 					if (resolved == null)
-						BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+						BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"',
+							field.span);
 					initializer = resolved.initializer;
 					inlineValue = resolved.value;
 				} else {
-					var initializerContext = bodyTyper.enterBody((specialization == null ? classDecl.name : specialization.name) + ".__init",
+					var initializerContext =
+						bodyTyper.enterBody((specialization == null ? classDecl.name : specialization.name) + ".__init",
 						erasedSubstitutions, specialization == null ? null : classDecl.name),
 						scope = new Scope();
 					if (!field.isStatic)
-						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions), field.span);
+						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
+							field.span);
 					try {
 						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type), type,
-							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"'), "E1002");
+							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"'
+							: 'field "${classDecl.name}.${field.name}"'), "E1002");
 					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);
 						throw error;
@@ -685,19 +729,24 @@ class ProgramTyper {
 				warnings: initializerContextWarnings
 			});
 		}
-		var propertyFacts = StructProperties.evaluate(session.declarations, TInstance(NominalKind.Class, classDecl.name, []));
+		var propertyFacts = StructProperties.evaluate(session.declarations,
+			TInstance(NominalKind.Class, classDecl.name, []));
 		for (metadata in classDecl.metadata) {
 			if (metadata.name == "flat" && !propertyFacts.flat)
-				BodyTyper.fail("E1022", 'Struct "${classDecl.name}" asserts @:flat but field "${propertyFacts.flatPath}" is not Flat', metadata.span);
+				BodyTyper.fail("E1022",
+					'Struct "${classDecl.name}" asserts @:flat but field "${propertyFacts.flatPath}" is not Flat',
+					metadata.span);
 			if (metadata.name == "portable" && !propertyFacts.portable)
-				BodyTyper.fail("E1022", 'Struct "${classDecl.name}" asserts @:portable but field "${propertyFacts.portablePath}" is not Portable',
+				BodyTyper.fail("E1022",
+					'Struct "${classDecl.name}" asserts @:portable but field "${propertyFacts.portablePath}" is not Portable',
 					metadata.span);
 		}
 		var classSemanticSubstitutions:Map<String, CompilerType> = [];
 		for (parameter in classDecl.typeParameters)
 			classSemanticSubstitutions.set(parameter, TTypeParameter(classDecl.name, parameter));
 		for (interfaceType in classDecl.interfaces) {
-			var interfaceInstance = session.declarations.resolve(interfaceType, classDecl.span, classSemanticSubstitutions),
+			var interfaceInstance = session.declarations.resolve(interfaceType, classDecl.span,
+				classSemanticSubstitutions),
 				interfaceName = BodyTyper.inheritanceName(interfaceType);
 			if (!session.interfaceDecls.exists(interfaceName) && !StructProperties.isConstraintType(interfaceInstance))
 				BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', classDecl.span);
@@ -733,12 +782,14 @@ class ProgramTyper {
 					if (!StructProperties.isConstraintSyntax(interfaceType)) BodyTyper.inheritanceName(interfaceType)
 			],
 			fields: fields,
-			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions, specialization),
+			methods: typeClassMethods(classDecl, fields, selected, deferMethodBodies, erasedSubstitutions,
+				specialization),
 			span: classDecl.span
 		};
 	}
 
-	function validateObservable(classDecl:AstClass, declaredType:CompilerType, classSemanticSubstitutions:Map<String, CompilerType>, isValue:Bool,
+	function validateObservable(classDecl:AstClass, declaredType:CompilerType,
+			classSemanticSubstitutions:Map<String, CompilerType>, isValue:Bool,
 			isNativeValue:Bool):Void {
 		if (!DeclaredConformance.has(session, declaredType, "Observable"))
 			return;
@@ -748,14 +799,18 @@ class ProgramTyper {
 		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.reactive.ObservableSource");
 		session.runtimeDependencyTracker.record(classDecl.name + ".new", "haxeon.reactive.ReactiveRuntime");
 		if (isValue || isNativeValue)
-			BodyTyper.fail("E1025", 'Observable conformance is only supported on classes with identity: "${classDecl.name}"', classDecl.span);
+			BodyTyper.fail("E1025",
+				'Observable conformance is only supported on classes with identity: "${classDecl.name}"',
+				classDecl.span);
 		if (classDecl.base != null) {
 			var baseType = session.declarations.resolve(classDecl.base, classDecl.span, classSemanticSubstitutions);
 			if (!DeclaredConformance.has(session, baseType, "Observable"))
-				BodyTyper.fail("E1025", 'Observable class "${classDecl.name}" must extend an Observable base class', classDecl.span);
+				BodyTyper.fail("E1025", 'Observable class "${classDecl.name}" must extend an Observable base class',
+					classDecl.span);
 		}
 		for (field in DiffIntrinsics.storedFields(classDecl)) {
-			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field), field.span, classSemanticSubstitutions);
+			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field),
+				field.span, classSemanticSubstitutions);
 			var enumField = switch fieldType {
 				case TInstance(NominalKind.Enum, _, _), TNullable(TInstance(NominalKind.Enum, _, _)): true;
 				default: false;
@@ -767,7 +822,8 @@ class ProgramTyper {
 		}
 	}
 
-	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType, classSemanticSubstitutions:Map<String, CompilerType>):Void {
+	function validateDeclaredConformance(classDecl:AstClass, declaredType:CompilerType,
+			classSemanticSubstitutions:Map<String, CompilerType>):Void {
 		if (!session.relations.isStruct(declaredType))
 			return;
 		if (DeclaredConformance.has(session, declaredType, "Equatable")) {
@@ -777,38 +833,49 @@ class ProgramTyper {
 					hasEquals = true;
 					if (method.isStatic
 						|| method.arguments.length != 1
-						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, classSemanticSubstitutions), declaredType)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TBool))
-						BodyTyper.fail("E1003", 'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool', method.span);
+						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span,
+						classSemanticSubstitutions), declaredType)
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
+						classSemanticSubstitutions), TBool))
+						BodyTyper.fail("E1003",
+							'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool',
+							method.span);
 				} else if (method.name == "hash" && DeclaredConformance.has(session, declaredType, "Hashable")) {
 					hasHash = true;
 					if (method.isStatic
 						|| method.arguments.length != 0
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, classSemanticSubstitutions), TInt))
-						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int', method.span);
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
+						classSemanticSubstitutions), TInt))
+						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int',
+							method.span);
 				}
 			if (!hasEquals)
 				for (entry in DiffIntrinsics.conformanceFields(session, declaredType)) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsEquality(session, fieldType))
-						BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable',
+						BodyTyper.fail("E1025",
+							'Cannot synthesize Equatable for "${classDecl.name}": field "${field.name}" does not conform to Equatable',
 							field.span);
 				}
 			if (DeclaredConformance.has(session, declaredType, "Hashable") && !hasHash) {
 				if (hasEquals)
-					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int', classDecl.span);
+					BodyTyper.fail("E1025",
+						'Cannot synthesize Hashable for "${classDecl.name}" with a handwritten equals; provide hash():Int',
+						classDecl.span);
 				var hashFields = DiffIntrinsics.conformanceFields(session, declaredType);
 				for (entry in hashFields) {
 					var field = entry.field, fieldType = entry.type;
 					if (!DeclaredConformance.supportsHash(session, fieldType))
-						BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable',
+						BodyTyper.fail("E1025",
+							'Cannot synthesize Hashable for "${classDecl.name}": field "${field.name}" does not conform to Hashable',
 							field.span);
 				}
 			}
 		}
 	}
 
-	function validateEnumInterface(declaration:compiler.syntax.Ast.AstEnum, interfaceType:CompilerType, enumSubstitutions:Map<String, CompilerType>,
+	function validateEnumInterface(declaration:compiler.syntax.Ast.AstEnum, interfaceType:CompilerType,
+			enumSubstitutions:Map<String, CompilerType>,
 			requiredMethods:Map<String, Bool>):Void {
 		var interfaceName = switch interfaceType {
 			case TInstance(NominalKind.Interface, name, _): name;
@@ -821,7 +888,8 @@ class ProgramTyper {
 			BodyTyper.fail("E1007", 'Unknown interface "$interfaceName"', declaration.span);
 		var interfaceSubstitutions = session.representation.nominalSubstitutions(interfaceType);
 		for (base in contract.bases)
-			validateEnumInterface(declaration, session.declarations.resolve(base, contract.span, interfaceSubstitutions), enumSubstitutions, requiredMethods);
+			validateEnumInterface(declaration, session.declarations.resolve(base, contract.span,
+				interfaceSubstitutions), enumSubstitutions, requiredMethods);
 		for (method in contract.methods) {
 			requiredMethods.set(method.name, true);
 			var implementation:Null<AstFunction> = null;
@@ -830,10 +898,13 @@ class ProgramTyper {
 					if (candidate.name == method.name)
 						implementation = candidate;
 			if (implementation == null || implementation.isStatic)
-				BodyTyper.fail("E1007", 'Enum "${declaration.name}" does not implement "$interfaceName.${method.name}"', declaration.span);
+				BodyTyper.fail("E1007", 'Enum "${declaration.name}" does not implement "$interfaceName.${method.name}"',
+					declaration.span);
 			if ((implementation.typeParameters != null && implementation.typeParameters.length > 0)
 				|| !sameSignature(implementation, method, enumSubstitutions, interfaceSubstitutions))
-				BodyTyper.fail("E1003", 'Method "${declaration.name}.${method.name}" does not match interface "$interfaceName"', implementation.span);
+				BodyTyper.fail("E1003",
+					'Method "${declaration.name}.${method.name}" does not match interface "$interfaceName"',
+					implementation.span);
 		}
 	}
 
@@ -848,7 +919,8 @@ class ProgramTyper {
 				var resolved = session.declarations.resolve(conformance, declaration.span, substitutions);
 				validateEnumInterface(declaration, resolved, substitutions, requiredMethods);
 			}
-		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name, [for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
+		var type:CompilerType = TInstance(NominalKind.Enum, declaration.name,
+			[for (parameter in declaration.typeParameters) substitutions.get(parameter)]),
 			equatable = DeclaredConformance.has(session, type, "Equatable"),
 			hashable = DeclaredConformance.has(session, type, "Hashable"),
 			hasEquals = false,
@@ -864,39 +936,53 @@ class ProgramTyper {
 					BodyTyper.fail("E1003", 'Duplicate method "${declaration.name}.${method.name}"', method.span);
 				seenMethods.set(method.name, true);
 				if (!hasPayload && (method.name == "equals" || method.name == "hash"))
-					BodyTyper.fail("E1025", 'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash', method.span);
+					BodyTyper.fail("E1025",
+						'Nullary enum "${declaration.name}" uses tag equality and cannot override equals or hash',
+						method.span);
 				if (method.name != "equals" && method.name != "hash") {
 					if (!requiredMethods.exists(method.name))
-						BodyTyper.fail("E1025", 'Enum method "${declaration.name}.${method.name}" must implement a declared interface method', method.span);
+						BodyTyper.fail("E1025",
+							'Enum method "${declaration.name}.${method.name}" must implement a declared interface method',
+							method.span);
 					continue;
 				}
 				if (method.name == "equals") {
 					hasEquals = true;
 					if (!equatable)
-						BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals', method.span);
+						BodyTyper.fail("E1025", 'Enum "${declaration.name}" must declare Equatable to define equals',
+							method.span);
 					if (method.isStatic
 						|| method.arguments.length != 1
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
-						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span, substitutions), type)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TBool))
-						BodyTyper.fail("E1003", 'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool', method.span);
+						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span,
+						substitutions), type)
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
+						substitutions), TBool))
+						BodyTyper.fail("E1003",
+							'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool',
+							method.span);
 				} else {
 					hasHash = true;
 					if (!hashable)
 						BodyTyper.fail("E1025",
 							session.relations.recursiveAnonymousField(type, [],
-								null) == null ? 'Enum "${declaration.name}" must declare Hashable to define hash' : DeclaredConformance.capabilityError(session,
-									type, "Hashable"),
+							null) == null ? 'Enum "${declaration.name}" must declare Hashable to define hash'
+							: DeclaredConformance.capabilityError(session,
+							type, "Hashable"),
 							method.span);
 					if (method.isStatic
 						|| method.arguments.length != 0
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span, substitutions), TInt))
-						BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int', method.span);
+						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
+						substitutions), TInt))
+						BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int',
+							method.span);
 				}
 			}
 		if (hashable && hasEquals && !hasHash)
-			BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}" with a handwritten equals; provide hash():Int', declaration.span);
+			BodyTyper.fail("E1025",
+				'Cannot synthesize Hashable for "${declaration.name}" with a handwritten equals; provide hash():Int',
+				declaration.span);
 		if (!equatable)
 			return;
 		for (constructor in declaration.cases)
@@ -904,10 +990,12 @@ class ProgramTyper {
 				var fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
 					field = parameter.name == null ? "payload" : parameter.name;
 				if (!hasEquals && !DeclaredConformance.supportsEquality(session, fieldType))
-					BodyTyper.fail("E1025", 'Cannot synthesize Equatable for "${declaration.name}": ${constructor.name}.$field does not conform to Equatable',
+					BodyTyper.fail("E1025",
+						'Cannot synthesize Equatable for "${declaration.name}": ${constructor.name}.$field does not conform to Equatable',
 						parameter.span);
 				if (hashable && !hasHash && !DeclaredConformance.supportsHash(session, fieldType))
-					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable',
+					BodyTyper.fail("E1025",
+						'Cannot synthesize Hashable for "${declaration.name}": ${constructor.name}.$field does not conform to Hashable',
 						parameter.span);
 			}
 	}
@@ -916,7 +1004,8 @@ class ProgramTyper {
 	function validateFiniteValueLayout(declaration:AstClass, visiting:Array<String>, complete:Map<String, Bool>):Void {
 		var cycle = visiting.indexOf(declaration.name);
 		if (cycle >= 0)
-			BodyTyper.fail("E1022", 'Value layout contains a by-value cycle: ${visiting.slice(cycle).concat([declaration.name]).join(" -> ")}',
+			BodyTyper.fail("E1022",
+				'Value layout contains a by-value cycle: ${visiting.slice(cycle).concat([declaration.name]).join(" -> ")}',
 				declaration.span);
 		if (complete.exists(declaration.name))
 			return;
@@ -924,7 +1013,8 @@ class ProgramTyper {
 		for (field in declaration.fields) {
 			if (field.isStatic || !DiffIntrinsics.hasStoredField(field))
 				continue;
-			var type = session.declarations.resolve(session.declarations.resolvedFieldType(declaration.name, field), field.span);
+			var type = session.declarations.resolve(session.declarations.resolvedFieldType(declaration.name, field),
+				field.span);
 			validateFiniteValueField(type, path, complete);
 		}
 		complete.set(declaration.name, true);
@@ -944,34 +1034,35 @@ class ProgramTyper {
 		}
 	}
 
-	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
+	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>,
+			selected:Null<Map<String, Bool>>):Array<TypedClass> {
 		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration];
-		return [
-			for (typed in classes) {
-				var declaration = byName.get(typed.name);
-				if (declaration == null) typed else {
-					var substitutions = session.representation.erasedNominalSubstitutions(declaration.name);
-					{
-						name: typed.name,
-						genericParameters: typed.genericParameters,
-						isValue: typed.isValue,
-						isFlat: typed.isFlat,
-						isPortable: typed.isPortable,
-						isNativeValue: typed.isNativeValue,
-						nativeLayouts: typed.nativeLayouts,
-						base: typed.base,
-						interfaces: typed.interfaces,
-						fields: typed.fields,
-						methods: typeClassMethods(declaration, typed.fields, selected, false, substitutions),
-						span: typed.span
-					};
-				}
+		return [for (typed in classes) {
+			var declaration = byName.get(typed.name);
+			if (declaration == null) typed else {
+				var substitutions = session.representation.erasedNominalSubstitutions(declaration.name);
+				{
+					name:typed.name,
+						genericParameters:typed.genericParameters,
+						isValue:typed.isValue,
+						isFlat:typed.isFlat,
+						isPortable:typed.isPortable,
+						isNativeValue:typed.isNativeValue,
+						nativeLayouts:typed.nativeLayouts,
+						base:typed.base,
+						interfaces:typed.interfaces,
+						fields:typed.fields,
+						methods:typeClassMethods(declaration, typed.fields, selected, false, substitutions),
+						span:typed.span
+				};
 			}
-		];
+		}];
 	}
 
-	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>, deferBodies:Bool,
-			substitutions:Map<String, CompilerType>, ?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation):Array<TypedFunction> {
+	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>,
+			deferBodies:Bool,
+			substitutions:Map<String, CompilerType>,
+			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation):Array<TypedFunction> {
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
 			hasConstructor = false;
@@ -988,13 +1079,16 @@ class ProgramTyper {
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified)),
 				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic, substitutions,
-					specialization == null ? null : specialization.name + "." + method.name, null, specialization == null ? null : specialization.name,
-					specialization == null ? null : specialization.typeArguments) : methodSignature(method, classDecl.name, substitutions);
+					specialization == null ? null : specialization.name + "." + method.name, null,
+					specialization == null ? null : specialization.name,
+					specialization == null ? null : specialization.typeArguments) : methodSignature(method,
+					classDecl.name, substitutions);
 			if (method.name == "new") {
 				hasConstructor = true;
 				if (typeBody && instanceInitializers.length > 0)
 					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers,
-						specialization == null ? null : session.representation.receiverType(classDecl.name, substitutions));
+						specialization == null ? null : session.representation.receiverType(classDecl.name,
+						substitutions));
 			}
 			typedMethods.push(typedMethod);
 		}
@@ -1033,13 +1127,15 @@ class ProgramTyper {
 	}
 
 	function layoutNativeClasses(classes:Array<TypedClass>):Array<TypedClass> {
-		var byName:Map<String, TypedClass> = [], layoutsByTarget:Map<String, Map<String, TypedNativeLayout>> = [], targets = [
-			"portable-abi32",
-			"portable-abi64",
-			"wasm32-wasi",
-			"x86_64-pc-linux-gnu",
-			"aarch64-unknown-linux-gnu"
-		];
+		var byName:Map<String, TypedClass> = [],
+			layoutsByTarget:Map<String, Map<String, TypedNativeLayout>> = [],
+			targets = [
+				"portable-abi32",
+				"portable-abi64",
+				"wasm32-wasi",
+				"x86_64-pc-linux-gnu",
+				"aarch64-unknown-linux-gnu"
+			];
 		if (targets.indexOf(session.nativeAbiTarget) < 0)
 			targets.push(session.nativeAbiTarget);
 		for (classDecl in classes)
@@ -1051,34 +1147,33 @@ class ProgramTyper {
 					computeNativeLayout(classDecl.name, target, byName, layouts, []);
 			layoutsByTarget.set(target, layouts);
 		}
-		return [
-			for (classDecl in classes) {
-				var hasNativeLayout = classDecl.isNativeValue || classDecl.isFlat,
-					nativeLayouts:Array<TypedNativeLayout> = hasNativeLayout ? [
-						for (target in targets)
-							requiredNativeLayout(layoutsByTarget, target, classDecl.name)
-					] : [];
-				if (hasNativeLayout) session.nativeLayoutsByName.set(classDecl.name,
-					requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
-				{
-					name: classDecl.name,
-					genericParameters: classDecl.genericParameters,
-					isValue: classDecl.isValue,
-					isFlat: classDecl.isFlat,
-					isPortable: classDecl.isPortable,
-					isNativeValue: classDecl.isNativeValue,
-					nativeLayouts: nativeLayouts,
-					base: classDecl.base,
-					interfaces: classDecl.interfaces,
-					fields: classDecl.fields,
-					methods: classDecl.methods,
-					span: classDecl.span
-				}
+		return [for (classDecl in classes) {
+			var hasNativeLayout = classDecl.isNativeValue || classDecl.isFlat,
+				nativeLayouts:Array<TypedNativeLayout> = hasNativeLayout ? [
+					for (target in targets)
+						requiredNativeLayout(layoutsByTarget, target, classDecl.name)
+				] : [];
+			if (hasNativeLayout) session.nativeLayoutsByName.set(classDecl.name,
+				requiredNativeLayout(layoutsByTarget, session.nativeAbiTarget, classDecl.name));
+			{
+				name:classDecl.name,
+					genericParameters:classDecl.genericParameters,
+					isValue:classDecl.isValue,
+					isFlat:classDecl.isFlat,
+					isPortable:classDecl.isPortable,
+					isNativeValue:classDecl.isNativeValue,
+					nativeLayouts:nativeLayouts,
+					base:classDecl.base,
+					interfaces:classDecl.interfaces,
+					fields:classDecl.fields,
+					methods:classDecl.methods,
+					span:classDecl.span
 			}
-		];
+		}];
 	}
 
-	static function requiredNativeLayout(layoutsByTarget:Map<String, Map<String, TypedNativeLayout>>, target:String, name:String):TypedNativeLayout {
+	static function requiredNativeLayout(layoutsByTarget:Map<String, Map<String, TypedNativeLayout>>, target:String,
+			name:String):TypedNativeLayout {
 		var layouts = layoutsByTarget.get(target);
 		if (layouts == null)
 			throw 'Missing native layout target "$target"';
@@ -1088,7 +1183,8 @@ class ProgramTyper {
 		return layout;
 	}
 
-	function computeNativeLayout(name:String, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
+	function computeNativeLayout(name:String, target:String, classes:Map<String, TypedClass>,
+			layouts:Map<String, TypedNativeLayout>,
 			visiting:Map<String, Bool>):TypedNativeLayout {
 		var cached = layouts.get(name);
 		if (cached != null)
@@ -1102,12 +1198,13 @@ class ProgramTyper {
 		var nativeDeclarations:Map<String, HxiDeclaration> = [];
 		for (field in declaration.fields)
 			if (!field.isStatic)
-				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations, field.span);
-		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [
-			for (field in declaration.fields)
-				if (!field.isStatic) {name: field.name, type: compiler.types.StructProperties.isTagEnum(session.declarations,
-					field.type) ? TInt : field.type, span: field.span}
-		], nativeDeclarations, declaration.span) catch (error:Dynamic) {
+				collectNestedNativeDeclarations(field.type, target, classes, layouts, visiting, nativeDeclarations,
+					field.span);
+		var layout:TypedNativeLayout = try NativeLayout.record(target, name, [for (field in declaration.fields)
+			if (!field.isStatic) {
+				name:field.name, type:compiler.types.StructProperties.isTagEnum(session.declarations,
+					field.type) ? TInt : field.type, span:field.span
+			}], nativeDeclarations, declaration.span) catch (error:Dynamic) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid flat value record "$name": ${Std.string(error)}', declaration.span);
 			cast null;
@@ -1117,7 +1214,8 @@ class ProgramTyper {
 		return layout;
 	}
 
-	function collectNestedNativeDeclarations(type:CompilerType, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
+	function collectNestedNativeDeclarations(type:CompilerType, target:String, classes:Map<String, TypedClass>,
+			layouts:Map<String, TypedNativeLayout>,
 			visiting:Map<String, Bool>, result:Map<String, HxiDeclaration>, span:SourceSpan):Void {
 		switch type {
 			case TAbstract(_, _, representation):
@@ -1134,7 +1232,8 @@ class ProgramTyper {
 		}
 	}
 
-	function addNestedNativeDeclaration(name:String, target:String, classes:Map<String, TypedClass>, layouts:Map<String, TypedNativeLayout>,
+	function addNestedNativeDeclaration(name:String, target:String, classes:Map<String, TypedClass>,
+			layouts:Map<String, TypedNativeLayout>,
 			visiting:Map<String, Bool>, result:Map<String, HxiDeclaration>):Void {
 		var nested = computeNativeLayout(name, target, classes, layouts, visiting),
 			nestedClass = classes.get(name);
@@ -1143,8 +1242,10 @@ class ProgramTyper {
 		result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
 	}
 
-	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType, span:SourceSpan):CompilerType {
-		return session.representation.physicalType(type, span, session.representation.erasedNominalSubstitutions(declaration.name));
+	function erasureType(declaration:compiler.syntax.Ast.AstInterface, type:compiler.syntax.Ast.AstType,
+			span:SourceSpan):CompilerType {
+		return session.representation.physicalType(type, span,
+			session.representation.erasedNominalSubstitutions(declaration.name));
 	}
 
 	static function hasMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, name:String):Bool {
@@ -1191,18 +1292,21 @@ class ProgramTyper {
 	}
 
 	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction {
-		var arguments = [
-			for (argument in method.arguments)
-				{
-					name: argument.name,
-					type: bodyTyper.argumentType(argument, substitutions)
-				}
-		], result = substitutions == null ? bodyTyper.lowerType(method.result, method.span) : session.declarations.resolve(method.result, method.span, substitutions);
+		var arguments = [for (argument in method.arguments)
+			{
+				name:argument.name,
+					type:bodyTyper.argumentType(argument, substitutions)
+			}], result = substitutions == null ? bodyTyper.lowerType(method.result,
+				method.span) : session.declarations.resolve(method.result, method.span, substitutions);
 		for (argument in arguments)
 			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
-				BodyTyper.fail("E1022", 'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet', method.span);
+				BodyTyper.fail("E1022",
+					'Native layout types cannot be passed by value in function "${owner}.${method.name}" yet',
+					method.span);
 		if (NativeLayout.containsUnsupportedRuntimeValueType(result))
-			BodyTyper.fail("E1022", 'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet', method.span);
+			BodyTyper.fail("E1022",
+				'Native layout types cannot be returned by value from function "${owner}.${method.name}" yet',
+				method.span);
 		return {
 			name: owner + "." + method.name,
 			role: UserFunction,
@@ -1218,7 +1322,8 @@ class ProgramTyper {
 		};
 	}
 
-	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>, ?receiverType:CompilerType):TypedFunction {
+	function prependInstanceInitializers(method:TypedFunction, className:String, fields:Array<TypedField>,
+			?receiverType:CompilerType):TypedFunction {
 		var statements = instanceInitializerStatements(fields, className, receiverType);
 		return {
 			name: method.name,
@@ -1243,7 +1348,8 @@ class ProgramTyper {
 		};
 	}
 
-	static function instanceInitializerStatements(fields:Array<TypedField>, className:String, ?receiverType:CompilerType):Array<TypedStatement> {
+	static function instanceInitializerStatements(fields:Array<TypedField>, className:String,
+			?receiverType:CompilerType):Array<TypedStatement> {
 		var statements:Array<TypedStatement> = [];
 		for (field in fields) {
 			var initializer = field.initializer;
@@ -1256,7 +1362,8 @@ class ProgramTyper {
 		return statements;
 	}
 
-	function validateInterfaceImplementation(classDecl:AstClass, interfaceInstance:CompilerType, classSubstitutions:Map<String, CompilerType>,
+	function validateInterfaceImplementation(classDecl:AstClass, interfaceInstance:CompilerType,
+			classSubstitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
 		var interfaceName = switch interfaceInstance {
 			case TInstance(Interface, name, _): name;
@@ -1288,11 +1395,14 @@ class ProgramTyper {
 			var implementation = bodyTyper.findMethod(classDecl.name, method.name);
 			if (implementation == null || implementation.isStatic)
 				BodyTyper.fail("E1007",
-					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"', span);
+					'${classDecl.isStruct == true ? "Struct" : "Class"} "${classDecl.name}" does not implement "$interfaceName.${method.name}"',
+					span);
 			var implementationName = implementation.owner + "." + method.name;
 			if (!session.signatures.exists(implementationName)
-				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method, classSubstitutions, interfaceSubstitutions))
-				BodyTyper.fail("E1003", 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
+				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method,
+				classSubstitutions, interfaceSubstitutions))
+				BodyTyper.fail("E1003",
+					'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
 		}
 	}
 
@@ -1300,10 +1410,11 @@ class ProgramTyper {
 			?rightSubstitutions:Map<String, CompilerType>):Bool {
 		if (left.arguments.length != right.arguments.length
 			|| !TypeRelations.equals(session.declarations.resolve(left.result, left.span, leftSubstitutions),
-				session.declarations.resolve(right.result, right.span, rightSubstitutions)))
+			session.declarations.resolve(right.result, right.span, rightSubstitutions)))
 			return false;
 		for (i in 0...left.arguments.length)
-			if (!TypeRelations.equals(session.declarations.resolve(left.arguments[i].type, left.arguments[i].span, leftSubstitutions),
+			if (!TypeRelations.equals(session.declarations.resolve(left.arguments[i].type, left.arguments[i].span,
+				leftSubstitutions),
 				session.declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
 				return false;
 		return true;
@@ -1313,6 +1424,8 @@ class ProgramTyper {
 		if (fn.metadata != null)
 			for (entry in fn.metadata)
 				if (entry.name == "hlNative" || entry.name == "cNative")
-					BodyTyper.fail("E1021", '@:${entry.name} binds only an extern function; "$name" has a body, which would run instead', entry.span);
+					BodyTyper.fail("E1021",
+						'@:${entry.name} binds only an extern function; "$name" has a body, which would run instead',
+						entry.span);
 	}
 }

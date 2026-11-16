@@ -210,8 +210,10 @@ class IrNonNullFacts {
 	static function checked(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
 			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1): arguments[0];
-			case FieldGet(_, v, _), FieldSet(v, _, _), MethodCall(_, v, _, _, _), InstanceClosure(_, _, v), ArrayGet(_, v, _), ArraySet(v, _, _),
-				ArraySize(_, v), IteratorNew(_, v), IteratorHasNext(_, v), IteratorNext(_, v), EnumIndex(_, v), EnumField(_, v, _, _): v;
+			case FieldGet(_, v, _), FieldSet(v, _, _), MethodCall(_, v, _, _, _), InstanceClosure(_, _, v),
+				ArrayGet(_, v, _), ArraySet(v, _, _),
+				ArraySize(_, v), IteratorNew(_, v), IteratorHasNext(_, v), IteratorNext(_, v), EnumIndex(_, v),
+				EnumField(_, v, _, _): v;
 			default: null;
 		}
 
@@ -222,7 +224,8 @@ class IrNonNullFacts {
 			default: false;
 		}
 
-	static function transfer(instruction:IrInstruction, facts:NonNullFactSet, graph:IrGraph, block:Int, outgoing:Map<Int, NonNullFactSet>,
+	static function transfer(instruction:IrInstruction, facts:NonNullFactSet, graph:IrGraph, block:Int,
+			outgoing:Map<Int, NonNullFactSet>,
 			tests:Map<Int, Int>, allowPhi:Bool, checkedDereferences:Bool):Void {
 		var receiver = checked(instruction);
 		if (receiver != null && (checkedDereferences || isExplicitCheck(instruction)))
@@ -263,7 +266,8 @@ class IrNonNullFacts {
 		return -1;
 	}
 
-	static function edgeHas(graph:IrGraph, from:Int, to:Int, outgoing:Map<Int, NonNullFactSet>, tests:Map<Int, Int>, value:Int):Bool {
+	static function edgeHas(graph:IrGraph, from:Int, to:Int, outgoing:Map<Int, NonNullFactSet>, tests:Map<Int, Int>,
+			value:Int):Bool {
 		var known = outgoing.get(from);
 		if (known != null && known.exists(value))
 			return true;
@@ -271,7 +275,8 @@ class IrNonNullFacts {
 			return false;
 		var term = graph.block(from).terminator;
 		return term != null && (switch term.value {
-			case Branch(condition, yes, no) if (yes != no && no == to && tests.exists(condition.id)): tests.get(condition.id) == value;
+			case Branch(condition, yes,
+				no) if (yes != no && no == to && tests.exists(condition.id)): tests.get(condition.id) == value;
 			default: false;
 		});
 	}

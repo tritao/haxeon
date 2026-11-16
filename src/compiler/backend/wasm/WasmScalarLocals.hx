@@ -6,13 +6,18 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 
-typedef WasmScalarLocal = {final typeName:String; final fields:Map<String, Int>; final declarations:Array<IrObjectField>;}
+typedef WasmScalarLocal = {
+	final typeName:String;
+	final fields:Map<String, Int>;
+	final declarations:Array<IrObjectField>;
+}
 
 /** Mutable Wasm locals for value objects used only as field places, including across exception handlers. */
 class WasmScalarLocals {
 	final candidates:Map<Int, WasmScalarLocal> = [];
 
-	public function new(fn:Null<IrFunction>, isValue:IrType->Bool, physicalFields:String->Array<IrObjectField>, valueType:IrType->WasmValueType,
+	public function new(fn:Null<IrFunction>, isValue:IrType->Bool, physicalFields:String->Array<IrObjectField>,
+			valueType:IrType->WasmValueType,
 			allocate:WasmValueType->Int) {
 		if (fn == null)
 			return;
@@ -39,8 +44,9 @@ class WasmScalarLocals {
 				for (input in IrOperands.inputs(instruction))
 					if (roots.exists(input.id)) {
 						var allowed = switch instruction {
-							case FieldGet(_, owner, name) if (owner.id == input.id): name == WasmFlattenValueFields.CHECK_FIELD || hasField(physicalFields(roots.get(input.id)),
-									name);
+							case FieldGet(_, owner, name) if (owner.id == input.id): name
+								== WasmFlattenValueFields.CHECK_FIELD || hasField(physicalFields(roots.get(input.id)),
+								name);
 							case FieldSet(owner, name, value) if (owner.id == input.id && value.id != input.id):
 								hasField(physicalFields(roots.get(input.id)), name);
 							default: false;

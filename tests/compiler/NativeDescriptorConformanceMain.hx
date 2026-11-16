@@ -22,17 +22,19 @@ class NativeDescriptorConformanceMain {
 		compiler.configure("descriptor-conformance", "descriptor-conformance", ["native-abi-target=portable-abi64"]);
 		compiler.update("schema/Resource.hx", "package schema; interface Resource {}");
 		compiler.update("schema/Component.hx", "package schema; interface Component {}");
-		compiler.update("schema/BaseResource.hx", "package schema; import schema.Resource; interface BaseResource extends Resource {}");
+		compiler.update("schema/BaseResource.hx",
+			"package schema; import schema.Resource; interface BaseResource extends Resource {}");
 		compiler.update("schema/GenericMarker.hx", "package schema; interface GenericMarker<T> {}");
 		compiler.update("model/FlatResource.hx",
 			"package model; import schema.Resource; struct FlatResource implements Resource { public var count:Int; public function new() count = 1; }");
 		compiler.update("model/InheritedResource.hx",
-			"package model; import schema.BaseResource; import schema.GenericMarker; struct InheritedResource implements BaseResource implements GenericMarker<Int> { " +
-			"public var count:Int; public function new() count = 2; }");
+			"package model; import schema.BaseResource; import schema.GenericMarker; struct InheritedResource implements BaseResource implements GenericMarker<Int> { "
+			+ "public var count:Int; public function new() count = 2; }");
 		compiler.update("model/ConflictingRoles.hx",
-			"package model; import schema.Resource; import schema.Component; struct ConflictingRoles implements Resource implements Component { " +
-			"public var count:Int; public function new() count = 3; }");
-		compiler.update("model/NativeValue.hx", "package model; @:value @:repr(\"C\") class NativeValue { public var count:Int; }");
+			"package model; import schema.Resource; import schema.Component; struct ConflictingRoles implements Resource implements Component { "
+			+ "public var count:Int; public function new() count = 3; }");
+		compiler.update("model/NativeValue.hx",
+			"package model; @:value @:repr(\"C\") class NativeValue { public var count:Int; }");
 		compiler.update("app/Main.hx",
 			"package app; import model.FlatResource; import model.InheritedResource; import model.ConflictingRoles; "
 			+ "import model.NativeValue; import schema.Resource; class Main { "
@@ -52,7 +54,8 @@ class NativeDescriptorConformanceMain {
 			&& flat.interfaces[0] == "interface:schema.Resource<>",
 			"direct Resource conformance and source struct kind are emitted");
 		expect(inherited.sourceKind == "struct"
-			&& inherited.interfaces.join(",") == "interface:schema.BaseResource<>,interface:schema.GenericMarker<Int>,interface:schema.Resource<>",
+			&& inherited.interfaces.join(",")
+			== "interface:schema.BaseResource<>,interface:schema.GenericMarker<Int>,interface:schema.Resource<>",
 			"descriptor interfaces include sorted inherited and instantiated generic interface facts");
 		expect(conflicting.interfaces.join(",") == "interface:schema.Component<>,interface:schema.Resource<>",
 			"compiler reports both declared roles without applying World registration policy");
@@ -70,29 +73,38 @@ class NativeDescriptorConformanceMain {
 			&& NativeTypeDescriptorCodec.toJson(decoded) == NativeTypeDescriptorCodec.toJson(descriptors),
 			"versioned binary and JSON descriptor round-trip preserves conformance facts");
 		var incremental = new Compiler();
-		incremental.configure("descriptor-interface-invalidation", "descriptor-interface-invalidation", ["native-abi-target=portable-abi64"]);
+		incremental.configure("descriptor-interface-invalidation", "descriptor-interface-invalidation",
+			["native-abi-target=portable-abi64"]);
 		incremental.update("schema/Resource.hx", "package schema; interface Resource {}");
-		incremental.update("model/Item.hx", "package model; import schema.Resource; struct Item { public var count:Int; }");
-		incremental.update("app/Main.hx", "package app; import model.Item; class Main { static function main():Int return typeInfo<Item>().hash.length; }");
+		incremental.update("model/Item.hx",
+			"package model; import schema.Resource; struct Item { public var count:Int; }");
+		incremental.update("app/Main.hx",
+			"package app; import model.Item; class Main { static function main():Int return typeInfo<Item>().hash.length; }");
 		incremental.compile("app.Main");
 		var oldDirect = descriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "model.Item");
-		incremental.update("model/Item.hx", "package model; import schema.Resource; struct Item implements Resource { public var count:Int; }");
+		incremental.update("model/Item.hx",
+			"package model; import schema.Resource; struct Item implements Resource { public var count:Int; }");
 		var directCompile = incremental.compile("app.Main"),
 			newDirect = descriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "model.Item");
 		expect(oldDirect.hash != newDirect.hash && directCompile.retyped.indexOf("app.Main.main") >= 0,
 			"adding direct interface conformance changes the descriptor and invalidates cross-module typeInfo callers");
-		incremental.update("model/Item.hx", "package model; import schema.Resource; struct Item { public var count:Int; }");
+		incremental.update("model/Item.hx",
+			"package model; import schema.Resource; struct Item { public var count:Int; }");
 		var removedCompile = incremental.compile("app.Main"),
 			removedDirect = descriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "model.Item");
 		expect(newDirect.hash != removedDirect.hash && removedCompile.retyped.indexOf("app.Main.main") >= 0,
 			"removing direct interface conformance changes the descriptor and invalidates cross-module typeInfo callers");
 
 		var ancestor = new Compiler();
-		ancestor.configure("descriptor-interface-ancestor-invalidation", "descriptor-interface-ancestor-invalidation", ["native-abi-target=portable-abi64"]);
+		ancestor.configure("descriptor-interface-ancestor-invalidation", "descriptor-interface-ancestor-invalidation",
+			["native-abi-target=portable-abi64"]);
 		ancestor.update("schema/Resource.hx", "package schema; interface Resource {}");
-		ancestor.update("schema/BaseResource.hx", "package schema; import schema.Resource; interface BaseResource extends Resource {}");
-		ancestor.update("model/Item.hx", "package model; import schema.BaseResource; struct Item implements BaseResource { public var count:Int; }");
-		ancestor.update("app/Main.hx", "package app; import model.Item; class Main { static function main():Int return typeInfo<Item>().hash.length; }");
+		ancestor.update("schema/BaseResource.hx",
+			"package schema; import schema.Resource; interface BaseResource extends Resource {}");
+		ancestor.update("model/Item.hx",
+			"package model; import schema.BaseResource; struct Item implements BaseResource { public var count:Int; }");
+		ancestor.update("app/Main.hx",
+			"package app; import model.Item; class Main { static function main():Int return typeInfo<Item>().hash.length; }");
 		ancestor.compile("app.Main");
 		var oldInherited = descriptor(ancestor.lastTypedProgram.nativeTypeDescriptors, "model.Item");
 		ancestor.update("schema/BaseResource.hx", "package schema; interface BaseResource {}");

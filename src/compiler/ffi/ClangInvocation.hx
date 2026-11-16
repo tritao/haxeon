@@ -28,7 +28,8 @@ class ClangInvocation {
 		var cached = hostTargets.get(clang);
 		if (cached != null)
 			return cached;
-		var process = ProcessOutputCapture.capture(clang, ["-dumpmachine"], ProcessOutputCapture.defaultDiagnosticLimit),
+		var process = ProcessOutputCapture.capture(clang, ["-dumpmachine"],
+			ProcessOutputCapture.defaultDiagnosticLimit),
 			output = StringTools.trim(process.stdout);
 		if (process.exitCode != 0 || output.length == 0)
 			throw 'Clang "$clang" could not report its host target${output.length == 0 ? "" : ":\n$output"}';
@@ -60,7 +61,8 @@ class ClangInvocation {
 		// passing it to clang++ makes headers such as <vector> unusable.
 		if (options.language == "c")
 			result.insert(3, "-ffreestanding");
-		var compileFlags = options.compileCommands == null ? [] : compileDatabaseFlags(options.compileCommands, options.header);
+		var compileFlags = options.compileCommands == null ? [] : compileDatabaseFlags(options.compileCommands,
+			options.header);
 		for (flag in compileFlags)
 			result.push(flag);
 		for (include in options.includes)
@@ -113,7 +115,8 @@ class ClangInvocation {
 				index++;
 				continue;
 			}
-			if (argument == "-o" || argument == "-MF" || argument == "-MT" || argument == "-MQ" || argument == "-include-pch") {
+			if (argument == "-o" || argument == "-MF" || argument == "-MT" || argument == "-MQ"
+				|| argument == "-include-pch") {
 				index += 2;
 				continue;
 			}
@@ -125,7 +128,8 @@ class ClangInvocation {
 				|| argument == "--target"
 				|| argument == "-x"
 				|| argument == "-Winvalid-pch") {
-				index += argument == "-std" || argument == "-target" || argument == "--target" || argument == "-x" ? 2 : 1;
+				index += argument == "-std" || argument == "-target" || argument == "--target"
+					|| argument == "-x" ? 2 : 1;
 				continue;
 			}
 			if (!StringTools.startsWith(argument, "-") && isSourcePath(argument)) {
@@ -142,9 +146,12 @@ class ClangInvocation {
 
 	static function isSourcePath(path:String):Bool {
 		var lower = path.toLowerCase();
-		return StringTools.endsWith(lower, ".c") || StringTools.endsWith(lower, ".cc") || StringTools.endsWith(lower, ".cpp")
-			|| StringTools.endsWith(lower, ".cxx") || StringTools.endsWith(lower, ".m") || StringTools.endsWith(lower, ".mm")
-			|| StringTools.endsWith(lower, ".h") || StringTools.endsWith(lower, ".hh") || StringTools.endsWith(lower, ".hpp")
+		return StringTools.endsWith(lower, ".c") || StringTools.endsWith(lower, ".cc")
+			|| StringTools.endsWith(lower, ".cpp")
+			|| StringTools.endsWith(lower, ".cxx") || StringTools.endsWith(lower, ".m")
+			|| StringTools.endsWith(lower, ".mm")
+			|| StringTools.endsWith(lower, ".h") || StringTools.endsWith(lower, ".hh")
+			|| StringTools.endsWith(lower, ".hpp")
 			|| StringTools.endsWith(lower, ".hxx");
 	}
 
@@ -162,7 +169,8 @@ class ClangInvocation {
 			default: architecture;
 		};
 		if (value.indexOf("windows") >= 0 || value.indexOf("mingw") >= 0 || value.indexOf("msvc") >= 0) {
-			var abi = value.indexOf("msvc") >= 0 ? "msvc" : value.indexOf("mingw") >= 0 || value.indexOf("gnu") >= 0 ? "gnu" : "windows";
+			var abi = value.indexOf("msvc") >= 0 ? "msvc" : value.indexOf("mingw") >= 0
+				|| value.indexOf("gnu") >= 0 ? "gnu" : "windows";
 			return '$architecture-windows-$abi';
 		}
 		if (value.indexOf("darwin") >= 0 || value.indexOf("apple") >= 0)

@@ -22,19 +22,23 @@ class ClassIdMain {
 		var first = IrClassIds.assign(null, ["Gamma", "Alpha", "Beta"]),
 			second = IrClassIds.assign(null, ["Beta", "Gamma", "Alpha"]);
 		for (name in ["Alpha", "Beta", "Gamma"])
-			expect(first.ids.get(name) == second.ids.get(name), "a cold build assigns the same ids whatever the order of the classes");
-		expect(first.ids.get("Alpha") == 0 && first.ids.get("Beta") == 1 && first.ids.get("Gamma") == 2, "ids follow the name order");
+			expect(first.ids.get(name) == second.ids.get(name),
+				"a cold build assigns the same ids whatever the order of the classes");
+		expect(first.ids.get("Alpha") == 0 && first.ids.get("Beta") == 1 && first.ids.get("Gamma") == 2,
+			"ids follow the name order");
 		// Warm: a class keeps its id, a new class takes the next one (by name among the new), a removed class leaves a hole.
 		var edited = IrClassIds.assign(first, ["Gamma", "Beta", "Delta", "Aardvark"]);
 		expect(edited.ids.get("Gamma") == 2 && edited.ids.get("Beta") == 1, "a class keeps its id");
-		expect(edited.ids.get("Aardvark") == 3 && edited.ids.get("Delta") == 4, "new classes take the next ids in name order, not before the existing ones");
+		expect(edited.ids.get("Aardvark") == 3 && edited.ids.get("Delta") == 4,
+			"new classes take the next ids in name order, not before the existing ones");
 		var live = IrClassIds.liveIds(edited, ["Gamma", "Beta", "Delta", "Aardvark"]);
 		expect(!live.exists("Alpha"), "a removed class has no live id");
 		// A removed class that comes back is not given its old id's neighbours, and a later class never takes a burnt id.
 		var later = IrClassIds.assign(edited, ["Gamma", "Beta", "Delta", "Aardvark", "Omega"]);
 		expect(later.ids.get("Omega") == 5 && later.next == 6, "the next id only grows");
 		var again = IrClassIds.assign(IrClassIds.assign(null, ["Alpha"]), ["Beta"]);
-		expect(again.ids.get("Alpha") == 0 && again.ids.get("Beta") == 1, "an id given earlier in the session is not reused");
+		expect(again.ids.get("Alpha") == 0 && again.ids.get("Beta") == 1,
+			"an id given earlier in the session is not reused");
 	}
 
 	static function program():IrProgram {
@@ -61,9 +65,11 @@ class ClassIdMain {
 	static function instruction():Void {
 		var original = program();
 		compiler.ir.IrVerifier.verify(original);
-		expect(new IrInterpreter(original).run("main") == 7, "the interpreter returns the class id of the object's class");
+		expect(new IrInterpreter(original).run("main") == 7,
+			"the interpreter returns the class id of the object's class");
 		var decoded = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(original));
-		expect(compiler.ir.codec.IrFunctionStateEquality.same(original.functions[0], decoded.functions[0]), "ClassId survives the canonical IR codec");
+		expect(compiler.ir.codec.IrFunctionStateEquality.same(original.functions[0], decoded.functions[0]),
+			"ClassId survives the canonical IR codec");
 		// An id of a type that is not an I32 is refused.
 		var bad = new IrBuilder();
 		var made = bad.newObject("Widget");

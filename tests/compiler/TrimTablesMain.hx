@@ -54,8 +54,10 @@ class TrimTablesMain {
 		var names = [for (kept in program.objects) kept.name];
 		expect(names.indexOf("Named") >= 0, 'A class named only by a type value was trimmed: $names');
 		expect(names.indexOf("Unused") < 0, 'An unreferenced class stayed: $names');
-		expect(names.indexOf("Declared") >= 0 && names.indexOf("Returned") >= 0, 'A class named only by the signature of a kept native was trimmed: $names');
-		expect([for (native in program.natives) native.name].join(",") == "calledNative", "An uncalled native stayed or the called one went");
+		expect(names.indexOf("Declared") >= 0 && names.indexOf("Returned") >= 0,
+			'A class named only by the signature of a kept native was trimmed: $names');
+		expect([for (native in program.natives) native.name].join(",") == "calledNative",
+			"An uncalled native stayed or the called one went");
 		var broken = new IrProgram("main");
 		broken.functions = [];
 		broken.natives = program.natives;

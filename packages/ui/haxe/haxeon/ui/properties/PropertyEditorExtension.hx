@@ -30,7 +30,7 @@ interface PropertyEditorExtension {
 
 	/** Additional model-level validation beyond descriptor type checking. */
 	function validate(context:CommandContext, descriptor:PropertyDescriptor,
-		value:Dynamic):Null<String>;
+			value:Dynamic):Null<String>;
 
 	/**
 	 * Builds the custom inspector control. `value` may be Mixed for a
@@ -38,5 +38,5 @@ interface PropertyEditorExtension {
 	 * extension's type to commit an edit.
 	 */
 	function build(key:String, descriptor:PropertyDescriptor, value:PropertyValue,
-		context:BuildContext, enabled:Bool, apply:PropertyValue->Void):View;
+			context:BuildContext, enabled:Bool, apply:PropertyValue->Void):View;
 }

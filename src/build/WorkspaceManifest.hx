@@ -33,7 +33,8 @@ class WorkspaceProject {
 	 */
 	public final shards:Int;
 
-	public function new(name:String, manifestPath:String, tags:Array<String>, cacheTests:Bool = true, ?testInputs:Array<String>, shards:Int = 1) {
+	public function new(name:String, manifestPath:String, tags:Array<String>, cacheTests:Bool = true,
+			?testInputs:Array<String>, shards:Int = 1) {
 		this.name = name;
 		this.manifestPath = manifestPath;
 		this.tags = tags.copy();
@@ -67,7 +68,8 @@ class WorkspaceManifest {
 	public static function load(path:String):WorkspaceManifest {
 		var absolute = Path.normalize(FileSystem.fullPath(path)),
 			root = Path.directory(absolute),
-			document:Dynamic = try Json.parse(File.getContent(absolute)) catch (error:Dynamic) throw 'Invalid workspace file $absolute: $error';
+			document:Dynamic = try Json.parse(File.getContent(absolute)) catch (error:Dynamic)
+				throw 'Invalid workspace file $absolute: $error';
 		if (Reflect.field(document, "version") != 1)
 			throw 'Workspace file $absolute must declare "version": 1';
 		var buildDir:Null<String> = Reflect.field(document, "buildDir"),
@@ -97,10 +99,16 @@ class WorkspaceManifest {
 			if (declaredShards != null && (declaredShards != Math.floor(declaredShards) || declaredShards < 1))
 				throw 'Workspace project "$name": "shards" must be a whole number of at least 1';
 			projects.push(new WorkspaceProject(name, manifestPath, tags == null ? [] : tags, cache != false,
-				inputs == null ? [] : [for (input in inputs) Path.normalize(Path.join([projectDirectory, input]))],
-				declaredShards == null ? 1 : Std.int(declaredShards)));
+				inputs == null ? [] : [for (input in inputs) Path.normalize(Path.join([
+					projectDirectory,
+					input
+				]))],
+					declaredShards == null ? 1 : Std.int(declaredShards)));
 		}
-		return new WorkspaceManifest(absolute, root, Path.normalize(Path.join([root, buildDir == null ? "build/workspace" : buildDir])), projects);
+		return new WorkspaceManifest(absolute, root, Path.normalize(Path.join([
+			root,
+			buildDir == null ? "build/workspace" : buildDir
+		])), projects);
 	}
 
 	/** `animkit/tests/haxeon.json` becomes `animkit/tests`. */

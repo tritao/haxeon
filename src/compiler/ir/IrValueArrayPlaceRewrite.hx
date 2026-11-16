@@ -4,7 +4,11 @@ import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.SourceProvenance.SourceOrigin;
 
-private typedef ArrayPlace = {final array:IrValue; final index:IrValue; final path:Array<String>;}
+private typedef ArrayPlace = {
+	final array:IrValue;
+	final index:IrValue;
+	final path:Array<String>;
+}
 
 /** Lower element-place projections before rewriting the remaining value-copy array reads. */
 class IrValueArrayPlaceRewrite {
@@ -14,32 +18,40 @@ class IrValueArrayPlaceRewrite {
 		for (block in fn.blocks) for (located in block.instructions) switch located.provenance.origin {
 			case CompilerGenerated(reason) if (reason == IrGenerator.ArrayValuePlaceReason):
 				switch located.value {
-					case ArrayGet(out, array, _) if (Type.enumEq(array.type, arrayType) && Type.enumEq(out.type, element)):
+					case ArrayGet(out, array,
+						_) if (Type.enumEq(array.type, arrayType) && Type.enumEq(out.type, element)):
 						result.set(out.id, true);
-					case Call(out, "__array_get_any", args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
+					case Call(out, "__array_get_any",
+						args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
 						raw.set(out.id, true);
 					default:
 				}
 			default:
 		}
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case SafeCast(out, input) if (raw.exists(input.id) && Type.enumEq(out.type, element)): result.set(out.id, true);
+			case SafeCast(out, input) if (raw.exists(input.id) && Type.enumEq(out.type, element)): result.set(out.id,
+				true);
 			default:
 		}
 		return result;
 	}
 
-	public static function rewrite(fn:IrFunction, element:IrType, objects:IrObjectTable, helpers:IrValueArraySlotHelpers,
+	public static function rewrite(fn:IrFunction, element:IrType, objects:IrObjectTable,
+			helpers:IrValueArraySlotHelpers,
 			methods:IrValueArrayPlaceMethods, roots:Map<Int, Bool>):IrFunction {
-		var arrayType:IrType = Array(element), aliases:Map<Int, ArrayPlace> = [], raw:Map<Int, ArrayPlace> = [],
-			nulls:Map<Int, Bool> = [], next = 0;
+		var arrayType:IrType = Array(element),
+			aliases:Map<Int, ArrayPlace> = [],
+			raw:Map<Int, ArrayPlace> = [],
+			nulls:Map<Int, Bool> = [],
+			next = 0;
 		function requiredPlace(id:Int):ArrayPlace {
 			var place = aliases.get(id);
 			if (place == null) throw 'Missing array place $id';
 			return place;
 		}
 		function isValue(type:IrType):Bool return switch type {
-			case Obj(name), Nullable(Obj(name)): var object = objects.get(name); object != null && object.isValue;
+			case Obj(name), Nullable(Obj(name)): var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 		function isNullableScalar(type:IrType):Bool return switch type {
@@ -54,7 +66,8 @@ class IrValueArrayPlaceRewrite {
 			switch located.value {
 				case ConstNull(value): nulls.set(value.id, true);
 				case ArrayGet(value, array, index) if (roots.exists(value.id)):
-					if (!Type.enumEq(array.type, arrayType) || !Type.enumEq(value.type, element)) throw "Invalid array place root";
+					if (!Type.enumEq(array.type, arrayType)
+						|| !Type.enumEq(value.type, element)) throw "Invalid array place root";
 					aliases.set(value.id, {array: array, index: index, path: []});
 				case Call(value, "__array_get_any", args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
 					switch located.provenance.origin {
@@ -67,7 +80,9 @@ class IrValueArrayPlaceRewrite {
 		}
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case SafeCast(out, input) if (roots.exists(out.id) && raw.exists(input.id)):
-				var place = raw.get(input.id); if (place == null) throw "Missing checked array place"; aliases.set(out.id, place);
+				var place = raw.get(input.id);
+				if (place == null) throw "Missing checked array place";
+				aliases.set(out.id, place);
 			default:
 		}
 		for (id in roots.keys()) if (!aliases.exists(id)) throw 'Missing array place root $id';
@@ -75,13 +90,20 @@ class IrValueArrayPlaceRewrite {
 		while (changed) {
 			changed = false;
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case FieldGet(out, owner, field) if (aliases.exists(owner.id) && isValue(out.type) && !aliases.exists(out.id)):
+				case FieldGet(out, owner,
+					field) if (aliases.exists(owner.id) && isValue(out.type) && !aliases.exists(out.id)):
 					var parent = requiredPlace(owner.id);
-					aliases.set(out.id, {array: parent.array, index: parent.index, path: parent.path.concat([field])}); changed = true;
+					aliases.set(out.id, {array: parent.array, index: parent.index, path: parent.path.concat([field])});
+					changed = true;
 				case SafeCast(out, value) if (aliases.exists(value.id) && isValue(out.type) && !aliases.exists(out.id)):
-					aliases.set(out.id, requiredPlace(value.id)); changed = true;
-				case ToDyn(out, value) if (aliases.exists(value.id) && (Type.enumEq(out.type, element) || (switch (out.type) { case Dyn: true; default: false; })) && !aliases.exists(out.id)):
-					aliases.set(out.id, requiredPlace(value.id)); changed = true;
+					aliases.set(out.id, requiredPlace(value.id));
+					changed = true;
+				case ToDyn(out,
+					value) if (aliases.exists(value.id) && (Type.enumEq(out.type, element) || (switch (out.type) {
+						case Dyn: true;
+						default: false;
+					})) && !aliases.exists(out.id)): aliases.set(out.id, requiredPlace(value.id));
+				changed = true;
 				default:
 			}
 		}
@@ -92,61 +114,98 @@ class IrValueArrayPlaceRewrite {
 				var instruction = located.value, handled = false, omit = false;
 				switch instruction {
 					case Call(out, "__array_get_any", _) if (raw.exists(out.id)):
-						var place = raw.get(out.id); if (place == null) throw "Missing checked array place";
+						var place = raw.get(out.id);
+						if (place == null) throw "Missing checked array place";
 						var check = new IrValue(next++, "$array-place-check", Void);
-						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]); handled = true;
+						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
+						handled = true;
 					case ArrayGet(out, _, _) if (roots.exists(out.id)):
 						var place = requiredPlace(out.id), check = new IrValue(next++, "$array-place-check", Void);
-						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]); handled = true;
+						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
+						handled = true;
 					case FieldGet(out, owner, field) if (aliases.exists(owner.id)):
-						var place = requiredPlace(owner.id), path = place.path.concat([field]), check = new IrValue(next++, "$array-place-check", Void);
-						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [place.array, place.index]), located.provenance));
+						var place = requiredPlace(owner.id),
+							path = place.path.concat([field]),
+							check = new IrValue(next++, "$array-place-check", Void);
+						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [
+							place.array,
+							place.index
+						]), located.provenance));
 						if (isValue(out.type)) omit = true;
 						else {
-							var getter = isNullableScalar(out.type) ? methods.scalarGetter(out.type, path) : helpers.getter(helpers.slot(path));
+							var getter = isNullableScalar(out.type) ? methods.scalarGetter(out.type,
+								path) : helpers.getter(helpers.slot(path));
 							instruction = Call(out, getter, [place.array, place.index]);
 						}
 						handled = true;
 					case FieldSet(owner, field, value) if (aliases.exists(owner.id)):
-						var place = requiredPlace(owner.id), path = place.path.concat([field]), check = new IrValue(next++, "$array-place-check", Void);
+						var place = requiredPlace(owner.id),
+							path = place.path.concat([field]),
+							check = new IrValue(next++, "$array-place-check", Void);
 						if (aliases.exists(value.id)) throw "Aliased place write requires component specialization";
-						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [place.array, place.index]), located.provenance));
-						var setter = isValue(value.type) || isNullableScalar(value.type) ? methods.valueSetter(value.type, path) : helpers.setter(helpers.slot(path));
-						instruction = Call(new IrValue(next++, "$array-place-write", Void), setter, [place.array, place.index, value]);
+						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [
+							place.array,
+							place.index
+						]), located.provenance));
+						var setter = isValue(value.type) || isNullableScalar(value.type)
+							? methods.valueSetter(value.type, path) : helpers.setter(helpers.slot(path));
+						instruction = Call(new IrValue(next++, "$array-place-write", Void), setter, [
+							place.array,
+							place.index,
+							value
+						]);
 						handled = true;
 					case SafeCast(out, value) if (roots.exists(out.id) && raw.exists(value.id)):
-						omit = true; handled = true;
+						omit = true;
+						handled = true;
 					case ToDyn(out, value) if (aliases.exists(value.id) && aliases.exists(out.id)):
-						omit = true; handled = true;
-					case Equal(out, left, right) if ((aliases.exists(left.id) && nulls.exists(right.id)) || (aliases.exists(right.id) && nulls.exists(left.id))):
-						var place = requiredPlace(aliases.exists(left.id) ? left.id : right.id), present = new IrValue(next++, "$array-place-present", Bool),
+						omit = true;
+						handled = true;
+					case Equal(out, left, right) if ((aliases.exists(left.id) && nulls.exists(right.id))
+						|| (aliases.exists(right.id) && nulls.exists(left.id))):
+						var place = requiredPlace(aliases.exists(left.id) ? left.id : right.id),
+							present = new IrValue(next++, "$array-place-present", Bool),
 							no = new IrValue(next++, "$array-place-false", Bool);
-						target.instructions.push(new Located(Call(present, helpers.getter(helpers.slot(place.path, true)), [place.array, place.index]), located.provenance));
+						target.instructions
+							.push(new Located(Call(present, helpers.getter(helpers.slot(place.path, true)), [
+								place.array,
+								place.index
+							]), located.provenance));
 						target.instructions.push(new Located(ConstBool(no, false), located.provenance));
-						instruction = Equal(out, present, no); handled = true;
+						instruction = Equal(out, present, no);
+						handled = true;
 					case SafeCast(out, value) if (aliases.exists(value.id) && aliases.exists(out.id)):
 						var place = requiredPlace(value.id), check = new IrValue(next++, "$array-place-check", Void);
-						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]); handled = true;
+						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
+						handled = true;
 					case MethodCall(out, owner, method, arguments, _) if (aliases.exists(owner.id)):
-						for (argument in arguments) if (aliases.exists(argument.id)) throw "Array place argument requires component specialization";
+						for (argument in arguments) if (aliases.exists(argument.id))
+							throw "Array place argument requires component specialization";
 						var place = requiredPlace(owner.id), name = methods.method(owner.type, method, place.path);
-						instruction = Call(out, name, [place.array, place.index].concat(arguments)); handled = true;
+						instruction = Call(out, name, [place.array, place.index].concat(arguments));
+						handled = true;
 					case ArraySet(array, index, value) if (aliases.exists(value.id)):
 						var place = requiredPlace(value.id);
 						if (place.path.length != 0 || place.array.id != array.id || place.index.id != index.id)
 							throw "Array place writeback changed its destination";
-						omit = true; handled = true;
-					case Call(_, "__array_set_any", arguments) if (arguments.length == 3 && aliases.exists(arguments[2].id)):
+						omit = true;
+						handled = true;
+					case Call(_, "__array_set_any",
+						arguments) if (arguments.length == 3 && aliases.exists(arguments[2].id)):
 						var place = requiredPlace(arguments[2].id);
-						if (place.path.length != 0 || place.array.id != arguments[0].id || place.index.id != arguments[1].id)
+						if (place.path.length != 0 || place.array.id != arguments[0].id
+							|| place.index.id != arguments[1].id)
 							throw "Checked array place writeback changed its destination";
-						omit = true; handled = true;
+						omit = true;
+						handled = true;
 					default:
 				}
 				if (!handled) {
-					for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id)) throw 'Array place ${input.id}:${input.type} escapes through ${Std.string(instruction)}';
+					for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id))
+						throw 'Array place ${input.id}:${input.type} escapes through ${Std.string(instruction)}';
 					switch instruction {
-						case Phi(_, inputs): for (input in inputs) if (aliases.exists(input.value.id)) throw "Array place phi requires component specialization";
+						case Phi(_, inputs): for (input in inputs) if (aliases.exists(input.value.id))
+							throw "Array place phi requires component specialization";
 						default:
 					}
 				}

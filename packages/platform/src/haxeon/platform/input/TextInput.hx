@@ -16,7 +16,8 @@ class TextInput {
 
 	public static function updateWindow(window:Window, state:TextInputState):Void {
 		if (window == null) throw BindingError.invalidArgument("TextInput.updateWindow", "Window cannot be null");
-		NativeKit.nk_surface_set_text_input_state_checked(new Handle(window.nativeHandle().rawValue()), checkedState(state).nativeValue());
+		NativeKit.nk_surface_set_text_input_state_checked(new Handle(window.nativeHandle().rawValue()),
+			checkedState(state).nativeValue());
 	}
 
 	/** Returns the backend result so callers can handle unsupported IME backends. */
@@ -25,8 +26,8 @@ class TextInput {
 
 	/** Publishes packed surface-local selection and composition rectangles. */
 	public static function updateGeometryResult(surface:Surface,
-		selectionStart:Int, selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
-		selectionRects:haxe.io.Bytes, compositionRects:haxe.io.Bytes):Result {
+			selectionStart:Int, selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
+			selectionRects:haxe.io.Bytes, compositionRects:haxe.io.Bytes):Result {
 		return NativeKit.nk_surface_set_text_input_geometry(surfaceTarget(surface), selectionStart, selectionEnd,
 			compositionStart, compositionEnd, selectionRects, compositionRects);
 	}

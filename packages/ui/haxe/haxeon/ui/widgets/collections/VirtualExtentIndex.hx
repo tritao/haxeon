@@ -22,8 +22,8 @@ class VirtualExtentIndex {
 
 	public var totalExtent(get, never):Float;
 	inline function get_totalExtent():Float
-		return totalExtentOverride == null ? itemCount * estimatedExtent + prefixDelta(itemCount) :
-			cast totalExtentOverride;
+		return totalExtentOverride == null
+			? itemCount * estimatedExtent + prefixDelta(itemCount) : cast totalExtentOverride;
 
 	public var count(get, never):Int;
 	inline function get_count():Int
@@ -35,12 +35,11 @@ class VirtualExtentIndex {
 		var invalidTotal = false;
 		if (totalExtent != null) {
 			var total:Float = cast totalExtent;
-			invalidTotal = total < 0.0 || !finite(total) ||
-				(itemCount > 0 && total <= 0.0);
+			invalidTotal = total < 0.0 || !finite(total) || (itemCount > 0 && total <= 0.0);
 		}
-		if (itemCount < 0 || estimatedExtent <= 0.0 || !finite(estimatedExtent) ||
-			viewportExtent <= 0.0 || !finite(viewportExtent) || !finite(offset) || offset < 0.0 ||
-			leadingOverscan < 0 || trailingOverscan < 0 || invalidTotal)
+		if (itemCount < 0 || estimatedExtent <= 0.0 || !finite(estimatedExtent) || viewportExtent <= 0.0
+			|| !finite(viewportExtent) || !finite(offset) || offset < 0.0 || leadingOverscan < 0 || trailingOverscan < 0
+			|| invalidTotal)
 			throw "Estimated virtual extent index requires finite dimensions and overscan";
 		this.itemCount = itemCount;
 		this.estimatedExtent = estimatedExtent;
@@ -82,8 +81,8 @@ class VirtualExtentIndex {
 	/** Repositions the window using estimated and measured prefix metrics. */
 	public function update(viewportExtent:Float, offset:Float,
 			leadingOverscan:Int = 1, trailingOverscan:Int = 1):Void {
-		if (viewportExtent <= 0.0 || !finite(viewportExtent) || !finite(offset) || offset < 0.0 ||
-			leadingOverscan < 0 || trailingOverscan < 0)
+		if (viewportExtent <= 0.0 || !finite(viewportExtent) || !finite(offset) || offset < 0.0 || leadingOverscan < 0
+			|| trailingOverscan < 0)
 			throw "Estimated virtual extent index requires finite dimensions and overscan";
 		this.viewportExtent = viewportExtent;
 		this.offset = Math.min(offset, Math.max(0.0, totalExtent - viewportExtent));

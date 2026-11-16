@@ -137,7 +137,10 @@ class Canvas {
 	}
 
 	public function withClip(rect:Rect, action:Canvas->Void):Void
-		withState(function(canvas) { canvas.clip(rect); action(canvas); });
+		withState(function(canvas) {
+			canvas.clip(rect);
+			action(canvas);
+		});
 
 	public function fill(path:Path, paint:Paint):Void {
 		setPaint(paint);
@@ -154,12 +157,19 @@ class Canvas {
 				fill(path, paint);
 				transientResources.push(path);
 				transientResources.push(paint);
-			} catch (error:Dynamic) { paint.dispose(); throw error; }
-		} catch (error:Dynamic) { path.dispose(); throw error; }
+			} catch (error:Dynamic) {
+				paint.dispose();
+				throw error;
+			}
+		} catch (error:Dynamic) {
+			path.dispose();
+			throw error;
+		}
 	}
 
-	public function stroke(path:Path, paint:Paint, width:Float, cap:LineCap = LineCap.Butt, join:LineJoin = LineJoin.Miter,
-		miterLimit:Float = 4.0):Void {
+	public function stroke(path:Path, paint:Paint, width:Float, cap:LineCap = LineCap.Butt,
+			join:LineJoin = LineJoin.Miter,
+			miterLimit:Float = 4.0):Void {
 		setPaint(paint);
 		commands.strokePath(path, width, cap, join, miterLimit);
 	}
@@ -195,7 +205,8 @@ class Canvas {
 				paintedRects = new Map();
 				retainedRects = new Map();
 			}
-			var key = rect.x + "," + rect.y + "," + rect.width + "," + rect.height + "," + color.red + "," + color.green + "," + color.blue + "," + color.alpha;
+			var key = rect.x + "," + rect.y + "," + rect.width + "," + rect.height + "," + color.red + "," + color.green
+				+ "," + color.blue + "," + color.alpha;
 			var entry = paintedRects.get(key);
 			if (entry == null) {
 				entry = retainedRects.get(key);
@@ -205,7 +216,8 @@ class Canvas {
 				}
 			}
 			if (entry == null) {
-				var retainedPath = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width, rect.y)
+				var retainedPath = rectanglePathBuilder.clear().moveTo(rect.x, rect.y).lineTo(rect.x + rect.width,
+					rect.y)
 					.lineTo(rect.x + rect.width, rect.y + rect.height).lineTo(rect.x, rect.y + rect.height)
 					.close().build();
 				var retainedPaint:Paint;
@@ -278,17 +290,16 @@ class Canvas {
 	 * Rotated/skewed borders retain vector antialiasing.
 	 */
 	public function drawRectBorder(rect:Rect, width:Float, color:Color):Void {
-		if (!Math.isFinite(rect.x) || !Math.isFinite(rect.y) ||
-			!Math.isFinite(rect.width) || !Math.isFinite(rect.height) ||
-			rect.width <= 0.0 || rect.height <= 0.0 || !Math.isFinite(width) || width < 0.0)
+		if (!Math.isFinite(rect.x) || !Math.isFinite(rect.y) || !Math.isFinite(rect.width)
+			|| !Math.isFinite(rect.height) || rect.width <= 0.0 || rect.height <= 0.0 || !Math.isFinite(width)
+			|| width < 0.0)
 			throw "Rectangular border requires finite positive bounds, nonnegative width, and a color";
 		commands.drawRectBorder(rect, width, color);
 	}
 
 	/** Adds a rounded solid rectangle and retains its temporary path and paint. */
 	public function fillRoundedRect(rect:Rect, radius:Float, color:Color):Void {
-		if (rect.width <= 0.0 || rect.height <= 0.0 ||
-			!Math.isFinite(radius) || radius < 0.0)
+		if (rect.width <= 0.0 || rect.height <= 0.0 || !Math.isFinite(radius) || radius < 0.0)
 			throw "Rounded rectangle requires positive bounds, a finite radius, and a color";
 		var path = new PathBuilder().roundRect(rect.x, rect.y, rect.width, rect.height, radius).build();
 		try {
@@ -347,10 +358,10 @@ class Canvas {
 	 * sigma = blurRadius / 2 so the falloff matches across backends.
 	 */
 	public function drawBoxShadow(rect:Rect, offsetX:Float, offsetY:Float, blurRadius:Float,
-		spread:Float, radii:Array<Float>, color:Color):Void {
-		if (rect.width <= 0.0 || rect.height <= 0.0 ||
-			!Math.isFinite(offsetX) || !Math.isFinite(offsetY) || !Math.isFinite(blurRadius) ||
-			blurRadius < 0.0 || !Math.isFinite(spread) || radii == null || radii.length != 4)
+			spread:Float, radii:Array<Float>, color:Color):Void {
+		if (rect.width <= 0.0 || rect.height <= 0.0 || !Math.isFinite(offsetX) || !Math.isFinite(offsetY)
+			|| !Math.isFinite(blurRadius) || blurRadius < 0.0 || !Math.isFinite(spread) || radii == null
+			|| radii.length != 4)
 			throw "Box shadow requires positive bounds, finite parameters, four radii, and a color";
 		for (radius in radii)
 			if (!Math.isFinite(radius) || radius < 0.0)
@@ -373,9 +384,8 @@ class Canvas {
 			?bounds:Rect, ?effects:EffectChain, ?mask:Mask, ?backdropEffects:EffectChain):Void {
 		if (opacity < 0.0 || opacity > 1.0)
 			throw "Canvas layer opacity must be in the range 0..1";
-		if (bounds != null && (!Math.isFinite(bounds.x) || !Math.isFinite(bounds.y) ||
-			!Math.isFinite(bounds.width) || !Math.isFinite(bounds.height) ||
-			bounds.width <= 0.0 || bounds.height <= 0.0))
+		if (bounds != null && (!Math.isFinite(bounds.x) || !Math.isFinite(bounds.y) || !Math.isFinite(bounds.width)
+			|| !Math.isFinite(bounds.height) || bounds.width <= 0.0 || bounds.height <= 0.0))
 			throw "Canvas layer bounds must be finite and positive";
 		commands.beginLayer(opacity, mode, bounds, effects, mask, backdropEffects);
 		openLayers++;

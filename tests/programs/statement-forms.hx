@@ -48,9 +48,8 @@ function main():Int {
 	if (total != 34)
 		return 3;
 	// A block whose last statement is an expression still yields its value.
-	var value = {
-		var a = 20;
-		a + 22;
+	var value = {var a = 20;
+	a + 22;
 	};
 	if (value != 42)
 		return 4;

@@ -1,13 +1,24 @@
 struct ArrayOffset {
 	public var x:Int;
-	public function new(x:Int) { this.x = x; }
-	public function changeThenThrow():Void { x += 3; throw "changed"; }
-	public function around(callback:Void->Void):Void { x += 1; callback(); x += 2; }
+	public function new(x:Int) {
+		this.x = x;
+	}
+	public function changeThenThrow():Void {
+		x += 3;
+		throw "changed";
+	}
+	public function around(callback:Void->Void):Void {
+		x += 1;
+		callback();
+		x += 2;
+	}
 }
 
 class ArrayMarker {
 	public var value:Int;
-	public function new(value:Int) { this.value = value; }
+	public function new(value:Int) {
+		this.value = value;
+	}
 }
 
 struct ArrayRecord {
@@ -44,7 +55,9 @@ function main():Int {
 	var alias = records;
 	alias[0].offset.x = 4;
 	if (records[0].offset.x != 4) return 2;
-	try { records[0].offset.changeThenThrow(); } catch (error:Dynamic) {}
+	try {
+		records[0].offset.changeThenThrow();
+	} catch (error:Dynamic) {}
 	if (alias[0].offset.x != 7) return 3;
 	var sum = 0;
 	for (record in records) sum += record.offset.x;
@@ -70,7 +83,9 @@ function main():Int {
 	// Evaluating the right-hand side may mutate another field of the same element.
 	records[0].offset.x = changeOtherField(records);
 	if (records[0].offset.x != 30 || records[0].text != "changed during assignment" || records.length != 448) return 5;
-	var saved = records[0].snapshotAfter(function() { records[0].offset.x = 44; });
+	var saved = records[0].snapshotAfter(function() {
+		records[0].offset.x = 44;
+	});
 	if (saved != 30 || records[0].offset.x != 44) return 6;
 	records[0].offset = records[1].offset;
 	records[1].offset.x = 81;
@@ -95,7 +110,8 @@ function main():Int {
 	var grownConcat = grown.concat([]);
 	grown[1].offset.x = 14;
 	if (grownCopy.length != 3 || grownSlice.length != 2 || grownConcat.length != 3
-		|| grownCopy[1].offset.x != 13 || grownSlice[1].offset.x != 13 || grownConcat[1].offset.x != 13) failures += 128;
+		|| grownCopy[1].offset.x != 13 || grownSlice[1].offset.x != 13
+		|| grownConcat[1].offset.x != 13) failures += 128;
 	var increments = [new ArrayRecord(10, "increment", null), new ArrayRecord(20, "increment", null)];
 	var index = 0;
 	increments[index++].offset.x += 3;

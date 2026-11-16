@@ -44,7 +44,8 @@ class WasmFunctionBuilder {
 		return new WasmFunctionRef(module.addFunction(new WasmFunction(name, type)));
 
 	/** Adopt a legacy raw instruction body while still allocating locals through the builder. */
-	public static function fromRaw(name:String, type:WasmFunctionType, ?locals:Array<WasmLocal>, ?body:Array<WasmInstruction>):WasmFunction {
+	public static function fromRaw(name:String, type:WasmFunctionType, ?locals:Array<WasmLocal>,
+			?body:Array<WasmInstruction>):WasmFunction {
 		var builder = new WasmFunctionBuilder(name, type);
 		if (locals != null)
 			for (index in 0...locals.length)
@@ -134,7 +135,8 @@ class WasmFunctionBuilder {
 	}
 
 	/** Emit a structured if/else scope and close it after both callbacks. */
-	public function ifElse(thenBody:WasmFunctionBuilder->Void, elseBody:WasmFunctionBuilder->Void, ?result:Null<WasmValueType>):Void {
+	public function ifElse(thenBody:WasmFunctionBuilder->Void, elseBody:WasmFunctionBuilder->Void,
+			?result:Null<WasmValueType>):Void {
 		emit(If(result));
 		thenBody(this);
 		emit(Else);

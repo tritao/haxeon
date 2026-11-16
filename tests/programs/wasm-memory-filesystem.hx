@@ -10,17 +10,20 @@ function host():Int {
 	if (Sys.args().length != 0)
 		return 1;
 	#end
-	return Sys.getEnv("HOME") == null && Sys.getCwd() == "/" && Sys.systemName() == "Web" && Sys.executablePath() == "" && Sys.exists("/")
+	return Sys.getEnv("HOME") == null && Sys.getCwd() == "/" && Sys.systemName() == "Web" && Sys.executablePath() == ""
+		&& Sys.exists("/")
 		&& Sys.isDir("/") ? 0 : 1;
 }
 
 function files():Int {
 	FileSystem.createDirectory("projects/demo/assets");
-	if (!FileSystem.isDirectory("/projects/demo") || FileSystem.fullPath("projects//demo/./assets/../") != "/projects/demo")
+	if (!FileSystem.isDirectory("/projects/demo")
+		|| FileSystem.fullPath("projects//demo/./assets/../") != "/projects/demo")
 		return 2;
 	File.saveContent("/projects/demo/scene.json", "{\"a\":1}");
 	File.appendContent("/projects/demo/scene.json", ",more");
-	if (File.getContent("projects/demo/scene.json") != "{\"a\":1},more" || !FileSystem.exists("/projects/demo/scene.json"))
+	if (File.getContent("projects/demo/scene.json") != "{\"a\":1},more"
+		|| !FileSystem.exists("/projects/demo/scene.json"))
 		return 3;
 	var bytes = Bytes.alloc(3);
 	bytes.set(0, 0);
@@ -32,7 +35,8 @@ function files():Int {
 	if (loaded.length != 3 || loaded.get(1) != 255 || loaded.get(2) != 42)
 		return 4;
 	var names = FileSystem.readDirectory("/projects/demo");
-	if (names.length != 2 || names[0] != "assets" || names[1] != "scene.json" || FileSystem.readDirectory("/missing") != null)
+	if (names.length != 2 || names[0] != "assets" || names[1] != "scene.json"
+		|| FileSystem.readDirectory("/missing") != null)
 		return 5;
 	var metadata = FileSystem.metadata("/projects/demo/scene.json");
 	if (metadata == null || metadata.size != 12 || metadata.modified <= 0 || FileSystem.metadata("/missing") != null)
@@ -68,7 +72,8 @@ function failures():Int {
 	if (!missingRead || !missingParent || !directoryWrite || !textBinary)
 		return 8;
 	// Sys.createDir is mkdir: no missing parents, and an existing path fails.
-	if (Sys.createDir("/a/b", 493) || !Sys.createDir("/a", 493) || Sys.createDir("/a", 493) || !Sys.createDir("/a/b", 493))
+	if (Sys.createDir("/a/b", 493) || !Sys.createDir("/a", 493) || Sys.createDir("/a", 493)
+		|| !Sys.createDir("/a/b", 493))
 		return 9;
 	if (Sys.removeDir("/a") || !Sys.removeDir("/a/b") || !Sys.removeDir("/a") || Sys.exists("/a"))
 		return 10;
@@ -86,7 +91,8 @@ function moves():Int {
 		FileSystem.rename("/projects/renamed", "/projects/renamed/inside")
 	catch (error:String)
 		rejected = true;
-	if (!rejected || !Sys.rename("/projects/renamed/scene.json", "/projects/scene.json") || Sys.exists("/projects/renamed/scene.json"))
+	if (!rejected || !Sys.rename("/projects/renamed/scene.json", "/projects/scene.json")
+		|| Sys.exists("/projects/renamed/scene.json"))
 		return 17;
 	if (!Sys.setCwd("/projects")
 		|| Sys.getCwd() != "/projects/"
@@ -133,7 +139,8 @@ function gc():Int {
 	hl.Gc.enable(true);
 	hl.Gc.major();
 	hl.Gc.setMarkThreshold(0.5);
-	return hl.Gc.markThreshold() == 0.5 && hl.Gc.heapBytes() == 0.0 && hl.Gc.allocatedSinceCollection() == 0.0 ? 0 : 128;
+	return hl.Gc.markThreshold() == 0.5 && hl.Gc.heapBytes() == 0.0
+		&& hl.Gc.allocatedSinceCollection() == 0.0 ? 0 : 128;
 }
 
 function main():Int {

@@ -94,14 +94,16 @@ class IrValueArrayOptionalComponents {
 		var presence = [for (slotIndex in 0...slots.length) if (slots[slotIndex].isPresence) slotIndex];
 		presence.sort((left, right) -> slots[right].path.length - slots[left].path.length);
 		for (slotIndex in presence)
-			set.call(helpers.setter(helpers.slot(slots[slotIndex].path, true)), [target, position, values[slotIndex]], Void);
+			set.call(helpers.setter(helpers.slot(slots[slotIndex].path, true)), [target, position, values[slotIndex]],
+				Void);
 		set.call("__value_array_mark", [target, position], Void);
 		set.returnValue(set.constVoid());
 		var push = new IrBuilder(),
 			pushArray = push.argument("array", arrayType),
 			pushValue = push.argument("components", wrapper),
 			length = new IrValue(1000000, "$array-length", I32);
-		push.currentBlock().instructions.push(new Located(ArraySize(length, pushArray), SourceProvenance.generated("optional-array-push")));
+		push.currentBlock().instructions.push(new Located(ArraySize(length, pushArray),
+			SourceProvenance.generated("optional-array-push")));
 		push.call(setName(), [pushArray, length, pushValue], Void);
 		push.returnValue(push.add(length, push.constInt(1)));
 		var insert = new IrBuilder(),
@@ -116,12 +118,14 @@ class IrValueArrayOptionalComponents {
 			unshiftValue = unshift.argument("components", wrapper),
 			unshiftLength = new IrValue(1000000, "$array-length", I32);
 		unshift.call(insertName(), [unshiftArray, unshift.constInt(0), unshiftValue], Void);
-		unshift.currentBlock().instructions.push(new Located(ArraySize(unshiftLength, unshiftArray), SourceProvenance.generated("optional-array-unshift")));
+		unshift.currentBlock().instructions.push(new Located(ArraySize(unshiftLength, unshiftArray),
+			SourceProvenance.generated("optional-array-unshift")));
 		unshift.returnValue(unshiftLength);
 		var pop = new IrBuilder(),
 			popArray = pop.argument("array", arrayType),
 			popLength = new IrValue(1000000, "$array-length", I32);
-		pop.currentBlock().instructions.push(new Located(ArraySize(popLength, popArray), SourceProvenance.generated("optional-array-pop")));
+		pop.currentBlock().instructions.push(new Located(ArraySize(popLength, popArray),
+			SourceProvenance.generated("optional-array-pop")));
 		var popIndex = pop.sub(popLength, pop.constInt(1)),
 			popValue = pop.call(getName(), [popArray, popIndex], wrapper);
 		pop.call("__value_array_remove_at", [popArray, popIndex], Void);
@@ -134,19 +138,26 @@ class IrValueArrayOptionalComponents {
 		shift.returnValue(shiftValue);
 		return [
 			new IrFunction(getName(), get.arguments, wrapper, get.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, getName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, getName()))),
 			new IrFunction(setName(), set.arguments, Void, set.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, setName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, setName()))),
 			new IrFunction(pushName(), push.arguments, I32, push.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, pushName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, pushName()))),
 			new IrFunction(insertName(), insert.arguments, Void, insert.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, insertName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, insertName()))),
 			new IrFunction(unshiftName(), unshift.arguments, I32, unshift.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, unshiftName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, unshiftName()))),
 			new IrFunction(popName(), pop.arguments, wrapper, pop.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, popName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, popName()))),
 			new IrFunction(shiftName(), shift.arguments, wrapper, shift.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayElement, shiftName())))
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayElement, shiftName())))
 		];
 	}
 }

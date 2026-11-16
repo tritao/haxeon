@@ -19,10 +19,10 @@ function expectThrows(body:Void->Void, message:String):Void {
 
 function main():Int {
 	var weights = [9.0, 1.0, 4.0, 1.0, 1.0, 7.0, 2.0, 2.0, 3.0, 1.0, 5.0, 1.0, 1.0, 1.0, 6.0];
-	var groups:Array<TestGroup> = [
-		for (index in 0...weights.length)
-			{name: "group" + index, run: () -> {}, weight: weights[index]}
-	];
+	var groups:Array<TestGroup> = [for (index in 0...weights.length)
+		{
+			name:"group" + index, run:() -> {}, weight:weights[index]
+		}];
 
 	// Every group belongs to exactly one shard, for any number of shards, and the split is the same every time.
 	for (count in 1...20) {
@@ -60,15 +60,18 @@ function main():Int {
 	}
 
 	// Groups without a weight count one each.
-	var plain:Array<TestGroup> = [for (index in 0...6) {name: "plain" + index, run: () -> {}}];
-	expect(Shards.assignment(plain, 1, 2).length == 3 && Shards.assignment(plain, 2, 2).length == 3, "unweighted groups split evenly");
+	var plain:Array<TestGroup> = [for (index in 0...6) {
+		name:"plain" + index, run:() -> {}
+	}];
+	expect(Shards.assignment(plain, 1, 2).length == 3 && Shards.assignment(plain, 2, 2).length == 3,
+		"unweighted groups split evenly");
 
 	// `run` runs the shard's groups, in order, and says whether that was everything.
 	var ran:Array<String> = [];
-	var tracked:Array<TestGroup> = [
-		for (index in 0...5)
-			{name: "t" + index, run: () -> ran.push("t" + index), weight: 1.0}
-	];
+	var tracked:Array<TestGroup> = [for (index in 0...5)
+		{
+			name:"t" + index, run:() -> ran.push("t" + index), weight:1.0
+		}];
 	expect(Shards.run(tracked, []) && ran.join(",") == "t0,t1,t2,t3,t4", "without a shard every group runs");
 	ran = [];
 	var partial = Shards.run(tracked, ["--shard", "1/2"]);
@@ -87,14 +90,19 @@ function main():Int {
 	];
 	for (arguments in bad)
 		expectThrows(() -> Shards.run(tracked, arguments), "a bad shard argument is rejected");
-	expectThrows(() -> Shards.assignment([{name: "same", run: () -> {}}, {name: "same", run: () -> {}}], 1, 2), "two groups with one name are rejected");
+	expectThrows(() -> Shards.assignment([{name: "same", run: () -> {}
+	}, {name: "same", run: () -> {}
+	}], 1, 2), "two groups with one name are rejected");
 
 	// `--only` runs the named groups in their listed order; `*` matches any run of characters.
-	expect(Shards.matches("t*", "t3") && Shards.matches("*3", "t3") && Shards.matches("t*3", "t3") && Shards.matches("*", "x"), "wildcards match");
-	expect(!Shards.matches("t", "t3") && !Shards.matches("t*4", "t3") && !Shards.matches("a*b*c", "abxc0"), "wildcards do not over-match");
+	expect(Shards.matches("t*", "t3") && Shards.matches("*3", "t3") && Shards.matches("t*3", "t3")
+		&& Shards.matches("*", "x"), "wildcards match");
+	expect(!Shards.matches("t", "t3") && !Shards.matches("t*4", "t3") && !Shards.matches("a*b*c", "abxc0"),
+		"wildcards do not over-match");
 	expect(Shards.matches("ab*b", "abb") && !Shards.matches("ab*ab", "ab"), "a wildcard does not reuse the prefix");
 	ran = [];
-	expect(!Shards.run(tracked, ["--only", "t3,t1"]) && ran.join(",") == "t1,t3", "--only runs named groups in listed order");
+	expect(!Shards.run(tracked, ["--only", "t3,t1"]) && ran.join(",") == "t1,t3",
+		"--only runs named groups in listed order");
 	ran = [];
 	expect(!Shards.run(tracked, ["--only", "t*"]) && ran.length == 5, "--only with a wildcard");
 	ran = [];
@@ -122,7 +130,8 @@ function main():Int {
 	catch (error:Dynamic)
 		report = Std.string(error);
 	expect(ran.join(",") == "ok1,ok2", "groups after a failure still run");
-	expect(report.indexOf("2 of 4 groups failed") >= 0 && report.indexOf("bad1, bad2") >= 0, "every failure is reported: " + report);
+	expect(report.indexOf("2 of 4 groups failed") >= 0 && report.indexOf("bad1, bad2") >= 0,
+		"every failure is reported: " + report);
 	ran = [];
 	expectThrows(() -> Shards.run(failing, []), "without --keep-going the first failure stops the run");
 	expect(ran.join(",") == "ok1", "without --keep-going later groups do not run");

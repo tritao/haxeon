@@ -17,6 +17,6 @@ class DockDropPreview {
 	}
 
 	public function same(other:Null<DockDropPreview>):Bool
-		return other != null && sourcePanelId == other.sourcePanelId &&
-			targetPanelId == other.targetPanelId && zone == other.zone;
+		return other != null && sourcePanelId == other.sourcePanelId && targetPanelId == other.targetPanelId
+			&& zone == other.zone;
 }

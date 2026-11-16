@@ -31,7 +31,8 @@ class PatchUnwindMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw "Editing the thrown message did not produce a patch";
-		Runtime.patchSet(live, new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		var after = Runtime.callInt(live, mainId);
 		if (after != 7)
 			throw 'The exception stack lost frames after a patch: $after';

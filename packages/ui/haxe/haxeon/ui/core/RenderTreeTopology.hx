@@ -13,7 +13,11 @@ class RenderTreeTopology {
 	public function new() {}
 
 	public function clear():Void {
-		indices.clear(); parents.resize(0); offsets.resize(0); counts.resize(0); children.resize(0);
+		indices.clear();
+		parents.resize(0);
+		offsets.resize(0);
+		counts.resize(0);
+		children.resize(0);
 	}
 
 	public function append(node:RenderNode):Void {

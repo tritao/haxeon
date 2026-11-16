@@ -91,7 +91,8 @@ class Ryu {
 			tableIndex = negativeBinaryExponent - q;
 			var log2PowerOfFive = ((tableIndex * LOG2_5_MULTIPLIER) >>> LOG2_5_SHIFT) + 1 - 125;
 			binaryShift = q - log2PowerOfFive;
-			var interval = multiplyShiftAll(significand, tableAddress, RyuTables.INVERSE_ENTRIES + tableIndex, binaryShift, mmShift);
+			var interval = multiplyShiftAll(significand, tableAddress, RyuTables.INVERSE_ENTRIES + tableIndex,
+				binaryShift, mmShift);
 			lower = interval.low;
 			center = interval.high;
 			upper = interval.top;
@@ -252,7 +253,7 @@ class Ryu {
 		} else if (decimalPointPosition <= 0) {
 			characters.insert(0, ".".code);
 			characters.insert(0, "0".code);
-			for (_ in 0... - decimalPointPosition)
+			for (_ in 0...- decimalPointPosition)
 				characters.insert(2, "0".code);
 		} else if (decimalPointPosition < digitCount) {
 			characters.insert(decimalPointPosition, ".".code);
@@ -274,7 +275,11 @@ class Ryu {
 	}
 
 	static function multiplyShiftAll(significand:haxe.Int64, tableAddress:Int, tableIndex:Int, bitShift:Int,
-			mmShift:Int):{low:haxe.Int64, high:haxe.Int64, top:haxe.Int64} {
+			mmShift:Int): {
+				low: haxe.Int64,
+				high: haxe.Int64,
+				top: haxe.Int64
+			} {
 		var fourTimesSignificand = significand << 2;
 		var center = multiplyShift(fourTimesSignificand, tableAddress, tableIndex, bitShift);
 		var upper = multiplyShift(fourTimesSignificand + wide(0, 2), tableAddress, tableIndex, bitShift);
@@ -284,8 +289,10 @@ class Ryu {
 
 	static function multiplyShift(value:haxe.Int64, tableAddress:Int, tableIndex:Int, bitShift:Int):haxe.Int64 {
 		var offset = tableIndex * 4;
-		var tableLow = haxe.Int64.make(RuntimeData.loadI32(tableAddress + (offset + 1) * 4), RuntimeData.loadI32(tableAddress + offset * 4));
-		var tableHigh = haxe.Int64.make(RuntimeData.loadI32(tableAddress + (offset + 3) * 4), RuntimeData.loadI32(tableAddress + (offset + 2) * 4));
+		var tableLow = haxe.Int64.make(RuntimeData.loadI32(tableAddress + (offset + 1) * 4),
+			RuntimeData.loadI32(tableAddress + offset * 4));
+		var tableHigh = haxe.Int64.make(RuntimeData.loadI32(tableAddress + (offset + 3) * 4),
+			RuntimeData.loadI32(tableAddress + (offset + 2) * 4));
 		var upperProduct = unsignedMultiply128(value, tableHigh);
 		var lowerProduct = unsignedMultiply128(value, tableLow);
 		var shiftedLowWord = upperProduct.low + lowerProduct.high;

@@ -47,7 +47,8 @@ class AudioTrackPlayer {
 
 	public function new(events:EventPump, ?bus:Bus) {
 		if (events == null)
-			throw BindingError.invalidArgument("AudioTrackPlayer.new", "Audio track player event pump must not be null");
+			throw BindingError.invalidArgument("AudioTrackPlayer.new",
+				"Audio track player event pump must not be null");
 		if (bus != null && bus.isDisposed())
 			throw BindingError.invalidArgument("AudioTrackPlayer.new", "Audio track player bus must be live");
 		this.events = events;
@@ -87,7 +88,8 @@ class AudioTrackPlayer {
 	public function transitionTo(track:AudioTrack, ?options:AudioTransitionOptions):Voice {
 		ensureLive();
 		if (track == null)
-			throw BindingError.invalidArgument("AudioTrackPlayer.transitionTo", "Audio track player track must not be null");
+			throw BindingError.invalidArgument("AudioTrackPlayer.transitionTo",
+				"Audio track player track must not be null");
 		var timing = copyOptions(options);
 		validateOptions(timing);
 		update();
@@ -138,7 +140,8 @@ class AudioTrackPlayer {
 	public function queue(track:AudioTrack, ?options:AudioTransitionOptions):Void {
 		ensureLive();
 		if (track == null)
-			throw BindingError.invalidArgument("AudioTrackPlayer.queue", "Audio track player queued track must not be null");
+			throw BindingError.invalidArgument("AudioTrackPlayer.queue",
+				"Audio track player queued track must not be null");
 		var timing = copyOptions(options);
 		validateOptions(timing);
 		if (currentVoiceValue == null) {
@@ -153,7 +156,8 @@ class AudioTrackPlayer {
 	public function stop(fadeOutSeconds:Float = 0.0):Void {
 		ensureLive();
 		if (!finite(fadeOutSeconds) || fadeOutSeconds < 0.0)
-			throw BindingError.invalidArgument("AudioTrackPlayer.stop", "Audio track player fade-out must be finite and non-negative");
+			throw BindingError.invalidArgument("AudioTrackPlayer.stop",
+				"Audio track player fade-out must be finite and non-negative");
 		update();
 		settleTransitionForReplacement();
 		clearQueued();
@@ -181,8 +185,7 @@ class AudioTrackPlayer {
 		var now = Mixer.timeFrames();
 		if (stopEndFrames != null && haxe.Int64.compare(now, stopEndFrames) >= 0)
 			finishStop();
-		if (transitionActive && transitionEndFrames != null &&
-			haxe.Int64.compare(now, transitionEndFrames) >= 0)
+		if (transitionActive && transitionEndFrames != null && haxe.Int64.compare(now, transitionEndFrames) >= 0)
 			finishTransition();
 	}
 
@@ -456,8 +459,7 @@ class AudioTrackPlayer {
 	}
 
 	function matches(source:Handle, voice:Null<Voice>):Bool {
-		return voice != null && !voice.isDisposed() &&
-			voice.nativeHandle().rawValue() == source.rawValue();
+		return voice != null && !voice.isDisposed() && voice.nativeHandle().rawValue() == source.rawValue();
 	}
 
 	static function copyOptions(source:Null<AudioTransitionOptions>):AudioTransitionOptions {
@@ -471,10 +473,10 @@ class AudioTrackPlayer {
 	}
 
 	static function validateOptions(options:AudioTransitionOptions):Void {
-		if (!finite(options.fadeInSeconds) || options.fadeInSeconds < 0.0 ||
-			!finite(options.fadeOutSeconds) || options.fadeOutSeconds < 0.0 ||
-			!finite(options.delaySeconds) || options.delaySeconds < 0.0)
-			throw BindingError.invalidArgument("AudioTrackPlayer.validateOptions", "Audio transition timing must be finite and non-negative");
+		if (!finite(options.fadeInSeconds) || options.fadeInSeconds < 0.0 || !finite(options.fadeOutSeconds)
+			|| options.fadeOutSeconds < 0.0 || !finite(options.delaySeconds) || options.delaySeconds < 0.0)
+			throw BindingError.invalidArgument("AudioTrackPlayer.validateOptions",
+				"Audio transition timing must be finite and non-negative");
 	}
 
 	static function secondsToFrames(seconds:Float):haxe.Int64 {

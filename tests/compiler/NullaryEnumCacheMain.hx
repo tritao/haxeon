@@ -29,15 +29,22 @@ class NullaryEnumCacheMain {
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null) temp = "out";
 		var stem = temp + "/nullary-enum-" + target + "-" + inlining + "-" + Std.random(0x7fffffff),
-			path = stem + (target == "hl" ? ".hl" : ".wasm"), captures:Array<String> = [];
+			path = stem + (target == "hl" ? ".hl" : ".wasm"),
+			captures:Array<String> = [];
 		if (target == "hl") {
 			program.natives = program.natives.concat([
-				{name:"cacheMajor", library:"std", symbol:"gc_major", arguments:[], result:Void},
-				{name:"cacheStart", library:"std", symbol:"gc_census_start", arguments:[I32], result:Void},
-				{name:"cacheStop", library:"std", symbol:"gc_census_stop", arguments:[], result:Void},
-				{name:"cacheReset", library:"std", symbol:"gc_census_reset", arguments:[], result:Void},
-				{name:"cacheDump", library:"haxeon_runtime", symbol:"__gc_census_dump", arguments:[Bytes], result:Void},
-				{name:"cacheExit", library:"std", symbol:"sys_exit", arguments:[I32], result:Void}
+				{name: "cacheMajor", library: "std", symbol: "gc_major", arguments: [], result: Void},
+				{name: "cacheStart", library: "std", symbol: "gc_census_start", arguments: [I32], result: Void},
+				{name: "cacheStop", library: "std", symbol: "gc_census_stop", arguments: [], result: Void},
+				{name: "cacheReset", library: "std", symbol: "gc_census_reset", arguments: [], result: Void},
+				{
+					name: "cacheDump",
+					library: "haxeon_runtime",
+					symbol: "__gc_census_dump",
+					arguments: [Bytes],
+					result: Void
+				},
+				{name: "cacheExit", library: "std", symbol: "sys_exit", arguments: [I32], result: Void}
 			]);
 			var entry = new IrBuilder(), bad = entry.createBlock();
 			if (Lambda.exists(program.functions, fn -> fn.name == "__init")) entry.call("__init", [], Void);
@@ -70,14 +77,16 @@ class NullaryEnumCacheMain {
 		}
 		compiler.ir.IrVerifier.verify(program);
 		var bytes = target == "hl"
-			? new compiler.backend.hl.HlBackend().compile(program, {target:HashLink, debugNames:true}).bytes
+			? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes
 			: new compiler.backend.wasm.WasmBackend().compile(program, {
-				target:target == "wasm32" ? Wasm32 : WasmGc, debugNames:true,
-				wasmMemoryStats:target == "wasm32", wasmGcStress:target == "wasm32", wasmGcAllocationCount:target == "wasm-gc"
+				target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true,
+				wasmMemoryStats: target == "wasm32", wasmGcStress: target == "wasm32",
+				wasmGcAllocationCount: target == "wasm-gc"
 			}).bytes;
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var js =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("case semantics");e["CaseProbe.clearRoots"]();'
 				+ 'const collections=e["haxeon.memory.collection_count"],beforeGC=collections?collections():0;'
 				+ 'e["CaseProbe.churn"](256);global.gc();if(collections&&collections()<=beforeGC)throw Error("guest did not collect");'
@@ -86,10 +95,18 @@ class NullaryEnumCacheMain {
 				+ 'for(const n of [8,1024]){const before=c();if(e["CaseProbe.perform"](n)!==42*n)throw Error("case result");'
 				+ 'if(c()!==before)throw Error("nullary references allocated "+(c()-before)+" objects for "+n+" iterations");}';
 			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node",
-				target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
-			var output = child.stdout.readAll().toString(), error = child.stderr.readAll().toString(), status = child.exitCode();
+				target == "hl" ? [path] : [
+					"--expose-gc",
+					"-e",
+					js,
+					path
+				]);
+			var output = child.stdout.readAll().toString(),
+				error = child.stderr.readAll().toString(),
+				status = child.exitCode();
 			child.close();
-			if (status != (target == "hl" ? 42 : 0)) throw target + " inline=" + inlining + ": " + status + " " + output + " " + error;
+			if (status != (target == "hl" ? 42 : 0)) throw target + " inline=" + inlining + ": " + status + " " + output
+				+ " " + error;
 			for (capture in captures) {
 				var census:Dynamic = haxe.Json.parse(sys.io.File.getContent(capture));
 				if (census.allocations != 0) throw "Nullary references allocated " + census.allocations + " objects";
@@ -99,7 +116,8 @@ class NullaryEnumCacheMain {
 			throw error;
 		}
 		cleanup(path, captures);
-		Sys.println("PASS: " + target + " inline=" + inlining + ": rooted boxed cases; zero objects for 8/1024 iterations");
+		Sys.println("PASS: " + target + " inline=" + inlining
+			+ ": rooted boxed cases; zero objects for 8/1024 iterations");
 	}
 
 	static function cleanup(path:String, captures:Array<String>):Void {

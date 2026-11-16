@@ -11,14 +11,17 @@ import compiler.runtime.CompilerIntrinsics;
  * A Dynamic object literal does not cause a restart on HashLink, whose dynamic objects are native.
  */
 class FrontendRestartMain {
-	static final value = "struct Value { public var number:Int; public function new(number:Int) this.number = number; } ";
+	static final value =
+		"struct Value { public var number:Int; public function new(number:Int) this.number = number; } ";
 
 	static function main():Void {
-		var literal = compile("function keep(value:Dynamic):Void {} function main():Int { keep({count: 42}); return 42; }");
+		var literal =
+			compile("function keep(value:Dynamic):Void {} function main():Int { keep({count: 42}); return 42; }");
 		if (literal.metrics.frontendRestarts.length != 0)
 			throw 'A Dynamic object literal restarted the frontend: ${literal.metrics.frontendRestarts}';
 
-		var arithmeticSource = "function read(value:Dynamic):Int return value < 0 ? 0 : 42; function main():Int return read(1);";
+		var arithmeticSource =
+			"function read(value:Dynamic):Int return value < 0 ? 0 : 42; function main():Int return read(1);";
 		var arithmetic = compile(arithmeticSource);
 		expectReasons(arithmetic, ["Main.read needs haxeon.DynamicOps"], "Dynamic arithmetic");
 		var passes = arithmetic.metrics.frontendPassFunctions;
@@ -31,8 +34,10 @@ class FrontendRestartMain {
 		// The second pass types the functions of the new module and nothing else: the program with the module imported types its
 		// own function and the always-present map module's besides.
 		var plain = compile("function main():Int return 42;").metrics.frontendPassFunctions;
-		var moduleAlone = compile("import haxeon.DynamicOps; function main():Int return 42;").metrics.frontendPassFunctions;
-		if (passes.length != 2 || plain.length != 1 || moduleAlone.length != 1 || passes[1] != moduleAlone[0] - plain[0])
+		var moduleAlone =
+			compile("import haxeon.DynamicOps; function main():Int return 42;").metrics.frontendPassFunctions;
+		if (passes.length != 2 || plain.length != 1 || moduleAlone.length != 1
+			|| passes[1] != moduleAlone[0] - plain[0])
 			throw 'Dynamic arithmetic must continue with only the new module, not type everything again: typed $passes, the module alone ${moduleAlone} over ${plain}';
 		expectSameProgram(arithmetic, compile("import haxeon.DynamicOps; " + arithmeticSource), "Dynamic arithmetic");
 
@@ -43,16 +48,17 @@ class FrontendRestartMain {
 		expectReasons(field, [], "A specialized map field");
 		if (field.metrics.frontendPassFunctions.length != 1)
 			throw 'A specialized map field must be typed once: typed ${field.metrics.frontendPassFunctions}';
-		expectSameProgram(field, compile("import haxeon.collections.HashMap; " + fieldSource), "A specialized map field");
+		expectSameProgram(field, compile("import haxeon.collections.HashMap; " + fieldSource),
+			"A specialized map field");
 
 		var bodySource = value
-			+
-			"function main():Int { var entries = new Map<Int, Value>(); entries.set(1, new Value(42)); var found = entries.get(1); return found == null ? 1 : found.number; }";
+			+ "function main():Int { var entries = new Map<Int, Value>(); entries.set(1, new Value(42)); var found = entries.get(1); return found == null ? 1 : found.number; }";
 		var body = compile(bodySource);
 		expectReasons(body, [], "A specialized map met in a body");
 		if (body.metrics.frontendPassFunctions.length != 1)
 			throw 'A specialized map met in a body must be typed once: typed ${body.metrics.frontendPassFunctions}';
-		expectSameProgram(body, compile("import haxeon.collections.HashMap; " + bodySource), "A specialized map met in a body");
+		expectSameProgram(body, compile("import haxeon.collections.HashMap; " + bodySource),
+			"A specialized map met in a body");
 
 		var withoutStdlib = new Compiler();
 		withoutStdlib.update("Main.hx", bodySource);
@@ -82,7 +88,8 @@ class FrontendRestartMain {
 	}
 
 	/** The program does not depend on how the module got there: the same functions and objects as with the module imported. */
-	static function expectSameProgram(incremental:compiler.Compiler.CompileResult, imported:compiler.Compiler.CompileResult, label:String):Void {
+	static function expectSameProgram(incremental:compiler.Compiler.CompileResult,
+			imported:compiler.Compiler.CompileResult, label:String):Void {
 		var left = shape(incremental), right = shape(imported);
 		if (left != right)
 			throw '$label differs from a compile that starts with the module:\n$left\n--\n$right';

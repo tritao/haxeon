@@ -50,13 +50,15 @@ typedef QueriedOutput = {
 class HxiHaxeEmitter {
 	public static function declarationName(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
-				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
+				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_): name;
 		};
 
 	static function projectedEnumValueName(value:ProjectedEnum, nativeName:String):String {
 		var projected = Lambda.find(value.values, entry -> entry.nativeName == nativeName);
-		return projected == null ?throw 'Missing projected enum value "${value.nativeName}.$nativeName"':projected.name;
+		return projected == null
+			? throw 'Missing projected enum value "${value.nativeName}.$nativeName"' : projected.name;
 	}
 
 	public static function functionNameForSymbol(declarations:Array<HxiDeclaration>, symbol:String):String {
@@ -69,7 +71,8 @@ class HxiHaxeEmitter {
 	static function functionDeclarationForSymbol(declarations:Array<HxiDeclaration>, symbol:String):HxiDeclaration {
 		for (declaration in declarations)
 			switch declaration {
-				case Function(name, _, _, declaredSymbol, _, _, _, _) if ((declaredSymbol == null ? name : declaredSymbol) == symbol):
+				case Function(name, _, _, declaredSymbol, _, _, _,
+					_) if ((declaredSymbol == null ? name : declaredSymbol) == symbol):
 					return declaration;
 				case _:
 			}
@@ -84,7 +87,8 @@ class HxiHaxeEmitter {
 
 	public static function isProjectedType(declaration:HxiDeclaration):Bool
 		return switch declaration {
-			case Opaque(_, _) | Handle(_, _, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_, _, _, _, _): true;
+			case Opaque(_, _) | Handle(_, _, _, _) | Structure(_, _, _, _, _) | Enumeration(_, _, _, _, _) | Callback(_,
+				_, _, _, _): true;
 			case _: false;
 		};
 
@@ -140,10 +144,11 @@ class HxiHaxeEmitter {
 
 	static function isHaxeKeyword(value:String):Bool
 		return switch value {
-			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "dynamic" | "else" | "enum" | "extends" |
-				"extern" | "false" | "final" | "for" | "from" | "function" | "if" | "implements" | "import" | "in" | "inline" | "interface" | "macro" |
-				"new" | "null" | "operator" | "overload" | "override" | "package" | "private" | "public" | "return" | "static" | "super" | "switch" | "this" |
-				"throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while": true;
+			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "dynamic"
+				| "else" | "enum" | "extends" | "extern" | "false" | "final" | "for" | "from" | "function" | "if"
+				| "implements" | "import" | "in" | "inline" | "interface" | "macro" | "new" | "null" | "operator"
+				| "overload" | "override" | "package" | "private" | "public" | "return" | "static" | "super" | "switch"
+				| "this" | "throw" | "to" | "true" | "try" | "typedef" | "untyped" | "using" | "var" | "while": true;
 			case _: false;
 		};
 
@@ -156,7 +161,8 @@ class HxiHaxeEmitter {
 	static function isHaxeTypeIdentifier(value:String):Bool
 		return isHaxeIdentifier(value) && !isHaxeBuiltinTypeName(value);
 
-	public static function addProjectedName(path:String, scope:String, projected:String, origin:String, names:Map<String, String>,
+	public static function addProjectedName(path:String, scope:String, projected:String, origin:String,
+			names:Map<String, String>,
 			allowBuiltinTypeName:Bool = false):Void {
 		if (allowBuiltinTypeName)
 			validateEnumValueIdentifier(path, '$scope.$origin', projected);
@@ -172,7 +178,8 @@ class HxiHaxeEmitter {
 	public static function profileError(path:String, message:String):Void
 		throw 'Invalid Haxe projection profile "$path": $message';
 
-	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
+	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>,
+			?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
 			?profile:HxiProjectionProfile):Array<IrCNative> {
 		var library = model.library;
 		if (library == null)
@@ -192,8 +199,8 @@ class HxiHaxeEmitter {
 				declarations.set(name, declaration);
 		for (declaration in model.declarations)
 			switch declaration {
-				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Structure(name, _, _, _, _) | Enumeration(name, _, _, _, _) |
-					Callback(name, _, _, _, _):
+				case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Structure(name, _, _, _,
+					_) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _):
 					declarations.set(name, declaration);
 				case Function(name, parameters, result, _, _, _, _, _):
 					directed.set(name, hasOutput(parameters) || structureType(result, declarations, profile) != null);
@@ -203,7 +210,8 @@ class HxiHaxeEmitter {
 			}
 		for (declaration in model.declarations)
 			switch declaration {
-				case Function(name, _, resultType, _, _, _, _, _) if (structureType(resultType, declarations, profile) != null):
+				case Function(name, _, resultType, _, _, _, _,
+					_) if (structureType(resultType, declarations, profile) != null):
 					directed.set(name, true);
 				case _:
 			}
@@ -260,26 +268,31 @@ class HxiHaxeEmitter {
 							case PointerValue(_, _, _, structure) if (structure != null):
 								// C may write through a non-const record pointer; backends that copy the record copy it back.
 								var layout = fixedStructureLayout(structure,
-									declarations), pointerFree = pointerFreeOutput(parameters[index].type, declarations);
-								layout == null ? Value : isConstPointer(parameters[index].type) ? FixedInput(layout.size, layout.alignment,
+									declarations),
+									pointerFree = pointerFreeOutput(parameters[index].type, declarations);
+								layout == null ? Value : isConstPointer(parameters[index].type)
+									? FixedInput(layout.size, layout.alignment,
 									pointerFree) : FixedInputOutput(layout.size, layout.alignment, pointerFree);
 							case _: Value;
 						}
 					case InputArray(_, _): Value;
 					case InputBytes(lengthName):
 						var lengthIndex = parameterIndex(parameters, lengthName);
-						isConstPointer(parameters[index].type) ? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
+						isConstPointer(parameters[index].type)
+							? BytesInput(lengthIndex) : BytesInputOutput(lengthIndex);
 					case OutputBuffer(lengthName): BytesOutput(parameterIndex(parameters, lengthName));
 					case OutputArray(_, _) | OutputStringArray(_): Output;
 					case OutputValue(_) | OutputHandle(_, _, _):
 						var info = outputInfo(parameters[index], abi, profile);
 						(info.structure || info.opaquePointer) ? FixedOutput(info.size,
-							info.alignment, info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : Output;
+							info.alignment,
+							info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : Output;
 					case InOutValue(_) if (outputBufferSizes.exists(parameters[index].name)): BytesSize;
 					case InOutValue(_):
 						var info = outputInfo(parameters[index], abi, profile);
 						(info.structure || info.opaquePointer) ? FixedInputOutput(info.size,
-							info.alignment, info.opaquePointer || pointerFreeOutput(parameters[index].type, declarations)) : InputOutput;
+							info.alignment, info.opaquePointer
+							|| pointerFreeOutput(parameters[index].type, declarations)) : InputOutput;
 					case RetainedCallback(_): Value;
 				};
 				argumentModes.push(mode);
@@ -289,59 +302,62 @@ class HxiHaxeEmitter {
 				returnValue = project(abiResult, true),
 				fixedResult:Null<compiler.ir.Ir.IrCNativeFixedLayout> = switch abiResult {
 					case AggregateValue(_, size, alignment): {
-							size: size,
-							alignment: alignment,
-							pointerFree: pointerFreeValue(functionResultTypes.get(fn.name), declarations, [])
-						};
+						size: size,
+						alignment: alignment,
+						pointerFree: pointerFreeValue(functionResultTypes.get(fn.name), declarations, [])
+					};
 					case _: null;
 				};
-			var resultContract:{
-				managedBytes:Bool,
-				length:Null<String>,
-				ownership:String,
-				release:Null<String>
+			var resultContract: {
+				managedBytes: Bool,
+				length: Null<String>,
+				ownership: String,
+				release: Null<String>
 			} = switch fn.semantics.result {
 				case ManagedBytes(length, _, pointerOwnership, _): {
-						managedBytes: true,
-						length: length,
-						ownership: pointerOwnershipName(pointerOwnership),
-						release: ownershipRelease(pointerOwnership)
-					};
+					managedBytes: true,
+					length: length,
+					ownership: pointerOwnershipName(pointerOwnership),
+					release: ownershipRelease(pointerOwnership)
+				};
 				case OwnedPointer(_, release): {
-						managedBytes: false,
-						length: null,
-						ownership: "owned",
-						release: release
-					};
+					managedBytes: false,
+					length: null,
+					ownership: "owned",
+					release: release
+				};
 				case BorrowedPointer(_) | BorrowedHandle(_) | NativeSpan(_, _): {
-						managedBytes: false,
-						length: null,
-						ownership: "borrowed",
-						release: null
-					};
+					managedBytes: false,
+					length: null,
+					ownership: "borrowed",
+					release: null
+				};
 				case PlainValue(CallbackValue(_, _, _, _)): {
-						managedBytes: false,
-						length: null,
-						ownership: "borrowed",
-						release: null
-					};
+					managedBytes: false,
+					length: null,
+					ownership: "borrowed",
+					release: null
+				};
 				case OwnedHandle(_, _) | PlainValue(_): {
-						managedBytes: false,
-						length: null,
-						ownership: "unspecified",
-						release: null
-					};
+					managedBytes: false,
+					length: null,
+					ownership: "unspecified",
+					release: null
+				};
 			};
 			if (supported && returnValue != null)
 				result.push({
-					name: nativeModule + "." + (directed.get(fn.name) == true ? "__hxi_raw_" + fn.name : projectedFunctionName(fn.name, profile)),
+					name: nativeModule + "." + (directed.get(fn.name) == true
+						? "__hxi_raw_" + fn.name : projectedFunctionName(fn.name, profile)),
 					library: library,
 					symbol: fn.symbol,
-					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
+					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi,
+						aggregateDescriptors), fn.callConvention),
 					arguments: arguments,
 					argumentModes: argumentModes,
 					result: resultContract.managedBytes
-					|| fixedResult != null ? ManagedBytes : fn.semantics.result.match(NativeSpan(_, _)) ? IrType.RawPtr : irType(returnValue.code, true),
+						|| fixedResult != null ? ManagedBytes : fn.semantics.result.match(NativeSpan(_, _))
+						? IrType.RawPtr : irType(returnValue.code, true),
 					pointerOwnership: resultContract.ownership,
 					pointerRelease: resultContract.release,
 					pointerLength: resultContract.length,
@@ -355,7 +371,8 @@ class HxiHaxeEmitter {
 					name: nativeModule + ".__hxi_span_" + fn.name,
 					library: library,
 					symbol: fn.symbol,
-					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
+					signature: callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi,
+						aggregateDescriptors), fn.callConvention),
 					arguments: [
 						for (index in 0...arguments.length)
 							spanInputs.exists(index) ? IrType.RawPtr : arguments[index]
@@ -395,9 +412,17 @@ class HxiHaxeEmitter {
 			origins: HxiSourceOrigins.forModule(plan, splitTypes ? "functions" : "all")
 		});
 		if (splitTypes)
-			result.push({path: packagePrefix + typeModule, source: sourceRaw(plan, "types"), origins: HxiSourceOrigins.forModule(plan, "types")});
+			result.push({
+				path: packagePrefix + typeModule,
+				source: sourceRaw(plan, "types"),
+				origins: HxiSourceOrigins.forModule(plan, "types")
+			});
 		if (splitConstants)
-			result.push({path: packagePrefix + constantModule, source: sourceRaw(plan, "constants"), origins: HxiSourceOrigins.forModule(plan, "constants")});
+			result.push({
+				path: packagePrefix + constantModule,
+				source: sourceRaw(plan, "constants"),
+				origins: HxiSourceOrigins.forModule(plan, "constants")
+			});
 		return result;
 	}
 
@@ -426,11 +451,15 @@ class HxiHaxeEmitter {
 				&& profile.functionModule != null
 				&& profile.constantModule != profile.functionModule,
 			emitFunctions = moduleKind == null || moduleKind == "all" || moduleKind == "functions",
-			emitTypes = moduleKind == null || moduleKind == "all" || moduleKind == "types" || moduleKind == "functions" && !splitTypes,
-			emitConstants = moduleKind == null || moduleKind == "all" || moduleKind == "constants" || moduleKind == "functions" && !splitConstants;
+			emitTypes = moduleKind == null || moduleKind == "all" || moduleKind == "types" || moduleKind == "functions"
+				&& !splitTypes,
+			emitConstants = moduleKind == null || moduleKind == "all" || moduleKind == "constants"
+				|| moduleKind == "functions" && !splitConstants;
 		// On Wasm, native code calls a callback through an exported entry function, named as a module-level function.
-		var callbackEntryModule = (profile == null || profile.packageName == null ? "" : profile.packageName + ".") + functionModule;
-		var callbackErrorType = profile != null && profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
+		var callbackEntryModule = (profile == null || profile.packageName == null ? "" : profile.packageName + ".")
+			+ functionModule;
+		var callbackErrorType = profile != null
+			&& profile.callbackErrorType != null ? profile.callbackErrorType : "HxiCallbackError",
 			pointerCloseHelper = '__hxi_${model.name}_native_pointer_close',
 			pointerIsClosedHelper = '__hxi_${model.name}_native_pointer_is_closed',
 			pointerOwnedSlotHelper = '__hxi_${model.name}_native_pointer_owned_from_slot',
@@ -501,7 +530,8 @@ class HxiHaxeEmitter {
 		output.add('// Generated semantic projection of ${model.name}. Do not edit.\n');
 		for (dependency in model.dependencies) {
 			var projectedDependency = profile == null ? null : profile.dependencyModules.get(dependency);
-			output.add(projectedDependency == null ? 'import $dependency;\n' : 'import $projectedDependency as $dependency;\n');
+			output.add(projectedDependency == null
+				? 'import $dependency;\n' : 'import $projectedDependency as $dependency;\n');
 		}
 		if (profile != null)
 			for (dependency in sortedKeys(profile.dependencyTypeModules))
@@ -565,7 +595,8 @@ class HxiHaxeEmitter {
 			for (declaration in opaqueDeclarations)
 				switch declaration {
 					case Opaque(name, _):
-						var projectedHandle = Lambda.find(plan.handles, handle -> handle.nativeName == name && handle.kind == OpaqueHandle);
+						var projectedHandle = Lambda.find(plan.handles,
+							handle -> handle.nativeName == name && handle.kind == OpaqueHandle);
 						if (projectedHandle == null)
 							throw 'Missing projected opaque handle "$name"';
 						var projectedName = projectedHandle.name;
@@ -628,11 +659,13 @@ class HxiHaxeEmitter {
 							returnValue = project(classifiedResult, true, profile);
 						if (!supported || returnValue == null)
 							continue;
-						var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult, declarations, abi, aggregateDescriptors),
+						var signature = callSignature(codes.join(",") + ">" + abiDescriptor(classifiedResult,
+							declarations, abi, aggregateDescriptors),
 							callConvention);
 						var nativeArguments:Array<String> = [], checks = false;
 						for (parameter in parameters) {
-							var classified = abi.classify(parameter.type), decoder = nativeEnumDecoder(classified, abi, profile);
+							var classified = abi.classify(parameter.type),
+								decoder = nativeEnumDecoder(classified, abi, profile);
 							if (decoder == null) nativeArguments.push(parameter.name);
 							else {
 								checks = true;
@@ -645,7 +678,8 @@ class HxiHaxeEmitter {
 						emitDocumentation(output, model, name);
 						output.add('typedef $projectedName = (${argumentTypes.join(", ")})->${returnValue.haxeType};\n');
 						output.add('abstract ${projectedName}Callback(hl.Abstract<"native_callback">) {\n');
-						var wasmEntry = callbackEntry(projectedName, name, parameters, result, abi, declarations, aggregateDescriptors, profile);
+						var wasmEntry = callbackEntry(projectedName, name, parameters, result, abi, declarations,
+							aggregateDescriptors, profile);
 						output.add('#if wasm\n');
 						if (wasmEntry == null)
 							output.add('\tpublic inline function new(callback:$projectedName) this = throw "HXI callback $name has arguments Wasm cannot pass";\n');
@@ -681,7 +715,8 @@ class HxiHaxeEmitter {
 				switch callbackDeclaration {
 					case Callback(name, parameters, result, _, _):
 						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
-						var entry = projectedCallback == null ? null : callbackEntry(projectedCallback.name, name, parameters, result, abi, declarations,
+						var entry = projectedCallback == null ? null : callbackEntry(projectedCallback.name, name,
+							parameters, result, abi, declarations,
 							aggregateDescriptors, profile);
 						if (entry != null)
 							output.add(entry.source);
@@ -739,15 +774,17 @@ class HxiHaxeEmitter {
 							output.add('\tpublic inline function rawValue():haxe.Int64 return this;\n');
 							output.add('}\n');
 						} else {
-							output.add(flags ? 'enum abstract $projectedName(${underlying.haxeType}) implements Flags {\n' : 'enum abstract $projectedName(${underlying.haxeType}) implements RawRepresentable {\n');
+							output.add(flags
+								? 'enum abstract $projectedName(${underlying.haxeType}) implements Flags {\n'
+								: 'enum abstract $projectedName(${underlying.haxeType}) implements RawRepresentable {\n');
 							for (value in values) {
 								emitDocumentation(output, model, '$name.${value.name}', "\t");
 								var projectedValue = projectedEnumValueName(projectedEnum, value.name),
 									literalValue = flags
 										&& bits == 32
 										&& haxe.Int64.compare(value.value,
-											haxe.Int64.parseString("2147483647")) > 0 ? haxe.Int64.sub(value.value,
-											haxe.Int64.parseString("4294967296")) : value.value,
+										haxe.Int64.parseString("2147483647")) > 0 ? haxe.Int64.sub(value.value,
+										haxe.Int64.parseString("4294967296")) : value.value,
 									literal = haxe.Int64.toStr(literalValue);
 								output.add('\tvar $projectedValue = $literal;\n');
 							}
@@ -759,7 +796,8 @@ class HxiHaxeEmitter {
 			for (declaration in handleDeclarations)
 				switch declaration {
 					case Handle(name, _, destroySymbol, _):
-						var projectedHandle = Lambda.find(plan.handles, handle -> handle.nativeName == name && handle.kind == ValueHandle);
+						var projectedHandle = Lambda.find(plan.handles,
+							handle -> handle.nativeName == name && handle.kind == ValueHandle);
 						if (projectedHandle == null)
 							throw 'Missing projected value handle "$name"';
 						var projectedName = projectedHandle.name;
@@ -781,18 +819,18 @@ class HxiHaxeEmitter {
 									case Function(value, _, _, _, _, _, _, _): value;
 									case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
 								},
-								destroyResult = switch destroyFunction {
-									case Function(_, _, value, _, _, _, _, _): value;
-									case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
-								},
+									destroyResult = switch destroyFunction {
+								case Function(_, _, value, _, _, _, _, _): value;
+								case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+							},
 								closeResultValue = switch abi.classify(destroyResult, true) {
-									case VoidValue: null;
-									case value:
-										var projected = project(value, true, profile);
-										if (projected == null)
-											throw 'Unsupported destroy result for handle "$name"';
-										projected.haxeType;
-								},
+								case VoidValue: null;
+								case value:
+									var projected = project(value, true, profile);
+									if (projected == null)
+										throw 'Unsupported destroy result for handle "$name"';
+									projected.haxeType;
+							},
 								destroyFunctionName = projectedFunctionName(destroyName, profile),
 								closeReturnType = closeResultValue == null ? "Bool" : 'Null<$closeResultValue>';
 							output.add('class $ownedName {\n');
@@ -846,11 +884,14 @@ class HxiHaxeEmitter {
 					}
 					usesNestedStructures = true;
 					var sizeField = Lambda.find(fields, field -> field.structSize),
-						sizeInitialization = sizeField == null ? "" : ' ${model.name}.__hxi_struct_setI32(bytes, ${requiredFieldOffset(sizeField)}, $size);';
-					var retainStorage = pointerFree ? ' this = bytes;' : ' var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...${rootSlots + 1}) roots.push(null); roots[0] = bytes; this = ${model.name}.__hxi_struct_with_roots(bytes, roots);';
+						sizeInitialization = sizeField == null ? ""
+							: ' ${model.name}.__hxi_struct_setI32(bytes, ${requiredFieldOffset(sizeField)}, $size);';
+					var retainStorage = pointerFree ? ' this = bytes;'
+						: ' var roots:Array<haxe.io.Bytes> = []; for (__slot in 0...${rootSlots + 1}) roots.push(null); roots[0] = bytes; this = ${model.name}.__hxi_struct_with_roots(bytes, roots);';
 					output.add('\tpublic inline function new() { var bytes = haxe.io.Bytes.alloc($size); for (index in 0...$size) bytes.set(index, 0);$sizeInitialization$retainStorage }\n');
 					for (field in fields) {
-						var projectedField = Lambda.find(projectedStruct.fields, value -> value.nativeName == field.name);
+						var projectedField = Lambda.find(projectedStruct.fields,
+							value -> value.nativeName == field.name);
 						if (projectedField == null)
 							throw 'Missing projected field "$name.${field.name}"';
 						var fieldName = projectedField.name,
@@ -868,13 +909,16 @@ class HxiHaxeEmitter {
 										case IntegerValue(_, _): "I32";
 										case _: throw 'Invalid length field "${lengthField.name}"';
 									},
-									lengthExpression = lengthAccess == "I64" ? "haxe.Int64.ofInt(values.length)" : "values.length",
-									rootSlot = Std.int(fieldOffset / pointerSize) + 1;
+										lengthExpression = lengthAccess == "I64"
+										? "haxe.Int64.ofInt(values.length)" : "values.length",
+										rootSlot = Std.int(fieldOffset / pointerSize) + 1;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
 								output.add('\tpublic function set_$fieldName(values:Array<$pointed>):Void { var bytes = $pointed.array(values); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, bytes); ${model.name}.__hxi_struct_set$lengthAccess(this, ${requiredFieldOffset(lengthField)}, $lengthExpression); }\n');
 								var pointedStruct = Lambda.find(plan.structures, value -> value.name == pointed);
-								if (pointedStruct != null && pointerFreeValue(Named(pointedStruct.nativeName), declarations, [])) {
-									var packedLength = lengthAccess == "I64" ? "haxe.Int64.ofInt(values.length)" : "values.length";
+								if (pointedStruct != null
+									&& pointerFreeValue(Named(pointedStruct.nativeName), declarations, [])) {
+									var packedLength = lengthAccess == "I64"
+										? "haxe.Int64.ofInt(values.length)" : "values.length";
 									output.add('\tpublic function set_${fieldName}_packed(values:${pointed}Buffer):Void { var bytes = values.__hxi_bytes(); ${model.name}.__hxi_struct_get_roots(this)[$rootSlot] = bytes; ${model.name}.__hxi_struct_set_borrowed_bytes(this, $fieldOffset, bytes); ${model.name}.__hxi_struct_set$lengthAccess(this, ${requiredFieldOffset(lengthField)}, $packedLength); }\n');
 								}
 								continue;
@@ -893,8 +937,11 @@ class HxiHaxeEmitter {
 								usesUtf8StringCopies = true;
 								usesPointerFields = true;
 								var lengthAccess = lengthBytes == 8 ? "I64" : "I32",
-									lengthExpression = lengthBytes == 8 ? "haxe.Int64.ofInt(values.length)" : "values.length",
-									countExpression = lengthBytes == 8 ? 'haxe.Int64.toInt(${model.name}.__hxi_struct_getI64(this, ${requiredFieldOffset(lengthField)}))' : '${model.name}.__hxi_struct_getI32(this, ${requiredFieldOffset(lengthField)})',
+									lengthExpression = lengthBytes == 8
+										? "haxe.Int64.ofInt(values.length)" : "values.length",
+									countExpression = lengthBytes == 8
+										? 'haxe.Int64.toInt(${model.name}.__hxi_struct_getI64(this, ${requiredFieldOffset(lengthField)}))'
+										: '${model.name}.__hxi_struct_getI32(this, ${requiredFieldOffset(lengthField)})',
 									rootSlot = Std.int(fieldOffset / pointerSize) + 1;
 								emitDocumentation(output, model, '$name.${field.name}', "\t");
 								output.add('\tpublic function get_$fieldName():Array<String> { var bytes = ${model.name}.__hxi_struct_get_roots(this)[$rootSlot]; var count = $countExpression; var values:Array<String> = []; if (bytes != null) for (index in 0...count) values.push(${model.name}.__hxi_struct_get_utf8(bytes, index * $pointerSize, false)); return values; }\n');
@@ -938,7 +985,9 @@ class HxiHaxeEmitter {
 							if (arrayAccess == null || stride == 0)
 								continue;
 							var arrayIsHandle = isHandleAbi(abi.classify(array.element)),
-								arrayRead = arrayIsHandle ? 'cast ${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)' : '${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)',
+								arrayRead = arrayIsHandle
+									? 'cast ${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)'
+									: '${model.name}.__hxi_struct_get${arrayAccess}(this, $fieldOffset + index * $stride)',
 								arrayWrite = arrayIsHandle
 									|| abi.isEnumValue(abi.classify(array.element))
 									&& element.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
@@ -948,7 +997,10 @@ class HxiHaxeEmitter {
 							var decoder = nativeEnumDecoder(abi.classify(array.element), abi, profile);
 							if (decoder != null)
 								arrayRead = '$decoder($arrayRead)';
-							structAccesses.set(arrayAccess, {type: structAccessHaxeType(arrayAccess), setterType: structAccessHaxeType(arrayAccess)});
+							structAccesses.set(arrayAccess, {
+								type: structAccessHaxeType(arrayAccess),
+								setterType: structAccessHaxeType(arrayAccess)
+							});
 							emitDocumentation(output, model, '$name.${field.name}', "\t");
 							output.add('\tpublic inline function get_${fieldName}(index:Int):${element.haxeType} { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; return $arrayRead; }\n');
 							output.add('\tpublic inline function set_${fieldName}(index:Int, value:${element.haxeType}):Void { if (index < 0 || index >= ${array.length}) throw "HXI array index out of bounds"; ${model.name}.__hxi_struct_set${arrayAccess}(this, $fieldOffset + index * $stride, $arrayWrite); }\n');
@@ -1005,17 +1057,23 @@ class HxiHaxeEmitter {
 						if (access == null)
 							continue;
 						var isHandle = isHandleAbi(abi.classify(field.type)),
-							readExpression = isHandle ? 'cast ${model.name}.__hxi_struct_get${access}(this, $fieldOffset)' : '${model.name}.__hxi_struct_get${access}(this, $fieldOffset)',
+							readExpression = isHandle
+								? 'cast ${model.name}.__hxi_struct_get${access}(this, $fieldOffset)'
+								: '${model.name}.__hxi_struct_get${access}(this, $fieldOffset)',
 							writeExpression = isHandle
 								|| abi.isEnumValue(abi.classify(field.type))
 								&& value.haxeType != "haxe.Int64" ? "value.rawValue()" : "value";
 						var nativeMask = nativeFlagsMask(abi.classify(field.type), abi);
 						if (nativeMask != null)
-							readExpression = nativeFlagsRead(value.haxeType, readExpression, nativeMask, structSize(value.code) == 8);
+							readExpression = nativeFlagsRead(value.haxeType, readExpression, nativeMask,
+								structSize(value.code) == 8);
 						var decoder = nativeEnumDecoder(abi.classify(field.type), abi, profile);
 						if (decoder != null)
 							readExpression = '$decoder($readExpression)';
-						structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
+						structAccesses.set(access, {
+							type: structAccessHaxeType(access),
+							setterType: structAccessHaxeType(access)
+						});
 						emitDocumentation(output, model, '$name.${field.name}', "\t");
 						output.add('\tpublic inline function get_$fieldName():${value.haxeType} return $readExpression;\n');
 						output.add('\tpublic inline function set_$fieldName(value:${value.haxeType}):Void ${model.name}.__hxi_struct_set${access}(this, $fieldOffset, $writeExpression);\n');
@@ -1029,7 +1087,8 @@ class HxiHaxeEmitter {
 						output.add('\tpublic function copy(index:Int):$projectedName return cast ${model.name}.__hxi_struct_slice(this.bytes, this.offset(index), $size);\n');
 						output.add('\tpublic function set(index:Int, value:$projectedName):Void ${model.name}.__hxi_struct_copy(this.bytes, this.offset(index), value, $size);\n');
 						for (field in fields) {
-							var projectedField = Lambda.find(projectedStruct.fields, value -> value.nativeName == field.name);
+							var projectedField = Lambda.find(projectedStruct.fields,
+								value -> value.nativeName == field.name);
 							if (projectedField == null)
 								continue;
 							var fieldName = projectedField.name,
@@ -1073,7 +1132,10 @@ class HxiHaxeEmitter {
 										usesOwnedPointerSlots = true;
 								} else if (!value.structure) {
 									var access = structAccess(value.code);
-									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
+									structAccesses.set(access, {
+										type: structAccessHaxeType(access),
+										setterType: structAccessHaxeType(access)
+									});
 								}
 							case InArray(_) if (utf8ArrayPointer(parameter.type)):
 								usesNestedStructures = true;
@@ -1086,7 +1148,10 @@ class HxiHaxeEmitter {
 								var element = arrayElementInfo(parameter.type, abi, profile);
 								if (!element.structure) {
 									var access = structAccess(element.code);
-									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
+									structAccesses.set(access, {
+										type: structAccessHaxeType(access),
+										setterType: structAccessHaxeType(access)
+									});
 								}
 							case InArray(_):
 								usesNestedStructures = true;
@@ -1098,7 +1163,10 @@ class HxiHaxeEmitter {
 								var element = arrayElementInfo(parameter.type, abi, profile);
 								if (!element.structure) {
 									var access = structAccess(element.code);
-									structAccesses.set(access, {type: structAccessHaxeType(access), setterType: structAccessHaxeType(access)});
+									structAccesses.set(access, {
+										type: structAccessHaxeType(access),
+										setterType: structAccessHaxeType(access)
+									});
 								}
 							case In:
 						}
@@ -1161,19 +1229,22 @@ class HxiHaxeEmitter {
 						case Out | InOut: outputInfo(parameters[index], abi, profile);
 						case In | InArray(_) | OutArray(_) | OutBuffer(_): null;
 					};
-					argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure ? outputValue.haxeType : "haxe.io.Bytes");
+					argumentTypes.push(outputValue == null ? projected.haxeType : outputValue.structure
+						? outputValue.haxeType : "haxe.io.Bytes");
 					codes.push(abiDescriptor(argument, declarations, abi, aggregateDescriptors));
 				}
 				var result = project(fn.result, true, profile);
 				if (!supported || result == null)
 					continue;
-				var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi, aggregateDescriptors), fn.callConvention),
+				var signature = callSignature(codes.join(",") + ">" + abiDescriptor(fn.result, declarations, abi,
+					aggregateDescriptors), fn.callConvention),
 					declaredResult = switch functions.get(fn.name) {
 						case Function(_, _, value, _, _, _, _, _): value;
 						case _: throw 'Missing HXI function "${fn.name}"';
 					},
-					aggregateResult = structureType(declaredResult, declarations, profile);
-				var ownedHandleResult = projectedFunction.ownedResult == null ? null : projectedFunction.ownedResult.name,
+						aggregateResult = structureType(declaredResult, declarations, profile);
+				var ownedHandleResult = projectedFunction.ownedResult == null
+					? null : projectedFunction.ownedResult.name,
 					callbackResult = callbackResultType(fn.result, profile),
 					hasOutputs = hasOutput(parameters),
 					rawName = projectedFunction.rawName;
@@ -1199,11 +1270,13 @@ class HxiHaxeEmitter {
 						switch fn.result {
 							case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
 								resultType = switch fn.resultPolicy.ownership {
-									case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>' : ownedTypeName(opaquePointee, profile);
+									case Owned(_): nullable ? 'Null<${ownedTypeName(opaquePointee, profile)}>'
+										: ownedTypeName(opaquePointee, profile);
 									case Borrowed | Unspecified: result.haxeType;
 								};
 							case _:
-								resultType = result.nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
+								resultType = result.nullable
+									? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">';
 						}
 				output.add('):$resultType;\n');
 				if (projectedFunction.hasOutputParameters) {
@@ -1213,9 +1286,12 @@ class HxiHaxeEmitter {
 					};
 					switch projectedFunction.outputStrategy {
 						case OutputValues:
-							emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi, profile, library, nativeSymbol,
-								signature, pointerOwnedSlotHelper, model.documentation.get(fn.name), functionModule, ownedHandleResult,
-								aggregateResult == null ? null : aggregateResult.name, nativeFlagsMask(fn.result, abi), structSize(result.code) == 8, nativeEnumDecoder(fn.result, abi, profile));
+							emitOutputWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, abi,
+								profile, library, nativeSymbol,
+								signature, pointerOwnedSlotHelper, model.documentation.get(fn.name), functionModule,
+								ownedHandleResult,
+								aggregateResult == null ? null : aggregateResult.name, nativeFlagsMask(fn.result, abi),
+								structSize(result.code) == 8, nativeEnumDecoder(fn.result, abi, profile));
 						case NoOutputWrapper:
 							throw 'Output parameters were not normalized for "${fn.name}"';
 					}
@@ -1238,27 +1314,35 @@ class HxiHaxeEmitter {
 						case Function(value, _, _, _, _, _, _, _): projectedFunctionName(value, profile);
 						case _: throw 'Native symbol "${spanResult.count}" is not an HXI function';
 					};
-					emitSpanResultWrapper(output, publicName, rawName, argumentTypes, spanResult.element, countName, Std.int(abi.pointerBits),
+					emitSpanResultWrapper(output, publicName, rawName, argumentTypes, spanResult.element, countName,
+						Std.int(abi.pointerBits),
 						model.documentation.get(fn.name));
 				} else if (ownedHandleResult != null) {
-					emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult, model.documentation.get(fn.name));
+					emitOwnedHandleResultWrapper(output, publicName, rawName, argumentTypes, ownedHandleResult,
+						model.documentation.get(fn.name));
 				} else if (callbackResult != null) {
-					emitCallbackResultWrapper(output, publicName, rawName, argumentTypes, callbackResult.name, callbackResult.nullable,
+					emitCallbackResultWrapper(output, publicName, rawName, argumentTypes, callbackResult.name,
+						callbackResult.nullable,
 						model.documentation.get(fn.name));
 				} else if (aggregateResult != null) {
-					emitAggregateResultWrapper(output, publicName, rawName, argumentTypes, aggregateResult.name, model.documentation.get(fn.name));
+					emitAggregateResultWrapper(output, publicName, rawName, argumentTypes, aggregateResult.name,
+						model.documentation.get(fn.name));
 				}
 				var byteIndex = projectedFunction.byteSliceName == null ? null : byteArrayParameter(parameters);
 				if (byteIndex != null) {
 					var byteWrapperResult = hasOutputs ? outputWrapperResult(publicName, parameters, resultType, abi,
-						profile) : ownedHandleResult == null ? aggregateResult == null ? resultType : aggregateResult.name : ownedHandleResult;
-					emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType, byteWrapperResult, abi, byteIndex, profile);
+						profile) : ownedHandleResult == null ? aggregateResult == null
+						? resultType : aggregateResult.name : ownedHandleResult;
+					emitByteSliceWrapper(output, fn.name, publicName, parameters, argumentTypes, resultType,
+						byteWrapperResult, abi, byteIndex, profile);
 				}
 				if (projectedFunction.checked != null)
-					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes, projectedFunction.checked, abi, profile);
+					emitCheckedResultWrapper(output, model, fn.name, publicName, parameters, argumentTypes,
+						projectedFunction.checked, abi, profile);
 				var spanInputs = spanCompanionInputs(fn.semantics);
 				if (spanInputs != null)
-					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters, argumentTypes, resultType, fn.result, spanInputs, abi,
+					emitSpanCompanion(output, library, fn.symbol, signature, fn.name, publicName, parameters,
+						argumentTypes, resultType, fn.result, spanInputs, abi,
 						profile);
 			}
 		var source = output.toString();
@@ -1270,7 +1354,8 @@ class HxiHaxeEmitter {
 	static inline function emitDocumentation(output:StringBuf, model:HxiInterface, name:String, indent:String = ""):Void
 		emitDocumentationValue(output, model.documentation.get(name), indent);
 
-	static function emitDocumentationValue(output:StringBuf, documentation:Null<HxiDocumentation>, indent:String = ""):Void {
+	static function emitDocumentationValue(output:StringBuf, documentation:Null<HxiDocumentation>,
+			indent:String = ""):Void {
 		if (documentation == null || documentation.raw.length == 0)
 			return;
 		if (indent.length == 0)
@@ -1288,14 +1373,16 @@ class HxiHaxeEmitter {
 	public static inline function isOmitted(omitted:Null<Map<String, Bool>>, name:String):Bool
 		return omitted != null && omitted.get(name) == true;
 
-	public static function resultErrorProjection(type:HxiType, profile:Null<HxiProjectionProfile>):Null<HxiResultErrorProjection>
+	public static function resultErrorProjection(type:HxiType,
+			profile:Null<HxiProjectionProfile>):Null<HxiResultErrorProjection>
 		return if (profile == null) null else switch type {
 			case Named(name): profile.resultPolicies.get(name);
 			case _: null;
 		};
 
 	static function emitCheckedResultWrapper(output:StringBuf, model:HxiInterface, nativeName:String, publicName:String,
-			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>, planned:ProjectedCheckedFunction, abi:HxiAbi,
+			parameters:Array<compiler.ffi.HxiModel.HxiParameter>, rawArgumentTypes:Array<String>,
+			planned:ProjectedCheckedFunction, abi:HxiAbi,
 			profile:HxiProjectionProfile):Void {
 		var policy = planned.policy;
 		var queriedCounts = queriedCountParameters(parameters),
@@ -1330,18 +1417,22 @@ class HxiHaxeEmitter {
 			}
 		}
 
-		var outputFields:Array<{name:String, type:String}> = [for (output in planned.outputs) {name: output.parameter, type: output.type}],
+		var outputFields:Array<{name:String, type:String}> = [for (output in planned.outputs) {
+			name:output.parameter, type:output.type
+		}],
 			statusField = "__result",
 			hasOutputs = outputFields.length > 0,
 			returnType = planned.returnType,
-			returnExpression = if (outputFields.length == 1) '__result.${outputFields[0].name}' else if (outputFields.length > 1) "{"
-				+ [for (field in outputFields) field.name + ": __result." + field.name].join(", ") + "}" else "",
+			returnExpression = if (outputFields.length == 1) '__result.${outputFields[0].name}'
+			else if (outputFields.length > 1) "{"
+			+ [for (field in outputFields) field.name + ": __result." + field.name].join(", ") + "}" else "",
 			resultName = switch nativeFunctionResult(model.declarations, nativeName) {
-				case Named(name): name;
-				case _: throw 'Result policy applied to non-enum result for "$nativeName"';
-			},
+			case Named(name): name;
+			case _: throw 'Result policy applied to non-enum result for "$nativeName"';
+		},
 			success = resultSuccessMember(model.declarations, resultName, policy.successValue, profile),
-			diagnostic = policy.diagnosticFunction == null ? "null" : projectedFunctionName(policy.diagnosticFunction, profile),
+			diagnostic = policy.diagnosticFunction == null ? "null" : projectedFunctionName(policy.diagnosticFunction,
+			profile),
 			checkedName = planned.name;
 
 		output.add('/** Calls $publicName and throws the configured error type when its result is not successful. */\n');
@@ -1371,7 +1462,8 @@ class HxiHaxeEmitter {
 		throw 'Missing HXI function "$name"';
 	}
 
-	static function resultSuccessMember(declarations:Array<HxiDeclaration>, enumName:String, nativeValue:String, profile:HxiProjectionProfile):String {
+	static function resultSuccessMember(declarations:Array<HxiDeclaration>, enumName:String, nativeValue:String,
+			profile:HxiProjectionProfile):String {
 		for (declaration in declarations)
 			switch declaration {
 				case Enumeration(name, _, _, values, _) if (name == enumName):
@@ -1394,7 +1486,8 @@ class HxiHaxeEmitter {
 		return false;
 	}
 
-	public static function hasGeneratedOutputResult(parameters:Array<compiler.ffi.HxiModel.HxiParameter>, result:compiler.ffi.HxiModel.HxiType):Bool {
+	public static function hasGeneratedOutputResult(parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			result:compiler.ffi.HxiModel.HxiType):Bool {
 		var outputCount = 0,
 			queriedCounts = queriedCountParameters(parameters);
 		for (parameter in parameters)
@@ -1427,7 +1520,8 @@ class HxiHaxeEmitter {
 			case Borrowed | Unspecified: null;
 		};
 
-	static function ownedValueHandleType(type:HxiAbiValue, disposition:HxiHandleDisposition, profile:HxiProjectionProfile):Null<String> {
+	static function ownedValueHandleType(type:HxiAbiValue, disposition:HxiHandleDisposition,
+			profile:HxiProjectionProfile):Null<String> {
 		return switch disposition {
 			case Owned:
 				switch type {
@@ -1439,21 +1533,22 @@ class HxiHaxeEmitter {
 		};
 	}
 
-	static function outputInfo(parameter:compiler.ffi.HxiModel.HxiParameter, abi:HxiAbi, profile:HxiProjectionProfile):{
-		haxeType:String,
-		rawHaxeType:String,
-		code:Int,
-		size:Int,
-		alignment:Int,
-		structure:Bool,
-		handle:Bool,
-		flagsMask:Null<String>,
-		enumDecoder:Null<String>,
-		ownedValueHandle:Bool,
-		opaquePointer:Bool,
-		nullable:Bool,
-		owned:Bool
-	} {
+	static function outputInfo(parameter:compiler.ffi.HxiModel.HxiParameter, abi:HxiAbi,
+			profile:HxiProjectionProfile): {
+				haxeType: String,
+				rawHaxeType: String,
+				code: Int,
+				size: Int,
+				alignment: Int,
+				structure: Bool,
+				handle: Bool,
+				flagsMask: Null<String>,
+				enumDecoder: Null<String>,
+				ownedValueHandle: Bool,
+				opaquePointer: Bool,
+				nullable: Bool,
+				owned: Bool
+			} {
 		var element = switch parameter.type {
 			case Pointer(value): value;
 			case _: throw "HXI output parameters require a pointer type";
@@ -1464,57 +1559,57 @@ class HxiHaxeEmitter {
 			throw "HXI output parameter has an unsupported pointee type";
 		return switch classified {
 			case AggregateValue(name, size, alignment): {
-					haxeType: projectedTypeName(name, profile),
-					rawHaxeType: projectedTypeName(name, profile),
-					code: 12,
-					size: size,
-					alignment: alignment,
-					structure: true,
-					handle: false,
-					flagsMask: null,
-					enumDecoder: null,
-					ownedValueHandle: false,
-					opaquePointer: false,
-					nullable: false,
-					owned: false
-				};
+				haxeType: projectedTypeName(name, profile),
+				rawHaxeType: projectedTypeName(name, profile),
+				code: 12,
+				size: size,
+				alignment: alignment,
+				structure: true,
+				handle: false,
+				flagsMask: null,
+				enumDecoder: null,
+				ownedValueHandle: false,
+				opaquePointer: false,
+				nullable: false,
+				owned: false
+			};
 			case HandleValue(name):
 				var ownedValueHandle = parameter.handleDisposition == Owned,
 					projectedName = projectedTypeName(name, profile),
 					haxeName = ownedValueHandle ? ownedTypeName(name, profile) : projectedName;
 				{
-					haxeType: haxeName,
-					rawHaxeType: projectedName,
-					code: projected.code,
-					size: 4,
-					alignment: 4,
-					structure: false,
-					handle: true,
-					flagsMask: null,
-					enumDecoder: null,
-					ownedValueHandle: ownedValueHandle,
-					opaquePointer: false,
-					nullable: false,
-					owned: false
+					haxeType:haxeName,
+						rawHaxeType:projectedName,
+						code:projected.code,
+						size:4,
+						alignment:4,
+						structure:false,
+						handle:true,
+						flagsMask:null,
+						enumDecoder:null,
+						ownedValueHandle:ownedValueHandle,
+						opaquePointer:false,
+						nullable:false,
+						owned:false
 				};
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_):
 				var size = structSize(projected.code);
 				if (size == 0)
 					throw "HXI output parameter has an unsupported scalar type";
 				{
-					haxeType: projected.haxeType,
-					rawHaxeType: projected.haxeType,
-					code: projected.code,
-					size: size,
-					alignment: size,
-					structure: false,
-					handle: false,
-					flagsMask: nativeFlagsMask(classified, abi),
-					enumDecoder: nativeEnumDecoder(classified, abi, profile),
-					ownedValueHandle: false,
-					opaquePointer: false,
-					nullable: false,
-					owned: false
+					haxeType:projected.haxeType,
+						rawHaxeType:projected.haxeType,
+						code:projected.code,
+						size:size,
+						alignment:size,
+						structure:false,
+						handle:false,
+						flagsMask:nativeFlagsMask(classified, abi),
+						enumDecoder:nativeEnumDecoder(classified, abi, profile),
+						ownedValueHandle:false,
+						opaquePointer:false,
+						nullable:false,
+						owned:false
 				};
 			case PointerValue(_, nullable, opaquePointee, _) if (opaquePointee != null):
 				var owned = switch parameter.ownership {
@@ -1523,25 +1618,27 @@ class HxiHaxeEmitter {
 					case Unspecified: throw 'Opaque pointer output parameter "${parameter.name}" requires an ownership contract';
 				}, typeName = owned ? ownedTypeName(opaquePointee, profile) : projectedTypeName(opaquePointee, profile);
 				{
-					haxeType: nullable ? 'Null<$typeName>' : typeName,
-					rawHaxeType: nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee, profile),
-					code: 11,
-					size: Std.int(abi.pointerBits / 8),
-					alignment: Std.int(abi.pointerBits / 8),
-					structure: false,
-					handle: false,
-					flagsMask: null,
-					enumDecoder: null,
-					ownedValueHandle: false,
-					opaquePointer: true,
-					nullable: nullable,
-					owned: owned
+					haxeType:nullable ? 'Null<$typeName>' : typeName,
+						rawHaxeType:nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>'
+						: projectedTypeName(opaquePointee, profile),
+						code:11,
+						size:Std.int(abi.pointerBits / 8),
+						alignment:Std.int(abi.pointerBits / 8),
+						structure:false,
+						handle:false,
+						flagsMask:null,
+						enumDecoder:null,
+						ownedValueHandle:false,
+						opaquePointer:true,
+						nullable:nullable,
+						owned:owned
 				};
 			case _: throw "HXI output parameters currently support scalar, fixed-structure, and typed opaque-pointer pointees";
 		};
 	}
 
-	static function pointerFreeOutput(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>):Bool {
+	static function pointerFreeOutput(type:compiler.ffi.HxiModel.HxiType,
+			declarations:Map<String, HxiDeclaration>):Bool {
 		var pointee = switch type {
 			case Pointer(value): value;
 			case _: return false;
@@ -1549,7 +1646,10 @@ class HxiHaxeEmitter {
 		return pointerFreeValue(pointee, declarations, []);
 	}
 
-	static function fixedStructureLayout(name:String, declarations:Map<String, HxiDeclaration>):Null<{size:Int, alignment:Int}> {
+	static function fixedStructureLayout(name:String, declarations:Map<String, HxiDeclaration>):Null<{
+		size:Int,
+		alignment:Int
+	}> {
 		return switch declarations.get(name) {
 			case Structure(_, size, alignment, _, _): {size: size, alignment: alignment};
 			case Alias(_, Named(alias), _): fixedStructureLayout(alias, declarations);
@@ -1557,24 +1657,26 @@ class HxiHaxeEmitter {
 		};
 	}
 
-	static function pointerFreeValue(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool {
+	static function pointerFreeValue(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
+			visiting:Map<String, Bool>):Bool {
 		return switch type {
 			case Const(element) | Nullable(element): pointerFreeValue(element, declarations, visiting);
 			case Array(element, _): pointerFreeValue(element, declarations, visiting);
 			case Pointer(_): false;
 			case Primitive(name): name != "utf8" && name != "void" && name != "c_void";
 			case Named(name):
-				if (visiting.exists(name)) false; else {
+				if (visiting.exists(name)) false;
+				else {
 					visiting.set(name, true);
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): pointerFreeValue(target, declarations, visiting);
 						case Structure(_, _, _, fields, _): {
-								var result = true;
-								for (field in fields)
-									if (!pointerFreeValue(field.type, declarations, visiting))
-										result = false;
-								result;
-							}
+							var result = true;
+							for (field in fields)
+								if (!pointerFreeValue(field.type, declarations, visiting))
+									result = false;
+							result;
+						}
 						case Handle(_, _, _, _) | Enumeration(_, _, _, _, _): true;
 						case _: false;
 					};
@@ -1584,7 +1686,8 @@ class HxiHaxeEmitter {
 		};
 	}
 
-	static function emitOwnedHandleResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, ownedType:String,
+	static function emitOwnedHandleResultWrapper(output:StringBuf, publicName:String, rawName:String,
+			argumentTypes:Array<String>, ownedType:String,
 			documentation:Null<HxiDocumentation>):Void {
 		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'];
@@ -1598,9 +1701,11 @@ class HxiHaxeEmitter {
 		inputs and at least one array of fixed-layout scalars, returning a plain
 		value. Null for any other function.
 	**/
-	public static function spanCompanionInputs(semantics:compiler.ffi.HxiSemantics.HxiSemanticFunction):Null<Map<Int, String>> {
+	public static function spanCompanionInputs(semantics:compiler.ffi.HxiSemantics
+		.HxiSemanticFunction):Null<Map<Int, String>> {
 		switch semantics.result {
-			case PlainValue(VoidValue | IntegerValue(_, _) | EnumerationValue(_, _, _) | FloatValue(_) | Boolean32Value | HandleValue(_)):
+			case PlainValue(VoidValue | IntegerValue(_, _) | EnumerationValue(_, _,
+				_) | FloatValue(_) | Boolean32Value | HandleValue(_)):
 			case _:
 				return null;
 		}
@@ -1632,8 +1737,10 @@ class HxiHaxeEmitter {
 		NativeSpans, read by native code in place for the call. Each count is the
 		length of its span; spans sharing a count must have equal lengths.
 	**/
-	static function emitSpanCompanion(output:StringBuf, library:String, symbol:String, signature:String, nativeName:String, publicName:String,
-			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, resultAbi:HxiAbiValue, spanInputs:Map<Int, String>, abi:HxiAbi,
+	static function emitSpanCompanion(output:StringBuf, library:String, symbol:String, signature:String,
+			nativeName:String, publicName:String,
+			parameters:Array<HxiParameter>, rawArgumentTypes:Array<String>, resultType:String, resultAbi:HxiAbiValue,
+			spanInputs:Map<Int, String>, abi:HxiAbi,
 			profile:HxiProjectionProfile):Void {
 		// Each count is the length of the first array it counts: a span's length() or an array's length.
 		var counts:Map<String, String> = [],
@@ -1687,9 +1794,15 @@ class HxiHaxeEmitter {
 		output.add('function ${publicName}_span(${arguments.join(", ")}):$resultType {\n');
 		for (check in checks)
 			output.add(check);
-		var call = '$rawName(${callArguments.join(", ")})', mask = nativeFlagsMask(resultAbi, abi), decoder = nativeEnumDecoder(resultAbi, abi, profile);
+		var call = '$rawName(${callArguments.join(", ")})',
+			mask = nativeFlagsMask(resultAbi, abi),
+			decoder = nativeEnumDecoder(resultAbi, abi, profile);
 		if (mask != null)
-			call = nativeFlagsRead(resultType, resultType == "haxe.Int64" ? call : '$call.rawValue()', mask, switch resultAbi { case EnumerationValue(_, 64, _): true; default: false; });
+			call = nativeFlagsRead(resultType, resultType == "haxe.Int64" ? call : '$call.rawValue()', mask,
+				switch resultAbi {
+					case EnumerationValue(_, 64, _): true;
+					default: false;
+				});
 		else if (decoder != null)
 			call = '$decoder($call.rawValue())';
 		output.add('\t${resultType == "Void" ? "" : "return "}$call;\n');
@@ -1697,7 +1810,8 @@ class HxiHaxeEmitter {
 	}
 
 	/** A @span result: the borrowed address and its count function's element count, as a NativeSpan. */
-	static function emitSpanResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, element:String, countName:String,
+	static function emitSpanResultWrapper(output:StringBuf, publicName:String, rawName:String,
+			argumentTypes:Array<String>, element:String, countName:String,
 			pointerBits:Int, documentation:Null<HxiDocumentation>):Void {
 		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
@@ -1740,7 +1854,8 @@ class HxiHaxeEmitter {
 			case _: null;
 		};
 
-	static function emitAggregateResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, structureType:String,
+	static function emitAggregateResultWrapper(output:StringBuf, publicName:String, rawName:String,
+			argumentTypes:Array<String>, structureType:String,
 			documentation:Null<HxiDocumentation>):Void {
 		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'];
@@ -1748,19 +1863,27 @@ class HxiHaxeEmitter {
 		output.add('function $publicName(${arguments.join(", ")}):$structureType return $structureType.__hxi_attach($rawName(${callArguments.join(", ")}));\n');
 	}
 
-	static function callbackResultType(value:HxiAbiValue, profile:Null<HxiProjectionProfile>):Null<{name:String, nullable:Bool}>
+	static function callbackResultType(value:HxiAbiValue, profile:Null<HxiProjectionProfile>):Null<{
+		name:String,
+		nullable:Bool
+	}>
 		return switch value {
-			case CallbackValue(name, _, _, nullable): {name: projectedTypeName(name, profile) + "Callback", nullable: nullable};
+			case CallbackValue(name, _, _, nullable): {
+				name: projectedTypeName(name, profile) + "Callback",
+				nullable: nullable
+			};
 			case _: null;
 		};
 
-	static function emitCallbackResultWrapper(output:StringBuf, publicName:String, rawName:String, argumentTypes:Array<String>, callbackType:String,
+	static function emitCallbackResultWrapper(output:StringBuf, publicName:String, rawName:String,
+			argumentTypes:Array<String>, callbackType:String,
 			nullable:Bool, documentation:Null<HxiDocumentation>):Void {
 		var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 			callArguments = [for (index in 0...argumentTypes.length) 'arg$index'];
 		emitDocumentationValue(output, documentation);
 		var resultType = nullable ? 'Null<$callbackType>' : callbackType,
-			conversion = nullable ? '__pointer == null ? null : $callbackType.fromNative(__pointer)' : '$callbackType.fromNative(__pointer)';
+			conversion = nullable ? '__pointer == null ? null : $callbackType.fromNative(__pointer)'
+				: '$callbackType.fromNative(__pointer)';
 		output.add('function $publicName(${arguments.join(", ")}):$resultType { var __pointer = $rawName(${callArguments.join(", ")}); return $conversion; }\n');
 	}
 
@@ -1774,16 +1897,25 @@ class HxiHaxeEmitter {
 		storage of that capacity and the second happens only when some output
 		reported more than it was given.
 	**/
-	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
-			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, library:String, nativeSymbol:String,
-			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>, moduleName:String, ?ownedHandleResult:String,
-			?aggregateResultType:String, ?nativeResultMask:String, nativeResultWide:Bool = false, ?nativeResultDecoder:String):Void {
-		var arguments:Array<String> = [], queryArguments:Array<String> = [], callArguments:Array<String> = [], setup:Array<String> = [],
-			reads:Array<String> = [], values:Array<{
+	static function emitOutputWrapper(output:StringBuf, nativeName:String, publicName:String,
+			parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, abi:HxiAbi, profile:HxiProjectionProfile, library:String,
+			nativeSymbol:String,
+			signature:String, pointerOwnedSlotHelper:String, documentation:Null<HxiDocumentation>, moduleName:String,
+			?ownedHandleResult:String,
+			?aggregateResultType:String, ?nativeResultMask:String, nativeResultWide:Bool = false,
+			?nativeResultDecoder:String):Void {
+		var arguments:Array<String> = [],
+			queryArguments:Array<String> = [],
+			callArguments:Array<String> = [],
+			setup:Array<String> = [],
+			reads:Array<String> = [],
+			values:Array<{
 				name:String,
 				type:String,
 				expression:String
-			}> = [], queries:Array<QueriedOutput> = [];
+			}> = [],
+			queries:Array<QueriedOutput> = [];
 		var arrayCounts:Map<String, String> = [],
 			queriedCounts = queriedCountParameters(parameters);
 		for (parameter in parameters)
@@ -1844,7 +1976,8 @@ class HxiHaxeEmitter {
 						})) {
 							var nativeValue = info.handle
 								|| (info.flagsMask != null || info.enumDecoder != null)
-								&& info.haxeType != "haxe.Int64" ? '${parameter.name}.rawValue()' : info.code == 15 ? '(${parameter.name} ? 1 : 0)' : parameter.name;
+								&& info.haxeType != "haxe.Int64" ? '${parameter.name}.rawValue()' : info.code == 15
+								? '(${parameter.name} ? 1 : 0)' : parameter.name;
 							setup.push('__hxi_struct_set${structAccess(info.code)}($local, 0, $nativeValue);');
 						}
 					}
@@ -1861,7 +1994,9 @@ class HxiHaxeEmitter {
 						} else
 							'__hxi_struct_get_pointer($local, 0, ${info.nullable})';
 					} else
-						info.structure ? local : info.code == 15 ? '__hxi_struct_get${structAccess(info.code)}($local, 0) != 0' : '__hxi_struct_get${structAccess(info.code)}($local, 0)';
+						info.structure ? local : info.code == 15
+							? '__hxi_struct_get${structAccess(info.code)}($local, 0) != 0'
+							: '__hxi_struct_get${structAccess(info.code)}($local, 0)';
 					if (info.handle) {
 						expression = 'cast($expression, ${info.rawHaxeType})';
 						if (info.ownedValueHandle)
@@ -1914,7 +2049,8 @@ class HxiHaxeEmitter {
 						countArray = arrayCounts.get(count),
 						memoryCountLimit = maxArrayCount(element.size),
 						nativeCountLimit = unsignedCountLimit(countParameter.type, abi),
-						maxCount = nativeCountLimit == null ? memoryCountLimit : Std.int(Math.min(memoryCountLimit, nativeCountLimit)),
+						maxCount = nativeCountLimit == null
+							? memoryCountLimit : Std.int(Math.min(memoryCountLimit, nativeCountLimit)),
 						capacity = '__capacity_${parameter.name}',
 						storage = '__out_${parameter.name}';
 					if (countArray != null)
@@ -1935,10 +2071,12 @@ class HxiHaxeEmitter {
 					values.push({name: parameter.name, type: 'Array<${element.haxeType}>', expression: items});
 			}
 		}
-		var managedResultType = aggregateResultType != null ? aggregateResultType : ownedHandleResult == null ? resultType : ownedHandleResult,
+		var managedResultType = aggregateResultType != null ? aggregateResultType : ownedHandleResult == null
+			? resultType : ownedHandleResult,
 			direct = resultType == "Void" && values.length == 1,
 			resultOnly = values.length == 0;
-		var wrapperResult = direct ? values[0].type : resultOnly ? managedResultType : upperFirst(publicName) + "OutResult";
+		var wrapperResult = direct ? values[0].type : resultOnly
+			? managedResultType : upperFirst(publicName) + "OutResult";
 		if (!direct && !resultOnly) {
 			output.add('class $wrapperResult {\n');
 			var fields:Array<{name:String, type:String}> = [];
@@ -2007,7 +2145,8 @@ class HxiHaxeEmitter {
 					output.add('\tif ($length != $storage.length) $storage = __hxi_struct_slice($storage, 0, $length);\n');
 				else {
 					var items = '__items_${query.name}',
-						read = query.strings ? '__hxi_struct_get_utf8($storage, __index * ${query.stride}, true)' : arrayValueRead(query.element, storage,
+						read = query.strings ? '__hxi_struct_get_utf8($storage, __index * ${query.stride}, true)'
+							: arrayValueRead(query.element, storage,
 							'__index', moduleName);
 					output.add('\tvar $items:${query.element == null ? outputArrayType() : 'Array<${query.element.haxeType}>'} = [];\n');
 					output.add('\tfor (__index in 0...$length) $items.push($read);\n');
@@ -2032,7 +2171,9 @@ class HxiHaxeEmitter {
 			output.add('\treturn ${values[0].expression};\n');
 		else {
 			var resultValues:Array<String> = resultType == "Void" ? [] : [
-				ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null && nativeResultDecoder == null ? "__status" : "__managed_result"];
+				ownedHandleResult == null && aggregateResultType == null && nativeResultMask == null
+					&& nativeResultDecoder == null ? "__status" : "__managed_result"
+			];
 			for (value in values)
 				resultValues.push(value.expression);
 			output.add('\treturn new $wrapperResult(${resultValues.join(", ")});\n');
@@ -2047,10 +2188,12 @@ class HxiHaxeEmitter {
 	static function queriedStorage(query:QueriedOutput, declare:Bool):String {
 		var storage = '__out_${query.name}',
 			capacity = '__capacity_${query.name}',
-			assign = declare ? 'var $storage:${query.buffer ? "haxe.io.Bytes" : "Null<haxe.io.Bytes>"} = ' : '$storage = ';
+			assign = declare
+				? 'var $storage:${query.buffer ? "haxe.io.Bytes" : "Null<haxe.io.Bytes>"} = ' : '$storage = ';
 		if (query.buffer)
 			return '${assign}haxe.io.Bytes.alloc($capacity);';
-		var allocate = query.strings ? 'haxe.io.Bytes.alloc($capacity * ${query.stride})' : '__hxi_struct_alloc($capacity * ${query.stride})';
+		var allocate = query.strings
+			? 'haxe.io.Bytes.alloc($capacity * ${query.stride})' : '__hxi_struct_alloc($capacity * ${query.stride})';
 		return '$assign$capacity == 0 ? null : $allocate; if ($storage != null) for (__byte in 0...$storage.length) $storage.set(__byte, 0);';
 	}
 
@@ -2083,8 +2226,10 @@ class HxiHaxeEmitter {
 		return result;
 	}
 
-	static function emitByteSliceWrapper(output:StringBuf, nativeName:String, publicName:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
-			rawArgumentTypes:Array<String>, resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>, profile:HxiProjectionProfile):Void {
+	static function emitByteSliceWrapper(output:StringBuf, nativeName:String, publicName:String,
+			parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			rawArgumentTypes:Array<String>, resultType:String, wrapperResult:String, abi:HxiAbi, byteIndex:Null<Int>,
+			profile:HxiProjectionProfile):Void {
 		if (byteIndex == null)
 			return;
 		var byteName = parameters[byteIndex].name,
@@ -2142,7 +2287,8 @@ class HxiHaxeEmitter {
 		output.add('}\n');
 	}
 
-	static function outputWrapperResult(name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>, resultType:String, abi:HxiAbi,
+	static function outputWrapperResult(name:String, parameters:Array<compiler.ffi.HxiModel.HxiParameter>,
+			resultType:String, abi:HxiAbi,
 			profile:HxiProjectionProfile):String {
 		var count = 0, valueType = "";
 		for (parameter in parameters)
@@ -2153,7 +2299,8 @@ class HxiHaxeEmitter {
 						valueType = outputInfo(parameter, abi, profile).haxeType;
 				case In | InArray(_) | OutArray(_) | OutBuffer(_):
 			}
-		return resultType == "Void" && count == 1 ? valueType : count == 0 ? resultType : upperFirst(name) + "OutResult";
+		return resultType == "Void"
+			&& count == 1 ? valueType : count == 0 ? resultType : upperFirst(name) + "OutResult";
 	}
 
 	public static function byteArrayParameter(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Null<Int> {
@@ -2184,7 +2331,8 @@ class HxiHaxeEmitter {
 			case _: false;
 		};
 
-	static function arrayElementInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):ProjectedArrayElement {
+	static function arrayElementInfo(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi,
+			profile:HxiProjectionProfile):ProjectedArrayElement {
 		var elementType = arrayPointeeType(type);
 		if (elementType == null)
 			throw "HXI counted array must use a pointer type";
@@ -2203,7 +2351,8 @@ class HxiHaxeEmitter {
 		};
 	}
 
-	static function inputArrayType(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi, profile:HxiProjectionProfile):String {
+	static function inputArrayType(type:compiler.ffi.HxiModel.HxiType, abi:HxiAbi,
+			profile:HxiProjectionProfile):String {
 		if (isByteArray(type))
 			return "haxe.io.Bytes";
 		if (utf8ArrayPointer(type))
@@ -2230,7 +2379,8 @@ class HxiHaxeEmitter {
 				'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = ${element.haxeType}.array($name);'
 			];
 		var access = structAccess(element.code),
-			value = element.code == 15 ? '$name[__index] ? 1 : 0' : (element.flagsMask != null || element.enumDecoder != null)
+			value = element.code == 15
+				? '$name[__index] ? 1 : 0' : (element.flagsMask != null || element.enumDecoder != null)
 				&& element.haxeType != "haxe.Int64" ? '$name[__index].rawValue()' : '$name[__index]';
 		return [
 			'if ($name.length > ${maxArrayCount(element.size)}) throw "HXI input array exceeds the 256 MiB safety limit"; var __array_$name = __hxi_struct_alloc($name.length * ${element.size}); for (__index in 0...$name.length) __hxi_struct_set$access(__array_$name, __index * ${element.size}, $value);'
@@ -2277,7 +2427,8 @@ class HxiHaxeEmitter {
 			return nativeFlagsRead(element.haxeType, read, element.flagsMask, element.size == 8);
 		if (element.enumDecoder != null)
 			return '${element.enumDecoder}($read)';
-		return element.haxeType == "Int" || element.haxeType == "Float" || element.haxeType == "haxe.Int64" ? read : 'cast $read';
+		return element.haxeType == "Int" || element.haxeType == "Float"
+			|| element.haxeType == "haxe.Int64" ? read : 'cast $read';
 	}
 
 	static function isByteElement(type:compiler.ffi.HxiModel.HxiType):Bool
@@ -2314,10 +2465,13 @@ class HxiHaxeEmitter {
 		var declarations:Map<String, HxiDeclaration> = [];
 		for (declaration in model.declarations)
 			declarations.set(declarationName(declaration), declaration);
-		var abi = HxiAbi.forInterface(model), aggregateDescriptors:Map<String, String> = [], arguments = [
-			for (argument in functionAbi.arguments)
-				abiDescriptor(argument, declarations, abi, aggregateDescriptors)
-		], result = abiDescriptor(functionAbi.result, declarations, abi, aggregateDescriptors);
+		var abi = HxiAbi.forInterface(model),
+			aggregateDescriptors:Map<String, String> = [],
+			arguments = [
+				for (argument in functionAbi.arguments)
+					abiDescriptor(argument, declarations, abi, aggregateDescriptors)
+			],
+			result = abiDescriptor(functionAbi.result, declarations, abi, aggregateDescriptors);
 		return callSignature(arguments.join(",") + ">" + result, functionAbi.callConvention);
 	}
 
@@ -2331,7 +2485,8 @@ class HxiHaxeEmitter {
 		return profile.constantCase == "camel" ? camelCase(stripped) : value;
 	}
 
-	public static function projectedFieldName(typeName:String, value:String, profile:Null<HxiProjectionProfile>):String {
+	public static function projectedFieldName(typeName:String, value:String,
+			profile:Null<HxiProjectionProfile>):String {
 		if (profile == null)
 			return value;
 		var mapped = profile.fieldNames.get(typeName + "." + value);
@@ -2408,13 +2563,15 @@ class HxiHaxeEmitter {
 	 * single value, or one value naming another's prefix), a configured prefix or else the words the value shares with the
 	 * enum's own C name (`nkui_composite_mode` for `NKUI_COMPOSITE_SOURCE_OVER`) are dropped instead.
 	 */
-	public static function enumValuePrefix(values:Array<HxiEnumValue>, ?profile:HxiProjectionProfile, ?enumName:String):Array<String> {
+	public static function enumValuePrefix(values:Array<HxiEnumValue>, ?profile:HxiProjectionProfile,
+			?enumName:String):Array<String> {
 		if (values.length == 0)
 			return [];
 		var prefix = values[0].name.split("_");
 		for (index in 1...values.length) {
 			var parts = values[index].name.split("_"), length = 0;
-			while (length < prefix.length && length < parts.length && prefix[length].toUpperCase() == parts[length].toUpperCase())
+			while (length < prefix.length && length < parts.length
+				&& prefix[length].toUpperCase() == parts[length].toUpperCase())
 				length++;
 			prefix = prefix.slice(0, length);
 		}
@@ -2436,7 +2593,8 @@ class HxiHaxeEmitter {
 			}
 		if (prefix.length == values[0].name.split("_").length && enumName != null) {
 			var typeParts = enumName.split("_"), length = 0;
-			while (length < prefix.length - 1 && length < typeParts.length && prefix[length].toUpperCase() == typeParts[length].toUpperCase())
+			while (length < prefix.length - 1 && length < typeParts.length
+				&& prefix[length].toUpperCase() == typeParts[length].toUpperCase())
 				length++;
 			if (length > 0)
 				prefix = prefix.slice(0, length);
@@ -2444,7 +2602,8 @@ class HxiHaxeEmitter {
 		return prefix;
 	}
 
-	public static function enumValueName(value:String, prefix:Array<String>, ?enumName:String, ?profile:HxiProjectionProfile):String {
+	public static function enumValueName(value:String, prefix:Array<String>, ?enumName:String,
+			?profile:HxiProjectionProfile):String {
 		if (profile != null && enumName != null) {
 			var values = profile.enumValueNames.get(enumName);
 			if (values != null) {
@@ -2497,100 +2656,103 @@ class HxiHaxeEmitter {
 	}>
 		return switch value {
 			case VoidValue: allowVoid ? {
-					haxeType: "Void",
-					code: 0,
-					nativePointer: false,
-					nullable: false
+					haxeType:"Void",
+						code:0,
+						nativePointer:false,
+						nullable:false
 				} : null;
 			case IntegerValue(64, sign): {
-					haxeType: "haxe.Int64",
-					code: sign == Unsigned ? 8 : 7,
-					nativePointer: false,
-					nullable: false
-				};
+				haxeType: "haxe.Int64",
+				code: sign == Unsigned ? 8 : 7,
+				nativePointer: false,
+				nullable: false
+			};
 			case IntegerValue(bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
-					haxeType: "Int",
-					nativePointer: false,
-					nullable: false,
-					code: switch bits {
+					haxeType:"Int",
+						nativePointer:false,
+						nullable:false,
+						code:switch bits {
 						case 8: unsigned ? 2 : 1;
 						case 16: unsigned ? 4 : 3;
 						default: unsigned ? 6 : 5;
 					}
 				};
 			case EnumerationValue(name, 64, sign): {
-					haxeType: "haxe.Int64",
-					nativePointer: false,
-					nullable: false,
-					code: sign == Unsigned ? 8 : 7
-				};
+				haxeType: "haxe.Int64",
+				nativePointer: false,
+				nullable: false,
+				code: sign == Unsigned ? 8 : 7
+			};
 			case EnumerationValue(name, bits, sign) if (bits <= 32):
 				var unsigned = sign == Unsigned || sign == PlainChar;
 				{
-					haxeType: projectedTypeReferenceName(enumTypeName(name, profile), profile),
-					nativePointer: false,
-					nullable: false,
-					code: switch bits {
+					haxeType:projectedTypeReferenceName(enumTypeName(name, profile), profile),
+						nativePointer:false,
+						nullable:false,
+						code:switch bits {
 						case 8: unsigned ? 2 : 1;
 						case 16: unsigned ? 4 : 3;
 						default: unsigned ? 6 : 5;
 					}
 				};
 			case CallbackValue(name, _, _, nullable): {
-					haxeType: projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile)
-						+ "Callback", profile),
-					code: 11,
-					nativePointer: true,
-					nullable: false
-				};
+				haxeType: projectedTypeReferenceName(nullable
+					? 'Null<${projectedTypeName(name, profile)}Callback>' : projectedTypeName(name, profile)
+					+ "Callback", profile),
+				code: 11,
+				nativePointer: true,
+				nullable: false
+			};
 			case AggregateValue(name, _, _): {
-					haxeType: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
-					code: 12,
-					nativePointer: false,
-					nullable: false
-				};
+				haxeType: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
+				code: 12,
+				nativePointer: false,
+				nullable: false
+			};
 			case HandleValue(name): {
-					haxeType: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
-					code: 6,
-					nativePointer: false,
-					nullable: false
-				};
+				haxeType: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
+				code: 6,
+				nativePointer: false,
+				nullable: false
+			};
 			case Boolean32Value: {
-					haxeType: "Bool",
-					code: 15,
-					nativePointer: false,
-					nullable: false
-				};
+				haxeType: "Bool",
+				code: 15,
+				nativePointer: false,
+				nullable: false
+			};
 			case Utf8Value(nullable): {
-					haxeType: nullable ? "Null<String>" : "String",
-					code: 13,
-					nativePointer: false,
-					nullable: nullable
-				};
+				haxeType: nullable ? "Null<String>" : "String",
+				code: 13,
+				nativePointer: false,
+				nullable: nullable
+			};
 			case FloatValue(32): {
-					haxeType: "Float",
-					code: 9,
-					nativePointer: false,
-					nullable: false
-				};
+				haxeType: "Float",
+				code: 9,
+				nativePointer: false,
+				nullable: false
+			};
 			case FloatValue(64): {
-					haxeType: "Float",
-					code: 10,
-					nativePointer: false,
-					nullable: false
-				};
+				haxeType: "Float",
+				code: 10,
+				nativePointer: false,
+				nullable: false
+			};
 			case PointerValue(_, nullable, opaquePointee, structure): {
-					haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
-						profile),
-						profile) : structure != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
-						profile),
-						profile) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
-					code: 11,
-					nativePointer: opaquePointee != null,
-					nullable: nullable
-				};
+				haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable
+					? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
+					profile),
+					profile) : structure != null ? projectedTypeReferenceName(nullable
+					? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+					profile),
+					profile) : (nullable ? "Null<haxe.io.Bytes>" : "haxe.io.Bytes"),
+				code: 11,
+				nativePointer: opaquePointee != null,
+				nullable: nullable
+			};
 			case _: null;
 		};
 
@@ -2604,11 +2766,13 @@ class HxiHaxeEmitter {
 	 * native frames. It returns null for callback shapes it cannot convert. The function lives in the functions
 	 * module, so it calls that module's helpers unqualified.
 	 */
-	static function callbackEntry(projectedName:String, name:String, parameters:Array<HxiParameter>, result:compiler.ffi.HxiModel.HxiType, abi:HxiAbi,
-			declarations:Map<String, HxiDeclaration>, aggregateDescriptors:Map<String, String>, ?profile:HxiProjectionProfile):Null<{
-			source:String,
-			signature:String
-		}> {
+	static function callbackEntry(projectedName:String, name:String, parameters:Array<HxiParameter>,
+			result:compiler.ffi.HxiModel.HxiType, abi:HxiAbi,
+			declarations:Map<String, HxiDeclaration>, aggregateDescriptors:Map<String, String>,
+			?profile:HxiProjectionProfile):Null<{
+				source:String,
+				signature:String
+			}> {
 		// The signature is the C function native code calls; the host adds the id when it forwards the call.
 		var rawParameters = ["id:Int"],
 			letters:Array<String> = [],
@@ -2641,7 +2805,8 @@ class HxiHaxeEmitter {
 					statements.push('var __pointer$index:${projected.haxeType} = cast __hxi_native_pointer_from_address($argument);');
 					values.push('__pointer$index');
 				case AggregateValue(structure, size, alignment):
-					var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi, aggregateDescriptors));
+					var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi,
+						aggregateDescriptors));
 					if (single == null) {
 						rawParameters.push('$argument:Int');
 						letters.push("i");
@@ -2668,14 +2833,19 @@ class HxiHaxeEmitter {
 					values.push(decoder == null ? argument : '$decoder($argument.rawValue())');
 			}
 		}
-		var call = '__callback(${values.join(", ")})', resultLetter:String, returnType:String, body:String, fallback = "";
+		var call = '__callback(${values.join(", ")})',
+			resultLetter:String,
+			returnType:String,
+			body:String,
+			fallback = "";
 		switch abi.classify(result, true) {
 			case VoidValue:
 				resultLetter = "v";
 				returnType = "Void";
 				body = '$call;';
 			case AggregateValue(structure, size, alignment):
-				var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi, aggregateDescriptors));
+				var single = singleScalarCode(aggregateDescriptor(structure, size, alignment, declarations, abi,
+					aggregateDescriptors));
 				if (single == null) {
 					rawParameters.insert(1, '__result:Int');
 					letters.insert(0, "i");
@@ -2708,7 +2878,7 @@ class HxiHaxeEmitter {
 			source: '@:expose function __hxi_callback_entry_$name(${rawParameters.join(", ")}):$returnType { try { ${statements.join(" ")} $body } catch (error:Dynamic) haxeon.wasm.Callbacks.fail(id, error);$fallback }\n',
 			signature: resultLetter + letters.join("")
 		};
-		}
+	}
 
 	/** The element code of a record descriptor `{size;align;elements}` with exactly one element. */
 	static function singleScalarCode(descriptor:String):Null<String> {
@@ -2738,47 +2908,47 @@ class HxiHaxeEmitter {
 	}>
 		return switch code {
 			case "2": {
-					type: "Int",
-					letter: "i",
-					zero: "0",
-					get: "get",
-					set: "set"
-				};
+				type: "Int",
+				letter: "i",
+				zero: "0",
+				get: "get",
+				set: "set"
+			};
 			case "4": {
-					type: "Int",
-					letter: "i",
-					zero: "0",
-					get: "getUInt16",
-					set: "setUInt16"
-				};
+				type: "Int",
+				letter: "i",
+				zero: "0",
+				get: "getUInt16",
+				set: "setUInt16"
+			};
 			case "5" | "6": {
-					type: "Int",
-					letter: "i",
-					zero: "0",
-					get: "getInt32",
-					set: "setInt32"
-				};
+				type: "Int",
+				letter: "i",
+				zero: "0",
+				get: "getInt32",
+				set: "setInt32"
+			};
 			case "7" | "8": {
-					type: "haxe.Int64",
-					letter: "j",
-					zero: "haxe.Int64.ofInt(0)",
-					get: "getInt64",
-					set: "setInt64"
-				};
+				type: "haxe.Int64",
+				letter: "j",
+				zero: "haxe.Int64.ofInt(0)",
+				get: "getInt64",
+				set: "setInt64"
+			};
 			case "9": {
-					type: "Float",
-					letter: "f",
-					zero: "0.0",
-					get: "getFloat",
-					set: "setFloat"
-				};
+				type: "Float",
+				letter: "f",
+				zero: "0.0",
+				get: "getFloat",
+				set: "setFloat"
+			};
 			case "10": {
-					type: "Float",
-					letter: "d",
-					zero: "0.0",
-					get: "getDouble",
-					set: "setDouble"
-				};
+				type: "Float",
+				letter: "d",
+				zero: "0.0",
+				get: "getDouble",
+				set: "setDouble"
+			};
 			case _: null;
 		};
 
@@ -2790,14 +2960,17 @@ class HxiHaxeEmitter {
 	}>
 		return switch value {
 			case PointerValue(_, nullable, opaquePointee, structure): {
-					haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
-						profile),
-						profile) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>' : 'hl.Abstract<"native_pointer">') : projectedTypeReferenceName(nullable ? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
-						profile), profile),
-					code: 11,
-					nativePointer: opaquePointee != null || structure == null,
-					nullable: nullable
-				};
+				haxeType: opaquePointee != null ? projectedTypeReferenceName(nullable
+					? 'Null<${projectedTypeName(opaquePointee, profile)}>' : projectedTypeName(opaquePointee,
+					profile),
+					profile) : structure == null ? (nullable ? 'Null<hl.Abstract<"native_pointer">>'
+					: 'hl.Abstract<"native_pointer">') : projectedTypeReferenceName(nullable
+					? 'Null<${projectedTypeName(structure, profile)}>' : projectedTypeName(structure,
+					profile), profile),
+				code: 11,
+				nativePointer: opaquePointee != null || structure == null,
+				nullable: nullable
+			};
 			case _: project(value, false, profile);
 		};
 
@@ -2827,7 +3000,8 @@ class HxiHaxeEmitter {
 	static function abiDescriptor(value:HxiAbiValue, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
 			aggregateDescriptors:Null<Map<String, String>> = null):String
 		return switch value {
-			case AggregateValue(name, size, align): aggregateDescriptor(name, size, align, declarations, abi, aggregateDescriptors);
+			case AggregateValue(name, size, align): aggregateDescriptor(name, size, align, declarations, abi,
+				aggregateDescriptors);
 			case VoidValue: "0";
 			case IntegerValue(64, sign): sign == Unsigned ? "8" : "7";
 			case IntegerValue(bits, sign): Std.string(switch bits {
@@ -2850,7 +3024,8 @@ class HxiHaxeEmitter {
 			case _: throw "Unsupported HXI ABI value";
 		};
 
-	static function aggregateDescriptor(name:String, size:Int, align:Int, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+	static function aggregateDescriptor(name:String, size:Int, align:Int, declarations:Map<String, HxiDeclaration>,
+			abi:HxiAbi,
 			aggregateDescriptors:Null<Map<String, String>>):String {
 		var cached = aggregateDescriptors == null ? null : aggregateDescriptors.get(name);
 		if (cached != null)
@@ -2890,26 +3065,32 @@ class HxiHaxeEmitter {
 			elements.push("2");
 	}
 
-	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):{size:Int, align:Int} {
+	static function abiLayout(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
+			abi:HxiAbi): {
+				size: Int,
+				align: Int
+			} {
 		var layout = abi.layout(type);
 		if (layout == null)
 			throw 'HXI type $type has no fixed ABI layout';
 		return {size: layout.size, align: layout.align};
 	}
 
-	static function fieldDescriptors(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+	static function fieldDescriptors(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
+			abi:HxiAbi,
 			aggregateDescriptors:Null<Map<String, String>> = null):Array<String>
 		return switch type {
 			case Const(element): fieldDescriptors(element, declarations, abi, aggregateDescriptors);
 			case Array(element, length): [
-					for (_ in 0...length)
-						for (entry in fieldDescriptors(element, declarations, abi, aggregateDescriptors))
-							entry
-				];
+				for (_ in 0...length)
+					for (entry in fieldDescriptors(element, declarations, abi, aggregateDescriptors))
+					entry
+			];
 			case Named(name):
 				switch declarations.get(name) {
 					case Alias(_, target, _): fieldDescriptors(target, declarations, abi, aggregateDescriptors);
-					case Structure(_, _, _, _, _): [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
+					case Structure(_, _, _, _,
+						_): [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
 					case _: [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
 				}
 			case _: [abiDescriptor(abi.classify(type), declarations, abi, aggregateDescriptors)];
@@ -2957,7 +3138,10 @@ class HxiHaxeEmitter {
 		var codes:Array<Int> = [], seen:Map<Int, Bool> = [];
 		for (value in values) {
 			var code = haxe.Int64.toInt(haxe.Int64.parseString(value));
-			if (!seen.exists(code)) { seen.set(code, true); codes.push(code); }
+			if (!seen.exists(code)) {
+				seen.set(code, true);
+				codes.push(code);
+			}
 		}
 		codes.sort((a, b) -> a < b ? -1 : (a > b ? 1 : 0));
 		var ranges:Array<String> = [], index = 0;
@@ -2978,7 +3162,8 @@ class HxiHaxeEmitter {
 				var separator = projected.haxeType.lastIndexOf("."),
 					owner = separator < 0 ? "" : projected.haxeType.substr(0, separator),
 					name = projected.haxeType.substr(separator + 1),
-					module = separator < 0 ? (profile.typeModule != null ? profile.typeModule : profile.functionModule) : compiler.QualifiedName.last(owner);
+					module = separator < 0 ? (profile.typeModule != null ? profile.typeModule : profile.functionModule)
+						: compiler.QualifiedName.last(owner);
 				if (module == null) module = abi.interfaceName;
 				if (module == null) throw "Missing native enum owning module";
 				(owner.length == 0 ? "" : owner + ".") + upperFirst(module) + "EnumDecoders.decode" + name;
@@ -3024,13 +3209,19 @@ class HxiHaxeEmitter {
 		};
 
 	static function structureType(type:compiler.ffi.HxiModel.HxiType, declarations:Map<String, HxiDeclaration>,
-			profile:Null<HxiProjectionProfile>):Null<{name:String, size:Int}>
+			profile:Null<HxiProjectionProfile>):Null<{
+				name:String,
+				size:Int
+			}>
 		return switch type {
 			case Const(element): structureType(element, declarations, profile);
 			case Named(name):
 				switch declarations.get(name) {
 					case Alias(_, target, _): structureType(target, declarations, profile);
-					case Structure(_, size, _, _, _): {name: projectedTypeReferenceName(projectedTypeName(name, profile), profile), size: size};
+					case Structure(_, size, _, _, _): {
+						name: projectedTypeReferenceName(projectedTypeName(name, profile), profile),
+						size: size
+					};
 					case _: null;
 				}
 			case _: null;
@@ -3074,7 +3265,8 @@ class HxiHaxeEmitter {
 			case 15: Bool;
 			case 7 | 8: I64;
 			case 9 | 10: F64;
-			case 11: result ? Abstract("native_pointer") : nativeAbstract == null ? ManagedBytes : Abstract(nativeAbstract);
+			case 11: result ? Abstract("native_pointer") : nativeAbstract == null
+				? ManagedBytes : Abstract(nativeAbstract);
 			case 12: ManagedBytes;
 			case 13: Bytes;
 			default: I32;

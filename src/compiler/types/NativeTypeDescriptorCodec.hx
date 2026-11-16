@@ -118,8 +118,10 @@ class NativeTypeDescriptorCodec {
 		if (!NativeTypeDescriptor.validSourceKind(descriptor.sourceKind)
 			|| !NativeTypeDescriptor.canonicalInterfaces(descriptor.interfaces))
 			throw 'Native type descriptor has invalid source conformance facts for "${descriptor.name}"';
-		var expected = NativeTypeDescriptor.contentHash(descriptor.type, descriptor.name, descriptor.type, descriptor.sourceKind, descriptor.interfaces,
-			descriptor.flat, descriptor.portable, descriptor.size, descriptor.alignment, descriptor.annotations, descriptor.annotationValues,
+		var expected = NativeTypeDescriptor.contentHash(descriptor.type, descriptor.name, descriptor.type,
+			descriptor.sourceKind, descriptor.interfaces,
+			descriptor.flat, descriptor.portable, descriptor.size, descriptor.alignment, descriptor.annotations,
+			descriptor.annotationValues,
 			descriptor.fields, descriptor.arguments);
 		if (descriptor.hash != expected)
 			throw 'Native type descriptor hash mismatch for "${descriptor.name}"';
@@ -143,7 +145,8 @@ class NativeTypeDescriptorCodec {
 			return;
 		var valid = switch descriptorDefault.value {
 			case IntValue(value): descriptorDefault.type == "Int" && defaultIntValueAccepted(node, value);
-			case FloatValue(value): descriptorDefault.type == "Float" && defaultTypeAccepted(node, "Float") && validFloatDefault(node, value);
+			case FloatValue(value): descriptorDefault.type == "Float" && defaultTypeAccepted(node, "Float")
+				&& validFloatDefault(node, value);
 			case StringValue(_): descriptorDefault.type == "String" && defaultTypeAccepted(node, "String");
 			case BoolValue(_): descriptorDefault.type == "Bool" && defaultTypeAccepted(node, "Bool");
 			case NullValue: descriptorDefault.type == "Null" && nullableDefaultType(node);
@@ -165,7 +168,8 @@ class NativeTypeDescriptorCodec {
 		if (node.type == "native-scalar:f32")
 			return true;
 		for (argument in node.arguments)
-			if ((argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+			if ((argument.name == "representation"
+				|| (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
 				&& containsFloat32(argument))
 				return true;
 		return false;
@@ -175,7 +179,8 @@ class NativeTypeDescriptorCodec {
 		if (node.type == "Int" || NativeTypeDescriptor.integerDefaultFits(node.type, value))
 			return true;
 		for (argument in node.arguments)
-			if (argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+			if (argument.name == "representation"
+				|| (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
 				if (defaultIntValueAccepted(argument, value))
 					return true;
 		return false;
@@ -185,7 +190,8 @@ class NativeTypeDescriptorCodec {
 		if (node.type == valueType || (valueType == "Float" && node.type == "native-scalar:f32"))
 			return true;
 		for (argument in node.arguments)
-			if (argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+			if (argument.name == "representation"
+				|| (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
 				if (defaultTypeAccepted(argument, valueType))
 					return true;
 		return false;
@@ -314,7 +320,10 @@ class NativeTypeDescriptorCodec {
 		}
 	}
 
-	static function descriptorJson(descriptor:NativeTypeDescriptorData, replacements:Array<{marker:String, number:String}>):Dynamic
+	static function descriptorJson(descriptor:NativeTypeDescriptorData, replacements:Array<{
+		marker:String,
+		number:String
+	}>):Dynamic
 		return {
 			version: descriptor.version,
 			name: descriptor.name,
@@ -349,23 +358,25 @@ class NativeTypeDescriptorCodec {
 			recursive: node.recursive
 		};
 
-	static function annotationValuesJson(values:Array<NativeTypeAnnotationData>, replacements:Array<{marker:String, number:String}>):Array<Dynamic>
-		return [
-			for (annotation in values)
-				{
-					name: annotation.name,
-					arguments: [
-						for (argument in annotation.arguments)
-							{
-								name: argument.name,
-								type: argument.type,
-								value: annotationConstantJson(argument.value, replacements)
-							}
-					]
-				}
-		];
+	static function annotationValuesJson(values:Array<NativeTypeAnnotationData>, replacements:Array<{
+		marker:String,
+		number:String
+	}>):Array<Dynamic>
+		return [for (annotation in values)
+			{
+				name:annotation.name,
+					arguments:[for (argument in annotation.arguments)
+					{
+						name:argument.name,
+							type:argument.type,
+							value:annotationConstantJson(argument.value, replacements)
+					}]
+			}];
 
-	static function annotationConstantJson(value:NativeTypeAnnotationValue, replacements:Array<{marker:String, number:String}>):Dynamic
+	static function annotationConstantJson(value:NativeTypeAnnotationValue, replacements:Array<{
+		marker:String,
+		number:String
+	}>):Dynamic
 		return switch value {
 			case IntValue(value): value;
 			case FloatValue(value):
@@ -390,14 +401,19 @@ class NativeTypeDescriptorCodec {
 	}
 
 	static function defaultJson(node:NativeTypeDescriptorField, value:Null<NativeTypeDescriptorDefault>,
-			replacements:Array<{marker:String, number:String}>):Dynamic {
+			replacements:Array<{
+				marker:String,
+				number:String
+			}>):Dynamic {
 		if (value == null)
 			return null;
 		return switch value.value {
 			case FloatValue(number) if (containsFloat32(node)):
 				var marker = '__HAXEON_F32_DEFAULT_${replacements.length}__';
 				replacements.push({marker: marker, number: exactFloat32Decimal(number)});
-				{type: value.type, value: marker};
+				{
+					type:value.type, value:marker
+				};
 			case _:
 				{type: value.type, value: annotationConstantJson(value.value, replacements)};
 		};

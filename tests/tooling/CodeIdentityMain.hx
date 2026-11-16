@@ -19,7 +19,8 @@ class CodeIdentityMain {
 
 	static function sources(edits:Map<String, String>):Map<String, String> {
 		var files = [
-			"Main" => 'import haxeon.build.CodeIdentity;
+			"Main"
+				=> 'import haxeon.build.CodeIdentity;
 class Main {
 	static function main():Int {
 		var seen = [A.value(), D.value(), E.value(), Z.value()];
@@ -48,8 +49,10 @@ class Main {
 
 	static function build(session:CompilerSession, tag:String, ?extra:Array<String>):Map<String, String> {
 		var output = root + "/" + tag + ".hl";
-		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--output=" + output].concat(extra == null ? [] : extra);
-		CompilerDriver.compile(CompilerArguments.parse(args.concat([for (name in all) root + "/" + name + ".hx"])), _ -> {}, session);
+		var args = ["--target=hl", "--entry=Main", "--root=" + root,
+			"--output=" + output].concat(extra == null ? [] : extra);
+		CompilerDriver.compile(CompilerArguments.parse(args.concat([for (name in all) root + "/" + name + ".hx"])),
+			_ -> {}, session);
 		var process = new Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [output]);
 		var text = process.stdout.readAll().toString();
 		var code = process.exitCode();
@@ -80,7 +83,8 @@ class Main {
 		var session = new CompilerSession();
 		var first = build(session, "first");
 		for (name in all)
-			expect(first.get(name) != null && first.get(name) != "null" && first.get(name).length == 32, 'identity of $name: ${first.get(name)}');
+			expect(first.get(name) != null && first.get(name) != "null" && first.get(name).length == 32,
+				'identity of $name: ${first.get(name)}');
 		expect(first.get("Nope") == "null", "an unknown module has no identity");
 		var distinct = new Map<String, Bool>();
 		for (name in all)
@@ -115,7 +119,8 @@ class Main {
 		build(session, "b-back");
 
 		// Editing one member of a cycle changes the whole cycle and its importers.
-		write(sources(["Y" => "class Y { public static function value():Int return 3; public static function viaX():Int return X.value(); }"]));
+		write(sources(["Y"
+			=> "class Y { public static function value():Int return 3; public static function viaX():Int return X.value(); }"]));
 		var editedY = build(session, "y");
 		expect(changed(first, editedY) == "Main,X,Y,Z", "editing Y changed " + changed(first, editedY));
 		expect(editedY.get("X") == editedY.get("Y"), "the cycle still shares one identity");
@@ -123,12 +128,22 @@ class Main {
 		build(session, "y-back");
 
 		// A long sequence of edits in one session ends where a clean build of the same sources does.
-		write(sources(["C" => "class C { public static function value():Int return 3; }", "E" => "class E { public static function value():Int return 9; }"]));
+		write(sources([
+			"C" => "class C { public static function value():Int return 3; }",
+			"E" => "class E { public static function value():Int return 9; }"
+		]));
 		build(session, "seq1");
-		write(sources(["A" => "class A { public static function value():Int return B.value() + 4; }", "Y" => "class Y { public static function value():Int return 7; public static function viaX():Int return X.value(); }"]));
+		write(sources([
+			"A" => "class A { public static function value():Int return B.value() + 4; }",
+			"Y" => "class Y { public static function value():Int return 7; public static function viaX():Int return X.value(); }"
+		]));
 		build(session, "seq2");
-		var finalSources = sources(["C" => "class C { public static function value():Int return 3; }", "D" => "class D { public static function value():Int return 0; }",
-			"A" => "class A { public static function value():Int return B.value() + 4; }", "E" => "class E { public static function value():Int return 9; }"]);
+		var finalSources = sources([
+			"C" => "class C { public static function value():Int return 3; }",
+			"D" => "class D { public static function value():Int return 0; }",
+			"A" => "class A { public static function value():Int return B.value() + 4; }",
+			"E" => "class E { public static function value():Int return 9; }"
+		]);
 		write(finalSources);
 		var incremental = build(session, "seq3");
 		var clean = build(new CompilerSession(), "clean");
@@ -147,7 +162,8 @@ class Main {
 		// A session carries the version across edits and rebuilds with a new one.
 		var sessionV = new CompilerSession();
 		sameAll(v1, build(sessionV, "sv1", ["--define=compiler-version=1"]), "a session build with the version");
-		expect(changed(v1, build(sessionV, "sv2", ["--define=compiler-version=2"])) == all.join(","), "a session rebuild with a new compiler version");
+		expect(changed(v1, build(sessionV, "sv2", ["--define=compiler-version=2"])) == all.join(","),
+			"a session rebuild with a new compiler version");
 
 		deleteTree(root);
 		Sys.println("PASS: code identities (" + checks + " checks)");

@@ -7,33 +7,40 @@ import compiler.syntax.Parser;
 /** Exercises inline conditional directives and Haxe-style version conditions. */
 class ConditionalCompilationMain {
 	static function main():Void {
-		var source = "typedef Choice = #if (haxe >= version(\"4.2.0\") && (hl || sys)) Int #elseif fallback String #else Bool #end;\n"
+		var source =
+			"typedef Choice = #if (haxe >= version(\"4.2.0\") && (hl || sys)) Int #elseif fallback String #else Bool #end;\n"
 			+ "function main():Choice return #if disabled 0 #else 42 #end;",
 			processed = process(source, ["haxe" => "4.10.0", "hl" => "1"]);
-		if (processed.length != source.length || processed.indexOf("Int") < 0 || processed.indexOf("42") < 0 || processed.indexOf("String") >= 0)
+		if (processed.length != source.length || processed.indexOf("Int") < 0 || processed.indexOf("42") < 0
+			|| processed.indexOf("String") >= 0)
 			throw "inline conditional branches were not selected or offset-preserved";
 		new Parser(new Lexer(new SourceFile("Inline.hx", source), processed).tokenize()).parseProgram();
-		var macroSource = "macro function topLevel() { return macro $v{1}; } class Example { @:keep macro public function build() { return macro $v{42}; } public function value():Int return 42; }",
+		var macroSource =
+			"macro function topLevel() { return macro $v{1}; } class Example { @:keep macro public function build() { return macro $v{42}; } public function value():Int return 42; }",
 			macroProgram = new Parser(new Lexer(new SourceFile("Macro.hx", macroSource)).tokenize()).parseProgram();
 		if (macroProgram.classes[0].methods.length != 1 || macroProgram.classes[0].methods[0].name != "value")
 			throw "macro methods were not excluded from the runtime AST";
 		expectParseError("function main():Int return $value;", "Expected expression");
 
-		var older = process("typedef Choice = #if (haxe >= version(\"4.10.0\")) Int #else String #end;", ["haxe" => "4.3.7"]);
+		var older = process("typedef Choice = #if (haxe >= version(\"4.10.0\")) Int #else String #end;",
+			["haxe" => "4.3.7"]);
 		if (older.indexOf("String") < 0 || older.indexOf("Int") >= 0)
 			throw "dotted versions were not compared component by component";
 
 		var literal = "function css():String return '#utesttip { color: #fff; }'; // #error ignored\n/* #if ignored */";
 		if (process(literal, []) != literal)
 			throw "directive-like text in strings or comments was modified";
-		var utf8 = "function label():String return 'café';\nfunction selected():String return #if disabled 'é' #else 'ok' #end;",
+		var utf8 =
+			"function label():String return 'café';\nfunction selected():String return #if disabled 'é' #else 'ok' #end;",
 			processedUtf8 = process(utf8, []);
-		if (haxe.io.Bytes.ofString(processedUtf8).length != haxe.io.Bytes.ofString(utf8).length || processedUtf8.indexOf("café") < 0)
+		if (haxe.io.Bytes.ofString(processedUtf8).length != haxe.io.Bytes.ofString(utf8).length
+			|| processedUtf8.indexOf("café") < 0)
 			throw "conditional masking did not preserve UTF-8 byte offsets";
 
 		process("#if disabled\n#error inactive\n#end\nfunction main():Int return 42;", []);
 		expectError("#unknown value", "Unknown conditional directive #unknown");
-		expectError("#if enabled\n#error \"selected branch failed\"\n#end", "selected branch failed", ["enabled" => "1"]);
+		expectError("#if enabled\n#error \"selected branch failed\"\n#end", "selected branch failed",
+			["enabled" => "1"]);
 		Sys.println("PASS: inline conditional compilation, #error, and version conditions");
 	}
 

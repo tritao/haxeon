@@ -68,7 +68,8 @@ class AudioSmoke {
 	static function main():Void {
 		var argument = false;
 		try new haxeon.audio.DspRenderTarget(0, 2) catch (error:haxeon.platform.BindingError) {
-			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument && error.operation == "DspRenderTarget.new";
+			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument
+				&& error.operation == "DspRenderTarget.new";
 		}
 		if (!argument) throw "Audio argument errors must use BindingError";
 		if (!NativeKitEventDecoderTests.run())
@@ -106,14 +107,13 @@ class AudioSmoke {
 		var resumedTransition = false;
 		try {
 			var resource = new Resource("file:///nativekit-audio-smoke.wav", "audio/wav", "smoke.wav");
-			if (resource.uri != "file:///nativekit-audio-smoke.wav" || resource.mimeType != "audio/wav" ||
-				resource.displayName != "smoke.wav")
+			if (resource.uri != "file:///nativekit-audio-smoke.wav" || resource.mimeType != "audio/wav"
+				|| resource.displayName != "smoke.wav")
 				throw "Haxe resource descriptor did not retain metadata";
 			var nativeResource = resource.nativeValue();
-			if (nativeResource.get_struct_size() != ResourceValue.size() ||
-				nativeResource.get_flags() != resource.flags || nativeResource.get_uri() != resource.uri ||
-				nativeResource.get_mime_type() != resource.mimeType ||
-				nativeResource.get_display_name() != resource.displayName)
+			if (nativeResource.get_struct_size() != ResourceValue.size() || nativeResource.get_flags() != resource.flags
+				|| nativeResource.get_uri() != resource.uri || nativeResource.get_mime_type() != resource.mimeType
+				|| nativeResource.get_display_name() != resource.displayName)
 				throw "Haxe resource descriptor did not build its ABI value";
 			resourceCache = ResourceCache.create();
 			audioBank = new AudioBank(resourceCache, runtime.events);
@@ -135,11 +135,11 @@ class AudioSmoke {
 				NativeKit.nk_wait_events_timeout_checked(0.05);
 				while (runtime.events.poll()) {}
 			}
-			if (!bankFailed || !bankEntry.isFailed() || bankFailure == Result.Ok ||
-				bankEntry.loadResult() != bankFailure)
+			if (!bankFailed || !bankEntry.isFailed() || bankFailure == Result.Ok
+				|| bankEntry.loadResult() != bankFailure)
 				throw "Haxe audio bank did not deliver its async failure lifecycle";
-			if (audioBank.find("missing-audio") != bankEntry || !audioBank.unload("missing-audio") ||
-				audioBank.find("missing-audio") != null || audioBank.count() != 0)
+			if (audioBank.find("missing-audio") != bankEntry || !audioBank.unload("missing-audio")
+				|| audioBank.find("missing-audio") != null || audioBank.count() != 0)
 				throw "Haxe audio bank did not unload its failed entry";
 			bankEntry = null;
 			audioBank.dispose();
@@ -191,8 +191,8 @@ class AudioSmoke {
 				throw "Haxe audio listener world up did not round-trip";
 			Mixer.setListenerCone(new Cone(0.5, 1.5, 0.25));
 			var listenerCone = Mixer.listenerCone();
-			if (listenerCone.innerAngleRadians != 0.5 || listenerCone.outerAngleRadians != 1.5 ||
-				listenerCone.outerGain != 0.25)
+			if (listenerCone.innerAngleRadians != 0.5 || listenerCone.outerAngleRadians != 1.5
+				|| listenerCone.outerGain != 0.25)
 				throw "Haxe audio listener cone did not round-trip";
 			Mixer.setSpeedOfSound(340.0);
 			if (Mixer.speedOfSound() != 340.0)
@@ -236,9 +236,8 @@ class AudioSmoke {
 			lowPass = bus.addLowPass(2000.0, 2);
 			highPass = bus.addHighPass(100.0, 1);
 			delay = bus.addDelay(64, 0.5);
-			if (lowPass.type() != EffectType.LowPass ||
-				highPass.type() != EffectType.HighPass ||
-				delay.type() != EffectType.Delay)
+			if (lowPass.type() != EffectType.LowPass || highPass.type() != EffectType.HighPass
+				|| delay.type() != EffectType.Delay)
 				throw "Haxe audio bus effect types did not round-trip";
 			if (lowPass.position() != 0 || highPass.position() != 1 || delay.position() != 2)
 				throw "Haxe audio bus effect positions did not round-trip";
@@ -285,18 +284,17 @@ class AudioSmoke {
 				var stereoDelay = bus.addStereoDelay();
 				stereoDelay.setDelayTempo(120.0, 0.5);
 				stereoDelay.setParameter(EffectParameter.PingPong, 1.0);
-				if (stereoDelay.type() != EffectType.StereoDelay ||
-					stereoDelay.parameter(EffectParameter.DelaySeconds) != 0.25 ||
-					stereoDelay.parameter(EffectParameter.DelayBeats) != 0.5 ||
-					stereoDelay.parameter(EffectParameter.PingPong) != 1.0)
+				if (stereoDelay.type() != EffectType.StereoDelay || stereoDelay.parameter(EffectParameter.DelaySeconds)
+					!= 0.25 || stereoDelay.parameter(EffectParameter.DelayBeats) != 0.5
+					|| stereoDelay.parameter(EffectParameter.PingPong) != 1.0)
 					throw "Haxe stereo delay tempo controls did not round-trip";
 				stereoDelay.reset();
 				stereoDelay.dispose();
 				var reverb = bus.addReverb();
 				reverb.setParameter(EffectParameter.Wet, 0.25);
 				reverb.setParameter(EffectParameter.DecaySeconds, 0.6);
-				if (reverb.type() != EffectType.Reverb || reverb.parameter(EffectParameter.Wet) != 0.25 ||
-					reverb.latencyFrames() != 0 || Math.abs(reverb.tailFrames() - sampleRate * 0.6) > 1)
+				if (reverb.type() != EffectType.Reverb || reverb.parameter(EffectParameter.Wet) != 0.25
+					|| reverb.latencyFrames() != 0 || Math.abs(reverb.tailFrames() - sampleRate * 0.6) > 1)
 					throw "Haxe reverb controls did not round-trip";
 				reverb.reset();
 				reverb.setEnabled(false);
@@ -340,8 +338,8 @@ class AudioSmoke {
 			concurrency.maxVoices = 1;
 			bus.setConcurrency(concurrency);
 			var queriedConcurrency = bus.concurrency();
-			if (queriedConcurrency.maxVoices != 1 || queriedConcurrency.stealPolicy != VoiceStealPolicy.None ||
-				queriedConcurrency.virtualize)
+			if (queriedConcurrency.maxVoices != 1 || queriedConcurrency.stealPolicy != VoiceStealPolicy.None
+				|| queriedConcurrency.virtualize)
 				throw "Haxe audio bus concurrency policy did not round-trip";
 			first.setPriority(1);
 			second.setPriority(2);
@@ -417,9 +415,8 @@ class AudioSmoke {
 			playOverrides.priority = 3;
 			playOverrides.position = new Vector3(1.0, 2.0, -3.0);
 			cueVoice = cue.play(playOverrides);
-			if (cueVoice == null || cue.activeVoiceCount() != 1 || cue.voiceCount() != 1 ||
-				cue.variantIndex(cueVoice) != 0 || cueVoice.volume() != 0.25 || cueVoice.pitch() != 1.5 ||
-				cueVoice.priority() != 3)
+			if (cueVoice == null || cue.activeVoiceCount() != 1 || cue.voiceCount() != 1 || cue.variantIndex(cueVoice)
+				!= 0 || cueVoice.volume() != 0.25 || cueVoice.pitch() != 1.5 || cueVoice.priority() != 3)
 				throw "Haxe audio cue did not apply per-play overrides";
 			var cuePosition = cueVoice.position();
 			if (cuePosition.x != 1.0 || cuePosition.y != 2.0 || cuePosition.z != -3.0)
@@ -433,9 +430,8 @@ class AudioSmoke {
 			if (cue.activeVoiceCount() != 0)
 				throw "Haxe audio cue did not retire its completed voice";
 			var reusedCueVoice = cue.play();
-			if (reusedCueVoice == null || cue.variantIndex(reusedCueVoice) != 1 || cue.voiceCount() != 2 ||
-				reusedCueVoice.volume() != 0.5 || reusedCueVoice.pitch() != 1.25 ||
-				reusedCueVoice.priority() != 1)
+			if (reusedCueVoice == null || cue.variantIndex(reusedCueVoice) != 1 || cue.voiceCount() != 2
+				|| reusedCueVoice.volume() != 0.5 || reusedCueVoice.pitch() != 1.25 || reusedCueVoice.priority() != 1)
 				throw "Haxe audio cue did not select its next variant or range values";
 			var nextCueVoice = cue.play();
 			if (nextCueVoice != cueVoice || cue.variantIndex(nextCueVoice) != 0 || cue.voiceCount() != 2)
@@ -516,8 +512,8 @@ class AudioSmoke {
 			transitionOptions.fadeInSeconds = 0.01;
 			transitionOptions.fadeOutSeconds = 0.01;
 			var secondTrackVoice = trackPlayer.transitionTo(secondTrack, transitionOptions);
-			if (secondTrackVoice == null || trackPlayer.currentTrack() != secondTrack ||
-				!trackPlayer.isTransitioning() || !transitionStarted)
+			if (secondTrackVoice == null || trackPlayer.currentTrack() != secondTrack || !trackPlayer.isTransitioning()
+				|| !transitionStarted)
 				throw "Haxe audio track player did not schedule its crossfade";
 			for (attempt in 0...20) {
 				if (!trackPlayer.isTransitioning())
@@ -526,8 +522,8 @@ class AudioSmoke {
 				while (runtime.events.poll()) {}
 				trackPlayer.update();
 			}
-			if (trackPlayer.isTransitioning() || trackPlayer.currentVoice() != secondTrackVoice ||
-				!transitionCompleted || trackEnded != 1)
+			if (trackPlayer.isTransitioning() || trackPlayer.currentVoice() != secondTrackVoice || !transitionCompleted
+				|| trackEnded != 1)
 				throw "Haxe audio track player did not complete its shared-clock crossfade";
 			queuedTrackStarted = false;
 			trackPlayer.play(finiteTrack);
@@ -546,8 +542,8 @@ class AudioSmoke {
 			if (trackPlayer.queuedTrack() != null)
 				throw "Haxe audio track player did not clear its queued track after natural completion";
 			if (trackStarted != 4)
-				throw "Haxe audio track player started an unexpected number of tracks: " + trackStarted +
-					" first=" + firstTrackStarts + " second=" + secondTrackStarts + " finite=" + finiteTrackStarts;
+				throw "Haxe audio track player started an unexpected number of tracks: " + trackStarted + " first="
+					+ firstTrackStarts + " second=" + secondTrackStarts + " finite=" + finiteTrackStarts;
 			if (!queuedTrackStarted)
 				throw "Haxe audio track player did not start its queued track after natural completion";
 			trackPlayer.stop(0.01);
@@ -611,8 +607,8 @@ class AudioSmoke {
 				throw "Haxe audio Doppler factor did not round-trip";
 			first.setCone(new Cone(0.25, 1.25, 0.25));
 			var sourceCone = first.cone();
-			if (sourceCone.innerAngleRadians != 0.25 || sourceCone.outerAngleRadians != 1.25 ||
-				sourceCone.outerGain != 0.25)
+			if (sourceCone.innerAngleRadians != 0.25 || sourceCone.outerAngleRadians != 1.25
+				|| sourceCone.outerGain != 0.25)
 				throw "Haxe audio voice cone did not round-trip";
 			first.setDirectionalAttenuationFactor(0.25);
 			if (first.directionalAttenuationFactor() != 0.25)

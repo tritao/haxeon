@@ -54,7 +54,8 @@ class InheritedMethodContractMain {
 		reject(warm);
 		warm.update("Base.hx", base);
 		var noBase = new Compiler();
-		noBase.update("Main.hx", 'class Child {public function new(){} override public function record():Int return 1;} function main():Int return new Child().record();');
+		noBase.update("Main.hx",
+			'class Child {public function new(){} override public function record():Int return 1;} function main():Int return new Child().record();');
 		reject(noBase);
 		// A base signature edit must invalidate an unchanged subclass, even without semantic indexing.
 		warm.update("Base.hx", base.split("name:String").join("name:Int"));
@@ -69,13 +70,16 @@ class InheritedMethodContractMain {
 		warm.update("Base.hx", base);
 		reject(warm);
 		var generic = new Compiler();
-		generic.update("Base.hx", 'class Base<T> {public function new(){} public function connector(name:T):T return name;}');
+		generic.update("Base.hx",
+			'class Base<T> {public function new(){} public function connector(name:T):T return name;}');
 		generic.update("Middle.hx", 'class Middle<U> extends Base<U> {public function new(){super();}}');
-		generic.update("Child.hx", 'class Child extends Middle<Int> {public function new(){super();} public function connector(name:Int):Int return name;}');
+		generic.update("Child.hx",
+			'class Child extends Middle<Int> {public function new(){super();} public function connector(name:Int):Int return name;}');
 		generic.update("Main.hx", 'function main():Int {var x:Base<Int>=new Child();return x.connector(42);}');
 		if (GeneratedProgramRunner.exitCode(generic.compile("Main")) != 42)
 			throw "Generic inheritance substitutions were not respected";
-		generic.update("Child.hx", 'class Child extends Middle<Int> {public function new(){super();} public function connector(name:String):Int return 42;}');
+		generic.update("Child.hx",
+			'class Child extends Middle<Int> {public function new(){super();} public function connector(name:String):Int return 42;}');
 		reject(generic);
 		Sys.println("PASS: inherited method signature and visibility contracts, cold, incremental and generic bases");
 	}

@@ -1,10 +1,10 @@
-import compiler.ir.Ir;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule;
-import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.WasmTypeIdPlan;
+import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
+import compiler.ir.Ir;
 
 /** Nominal query signatures retain their checks but share one physical native operation. */
 class WasmClosureReceiverRuntimeMain {
@@ -32,23 +32,27 @@ class WasmClosureReceiverRuntimeMain {
 			functions:Map<String, Int> = [],
 			strings:Map<String, Int> = [];
 		module.runtimeTypeIds = WasmTypeIdPlan.forProgram(program);
-		var allocator = module.addFunction(new WasmFunction("allocator", {parameters: [I32], results: [I32]}, [], [I32Const(0), Return])),
-			context = new WasmLinearContext(module, program, new WasmLayout(program), {target: Wasm32, debugNames: true}, {
-				functions: functions,
-				globals: [],
-				rootGlobals: [],
-				strings: strings,
-				heapStart: 0,
-				rootBase: 0,
-				rootTop: 0,
-				rootFrameTop: 0,
-				rootLimit: 0,
-				markStackTop: 0,
-				heapState: 0,
-				reflectionTable: 0,
-				reflectionCount: 0,
-				reflectionBytes: null
-			});
+		var allocator = module.addFunction(new WasmFunction("allocator", {parameters: [I32], results: [I32]}, [], [
+			I32Const(0),
+			Return
+		])),
+			context = new WasmLinearContext(module, program, new WasmLayout(program),
+				{target: Wasm32, debugNames: true}, {
+					functions: functions,
+					globals: [],
+					rootGlobals: [],
+					strings: strings,
+					heapStart: 0,
+					rootBase: 0,
+					rootTop: 0,
+					rootFrameTop: 0,
+					rootLimit: 0,
+					markStackTop: 0,
+					heapState: 0,
+					reflectionTable: 0,
+					reflectionCount: 0,
+					reflectionBytes: null
+				});
 		context.allocatorFunction = allocator;
 		WasmLinearRuntime.register(context);
 		var first = functions.get("query0");
@@ -57,7 +61,8 @@ class WasmClosureReceiverRuntimeMain {
 		for (index in 0...32) {
 			if (functions.get("query" + index) != first)
 				throw "Closure receiver aliases duplicated the physical native body";
-			if (!compiler.ir.IrVerifier.sameType(program.natives[index].arguments[0], Function([EnumTag("Tag" + index)], EnumTag("Tag" + index))))
+			if (!compiler.ir.IrVerifier.sameType(program.natives[index].arguments[0],
+				Function([EnumTag("Tag" + index)], EnumTag("Tag" + index))))
 				throw "Sharing a physical native erased its nominal signature";
 		}
 		Sys.println("PASS: 32 nominal closure queries share one physical native body");
@@ -77,8 +82,14 @@ class WasmClosureReceiverRuntimeMain {
 			+ 'if(readTone(Light)!=Light || readHeat(Hot)!=Hot) return 1; '
 			+ 'try { var wrong:Heat->Heat=cast tone; wrong(Hot); return 2; } catch(error:Dynamic) {} return 42; }');
 		var program = session.compile("Main").ir;
-		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, debugNames: true})
-			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true}).bytes;
+		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+			target: HashLink,
+			debugNames: true
+		})
+			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
+				target: target == "wasm32" ? Wasm32 : WasmGc,
+				debugNames: true
+			}).bytes;
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null)
 			temp = "out";
@@ -91,9 +102,14 @@ class WasmClosureReceiverRuntimeMain {
 			+ (target == "hl" ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, binary);
 		try {
-			var script = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var script =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("nominal closure receiver probes");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", script, path]);
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"-e",
+				script,
+				path
+			]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();

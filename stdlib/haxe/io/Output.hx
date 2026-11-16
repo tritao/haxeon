@@ -52,7 +52,9 @@ class Output {
 		writeInt32(FPHelper.floatToI32(x));
 
 	public function writeDouble(x:Float):Void {
-		var bits = FPHelper.doubleToI64(x), low = haxe.Int64.toInt(bits), high = haxe.Int64.toInt(haxe.Int64.shr(bits, 32));
+		var bits = FPHelper.doubleToI64(x),
+			low = haxe.Int64.toInt(bits),
+			high = haxe.Int64.toInt(haxe.Int64.shr(bits, 32));
 		if (bigEndian) {
 			writeInt32(high);
 			writeInt32(low);

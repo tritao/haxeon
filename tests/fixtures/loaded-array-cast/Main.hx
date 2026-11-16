@@ -36,7 +36,7 @@ function main():Int {
 	var dynamicParts:Array<String> = receiver.split("b");
 	if (dynamicParts[1] != "a")
 		return 6;
-	var empty:Array<String> = (cast "".split("b") : Dynamic);
+	var empty:Array<String> = (cast "".split("b"):Dynamic);
 	if (empty.length != 1 || empty[0] != "")
 		return 7;
 	var rejected = false;

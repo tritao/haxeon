@@ -38,7 +38,8 @@ class HaxeonBuild {
 	}
 
 	static function native(arguments:Array<String>):Int {
-		var preset = arguments.length == 0 ? (Sys.systemName() == "Windows" ? "windows-msvc" : "release") : arguments[0];
+		var preset = arguments.length == 0
+			? (Sys.systemName() == "Windows" ? "windows-msvc" : "release") : arguments[0];
 		var plan = BuildPlanner.nativeRuntime(environment, preset),
 			execution = PlanLowerer.lower(plan, new LoweringContext(environment, preset)),
 			result = new Executor(environment, 1).execute(execution);
@@ -71,7 +72,8 @@ class HaxeonBuild {
 		}
 
 		var seed = path(["out", "bootstrap", "compiler-seed.hl"]);
-		var status = run(haxe(), ["--cwd", root(), "common.hxml", "--run", "compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
+		var status = run(haxe(), ["--cwd", root(), "common.hxml", "--run",
+			"compiler.tools.HaxeonCompiler"].concat(compilerArguments(seed, sourcesFile)));
 		if (status != 0)
 			return status;
 		var compiler = seed;
@@ -99,11 +101,13 @@ class HaxeonBuild {
 			try
 				loaded = RuntimeBuildSafety.conflictingLibrary(outputDirectory)
 			catch (failure:Dynamic) {
-				Sys.stderr().writeString('Cannot verify loaded libraries before building in $outputDirectory: $failure\n');
+				Sys.stderr()
+					.writeString('Cannot verify loaded libraries before building in $outputDirectory: $failure\n');
 				return 1;
 			}
 			if (loaded != null) {
-				Sys.stderr().writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Run scripts/test-driver.sh to use isolated libraries.\n');
+				Sys.stderr()
+					.writeString('Cannot build native libraries in $outputDirectory: loaded library or search path $loaded conflicts with it. Run scripts/test-driver.sh to use isolated libraries.\n');
 				return 1;
 			}
 		}
@@ -175,12 +179,14 @@ class HaxeonBuild {
 	}
 
 	static function identical(left:String, right:String):Bool
-		return FileSystem.exists(left) && FileSystem.exists(right) && File.getBytes(left).compare(File.getBytes(right)) == 0;
+		return FileSystem.exists(left) && FileSystem.exists(right)
+			&& File.getBytes(left).compare(File.getBytes(right)) == 0;
 
 	static function configureRuntimeLibraryPath():Void {
 		var directories = [path(["out"]), HashLinkPath.directory(root())];
 		Sys.putEnv("HAXEON_HASHLINK_DIR", HashLinkPath.directory(root()));
-		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
+		var variable = Sys.systemName() == "Windows"
+			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")
 			directories.push(existing);
@@ -209,7 +215,8 @@ class HaxeonBuild {
 			}
 		try {
 			processActionNumber++;
-			var action = new ExecutionAction(new ActionId('build-command-$processActionNumber'), [], [], [], '$command ${arguments.join(" ")}',
+			var action = new ExecutionAction(new ActionId('build-command-$processActionNumber'), [], [], [],
+				'$command ${arguments.join(" ")}',
 				Process(command, arguments, root(), new Map())),
 				result = new Executor(environment, 1).execute(new ExecutionPlan([action]));
 			return result.exitCode;

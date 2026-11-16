@@ -50,8 +50,10 @@ class ClosureTyper {
 	final typeStatements:ClosureTypeStatementsCallback;
 	final alwaysReturns:ClosureAlwaysReturnsCallback;
 
-	public function new(session:TypingSession, typeExpression:ClosureExpressionCallback, lowerType:ClosureLowerTypeCallback,
-			lexicalMethod:ClosureMethodLookupCallback, findFieldType:ClosureFieldLookupCallback, boundCell:ClosureBoundCellCallback,
+	public function new(session:TypingSession, typeExpression:ClosureExpressionCallback,
+			lowerType:ClosureLowerTypeCallback,
+			lexicalMethod:ClosureMethodLookupCallback, findFieldType:ClosureFieldLookupCallback,
+			boundCell:ClosureBoundCellCallback,
 			enterBody:ClosureEnterBodyCallback, leaveBody:ClosureLeaveBodyCallback, bindCell:ClosureBindCellCallback,
 			typeStatements:ClosureTypeStatementsCallback, alwaysReturns:ClosureAlwaysReturnsCallback) {
 		this.session = session;
@@ -67,29 +69,43 @@ class ClosureTyper {
 		this.alwaysReturns = alwaysReturns;
 	}
 
-	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool, outerContext:TypingContext):TypedExpression {
+	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan,
+			scope:Scope,
+			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool,
+			outerContext:TypingContext):TypedExpression {
 		var lambdaKey = '${outerContext.name}:${span.file.path}:${span.start}';
 		var expectedFunction = expectedFunctionType(expectedType),
-			inferContextualResult = expectedFunction != null && (switch (expectedFunction.result) { case TDynamic: true; default: false; }) && inferDynamicLambdaResult;
+			inferContextualResult = expectedFunction != null && (switch (expectedFunction.result) {
+				case TDynamic: true;
+				default: false;
+			}) && inferDynamicLambdaResult;
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
-			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}', span);
+			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}',
+				span);
 		var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
 			lambdaScope = new Scope();
 		for (i in 0...arguments.length) {
 			var argument = arguments[i],
 				localName = argument.name == "_" ? '$' + 'discard:$i' : argument.name;
-			var argumentType = (switch (argument.type) { case InferredType: true; default: false; }) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type, argument.span);
+			var argumentType = (switch (argument.type) {
+				case InferredType: true;
+				default: false;
+			}) ? (expectedFunction == null ? null : expectedFunction.arguments[i]) : lowerType(argument.type,
+				argument.span);
 			if (argumentType != null
-				&& (switch (argument.type) { case InferredType: false; default: true; })
-				&& argument.optional == true
-				&& compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
-				argumentType = switch argumentType {
-					case TNullable(_): argumentType;
-					default: TNullable(argumentType);
-				};
+				&& (switch (argument.type) {
+					case InferredType: false;
+					default: true;
+				})
+					&& argument.optional == true
+					&& compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
+					argumentType = switch argumentType {
+				case TNullable(_): argumentType;
+				default: TNullable(argumentType);
+			};
 			if (argumentType == null)
-				fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context', argument.span);
+				fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context',
+					argument.span);
 			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
 				fail("E1003", "Lambda argument type does not match its context", argument.span);
 			lambdaScope.define(localName, argumentType, argument.span);
@@ -109,10 +125,12 @@ class ClosureTyper {
 				if (scope.resolve(name) == null) {
 					var method = lexicalMethod(name),
 						receiverType = scope.resolve("this");
-					if (method != null && !method.isStatic || receiverType != null && findFieldType(receiverType, name) != null)
+					if (method != null && !method.isStatic || receiverType != null
+						&& findFieldType(receiverType, name) != null)
 						freeVariables.set("this", true);
 				}
-		var pathConstants:Map<String, String> = [], captures:Array<TypedCapture> = [],
+		var pathConstants:Map<String, String> = [],
+			captures:Array<TypedCapture> = [],
 			captureCells:Map<String, String> = [],
 			captureTypes:Map<String, CompilerType> = [];
 		// Map iteration order differs between hosts; sort so closure layouts are deterministic.
@@ -147,10 +165,13 @@ class ClosureTyper {
 				}
 				var bindingId = scope.requireId(name),
 					captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
-						scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name) else if (cellClass != null)
-						CaptureCellLocal(bindingId, cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
+						scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name)
+						else if (cellClass != null)
+						CaptureCellLocal(bindingId,
+						cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
 				lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
-					declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name), scope.declarationOf(name));
+					declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name),
+					scope.declarationOf(name));
 				if (cellClass != null)
 					captureCells.set(name, cellClass);
 				captureTypes.set(name, captureType);
@@ -165,8 +186,10 @@ class ClosureTyper {
 		}
 		// A switch arm with several patterns is typed once per pattern, so one lambda position can capture different bindings:
 		// each distinct set of captures is its own lambda, and the first keeps the name the position gives it.
-		var constantIdentity = [for (name in freeNames) if (pathConstants.exists(name)) name + "=" + pathConstants.get(name)].join(",");
-		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",") + "|" + constantIdentity;
+		var constantIdentity =
+			[for (name in freeNames) if (pathConstants.exists(name)) name + "=" + pathConstants.get(name)].join(",");
+		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",")
+			+ "|" + constantIdentity;
 		if (session.lambdaCache.exists(variantKey))
 			return session.lambdaCache.get(variantKey);
 		var variant:Int = session.lambdaVariants.exists(lambdaKey) ? session.lambdaVariants.get(lambdaKey) : 0;
@@ -180,22 +203,29 @@ class ClosureTyper {
 			lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
 		}
 		for (capture in captures)
-			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field), captureCells.get(capture.field),
-				capture.bindingId, capture.storageType, scope.localFunction(capture.field), scope.declarationOf(capture.field));
+			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field),
+				captureCells.get(capture.field),
+				capture.bindingId, capture.storageType, scope.localFunction(capture.field),
+				scope.declarationOf(capture.field));
 		for (name in freeNames) if (pathConstants.exists(name)) {
 			typedBodyScope.define(name, scope.resolve(name), span);
 			typedBodyScope.setKeyPathConstant(name, pathConstants.get(name));
 		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
 		// function with a new environment type: closures made before the edit keep the code that reads their environment.
-		var capturedIdentity = compiler.semantic.LambdaName.withCaptures(identity, [for (capture in captures) capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
+		var capturedIdentity = compiler.semantic.LambdaName.withCaptures(identity, [for (capture in captures)
+			capture.field + ":" + compiler.types.DeclarationIndex.typeKey(capture.storageType)]);
 		var lambdaName = compiler.semantic.LambdaName.of(outerContext.name, capturedIdentity),
 			lambdaContext = enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
 		context.receiver = typedBodyScope.resolve("this");
-		context.expectedReturnType = expectedFunction == null || inferContextualResult ? TVoid : expectedFunction.result;
-		context.contextualVoidLambda = expectedFunction != null && (switch (expectedFunction.result) { case TVoid: true; default: false; });
+		context.expectedReturnType = expectedFunction == null
+			|| inferContextualResult ? TVoid : expectedFunction.result;
+		context.contextualVoidLambda = expectedFunction != null && (switch (expectedFunction.result) {
+			case TVoid: true;
+			default: false;
+		});
 		for (declaration in AssignedDeclarations.ofFunction(arguments, body).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (declaration in lambdaAssignments.keys())
@@ -209,11 +239,14 @@ class ClosureTyper {
 				context.storage.closureWrites.set(declaration, true);
 		}
 		for (binding in lambdaStorage.mutableCaptures.keys())
-			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + BindingWalker.nameOf(binding), MutableCapture);
+			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + BindingWalker.nameOf(binding),
+				MutableCapture);
 		for (binding in lambdaStorage.exceptionCells.keys())
-			context.storage.request(binding, "$cell:" + lambdaName + ":" + BindingWalker.nameOf(binding), ExceptionEdge);
+			context.storage.request(binding, "$cell:" + lambdaName + ":" + BindingWalker.nameOf(binding),
+				ExceptionEdge);
 		for (i in 0...arguments.length)
-			bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span, typedBodyScope, lambdaArguments[i].type);
+			bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span, typedBodyScope,
+				lambdaArguments[i].type);
 		var typedBody = typeStatements(body, typedBodyScope, expectedFunction == null
 			|| inferContextualResult ? null : expectedFunction.result),
 			inferredResult:CompilerType;
@@ -228,11 +261,15 @@ class ClosureTyper {
 			lambdaCellTypes = copyMap(context.storage.types),
 			lambdaCellKinds = copyMap(context.storage.kinds);
 		leaveBody(lambdaContext);
-		if ((switch (inferredResult) { case TVoid: false; default: true; }) && !alwaysReturns(typedBody))
+		if ((switch (inferredResult) {
+			case TVoid: false;
+			default: true;
+		}) && !alwaysReturns(typedBody))
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)
-			environment = compiler.semantic.LambdaName.ENVIRONMENT_PREFIX + '${session.currentContext.name}:$capturedIdentity';
+			environment = compiler.semantic.LambdaName.ENVIRONMENT_PREFIX
+				+ '${session.currentContext.name}:$capturedIdentity';
 		if (environment != null)
 			session.closureConversion.addEnvironment(environment, captures);
 		session.closureConversion.addFunction({
@@ -252,7 +289,8 @@ class ClosureTyper {
 		});
 		for (name in lambdaCells.keys())
 			if (lambdaCellTypes.exists(name) && lambdaCellKinds.exists(name))
-				session.closureConversion.addCell(requiredMapValue(lambdaCells, name), requiredMapValue(lambdaCellTypes, name),
+				session.closureConversion.addCell(requiredMapValue(lambdaCells, name),
+					requiredMapValue(lambdaCellTypes, name),
 					requiredMapValue(lambdaCellKinds, name));
 		var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 			TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
@@ -260,7 +298,10 @@ class ClosureTyper {
 		return lambdaResult;
 	}
 
-	static function expectedFunctionType(type:Null<CompilerType>):Null<{arguments:Array<CompilerType>, result:CompilerType}> {
+	static function expectedFunctionType(type:Null<CompilerType>):Null<{
+		arguments:Array<CompilerType>,
+		result:CompilerType
+	}> {
 		if (type == null)
 			return null;
 		return switch type {

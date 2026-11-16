@@ -15,7 +15,8 @@ class NativeDependencyScanner {
 		return result;
 	}
 
-	static function scan(file:String, includeDirs:Array<String>, found:Map<String, Bool>, active:Map<String, Bool>, result:Array<String>):Void {
+	static function scan(file:String, includeDirs:Array<String>, found:Map<String, Bool>, active:Map<String, Bool>,
+			result:Array<String>):Void {
 		var canonical = Path.normalize(FileSystem.fullPath(file));
 		if (active.exists(canonical) || !FileSystem.exists(canonical) || FileSystem.isDirectory(canonical))
 			return;

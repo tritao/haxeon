@@ -2,7 +2,8 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 
 class ArrayLookupContextMain {
-	static final valid = 'function main():Int { var values:Array<a.Expected> = [a.Expected.Present]; if (values.indexOf(Present) != 0 || !values.contains(Present)) return 1; return 42; }';
+	static final valid =
+		'function main():Int { var values:Array<a.Expected> = [a.Expected.Present]; if (values.indexOf(Present) != 0 || !values.contains(Present)) return 1; return 42; }';
 
 	static function compiler():Compiler {
 		var result = new Compiler();

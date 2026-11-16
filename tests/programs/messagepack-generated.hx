@@ -287,8 +287,10 @@ function main():Int {
 	unicodeKeys.set("é", 2);
 	unicodeKeys.set("é", 1);
 	var unicodeReader = new MessagePackReader(MessagePack.encode(unicodeKeys));
-	if (unicodeReader.readMapHeader() != 3 || unicodeReader.readString() != "é" || unicodeReader.readInt() != 1 || unicodeReader.readString() != "é"
-		|| unicodeReader.readInt() != 2 || unicodeReader.readString() != "😀" || unicodeReader.readInt() != 3 || !unicodeReader.atEnd())
+	if (unicodeReader.readMapHeader() != 3 || unicodeReader.readString() != "é" || unicodeReader.readInt() != 1
+		|| unicodeReader.readString() != "é"
+		|| unicodeReader.readInt() != 2 || unicodeReader.readString() != "😀" || unicodeReader.readInt() != 3
+		|| !unicodeReader.atEnd())
 		return 27;
 
 	var optionalUser:Null<WireUser> = user;

@@ -79,12 +79,14 @@ typedef FrontendResult = {
 
 /** Builds and validates the reachable source graph through complete IR assembly. */
 class FrontendCompilation {
-	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>, ?pendingSignatures:Map<String, Bool>,
-			?pendingStructural:Map<String, Bool>, ?carried:{
-			regenerated:Array<String>,
-			retyped:Array<String>
-		}):FrontendResult {
+	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
+			rollbackModules:Map<String, ModuleState>,
+			snapshotDoneAt:Float, ?lowerToIr = true, ?indexSemantics = true, ?pendingBody:Map<String, Bool>,
+			?pendingSignatures:Map<String, Bool>,
+			?pendingStructural:Map<String, Bool>, ?carried: {
+				regenerated: Array<String>,
+				retyped: Array<String>
+			}):FrontendResult {
 		seedRepresentationModules(context);
 		var allocationAtStart = AllocationMeter.sample(),
 			passStartedAt = Sys.time() * 1000.0,
@@ -159,11 +161,13 @@ class FrontendCompilation {
 			context.cacheReachability(entryModule, names, initializationClasses);
 			graphInitializationMs = Sys.time() * 1000.0 - initializationStartedAt;
 		}
-		compiler.modules.CodeIdentityTable.refresh(context, names, rollbackModules, entryModule, bodyChanged, signatureChanged, structuralChanged);
+		compiler.modules.CodeIdentityTable.refresh(context, names, rollbackModules, entryModule, bodyChanged,
+			signatureChanged, structuralChanged);
 		var frontendGraphDoneAt = Sys.time() * 1000.0;
 		var allocationAfterGraph = AllocationMeter.sample();
 
-		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged, signatureChanged, structuralChanged,
+		var semanticAssembly = SemanticAssembly.run(context, entryModule, token, rollbackModules, names, bodyChanged,
+			signatureChanged, structuralChanged,
 			indexSemantics, carried != null),
 			canonicalProgram = semanticAssembly.canonicalProgram,
 			functions = semanticAssembly.functions,
@@ -180,7 +184,10 @@ class FrontendCompilation {
 		var typedNew:TypedProgram,
 			typerMetrics:TyperPhaseMetrics,
 			generator:IrGenerator;
-		var runtimeDependencies:Array<{var functionName:String; var target:String;}> = [];
+		var runtimeDependencies:Array<{
+			var functionName:String;
+			var target:String;
+		}> = [];
 		var purityQueries:Map<String, Map<String, Bool>>,
 			noReturnQueries:Map<String, Map<String, Bool>>,
 			keyPathUses:Map<String, Map<String, Bool>>,
@@ -202,10 +209,13 @@ class FrontendCompilation {
 				semantic = SemanticProgram.analyze(canonicalProgram);
 			allocationAfterAnalysis = AllocationMeter.sample();
 			analysisDoneAt = Sys.time() * 1000.0;
-			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint, genericSpecializations,
-				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null, semanticAssembly.facts, lowerToIr,
-				retainedFromPrevious(context, names, selected, lowerToIr, [for (classDecl in canonicalProgram.classes) classDecl.name => true],
-					previousSemantic));
+			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.nativeSignatures(), entryPoint,
+				genericSpecializations,
+				context.nativeLayoutTarget(), canReuseSemantic ? context.lastTypedProgram : null,
+				semanticAssembly.facts, lowerToIr,
+				retainedFromPrevious(context, names, selected, lowerToIr,
+				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
+				previousSemantic));
 			allocationAfterProgramTyping = AllocationMeter.sample();
 			typingDoneAt = Sys.time() * 1000.0;
 			typedNew = typedResult.program;
@@ -246,7 +256,8 @@ class FrontendCompilation {
 		if (indexSemantics) {
 			for (module in reindexedModules.keys()) {
 				var state = context.writableState(module, rollbackModules);
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
+					state.revision, state.tokens);
 			}
 			context.invalidateSemanticResolutionCache();
 			for (module in reindexedModules.keys()) {
@@ -294,7 +305,8 @@ class FrontendCompilation {
 			var sameLayout:Map<String, Bool> = [
 				for (classDecl in typedNew.classes)
 					if (classDecl.isValue
-						&& IrProgramAssembler.matchesCanonicalLayout(classDecl, typedNew.nativeAbiTarget)) classDecl.name => true
+					&& IrProgramAssembler.matchesCanonicalLayout(classDecl, typedNew.nativeAbiTarget))
+					classDecl.name => true
 			];
 			for (object in typedObjects)
 				if (object.isValue && object.nativeLayout != null && sameLayout.exists(object.name))
@@ -355,7 +367,8 @@ class FrontendCompilation {
 			var constants = inlineConstantDependencies.get(fn.name);
 			if (constants != null)
 				for (target in constants.keys())
-					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name, SemanticDependencyKind.InlineConstant, target,
+					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name,
+						SemanticDependencyKind.InlineConstant, target,
 						context.resolveSemanticSymbol(target));
 			var sourceRecord = defaultArgumentSources.get(fn.name);
 			if (sourceRecord != null)
@@ -378,10 +391,12 @@ class FrontendCompilation {
 			else
 				state.keyPathUses.remove(fn.name);
 			if (indexSemantics && state.semanticModel != null)
-				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol, context.resolveSemanticEnumCase, token);
+				state.semanticModel.index.indexTypedFunction(fn, context.resolveSemanticSymbol,
+					context.resolveSemanticEnumCase, token);
 			// A lambda names the function it is written in as its origin, so it is retyped with that function.
 			var semanticOrigin = fn.origin;
-			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null && invalidated.exists(semanticOrigin);
+			var semanticallyInvalidated = invalidated.exists(fn.name) || semanticOrigin != null
+				&& invalidated.exists(semanticOrigin);
 			if (semanticallyInvalidated)
 				retyped.push(fn.name);
 			touchedModules.set(module, true);
@@ -441,12 +456,12 @@ class FrontendCompilation {
 			if (generatedByModule.exists(name)) {
 				var lambdaNames = generatedByModule.get(name);
 				for (lambdaName in lambdaNames.keys())
-					// Syntax names do not include capture hashes. If the owner was retyped, only the closures actually
-					// produced by that typing can survive; a formerly capture-free closure may now have another name.
-					if (!LambdaName.is(lambdaName)
-						|| !typedByName.exists(LambdaName.outermost(lambdaName))
-						|| typedByName.exists(lambdaName))
-						valid.set(lambdaName, true);
+				// Syntax names do not include capture hashes. If the owner was retyped, only the closures actually
+				// produced by that typing can survive; a formerly capture-free closure may now have another name.
+				if (!LambdaName.is(lambdaName)
+					|| !typedByName.exists(LambdaName.outermost(lambdaName))
+					|| typedByName.exists(lambdaName))
+					valid.set(lambdaName, true);
 			}
 			// An unchanged caller can retain a call to a generated specialization.
 			// Such bodies are absent from this request's typedNew, but must survive
@@ -463,13 +478,15 @@ class FrontendCompilation {
 				// earlier typing (an edit moved them, so they are named by another offset) and must not outlive it.
 				var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
 				var sourceOwner = origin != null
-					&& initializerModule(origin, owners) != null ? origin.substr(0, origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
+					&& initializerModule(origin, owners) != null ? origin.substr(0,
+					origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
 				// Shared helpers may move to another requesting module. Keep only the fresh owner's copy,
 				// otherwise assembling cached bodies can resurrect the previous owner's stale IR.
 				var supersededOwner = typedByName.exists(cached) && owners.get(cached) != name;
 				// Even when the generic origin is unchanged, a specialization can depend on a changed type's
 				// representation. Its cached body and optional-value helpers are no longer valid in that case.
-				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner) && !supersededOwner
+				if (sourceOwner != null && owners.exists(sourceOwner) && !invalidated.exists(sourceOwner)
+					&& !supersededOwner
 					&& !invalidated.exists(cached) && !supersededByRetyping) {
 					valid.set(cached, true);
 					owners.set(cached, name);
@@ -584,25 +601,32 @@ class FrontendCompilation {
 		var irGenerationDoneAt = Sys.time() * 1000.0;
 		context.frontendPassReports.push(passReport(context.frontendPassReports.length
 			+ 1, [
-				stage("graph", frontendGraphDoneAt - passStartedAt, AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
+				stage("graph", frontendGraphDoneAt - passStartedAt,
+					AllocationMeter.delta("graph", allocationAtStart, allocationAfterGraph)),
 				stage("semantic-assembly", frontendDoneAt - frontendGraphDoneAt,
 					AllocationMeter.delta("semantic", allocationAfterGraph, allocationAfterSemantic)),
 				stage("signature-inference", analysisDoneAt - frontendDoneAt,
 					AllocationMeter.delta("analysis", allocationAfterSemantic, allocationAfterAnalysis)),
-				stage("typing", typingDoneAt - analysisDoneAt, AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
+				stage("typing", typingDoneAt - analysisDoneAt,
+					AllocationMeter.delta("typing", allocationAfterAnalysis, allocationAfterProgramTyping)),
 				stage("ir-generation", irGenerationDoneAt - typingDoneAt,
 					AllocationMeter.delta("ir-generation", allocationAfterProgramTyping, AllocationMeter.sample()))
 			], context.parseMs
-			- parseMsAtStart,
-			context.parseBytes
-			- parseBytesAtStart, context.parseCount
-			- parseCountAtStart));
+				- parseMsAtStart,
+				context.parseBytes
+				- parseBytesAtStart, context.parseCount
+				- parseCountAtStart));
 		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
 		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
-		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names, rollbackModules)) {
+		if (includeTypedRuntimeDependencies(context, runtimeDependencies, typedNew.functions, owners, names,
+			rollbackModules)) {
 			context.setLastTypedProgram(typedNew);
-			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, [], [], [],
-				{regenerated: regenerated, retyped: retyped});
+			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, [], [],
+				[],
+				{
+					regenerated: regenerated,
+					retyped: retyped
+				});
 		}
 		var typingLoweringDoneAt = Sys.time() * 1000.0;
 		var allocationAfterTyping = AllocationMeter.sample();
@@ -613,12 +637,14 @@ class FrontendCompilation {
 			AllocationMeter.delta("semantic-analysis", allocationAfterSemantic, allocationAfterAnalysis),
 			AllocationMeter.delta("program-typing", allocationAfterAnalysis, allocationAfterProgramTyping),
 			AllocationMeter.delta("typing-publication", allocationAfterProgramTyping, allocationAfterTyping),
-			AllocationMeter.delta("publication-index-rebuild", allocationAfterProgramTyping, allocationAfterIndexRebuild),
+			AllocationMeter.delta("publication-index-rebuild", allocationAfterProgramTyping,
+				allocationAfterIndexRebuild),
 			AllocationMeter.delta("publication-objects", allocationAfterIndexRebuild, allocationAfterObjects),
 			AllocationMeter.delta("publication-functions", allocationAfterObjects, allocationAfterFunctions),
 			AllocationMeter.delta("publication-index", allocationAfterFunctions, allocationAfterIndexPublication),
 			AllocationMeter.delta("publication-prune", allocationAfterIndexPublication, allocationAfterPrune),
-			AllocationMeter.delta("publication-prune-setup", allocationAfterIndexPublication, allocationBeforeModulePrune),
+			AllocationMeter.delta("publication-prune-setup", allocationAfterIndexPublication,
+				allocationBeforeModulePrune),
 			AllocationMeter.delta("publication-prune-modules", allocationBeforeModulePrune, allocationAfterModulePrune),
 			AllocationMeter.delta("publication-pending-ir", allocationAfterPrune, allocationAfterTyping)
 		];
@@ -741,44 +767,52 @@ class FrontendCompilation {
 		var published = context.assembler,
 			liveInitializers = context.livePatching
 				&& !context.isWasmTarget()
-				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(generator, typedNew, name -> published.publishedObject(name),
-					(name, field) -> published.publishedField(name, field)) : [];
+				&& published.isPublished() ? IrProgramAssembler.liveInitializersFrom(generator, typedNew,
+				name -> published.publishedObject(name),
+				(name, field) -> published.publishedField(name, field)) : [];
 		var generated = {
 			objects: [for (name in objectNames) resolvedObjects.get(name)],
 			interfaces: IrProgramAssembler.interfacesFrom(generator, typedNew),
 			enums: IrProgramAssembler.enumsFrom(generator, typedNew),
 			staticFields: IrProgramAssembler.staticFieldsFrom(generator, typedNew),
 			initializers: [
-				for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses, cached))
+				for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, initializationClasses,
+					cached))
 					compiler.ir.IrSourceRehash.of(fn, currentHashes)
 			].concat(liveInitializers),
 			reflectable: IrProgramAssembler.reflectableObjectsFrom(typedNew)
 		};
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With HAXEON_CHECK_REUSE=1
 		// the passes run anyway and the result is compared with the reused one.
-		var inputs = pipelineInputs(context, generator, instrumentScope, cached, generated.initializers, irNatives, irCNatives, generated.objects,
+		var inputs = pipelineInputs(context, generator, instrumentScope, cached, generated.initializers, irNatives,
+			irCNatives, generated.objects,
 			generated.interfaces, generated.enums, generated.staticFields, entryPoint, generated.reflectable),
 			previousPipeline = context.pipelineSnapshot,
-			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null ? "no earlier build" : previousPipeline.mismatch(inputs),
-			matchesPrevious = reuseMiss == null, checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
-			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null, ir:IrProgram, inlinerChanged:Array<String>;
+			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null
+				? "no earlier build" : previousPipeline.mismatch(inputs),
+			matchesPrevious = reuseMiss == null,
+			checkingReuse = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null,
+			ir:IrProgram,
+			inlinerChanged:Array<String>;
 		if (reusedPipeline != null && !checkingReuse) {
 			ir = reusedPipeline.ir;
 			inlinerChanged = [];
 		} else {
 			compiler.compilation.IrPassMeter.reset();
-			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces, generated.enums, generated.staticFields,
-				generated.initializers, entryPoint, irCNatives, generated.reflectable, context.inlineCache().staticChecks, context.valueArrayTarget(),
-				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget() && compiler.ir.IrEntryPrune.enabled(), [
-					for (object in generated.objects) {
-						if (object.isValue && object.nativeLayout != null) {
-							var canonical = canonicalObjectCache.get(object.name);
-							if (canonical == null)
-								throw 'Missing canonical layout for "${object.name}"';
-							canonical;
-						} else object;
-					}
-				]);
+			ir = IrProgramAssembler.assemble(generator, cached, irNatives, generated.objects, generated.interfaces,
+				generated.enums, generated.staticFields,
+				generated.initializers, entryPoint, irCNatives, generated.reflectable,
+				context.inlineCache().staticChecks, context.valueArrayTarget(),
+				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget()
+				&& compiler.ir.IrEntryPrune.enabled(), [for (object in generated.objects) {
+					if (object.isValue && object.nativeLayout != null) {
+						var canonical = canonicalObjectCache.get(object.name);
+						if (canonical == null)
+							throw 'Missing canonical layout for "${object.name}"';
+						canonical;
+					} else object;
+				}]);
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
@@ -805,7 +839,8 @@ class FrontendCompilation {
 			if (!context.developmentMetadata && !context.livePatching)
 				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
 			compiler.compilation.IrPassMeter.measureVoid("value-array-rewrite",
-				() -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32, valueArrayTarget));
+				() -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32,
+				valueArrayTarget));
 			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
 			// further value joins, so it needs a second pass after that rewrite.
 			if (context.isWasmTarget()) {
@@ -817,25 +852,33 @@ class FrontendCompilation {
 				}
 			}
 			if (!context.isWasmTarget()) {
-				compiler.compilation.IrPassMeter.measureVoid("value-constructors", () -> compiler.ir.IrValueConstructors.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization", () -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("scalar-arguments", () -> compiler.ir.IrScalarArguments.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("scalar-closures", () -> compiler.ir.IrScalarClosures.rewrite(ir));
-				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization", () -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-constructors",
+					() -> compiler.ir.IrValueConstructors.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization",
+					() -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("scalar-arguments",
+					() -> compiler.ir.IrScalarArguments.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("scalar-closures",
+					() -> compiler.ir.IrScalarClosures.rewrite(ir));
+				compiler.compilation.IrPassMeter.measureVoid("value-phi-scalarization",
+					() -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
 			}
 			var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
 			ir.functions = compiler.compilation.IrPassMeter.measure("scalar-replacement", () -> [
 				for (fn in ir.functions)
 					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
 			]);
-			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow", () -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
+			compiler.compilation.IrPassMeter.measureVoid("nullable-scalar-flow",
+				() -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
 			compiler.ir.IrEnumTagLowering.escapes(ir);
 			// Compare and publish the final IR even when only load/store forwarding is enabled.
 			inlinerChanged = compiler.compilation.IrPassMeter.measure("inliner",
-				() -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(), instrumentScope));
+				() -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(),
+				instrumentScope));
 			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
 			if (!context.livePatching && !context.isWasmTarget()) {
-				compiler.compilation.IrPassMeter.measureVoid("verifier", () -> IrVerifier.verifyReusing(ir, context.verifyMemo));
+				compiler.compilation.IrPassMeter.measureVoid("verifier",
+					() -> IrVerifier.verifyReusing(ir, context.verifyMemo));
 				if (checkingReuse) {
 					try
 						IrVerifier.verify(ir)
@@ -908,13 +951,15 @@ class FrontendCompilation {
 			reused: reusedPipeline,
 			reuseMiss: reuseMiss
 		};
-		}
+	}
 
 	/** Everything the IR pipeline reads for this build (see `PipelineInputs`). */
 	static function pipelineInputs(context:CompilationContext, generator:IrGenerator,
-			instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>, functions:Array<IrFunction>, initializers:Array<IrFunction>,
+			instrumentScope:Null<compiler.ir.IrInstrumentation.IrInstrumentationScope>, functions:Array<IrFunction>,
+			initializers:Array<IrFunction>,
 			natives:Array<compiler.ir.Ir.IrNative>, cNatives:Array<compiler.ir.Ir.IrCNative>, objects:Array<IrObject>,
-			interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>, staticFields:Array<compiler.ir.Ir.IrStaticField>,
+			interfaces:Array<compiler.ir.Ir.IrInterface>, enums:Array<compiler.ir.Ir.IrEnum>,
+			staticFields:Array<compiler.ir.Ir.IrStaticField>,
 			entryPoint:Null<String>, reflectable:Null<Array<String>>):PipelineInputs {
 		var objectNames:Map<String, Bool> = [for (object in objects) object.name => true];
 		var tables = new IrProgram(entryPoint == null ? "" : entryPoint);
@@ -924,8 +969,7 @@ class FrontendCompilation {
 		tables.interfaces = interfaces;
 		tables.enums = enums;
 		tables.staticFields = staticFields;
-		var environment = [
-			"defines:" + context.definesKey(),
+		var environment = ["defines:" + context.definesKey(),
 			"target:" + Std.string(context.valueArrayTarget()),
 			"wasm:" + context.isWasmTarget(),
 			"live:" + context.livePatching,
@@ -933,12 +977,12 @@ class FrontendCompilation {
 			"inline:" + context.inlineEnabled(),
 			"instrument:" + (instrumentScope == null ? "-" : Std.string(instrumentScope)),
 			"exports:" + context.exportedFunctions().join(","),
-			// Reflection ignores a name that has no object (a typed program can list an empty anonymous type no function uses), and no
-			// pass gives such a name an object later.
-			"reflectable:" + (reflectable == null ? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
+		// Reflection ignores a name that has no object (a typed program can list an empty anonymous type no function uses), and no
+		// pass gives such a name an object later.
+		"reflectable:"
+			+ (reflectable == null ? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
 			"entry:" + entryPoint,
-			"generator:" + generator.facts.inputState(generator.profile)
-		].join("\n");
+			"generator:" + generator.facts.inputState(generator.profile)].join("\n");
 		return {
 			functions: functions,
 			initializers: initializers,
@@ -978,7 +1022,8 @@ class FrontendCompilation {
 	 * program uses the literal. The helper is shared and recorded under one origin (the root's constructor), so the origin alone
 	 * would keep it after its last user is edited away or removed.
 	 */
-	static function pruneUnusedKeyPathHelpers(context:CompilationContext, names:Array<String>, rollbackModules:Map<String, ModuleState>):Void {
+	static function pruneUnusedKeyPathHelpers(context:CompilationContext, names:Array<String>,
+			rollbackModules:Map<String, ModuleState>):Void {
 		var used:Map<String, Bool> = [];
 		for (name in names) {
 			var state = context.modules.get(name);
@@ -994,7 +1039,7 @@ class FrontendCompilation {
 			var unused = [
 				for (cached in state.typedFunctions.keys())
 					if (StringTools.startsWith(cached, compiler.types.typing.KeyPathTyping.LITERAL_PREFIX)
-						&& !used.exists(keyPathLiteralOf(cached))) cached
+					&& !used.exists(keyPathLiteralOf(cached))) cached
 			];
 			if (unused.length > 0)
 				removeCachedFunctions(context.writableState(name, rollbackModules), unused);
@@ -1023,7 +1068,8 @@ class FrontendCompilation {
 	 * What unchanged cached functions, and the generated functions they call, still take from the previous typed program:
 	 * generic owners and the other generated classes (no source declares them) they refer to, and the static fields they read.
 	 */
-	static function retainedFromPrevious(context:CompilationContext, modules:Array<String>, selected:Map<String, Bool>, lowerToIr:Bool,
+	static function retainedFromPrevious(context:CompilationContext, modules:Array<String>, selected:Map<String, Bool>,
+			lowerToIr:Bool,
 			declared:Map<String, Bool>, previousSemantic:Null<SemanticProgram>):Null<RetainedFromPrevious> {
 		var result:Map<String, Bool> = [],
 			retainedEnums:Map<String, Bool> = [],
@@ -1037,10 +1083,11 @@ class FrontendCompilation {
 		var known:Map<String, Bool> = [
 			for (entry in previous.classes)
 				if (entry.specializationOrigin != null
-					|| (!declared.exists(entry.name) && !previouslyDeclared.exists(entry.name))) entry.name => true
-		], knownEnums:Map<String, Bool> = [
-			for (entry in previous.enums)
-				if (entry.specializationOrigin != null) entry.name => true
+				|| (!declared.exists(entry.name) && !previouslyDeclared.exists(entry.name))) entry.name => true
+		],
+			knownEnums:Map<String, Bool> = [
+				for (entry in previous.enums)
+					if (entry.specializationOrigin != null) entry.name => true
 			];
 		if (!known.keys().hasNext() && !knownEnums.keys().hasNext())
 			return {
@@ -1228,7 +1275,8 @@ class FrontendCompilation {
 	 * their source module is no longer reachable; unrelated functions in that module are still pruned.
 	 */
 	static function generatedHelpersStillCalled(modules:Map<String, compiler.modules.ModuleState>, names:Array<String>,
-			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, invalidated:Map<String, Bool>):Map<String, Bool> {
+			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>,
+			invalidated:Map<String, Bool>):Map<String, Bool> {
 		var reachable = [for (name in names) name => true];
 		var holders:Map<String, compiler.modules.ModuleState> = [],
 			kept:Map<String, Bool> = [],
@@ -1236,7 +1284,8 @@ class FrontendCompilation {
 		for (name => state in modules) {
 			for (cached => fn in state.typedFunctions) {
 				var shared = switch fn.role {
-					case ProviderFunction(_, operation): compiler.Provides.ProviderOperations.sharedAcrossModules(operation);
+					case ProviderFunction(_,
+						operation): compiler.Provides.ProviderOperations.sharedAcrossModules(operation);
 					default: false;
 				};
 				if (!shared)
@@ -1245,7 +1294,8 @@ class FrontendCompilation {
 					holders.set(cached, state);
 				var origin = fn.origin;
 				if (reachable.exists(name)
-					&& (typedByName.exists(cached) || (origin != null && owners.exists(origin) && !invalidated.exists(origin)))) {
+					&& (typedByName.exists(cached)
+					|| (origin != null && owners.exists(origin) && !invalidated.exists(origin)))) {
 					kept.set(cached, true);
 					pending.push(cached);
 				}
@@ -1282,7 +1332,8 @@ class FrontendCompilation {
 
 	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {
 		return sameNames([for (decl in previous.enums) decl.name], [for (decl in current.enums) decl.name])
-			&& sameNames([for (decl in previous.enumAbstracts) decl.name], [for (decl in current.enumAbstracts) decl.name])
+			&& sameNames([for (decl in previous.enumAbstracts) decl.name],
+			[for (decl in current.enumAbstracts) decl.name])
 			&& sameNames([for (decl in previous.abstracts) decl.name], [for (decl in current.abstracts) decl.name])
 			&& sameNames([for (decl in previous.interfaces) decl.name], [for (decl in current.interfaces) decl.name])
 			&& sameNames([for (decl in previous.classes) decl.name], [for (decl in current.classes) decl.name])
@@ -1305,11 +1356,14 @@ class FrontendCompilation {
 	 * kept for when their module becomes reachable again; only objects whose layout resolves
 	 * against this program's declarations are lowered.
 	 */
-	static function resolvedObjectsFrom(objectCache:Map<String, IrObject>, typed:TypedProgram, functionNames:Map<String, Bool>):Map<String, IrObject> {
-		var enums = [for (decl in typed.enums) decl.name => true], interfaces = [for (decl in typed.interfaces) decl.name => true], objects = [
-			for (name => object in objectCache)
-				if (!isOrphanedEnvironment(name, functionNames)) name => object
-		];
+	static function resolvedObjectsFrom(objectCache:Map<String, IrObject>, typed:TypedProgram,
+			functionNames:Map<String, Bool>):Map<String, IrObject> {
+		var enums = [for (decl in typed.enums) decl.name => true],
+			interfaces = [for (decl in typed.interfaces) decl.name => true],
+			objects = [
+				for (name => object in objectCache)
+					if (!isOrphanedEnvironment(name, functionNames)) name => object
+			];
 		var removed = true;
 		while (removed) {
 			removed = false;
@@ -1367,7 +1421,8 @@ class FrontendCompilation {
 		return false;
 	}
 
-	static function typeResolved(type:IrType, objects:Map<String, IrObject>, enums:Map<String, Bool>, interfaces:Map<String, Bool>):Bool
+	static function typeResolved(type:IrType, objects:Map<String, IrObject>, enums:Map<String, Bool>,
+			interfaces:Map<String, Bool>):Bool
 		return switch type {
 			case Obj(name): objects.exists(name);
 			case Enum(name): enums.exists(compiler.types.typing.EnumRuntimeType.declaration(name));
@@ -1393,13 +1448,14 @@ class FrontendCompilation {
 			var defaults:Map<String, compiler.ir.Ir.IrDefault> = [];
 			for (argument in signature.arguments) {
 				var value = argument.defaultValue;
-				var literal:Null<compiler.ir.Ir.IrDefault> = value == null ? (argument.optional == true ? NullDefault : null) : switch value {
-					case IntegerLiteral(number, _): IntDefault(number);
-					case FloatLiteral(number, _): FloatDefault(number);
-					case BoolLiteral(flag, _): BoolDefault(flag);
-					case NullLiteral(_): NullDefault;
-					default: null;
-				};
+				var literal:Null<compiler.ir.Ir.IrDefault> = value == null
+					? (argument.optional == true ? NullDefault : null) : switch value {
+						case IntegerLiteral(number, _): IntDefault(number);
+						case FloatLiteral(number, _): FloatDefault(number);
+						case BoolLiteral(flag, _): BoolDefault(flag);
+						case NullLiteral(_): NullDefault;
+						default: null;
+					};
 				if (literal != null)
 					defaults.set(argument.name, literal);
 			}
@@ -1485,14 +1541,22 @@ class FrontendCompilation {
 		return owners.get(className + ".new");
 	}
 
-	static function stage(name:String, ms:Float, allocation:PhaseAllocation):{name:String, ms:Float, allocation:PhaseAllocation}
-		return {name: name, ms: ms, allocation: allocation};
+	static function stage(name:String, ms:Float, allocation:PhaseAllocation): {
+		name: String,
+		ms: Float,
+		allocation: PhaseAllocation
+	} return {
+		name: name,
+		ms: ms,
+		allocation: allocation
+	};
 
 	/**
 	 * One frontend pass as a line: for each stage its time, bytes, objects and collections (with their time), and the parsing done inside
 	 * the pass (it happens in the graph and in semantic assembly, so it is shown apart rather than as a stage).
 	 */
-	static function passReport(number:Int, stages:Array<{name:String, ms:Float, allocation:PhaseAllocation}>, parseMs:Float, parseBytes:Float,
+	static function passReport(number:Int, stages:Array<{name:String, ms:Float, allocation:PhaseAllocation}>,
+			parseMs:Float, parseBytes:Float,
 			parseCount:Float):String {
 		var parts = ['pass$number'];
 		for (stage in stages) {
@@ -1503,9 +1567,12 @@ class FrontendCompilation {
 		return parts.join(" ");
 	}
 
-	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{var functionName:String; var target:String;}>,
-			typedFunctions:Array<compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, names:Array<String>,
-			rollbackModules:Map<String, ModuleState>):Bool {
+	static function includeTypedRuntimeDependencies(context:CompilationContext, dependencies:Array<{
+		var functionName:String;
+		var target:String;
+	}>,
+		typedFunctions:Array<compiler.types.TypedAst.TypedFunction>, owners:Map<String, String>, names:Array<String>,
+		rollbackModules:Map<String, ModuleState>):Bool {
 		var typedByName:Map<String, compiler.types.TypedAst.TypedFunction> = [];
 		for (fn in typedFunctions)
 			typedByName.set(fn.name, fn);
@@ -1523,13 +1590,15 @@ class FrontendCompilation {
 				continue;
 			var fn = typedByName.get(dependency.functionName),
 				owner:Null<String> = null;
-			if (StringTools.startsWith(dependency.functionName, compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX))
-				owner = context.declarationOwner(dependency.functionName.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
+			if (StringTools.startsWith(dependency.functionName,
+				compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX))
+				owner = context.declarationOwner(dependency.functionName
+					.substr(compiler.types.typing.RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX.length));
 			else if (fn != null)
 				owner = resolveFunctionModule(fn, owners, typedByName, []);
 			else if (owners.exists(dependency.functionName))
-				// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
-				owner = owners.get(dependency.functionName);
+			// Typed in an earlier build and kept: it is not among this pass's typed functions, but its module is known.
+			owner = owners.get(dependency.functionName);
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
@@ -1545,7 +1614,8 @@ class FrontendCompilation {
 		return changed;
 	}
 
-	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>):Void {
+	static function indexTypedInitializers(context:CompilationContext, typed:TypedProgram,
+			reindexedModules:Map<String, Bool>):Void {
 		for (classDecl in typed.classes)
 			for (module in reindexedModules.keys()) {
 				if (!context.modules.exists(module))
@@ -1556,13 +1626,15 @@ class FrontendCompilation {
 					continue;
 				for (field in classDecl.fields)
 					if (field.initializer != null)
-						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer, context.resolveSemanticSymbol,
+						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer,
+							context.resolveSemanticSymbol,
 							context.resolveSemanticEnumCase);
 			}
 	}
 
 	/** Replace provisional edges with dependencies proven by typed resolution. */
-	static function publishResolvedDependencies(context:CompilationContext, typed:TypedProgram, reindexedModules:Map<String, Bool>,
+	static function publishResolvedDependencies(context:CompilationContext, typed:TypedProgram,
+			reindexedModules:Map<String, Bool>,
 			rollbackModules:Map<String, ModuleState>):Void {
 		for (module in reindexedModules.keys()) {
 			var state = context.writableState(module, rollbackModules),
@@ -1572,38 +1644,49 @@ class FrontendCompilation {
 			var resolved:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>> = [];
 			for (owner => dependencies in state.semanticDependencies)
 				for (dependency in dependencies)
-					if (dependency.kind != SemanticDependencyKind.Body && dependency.kind != SemanticDependencyKind.Initializer) {
-						var targetId = dependency.targetId == null ? context.resolveSemanticType(dependency.target) : dependency.targetId;
-						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target, targetId);
+					if (dependency.kind != SemanticDependencyKind.Body
+						&& dependency.kind != SemanticDependencyKind.Initializer) {
+						var targetId = dependency.targetId == null
+							? context.resolveSemanticType(dependency.target) : dependency.targetId;
+						SemanticDependencyCollector.addDependency(resolved, owner, dependency.kind, dependency.target,
+							targetId);
 					}
 			for (dependency in model.index.resolvedDependencies())
-				SemanticDependencyCollector.addDependency(resolved, dependency.owner, dependency.kind, dependency.target, dependency.targetId);
+				SemanticDependencyCollector.addDependency(resolved, dependency.owner, dependency.kind,
+					dependency.target, dependency.targetId);
 			for (name => fn in state.typedFunctions)
 				if (state.typedSourceRevisions.get(name) == state.revision) {
 					for (argument in fn.arguments)
-						addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, argument.type, context);
+						addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, argument.type,
+							context);
 					addResolvedTypeDependency(resolved, name, SemanticDependencyKind.Signature, fn.result, context);
 				}
 			for (classDecl in typed.classes)
 				if (modelOwnsType(model.program, classDecl.name)) {
 					if (classDecl.base != null)
-						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, classDecl.base, context);
+						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout,
+							classDecl.base, context);
 					for (interfaceName in classDecl.interfaces)
-						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, interfaceName, context);
+						addResolvedNamedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout,
+							interfaceName, context);
 					for (field in classDecl.fields)
-						addResolvedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, field.type, context);
+						addResolvedTypeDependency(resolved, classDecl.name, SemanticDependencyKind.Layout, field.type,
+							context);
 				}
 			state.semanticDependencies = resolved;
 		}
 	}
 
-	static function addResolvedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
+	static function addResolvedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
+			owner:String,
 			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext):Void
 		addResolvedTypeDependencyWithin(result, owner, kind, type, context, []);
 
 	/** `explored` holds the anonymous structures already walked: one can contain itself, and a repeat adds nothing. */
-	static function addResolvedTypeDependencyWithin(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
-			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext, explored:Array<Array<compiler.types.Type.AnonymousField>>):Void
+	static function addResolvedTypeDependencyWithin(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
+			owner:String,
+			kind:SemanticDependencyKind, type:CompilerType, context:CompilationContext,
+			explored:Array<Array<compiler.types.Type.AnonymousField>>):Void
 		switch type {
 			case TAbstract(name, arguments, representation):
 				addResolvedNamedTypeDependency(result, owner, kind, name, context);
@@ -1632,7 +1715,8 @@ class FrontendCompilation {
 			default:
 		}
 
-	static function addResolvedNamedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>, owner:String,
+	static function addResolvedNamedTypeDependency(result:Map<String, Array<compiler.modules.ModuleState.SemanticDependency>>,
+			owner:String,
 			kind:SemanticDependencyKind, target:String, context:CompilationContext):Void {
 		var targetId = context.resolveSemanticType(target);
 		if (targetId != null)

@@ -27,8 +27,10 @@ class DspInstrument {
 	/** Future notes release peers in this engine-local group; zero disables choking. */
 	public function setChokeGroup(group:Int):Void {
 		ensureLive();
-		if (group < 0 || group > 255) throw BindingError.invalidArgument("DspInstrument.setChokeGroup", "Choke group must be 0..255");
-		AudioResult.check(NativeKitAudio.nk_audio_dsp_instrument_set_choke_group(value, group), "audio.dsp.instrument.chokeGroup");
+		if (group < 0 || group > 255) throw BindingError.invalidArgument("DspInstrument.setChokeGroup",
+			"Choke group must be 0..255");
+		AudioResult.check(NativeKitAudio.nk_audio_dsp_instrument_set_choke_group(value, group),
+			"audio.dsp.instrument.chokeGroup");
 	}
 
 	/** Sets an instrument parameter between render calls. */
@@ -40,10 +42,11 @@ class DspInstrument {
 
 	/** Sets one oscillator-specific parameter between render calls. */
 	public function setOscillatorParameter(oscillatorIndex:Int, parameter:DspOscillatorParameter,
-		value:Float):Void {
+			value:Float):Void {
 		ensureLive();
 		if (oscillatorIndex < 0)
-			throw BindingError.invalidArgument("DspInstrument.setOscillatorParameter", "DSP oscillator parameter index must not be negative");
+			throw BindingError.invalidArgument("DspInstrument.setOscillatorParameter",
+				"DSP oscillator parameter index must not be negative");
 		AudioResult.check(NativeKitAudio.nk_audio_dsp_instrument_set_oscillator_parameter(this.value,
 			oscillatorIndex, parameter, value), "audio.dsp.instrument.setOscillatorParameter");
 	}
@@ -60,7 +63,8 @@ class DspInstrument {
 	public function oscillatorParameter(oscillatorIndex:Int, parameter:DspOscillatorParameter):Float {
 		ensureLive();
 		if (oscillatorIndex < 0)
-			throw BindingError.invalidArgument("DspInstrument.oscillatorParameter", "DSP oscillator parameter index must not be negative");
+			throw BindingError.invalidArgument("DspInstrument.oscillatorParameter",
+				"DSP oscillator parameter index must not be negative");
 		var result = NativeKitAudio.nk_audio_dsp_instrument_get_oscillator_parameter(this.value,
 			oscillatorIndex, parameter);
 		AudioResult.check(result.status, "audio.dsp.instrument.oscillatorParameter");

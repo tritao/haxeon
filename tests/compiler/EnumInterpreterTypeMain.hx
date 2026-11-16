@@ -16,7 +16,8 @@ class EnumInterpreterTypeMain {
 			var instruction = block.instructions[index];
 			switch instruction.value {
 				case Call(out, "__std_is_of_type", args):
-					block.instructions[index] = new Located(Call(out, "__std_is_exact_type", args), instruction.provenance);
+					block.instructions[index] = new Located(Call(out, "__std_is_exact_type", args),
+						instruction.provenance);
 					changed = true;
 				default:
 			}

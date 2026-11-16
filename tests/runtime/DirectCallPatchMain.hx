@@ -71,7 +71,8 @@ class DirectCallPatchMain {
 		// The callers reach their callees with a call to the callee's own entry, not through the stub table. x86-64 and AArch64
 		// call a patchable function directly (HL_JIT_DIRECT_PATCHABLE_CALLS); elsewhere the hooks answer -1, every call goes
 		// through the function's stub, and only the results below are checked.
-		var directCalls = Runtime.callsDirectly(live, build.functionIds.get("Main.callLeaf"), build.functionIds.get("Calc.leaf")) >= 0;
+		var directCalls = Runtime.callsDirectly(live, build.functionIds.get("Main.callLeaf"),
+			build.functionIds.get("Calc.leaf")) >= 0;
 		var direct = [
 			"Main.callLeaf" => "Calc.leaf",
 			"Main.callTiny" => "Calc.tiny",
@@ -80,9 +81,11 @@ class DirectCallPatchMain {
 			"Main.callCatch" => "Calc.fail"
 		];
 		for (caller => callee in direct)
-			if (directCalls && Runtime.callsDirectly(live, build.functionIds.get(caller), build.functionIds.get(callee)) != 1)
+			if (directCalls
+				&& Runtime.callsDirectly(live, build.functionIds.get(caller), build.functionIds.get(callee)) != 1)
 				throw '$caller does not call $callee directly';
-		if (directCalls && Runtime.callsDirectly(live, build.functionIds.get("Calc.fact"), build.functionIds.get("Calc.fact")) != 1)
+		if (directCalls
+			&& Runtime.callsDirectly(live, build.functionIds.get("Calc.fact"), build.functionIds.get("Calc.fact")) != 1)
 			throw "A recursive function does not call itself directly";
 		for (name in ["Calc.leaf", "Calc.tiny", "Calc.fact", "Calc.fail"])
 			if (directCalls && Runtime.entryState(live, build.functionIds.get(name)) != 0)
@@ -99,7 +102,8 @@ class DirectCallPatchMain {
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null)
 				throw 'The edit for ${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
-			Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			Runtime.patchSet(live,
+				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			build = changed;
 			check(edit.label, edit.v, edit.extra);
 			// Every patched function's original entry now jumps to its stub with one atomic store.

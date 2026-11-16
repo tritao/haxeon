@@ -6,7 +6,8 @@ function main():Int {
 	var open = parseError("<robot><link/>");
 	if (open == null || open.message != "Unclosed node <robot>")
 		return 2;
-	if (parseError("</robot>") == null || parseError("<robot a=\"1\" a=\"2\"/>") == null || parseError("<robot a=1/>") == null)
+	if (parseError("</robot>") == null || parseError("<robot a=\"1\" a=\"2\"/>") == null
+		|| parseError("<robot a=1/>") == null)
 		return 3;
 	var strict = parseError("<a>&bogus;</a>", true);
 	if (strict == null || strict.message != "Undefined entity: bogus")

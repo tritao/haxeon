@@ -14,7 +14,8 @@ import compiler.types.analysis.Scope;
  */
 class LoopFlow {
 	/** The same for a comprehension, whose predicate and result expressions run once per item. */
-	public static function enterExpressions(session:TypingSession, scope:Scope, expressions:Array<AstExpression>, span:SourceSpan,
+	public static function enterExpressions(session:TypingSession, scope:Scope, expressions:Array<AstExpression>,
+			span:SourceSpan,
 			?loopVariables:Array<String>):Void
 		enter(session, scope, [for (expression in expressions) Expression(expression, span)], loopVariables);
 
@@ -22,7 +23,8 @@ class LoopFlow {
 	 * Forget, in `scope`, every fact the loop made of `statements` could invalidate. `loopVariables` are the names the
 	 * loop itself binds (a for-in's element), which are locals of the body even though the loop scope is not open yet.
 	 */
-	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>, ?loopVariables:Array<String>):Void {
+	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>,
+			?loopVariables:Array<String>):Void {
 		var visible = scope.visibleDeclarations(),
 			assigned = AssignedDeclarations.within(statements, visible).declarations;
 		for (name => declaration in visible)
@@ -41,7 +43,8 @@ class LoopFlow {
 					arrays.remove(name);
 					maps.remove(name);
 				}
-		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, privateMaps, arrays, maps);
+		var stores = session.bodyStores(statements, locals, session.currentContext.lexicalOwner, privateMaps, arrays,
+			maps);
 		if (stores == null)
 			session.invalidateUnknownCall(scope);
 		else {

@@ -30,8 +30,13 @@ class NativeEvent {
 	@:allow(haxeon.platform.event.EventPump)
 	private function new(event:Event) {
 		this.event = event;
-		kind = event.get_kind(); source = event.get_source(); request = event.get_request_id();
-		result = event.get_result(); flags = event.get_flags(); dataCount = event.get_data_count(); dataSize = event.get_data_size();
+		kind = event.get_kind();
+		source = event.get_source();
+		request = event.get_request_id();
+		result = event.get_result();
+		flags = event.get_flags();
+		dataCount = event.get_data_count();
+		dataSize = event.get_data_size();
 		released = false;
 	}
 
@@ -61,8 +66,8 @@ class NativeEvent {
 
 	/** Decodes known event formats without releasing this event. */
 	public function decode():PlatformEvent {
-		if (kind == EventKind.HttpHeaders || kind == EventKind.HttpComplete ||
-			kind == EventKind.HttpDataAvailable || kind == EventKind.HttpProgress)
+		if (kind == EventKind.HttpHeaders || kind == EventKind.HttpComplete || kind == EventKind.HttpDataAvailable
+			|| kind == EventKind.HttpProgress)
 			return HttpEventDecoder.decode(this);
 		return decodeSnapshot(snapshot());
 	}
@@ -95,5 +100,6 @@ class NativeEvent {
 	public function isReleased():Bool return released;
 
 	function ensureOpen():Void
-		if (released) throw BindingError.disposed("NativeEvent.ensureOpen", "NativeKit event has already been released");
+		if (released) throw BindingError.disposed("NativeEvent.ensureOpen",
+			"NativeKit event has already been released");
 }

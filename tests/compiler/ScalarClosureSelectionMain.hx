@@ -62,7 +62,8 @@ class ScalarClosureSelectionMain {
 			if (!redirected)
 				throw "Scalar closure was not redirected";
 			for (i in 3...original.length)
-				if (compiler.ir.codec.IrFunctionStateCodec.encode(original[i]).compare(compiler.ir.codec.IrFunctionStateCodec.encode(p.functions[i])) != 0)
+				if (compiler.ir.codec.IrFunctionStateCodec.encode(original[i])
+					.compare(compiler.ir.codec.IrFunctionStateCodec.encode(p.functions[i])) != 0)
 					throw "Unrelated closure body state changed";
 			compiler.ir.IrVerifier.verify(p);
 		}

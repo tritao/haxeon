@@ -10,7 +10,8 @@ class NativeNode {
 }
 
 function main():Int {
-	if (sizeof<NativeNode>() != 32 || alignof<NativeNode>() != 8 || offsetof<NativeNode>("value") != 8 || offsetof<NativeNode>("ratio") != 16
+	if (sizeof<NativeNode>() != 32 || alignof<NativeNode>() != 8 || offsetof<NativeNode>("value") != 8
+		|| offsetof<NativeNode>("ratio") != 16
 		|| offsetof<NativeNode>("next") != 24)
 		return 1;
 	var arena = new Arena(32);
@@ -33,13 +34,15 @@ function main():Int {
 	var secondTagValue = secondTag.load();
 	var linkTag:RawPtr<UInt8> = link.byteOffset(offsetof<NativeNode>("tag")).castTo();
 	var empty:RawPtr<Int> = RawPtr.nullPtr();
-	var correct = firstTag == 7 && firstValue == 9001 && firstRatio == 1.25 && secondTagValue == 9 && !link.isNull() && linkTag.load() == 9 && empty.isNull();
+	var correct = firstTag == 7 && firstValue == 9001 && firstRatio == 1.25 && secondTagValue == 9 && !link.isNull()
+		&& linkTag.load() == 9 && empty.isNull();
 	var ints:RawPtr<Int32> = arena.alloc(4);
 	ints.offset(0).store(11);
 	ints.offset(1).store(22);
 	ints.offset(2).store(33);
 	ints.offset(3).store(44);
-	correct = correct && ints.offset(0).load() == 11 && ints.offset(1).load() == 22 && ints.offset(2).load() == 33 && ints.offset(3).load() == 44;
+	correct = correct && ints.offset(0).load() == 11 && ints.offset(1).load() == 22 && ints.offset(2).load() == 33
+		&& ints.offset(3).load() == 44;
 	// Branching operands keep evaluation order and stay valid across the join block.
 	var pick = Sys.args().length == 0;
 	(pick ? ints : second.castTo()).offset(pick ? 2 : 0).store(pick ? 55 : 0);

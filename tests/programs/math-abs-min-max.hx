@@ -20,7 +20,8 @@ function main():Int {
 
 	// min and max with a NaN operand are NaN, whichever side it is on.
 	var nan = Math.NaN;
-	if (!isNaN(Math.min(nan, 1.0)) || !isNaN(Math.min(1.0, nan)) || !isNaN(Math.max(nan, 1.0)) || !isNaN(Math.max(1.0, nan)))
+	if (!isNaN(Math.min(nan, 1.0)) || !isNaN(Math.min(1.0, nan)) || !isNaN(Math.max(nan, 1.0))
+		|| !isNaN(Math.max(1.0, nan)))
 		return 4;
 	if (!isNaN(Math.min(nan, nan))
 		|| !isNaN(Math.max(nan, nan))
@@ -29,9 +30,11 @@ function main():Int {
 		return 5;
 
 	// Ordinary operands.
-	if (Math.min(1.0, 2.0) != 1.0 || Math.min(2.0, 1.0) != 1.0 || Math.max(1.0, 2.0) != 2.0 || Math.max(2.0, 1.0) != 2.0)
+	if (Math.min(1.0, 2.0) != 1.0 || Math.min(2.0, 1.0) != 1.0 || Math.max(1.0, 2.0) != 2.0
+		|| Math.max(2.0, 1.0) != 2.0)
 		return 6;
-	if (Math.min(-3.0, 3.0) != -3.0 || Math.max(-3.0, 3.0) != 3.0 || Math.min(4.0, 4.0) != 4.0 || Math.max(4.0, 4.0) != 4.0)
+	if (Math.min(-3.0, 3.0) != -3.0 || Math.max(-3.0, 3.0) != 3.0 || Math.min(4.0, 4.0) != 4.0
+		|| Math.max(4.0, 4.0) != 4.0)
 		return 7;
 	if (Math.min(Math.NEGATIVE_INFINITY, 5.0) != Math.NEGATIVE_INFINITY
 		|| Math.max(Math.POSITIVE_INFINITY, 5.0) != Math.POSITIVE_INFINITY

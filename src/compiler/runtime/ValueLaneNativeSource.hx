@@ -38,7 +38,8 @@ class ValueLaneNativeSource {
 	static function variable(value:IrValue):String return 'v${value.id}';
 	static function declaration(value:IrValue):String return type(value.type) + " " + variable(value);
 	static function signature(fn:IrFunction):String
-		return 'static ${type(fn.result)} ${name(fn.name)}(' + (fn.arguments.length == 0 ? "void" : [for (arg in fn.arguments) declaration(arg)].join(", ")) + ")";
+		return 'static ${type(fn.result)} ${name(fn.name)}('
+			+ (fn.arguments.length == 0 ? "void" : [for (arg in fn.arguments) declaration(arg)].join(", ")) + ")";
 
 	static function emitFunction(out:StringBuf, fn:IrFunction):Void {
 		out.add("\n" + signature(fn) + " {\n");
@@ -47,7 +48,10 @@ class ValueLaneNativeSource {
 			var value = IrOperands.output(item.value);
 			if (value != null && value.type != Void) {
 				out.add("\t" + declaration(value) + ";\n");
-				switch item.value { case Phi(_, _): out.add('\t${type(value.type)} p${value.id};\n'); default: }
+				switch item.value {
+					case Phi(_, _): out.add('\t${type(value.type)} p${value.id};\n');
+					default:
+				}
 			}
 		}
 		function edge(from:Int, target:Int):String {
@@ -79,16 +83,19 @@ class ValueLaneNativeSource {
 					case Less(_, a, z): '${variable(a)} < ${variable(z)}';
 					case LessEqual(_, a, z): '${variable(a)} <= ${variable(z)}';
 					case Equal(_, a, z): '${variable(a)} == ${variable(z)}';
-					case Call(_, callee, arguments): name(callee) + "(" + [for (arg in arguments) variable(arg)].join(", ") + ")";
+					case Call(_, callee,
+						arguments): name(callee) + "(" + [for (arg in arguments) variable(arg)].join(", ") + ")";
 					default: throw 'Unsupported lane runtime C instruction: ${item.value}';
 				};
-				if (expression != null) out.add("\t" + (value.type == Void ? "" : variable(value) + " = ") + expression + ";\n");
+				if (expression != null)
+					out.add("\t" + (value.type == Void ?"":variable(value) + " = ") + expression + ";\n");
 			}
 			if (block.terminator == null) throw 'Unterminated lane runtime block ${block.id}';
 			out.add("\t" + (switch block.terminator.value {
 				case Jump(target): edge(block.id, target);
-				case Branch(condition, yes, no): 'if (${variable(condition)}) { ${edge(block.id, yes)} } else { ${edge(block.id, no)} }';
-				case Return(value): value.type == Void ? "return;" : 'return ${variable(value)};';
+				case Branch(condition, yes,
+					no): 'if (${variable(condition)}) { ${edge(block.id, yes)} } else { ${edge(block.id, no)} }';
+				case Return(value): value.type == Void ?"return;":'return ${variable(value)};';
 				case Throw(value): 'hl_throw(${variable(value)}); abort();';
 				default: throw 'Unsupported lane runtime C terminator: ${block.terminator.value}';
 			}) + "\n");

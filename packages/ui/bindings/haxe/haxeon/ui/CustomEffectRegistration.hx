@@ -17,12 +17,11 @@ class CustomEffectRegistration {
 	public final metalMacosFragment:Null<String>;
 
 	public function new(definition:CustomEffectDefinition, glsl410Fragment:Null<String> = null,
-		glsl300esFragment:Null<String> = null, hlsl5Fragment:Null<String> = null,
-		metalMacosFragment:Null<String> = null) {
+			glsl300esFragment:Null<String> = null, hlsl5Fragment:Null<String> = null,
+			metalMacosFragment:Null<String> = null) {
 		if (definition == null)
 			throw "Custom effect registrations require a definition";
-		if (glsl410Fragment == null && glsl300esFragment == null && hlsl5Fragment == null &&
-			metalMacosFragment == null)
+		if (glsl410Fragment == null && glsl300esFragment == null && hlsl5Fragment == null && metalMacosFragment == null)
 			throw "Custom effect registrations require at least one shader fragment";
 		this.definition = definition;
 		this.glsl410Fragment = glsl410Fragment;

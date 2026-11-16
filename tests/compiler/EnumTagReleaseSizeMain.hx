@@ -13,7 +13,8 @@ class EnumTagReleaseSizeMain {
 					throw target + " tag representation overhead: " + nominal.length + " > " + integer.length;
 				run(target, integer);
 				run(target, nominal);
-				Sys.println("SIZE " + target + " inline=" + inlining + " Int=" + integer.length + " enum=" + nominal.length);
+				Sys.println("SIZE " + target + " inline=" + inlining + " Int=" + integer.length + " enum="
+					+ nominal.length);
 				checkReflection(target, inlining);
 			}
 	}
@@ -31,7 +32,8 @@ class EnumTagReleaseSizeMain {
 	static function compile(target:String, inlining:Bool, nominal:Bool):haxe.io.Bytes {
 		var session = newSession(target, inlining);
 		session.update("Main.hx",
-			(nominal ? 'enum Mode implements Equatable { Off; On; Hot; }' : 'enum abstract Mode(Int) { var Off=1; var On=2; var Hot=3; }')
+			(nominal ? 'enum Mode implements Equatable { Off; On; Hot; }'
+			: 'enum abstract Mode(Int) { var Off=1; var On=2; var Hot=3; }')
 			+ '\nclass Holder { public var mode:Mode; public function new(mode:Mode) this.mode=mode; }'
 			+ '\nfunction same(a:Mode,b:Mode):Bool return a==b;'
 			+ '\nfunction main():Int { var x:Dynamic=17, y:Dynamic=18; var h=new Holder(On), a:Array<Mode>=[Off,On,Hot], f:Mode->Mode=function(v:Mode):Mode return v; '
@@ -64,9 +66,17 @@ class EnumTagReleaseSizeMain {
 	}
 
 	static function encode(program:IrProgram, target:String):haxe.io.Bytes
-		return target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, developmentMetadata: false, debugNames: true})
+		return target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+			target: HashLink,
+			developmentMetadata: false,
+			debugNames: true
+		})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(program,
-				{target: target == "wasm32" ? Wasm32 : WasmGc, developmentMetadata: false, debugNames: true})
+			{
+				target: target == "wasm32" ? Wasm32 : WasmGc,
+				developmentMetadata: false,
+				debugNames: true
+			})
 				.bytes;
 
 	static function run(target:String, bytes:haxe.io.Bytes):Void {
@@ -76,9 +86,14 @@ class EnumTagReleaseSizeMain {
 		var path = temp + "/tag-release-size-" + Std.random(0x7fffffff) + (target == "hl" ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var script = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var script =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("release enum tag semantics");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", script, path]);
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"-e",
+				script,
+				path
+			]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();

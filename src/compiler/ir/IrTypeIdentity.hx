@@ -25,12 +25,27 @@ class IrTypeIdentity {
 	/** Whether two types have the same identity (the same `text`), compared without building either text. */
 	public static function same(a:IrType, b:IrType):Bool
 		return switch [a, b] {
-			case [Void, Void], [I32, I32], [I64, I64], [Bool, Bool], [F32, F32], [F64, F64], [Bytes, Bytes], [RawPtr, RawPtr], [ManagedBytes, ManagedBytes],
-				[Dyn, Dyn], [TypeRef, TypeRef]:
+			case [Void, Void], [I32, I32], [I64, I64], [Bool, Bool], [F32, F32], [F64, F64], [Bytes, Bytes], [
+				RawPtr,
+				RawPtr
+			], [
+				ManagedBytes,
+				ManagedBytes
+			],
+				[
+					Dyn,
+					Dyn
+				], [
+					TypeRef,
+					TypeRef
+				]:
 				true;
 			case [Nullable(x), Nullable(y)], [Array(x), Array(y)], [Iterator(x), Iterator(y)]:
 				same(x, y);
-			case [Enum(x), Enum(y)], [EnumTag(x), EnumTag(y)], [Obj(x), Obj(y)], [Abstract(x), Abstract(y)], [Virtual(x), Virtual(y)]:
+			case [Enum(x), Enum(y)], [EnumTag(x), EnumTag(y)], [Obj(x), Obj(y)], [Abstract(x), Abstract(y)], [
+				Virtual(x),
+				Virtual(y)
+			]:
 				x == y;
 			case [Function(xs, x), Function(ys, y)]: sameList(xs, ys) && same(x, y);
 			default:

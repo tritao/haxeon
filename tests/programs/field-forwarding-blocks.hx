@@ -1,12 +1,16 @@
 class ForwardBox {
 	public var value:Int;
 	public var other:Int;
-	public function new(value:Int) { this.value = value; other = 0; }
+	public function new(value:Int) {
+		this.value = value;
+		other = 0;
+	}
 }
 
 function acrossJoin(object:ForwardBox, branch:Bool):Int {
 	var first = object.value;
-	if (branch) object.other = 1; else object.other = 2;
+	if (branch) object.other = 1;
+	else object.other = 2;
 	return first + object.value;
 }
 

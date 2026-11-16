@@ -17,7 +17,8 @@ class HldiClientMain {
 
 		var client = new HldiClient("127.0.0.1", port, 3.0, args.length == 2 ? args[1] : null);
 		require(client.hello.version == 2, "unexpected protocol version");
-		require(client.hello.capabilities & (HldiClient.CAP_PROFILER | HldiClient.CAP_SYMBOLS) == 3, "missing profiler capabilities");
+		require(client.hello.capabilities & (HldiClient.CAP_PROFILER | HldiClient.CAP_SYMBOLS) == 3,
+			"missing profiler capabilities");
 		var session = new ProfilerSession(client);
 		try {
 			session.start(500);

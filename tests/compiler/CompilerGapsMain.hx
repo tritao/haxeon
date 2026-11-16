@@ -60,12 +60,18 @@ class CompilerGapsMain {
 							throw 'Compiler gap case $index failed';
 					} else if (c == warm)
 						File.saveBytes(SuiteOutput.path('compiler-gaps-$target-$index.wasm'),
-							new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+							new WasmBackend().compile(result.ir, {
+								target: target,
+								debugNames: true
+							}).bytes);
 				}
 		}
 
 		var invalid = [
-			{code: "E1016", text: 'typedef Node={value:Int,?next:Node};function main():Int{var d:Dynamic={value:42};var x:Node=d;return x.value;}'},
+			{
+				code: "E1016",
+				text: 'typedef Node={value:Int,?next:Node};function main():Int{var d:Dynamic={value:42};var x:Node=d;return x.value;}'
+			},
 			{
 				code: "E1005",
 				text: 'class Box{public var value:Int=42;public function new(){}} function main():Int{var x:Null<Box>=new Box();if(x==null)return 1;[1].exists(v->{x=null;return true;});return x.value;}'

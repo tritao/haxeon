@@ -14,16 +14,26 @@ import project.ResolvedPackage;
 
 /** Lowers a project FFI recipe into a deterministic header-import action. */
 class FfiProvider {
-	public static function action(resolvedPackage:ResolvedPackage, ffi:ResolvedFfiImport, context:LoweringContext, actionId:ActionId,
+	public static function action(resolvedPackage:ResolvedPackage, ffi:ResolvedFfiImport, context:LoweringContext,
+			actionId:ActionId,
 			output:String):ExecutionAction {
 		var useWrapper = Sys.systemName() != "Windows",
-			compiler = useWrapper ? Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]) : Path.join([context.compilerHome, ".tools", "haxe", "haxe.exe"]),
+			compiler = useWrapper ? Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]) : Path.join([
+				context.compilerHome,
+				".tools",
+				"haxe",
+				"haxe.exe"
+			]),
 			projectionDirectory = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
-			projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name), arguments = [
+			projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name),
+			arguments = [
 				"--manifest=" + ffi.manifestPath,
 				"--target=" + clangTarget(context.environment.target),
 				"--output=" + output
-			], inputs = ffi.inputs(), outputs = [output], thunkSource = context.layout.ffiThunkSourcePath(resolvedPackage.name, ffi.config.name);
+			],
+			inputs = ffi.inputs(),
+			outputs = [output],
+			thunkSource = context.layout.ffiThunkSourcePath(resolvedPackage.name, ffi.config.name);
 		if (!useWrapper) {
 			arguments.unshift("FfiImportMain");
 			arguments.unshift("--run");
@@ -47,8 +57,10 @@ class FfiProvider {
 			outputs.push(projectionDirectory);
 			outputs.push(projectionManifest);
 		}
-		return new ExecutionAction(actionId, [], inputs, outputs, 'Import ${ffi.config.language} FFI ${ffi.config.name} -> $output',
-			Process(compiler, arguments, context.compilerHome, new Map()), true, false, false, ffi.config.projection ? [projectionDirectory] : []);
+		return new ExecutionAction(actionId, [], inputs, outputs,
+			'Import ${ffi.config.language} FFI ${ffi.config.name} -> $output',
+			Process(compiler, arguments, context.compilerHome, new Map()), true, false, false,
+			ffi.config.projection ? [projectionDirectory] : []);
 	}
 
 	public static function clangTarget(target:Target):String {

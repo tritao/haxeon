@@ -11,11 +11,13 @@ import project.ResolvedPackage;
 
 /** Lowers C sources to object files and only the native library artifacts in the plan. */
 class NativeSourcesProvider {
-	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>, context:LoweringContext):{
-		actions:Array<ExecutionAction>,
-		artifactActions:Map<String, Array<ActionId>>
-	} {
-		var library = new NativeLibrary(resolvedPackage.name, resolvedPackage.nativeSources, resolvedPackage.includeDirs),
+	public static function lowerPackage(resolvedPackage:ResolvedPackage, artifacts:Array<Artifact>,
+			context:LoweringContext): {
+				actions: Array<ExecutionAction>,
+				artifactActions: Map<String, Array<ActionId>>
+			} {
+		var library = new NativeLibrary(resolvedPackage.name, resolvedPackage.nativeSources,
+			resolvedPackage.includeDirs),
 			environment = context.environment,
 			layout = context.layout,
 			toolchain = new NativeToolchain(environment, context.compilerHome),
@@ -28,19 +30,18 @@ class NativeSourcesProvider {
 			if (artifact.id.packageId == library.packageName && artifact.id.kind == ArtifactKind.NativeObject) {
 				var sourceRelative = artifact.details.get("source"),
 					ffiName = artifact.details.get("ffi"),
-					source = ffiName == null ? Path.join([resolvedPackage.root, sourceRelative]) : layout.ffiThunkSourcePath(library.packageName, ffiName),
+					source = ffiName == null ? Path.join([resolvedPackage.root, sourceRelative])
+						: layout.ffiThunkSourcePath(library.packageName, ffiName),
 					output = layout.objectPath(library.packageName, sourceRelative),
 					id = new ActionId('native-compile:${artifact.id.key()}'),
 					inputs = [source],
-					dependencies:Array<ActionId> = [
-						for (dependency in artifact.dependencies)
-							switch dependency.kind {
-								case ArtifactKind.FfiInterface:
-									new ActionId('ffi-import:${dependency.key()}');
-								case _:
-									throw 'Native object ${artifact.id} has unsupported dependency $dependency';
-							}
-					];
+					dependencies:Array<ActionId> = [for (dependency in artifact.dependencies)
+						switch dependency.kind {
+							case ArtifactKind.FfiInterface:
+								new ActionId('ffi-import:${dependency.key()}');
+							case _:
+								throw 'Native object ${artifact.id} has unsupported dependency $dependency';
+						}];
 				if (ffiName == null)
 					inputs = inputs.concat(NativeDependencyScanner.dependencies(source, includeDirs));
 				else {
@@ -56,16 +57,18 @@ class NativeSourcesProvider {
 					language = cxx ? "C++" : "C",
 					standard = artifact.details.get("standard");
 				objectPaths.set(artifact.id.key(), output);
-				actions.push(new ExecutionAction(id, dependencies, inputs, [output], 'Compile $language $source -> $output',
-					Process(toolchain.compileCommand(source), toolchain.compileArguments(source, output, includeDirs, standard, resolvedPackage.root),
-						resolvedPackage.root, new Map())));
+				actions.push(new ExecutionAction(id, dependencies, inputs, [output],
+					'Compile $language $source -> $output',
+					Process(toolchain.compileCommand(source),
+					toolchain.compileArguments(source, output, includeDirs, standard, resolvedPackage.root),
+					resolvedPackage.root, new Map())));
 				artifactActions.set(artifact.id.key(), [id]);
 			}
 		for (artifact in artifacts)
 			if (artifact.id.packageId == library.packageName
 				&& (artifact.id.kind == ArtifactKind.NativeStaticLibrary
-					|| artifact.id.kind == ArtifactKind.NativeSharedLibrary
-					|| artifact.id.kind == ArtifactKind.FfiNativeSharedLibrary)) {
+				|| artifact.id.kind == ArtifactKind.NativeSharedLibrary
+				|| artifact.id.kind == ArtifactKind.FfiNativeSharedLibrary)) {
 				var objects = [for (dependency in artifact.dependencies) objectPaths.get(dependency.key())],
 					dependencies = [
 						for (dependency in artifact.dependencies)
@@ -74,15 +77,20 @@ class NativeSourcesProvider {
 					isStatic = artifact.id.kind == ArtifactKind.NativeStaticLibrary,
 					ffiName = artifact.details.get("ffi"),
 					output = isStatic ? layout.nativeStaticLibraryPath(library.packageName,
-						library.packageName) : ffiName == null ? layout.haxeonNativeLibraryPath(library.packageName) : layout.ffiNativeLibraryPath(library.packageName,
-							ffiName),
+						library.packageName) : ffiName == null ? layout.haxeonNativeLibraryPath(library.packageName)
+						: layout.ffiNativeLibraryPath(library.packageName,
+						ffiName),
 					id = new ActionId('${isStatic ? "native-archive" : "native-link"}:${artifact.id.key()}'),
 					command = isStatic ? toolchain.archiveCommand() : toolchain.sharedCommand(),
-					arguments = isStatic ? toolchain.archiveArguments(output, objects) : toolchain.sharedArguments(output, objects);
+					arguments = isStatic ? toolchain.archiveArguments(output,
+						objects) : toolchain.sharedArguments(output, objects);
 				// An instrumented module links the hooks, and on MSVC writes a PDB, which the profiler names its functions from.
 				var instrumentedLink = !isStatic && toolchain.instrumenting(),
 					linkInputs = instrumentedLink ? objects.concat([toolchain.instrumentHooks()]) : objects,
-					linkOutputs = instrumentedLink && toolchain.writesDebugDatabase() ? [output, Path.withoutExtension(output) + ".pdb"] : [output];
+					linkOutputs = instrumentedLink && toolchain.writesDebugDatabase() ? [
+						output,
+						Path.withoutExtension(output) + ".pdb"
+					] : [output];
 				actions.push(new ExecutionAction(id, dependencies, linkInputs, linkOutputs,
 					'${isStatic ? "Archive" : "Link shared library"} ${ffiName == null ? library.packageName : library.packageName + " FFI " + ffiName} -> $output',
 					Process(command, arguments, resolvedPackage.root, new Map())));

@@ -50,7 +50,8 @@ class MsvcEnvironment {
 	}
 
 	static function archName(arch:TargetArch):Null<String>
-		return arch == TargetArch.X64 ? "x64" : arch == TargetArch.Arm64 ? "arm64" : arch == TargetArch.X86 ? "x86" : null;
+		return arch == TargetArch.X64 ? "x64" : arch == TargetArch.Arm64 ? "arm64" : arch == TargetArch.X86
+			? "x86" : null;
 
 	/** The machine's architecture, also from a 32-bit process, which Windows tells through PROCESSOR_ARCHITEW6432. */
 	static function hostArch():TargetArch {
@@ -75,10 +76,19 @@ class MsvcEnvironment {
 		var vswhere = Path.join([programs, "Microsoft Visual Studio", "Installer", "vswhere.exe"]);
 		if (!FileSystem.exists(vswhere))
 			return false;
-		var install = HostCommand.text(vswhere, ["-latest", "-products", "*", "-requires", tools.component, "-property", "installationPath"]);
+		var install = HostCommand.text(vswhere, [
+			"-latest",
+			"-products",
+			"*",
+			"-requires",
+			tools.component,
+			"-property",
+			"installationPath"
+		]);
 		if (install == null || install.length == 0)
 			return false;
-		var vcvars = StringTools.replace(Path.join([install.split("\n")[0], "VC", "Auxiliary", "Build", "vcvarsall.bat"]), "/", "\\");
+		var vcvars = StringTools.replace(Path.join([install.split("\n")[0], "VC", "Auxiliary", "Build",
+			"vcvarsall.bat"]), "/", "\\");
 		if (!FileSystem.exists(vcvars))
 			return false;
 		// Without an argument list the line runs through `cmd /C`. The inner `cmd /u` makes `set` print UTF-16, so values

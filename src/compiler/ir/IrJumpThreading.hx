@@ -3,7 +3,10 @@ package compiler.ir;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
-private typedef JumpBridge = {final predecessor:Int; final target:Int;}
+private typedef JumpBridge = {
+	final predecessor:Int;
+	final target:Int;
+}
 
 /** Thread linear edges through empty jump blocks while preserving SSA phi edges. */
 class IrJumpThreading {
@@ -12,7 +15,10 @@ class IrJumpThreading {
 		var candidate = false;
 		for (block in fn.blocks) {
 			if (block != fn.blocks[0] && block.instructions.length == 0 && block.terminator != null)
-				switch block.terminator.value { case Jump(_): candidate = true; default: }
+				switch block.terminator.value {
+					case Jump(_): candidate = true;
+					default:
+				}
 			for (located in block.instructions) switch located.value {
 				// Handler and cleanup destinations have instruction-level semantics not represented by normal edges alone.
 				case BeginTry(_, _, _), EndTry(_, _), Catch(_): return fn;
@@ -25,7 +31,8 @@ class IrJumpThreading {
 		for (block in fn.blocks) if (!graph.immediate.exists(block.id)) {
 			if (block.terminator != null) switch block.terminator.value {
 				case Jump(target): external.set(target, true);
-				case Branch(_, yes, no): external.set(yes, true); external.set(no, true);
+				case Branch(_, yes, no): external.set(yes, true);
+					external.set(no, true);
 				default:
 			}
 			for (located in block.instructions) switch located.value {
@@ -38,10 +45,14 @@ class IrJumpThreading {
 			var bridgeTerminator = bridge.terminator, dominators = graph.immediate;
 			if (bridge.id == fn.blocks[0].id || bridge.instructions.length != 0 || bridgeTerminator == null
 				|| !dominators.exists(bridge.id) || external.exists(bridge.id)) continue;
-			var target = switch bridgeTerminator.value { case Jump(id): id; default: -1; };
+			var target = switch bridgeTerminator.value {
+				case Jump(id): id;
+				default: -1;
+			};
 			if (target < 0 || target == bridge.id || !graph.blocks.exists(target)) continue;
 			var predecessors = graph.predecessors.get(bridge.id);
-			if (predecessors == null || predecessors.length != 1 || predecessors[0] == bridge.id || predecessors[0] == target) continue;
+			if (predecessors == null || predecessors.length != 1 || predecessors[0] == bridge.id
+				|| predecessors[0] == target) continue;
 			var term = graph.block(predecessors[0]).terminator;
 			if (term == null) continue;
 			switch term.value {
@@ -56,7 +67,9 @@ class IrJumpThreading {
 			for (located in block.instructions) switch located.value {
 				case Phi(out, inputs):
 					var rewritten:Array<IrPhiInput> = [for (input in inputs)
-						{block: originalPredecessor(input.block, bridges), value: input.value}];
+						{
+							block:originalPredecessor(input.block, bridges), value:input.value
+						}];
 					copy.instructions.push(new Located(Phi(out, rewritten), located.provenance));
 				default: copy.instructions.push(located);
 			}

@@ -15,12 +15,20 @@ class ReactiveScaleCensus {
 		capture = new ReactiveDependencySet(true);
 		perform(1);
 		runs = 0;
-		effect = new Effect(() -> { for (source in sources) { var value = source.value; } runs++; });
+		effect = new Effect(() -> {
+			for (source in sources) {
+				var value = source.value;
+			}
+			runs++;
+		});
 	}
 	public static function perform(iterations:Int):Int {
 		var total = 0;
 		for (iteration in 0...iterations) {
-			for (source in sources) { capture.track(source); capture.track(source); }
+			for (source in sources) {
+				capture.track(source);
+				capture.track(source);
+			}
 			total += capture.pendingCount();
 			capture.clearPending();
 		}
@@ -35,7 +43,10 @@ class ReactiveScaleCensus {
 
 function main():Int {
 	var shared = new Signal(1), readers:Array<Effect> = [], runs = 0;
-	for (i in 0...10000) readers.push(new Effect(() -> { var value = shared.value; runs += value; }));
+	for (i in 0...10000) readers.push(new Effect(() -> {
+		var value = shared.value;
+		runs += value;
+	}));
 	if (runs != 10000) return 1;
 	for (reader in readers) reader.retrack();
 	if (runs != 20000) return 2;
@@ -50,20 +61,30 @@ function main():Int {
 	var rows = new Effect(() -> {
 		var sum = 0;
 		for (i in 0...2000) sum += sources[i].value;
-		rowSum = sum; rowRuns++;
+		rowSum = sum;
+		rowRuns++;
 	});
 	if (rows.dependencyCount() != 2000 || rowRuns != 1) return 16;
-	sources[0].value = 42; ReactiveRuntime.flushEffects();
+	sources[0].value = 42;
+	ReactiveRuntime.flushEffects();
 	if (rowRuns != 2 || rowSum != 1999042) return 17;
 	rows.dispose();
 	var wideRuns = 0;
-	var wide = new Effect(() -> { for (source in sources) { var value = source.value; } wideRuns++; });
+	var wide = new Effect(() -> {
+		for (source in sources) {
+			var value = source.value;
+		}
+		wideRuns++;
+	});
 	if (wide.dependencyCount() != 10000) return 18;
 	wide.retrack();
 	if (wideRuns != 2 || wide.dependencyCount() != 10000) return 19;
 	wide.dispose();
 	var capture = new ReactiveDependencySet(true);
-	for (source in sources) { capture.track(source); capture.track(source); }
+	for (source in sources) {
+		capture.track(source);
+		capture.track(source);
+	}
 	if (capture.pendingCount() != 10000) return 4;
 	capture.clearDependencies();
 	for (source in sources) capture.track(source);
@@ -78,15 +99,22 @@ function main():Int {
 	if (capture.pendingCount() != 0) return 7;
 
 	var fields = new ObservableSource(4000), total = 0;
-	var effect = new Effect(() -> { for (i in 0...2000) fields.recordFieldRead(i); total++; });
+	var effect = new Effect(() -> {
+		for (i in 0...2000) fields.recordFieldRead(i);
+		total++;
+	});
 	if (effect.dependencyCount() != 2000) return 8;
-	fields.invalidateField(1999); ReactiveRuntime.flushEffects();
+	fields.invalidateField(1999);
+	ReactiveRuntime.flushEffects();
 	if (total != 2) return 9;
 	effect.dispose();
 	var even = true;
-	var changing = new Effect(() -> { for (i in 0...4000) if ((i % 2 == 0) == even) fields.recordFieldRead(i); });
+	var changing = new Effect(() -> {
+		for (i in 0...4000) if ((i % 2 == 0) == even) fields.recordFieldRead(i);
+	});
 	if (changing.dependencyCount() != 2000) return 10;
-	even = false; changing.retrack();
+	even = false;
+	changing.retrack();
 	if (changing.dependencyCount() != 2000) return 11;
 	fields.invalidateField(0);
 	if (changing.dirty) return 12;

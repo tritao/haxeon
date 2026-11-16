@@ -30,13 +30,15 @@ class RpcProtocol {
 			throw "RPC envelope is required";
 		switch message {
 			case Hello(protocol, codec, application, capabilities), Welcome(protocol, codec, application, capabilities):
-				if (protocol <= 0 || codec <= 0 || application == null || application.length == 0 || application.length > 256)
+				if (protocol <= 0 || codec <= 0 || application == null || application.length == 0
+					|| application.length > 256)
 					throw "Invalid RPC handshake";
 				if (capabilities == null || capabilities.length > MAX_CAPABILITIES)
 					throw "Invalid RPC capabilities";
 				var seen:Map<String, Bool> = [];
 				for (capability in capabilities) {
-					if (capability == null || capability.length == 0 || capability.length > 128 || seen.exists(capability))
+					if (capability == null || capability.length == 0 || capability.length > 128
+						|| seen.exists(capability))
 						throw "Invalid or duplicate RPC capability";
 					seen.set(capability, true);
 				}
@@ -62,7 +64,8 @@ class RpcProtocol {
 	}
 
 	static function validateError(error:RpcError):Void {
-		if (error == null || error.code == null || error.code.length == 0 || error.code.length > 128 || error.message == null || error.message.length > 4096)
+		if (error == null || error.code == null || error.code.length == 0 || error.code.length > 128
+			|| error.message == null || error.message.length > 4096)
 			throw "Invalid RPC error";
 	}
 }

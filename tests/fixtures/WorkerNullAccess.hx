@@ -50,9 +50,9 @@ function enumRead(value:Payload):Int
 function check():Bool {
 	var checks:Array<Void->Int> = [
 		function() return resolveTarget(null), function() return writeTarget(null),
-		   function() return callTarget(null),  function() return bindTarget(null),
-		  function() return arrayLength(null),   function() return arrayRead(null),
-		   function() return arrayWrite(null),    function() return enumRead(null)
+		function() return callTarget(null), function() return bindTarget(null),
+		function() return arrayLength(null), function() return arrayRead(null),
+		function() return arrayWrite(null), function() return enumRead(null)
 	];
 	for (index in 0...checks.length) {
 		var caught = false;

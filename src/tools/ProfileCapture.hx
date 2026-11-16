@@ -155,7 +155,9 @@ class ProfileCapture {
 
 	/** A new capture directory under root, named by its start time. */
 	public static function nextCapture(root:String):String {
-		var stamp = DateTools.format(Date.now(), "%Y%m%d-%H%M%S"), directory = Path.join([root, 'profile-$stamp']), suffix = 2;
+		var stamp = DateTools.format(Date.now(), "%Y%m%d-%H%M%S"),
+			directory = Path.join([root, 'profile-$stamp']),
+			suffix = 2;
 		while (FileSystem.exists(directory))
 			directory = Path.join([root, 'profile-$stamp-${suffix++}']);
 		return Path.join([directory, "profile.hlpc"]);
@@ -242,7 +244,8 @@ class ProfileCapture {
 		this.recorder = null;
 		var status = waitOrStop(recorder, 15.0);
 		if (status != 0) {
-			Sys.stderr().writeString('haxeon: profiler capture did not finalize cleanly (status $status); see ${recorderLog()}\n');
+			Sys.stderr()
+				.writeString('haxeon: profiler capture did not finalize cleanly (status $status); see ${recorderLog()}\n');
 			return null;
 		}
 		return complete();
@@ -255,11 +258,17 @@ class ProfileCapture {
 	public function complete():Null<String> {
 		var trace = Path.join([directory, '$name.pftrace']),
 			log = Path.join([directory, "export.log"]);
-		var status = waitOrStop(startLogged([profiler, "export", "--format", "pftrace", "--process-name", processName].concat(windowArguments(controls.window))
-			.concat(["--output", trace, capture]),
-			log),
-			EXPORT_SECONDS);
-		var errors = status == null ? 'stopped after ${EXPORT_SECONDS} s' : FileSystem.exists(log) ? File.getContent(log) : "";
+		var status = waitOrStop(startLogged([profiler, "export", "--format", "pftrace", "--process-name",
+			processName].concat(windowArguments(controls.window))
+			.concat([
+				"--output",
+				trace,
+				capture
+			]),
+				log),
+				EXPORT_SECONDS);
+		var errors = status == null ? 'stopped after ${EXPORT_SECONDS} s' : FileSystem.exists(log)
+			? File.getContent(log) : "";
 		var artifacts:Dynamic = {bytecode: '$name.hl', profile: Path.withoutDirectory(capture)};
 		if (revisions.length > 0)
 			artifacts.liveRevisions = revisions;

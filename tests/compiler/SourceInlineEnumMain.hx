@@ -62,7 +62,8 @@ class SourceInlineEnumMain {
 			for (inlining in [false, true]) {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 				c.addStandardLibrarySourceRoot("stdlib");
-				c.configure("first-" + target + inlining, "first", CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+				c.configure("first-" + target + inlining, "first",
+					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				var result = c.compile("Main");
 				assertInline(result.ir, true);
@@ -71,8 +72,8 @@ class SourceInlineEnumMain {
 					+ "\nfunction reveal(value:Packet):Dynamic return value;\n");
 				assertInline(c.compile("Main").ir, false);
 				c.update("Main.hx",
-					sys.io.File.getContent("tests/programs/source-inline-enum.hx") +
-					'\nfunction reflectUnrelated():Dynamic return Reflect.field({marker:1}, "marker");\n');
+					sys.io.File.getContent("tests/programs/source-inline-enum.hx")
+					+ '\nfunction reflectUnrelated():Dynamic return Reflect.field({marker:1}, "marker");\n');
 				assertInline(c.compile("Main").ir, false);
 				c.update("Main.hx", sys.io.File.getContent("tests/programs/source-inline-enum.hx"));
 				assertInline(c.compile("Main").ir, true);
@@ -80,16 +81,23 @@ class SourceInlineEnumMain {
 				if (temp == null)
 					temp = "out";
 				var path = temp + "/first-" + target + inlining + (target == "hl" ? ".hl" : ".wasm");
-				var bytes = target == "hl" ? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
-					target: target == "wasm32" ? Wasm32 : WasmGc,
-					debugNames: true,
-					wasmMemoryStats: target == "wasm32",
-					wasmGcStress: target == "wasm32",
-					wasmGcAllocationCount: target == "wasm-gc"
-				}).bytes;
+				var bytes = target == "hl"
+					? HlWriter.encode(result.module).flatten() : new WasmBackend().compile(result.ir, {
+						target: target == "wasm32" ? Wasm32 : WasmGc,
+						debugNames: true,
+						wasmMemoryStats: target == "wasm32",
+						wasmGcStress: target == "wasm32",
+						wasmGcAllocationCount: target == "wasm-gc"
+					}).bytes;
 				sys.io.File.saveBytes(path, bytes);
-				var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");e["EnumCensus.prepareRoots"]();global.gc();if(e["EnumCensus.checkRoots"]()!==42)throw Error("enum-only roots lost");const c=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const n of [8,1024]){const before=c();if(e["EnumCensus.perform"](n)!==42*n)throw Error("repeat");if(c()!==before)throw Error("enum transport allocated "+(c()-before));}';
-				var status = Sys.command(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
+				var js =
+					'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");e["EnumCensus.prepareRoots"]();global.gc();if(e["EnumCensus.checkRoots"]()!==42)throw Error("enum-only roots lost");const c=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const n of [8,1024]){const before=c();if(e["EnumCensus.perform"](n)!==42*n)throw Error("repeat");if(c()!==before)throw Error("enum transport allocated "+(c()-before));}';
+				var status = Sys.command(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+					"--expose-gc",
+					"-e",
+					js,
+					path
+				]);
 				if (status != (target == "hl" ? 42 : 0))
 					throw "Failed " + target + inlining + " " + status;
 				Sys.println("PASS " + target + " inline=" + inlining);
@@ -104,7 +112,8 @@ class SourceInlineEnumMain {
 		compiler.configure("native-map-enum-" + target + inlining, "map-enum",
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		compiler.update("Main.hx", sys.io.File.getContent("tests/programs/enum-array-iterator-escape.hx"));
-		var compiled = compiler.compile("Main"), declaration = Lambda.find(compiled.ir.enums, entry -> entry.name == "IteratorChoice");
+		var compiled = compiler.compile("Main"),
+			declaration = Lambda.find(compiled.ir.enums, entry -> entry.name == "IteratorChoice");
 		if (declaration == null || declaration.inlineStorage != null)
 			throw 'Native reference map did not keep IteratorChoice boxed on $target inline=$inlining';
 		var root = Sys.getEnv("TMPDIR");
@@ -113,8 +122,10 @@ class SourceInlineEnumMain {
 			+ (target == "hl" ? ".hl" : ".wasm");
 		if (target == "hl") {
 			sys.io.File.saveBytes(path, HlWriter.encode(compiled.module).flatten());
-			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [path]),
-				error = process.stderr.readAll().toString(), status = process.exitCode();
+			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
+				process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [path]),
+				error = process.stderr.readAll().toString(),
+				status = process.exitCode();
 			process.close();
 			if (status != 42) throw 'Native reference map failed on $target inline=$inlining ($status): $error';
 		} else {
@@ -125,8 +136,13 @@ class SourceInlineEnumMain {
 				wasmGcAllocationCount: target == "wasm-gc"
 			}).bytes;
 			sys.io.File.saveBytes(path, bytes);
-			var process = new sys.io.Process("node", ["-e", 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");', path]),
-				error = process.stderr.readAll().toString(), status = process.exitCode();
+			var process = new sys.io.Process("node", [
+				"-e",
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("result");',
+				path
+			]),
+				error = process.stderr.readAll().toString(),
+				status = process.exitCode();
 			process.close();
 			if (status != 0) throw 'Native reference map failed on $target inline=$inlining ($status): $error';
 		}

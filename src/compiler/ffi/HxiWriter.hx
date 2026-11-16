@@ -93,7 +93,8 @@ class HxiWriter {
 				output.add(";\n");
 		}
 
-	static function writeField(output:StringBuf, documentation:Map<String, HxiDocumentation>, typeName:String, field:HxiField):Void {
+	static function writeField(output:StringBuf, documentation:Map<String, HxiDocumentation>, typeName:String,
+			field:HxiField):Void {
 		writeDocumentation(output, documentation.get('$typeName.${field.name}'), "\t\t");
 		output.add('\t\t${field.name}: ${writeType(field.type)}');
 		if (field.metadata == null) {
@@ -146,7 +147,8 @@ class HxiWriter {
 		return output.toString();
 	}
 
-	static function writeFunctionMetadataFallback(output:StringBuf, callConvention:String, policy:HxiResultPolicy):Void {
+	static function writeFunctionMetadataFallback(output:StringBuf, callConvention:String,
+			policy:HxiResultPolicy):Void {
 		if (callConvention != "cdecl")
 			output.add(' @callconv("$callConvention")');
 		writeOwnership(output, policy.ownership);

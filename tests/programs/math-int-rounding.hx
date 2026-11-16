@@ -31,7 +31,8 @@ function main():Int {
 	var nan = Math.NaN;
 	if (Math.ffloor(nan) == Math.ffloor(nan) || Math.fceil(nan) == Math.fceil(nan))
 		return 4;
-	if (Math.ffloor(Math.POSITIVE_INFINITY) != Math.POSITIVE_INFINITY || Math.fceil(Math.NEGATIVE_INFINITY) != Math.NEGATIVE_INFINITY)
+	if (Math.ffloor(Math.POSITIVE_INFINITY) != Math.POSITIVE_INFINITY
+		|| Math.fceil(Math.NEGATIVE_INFINITY) != Math.NEGATIVE_INFINITY)
 		return 5;
 	var zero = 0.0 * -1.0;
 	if (1.0 / Math.ffloor(zero) != Math.NEGATIVE_INFINITY || 1.0 / Math.fceil(zero) != Math.NEGATIVE_INFINITY)

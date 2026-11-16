@@ -242,7 +242,8 @@ private class TurnSink implements ModelSink {
 	var buffer = "";
 
 	public function new(token:Int, onText:(token:Int, delta:String) -> Void,
-			onComplete:(token:Int, text:String, calls:Array<ToolCall>, reason:StopReason) -> Void, onFail:(token:Int, message:String) -> Void) {
+			onComplete:(token:Int, text:String, calls:Array<ToolCall>, reason:StopReason) -> Void,
+			onFail:(token:Int, message:String) -> Void) {
 		this.token = token;
 		this.onText = onText;
 		this.onComplete = onComplete;

@@ -9,7 +9,8 @@ class HxiNumericStorageMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot(Sys.getCwd() + "/stdlib");
-		compiler.addFfiInterface("numeric-storage.hxi", '
+		compiler.addFfiInterface("numeric-storage.hxi",
+			'
 interface NumericStorage @target("x86_64-linux-gnu") @library("unused_numeric_storage") {
  struct Point @layout(8,4) { x: i32 @offset(0); y: i32 @offset(4); }
  type PointAlias = Point;
@@ -26,7 +27,8 @@ interface NumericStorage @target("x86_64-linux-gnu") @library("unused_numeric_st
   size: u32 @offset(32);
  }
 }');
-		var programSource = '
+		var programSource =
+			'
 import NumericStorage;
 extern class CopyNative {
  @:hlNative("haxeon_runtime", "structCopy")
@@ -135,21 +137,26 @@ function main():Int {
 		var replacement = Sys.args().indexOf("--replace-program") >= 0;
 		// The replacement adds a static variable, which a running module cannot take, so it reloads: added methods alone
 		// would patch.
-		compiler.update("Main.hx", replacement ? 'import NumericStorage;
+		compiler.update("Main.hx", replacement
+			? 'import NumericStorage;
 class Expected { public static var x:Int = 42; }
 function main():Int {
  var point = new Point(); point.set_x(Expected.x);
  var batch = new Batch(); batch.set_points(0,point);
  var buffer = new BatchBuffer(1); buffer.set(0,batch);
  return buffer.copy(0).get_points(0).get_x();
-}' : StringTools.replace(programSource, " if (bounds != 2) return 7;", '
+}'
+			: StringTools.replace(programSource, " if (bounds != 2) return 7;",
+			'
  if (bounds != 2) return 7;
  var batchBuffer = new BatchBuffer(1); batchBuffer.set(0,batch);
  if (batchBuffer.copy(0).get_points(0).get_x() != 20) return 17;
 '));
 		var incremental = compiler.compile("Main");
-		if (replacement && (!incremental.requiresReload || incremental.module.natives.length >= result.module.natives.length))
-			throw "Program replacement must exercise a reload with fewer runtime imports (reasons: " + incremental.reloadReasons.join(", ") + ")";
+		if (replacement
+			&& (!incremental.requiresReload || incremental.module.natives.length >= result.module.natives.length))
+			throw "Program replacement must exercise a reload with fewer runtime imports (reasons: "
+				+ incremental.reloadReasons.join(", ") + ")";
 		if (!Lambda.exists(incremental.ir.functions, fn -> fn.name.indexOf("BatchBuffer.") >= 0))
 			throw "A previously unused buffer must become available on demand";
 		// Reloads can remove runtime imports, moving every user-function slot.

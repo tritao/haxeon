@@ -16,7 +16,8 @@ class HlDebugLocation {
 	public final end:Int;
 	public final flags:Int;
 
-	public function new(path:String, line:Int, column:Int, endLine:Int, endColumn:Int, sourceHash:Int, start:Int, end:Int, flags:Int) {
+	public function new(path:String, line:Int, column:Int, endLine:Int, endColumn:Int, sourceHash:Int, start:Int,
+			end:Int, flags:Int) {
 		this.path = path;
 		this.line = line;
 		this.column = column;
@@ -45,7 +46,8 @@ class HlFunction {
 	public final debugLocations:Array<HlDebugLocation>;
 	public final debugAssignments:Array<HlDebugAssignment>;
 
-	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>, ?debugLocations:Array<HlDebugLocation>,
+	public function new(type:Int, functionIndex:Int, registers:Array<Int>, opcodes:Array<HlInstruction>,
+			?debugLocations:Array<HlDebugLocation>,
 			?debugAssignments:Array<HlDebugAssignment>) {
 		this.type = type;
 		this.functionIndex = functionIndex;

@@ -31,7 +31,8 @@ class ValueCopy {
 	/** Results of these are new, unshared instances. */
 	static function isFresh(value:TypedExpression):Bool
 		return switch value.expression {
-			case TNew(_, _, _), TCall(_, _), TCNativeCall(_, _), TMethodCall(_, _, _), TClosureCall(_, _), TSuperCall(_, _), TObjectLiteral(_, _, _),
+			case TNew(_, _, _), TCall(_, _), TCNativeCall(_, _), TMethodCall(_, _, _), TClosureCall(_, _),
+				TSuperCall(_, _), TObjectLiteral(_, _, _),
 				TArrayPop(_), TCopy(_, _): true;
 			default: false;
 		};
@@ -52,7 +53,8 @@ class ValueCopy {
 		for (field in declaration.fields) {
 			if (field.isStatic || !hasStorage(field))
 				continue;
-			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field), field.span);
+			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field),
+				field.span);
 			var nestedType = switch fieldType {
 				case TNullable(element): element;
 				default: fieldType;

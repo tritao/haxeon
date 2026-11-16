@@ -19,7 +19,8 @@ typedef CxxDiagnostic = {
 class CxxSubsetValidator {
 	public static inline final PROFILE = "CXX_ABI_V1";
 
-	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false,
+	public static function validate(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false,
+			virtualDispatch:Bool = false, cxxThunks:Bool = false,
 			?cxxOwnership:Map<String, String>):Array<CxxDiagnostic> {
 		var diagnostics:Array<CxxDiagnostic> = [],
 			records:Map<String, CxxRecord> = [],
@@ -35,9 +36,14 @@ class CxxSubsetValidator {
 		for (record in model.records) {
 			if (record.bases.length > 0
 				&& (!virtualDispatch || record.bases.length > 1 || Lambda.exists(record.bases, base -> base.isVirtual)))
-				diagnostics.push({code: "CXX005", message: 'inheritance for ${record.qualifiedName} is unsupported by CXX_ABI_V1', span: record.span});
+				diagnostics.push({
+					code: "CXX005",
+					message: 'inheritance for ${record.qualifiedName} is unsupported by CXX_ABI_V1',
+					span: record.span
+				});
 			for (method in record.methods)
-				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes, virtualDispatch, cxxThunks);
+				validateMethod(method, record, records, enums, aliases, diagnostics, trivialValues, lifetimes,
+					virtualDispatch, cxxThunks);
 		}
 		for (functionModel in model.functions) {
 			if (functionModel.symbol.length == 0)
@@ -53,18 +59,21 @@ class CxxSubsetValidator {
 					span: functionModel.span
 				});
 			validateResultType(functionModel.result, functionModel.span, diagnostics, cxxThunks);
-			validateType(functionModel.result, true, functionModel.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+			validateType(functionModel.result, true, functionModel.span, records, enums, aliases, diagnostics,
+				trivialValues, cxxThunks);
 			for (parameter in functionModel.parameters)
 				validateParameter(parameter, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		}
 		for (alias in model.aliases)
-			validateType(alias.target, true, alias.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+			validateType(alias.target, true, alias.span, records, enums, aliases, diagnostics, trivialValues,
+				cxxThunks);
 		if (cxxOwnership != null)
 			validateOwnership(model, cxxOwnership, diagnostics, cxxThunks);
 		return diagnostics;
 	}
 
-	static function validateParameter(parameter:CxxModel.CxxParameter, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
+	static function validateParameter(parameter:CxxModel.CxxParameter, records:Map<String, CxxRecord>,
+			enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, cxxThunks:Bool):Void {
 		if (parameter.retained && !isCallbackType(parameter.type, aliases, []))
 			diagnostics.push({
@@ -72,14 +81,17 @@ class CxxSubsetValidator {
 				message: 'parameter "${parameter.name}" uses hxi:retained but is not a function-pointer callback',
 				span: parameter.span
 			});
-		validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+		validateType(parameter.type, true, parameter.span, records, enums, aliases, diagnostics, trivialValues,
+			cxxThunks);
 	}
 
 	static function validateTarget(model:CxxModel, diagnostics:Array<CxxDiagnostic>):Void {
 		var target = model.target.toLowerCase(),
 			architecture = target.split("-")[0],
-			supportedArchitecture = architecture == "x86_64" || architecture == "amd64" || architecture == "aarch64" || architecture == "arm64",
-			supportedPlatform = target.indexOf("linux") >= 0 || target.indexOf("darwin") >= 0 || target.indexOf("apple") >= 0
+			supportedArchitecture = architecture == "x86_64" || architecture == "amd64" || architecture == "aarch64"
+				|| architecture == "arm64",
+			supportedPlatform = target.indexOf("linux") >= 0 || target.indexOf("darwin") >= 0
+				|| target.indexOf("apple") >= 0
 				|| target.indexOf("windows") >= 0 || target.indexOf("msvc") >= 0 || target.indexOf("mingw") >= 0;
 		if (!supportedArchitecture || !supportedPlatform)
 			diagnostics.push({
@@ -89,21 +101,21 @@ class CxxSubsetValidator {
 			});
 	}
 
-	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
+	public static function throwIfInvalid(model:CxxModel, trivialValues:Bool = false, lifetimes:Bool = false,
+			virtualDispatch:Bool = false,
 			cxxThunks:Bool = false, ?cxxOwnership:Map<String, String>):Void {
 		var diagnostics = validate(model, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
 		if (diagnostics.length == 0)
 			return;
-		var lines = [
-			for (diagnostic in diagnostics) {
-				var position = diagnostic.span.file.lineColumnAt(diagnostic.span.start);
-				'${diagnostic.code} ${diagnostic.span.file.path}:${position.line}:${position.column}: ${diagnostic.message}';
-			}
-		];
+		var lines = [for (diagnostic in diagnostics) {
+			var position = diagnostic.span.file.lineColumnAt(diagnostic.span.start);
+			'${diagnostic.code} ${diagnostic.span.file.path}:${position.line}:${position.column}: ${diagnostic.message}';
+		}];
 		throw lines.join("\n");
 	}
 
-	static function validateOwnership(model:CxxModel, ownership:Map<String, String>, diagnostics:Array<CxxDiagnostic>, cxxThunks:Bool):Void {
+	static function validateOwnership(model:CxxModel, ownership:Map<String, String>, diagnostics:Array<CxxDiagnostic>,
+			cxxThunks:Bool):Void {
 		var functions:Map<String, CxxFunction> = [];
 		for (functionModel in model.functions)
 			functions.set(functionModel.qualifiedName, functionModel);
@@ -111,7 +123,11 @@ class CxxSubsetValidator {
 			var owner = functions.get(ownerName),
 				release = functions.get(releaseName);
 			if (owner == null) {
-				diagnostics.push({code: "CXX020", message: 'owned C++ result "$ownerName" must name a free function in the imported header', span: model.span});
+				diagnostics.push({
+					code: "CXX020",
+					message: 'owned C++ result "$ownerName" must name a free function in the imported header',
+					span: model.span
+				});
 				continue;
 			}
 			if (release == null) {
@@ -124,14 +140,23 @@ class CxxSubsetValidator {
 			}
 			var ownerType = pointerRecord(owner.result);
 			if (ownerType == null) {
-				diagnostics.push({code: "CXX020", message: 'owned C++ result "$ownerName" must return a pointer to an imported record', span: owner.span});
+				diagnostics.push({
+					code: "CXX020",
+					message: 'owned C++ result "$ownerName" must return a pointer to an imported record',
+					span: owner.span
+				});
 				continue;
 			}
 			if (!release.isNoexcept && !cxxThunks)
-				diagnostics.push({code: "CXX020", message: 'release function "$releaseName" must be noexcept or use generated C++ thunks', span: release.span});
+				diagnostics.push({
+					code: "CXX020",
+					message: 'release function "$releaseName" must be noexcept or use generated C++ thunks',
+					span: release.span
+				});
 			var releaseType = release.parameters.length == 1 ? pointerRecord(release.parameters[0].type) : null,
 				releaseIsVoid = release.parameters.length == 1 && isVoidPointer(release.parameters[0].type);
-			if (release.parameters.length != 1 || (releaseType != ownerType && !releaseIsVoid) || !isVoid(release.result))
+			if (release.parameters.length != 1 || (releaseType != ownerType && !releaseIsVoid)
+				|| !isVoid(release.result))
 				diagnostics.push({
 					code: "CXX020",
 					message: 'release function "$releaseName" must accept one pointer to "$ownerType" (or void*) and return void',
@@ -168,8 +193,10 @@ class CxxSubsetValidator {
 			case _: false;
 		};
 
-	static function validateMethod(method:CxxMethod, record:CxxRecord, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
-			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool, virtualDispatch:Bool, cxxThunks:Bool):Void {
+	static function validateMethod(method:CxxMethod, record:CxxRecord, records:Map<String, CxxRecord>,
+			enums:Map<String, CxxEnum>,
+			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, lifetimes:Bool,
+			virtualDispatch:Bool, cxxThunks:Bool):Void {
 		if ((method.isConstructor || method.isDestructor) && !lifetimes)
 			diagnostics.push({
 				code: "CXX008",
@@ -217,9 +244,17 @@ class CxxSubsetValidator {
 				span: method.span
 			});
 		if (method.symbol.length == 0)
-			diagnostics.push({code: "CXX011", message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}', span: method.span});
+			diagnostics.push({
+				code: "CXX011",
+				message: 'Clang did not provide a mangled symbol for ${method.qualifiedName}',
+				span: method.span
+			});
 		if (!method.isNoexcept && !cxxThunks)
-			diagnostics.push({code: "CXX003", message: '${method.qualifiedName} may throw; direct C++ calls require noexcept', span: method.span});
+			diagnostics.push({
+				code: "CXX003",
+				message: '${method.qualifiedName} may throw; direct C++ calls require noexcept',
+				span: method.span
+			});
 		else if (!method.isNoexcept && (method.isConstructor || method.isDestructor))
 			diagnostics.push({
 				code: "CXX016",
@@ -247,16 +282,25 @@ class CxxSubsetValidator {
 				});
 		}
 		if (method.access != "public")
-			diagnostics.push({code: "CXX010", message: 'member ${method.qualifiedName} is ${method.access} and cannot be projected', span: method.span});
+			diagnostics.push({
+				code: "CXX010",
+				message: 'member ${method.qualifiedName} is ${method.access} and cannot be projected',
+				span: method.span
+			});
 		if (StringTools.startsWith(method.name, "operator"))
-			diagnostics.push({code: "CXX009", message: 'member-function operator ${method.qualifiedName} is unsupported', span: method.span});
+			diagnostics.push({
+				code: "CXX009",
+				message: 'member-function operator ${method.qualifiedName} is unsupported',
+				span: method.span
+			});
 		validateResultType(method.result, method.span, diagnostics, cxxThunks);
 		validateType(method.result, true, method.span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		for (parameter in method.parameters)
 			validateParameter(parameter, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 	}
 
-	static function validateType(type:CxxType, byValue:Bool, span:SourceSpan, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
+	static function validateType(type:CxxType, byValue:Bool, span:SourceSpan, records:Map<String, CxxRecord>,
+			enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, cxxThunks:Bool):Void {
 		switch type {
 			case CxxType.CxxVoid | CxxType.CxxPrimitive(_):
@@ -266,15 +310,28 @@ class CxxSubsetValidator {
 				validateType(element, false, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 			case CxxType.CxxFunctionPointer(parameters, result, _):
 				if (isFunctionPointer(result))
-					diagnostics.push({code: "CXX021", message: "nested function-pointer callback results are unsupported", span: span});
+					diagnostics.push({
+						code: "CXX021",
+						message: "nested function-pointer callback results are unsupported",
+						span: span
+					});
 				validateCallbackResult(result, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 				for (parameter in parameters) {
 					if (isFunctionPointer(parameter))
-						diagnostics.push({code: "CXX021", message: "nested function-pointer callback parameters are unsupported", span: span});
-					validateType(parameter, false, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
+						diagnostics.push({
+							code: "CXX021",
+							message: "nested function-pointer callback parameters are unsupported",
+							span: span
+						});
+					validateType(parameter, false, span, records, enums, aliases, diagnostics, trivialValues,
+						cxxThunks);
 				}
 			case CxxType.CxxRValueReference(_):
-				diagnostics.push({code: "CXX001", message: "rvalue references are unsupported by CXX_ABI_V1", span: span});
+				diagnostics.push({
+					code: "CXX001",
+					message: "rvalue references are unsupported by CXX_ABI_V1",
+					span: span
+				});
 			case CxxType.CxxStringView:
 				if (!cxxThunks)
 					diagnostics.push({
@@ -314,13 +371,19 @@ class CxxSubsetValidator {
 							message: 'non-trivial value parameter/result "$name" is disabled; use a pointer or --cxx-trivial-values',
 							span: record.span
 						});
-					else if (!record.isStandardLayout || !record.isTriviallyCopyable || record.bases.length != 0 || record.hasVirtualMembers)
-						diagnostics.push({code: "CXX002", message: 'record "$name" is not a validated trivial C++ value', span: record.span});
+					else if (!record.isStandardLayout || !record.isTriviallyCopyable || record.bases.length != 0
+						|| record.hasVirtualMembers)
+						diagnostics.push({
+							code: "CXX002",
+							message: 'record "$name" is not a validated trivial C++ value',
+							span: record.span
+						});
 				}
 		}
 	}
 
-	static function validateResultType(type:CxxType, span:SourceSpan, diagnostics:Array<CxxDiagnostic>, cxxThunks:Bool):Void {
+	static function validateResultType(type:CxxType, span:SourceSpan, diagnostics:Array<CxxDiagnostic>,
+			cxxThunks:Bool):Void {
 		if (cxxThunks && CxxTypeTools.isStringView(type))
 			diagnostics.push({
 				code: "CXX017",
@@ -335,13 +398,23 @@ class CxxSubsetValidator {
 			});
 	}
 
-	static function validateCallbackResult(type:CxxType, span:SourceSpan, records:Map<String, CxxRecord>, enums:Map<String, CxxEnum>,
+	static function validateCallbackResult(type:CxxType, span:SourceSpan, records:Map<String, CxxRecord>,
+			enums:Map<String, CxxEnum>,
 			aliases:Map<String, CxxAlias>, diagnostics:Array<CxxDiagnostic>, trivialValues:Bool, cxxThunks:Bool):Void {
 		switch type {
-			case CxxType.CxxPointer(_) | CxxType.CxxReference(_) | CxxType.CxxRValueReference(_) | CxxType.CxxStringView | CxxType.CxxByteSpan(_):
-				diagnostics.push({code: "CXX021", message: "callback results must be scalar, enum, validated aggregate, or void", span: span});
+			case CxxType.CxxPointer(_) | CxxType.CxxReference(_) | CxxType.CxxRValueReference(_) | CxxType.CxxStringView
+				| CxxType.CxxByteSpan(_):
+				diagnostics.push({
+					code: "CXX021",
+					message: "callback results must be scalar, enum, validated aggregate, or void",
+					span: span
+				});
 			case CxxType.CxxFunctionPointer(_, _, _):
-				diagnostics.push({code: "CXX021", message: "nested function-pointer callback results are unsupported", span: span});
+				diagnostics.push({
+					code: "CXX021",
+					message: "nested function-pointer callback results are unsupported",
+					span: span
+				});
 			case _:
 				validateType(type, true, span, records, enums, aliases, diagnostics, trivialValues, cxxThunks);
 		}
@@ -359,7 +432,8 @@ class CxxSubsetValidator {
 			case CxxType.CxxFunctionPointer(_, _, _): true;
 			case CxxType.CxxConst(element): isCallbackType(element, aliases, visiting);
 			case CxxType.CxxNamed(name):
-				if (visiting.indexOf(name) >= 0) false; else {
+				if (visiting.indexOf(name) >= 0) false;
+				else {
 					var alias = aliases.get(name);
 					alias == null ? false : isCallbackType(alias.target, aliases, visiting.concat([name]));
 				}

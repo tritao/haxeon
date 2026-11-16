@@ -6,7 +6,8 @@ import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 class MixedArrayLiteralMain {
-	static final prefix = 'class Base { public var value:Int=42; public function new() {} } class Child extends Base { public function new() super(); } ';
+	static final prefix =
+		'class Base { public var value:Int=42; public function new() {} } class Child extends Base { public function new() super(); } ';
 	static final cases = [
 		'var d:Dynamic=[new Child()];var accepted=false;try {var a:Array<Base>=d;accepted=true;}catch(e:Dynamic){}return !accepted?42:1;',
 		'var d:Dynamic=[1,2.5];var a:Array<Float>=d;return a[0]+a[1]==3.5?42:1;',
@@ -54,7 +55,10 @@ class MixedArrayLiteralMain {
 				if (c == warm)
 					for (target in [Wasm32, WasmGc])
 						File.saveBytes(SuiteOutput.path('mixed-array-$target-$index.wasm'),
-							new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+							new WasmBackend().compile(result.ir, {
+								target: target,
+								debugNames: true
+							}).bytes);
 			}
 		}
 		File.saveContent(SuiteOutput.path("mixed-array-count.txt"), Std.string(cases.length));
@@ -84,7 +88,8 @@ class MixedArrayLiteralMain {
 			}
 		var dependency = compiler();
 		dependency.update("Helper.hx", "class Helper { public static function value():Float return 2.5; }");
-		dependency.update("Main.hx", 'import Helper; function main():Int { var a=[1,Helper.value()]; return a[0]+a[1]==3.5 ? 42 : 1; }');
+		dependency.update("Main.hx",
+			'import Helper; function main():Int { var a=[1,Helper.value()]; return a[0]+a[1]==3.5 ? 42 : 1; }');
 		if (GeneratedProgramRunner.exitCode(dependency.compile("Main")) != 42)
 			throw "Numeric dependency case failed";
 		dependency.update("Helper.hx", 'class Helper { public static function value():String return "x"; }');

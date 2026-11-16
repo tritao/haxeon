@@ -31,7 +31,12 @@ class LintCommand {
 	function new() {}
 
 	public static function run(arguments:Array<String>):Int {
-		var fix = false, manifests:Array<String> = [], paths:Array<String> = [], index = 0, checkUnused = true, checkOrder = true;
+		var fix = false,
+			manifests:Array<String> = [],
+			paths:Array<String> = [],
+			index = 0,
+			checkUnused = true,
+			checkOrder = true;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--fix")
@@ -45,7 +50,7 @@ class LintCommand {
 					case other: throw 'Unknown lint rule "$other" (known: unused-imports, import-order)';
 				}
 			}
-			else if (argument == "--manifest") {
+				else if (argument == "--manifest") {
 				if (index >= arguments.length)
 					throw 'Option "--manifest" requires a value';
 				manifests.push(arguments[index++]);
@@ -65,7 +70,8 @@ class LintCommand {
 			// Unused imports read the raw tokens: with directives blanked out, an import used only in an inactive branch would look
 			// unused, so a file the raw lexer rejects (it has `#if`) is not judged. Order reads through the directives.
 			var tokens:Null<Array<compiler.syntax.Token>> = try new Lexer(file).tokenize() catch (_:Dynamic) null;
-			var orderTokens:Null<Array<compiler.syntax.Token>> = checkOrder ? (try ImportOrder.tokens(path, source) catch (_:Dynamic) null) : null;
+			var orderTokens:Null<Array<compiler.syntax.Token>> = checkOrder
+				? (try ImportOrder.tokens(path, source) catch (_:Dynamic) null) : null;
 			var rootTokens = tokens ?? orderTokens;
 			if (rootTokens == null)
 				continue;
@@ -73,7 +79,8 @@ class LintCommand {
 			if (root != null)
 				command.addRoot(root);
 			var unused = checkUnused && tokens != null ? UnusedImports.find(tokens, command.resolve) : [];
-			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens, command.resolve).filter(block -> block.sorted != null) : [];
+			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens,
+				command.resolve).filter(block -> block.sorted != null) : [];
 			if (unused.length == 0 && unordered.length == 0)
 				continue;
 			found += unused.length + unordered.length;
@@ -82,7 +89,9 @@ class LintCommand {
 			for (block in unordered)
 				Sys.println('$path:${lineOf(source, block.start)}: imports not in order');
 			if (fix) {
-				var config = projects.forFile(path), wasFormatted = Formatter.format(source, config) == source, edited = remove(source, unused);
+				var config = projects.forFile(path),
+					wasFormatted = Formatter.format(source, config) == source,
+					edited = remove(source, unused);
 				// Sorted after the removal, which can join two runs or empty one.
 				if (orderTokens != null)
 					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), command.resolve);
@@ -123,7 +132,8 @@ class LintCommand {
 		var directory = Path.directory(path), expected = parts.join("/");
 		if (expected == "")
 			return directory;
-		return StringTools.endsWith(directory, "/" + expected) || directory == expected ? directory.substr(0, directory.length - expected.length) : null;
+		return StringTools.endsWith(directory, "/" + expected)
+			|| directory == expected ? directory.substr(0, directory.length - expected.length) : null;
 	}
 
 	/** The module an import names: the longest prefix of the path that is a source file, and the type after it. */
@@ -172,7 +182,8 @@ class LintCommand {
 			var lineStart = result.lastIndexOf("\n", start - 1) + 1, lineEnd = result.indexOf("\n", end);
 			if (lineEnd < 0)
 				lineEnd = result.length;
-			if (StringTools.trim(result.substring(lineStart, start)) == "" && StringTools.trim(result.substring(end, lineEnd)) == "") {
+			if (StringTools.trim(result.substring(lineStart, start)) == ""
+				&& StringTools.trim(result.substring(end, lineEnd)) == "") {
 				start = lineStart;
 				end = Std.int(Math.min(lineEnd + 1, result.length));
 			}

@@ -66,8 +66,7 @@ class PropertyValueTools {
 
 	/** Keep editor fields readable without changing the stored numeric value. */
 	static function formatFloat(value:Float):String {
-		if (!finite(value) || Math.abs(value) > 2000.0 ||
-			(value != 0.0 && Math.abs(value) < 0.000001))
+		if (!finite(value) || Math.abs(value) > 2000.0 || (value != 0.0 && Math.abs(value) < 0.000001))
 			return Std.string(value);
 		var scaled = Math.round(Math.abs(value) * 1000000.0);
 		var whole = Std.int(scaled / 1000000);

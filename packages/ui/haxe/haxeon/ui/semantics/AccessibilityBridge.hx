@@ -66,8 +66,7 @@ class AccessibilityBridge {
 		for (id in previousParents.keys()) {
 			if (!currentIds.exists(id)) {
 				var parentId = previousParents.get(id);
-				if (parentId == NativeKitConstants.NK_ACCESSIBILITY_ROOT ||
-					currentIds.exists(parentId))
+				if (parentId == NativeKitConstants.NK_ACCESSIBILITY_ROOT || currentIds.exists(parentId))
 					removed.push(id);
 			}
 		}
@@ -99,7 +98,8 @@ class AccessibilityBridge {
 	}
 
 	/** Serializes every record in a semantic snapshot into native ABI structures. */
-	public static function buildNodes(snapshot:Array<AccessibilitySnapshotNode>, coordinateScale:Float = 1.0):Array<AccessibilityNode> {
+	public static function buildNodes(snapshot:Array<AccessibilitySnapshotNode>,
+			coordinateScale:Float = 1.0):Array<AccessibilityNode> {
 		var result:Array<AccessibilityNode> = [];
 		for (item in snapshot)
 			result.push(toNativeNode(item, coordinateScale));

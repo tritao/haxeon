@@ -13,10 +13,12 @@ class SourceLocation {
 	public final endColumn:Int;
 	public final sourceHash:Int;
 
-	public function new(path:String, start:Int, end:Int, line:Int, column:Int = 1, ?endLine:Int, ?endColumn:Int, sourceHash:Int = 0) {
+	public function new(path:String, start:Int, end:Int, line:Int, column:Int = 1, ?endLine:Int, ?endColumn:Int,
+			sourceHash:Int = 0) {
 		this.endLine = endLine == null ? line : endLine;
 		this.endColumn = endColumn == null ? column : endColumn;
-		if (path == null || start < 0 || end < start || line < 1 || column < 1 || this.endLine < line || this.endColumn < 1 || this.endLine == line
+		if (path == null || start < 0 || end < start || line < 1 || column < 1 || this.endLine < line
+			|| this.endColumn < 1 || this.endLine == line
 			&& this.endColumn < column)
 			throw "Invalid source location";
 		this.path = path;
@@ -31,7 +33,8 @@ class SourceLocation {
 		var file = span.file,
 			startLine = file.lineAt(span.start),
 			endLine = file.lineAt(span.end);
-		return new SourceLocation(file.path, span.start, span.end, startLine, file.columnOnLine(span.start, startLine), endLine,
+		return new SourceLocation(file.path, span.start, span.end, startLine, file.columnOnLine(span.start, startLine),
+			endLine,
 			file.columnOnLine(span.end, endLine), span.generatedReason == null ? file.contentHash() : 0);
 	}
 }
@@ -59,7 +62,8 @@ class SourceProvenance {
 	}
 
 	public static function user(span:SourceSpan):SourceProvenance
-		return new SourceProvenance(SourceLocation.fromSpan(span), span.generatedReason == null ? UserSource : CompilerGenerated(span.generatedReason));
+		return new SourceProvenance(SourceLocation.fromSpan(span),
+			span.generatedReason == null ? UserSource : CompilerGenerated(span.generatedReason));
 
 	public static function generated(reason:String, ?anchor:SourceSpan):SourceProvenance
 		return new SourceProvenance(anchor == null ? null : SourceLocation.fromSpan(anchor), CompilerGenerated(reason));

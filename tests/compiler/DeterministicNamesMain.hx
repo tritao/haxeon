@@ -10,18 +10,24 @@ import compiler.Compiler;
  * - The environment object of a lambda or adapter stayed in the object cache after its function was renamed or removed.
  */
 class DeterministicNamesMain {
-	static final a = "function first():Int { var g = function(x:Int):Int { return x + 1; }; var d:(Dynamic)->Dynamic = g; return d(1); }";
-	static final b1 = "function second():Int { var g = function(x:Int):Int { return x + 2; }; var d:(Dynamic)->Dynamic = g; return d(1); }";
-	static final b2 = "function second():Int { var g = function(x:Int):Int { return x + 3; }; var d:(Dynamic)->Dynamic = g; return d(1); }";
+	static final a =
+		"function first():Int { var g = function(x:Int):Int { return x + 1; }; var d:(Dynamic)->Dynamic = g; return d(1); }";
+	static final b1 =
+		"function second():Int { var g = function(x:Int):Int { return x + 2; }; var d:(Dynamic)->Dynamic = g; return d(1); }";
+	static final b2 =
+		"function second():Int { var g = function(x:Int):Int { return x + 3; }; var d:(Dynamic)->Dynamic = g; return d(1); }";
 	static final util1 = "function wrap<T>(value:T):Int { var f = function():Int { return 1; }; return f(); }";
-	static final util2 = "function wrap<T>(value:T):Int { var padding = 12345; var f = function():Int { return 1; }; return f() + padding - padding; }";
-	static final mainSource = "function main():Int { return A.first() + B.second() + Util.wrap(5) + Util.wrap(\"s\"); }";
+	static final util2 =
+		"function wrap<T>(value:T):Int { var padding = 12345; var f = function():Int { return 1; }; return f() + padding - padding; }";
+	static final mainSource =
+		"function main():Int { return A.first() + B.second() + Util.wrap(5) + Util.wrap(\"s\"); }";
 
 	static function generatedNames(compiler:Compiler):Array<String> {
 		var result = compiler.compile("Main", null, false);
 		var names = [
 			for (fn in result.ir.functions)
-				if (fn.name.indexOf("adapter") >= 0 || fn.name.indexOf("$lambda") >= 0 || fn.name.indexOf("$generic") >= 0) fn.name
+				if (fn.name.indexOf("adapter") >= 0 || fn.name.indexOf("$lambda") >= 0
+				|| fn.name.indexOf("$generic") >= 0) fn.name
 		];
 		for (object in result.ir.objects)
 			if (object.name.indexOf("-env:") >= 0)

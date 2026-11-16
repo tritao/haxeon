@@ -17,13 +17,15 @@ class AbstractTypeDependencyMain {
 		}
 		// The entry imports only Api; Sibling appears solely in the abstract's signature.
 		compiler = new Compiler();
-		compiler.update("pkg/Sibling.hx", "package pkg; class Sibling { public var value:Int; public function new(value:Int) this.value=value; }");
+		compiler.update("pkg/Sibling.hx",
+			"package pkg; class Sibling { public var value:Int; public function new(value:Int) this.value=value; }");
 		compiler.update("pkg/Api.hx",
 			"package pkg; abstract Api(Int) { public function new() this=0; public function echo(value:Sibling):Sibling return value; }");
 		// analyze the signature alone: do not rely on caller arguments to load Sibling.
 		compiler.update("Main.hx", "import pkg.Api; function main():Int return 42;");
 		compiler.compile("Main");
-		compiler.update("pkg/Sibling.hx", "package pkg; class Sibling { public var changed:String; public function new() {} }");
+		compiler.update("pkg/Sibling.hx",
+			"package pkg; class Sibling { public var changed:String; public function new() {} }");
 		compiler.compile("Main");
 		compiler = new Compiler();
 		compiler.update("pkg/Storage.hx", "package pkg; class Storage { public function new() {} }");
@@ -37,14 +39,16 @@ class AbstractTypeDependencyMain {
 		compiler.update("Main.hx", "import pkg.Conversions; function main():Int return 42;");
 		compiler.compile("Main");
 		compiler = new Compiler();
-		compiler.update("pkg/Representation.hx", "package pkg; enum abstract Representation(Int) from Int to Int { var Zero=0; }");
+		compiler.update("pkg/Representation.hx",
+			"package pkg; enum abstract Representation(Int) from Int to Int { var Zero=0; }");
 		compiler.update("pkg/Mode.hx", "package pkg; enum abstract Mode(Representation) { var Zero=0; }");
 		compiler.update("Main.hx", "import pkg.Mode; function main():Int return 42;");
 		compiler.compile("Main");
 		compiler = new Compiler();
 		compiler.update("pkg/T.hx", "this is deliberately not valid source");
 		compiler.update("pkg/U.hx", "this is deliberately not valid source either");
-		compiler.update("pkg/Generic.hx", "package pkg; abstract Generic<T>(T) from T to T { public function identity<U>(value:U):U return value; }");
+		compiler.update("pkg/Generic.hx",
+			"package pkg; abstract Generic<T>(T) from T to T { public function identity<U>(value:U):U return value; }");
 		compiler.update("Main.hx", "import pkg.Generic; function main():Int return 42;");
 		compiler.compile("Main");
 		Sys.println("PASS: abstract signature, underlying and conversion dependencies; stdlib siblings load without caller imports");

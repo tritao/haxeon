@@ -53,7 +53,8 @@ class TypingContext {
 	inline function get_lexicalOwner():Null<String>
 		return owner;
 
-	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?lexicalOwner:String, ?sourceFunctionName:String) {
+	public function new(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?lexicalOwner:String,
+			?sourceFunctionName:String) {
 		this.functionName = name;
 		this.sourceFunctionName = sourceFunctionName == null ? name : sourceFunctionName;
 		this.owner = lexicalOwner;

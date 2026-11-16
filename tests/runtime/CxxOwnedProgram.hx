@@ -7,5 +7,6 @@ function main():Int {
 		value = widget.value(),
 		firstClose = owner.close(),
 		secondClose = owner.close();
-	return value == 42 && firstClose && !secondClose && owner.isClosed() && CxxOwnedFixture.__cxx_cxxown__released() == 1 ? 42 : 1;
+	return value == 42 && firstClose && !secondClose && owner.isClosed()
+		&& CxxOwnedFixture.__cxx_cxxown__released() == 1 ? 42 : 1;
 }

@@ -7,7 +7,7 @@ import nativekit.ffi.NativeKit;
 
 /** UI-thread clipboard bridge with asynchronous paste completion routing. */
 class ClipboardService {
-	final pending:Map<String, String->Void>;
+	final pending:Map<String, String -> Void>;
 	var disposed:Bool;
 
 	public function new() {

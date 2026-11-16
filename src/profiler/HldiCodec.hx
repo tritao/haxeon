@@ -34,7 +34,8 @@ class HldiReader {
 
 	public function u32():Int {
 		require(4);
-		var value = bytes.get(position) | (bytes.get(position + 1) << 8) | (bytes.get(position + 2) << 16) | (bytes.get(position + 3) << 24);
+		var value = bytes.get(position) | (bytes.get(position + 1) << 8) | (bytes.get(position + 2) << 16)
+			| (bytes.get(position + 3) << 24);
 		position += 4;
 		return value;
 	}
@@ -112,7 +113,8 @@ class HldiCodec {
 								throw 'Invalid source mapping for $name';
 							if (lines.length != 0 && haxe.Int32.ucompare(jitOffset, lines[lines.length - 1].offset) < 0)
 								throw 'Unsorted source mapping for $name';
-							lines.push(new HldiSourceLine(jitOffset, endOffset, opcodeIndex, opcode, files[fileId], line));
+							lines.push(new HldiSourceLine(jitOffset, endOffset, opcodeIndex, opcode, files[fileId],
+								line));
 						}
 					var start = Int64.add(base, Int64.ofInt(offset)),
 						end = Int64.add(start, Int64.ofInt(size));
@@ -184,8 +186,10 @@ class HldiClock {
 			low = 1;
 		if (low >= count)
 			low = count - 1;
-		var rate = signed(Int64.sub(pairNanos[low], pairNanos[low - 1])) / signed(Int64.sub(pairTicks[low], pairTicks[low - 1]));
-		return (signed(Int64.sub(pairNanos[low - 1], originNanos)) + signed(Int64.sub(ticks, pairTicks[low - 1])) * rate) / 1e9;
+		var rate = signed(Int64.sub(pairNanos[low], pairNanos[low - 1]))
+			/ signed(Int64.sub(pairTicks[low], pairTicks[low - 1]));
+		return (signed(Int64.sub(pairNanos[low - 1], originNanos)) + signed(Int64.sub(ticks, pairTicks[low - 1]))
+			* rate) / 1e9;
 	}
 
 	static function signed(value:Int64):Float {
@@ -315,7 +319,8 @@ class HldiFrames {
 						frames = input.u16(),
 						flags = input.u8();
 					input.u8();
-					result.push(new HldiRecord(KIND_SAMPLE, flags, time, sampleThread, frames, [for (_ in 0...frames) input.u64()], empty));
+					result.push(new HldiRecord(KIND_SAMPLE, flags, time, sampleThread, frames,
+						[for (_ in 0...frames) input.u64()], empty));
 				default:
 					throw 'Unknown HLDI record kind $kind';
 			}

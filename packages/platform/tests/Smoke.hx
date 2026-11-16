@@ -62,7 +62,8 @@ class Smoke {
 		try
 			NativeKit.nk_window_show_checked(WindowHandle.invalid(), true)
 		catch (error:NativeKitError)
-			resultErrorOk = error.result == Result.ErrorInvalidHandle && error.operation == "nk_window_show" && error.diagnostic != null;
+			resultErrorOk = error.result == Result.ErrorInvalidHandle && error.operation == "nk_window_show"
+			&& error.diagnostic != null;
 
 		var events = runtime.events;
 		var promise = new Promise<Int>();
@@ -87,17 +88,25 @@ class Smoke {
 			var requests = events.requests;
 			var future = requests.readClipboardText();
 			future.onComplete(function(outcome) {
-				payloadOk = switch outcome { case Success(text): text == "nativekit ffi"; case _: false; };
+				payloadOk = switch outcome {
+					case Success(text): text == "nativekit ffi";
+					case _: false;
+				};
 				completed = true;
 			});
 			var subscription = events.listen(function(value) switch value {
 				case ClipboardText(_, _, _): requestSeenByListener = completed;
 				case _:
 			});
-			payloadOk = payloadOk && !future.canCancel() && !future.cancel() && !future.isComplete() && requests.pending() == 1;
-			for (_ in 0...1000) { events.poll(); if (completed) break; }
+			payloadOk = payloadOk && !future.canCancel() && !future.cancel() && !future.isComplete()
+				&& requests.pending() == 1;
+			for (_ in 0...1000) {
+				events.poll();
+				if (completed) break;
+			}
 			subscription.dispose();
-			payloadOk = payloadOk && completed && requestSeenByListener && requests.pending() == 0 && !future.stopObserving();
+			payloadOk = payloadOk && completed && requestSeenByListener && requests.pending() == 0
+				&& !future.stopObserving();
 
 			var stopped = requests.readClipboardText();
 			var stoppedCount = 0, successAfterStop = false, lateEventSeen = false;
@@ -112,7 +121,10 @@ class Smoke {
 			});
 			payloadOk = payloadOk && stopped.stopObserving() && !stopped.stopObserving() && !stopped.cancel()
 				&& stopped.isComplete() && stoppedCount == 1 && requests.pending() == 0;
-			for (_ in 0...1000) { events.poll(); if (lateEventSeen) break; }
+			for (_ in 0...1000) {
+				events.poll();
+				if (lateEventSeen) break;
+			}
 			lateSubscription.dispose();
 			payloadOk = payloadOk && lateEventSeen && !successAfterStop && stoppedCount == 1;
 
@@ -202,13 +214,20 @@ class Smoke {
 				var completed = false, cancelled = false;
 				var future = requests.openResource(window, options);
 				future.onComplete(function(outcome) {
-					cancelled = switch outcome { case Cancelled: true; case _: false; };
+					cancelled = switch outcome {
+						case Cancelled: true;
+						case _: false;
+					};
 					completed = true;
 				});
 				dialogCancellationOk = future.canCancel() && future.cancel() && !future.cancel()
 					&& future.isCancellationRequested() && !future.isComplete();
-				for (_ in 0...1000) { events.poll(); if (completed) break; }
-				dialogCancellationOk = dialogCancellationOk && completed && cancelled && requests.pending() == 0 && !future.cancel();
+				for (_ in 0...1000) {
+					events.poll();
+					if (completed) break;
+				}
+				dialogCancellationOk = dialogCancellationOk && completed && cancelled && requests.pending() == 0
+					&& !future.cancel();
 			}
 
 			{
@@ -218,13 +237,19 @@ class Smoke {
 				var completed = false, cancelled = false;
 				var future = requests.messageDialog(window, options);
 				future.onComplete(function(outcome) {
-					cancelled = switch outcome { case Cancelled: true; case _: false; };
+					cancelled = switch outcome {
+						case Cancelled: true;
+						case _: false;
+					};
 					completed = true;
 				});
 				future.cancel();
 				future.cancel();
 				dialogCancellationOk = !future.isComplete() && dialogCancellationOk;
-				for (_ in 0...1000) { events.poll(); if (completed) break; }
+				for (_ in 0...1000) {
+					events.poll();
+					if (completed) break;
+				}
 				dialogCancellationOk = dialogCancellationOk && completed && cancelled && requests.pending() == 0;
 			}
 
@@ -252,7 +277,8 @@ class Smoke {
 			monitorOk = primary.out_monitor.isValid() && name.status == Result.Ok && name.buffer != null;
 		}
 
-		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == Result.ErrorInvalidHandle && NativeKit.nk_last_error() != null;
+		var diagnosticOk = NativeKit.nk_window_destroy(WindowHandle.invalid()) == Result.ErrorInvalidHandle
+			&& NativeKit.nk_last_error() != null;
 		var httpEventOk = NativeKitHttpEventTests.run(events);
 		var fileWatchOk = NativeKitFileWatchTests.run(events);
 		var lifetimeOk = NativeKitLifetimeTests.run(events);

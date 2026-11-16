@@ -41,7 +41,12 @@ class CanvasCommandBuffer {
 
 	public function transform(a:Float, b:Float, c:Float, d:Float, x:Float, y:Float):Void {
 		header(NativeKitUI.CommandOpcode.SetTransform, 32);
-		float(a); float(b); float(c); float(d); float(x); float(y);
+		float(a);
+		float(b);
+		float(c);
+		float(d);
+		float(x);
+		float(y);
 	}
 
 	public function globalAlpha(alpha:Float):Void {
@@ -59,31 +64,43 @@ class CanvasCommandBuffer {
 
 	public function clipRect(x:Float, y:Float, width:Float, height:Float):Void {
 		header(NativeKitUI.CommandOpcode.ClipRect, 24);
-		float(x); float(y); float(width); float(height);
+		float(x);
+		float(y);
+		float(width);
+		float(height);
 	}
 
 	public function drawPath(path:Path):Void
 		resource(NativeKitUI.CommandOpcode.DrawPath, path);
 
 	public function drawImage(image:Image, x:Float, y:Float, width:Float,
-		height:Float):Void
+			height:Float):Void
 		drawRect(NativeKitUI.CommandOpcode.DrawImage, image, x, y, width, height);
 
 	public function drawSurface(surface:GraphicsSurface, x:Float, y:Float, width:Float,
-		height:Float):Void
+			height:Float):Void
 		drawRect(NativeKitUI.CommandOpcode.DrawRenderTarget, surface, x, y, width, height);
 
 	/** Internal display-list encoding; blurSigma is already in renderer sigma units. */
 	public function drawBoxShadow(x:Float, y:Float, width:Float, height:Float, offsetX:Float,
-		 offsetY:Float, blurSigma:Float, spread:Float, radii:Array<Float>, color:Color):Void {
+			offsetY:Float, blurSigma:Float, spread:Float, radii:Array<Float>, color:Color):Void {
 		if (radii == null || radii.length != 4)
 			throw "Box shadow requires four corner radii and a color";
 		header(NativeKitUI.CommandOpcode.DrawBoxShadow, 72);
-		float(x); float(y); float(width); float(height);
-		float(offsetX); float(offsetY); float(blurSigma); float(spread);
+		float(x);
+		float(y);
+		float(width);
+		float(height);
+		float(offsetX);
+		float(offsetY);
+		float(blurSigma);
+		float(spread);
 		for (radius in radii)
 			float(radius);
-		float(color.red); float(color.green); float(color.blue); float(color.alpha);
+		float(color.red);
+		float(color.green);
+		float(color.blue);
+		float(color.alpha);
 	}
 
 	public function drawText(layout:TextLayout, x:Float, y:Float):Void
@@ -91,17 +108,23 @@ class CanvasCommandBuffer {
 
 	public function drawRectBorder(rect:Rect, width:Float, color:Color):Void {
 		header(NativeKitUI.CommandOpcode.DrawRectBorder, 44);
-		float(rect.x); float(rect.y); float(rect.width); float(rect.height);
+		float(rect.x);
+		float(rect.y);
+		float(rect.width);
+		float(rect.height);
 		float(width);
-		float(color.red); float(color.green); float(color.blue); float(color.alpha);
+		float(color.red);
+		float(color.green);
+		float(color.blue);
+		float(color.alpha);
 	}
 
 	public function beginLayer(opacity:Float, mode:CompositeMode = CompositeMode.SourceOver,
 			?bounds:Rect, ?effects:EffectChain, ?mask:Mask, ?backdropEffects:EffectChain):Void {
 		var foreground = effects == null ? [] : effects.normalized().effects;
 		var backdrop = backdropEffects == null ? [] : backdropEffects.normalized().effects;
-		if (foreground.length > NativeKitUIConstants.NKUI_EFFECT_PROGRAM_MAX_OPS ||
-			backdrop.length > NativeKitUIConstants.NKUI_EFFECT_PROGRAM_MAX_OPS)
+		if (foreground.length > NativeKitUIConstants.NKUI_EFFECT_PROGRAM_MAX_OPS
+			|| backdrop.length > NativeKitUIConstants.NKUI_EFFECT_PROGRAM_MAX_OPS)
 			throw "Effect chains exceed the native operation limit";
 		var hasMask = mask != null;
 		var isolated = opacity < 1.0 || bounds != null || foreground.length > 0 || backdrop.length > 0 || hasMask;
@@ -117,9 +140,15 @@ class CanvasCommandBuffer {
 		float(opacity);
 		word(mode.rawValue());
 		if (bounds == null) {
-			float(0.0); float(0.0); float(0.0); float(0.0);
+			float(0.0);
+			float(0.0);
+			float(0.0);
+			float(0.0);
 		} else {
-			float(bounds.x); float(bounds.y); float(bounds.width); float(bounds.height);
+			float(bounds.x);
+			float(bounds.y);
+			float(bounds.width);
+			float(bounds.height);
 		}
 		word(flags);
 		writeMask(mask);
@@ -219,7 +248,7 @@ class CanvasCommandBuffer {
 		header(NativeKitUI.CommandOpcode.EndLayer, 8);
 
 	public function strokePath(path:Path, width:Float, cap:LineCap = LineCap.Butt, join:LineJoin = LineJoin.Miter,
-		miterLimit:Float = 4.0):Void {
+			miterLimit:Float = 4.0):Void {
 		header(NativeKitUI.CommandOpcode.StrokePath, 28);
 		word(path.nativeHandle().rawValue());
 		float(width);
@@ -251,14 +280,17 @@ class CanvasCommandBuffer {
 	}
 
 	function drawRect(opcode:NativeKitUI.CommandOpcode, value:NativeKitUIResource, x:Float, y:Float, width:Float,
-		height:Float):Void {
+			height:Float):Void {
 		header(opcode, 28);
 		word(value.nativeHandle().rawValue());
-		float(x); float(y); float(width); float(height);
+		float(x);
+		float(y);
+		float(width);
+		float(height);
 	}
 
 	function header(opcode:NativeKitUI.CommandOpcode, size:Int,
-		version:Int = NativeKitUIConstants.NKUI_COMMAND_VERSION):Void {
+			version:Int = NativeKitUIConstants.NKUI_COMMAND_VERSION):Void {
 		require(size);
 		var rawOpcode = opcode.rawValue();
 		bytes.set(length, rawOpcode & 255);

@@ -72,8 +72,7 @@ class TextStyleOverride {
 			return child;
 		if (child == null)
 			return parent;
-		return new TextStyleOverride(
-			child.font == null ? parent.font : child.font,
+		return new TextStyleOverride(child.font == null ? parent.font : child.font,
 			child.fontSize == null ? parent.fontSize : child.fontSize,
 			child.letterSpacing == null ? parent.letterSpacing : child.letterSpacing,
 			child.wrap == null ? parent.wrap : child.wrap,

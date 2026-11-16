@@ -122,7 +122,8 @@ class IrTypeCodec {
 				var count = input.readInt32();
 				if (count < 0 || count > MAX_ARGUMENTS)
 					throw "Invalid IR function type argument count";
-				Function([for (_ in 0...count) readType(input, totalLength, depth + 1)], readType(input, totalLength, depth + 1));
+				Function([for (_ in 0...count) readType(input, totalLength, depth + 1)],
+					readType(input, totalLength, depth + 1));
 			case 13: I64;
 			case 16: RawPtr;
 			case 17: F32;

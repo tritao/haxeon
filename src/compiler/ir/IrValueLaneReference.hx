@@ -20,7 +20,10 @@ class IrValueLaneReference {
 	public static function canCarry(type:IrType):Bool return switch type {
 		case Dyn, Bytes, ManagedBytes, Obj(_), Enum(_), Array(_), Iterator(_), Function(_, _), Virtual(_): true;
 		case Abstract(name): name != TYPE_NAME && IrHlScalarRef.element(type) == null;
-		case Nullable(inner): canCarry(inner) || switch inner { case I32, I64, F32, F64, Bool: true; default: false; };
+		case Nullable(inner): canCarry(inner) || switch inner {
+				case I32, I64, F32, F64, Bool: true;
+				default: false;
+			};
 		default: false;
 	};
 }

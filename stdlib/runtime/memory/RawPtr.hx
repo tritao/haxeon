@@ -13,7 +13,7 @@ abstract RawPtr<T>(hl.Bytes) from hl.Bytes to hl.Bytes {
 
 	/** Reports whether this pointer is null. It does not validate the address. */
 	public inline function isNull():Bool
-		return (this : hl.Bytes) == null;
+		return (this:hl.Bytes) == null;
 
 	/**
 		Read one unmanaged scalar or Flat value through the pointer's selected native field layout.

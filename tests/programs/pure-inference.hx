@@ -1,4 +1,7 @@
-typedef Limits = {var lower:Null<Float>; var upper:Null<Float>;};
+typedef Limits = {
+	var lower:Null<Float>;
+	var upper:Null<Float>;
+};
 
 class Bounds {
 	public static var checks = 0;
@@ -129,11 +132,13 @@ function main():Int {
 	holder.item = new Item(1);
 	if (!shown(holder) || new Label().toString() != "label")
 		return 2;
-	if (!valid({lower: 3.0, upper: 7.0}) || valid({lower: 12.0, upper: null}) || !Bounds.recorded(1) || Bounds.checks != 1)
+	if (!valid({lower: 3.0, upper: 7.0}) || valid({lower: 12.0, upper: null}) || !Bounds.recorded(1)
+		|| Bounds.checks != 1)
 		return 1;
 	if (sumArray([1, 2, 3]) != 6 || sumMap(["a" => 1, "b" => 2]) != 3)
 		return 3;
-	if (!countedValid({lower: 2.0, upper: null}, new Counter(1)) || countedValid({lower: 2.0, upper: null}, new Counter(0)))
+	if (!countedValid({lower: 2.0, upper: null}, new Counter(1))
+		|| countedValid({lower: 2.0, upper: null}, new Counter(0)))
 		return 4;
 	if (!shapeValid({lower: 2.0, upper: null}, new Circle(2.0)) || !shapeValid({lower: 2.0, upper: null}, new Shape()))
 		return 5;

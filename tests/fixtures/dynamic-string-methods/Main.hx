@@ -102,7 +102,8 @@ function main():Int {
 	if (unicode.indexOf("x") != 2)
 		return 23;
 	var unicodeSearch:Dynamic = "😀x😀";
-	if (unicodeSearch.indexOf("😀", 1) != 3 || unicodeSearch.lastIndexOf("😀", 2) != 0 || unicodeSearch.lastIndexOf("x") != 2)
+	if (unicodeSearch.indexOf("😀", 1) != 3 || unicodeSearch.lastIndexOf("😀", 2) != 0
+		|| unicodeSearch.lastIndexOf("x") != 2)
 		return 27;
 	if (unicodeSearch.indexOf("", 1) != 1 || unicodeSearch.lastIndexOf("", 1) != 1)
 		return 28;

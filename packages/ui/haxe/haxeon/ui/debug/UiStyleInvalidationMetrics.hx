@@ -45,8 +45,8 @@ class UiStyleInvalidationMetrics {
 	public static function compare(previous:Null<RenderNode>, current:Null<RenderNode>,
 			?previousById:Map<Int, RenderNode>, ?currentById:Map<Int, RenderNode>,
 			?priorOverrides:Map<Int, RenderNode>, ?frame:UiStyleInvalidationFrame):UiStyleInvalidationMetrics {
-		var previousIndex = previousById == null ? new Map<Int, RenderNode>() : previousById;
-		var currentIndex = currentById == null ? new Map<Int, RenderNode>() : currentById;
+		var previousIndex = previousById == null ? new Map<Int, RenderNode>():previousById;
+		var currentIndex = currentById == null ? new Map<Int, RenderNode>():currentById;
 		if (frame == null) {
 			previousIndex.clear();
 			if (previous != null) previous.walk(function(node) previousIndex.set(node.id.value, node));
@@ -63,8 +63,8 @@ class UiStyleInvalidationMetrics {
 		// Every visited prior was matched by ID; a smaller count means a node was removed.
 		if (previous != null && !result.treeChanged && matched != previousIndex.size()) result.treeChanged = true;
 		if (result.treeChanged) result.invalidationFlags |= UiDirtyFlag.NeedsBuild;
-		var nativeWork = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsTextLayout |
-			UiDirtyFlag.NeedsLayout | UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsHitGeometry;
+		var nativeWork = UiDirtyFlag.NeedsBuild | UiDirtyFlag.NeedsTextLayout | UiDirtyFlag.NeedsLayout
+			| UiDirtyFlag.NeedsPaint | UiDirtyFlag.NeedsHitGeometry;
 		result.nativeLayoutRequired = ((result.invalidationFlags & nativeWork) != UiDirtyFlag.empty());
 		return result;
 	}
@@ -88,10 +88,11 @@ class UiStyleInvalidationMetrics {
 		if (prior == null) {
 			result.treeChanged = true;
 		} else {
-			var priorParent = frame != null ? frame.topology.parent(node.id.value) : prior.parent == null ? 0 : prior.parent.id.value;
+			var priorParent = frame != null ? frame.topology.parent(node.id.value) : prior.parent == null
+				? 0 : prior.parent.id.value;
 			var currentParent = node.parent == null ? 0 : node.parent.id.value;
-			if (priorParent != currentParent || prior.layout.visualKind != node.layout.visualKind ||
-				!sameChildOrder(prior, node, frame == null ? null : frame.topology))
+			if (priorParent != currentParent || prior.layout.visualKind != node.layout.visualKind
+				|| !sameChildOrder(prior, node, frame == null ? null : frame.topology))
 				result.treeChanged = true;
 		}
 		if (frame != null && !frame.preserveRevisions && (prior == null || !frame.topology.sameChildren(node)))
@@ -116,7 +117,8 @@ class UiStyleInvalidationMetrics {
 	}
 
 	/** Classify announced edits made by geometry callbacks against their existing comparison priors. */
-	public static function collectLayoutEdits(current:Map<Int, RenderNode>, priors:Map<Int, RenderNode>, changes:LayoutChanges):Void {
+	public static function collectLayoutEdits(current:Map<Int, RenderNode>, priors:Map<Int, RenderNode>,
+			changes:LayoutChanges):Void {
 		for (id => prior in priors) {
 			var node = current.get(id);
 			if (node == null) continue;

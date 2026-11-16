@@ -97,7 +97,7 @@ class Main {
 					if (errorView != null) {
 						layoutFrame.setViewport(logicalWidth, logicalHeight);
 						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
-						framebufferWidth / logicalWidth);
+							framebufferWidth / logicalWidth);
 						context.submit(errorView, layoutFrame);
 						context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
 						if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
@@ -127,7 +127,7 @@ class Main {
 					try {
 						layoutFrame.setViewport(logicalWidth, logicalHeight);
 						frameInfo.set(logicalWidth, logicalHeight, framebufferWidth, framebufferHeight,
-						framebufferWidth / logicalWidth);
+							framebufferWidth / logicalWidth);
 						context.submit(errorView, layoutFrame);
 						context.render(renderer, Surface.fromNativeHandle(nativeSurface), frameInfo);
 						if (NativeKit.nk_surface_request_frame(nativeSurface) != Result.Ok)
@@ -155,8 +155,8 @@ class Main {
 	}
 
 	static function disposeAll(input:Null<NativeInputAdapter>, frameSubscription:Null<SurfaceFrameSubscription>,
-		eventSubscription:Null<EventSubscription>, context:Null<UiContext>, renderer:Null<Renderer>,
-		fonts:Null<FontCollection>, lab:Null<AudioLabEngine>, runtime:Null<Runtime>):Void {
+			eventSubscription:Null<EventSubscription>, context:Null<UiContext>, renderer:Null<Renderer>,
+			fonts:Null<FontCollection>, lab:Null<AudioLabEngine>, runtime:Null<Runtime>):Void {
 		if (input != null)
 			input.detach();
 		if (frameSubscription != null)

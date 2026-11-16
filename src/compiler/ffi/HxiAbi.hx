@@ -68,7 +68,8 @@ class HxiAbi {
 			case "portable64": 64;
 			default: throw 'Unsupported HXI target architecture "$architecture"';
 		}
-		var windows = this.target.indexOf("windows") >= 0 || this.target.indexOf("mingw") >= 0 || this.target.indexOf("msvc") >= 0;
+		var windows = this.target.indexOf("windows") >= 0 || this.target.indexOf("mingw") >= 0
+			|| this.target.indexOf("msvc") >= 0;
 		longBits = windows ? 32 : pointerBits;
 		wcharBits = windows ? 16 : 32;
 		scalarAlignLimit = switch architecture {
@@ -104,22 +105,32 @@ class HxiAbi {
 			case Pointer(_): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
 			case Primitive("utf8"): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
 			case Array(element, length): var item = typeLayout(element,
-					resolving); item == null || length < 0 || (length != 0
-					&& item.size > Std.int(0x7FFFFFFF / length)) ? null : {size: item.size * length, align: item.align};
+				resolving);
+				item == null || length < 0 || (length != 0
+					&& item.size > Std.int(0x7FFFFFFF / length)) ? null : {
+						size: item.size * length,
+						align: item.align
+					};
 			case Primitive(_):
 				switch classify(type) {
 					case IntegerValue(bits, _), EnumerationValue(_, bits, _), FloatValue(bits):
 						var size = Std.int(bits / 8);
-						{size: size, align: size < scalarAlignLimit ? size : scalarAlignLimit};
+						{
+							size:size, align:size < scalarAlignLimit ? size : scalarAlignLimit
+						};
 					case Boolean32Value: {size: 4, align: 4};
 					case HandleValue(_): {size: 4, align: 4};
-					case PointerValue(_, _, _, _) | Utf8Value(_): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
+					case PointerValue(_, _, _, _) | Utf8Value(_): {
+						size: Std.int(pointerBits / 8),
+						align: Std.int(pointerBits / 8)
+					};
 					case CallbackValue(_, _, _, _): {size: Std.int(pointerBits / 8), align: Std.int(pointerBits / 8)};
 					case AggregateValue(_, size, align): {size: size, align: align};
 					case _: null;
 				}
 			case Named(name):
-				if (resolving.exists(name)) null; else {
+				if (resolving.exists(name)) null;
+				else {
 					resolving.set(name, true);
 					var result = switch declarations.get(name) {
 						case Alias(_, target, _): typeLayout(target, resolving);
@@ -192,7 +203,8 @@ class HxiAbi {
 			case Pointer(element): PointerValue(pointerBits, false, opaquePointee(element), structurePointee(element));
 			case Nullable(element):
 				switch classify(element, allowVoid) {
-					case PointerValue(bits, _, opaquePointee, structure): PointerValue(bits, true, opaquePointee, structure);
+					case PointerValue(bits, _, opaquePointee, structure): PointerValue(bits, true, opaquePointee,
+						structure);
 					case CallbackValue(name, arguments, result, _): CallbackValue(name, arguments, result, true);
 					case Utf8Value(_): Utf8Value(true);
 					case _: throw "Nullable ABI value must be a pointer";
@@ -216,7 +228,8 @@ class HxiAbi {
 							case _: throw 'Enum HXI type "$name" does not have an integer representation';
 						}
 					case Callback(_, parameters, result, _, _):
-						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)], classify(result, true), false);
+						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)],
+							classify(result, true), false);
 					case Structure(_, size, align, _, _): AggregateValue(name, size, align);
 					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
 					case _: throw 'HXI declaration "$name" is not a type';
@@ -284,7 +297,8 @@ class HxiAbi {
 
 	static function nameOf(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
-				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
+				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_): name;
 		};
 }

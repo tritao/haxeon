@@ -15,13 +15,15 @@ class WasmDynamicStringMain {
 			compiler.update("Main.hx", incremental ? StringTools.replace(source, "return 42;", "return 43;") : source);
 			var result = compiler.compile("Main");
 			for (target in [Wasm32, WasmGc]) {
-				File.saveBytes(SuiteOutput.path('dynamic-string-$target-' + (incremental ? "incremental" : "clean") + ".wasm"),
+				File.saveBytes(SuiteOutput.path('dynamic-string-$target-' + (incremental ? "incremental" : "clean")
+					+ ".wasm"),
 					new WasmBackend().compile(result.ir, {
 						target: target,
 						debugNames: true
 					}).bytes);
 				if (target == Wasm32)
-					File.saveBytes(SuiteOutput.path('dynamic-string-Wasm32-stress-' + (incremental ? "incremental" : "clean") + ".wasm"),
+					File.saveBytes(SuiteOutput.path('dynamic-string-Wasm32-stress-'
+						+ (incremental ? "incremental" : "clean") + ".wasm"),
 						new WasmBackend().compile(result.ir, {
 							target: target,
 							debugNames: true,

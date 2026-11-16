@@ -10,7 +10,8 @@ class DebugSectionFixture {
 		var args = Sys.args();
 		if (args.length != 2)
 			throw "Expected valid and malformed output paths";
-		var program = Frontend.compileFile(new SourceFile("debug-section-fixture.hx", "function main():Int return 0;\n"));
+		var program = Frontend.compileFile(new SourceFile("debug-section-fixture.hx",
+			"function main():Int return 0;\n"));
 		var code = HlLower.lower(program);
 		code.debugSections.push(compiler.hl.HlCode.HlDebugSection.of(0x3FFF, 9, 0, Bytes.ofString("unknown-section")));
 		var encoded = HlWriter.encode(code).flatten();

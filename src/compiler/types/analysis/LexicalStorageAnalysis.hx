@@ -24,13 +24,17 @@ class LexicalStorageAnalysis extends BindingWalker {
 		return BindingWalker.key(name, span);
 
 	public static function analyze(statements:Array<AstStatement>, arguments:Array<AstArgument>,
-			?mayHoldValue:(Null<AstType>, Null<AstExpression>)->Bool,
-			?mayBeKeyPath:(Null<AstType>, Null<AstExpression>)->Bool):LexicalStorageRequirements {
+			?mayHoldValue:(Null<AstType>, Null<AstExpression>) -> Bool,
+			?mayBeKeyPath:(Null<AstType>, Null<AstExpression>) -> Bool):LexicalStorageRequirements {
 		var first = new LexicalStorageAnalysis(null, mayHoldValue, mayBeKeyPath);
 		first.walkFunction(arguments, statements);
 		var storage = new LexicalStorageAnalysis(first.writtenDeclarations, mayHoldValue, mayBeKeyPath);
 		storage.walkFunction(arguments, statements);
-		return {mutableCaptures: storage.captures, exceptionCells: storage.exceptions, closureWrites: storage.closureWrites};
+		return {
+			mutableCaptures: storage.captures,
+			exceptionCells: storage.exceptions,
+			closureWrites: storage.closureWrites
+		};
 	}
 
 	/** Declarations assigned anywhere, found by the first pass. Null during that pass. */
@@ -44,21 +48,22 @@ class LexicalStorageAnalysis extends BindingWalker {
 	final declaredInTry:Map<String, Int> = [];
 	final valueBindings:Map<String, Bool> = [];
 	final bindingSyntax:Map<String, {type:Null<AstType>, initializer:Null<AstExpression>}> = [];
-	final mayHoldValue:Null<(Null<AstType>, Null<AstExpression>)->Bool>;
-	final mayBeKeyPath:Null<(Null<AstType>, Null<AstExpression>)->Bool>;
+	final mayHoldValue:Null<(Null<AstType>, Null<AstExpression>) -> Bool>;
+	final mayBeKeyPath:Null<(Null<AstType>, Null<AstExpression>) -> Bool>;
 
 	/** Local functions whose own body the walk is inside. */
 	final enclosingFunctions:Array<String> = [];
 
-	function new(knownWrites:Null<Map<String, Bool>>, mayHoldValue:Null<(Null<AstType>, Null<AstExpression>)->Bool>,
-			mayBeKeyPath:Null<(Null<AstType>, Null<AstExpression>)->Bool>) {
+	function new(knownWrites:Null<Map<String, Bool>>, mayHoldValue:Null<(Null<AstType>, Null<AstExpression>) -> Bool>,
+			mayBeKeyPath:Null<(Null<AstType>, Null<AstExpression>) -> Bool>) {
 		super();
 		this.knownWrites = knownWrites;
 		this.mayHoldValue = mayHoldValue;
 		this.mayBeKeyPath = mayBeKeyPath;
 	}
 
-	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
+	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
+			initializer:Null<AstExpression>):Void {
 		declaredInLambda.set(declaration, lambdaDepth);
 		declaredInTry.set(declaration, tryDepth);
 		if (mayHoldValue != null) bindingSyntax.set(declaration, {type: type, initializer: initializer});
@@ -127,7 +132,8 @@ class LexicalStorageAnalysis extends BindingWalker {
 	function read(declaration:Null<String>):Void {
 		if (declaration == null)
 			return;
-		if (!refersToItself(declaration) && knownWrites != null && isCaptured(declaration) && knownWrites.exists(declaration))
+		if (!refersToItself(declaration) && knownWrites != null && isCaptured(declaration)
+			&& knownWrites.exists(declaration))
 			captures.set(declaration, true);
 	}
 

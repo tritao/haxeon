@@ -50,8 +50,8 @@ struct EffectParameter implements Equatable {
 		};
 
 	public function equals(other:EffectParameter):Bool
-		return type == other.type && componentCount == other.componentCount &&
-			x == other.x && y == other.y && z == other.z && w == other.w;
+		return type == other.type && componentCount == other.componentCount && x == other.x && y == other.y
+			&& z == other.z && w == other.w;
 
 	public function interpolate(other:Null<EffectParameter>, amount:Float):EffectParameter {
 		if (other == null)

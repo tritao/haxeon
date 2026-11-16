@@ -34,9 +34,10 @@ class Image {
 
 	/** Creates an image from the current generic image descriptor. */
 	public static function create(renderer:Renderer, desc:ImageDesc):Image {
-		if (desc == null || desc.width <= 0 || desc.height <= 0 || desc.mipCount <= 0 ||
-			desc.sampleCount <= 0 || desc.layerCount <= 0)
-			throw BindingError.invalidArgument("Image.create", "GPU image descriptor dimensions and counts must be positive");
+		if (desc == null || desc.width <= 0 || desc.height <= 0 || desc.mipCount <= 0 || desc.sampleCount <= 0
+			|| desc.layerCount <= 0)
+			throw BindingError.invalidArgument("Image.create",
+				"GPU image descriptor dimensions and counts must be positive");
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_image_create_desc(renderer.nativeHandle(), desc.nativeValue());
 		GpuResult.check(made.status, "image.create");
@@ -47,7 +48,8 @@ class Image {
 	public static function fromRgba8(renderer:Renderer, width:Int, height:Int, pixels:Bytes):Image {
 		if (width <= 0 || height <= 0 || pixels == null || width > Std.int(536870911 / height)
 			|| pixels.length != width * height * 4)
-			throw BindingError.invalidArgument("Image.fromRgba8", "GPU RGBA8 image dimensions or pixel storage are invalid");
+			throw BindingError.invalidArgument("Image.fromRgba8",
+				"GPU RGBA8 image dimensions or pixel storage are invalid");
 		renderer.ensureResourceOperation();
 		var madeBuilder = NativeKitGpu.nkgpu_image_begin(renderer.nativeHandle(), width, height);
 		GpuResult.check(madeBuilder.status, "image.begin");
@@ -55,7 +57,8 @@ class Image {
 		for (y in 0...height)
 			for (x in 0...width) {
 				var offset = (y * width + x) * 4;
-				GpuResult.check(NativeKitGpu.nkgpu_image_write_rgba8(builder, x, y, pixels.get(offset), pixels.get(offset + 1),
+				GpuResult.check(NativeKitGpu.nkgpu_image_write_rgba8(builder, x, y, pixels.get(offset),
+					pixels.get(offset + 1),
 					pixels.get(offset + 2), pixels.get(offset + 3)), "image.writePixel");
 			}
 		var made = NativeKitGpu.nkgpu_image_end(builder);

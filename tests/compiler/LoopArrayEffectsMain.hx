@@ -46,12 +46,14 @@ class LoopArrayEffectsMain {
 			'var output = [0]; if (provider == null) return 0; for (i in 0...provider.entries.length) { output.push(provider.entries[i]); } return output.length;',
 			true);
 		check("user push can clear the field",
-			'if (provider == null) return 0; for (i in 0...provider.entries.length) { var value = provider.entries[i]; fake.push(this); } return 0;', false);
+			'if (provider == null) return 0; for (i in 0...provider.entries.length) { var value = provider.entries[i]; fake.push(this); } return 0;',
+			false);
 		check("array callback can clear the field",
 			'if (provider == null) return 0; for (i in 0...provider.entries.length) { var value = provider.entries[i]; results.sort(function(a:Int, b:Int):Int { provider = null; return 0; }); } return 0;',
 			false);
 		check("plain field assignment still invalidates",
-			'if (provider == null) return 0; for (i in 0...provider.entries.length) { results.push(provider.entries[i]); provider = null; } return 0;', false);
+			'if (provider == null) return 0; for (i in 0...provider.entries.length) { results.push(provider.entries[i]); provider = null; } return 0;',
+			false);
 		Sys.println("PASS: loop array effects preserve unrelated fields and reject real mutations");
 	}
 }

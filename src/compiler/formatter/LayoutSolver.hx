@@ -103,7 +103,10 @@ class LayoutSolver {
 	}
 
 	/** The indent of the line after a break, and of the element it starts. */
-	static function place(layout:BreakLayout, indent:Int, base:Int, line:UnwrappedLine, config:FormatConfig):{indent:Int, base:Int} {
+	static function place(layout:BreakLayout, indent:Int, base:Int, line:UnwrappedLine, config:FormatConfig): {
+		indent: Int,
+		base: Int
+	} {
 		var levels = FormatConfigTools.continuationLevels(config);
 		return switch layout {
 			case Wrap(count): {indent: base + count * levels, base: base};
@@ -111,7 +114,9 @@ class LayoutSolver {
 			case Separator: {indent: base, base: base};
 			case Close:
 				var closing = Std.int(Math.max(line.indent, base - levels));
-				{indent: closing, base: closing};
+				{
+					indent:closing, base:closing
+				};
 			case At(fixed): {indent: fixed, base: fixed};
 		};
 	}

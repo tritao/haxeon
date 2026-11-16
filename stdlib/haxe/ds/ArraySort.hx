@@ -24,11 +24,11 @@ package haxe.ds;
 
 /** Stable in-place merge sort, adapted from the Haxe 4.3.7 standard library. */
 class ArraySort {
-	public static function sort<T>(a:Array<T>, cmp:(T, T)->Int):Void {
+	public static function sort<T>(a:Array<T>, cmp:(T, T) -> Int):Void {
 		ArraySort.rec(a, cmp, 0, a.length);
 	}
 
-	static function rec<T>(a:Array<T>, cmp:(T, T)->Int, from:Int, to:Int):Void {
+	static function rec<T>(a:Array<T>, cmp:(T, T) -> Int, from:Int, to:Int):Void {
 		var middle:Int = (from + to) >> 1;
 		if (to - from < 12) {
 			if (to <= from)
@@ -50,7 +50,7 @@ class ArraySort {
 		ArraySort.doMerge(a, cmp, from, middle, to, middle - from, to - middle);
 	}
 
-	static function doMerge<T>(a:Array<T>, cmp:(T, T)->Int, from:Int, pivot:Int, to:Int, len1:Int, len2:Int):Void {
+	static function doMerge<T>(a:Array<T>, cmp:(T, T) -> Int, from:Int, pivot:Int, to:Int, len1:Int, len2:Int):Void {
 		var firstCut:Int = 0, secondCut:Int = 0, len11:Int = 0, len22:Int = 0, newMid:Int = 0;
 		if (len1 == 0 || len2 == 0)
 			return;
@@ -105,7 +105,7 @@ class ArraySort {
 		return m;
 	}
 
-	static function upper<T>(a:Array<T>, cmp:(T, T)->Int, from:Int, to:Int, valueIndex:Int):Int {
+	static function upper<T>(a:Array<T>, cmp:(T, T) -> Int, from:Int, to:Int, valueIndex:Int):Int {
 		var length:Int = to - from, half:Int = 0, middle:Int = 0;
 		while (length > 0) {
 			half = length >> 1;
@@ -120,7 +120,7 @@ class ArraySort {
 		return from;
 	}
 
-	static function lower<T>(a:Array<T>, cmp:(T, T)->Int, from:Int, to:Int, valueIndex:Int):Int {
+	static function lower<T>(a:Array<T>, cmp:(T, T) -> Int, from:Int, to:Int, valueIndex:Int):Int {
 		var length:Int = to - from, half:Int = 0, middle:Int = 0;
 		while (length > 0) {
 			half = length >> 1;
@@ -140,7 +140,7 @@ class ArraySort {
 		a[second] = temporary;
 	}
 
-	static inline function compare<T>(a:Array<T>, cmp:(T, T)->Int, first:Int, second:Int):Int {
+	static inline function compare<T>(a:Array<T>, cmp:(T, T) -> Int, first:Int, second:Int):Int {
 		return cmp(a[first], a[second]);
 	}
 }

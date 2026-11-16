@@ -24,7 +24,8 @@ private class FocusView implements View {
 		style.width = LayoutAxis.fixed(120);
 		style.height = LayoutAxis.fixed(40);
 		var children:Array<KeyedView> = [];
-		if (showFirst) children.push(new KeyedView("first", new CanvasView("first", function(_, _) {}, style, "First")));
+		if (showFirst) children.push(new KeyedView("first",
+			new CanvasView("first", function(_, _) {}, style, "First")));
 		children.push(new KeyedView("second", new CanvasView("second", function(_, _) {}, style, "Second")));
 		var root = new Column("focus-test", children).build(context);
 		for (child in root.children) child.focusable = true;
@@ -45,8 +46,12 @@ class WindowFocusTests {
 		var source = new Handle(17);
 		var input = new NativeInputAdapter(context, source);
 		var gained = 0, lost = 0;
-		root.children[0].on(UiEventKind.Focus, function(_) { gained++; });
-		root.children[0].on(UiEventKind.FocusLost, function(_) { lost++; });
+		root.children[0].on(UiEventKind.Focus, function(_) {
+			gained++;
+		});
+		root.children[0].on(UiEventKind.FocusLost, function(_) {
+			lost++;
+		});
 		check(context.focusWidget(first), "initial focus");
 		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
 		input.consume(WindowStateChanged(source, nativekit.ffi.NativeKitTypes.WindowStateFlags.empty()));
@@ -91,7 +96,8 @@ class WindowFocusTests {
 		view.trapSecond = true;
 		context.submit(view, frame);
 		input.consume(WindowStateChanged(source, WindowStateFlags.Active));
-		check(context.focus.focusedId != null && context.focus.focusedId.equals(second), "modal focus stays in its trap");
+		check(context.focus.focusedId != null && context.focus.focusedId.equals(second),
+			"modal focus stays in its trap");
 		context.dispose();
 		Sys.println("PASS: window focus restoration, duplicate events, rebuilds, explicit changes and eligibility");
 		return 0;

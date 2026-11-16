@@ -104,7 +104,11 @@ class FieldStorageSelectionMain {
 		}
 		if (!caught)
 			throw "Invalid optional copies must still be diagnosed";
-		declarations[1].fields.push({name: "narrow", type: Nullable(I32), nullableScalarStorage: {size: 4, signed: true}});
+		declarations[1].fields.push({
+			name: "narrow",
+			type: Nullable(I32),
+			nullableScalarStorage: {size: 4, signed: true}
+		});
 		b = new IrBuilder();
 		owner = b.argument("owner", Obj("Holder"));
 		var value = b.argument("value", Nullable(I32));
@@ -112,7 +116,8 @@ class FieldStorageSelectionMain {
 		b.returnValue(b.constInt(42));
 		caught = false;
 		try {
-			new IrNullableScalarFields(declarations).rewrite([new IrFunction("badWidth", b.arguments, I32, b.blocks, Ordinary)]);
+			new IrNullableScalarFields(declarations)
+				.rewrite([new IrFunction("badWidth", b.arguments, I32, b.blocks, Ordinary)]);
 		} catch (error:Dynamic) {
 			if (Std.string(error).indexOf("Invalid nullable scalar width") < 0)
 				throw error;

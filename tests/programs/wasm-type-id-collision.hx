@@ -16,7 +16,9 @@ function main():Int {
 	if (Reflect.field(first, "left") != 42 || Reflect.field(first, "right") != null) return 3;
 	if (Reflect.field(second, "right") != "kept" || Reflect.field(second, "left") != null) return 4;
 	var typed:Array<CaxscQFXbw> = [cast first], erased:Dynamic = typed, rejected = false;
-	try { var wrong:Array<CVqowVrIwv> = cast erased; } catch (_:Dynamic) rejected = true;
+	try {
+		var wrong:Array<CVqowVrIwv> = cast erased;
+	} catch (_:Dynamic) rejected = true;
 	if (!rejected) return 5;
 	var seed = 0;
 	for (i in 0...3) seed += i;

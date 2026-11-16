@@ -127,7 +127,8 @@ class FileWatch {
 		return contains(pathKey(parent), pathKey(child));
 
 	static function contains(parentKey:String, childKey:String):Bool
-		return parentKey == childKey || StringTools.startsWith(childKey, StringTools.endsWith(parentKey, "/") ? parentKey : parentKey + "/");
+		return parentKey == childKey
+			|| StringTools.startsWith(childKey, StringTools.endsWith(parentKey, "/") ? parentKey : parentKey + "/");
 
 	function register(path:String, recursive:Bool):Void {
 		NativeKit.nk_file_watch_add_directory_checked(owned.borrow(), path, recursive);
@@ -150,9 +151,10 @@ class FileWatch {
 					if (change == null)
 						return;
 					// A registration follows its subtree; only a removal, move or rescan at or above it invalidates it.
-					var invalidating = change.rescan || ((change.change == FileChangeType.Removed || change.change == FileChangeType.Moved) &&
-						change.item != FileItemKind.File);
-					if (!invalidating || rearm(change.change == FileChangeType.Moved && change.oldPath != null ? change.oldPath : change.path))
+					var invalidating = change.rescan || ((change.change == FileChangeType.Removed
+						|| change.change == FileChangeType.Moved) && change.item != FileItemKind.File);
+					if (!invalidating || rearm(change.change == FileChangeType.Moved
+						&& change.oldPath != null ? change.oldPath : change.path))
 						listener(Changed(change));
 				}
 			case _:

@@ -73,7 +73,8 @@ class ReflectionTagProjectionMain {
 			}
 		];
 		var functions:Array<IrFunction> = [],
-			remaining = compiler.ir.ObjectReflection.generate(compiler.ir.ProgramFacts.empty(), natives, objects, ["Holder"], functions);
+			remaining = compiler.ir.ObjectReflection.generate(compiler.ir.ProgramFacts.empty(), natives, objects,
+				["Holder"], functions);
 		var generated = [for (fn in functions) fn.name => true];
 		for (name in ["read", "write", "count", "name", "has", "delete", "copy"])
 			if (generated.exists(name) || !Lambda.exists(remaining, native -> native.name == name))
@@ -88,8 +89,7 @@ class ReflectionTagProjectionMain {
 			compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		session.update("Main.hx",
 			'enum Mode { First; Second; } '
-			+
-			'\nclass Holder { public var mode:Mode; public var number:Int; public var callback:Mode->Mode; public function new() {mode=Second;number=17;callback=function(value:Mode):Mode return value;} } '
+			+ '\nclass Holder { public var mode:Mode; public var number:Int; public var callback:Mode->Mode; public function new() {mode=Second;number=17;callback=function(value:Mode):Mode return value;} } '
 			+ '\nfunction main():Int { var h=new Holder(), d:Dynamic=h; '
 			+ '\nif (!Reflect.hasField(d,"mode") || Reflect.hasField(d,"absent") || Reflect.fields(d).length!=3) return 1; '
 			+ '\nif (Reflect.field(d,"mode")!=Second) return 2; '
@@ -97,12 +97,17 @@ class ReflectionTagProjectionMain {
 			+ '\nvar c:Dynamic=Reflect.copy(d); Reflect.setField(d,"mode",Second); '
 			+ '\nvar callback:Mode->Mode=Reflect.field(c,"callback"); if(callback(Second)!=Second) return 6; '
 			+ '\nif(Reflect.field(c,"mode")!=First || Reflect.field(c,"number")!=17) return 4; '
-			+
-			'\nif(!Reflect.deleteField(d,"mode") || Reflect.deleteField(d,"absent") || Reflect.field(d,"mode")!=null || !Reflect.hasField(d,"mode")) return 5; '
+			+ '\nif(!Reflect.deleteField(d,"mode") || Reflect.deleteField(d,"absent") || Reflect.field(d,"mode")!=null || !Reflect.hasField(d,"mode")) return 5; '
 			+ '\nreturn 42; }');
 		var program = session.compile("Main").ir;
-		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, debugNames: true})
-			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true}).bytes;
+		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+			target: HashLink,
+			debugNames: true
+		})
+			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
+				target: target == "wasm32" ? Wasm32 : WasmGc,
+				debugNames: true
+			}).bytes;
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null)
 			temp = "out";
@@ -115,9 +120,14 @@ class ReflectionTagProjectionMain {
 			+ (target == "hl" ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, binary);
 		try {
-			var script = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var script =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ '\nif(e.main()!==42)throw Error("tag reflection");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", script, path]);
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"-e",
+				script,
+				path
+			]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();

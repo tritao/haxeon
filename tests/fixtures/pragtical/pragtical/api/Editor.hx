@@ -4,12 +4,12 @@ import pragtical.api.Document;
 
 class Editor {
 	public var commands:Array<String>;
-	public var callbacks:Map<String, Void->Int>;
+	public var callbacks:Map<String, Void -> Int>;
 	public var documents:Array<Document>;
 
 	public function new():Void {
 		this.commands = new Array<String>(0);
-		this.callbacks = new Map<String, Void->Int>();
+		this.callbacks = new Map<String, Void -> Int>();
 		this.documents = new Array<pragtical.api.Document>(0);
 	}
 

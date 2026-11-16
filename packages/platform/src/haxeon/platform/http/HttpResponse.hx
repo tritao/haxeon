@@ -11,7 +11,7 @@ class HttpResponse {
 	public final body:haxe.io.Bytes;
 
 	public function new(statusCode:Int, flags:Int, contentLength:haxe.Int64,
-		headers:Array<HttpHeader>, body:haxe.io.Bytes) {
+			headers:Array<HttpHeader>, body:haxe.io.Bytes) {
 		this.statusCode = statusCode;
 		this.flags = flags;
 		this.contentLength = contentLength;

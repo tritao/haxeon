@@ -8,26 +8,40 @@ import compiler.types.analysis.LexicalStorageAnalysis;
 
 class CaptureAnalysisMain {
 	static function main():Void {
-		var lexicalShadowed = analyzeLexically('function main():Int { var value = 1; var local = () -> { var value = 2; value = value + 1; return value; }; return local(); }');
-		expect(count(lexicalShadowed.mutableCaptures) == 0, "lambda-local writes must not request storage in the enclosing body");
+		var lexicalShadowed =
+			analyzeLexically('function main():Int { var value = 1; var local = () -> { var value = 2; value = value + 1; return value; }; return local(); }');
+		expect(count(lexicalShadowed.mutableCaptures) == 0,
+			"lambda-local writes must not request storage in the enclosing body");
 
-		var lexicalMutable = analyzeLexically('function main():Int { var value = 0; var increment = () -> { value = value + 1; return value; }; return increment(); }');
-		expect(count(lexicalMutable.mutableCaptures) == 1, "the resolver must identify exactly one mutable captured declaration");
-		expect(firstKey(lexicalMutable.mutableCaptures).indexOf("value@") == 0, "storage identities must include the declaration site");
+		var lexicalMutable =
+			analyzeLexically('function main():Int { var value = 0; var increment = () -> { value = value + 1; return value; }; return increment(); }');
+		expect(count(lexicalMutable.mutableCaptures) == 1,
+			"the resolver must identify exactly one mutable captured declaration");
+		expect(firstKey(lexicalMutable.mutableCaptures).indexOf("value@") == 0,
+			"storage identities must include the declaration site");
 
-		var receiver = analyzeLexically('function main():Int { var box = new Box(1); box = new Box(2); var read = () -> box.answer(); return read(); }');
-		expect(count(receiver.mutableCaptures) == 1, "method-only captured receivers must use cells from their declaration");
-		var callee = analyzeLexically('function main():Int { var f = () -> 1; f = () -> 2; var read = () -> f(); return read(); }');
-		expect(count(callee.mutableCaptures) == 1, "call-only captured functions must use cells from their declaration");
-		var immutable = analyzeLexically('function main():Int { var box = new Box(1); var read = () -> box.answer(); return read(); }');
+		var receiver =
+			analyzeLexically('function main():Int { var box = new Box(1); box = new Box(2); var read = () -> box.answer(); return read(); }');
+		expect(count(receiver.mutableCaptures) == 1,
+			"method-only captured receivers must use cells from their declaration");
+		var callee =
+			analyzeLexically('function main():Int { var f = () -> 1; f = () -> 2; var read = () -> f(); return read(); }');
+		expect(count(callee.mutableCaptures) == 1,
+			"call-only captured functions must use cells from their declaration");
+		var immutable =
+			analyzeLexically('function main():Int { var box = new Box(1); var read = () -> box.answer(); return read(); }');
 		expect(count(immutable.mutableCaptures) == 0, "immutable receiver captures should remain direct values");
-		var referenceProgram = compiler.Frontend.compile('class Box { public var n:Int; public function new() n = 1; public function bump():Void n++; } function main():Int { var box = new Box(); var update = () -> box.bump(); update(); return box.n; }');
+		var referenceProgram = compiler.Frontend
+			.compile('class Box { public var n:Int; public function new() n = 1; public function bump():Void n++; } function main():Int { var box = new Box(); var update = () -> box.bump(); update(); return box.n; }');
 		for (object in referenceProgram.objects)
-			expect(!StringTools.startsWith(object.name, "$cell:"), "mutating a referenced class must not add a capture cell");
+			expect(!StringTools.startsWith(object.name, "$cell:"),
+				"mutating a referenced class must not add a capture cell");
 
-		var factoryReference = compiler.Frontend.compile('class Box { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():Box return new Box(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return box.n; }');
+		var factoryReference = compiler.Frontend
+			.compile('class Box { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():Box return new Box(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return box.n; }');
 		for (object in factoryReference.objects)
-			expect(!StringTools.startsWith(object.name, "$cell:"), "inferred reference receivers must not add capture cells");
+			expect(!StringTools.startsWith(object.name, "$cell:"),
+				"inferred reference receivers must not add capture cells");
 
 		for (source in [
 			'function fresh():Array<Int> return [1]; function main():Int { var values=fresh(); var update=()->values.push(2); update(); return values.length; }',
@@ -38,24 +52,31 @@ class CaptureAnalysisMain {
 		]) {
 			var inferredReference = compiler.Frontend.compile(source);
 			for (object in inferredReference.objects)
-				expect(!StringTools.startsWith(object.name, "$cell:"), "inferred reference containers must not add capture cells");
+				expect(!StringTools.startsWith(object.name, "$cell:"),
+					"inferred reference containers must not add capture cells");
 		}
 
-		var factoryValue = compiler.Frontend.compile('struct Counter { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():Counter return new Counter(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return box.n; }');
+		var factoryValue = compiler.Frontend
+			.compile('struct Counter { public var n:Int=1; public function new() {} public function bump():Void n++; } function fresh():Counter return new Counter(); function main():Int { var box=fresh(); var update=()->box.bump(); update(); return box.n; }');
 		var hasValueCell = false;
 		for (object in factoryValue.objects) if (StringTools.startsWith(object.name, "$cell:")) hasValueCell = true;
 		expect(hasValueCell, "inferred value receivers must keep shared capture storage");
-		var reassignedReference = compiler.Frontend.compile('class Box { public var n:Int=1; public function new() {} } function fresh():Box return new Box(); function main():Int { var box=fresh(); var update=()->{box=fresh();}; update(); return box.n; }');
+		var reassignedReference = compiler.Frontend
+			.compile('class Box { public var n:Int=1; public function new() {} } function fresh():Box return new Box(); function main():Int { var box=fresh(); var update=()->{box=fresh();}; update(); return box.n; }');
 		var hasReferenceCell = false;
-		for (object in reassignedReference.objects) if (StringTools.startsWith(object.name, "$cell:")) hasReferenceCell = true;
+		for (object in reassignedReference.objects) if (StringTools.startsWith(object.name, "$cell:"))
+			hasReferenceCell = true;
 		expect(hasReferenceCell, "whole reference assignments must keep shared capture storage");
 
-		var exception = analyzeLexically('function main():Int { var value = 0; try { value = 42; throw "stop"; } catch (error:Dynamic) { return value; } }');
+		var exception =
+			analyzeLexically('function main():Int { var value = 0; try { value = 42; throw "stop"; } catch (error:Dynamic) { return value; } }');
 		expect(count(exception.exceptionCells) == 1 && firstKey(exception.exceptionCells).indexOf("value@") == 0,
 			"local crossing a throwing edge should require stable storage");
 
-		var loopShadowing = analyzeLexically('function main():Int { try { for (name => state in [1 => 2]) { state = state + 1; trace(name); } } catch (error:Dynamic) { for (name => state in [3 => 4]) trace(name + state); } return 0; }');
-		expect(count(loopShadowing.exceptionCells) == 0, "separate loop keys and values must not alias across an exception edge");
+		var loopShadowing =
+			analyzeLexically('function main():Int { try { for (name => state in [1 => 2]) { state = state + 1; trace(name); } } catch (error:Dynamic) { for (name => state in [3 => 4]) trace(name + state); } return 0; }');
+		expect(count(loopShadowing.exceptionCells) == 0,
+			"separate loop keys and values must not alias across an exception edge");
 
 		var plan = new BindingStoragePlan();
 		plan.request("value@1", "$cell:test:value", ExceptionEdge);
@@ -64,13 +85,15 @@ class CaptureAnalysisMain {
 		var outer = plan.bind("value@1", "$l0:value", CompilerType.TInt),
 			inner = plan.bind("value@2", "$l1:value", CompilerType.TInt);
 		expect(outer != inner, "shadowed bindings must receive distinct cells");
-		expect(plan.kinds.get("$l0:value") == MutableCapture, "mutable capture storage must take precedence over exception storage");
+		expect(plan.kinds.get("$l0:value") == MutableCapture,
+			"mutable capture storage must take precedence over exception storage");
 		expect(!plan.cells.exists("value"), "source names must not escape into resolved cell maps");
 
 		Sys.println("PASS: capture and exception-edge storage analysis");
 	}
 
-	static function analyzeLexically(source:String):compiler.types.analysis.LexicalStorageAnalysis.LexicalStorageRequirements {
+	static function analyzeLexically(source:String):compiler.types.analysis.LexicalStorageAnalysis
+		.LexicalStorageRequirements {
 		var program = new Parser(new Lexer(new SourceFile("capture-analysis.hx", source)).tokenize()).parseProgram();
 		var fn = program.functions[0];
 		return LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);

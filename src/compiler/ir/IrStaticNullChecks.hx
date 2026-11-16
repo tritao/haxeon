@@ -12,7 +12,8 @@ class IrStaticNullChecks {
 	 * as the same object; the inliner memoizes on function identity and would otherwise redo everything reachable from
 	 * initialization on every compile.
 	 */
-	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>, ?cache:IrStaticCheckCache):Array<IrFunction> {
+	public static function run(functions:Array<IrFunction>, ?objects:Array<IrObject>,
+			?cache:IrStaticCheckCache):Array<IrFunction> {
 		var helpers:Map<String, IrFunction> = [];
 		var nextCopies:Map<String, {source:IrFunction, result:IrFunction, statics:Array<String>}> = [];
 		var store = cache != null ? cache : new IrStaticCheckCache();
@@ -80,7 +81,8 @@ class IrStaticNullChecks {
 						if (output == null || origins.exists(output.id))
 							continue;
 						var source:Null<String> = switch instruction.value {
-							case SafeCast(_, value), ToDyn(_, value), ToVirtual(_, value), Upcast(_, value): origins.get(value.id);
+							case SafeCast(_, value), ToDyn(_, value), ToVirtual(_, value),
+								Upcast(_, value): origins.get(value.id);
 							case Phi(_, inputs):
 								var name:Null<String> = null;
 								for (input in inputs) {
@@ -106,11 +108,16 @@ class IrStaticNullChecks {
 				copy.terminator = block.terminator;
 				for (instruction in block.instructions) {
 					var receivers:Array<IrValue> = switch instruction.value {
-						case FieldGet(_, value, _), FieldSet(value, _, _), ArrayGet(_, value, _), ArraySet(value, _, _), ArraySize(_, value),
-							IteratorNew(_, value), MethodCall(_, value, _, _, _), EnumIndex(_, value), EnumField(_, value, _, _): [value];
+						case FieldGet(_, value, _), FieldSet(value, _, _), ArrayGet(_, value, _), ArraySet(value, _, _),
+							ArraySize(_, value),
+							IteratorNew(_, value), MethodCall(_, value, _, _, _), EnumIndex(_, value),
+							EnumField(_, value, _, _): [value];
 						// The copy reads the source before it writes the destination, even when both are null statics.
 						case Call(_, name, arguments) if (IrOptionalFieldStorage.isCopyName(name)
-							&& arguments.length == 2): [arguments[1], arguments[0]];
+							&& arguments.length == 2): [
+								arguments[1],
+								arguments[0]
+							];
 						case _: [];
 					};
 					for (receiver in receivers)
@@ -120,8 +127,12 @@ class IrStaticNullChecks {
 									case Obj(typeName) if (valueTypes.exists(typeName)): receiver.type;
 									default: null;
 								},
-								helperName = valueType == null ? "__static$nonnull$" + name : "$static$nonnull$value$"
-									+ haxe.Json.stringify([name, Std.string(valueType)]);
+									helperName = valueType == null
+									? "__static$nonnull$" + name : "$static$nonnull$value$"
+									+ haxe.Json.stringify([
+										name,
+										Std.string(valueType)
+									]);
 							if (!helpers.exists(helperName)) {
 								var knownHelper = store.helpers.get(helperName);
 								if (knownHelper != null)
@@ -131,12 +142,15 @@ class IrStaticNullChecks {
 										value = builder.argument("value", valueType == null ? Dyn : valueType),
 										missing = builder.createBlock(),
 										present = builder.createBlock();
-									builder.branch(builder.equal(value, builder.constNull(value.type)), missing, present);
+									builder.branch(builder.equal(value, builder.constNull(value.type)), missing,
+										present);
 									builder.select(missing);
 									builder.terminate(Throw(builder.toDyn(builder.constString('Cannot dereference null static "$name"'))));
 									builder.select(present);
 									builder.returnValue(builder.constVoid());
-									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks, Provider(TypeKey.of(valueType == null ? Dyn : valueType), ProviderOperations.detailed(ProviderOperation.ReceiverCheck, helperName)));
+									var created = new IrFunction(helperName, builder.arguments, Void, builder.blocks,
+										Provider(TypeKey.of(valueType == null ? Dyn : valueType),
+										ProviderOperations.detailed(ProviderOperation.ReceiverCheck, helperName)));
 									helpers.set(helperName, created);
 									store.helpers.set(helperName, created);
 								}
@@ -148,7 +162,8 @@ class IrStaticNullChecks {
 								copy.instructions.push(new Located(ToDyn(actual, receiver), instruction.provenance));
 							}
 							var unused = new IrValue(nextId++, "staticCheck", Void);
-							copy.instructions.push(new Located(Call(unused, helperName, [actual]), instruction.provenance));
+							copy.instructions.push(new Located(Call(unused, helperName, [actual]),
+								instruction.provenance));
 						}
 					copy.instructions.push(instruction);
 				}

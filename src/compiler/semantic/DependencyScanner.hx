@@ -13,7 +13,8 @@ class DependencyScanner {
 	 */
 	public static inline final OPTIONAL_PREFIX = "?";
 
-	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void
+	public static function scanStatement(s:AstStatement, dependencies:Map<String, Bool>,
+			?typeParameters:Array<String>):Void
 		switch s {
 			case ErrorStatement(_):
 			case UninitializedDeclaration(_, type, _):
@@ -85,13 +86,16 @@ class DependencyScanner {
 				scanExpression(e, dependencies, typeParameters);
 		}
 
-	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>, ?typeParameters:Array<String>):Void
+	public static function scanExpression(e:AstExpression, dependencies:Map<String, Bool>,
+			?typeParameters:Array<String>):Void
 		switch e {
 			case Add(a, b, _):
 				scanExpression(a, dependencies, typeParameters);
 				scanExpression(b, dependencies, typeParameters);
-			case Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
-				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
+			case Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
+				BitOr(a, b, _), ShiftLeft(a, b, _),
+				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _),
+				GreaterEqual(a, b, _), Equal(a, b, _),
 				NotEqual(a, b, _):
 				scanExpression(a, dependencies, typeParameters);
 				scanExpression(b, dependencies, typeParameters);
@@ -232,7 +236,8 @@ class DependencyScanner {
 				if (typeParameters == null || typeParameters.indexOf(name) < 0)
 					dependencies.set(name, true);
 			case AppliedType(name, arguments):
-				if (name != "KeyPath" && name != "WritableKeyPath" && (typeParameters == null || typeParameters.indexOf(name) < 0))
+				if (name != "KeyPath" && name != "WritableKeyPath"
+					&& (typeParameters == null || typeParameters.indexOf(name) < 0))
 					dependencies.set(name, true);
 				for (argument in arguments)
 					scanType(argument, dependencies, typeParameters);

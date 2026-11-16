@@ -36,5 +36,6 @@ function main():Int {
 	if (stored == null || stored.length != 2 || stored[0] != allBits || stored[1] != highBit) return 3;
 	value.ticks = null;
 	if (value.ticks != null) return 4;
-	return roundTripTick(ticks[0]) == allBits && roundTripTick(ticks[1]) == highBit && ticks.indexOf(highBit) == 1 ? 42 : 1;
+	return roundTripTick(ticks[0]) == allBits && roundTripTick(ticks[1]) == highBit
+		&& ticks.indexOf(highBit) == 1 ? 42 : 1;
 }

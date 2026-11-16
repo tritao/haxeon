@@ -6,7 +6,8 @@ class AnonymousConformanceMain {
 	static function main():Void {
 		rejected('class Ref { public function new() {} } function main():Int { var a = {x:new Ref()}; var b = {x:new Ref()}; return haxeon.Equality.equals(a,b) ? 1 : 0; }',
 			"Equatable");
-		rejected('class Ref { public function new() {} } function main():Int return haxeon.Hashing.hash({x:new Ref()});', "Hashable");
+		rejected('class Ref { public function new() {} } function main():Int return haxeon.Hashing.hash({x:new Ref()});',
+			"Hashable");
 		rejected('function main():Int { var f = function(x:Int):Int return x; var a = {callback:f}; return haxeon.Equality.equals(a,a) ? 1 : 0; }',
 			"Equatable");
 		rejected('function main():Int return haxeon.Hashing.hash({values:[1,2]});', "Hashable");
@@ -39,7 +40,8 @@ class AnonymousConformanceMain {
 			compiler.compile("Main")
 		catch (error:CompileError)
 			diagnostic = error;
-		if (diagnostic == null || diagnostic.diagnostic.code != "E1025" || diagnostic.diagnostic.message.indexOf("recursive field") >= 0)
+		if (diagnostic == null || diagnostic.diagnostic.code != "E1025"
+			|| diagnostic.diagnostic.message.indexOf("recursive field") >= 0)
 			throw 'Expected nonrecursive Hashable error, got ${diagnostic == null ? "success" : diagnostic.diagnostic.message}';
 	}
 
@@ -47,7 +49,8 @@ class AnonymousConformanceMain {
 		var compiler = new Compiler();
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
-			'typedef Chain = {value:Int, next:Null<Chain>}; function main():Int { var c:Chain = {value:1, next:null}; ' + operation + ' }');
+			'typedef Chain = {value:Int, next:Null<Chain>}; function main():Int { var c:Chain = {value:1, next:null}; '
+			+ operation + ' }');
 		var diagnostic:Null<CompileError> = null;
 		try
 			compiler.compile("Main")
@@ -118,7 +121,8 @@ class AnonymousConformanceMain {
 			compiler.compile("Main")
 		catch (error:CompileError)
 			diagnostic = error;
-		if (diagnostic == null || diagnostic.diagnostic.code != "E1025" || diagnostic.diagnostic.message.indexOf('field "node"') < 0)
+		if (diagnostic == null || diagnostic.diagnostic.code != "E1025"
+			|| diagnostic.diagnostic.message.indexOf('field "node"') < 0)
 			throw 'Expected recursive field node in E1025, got ${diagnostic == null ? "success" : diagnostic.diagnostic.message}';
 	}
 
@@ -218,7 +222,8 @@ class AnonymousConformanceMain {
 			compiler.compile("Main")
 		catch (error:CompileError)
 			diagnostic = error;
-		if (diagnostic == null || diagnostic.diagnostic.code != "E1025" || diagnostic.diagnostic.message.indexOf("node") < 0)
+		if (diagnostic == null || diagnostic.diagnostic.code != "E1025"
+			|| diagnostic.diagnostic.message.indexOf("node") < 0)
 			throw 'Expected recursive field node in E1025, got ${diagnostic == null ? "success" : diagnostic.diagnostic.message}';
 	}
 

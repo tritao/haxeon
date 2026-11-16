@@ -8,7 +8,8 @@ class ScrollBinding {
 	public function new() {}
 	public function attach(value:ScrollController, scheduler:AnimationScheduler, changed:ScrollController->Void):Void {
 		if (controller != value) {
-			dispose(); controller = value;
+			dispose();
+			controller = value;
 		}
 		value.bind(changed, scheduler, this);
 	}

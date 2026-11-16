@@ -71,7 +71,8 @@ class SettingsTests {
 		panel.setFilter("whole scale");
 		var help:PropertyInspector = cast panel.currentInspector();
 		var descriptor = help.descriptors[0];
-		check(descriptor.description == options.tooltip && descriptor.restartRequired, "help and restart metadata reach the row");
+		check(descriptor.description == options.tooltip && descriptor.restartRequired,
+			"help and restart metadata reach the row");
 		panel.setFilter("i");
 		var results:PropertyInspector = cast panel.currentInspector();
 		check(results.descriptors.length == 3, "search combines results across categories");
@@ -83,22 +84,26 @@ class SettingsTests {
 		check(modified != null && modified.descriptors.length == 1, "explicit default override counts as modified");
 		var reset = modified.descriptors[0].reset;
 		if (reset != null) reset();
-		check(store.isDefault("editor/indentation/width") && panel.currentInspector() == null, "reset removes override and updates filtered results");
+		check(store.isDefault("editor/indentation/width") && panel.currentInspector() == null,
+			"reset removes override and updates filtered results");
 	}
 
 	static function discoverability():Void {
 		var registry = new SettingsRegistry();
-		var restart = new SettingOptions(); restart.restartRequired = true;
+		var restart = new SettingOptions();
+		restart.restartRequired = true;
 		registry.define("editor/fonts/path", PropertyType.Text, PropertyValue.Text("initial.ttf"), restart);
 		registry.define("editor/fonts/size", PropertyType.Int, PropertyValue.Int(15));
-		var advanced = new SettingOptions(); advanced.advanced = true;
+		var advanced = new SettingOptions();
+		advanced.advanced = true;
 		registry.define("editor/fonts/fallback", PropertyType.Text, PropertyValue.Text(""), advanced);
 		registry.define("terminal/fonts/size", PropertyType.Int, PropertyValue.Int(15));
 		var store = new SettingsStore(registry);
 		var panel = new SettingsPanel("discovery", store);
 		check(panel.categoryCount("editor/fonts") == 2, "category counts hide advanced settings");
 		panel.setFilter("fonts");
-		check(panel.categoryCount("editor/fonts") == 3 && panel.categoryCount("terminal/fonts") == 1, "counts follow search visibility");
+		check(panel.categoryCount("editor/fonts") == 3 && panel.categoryCount("terminal/fonts") == 1,
+			"counts follow search visibility");
 		panel.setModifiedOnly(true);
 		check(panel.categoryCount("editor/fonts") == 0, "modified filter updates category counts");
 		store.set("editor/fonts/path", PropertyValue.Text("changed.ttf"));
@@ -135,7 +140,8 @@ class SettingsTests {
 		var ranges = haxeon.ui.widgets.text.HighlightedText.matches("😀 Font FONT", "font font on");
 		check(ranges.length == 2 && ranges[0].start == 2 && ranges[0].end == 6 && ranges[1].start == 7,
 			"highlights merge overlapping terms and use Unicode codepoint offsets");
-		check(haxeon.ui.widgets.text.HighlightedText.matches("Font", "  ").length == 0, "empty queries do not mark text");
+		check(haxeon.ui.widgets.text.HighlightedText.matches("Font", "  ").length == 0,
+			"empty queries do not mark text");
 	}
 
 	static function check(condition:Bool, message:String):Void
@@ -173,13 +179,18 @@ class SettingsTests {
 			range(0.5, 4.0));
 		result.define("interface/editor/appearance/expand_to_title", PropertyType.Bool, PropertyValue.Bool(true));
 		result.define("interface/editor/docks/dock_tab_style", PropertyType.Enum, PropertyValue.Enum("text_and_icon"),
-			choices(["text_only", "icon_only", "text_and_icon"]));
+			choices([
+				"text_only",
+				"icon_only",
+				"text_and_icon"
+			]));
 		result.define("filesystem/directories/default_project_path", PropertyType.Text, PropertyValue.Text(""));
 		return result;
 	}
 
 	static function definitions():Void {
-		var size = new SettingDefinition("interface/editor/fonts/main_font_size", PropertyType.Int, PropertyValue.Int(14));
+		var size = new SettingDefinition("interface/editor/fonts/main_font_size", PropertyType.Int,
+			PropertyValue.Int(14));
 		check(size.label == "Main Font Size", "labels come from the last path segment");
 		check(SettingDefinition.labelFor("show_at_startup") == "Show at Startup", "small words stay lowercase");
 		check(SettingDefinition.labelFor("at_startup") == "At Startup", "except the first");
@@ -207,7 +218,8 @@ class SettingsTests {
 			"custom types are not settings");
 
 		var scale = new SettingDefinition("a/scale", PropertyType.Float, PropertyValue.Int(1));
-		check(PropertyValueTools.same(scale.defaultValue, PropertyValue.Float(1.0)), "an Int default of a Float setting becomes a Float");
+		check(PropertyValueTools.same(scale.defaultValue, PropertyValue.Float(1.0)),
+			"an Int default of a Float setting becomes a Float");
 		check(scale.validate(PropertyValue.Float(Math.NaN)) != null, "NaN is refused");
 	}
 
@@ -216,7 +228,8 @@ class SettingsTests {
 		var first = registry.define("interface/editor/fonts/main_font_size", PropertyType.Int, PropertyValue.Int(14));
 		var again = registry.define("interface/editor/fonts/main_font_size", PropertyType.Int, PropertyValue.Int(14));
 		check(first == again, "an identical redefinition returns the first definition");
-		throws(() -> registry.define("interface/editor/fonts/main_font_size", PropertyType.Float, PropertyValue.Float(14)),
+		throws(() -> registry.define("interface/editor/fonts/main_font_size", PropertyType.Float,
+			PropertyValue.Float(14)),
 			"a redefinition with another type is refused");
 		throws(() -> registry.define("interface/editor/fonts/main_font_size", PropertyType.Int, PropertyValue.Int(12)),
 			"a redefinition with another default is refused");
@@ -235,33 +248,42 @@ class SettingsTests {
 		check(store.getInt("interface/editor/fonts/main_font_size") == 14, "values start at their defaults");
 		check(store.isDefault("interface/editor/fonts/main_font_size"), "untouched settings are at their default");
 
-		check(store.set("interface/editor/fonts/main_font_size", PropertyValue.Int(18)) == null, "a valid value is stored");
+		check(store.set("interface/editor/fonts/main_font_size", PropertyValue.Int(18)) == null,
+			"a valid value is stored");
 		check(store.getInt("interface/editor/fonts/main_font_size") == 18, "the new value is read back");
-		check(!store.isDefault("interface/editor/fonts/main_font_size"), "a changed setting is no longer at its default");
+		check(!store.isDefault("interface/editor/fonts/main_font_size"),
+			"a changed setting is no longer at its default");
 
-		check(store.set("interface/editor/fonts/main_font_size", PropertyValue.Int(100)) != null, "out of range is refused");
-		check(store.set("interface/editor/fonts/main_font_size", PropertyValue.Text("big")) != null, "a wrong type is refused");
+		check(store.set("interface/editor/fonts/main_font_size", PropertyValue.Int(100)) != null,
+			"out of range is refused");
+		check(store.set("interface/editor/fonts/main_font_size", PropertyValue.Text("big")) != null,
+			"a wrong type is refused");
 		check(store.getInt("interface/editor/fonts/main_font_size") == 18, "a refused value leaves the setting alone");
 
 		check(store.set("interface/editor/docks/dock_tab_style", PropertyValue.Enum("sideways")) != null,
 			"an unknown choice is refused");
 		store.set("interface/editor/docks/dock_tab_style", PropertyValue.Enum("icon_only"));
-		check(store.getString("interface/editor/docks/dock_tab_style") == "icon_only", "enum values read back as their key");
+		check(store.getString("interface/editor/docks/dock_tab_style") == "icon_only",
+			"enum values read back as their key");
 
 		store.set("interface/editor/appearance/custom_display_scale", PropertyValue.Int(2));
-		check(store.getFloat("interface/editor/appearance/custom_display_scale") == 2.0, "an Int given to a Float setting is stored as a Float");
+		check(store.getFloat("interface/editor/appearance/custom_display_scale") == 2.0,
+			"an Int given to a Float setting is stored as a Float");
 
 		store.set("interface/editor/fonts/main_font_size", PropertyValue.Int(14));
-		check(store.isDefault("interface/editor/fonts/main_font_size"), "setting the default value clears the override");
+		check(store.isDefault("interface/editor/fonts/main_font_size"),
+			"setting the default value clears the override");
 
 		store.reset("interface/editor/docks/dock_tab_style");
-		check(store.getString("interface/editor/docks/dock_tab_style") == "text_and_icon", "reset restores the default");
+		check(store.getString("interface/editor/docks/dock_tab_style") == "text_and_icon",
+			"reset restores the default");
 
 		store.set("interface/editor/appearance/expand_to_title", PropertyValue.Bool(false));
 		store.set("filesystem/directories/default_project_path", PropertyValue.Text("/work"));
 		store.resetUnder("interface");
 		check(store.getBool("interface/editor/appearance/expand_to_title")
-			&& store.getFloat("interface/editor/appearance/custom_display_scale") == 1.0, "resetUnder resets the group");
+			&& store.getFloat("interface/editor/appearance/custom_display_scale") == 1.0,
+			"resetUnder resets the group");
 		check(store.getString("filesystem/directories/default_project_path") == "/work", "and nothing outside it");
 
 		throws(() -> store.get("interface/editor/nonexistent"), "reading an undefined setting is a programming error");
@@ -282,7 +304,8 @@ class SettingsTests {
 		store.set("interface/editor/fonts/main_font_size", PropertyValue.Int(99));
 		check(heard.length == 1 && heard[0] == "interface/editor/fonts/main_font_size",
 			"a listener hears real changes under its prefix only");
-		check(everything == 2 && store.revision == before + 2, "an empty prefix hears every change; revision counts them");
+		check(everything == 2 && store.revision == before + 2,
+			"an empty prefix hears every change; revision counts them");
 
 		store.reset("interface/editor/appearance/custom_display_scale");
 		check(everything == 2, "resetting a setting already at its default is not a change");
@@ -318,7 +341,8 @@ class SettingsTests {
 
 		var reopened = new SettingsStore(sampleRegistry(), file);
 		check(reopened.getInt("interface/editor/fonts/main_font_size") == 16, "Int survives a restart");
-		check(reopened.getFloat("interface/editor/appearance/custom_display_scale") == 1.25, "Float survives a restart");
+		check(reopened.getFloat("interface/editor/appearance/custom_display_scale") == 1.25,
+			"Float survives a restart");
 		check(!reopened.getBool("interface/editor/appearance/expand_to_title"), "Bool survives a restart");
 		check(reopened.getString("interface/editor/docks/dock_tab_style") == "text_only", "Enum survives a restart");
 		check(reopened.getString("filesystem/directories/default_project_path") == "/home/me/projects",
@@ -334,14 +358,16 @@ class SettingsTests {
 			"a changed default takes effect for an untouched setting");
 
 		// A value saved by a build that defines more settings is kept.
-		File.saveContent(file, '{"version":1,"values":{"plugins/other/flag":true,"interface/editor/fonts/main_font_size":12}}');
+		File.saveContent(file,
+			'{"version":1,"values":{"plugins/other/flag":true,"interface/editor/fonts/main_font_size":12}}');
 		var partial = new SettingsRegistry();
 		partial.define("interface/editor/fonts/main_font_size", PropertyType.Int, PropertyValue.Int(14));
 		var older = new SettingsStore(partial, file);
 		check(older.unknownPaths().join(",") == "interface/editor/fonts/main_font_size,plugins/other/flag",
 			"saved values wait until their setting is defined");
 		older.set("interface/editor/fonts/main_font_size", PropertyValue.Int(13));
-		check(File.getContent(file).indexOf("plugins/other/flag") >= 0, "an undefined setting's saved value is written back");
+		check(File.getContent(file).indexOf("plugins/other/flag") >= 0,
+			"an undefined setting's saved value is written back");
 		check(older.unknownPaths().join(",") == "plugins/other/flag", "a defined setting's value is adopted");
 		partial.define("plugins/other/flag", PropertyType.Bool, PropertyValue.Bool(false));
 		check(older.getBool("plugins/other/flag"), "a setting defined late picks up its saved value");
@@ -395,11 +421,15 @@ class SettingsTests {
 			+ '"interface/editor/appearance/expand_to_title":1,'
 			+ '"filesystem/directories/default_project_path":"/kept"}}');
 		var mixed = new SettingsStore(sampleRegistry(), file);
-		check(mixed.getInt("interface/editor/fonts/main_font_size") == 14, "a wrong-type value falls back to the default");
-		check(mixed.getFloat("interface/editor/appearance/custom_display_scale") == 1.0, "an out-of-range value falls back");
-		check(mixed.getString("interface/editor/docks/dock_tab_style") == "text_and_icon", "an unknown choice falls back");
+		check(mixed.getInt("interface/editor/fonts/main_font_size") == 14,
+			"a wrong-type value falls back to the default");
+		check(mixed.getFloat("interface/editor/appearance/custom_display_scale") == 1.0,
+			"an out-of-range value falls back");
+		check(mixed.getString("interface/editor/docks/dock_tab_style") == "text_and_icon",
+			"an unknown choice falls back");
 		check(mixed.getBool("interface/editor/appearance/expand_to_title"), "a number is not a Bool");
-		check(mixed.getString("filesystem/directories/default_project_path") == "/kept", "good values beside bad ones survive");
+		check(mixed.getString("filesystem/directories/default_project_path") == "/kept",
+			"good values beside bad ones survive");
 
 		File.saveContent(file, '[1, 2, 3]');
 		var wrongShape = new SettingsStore(sampleRegistry(), file);
@@ -426,13 +456,16 @@ class SettingsTests {
 
 	static function catalog():Void {
 		var catalog = new SettingsCatalog(new SettingsStore(catalogRegistry()));
-		check(catalog.categories("", false).join(",") == "interface/editor,filesystem/directories,network,interface/theme",
+		check(catalog.categories("", false).join(",")
+			== "interface/editor,filesystem/directories,network,interface/theme",
 			'categories in definition order: ${catalog.categories("", false).join(",")}');
 
 		var sections = catalog.sections("interface/editor", "", false);
 		var labels = [for (section in sections) section.label].join(",");
-		check(labels == "Editor,Fonts,Appearance,Docks", 'unsectioned settings come first under the category label: $labels');
-		check(sections[0].descriptors.length == 1 && sections[0].descriptors[0].id == "interface/editor/editor_language",
+		check(labels == "Editor,Fonts,Appearance,Docks",
+			'unsectioned settings come first under the category label: $labels');
+		check(sections[0].descriptors.length == 1
+			&& sections[0].descriptors[0].id == "interface/editor/editor_language",
 			"internal settings never show");
 		check(sections[1].descriptors.length == 1, "advanced settings are hidden by default");
 		check(catalog.sections("interface/editor", "", true)[1].descriptors.length == 2, "and shown when asked for");
@@ -448,7 +481,8 @@ class SettingsTests {
 		check(catalog.categories("nothing matches this", true).length == 0, "no match, no categories");
 		check(catalog.categories("placement", true).length == 0, "the filter never reveals internal settings");
 
-		check(catalog.descriptor(catalogRegistry().get("network/debug_port")) == catalog.descriptor(catalogRegistry().get("network/debug_port")),
+		check(catalog.descriptor(catalogRegistry().get("network/debug_port"))
+			== catalog.descriptor(catalogRegistry().get("network/debug_port")),
 			"a setting keeps one descriptor, so its editor keeps its state");
 	}
 
@@ -461,10 +495,13 @@ class SettingsTests {
 		var context = new CommandContext();
 		check(context.document == null, "no document is open");
 		var binding = new PropertyBinding(size, context);
-		check(sameResult(binding.apply(PropertyValue.Int(20)), PropertyEditResult.Applied), "an edit applies without a document");
+		check(sameResult(binding.apply(PropertyValue.Int(20)), PropertyEditResult.Applied),
+			"an edit applies without a document");
 		check(store.getInt("interface/editor/fonts/main_font_size") == 20, "the edit reaches the store");
-		check(sameResult(binding.apply(PropertyValue.Int(20)), PropertyEditResult.Unchanged), "the same value is unchanged");
-		check(!sameResult(binding.apply(PropertyValue.Int(500)), PropertyEditResult.Applied), "out of range is rejected");
+		check(sameResult(binding.apply(PropertyValue.Int(20)), PropertyEditResult.Unchanged),
+			"the same value is unchanged");
+		check(!sameResult(binding.apply(PropertyValue.Int(500)), PropertyEditResult.Applied),
+			"out of range is rejected");
 		check(store.getInt("interface/editor/fonts/main_font_size") == 20, "a rejected edit leaves the store alone");
 		store.reset("interface/editor/fonts/main_font_size");
 		check(PropertyValueTools.same(binding.read(), PropertyValue.Int(14)), "the row reads what the store holds");
@@ -519,28 +556,40 @@ class SettingsTests {
 
 	static function shortcutNames():Void {
 		var save = new Shortcut(UiKey.S, UiModifier.Control | UiModifier.Shift);
-		check(save.label() == "Ctrl+Shift+S" && save.serialize() == "ctrl+shift+s", 'names: ${save.label()} ${save.serialize()}');
+		check(save.label() == "Ctrl+Shift+S" && save.serialize() == "ctrl+shift+s",
+			'names: ${save.label()} ${save.serialize()}');
 		check(new Shortcut(UiKey.Comma, UiModifier.Control).label() == "Ctrl+,", "punctuation shows as itself");
-		check(new Shortcut(UiKey.F5).label() == "F5" && new Shortcut(UiKey.Escape).label() == "Esc", "F-keys and named keys");
-		for (shortcut in [save, new Shortcut(UiKey.Comma, UiModifier.Control), new Shortcut(UiKey.F10, UiModifier.Alt),
-			new Shortcut(49, UiModifier.Super), new Shortcut(UiKey.PageDown), new Shortcut(123456, UiModifier.Control)]) {
+		check(new Shortcut(UiKey.F5).label() == "F5" && new Shortcut(UiKey.Escape).label() == "Esc",
+			"F-keys and named keys");
+		for (shortcut in [
+			save,
+			new Shortcut(UiKey.Comma, UiModifier.Control),
+			new Shortcut(UiKey.F10, UiModifier.Alt),
+			new Shortcut(49, UiModifier.Super),
+			new Shortcut(UiKey.PageDown),
+			new Shortcut(123456, UiModifier.Control)
+		]) {
 			var parsed = Shortcut.parse(shortcut.serialize());
 			check(parsed != null && shortcut == parsed, "round trip: " + shortcut.serialize());
 		}
 		check(Shortcut.parse("CTRL+S") != null, "parsing ignores case");
 		for (bad in ["", "ctrl+", "hyper+s", "ctrl+nosuchkey", "f0", "key-3", "ctrl+key340"])
 			check(Shortcut.parse(bad) == null, "rejected: " + bad);
-		check(Shortcut.isModifierKey(340) && Shortcut.isModifierKey(347) && !Shortcut.isModifierKey(UiKey.S), "modifier keys");
+		check(Shortcut.isModifierKey(340) && Shortcut.isModifierKey(347) && !Shortcut.isModifierKey(UiKey.S),
+			"modifier keys");
 	}
 
 	static function sampleCommands(log:Array<String>):CommandRegistry {
 		var commands = new CommandRegistry();
-		commands.register(new Command("editor.save", "Save", () -> log.push("save"), new Shortcut(UiKey.S, UiModifier.Control)));
-		var palette = new Command("editor.palette", "Command Palette", () -> log.push("palette"), new Shortcut(UiKey.K, UiModifier.Control));
+		commands.register(new Command("editor.save", "Save", () -> log.push("save"),
+			new Shortcut(UiKey.S, UiModifier.Control)));
+		var palette = new Command("editor.palette", "Command Palette", () -> log.push("palette"),
+			new Shortcut(UiKey.K, UiModifier.Control));
 		palette.addShortcut(new Shortcut(UiKey.P, UiModifier.Control));
 		commands.register(palette);
 		commands.register(new Command("scene.frame", "Frame Selected", () -> log.push("frame")));
-		commands.register(new Command("viewport.save", "Save View", () -> log.push("view"), new Shortcut(UiKey.S, UiModifier.Control)), "viewport");
+		commands.register(new Command("viewport.save", "Save View", () -> log.push("view"),
+			new Shortcut(UiKey.S, UiModifier.Control)), "viewport");
 		return commands;
 	}
 
@@ -549,20 +598,30 @@ class SettingsTests {
 		var commands = sampleCommands(log);
 		check(commands.shortcutsFor("editor.palette").length == 2, "registered shortcuts, primary first");
 		commands.setShortcuts("scene.frame", [new Shortcut(UiKey.F2)]);
-		check(commands.dispatch(UiKey.F2, haxeon.ui.core.UiModifier.empty()) && log.join(",") == "frame", "a custom binding runs its command");
+		check(commands.dispatch(UiKey.F2, haxeon.ui.core.UiModifier.empty()) && log.join(",") == "frame",
+			"a custom binding runs its command");
 		commands.setShortcuts("editor.save", []);
 		check(!commands.dispatch(UiKey.S, UiModifier.Control) && log.length == 1, "an unbound command no longer runs");
 		commands.resetShortcuts("editor.save");
-		check(commands.dispatch(UiKey.S, UiModifier.Control) && log[1] == "save", "reset restores the registered shortcut");
-		commands.setShortcuts("editor.palette", [new Shortcut(UiKey.K, UiModifier.Control), new Shortcut(UiKey.P, UiModifier.Control)]);
-		check(!commands.hasCustomShortcuts("editor.palette"), "choosing the registered shortcuts is not a custom binding");
-		check(commands.commandsBoundTo(new Shortcut(UiKey.S, UiModifier.Control)).join(",") == "editor.save", "lookup stays in its scope");
-		check(commands.commandsBoundTo(new Shortcut(UiKey.S, UiModifier.Control), "viewport").join(",") == "viewport.save",
+		check(commands.dispatch(UiKey.S, UiModifier.Control) && log[1] == "save",
+			"reset restores the registered shortcut");
+		commands.setShortcuts("editor.palette", [
+			new Shortcut(UiKey.K, UiModifier.Control),
+			new Shortcut(UiKey.P, UiModifier.Control)
+		]);
+		check(!commands.hasCustomShortcuts("editor.palette"),
+			"choosing the registered shortcuts is not a custom binding");
+		check(commands.commandsBoundTo(new Shortcut(UiKey.S, UiModifier.Control)).join(",") == "editor.save",
+			"lookup stays in its scope");
+		check(commands.commandsBoundTo(new Shortcut(UiKey.S, UiModifier.Control), "viewport").join(",")
+			== "viewport.save",
 			"other scopes are separate");
 		commands.setShortcuts("plugin.later", [new Shortcut(UiKey.F5)]);
-		check(commands.customShortcutIds().indexOf("plugin.later") >= 0, "bindings for commands not registered yet are kept");
+		check(commands.customShortcutIds().indexOf("plugin.later") >= 0,
+			"bindings for commands not registered yet are kept");
 		commands.register(new Command("plugin.later", "Later", () -> log.push("later")));
-		check(commands.dispatch(UiKey.F5, haxeon.ui.core.UiModifier.empty()) && log[2] == "later", "and apply once the command is registered");
+		check(commands.dispatch(UiKey.F5, haxeon.ui.core.UiModifier.empty()) && log[2] == "later",
+			"and apply once the command is registered");
 	}
 
 	static function shortcutPersistence():Void {
@@ -572,11 +631,13 @@ class SettingsTests {
 		bindings.assign("scene.frame", new Shortcut(UiKey.F2, UiModifier.Shift));
 		bindings.clear("editor.palette");
 		var reopened = new ShortcutBindings(sampleCommands(log), new SettingsStore(sampleRegistry(), file));
-		check(reopened.commands.shortcutsFor("scene.frame")[0].label() == "Shift+F2", "a new binding survives a restart");
+		check(reopened.commands.shortcutsFor("scene.frame")[0].label() == "Shift+F2",
+			"a new binding survives a restart");
 		check(reopened.commands.shortcutsFor("editor.palette").length == 0, "an unbound command stays unbound");
 		check(!reopened.commands.hasCustomShortcuts("editor.save"), "untouched commands are not saved");
 		reopened.resetAll();
-		check(new SettingsStore(sampleRegistry(), file).getState(ShortcutBindings.STATE_KEY) == null, "resetting everything saves nothing");
+		check(new SettingsStore(sampleRegistry(), file).getState(ShortcutBindings.STATE_KEY) == null,
+			"resetting everything saves nothing");
 
 		// Taking a chord from another command in the same scope, and only there.
 		var taking = new ShortcutBindings(sampleCommands(log), new SettingsStore(sampleRegistry()));
@@ -602,28 +663,34 @@ class SettingsTests {
 	static function shortcutsPanel():Void {
 		var log:Array<String> = [];
 		var changes = 0;
-		var panel = new ShortcutsPanel("shortcuts", new ShortcutBindings(sampleCommands(log), new SettingsStore(sampleRegistry())),
+		var panel = new ShortcutsPanel("shortcuts",
+			new ShortcutBindings(sampleCommands(log), new SettingsStore(sampleRegistry())),
 			() -> changes++);
 		var groups = panel.groups();
-		check([for (group in groups) group.name].join(",") == "editor,scene,viewport", "commands are grouped by ID prefix");
+		check([for (group in groups) group.name].join(",") == "editor,scene,viewport",
+			"commands are grouped by ID prefix");
 		check(panel.shortcutText("editor.palette") == "Ctrl+K, Ctrl+P" && panel.shortcutText("scene.frame") == "None",
 			"shortcut text");
 
 		check(!panel.press(UiKey.F2, UiModifier.empty()), "keys are ignored until a row records");
 		panel.record("scene.frame");
 		check(panel.recordingId == "scene.frame" && changes == 1, "clicking a shortcut starts recording");
-		check(panel.press(340, UiModifier.Shift) && panel.recordingId == "scene.frame", "a modifier alone keeps waiting");
-		check(panel.press(70, UiModifier.Shift | UiModifier.CapsLock) && panel.recordingId == null, "a chord is recorded");
+		check(panel.press(340, UiModifier.Shift) && panel.recordingId == "scene.frame",
+			"a modifier alone keeps waiting");
+		check(panel.press(70, UiModifier.Shift | UiModifier.CapsLock) && panel.recordingId == null,
+			"a chord is recorded");
 		check(panel.shortcutText("scene.frame") == "Shift+F", "lock keys are not part of the chord");
 
 		panel.record("scene.frame");
-		check(panel.press(UiKey.Escape, UiModifier.empty()) && panel.shortcutText("scene.frame") == "Shift+F", "Escape cancels recording");
+		check(panel.press(UiKey.Escape, UiModifier.empty()) && panel.shortcutText("scene.frame") == "Shift+F",
+			"Escape cancels recording");
 
 		panel.record("scene.frame");
 		panel.press(UiKey.S, UiModifier.Control);
 		check(panel.notice == "Ctrl+S was moved from Save.", 'moving a chord is explained: ${panel.notice}');
 		panel.reset("editor.save");
-		check(panel.notice == "Ctrl+S is also used by Frame Selected.", 'a reset that clashes is explained: ${panel.notice}');
+		check(panel.notice == "Ctrl+S is also used by Frame Selected.",
+			'a reset that clashes is explained: ${panel.notice}');
 
 		panel.clear("editor.palette");
 		check(panel.shortcutText("editor.palette") == "None", "clear removes every shortcut");

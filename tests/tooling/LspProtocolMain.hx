@@ -1,13 +1,13 @@
-import editor.lsp.LspDispatcher;
-import editor.lsp.LspProtocol;
-import editor.lsp.DocumentStore;
-import editor.lsp.DocumentStore.LspDocument;
-import editor.lsp.FileUri;
-import haxe.Json;
-import haxe.io.Path;
 import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.CompletionItem;
+import editor.lsp.DocumentStore;
+import editor.lsp.DocumentStore.LspDocument;
+import editor.lsp.FileUri;
+import editor.lsp.LspDispatcher;
+import editor.lsp.LspProtocol;
+import haxe.Json;
+import haxe.io.Path;
 
 class BlockingLanguageService extends LanguageService {
 	public final entered = new sys.thread.Lock();
@@ -102,7 +102,8 @@ class LspProtocolMain {
 			])
 		catch (_:Dynamic)
 			rejectedIncrementalBatch = true;
-		if (!rejectedIncrementalBatch || incrementalDocument.version != 2 || incrementalDocument.source != beforeRejectedSource)
+		if (!rejectedIncrementalBatch || incrementalDocument.version != 2
+			|| incrementalDocument.source != beforeRejectedSource)
 			throw "failed incremental LSP edit batch was not rolled back transactionally";
 		incrementalStore.applyChanges(incrementalDocument.uri, 3, [{text: "replacement"}]);
 		if (incrementalDocument.source != "replacement")
@@ -156,7 +157,11 @@ class LspProtocolMain {
 				}
 			}
 		}));
-		var refreshChange = Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeConfiguration", params: {settings: {}}}),
+		var refreshChange = Json.stringify({
+			jsonrpc: "2.0",
+			method: "workspace/didChangeConfiguration",
+			params: {settings: {}}
+		}),
 			firstRefreshes = refreshProtocol.handle(refreshChange),
 			refreshMethods:Map<String, String> = [];
 		for (message in firstRefreshes) {
@@ -172,13 +177,16 @@ class LspProtocolMain {
 			throw "LSP did not coalesce in-flight workspace refresh requests";
 		for (method => refreshId in refreshMethods) {
 			var repeated = refreshProtocol.handle(Json.stringify({jsonrpc: "2.0", id: refreshId, result: null}));
-			if (repeated.length != 1 || Json.parse(repeated[0]).method != method || Std.string(Json.parse(repeated[0]).id) == refreshId)
+			if (repeated.length != 1 || Json.parse(repeated[0]).method != method
+				|| Std.string(Json.parse(repeated[0]).id) == refreshId)
 				throw "LSP did not replay a coalesced refresh after its response";
-			if (refreshProtocol.handle(Json.stringify({jsonrpc: "2.0", id: Json.parse(repeated[0]).id, result: null})).length != 0)
+			if (refreshProtocol.handle(Json.stringify({jsonrpc: "2.0", id: Json.parse(repeated[0]).id, result: null}))
+				.length != 0)
 				throw "LSP retained a completed refresh request";
 		}
 		var unsupportedRefreshProtocol = new LspProtocol();
-		request(unsupportedRefreshProtocol, '{"jsonrpc":"2.0","id":12,"method":"initialize","params":{"capabilities":{}}}');
+		request(unsupportedRefreshProtocol,
+			'{"jsonrpc":"2.0","id":12,"method":"initialize","params":{"capabilities":{}}}');
 		if (unsupportedRefreshProtocol.handle(refreshChange).length != 0)
 			throw "LSP sent refresh requests without client support";
 		var fixtureRoot = sys.FileSystem.absolutePath("tests/fixtures/pragtical"),
@@ -194,7 +202,10 @@ class LspProtocolMain {
 			params: {rootUri: "file://" + fixtureRoot}
 		}));
 		if (projectProtocol.project.configurations.length != 1
-			|| !projectProtocol.project.hasDiskSource(Path.join([fixtureRoot, "pragtical/plugins/SearchPlugin.hx"])))
+			|| !projectProtocol.project.hasDiskSource(Path.join([
+				fixtureRoot,
+				"pragtical/plugins/SearchPlugin.hx"
+			])))
 			throw "LSP initialization did not discover the Haxe project";
 		var workspaceMatches = request(projectProtocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -235,7 +246,9 @@ class LspProtocolMain {
 				id: 403,
 				method: "textDocument/documentLink",
 				params: {textDocument: {uri: fixtureMainUri}}
-			})), importStart = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")), importEnd = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")
+			})),
+			importStart = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")),
+			importEnd = fixtureDocument.position(fixtureSource.indexOf("pragtical.api.Document")
 				+ "pragtical.api.Document".length);
 		if (documentLinks.result.length != 1
 			|| !StringTools.endsWith(documentLinks.result[0].target, "/pragtical/api/Document.hx")
@@ -248,9 +261,13 @@ class LspProtocolMain {
 				jsonrpc: "2.0",
 				id: 41,
 				method: "textDocument/definition",
-				params: {textDocument: {uri: fixtureMainUri}, position: fixtureDocument.position(importedTypeOffset + 2)}
+				params: {
+					textDocument: {uri: fixtureMainUri},
+					position: fixtureDocument.position(importedTypeOffset + 2)
+				}
 			}));
-		if (importedDefinition.result == null || !StringTools.endsWith(importedDefinition.result.uri, "/pragtical/api/Document.hx"))
+		if (importedDefinition.result == null
+			|| !StringTools.endsWith(importedDefinition.result.uri, "/pragtical/api/Document.hx"))
 			throw "project-backed definition did not resolve an unopened dependency";
 		var parameterTypeUse = fixtureSource.indexOf("Document"),
 			parameterTypeDefinition = request(projectProtocol, Json.stringify({
@@ -288,14 +305,16 @@ class LspProtocolMain {
 			watchMainPath = Path.join([watchAppRoot, "Main.hx"]),
 			watchHelperPath = Path.join([watchLibRoot, "Helper.hx"]),
 			watchConfigPath = Path.join([watchRoot, "haxe.json"]),
-			watchMainSource = "package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nstruct BuildPoint { public var x:Int; }\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
+			watchMainSource =
+				"package app; import lib.Helper;\n#if watcher && !missing\nfunction buildSelected():Int return 1;\n#else\nfunction wrongBuild():Int return 0;\n#end\nstruct BuildPoint { public var x:Int; }\nfunction main():Int { var helper = new Helper(); return helper.answer(); }";
 		sys.FileSystem.createDirectory(watchRoot);
 		sys.FileSystem.createDirectory(watchSourceRoot);
 		sys.FileSystem.createDirectory(watchAppRoot);
 		sys.FileSystem.createDirectory(watchLibRoot);
 		sys.io.File.saveContent(watchConfigPath, '{"classPath":["src"],"main":"app.Main","defines":["watcher"]}');
 		sys.io.File.saveContent(watchMainPath, watchMainSource);
-		sys.io.File.saveContent(watchHelperPath, "package lib; class Helper { public function new() {} public function answer():Int return 1; }");
+		sys.io.File.saveContent(watchHelperPath,
+			"package lib; class Helper { public function new() {} public function answer():Int return 1; }");
 		var watchProtocol = new LspProtocol(),
 			watchMainUri = "file://" + watchMainPath,
 			watchHelperUri = "file://" + watchHelperPath,
@@ -323,7 +342,10 @@ class LspProtocolMain {
 			id: 430,
 			method: "textDocument/documentSymbol",
 			params: {textDocument: {uri: watchMainUri}}
-		})), hasSelectedBuild = false, hasWrongBuild = false, hasStruct = false;
+		})),
+			hasSelectedBuild = false,
+			hasWrongBuild = false,
+			hasStruct = false;
 		for (symbol in cast(Json.parse(buildSymbols[0]).result, Array<Dynamic>)) {
 			if (symbol.name == "buildSelected")
 				hasSelectedBuild = true;
@@ -340,7 +362,11 @@ class LspProtocolMain {
 				id: 431,
 				method: "workspace/diagnostic",
 				params: {previousResultIds: []}
-			})), previousWorkspaceDiagnostics:Array<Dynamic> = [], unopenedDiagnostic:Dynamic = null, openedDiagnostic:Dynamic = null, previousDiagnosticUri = "";
+			})),
+			previousWorkspaceDiagnostics:Array<Dynamic> = [],
+			unopenedDiagnostic:Dynamic = null,
+			openedDiagnostic:Dynamic = null,
+			previousDiagnosticUri = "";
 		for (report in cast(firstWorkspaceDiagnostics.result.items, Array<Dynamic>)) {
 			if (previousDiagnosticUri != "" && Reflect.compare(previousDiagnosticUri, report.uri) > 0)
 				throw "workspace diagnostics were not ordered deterministically";
@@ -351,7 +377,8 @@ class LspProtocolMain {
 			if (report.uri == watchMainUri)
 				openedDiagnostic = report;
 		}
-		if (unopenedDiagnostic == null || unopenedDiagnostic.kind != "full" || unopenedDiagnostic.version != null || openedDiagnostic == null
+		if (unopenedDiagnostic == null || unopenedDiagnostic.kind != "full" || unopenedDiagnostic.version != null
+			|| openedDiagnostic == null
 			|| openedDiagnostic.version != 1)
 			throw "workspace diagnostics omitted open or indexed unopened sources";
 		var unchangedWorkspaceDiagnostics = request(watchProtocol, Json.stringify({
@@ -388,7 +415,8 @@ class LspProtocolMain {
 		watchProtocol.handle(documentChangeMessage(watchMainUri, 2, watchMainSource));
 		if (!definitionTargets(watchProtocol, watchMainUri, watchDocument, "diskOnly", 44, watchHelperUri))
 			throw "external source edit did not refresh unopened navigation";
-		var overlaySource = "package lib; class Helper { public function new() {} public function answer():Int return 4; public function overlayOnly():Int return 5; }";
+		var overlaySource =
+			"package lib; class Helper { public function new() {} public function answer():Int return 4; public function overlayOnly():Int return 5; }";
 		watchProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -489,7 +517,10 @@ class LspProtocolMain {
 			method: "textDocument/semanticTokens/full",
 			params: {textDocument: {uri: folderAUri}}
 		}));
-		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderB, name: "folder-b"}], [{uri: "file://" + folderA, name: "folder-a"}]));
+		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderB, name: "folder-b"}], [{
+			uri: "file://" + folderA,
+			name: "folder-a"
+		}]));
 		if (folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
 			throw "workspace folder replacement did not update indexed disk sources";
 		var retainedSymbols = request(folderProtocol, Json.stringify({
@@ -518,7 +549,9 @@ class LspProtocolMain {
 			id: 436,
 			method: "workspace/diagnostic",
 			params: {previousResultIds: []}
-		})), foundRemovedFolder = false, foundRetainedFolder = false;
+		})),
+			foundRemovedFolder = false,
+			foundRetainedFolder = false;
 		for (report in cast(folderDiagnostics.result.items, Array<Dynamic>)) {
 			if (report.uri == folderAUri)
 				foundRemovedFolder = true;
@@ -580,10 +613,15 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 50,
 			method: "textDocument/inlayHint",
-			params: {textDocument: {uri: uri}, range: {start: {line: 0, character: 0}, end: {line: 0, character: source.length}}}
-		})), inferredLocal = false;
+			params: {
+				textDocument: {uri: uri},
+				range: {start: {line: 0, character: 0}, end: {line: 0, character: source.length}}
+			}
+		})),
+			inferredLocal = false;
 		for (hint in cast(localHints.result, Array<Dynamic>))
-			if (hint.kind == 1 && hint.label == ": Int" && hint.position.character == source.indexOf("answer") + "answer".length)
+			if (hint.kind == 1 && hint.label == ": Int"
+				&& hint.position.character == source.indexOf("answer") + "answer".length)
 				inferredLocal = true;
 		if (!inferredLocal)
 			throw "LSP inlay hints omitted an inferred local type";
@@ -629,7 +667,8 @@ class LspProtocolMain {
 			|| actions.result[0].edit.documentChanges[0].textDocument.version != 1
 			|| actions.result[0].edit.documentChanges[0].edits[0].newText != "\"")
 			throw "LSP code actions did not expose the compiler-authored lexical fix";
-		var callSource = "/** Adds values.\n * @param left First value.\n * @param right Second value.\n * @return the sum.\n * @deprecated Use sum.\n */\nfunction add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22) + add(1, 2);",
+		var callSource =
+			"/** Adds values.\n * @param left First value.\n * @param right Second value.\n * @return the sum.\n * @deprecated Use sum.\n */\nfunction add(left:Int, right:Int):Int return left + right; function main():Int return add(20, 22) + add(1, 2);",
 			callUri = "file:///workspace/Call.hx",
 			callDocument = new LspDocument(callUri, "/workspace/Call.hx", 1, callSource);
 		protocol.handle(Json.stringify({
@@ -649,7 +688,8 @@ class LspProtocolMain {
 			id: 59,
 			method: "textDocument/foldingRange",
 			params: {textDocument: {uri: callUri}}
-		})), hasDocumentationFold = false;
+		})),
+			hasDocumentationFold = false;
 		for (fold in cast(callFolds.result, Array<Dynamic>))
 			if (fold.kind == "comment" && fold.startLine == 0 && fold.endLine == 5)
 				hasDocumentationFold = true;
@@ -675,18 +715,25 @@ class LspProtocolMain {
 			method: "textDocument/signatureHelp",
 			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("22") + 1)}
 		}));
-		if (signature.result == null
-			|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int" // Typed: HashLink rejects dynamic calls that omit String.indexOf's optional argument.
-			|| (signature.result.signatures[0].documentation.value : String).indexOf("Adds values") < 0
+		if (
+			signature.result == null
+				|| signature.result.signatures[0].label != "add(left:Int, right:Int):Int" // Typed: HashLink rejects dynamic calls that omit String.indexOf's optional argument.
+				|| (signature.result.signatures[0].documentation.value:String).indexOf("Adds values") < 0
 				|| signature.result.signatures[0].parameters[0].documentation.value != "First value."
-				|| signature.result.activeParameter != 1)
+				|| signature.result.activeParameter != 1
+		)
 			throw "LSP signature help did not use compiler signature information";
 		var callHints = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 61,
 			method: "textDocument/inlayHint",
-			params: {textDocument: {uri: callUri}, range: {start: {line: 0, character: 0}, end: callDocument.position(callSource.length)}}
-		})), hasLeftHint = false, hasRightHint = false;
+			params: {
+				textDocument: {uri: callUri},
+				range: {start: {line: 0, character: 0}, end: callDocument.position(callSource.length)}
+			}
+		})),
+			hasLeftHint = false,
+			hasRightHint = false;
 		for (hint in cast(callHints.result, Array<Dynamic>)) {
 			if (hint.kind == 2
 				&& hint.label == "left:"
@@ -704,12 +751,13 @@ class LspProtocolMain {
 			id: 62,
 			method: "textDocument/prepareCallHierarchy",
 			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("add") + 1)}
-		})), preparedMain = request(protocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 63,
-			method: "textDocument/prepareCallHierarchy",
-			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("main") + 1)}
-		}));
+		})),
+			preparedMain = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 63,
+				method: "textDocument/prepareCallHierarchy",
+				params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.indexOf("main") + 1)}
+			}));
 		if (preparedAdd.result == null || preparedMain.result == null)
 			throw "LSP did not prepare callable hierarchy items";
 		var incoming = request(protocol, Json.stringify({
@@ -717,12 +765,13 @@ class LspProtocolMain {
 			id: 64,
 			method: "callHierarchy/incomingCalls",
 			params: {item: preparedAdd.result[0]}
-		})), outgoing = request(protocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 65,
-			method: "callHierarchy/outgoingCalls",
-			params: {item: preparedMain.result[0]}
-		}));
+		})),
+			outgoing = request(protocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 65,
+				method: "callHierarchy/outgoingCalls",
+				params: {item: preparedMain.result[0]}
+			}));
 		if (incoming.result.length != 1
 			|| incoming.result[0].from.name != "main"
 			|| incoming.result[0].fromRanges.length != 2
@@ -735,14 +784,17 @@ class LspProtocolMain {
 			id: 7,
 			method: "textDocument/completion",
 			params: {textDocument: {uri: callUri}, position: callDocument.position(callSource.lastIndexOf("add") + 2)}
-		})), foundRankedCall = false, addCompletionItem:Dynamic = null;
+		})),
+			foundRankedCall = false,
+			addCompletionItem:Dynamic = null;
 		for (item in cast(completion.result.items, Array<Dynamic>))
 			if (item.label == "add"
 				&& item.sortText != null
 				&& item.insertTextFormat == 2
 				&& item.textEdit.newText == "add(${1})"
 				&& item.textEdit.range.start.character == callDocument.position(callSource.lastIndexOf("add")).character
-				&& item.textEdit.range.end.character == callDocument.position(callSource.lastIndexOf("add") + 2).character) {
+				&& item.textEdit.range.end.character
+				== callDocument.position(callSource.lastIndexOf("add") + 2).character) {
 				foundRankedCall = true;
 				addCompletionItem = item;
 			}
@@ -764,7 +816,7 @@ class LspProtocolMain {
 			params: addCompletionItem
 		}));
 		if (resolvedAdd.result.documentation.kind != "markdown"
-			|| (resolvedAdd.result.documentation.value : String).indexOf("**Deprecated.** Use sum.") < 0)
+			|| (resolvedAdd.result.documentation.value:String).indexOf("**Deprecated.** Use sum.") < 0)
 			throw "completion resolve did not reuse compiler-owned documentation";
 		var addHoverPosition = callDocument.position(callSource.indexOf("add") + 1),
 			documentedHover = request(protocol, Json.stringify({
@@ -774,14 +826,15 @@ class LspProtocolMain {
 				params: {textDocument: {uri: callUri}, position: addHoverPosition}
 			}));
 		if (documentedHover.result.contents.kind != "markdown"
-			|| (documentedHover.result.contents.value : String).indexOf("Adds values") < 0)
+			|| (documentedHover.result.contents.value:String).indexOf("Adds values") < 0)
 			throw "hover did not reuse compiler-owned documentation";
 		var callSemantic = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 78,
 			method: "textDocument/semanticTokens/full",
 			params: {textDocument: {uri: callUri}}
-		})), addDeclaration = callDocument.position(callSource.indexOf("add"));
+		})),
+			addDeclaration = callDocument.position(callSource.indexOf("add"));
 		if (!hasSemanticToken(callSemantic.result.data, addDeclaration.line, addDeclaration.character, 12, 17))
 			throw "deprecated documentation did not annotate the semantic declaration token";
 		var importService = new LanguageService(),
@@ -790,7 +843,8 @@ class LspProtocolMain {
 			helperUri = "file://" + helperPath,
 			importUri = "file:///workspace/ImportMain.hx",
 			importSource = "function main():Int return 0; // Hel";
-		importService.update(helperPath, "class Helper { public static function answer():Int return 42; } function main():Int return 0;");
+		importService.update(helperPath,
+			"class Helper { public static function answer():Int return 42; } function main():Int return 0;");
 		request(importProtocol, '{"jsonrpc":"2.0","id":70,"method":"initialize","params":{}}');
 		importProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -809,7 +863,8 @@ class LspProtocolMain {
 			id: 71,
 			method: "textDocument/completion",
 			params: {textDocument: {uri: importUri}, position: {line: 0, character: importSource.length}}
-		})), helperItem:Dynamic = null;
+		})),
+			helperItem:Dynamic = null;
 		for (item in cast(importCompletion.result.items, Array<Dynamic>))
 			if (item.label == "Helper")
 				helperItem = item;
@@ -821,7 +876,7 @@ class LspProtocolMain {
 			method: "completionItem/resolve",
 			params: helperItem
 		}));
-		if ((resolvedHelper.result.documentation.value : String).indexOf(helperPath) < 0
+		if ((resolvedHelper.result.documentation.value:String).indexOf(helperPath) < 0
 			|| resolvedHelper.result.additionalTextEdits.length != 1
 			|| resolvedHelper.result.additionalTextEdits[0].newText != "import workspace.tools.Helper;\n")
 			throw "completion resolve omitted documentation or the deterministic import edit";
@@ -831,8 +886,12 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 74,
 			method: "textDocument/completion",
-			params: {textDocument: {uri: importUri}, position: {line: 1, character: "function main():Int return 0; // Hel".length}}
-		})), importedHelper:Dynamic = null;
+			params: {
+				textDocument: {uri: importUri},
+				position: {line: 1, character: "function main():Int return 0; // Hel".length}
+			}
+		})),
+			importedHelper:Dynamic = null;
 		for (item in cast(importedCompletion.result.items, Array<Dynamic>))
 			if (item.label == "Helper")
 				importedHelper = item;
@@ -1023,7 +1082,8 @@ class LspProtocolMain {
 		var syntaxTokenService = new CountingDiagnosticLanguageService(),
 			syntaxTokenProtocol = new LspProtocol(syntaxTokenService),
 			syntaxTokenUri = "file:///workspace/SyntaxTokens.hx",
-			syntaxTokenSource = 'class SyntaxTokens { static function value():Int { var answer = 42; var wrong:String = "bad"; return answer; } }';
+			syntaxTokenSource =
+				'class SyntaxTokens { static function value():Int { var answer = 42; var wrong:String = "bad"; return answer; } }';
 		syntaxTokenProtocol.enableDeferredDiagnostics();
 		request(syntaxTokenProtocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -1069,7 +1129,8 @@ class LspProtocolMain {
 			choiceUri = "file:///workspace/shape/Choice.hx",
 			consumerUri = "file:///workspace/shapeapp/Main.hx",
 			choiceSource = "package workspace.shape; enum Choice { One; }",
-			consumerSource = "package workspace.shapeapp; import workspace.shape.Choice; function read(value:Choice):Int return switch value { case Choice.One: 1; }; function main():Int return read(Choice.One);";
+			consumerSource =
+				"package workspace.shapeapp; import workspace.shape.Choice; function read(value:Choice):Int return switch value { case Choice.One: 1; }; function main():Int return read(Choice.One);";
 		diagnosticProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -1097,7 +1158,10 @@ class LspProtocolMain {
 		var invalidated = diagnosticProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didChange",
-			params: {textDocument: {uri: choiceUri, version: 2}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
+			params: {
+				textDocument: {uri: choiceUri, version: 2},
+				contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]
+			}
 		}));
 		if (invalidated.length != 1)
 			throw 'expected one dependent diagnostic publication, got ${invalidated.length}';
@@ -1131,7 +1195,10 @@ class LspProtocolMain {
 		var closedDependent = diagnosticProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didChange",
-			params: {textDocument: {uri: choiceUri, version: 5}, contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]}
+			params: {
+				textDocument: {uri: choiceUri, version: 5},
+				contentChanges: [{text: "package workspace.shape; enum Choice { One; Two; }"}]
+			}
 		}));
 		if (closedDependent.length != 0)
 			throw "LSP published diagnostics for a closed file outside the workspace";
@@ -1204,7 +1271,8 @@ class LspProtocolMain {
 		}
 		if (interactiveIndex < 0 || diagnosticIndex <= interactiveIndex)
 			throw "interactive LSP request was not prioritized over pending diagnostics";
-		if (latestChoiceVersion != 2 || scheduledConsumerDiagnostics == 0 || scheduledProtocol.lastBackgroundAnalysisMs < 0)
+		if (latestChoiceVersion != 2 || scheduledConsumerDiagnostics == 0
+			|| scheduledProtocol.lastBackgroundAnalysisMs < 0)
 			throw "debounced diagnostics did not publish only the latest document generation";
 		var definition = request(protocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -1218,7 +1286,11 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 4,
 			method: "textDocument/rename",
-			params: {textDocument: {uri: uri}, position: {line: 0, character: source.lastIndexOf("answer") + 2}, newName: "result"}
+			params: {
+				textDocument: {uri: uri},
+				position: {line: 0, character: source.lastIndexOf("answer") + 2},
+				newName: "result"
+			}
 		}));
 		var documentChanges:Array<Dynamic> = renamed.result.documentChanges;
 		if (documentChanges.length != 1
@@ -1256,7 +1328,8 @@ class LspProtocolMain {
 			throw "LSP rename did not reject a stale semantic snapshot";
 		var deltaProtocol = new LspProtocol(),
 			deltaUri = "file:///workspace/Delta.hx",
-			deltaSource = "function main():Int { var a:Dynamic = 1; var b:Dynamic = 2; var c:Dynamic = 3; var d:Dynamic = 4; var e:Dynamic = 5; return 0; }";
+			deltaSource =
+				"function main():Int { var a:Dynamic = 1; var b:Dynamic = 2; var c:Dynamic = 3; var d:Dynamic = 4; var e:Dynamic = 5; return 0; }";
 		request(deltaProtocol, '{"jsonrpc":"2.0","id":80,"method":"initialize","params":{}}');
 		deltaProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -1275,12 +1348,13 @@ class LspProtocolMain {
 			id: 81,
 			method: "textDocument/semanticTokens/full",
 			params: {textDocument: {uri: deltaUri}}
-		})), unchangedDelta = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 82,
-			method: "textDocument/semanticTokens/full/delta",
-			params: {textDocument: {uri: deltaUri}, previousResultId: firstTokens.result.resultId}
-		}));
+		})),
+			unchangedDelta = request(deltaProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 82,
+				method: "textDocument/semanticTokens/full/delta",
+				params: {textDocument: {uri: deltaUri}, previousResultId: firstTokens.result.resultId}
+			}));
 		if (unchangedDelta.result.edits.length != 0)
 			throw "unchanged semantic tokens produced a non-empty delta";
 		var changedDeltaSource = StringTools.replace(deltaSource, "= 3", "= \"three\"");
@@ -1290,15 +1364,17 @@ class LspProtocolMain {
 			id: 83,
 			method: "textDocument/semanticTokens/full/delta",
 			params: {textDocument: {uri: deltaUri}, previousResultId: unchangedDelta.result.resultId}
-		})), changedFull = request(deltaProtocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 84,
-			method: "textDocument/semanticTokens/full",
-			params: {textDocument: {uri: deltaUri}}
-		}));
+		})),
+			changedFull = request(deltaProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 84,
+				method: "textDocument/semanticTokens/full",
+				params: {textDocument: {uri: deltaUri}}
+			}));
 		if (!Reflect.hasField(changedDelta.result, "edits")
 			|| changedDelta.result.edits.length != 1
-			|| !sameInts(applySemanticEdits(firstTokens.result.data, changedDelta.result.edits), changedFull.result.data))
+			|| !sameInts(applySemanticEdits(firstTokens.result.data, changedDelta.result.edits),
+			changedFull.result.data))
 			throw "semantic token delta did not reconstruct the current full token stream";
 		var unknownHistory = request(deltaProtocol, Json.stringify({
 			jsonrpc: "2.0",
@@ -1329,12 +1405,13 @@ class LspProtocolMain {
 			id: 87,
 			method: "textDocument/diagnostic",
 			params: {textDocument: {uri: diagnosticUri}}
-		})), unchangedDiagnostics = request(diagnosticProtocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 88,
-			method: "textDocument/diagnostic",
-			params: {textDocument: {uri: diagnosticUri}, previousResultId: firstDiagnostics.result.resultId}
-		}));
+		})),
+			unchangedDiagnostics = request(diagnosticProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 88,
+				method: "textDocument/diagnostic",
+				params: {textDocument: {uri: diagnosticUri}, previousResultId: firstDiagnostics.result.resultId}
+			}));
 		if (firstDiagnostics.result.kind != "full"
 			|| firstDiagnostics.result.items.length != 0
 			|| unchangedDiagnostics.result.kind != "unchanged"
@@ -1432,7 +1509,8 @@ class LspProtocolMain {
 			throw "incremental document change did not reach compiler-backed LSP queries";
 		var formattingProtocol = new LspProtocol(),
 			formattingUri = "file:///workspace/Formatting.hx",
-			formattingSource = "function main():Int {\nvar text = \"{ literal }\"; // }\nif (true) {\nreturn 42;   \n}\n}\n",
+			formattingSource =
+				"function main():Int {\nvar text = \"{ literal }\"; // }\nif (true) {\nreturn 42;   \n}\n}\n",
 			formattingDocument = new LspDocument(formattingUri, "/workspace/Formatting.hx", 1, formattingSource);
 		request(formattingProtocol, '{"jsonrpc":"2.0","id":8923,"method":"initialize","params":{}}');
 		formattingProtocol.handle(Json.stringify({
@@ -1472,8 +1550,10 @@ class LspProtocolMain {
 			throw "LSP range formatting changed lines outside its requested range";
 		var implementationProtocol = new LspProtocol(),
 			implementationUri = "file:///workspace/Implementation.hx",
-			implementationSource = "interface Worker { function work():Int; } class First implements Worker { public function work():Int return 1; } class Second implements Worker { public function work():Int return 2; } function main():Int return new First().work();",
-			implementationDocument = new LspDocument(implementationUri, "/workspace/Implementation.hx", 1, implementationSource);
+			implementationSource =
+				"interface Worker { function work():Int; } class First implements Worker { public function work():Int return 1; } class Second implements Worker { public function work():Int return 2; } function main():Int return new First().work();",
+			implementationDocument = new LspDocument(implementationUri, "/workspace/Implementation.hx", 1,
+				implementationSource);
 		request(implementationProtocol, '{"jsonrpc":"2.0","id":893,"method":"initialize","params":{}}');
 		implementationProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -1491,14 +1571,19 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 894,
 			method: "textDocument/implementation",
-			params: {textDocument: {uri: implementationUri}, position: implementationDocument.position(implementationSource.indexOf("Worker") + 2)}
+			params: {
+				textDocument: {uri: implementationUri},
+				position: implementationDocument.position(implementationSource.indexOf("Worker") + 2)
+			}
 		}));
 		if (implementationLocations.result.length != 2 || implementationLocations.result[0].uri != implementationUri)
 			throw "LSP implementation navigation did not map multiple compiler locations";
 		var typeHierarchyProtocol = new LspProtocol(),
 			typeHierarchyUri = "file:///workspace/TypeHierarchy.hx",
-			typeHierarchySource = "class Root {} interface Named {} class Branch extends Root implements Named {} class Leaf extends Branch {} function main():Int return 0;",
-			typeHierarchyDocument = new LspDocument(typeHierarchyUri, "/workspace/TypeHierarchy.hx", 1, typeHierarchySource);
+			typeHierarchySource =
+				"class Root {} interface Named {} class Branch extends Root implements Named {} class Leaf extends Branch {} function main():Int return 0;",
+			typeHierarchyDocument = new LspDocument(typeHierarchyUri, "/workspace/TypeHierarchy.hx", 1,
+				typeHierarchySource);
 		request(typeHierarchyProtocol, '{"jsonrpc":"2.0","id":895,"method":"initialize","params":{}}');
 		typeHierarchyProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -1516,13 +1601,19 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 896,
 			method: "textDocument/prepareTypeHierarchy",
-			params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Branch") + 2)}
+			params: {
+				textDocument: {uri: typeHierarchyUri},
+				position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Branch") + 2)
+			}
 		})),
 			preparedRootType = request(typeHierarchyProtocol, Json.stringify({
 				jsonrpc: "2.0",
 				id: 897,
 				method: "textDocument/prepareTypeHierarchy",
-				params: {textDocument: {uri: typeHierarchyUri}, position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Root") + 1)}
+				params: {
+					textDocument: {uri: typeHierarchyUri},
+					position: typeHierarchyDocument.position(typeHierarchySource.indexOf("Root") + 1)
+				}
 			}));
 		if (preparedBranchType.result == null || preparedRootType.result == null)
 			throw "LSP did not prepare type hierarchy items";
@@ -1531,17 +1622,19 @@ class LspProtocolMain {
 			id: 898,
 			method: "typeHierarchy/supertypes",
 			params: {item: preparedBranchType.result[0]}
-		})), branchSubtypes = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 899,
-			method: "typeHierarchy/subtypes",
-			params: {item: preparedBranchType.result[0]}
-		})), rootSubtypes = request(typeHierarchyProtocol, Json.stringify({
-			jsonrpc: "2.0",
-			id: 900,
-			method: "typeHierarchy/subtypes",
-			params: {item: preparedRootType.result[0]}
-		}));
+		})),
+			branchSubtypes = request(typeHierarchyProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 899,
+				method: "typeHierarchy/subtypes",
+				params: {item: preparedBranchType.result[0]}
+			})),
+			rootSubtypes = request(typeHierarchyProtocol, Json.stringify({
+				jsonrpc: "2.0",
+				id: 900,
+				method: "typeHierarchy/subtypes",
+				params: {item: preparedRootType.result[0]}
+			}));
 		if (branchSupertypes.result.length != 2
 			|| branchSupertypes.result[0].name != "Named"
 			|| branchSupertypes.result[1].name != "Root"
@@ -1570,7 +1663,8 @@ class LspProtocolMain {
 			uri = "file:///app/Holder.hx";
 		service.update("left/Widget.hx", "package left; class Widget {}");
 		service.update("right/Widget.hx", "package right; class Widget {}");
-		var source = "package app; import left.Widget; import missing.Dependency; class Holder { final view:Widget; public function new(view:Widget) { this.view = view; } public function get():Widget return this.view; }";
+		var source =
+			"package app; import left.Widget; import missing.Dependency; class Holder { final view:Widget; public function new(view:Widget) { this.view = view; } public function get():Widget return this.view; }";
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -1599,7 +1693,8 @@ class LspProtocolMain {
 				}
 			}));
 			if (response.result == null || response.result.uri != "file://left/Widget.hx")
-				throw "type navigation did not use the declared import during dependency failure: " + Json.stringify(response);
+				throw "type navigation did not use the declared import during dependency failure: "
+					+ Json.stringify(response);
 		}
 		var unknown = protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -1638,15 +1733,18 @@ class LspProtocolMain {
 			params: {
 				textDocument: {uri: uri, version: 2},
 				contentChanges: [
-					{text: StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;")}
+					{text: StringTools.replace(source, "import left.Widget;",
+						"import left.Widget; import right.Widget;")}
 				]
 			}
 		}));
 		var ambiguous = service.typeDefinition("/app/Holder.hx",
-			StringTools.replace(source, "import left.Widget;", "import left.Widget; import right.Widget;").lastIndexOf("this.view") + 6);
+			StringTools.replace(source, "import left.Widget;",
+			"import left.Widget; import right.Widget;").lastIndexOf("this.view") + 6);
 		if (ambiguous != null)
 			throw "recovered type navigation guessed between ambiguous imports";
-		var genericSource = "package app; import left.Widget; import missing.Dependency; class Holder { public function take<Widget>(value:Widget):Widget return value; }";
+		var genericSource =
+			"package app; import left.Widget; import missing.Dependency; class Holder { public function take<Widget>(value:Widget):Widget return value; }";
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didChange",
@@ -1664,7 +1762,8 @@ class LspProtocolMain {
 		var service = new LanguageService(),
 			protocol = new LspProtocol(service),
 			uri = "file:///workspace/Active.hx";
-		var source = "import missing.Dependency; class Active { final view:Int; public function new(view:Int) { this.view = view; } public function read():Int return this.view; }";
+		var source =
+			"import missing.Dependency; class Active { final view:Int; public function new(view:Int) { this.view = view; } public function read():Int return this.view; }";
 		protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			method: "textDocument/didOpen",
@@ -1754,7 +1853,8 @@ class LspProtocolMain {
 			if (FileUri.toPath(check.uri) != check.path)
 				throw 'file URI ${check.uri} read as ${FileUri.toPath(check.uri)}';
 		var path = "/work/c++/My Main#1?.hx";
-		if (FileUri.fromPath(path) != "file:///work/c%2B%2B/My%20Main%231%3F.hx" || FileUri.toPath(FileUri.fromPath(path)) != path)
+		if (FileUri.fromPath(path) != "file:///work/c%2B%2B/My%20Main%231%3F.hx"
+			|| FileUri.toPath(FileUri.fromPath(path)) != path)
 			throw 'path $path written as ${FileUri.fromPath(path)}';
 		Sys.println("PASS: file URIs decode percent escapes only and round-trip paths");
 	}
@@ -1781,11 +1881,14 @@ class LspProtocolMain {
 			throw "could not link the workspace";
 		sys.io.File.saveContent(base + "/app/haxeon.json",
 			'{"version":1,"package":{"name":"demo"},"entry":"app.Main","sourceRoots":["src"],"dependencies":{"helper":{"path":"../lib"}}}');
-		sys.io.File.saveContent(base + "/lib/haxeon.json", '{"version":1,"package":{"name":"helper"},"sourceRoots":["code"]}');
-		sys.io.File.saveContent(base + "/lib/code/Value.hx", "class Value { public static function answer():Int return 42; }");
+		sys.io.File.saveContent(base + "/lib/haxeon.json",
+			'{"version":1,"package":{"name":"helper"},"sourceRoots":["code"]}');
+		sys.io.File.saveContent(base + "/lib/code/Value.hx",
+			"class Value { public static function answer():Int return 42; }");
 		var mainPath = base + "/app/src/app/Main.hx",
 			protocol = new LspProtocol();
-		sys.io.File.saveContent(mainPath, "package app; class Main { public static function main():Int return Value.answer(); }");
+		sys.io.File.saveContent(mainPath,
+			"package app; class Main { public static function main():Int return Value.answer(); }");
 		request(protocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 851,
@@ -1836,12 +1939,14 @@ class LspProtocolMain {
 			'{"version":1,"package":{"name":"helper"},"sourceRoots":["code"],"sources":["code/dep/Value.hx"],"scopeSourceRoots":false}');
 		// A package directory named build is source when the manifest names its output elsewhere, even beside listed sources.
 		sys.io.File.saveContent(base + "/lib/code/build/Digest.hx", "package build; class Digest {} ");
-		sys.io.File.saveContent(base + "/lib/code/dep/Value.hx", "package dep; class Value { public static function answer():Int return 42; }");
+		sys.io.File.saveContent(base + "/lib/code/dep/Value.hx",
+			"package dep; class Value { public static function answer():Int return 42; }");
 		sys.io.File.saveContent(base + "/app/src/build/BuildDiagnostic.hx", "package build; class BuildDiagnostic {} ");
 		sys.io.File.saveContent(base + "/app/src/generated/Artifact.hx", "invalid generated output");
 		var mainPath = base + "/app/src/app/Main.hx",
 			uri = "file://" + mainPath,
-			source = "package app; import dep.Value; class Main { public static function main():Int { var answer = Value.answer(); return answer; } }",
+			source =
+				"package app; import dep.Value; class Main { public static function main():Int { var answer = Value.answer(); return answer; } }",
 			protocol = new LspProtocol();
 		sys.io.File.saveContent(mainPath, source);
 		request(protocol, Json.stringify({
@@ -1904,14 +2009,12 @@ class LspProtocolMain {
 			[base]
 		]) {
 			var nested = new LspProtocol();
-			request(nested, Json.stringify({
-				jsonrpc: "2.0",
+			request(nested, Json.stringify({jsonrpc: "2.0",
 				id: 803,
 				method: "initialize",
-				params: {
-					workspaceFolders: [for (root in roots) {uri: "file://" + root, name: root}]
-				}
-			}));
+				params: {workspaceFolders: [for (root in roots) {
+					uri:"file://" + root, name:root
+				}]}}));
 			var published = nested.handle(Json.stringify({
 				jsonrpc: "2.0",
 				method: "textDocument/didOpen",
@@ -1924,7 +2027,8 @@ class LspProtocolMain {
 					}
 				}
 			}));
-			if (nested.project.compilerPath(mainPath) != "app/Main.hx" || !nested.project.hasDiskSource(base + "/lib/code/dep/Value.hx"))
+			if (nested.project.compilerPath(mainPath) != "app/Main.hx"
+				|| !nested.project.hasDiskSource(base + "/lib/code/dep/Value.hx"))
 				throw "source-folder or nested workspace lost owning manifest dependencies";
 			var clean = false;
 			for (raw in published) {
@@ -1944,7 +2048,8 @@ class LspProtocolMain {
 		}
 		var deferred = new LspProtocol(),
 			dependencyPath = base + "/lib/code/dep/Value.hx",
-			deferredSource = StringTools.replace(source, "var answer =", 'var expression = new EReg("x", ""); var answer =');
+			deferredSource = StringTools.replace(source, "var answer =",
+				'var expression = new EReg("x", ""); var answer =');
 		deferred.enableDeferredDiagnostics();
 		request(deferred, Json.stringify({
 			jsonrpc: "2.0",
@@ -1988,8 +2093,10 @@ class LspProtocolMain {
 			}
 		}));
 		if (returnedDefinition.result == null || returnedDefinition.result.uri != uri)
-			throw "definition failed after switching configurations with drained diagnostics: " + Json.stringify(returnedDefinition);
-		var editedSource = StringTools.replace(StringTools.replace(deferredSource, "var answer =", "var newAnswerValue ="), "return answer;",
+			throw "definition failed after switching configurations with drained diagnostics: "
+				+ Json.stringify(returnedDefinition);
+		var editedSource = StringTools.replace(StringTools.replace(deferredSource, "var answer =",
+			"var newAnswerValue ="), "return answer;",
 			"return newAnswerValue;");
 		deferred.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -2022,13 +2129,15 @@ class LspProtocolMain {
 		Sys.println("PASS: foreground definition reanalyzes its document after configuration switches");
 		Sys.println("PASS: ancestor manifests, overlapping source folders and lazy nested project dependencies");
 		// Project FFI metadata supplies virtual Haxe modules, without native builds.
-		sys.io.File.saveContent(base + "/app/fixture.hxi", 'interface fixture @target("portable-abi64") @library("fixture") { const VALUE = 17; }');
+		sys.io.File.saveContent(base + "/app/fixture.hxi",
+			'interface fixture @target("portable-abi64") @library("fixture") { const VALUE = 17; }');
 		sys.io.File.saveContent(base + "/app/fixture.hxmap",
 			'{"interface":"fixture","package":"projected","modules":{"functions":"Fixture","types":"FixtureTypes","constants":"FixtureConstants"}}');
 		sys.io.File.saveContent(base + "/app/haxeon.json",
 			'{"version":1,"package":{"name":"demo"},"sourceRoots":["src"],"scopeSourceRoots":false,"ffi":{"interfaces":["fixture.hxi"],"projections":["fixture.hxmap"]}}');
 		var ffiProtocol = new LspProtocol(),
-			ffiSource = "package app; import projected.FixtureConstants; class Main { public static function main():Int { var value = FixtureConstants.VALUE; return value; } }";
+			ffiSource =
+				"package app; import projected.FixtureConstants; class Main { public static function main():Int { var value = FixtureConstants.VALUE; return value; } }";
 		request(ffiProtocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 804,
@@ -2049,7 +2158,8 @@ class LspProtocolMain {
 		}));
 		for (raw in ffiMessages) {
 			var message:Dynamic = Json.parse(raw);
-			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri && message.params.diagnostics.length > 0)
+			if (message.method == "textDocument/publishDiagnostics" && message.params.uri == uri
+				&& message.params.diagnostics.length > 0)
 				throw "manifest FFI projection did not resolve: " + raw;
 		}
 		var ffiHover = request(ffiProtocol, Json.stringify({
@@ -2073,7 +2183,8 @@ class LspProtocolMain {
 			}
 		}));
 		if (ffiDefinition.result == null || FileUri.toPath(ffiDefinition.result.uri) != base + "/app/fixture.hxi")
-			throw "projected FFI constant definition did not reach its ABI declaration: " + Json.stringify(ffiDefinition);
+			throw "projected FFI constant definition did not reach its ABI declaration: "
+				+ Json.stringify(ffiDefinition);
 		var oldConfiguration = ffiProtocol.project.configurations[0].id;
 		sys.io.File.saveContent(base + "/app/fixture.hxi",
 			'// Updated ABI\ninterface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
@@ -2127,10 +2238,18 @@ class LspProtocolMain {
 	}
 
 	static function watchedFileMessage(uri:String, type:Int):String
-		return Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeWatchedFiles", params: {changes: [{uri: uri, type: type}]}});
+		return Json.stringify({
+			jsonrpc: "2.0",
+			method: "workspace/didChangeWatchedFiles",
+			params: {changes: [{uri: uri, type: type}]}
+		});
 
 	static function workspaceFolderChange(added:Array<Dynamic>, removed:Array<Dynamic>):String
-		return Json.stringify({jsonrpc: "2.0", method: "workspace/didChangeWorkspaceFolders", params: {event: {added: added, removed: removed}}});
+		return Json.stringify({
+			jsonrpc: "2.0",
+			method: "workspace/didChangeWorkspaceFolders",
+			params: {event: {added: added, removed: removed}}
+		});
 
 	static function documentChangeMessage(uri:String, version:Int, source:String):String
 		return Json.stringify({
@@ -2139,7 +2258,8 @@ class LspProtocolMain {
 			params: {textDocument: {uri: uri, version: version}, contentChanges: [{text: source}]}
 		});
 
-	static function definitionTargets(protocol:LspProtocol, uri:String, document:LspDocument, symbol:String, id:Int, expectedUri:String):Bool {
+	static function definitionTargets(protocol:LspProtocol, uri:String, document:LspDocument, symbol:String, id:Int,
+			expectedUri:String):Bool {
 		var responses = protocol.handle(Json.stringify({
 			jsonrpc: "2.0",
 			id: id,
@@ -2152,12 +2272,14 @@ class LspProtocolMain {
 		return response.error == null && response.result != null && response.result.uri == expectedUri;
 	}
 
-	static function hasSemanticToken(raw:Dynamic, expectedLine:Int, expectedCharacter:Int, expectedType:Int, expectedModifiers:Int):Bool {
+	static function hasSemanticToken(raw:Dynamic, expectedLine:Int, expectedCharacter:Int, expectedType:Int,
+			expectedModifiers:Int):Bool {
 		var data:Array<Int> = cast raw, line = 0, character = 0, index = 0;
 		while (index < data.length) {
 			line += data[index];
 			character = data[index] == 0 ? character + data[index + 1] : data[index + 1];
-			if (line == expectedLine && character == expectedCharacter && data[index + 3] == expectedType && data[index + 4] == expectedModifiers)
+			if (line == expectedLine && character == expectedCharacter && data[index + 3] == expectedType
+				&& data[index + 4] == expectedModifiers)
 				return true;
 			index += 5;
 		}

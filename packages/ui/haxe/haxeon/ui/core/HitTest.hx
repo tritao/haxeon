@@ -66,7 +66,10 @@ private class HitTestState {
 				var target = node.layout.style.overlay ? overlays : children;
 				var parent = node.layout.style.overlay ? overlayOwner : owner;
 				var siblings = target.get(parent.id.value);
-				if (siblings == null) { siblings = []; target.set(parent.id.value, siblings); }
+				if (siblings == null) {
+					siblings = [];
+					target.set(parent.id.value, siblings);
+				}
 				siblings.push(node);
 				if (node.layout.style.overlay) overlayOwner = node;
 				owner = node;
@@ -128,10 +131,9 @@ private class HitTestState {
 		// Clay's base flow root is emitted before floating roots at the same
 		// z-index. Negative/positive z-index values still compare normally.
 		var layerKind = owner == null ? 0 : 1;
-		if (bestPath == null || layerZ > bestLayerZ ||
-			(layerZ == bestLayerZ && (layerKind > bestLayerKind ||
-				(layerKind == bestLayerKind && (ownerOrder > bestLayerOrder ||
-					(ownerOrder == bestLayerOrder && candidateOrder > bestCandidateOrder)))))) {
+		if (bestPath == null || layerZ > bestLayerZ
+			|| (layerZ == bestLayerZ && (layerKind > bestLayerKind || (layerKind == bestLayerKind && (ownerOrder
+			> bestLayerOrder || (ownerOrder == bestLayerOrder && candidateOrder > bestCandidateOrder)))))) {
 			bestPath = path.copy();
 			bestLayerZ = layerZ;
 			bestLayerKind = layerKind;

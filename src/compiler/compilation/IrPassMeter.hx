@@ -28,7 +28,8 @@ class IrPassMeter {
 		record(name, before, AllocationMeter.sample());
 	}
 
-	static function record(name:String, before:AllocationMeter.AllocationSnapshot, after:AllocationMeter.AllocationSnapshot):Void {
+	static function record(name:String, before:AllocationMeter.AllocationSnapshot,
+			after:AllocationMeter.AllocationSnapshot):Void {
 		if (!bytes.exists(name))
 			order.push(name);
 		bytes.set(name, (bytes.exists(name) ? bytes.get(name) : 0.0) + after.bytes - before.bytes);
@@ -40,7 +41,11 @@ class IrPassMeter {
 		var result:Array<{name:String, bytes:Float, count:Float}> = [];
 		for (name in order) {
 			var passBytes = bytes.get(name), passCount = counts.get(name);
-			result.push({name: name, bytes: passBytes == null ? 0.0 : passBytes, count: passCount == null ? 0.0 : passCount});
+			result.push({
+				name: name,
+				bytes: passBytes == null ? 0.0 : passBytes,
+				count: passCount == null ? 0.0 : passCount
+			});
 		}
 		return result;
 	}

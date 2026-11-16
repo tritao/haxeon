@@ -39,7 +39,8 @@ class TextInputState {
 		value.set_document_length(documentLength);
 		value.set_selection_start(selectionStart);
 		value.set_selection_end(selectionEnd);
-		value.set_composition_start(compositionStart == null ? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionStart);
+		value.set_composition_start(compositionStart == null
+			? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionStart);
 		value.set_composition_end(compositionEnd == null ? NativeKitConstants.NK_TEXT_POSITION_NONE : compositionEnd);
 		value.set_input_type(inputType);
 		value.set_flags(flags);

@@ -65,7 +65,8 @@ class ProfileStackFrame {
 	public final nativeModule:Null<String>;
 	public final nativeOffset:Null<String>;
 
-	public function new(key:String, stableKey:String, name:String, revision:Int, ?file:String, ?line:Int, ?nativeModule:String, ?nativeOffset:String) {
+	public function new(key:String, stableKey:String, name:String, revision:Int, ?file:String, ?line:Int,
+			?nativeModule:String, ?nativeOffset:String) {
 		this.key = key;
 		this.stableKey = stableKey;
 		this.name = name;
@@ -113,7 +114,8 @@ class ProfileGcStats {
 	public final collections:String;
 	public final markMicros:String;
 
-	public function new(timestamp:Float, allocated:Int64, allocations:Int64, heap:Int64, collections:Int64, markMicros:Int64) {
+	public function new(timestamp:Float, allocated:Int64, allocations:Int64, heap:Int64, collections:Int64,
+			markMicros:Int64) {
 		this.timestamp = timestamp;
 		this.allocated = Int64.toStr(allocated);
 		this.allocations = Int64.toStr(allocations);
@@ -134,7 +136,8 @@ class ProfileLeaf {
 	public final file:Null<String>;
 	public final line:Null<Int>;
 
-	public function new(timestamp:Float, threadId:Int, address:Int64, ?offset:Int, ?functionName:String, ?opcodeIndex:Int, ?opcode:Int, ?file:String,
+	public function new(timestamp:Float, threadId:Int, address:Int64, ?offset:Int, ?functionName:String,
+			?opcodeIndex:Int, ?opcode:Int, ?file:String,
 			?line:Int) {
 		this.timestamp = timestamp;
 		this.threadId = threadId;
@@ -172,7 +175,8 @@ class ProfileAllocationSample {
 	public final typeKind:Int;
 	public final frameDetails:Array<ProfileStackFrame>;
 
-	public function new(sequence:Int, timestamp:Float, threadId:Int, requested:Int64, allocated:Int64, interval:Int, typeKind:Int,
+	public function new(sequence:Int, timestamp:Float, threadId:Int, requested:Int64, allocated:Int64, interval:Int,
+			typeKind:Int,
 			frameDetails:Array<ProfileStackFrame>) {
 		this.sequence = sequence;
 		this.timestamp = timestamp;
@@ -323,7 +327,8 @@ class ProfilerSession {
 		if (state == Running)
 			pause();
 		this.sampleRate = sampleRate;
-		this.sources = sources != null ? sources : HldiClient.SOURCE_SAMPLING | (allocationInterval > 0 ? HldiClient.SOURCE_ALLOC : 0);
+		this.sources = sources != null
+			? sources : HldiClient.SOURCE_SAMPLING | (allocationInterval > 0 ? HldiClient.SOURCE_ALLOC : 0);
 		requestedSampleRate = sampleRate;
 		// Ticks restart with each session; its timestamps continue from where the last one stopped.
 		clock = new HldiClock();
@@ -597,7 +602,8 @@ class ProfilerSession {
 				threads.set(record.threadId, record.payload.toString());
 			if (record.value == EVENT_GC_STATS && record.payload.length == 40) {
 				var input = new HldiReader(record.payload);
-				gcStats.push(new ProfileGcStats(record.timestamp, input.u64(), input.u64(), input.u64(), input.u64(), input.u64()));
+				gcStats.push(new ProfileGcStats(record.timestamp, input.u64(), input.u64(), input.u64(), input.u64(),
+					input.u64()));
 				if (gcStats.length > 256)
 					gcStats.shift();
 			}
@@ -616,7 +622,8 @@ class ProfilerSession {
 					nativeSymbols.set(pc, {name: name, module: module, base: base});
 				}
 			}
-			if (record.value == EVENT_ALLOCATION_SAMPLE && record.payload.length >= 32 && (record.payload.length - 32) % 8 == 0) {
+			if (record.value == EVENT_ALLOCATION_SAMPLE && record.payload.length >= 32
+				&& (record.payload.length - 32) % 8 == 0) {
 				var input = new HldiReader(record.payload),
 					requested = input.u64(),
 					allocated = input.u64(),
@@ -626,7 +633,8 @@ class ProfilerSession {
 				input.u32();
 				if (count == Std.int(input.remaining() / 8)) {
 					var frames = [for (_ in 0...count) input.u64()];
-					allocationSamples.push(new ProfileAllocationSample(++allocationSequence, record.timestamp, record.threadId, requested, allocated,
+					allocationSamples.push(new ProfileAllocationSample(++allocationSequence, record.timestamp,
+						record.threadId, requested, allocated,
 						interval, typeKind, resolveFrames(frames)));
 					if (allocationSamples.length > allocationCapacity)
 						allocationSamples.splice(0, allocationSamples.length - allocationCapacity);
@@ -691,13 +699,16 @@ class ProfilerSession {
 				symbol = resolve(address);
 			var location = symbol == null ? null : symbol.sourceAt(address),
 				native = nativeSymbols.get(Int64.toStr(address));
-			frameDetails.push(symbol == null ? new ProfileStackFrame(native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}',
-				native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}', native == null ? "[native/unknown]" : native.name, 0, null,
+			frameDetails.push(symbol == null
+				? new ProfileStackFrame(native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}',
+				native == null ? "[native/unknown]" : 'native:${native.module}:${native.name}',
+				native == null ? "[native/unknown]" : native.name, 0, null,
 				null, native == null ? null : native.module,
 				native == null ? null : Int64.toStr(Int64.sub(address,
-					native.base))) : new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}',
-					'${symbol.moduleId}:${symbol.functionId}', symbol.name, symbol.revision, location == null ? null : location.file,
-					location == null ? null : location.line));
+				native.base))) : new ProfileStackFrame('${symbol.moduleId}:${symbol.revision}:${symbol.functionId}',
+				'${symbol.moduleId}:${symbol.functionId}', symbol.name, symbol.revision,
+				location == null ? null : location.file,
+				location == null ? null : location.line));
 		}
 		return frameDetails;
 	}
@@ -711,8 +722,9 @@ class ProfilerSession {
 				offset:Null<Int> = relative.high == 0 ? relative.low : null,
 				location = symbol.sourceAt(address);
 			leaves.push(location == null ? new ProfileLeaf(record.timestamp, record.threadId, address, offset,
-				symbol.name) : new ProfileLeaf(record.timestamp, record.threadId, address, offset, symbol.name, location.opcodeIndex, location.opcode,
-					location.file, location.line));
+				symbol.name) : new ProfileLeaf(record.timestamp, record.threadId, address, offset, symbol.name,
+				location.opcodeIndex, location.opcode,
+				location.file, location.line));
 		}
 		if (leafCapacity <= 0)
 			leaves.resize(0);
@@ -748,7 +760,8 @@ class ProfilerSession {
 		var key = '${symbol.moduleId}:${symbol.revision}:${symbol.functionId}:${source.file}:${source.line}',
 			value = lines.get(key);
 		if (value == null) {
-			value = new ProfileAggregate(key, '${symbol.moduleId}:${symbol.functionId}:${source.file}:${source.line}', symbol.name, source.file, source.line);
+			value = new ProfileAggregate(key, '${symbol.moduleId}:${symbol.functionId}:${source.file}:${source.line}',
+				symbol.name, source.file, source.line);
 			lines.set(key, value);
 		}
 		return value;
@@ -758,8 +771,8 @@ class ProfilerSession {
 		var result = [for (value in values) value];
 		result.sort((left, right) -> left.selfSamples != right.selfSamples ? right.selfSamples
 			- left.selfSamples : left.totalSamples != right.totalSamples ? right.totalSamples
-				- left.totalSamples : right.calls
-				- left.calls);
+			- left.totalSamples : right.calls
+			- left.calls);
 		return result;
 	}
 }

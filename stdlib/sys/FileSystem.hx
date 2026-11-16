@@ -71,7 +71,8 @@ function fileSystemReadDirectoryEntriesRaw(path:String):Array<String> {
 	var entries:Array<String> = [];
 	for (name in names) {
 		entries.push(name);
-		entries.push(runtime.MemoryFileSystem.isDirectory(runtime.MemoryFileSystem.normalize(path + "/" + name)) ? "d" : "f");
+		entries.push(runtime.MemoryFileSystem.isDirectory(runtime.MemoryFileSystem.normalize(path + "/" + name))
+			? "d" : "f");
 	}
 	return entries;
 }

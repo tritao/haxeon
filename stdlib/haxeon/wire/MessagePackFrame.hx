@@ -43,7 +43,8 @@ class MessagePackFrame {
 		return frame;
 	}
 
-	public static function unpack(frame:Bytes, ?expectedVersion:Int = CURRENT_VERSION, ?maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES):Bytes {
+	public static function unpack(frame:Bytes, ?expectedVersion:Int = CURRENT_VERSION,
+			?maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES):Bytes {
 		if (frame == null)
 			throw new MessagePackError("MessagePack frame cannot be null");
 		checkByte(expectedVersion, "expected version");
@@ -59,7 +60,8 @@ class MessagePackFrame {
 	}
 
 	/** Validates the header and bounds length before any payload allocation. */
-	public static function payloadLength(frame:Bytes, maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES, expectedVersion:Int = CURRENT_VERSION):Int {
+	public static function payloadLength(frame:Bytes, maxPayload:Int = MessagePackReader.DEFAULT_MAX_BYTES,
+			expectedVersion:Int = CURRENT_VERSION):Int {
 		if (frame == null || frame.length < HEADER_BYTES)
 			throw new MessagePackError("MessagePack frame is truncated");
 		if (maxPayload < 0)

@@ -25,7 +25,8 @@ function read(mode:Mode = Constants.ALIAS):Int
 	return mode;
 
 function main():Int {
-	if (Constants.ACTIVE != Mode.Active || Constants.ALIAS != Mode.Active || Constants.LABEL != Label.Ready || Constants.INFERRED != Mode.Active
+	if (Constants.ACTIVE != Mode.Active || Constants.ALIAS != Mode.Active || Constants.LABEL != Label.Ready
+		|| Constants.INFERRED != Mode.Active
 		|| Constants.SELECTED != Mode.Active)
 		return 1;
 	if (Constants.OPTIONAL != Mode.Active || Constants.MISSING != null || Constants.OPTIONAL_LABEL != Label.Ready)

@@ -6,7 +6,10 @@ function main():Int {
 	var first:GuardRecord = {
 		x: 0,
 		y: 1
-	}, second:GuardRecord = {x: 0, y: 1}, different:GuardRecord = {x: 1, y: 0}, alias:GuardRecord = first;
+	},
+		second:GuardRecord = {x: 0, y: 1},
+		different:GuardRecord = {x: 1, y: 0},
+		alias:GuardRecord = first;
 	var dynamicFirst:Dynamic = first,
 		dynamicSecond:Dynamic = second,
 		dynamicDifferent:Dynamic = different,

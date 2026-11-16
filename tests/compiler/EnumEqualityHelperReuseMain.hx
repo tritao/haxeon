@@ -22,15 +22,18 @@ class EnumEqualityHelperReuseMain {
 			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlineEnabled ? "1" : "0")]));
 		compiler.update("Equatable.hx", "interface Equatable {}");
 		compiler.update("Value.hx", "enum Value implements Equatable { Empty; Item(value:Int); }");
-		compiler.update("Box.hx", "struct Box implements Equatable { public final value:Value; public function new(value:Value) this.value=value; }");
+		compiler.update("Box.hx",
+			"struct Box implements Equatable { public final value:Value; public function new(value:Value) this.value=value; }");
 		compiler.update("A.hx", "class A { public static function same(a:Box, b:Box):Bool return a == b; }");
-		compiler.update("Main.hx", "function main():Int return A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) ? 42 : 1;");
+		compiler.update("Main.hx",
+			"function main():Int return A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) ? 42 : 1;");
 		var initial = compiler.compile("Main");
 		if (new IrInterpreter(initial.ir).run("main") != 42)
 			throw 'initial enum equality call failed for $target inline=$inlineEnabled';
 
 		compiler.update("B.hx", comparisonModule("B"));
-		compiler.update("Main.hx", "function main():Int return A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) && B.same(Value.Item(2), Value.Item(2)) ? 42 : 1;");
+		compiler.update("Main.hx",
+			"function main():Int return A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) && B.same(Value.Item(2), Value.Item(2)) ? 42 : 1;");
 		var updated = compiler.compile("Main");
 		if (new IrInterpreter(updated.ir).run("main") != 42)
 			throw 'enum equality helper was not reused for $target inline=$inlineEnabled';
@@ -40,7 +43,8 @@ class EnumEqualityHelperReuseMain {
 		if (helpers != 1)
 			throw 'expected one shared enum equality helper for $target inline=$inlineEnabled, found $helpers';
 		compiler.update("Alpha.hx", "enum Alpha { One; }");
-		compiler.update("Main.hx", "function main():Int { var extra:Dynamic=Alpha.One; return extra != null && A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) && B.same(Value.Item(2), Value.Item(2)) ? 42 : 1; }");
+		compiler.update("Main.hx",
+			"function main():Int { var extra:Dynamic=Alpha.One; return extra != null && A.same(new Box(Value.Item(1)), new Box(Value.Item(1))) && B.same(Value.Item(2), Value.Item(2)) ? 42 : 1; }");
 		updated = compiler.compile("Main");
 		if (new IrInterpreter(updated.ir).run("main") != 42)
 			throw 'adding an enum changed cached Dynamic equality for $target inline=$inlineEnabled';

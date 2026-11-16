@@ -40,8 +40,10 @@ typedef SemanticAssemblyResult = {
 
 /** Canonicalizes reachable declarations and selects functions invalidated by source changes. */
 class SemanticAssembly {
-	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
-			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>, structuralChanged:Map<String, Bool>,
+	public static function run(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
+			rollbackModules:Map<String, ModuleState>,
+			names:Array<String>, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
+			structuralChanged:Map<String, Bool>,
 			refreshUnchangedModules:Bool = true, continuation:Bool = false):SemanticAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		#if haxeon
@@ -119,11 +121,14 @@ class SemanticAssembly {
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
 				for (enumDecl in parsed.enums)
-					enumDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, enumDecl.name), enumDecl);
+					enumDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, enumDecl.name),
+						enumDecl);
 				for (abstractDecl in parsed.enumAbstracts)
-					enumAbstractDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, abstractDecl.name), abstractDecl);
+					enumAbstractDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName,
+						abstractDecl.name), abstractDecl);
 				for (classDecl in parsed.classes)
-					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name), classDecl);
+					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name),
+						classDecl);
 			}
 
 		var discoveryPrefixes:Map<String, Array<String>> = [];
@@ -134,10 +139,12 @@ class SemanticAssembly {
 			for (classDecl in program.classes) {
 				var prefixes = declaredDiscoveryPrefixes(classDecl);
 				if (prefixes != null)
-					discoveryPrefixes.set(ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name), prefixes);
+					discoveryPrefixes.set(ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name),
+						prefixes);
 			}
 		}
-		var reuseModuleContributions = CompilationContext.mapIsEmpty(signatureChanged) && CompilationContext.mapIsEmpty(structuralChanged);
+		var reuseModuleContributions = CompilationContext.mapIsEmpty(signatureChanged)
+			&& CompilationContext.mapIsEmpty(structuralChanged);
 		if (reuseModuleContributions) {
 			var discovered = true;
 			while (discovered) {
@@ -148,7 +155,8 @@ class SemanticAssembly {
 						continue;
 					for (classDecl in cachedState.canonicalClasses) {
 						var baseName = nominalTypeName(classDecl.base);
-						if (baseName != null && discoveryPrefixes.exists(baseName) && !discoveryPrefixes.exists(classDecl.name)) {
+						if (baseName != null && discoveryPrefixes.exists(baseName)
+							&& !discoveryPrefixes.exists(classDecl.name)) {
 							discoveryPrefixes.set(classDecl.name, discoveryPrefixes.get(baseName));
 							discovered = true;
 						}
@@ -197,7 +205,8 @@ class SemanticAssembly {
 				for (functionName in state.canonicalGenericOrigins)
 					genericOrigins.set(functionName, true);
 				if (state.canonicalGeneratedFunctions.length > 0)
-					generatedByModule.set(name, [for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
+					generatedByModule.set(name,
+						[for (functionName in state.canonicalGeneratedFunctions) functionName => true]);
 				contributionReuseMs += Sys.time() * 1000.0 - contributionStartedAt;
 				continue;
 			}
@@ -210,8 +219,7 @@ class SemanticAssembly {
 			// in `package nav`, a plain `Path` is `nav.Path`, as in Haxe.
 			aliases.attach(dottedSourceAliases);
 			var constructorTargets:Map<String, String> = [],
-				ambiguousConstructors:Map<String,
-					Bool> = [], // `import pack.Module as M;` makes M a namespace; nothing of the module comes in by its bare name.
+				ambiguousConstructors:Map<String, Bool> = [], // `import pack.Module as M;` makes M a namespace; nothing of the module comes in by its bare name.
 				namespaceImports:Map<String, Bool> = [
 					for (alias => path in ast.importAliases)
 						if (alias != QualifiedName.last(path)) path => true
@@ -236,7 +244,7 @@ class SemanticAssembly {
 						for (caseName in enumCasesByType.get(type))
 							if (!importConstructors.exists(caseName))
 								importConstructors.set(caseName, type + "." + caseName);
-								// The same enum reached through its module and through
+							// The same enum reached through its module and through
 							// its own import is not a clash.
 							else if (importConstructors.get(caseName) != type + "." + caseName)
 								ambiguousImportConstructors.set(caseName, true);
@@ -293,11 +301,14 @@ class SemanticAssembly {
 			for (alias in ast.aliases)
 				typeAliases.push(ModuleCanonicalizer.canonicalAlias(alias, aliases, ast.packageName));
 			for (enumDecl in ast.enums)
-				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName, name, entryModule, locals));
+				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName, name, entryModule,
+					locals));
 			for (abstractDecl in ast.enumAbstracts)
-				enumAbstracts.push(ModuleCanonicalizer.canonicalEnumAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals));
+				enumAbstracts.push(ModuleCanonicalizer.canonicalEnumAbstract(abstractDecl, aliases, ast.packageName,
+					name, entryModule, locals));
 			for (abstractDecl in ast.abstracts) {
-				var canonicalAbstract = ModuleCanonicalizer.canonicalAbstract(abstractDecl, aliases, ast.packageName, name, entryModule, locals);
+				var canonicalAbstract = ModuleCanonicalizer.canonicalAbstract(abstractDecl, aliases, ast.packageName,
+					name, entryModule, locals);
 				abstracts.push(canonicalAbstract);
 				for (method in canonicalAbstract.methods) {
 					var qualified = canonicalAbstract.name + "." + method.name,
@@ -315,7 +326,8 @@ class SemanticAssembly {
 						};
 					functions.push(canonicalMethod);
 					owners.set(qualified, name);
-					if (canonicalAbstract.typeParameters.length > 0 || (method.typeParameters != null && method.typeParameters.length > 0))
+					if (canonicalAbstract.typeParameters.length > 0
+						|| (method.typeParameters != null && method.typeParameters.length > 0))
 						genericOrigins.set(qualified, true);
 					LambdaCollector.collect(method.statements, qualified, name, generatedByModule);
 				}
@@ -323,7 +335,8 @@ class SemanticAssembly {
 			for (fn in ast.functions)
 				locals.set(fn.name, true);
 			var canonicalFunctions:Array<AstFunction>;
-			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule && state.canonicalAliasKey == aliasKey)
+			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule
+				&& state.canonicalAliasKey == aliasKey)
 				canonicalFunctions = state.canonicalFunctions;
 			else {
 				state = context.writableState(name, rollbackModules);
@@ -352,7 +365,8 @@ class SemanticAssembly {
 				if (canonical.typeParameters != null && canonical.typeParameters.length > 0)
 					genericOrigins.set(canonical.name, true);
 				LambdaCollector.collect(canonical.statements, canonical.name, name, generatedByModule);
-				for (callee in dependencyCalls(state, rollbackModules, canonical.name, state.canonicalCalls.get(canonical.name))) {
+				for (callee in dependencyCalls(state, rollbackModules, canonical.name,
+					state.canonicalCalls.get(canonical.name))) {
 					var callers:Array<String>;
 					if (reverseCalls.exists(callee))
 						callers = reverseCalls.get(callee);
@@ -367,14 +381,16 @@ class SemanticAssembly {
 				var className = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
 					classAliases = aliases.child();
 				for (field in classDecl.fields)
-					if (constructorTargets.exists(field.name) && classAliases.get(field.name) == constructorTargets.get(field.name))
+					if (constructorTargets.exists(field.name)
+						&& classAliases.get(field.name) == constructorTargets.get(field.name))
 						classAliases.remove(field.name);
 				for (parameter in classDecl.typeParameters)
 					classAliases.set(parameter, parameter);
 				var parsedBase = classDecl.base,
 					canonicalBase:Null<compiler.syntax.Ast.AstType> = null;
 				if (parsedBase != null)
-					canonicalBase = ModuleCanonicalizer.canonicalType(parsedBase, classAliases, classDecl.typeParameters);
+					canonicalBase = ModuleCanonicalizer.canonicalType(parsedBase, classAliases,
+						classDecl.typeParameters);
 				var parsedMethods = classDecl.methods;
 				var baseName = nominalTypeName(canonicalBase);
 				if (baseName != null && discoveryPrefixes.exists(baseName)) {
@@ -385,7 +401,8 @@ class SemanticAssembly {
 				var classMethods:Array<AstFunction> = [];
 				for (parsedMethod in parsedMethods) {
 					var method = SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
-					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals, className + "." + method.name, classAliases);
+					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals,
+						className + "." + method.name, classAliases);
 					functions.push(canonical);
 					classMethods.push({
 						name: method.name,
@@ -402,7 +419,8 @@ class SemanticAssembly {
 						statements: canonical.statements
 					});
 					owners.set(canonical.name, name);
-					if (classDecl.typeParameters.length > 0 || (method.typeParameters != null && method.typeParameters.length > 0))
+					if (classDecl.typeParameters.length > 0
+						|| (method.typeParameters != null && method.typeParameters.length > 0))
 						genericOrigins.set(canonical.name, true);
 					var calls:Map<String, Bool> = [];
 					var aliases:Map<String, String> = [];
@@ -424,14 +442,17 @@ class SemanticAssembly {
 				}
 				var canonicalFields:Array<compiler.syntax.Ast.AstField> = [];
 				for (field in classDecl.fields) {
-					var initializer = ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name, entryModule, locals, classAliases);
+					var initializer = ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name,
+						entryModule, locals, classAliases);
 					if (initializer != null)
 						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
 					canonicalFields.push({
 						name: field.name,
 						isPublic: field.isPublic,
-						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals, classAliases),
-						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className, classDeclarations, classAliases,
+						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals,
+							classAliases),
+						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className,
+							classDeclarations, classAliases,
 							enumDeclarations, enumAbstractDeclarations),
 							classAliases, classDecl.typeParameters),
 						initializer: initializer,
@@ -450,7 +471,8 @@ class SemanticAssembly {
 					typeParameters: classDecl.typeParameters,
 					typeConstraints: classDecl.typeConstraints,
 					isPrivate: classDecl.isPrivate,
-					metadata: ModuleCanonicalizer.canonicalMetadata(classDecl.metadata, name, entryModule, locals, classAliases),
+					metadata: ModuleCanonicalizer.canonicalMetadata(classDecl.metadata, name, entryModule, locals,
+						classAliases),
 					base: canonicalBase,
 					interfaces: [
 						for (interfaceType in classDecl.interfaces)
@@ -466,7 +488,8 @@ class SemanticAssembly {
 			state.canonicalAliases = typeAliases.slice(aliasStart);
 			// An alias remains an invalidation node even though typed values use its resolved type.
 			for (alias in state.canonicalAliases)
-				SemanticDependencyCollector.addTypeDependency(state.semanticDependencies, alias.name, SemanticDependencyKind.Layout, alias.type, aliases);
+				SemanticDependencyCollector.addTypeDependency(state.semanticDependencies, alias.name,
+					SemanticDependencyKind.Layout, alias.type, aliases);
 			state.canonicalEnums = enums.slice(enumStart);
 			state.canonicalEnumAbstracts = enumAbstracts.slice(enumAbstractStart);
 			state.canonicalAbstracts = abstracts.slice(abstractStart);
@@ -479,7 +502,8 @@ class SemanticAssembly {
 					if (owners.get(functionName) == name) functionName
 			];
 			var generated = generatedByModule.get(name);
-			state.canonicalGeneratedFunctions = generated == null ? [] : [for (functionName in generated.keys()) functionName];
+			state.canonicalGeneratedFunctions = generated == null
+				? [] : [for (functionName in generated.keys()) functionName];
 			contributionRebuildMs += Sys.time() * 1000.0 - contributionStartedAt;
 		}
 
@@ -524,19 +548,27 @@ class SemanticAssembly {
 		// flipped elsewhere is retyped below through the ordinary invalidation propagation, even
 		// though neither its own source nor its signature changed.
 		var purityScopeClasses:Map<String, AstClass> = [for (classDecl in classes) classDecl.name => classDecl];
-		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> = [for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
-		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> = [for (enumDecl in enums) enumDecl.name => enumDecl];
-		var purityScopeEnumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [for (decl in enumAbstracts) decl.name => decl];
-		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [for (decl in abstracts) decl.name => decl];
+		var purityScopeInterfaces:Map<String, compiler.syntax.Ast.AstInterface> =
+			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
+		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
+			[for (enumDecl in enums) enumDecl.name => enumDecl];
+		var purityScopeEnumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> =
+			[for (decl in enumAbstracts) decl.name => decl];
+		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
+			[for (decl in abstracts) decl.name => decl];
 		// The typer's own signature table: purity inferred over any other scope can disagree with what typing relied on, and
 		// every cached body then looks drifted on every edit.
 		var purityScopeSignatures:Map<String, AstFunction> = [];
 		SemanticProgram.fillSignatures(interfaces, classes, abstracts, programFunctions, purityScopeSignatures, null);
-		var isAnnotatedPure = function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
-			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures, purityScopeClasses);
-		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations.isTypeName(candidate, purityScopeClasses,
+		var isAnnotatedPure =
+			function(candidate:String):Bool return compiler.runtime.CompilerIntrinsics.isPure(candidate)
+			|| compiler.types.analysis.PurityAnnotations.hasPureAnnotation(candidate, purityScopeSignatures,
+			purityScopeClasses);
+		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
+			.isTypeName(candidate, purityScopeClasses,
 			purityScopeInterfaces, purityScopeEnums, purityScopeEnumAbstracts, purityScopeAbstracts);
-		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses, purityScopeAbstracts,
+		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
+			purityScopeAbstracts,
 			purityScopeEnums, isAnnotatedPure, isTypeName);
 		var freshNoReturn = compiler.types.analysis.NoReturnDeclarations.declared(purityScopeSignatures);
 		var purityDrifted:Map<String, Bool> = [];
@@ -559,10 +591,9 @@ class SemanticAssembly {
 		}
 
 		var invalid:Map<String, Bool> = [],
-			invalidationReasons:Map<String,
-				Array<InvalidationReason>> = [], // A continuation picks up a pass whose typed functions are already published to the module states, though no module has
+			invalidationReasons:Map<String, Array<InvalidationReason>> = [], // A continuation picks up a pass whose typed functions are already published to the module states, though no module has
 		// a good revision until the whole compilation commits: it is incremental over that pass, not a first build.
-			initialBuild = !continuation;
+		initialBuild = !continuation;
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;
@@ -581,7 +612,8 @@ class SemanticAssembly {
 				var change = structuralQueue[structuralCursor++];
 				var changedDependency:String = change,
 					separator = changedDependency.indexOf(":"),
-					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1, changedDependency.length),
+					target = separator < 0 ? changedDependency : changedDependency.substring(separator + 1,
+						changedDependency.length),
 					targetId = context.resolveSemanticType(target);
 				if (targetId == null)
 					targetId = context.resolveSemanticSymbol(target);
@@ -597,10 +629,12 @@ class SemanticAssembly {
 						for (dependency in dependencies) {
 							var functionOwner:String = owner;
 							var matches = dependency.targetId != null
-								&& targetId != null ? dependency.targetId == targetId : SemanticDependencyCollector.sameDependencyTarget(dependency.target,
-									target);
+								&& targetId != null ? dependency.targetId
+								== targetId : SemanticDependencyCollector.sameDependencyTarget(dependency.target,
+								target);
 							if (matches) {
-								invalidate(invalid, invalidationReasons, functionOwner, StructuralDependency, target, targetId, Std.string(dependency.kind));
+								invalidate(invalid, invalidationReasons, functionOwner, StructuralDependency, target,
+									targetId, Std.string(dependency.kind));
 								if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Layout)
 									for (classDecl in classes)
 										if (classDecl.name == functionOwner) {
@@ -621,8 +655,10 @@ class SemanticAssembly {
 										}
 								var matchedFunction = false;
 								for (fn in functions)
-									if (fn.name == functionOwner || StringTools.startsWith(fn.name, functionOwner + ".")) {
-										invalidate(invalid, invalidationReasons, fn.name, StructuralDependency, target, targetId, Std.string(dependency.kind));
+									if (fn.name == functionOwner
+										|| StringTools.startsWith(fn.name, functionOwner + ".")) {
+										invalidate(invalid, invalidationReasons, fn.name, StructuralDependency, target,
+											targetId, Std.string(dependency.kind));
 										matchedFunction = true;
 									}
 								if (matchedFunction)
@@ -640,7 +676,8 @@ class SemanticAssembly {
 				for (caller => sources in modules.get(moduleName).defaultArgumentSources)
 					for (path => source in sources)
 						if (!sourceFiles.exists(path) || sourceFiles.get(path).text != source.text) {
-							invalidate(invalid, invalidationReasons, enclosingFunction(caller), SourceRevision, path, null, "default-argument");
+							invalidate(invalid, invalidationReasons, enclosingFunction(caller), SourceRevision, path,
+								null, "default-argument");
 							break;
 						}
 		// Rehydrated modules can retain field initializer fingerprints without
@@ -672,7 +709,8 @@ class SemanticAssembly {
 				continue;
 			for (owner => dependencies in modules.get(moduleName).semanticDependencies)
 				for (dependency in dependencies)
-					if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body && dependency.targetId != null) {
+					if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
+						&& dependency.targetId != null) {
 						var dependents = reverseBodyDependencies.get(dependency.targetId);
 						if (dependents == null) {
 							dependents = [];
@@ -732,14 +770,16 @@ class SemanticAssembly {
 				token.check();
 			var changed = work[workCursor++];
 			if (changedSignatures.exists(changed))
-				invalidate(invalid, invalidationReasons, changed, SignatureChanged, changed, context.resolveSemanticSymbol(changed));
+				invalidate(invalid, invalidationReasons, changed, SignatureChanged, changed,
+					context.resolveSemanticSymbol(changed));
 			else if (!invalid.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.resolveSemanticSymbol(changed);
 			var helperOrigin = helperOrigins.get(changed);
 			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
 				work.push(helperOrigin);
-				invalidate(invalid, invalidationReasons, helperOrigin, DependencySignature, changed, changedId, "generated-helper");
+				invalidate(invalid, invalidationReasons, helperOrigin, DependencySignature, changed, changedId,
+					"generated-helper");
 			}
 			if (changedId != null && reverseBodyDependencies.exists(changedId))
 				for (ownerName in reverseBodyDependencies.get(changedId)) {
@@ -754,7 +794,8 @@ class SemanticAssembly {
 				for (caller in reverseTypedCalls.get(changed))
 					if (!invalid.exists(caller)) {
 						work.push(caller);
-						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "typed-call");
+						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
+							"typed-call");
 					}
 			if (genericOrigins.exists(changed)) {
 				// A call through a local (`context.resourceState(...)`) has no resolvable name before typing, so the callers
@@ -766,7 +807,8 @@ class SemanticAssembly {
 					for (caller in requesting)
 						if (!invalid.exists(caller)) {
 							work.push(caller);
-							invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "specialization-request");
+							invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
+								"specialization-request");
 						}
 			}
 			if (reverseCalls.exists(changed)) {
@@ -775,7 +817,8 @@ class SemanticAssembly {
 					var caller = enclosingFunction(callerName);
 					if (!invalid.exists(caller)) {
 						work.push(caller);
-						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId, "provisional-call");
+						invalidate(invalid, invalidationReasons, caller, DependencySignature, changed, changedId,
+							"provisional-call");
 					}
 				}
 			}
@@ -793,7 +836,8 @@ class SemanticAssembly {
 				invalidModules.set(owner, true);
 		}
 		for (moduleName in names)
-			if (modules.exists(moduleName) && modules.get(moduleName).lastGoodRevision != modules.get(moduleName).revision)
+			if (modules.exists(moduleName)
+				&& modules.get(moduleName).lastGoodRevision != modules.get(moduleName).revision)
 				invalidModules.set(moduleName, true);
 		for (fn in functions) {
 			var owner = owners.get(fn.name);
@@ -841,11 +885,15 @@ class SemanticAssembly {
 			contributionReuseMs: contributionReuseMs,
 			contributionRebuildMs: contributionRebuildMs,
 			invalidationMs: invalidatedAt - canonicalizedAt,
-			allocatedBytes: #if haxeon hl.Gc.totalAllocated() - allocatedAtStart #elseif hl hl.Gc.stats().totalAllocated - allocatedAtStart #else 0.0 #end
+			allocatedBytes: #if haxeon hl.Gc.totalAllocated() - allocatedAtStart #elseif hl hl.Gc.stats().totalAllocated
+				- allocatedAtStart #else 0.0 #end
 		};
 	}
 
-	static function addSourceAlias(target:Map<String, String>, moduleAliases:Array<{sourceName:String, declarationName:String}>, moduleName:String,
+	static function addSourceAlias(target:Map<String, String>, moduleAliases:Array<{
+		sourceName:String,
+		declarationName:String
+	}>, moduleName:String,
 			declarationName:String, packageName:Null<String>):Void {
 		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
 			canonicalName = ModuleCanonicalizer.qualifiedTypeName(packageName, declarationName);
@@ -867,7 +915,8 @@ class SemanticAssembly {
 			&& (state.irFunctions.exists(name) || state.pendingIrFunctions.exists(name));
 
 	/** The functions whose lowered bodies call or refer to a specialization, by the generic function it was made from. */
-	static function callersOfSpecializations(modules:Map<String, ModuleState>, names:Array<String>):Map<String, Array<String>> {
+	static function callersOfSpecializations(modules:Map<String, ModuleState>,
+			names:Array<String>):Map<String, Array<String>> {
 		var result:Map<String, Array<String>> = [];
 		for (moduleName in names) {
 			var state = modules.get(moduleName);
@@ -937,7 +986,10 @@ class SemanticAssembly {
 	 * name and its declaration name start with (`P.`), and under the root package (""). Each group keeps the aliases in the order of
 	 * `sourceTypeAliases`, so what a package sees is built exactly as walking all of them would build it.
 	 */
-	static function indexAliasesByPackage(sourceTypeAliases:Map<String, String>):Map<String, Array<{source:String, declaration:String}>> {
+	static function indexAliasesByPackage(sourceTypeAliases:Map<String, String>):Map<String, Array<{
+		source:String,
+		declaration:String
+	}>> {
 		var index:Map<String, Array<{source:String, declaration:String}>> = [];
 		function add(packageName:String, source:String, declaration:String):Void {
 			var group = index.get(packageName);
@@ -961,7 +1013,10 @@ class SemanticAssembly {
 		return index;
 	}
 
-	static function visibleTypeAliases(packageName:String, aliasIndex:Map<String, Array<{source:String, declaration:String}>>,
+	static function visibleTypeAliases(packageName:String, aliasIndex:Map<String, Array<{
+		source:String,
+		declaration:String
+	}>>,
 			cache:Map<String, Map<String, String>>):Map<String, String> {
 		if (cache.exists(packageName))
 			return cache.get(packageName);
@@ -987,7 +1042,8 @@ class SemanticAssembly {
 		return result;
 	}
 
-	static function invalidate(invalid:Map<String, Bool>, reasons:Map<String, Array<InvalidationReason>>, artifact:String, kind:InvalidationKind,
+	static function invalidate(invalid:Map<String, Bool>, reasons:Map<String, Array<InvalidationReason>>,
+			artifact:String, kind:InvalidationKind,
 			cause:String, ?causeId:String, ?via:String):Void {
 		invalid.set(artifact, true);
 		var entries = reasons.get(artifact);
@@ -1009,7 +1065,9 @@ class SemanticAssembly {
 	static function orderedInvalidations(reasons:Map<String, Array<InvalidationReason>>):Array<InvalidatedArtifact> {
 		var names = [for (name in reasons.keys()) name];
 		names.sort(Reflect.compare);
-		return [for (name in names) {artifact: name, reasons: reasons.get(name)}];
+		return [for (name in names) {
+			artifact:name, reasons:reasons.get(name)
+		}];
 	}
 
 	/** A purity/no-return answer is recorded against the exact body that asked, which for a
@@ -1020,13 +1078,15 @@ class SemanticAssembly {
 		return LambdaName.outermost(name);
 
 	/** Prefer the last successfully resolved call graph; syntax calls bootstrap new declarations. */
-	static function dependencyCalls(state:ModuleState, rollbackModules:Map<String, ModuleState>, owner:String, fallback:Array<String>):Array<String> {
+	static function dependencyCalls(state:ModuleState, rollbackModules:Map<String, ModuleState>, owner:String,
+			fallback:Array<String>):Array<String> {
 		var previous = rollbackModules.exists(state.name) ? rollbackModules.get(state.name) : state,
 			dependencies = previous.semanticDependencies.get(owner),
 			resolved:Array<String> = [];
 		if (dependencies != null)
 			for (dependency in dependencies)
-				if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body && dependency.targetId != null)
+				if (dependency.kind == compiler.modules.ModuleState.SemanticDependencyKind.Body
+					&& dependency.targetId != null)
 					resolved.push(dependency.target);
 		return resolved.length == 0 ? fallback : resolved;
 	}
@@ -1035,14 +1095,16 @@ class SemanticAssembly {
 		for (metadata in classDecl.metadata)
 			if (metadata.name == "discoverMethods") {
 				if (metadata.arguments.length == 0)
-					throw new CompileError(new Diagnostic("E1024", "@:discoverMethods requires at least one prefix", metadata.span));
+					throw new CompileError(new Diagnostic("E1024", "@:discoverMethods requires at least one prefix",
+						metadata.span));
 				var prefixes:Array<String> = [];
 				for (argument in metadata.arguments)
 					switch argument {
 						case AstExpression.StringLiteral(value, _):
 							prefixes.push(value);
 						default:
-							throw new CompileError(new Diagnostic("E1024", "@:discoverMethods prefixes must be string literals", metadata.span));
+							throw new CompileError(new Diagnostic("E1024",
+								"@:discoverMethods prefixes must be string literals", metadata.span));
 					}
 				return prefixes;
 			}
@@ -1062,12 +1124,14 @@ class SemanticAssembly {
 			if (!discovered)
 				continue;
 			if (method.isStatic || method.arguments.length != 0)
-				throw new CompileError(new Diagnostic("E1024", 'Discovered method "$className.${method.name}" must be a parameterless instance method',
+				throw new CompileError(new Diagnostic("E1024",
+					'Discovered method "$className.${method.name}" must be a parameterless instance method',
 					method.span));
 			switch method.result {
 				case AstType.VoidType, AstType.InferredType:
 				default:
-					throw new CompileError(new Diagnostic("E1024", 'Discovered method "$className.${method.name}" must return Void', method.span));
+					throw new CompileError(new Diagnostic("E1024",
+						'Discovered method "$className.${method.name}" must return Void', method.span));
 			}
 			var receiver = AstExpression.Variable("this", method.span);
 			statements.push(AstStatement.Expression(AstExpression.MethodCall(receiver, "addTest", [

@@ -51,9 +51,9 @@ class Lz4 {
 			if (offset >= matchLength)
 				output.blit(op, output, from, matchLength);
 			else
-				// Overlapping copies repeat the pattern, so they go byte by byte.
-				for (index in 0...matchLength)
-					output.set(op + index, output.get(from + index));
+			// Overlapping copies repeat the pattern, so they go byte by byte.
+			for (index in 0...matchLength)
+				output.set(op + index, output.get(from + index));
 			op += matchLength;
 		}
 		if (op != rawLength)

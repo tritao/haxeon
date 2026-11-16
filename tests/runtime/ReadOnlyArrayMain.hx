@@ -13,7 +13,8 @@ class ReadOnlyArrayMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		compiler.update("Main.hx", 'import haxe.ds.ReadOnlyArray;
+		compiler.update("Main.hx",
+			'import haxe.ds.ReadOnlyArray;
 function main():Int {
   var source:Array<Int> = [10, 20, 30];
   var values:ReadOnlyArray<Int> = source;
@@ -31,7 +32,8 @@ function main():Int {
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx",
-			'import haxe.ds.ReadOnlyArray; function main():Int { var values:ReadOnlyArray<Int> = [1, 2]; ' + statement + '; return 42; }');
+			'import haxe.ds.ReadOnlyArray; function main():Int { var values:ReadOnlyArray<Int> = [1, 2]; ' + statement
+			+ '; return 42; }');
 		try {
 			compiler.compile("Main");
 			throw 'ReadOnlyArray accepted mutation: $statement';

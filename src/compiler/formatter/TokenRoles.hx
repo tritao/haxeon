@@ -114,7 +114,8 @@ class TokenRoles {
 					spacedColons.set(start, true);
 			}
 		for (step in 0...code.length)
-			if (kind(step) == TokenKind.Arrow && step > 0 && kind(step - 1) != TokenKind.RightParen && inTypePosition(step))
+			if (kind(step) == TokenKind.Arrow && step > 0 && kind(step - 1) != TokenKind.RightParen
+				&& inTypePosition(step))
 				tightArrows.set(tokens[code[step]].start, true);
 	}
 
@@ -160,8 +161,10 @@ class TokenRoles {
 		if (previous < 0)
 			return false;
 		return switch FormatTokenTools.syntaxKind(tokens[previous]) {
-			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace, TokenKind.Integer, TokenKind.Float,
-				TokenKind.StringLiteral, TokenKind.RegexLiteral, TokenKind.BoolTrue, TokenKind.BoolFalse, TokenKind.This, TokenKind.Increment,
+			case TokenKind.Identifier, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace,
+				TokenKind.Integer, TokenKind.Float,
+				TokenKind.StringLiteral, TokenKind.RegexLiteral, TokenKind.BoolTrue, TokenKind.BoolFalse,
+				TokenKind.This, TokenKind.Increment,
 				TokenKind.Decrement, TokenKind.TypeInt, TokenKind.TypeBool, TokenKind.TypeFloat, TokenKind.TypeString:
 				true;
 			default:
@@ -180,12 +183,21 @@ class TokenRoles {
 		var kind = FormatTokenTools.syntaxKind(before);
 		// After the `)` of a control header (`for (...) -1` in a comprehension) an expression begins.
 		if (kind == TokenKind.RightParen)
-			return position.exists(previous) && keywordBefore(position.get(previous), [TokenKind.If, TokenKind.For, TokenKind.While, TokenKind.Catch]);
+			return position.exists(previous) && keywordBefore(position.get(previous), [
+				TokenKind.If,
+				TokenKind.For,
+				TokenKind.While,
+				TokenKind.Catch
+			]);
 		return switch kind {
-			case TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Semicolon, TokenKind.Comma,
-				TokenKind.Assign, TokenKind.Colon, TokenKind.Question, TokenKind.Return, TokenKind.Throw, TokenKind.Case, TokenKind.In,
-				TokenKind.Arrow, TokenKind.Else, TokenKind.Do, TokenKind.PlusAssign, TokenKind.MinusAssign, TokenKind.StarAssign,
-				TokenKind.SlashAssign, TokenKind.PercentAssign, TokenKind.AndAssign, TokenKind.OrAssign, TokenKind.XorAssign:
+			case TokenKind.LeftParen, TokenKind.LeftBracket, TokenKind.LeftBrace, TokenKind.RightBrace,
+				TokenKind.Semicolon, TokenKind.Comma,
+				TokenKind.Assign, TokenKind.Colon, TokenKind.Question, TokenKind.Return, TokenKind.Throw,
+				TokenKind.Case, TokenKind.In,
+				TokenKind.Arrow, TokenKind.Else, TokenKind.Do, TokenKind.PlusAssign, TokenKind.MinusAssign,
+				TokenKind.StarAssign,
+				TokenKind.SlashAssign, TokenKind.PercentAssign, TokenKind.AndAssign, TokenKind.OrAssign,
+				TokenKind.XorAssign:
 				true;
 			default:
 				TokenRoles.isBinaryOperator(kind);
@@ -195,7 +207,8 @@ class TokenRoles {
 	/** The nearest token before `index` that is not whitespace or a line break (a comment counts). */
 	function previousToken(index:Int):Int {
 		var previous = index - 1;
-		while (previous >= 0 && (tokens[previous].kind == FormatTokenKind.Whitespace || tokens[previous].kind == FormatTokenKind.Newline))
+		while (previous >= 0 && (tokens[previous].kind == FormatTokenKind.Whitespace
+			|| tokens[previous].kind == FormatTokenKind.Newline))
 			previous--;
 		return previous;
 	}
@@ -274,8 +287,8 @@ class TokenRoles {
 						else {
 							var start = tokens[code[step]].start;
 							if (!(syntax.blockOpens.exists(start) && !syntax.blockOpens.get(start)))
-								// A block: the code inside it does not see the braces around it.
-								break;
+							// A block: the code inside it does not see the braces around it.
+							break;
 							if (objectBrace < 0)
 								objectBrace = step;
 						}
@@ -346,8 +359,10 @@ class TokenRoles {
 	public static function isBinaryOperator(kind:Null<TokenKind>):Bool
 		return kind != null
 			&& (kind == TokenKind.AndAnd || kind == TokenKind.OrOr || kind == TokenKind.Plus || kind == TokenKind.Minus
-				|| kind == TokenKind.Star || kind == TokenKind.Slash || kind == TokenKind.Percent || kind == TokenKind.Ampersand
-				|| kind == TokenKind.Pipe || kind == TokenKind.Caret || kind == TokenKind.NullCoalesce || kind == TokenKind.Less
-				|| kind == TokenKind.Greater || kind == TokenKind.LessEqual || kind == TokenKind.GreaterEqual
-				|| kind == TokenKind.EqualEqual || kind == TokenKind.NotEqual || kind == TokenKind.Assign);
+			|| kind == TokenKind.Star || kind == TokenKind.Slash || kind == TokenKind.Percent
+			|| kind == TokenKind.Ampersand
+			|| kind == TokenKind.Pipe || kind == TokenKind.Caret || kind == TokenKind.NullCoalesce
+			|| kind == TokenKind.Less
+			|| kind == TokenKind.Greater || kind == TokenKind.LessEqual || kind == TokenKind.GreaterEqual
+			|| kind == TokenKind.EqualEqual || kind == TokenKind.NotEqual || kind == TokenKind.Assign);
 }

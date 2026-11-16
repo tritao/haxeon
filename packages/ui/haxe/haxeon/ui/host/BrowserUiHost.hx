@@ -124,8 +124,7 @@ class BrowserUiHost {
 	}
 
 	function finishResources():Void {
-		if (stopped || session.state == UiHostLifecycle.Stopping ||
-			session.state == UiHostLifecycle.Stopped) return;
+		if (stopped || session.state == UiHostLifecycle.Stopping || session.state == UiHostLifecycle.Stopped) return;
 		#if !nativekit_bundle_web_fonts
 		if (loaded != null)
 			for (font in options.fonts) {
@@ -160,53 +159,54 @@ class BrowserUiHost {
 		frameRequested = true;
 		try {
 			switch (value) {
-			case Raw(kind, _, request, loadResult, _, _, data)
-				if (kind == EventKind.ResourceDataComplete):
-				handleFont(request, loadResult, data);
-			case WindowClose(source) if (source.rawValue() == window.rawValue()):
-				var activeContext = hostContext;
-				if (activeContext == null) session.stop(); else activeContext.requestClose();
-			case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
-				logicalWidth = width;
-				logicalHeight = height;
-				if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
-					throw "Browser surface resize failed";
-				frameRequested = true;
-			case WindowScaleChanged(source, scale) if (source.rawValue() == window.rawValue()):
-				pixelScale = scale;
-				if (runtime != null) runtime.setScale(scale);
-				frameRequested = true;
-			case SurfaceReady(source) if (source.rawValue() == surface.rawValue()):
-				if (NativeKit.nk_surface_make_current(surface) != Result.Ok)
-					throw "Browser surface activation failed";
-				var size = NativeKit.nk_surface_get_framebuffer_size(surface);
-				if (size.status != Result.Ok) throw "Browser framebuffer size query failed";
-				var scale = NativeKit.nk_window_get_scale(window);
-				if (scale.status != Result.Ok) throw "Browser scale query failed";
-				framebufferWidth = size.out_width;
-				framebufferHeight = size.out_height;
-				pixelScale = scale.out_scale;
-				surfaceReady = framebufferWidth > 0 && framebufferHeight > 0;
-				frameRequested = surfaceReady;
-				var activeRuntime = runtime;
-				if (activeRuntime != null) {
-					activeRuntime.setScale(scale.out_scale);
-					activeRuntime.resize(activeRuntime.logicalWidth, activeRuntime.logicalHeight,
-						size.out_width, size.out_height);
-					activeRuntime.setSurfaceReady(surfaceReady);
-				}
-			case SurfaceResize(source, width, height, framebufferWidth, framebufferHeight)
-				if (source.rawValue() == surface.rawValue()):
-				logicalWidth = width;
-				logicalHeight = height;
-				this.framebufferWidth = framebufferWidth;
-				this.framebufferHeight = framebufferHeight;
-				if (runtime != null) runtime.resize(width, height, framebufferWidth, framebufferHeight);
-				if (surfaceReady) frameRequested = true;
-			case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
-				surfaceReady = false;
-				if (runtime != null) runtime.setSurfaceReady(false);
-			case _:
+				case Raw(kind, _, request, loadResult, _, _, data)
+					if (kind == EventKind.ResourceDataComplete):
+					handleFont(request, loadResult, data);
+				case WindowClose(source) if (source.rawValue() == window.rawValue()):
+					var activeContext = hostContext;
+					if (activeContext == null) session.stop();
+					else activeContext.requestClose();
+				case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
+					logicalWidth = width;
+					logicalHeight = height;
+					if (NativeKit.nk_surface_set_bounds(surface, 0, 0, width, height) != Result.Ok)
+						throw "Browser surface resize failed";
+					frameRequested = true;
+				case WindowScaleChanged(source, scale) if (source.rawValue() == window.rawValue()):
+					pixelScale = scale;
+					if (runtime != null) runtime.setScale(scale);
+					frameRequested = true;
+				case SurfaceReady(source) if (source.rawValue() == surface.rawValue()):
+					if (NativeKit.nk_surface_make_current(surface) != Result.Ok)
+						throw "Browser surface activation failed";
+					var size = NativeKit.nk_surface_get_framebuffer_size(surface);
+					if (size.status != Result.Ok) throw "Browser framebuffer size query failed";
+					var scale = NativeKit.nk_window_get_scale(window);
+					if (scale.status != Result.Ok) throw "Browser scale query failed";
+					framebufferWidth = size.out_width;
+					framebufferHeight = size.out_height;
+					pixelScale = scale.out_scale;
+					surfaceReady = framebufferWidth > 0 && framebufferHeight > 0;
+					frameRequested = surfaceReady;
+					var activeRuntime = runtime;
+					if (activeRuntime != null) {
+						activeRuntime.setScale(scale.out_scale);
+						activeRuntime.resize(activeRuntime.logicalWidth, activeRuntime.logicalHeight,
+							size.out_width, size.out_height);
+						activeRuntime.setSurfaceReady(surfaceReady);
+					}
+				case SurfaceResize(source, width, height, framebufferWidth, framebufferHeight)
+					if (source.rawValue() == surface.rawValue()):
+					logicalWidth = width;
+					logicalHeight = height;
+					this.framebufferWidth = framebufferWidth;
+					this.framebufferHeight = framebufferHeight;
+					if (runtime != null) runtime.resize(width, height, framebufferWidth, framebufferHeight);
+					if (surfaceReady) frameRequested = true;
+				case SurfaceLost(source) if (source.rawValue() == surface.rawValue()):
+					surfaceReady = false;
+					if (runtime != null) runtime.setSurfaceReady(false);
+				case _:
 			}
 		} catch (error:Dynamic) {
 			fail("browser-event", error);
@@ -250,8 +250,8 @@ class BrowserUiHost {
 			var backgroundPoll:Null<Void->Void> = hostContext == null ? null : hostContext.onPoll;
 			if (backgroundPoll != null) backgroundPoll();
 			var activeRuntime = runtime;
-			if (frameRequested && activeRuntime != null && activeRuntime.surfaceReady &&
-				session.state == UiHostLifecycle.Running) {
+			if (frameRequested && activeRuntime != null && activeRuntime.surfaceReady
+				&& session.state == UiHostLifecycle.Running) {
 				frameRequested = false;
 				if (NativeKit.nk_surface_make_current(surface) != Result.Ok)
 					throw "Browser surface activation failed";
@@ -314,11 +314,13 @@ class BrowserUiHost {
 		var ownedSurface = surface;
 		surface = SurfaceHandle.invalid();
 		if (ownedSurface.isValid())
-			try NativeKit.nk_surface_destroy(ownedSurface) catch (error:Dynamic) session.cleanupFailed("surface-destroy", error);
+			try NativeKit.nk_surface_destroy(ownedSurface) catch (error:Dynamic)
+				session.cleanupFailed("surface-destroy", error);
 		var ownedWindow = window;
 		window = WindowHandle.invalid();
 		if (ownedWindow.isValid())
-			try NativeKit.nk_window_destroy(ownedWindow) catch (error:Dynamic) session.cleanupFailed("window-destroy", error);
+			try NativeKit.nk_window_destroy(ownedWindow) catch (error:Dynamic) session.cleanupFailed("window-destroy",
+				error);
 		var wasInitialized = initialized;
 		initialized = false;
 		if (wasInitialized)

@@ -44,10 +44,17 @@ class DockWorkspaceSnapshotCodec {
 			case DockNode.Panel(panelId): {kind: "panel", id: panelId};
 			case DockNode.Tabs(panelIds, activePanelId):
 				var encodedPanelIds:Array<String> = panelIds == null ? [] : panelIds.copy();
-				{kind: "tabs", panels: encodedPanelIds, active: activePanelId};
+				{
+					kind:"tabs", panels:encodedPanelIds, active:activePanelId
+				};
 			case DockNode.Split(axis, ratio, first, second):
-				{kind: "split", axis: axisName(axis), ratio: ratio,
-					first: encodeNode(first), second: encodeNode(second)};
+				{
+					kind: "split",
+					axis: axisName(axis),
+					ratio: ratio,
+					first: encodeNode(first),
+					second: encodeNode(second)
+				};
 		};
 	}
 
@@ -103,6 +110,5 @@ class DockWorkspaceSnapshotCodec {
 		return axis == DockSplitAxis.Horizontal ? "horizontal" : "vertical";
 
 	static function parseAxis(value:String):Null<DockSplitAxis>
-		return value == "horizontal" ? DockSplitAxis.Horizontal :
-			value == "vertical" ? DockSplitAxis.Vertical : null;
+		return value == "horizontal" ? DockSplitAxis.Horizontal : value == "vertical" ? DockSplitAxis.Vertical : null;
 }

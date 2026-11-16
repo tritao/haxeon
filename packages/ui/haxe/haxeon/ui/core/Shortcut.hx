@@ -16,8 +16,7 @@ struct Shortcut implements Hashable {
 
 	/** Ignores lock-state bits; command chords are physical modifier chords. */
 	public static function normalizeModifiers(modifiers:UiModifier):UiModifier
-		return modifiers & (UiModifier.Shift | UiModifier.Control | UiModifier.Alt |
-			UiModifier.Super);
+		return modifiers & (UiModifier.Shift | UiModifier.Control | UiModifier.Alt | UiModifier.Super);
 
 	public function matches(key:Int, modifiers:UiModifier):Bool
 		return this.key == key && this.modifiers == normalizeModifiers(modifiers);

@@ -1,29 +1,29 @@
+import compiler.Compiler;
+import compiler.Compiler.CompileResult;
 import compiler.Diagnostic.CompileError;
-import compiler.hl.HlWriter;
-import compiler.hl.patch.HlPatchReader;
-import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.persistence.HlRuntimeIdentity;
+import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
-import compiler.hl.HlOpcode;
 import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlOpcode;
 import compiler.hl.HlType;
-import compiler.Compiler;
-import compiler.Compiler.CompileResult;
-import compiler.compilation.CompilerPublication.ReconnectDecision;
-import compiler.ir.codec.IrFunctionStateCodec;
-import compiler.hl.persistence.HlFunctionCacheStateCodec;
-import compiler.hl.persistence.HlSymbolStateCodec;
-import compiler.hl.persistence.HlAssemblerStateCodec;
+import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlModuleAssembler;
-import compiler.abi.PatchPlanner.PatchDecision;
-import runtime.Runtime;
+import compiler.hl.patch.HlPatchReader;
+import compiler.hl.patch.HlPatchWriter;
+import compiler.hl.persistence.HlAssemblerStateCodec;
+import compiler.hl.persistence.HlFunctionCacheStateCodec;
+import compiler.hl.persistence.HlRuntimeIdentity;
+import compiler.hl.persistence.HlSymbolStateCodec;
+import compiler.ir.codec.IrFunctionStateCodec;
 import runtime.LoadedModule;
+import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
+import runtime.PatchSet;
+import runtime.Runtime;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
-import runtime.PatchSet;
-import runtime.ModuleRetirementStatus.ModuleRetirementFlag;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -57,7 +57,8 @@ class HotReloadMain {
 		compiler.update("Probe.hx", "function read():Int { return Value.value(); }");
 		compiler.update("Worker.hx",
 			"function fib(n:Int):Int { if (n <= 1) return n; return fib(n - 1) + fib(n - 2); } function run():Int { return fib(38); }");
-		compiler.update("Seed.hx", "function ratio():Float { return 1.0 + 0.5; } function label():String { return \"initial\"; }");
+		compiler.update("Seed.hx",
+			"function ratio():Float { return 1.0 + 0.5; } function label():String { return \"initial\"; }");
 		compiler.update("ExceptionProbe.hx",
 			"function probe():Int { try { throw \"probe\"; } catch (error:Int) { return 0; } catch (error:String) { return 41; } }");
 		compiler.update("Main.hx",
@@ -91,7 +92,8 @@ class HotReloadMain {
 			throw "HLP module identity does not match its load manifest";
 		if (decoded.baseInts != initial.module.ints.length || decoded.ints.indexOf(43) < 0)
 			throw "HLP did not encode the integer symbol delta";
-		if (decoded.baseFloats != initial.module.floats.length || decoded.floats.length != 1 || decoded.floats[0] != 2.75)
+		if (decoded.baseFloats != initial.module.floats.length || decoded.floats.length != 1
+			|| decoded.floats[0] != 2.75)
 			throw "HLP did not encode the source float symbol delta";
 		if (decoded.baseStrings != initial.module.strings.length || decoded.strings.indexOf("patched source") < 0)
 			throw "HLP did not encode the source string symbol delta";
@@ -127,13 +129,15 @@ class HotReloadMain {
 			hashPosition = skipIndex(corruptHash, 24);
 		corruptHash.set(hashPosition, corruptHash.get(hashPosition) ^ 1);
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, corruptHash, changed.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(liveRevision, changed.revision, corruptHash, changed.changedFunctions));
 			throw "mismatched symbol prefix unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
 				throw error;
 		}
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(liveRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		liveRevision = changed.revision;
 		if (Runtime.patchJitCount(loaded) != changed.changedFunctions.length)
 			throw "one-function patch did not JIT exactly one function";
@@ -176,7 +180,8 @@ class HotReloadMain {
 			}
 		if (!hasTrap || !hasThrow || !hasSafeCast || !hasRethrow || !hasType)
 			throw "typed exception HLP omitted trap, throw, type, cast, or rethrow opcodes";
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes, exceptionPatch.changedFunctions));
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, exceptionPatch.revision, exceptionPatch.patchBytes,
+			exceptionPatch.changedFunctions));
 		liveRevision = exceptionPatch.revision;
 		if (Runtime.callInt(loaded, exceptionIndex) != 42)
 			throw "hot-patched exception handler did not execute";
@@ -186,7 +191,8 @@ class HotReloadMain {
 			var expected = 44 + (i & 1);
 			compiler.update("Value.hx", 'function value():Int { return $expected; }');
 			var iteration = compiler.compile("Main");
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, iteration.revision, iteration.patchBytes, iteration.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(liveRevision, iteration.revision, iteration.patchBytes, iteration.changedFunctions));
 			liveRevision = iteration.revision;
 			if (Runtime.callInt(loaded, readIndex) != expected)
 				throw 'stress patch $i returned the wrong value';
@@ -230,7 +236,8 @@ class HotReloadMain {
 		Sys.sleep(0.01);
 		compiler.update("Value.hx", "function value():Int { return 47; }");
 		var concurrentPatch = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, concurrentPatch.revision, concurrentPatch.patchBytes, concurrentPatch.changedFunctions));
+		Runtime.patchSet(loaded, new PatchSet(liveRevision, concurrentPatch.revision, concurrentPatch.patchBytes,
+			concurrentPatch.changedFunctions));
 		liveRevision = concurrentPatch.revision;
 		if (!finished.wait(5.0) || workerResult != 39088169)
 			throw "concurrent call did not finish safely";
@@ -238,8 +245,13 @@ class HotReloadMain {
 			throw "concurrent patch was not committed";
 
 		compiler.update("Value.hx", "function value():Int { return 48; }");
-		var competingPatch = compiler.compile("Main"), ready = new sys.thread.Lock(), gate = new sys.thread.Lock(), doneA = new sys.thread.Lock(),
-			doneB = new sys.thread.Lock(), outcomeA = "", outcomeB = "";
+		var competingPatch = compiler.compile("Main"),
+			ready = new sys.thread.Lock(),
+			gate = new sys.thread.Lock(),
+			doneA = new sys.thread.Lock(),
+			doneB = new sys.thread.Lock(),
+			outcomeA = "",
+			outcomeB = "";
 		sys.thread.Thread.create(function() {
 			ready.release();
 			gate.wait();
@@ -272,7 +284,8 @@ class HotReloadMain {
 		for (stage in 1...4) {
 			Runtime.injectPatchFailure(loaded, stage);
 			try {
-				Runtime.patchSet(loaded, new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes, failurePatch.changedFunctions));
+				Runtime.patchSet(loaded, new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes,
+					failurePatch.changedFunctions));
 				throw 'injected patch failure $stage unexpectedly succeeded';
 			} catch (error:RuntimeError) {
 				if (error.status != RuntimeStatus.Incompatible)
@@ -285,7 +298,8 @@ class HotReloadMain {
 				|| Runtime.callInt(loaded, readIndex) != 48)
 				throw 'injected patch failure $stage changed published state';
 		}
-		Runtime.patchSet(loaded, new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes, failurePatch.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(liveRevision, failurePatch.revision, failurePatch.patchBytes, failurePatch.changedFunctions));
 		liveRevision = failurePatch.revision;
 		if (Runtime.liveRevision(loaded) != liveRevision || Runtime.callInt(loaded, readIndex) != 49)
 			throw "patch did not recover after injected staging failures";
@@ -299,7 +313,8 @@ class HotReloadMain {
 			throw "compile failure damaged the live generation";
 
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), [valueIndex]));
+			Runtime.patchSet(loaded,
+				new PatchSet(liveRevision, liveRevision + 1, haxe.io.Bytes.ofString("not HLP"), [valueIndex]));
 			throw "malformed patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.BadFormat)
@@ -309,7 +324,8 @@ class HotReloadMain {
 			throw "rejected patch damaged the live generation";
 
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision - 1, liveRevision, failurePatch.patchBytes, failurePatch.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(liveRevision - 1, liveRevision, failurePatch.patchBytes, failurePatch.changedFunctions));
 			throw "stale patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.StalePatch)
@@ -326,7 +342,8 @@ class HotReloadMain {
 		foreign.update("Value.hx", "function value():Int { return 99; }");
 		var foreignPatch = foreign.compile("Main");
 		try {
-			Runtime.patchSet(loaded, new PatchSet(liveRevision, liveRevision + 1, foreignPatch.patchBytes, foreignPatch.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(liveRevision, liveRevision + 1, foreignPatch.patchBytes, foreignPatch.changedFunctions));
 			throw "foreign-module patch unexpectedly succeeded";
 		} catch (error:RuntimeError) {
 			if (error.status != RuntimeStatus.Incompatible)
@@ -364,7 +381,8 @@ class HotReloadMain {
 
 	static function applyCompetingPatch(loaded:LoadedModule, patch:CompileResult, baseRevision:Int):String {
 		try {
-			Runtime.patchSet(loaded, new PatchSet(baseRevision, patch.revision, patch.patchBytes, patch.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(baseRevision, patch.revision, patch.patchBytes, patch.changedFunctions));
 			return "ok";
 		} catch (error:RuntimeError) {
 			return error.status == RuntimeStatus.StalePatch ? "stale" : 'runtime-${error.status}';
@@ -402,7 +420,8 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"class Box { public var value:Int; public function new(value:Int):Void { this.value = value; } } function make():Box { return new Box(40); } function read(box:Box):Int { return box.value + 2; } function fail():Int { throw new Box(1); } function main():Int { return read(make()); }");
 		var changed = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		if (Runtime.callIntObject(loaded, initial.functionIds.get("Main.read"), retained) != 42)
 			throw "patched code could not consume a retained object with the same layout";
 		retained.release();
@@ -411,7 +430,8 @@ class HotReloadMain {
 
 	static function testRetainedPatchedClosure():Void {
 		var compiler = new Compiler();
-		compiler.update("Main.hx", "function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
+		compiler.update("Main.hx",
+			"function value():Int { return 40; } function make():() -> Int { return value; } function main():Int { return value(); }");
 		var initial = compiler.compile("Main"),
 			loaded = Runtime.load(HlWriter.encode(initial.module).flatten(), initial.runtimeIdentity);
 		var makeId = initial.functionIds.get("Main.make");
@@ -421,7 +441,8 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"function value():Int { return 41; } function make():() -> Int { var marker = 1; return value; } function main():Int { return value(); }");
 		var first = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(initial.revision, first.revision, first.patchBytes, first.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(initial.revision, first.revision, first.patchBytes, first.changedFunctions));
 		if (Runtime.callRetainedClosureInt(initialClosure) != 41)
 			throw "initial static closure did not follow its stable function slot";
 		var retained = Runtime.retainClosure(loaded, makeId);
@@ -432,7 +453,8 @@ class HotReloadMain {
 		compiler.update("Main.hx",
 			"function value():Int { return 42; } function make():() -> Int { var marker = 2; return value; } function main():Int { return value(); }");
 		var second = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(first.revision, second.revision, second.patchBytes, second.changedFunctions));
 		if (Runtime.callRetainedClosureInt(initialClosure) != 42 || Runtime.callRetainedClosureInt(retained) != 42)
 			throw "retained closure did not follow its stable function slot";
 		if (Runtime.retiredCodeAllocationCount(loaded) != 0)
@@ -557,9 +579,11 @@ class HotReloadMain {
 	 * or unused must patch like any other edit and not move the module's layout.
 	 */
 	static function testLiveReachability():Void {
-		var unused = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
+		var unused =
+			"class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
 			+ "function main():Int { return 42; }",
-			used = "class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
+			used =
+				"class Spare { public function new() {} public function read():Int { return 40; } public function more():Int { return 2; } } "
 				+ "function main():Int { var s = new Spare(); return s.read() + s.more(); }";
 		var compiler = new Compiler();
 		compiler.update("Main.hx", unused);
@@ -574,7 +598,8 @@ class HotReloadMain {
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null)
 				throw 'step $step: making a class used or unused must patch, not reload: ${[for (reason in changed.reloadReasons) Std.string(reason)]}';
-			Runtime.patchSet(loaded, new PatchSet(baseRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(baseRevision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			baseRevision = changed.revision;
 			if (Runtime.callInt(loaded, changed.functionIds.get("main")) != 42)
 				throw 'step $step: the patched module does not run the edited program';
@@ -645,7 +670,8 @@ class HotReloadMain {
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null || changed.changedFunctions.length == 0)
 				throw '${fixture.name}: compiler did not emit a body patch';
-			Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			Runtime.patchSet(loaded,
+				new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			if (Runtime.callInt(loaded, mainId) != 42)
 				throw '${fixture.name}: live runtime did not execute the patched behavior';
 			Runtime.dispose(loaded);
@@ -655,7 +681,8 @@ class HotReloadMain {
 	static function testCompilerRestart():Void {
 		var compiler = new Compiler();
 		compiler.enablePublicationTracking();
-		compiler.update("Main.hx", "function helper():Int { return 1; } function main():Int { return 40 + helper() - 1; }");
+		compiler.update("Main.hx",
+			"function helper():Int { return 1; } function main():Int { return 40 + helper() - 1; }");
 		var initial = compiler.compile("Main"),
 			mainId = initial.functionIds.get("main"),
 			helperId = initial.functionIds.get("Main.helper"),
@@ -670,7 +697,8 @@ class HotReloadMain {
 			case ReloadDomain(reason):
 				throw 'Restored compiler required reload: $reason';
 		}
-		resumed.update("Main.hx", "function helper():Int { return 1; } function main():Int { return 42 + helper() - 1; }");
+		resumed.update("Main.hx",
+			"function helper():Int { return 1; } function main():Int { return 42 + helper() - 1; }");
 		var changed = resumed.compile("Main");
 		if (changed.revision != initial.revision + 1
 			|| changed.changedFunctions.length != 2
@@ -678,7 +706,8 @@ class HotReloadMain {
 			|| changed.changedFunctions.indexOf(helperId) < 0
 			|| changed.patchBytes == null)
 			throw "Restarted compiler did not emit the revision-2 code and source-metadata patch";
-		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		resumed.acknowledgePublication(changed.revision);
 		if (Runtime.callInt(loaded, mainId) != 42)
 			throw "Surviving runtime did not execute the restarted compiler patch";
@@ -687,7 +716,8 @@ class HotReloadMain {
 
 	static function testBackendStateLifetime():Void {
 		var compiler = new Compiler();
-		compiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(20, 22); }");
+		compiler.update("Main.hx",
+			"function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(20, 22); }");
 		var program = compiler.compile("Main").ir,
 			assembler = new HlModuleAssembler();
 		assembler.livePatching = true;
@@ -722,7 +752,8 @@ class HotReloadMain {
 		var uninterruptedAssembler = assembler.copy(),
 			restoredAssembler = HlAssemblerStateCodec.decode(assemblerBytes),
 			editedCompiler = new Compiler();
-		editedCompiler.update("Main.hx", "function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(21, 22); }");
+		editedCompiler.update("Main.hx",
+			"function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add(21, 22); }");
 		var edited = editedCompiler.compile("Main").ir;
 		// Both functions name the edited source snapshot, including the unchanged body.
 		restoredAssembler.livePatching = true;
@@ -750,7 +781,8 @@ class HotReloadMain {
 	static function testDecodedIrLifetime():Void {
 		for (iteration in 0...100) {
 			var compiler = new Compiler();
-			compiler.update("Main.hx", 'function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add($iteration, 1); }');
+			compiler.update("Main.hx",
+				'function add(a:Int, b:Int):Int { return a + b; } function main():Int { return add($iteration, 1); }');
 			var program = compiler.compile("Main").ir, decoded = [];
 			for (fn in program.functions)
 				decoded.push(IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(fn)));
@@ -797,10 +829,12 @@ class HotReloadMain {
 		code.functions = [
 			new HlFunction(2, 0, [1, parameterizedBase, parameterizedBase + 1], [LoadInt(0, 0), Return(0)])
 		];
-		var parameterizedBytes = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, parameterizedBase);
+		var parameterizedBytes = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0,
+			parameterizedBase);
 		var parameterizedPatch = HlPatchReader.decode(parameterizedBytes);
 		switch parameterizedPatch.types {
-			case [Parameterized(HlType.Ref, reference), Parameterized(HlType.Null, 1)] if (reference == parameterizedBase + 1):
+			case [Parameterized(HlType.Ref, reference),
+				Parameterized(HlType.Null, 1)] if (reference == parameterizedBase + 1):
 			default:
 				throw "parameterized patch types did not round-trip";
 		}
@@ -825,7 +859,8 @@ class HotReloadMain {
 		var retainedTypeCount = code.types.length;
 		for (_ in retainedTypeCount...initialCapacity + 1)
 			code.types.push(Simple(HlType.I32));
-		var exhausted = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, retainedTypeCount);
+		var exhausted = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0,
+			retainedTypeCount);
 		try {
 			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, exhausted, [71000]));
 			throw "exhausted type arena unexpectedly accepted metadata";
@@ -840,7 +875,8 @@ class HotReloadMain {
 			throw "type arena exhaustion was not transactional";
 
 		code.functions = [new HlFunction(2, 0, [1], [LoadInt(0, 0), Return(0)])];
-		var recovery = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0, retainedTypeCount);
+		var recovery = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, 1, 0, 0,
+			retainedTypeCount);
 		Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, recovery, [71000]));
 		if (Runtime.callInt(loaded, 71000) != 42)
 			throw "valid patch did not recover after type arena exhaustion";
@@ -894,7 +930,8 @@ class HotReloadMain {
 					Return(2)
 				])
 			];
-			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, baseInts, baseFloats, baseStrings, 5);
+			var patch = HlPatchWriter.encode(code, moduleId, [0], bySlot, revision, revision + 1, baseInts, baseFloats,
+				baseStrings, 5);
 			Runtime.patchSet(loaded, new PatchSet(revision, revision + 1, patch, [70000]));
 			revision++;
 			if (Runtime.callInt(loaded, 70000) != 3 + i)

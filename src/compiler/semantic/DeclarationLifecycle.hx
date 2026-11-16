@@ -41,16 +41,16 @@ class DeclarationLifecycle {
 	public function advanceAll(next:DeclarationStage):Void
 		for (position in 0...ids.length) {
 			var stage = current[position];
-			if ((next : Int) < (stage : Int))
+			if ((next:Int) < (stage:Int))
 				continue;
-			if ((next : Int) > (stage : Int) + 1)
+			if ((next:Int) > (stage:Int) + 1)
 				throw 'Declaration "${ids[position]}" cannot advance from ${name(stage)} to ${name(next)}';
 			current[position] = next;
 		}
 
 	public function requireAtLeast(required:DeclarationStage):Void
 		for (position in 0...ids.length)
-			if ((current[position] : Int) < (required : Int))
+			if ((current[position]:Int) < (required:Int))
 				throw 'Declaration "${ids[position]}" is ${name(current[position])}; ${name(required)} is required';
 
 	public function snapshot():Map<String, DeclarationStage>

@@ -59,15 +59,15 @@ class StyleTarget {
 
 	/** Whether both targets select on identical type, key, id, classes and tags (pseudo-state excluded). */
 	public function sameSelector(other:StyleTarget):Bool
-		return this == other || (widgetType == other.widgetType && key == other.key && id == other.id &&
-			sameValues(classes, other.classes) && sameValues(tags, other.tags));
+		return this == other || (widgetType == other.widgetType && key == other.key && id == other.id
+			&& sameValues(classes, other.classes) && sameValues(tags, other.tags));
 
 	/** Stable text form of the selector inputs, for diagnostics; the style cache compares structurally instead. */
 	public var selectorFingerprint(get, never):String;
 
 	function get_selectorFingerprint():String
-		return stringKey(widgetType) + "|key=" + stringKey(key) + "|id=" + stringKey(id) +
-			"|classes=" + valuesKey(classes) + "|tags=" + valuesKey(tags);
+		return stringKey(widgetType) + "|key=" + stringKey(key) + "|id=" + stringKey(id) + "|classes="
+			+ valuesKey(classes) + "|tags=" + valuesKey(tags);
 
 	static function hashString(value:Null<String>, seed:Int):Int {
 		if (value == null)

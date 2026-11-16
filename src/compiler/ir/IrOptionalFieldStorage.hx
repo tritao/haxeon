@@ -13,7 +13,12 @@ private typedef OptionalFieldPlan = {
 	final slots:Array<IrInlineValueSlot>;
 }
 
-private typedef OptionalMethodRequest = {final owner:String; final field:String; final method:String; final path:Array<String>;}
+private typedef OptionalMethodRequest = {
+	final owner:String;
+	final field:String;
+	final method:String;
+	final path:Array<String>;
+}
 
 /**
  * Plans inline optional fields and builds their storage accessors. Logical value copies are made only at the accessor
@@ -66,44 +71,42 @@ class IrOptionalFieldStorage {
 
 	/** The physical field declarations; field order remains deterministic. */
 	public function physicalObjects(declarations:Array<IrObject>):Array<IrObject> {
-		return [
-			for (object in declarations) {
-				var fields:Array<IrObjectField> = [];
-				for (field in object.fields) {
-					var plan = planFor(object.name, field.name);
-					if (plan == null)
-						fields.push(field);
-					else
-						for (slot in plan.slots)
-							fields.push({
-								name: IrInlineValueLayout.slotName(field.name, slot),
-								type: slot.type,
-								nativeLayout: null,
-								scalarStorage: slot.scalarStorage,
-								nullableScalarStorage: slot.nullableScalarStorage
-							});
-				}
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					fields: fields,
-					methods: object.methods
-				};
+		return [for (object in declarations) {
+			var fields:Array<IrObjectField> = [];
+			for (field in object.fields) {
+				var plan = planFor(object.name, field.name);
+				if (plan == null)
+					fields.push(field);
+				else
+					for (slot in plan.slots)
+						fields.push({
+							name: IrInlineValueLayout.slotName(field.name, slot),
+							type: slot.type,
+							nativeLayout: null,
+							scalarStorage: slot.scalarStorage,
+							nullableScalarStorage: slot.nullableScalarStorage
+						});
 			}
-		];
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					fields:fields,
+					methods:object.methods
+			};
+		}];
 	}
 
 	/** Replace logical reads and writes, including generated reflection operations, with field-specific accessors. */
 	public function rewrite(functions:Array<IrFunction>):Array<IrFunction> {
 		var all = functions.copy();
-		var ordered = [
-			for (fields in plans)
-				for (plan in fields)
-					{name: key(plan.owner, plan.field), plan: plan}
-		];
+		var ordered = [for (fields in plans)
+			for (plan in fields)
+			{
+				name:key(plan.owner, plan.field), plan:plan
+			}];
 		ordered.sort((a, b) -> Reflect.compare(a.name, b.name));
 		for (entry in ordered) {
 			var plan = entry.plan;
@@ -116,9 +119,11 @@ class IrOptionalFieldStorage {
 			var rootReader = new IrBuilder(),
 				rootOwner = rootReader.argument("owner", Obj(plan.owner));
 			rootReader.returnValue(readValue(rootReader, plan, rootOwner, Obj(element), []));
-			all.push(new IrFunction(placeGetterName(plan.owner, plan.field, []), rootReader.arguments, Obj(element), rootReader.blocks,
+			all.push(new IrFunction(placeGetterName(plan.owner, plan.field, []), rootReader.arguments, Obj(element),
+				rootReader.blocks,
 				Provider(TypeKey.of(Obj(plan.owner)),
-					ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, placeGetterName(plan.owner, plan.field, [])))));
+				ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
+				placeGetterName(plan.owner, plan.field, [])))));
 			appendPlaceSetters(all, plan, Obj(element), []);
 		}
 		var originals = new IrFunctionIndex("optional-field-storage", functions),
@@ -161,10 +166,12 @@ class IrOptionalFieldStorage {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case FieldGet(out, object, field) if (aliases.exists(object.id) && isComposite(out.type) && !aliases.exists(out.id)):
+						case FieldGet(out, object,
+							field) if (aliases.exists(object.id) && isComposite(out.type) && !aliases.exists(out.id)):
 							aliases.set(out.id, aliases.get(object.id).concat([field]));
 							changed = true;
-						case SafeCast(out, value) if (aliases.exists(value.id) && isComposite(out.type) && !aliases.exists(out.id)):
+						case SafeCast(out,
+							value) if (aliases.exists(value.id) && isComposite(out.type) && !aliases.exists(out.id)):
 							aliases.set(out.id, aliases.get(value.id));
 							changed = true;
 						default:
@@ -174,7 +181,8 @@ class IrOptionalFieldStorage {
 		for (blockIndex in 0...fn.blocks.length) {
 			var block = fn.blocks[blockIndex], target = new IrBlock(block.id);
 			if (blockIndex == 0)
-				target.instructions.push(new Located(Call(receiver, getterFor(plan, request.path, receiver.type), [owner]),
+				target.instructions
+					.push(new Located(Call(receiver, getterFor(plan, request.path, receiver.type), [owner]),
 					compiler.ir.SourceProvenance.generated("optional-method-receiver")));
 			for (located in block.instructions) {
 				var instruction = located.value, handled = false;
@@ -184,7 +192,7 @@ class IrOptionalFieldStorage {
 							path = aliases.get(object.id).concat(nested == null ? [field] : nested.path);
 						instruction = nested == null
 							&& isComposite(out.type) ? Call(out, getterFor(plan, path, out.type),
-								[owner]) : FieldGet(out, owner, physical(plan, path, nested != null && nested.presence));
+							[owner]) : FieldGet(out, owner, physical(plan, path, nested != null && nested.presence));
 						handled = true;
 					case FieldSet(object, field, value) if (aliases.exists(object.id)):
 						var nested = nestedPhysicalField(object.type, field),
@@ -193,9 +201,13 @@ class IrOptionalFieldStorage {
 						next = actual.next;
 						if (nested == null && isComposite(value.type)) {
 							var unused = new IrValue(next++, "$optional-place-write", Void);
-							instruction = Call(unused, placeSetterName(plan.owner, plan.field, path), [owner, actual.value]);
+							instruction = Call(unused, placeSetterName(plan.owner, plan.field, path), [
+								owner,
+								actual.value
+							]);
 						} else
-							instruction = FieldSet(owner, physical(plan, path, nested != null && nested.presence), actual.value);
+							instruction = FieldSet(owner, physical(plan, path, nested != null && nested.presence),
+								actual.value);
 						handled = true;
 					case MethodCall(out, object, method, arguments, _) if (aliases.exists(object.id)):
 						var resolved = methodName(object.type, method),
@@ -205,17 +217,20 @@ class IrOptionalFieldStorage {
 							next = actual.next;
 							args.push(actual.value);
 						}
-						instruction = Call(out, placeMethodName(plan.owner, plan.field, aliases.get(object.id), resolved), args);
+						instruction = Call(out,
+							placeMethodName(plan.owner, plan.field, aliases.get(object.id), resolved), args);
 						handled = true;
 					case Call(out, called, arguments)
-						if (StringTools.startsWith(called, "$generic:") && arguments.length > 0 && aliases.exists(arguments[0].id)):
+						if (StringTools.startsWith(called, "$generic:") && arguments.length > 0
+						&& aliases.exists(arguments[0].id)):
 						var args:Array<IrValue> = [owner];
 						for (argument in arguments.slice(1)) {
 							var actual = materializeAlias(argument, aliases, plan, owner, target, located, next);
 							next = actual.next;
 							args.push(actual.value);
 						}
-						instruction = Call(out, placeMethodName(plan.owner, plan.field, aliases.get(arguments[0].id), called), args);
+						instruction = Call(out,
+							placeMethodName(plan.owner, plan.field, aliases.get(arguments[0].id), called), args);
 						handled = true;
 					default:
 				}
@@ -228,7 +243,8 @@ class IrOptionalFieldStorage {
 							substitutions.set(input.id, actual.value);
 						}
 					if (substitutions.keys().hasNext())
-						instruction = IrInliner.remap(instruction, value -> substitutions.exists(value.id) ? substitutions.get(value.id) : value, id -> id);
+						instruction = IrInliner.remap(instruction,
+							value -> substitutions.exists(value.id) ? substitutions.get(value.id) : value, id -> id);
 				}
 				target.instructions.push(new Located(instruction, located.provenance));
 			}
@@ -256,19 +272,22 @@ class IrOptionalFieldStorage {
 			blocks.push(target);
 		}
 		return new IrFunction(name, [owner].concat(fn.arguments.slice(1)), fn.result, blocks,
-			Provider(TypeKey.of(owner.type), ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, name)), [], fn.inlineHint);
+			Provider(TypeKey.of(owner.type), ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, name)),
+			[], fn.inlineHint);
 	}
 
-	function materializeAlias(value:IrValue, aliases:Map<Int, Array<String>>, plan:OptionalFieldPlan, owner:IrValue, target:IrBlock,
-			located:Located<IrInstruction>, next:Int):{
-		value:IrValue,
-		next:Int
-	} {
+	function materializeAlias(value:IrValue, aliases:Map<Int, Array<String>>, plan:OptionalFieldPlan, owner:IrValue,
+			target:IrBlock,
+			located:Located<IrInstruction>, next:Int): {
+				value: IrValue,
+				next: Int
+			} {
 		var path = aliases.get(value.id);
 		if (path == null)
 			return {value: value, next: next};
 		var result = new IrValue(next++, "$optional-place-value", value.type);
-		target.instructions.push(new Located(Call(result, getterFor(plan, path, value.type), [owner]), located.provenance));
+		target.instructions.push(new Located(Call(result, getterFor(plan, path, value.type), [owner]),
+			located.provenance));
 		return {value: result, next: next};
 	}
 
@@ -277,7 +296,8 @@ class IrOptionalFieldStorage {
 			return placeGetterName(plan.owner, plan.field, path);
 		var declared = pathType(plan, path);
 		return switch [declared, requested] {
-			case [Nullable(Obj(name)), Obj(other)] if (name == other): placeUnwrappedGetterName(plan.owner, plan.field, path);
+			case [Nullable(Obj(name)), Obj(other)] if (name == other): placeUnwrappedGetterName(plan.owner, plan.field,
+				path);
 			default: placeGetterName(plan.owner, plan.field, path);
 		};
 	}
@@ -337,7 +357,8 @@ class IrOptionalFieldStorage {
 		return null;
 	}
 
-	function appendPlaceSetters(functions:Array<IrFunction>, plan:OptionalFieldPlan, type:IrType, path:Array<String>):Void {
+	function appendPlaceSetters(functions:Array<IrFunction>, plan:OptionalFieldPlan, type:IrType,
+			path:Array<String>):Void {
 		switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
 				appendPlaceSetters(functions, plan, Obj(name), path);
@@ -351,19 +372,22 @@ class IrOptionalFieldStorage {
 						var reader = new IrBuilder(),
 							source = reader.argument("owner", Obj(plan.owner));
 						reader.returnValue(readValue(reader, plan, source, field.type, childPath));
-						functions.push(new IrFunction(placeGetterName(plan.owner, plan.field, childPath), reader.arguments, field.type, reader.blocks,
+						functions.push(new IrFunction(placeGetterName(plan.owner, plan.field, childPath),
+							reader.arguments, field.type, reader.blocks,
 							Provider(TypeKey.of(Obj(plan.owner)),
-								ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, placeGetterName(plan.owner, plan.field, childPath)))));
+							ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
+							placeGetterName(plan.owner, plan.field, childPath)))));
 						switch field.type {
 							case Nullable(Obj(child)) if (isValue(child)):
 								var unwrapped = new IrBuilder(),
 									sourceOwner = unwrapped.argument("owner", Obj(plan.owner));
 								unwrapped.returnValue(readValue(unwrapped, plan, sourceOwner, Obj(child), childPath));
-								functions.push(new IrFunction(placeUnwrappedGetterName(plan.owner, plan.field, childPath), unwrapped.arguments, Obj(child),
+								functions.push(new IrFunction(placeUnwrappedGetterName(plan.owner, plan.field,
+									childPath), unwrapped.arguments, Obj(child),
 									unwrapped.blocks,
 									Provider(TypeKey.of(Obj(plan.owner)),
-										ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
-											placeUnwrappedGetterName(plan.owner, plan.field, childPath)))));
+									ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
+									placeUnwrappedGetterName(plan.owner, plan.field, childPath)))));
 							default:
 						}
 						var builder = new IrBuilder(),
@@ -371,9 +395,11 @@ class IrOptionalFieldStorage {
 							value = builder.argument("value", field.type);
 						writeValue(builder, plan, owner, field.type, childPath, value);
 						builder.returnValue(builder.constVoid());
-						functions.push(new IrFunction(placeSetterName(plan.owner, plan.field, childPath), builder.arguments, Void, builder.blocks,
+						functions.push(new IrFunction(placeSetterName(plan.owner, plan.field, childPath),
+							builder.arguments, Void, builder.blocks,
 							Provider(TypeKey.of(Obj(plan.owner)),
-								ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, placeSetterName(plan.owner, plan.field, childPath)))));
+							ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper,
+							placeSetterName(plan.owner, plan.field, childPath)))));
 					}
 					appendPlaceSetters(functions, plan, field.type, childPath);
 				}
@@ -424,12 +450,14 @@ class IrOptionalFieldStorage {
 						var snapshot:Array<IrValue> = [];
 						for (slot in source.slots) {
 							var value = new IrValue(next++, "$optional-copy-slot", slot.type);
-							replacement.instructions.push(new Located(FieldGet(value, origin, IrInlineValueLayout.slotName(source.field, slot)),
+							replacement.instructions.push(new Located(FieldGet(value, origin,
+								IrInlineValueLayout.slotName(source.field, slot)),
 								located.provenance));
 							snapshot.push(value);
 						}
 						for (index in 0...target.slots.length)
-							replacement.instructions.push(new Located(FieldSet(destination, IrInlineValueLayout.slotName(target.field, target.slots[index]),
+							replacement.instructions.push(new Located(FieldSet(destination,
+								IrInlineValueLayout.slotName(target.field, target.slots[index]),
 								snapshot[index]), located.provenance));
 						instruction = ConstVoid(out);
 						rewrittenInstruction = true;
@@ -440,7 +468,8 @@ class IrOptionalFieldStorage {
 							var receiver = object;
 							if (!Type.enumEq(object.type, Obj(plan.owner))) {
 								receiver = new IrValue(next++, "$optional-field-base", Obj(plan.owner));
-								replacement.instructions.push(new Located(Upcast(receiver, object), located.provenance));
+								replacement.instructions.push(new Located(Upcast(receiver, object),
+									located.provenance));
 							}
 							instruction = Call(out, accessorName(plan, false), [receiver]);
 							rewrittenInstruction = true;
@@ -452,7 +481,8 @@ class IrOptionalFieldStorage {
 							var receiver = object;
 							if (!Type.enumEq(object.type, Obj(plan.owner))) {
 								receiver = new IrValue(next++, "$optional-field-base", Obj(plan.owner));
-								replacement.instructions.push(new Located(Upcast(receiver, object), located.provenance));
+								replacement.instructions.push(new Located(Upcast(receiver, object),
+									located.provenance));
 							}
 							var unused = new IrValue(next++, "$optional-field-write", Void);
 							instruction = Call(unused, accessorName(plan, true), [receiver, value]);
@@ -461,7 +491,8 @@ class IrOptionalFieldStorage {
 						}
 					default:
 				}
-				replacement.instructions.push(rewrittenInstruction ? new Located(instruction, located.provenance) : located);
+				replacement.instructions.push(rewrittenInstruction ? new Located(instruction,
+					located.provenance) : located);
 			}
 			replacement.terminator = block.terminator;
 			blocks.push(replacement);
@@ -507,10 +538,12 @@ class IrOptionalFieldStorage {
 		} else
 			builder.returnValue(readValue(builder, plan, owner, plan.type, []));
 		return new IrFunction(accessorName(plan, write), builder.arguments, write ? Void : plan.type, builder.blocks,
-			Provider(TypeKey.of(Obj(plan.owner)), ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, accessorName(plan, write))));
+			Provider(TypeKey.of(Obj(plan.owner)),
+			ProviderOperations.detailed(ProviderOperation.OptionalFieldHelper, accessorName(plan, write))));
 	}
 
-	function readValue(builder:IrBuilder, plan:OptionalFieldPlan, owner:IrValue, type:IrType, path:Array<String>):IrValue {
+	function readValue(builder:IrBuilder, plan:OptionalFieldPlan, owner:IrValue, type:IrType,
+			path:Array<String>):IrValue {
 		return switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
 				var present = builder.fieldGet(owner, physical(plan, path, true), Bool),
@@ -538,14 +571,16 @@ class IrOptionalFieldStorage {
 				if (object == null)
 					throw 'Missing value object "$name"';
 				for (field in object.fields)
-					builder.fieldSet(value, field.name, readValue(builder, plan, owner, field.type, path.concat([field.name])));
+					builder.fieldSet(value, field.name,
+						readValue(builder, plan, owner, field.type, path.concat([field.name])));
 				value;
 			default:
 				builder.fieldGet(owner, physical(plan, path, false), type);
 		};
 	}
 
-	function writeValue(builder:IrBuilder, plan:OptionalFieldPlan, owner:IrValue, type:IrType, path:Array<String>, value:IrValue):Void {
+	function writeValue(builder:IrBuilder, plan:OptionalFieldPlan, owner:IrValue, type:IrType, path:Array<String>,
+			value:IrValue):Void {
 		switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
 				var missing = builder.createBlock(),
@@ -565,7 +600,8 @@ class IrOptionalFieldStorage {
 				if (object == null)
 					throw 'Missing value object "$name"';
 				for (field in object.fields)
-					writeValue(builder, plan, owner, field.type, path.concat([field.name]), builder.fieldGet(value, field.name, field.type));
+					writeValue(builder, plan, owner, field.type, path.concat([field.name]),
+						builder.fieldGet(value, field.name, field.type));
 			default:
 				builder.fieldSet(owner, physical(plan, path, false), value);
 		}
@@ -620,7 +656,8 @@ class IrOptionalFieldStorage {
 	public static function isCopyName(name:String):Bool
 		return StringTools.startsWith(name, COPY_PREFIX);
 
-	public static function copyName(targetOwner:String, targetField:String, sourceOwner:String, sourceField:String):String
+	public static function copyName(targetOwner:String, targetField:String, sourceOwner:String,
+			sourceField:String):String
 		return COPY_PREFIX + haxe.Json.stringify([targetOwner, targetField, sourceOwner, sourceField]);
 
 	public static function placeSetterName(owner:String, field:String, path:Array<String>):String {

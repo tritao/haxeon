@@ -20,7 +20,8 @@ class TypedExpression {
 	/** Declared storage type for a captured value whose flow type may be narrowed. */
 	public final storageType:Null<CompilerType>;
 
-	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression, ?storageType:CompilerType,
+	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression,
+			?storageType:CompilerType,
 			?semanticReference:String) {
 		this.expression = expression;
 		this.type = type;
@@ -88,13 +89,16 @@ enum TypedExpressionKind {
 	TNoReturn(expression:TypedExpression);
 	TCast(expression:TypedExpression);
 	TAbiCast(expression:TypedExpression);
-	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>, defaultExpression:Null<TypedExpression>);
+	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>,
+		defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>, isDynamic:Bool);
 	TArrayLiteral(values:Array<TypedExpression>);
 	TMapLiteral(entries:Array<TypedMapEntry>);
-	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, value:TypedExpression,
+	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression,
+		condition:Null<TypedExpression>, value:TypedExpression,
 		flattened:Bool);
-	TMapComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>, key:TypedExpression,
+	TMapComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression, condition:Null<TypedExpression>,
+		key:TypedExpression,
 		value:TypedExpression);
 	TRange(start:TypedExpression, end:TypedExpression);
 	TCall(name:String, arguments:Array<TypedExpression>);
@@ -135,10 +139,16 @@ enum TypedExpressionKind {
 }
 
 /** Resolved field initializer in a typed object literal. */
-typedef TypedObjectField = {final name:String; final value:TypedExpression;}
+typedef TypedObjectField = {
+	final name:String;
+	final value:TypedExpression;
+}
 
 /** Resolved key/value pair in a typed map literal. */
-typedef TypedMapEntry = {final key:TypedExpression; final value:TypedExpression;}
+typedef TypedMapEntry = {
+	final key:TypedExpression;
+	final value:TypedExpression;
+}
 
 /** Type-checked, guarded arm of a switch expression. */
 typedef TypedSwitchExpressionCase = {
@@ -183,10 +193,12 @@ enum TypedStatement {
 	TIf(condition:TypedExpression, thenBranch:Array<TypedStatement>, elseBranch:Array<TypedStatement>, span:SourceSpan);
 	TWhile(condition:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
 	TDoWhile(body:Array<TypedStatement>, condition:TypedExpression, span:SourceSpan);
-	TForIn(keyName:String, valueName:Null<String>, iterable:TypedExpression, body:Array<TypedStatement>, span:SourceSpan);
+	TForIn(keyName:String, valueName:Null<String>, iterable:TypedExpression, body:Array<TypedStatement>,
+		span:SourceSpan);
 	TBreak(span:SourceSpan);
 	TContinue(span:SourceSpan);
-	TSwitch(expression:TypedExpression, cases:Array<TypedSwitchCase>, defaultBranch:Array<TypedStatement>, hasDefault:Bool, span:SourceSpan);
+	TSwitch(expression:TypedExpression, cases:Array<TypedSwitchCase>, defaultBranch:Array<TypedStatement>,
+		hasDefault:Bool, span:SourceSpan);
 	TIncrement(name:String, delta:Int, span:SourceSpan);
 	TCellIncrement(name:String, cellClass:String, valueType:CompilerType, delta:Int, span:SourceSpan);
 	TCellCapturedIncrement(name:String, cellClass:String, valueType:CompilerType, delta:Int, span:SourceSpan);
@@ -215,7 +227,9 @@ typedef TypedSwitchCase = {
 }
 
 /** Fixed-length array pattern used by a switch arm, including nested enum patterns. */
-typedef TypedSwitchArrayPattern = {final elements:Array<TypedSwitchArrayElement>;}
+typedef TypedSwitchArrayPattern = {
+	final elements:Array<TypedSwitchArrayElement>;
+}
 
 /** One typed element constraint or binding in a fixed-length array pattern. */
 typedef TypedSwitchArrayElement = {
@@ -244,10 +258,17 @@ typedef TypedSwitchBinding = {
 }
 
 /** One enum payload field traversed while matching a nested constructor pattern. */
-typedef TypedSwitchFieldAccess = {final constructorIndex:Int; final fieldIndex:Int; final storageType:CompilerType;}
+typedef TypedSwitchFieldAccess = {
+	final constructorIndex:Int;
+	final fieldIndex:Int;
+	final storageType:CompilerType;
+}
 
 /** One anonymous-object field traversed while matching an enum payload pattern. */
-typedef TypedSwitchObjectFieldAccess = {final name:String; final storageType:CompilerType;}
+typedef TypedSwitchObjectFieldAccess = {
+	final name:String;
+	final storageType:CompilerType;
+}
 
 /** Constant or structural constraint applied to one enum payload position. */
 typedef TypedSwitchPredicate = {
@@ -273,7 +294,12 @@ typedef TypedSwitchCoverageCase = {
 }
 
 /** Resolved catch arm ready for IR exception lowering. */
-typedef TypedCatch = {final name:String; final type:CompilerType; final statements:Array<TypedStatement>; final span:SourceSpan;}
+typedef TypedCatch = {
+	final name:String;
+	final type:CompilerType;
+	final statements:Array<TypedStatement>;
+	final span:SourceSpan;
+}
 
 /** Resolved enum-constructor signature. */
 typedef TypedEnumCase = {
@@ -434,10 +460,18 @@ typedef TypedNativeFieldLayout = {
 }
 
 /** Resolved callable contract required by an interface. */
-typedef TypedInterfaceMethod = {final name:String; final arguments:Array<CompilerType>; final result:CompilerType;}
+typedef TypedInterfaceMethod = {
+	final name:String;
+	final arguments:Array<CompilerType>;
+	final result:CompilerType;
+}
 
 /** Interface declaration after base and method signature resolution. */
-typedef TypedInterface = {final name:String; final bases:Array<String>; final methods:Array<TypedInterfaceMethod>;}
+typedef TypedInterface = {
+	final name:String;
+	final bases:Array<String>;
+	final methods:Array<TypedInterfaceMethod>;
+}
 
 /** Reason a local is represented by a shared generated cell. */
 enum CellStorageKind {
@@ -456,7 +490,10 @@ enum TypedCaptureSource {
 }
 
 /** Stored fields to copy for a value class, with the layout of nested mutable value classes that need copying too. */
-typedef ValueCopyLayout = {final name:String; final fields:Array<{name:String, type:CompilerType, nested:Null<ValueCopyLayout>}>;}
+typedef ValueCopyLayout = {
+	final name:String;
+	final fields:Array<{name:String, type:CompilerType, nested:Null<ValueCopyLayout>}>;
+}
 
 /** A closure capture tied to its resolved lexical binding and storage source. */
 typedef TypedCapture = {
@@ -468,10 +505,17 @@ typedef TypedCapture = {
 }
 
 /** Semantic storage required to preserve a binding across an exceptional edge or closure. */
-typedef TypedStorageRequirement = {final name:String; final valueType:CompilerType; final kind:CellStorageKind;}
+typedef TypedStorageRequirement = {
+	final name:String;
+	final valueType:CompilerType;
+	final kind:CellStorageKind;
+}
 
 /** Semantic captures shared by one generated lambda body. */
-typedef TypedEnvironmentRequirement = {final name:String; final captures:Array<TypedCapture>;}
+typedef TypedEnvironmentRequirement = {
+	final name:String;
+	final captures:Array<TypedCapture>;
+}
 
 /** Closure and exceptional-edge requirements consumed by lowering. */
 typedef TypedClosurePlan = {
@@ -480,7 +524,10 @@ typedef TypedClosurePlan = {
 }
 
 /** Named backend representation of a structural anonymous type. */
-typedef TypedAnonymous = {final name:String; final fields:Array<compiler.types.Type.AnonymousField>;}
+typedef TypedAnonymous = {
+	final name:String;
+	final fields:Array<compiler.types.Type.AnonymousField>;
+}
 
 /** Complete semantic module consumed by IR generation. */
 typedef TypedProgram = {

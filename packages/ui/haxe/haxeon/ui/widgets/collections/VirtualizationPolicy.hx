@@ -17,12 +17,12 @@ class VirtualizationPolicy {
 	}
 
 	public function fixed(itemCount:Int, itemExtent:Float, viewportExtent:Float,
-		offset:Float):VirtualViewport
+			offset:Float):VirtualViewport
 		return new VirtualViewport(itemCount, itemExtent, viewportExtent, offset,
 			leadingOverscan, trailingOverscan);
 
 	public function variable(extents:Array<Float>, viewportExtent:Float,
-		offset:Float):VirtualExtentViewport
+			offset:Float):VirtualExtentViewport
 		return new VirtualExtentViewport(extents, viewportExtent, offset,
 			leadingOverscan, trailingOverscan);
 }

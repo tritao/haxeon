@@ -117,7 +117,7 @@ class IrInterpreter {
 	function executeInstruction(instruction:IrInstruction, values:Map<Int, Dynamic>):Dynamic {
 		return switch instruction {
 			case ConstVoid(_): null;
-			case ConstInt(output, value): output.type == I64 ? haxe.Int64.ofInt(value) : (value : Dynamic);
+			case ConstInt(output, value): output.type == I64 ? haxe.Int64.ofInt(value) : (value:Dynamic);
 			case ConstFloat(_, value): value;
 			case ConstString(_, value): value;
 			case StaticDataAddress(_, _): throw "IR interpreter cannot execute target static data addresses";
@@ -149,8 +149,10 @@ class IrInterpreter {
 					default:
 				}
 				actual;
-			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right), Mod(output, left, right),
-				BitAnd(output, left, right), BitXor(output, left, right), BitOr(output, left, right) if (output.type == I64):
+			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right),
+				Mod(output, left, right),
+				BitAnd(output, left, right), BitXor(output, left, right),
+				BitOr(output, left, right) if (output.type == I64):
 				var a:haxe.Int64 = cast value(values, left),
 					b:haxe.Int64 = cast value(values, right);
 				switch instruction {
@@ -164,7 +166,8 @@ class IrInterpreter {
 					case BitOr(_, _, _): a | b;
 					default: throw "Invalid Int64 binary operation";
 				}
-			case ShiftLeft(output, left, right), ShiftRight(output, left, right), UnsignedShiftRight(output, left, right) if (output.type == I64):
+			case ShiftLeft(output, left, right), ShiftRight(output, left, right),
+				UnsignedShiftRight(output, left, right) if (output.type == I64):
 				var a:haxe.Int64 = cast value(values, left),
 					shift:Int = value(values, right);
 				switch instruction {
@@ -173,8 +176,10 @@ class IrInterpreter {
 					case UnsignedShiftRight(_, _, _): a >>> shift;
 					default: throw "Invalid Int64 shift operation";
 				}
-			case Less(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left), cast value(values, right)) < 0;
-			case LessEqual(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left), cast value(values, right)) <= 0;
+			case Less(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left),
+				cast value(values, right)) < 0;
+			case LessEqual(_, left, right) if (left.type == I64): haxe.Int64.compare(cast value(values, left),
+				cast value(values, right)) <= 0;
 			case Equal(_, left, right) if (left.type == I64 && right.type == I64):
 				haxe.Int64.compare(cast value(values, left), cast value(values, right)) == 0;
 			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right) if (output.type == I32):
@@ -262,8 +267,8 @@ class IrInterpreter {
 				null;
 			case Call(output, name, arguments)
 				if (IrScalarWordBits.matches(name)
-					&& arguments.length == 1
-					&& IrScalarWordBits.valid(name, arguments[0].type, output.type)):
+				&& arguments.length == 1
+				&& IrScalarWordBits.valid(name, arguments[0].type, output.type)):
 				switch [arguments[0].type, output.type] {
 					case [EnumTag(_), I32] | [I32, EnumTag(_)]: value(values, arguments[0]);
 					default: throw "IR interpreter cannot execute native scalar word transport";
@@ -281,16 +286,21 @@ class IrInterpreter {
 			case Intrinsic(_, EnumTagBox(EnumTag(name)), [input]):
 				var tag:Int = value(values, input),
 					declaration = Lambda.find(program.enums, entry -> entry.name == name);
-				if (tag == 0) null; else if (declaration == null || tag < 0 || tag > declaration.cases.length) throw "Invalid enum tag"; else
+				if (tag == 0) null;
+				else if (declaration == null || tag < 0 || tag > declaration.cases.length) throw "Invalid enum tag";
+				else
 					new InterpEnum(name, tag
-					- 1, []);
+						- 1, []);
 			case Intrinsic(_, EnumTagUnbox(EnumTag(name)), [input]):
 				var actual = value(values, input);
-				if (actual == null) 0; else if (!Std.isOfType(actual,
-					InterpEnum) || cast(actual, InterpEnum).type != name) throw 'Invalid cast to $name'; else cast(actual, InterpEnum).constructor + 1;
+				if (actual == null) 0;
+				else if (!Std.isOfType(actual,
+					InterpEnum) || cast(actual, InterpEnum).type != name) throw 'Invalid cast to $name';
+				else cast(actual, InterpEnum).constructor + 1;
 			case Call(output, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
-				if (functions.exists(name)) execute(functions.get(name), args); else {
+				if (functions.exists(name)) execute(functions.get(name), args);
+				else {
 					var result = executeNative(name, args);
 					if (StringTools.startsWith(name, "__array_alloc_")
 						&& name != "__array_alloc_typed_ref"
@@ -305,8 +315,8 @@ class IrInterpreter {
 						}
 					if (arguments.length > 0
 						&& (StringTools.startsWith(name, "__array_copy_")
-							|| StringTools.startsWith(name, "__array_slice_")
-							|| StringTools.startsWith(name, "__array_concat_")))
+						|| StringTools.startsWith(name, "__array_slice_")
+						|| StringTools.startsWith(name, "__array_concat_")))
 						switch arguments[0].type {
 							case Array(element): copyArrayRangeValues(interpArray(result), element);
 							default:
@@ -315,8 +325,10 @@ class IrInterpreter {
 				}
 			case CNativeCall(_, name, _):
 				throw 'IR interpreter cannot execute ordinary C native "$name" without a host binding';
-			case StaticClosure(out, name): new InterpClosure(functions.get(name), null, out.type, null, functions.exists(name) ? null : name);
-			case InstanceClosure(out, name, receiver): new InterpClosure(functions.get(name), value(values, receiver), out.type);
+			case StaticClosure(out, name): new InterpClosure(functions.get(name), null, out.type, null,
+				functions.exists(name) ? null : name);
+			case InstanceClosure(out, name, receiver): new InterpClosure(functions.get(name), value(values, receiver),
+				out.type);
 			case CallClosure(_, closure, arguments):
 				var callable:InterpClosure = cast value(values, closure),
 					args = [for (argument in arguments) value(values, argument)];
@@ -331,7 +343,8 @@ class IrInterpreter {
 						item = value(values, argument);
 					// The interpreter has no non-null native pointer values; a Dynamic value cannot
 					// satisfy a pointer parameter merely because its host representation is an Int.
-					if (item != null && Type.enumEq(argument.type, Dyn) && Type.enumEq(target.arguments[index + 1].type, RawPtr))
+					if (item != null && Type.enumEq(argument.type, Dyn)
+						&& Type.enumEq(target.arguments[index + 1].type, RawPtr))
 						throw "Invalid cast to hl.Bytes";
 					args.push(item);
 				}
@@ -341,7 +354,8 @@ class IrInterpreter {
 			case MakeEnum(output, typeName, constructor, arguments):
 				switch output.type {
 					case EnumTag(_): constructor + 1;
-					default: new InterpEnum(typeName, constructor, [for (argument in arguments) value(values, argument)]);
+					default: new InterpEnum(typeName, constructor,
+						[for (argument in arguments) value(values, argument)]);
 				};
 			case EnumIndex(_, input):
 				switch input.type {
@@ -388,7 +402,8 @@ class IrInterpreter {
 				null;
 			case "remove":
 				var at = map.find(arguments[1]);
-				if (at < 0) false; else {
+				if (at < 0) false;
+				else {
 					map.entries.splice(at, 1);
 					true;
 				}
@@ -402,7 +417,8 @@ class IrInterpreter {
 					result.entries.push({key: entry.key, value: entry.value});
 				result;
 			case "keys": new InterpArray([for (entry in map.entries) entry.key], map.entries.length, Bytes);
-			case "values": new InterpArray([for (entry in map.entries) entry.value], map.entries.length, map.elementType);
+			case "values": new InterpArray([for (entry in map.entries) entry.value], map.entries.length,
+				map.elementType);
 			default: throw 'Unsupported String map operation "${parts[1]}"';
 		};
 	}
@@ -410,13 +426,15 @@ class IrInterpreter {
 	function executeNative(name:String, arguments:Array<Dynamic>):Dynamic {
 		if (StringTools.startsWith(name, "__map_string_"))
 			return executeStringMap(name, arguments);
-		if (StringTools.startsWith(name, "$scalar-closure:receiver:") || StringTools.startsWith(name, "$wasm:closure-receiver:")) {
+		if (StringTools.startsWith(name, "$scalar-closure:receiver:")
+			|| StringTools.startsWith(name, "$wasm:closure-receiver:")) {
 			var value = arguments[0], probe = arguments[1];
 			if (!Std.isOfType(value, InterpClosure) || !Std.isOfType(probe, InterpClosure))
 				return null;
 			var closure:InterpClosure = cast value,
 				expected:InterpClosure = cast probe;
-			return closure.target == expected.target && closure.nativeName == expected.nativeName ? closure.receiver : null;
+			return closure.target == expected.target
+				&& closure.nativeName == expected.nativeName ? closure.receiver : null;
 		}
 
 		if (enumKindQueries.exists(name))
@@ -424,7 +442,8 @@ class IrInterpreter {
 		return switch name {
 			case "__exit": null;
 			case "__dynamic_object_type_id":
-				Std.isOfType(arguments[0], InterpObject) ? IrTypeIdentity.id(Obj(cast(arguments[0], InterpObject).type)) : 0;
+				Std.isOfType(arguments[0], InterpObject)
+					? IrTypeIdentity.id(Obj(cast(arguments[0], InterpObject).type)) : 0;
 			case "__std_is_exact_type":
 				var reference:InterpTypeRef = cast arguments[1],
 					input:Dynamic = arguments[0];
@@ -457,51 +476,65 @@ class IrInterpreter {
 					case Bytes: Std.isOfType(input, String);
 					case ManagedBytes: Std.isOfType(input, haxe.io.Bytes);
 					case Array(_): Std.isOfType(input, InterpArray);
-					case Iterator(element): Std.isOfType(input, InterpIterator) && IrVerifier.sameType(cast(input, InterpIterator).values.elementType, element);
+					case Iterator(element): Std.isOfType(input, InterpIterator)
+						&& IrVerifier.sameType(cast(input, InterpIterator).values.elementType, element);
 					default: false;
 				};
 			case "__closure_is_of_type": Std.isOfType(arguments[0],
-					InterpClosure) && IrVerifier.sameType(cast(arguments[0], InterpClosure).type, cast(arguments[1], InterpTypeRef).type);
+				InterpClosure)
+				&& IrVerifier.sameType(cast(arguments[0], InterpClosure).type, cast(arguments[1], InterpTypeRef).type);
 			case "__array_alloc_typed_ref":
-				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8, cast(arguments[1], InterpTypeRef).type);
+				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8,
+					cast(arguments[1], InterpTypeRef).type);
 			case "__array_check_cast":
 				checkArrayCast(arguments[0], cast(arguments[1], InterpTypeRef).type);
-			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64", "__array_alloc_bytes", "__array_alloc_ref":
+			case "__array_alloc_i32", "__array_alloc_i64", "__array_alloc_bool", "__array_alloc_f64",
+				"__array_alloc_bytes", "__array_alloc_ref":
 				new InterpArray([for (_ in 0...Std.int(arguments[0])) null], Std.int(arguments[0]) + 8);
-			case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes", "__array_index_of_ref":
+			case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_f64", "__array_index_of_bytes",
+				"__array_index_of_ref":
 				interpArray(arguments[0]).values.indexOf(arguments[1]);
 			case "__array_join_bytes":
 				interpArray(arguments[0]).values.join(Std.string(arguments[1]));
-			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes", "__array_copy_ref", "__array_copy_any":
+			case "__array_copy_i32", "__array_copy_i64", "__array_copy_bool", "__array_copy_f64", "__array_copy_bytes",
+				"__array_copy_ref", "__array_copy_any":
 				var source = interpArray(arguments[0]);
 				new InterpArray(source.values.copy(), source.capacity, source.elementType);
-			case "__array_slice_i32", "__array_slice_i64", "__array_slice_bool", "__array_slice_f64", "__array_slice_bytes", "__array_slice_ref",
+			case "__array_slice_i32", "__array_slice_i64", "__array_slice_bool", "__array_slice_f64",
+				"__array_slice_bytes", "__array_slice_ref",
 				"__array_slice_any":
 				var source = interpArray(arguments[0]),
 					sliced = source.values.slice(Std.int(arguments[1]), Std.int(arguments[2]));
 				new InterpArray(sliced, sliced.length + 8, source.elementType);
-			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64", "__array_concat_bytes", "__array_concat_ref",
+			case "__array_concat_i32", "__array_concat_i64", "__array_concat_bool", "__array_concat_f64",
+				"__array_concat_bytes", "__array_concat_ref",
 				"__array_concat_any":
 				var left = interpArray(arguments[0]),
 					right = interpArray(arguments[1]);
-				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8, left.elementType);
-			case "__array_push_i32", "__array_push_i64", "__array_push_bool", "__array_push_f64", "__array_push_bytes", "__array_push_ref":
+				new InterpArray(left.values.concat(right.values), left.values.length + right.values.length + 8,
+					left.elementType);
+			case "__array_push_i32", "__array_push_i64", "__array_push_bool", "__array_push_f64", "__array_push_bytes",
+				"__array_push_ref":
 				var pushed = interpArray(arguments[0]);
 				pushed.values.push(arguments[1]);
 				pushed.capacity = pushed.values.length + 8;
 				pushed.values.length;
-			case "__array_pop_i32", "__array_pop_i64", "__array_pop_bool", "__array_pop_f64", "__array_pop_bytes", "__array_pop_ref":
+			case "__array_pop_i32", "__array_pop_i64", "__array_pop_bool", "__array_pop_f64", "__array_pop_bytes",
+				"__array_pop_ref":
 				var popped = interpArray(arguments[0]);
 				popped.values.length == 0 ? null : popped.values.pop();
 			case "__string_length": Std.string(arguments[0]).length;
 			case "__string_concat": Std.string(arguments[0]) + Std.string(arguments[1]);
 			case "__string_concat3": Std.string(arguments[0]) + Std.string(arguments[1]) + Std.string(arguments[2]);
-			case "__string_equal": arguments[0] == null || arguments[1] == null ? arguments[0] == arguments[1] : Std.string(arguments[0]) == Std.string(arguments[1]);
+			case "__string_equal": arguments[0] == null || arguments[1] == null ? arguments[0]
+				== arguments[1] : Std.string(arguments[0]) == Std.string(arguments[1]);
 			case "__string_char_code_at": Std.string(arguments[0]).charCodeAt(Std.int(arguments[1]));
 			case "__string_to_lower_case": Std.string(arguments[0]).toLowerCase();
 			case "__string_to_upper_case": Std.string(arguments[0]).toUpperCase();
-			case "__f32_to_i32_bits", "__float_to_f32_bits", "runtime.FloatBits.toInt32": haxe.io.FPHelper.floatToI32(arguments[0]);
-			case "__i32_to_f32_bits", "__f32_bits_to_float", "runtime.FloatBits.fromInt32": haxe.io.FPHelper.i32ToFloat(arguments[0]);
+			case "__f32_to_i32_bits", "__float_to_f32_bits",
+				"runtime.FloatBits.toInt32": haxe.io.FPHelper.floatToI32(arguments[0]);
+			case "__i32_to_f32_bits", "__f32_bits_to_float",
+				"runtime.FloatBits.fromInt32": haxe.io.FPHelper.i32ToFloat(arguments[0]);
 			case "runtime.FloatBits.toInt64", "__f64_to_i64_bits": haxe.io.FPHelper.doubleToI64(arguments[0]);
 			case "runtime.FloatBits.fromInt64", "__i64_to_f64_bits":
 				var bits:haxe.Int64 = cast arguments[0];
@@ -534,11 +567,11 @@ class IrInterpreter {
 				}
 			case "__reflect_is_object":
 				arguments[0] != null
-				&& !Std.isOfType(arguments[0], Bool)
-				&& !Std.isOfType(arguments[0], Int)
-				&& !Std.isOfType(arguments[0], Float)
-				&& !Std.isOfType(arguments[0], String)
-				&& !Reflect.isFunction(arguments[0]);
+					&& !Std.isOfType(arguments[0], Bool)
+					&& !Std.isOfType(arguments[0], Int)
+					&& !Std.isOfType(arguments[0], Float)
+					&& !Std.isOfType(arguments[0], String)
+					&& !Reflect.isFunction(arguments[0]);
 			default: throw 'IR interpreter cannot execute native "$name"';
 		};
 	}
@@ -581,7 +614,8 @@ class IrInterpreter {
 	function isInlineValue(type:IrType):Bool
 		return switch type {
 			case Nullable(element): isInlineValue(element);
-			case Obj(name): var declaration = objectDeclaration(name); declaration != null && declaration.isValue;
+			case Obj(name): var declaration = objectDeclaration(name);
+				declaration != null && declaration.isValue;
 			default: false;
 		};
 
@@ -592,7 +626,8 @@ class IrInterpreter {
 			case Nullable(element): copyInlineValue(input, element);
 			case Obj(name):
 				var declaration = objectDeclaration(name);
-				if (declaration == null || !declaration.isValue) input; else {
+				if (declaration == null || !declaration.isValue) input;
+				else {
 					var original = interpObject(input), copy = newObject(name);
 					for (field in declaration.fields)
 						copy.fields.set(field.name, copyInlineValue(original.fields.get(field.name), field.type));
@@ -609,7 +644,8 @@ class IrInterpreter {
 			initializeObjectFields(object, objectDeclaration(declaration.base));
 		for (field in declaration.fields)
 			object.fields.set(field.name, switch field.type {
-				case Obj(name): var nested = objectDeclaration(name); nested != null && nested.isValue ? newObject(name) : null;
+				case Obj(name): var nested = objectDeclaration(name);
+					nested != null && nested.isValue ? newObject(name) : null;
 				default: defaultValue(field.type);
 			});
 	}
@@ -724,8 +760,9 @@ class IrInterpreter {
 			case [_, Array(element)]: checkArrayCast(input, element);
 			case [_, Function(_, _)] if (input != null): closureView(input, to);
 			case [_, I32] if (input != null && numericValue(input)): Std.int(input);
-			case [_, F32] if (input != null && numericValue(input)): haxe.io.FPHelper.i32ToFloat(haxe.io.FPHelper.floatToI32(input));
-			case [_, F64] if (input != null && numericValue(input)): (input : Float);
+			case [_, F32] if (input != null
+				&& numericValue(input)): haxe.io.FPHelper.i32ToFloat(haxe.io.FPHelper.floatToI32(input));
+			case [_, F64] if (input != null && numericValue(input)): (input:Float);
 			case [_, _] if (matchesArrayElement(input, to)): input;
 			default: throw 'Cannot convert closure value from ${Std.string(from)} to ${Std.string(to)}';
 		};
@@ -752,7 +789,8 @@ class IrInterpreter {
 		if (input == null)
 			return switch type {
 				case Nullable(_) | Bytes | Array(_) | Enum(_) | Virtual(_) | Function(_, _) | Dyn: true;
-				case Obj(name): var object = objectDeclaration(name); object == null || !object.isValue;
+				case Obj(name): var object = objectDeclaration(name);
+					object == null || !object.isValue;
 				default: false;
 			};
 		return switch type {
@@ -777,7 +815,8 @@ class IrInterpreter {
 			case Virtual(name): objectImplements(input, name);
 			case Enum(name): Std.isOfType(input, InterpEnum) && cast(input, InterpEnum).type == name;
 			case Array(_): Std.isOfType(input, InterpArray);
-			case Function(_, _): Std.isOfType(input, InterpClosure) && IrVerifier.sameType(cast(input, InterpClosure).type, type);
+			case Function(_, _): Std.isOfType(input, InterpClosure)
+				&& IrVerifier.sameType(cast(input, InterpClosure).type, type);
 			default: false;
 		};
 	}
@@ -785,7 +824,7 @@ class IrInterpreter {
 	function classIdOf(object:Dynamic):Int {
 		if (object == null)
 			throw "IR interpreter: class id of null";
-		var id = program.classIds.get((cast object : InterpObject).type);
+		var id = program.classIds.get((cast object:InterpObject).type);
 		if (id == null)
 			throw 'IR interpreter: class ${(cast object : InterpObject).type} has no class id';
 		return id;
@@ -903,17 +942,27 @@ class IrInterpreter {
 
 	static function outputOf(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
-			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _),
-				PointerOffset(output, _, _), MemoryLoad(output, _, _, _), ConstBool(output, _), ConstNull(output), TypeValue(output, _), ToDyn(output, _),
-				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _), SafeCast(output, _), Catch(output),
-				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _), Mod(output, _, _), BitAnd(output, _, _),
-				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _), UnsignedShiftRight(output, _, _),
-				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _), Intrinsic(output, _, _), CNativeCall(output, _, _),
-				StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _), ToVirtual(output, _), Upcast(output, _),
-				ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _), ValueInit(output), FieldGet(output, _, _),
-				ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _), IteratorNext(output, _),
+			case Phi(output, _), ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _),
+				StaticDataAddress(output, _),
+				PointerOffset(output, _, _), MemoryLoad(output, _, _, _), ConstBool(output, _), ConstNull(output),
+				TypeValue(output, _), ToDyn(output, _),
+				IntToFloat(output, _), IntToInt64(output, _), FloatToInt(output, _), FloatToFloat(output, _),
+				SafeCast(output, _), Catch(output),
+				GlobalGet(output, _), Add(output, _, _), Sub(output, _, _), Mul(output, _, _), Div(output, _, _),
+				Mod(output, _, _), BitAnd(output, _, _),
+				BitXor(output, _, _), BitOr(output, _, _), ShiftLeft(output, _, _), ShiftRight(output, _, _),
+				UnsignedShiftRight(output, _, _),
+				Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _), Call(output, _, _),
+				Intrinsic(output, _, _), CNativeCall(output, _, _),
+				StaticClosure(output, _), InstanceClosure(output, _, _), CallClosure(output, _, _),
+				ToVirtual(output, _), Upcast(output, _),
+				ClassId(output, _), MethodCall(output, _, _, _, _), NewObject(output, _), ValueInit(output),
+				FieldGet(output, _, _),
+				ArrayGet(output, _, _), ArraySize(output, _), IteratorNew(output, _), IteratorHasNext(output, _),
+				IteratorNext(output, _),
 				MakeEnum(output, _, _, _), EnumIndex(output, _), EnumField(output, _, _, _): output;
-			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _), MemoryStore(_, _, _): null;
+			case BeginTry(_, _, _), EndTry(_, _), GlobalSet(_, _), FieldSet(_, _, _), ArraySet(_, _, _),
+				MemoryStore(_, _, _): null;
 		};
 }
 
@@ -981,7 +1030,8 @@ private class InterpClosure {
 	public final source:Null<InterpClosure>;
 	public final nativeName:Null<String>;
 
-	public function new(target:Null<IrFunction>, receiver:Dynamic, type:IrType, ?source:InterpClosure, ?nativeName:String) {
+	public function new(target:Null<IrFunction>, receiver:Dynamic, type:IrType, ?source:InterpClosure,
+			?nativeName:String) {
 		this.target = target;
 		this.receiver = receiver;
 		this.type = type;

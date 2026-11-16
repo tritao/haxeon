@@ -6,7 +6,10 @@ class RangeOwner {
 struct RangeValue {
 	public var number:Int;
 	public var owner:RangeOwner;
-	public function new(number:Int, owner:RangeOwner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:RangeOwner) {
+		this.number = number;
+		this.owner = owner;
+	}
 }
 
 function duplicateRanges<T>(source:Array<T>):Array<T> {

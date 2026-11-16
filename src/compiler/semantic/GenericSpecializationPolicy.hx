@@ -52,7 +52,8 @@ class GenericSpecializationPolicy {
 					return {representation: semantic, policy: "constrained"};
 		// Native scalars and records have no runtime shape of their own: a shared body would read
 		// `RawPtr<T>` or `sizeof<T>()` with another type's size, so they specialize exactly.
-		if (requiresLayoutSpecialization == null ? NativeLayout.containsNativeLayoutType(semantic) : requiresLayoutSpecialization(semantic))
+		if (requiresLayoutSpecialization == null
+			? NativeLayout.containsNativeLayoutType(semantic) : requiresLayoutSpecialization(semantic))
 			return {representation: semantic, policy: "layout"};
 		for (argument in fn.arguments)
 			if (containsNested(argument.type, parameter, false))
@@ -68,7 +69,8 @@ class GenericSpecializationPolicy {
 			case AppliedType(_, arguments): containsAny(arguments, parameter);
 			case ArrayType(element), NullableType(element): containsNested(element, parameter, true);
 			case MapType(key, value): containsNested(key, parameter, true) || containsNested(value, parameter, true);
-			case FunctionType(arguments, result): containsAny(arguments, parameter) || containsNested(result, parameter, true);
+			case FunctionType(arguments, result): containsAny(arguments, parameter)
+				|| containsNested(result, parameter, true);
 			case AnonymousType(fields):
 				var found = false;
 				for (field in fields)

@@ -34,7 +34,8 @@ class JsonWireReader {
 	final frames:Array<JsonWireReadFrame> = [];
 	var consumed:Bool = false;
 
-	public function new(source:String, ?maxContainer:Int = 1000000, ?maxDepth:Int = 64, ?maxBytes:Int = 16 * 1024 * 1024) {
+	public function new(source:String, ?maxContainer:Int = 1000000, ?maxDepth:Int = 64,
+			?maxBytes:Int = 16 * 1024 * 1024) {
 		if (source == null || maxContainer < 0 || maxDepth < 0 || maxBytes < 0)
 			throw "Invalid JSON wire input or limits";
 		if (Bytes.ofString(source).length > maxBytes)
@@ -139,7 +140,7 @@ class JsonWireReader {
 	public function readFloat():Float {
 		var value:Dynamic = take();
 		if (Std.isOfType(value, String)) {
-			return switch (cast value : String) {
+			return switch (cast value:String) {
 				case "float:NaN": Math.NaN;
 				case "float:+Infinity": Math.POSITIVE_INFINITY;
 				case "float:-Infinity": Math.NEGATIVE_INFINITY;

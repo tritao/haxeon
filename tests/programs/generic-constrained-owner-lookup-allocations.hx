@@ -13,10 +13,13 @@ class LookupOwner {
 struct LookupValue {
 	public var number:Int;
 	public var owner:LookupOwner;
-	public function new(number:Int, owner:LookupOwner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:LookupOwner) {
+		this.number = number;
+		this.owner = owner;
+	}
 }
 
-class ValueLookup<K:Hashable, V> {
+class ValueLookup < K:Hashable, V > {
 	final keys:Array<K>;
 	final values:Array<V>;
 	final hashes:Array<Int>;

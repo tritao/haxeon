@@ -40,7 +40,8 @@ class ProcessRunner {
 	static function copyOf(value:Null<String>):Null<String>
 		return value == null ? null : Bytes.ofString(value).toString();
 
-	public static function run(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>, forwardOutput:Bool = true):Int {
+	public static function run(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>,
+			forwardOutput:Bool = true):Int {
 		#if (target.threaded && !eval)
 		var oldEnvironment = new Map<String, Null<String>>(),
 			process:Process = null;
@@ -146,8 +147,14 @@ class ProcessRunner {
 		var script = new StringBuf();
 		script.add("#!/bin/sh\nset +e\n");
 		for (index in 0...tasks.length) {
-			var task = tasks[index], stdoutPath = Path.join([waveDirectory, 'stdout-$index']), stderrPath = Path.join([waveDirectory, 'stderr-$index']),
-				statusPath = Path.join([waveDirectory, 'status-$index']), command = [
+			var task = tasks[index],
+				stdoutPath = Path.join([waveDirectory, 'stdout-$index']),
+				stderrPath = Path.join([
+					waveDirectory,
+					'stderr-$index'
+				]),
+				statusPath = Path.join([waveDirectory, 'status-$index']),
+				command = [
 					for (key in sortedKeys(task.environment))
 						shellQuote('$key=${task.environment.get(key)}')
 				];
@@ -206,7 +213,7 @@ class ProcessRunner {
 		#end
 	}
 
-	public static function capture(command:String, arguments:Array<String>):{status:Int, output:String} {
+	public static function capture(command:String, arguments:Array<String>): {status: Int, output: String} {
 		try {
 			var process = new Process(command, arguments),
 				stdout = process.stdout.readAll().toString(),

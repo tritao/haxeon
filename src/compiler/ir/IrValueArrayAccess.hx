@@ -19,15 +19,23 @@ class IrValueArrayAccess {
 		if (slot.isReference) {
 			declare(IrValueLaneReference.READ, [Array(Dyn), I32, I32], IrValueLaneReference.type());
 			var carrier = builder.call(IrValueLaneReference.READ, args, IrValueLaneReference.type());
-			return IrValueLaneReference.isCarrier(slot.type) ? carrier : builder.call(IrValueLaneReference.UNPACK, [carrier], slot.type);
+			return IrValueLaneReference.isCarrier(slot.type) ? carrier : builder.call(IrValueLaneReference.UNPACK,
+				[carrier], slot.type);
 		}
 		var suffix = scalarSuffix(slot.type), name = '__value_array_read_$suffix';
 		var types:Array<IrType> = [Array(Dyn), I32, I32];
 		if (suffix == "i32" || suffix == "i64" || suffix == "ptr" || suffix == "type") {
-			args.push(builder.constInt(slot.bitWidth)); types.push(I32);
+			args.push(builder.constInt(slot.bitWidth));
+			types.push(I32);
 		}
-		if (suffix == "i32" || suffix == "i64") { args.push(builder.constBool(slot.signed)); types.push(Bool); }
-		var physical = switch slot.type { case EnumTag(_): I32; default: slot.type; };
+		if (suffix == "i32" || suffix == "i64") {
+			args.push(builder.constBool(slot.signed));
+			types.push(Bool);
+		}
+		var physical = switch slot.type {
+			case EnumTag(_): I32;
+			default: slot.type;
+		};
 		declare(name, types, physical);
 		var value = builder.call(name, args, physical);
 		return switch slot.type {
@@ -38,24 +46,28 @@ class IrValueArrayAccess {
 
 	/** The caller grows the array before writing and marks the element initialized after all leaves are written. */
 	public function write(builder:IrBuilder, array:IrValue, index:IrValue, slot:IrValueLaneSlot, value:IrValue):Void {
-		if (!IrVerifier.sameType(value.type, slot.type)) throw 'Wrong value lane slot type: ${value.type}, expected ${slot.type}';
+		if (!IrVerifier.sameType(value.type, slot.type))
+			throw 'Wrong value lane slot type: ${value.type}, expected ${slot.type}';
 		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
 		if (slot.isReference) {
 			declare(IrValueLaneReference.WRITE, [Array(Dyn), I32, I32, IrValueLaneReference.type()], Void);
-			args.push(IrValueLaneReference.isCarrier(value.type) ? value : builder.call(IrValueLaneReference.PACK, [value], IrValueLaneReference.type()));
+			args.push(IrValueLaneReference.isCarrier(value.type) ? value : builder.call(IrValueLaneReference.PACK,
+				[value], IrValueLaneReference.type()));
 			builder.call(IrValueLaneReference.WRITE, args, Void);
 			return;
 		}
 		var suffix = scalarSuffix(slot.type), name = '__value_array_write_$suffix';
 		var types:Array<IrType> = [Array(Dyn), I32, I32];
 		if (suffix == "i32" || suffix == "i64" || suffix == "ptr" || suffix == "type") {
-			args.push(builder.constInt(slot.bitWidth)); types.push(I32);
+			args.push(builder.constInt(slot.bitWidth));
+			types.push(I32);
 		}
 		var stored = switch slot.type {
 			case EnumTag(_): builder.call(IrScalarWordBits.PACK, [value], I32);
 			default: value;
 		};
-		args.push(stored); types.push(stored.type);
+		args.push(stored);
+		types.push(stored.type);
 		declare(name, types, Void);
 		builder.call(name, args, Void);
 	}
@@ -65,7 +77,10 @@ class IrValueArrayAccess {
 		var name = slot.isReference ? "__value_array_clear_ref" : "__value_array_clear_scalar";
 		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
 		var types:Array<IrType> = [Array(Dyn), I32, I32];
-		if (!slot.isReference) { args.push(builder.constInt(slot.bitWidth)); types.push(I32); }
+		if (!slot.isReference) {
+			args.push(builder.constInt(slot.bitWidth));
+			types.push(I32);
+		}
 		declare(name, types, Void);
 		builder.call(name, args, Void);
 	}
@@ -103,6 +118,12 @@ class IrValueArrayAccess {
 				throw 'Conflicting value lane native "$name"';
 			return;
 		}
-		declarations.set(name, {name: name, library: "haxeon_runtime", symbol: name, arguments: arguments, result: result});
+		declarations.set(name, {
+			name: name,
+			library: "haxeon_runtime",
+			symbol: name,
+			arguments: arguments,
+			result: result
+		});
 	}
 }

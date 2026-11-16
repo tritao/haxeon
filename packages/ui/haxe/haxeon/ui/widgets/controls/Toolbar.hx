@@ -37,7 +37,7 @@ class Toolbar implements View {
 		var children:Array<KeyedView> = [];
 		for (commandId in commandIds)
 			if (commandId != null && commandId.length > 0 && commands.get(commandId) != null)
-			{
+				{
 				var button = new CommandButton(commandId, commandId, registry, invocationContext);
 				button.variant = ButtonVariant.Navigation;
 				children.push(new KeyedView(commandId, button));

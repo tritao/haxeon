@@ -13,10 +13,9 @@ enum abstract Tag(String) {
 }
 
 class Bag {
-	static var defaults:Map<String, Int> = {
-		var m = new Map<String, Int>();
-		m.set("one", 1);
-		m;
+	static var defaults:Map<String, Int> = {var m = new Map<String, Int>();
+	m.set("one", 1);
+	m;
 	}
 
 	@:isVar public var label(get, set):String;
@@ -65,9 +64,9 @@ function stepName(step:Step):String {
 }
 
 function main():Int {
-	if ((cast Second : Int) != 1 || (cast Eleventh : Int) != 11)
+	if ((cast Second:Int) != 1 || (cast Eleventh:Int) != 11)
 		return 1;
-	if ((cast Alpha : String) != "Alpha" || (cast Beta : String) != "b")
+	if ((cast Alpha:String) != "Alpha" || (cast Beta:String) != "b")
 		return 2;
 	if (stepName(Second) != "second" || stepName(Eleventh) != "eleventh" || stepName(First) != "first")
 		return 3;
@@ -85,9 +84,8 @@ function main():Int {
 	var doubled = [for (item in bag) item * 2];
 	if (total != 7 || doubled.join(",") != "4,4,6")
 		return 6;
-	var value = {
-		var base = Bag.defaultOne();
-		base + 41;
+	var value = {var base = Bag.defaultOne();
+	base + 41;
 	};
 	return value;
 }

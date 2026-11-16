@@ -1,48 +1,48 @@
-import compiler.ir.IrReachability;
-import compiler.Frontend;
 import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
+import compiler.Frontend;
+import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.hl.HlBackend;
-import compiler.hl.HlCode;
-import compiler.hl.HlCode.HlTypeDef;
-import compiler.ir.hl.HlLower;
 import compiler.backend.wasm.WasmBackend;
+import compiler.backend.wasm.WasmCfgAnalysis;
+import compiler.backend.wasm.WasmEncoder;
+import compiler.backend.wasm.WasmLayout;
+import compiler.backend.wasm.WasmModule.WasmFunction;
+import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.backend.wasm.WasmModuleSupport;
+import compiler.backend.wasm.WasmPatch;
+import compiler.backend.wasm.WasmRuntimeAbi;
+import compiler.backend.wasm.WasmStructurer;
 import compiler.backend.wasm.WasmTarget;
 import compiler.backend.wasm.WasmTarget.WasmReferenceModel;
-import compiler.backend.wasm.WasmLayout;
-import compiler.backend.wasm.gc.WasmGcTypePlan;
-import compiler.backend.wasm.WasmCfgAnalysis;
-import compiler.backend.wasm.WasmRuntimeAbi;
-import compiler.backend.wasm.WasmModuleSupport;
-import compiler.backend.wasm.gc.WasmGcRoots;
-import compiler.backend.wasm.WasmStructurer;
-import compiler.backend.wasm.WasmPatch;
-import compiler.backend.wasm.WasmEncoder;
-import compiler.backend.wasm.WasmValidator;
-import compiler.backend.wasm.WasmModule.WasmModule;
-import compiler.backend.wasm.WasmModule.WasmFunction;
-import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmCatchClause;
+import compiler.backend.wasm.WasmTypes.WasmCompositeType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmHeapType;
+import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmStorageType;
-import compiler.backend.wasm.WasmTypes.WasmCompositeType;
 import compiler.backend.wasm.WasmTypes.WasmSubtype;
-import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.ir.IrInterpreter;
-import compiler.ir.codec.CanonicalIrCodec;
-import compiler.ir.IrBuilder;
-import compiler.ir.IrFunction;
-import compiler.ir.Ir.IrInstruction;
-import compiler.ir.Ir.IrTerminator;
+import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.backend.wasm.WasmValidator;
+import compiler.backend.wasm.gc.WasmGcRoots;
+import compiler.backend.wasm.gc.WasmGcTypePlan;
+import compiler.hl.HlCode;
+import compiler.hl.HlCode.HlTypeDef;
 import compiler.ir.Ir.IrBlock;
+import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
+import compiler.ir.IrBuilder;
+import compiler.ir.IrFunction;
+import compiler.ir.IrInterpreter;
+import compiler.ir.IrReachability;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
+import compiler.ir.codec.CanonicalIrCodec;
+import compiler.ir.hl.HlLower;
+import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 class WasmBackendMain {
@@ -59,13 +59,18 @@ class WasmBackendMain {
 			}
 		var modeProgram = Frontend.compile("function main():Int return 42;");
 		for (target in [Wasm32, WasmGc]) {
-			var release = new WasmBackend().compile(modeProgram, {target: target, debugNames: true, developmentMetadata: false}).bytes;
+			var release = new WasmBackend().compile(modeProgram, {
+				target: target,
+				debugNames: true,
+				developmentMetadata: false
+			}).bytes;
 			var development = new WasmBackend().compile(modeProgram, {target: target, debugNames: true}).bytes;
 			for (name in ["haxeon.patch", "haxeon.patch.slots"]) {
 				if (containsBytes(release, name) || !containsBytes(development, name))
 					throw 'Wasm $target build mode did not select $name correctly';
 			}
-			if (target == Wasm32 && (containsBytes(release, "haxeon.gc.roots") || !containsBytes(development, "haxeon.gc.roots")))
+			if (target == Wasm32
+				&& (containsBytes(release, "haxeon.gc.roots") || !containsBytes(development, "haxeon.gc.roots")))
 				throw "Wasm32 build mode did not select development root metadata correctly";
 		}
 		WasmTypeIdPlanMain.run();
@@ -98,18 +103,22 @@ class WasmBackendMain {
 					var signature = optionalAbi.signatures.get(name);
 					return signature != null && signature.throwsReceiver;
 				}).rewrite(),
-			optionalPlan = new WasmGcTypePlan(optionalLowered, true, optionalAbi.signatures, optionalAbi.scalarClosures, optionalAbi.scalarVirtuals),
-			optionalCloneFound = false;
+					optionalPlan = new WasmGcTypePlan(optionalLowered, true, optionalAbi.signatures,
+					optionalAbi.scalarClosures, optionalAbi.scalarVirtuals),
+					optionalCloneFound = false;
 		for (fn in optionalLowered.functions)
-			if (fn.name.indexOf('$' + 'wasm:scalar-function:') == 0 && fn.name.indexOf('$' + 'optional-scalar:change') >= 0) {
+			if (fn.name.indexOf('$' + 'wasm:scalar-function:') == 0
+				&& fn.name.indexOf('$' + 'optional-scalar:change') >= 0) {
 				optionalCloneFound = true;
-				var locals = new compiler.backend.wasm.WasmScalarLocals(fn, optionalPlan.values.isValue, optionalPlan.physicalFields, optionalPlan.valueType,
+				var locals = new compiler.backend.wasm.WasmScalarLocals(fn, optionalPlan.values.isValue,
+					optionalPlan.physicalFields, optionalPlan.valueType,
 					_ -> 0);
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
 							case ValueInit(out)
-								if (StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type), compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+								if (StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type),
+								compiler.ir.IrOptionalScalarFlow.WRAPPER)):
 								if (locals.get(out) == null)
 									throw "optional value place still allocates in the Wasm GC scalar clone";
 							default:
@@ -117,7 +126,8 @@ class WasmBackendMain {
 			}
 		if (!optionalCloneFound)
 			throw "missing Wasm GC scalar optional call";
-		var equalityProgram = Frontend.compile("interface Equatable {} struct V implements Equatable { public var x:Int; public var label:String; "
+		var equalityProgram =
+			Frontend.compile("interface Equatable {} struct V implements Equatable { public var x:Int; public var label:String; "
 			+ "public function new(x:Int, label:String) { this.x = x; this.label = label; } } "
 			+ "function same(a:Null<V>, b:V):Bool return a == b; "
 			+ "function main():Int { var a:Null<V> = new V(42, 'managed'); var b = new V(42, 'managed'); return same(a, b) ? 42 : 0; }");
@@ -128,21 +138,24 @@ class WasmBackendMain {
 					var signature = equalityAbi.signatures.get(name);
 					return signature != null && signature.throwsReceiver;
 				}).rewrite(),
-			equalityPlan = new WasmGcTypePlan(equalityLowered, true, equalityAbi.signatures, equalityAbi.scalarClosures, equalityAbi.scalarVirtuals),
-			equalityClone = false;
+					equalityPlan = new WasmGcTypePlan(equalityLowered, true, equalityAbi.signatures,
+					equalityAbi.scalarClosures, equalityAbi.scalarVirtuals),
+					equalityClone = false;
 		for (fn in equalityLowered.functions)
 			if (fn.name.indexOf('$' + 'wasm:scalar-function:') == 0
 				&& fn.name.indexOf('$' + 'optional-scalar:') >= 0
 				&& fn.name.indexOf('$' + 'value' + '$' + 'equality:') >= 0) {
 				equalityClone = true;
-				var locals = new compiler.backend.wasm.WasmScalarLocals(fn, equalityPlan.values.isValue, equalityPlan.physicalFields, equalityPlan.valueType,
+				var locals = new compiler.backend.wasm.WasmScalarLocals(fn, equalityPlan.values.isValue,
+					equalityPlan.physicalFields, equalityPlan.valueType,
 					_ -> 0);
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
 							case ValueInit(out)
 								if (compiler.ir.IrTypeTools.valueObjectName(out.type) == "V"
-									|| StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type), compiler.ir.IrOptionalScalarFlow.WRAPPER)):
+								|| StringTools.startsWith(compiler.ir.IrTypeTools.valueObjectName(out.type),
+								compiler.ir.IrOptionalScalarFlow.WRAPPER)):
 								if (locals.get(out) == null)
 									throw "nullable value equality still allocates on Wasm GC";
 							default:
@@ -166,7 +179,8 @@ class WasmBackendMain {
 			signature = valuePlan.scalarFunctionType([I32, Obj("Nested")], Obj("Leaf"));
 		if (signature.parameters.length != 4 || signature.results.length != 2)
 			throw "Wasm GC value signatures must expand nested parameters and return every leaf";
-		if (valuePlan.usesBytePayload("Standalone") || !valuePlan.usesBytePayload("Nested") || !valuePlan.usesBytePayload("Leaf"))
+		if (valuePlan.usesBytePayload("Standalone") || !valuePlan.usesBytePayload("Nested")
+			|| !valuePlan.usesBytePayload("Leaf"))
 			throw "Standalone flat values use GC fields; nested byte views retain their common payload";
 		var copyProgram = Frontend.compile("struct P { public var x:Int; public var y:Int; } "
 			+ "class H { public var p:P; } function work(h:H):Int { var q = h.p; q.x += 1; return q.x; } "
@@ -178,18 +192,16 @@ class WasmBackendMain {
 			throw "A field-only value copy should have a flat Wasm GC layout";
 		var copyLayout = new compiler.backend.wasm.WasmValueLayout(flatCopies),
 			flatPlan = new WasmGcTypePlan(flatCopies, true),
-			copyObjects = compiler.ir.IrObjectTable.of([
-				for (object in flatCopies.objects)
-					object.name => {
-						name: object.name,
-						isValue: object.isValue,
-						nativeLayout: object.nativeLayout,
-						base: object.base,
-						interfaces: object.interfaces,
-						fields: copyLayout.fields(object.fields),
-						methods: object.methods
-					}
-			]);
+			copyObjects = compiler.ir.IrObjectTable.of([for (object in flatCopies.objects)
+				object.name => {
+					name:object.name,
+						isValue:object.isValue,
+						nativeLayout:object.nativeLayout,
+						base:object.base,
+						interfaces:object.interfaces,
+						fields:copyLayout.fields(object.fields),
+						methods:object.methods
+				}]);
 		if (flatPlan.usesBytePayload("P") || flatPlan.physicalFields("H").length != 2)
 			throw "A holder must contain the scalar fields of its struct directly";
 		var foundCopyWork = false;
@@ -231,7 +243,8 @@ class WasmBackendMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case FieldGet(_, _, name) if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD):
+							case FieldGet(_, _,
+								name) if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD):
 								holderChecks++;
 							case FieldGet(_, _, _):
 								fieldReads++;
@@ -247,7 +260,10 @@ class WasmBackendMain {
 					target: WasmGc,
 					debugNames: true
 				}),
-			scalarPatch = scalarPatchBackend.compilePatch(scalarPatchBase.state, scalarPatchProgram, ["keep"], {target: WasmGc, debugNames: true}),
+			scalarPatch = scalarPatchBackend.compilePatch(scalarPatchBase.state, scalarPatchProgram, ["keep"], {
+				target: WasmGc,
+				debugNames: true
+			}),
 			scalarPatchEntries = WasmPatch.readManifest(scalarPatch.manifest);
 		if (scalarPatchEntries.length != 1
 			|| scalarPatchEntries[0].name != "keep"
@@ -255,10 +271,14 @@ class WasmBackendMain {
 			throw "Wasm GC patch manifests must retain source-level value signatures";
 		if (WasmTarget.forBackend(Wasm32).referenceModel != Linear32)
 			throw "Wasm32 must use the linear32 reference model";
-		var hl = new HlBackend().compile(Frontend.compile("function main():Int return 42;"), {target: HashLink, debugNames: true});
+		var hl = new HlBackend().compile(Frontend.compile("function main():Int return 42;"), {
+			target: HashLink,
+			debugNames: true
+		});
 		if (hl.bytes.get(0) != 72 || hl.bytes.get(1) != 76 || hl.bytes.get(2) != 66)
 			throw "The target-neutral backend seam must preserve the HashLink backend";
-		var capabilityCode = HlLower.lower(Frontend.compile("interface Equatable {} interface Hashable extends Equatable {} interface Diffable {} "
+		var capabilityCode =
+			HlLower.lower(Frontend.compile("interface Equatable {} interface Hashable extends Equatable {} interface Diffable {} "
 			+ "interface Reader { function read():Int; } struct Point implements Hashable implements Diffable { public var x:Int; } "
 			+ "class Record implements Diffable { public final x:Int; public function new() x = 0; } "
 			+ "class ReaderImpl implements Reader { public function new() {} public function read():Int return 42; } "
@@ -271,14 +291,17 @@ class WasmBackendMain {
 			throw "Compiler-known value capabilities must not add HashLink virtual-cache fields to structs or classes";
 		if (readerFields.length != 1 || readerFields[0] != "")
 			throw "Ordinary runtime interfaces must retain their HashLink virtual-cache field";
-		var layout = new WasmLayout(Frontend.compile("class Box { public var value:Int; public function new() {} } function main():Int return 0;"));
+		var layout =
+			new WasmLayout(Frontend.compile("class Box { public var value:Int; public function new() {} } function main():Int return 0;"));
 		if (layout.object("Box").fields[0].offset != WasmLayout.HEADER_SIZE)
 			throw "Wasm object fields must use the centralized layout";
-		var runtimeOps = WasmRuntimeAbi.operations(Frontend.compile("function main():Int { var value = 40; return value + 2; }"));
+		var runtimeOps =
+			WasmRuntimeAbi.operations(Frontend.compile("function main():Int { var value = 40; return value + 2; }"));
 		if (runtimeOps.length != 0)
 			throw "Scalar Wasm IR should not require runtime operations";
 		var rawPointerBuilder = new IrBuilder();
-		rawPointerBuilder.returnValue(rawPointerBuilder.cNativeCall("inspect_raw_pointer", [rawPointerBuilder.argument("address", RawPtr)], RawPtr));
+		rawPointerBuilder.returnValue(rawPointerBuilder.cNativeCall("inspect_raw_pointer",
+			[rawPointerBuilder.argument("address", RawPtr)], RawPtr));
 		var rawPointerProgram = Frontend.compile("function main():Int return 42;");
 		rawPointerProgram.entryPoint = "main";
 		rawPointerProgram.functions = [
@@ -297,7 +320,10 @@ class WasmBackendMain {
 			argumentModes: [Value],
 			result: RawPtr
 		});
-		File.saveBytes(SuiteOutput.path("wasm-gc-raw-pointer.wasm"), new WasmBackend().compile(rawPointerProgram, {target: WasmGc, debugNames: true}).bytes);
+		File.saveBytes(SuiteOutput.path("wasm-gc-raw-pointer.wasm"), new WasmBackend().compile(rawPointerProgram, {
+			target: WasmGc,
+			debugNames: true
+		}).bytes);
 		var generatedNativeBuilder = new IrBuilder(),
 			generatedNativeArgument = generatedNativeBuilder.constInt(1);
 		generatedNativeBuilder.call("__std_string", [generatedNativeArgument], Bytes);
@@ -348,7 +374,8 @@ class WasmBackendMain {
 			throw "Canonical IR must preserve generated native lowering dependencies";
 		if (WasmGcRoots.analyze(Frontend.compile("function main():Int return 42;").functions[0]).length != 0)
 			throw "Scalar functions should not have managed GC roots";
-		var boxingProgram = Frontend.compile("class Marker { public function new() {} } function main():Int { var marker = new Marker(); var boxed:Dynamic = 1; return boxed == 1 && marker != null ? 42 : 0; }");
+		var boxingProgram =
+			Frontend.compile("class Marker { public function new() {} } function main():Int { var marker = new Marker(); var boxed:Dynamic = 1; return boxed == 1 && marker != null ? 42 : 0; }");
 		var boxingFunction:Null<IrFunction> = null;
 		for (fn in boxingProgram.functions)
 			if (fn.name == "main")
@@ -383,7 +410,8 @@ class WasmBackendMain {
 		callbackRoots.newObject("Marker");
 		callbackRoots.call("retain", [callback, managed, optional], Void);
 		callbackRoots.returnValue(callbackRoots.constInt(42));
-		var callbackFunction = new IrFunction("callbackRoots", callbackRoots.arguments, I32, callbackRoots.blocks, Ordinary),
+		var callbackFunction = new IrFunction("callbackRoots", callbackRoots.arguments, I32, callbackRoots.blocks,
+			Ordinary),
 			callbackSafepoint = false;
 		for (point in WasmGcRoots.analyze(callbackFunction))
 			if (point.block == 0 && point.instruction == 0) {
@@ -395,7 +423,8 @@ class WasmBackendMain {
 			}
 		if (!callbackSafepoint)
 			throw "Missing callback root safepoint";
-		var nestedProgram = Frontend.compile("@:value class RootChild { public final number:Int; public function new() number = 1; } @:value class RootParent { public final child:RootChild; public final tag:Int; public function new() { child = new RootChild(); tag = 2; } } function main():Int return new RootParent().tag;");
+		var nestedProgram =
+			Frontend.compile("@:value class RootChild { public final number:Int; public function new() number = 1; } @:value class RootParent { public final child:RootChild; public final tag:Int; public function new() { child = new RootChild(); tag = 2; } } function main():Int return new RootParent().tag;");
 		var nestedBuilder = new IrBuilder(),
 			nestedSource = nestedBuilder.argument("source", Obj("RootParent")),
 			nestedCopy = nestedBuilder.valueInit("RootParent"),
@@ -403,11 +432,13 @@ class WasmBackendMain {
 		nestedBuilder.fieldGet(nestedSource, "tag", I32);
 		nestedBuilder.call("retain", [nestedCopy, nestedChild], Void);
 		nestedBuilder.returnValue(nestedBuilder.constInt(42));
-		var nestedFunction = new IrFunction("nestedRoots", nestedBuilder.arguments, I32, nestedBuilder.blocks, Ordinary),
+		var nestedFunction = new IrFunction("nestedRoots", nestedBuilder.arguments, I32, nestedBuilder.blocks,
+			Ordinary),
 			rootedInlineRead = false;
 		for (point in WasmGcRoots.analyze(nestedFunction, nestedProgram)) {
 			if (point.instruction == 1)
-				rootedInlineRead = point.liveReferences.indexOf(nestedSource.id) >= 0 && point.liveReferences.indexOf(nestedCopy.id) >= 0;
+				rootedInlineRead = point.liveReferences.indexOf(nestedSource.id) >= 0
+					&& point.liveReferences.indexOf(nestedCopy.id) >= 0;
 			if (point.instruction == 2)
 				throw "Scalar field reads must not become allocation safepoints";
 		}
@@ -419,7 +450,8 @@ class WasmBackendMain {
 			manyRootArguments.push(manyRootsBuilder.argument('root$index', Obj("Marker")));
 		manyRootsBuilder.call("root_safepoint", manyRootArguments, Void);
 		manyRootsBuilder.returnValue(manyRootsBuilder.constInt(0));
-		var manyRootsFunction = new IrFunction("manyRoots", manyRootsBuilder.arguments, I32, manyRootsBuilder.blocks, Ordinary),
+		var manyRootsFunction = new IrFunction("manyRoots", manyRootsBuilder.arguments, I32, manyRootsBuilder.blocks,
+			Ordinary),
 			manyLiveReferences:Array<Int> = [];
 		for (point in WasmGcRoots.analyze(manyRootsFunction))
 			if (point.block == 0 && point.instruction == 0)
@@ -429,9 +461,11 @@ class WasmBackendMain {
 		for (index in 0...manyRootArguments.length)
 			if (manyLiveReferences[index] != manyRootArguments[index].id)
 				throw "Wasm GC-root bitsets did not preserve deterministic reference ordering";
-		var referenceProgram = Frontend.compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
+		var referenceProgram =
+			Frontend.compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
 		var visitedRootFunctions:Array<String> = [];
-		var streamedRoots = WasmGcRoots.encodeAndVisit(referenceProgram, function(fn, _) visitedRootFunctions.push(fn.name));
+		var streamedRoots = WasmGcRoots.encodeAndVisit(referenceProgram,
+			function(fn, _) visitedRootFunctions.push(fn.name));
 		if (streamedRoots.compare(WasmGcRoots.encode(referenceProgram)) != 0
 			|| visitedRootFunctions.length != referenceProgram.functions.length)
 			throw "Streaming Wasm GC-root analysis changed canonical metadata or skipped a function";
@@ -464,7 +498,8 @@ class WasmBackendMain {
 		diamondBuilder.jump(diamondMerge);
 		diamondBuilder.select(diamondMerge);
 		diamondBuilder.returnValue(diamondBuilder.constInt(42));
-		var diamondAnalysis = new WasmCfgAnalysis(new IrFunction("diamond", diamondBuilder.arguments, I32, diamondBuilder.blocks, Ordinary));
+		var diamondAnalysis = new WasmCfgAnalysis(new IrFunction("diamond", diamondBuilder.arguments, I32,
+			diamondBuilder.blocks, Ordinary));
 		if (diamondAnalysis.postImmediate.get(diamondEntry) != diamondMerge.id
 			|| diamondAnalysis.postImmediate.get(diamondLeft.id) != diamondMerge.id
 			|| diamondAnalysis.postImmediate.get(diamondRight.id) != diamondMerge.id
@@ -480,8 +515,10 @@ class WasmBackendMain {
 		exitsBuilder.returnValue(exitsBuilder.constInt(1));
 		exitsBuilder.select(exitsRight);
 		exitsBuilder.returnValue(exitsBuilder.constInt(2));
-		var exitsAnalysis = new WasmCfgAnalysis(new IrFunction("multipleExits", exitsBuilder.arguments, I32, exitsBuilder.blocks, Ordinary));
-		if (exitsAnalysis.postImmediate.get(exitsEntry) != exitsEntry || exitsAnalysis.mergeFor(exitsLeft.id, exitsRight.id) != null)
+		var exitsAnalysis = new WasmCfgAnalysis(new IrFunction("multipleExits", exitsBuilder.arguments, I32,
+			exitsBuilder.blocks, Ordinary));
+		if (exitsAnalysis.postImmediate.get(exitsEntry) != exitsEntry
+			|| exitsAnalysis.mergeFor(exitsLeft.id, exitsRight.id) != null)
 			throw "Post-dominators must not invent a shared merge for distinct function exits";
 		var canonical = CanonicalIrCodec.decode(CanonicalIrCodec.encode(referenceProgram));
 		if (new IrInterpreter(canonical).run("main") != 6)
@@ -492,11 +529,16 @@ class WasmBackendMain {
 			patchBase = patchBackend.compilePatchBase(referenceProgram, {target: Wasm32, debugNames: true});
 		if (!containsBytes(patchBase.bytes, "haxeon.patch.slots") || !containsBytes(patchBase.bytes, "haxeon.gc.roots"))
 			throw "Wasm patch bases must retain development metadata";
-		var patchArtifact = patchBackend.compilePatch(patchBase.state, canonical, ["main"], {target: Wasm32, debugNames: true});
-		if (!containsBytes(patchArtifact.bytes, "haxeon.patch.slots") || !containsBytes(patchArtifact.bytes, "haxeon.gc.roots"))
+		var patchArtifact = patchBackend.compilePatch(patchBase.state, canonical, ["main"], {
+			target: Wasm32,
+			debugNames: true
+		});
+		if (!containsBytes(patchArtifact.bytes, "haxeon.patch.slots")
+			|| !containsBytes(patchArtifact.bytes, "haxeon.gc.roots"))
 			throw "Wasm patch replacements must retain development metadata";
 		var patchEntries = WasmPatch.readManifest(patchArtifact.manifest);
-		if (patchArtifact.bytes.length < 8 || patchEntries.length != 1 || patchEntries[0].name != "main" || patchArtifact.changed.length != 1)
+		if (patchArtifact.bytes.length < 8 || patchEntries.length != 1 || patchEntries[0].name != "main"
+			|| patchArtifact.changed.length != 1)
 			throw "Wasm patch compilation must produce a validated replacement artifact";
 		var stringEquality = Frontend.compile(sys.io.File.getContent("tests/programs/string-null-equality.hx"));
 		if (new IrInterpreter(stringEquality).run("main") != 42)
@@ -505,9 +547,11 @@ class WasmBackendMain {
 		if (new IrInterpreter(Frontend.compile("class Box { public var value:Int; public function new() {} } function main():Int { var box = new Box(); box.value = 42; return box.value; }"))
 			.run("main") != 42)
 			throw "The SSA interpreter must execute object field semantics";
-		if (new IrInterpreter(Frontend.compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }")).run("main") != 42)
+		if (new IrInterpreter(Frontend.compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }"))
+			.run("main") != 42)
 			throw "The SSA interpreter must execute array semantics";
-		var iteratorProgram = Frontend.compile("function main():Int { var values = [20, 22]; var first = values.iterator(); var second = values.iterator(); if (first.next() != 20 || second.next() != 20 || first.next() != 22 || second.next() != 22 || first.hasNext() || second.hasNext()) return 0; return 42; }");
+		var iteratorProgram =
+			Frontend.compile("function main():Int { var values = [20, 22]; var first = values.iterator(); var second = values.iterator(); if (first.next() != 20 || second.next() != 20 || first.next() != 22 || second.next() != 22 || first.hasNext() || second.hasNext()) return 0; return 42; }");
 		if (new IrInterpreter(iteratorProgram).run("main") != 42)
 			throw "The SSA interpreter must preserve typed iterator cursors and array iteration semantics";
 		var canonicalIteratorProgram = CanonicalIrCodec.decode(CanonicalIrCodec.encode(iteratorProgram));
@@ -616,8 +660,13 @@ class WasmBackendMain {
 		var int64FlagsWasm = new WasmBackend().compile(int64FlagsProgram, {target: Wasm32, debugNames: true});
 		if (int64FlagsWasm.bytes.length < 8 || int64FlagsWasm.bytes.get(0) != 0 || int64FlagsWasm.bytes.get(1) != 97)
 			throw "Wasm Int64 flag operations failed to lower into a module";
-		var memoryStats = new WasmBackend().compile(Frontend.compile("function main():Int { var values = [1, 2, 3]; return values.length; }"),
-			{target: Wasm32, debugNames: true, wasmMemoryStats: true});
+		var memoryStats = new WasmBackend()
+			.compile(Frontend.compile("function main():Int { var values = [1, 2, 3]; return values.length; }"),
+			{
+				target: Wasm32,
+				debugNames: true,
+				wasmMemoryStats: true
+			});
 		for (name in [
 			"haxeon.memory.heap_base",
 			"haxeon.memory.heap_top",
@@ -630,15 +679,23 @@ class WasmBackendMain {
 		])
 			if (!containsBytes(memoryStats.bytes, name))
 				throw 'Wasm allocator diagnostics omitted export "$name"';
-		var branch = compile("function main():Int { var value:Int; if (true) value = 40; else value = 2; return value + 2; }");
-		var loop = compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
-		var array = compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }");
-		var floatArray = compile("function main():Int { var values = new Array<Float>(1); values[0] = 40.5; return values[0] == 40.5 ? 42 : 0; }");
-		var arrayOps = compile("function main():Int { var first = [40]; var second = [2]; var combined = first.concat(second); return combined[0] + combined[1]; }");
-		var arrayMutation = compile("function main():Int { var values = [40]; values.push(2); return values.pop() + values[0]; }");
+		var branch =
+			compile("function main():Int { var value:Int; if (true) value = 40; else value = 2; return value + 2; }");
+		var loop =
+			compile("function sum(value:Int):Int { var result = 0; while (value > 0) { result = result + value; value = value - 1; } return result; } function main():Int return sum(3);");
+		var array =
+			compile("function main():Int { var values = new Array<Int>(1); values[0] = 42; return values[0]; }");
+		var floatArray =
+			compile("function main():Int { var values = new Array<Float>(1); values[0] = 40.5; return values[0] == 40.5 ? 42 : 0; }");
+		var arrayOps =
+			compile("function main():Int { var first = [40]; var second = [2]; var combined = first.concat(second); return combined[0] + combined[1]; }");
+		var arrayMutation =
+			compile("function main():Int { var values = [40]; values.push(2); return values.pop() + values[0]; }");
 		var string = compile("function main():Int return \"haxeon\".length;");
-		var stringOps = compile("function main():Int { var value = \"HaXeOn\"; return value.toLowerCase() == \"haxeon\" && value.toUpperCase() == \"HAXEON\" && value.indexOf(\"Xe\") == 2 && value.indexOf(\"\") == 0 && value.substring(2, 4) == \"Xe\" && value.charAt(2) == \"X\" && String.fromCharCode(65) == \"A\" ? 42 : 0; }");
-		var stdStringProgram = Frontend.compile("function main():Int { var context = \"layoutSession.item(\" + 9001 + \")\"; var minimum = \"\" + (-2147483647 - 1); return (\"\" + 42) == \"42\" && minimum == \"-2147483648\" && (\"\" + true) == \"true\" && (\"\" + false) == \"false\" && (\"\" + null) == \"null\" && context == \"layoutSession.item(9001)\" ? 42 : 0; }");
+		var stringOps =
+			compile("function main():Int { var value = \"HaXeOn\"; return value.toLowerCase() == \"haxeon\" && value.toUpperCase() == \"HAXEON\" && value.indexOf(\"Xe\") == 2 && value.indexOf(\"\") == 0 && value.substring(2, 4) == \"Xe\" && value.charAt(2) == \"X\" && String.fromCharCode(65) == \"A\" ? 42 : 0; }");
+		var stdStringProgram =
+			Frontend.compile("function main():Int { var context = \"layoutSession.item(\" + 9001 + \")\"; var minimum = \"\" + (-2147483647 - 1); return (\"\" + 42) == \"42\" && minimum == \"-2147483648\" && (\"\" + true) == \"true\" && (\"\" + false) == \"false\" && (\"\" + null) == \"null\" && context == \"layoutSession.item(9001)\" ? 42 : 0; }");
 		stdStringProgram.natives.push({
 			name: "__std_string",
 			library: "haxeon_runtime",
@@ -647,17 +704,30 @@ class WasmBackendMain {
 			result: Bytes
 		});
 		var stdString = new WasmBackend().compile(stdStringProgram, {target: Wasm32, debugNames: true}).bytes;
-		var stdStringInt64 = new WasmBackend().compile(int64StringProgram(), {target: Wasm32, debugNames: true, exports: ["stringifyInt64"]}).bytes;
-		var method = compile("class Counter { public var value:Int; public function new() { value = 40; } public function add(delta:Int):Int return value + delta; } function main():Int { var counter = new Counter(); return counter.add(2); }");
-		var global = compile("class State { public static var value:Int = 40; } function main():Int { State.value = State.value + 2; return State.value; }");
-		var floatGlobal = compile("class FloatState { public static var value:Float = 40.0; } function main():Int return FloatState.value == 40.0 ? 42 : 0;");
-		var enumValue = compile("enum Answer { No; Yes(value:Int); } function main():Int { var answer:Answer = Yes(42); return switch (answer) { case Yes(value): value; case No: 0; }; }");
-		var floatEnum = compile("enum Measurement { Value(prefix:Int, value:Float); } function main():Int { var measurement:Measurement = Value(7, 40.5); return switch (measurement) { case Value(prefix, value): prefix + (value == 40.5 ? 35 : 0); }; }");
-		var inheritedField = compile("class Base { public var value:Int; public function new() { value = 42; } } class Child extends Base { public function new() { super(); } } function main():Int { var child = new Child(); return child.value; }");
+		var stdStringInt64 = new WasmBackend().compile(int64StringProgram(), {
+			target: Wasm32,
+			debugNames: true,
+			exports: ["stringifyInt64"]
+		}).bytes;
+		var method =
+			compile("class Counter { public var value:Int; public function new() { value = 40; } public function add(delta:Int):Int return value + delta; } function main():Int { var counter = new Counter(); return counter.add(2); }");
+		var global =
+			compile("class State { public static var value:Int = 40; } function main():Int { State.value = State.value + 2; return State.value; }");
+		var floatGlobal =
+			compile("class FloatState { public static var value:Float = 40.0; } function main():Int return FloatState.value == 40.0 ? 42 : 0;");
+		var enumValue =
+			compile("enum Answer { No; Yes(value:Int); } function main():Int { var answer:Answer = Yes(42); return switch (answer) { case Yes(value): value; case No: 0; }; }");
+		var floatEnum =
+			compile("enum Measurement { Value(prefix:Int, value:Float); } function main():Int { var measurement:Measurement = Value(7, 40.5); return switch (measurement) { case Value(prefix, value): prefix + (value == 40.5 ? 35 : 0); }; }");
+		var inheritedField =
+			compile("class Base { public var value:Int; public function new() { value = 42; } } class Child extends Base { public function new() { super(); } } function main():Int { var child = new Child(); return child.value; }");
 		var largeArray = compile("function main():Int { var values = new Array<Int>(20000); return values.length; }");
-		var closure = compile("function increment(value:Int):Int return value + 1; function main():Int { var fn = increment; return fn(41); }");
-		var instanceClosure = compile("class Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder = new Adder(); var fn = adder.add; return fn(41); }");
-		var virtualCall = compile("interface Adder { function add(value:Int):Int; } class Concrete implements Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder:Adder = new Concrete(); return adder.add(41); }");
+		var closure =
+			compile("function increment(value:Int):Int return value + 1; function main():Int { var fn = increment; return fn(41); }");
+		var instanceClosure =
+			compile("class Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder = new Adder(); var fn = adder.add; return fn(41); }");
+		var virtualCall =
+			compile("interface Adder { function add(value:Int):Int; } class Concrete implements Adder { public function new() {} public function add(value:Int):Int return value + 1; } function main():Int { var adder:Adder = new Concrete(); return adder.add(41); }");
 		File.saveBytes(SuiteOutput.path("wasm-backend-test.wasm"), first);
 		File.saveBytes(SuiteOutput.path("wasm-backend-branch.wasm"), branch);
 		File.saveBytes(SuiteOutput.path("wasm-backend-loop.wasm"), loop);
@@ -918,7 +988,8 @@ class WasmBackendMain {
 			case Value(Ref(ref)): isTypeHeap(ref.heap, nodeIndex);
 			default: false;
 		};
-		var objectSubtype = module.typeAt(nodeIndex).supertypes.length == 1 && module.typeAt(nodeIndex).supertypes[0] == baseIndex;
+		var objectSubtype = module.typeAt(nodeIndex).supertypes.length == 1
+			&& module.typeAt(nodeIndex).supertypes[0] == baseIndex;
 		var nodeArrayType = switch module.typeAt(nodesArrayIndex).composite {
 			case Struct(fields): fields;
 			default: throw "A Haxe array must plan as a wrapper struct";
@@ -936,22 +1007,23 @@ class WasmBackendMain {
 				case Value(Ref(ref)): isTypeHeap(ref.heap, nodeIndex);
 				default: false;
 			}, // Every array shares one wrapper: element-typed storage behind an abstract arrayref, plus its element type id.
-			arrayDataType = (switch nodeArrayType[1].type {
-				case Value(Ref(ref)): !ref.nullable && ref.heap == WasmHeapType.Array;
-				default: false;
-			}) && (switch nodeArrayType[2].type {
-				case Value(I32): true;
-				default: false;
-			}),
+				arrayDataType = (switch nodeArrayType[1].type {
+			case Value(Ref(ref)): !ref.nullable && ref.heap == WasmHeapType.Array;
+			default: false;
+		}) && (switch nodeArrayType[2].type {
+			case Value(I32): true;
+			default: false;
+		}),
 			iteratorArrayType = switch iteratorFields[0].type {
-				case Value(Ref(ref)): ref.nullable && isTypeHeap(ref.heap, nodesArrayIndex);
-				default: false;
-			};
+			case Value(Ref(ref)): ref.nullable && isTypeHeap(ref.heap, nodesArrayIndex);
+			default: false;
+		};
 		var callbackUsesClosure = switch plan.valueType(Function([Obj("Node")], Enum("Choice"))) {
 			case Ref(ref): ref.nullable && isTypeHeap(ref.heap, plan.closureTypeIndex);
 			default: false;
 		};
-		if (!headerIsClassId || !rootIsSupertype || !recursiveParent || !objectSubtype || !nodeElementType || !arrayDataType || !iteratorArrayType
+		if (!headerIsClassId || !rootIsSupertype || !recursiveParent || !objectSubtype || !nodeElementType
+			|| !arrayDataType || !iteratorArrayType
 			|| !callbackUsesClosure || enumSubtype.supertypes[0] != enumIndex)
 			throw "Wasm GC type plan lost a recursive reference, wrapper, iterator, or enum subtype";
 
@@ -1226,7 +1298,8 @@ class WasmBackendMain {
 			supertypes: [],
 			composite: Array({type: Value(Ref({nullable: true, heap: Type(1)})), mutable: true})
 		});
-		assertGcModuleRejected(invalidReference, "The Wasm validator accepted a forward reference outside its recursive group");
+		assertGcModuleRejected(invalidReference,
+			"The Wasm validator accepted a forward reference outside its recursive group");
 
 		var immutableField = new WasmModule(),
 			voidSignature:WasmFunctionType = {parameters: [], results: []};
@@ -1235,7 +1308,11 @@ class WasmBackendMain {
 			supertypes: [],
 			composite: Struct([{type: Value(I32), mutable: false}])
 		});
-		immutableField.addFunction(new WasmFunction("writeImmutable", voidSignature, [], [StructNewDefault(0), I32Const(7), StructSet(0, 0)]));
+		immutableField.addFunction(new WasmFunction("writeImmutable", voidSignature, [], [
+			StructNewDefault(0),
+			I32Const(7),
+			StructSet(0, 0)
+		]));
 		assertGcModuleRejected(immutableField, "The Wasm validator accepted a write to an immutable GC field");
 		var immutableArray = new WasmModule();
 		immutableArray.addType({finalType: true, supertypes: [], composite: Array({type: Value(I32), mutable: false})});
@@ -1326,7 +1403,8 @@ class WasmBackendMain {
 
 	static function compile(source:String):haxe.io.Bytes {
 		var result = new WasmBackend().compile(Frontend.compile(source), {target: Wasm32, debugNames: true});
-		if (result.bytes.length < 8 || result.bytes.get(0) != 0 || result.bytes.get(1) != 97 || result.bytes.get(2) != 115 || result.bytes.get(3) != 109)
+		if (result.bytes.length < 8 || result.bytes.get(0) != 0 || result.bytes.get(1) != 97
+			|| result.bytes.get(2) != 115 || result.bytes.get(3) != 109)
 			throw "Wasm module is missing its binary header";
 		return result.bytes;
 	}

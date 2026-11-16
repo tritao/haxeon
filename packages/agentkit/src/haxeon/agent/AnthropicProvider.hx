@@ -24,7 +24,8 @@ class AnthropicProvider implements ModelProvider {
 			new HttpHeaderField("x-api-key", apiKey),
 			new HttpHeaderField("anthropic-version", ApiVersion)
 		];
-		stream.attach(transport.postStream(new HttpStreamRequest(baseUrl + "/v1/messages", headers, body(request)), stream));
+		stream.attach(transport.postStream(new HttpStreamRequest(baseUrl + "/v1/messages", headers, body(request)),
+			stream));
 		return stream;
 	}
 
@@ -45,7 +46,7 @@ class AnthropicProvider implements ModelProvider {
 						JsonWriter.stringField("description", tool.description),
 						JsonWriter.field("input_schema", tool.schemaJson)
 					])
-			])));
+				])));
 		return JsonWriter.object(fields);
 	}
 }

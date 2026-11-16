@@ -1,10 +1,10 @@
-import compiler.Frontend;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrVerifier;
 import compiler.ir.IrHlScalarRef;
+import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 
@@ -23,7 +23,10 @@ class AuditVerifierMain {
 				case "iterator": IteratorNew(new IrValue(1001, "iterator", Iterator(element)), array);
 				case "push": Call(new IrValue(1002, "length", I32), "__array_push_ref", [array, value]);
 				case "alias": Call(new IrValue(1002, "length", I32), "$aliased-push", [array, value]);
-				case "concat-second": Call(new IrValue(1003, "array", Array(Dyn)), "__array_concat_ref", [builder.argument("dynamic", Array(Dyn)), array]);
+				case "concat-second": Call(new IrValue(1003, "array", Array(Dyn)), "__array_concat_ref", [
+					builder.argument("dynamic", Array(Dyn)),
+					array
+				]);
 				default: throw 'Unknown test operation $operation';
 			};
 			builder.currentBlock().instructions.push(new Located(instruction, provenance));
@@ -117,7 +120,8 @@ class AuditVerifierMain {
 		box.returnValue(box.intrinsic(InlineEnumBox(Enum(first.name)), [storage], Dyn));
 		var unbox = new IrBuilder(),
 			dynamicValue = unbox.argument("value", Dyn);
-		unbox.returnValue(unbox.intrinsic(InlineEnumUnbox(Enum(first.name)), [dynamicValue], Obj(firstShape.valueObject.name)));
+		unbox.returnValue(unbox.intrinsic(InlineEnumUnbox(Enum(first.name)), [dynamicValue],
+			Obj(firstShape.valueObject.name)));
 		program.functions = [
 			new IrFunction("main", box.arguments, Dyn, box.blocks, Ordinary),
 			new IrFunction("unbox", unbox.arguments, Obj(firstShape.valueObject.name), unbox.blocks, Ordinary)
@@ -137,7 +141,8 @@ class AuditVerifierMain {
 		rejected(program, "Invalid IR inline enum box signature");
 		var badUnbox = new IrBuilder(),
 			input = badUnbox.argument("value", Dyn);
-		badUnbox.returnValue(badUnbox.intrinsic(InlineEnumUnbox(Enum(first.name)), [input], Obj(secondShape.valueObject.name)));
+		badUnbox.returnValue(badUnbox.intrinsic(InlineEnumUnbox(Enum(first.name)), [input],
+			Obj(secondShape.valueObject.name)));
 		program.functions = [
 			new IrFunction("main", badUnbox.arguments, Obj(secondShape.valueObject.name), badUnbox.blocks, Ordinary)
 		];
@@ -210,7 +215,8 @@ class AuditVerifierMain {
 		var receiverConstructor = new IrBuilder(),
 			receiver = receiverConstructor.argument("this", Obj(value.name));
 		receiverConstructor.returnValue(receiver);
-		oldProgram.functions[1] = new IrFunction("ShapeValue.new", receiverConstructor.arguments, Obj(value.name), receiverConstructor.blocks, Ordinary);
+		oldProgram.functions[1] = new IrFunction("ShapeValue.new", receiverConstructor.arguments, Obj(value.name),
+			receiverConstructor.blocks, Ordinary);
 		rejected(oldProgram, 'IR value constructor "ShapeValue.new" must not take a receiver');
 		oldProgram.functions.pop();
 		IrVerifier.verify(oldProgram);
@@ -226,7 +232,8 @@ class AuditVerifierMain {
 			invalidInput = intrinsicBuilder.argument("value", I32);
 		intrinsicBuilder.returnValue(intrinsicBuilder.intrinsic(EnumDynamicBox(Enum("Example")), [invalidInput], Dyn));
 		var intrinsicProgram = new IrProgram("main");
-		intrinsicProgram.functions.push(new IrFunction("main", intrinsicBuilder.arguments, Dyn, intrinsicBuilder.blocks, Ordinary));
+		intrinsicProgram.functions.push(new IrFunction("main", intrinsicBuilder.arguments, Dyn, intrinsicBuilder.blocks,
+			Ordinary));
 		rejected(intrinsicProgram, "Invalid IR enum Dynamic box signature");
 		var dispatchRejected = false;
 		try
@@ -256,10 +263,12 @@ class AuditVerifierMain {
 		rejected(invalidAdapter, "Invalid enum tag adapter signature");
 		var invalidTagBuilder = new IrBuilder(),
 			invalidTagInput = invalidTagBuilder.argument("value", I32);
-		invalidTagBuilder.returnValue(invalidTagBuilder.intrinsic(EnumTagBox(EnumTag("Example")), [invalidTagInput], Dyn));
+		invalidTagBuilder.returnValue(invalidTagBuilder.intrinsic(EnumTagBox(EnumTag("Example")), [invalidTagInput],
+			Dyn));
 		var invalidTag = new IrProgram("main");
 		invalidTag.enums = [{name: "Example", cases: [{name: "Only", params: []}]}];
-		invalidTag.functions.push(new IrFunction("main", invalidTagBuilder.arguments, Dyn, invalidTagBuilder.blocks, Ordinary));
+		invalidTag.functions.push(new IrFunction("main", invalidTagBuilder.arguments, Dyn, invalidTagBuilder.blocks,
+			Ordinary));
 		rejected(invalidTag, "Invalid IR enum tag box signature");
 		var tagLoweringRejected = false;
 		try

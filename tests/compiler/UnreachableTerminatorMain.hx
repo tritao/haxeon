@@ -71,8 +71,12 @@ class UnreachableTerminatorMain {
 		for (target in [Wasm32, WasmGc]) {
 			var backend:BackendTarget = target == Wasm32 ? Wasm32 : WasmGc,
 				wasmPath = 'out/unreachable-terminator-$target.wasm';
-			sys.io.File.saveBytes(wasmPath, new compiler.backend.wasm.WasmBackend().compile(program(), {target: backend, debugNames: true}).bytes);
-			var js = 'const fs=require("fs"), e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports; try { e.main(); } catch (error) { if (error instanceof WebAssembly.RuntimeError) process.exit(0); throw error; } process.exit(3);';
+			sys.io.File.saveBytes(wasmPath, new compiler.backend.wasm.WasmBackend().compile(program(), {
+				target: backend,
+				debugNames: true
+			}).bytes);
+			var js =
+				'const fs=require("fs"), e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports; try { e.main(); } catch (error) { if (error instanceof WebAssembly.RuntimeError) process.exit(0); throw error; } process.exit(3);';
 			var node = new sys.io.Process("node", ["-e", js, wasmPath]),
 				nodeError = node.stderr.readAll().toString(),
 				nodeStatus = node.exitCode();

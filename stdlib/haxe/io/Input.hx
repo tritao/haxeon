@@ -127,7 +127,8 @@ class Input {
 
 	public function readInt32():Int {
 		var first = readByte(), second = readByte(), third = readByte(), fourth = readByte();
-		return bigEndian ? fourth | (third << 8) | (second << 16) | (first << 24) : first | (second << 8) | (third << 16) | (fourth << 24);
+		return bigEndian ? fourth | (third << 8) | (second << 16) | (first << 24) : first | (second << 8)
+			| (third << 16) | (fourth << 24);
 	}
 
 	/** `len` bytes as a String; Haxeon strings are read as UTF-8. */

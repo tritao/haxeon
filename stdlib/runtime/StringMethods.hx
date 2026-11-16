@@ -10,7 +10,8 @@ class StringMethods {
 		if (name == "length")
 			return value.length;
 		switch name {
-			case "charAt", "charCodeAt", "indexOf", "lastIndexOf", "split", "substr", "substring", "toLowerCase", "toUpperCase", "toString":
+			case "charAt", "charCodeAt", "indexOf", "lastIndexOf", "split", "substr", "substring", "toLowerCase",
+				"toUpperCase", "toString":
 				return makeStringMethod(arguments -> invoke(value, name, arguments));
 			default:
 				return null;

@@ -6,7 +6,8 @@ import compiler.runtime.CompilerIntrinsics;
 import sys.io.File;
 
 class NullReassignmentMain {
-	static final prefix = 'class Box { public var value:Int=42; public var child:Null<Box>; public function new() {} public function bump():Void value++; } '
+	static final prefix =
+		'class Box { public var value:Int=42; public var child:Null<Box>; public function new() {} public function bump():Void value++; } '
 		+ 'struct Counter { public var value:Int=41; public function new() {} public function bump():Void value++; } '
 		+ 'class Hooks { public static var saved:Null<Void->Void>; public static function fire():Void {var call=saved;if(call!=null) call();} } '
 		+ 'class Holder { public var slot:Null<Box>=new Box(); public final saved:Null<Box>=new Box(); public function new() {} } '
@@ -46,8 +47,8 @@ class NullReassignmentMain {
 		'var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; var items=[2,1];items.sort((a,b)->a-b);return x.value;',
 		'var x:Null<Int>=42; var y=x; x=null; if(y==null) return 1; return y;'
 	];
-	static final invalid = [
-		'var h=new Holder(); var x=h.slot; if(x==null) return 1; x.child=new Box(); if(x.child==null) return 1; Hooks.saved=()->{x.child=null;}; Hooks.fire(); return x.child.value;',
+	static final invalid =
+		['var h=new Holder(); var x=h.slot; if(x==null) return 1; x.child=new Box(); if(x.child==null) return 1; Hooks.saved=()->{x.child=null;}; Hooks.fire(); return x.child.value;',
 		'var x:Null<Counter>=new Counter(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;',
 		'var x:Null<Box>=new Box(); if(x==null) return 1; var items=[2,1]; items.sort((a,b)->{x=null;return a-b;}); return x.value;',
 		'var x:Null<Box>=new Box(); Hooks.saved=()->{x=null;}; if(x==null) return 1; var forward=()->Hooks.fire(); forward(); return x.value;',
@@ -68,9 +69,8 @@ class NullReassignmentMain {
 		'var x:Null<Box>=new Box(); if(x==null) return 1; try {try {x=null;throw "stop";} catch(e:Dynamic) {throw e;}} catch(e:Dynamic) {} return x.value;',
 		'var h=new Holder(); if(h.slot==null) return 1; try {h.slot=null;throw "stop";} catch(e:Dynamic) {} return h.slot.value;',
 		'var h=new Holder(); if(h.slot==null) return 1; try {clear(h);} catch(e:Dynamic) {} return h.slot.value;',
-		// A nullable Int would read as 0 here, as in Haxe; a reference must still be checked again after the catch.
-		'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} var y:Int=x.value; return y;'
-	];
+	// A nullable Int would read as 0 here, as in Haxe; a reference must still be checked again after the catch.
+	'var x:Null<Box>=new Box(); if(x==null) return 1; try {x=null;throw "stop";} catch(e:Dynamic) {} var y:Int=x.value; return y;'];
 
 	static function compiler():Compiler {
 		var c = new Compiler();
@@ -93,7 +93,10 @@ class NullReassignmentMain {
 				if (c == warm)
 					for (target in [Wasm32, WasmGc])
 						File.saveBytes(SuiteOutput.path('null-reassignment-$target-$index.wasm'),
-							new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+							new WasmBackend().compile(result.ir, {
+								target: target,
+								debugNames: true
+							}).bytes);
 			}
 		File.saveContent(SuiteOutput.path("null-reassignment-count.txt"), Std.string(valid.length));
 		for (index in 0...invalid.length)
@@ -110,7 +113,8 @@ class NullReassignmentMain {
 			}
 		// The error names the variable and the cause, so a reader is not left with a bare "requires an object".
 		var explained = compiler();
-		explained.update("Main.hx", source('var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;'));
+		explained.update("Main.hx",
+			source('var x:Null<Box>=new Box(); var reset=()->{x=null;}; if(x==null) return 1; invoke(reset); return x.value;'));
 		try {
 			explained.compile("Main");
 			throw "The write through an escaped closure was accepted";

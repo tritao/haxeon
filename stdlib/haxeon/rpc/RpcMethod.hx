@@ -10,7 +10,8 @@ class RpcMethod<Request, Response> {
 	public final encodeResponse:Response->Bytes;
 	public final decodeResponse:Bytes->Response;
 
-	public function new(id:Int, encodeRequest:Request->Bytes, decodeRequest:Bytes->Request, encodeResponse:Response->Bytes, decodeResponse:Bytes->Response) {
+	public function new(id:Int, encodeRequest:Request->Bytes, decodeRequest:Bytes->Request,
+			encodeResponse:Response->Bytes, decodeResponse:Bytes->Response) {
 		if (id <= 0)
 			throw "RPC method id must be positive";
 		this.id = id;

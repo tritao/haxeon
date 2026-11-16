@@ -31,7 +31,7 @@ class Shader {
 	}
 
 	public static function create(renderer:Renderer, language:ShaderLanguage,
-		vertexSource:String, fragmentSource:String):Shader {
+			vertexSource:String, fragmentSource:String):Shader {
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_shader_create(renderer.nativeHandle(), language,
 			vertexSource, fragmentSource);
@@ -40,7 +40,7 @@ class Shader {
 	}
 
 	public static function begin(renderer:Renderer, language:ShaderLanguage,
-		vertexSource:String, fragmentSource:String):ShaderBuilder {
+			vertexSource:String, fragmentSource:String):ShaderBuilder {
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_shader_begin(renderer.nativeHandle(), language,
 			vertexSource, fragmentSource);
@@ -50,7 +50,7 @@ class Shader {
 
 	/** Begins a compute-only shader builder. */
 	public static function beginCompute(renderer:Renderer, language:ShaderLanguage,
-		computeSource:String):ShaderBuilder {
+			computeSource:String):ShaderBuilder {
 		renderer.ensureResourceOperation();
 		var made = NativeKitGpu.nkgpu_shader_begin_compute(renderer.nativeHandle(), language, computeSource);
 		GpuResult.check(made.status, "shader.beginCompute");
@@ -108,13 +108,14 @@ class ShaderBuilder {
 	public function uniformBlock(slot:Int, stage:ShaderStage, size:Int):ShaderBuilder {
 		ensureLive();
 		if (slot < 0 || size <= 0)
-			throw BindingError.invalidArgument("ShaderBuilder.uniformBlock", "GPU uniform block slot and size are invalid");
+			throw BindingError.invalidArgument("ShaderBuilder.uniformBlock",
+				"GPU uniform block slot and size are invalid");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_uniform_block(value, slot, stage, size), "shader.uniformBlock");
 		return this;
 	}
 
 	public function attribute(location:Int, glslName:String, hlslSemantic:String,
-		semanticIndex:Int = 0):ShaderBuilder {
+			semanticIndex:Int = 0):ShaderBuilder {
 		ensureLive();
 		if (location < 0 || semanticIndex < 0)
 			throw BindingError.invalidArgument("ShaderBuilder.attribute", "GPU shader vertex attribute is invalid");
@@ -123,11 +124,13 @@ class ShaderBuilder {
 		return this;
 	}
 
-	public function uniform(slot:Int, memberIndex:Int, name:String, type:UniformType, arrayCount:Int = 1):ShaderBuilder {
+	public function uniform(slot:Int, memberIndex:Int, name:String, type:UniformType,
+			arrayCount:Int = 1):ShaderBuilder {
 		ensureLive();
 		if (slot < 0 || memberIndex < 0 || arrayCount < 0)
 			throw BindingError.invalidArgument("ShaderBuilder.uniform", "GPU uniform description is invalid");
-		GpuResult.check(NativeKitGpu.nkgpu_shader_uniform(value, slot, memberIndex, name, type, arrayCount), "shader.uniform");
+		GpuResult.check(NativeKitGpu.nkgpu_shader_uniform(value, slot, memberIndex, name, type, arrayCount),
+			"shader.uniform");
 		return this;
 	}
 
@@ -141,7 +144,7 @@ class ShaderBuilder {
 
 	/** Describes a filtering texture binding with an explicit image shape. */
 	public function textureType(viewSlot:Int, samplerSlot:Int, stage:ShaderStage,
-		imageType:ImageType, name:String):ShaderBuilder {
+			imageType:ImageType, name:String):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0 || samplerSlot < 0)
 			throw BindingError.invalidArgument("ShaderBuilder.textureType", "GPU texture slots must be non-negative");
@@ -152,10 +155,11 @@ class ShaderBuilder {
 
 	/** Describes a storage-buffer resource for a compute or graphics stage. */
 	public function storageBuffer(viewSlot:Int, stage:ShaderStage = ShaderStage.Compute,
-		readonly:Bool = false):ShaderBuilder {
+			readonly:Bool = false):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0)
-			throw BindingError.invalidArgument("ShaderBuilder.storageBuffer", "GPU storage-buffer slot must be non-negative");
+			throw BindingError.invalidArgument("ShaderBuilder.storageBuffer",
+				"GPU storage-buffer slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_storage_buffer(value, viewSlot, stage,
 			readonly ? 1 : 0), "shader.storageBuffer");
 		return this;
@@ -163,10 +167,11 @@ class ShaderBuilder {
 
 	/** Describes a compute storage-image resource and its access format. */
 	public function storageImage(viewSlot:Int, format:ImageFormat,
-		writeonly:Bool = false):ShaderBuilder {
+			writeonly:Bool = false):ShaderBuilder {
 		ensureLive();
 		if (viewSlot < 0)
-			throw BindingError.invalidArgument("ShaderBuilder.storageImage", "GPU storage-image slot must be non-negative");
+			throw BindingError.invalidArgument("ShaderBuilder.storageImage",
+				"GPU storage-image slot must be non-negative");
 		GpuResult.check(NativeKitGpu.nkgpu_shader_storage_image(value, viewSlot, format,
 			writeonly ? 1 : 0), "shader.storageImage");
 		return this;

@@ -67,10 +67,12 @@ class NameRewrite {
 	}
 
 	static function startsName(code:Null<Int>):Bool
-		return code == ":".code || code == "(".code || code == ",".code || code == "<".code || code == " ".code || code == "=".code;
+		return code == ":".code || code == "(".code || code == ",".code || code == "<".code || code == " ".code
+			|| code == "=".code;
 
 	static function endsName(code:Null<Int>):Bool
-		return code == ":".code || code == ")".code || code == ",".code || code == ">".code || code == " ".code || code == ";".code;
+		return code == ":".code || code == ")".code || code == ",".code || code == ">".code || code == " ".code
+			|| code == ";".code;
 
 	/**
 	 * `map` with its keys rewritten. Two keys that come out the same would silently lose one entry, so that throws: a rewrite

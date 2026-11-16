@@ -13,11 +13,17 @@ struct ScalarMapRecordKey implements Hashable {
 	public function hash():Int return number % 10;
 }
 
-enum ScalarMapTag { First; Second; }
+enum ScalarMapTag {
+	First;
+	Second;
+}
 
 class ScalarMapEffects {
 	public static var calls:Int = 0;
-	public static function next():Float { calls++; return Math.NaN; }
+	public static function next():Float {
+		calls++;
+		return Math.NaN;
+	}
 }
 
 class ScalarMapCensus {
@@ -50,21 +56,26 @@ function main():Int {
 	floats.set(Math.POSITIVE_INFINITY, 5);
 	floats.set(Math.NEGATIVE_INFINITY, 6);
 	floats.set(1e100, 7);
-	if (floats.get(Math.POSITIVE_INFINITY) != 5 || floats.get(Math.NEGATIVE_INFINITY) != 6 || floats.get(1e100) != 7) return 3;
+	if (floats.get(Math.POSITIVE_INFINITY) != 5 || floats.get(Math.NEGATIVE_INFINITY) != 6
+		|| floats.get(1e100) != 7) return 3;
 	if (!floats.remove(otherNaN) || floats.exists(nan)) return 4;
 	var bools:Map<Bool, Int> = new Map();
-	bools.set(true, 8); bools.set(false, 9);
+	bools.set(true, 8);
+	bools.set(false, 9);
 	if (bools.get(true) != 8 || bools.get(false) != 9) return 5;
 	var integers:Map<haxe.Int64, Int> = new Map();
 	var big = haxe.Int64.make(1, 7);
 	integers.set(big, 10);
 	if (integers.get(big) != 10) return 6;
 	var nativeIntegers:Map<UInt32, Int> = new Map();
-	var unsigned:UInt32 = cast -1;
+	var unsigned:UInt32 = cast - 1;
 	nativeIntegers.set(unsigned, 19);
 	if (nativeIntegers.get(unsigned) != 19) return 14;
 	var unsignedCount = 0;
-	for (key in nativeIntegers.keys()) { if (key != unsigned) return 15; unsignedCount++; }
+	for (key in nativeIntegers.keys()) {
+		if (key != unsigned) return 15;
+		unsignedCount++;
+	}
 	if (unsignedCount != 1) return 16;
 	var optional:Map<Null<ScalarMapTag>, ScalarMapValue> = new Map();
 	optional.set(null, new ScalarMapValue(11));
@@ -81,7 +92,9 @@ function main():Int {
 	}
 	if (!foundAbsent || !foundFirst || !foundSecond) return 17;
 	var optionalFloats:Map<Null<Float>, Int> = new Map();
-	optionalFloats.set(null, 14); optionalFloats.set(nan, 15); optionalFloats.set(otherNaN, 16);
+	optionalFloats.set(null, 14);
+	optionalFloats.set(nan, 15);
+	optionalFloats.set(otherNaN, 16);
 	if (optionalFloats.size() != 2 || optionalFloats.get(null) != 14 || optionalFloats.get(nan) != 16) return 9;
 	var records:Map<ScalarMapRecordKey, Int> = new Map();
 	records.set(new ScalarMapRecordKey(11), 17);

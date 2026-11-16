@@ -83,7 +83,8 @@ class GenericSpecializationRegistry {
 		return input.readString(length);
 	}
 
-	public function request(origin:String, representations:Array<CompilerType>, ?policies:Array<String>):GenericSpecialization {
+	public function request(origin:String, representations:Array<CompilerType>,
+			?policies:Array<String>):GenericSpecialization {
 		var signature = [for (type in representations) SemanticSignature.type(type)].join(","),
 			policy = policies == null ? "legacy" : policies.join(","),
 			key = origin + "[" + policy + "]<" + signature + ">";

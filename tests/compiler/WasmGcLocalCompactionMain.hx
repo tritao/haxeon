@@ -12,8 +12,8 @@ class WasmGcLocalCompactionMain {
 	static function main():Void {
 		var locals:Array<WasmLocal> = [{type: I32}, {type: I32}, {type: I32}],
 			body:Array<WasmInstruction> = [
-				  I32Const(5), LocalSet(1), LocalGet(1), LocalGet(0), I32Add, LocalSet(3),
-				I32Const(123), LocalSet(2), LocalGet(3), LocalGet(3), I32Add,      Return
+				I32Const(5), LocalSet(1), LocalGet(1), LocalGet(0), I32Add, LocalSet(3),
+				I32Const(123), LocalSet(2), LocalGet(3), LocalGet(3), I32Add, Return
 			],
 			trapBody:Array<WasmInstruction> = [I32Const(0), I32Const(0), I32DivS, LocalSet(2), I32Const(42), Return],
 			compact = WasmGcLocalCompaction.run(body, locals, 1),
@@ -25,12 +25,12 @@ class WasmGcLocalCompactionMain {
 			trapType:WasmFunctionType = {parameters: [], results: [I32]},
 			pairType:WasmFunctionType = {parameters: [I32, I32], results: [I32]},
 			exceptionBody:Array<WasmInstruction> = [
-				I32Const(17), LocalSet(0), Try(null), I32Const(9), Throw(0),     Catch(0), LocalSet(1),
-				 LocalGet(0), LocalGet(1),    I32Add,      Return,      End, I32Const(-1),      Return
+				I32Const(17), LocalSet(0), Try(null), I32Const(9), Throw(0), Catch(0), LocalSet(1),
+				LocalGet(0), LocalGet(1), I32Add, Return, End, I32Const(-1), Return
 			],
 			pairBody:Array<WasmInstruction> = [
-				  I32Const(4), LocalSet(2), LocalGet(2), LocalGet(0), I32Add, LocalSet(4),
-				I32Const(100), LocalSet(3), LocalGet(4), LocalGet(1), I32Sub,      Return
+				I32Const(4), LocalSet(2), LocalGet(2), LocalGet(0), I32Add, LocalSet(4),
+				I32Const(100), LocalSet(3), LocalGet(4), LocalGet(1), I32Sub, Return
 			],
 			referenceLocals:Array<WasmLocal> = [
 				{
@@ -73,7 +73,8 @@ class WasmGcLocalCompactionMain {
 		var path = dir + "/module.wasm";
 		try {
 			sys.io.File.saveBytes(path, WasmEncoder.encode(module));
-			var js = 'let e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;for(let x of [-7,0,4])if(e.main(x)!==(x+5)*2)throw Error("local value changed");if(e.exception()!==26||e.pair(20,3)!==21||e.reference()!==1)throw Error("local changed across exception, parameters or reference");let trapped=false;try{e.trap()}catch(e){if(e instanceof WebAssembly.RuntimeError)trapped=true;else throw e}if(!trapped)throw Error("trap removed")';
+			var js =
+				'let e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;for(let x of [-7,0,4])if(e.main(x)!==(x+5)*2)throw Error("local value changed");if(e.exception()!==26||e.pair(20,3)!==21||e.reference()!==1)throw Error("local changed across exception, parameters or reference");let trapped=false;try{e.trap()}catch(e){if(e instanceof WebAssembly.RuntimeError)trapped=true;else throw e}if(!trapped)throw Error("trap removed")';
 			if (Sys.command("node", ["-e", js, path]) != 0)
 				throw "Compacted Wasm changed behavior";
 		} catch (error:Dynamic) {

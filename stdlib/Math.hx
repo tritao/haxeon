@@ -94,10 +94,12 @@ class Math {
 		return mathMax(left, right);
 	#else
 	@:pure public static inline function min(left:Float, right:Float):Float
-		return left != left || right != right ? Math.NaN : (left < right ? left : (right < left ? right : (1 / left < 0 ? left : right)));
+		return left != left || right != right
+			? Math.NaN : (left < right ? left : (right < left ? right : (1 / left < 0 ? left : right)));
 
 	@:pure public static inline function max(left:Float, right:Float):Float
-		return left != left || right != right ? Math.NaN : (left > right ? left : (right > left ? right : (1 / left < 0 ? right : left)));
+		return left != left || right != right
+			? Math.NaN : (left > right ? left : (right > left ? right : (1 / left < 0 ? right : left)));
 	#end
 
 	@:pure public static inline function abs(value:Float):Float

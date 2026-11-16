@@ -62,7 +62,10 @@ class WasmGcClosureAdapters {
 		return switch type {
 			case Function(_, _):
 				var signature = plan.closureFunctionType(type);
-				module.typeIndex({parameters: [Ref({nullable: true, heap: Any})].concat(signature.parameters), results: signature.results});
+				module.typeIndex({
+					parameters: [Ref({nullable: true, heap: Any})].concat(signature.parameters),
+					results: signature.results
+				});
 			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
 		};
 
@@ -71,7 +74,8 @@ class WasmGcClosureAdapters {
 	 * signature a closure of the same arity may have been created with. Adapters take table slots, so this runs
 	 * before the table is built; `define` fills the bodies.
 	 */
-	public static function reserve(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>, program:IrProgram,
+	public static function reserve(module:WasmModule, plan:WasmGcTypePlan, functions:Map<String, Int>,
+			program:IrProgram,
 			reachable:Map<String, Bool>):WasmGcClosureAdapters {
 		var adapters = new WasmGcClosureAdapters(module, plan),
 			created:Map<Int, Bool> = [],
@@ -116,13 +120,17 @@ class WasmGcClosureAdapters {
 		adapters.sources.sort((left, right) -> left - right);
 		var closure = plan.valueType(Function([], Void));
 		for (target in adapters.targets) {
-			functions.set(castName(target), module.addFunction(new WasmFunction(castName(target), {parameters: [closure], results: [closure]})));
+			functions.set(castName(target), module.addFunction(new WasmFunction(castName(target), {
+				parameters: [closure],
+				results: [closure]
+			})));
 			for (source in adapters.adaptable(target)) {
 				var name = adapterName(source, target);
 				functions.set(name,
 					source == -1 ? WasmModuleSupport.requiredFunctionIndex(functions,
-						WasmDynamicCalls.varargsAdapterName(adapters.targetTypes.get(target))) : module.addFunction(new WasmFunction(name,
-							module.functionTypeAt(instanceType(module, plan, adapters.targetTypes.get(target))))));
+					WasmDynamicCalls.varargsAdapterName(adapters.targetTypes.get(target)))
+					: module.addFunction(new WasmFunction(name,
+					module.functionTypeAt(instanceType(module, plan, adapters.targetTypes.get(target))))));
 			}
 		}
 		return adapters;
@@ -147,7 +155,8 @@ class WasmGcClosureAdapters {
 			default: -1;
 		};
 
-	public function define(functions:Map<String, Int>, representation:WasmGcRepresentation, tableSlots:Map<String, Int>):Void
+	public function define(functions:Map<String, Int>, representation:WasmGcRepresentation,
+			tableSlots:Map<String, Int>):Void
 		for (target in targets) {
 			defineCast(target, functions, tableSlots);
 			for (source in adaptable(target))
@@ -171,7 +180,8 @@ class WasmGcClosureAdapters {
 				End
 			];
 		for (source in adaptable(target)) {
-			var slot = tableSlots.get(source == -1 ? WasmDynamicCalls.varargsAdapterName(targetTypes.get(target)) : adapterName(source, target));
+			var slot = tableSlots.get(source == -1
+				? WasmDynamicCalls.varargsAdapterName(targetTypes.get(target)) : adapterName(source, target));
 			if (slot == null)
 				throw 'Wasm GC closure adapter ${adapterName(source, target)} has no table slot';
 			body = body.concat([
@@ -199,7 +209,8 @@ class WasmGcClosureAdapters {
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic where they differ. */
-	function defineAdapter(source:Int, target:Int, functions:Map<String, Int>, representation:WasmGcRepresentation):Void {
+	function defineAdapter(source:Int, target:Int, functions:Map<String, Int>,
+			representation:WasmGcRepresentation):Void {
 		var name = adapterName(source, target),
 			type:WasmFunctionType = module.functionType(WasmModuleSupport.requiredFunctionIndex(functions, name)),
 			sourceType = types.get(source),
@@ -224,16 +235,19 @@ class WasmGcClosureAdapters {
 		var lowering = representation.forFunction({allocateLocal: allocateLocal, exceptionTag: null, irFunction: null}),
 			body:Array<WasmInstruction>;
 		try {
-			body = adapterBody(lowering, allocateLocal, source, sourceArguments, sourceResult, targetArguments, targetResult);
+			body = adapterBody(lowering, allocateLocal, source, sourceArguments, sourceResult, targetArguments,
+				targetResult);
 		} catch (error:String) {
 			// A value with no Dynamic form (a borrowed native pointer) cannot cross; such a cast traps.
 			locals = [];
 			body = [Unreachable];
 		}
-		module.setFunction(WasmModuleSupport.requiredFunctionIndex(functions, name), new WasmFunction(name, type, locals, body));
+		module.setFunction(WasmModuleSupport.requiredFunctionIndex(functions, name),
+			new WasmFunction(name, type, locals, body));
 	}
 
-	function adapterBody(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, source:Int, sourceArguments:Array<IrType>, sourceResult:IrType,
+	function adapterBody(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, source:Int,
+			sourceArguments:Array<IrType>, sourceResult:IrType,
 			targetArguments:Array<IrType>, targetResult:IrType):Array<WasmInstruction> {
 		var closure = allocateLocal(plan.valueType(Function([], Void))),
 			body:Array<WasmInstruction> = [
@@ -245,11 +259,21 @@ class WasmGcClosureAdapters {
 			for (index in 0...sourceArguments.length)
 				convert(lowering, allocateLocal, body, targetArguments[index], sourceArguments[index], index + 1)
 		];
-		var result = (switch (sourceResult) { case Void: true; default: false; }) ? -1 : allocateLocal(plan.valueType(sourceResult));
-		body = body.concat(handled(lowering.callClosure(signature(module, plan, types.get(source)), instanceType(module, plan, types.get(source)),
+		var result = (switch (sourceResult) {
+			case Void: true;
+			default: false;
+		}) ? -1 : allocateLocal(plan.valueType(sourceResult));
+		body = body.concat(handled(lowering.callClosure(signature(module, plan, types.get(source)),
+			instanceType(module, plan, types.get(source)),
 			[for (argument in sourceArguments) value(argument)], closure, result, converted)));
-		if ((switch (targetResult) { case Void: false; default: true; })) {
-			if ((switch (sourceResult) { case Void: true; default: false; }))
+		if ((switch (targetResult) {
+			case Void: false;
+			default: true;
+		})) {
+			if ((switch (sourceResult) {
+				case Void: true;
+				default: false;
+			}))
 				body = body.concat(lowering.zeroValue(targetResult));
 			else
 				body.push(LocalGet(convert(lowering, allocateLocal, body, sourceResult, targetResult, result)));
@@ -259,8 +283,15 @@ class WasmGcClosureAdapters {
 	}
 
 	/** Converts a value between closure parameter or result types, through Dynamic when their Wasm types differ. */
-	function convert(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, body:Array<WasmInstruction>, from:IrType, to:IrType, local:Int):Int {
-		if ((switch (from) { case I32: true; default: false; }) && (switch (to) { case Bool: true; default: false; })) {
+	function convert(lowering:WasmGcRepresentation, allocateLocal:WasmValueType->Int, body:Array<WasmInstruction>,
+			from:IrType, to:IrType, local:Int):Int {
+		if ((switch (from) {
+			case I32: true;
+			default: false;
+		}) && (switch (to) {
+			case Bool: true;
+			default: false;
+		})) {
 			var result = allocateLocal(plan.valueType(Bool));
 			body.push(LocalGet(local));
 			body.push(I32Eqz);
@@ -268,16 +299,26 @@ class WasmGcClosureAdapters {
 			body.push(LocalSet(result));
 			return result;
 		}
-		var tagBoundary = switch [from, to] { case [EnumTag(_), _] | [_, EnumTag(_)]: true; default: false; };
-		if (compiler.ir.IrVerifier.sameType(from, to) || (!tagBoundary && Type.enumEq(plan.valueType(from), plan.valueType(to))))
+		var tagBoundary = switch [from, to] {
+			case [EnumTag(_), _] | [_, EnumTag(_)]: true;
+			default: false;
+		};
+		if (compiler.ir.IrVerifier.sameType(from, to)
+			|| (!tagBoundary && Type.enumEq(plan.valueType(from), plan.valueType(to))))
 			return local;
 		var boxed = local;
-		if ((switch (from) { case Dyn: false; default: true; })) {
+		if ((switch (from) {
+			case Dyn: false;
+			default: true;
+		})) {
 			boxed = allocateLocal(plan.valueType(Dyn));
 			for (instruction in handled(lowering.toDynamic(value(from), boxed, local)))
 				body.push(instruction);
 		}
-		if ((switch (to) { case Dyn: true; default: false; }))
+		if ((switch (to) {
+			case Dyn: true;
+			default: false;
+		}))
 			return boxed;
 		var output = allocateLocal(plan.valueType(to));
 		for (instruction in handled(lowering.safeCast(value(to), value(Dyn), output, boxed)))

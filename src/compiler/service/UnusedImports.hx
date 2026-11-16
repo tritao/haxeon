@@ -16,7 +16,10 @@ typedef UnusedImport = {
 }
 
 /** The module an import path names, and the type inside it when the path goes one level deeper. */
-typedef ImportTarget = {final program:AstProgram; final member:Null<String>;}
+typedef ImportTarget = {
+	final program:AstProgram;
+	final member:Null<String>;
+}
 
 /**
  * Finds imports that bring no name into use.
@@ -38,7 +41,8 @@ class UnusedImports {
 			}
 			var first = index, parts:Array<String> = [], alias:Null<String> = null, wildcard = false;
 			index++;
-			while (index < tokens.length && tokens[index].kind != TokenKind.Semicolon && tokens[index].kind != TokenKind.Eof) {
+			while (index < tokens.length && tokens[index].kind != TokenKind.Semicolon
+				&& tokens[index].kind != TokenKind.Eof) {
 				var token = tokens[index];
 				if (token.kind == TokenKind.Star)
 					wildcard = true;
@@ -75,14 +79,20 @@ class UnusedImports {
 
 		var unused = [];
 		for (statement in statements) {
-			if (statement.wildcard || statement.last >= tokens.length || used(statement.path, statement.alias, mentioned, resolve))
+			if (statement.wildcard || statement.last >= tokens.length
+				|| used(statement.path, statement.alias, mentioned, resolve))
 				continue;
-			unused.push({path: statement.path, start: tokens[statement.first].span.start, end: tokens[statement.last].span.end});
+			unused.push({
+				path: statement.path,
+				start: tokens[statement.first].span.start,
+				end: tokens[statement.last].span.end
+			});
 		}
 		return unused;
 	}
 
-	static function used(path:String, alias:Null<String>, mentioned:Map<String, Bool>, resolve:String->Null<ImportTarget>):Bool {
+	static function used(path:String, alias:Null<String>, mentioned:Map<String, Bool>,
+			resolve:String->Null<ImportTarget>):Bool {
 		if (alias != null)
 			return mentioned.exists(alias);
 		var target = resolve(path);

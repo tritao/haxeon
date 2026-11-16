@@ -11,7 +11,8 @@ import runtime.Runtime;
 	are loaded at once than there are slots, the extra ones share pages and wait for each other.
 **/
 class GcOwnerRetirementMain {
-	static function load(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, make:Int, loaded:Array<LoadedModule>, retained:Array<RetainedValue>) {
+	static function load(bytes:haxe.io.Bytes, identity:haxe.io.Bytes, make:Int, loaded:Array<LoadedModule>,
+			retained:Array<RetainedValue>) {
 		var module = Runtime.load(bytes, identity);
 		var closure = Runtime.retainClosure(module, make);
 		if (Runtime.callRetainedClosureInt(closure) != 42)
@@ -27,7 +28,8 @@ class GcOwnerRetirementMain {
 
 	static function main() {
 		var compiler = new Compiler();
-		compiler.update("Main.hx", "class Box { public var value:Int; public function new(value:Int) { this.value = value; } }
+		compiler.update("Main.hx",
+			"class Box { public var value:Int; public function new(value:Int) { this.value = value; } }
 function makeBox():Box { return new Box(42); }
 function make():() -> Int { var values = [40, 2]; return function() return values[0] + values[1]; } function main():Int { return 42; }");
 		var compiled = compiler.compile("Main");

@@ -102,8 +102,8 @@ class GestureArena {
 		var distanceSquared = dx * dx + dy * dy;
 		var movementTolerance = 8.0;
 		for (recognizer in sequence.recognizers)
-			if ((recognizer.kind == GestureKind.Tap || recognizer.kind == GestureKind.LongPress) &&
-				recognizer.threshold < movementTolerance)
+			if ((recognizer.kind == GestureKind.Tap || recognizer.kind == GestureKind.LongPress)
+				&& recognizer.threshold < movementTolerance)
 				movementTolerance = recognizer.threshold;
 		if (distanceSquared > movementTolerance * movementTolerance)
 			sequence.moved = true;
@@ -143,9 +143,8 @@ class GestureArena {
 			return;
 		var last = lastTaps.get(event.pointerId);
 		for (recognizer in sequence.recognizers)
-			if (recognizer.kind == GestureKind.DoubleTap && last != null &&
-				last.target.equals(sequence.target) &&
-				elapsedSeconds - last.time <= recognizer.interval) {
+			if (recognizer.kind == GestureKind.DoubleTap && last != null && last.target.equals(sequence.target)
+				&& elapsedSeconds - last.time <= recognizer.interval) {
 				var tapDx = event.x - last.x;
 				var tapDy = event.y - last.y;
 				if (tapDx * tapDx + tapDy * tapDy <= recognizer.threshold * recognizer.threshold) {
@@ -174,12 +173,11 @@ class GestureArena {
 			if (sequence.longPressed || sequence.moved)
 				continue;
 			for (recognizer in sequence.recognizers)
-				if (recognizer.kind == GestureKind.LongPress &&
-					sequence.elapsed >= recognizer.interval) {
+				if (recognizer.kind == GestureKind.LongPress && sequence.elapsed >= recognizer.interval) {
 					sequence.longPressed = true;
 					if (recognizer.hasHandler)
 						recognizer.onRecognized(makeEvent(GestureKind.LongPress, sequence, 0.0, 0.0));
-			}
+				}
 		}
 		if (hadActive)
 			revision++;

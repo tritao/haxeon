@@ -54,7 +54,8 @@ class LiveStringArrayMain {
 		].concat(hostSources)), _ -> {}, new CompilerSession());
 		expect(FileSystem.exists(host), "the live host must build");
 		var status = Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [host, output, "Main", "[]"]);
-		expect(status == 0, 'string arrays from the host and the app must concatenate under the live host; it exited with $status');
+		expect(status == 0,
+			'string arrays from the host and the app must concatenate under the live host; it exited with $status');
 
 		for (path in FileSystem.readDirectory(root))
 			FileSystem.deleteFile(root + "/" + path);

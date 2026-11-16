@@ -48,12 +48,21 @@ class InterpreterInt32Main {
 			throw "Interpreter scalar result";
 		var stem = "out/interpreter-int32-" + target + inlining + "-" + Std.random(0x7fffffff),
 			path = stem + (target == "hl" ? ".hl" : ".wasm");
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p, {target: HashLink, debugNames: true})
-			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true}).bytes;
+		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p,
+			{target: HashLink, debugNames: true})
+			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
+				target: target == "wasm32" ? Wasm32 : WasmGc,
+				debugNames: true
+			}).bytes;
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("integer/string parity");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", js, path]);
+			var js =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("integer/string parity");';
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"-e",
+				js,
+				path
+			]);
 			var out = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();

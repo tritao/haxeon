@@ -12,8 +12,8 @@ class AddedFunctionLayoutMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addFfiInterface("fixture.hxi",
-			'interface Fixture @target("x86_64-linux-gnu") @library("fixture") {\n' +
-			'\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n' + '}\n');
+			'interface Fixture @target("x86_64-linux-gnu") @library("fixture") {\n'
+			+ '\textern fn add(left: i32, right: i32) -> i32 @symbol("native_fixture_add");\n' + '}\n');
 		var program = (extra:String, use:String) -> "import Fixture;\n"
 			+ extra
 			+ "function main():Int { return Fixture.add(1, 2)"

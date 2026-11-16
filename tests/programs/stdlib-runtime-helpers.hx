@@ -2,8 +2,10 @@
 // without the HashLink runtime; the parity suite checks both Wasm targets against HL.
 function lastIndexOf():Int {
 	var text = "abcabc";
-	return text.lastIndexOf("bc") == 4 && text.lastIndexOf("bc", 3) == 1 && text.lastIndexOf("bc", 4) == 4 && text.lastIndexOf("bc", 100) == 4
-		&& text.lastIndexOf("abc", 0) == 0 && text.lastIndexOf("x") == -1 && text.lastIndexOf("") == 6 && text.lastIndexOf("", 2) == 2
+	return text.lastIndexOf("bc") == 4 && text.lastIndexOf("bc", 3) == 1 && text.lastIndexOf("bc", 4) == 4
+		&& text.lastIndexOf("bc", 100) == 4
+		&& text.lastIndexOf("abc", 0) == 0 && text.lastIndexOf("x") == -1 && text.lastIndexOf("") == 6
+		&& text.lastIndexOf("", 2) == 2
 		&& text.lastIndexOf("", 100) == 6 && text.lastIndexOf("bc", -1) == -1 && "ab".lastIndexOf("abc") == -1 ? 0 : 1;
 }
 

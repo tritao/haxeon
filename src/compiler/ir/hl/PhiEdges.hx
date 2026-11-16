@@ -53,7 +53,8 @@ class PhiEdges {
 							} else
 								redirected.push(target);
 						}
-						copy.terminator = new Located(Branch(condition, redirected[0], redirected[1]), terminator.provenance);
+						copy.terminator = new Located(Branch(condition, redirected[0], redirected[1]),
+							terminator.provenance);
 					default:
 				}
 			result.push(copy);
@@ -68,7 +69,10 @@ class PhiEdges {
 						var phiInputs:Array<IrPhiInput> = [];
 						for (input in inputs) {
 							var key = input.block + ":" + block.id;
-							phiInputs.push({block: edges.exists(key) ? edgeId(edges, key) : input.block, value: input.value});
+							phiInputs.push({
+								block: edges.exists(key) ? edgeId(edges, key) : input.block,
+								value: input.value
+							});
 						}
 						copy.instructions.push(new Located(Phi(output, phiInputs), instruction.provenance));
 					default:

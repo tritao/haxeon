@@ -62,7 +62,8 @@ class TargetLayout {
 	public function cmakeSharedLibraryPath(packageName:String, libraryName:String):String
 		return Path.join([
 			packageRoot(packageName),
-			(environment.target.os == TargetOs.Windows ? "" : "lib") + libraryName + environment.toolchain.sharedLibrarySuffix
+			(environment.target.os == TargetOs.Windows ? "" : "lib") + libraryName
+				+ environment.toolchain.sharedLibrarySuffix
 		]);
 
 	public function haxeonNativeLibraryPath(packageName:String):String {

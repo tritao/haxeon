@@ -31,8 +31,10 @@ class LoweringContext {
 	/** What a watching process keeps between rebuilds; null for one-shot builds. */
 	public final session:Null<BuildSession>;
 
-	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String, ?compilerHome:String,
-			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession, ?nativeCache:String,
+	public function new(environment:BuildEnvironment, ?cmakePreset:String, ?project:ResolvedProject, ?output:String,
+			?compilerHome:String,
+			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
+			?nativeCache:String,
 			developmentMetadata:Bool = true) {
 		this.developmentMetadata = developmentMetadata;
 		this.nativeCache = nativeCache;

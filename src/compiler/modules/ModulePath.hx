@@ -12,7 +12,8 @@ class ModulePath {
 		var start = 0, end = path.length;
 		while (start + 1 < end && path.charCodeAt(start) == 46 && isSeparator(path.charCodeAt(start + 1)))
 			start += 2;
-		if (end - start >= 3 && path.charCodeAt(end - 3) == 46 && path.charCodeAt(end - 2) == 104 && path.charCodeAt(end - 1) == 120)
+		if (end - start >= 3 && path.charCodeAt(end - 3) == 46 && path.charCodeAt(end - 2) == 104
+			&& path.charCodeAt(end - 1) == 120)
 			end -= 3;
 		var result = "", segment = "";
 		for (cursor in start...end) {

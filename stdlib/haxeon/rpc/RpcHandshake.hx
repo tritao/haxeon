@@ -23,7 +23,8 @@ class RpcHandshake {
 	var refusalSent:Bool = false;
 	var done:Bool = false;
 
-	private function new(transport:MessageTransport, clock:Void->Float, options:RpcPeerOptions, initiator:Bool, offered:Array<String>,
+	private function new(transport:MessageTransport, clock:Void->Float, options:RpcPeerOptions, initiator:Bool,
+			offered:Array<String>,
 			authorize:Null<(String, Array<String>) -> Null<RpcError>>) {
 		this.transport = transport;
 		this.clock = clock;
@@ -33,10 +34,12 @@ class RpcHandshake {
 		this.authorize = authorize;
 		deadline = clock() + options.timeoutMs;
 		if (initiator)
-			outgoing = RpcProtocol.encode(Hello(options.protocol, options.codec, options.application, offered), options.maxMessageBytes);
+			outgoing = RpcProtocol.encode(Hello(options.protocol, options.codec, options.application, offered),
+				options.maxMessageBytes);
 	}
 
-	public static function client(transport:MessageTransport, clock:Void->Float, options:RpcPeerOptions, offered:Array<String>):RpcHandshake {
+	public static function client(transport:MessageTransport, clock:Void->Float, options:RpcPeerOptions,
+			offered:Array<String>):RpcHandshake {
 		for (capability in offered)
 			if (options.offered().indexOf(capability) < 0)
 				throw "Handshake cannot widen policy";
@@ -76,7 +79,8 @@ class RpcHandshake {
 	}
 
 	function negotiate(protocol:Int, codec:Int, application:String, capabilities:Array<String>):Bool {
-		var code:Null<String> = protocol != options.protocol ? "unsupported_protocol" : codec != options.codec ? "unsupported_codec" : null;
+		var code:Null<String> = protocol != options.protocol ? "unsupported_protocol" : codec != options.codec
+			? "unsupported_codec" : null;
 		if (code != null) {
 			if (initiator)
 				fail(code);
@@ -109,7 +113,8 @@ class RpcHandshake {
 	}
 
 	function establish():Void {
-		connection = new RpcConnection(transport, clock, options.maxMessageBytes, options.maxCalls, options.maxQueuedBytes);
+		connection = new RpcConnection(transport, clock, options.maxMessageBytes, options.maxCalls,
+			options.maxQueuedBytes);
 		done = true;
 	}
 
@@ -180,7 +185,8 @@ class RpcHandshake {
 					}
 				}
 				accepted = true;
-				outgoing = RpcProtocol.encode(Welcome(options.protocol, options.codec, options.application, negotiated), options.maxMessageBytes);
+				outgoing = RpcProtocol.encode(Welcome(options.protocol, options.codec, options.application, negotiated),
+					options.maxMessageBytes);
 			default:
 				fail("invalid_handshake");
 		}

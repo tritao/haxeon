@@ -36,8 +36,7 @@ class MixSnapshot {
 		ensureLive();
 		if (bus == null)
 			throw BindingError.invalidArgument("MixSnapshot.captureBus", "Audio mix snapshot bus must not be null");
-		AudioResult.check(
-			NativeKitAudio.nk_audio_mix_snapshot_capture_bus(value, bus.nativeHandle()),
+		AudioResult.check(NativeKitAudio.nk_audio_mix_snapshot_capture_bus(value, bus.nativeHandle()),
 			"audio.mixSnapshot.captureBus");
 	}
 
@@ -46,8 +45,7 @@ class MixSnapshot {
 		ensureLive();
 		if (bus == null)
 			throw BindingError.invalidArgument("MixSnapshot.setBus", "Audio mix snapshot bus must not be null");
-		AudioResult.check(
-			NativeKitAudio.nk_audio_mix_snapshot_set_bus(value, bus.nativeHandle(), volume, muted),
+		AudioResult.check(NativeKitAudio.nk_audio_mix_snapshot_set_bus(value, bus.nativeHandle(), volume, muted),
 			"audio.mixSnapshot.setBus");
 	}
 
@@ -56,8 +54,7 @@ class MixSnapshot {
 		ensureLive();
 		if (bus == null)
 			throw BindingError.invalidArgument("MixSnapshot.removeBus", "Audio mix snapshot bus must not be null");
-		AudioResult.check(
-			NativeKitAudio.nk_audio_mix_snapshot_remove_bus(value, bus.nativeHandle()),
+		AudioResult.check(NativeKitAudio.nk_audio_mix_snapshot_remove_bus(value, bus.nativeHandle()),
 			"audio.mixSnapshot.removeBus");
 	}
 
@@ -79,16 +76,14 @@ class MixSnapshot {
 	/** Applies all targets immediately or over a duration in PCM frames. */
 	public function apply(durationFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_mix_snapshot_apply(value, durationFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_mix_snapshot_apply(value, durationFrames),
 			"audio.mixSnapshot.apply");
 	}
 
 	/** Applies all targets at an absolute process-wide audio time. */
 	public function applyAt(durationFrames:haxe.Int64, timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_mix_snapshot_apply_at(value, durationFrames, timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_mix_snapshot_apply_at(value, durationFrames, timeFrames),
 			"audio.mixSnapshot.applyAt");
 	}
 

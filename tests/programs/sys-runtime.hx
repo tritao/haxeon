@@ -57,7 +57,11 @@ function main():Int {
 	if (Sys.command(command) != 0)
 		return 7;
 	var argumentCommand = systemName == "Windows" ? "cmd /C call tests\\programs\\sys-command-args.cmd" : "test";
-	var argumentValues = systemName == "Windows" ? ["value with spaces", "==", "value with spaces"] : ["value with spaces; 'quoted'", "=", "value with spaces; 'quoted'"];
+	var argumentValues = systemName == "Windows" ? ["value with spaces", "==", "value with spaces"] : [
+		"value with spaces; 'quoted'",
+		"=",
+		"value with spaces; 'quoted'"
+	];
 	if (Sys.command(argumentCommand, argumentValues) != 0)
 		return 13;
 	var fsDirectory = "out/filesystem-runtime-é";

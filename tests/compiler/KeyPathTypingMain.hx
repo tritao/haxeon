@@ -14,7 +14,8 @@ class KeyPathTypingMain {
 			+ 'function get_computed():Int return width; } ';
 		expectType(node, '\\Node.width', 'WritableKeyPath<Node,Int>');
 		expectType(node, '\\Node.height', 'KeyPath<Node,Int>');
-		expectType('class Base { public var width:Int = 1; } class Child extends Base {} ', '\\Child.width', 'WritableKeyPath<Child,Int>');
+		expectType('class Base { public var width:Int = 1; } class Child extends Base {} ', '\\Child.width',
+			'WritableKeyPath<Child,Int>');
 		expectType('struct Point { public var x:Int = 1; } struct Rect { public var point:Point; } ',
 			'\\Rect.point.x', 'WritableKeyPath<Rect,Int>');
 		expectType('class Box<T> { public var item:T; } ', '\\Box<Int>.item', 'WritableKeyPath<Box<Int>,Int>');
@@ -25,7 +26,8 @@ class KeyPathTypingMain {
 		expectError(node, '\\Node.computed', 'computed property "computed"');
 		expectError('struct Point { public var x:Int = 1; } class Model { public var point:Null<Point>; } ',
 			'\\Model.point.x', 'nullable intermediate');
-		var read = compiler.Frontend.compile(node + 'function main():Int { var n = new Node(); return (\\Node.width).get(n) + 41; }');
+		var read = compiler.Frontend.compile(node
+			+ 'function main():Int { var n = new Node(); return (\\Node.width).get(n) + 41; }');
 		if (new compiler.ir.IrInterpreter(read).run('main') != 42)
 			throw 'Known class-root path did not read its stored field';
 		var writes = compiler.Frontend.compile(node
@@ -36,23 +38,29 @@ class KeyPathTypingMain {
 			+ 'var point=update(\\Point.x,new Point(0)); return read(\\Node.width,n)+(\\Point.x).get(point); }');
 		if (new compiler.ir.IrInterpreter(writes).run('main') != 42)
 			throw 'Escaped class read or escaped struct write did not preserve its root';
-		var composition = compiler.Frontend.compile('class Child { public var x:Int=21; } class Root { public var child:Child=new Child(); } '
+		var composition = compiler.Frontend
+			.compile('class Child { public var x:Int=21; } class Root { public var child:Child=new Child(); } '
 			+ 'function compose(p:WritableKeyPath<Root,Child>,q:WritableKeyPath<Child,Int>):WritableKeyPath<Root,Int> return p.then(q); '
 			+ 'function main():Int { var r=new Root(); var p=compose(\\Root.child,\\Child.x); '
 			+ 'p.set(r,42); if(p != \\Root.child.x) return 1; '
 			+ 'if(haxeon.Hashing.hash(p) != haxeon.Hashing.hash(\\Root.child.x)) return 2; '
 			+ 'if(p.toString() != "\\\\Root.child.x") return 3; return p.get(r); }');
-		if (new compiler.ir.IrInterpreter(composition).run('main') != 42) throw 'Escaped composition or identity failed';
+		if (new compiler.ir.IrInterpreter(composition).run('main') != 42)
+			throw 'Escaped composition or identity failed';
 		var granted = compiler.Frontend.compile('struct Point { public var x:Int=0; } '
 			+ 'class Root { public var point(default,null):Point=new Point(); '
 			+ 'public static function run():Int return update(\\Root.point,\\Point.x,new Root()); } '
 			+ 'function update<R,V>(p:WritableKeyPath<R,V>,q:WritableKeyPath<V,Int>,r:R):Int { var path=p.then(q); path.set(r,42); return path.get(r); } '
 			+ 'function main():Int return Root.run();');
-		if (new compiler.ir.IrInterpreter(granted).run('main') != 42) throw 'Composition lost the granted setter capability';
+		if (new compiler.ir.IrInterpreter(granted).run('main') != 42)
+			throw 'Composition lost the granted setter capability';
 		expectError(node, '(\\Node.height).set(new Node(),3)', 'not writable');
-		expectError('struct Point { public var x:Int=0; } ', '(\\Point.x).set(new Point(),3)', 'Cannot mutate temporary struct');
-		expectType('struct Point { public var x:Int=0; } class Model { public var point:Null<Point>; } ', '\\Model.point', 'WritableKeyPath<Model,Null<Point>>');
-		expectError('class Model { public var next:Null<Model>; public var x:Int; } ', '\\Model.next.x', 'nullable intermediate');
+		expectError('struct Point { public var x:Int=0; } ', '(\\Point.x).set(new Point(),3)',
+			'Cannot mutate temporary struct');
+		expectType('struct Point { public var x:Int=0; } class Model { public var point:Null<Point>; } ',
+			'\\Model.point', 'WritableKeyPath<Model,Null<Point>>');
+		expectError('class Model { public var next:Null<Model>; public var x:Int; } ', '\\Model.next.x',
+			'nullable intermediate');
 		expectError('struct Point { public var x:Int=0; } class Model { public final point:Point; } ',
 			'(\\Model.point.x).set(new Model(),1)', 'not writable');
 		expectError('interface Observable {} struct Point { public var x:Int=0; } class Model implements Observable { public var point:Point; } ',
@@ -60,15 +68,19 @@ class KeyPathTypingMain {
 		expectError('interface Observable {} struct Point { public var x:Int=0; } class Model implements Observable { public var point:Point; } '
 			+ 'function compose(p:WritableKeyPath<Model,Point>):WritableKeyPath<Model,Int> return p.then(\\Point.x); ',
 			'\\Point.x', 'Cannot mutate a struct inside Observable');
-		expectError(node + 'function write(p:KeyPath<Node,Int>, n:Node):Void p.set(n,1); ', '\\Node.width', 'read-only KeyPath');
+		expectError(node + 'function write(p:KeyPath<Node,Int>, n:Node):Void p.set(n,1); ', '\\Node.width',
+			'read-only KeyPath');
 		expectError(node, '(\\Node.width).then(\\Node.height)', 'matching intermediate types');
 		expectError('interface Diffable {} class Model implements Diffable { public var x:Int=0; } function bit(p:KeyPath<Model,Int>):Int return haxeon.Diff.bit(p); ',
 			'\\Model.x', 'requires a known direct-field key path');
 		for (inlineEnabled in [false, true]) {
 			var c = new compiler.Compiler();
-			c.update('model/Box.hx', 'package model; class Box<T> { public var item:T; public function new(item:T) this.item = item; }');
-			c.update('Main.hx', 'import model.Box; function main():Int { var box:Box<Int> = new Box(42); var path = \\model.Box<Int>.item; return path.get(box); }');
-			c.configure(inlineEnabled ? 'inline-on' : 'inline-off', 'test', ['haxeon-inline=' + (inlineEnabled ? '1' : '0')]);
+			c.update('model/Box.hx',
+				'package model; class Box<T> { public var item:T; public function new(item:T) this.item = item; }');
+			c.update('Main.hx',
+				'import model.Box; function main():Int { var box:Box<Int> = new Box(42); var path = \\model.Box<Int>.item; return path.get(box); }');
+			c.configure(inlineEnabled ? 'inline-on' : 'inline-off', 'test',
+				['haxeon-inline=' + (inlineEnabled ? '1' : '0')]);
 			if (new compiler.ir.IrInterpreter(c.compile('Main').ir).run('main') != 42)
 				throw 'Qualified generic-root path failed with inline=' + inlineEnabled;
 		}
@@ -76,7 +88,8 @@ class KeyPathTypingMain {
 	}
 
 	static function typePath(prefix:String, path:String):compiler.types.Type.CompilerType {
-		var source = new SourceFile('Main.hx', prefix + 'function main():Int { var path = ' + path + '; path = path; return 42; }'),
+		var source = new SourceFile('Main.hx',
+			prefix + 'function main():Int { var path = ' + path + '; path = path; return 42; }'),
 			program = Typer.type(new Parser(new Lexer(source).tokenize()).parseProgram());
 		for (fn in program.functions)
 			if (fn.name == 'main')

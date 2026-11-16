@@ -12,7 +12,8 @@ class ContextualTypedLambdaMain {
 			compiler.compile("Main");
 			throw "Invalid annotated callback accepted";
 		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E1003" && error.diagnostic.code != "E1009" && error.diagnostic.code != "E1002")
+			if (error.diagnostic.code != "E1003" && error.diagnostic.code != "E1009"
+				&& error.diagnostic.code != "E1002")
 				throw error;
 		}
 	}
@@ -21,15 +22,19 @@ class ContextualTypedLambdaMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		var prefix = 'class Sink {
+		var prefix =
+			'class Sink {
 		 public function new() {}
 		 public function consume<T>(value:T, callback:T->Void):Void callback(value);
 		 public function map<T, R>(callback:T->R, value:T):R return callback(value);
 		 public function optional(callback:Null<Int>->Int):Int return callback(null);
 		}\n';
-		rejected(compiler, prefix + 'function main():Int { new Sink().consume(42, function(value):String return "bad"); return 42; }');
-		rejected(compiler, prefix + 'function main():Int { new Sink().consume(42, function(value:String):Void {}); return 42; }');
-		rejected(compiler, prefix + 'function main():Int { new Sink().consume(42, function(value):Int return "bad"); return 42; }');
+		rejected(compiler,
+			prefix + 'function main():Int { new Sink().consume(42, function(value):String return "bad"); return 42; }');
+		rejected(compiler,
+			prefix + 'function main():Int { new Sink().consume(42, function(value:String):Void {}); return 42; }');
+		rejected(compiler,
+			prefix + 'function main():Int { new Sink().consume(42, function(value):Int return "bad"); return 42; }');
 		var source = prefix
 			+ 'function main():Int {
 		 var sink = new Sink(), result = 0;

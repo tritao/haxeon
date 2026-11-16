@@ -35,17 +35,19 @@ class Lexer {
 				if (next == "*".code) {
 					var commentStart = position;
 					position += 2;
-					while (position + 1 < source.length && !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
+					while (position + 1 < source.length
+						&& !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
 						position++;
 					if (position + 1 >= source.length)
-						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment", file.span(commentStart, position),
+						throw new CompileError(new Diagnostic("E0001", "Unterminated block comment",
+							file.span(commentStart, position),
 							DiagnosticSeverity.Error, [
-							{
-								id: "close-block-comment",
-								title: "Close block comment",
-								edits: [{span: file.span(position, position), replacement: "*/"}]
-							}
-						]));
+								{
+									id: "close-block-comment",
+									title: "Close block comment",
+									edits: [{span: file.span(position, position), replacement: "*/"}]
+								}
+							]));
 					position += 2;
 					continue;
 				}
@@ -74,7 +76,8 @@ class Lexer {
 					}
 				}
 				if (!closed)
-					throw new CompileError(new Diagnostic("E0001", "Unterminated regular expression literal", file.span(start, position)));
+					throw new CompileError(new Diagnostic("E0001", "Unterminated regular expression literal",
+						file.span(start, position)));
 				while (position < source.length && isIdentifierPart(source.get(position)))
 					position++;
 				tokens.push(new Token(TokenKind.RegexLiteral, text(start, position), file.span(start, position)));
@@ -85,18 +88,19 @@ class Lexer {
 				position++;
 				var closed = scanString(quote);
 				if (!closed)
-					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal", file.span(start, position), DiagnosticSeverity.Error, [
-						{
-							id: "close-string-literal",
-							title: "Close string literal",
-							edits: [
-								{
-									span: file.span(position, position),
-									replacement: String.fromCharCode(quote)
-								}
-							]
-						}
-					]));
+					throw new CompileError(new Diagnostic("E0001", "Unterminated string literal",
+						file.span(start, position), DiagnosticSeverity.Error, [
+							{
+								id: "close-string-literal",
+								title: "Close string literal",
+								edits: [
+									{
+										span: file.span(position, position),
+										replacement: String.fromCharCode(quote)
+									}
+								]
+							}
+						]));
 				tokens.push(new Token(TokenKind.StringLiteral, text(start, position), file.span(start, position)));
 				continue;
 			}
@@ -120,17 +124,22 @@ class Lexer {
 				}
 				scanNumericDigits(start, false, true);
 				var kind = TokenKind.Integer;
-				if (position + 1 < source.length && source.get(position) == ".".code && isDigit(source.get(position + 1))) {
+				if (position + 1 < source.length && source.get(position) == ".".code
+					&& isDigit(source.get(position + 1))) {
 					kind = TokenKind.Float;
 					position++;
 					scanNumericDigits(start, false, false);
-				} else if (position + 1 < source.length && source.get(position) == ".".code && source.get(position + 1) == "_".code) {
-					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits", file.span(start, position + 2)));
+				} else if (position + 1 < source.length && source.get(position) == ".".code
+					&& source.get(position + 1) == "_".code) {
+					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits",
+						file.span(start, position + 2)));
 				}
-				if (position < source.length && (source.get(position) == "e".code || source.get(position) == "E".code)) {
+				if (position < source.length
+					&& (source.get(position) == "e".code || source.get(position) == "E".code)) {
 					kind = TokenKind.Float;
 					position++;
-					if (position < source.length && (source.get(position) == "+".code || source.get(position) == "-".code))
+					if (position < source.length
+						&& (source.get(position) == "+".code || source.get(position) == "-".code))
 						position++;
 					scanNumericDigits(start, false, false, true);
 				}
@@ -141,7 +150,8 @@ class Lexer {
 				var end = position + utf8Width(code);
 				if (end > source.length)
 					end = source.length;
-				throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${text(position, end)}"', file.span(position, end)));
+				throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${text(position, end)}"',
+					file.span(position, end)));
 			}
 			position++;
 			var character = String.fromCharCode(code);
@@ -240,7 +250,8 @@ class Lexer {
 						position++;
 						TokenKind.PercentAssign;
 					} else TokenKind.Percent;
-				default: throw new CompileError(new Diagnostic("E0001", 'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
+				default: throw new CompileError(new Diagnostic("E0001",
+					'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
 			}
 			tokens.push(new Token(kind, operatorText(start, position), file.span(start, position)));
 		}
@@ -257,7 +268,8 @@ class Lexer {
 					position++;
 				continue;
 			}
-			if (quote == "'".code && current == "$".code && position < source.length && source.get(position) == "{".code) {
+			if (quote == "'".code && current == "$".code && position < source.length
+				&& source.get(position) == "{".code) {
 				position++;
 				if (!scanInterpolation())
 					return false;
@@ -289,7 +301,8 @@ class Lexer {
 				}
 				if (next == "*".code) {
 					position++;
-					while (position + 1 < source.length && !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
+					while (position + 1 < source.length
+						&& !(source.get(position) == "*".code && source.get(position + 1) == "/".code))
 						position++;
 					if (position + 1 >= source.length)
 						return false;
@@ -408,7 +421,8 @@ class Lexer {
 				var nextIsDigit = position + 1 < source.length
 					&& (hexadecimal ? isHexDigit(source.get(position + 1)) : isDigit(source.get(position + 1)));
 				if (!previousDigit || !nextIsDigit)
-					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits", file.span(start, position + 1)));
+					throw new CompileError(new Diagnostic("E0001", "Numeric separator must appear between digits",
+						file.span(start, position + 1)));
 				previousDigit = false;
 				position++;
 			} else
@@ -416,6 +430,7 @@ class Lexer {
 		}
 		if (requireDigit && count == 0)
 			throw new CompileError(new Diagnostic("E0001",
-				hexadecimal ? "Hexadecimal literal requires at least one digit" : "Exponent requires at least one digit", file.span(start, position)));
+				hexadecimal ? "Hexadecimal literal requires at least one digit"
+				: "Exponent requires at least one digit", file.span(start, position)));
 	}
 }

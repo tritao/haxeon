@@ -87,15 +87,20 @@ class IrArrayFactory {
 						changed = true;
 						switch element {
 							case I32:
-								target.instructions.push(new Located(Call(out, "__array_alloc_i32", arguments), located.provenance));
+								target.instructions.push(new Located(Call(out, "__array_alloc_i32", arguments),
+									located.provenance));
 							case EnumTag(_): throw "Tag array factory was not consumed by lane selection";
 							default:
 								typed = true;
 								var descriptor = new IrValue(next++, "$array-element", TypeRef),
 									raw = new IrValue(next++, "$array-storage", Array(Dyn)),
 									erased = new IrValue(next++, "$array-erased", Dyn);
-								target.instructions.push(new Located(TypeValue(descriptor, element), located.provenance));
-								target.instructions.push(new Located(Call(raw, "__array_alloc_typed_ref", [arguments[0], descriptor]), located.provenance));
+								target.instructions.push(new Located(TypeValue(descriptor, element),
+									located.provenance));
+								target.instructions.push(new Located(Call(raw, "__array_alloc_typed_ref", [
+									arguments[0],
+									descriptor
+								]), located.provenance));
 								target.instructions.push(new Located(ToDyn(erased, raw), located.provenance));
 								target.instructions.push(new Located(SafeCast(out, erased), located.provenance));
 						}

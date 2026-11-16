@@ -23,7 +23,8 @@ class ActionMerge {
 		return [for (key in order) byKey.get(key)];
 	}
 
-	public static function combine(existing:ExecutionAction, incoming:ExecutionAction, earlier:String, later:String):ExecutionAction {
+	public static function combine(existing:ExecutionAction, incoming:ExecutionAction, earlier:String,
+			later:String):ExecutionAction {
 		var problems:Array<String> = [];
 		if (existing.description != incoming.description)
 			problems.push('description "${existing.description}" vs "${incoming.description}"');
@@ -38,7 +39,8 @@ class ActionMerge {
 		if (problems.length > 0)
 			throw 'Action ${existing.id} differs between $earlier and $later: ${problems.join("; ")}';
 		return new ExecutionAction(existing.id, union(existing.dependencies, incoming.dependencies, id -> id.key()),
-			union(existing.inputs, incoming.inputs, path -> path), existing.outputs, existing.description, existing.action, existing.fingerprintDependencies,
+			union(existing.inputs, incoming.inputs, path -> path), existing.outputs, existing.description,
+			existing.action, existing.fingerprintDependencies,
 			existing.alwaysRun, existing.jobserverClient);
 	}
 

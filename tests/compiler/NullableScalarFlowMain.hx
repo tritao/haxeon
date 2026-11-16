@@ -12,7 +12,8 @@ class NullableScalarFlowMain {
 			+ 'function escape(value:Int):Dynamic { var optional:Null<Int> = value; return optional; } '
 			+ 'function main():Int return choose(true);');
 		var before = new IrInterpreter(program);
-		if (before.run("choose", [true]) != 42 || before.run("choose", [false]) != 7 || before.run("escape", [13]) != 13)
+		if (before.run("choose", [true]) != 42 || before.run("choose", [false]) != 7
+			|| before.run("escape", [13]) != 13)
 			throw "Unexpected nullable scalar baseline";
 		IrNullableScalarFlow.rewrite(program);
 		IrVerifier.verify(program);

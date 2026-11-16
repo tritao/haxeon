@@ -8,7 +8,8 @@ import compiler.syntax.Parser;
 class ParserRecoveryMain {
 	static function main():Void {
 		var service = new LanguageService(),
-			source = "class Box { public var value:Int; public function read():Int return value; } function main():Int { var box:Box = new Box(); box.value; box.";
+			source =
+				"class Box { public var value:Int; public function read():Int return value; } function main():Int { var box:Box = new Box(); box.value; box.";
 		service.update("Main.hx", source);
 		try
 			service.analyze("Main")
@@ -103,7 +104,8 @@ class ParserRecoveryMain {
 
 	static function assertNestedRecovery(tail:String):Void {
 		var service = new LanguageService(),
-			source = 'function consume(value:Int):Int return value; function main():Int { var available:Int = 1; var values = [1]; $tail';
+			source =
+				'function consume(value:Int):Int return value; function main():Int { var available:Int = 1; var values = [1]; $tail';
 		service.update("Nested.hx", source);
 		try
 			service.analyze("Nested")
@@ -116,7 +118,8 @@ class ParserRecoveryMain {
 	}
 
 	static function assertTruncationRecovery():Void {
-		var source = "package demo; class Box { public var value:Int; public function read(scale:Int):Int { if (scale > 0) return value * scale; return 0; } } function main():Int { var box:Box = new Box(); var values = [1, 2]; var read = (item:Int) -> item + box.value; return switch (values[0]) { case 1: read(41); default: 0; }; }";
+		var source =
+			"package demo; class Box { public var value:Int; public function read(scale:Int):Int { if (scale > 0) return value * scale; return 0; } } function main():Int { var box:Box = new Box(); var values = [1, 2]; var read = (item:Int) -> item + box.value; return switch (values[0]) { case 1: read(41); default: 0; }; }";
 		for (end in 0...source.length + 1) {
 			var prefix = source.substring(0, end),
 				file = new SourceFile("Truncated.hx", prefix);

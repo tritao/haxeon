@@ -79,7 +79,8 @@ class WasmOptimizer {
 		};
 	}
 
-	static function foldI32(left:WasmInstruction, right:WasmInstruction, operation:WasmInstruction):Null<WasmInstruction> {
+	static function foldI32(left:WasmInstruction, right:WasmInstruction,
+			operation:WasmInstruction):Null<WasmInstruction> {
 		return switch left {
 			case I32Const(a):
 				switch right {
@@ -105,7 +106,8 @@ class WasmOptimizer {
 		};
 	}
 
-	static function foldF64(left:WasmInstruction, right:WasmInstruction, operation:WasmInstruction):Null<WasmInstruction> {
+	static function foldF64(left:WasmInstruction, right:WasmInstruction,
+			operation:WasmInstruction):Null<WasmInstruction> {
 		return switch left {
 			case F64Const(a):
 				switch right {

@@ -50,7 +50,8 @@ class ByteSinkMain {
 		var copying = new ByteSink();
 		copying.write(large);
 		large.set(0, 255 - large.get(0));
-		expect(copying.finish().flatten().get(0) != large.get(0), "write copies: changing the buffer afterwards does not change the result");
+		expect(copying.finish().flatten().get(0) != large.get(0),
+			"write copies: changing the buffer afterwards does not change the result");
 		var sharing = new ByteSink();
 		sharing.appendShared(large);
 		expect(sharing.finish().flatten() == large, "one shared buffer comes back as the very buffer");

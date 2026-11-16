@@ -20,10 +20,14 @@ class HaxeProjectConfiguration {
 	public final ffi:compiler.Compiler.FfiConfiguration;
 	public final ffiIdentity:String;
 
-	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>, libraries:Array<String>,
+	public function new(file:String, classPaths:Array<String>, entries:Array<String>, defines:Array<String>,
+			libraries:Array<String>,
 			?ffi:compiler.Compiler.FfiConfiguration) {
 		this.ffi = ffi == null ? new compiler.Compiler.FfiConfiguration() : ffi;
-		ffiIdentity = Sha256.encode(haxe.Json.stringify({interfaces: this.ffi.interfaceSources(), projections: this.ffi.projectionSources()}));
+		ffiIdentity = Sha256.encode(haxe.Json.stringify({
+			interfaces: this.ffi.interfaceSources(),
+			projections: this.ffi.projectionSources()
+		}));
 		this.file = file;
 		this.classPaths = sortedCopy(classPaths);
 		this.entries = sortedCopy(entries);
@@ -82,7 +86,8 @@ class ProjectWorkspace {
 		discover(service, _ -> false);
 	}
 
-	public function changeWorkspaceFolders(added:Array<String>, removed:Array<String>, service:LanguageService, isOpen:String->Bool):Void {
+	public function changeWorkspaceFolders(added:Array<String>, removed:Array<String>, service:LanguageService,
+			isOpen:String->Bool):Void {
 		for (uri in removed) {
 			var root = uriPath(uri);
 			while (workspaceRootPaths.remove(root)) {}
@@ -161,7 +166,8 @@ class ProjectWorkspace {
 
 	public function isConfiguration(path:String):Bool {
 		var name = Path.withoutDirectory(path);
-		return name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml") || StringTools.endsWith(name, ".hxi")
+		return name == "haxeon.json" || name == "haxe.json" || StringTools.endsWith(name, ".hxml")
+			|| StringTools.endsWith(name, ".hxi")
 			|| StringTools.endsWith(name, ".hxmap");
 	}
 
@@ -199,7 +205,8 @@ class ProjectWorkspace {
 		if (matches.length > 0)
 			return matches[0];
 		for (root in unconfiguredSourceRoots)
-			if (normalized == root || StringTools.startsWith(normalized, (StringTools.endsWith(root, "/") ? root : root + "/")))
+			if (normalized == root
+				|| StringTools.startsWith(normalized, (StringTools.endsWith(root, "/") ? root : root + "/")))
 				return null;
 		return configurations.length == 1 ? configurations[0] : null;
 	}
@@ -338,7 +345,12 @@ class ProjectWorkspace {
 		if (visiting.exists(file))
 			throw 'Cyclic HXML reference: $file';
 		visiting.set(file, true);
-		var base = Path.directory(file), classPaths = [], entries = [], defines = [], libraries = [], words:Array<String> = [];
+		var base = Path.directory(file),
+			classPaths = [],
+			entries = [],
+			defines = [],
+			libraries = [],
+			words:Array<String> = [];
 		for (line in File.getContent(file).split("\n")) {
 			var clean = StringTools.trim(line), comment = clean.indexOf("#");
 			if (comment >= 0)
@@ -432,15 +444,18 @@ class ProjectWorkspace {
 				projectionPaths = [for (path in projections.keys()) path];
 			interfacePaths.sort(Reflect.compare);
 			projectionPaths.sort(Reflect.compare);
-			var ffi = new compiler.Compiler.FfiConfiguration(compiler.ffi.HxiInterfaceOrder.dependenciesFirst([
-				for (path in interfacePaths)
-					{
-						path: path,
-						text: interfaces.get(path)
-					}
-			]), [for (path in projectionPaths) {path: path, text: projections.get(path)}]);
-			var defines = resolved.manifest.defines.concat(compiler.tools.CompilerDriver.targetDefines(resolved.manifest.target == "host" ? "hl" : resolved.manifest.target));
-			return new HaxeProjectConfiguration(file, roots, resolved.manifest.entry == null ? [] : [resolved.manifest.entry], defines, [], ffi);
+			var ffi = new compiler.Compiler
+				.FfiConfiguration(compiler.ffi.HxiInterfaceOrder.dependenciesFirst([for (path in interfacePaths)
+				{
+					path:path,
+						text:interfaces.get(path)
+				}]), [for (path in projectionPaths) {
+				path:path, text:projections.get(path)
+			}]);
+			var defines = resolved.manifest.defines.concat(compiler.tools.CompilerDriver
+				.targetDefines(resolved.manifest.target == "host" ? "hl" : resolved.manifest.target));
+			return new HaxeProjectConfiguration(file, roots,
+				resolved.manifest.entry == null ? [] : [resolved.manifest.entry], defines, [], ffi);
 		}
 		var value:Dynamic = Json.parse(File.getContent(file)),
 			base = Path.directory(file),
@@ -476,7 +491,8 @@ class ProjectWorkspace {
 					|| name == "node_modules"
 					|| name == "vendor"
 					|| outputDirectories.exists(path)
-					|| (presumeOutputs && (name == "build" || name == "out") && !declaredSourceDirectories.exists(path)))
+					|| (presumeOutputs && (name == "build" || name == "out")
+					&& !declaredSourceDirectories.exists(path)))
 					continue;
 				if (FileSystem.isDirectory(path))
 					pending.push(path);
@@ -560,7 +576,8 @@ class ProjectWorkspace {
 	static function longestOwningPath(configuration:HaxeProjectConfiguration, path:String):Int {
 		var result = -1;
 		for (classPath in configuration.classPaths)
-			if (path == classPath || StringTools.startsWith(path, (StringTools.endsWith(classPath, "/") ? classPath : classPath + "/")))
+			if (path == classPath
+				|| StringTools.startsWith(path, (StringTools.endsWith(classPath, "/") ? classPath : classPath + "/")))
 				result = Std.int(Math.max(result, classPath.length));
 		return result;
 	}

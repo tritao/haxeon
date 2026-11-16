@@ -2,11 +2,11 @@ import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiParser;
-import compiler.ffi.HxiValidator;
 import compiler.ffi.HxiProjection;
 import compiler.ffi.HxiProjectionProfile;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
 import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
+import compiler.ffi.HxiValidator;
 import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.ir.Ir.IrType;
 
@@ -24,20 +24,26 @@ class HxiAbiMain {
 			case _:
 				throw "nullable UTF-8 ABI did not retain its contract";
 		}
-		expect(HxiProjection.source(linuxModel("x86_64-linux-gnu")).indexOf("haxe.Int64") >= 0, "LP64 c_long should project as haxe.Int64");
-		expect(HxiProjection.source(linuxModel("x86_64-pc-windows-msvc")).indexOf("haxe.Int64") < 0, "LLP64 c_long should remain a 32-bit Int");
+		expect(HxiProjection.source(linuxModel("x86_64-linux-gnu")).indexOf("haxe.Int64") >= 0,
+			"LP64 c_long should project as haxe.Int64");
+		expect(HxiProjection.source(linuxModel("x86_64-pc-windows-msvc")).indexOf("haxe.Int64") < 0,
+			"LLP64 c_long should remain a 32-bit Int");
 		var enumModel = HxiParser.parse("enum.hxi",
 			'interface sample @target("x86_64-linux-gnu") @library("sample") { enum result : i32 { OK = 0; ERROR = -1; } extern fn check(value: result) -> result; }'),
 			enumAbi = HxiAbi.forInterface(enumModel);
 		switch enumAbi.functions()[0] {
-			case {arguments: [EnumerationValue("result", 32, Signed)], result: EnumerationValue("result", 32, Signed)}:
+			case {
+				arguments:[EnumerationValue("result", 32, Signed)], result:EnumerationValue("result", 32, Signed)
+			}
+			:
 			case _:
 				throw "enum ABI did not retain its nominal type";
 		}
 		var callbackModel = HxiParser.parse("callback.hxi",
 			'interface sample @target("x86_64-linux-gnu") @library("sample") { callback Binary = fn(left: i32, right: i32) -> i32; extern fn apply(callback: Binary) -> i32; }');
 		switch HxiAbi.forInterface(callbackModel).functions()[0].arguments[0] {
-			case CallbackValue("Binary", [IntegerValue(32, Signed), IntegerValue(32, Signed)], IntegerValue(32, Signed), false):
+			case CallbackValue("Binary", [IntegerValue(32, Signed), IntegerValue(32, Signed)], IntegerValue(32, Signed),
+				false):
 			case _:
 				throw "callback ABI did not retain its typed signature";
 		}
@@ -45,7 +51,10 @@ class HxiAbiMain {
 			'interface sample @target("x86_64-linux-gnu") @library("sample") { handle resource : u32; extern fn use(value: resource) -> resource; }'),
 			handleAbi = HxiAbi.forInterface(handleModel);
 		switch handleAbi.functions()[0] {
-			case {arguments: [HandleValue("resource")], result: HandleValue("resource")}:
+			case {
+				arguments:[HandleValue("resource")], result:HandleValue("resource")
+			}
+			:
 			case _:
 				throw "handle ABI did not retain its nominal type";
 		}
@@ -105,12 +114,13 @@ class HxiAbiMain {
 			"handles should project as opaque value abstracts");
 		switch linux.functions()[0] {
 			case {
-				name: "open",
-				symbol: "open_v1",
-				library: "sample",
-				arguments: [PointerValue(64, false, "context", null)],
-				result: IntegerValue(32, Signed)
-			}:
+				name:"open",
+					symbol:"open_v1",
+					library:"sample",
+					arguments:[PointerValue(64, false, "context", null)],
+					result:IntegerValue(32, Signed)
+			}
+			:
 			case _:
 				throw "function ABI did not resolve";
 		}
@@ -153,7 +163,8 @@ class HxiAbiMain {
 			ownedOpaqueStart = opaqueSource.indexOf('abstract OwnedContext(hl.Abstract<"native_pointer">) {');
 		expect(borrowedOpaqueStart >= 0
 			&& ownedOpaqueStart > borrowedOpaqueStart
-			&& opaqueSource.substr(borrowedOpaqueStart, ownedOpaqueStart - borrowedOpaqueStart).indexOf("function close()") < 0
+			&& opaqueSource.substr(borrowedOpaqueStart,
+			ownedOpaqueStart - borrowedOpaqueStart).indexOf("function close()") < 0
 			&& opaqueSource.substr(ownedOpaqueStart).indexOf("function close():Bool") >= 0,
 			"only owned opaque results should expose close()");
 		var opaqueNative = HxiProjection.cNatives(opaqueModel)[0];
@@ -164,7 +175,8 @@ class HxiAbiMain {
 				throw "opaque Haxe handles should retain the generic native pointer ABI representation";
 		}
 		var opaqueResultNative = HxiProjection.cNatives(opaqueModel)[3];
-		expect(opaqueResultNative.signature == ">11", "opaque pointer results must keep the generic C pointer ABI signature");
+		expect(opaqueResultNative.signature == ">11",
+			"opaque pointer results must keep the generic C pointer ABI signature");
 		switch opaqueResultNative.result {
 			case Abstract("native_pointer"):
 			case _:
@@ -175,7 +187,8 @@ class HxiAbiMain {
 			&& ownedOpaqueNative.pointerOwnership == "owned"
 			&& ownedOpaqueNative.pointerRelease == "destroy_context",
 			"owned opaque results should retain ownership metadata without changing the C pointer ABI");
-		var opaqueProfile = HxiProjectionProfile.parse("opaque.hxmap", '{"interface":"sample","typeNames":{"Context":"ContextHandle"}}');
+		var opaqueProfile = HxiProjectionProfile.parse("opaque.hxmap",
+			'{"interface":"sample","typeNames":{"Context":"ContextHandle"}}');
 		HxiProjection.validateProfile("opaque.hxmap", opaqueModel, null, null, opaqueProfile);
 		var mappedOpaqueSource = HxiProjection.source(opaqueModel, null, null, null, opaqueProfile);
 		expect(mappedOpaqueSource.indexOf('abstract ContextHandle(hl.Abstract<"native_pointer">)') >= 0
@@ -215,7 +228,8 @@ class HxiAbiMain {
 			var abi = HxiAbi.forTarget(entry.target);
 			for (primitive in ["f64", "i64"]) {
 				var layout = abi.layout(compiler.ffi.HxiModel.HxiType.Primitive(primitive));
-				expect(layout != null && layout.size == 8 && layout.align == entry.align, '${entry.target}: $primitive should align to ${entry.align}');
+				expect(layout != null && layout.size == 8 && layout.align == entry.align,
+					'${entry.target}: $primitive should align to ${entry.align}');
 			}
 		}
 		var model = HxiParser.parse("vec3.hxi",
@@ -252,13 +266,19 @@ class HxiAbiMain {
 				source = HxiProjection.source(model);
 			expect(natives.length == 6, '${entry.target}: value-record native count changed');
 			expect(natives[0].pointerSize == entry.pointerSize, '${entry.target}: pointer ABI width changed');
-			expect(Type.enumEq(natives[0].argumentModes[0], FixedInput(8, 4, true)), '${entry.target}: const struct* must lower as a fixed input');
-			expect(Type.enumEq(natives[1].argumentModes[0], FixedOutput(8, 4, true)), '${entry.target}: struct* @out must lower as a fixed output');
-			expect(Type.enumEq(natives[2].argumentModes[0], FixedInputOutput(8, 4, true)), '${entry.target}: struct* @inout must lower as fixed input/output');
-			expect(Type.enumEq(natives[3].argumentModes[0], FixedValue(8, 4, true)), '${entry.target}: by-value struct input must retain aggregate storage');
-			expect(natives[4].fixedResult != null && natives[4].fixedResult.size == 8 && natives[4].fixedResult.alignment == 4,
+			expect(Type.enumEq(natives[0].argumentModes[0], FixedInput(8, 4, true)),
+				'${entry.target}: const struct* must lower as a fixed input');
+			expect(Type.enumEq(natives[1].argumentModes[0], FixedOutput(8, 4, true)),
+				'${entry.target}: struct* @out must lower as a fixed output');
+			expect(Type.enumEq(natives[2].argumentModes[0], FixedInputOutput(8, 4, true)),
+				'${entry.target}: struct* @inout must lower as fixed input/output');
+			expect(Type.enumEq(natives[3].argumentModes[0], FixedValue(8, 4, true)),
+				'${entry.target}: by-value struct input must retain aggregate storage');
+			expect(natives[4].fixedResult != null && natives[4].fixedResult.size == 8
+				&& natives[4].fixedResult.alignment == 4,
 				'${entry.target}: by-value struct result lost its layout');
-			expect(natives[5].signature == "5>{12;4;1,2,2,2,2,2,2,2,5}", '${entry.target}: gapped by-value result lost explicit padding');
+			expect(natives[5].signature == "5>{12;4;1,2,2,2,2,2,2,2,5}",
+				'${entry.target}: gapped by-value result lost explicit padding');
 			expect(source.indexOf('extern function read(arg0:point):Int;') >= 0
 				&& source.indexOf('function write():point') >= 0
 				&& source.indexOf('function update(value:point):point') >= 0,

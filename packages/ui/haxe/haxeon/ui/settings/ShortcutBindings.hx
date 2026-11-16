@@ -38,7 +38,8 @@ class ShortcutBindings {
 			for (other in commands.commandsBoundTo(shortcut, scope)) {
 				if (other == id)
 					continue;
-				commands.setShortcuts(other, [for (existing in commands.shortcutsFor(other)) if (!existing.equals(shortcut)) existing]);
+				commands.setShortcuts(other,
+					[for (existing in commands.shortcutsFor(other)) if (!existing.equals(shortcut)) existing]);
 				taken.push(other);
 			}
 		commands.setShortcuts(id, [shortcut]);

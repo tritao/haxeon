@@ -3,24 +3,36 @@ package compiler.ir;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
-private typedef OptionalArrayAccess = {final block:Int; final position:Int; final array:IrValue; final index:Null<IrValue>; final operation:String;}
-private typedef OptionalBox = {final block:Int; final position:Int; final wrapper:IrValue;}
+private typedef OptionalArrayAccess = {
+	final block:Int;
+	final position:Int;
+	final array:IrValue;
+	final index:Null<IrValue>;
+	final operation:String;
+}
+private typedef OptionalBox = {
+	final block:Int;
+	final position:Int;
+	final wrapper:IrValue;
+}
 
 /** Keep optional-scalar wrappers in components when they cross a typed array boundary. */
 class IrValueArrayOptionalRewrite {
-	public static function rewrite(fn:IrFunction, element:IrType, components:IrValueArrayOptionalComponents):IrFunction {
+	public static function rewrite(fn:IrFunction, element:IrType,
+			components:IrValueArrayOptionalComponents):IrFunction {
 		var name = switch element {
 			case Nullable(Obj(value)): value;
 			default: throw "Expected a nullable struct element";
-		}, arrayType:IrType = Array(element), wrapperType = components.wrapperType(), reads:Map<Int, OptionalArrayAccess> = [], boxes:Map<Int,
-			OptionalBox> = [],
-			unboxes:Map<Int, IrValue> = [], writes:Map<Int, IrValue> = [], anyReads:Map<Int, OptionalArrayAccess> = [], castSources:Map<Int, Int> = [],
-			rawReads:Map<Int, Int> = [], dynamicValues:Map<Int,
-				{
-					boxed:Int,
-					block:Int,
-					position:Int
-				}> = [], dynamicWrites:Map<Int, IrValue> = [], dynamicBoxes:Map<Int, Bool> = [], uses:Map<Int, Int> = [], next = 0;
+		}, arrayType:IrType = Array(element), wrapperType = components.wrapperType(),
+			reads:Map<Int, OptionalArrayAccess> = [], boxes:Map<Int, OptionalBox> = [],
+			unboxes:Map<Int, IrValue> = [], writes:Map<Int, IrValue> = [], anyReads:Map<Int, OptionalArrayAccess> = [],
+			castSources:Map<Int, Int> = [],
+			rawReads:Map<Int, Int> = [], dynamicValues:Map<Int, {
+				boxed:Int,
+				block:Int,
+				position:Int
+			}> = [], dynamicWrites:Map<Int, IrValue> = [], dynamicBoxes:Map<Int, Bool> = [], uses:Map<Int, Int> = [],
+				next = 0;
 		function use(value:IrValue):Void
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		function readAt(id:Int):OptionalArrayAccess {
@@ -59,7 +71,8 @@ class IrValueArrayOptionalRewrite {
 					case Phi(_, inputs):
 						for (input in inputs)
 							use(input.value);
-					case ArrayGet(value, array, index) if (Type.enumEq(array.type, arrayType) && Type.enumEq(value.type, element)):
+					case ArrayGet(value, array,
+						index) if (Type.enumEq(array.type, arrayType) && Type.enumEq(value.type, element)):
 						reads.set(value.id, {
 							block: block.id,
 							position: position,
@@ -67,7 +80,8 @@ class IrValueArrayOptionalRewrite {
 							index: index,
 							operation: "get"
 						});
-					case Call(value, "__array_get_any", args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
+					case Call(value, "__array_get_any",
+						args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
 						anyReads.set(value.id, {
 							block: block.id,
 							position: position,
@@ -76,10 +90,11 @@ class IrValueArrayOptionalRewrite {
 							operation: "get"
 						});
 					case Call(value, nativeName, args)
-						if ((nativeName == "__array_pop_ref" || nativeName == "__array_shift_ref" || nativeName == "__array_pop_any"
-							|| nativeName == "__array_shift_any")
-							&& args.length == 1
-							&& Type.enumEq(args[0].type, arrayType)):
+						if ((nativeName == "__array_pop_ref" || nativeName == "__array_shift_ref"
+						|| nativeName == "__array_pop_any"
+						|| nativeName == "__array_shift_any")
+						&& args.length == 1
+						&& Type.enumEq(args[0].type, arrayType)):
 						var read:OptionalArrayAccess = {
 							block: block.id,
 							position: position,
@@ -93,15 +108,14 @@ class IrValueArrayOptionalRewrite {
 							anyReads.set(value.id, read);
 					case Call(value, helper, args)
 						if (helper == IrOptionalValueFlow.boxName(name)
-							&& args.length == 1
-							&& Type.enumEq(value.type, element)
-							&& Type.enumEq(args[0].type, wrapperType)):
+						&& args.length == 1
+						&& Type.enumEq(value.type, element)
+						&& Type.enumEq(args[0].type, wrapperType)):
 						boxes.set(value.id, {block: block.id, position: position, wrapper: args[0]});
 					case ToDyn(out, value) if (Type.enumEq(value.type, element) && (switch (out.type) {
 						case Dyn: true;
 						default: false;
-					})):
-						dynamicValues.set(out.id, {boxed: value.id, block: block.id, position: position});
+					})): dynamicValues.set(out.id, {boxed: value.id, block: block.id, position: position});
 					default:
 				}
 			}
@@ -115,7 +129,8 @@ class IrValueArrayOptionalRewrite {
 		for (block in fn.blocks)
 			for (position in 0...block.instructions.length)
 				switch block.instructions[position].value {
-					case SafeCast(out, value) if (Type.enumEq(out.type, element) && anyReads.exists(value.id) && uses.get(value.id) == 1):
+					case SafeCast(out, value) if (Type.enumEq(out.type, element) && anyReads.exists(value.id)
+						&& uses.get(value.id) == 1):
 						var read = anyReads.get(value.id);
 						if (read.block == block.id && read.position < position) {
 							reads.set(out.id, read);
@@ -128,17 +143,18 @@ class IrValueArrayOptionalRewrite {
 				switch block.instructions[position].value {
 					case Call(out, helper, args)
 						if (helper == IrOptionalValueFlow.unboxName(name)
-							&& args.length == 1
-							&& reads.exists(args[0].id)
-							&& Type.enumEq(out.type, wrapperType)
-							&& uses.get(args[0].id) == 1):
+						&& args.length == 1
+						&& reads.exists(args[0].id)
+						&& Type.enumEq(out.type, wrapperType)
+						&& uses.get(args[0].id) == 1):
 						var read = readAt(args[0].id);
 						if (read.block == block.id && read.position < position) {
 							unboxes.set(args[0].id, out);
 							if (castSources.exists(args[0].id))
 								rawReads.set(castSources.get(args[0].id), args[0].id);
 						}
-					case ArraySet(array, _, value) if (Type.enumEq(array.type, arrayType) && boxes.exists(value.id) && uses.get(value.id) == 1):
+					case ArraySet(array, _, value) if (Type.enumEq(array.type, arrayType) && boxes.exists(value.id)
+						&& uses.get(value.id) == 1):
 						var box = boxAt(value.id);
 						if (box.block == block.id
 							&& box.position < position
@@ -146,8 +162,8 @@ class IrValueArrayOptionalRewrite {
 							writes.set(value.id, box.wrapper);
 					case Call(out, nativeName, args)
 						if (mutation(nativeName, args, out, arrayType) != null
-							&& boxes.exists(args[args.length - 1].id)
-							&& uses.get(args[args.length - 1].id) == 1):
+						&& boxes.exists(args[args.length - 1].id)
+						&& uses.get(args[args.length - 1].id) == 1):
 						var value = args[args.length - 1],
 							box = boxAt(value.id);
 						if (box.block == block.id
@@ -156,8 +172,8 @@ class IrValueArrayOptionalRewrite {
 							writes.set(value.id, box.wrapper);
 					case Call(out, nativeName, args)
 						if (mutation(nativeName, args, out, arrayType) != null
-							&& dynamicValues.exists(args[args.length - 1].id)
-							&& uses.get(args[args.length - 1].id) == 1):
+						&& dynamicValues.exists(args[args.length - 1].id)
+						&& uses.get(args[args.length - 1].id) == 1):
 						var conversion = dynamicValues.get(args[args.length - 1].id);
 						if (conversion == null)
 							throw "Missing optional dynamic array conversion";
@@ -186,8 +202,9 @@ class IrValueArrayOptionalRewrite {
 						instruction = Call(unboxed(out.id), components.getName(), [array, index]);
 					case Call(out, nativeName, args)
 						if ((rawReads.exists(out.id) || unboxes.exists(out.id))
-							&& (nativeName == "__array_get_any" || nativeName == "__array_pop_ref" || nativeName == "__array_shift_ref"
-								|| nativeName == "__array_pop_any" || nativeName == "__array_shift_any")):
+						&& (nativeName == "__array_get_any" || nativeName == "__array_pop_ref"
+						|| nativeName == "__array_shift_ref"
+						|| nativeName == "__array_pop_any" || nativeName == "__array_shift_any")):
 						var id = out.id;
 						if (rawReads.exists(out.id)) {
 							var source = rawReads.get(out.id);
@@ -215,10 +232,14 @@ class IrValueArrayOptionalRewrite {
 					case ToDyn(out, _) if (dynamicWrites.exists(out.id)):
 						omit = true;
 					case ArraySet(array, index, value) if (writes.exists(value.id)):
-						instruction = Call(new IrValue(next++, "$optional-array-write", Void), components.setName(), [array, index, writes.get(value.id)]);
+						instruction = Call(new IrValue(next++, "$optional-array-write", Void), components.setName(), [
+							array,
+							index,
+							writes.get(value.id)
+						]);
 					case Call(out, nativeName, args)
 						if (mutation(nativeName, args, out, arrayType) != null
-							&& (writes.exists(args[args.length - 1].id) || dynamicWrites.exists(args[args.length - 1].id))):
+						&& (writes.exists(args[args.length - 1].id) || dynamicWrites.exists(args[args.length - 1].id))):
 						var kind = mutation(nativeName, args, out, arrayType),
 							value = args[args.length - 1],
 							wrapper = writes.exists(value.id) ? writes.get(value.id) : dynamicWrites.get(value.id),
@@ -242,10 +263,10 @@ class IrValueArrayOptionalRewrite {
 		var debug = [
 			for (binding in fn.debugBindings)
 				if (!unboxes.exists(binding.value.id)
-					&& !writes.exists(binding.value.id)
-					&& !rawReads.exists(binding.value.id)
-					&& !dynamicWrites.exists(binding.value.id)
-					&& !dynamicBoxes.exists(binding.value.id)) binding
+				&& !writes.exists(binding.value.id)
+				&& !rawReads.exists(binding.value.id)
+				&& !dynamicWrites.exists(binding.value.id)
+				&& !dynamicBoxes.exists(binding.value.id)) binding
 		];
 		return fn.withBlocks(blocks, debug);
 	}
@@ -299,7 +320,8 @@ class IrValueArrayOptionalRewrite {
 				for (input in IrOperands.inputs(instruction))
 					if (input.id == wrapper.id) {
 						var allowed = block.id == blockId && (switch instruction {
-							case FieldSet(owner, _, value) if (owner.id == wrapper.id && value.id != wrapper.id && position < boxPosition): true;
+							case FieldSet(owner, _, value) if (owner.id == wrapper.id && value.id != wrapper.id
+								&& position < boxPosition): true;
 							case Call(out, _, _) if (out.id == boxValue && position == boxPosition): true;
 							default: false;
 						});

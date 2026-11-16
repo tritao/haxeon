@@ -18,9 +18,12 @@ class ReactiveIdentityIndex {
 	}
 
 	function allocate(capacity:Int):Void {
-		sources = []; sources.resize(capacity);
-		bits = []; bits.resize(capacity);
-		edges = []; edges.resize(capacity);
+		sources = [];
+		sources.resize(capacity);
+		bits = [];
+		bits.resize(capacity);
+		edges = [];
+		edges.resize(capacity);
 	}
 
 	function slot(source:ReactiveSource, bit:Int):Int {
@@ -41,12 +44,15 @@ class ReactiveIdentityIndex {
 			count++;
 			if (occupied != null) occupied.push(index);
 		}
-		sources[index] = source; bits[index] = bit; edges[index] = edge;
+		sources[index] = source;
+		bits[index] = bit;
+		edges[index] = edge;
 	}
 
 	function grow():Void {
 		var oldSources = sources, oldBits = bits, oldEdges = edges;
-		allocate(oldSources.length * 2); count = 0;
+		allocate(oldSources.length * 2);
+		count = 0;
 		if (occupied != null) occupied.resize(0);
 		for (index in 0...oldSources.length)
 			if (oldSources[index] != null) put(oldSources[index], oldBits[index], oldEdges[index]);
@@ -56,11 +62,15 @@ class ReactiveIdentityIndex {
 		var index = slot(source, bit);
 		if (sources[index] == null) return;
 		var mask = sources.length - 1;
-		sources[index] = null; edges[index] = null; count--;
+		sources[index] = null;
+		edges[index] = null;
+		count--;
 		index = (index + 1) & mask;
 		while (sources[index] != null) {
 			var displacedSource = sources[index], displacedBit = bits[index], displacedEdge = edges[index];
-			sources[index] = null; edges[index] = null; count--;
+			sources[index] = null;
+			edges[index] = null;
+			count--;
 			put(displacedSource, displacedBit, displacedEdge);
 			index = (index + 1) & mask;
 		}
@@ -68,10 +78,16 @@ class ReactiveIdentityIndex {
 
 	public function clear():Void {
 		if (occupied != null) {
-			for (index in occupied) { sources[index] = null; edges[index] = null; }
+			for (index in occupied) {
+				sources[index] = null;
+				edges[index] = null;
+			}
 			occupied.resize(0);
 		} else
-			for (index in 0...sources.length) { sources[index] = null; edges[index] = null; }
+			for (index in 0...sources.length) {
+				sources[index] = null;
+				edges[index] = null;
+			}
 		count = 0;
 	}
 }

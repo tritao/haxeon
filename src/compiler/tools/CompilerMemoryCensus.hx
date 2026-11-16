@@ -36,99 +36,95 @@ class CompilerMemoryCensus {
 			var compiler:Null<Compiler> = session.compiler;
 			if (compiler == null)
 				return;
-			var steps:Array<{name:String, release:() -> Void}> = [
-				{name: "baseline", release: () -> {}},
-				{
-					name: "cached compile result",
-					release: () -> {
-						compiler.cachedCompileResult = null;
-						compiler.cachedCompileEntry = null;
-					}
-				},
+			var steps:Array<{name:String, release:() -> Void}> = [{name: "baseline", release: () -> {}
+			},
+				{name: "cached compile result",
+				release: () -> {
+					compiler.cachedCompileResult = null;
+					compiler.cachedCompileEntry = null;
+				}
+			},
 				{name: "pipeline snapshot (final IR, module)", release: () -> compiler.pipelineSnapshot = null},
-				{
-					name: "encoded module bytes and writer cache",
-					release: () -> {
-						session.encodedModule = null;
-						session.encodedWasm = null;
-						session.writerCache = new HlWriterCache();
-					}
-				},
+				{name: "encoded module bytes and writer cache",
+				release: () -> {
+					session.encodedModule = null;
+					session.encodedWasm = null;
+					session.writerCache = new HlWriterCache();
+				}
+			},
 				{name: "lowered function cache", release: () -> compiler.loweredCache = new HlLoweredCache()},
-				{name: "last assembler (function cache, symbols)", release: () -> compiler.assembler = new HlModuleAssembler()},
-				{name: "inline cache", release: () -> compiler.inlineCache = new IrInlineCache()},
 				{
-					name: "object cache",
-					release: () -> {
-						compiler.objectCache = [];
-						compiler.canonicalObjectCache = [];
-					}
+					name: "last assembler (function cache, symbols)",
+					release: () -> compiler.assembler = new HlModuleAssembler()
 				},
-				{
-					name: "last typed program and semantic program",
-					release: () -> {
-						compiler.lastTypedProgram = null;
-						compiler.cachedSemanticProgram = null;
-					}
-				},
-				{
-					name: "typed functions of modules",
-					release: () -> for (state in compiler.modules) {
-						state.typedFunctions = [];
-						state.purityQueries = [];
-						state.noReturnQueries = [];
-						state.keyPathUses = [];
-						state.defaultArgumentSources = [];
-					}
-				},
-				{
-					name: "IR functions of modules",
-					release: () -> for (state in compiler.modules) {
-						state.irFunctions = [];
-						state.pendingIrFunctions = [];
-					}
-				},
-				{
-					name: "canonical declarations of modules",
-					release: () -> for (state in compiler.modules) {
-						state.canonicalFunctions = [];
-						state.canonicalAllFunctions = [];
-						state.canonicalProgramFunctions = [];
-						state.canonicalClasses = [];
-						state.canonicalEnums = [];
-						state.canonicalInterfaces = [];
-						state.canonicalAbstracts = [];
-						state.canonicalAliases = [];
-						state.canonicalEnumAbstracts = [];
-					}
-				},
-				{
-					name: "semantic models of modules",
-					release: () -> for (state in compiler.modules) {
-						state.semanticModel = null;
-						state.recoveredSemanticModel = null;
-						state.lastGoodSemanticModel = null;
-					}
-				},
-				{
-					name: "tokens and syntax trees of modules",
-					release: () -> for (state in compiler.modules) {
-						state.tokens = [];
-						state.recoveredTokens = [];
-						state.lastGoodTokens = [];
-						state.ast = null;
-						state.recoveredAst = null;
-						state.lastGoodAst = null;
-					}
-				},
-				{
-					name: "reachability and declaration owners",
-					release: () -> {
-						compiler.reachabilityCache = [];
-						compiler.declarationOwners = new compiler.semantic.DeclarationOwners();
-					}
-				},
-			];
+					{
+						name: "inline cache",
+						release: () -> compiler.inlineCache = new IrInlineCache()
+					},
+						{name: "object cache",
+						release: () -> {
+							compiler.objectCache = [];
+							compiler.canonicalObjectCache = [];
+						}
+			},
+				{name: "last typed program and semantic program",
+				release: () -> {
+					compiler.lastTypedProgram = null;
+					compiler.cachedSemanticProgram = null;
+				}
+			},
+				{name: "typed functions of modules",
+				release: () -> for (state in compiler.modules) {
+					state.typedFunctions = [];
+					state.purityQueries = [];
+					state.noReturnQueries = [];
+					state.keyPathUses = [];
+					state.defaultArgumentSources = [];
+				}
+			},
+				{name: "IR functions of modules",
+				release: () -> for (state in compiler.modules) {
+					state.irFunctions = [];
+					state.pendingIrFunctions = [];
+				}
+			},
+				{name: "canonical declarations of modules",
+				release: () -> for (state in compiler.modules) {
+					state.canonicalFunctions = [];
+					state.canonicalAllFunctions = [];
+					state.canonicalProgramFunctions = [];
+					state.canonicalClasses = [];
+					state.canonicalEnums = [];
+					state.canonicalInterfaces = [];
+					state.canonicalAbstracts = [];
+					state.canonicalAliases = [];
+					state.canonicalEnumAbstracts = [];
+				}
+			},
+				{name: "semantic models of modules",
+				release: () -> for (state in compiler.modules) {
+					state.semanticModel = null;
+					state.recoveredSemanticModel = null;
+					state.lastGoodSemanticModel = null;
+				}
+			},
+				{name: "tokens and syntax trees of modules",
+				release: () -> for (state in compiler.modules) {
+					state.tokens = [];
+					state.recoveredTokens = [];
+					state.lastGoodTokens = [];
+					state.ast = null;
+					state.recoveredAst = null;
+					state.lastGoodAst = null;
+				}
+			},
+				{name: "reachability and declaration owners",
+				release: () -> {
+					compiler.reachabilityCache = [];
+					compiler.declarationOwners = new compiler.semantic.DeclarationOwners();
+				}
+			},
+				];
 			var report = File.append(directory + "/census.txt");
 			var limit = Sys.getEnv("HAXEON_COMPILER_CENSUS_STEPS");
 			for (index in 0...(limit == null ? steps.length : Std.int(Math.min(steps.length, Std.parseInt(limit))))) {

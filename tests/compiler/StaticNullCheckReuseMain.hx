@@ -48,7 +48,8 @@ class StaticNullCheckReuseMain {
 		expect(plain.length == cached.length, "a cached run returns the same functions as an uncached run");
 		for (index in 0...plain.length) {
 			expect(plain[index].name == cached[index].name, "a cached run keeps the order");
-			expect(bytes(plain[index]) == bytes(cached[index]), 'a cached run builds the same ${plain[index].name} as an uncached run');
+			expect(bytes(plain[index]) == bytes(cached[index]),
+				'a cached run builds the same ${plain[index].name} as an uncached run');
 		}
 	}
 
@@ -83,31 +84,49 @@ class StaticNullCheckReuseMain {
 		expect(pruned.get("readA") == unreachable[1], "an unreachable function is passed through");
 		sameAsUncached(IrStaticNullChecks.run(unreachable, null, cache), unreachable);
 		// A value static must keep the initialization guard without boxing on every field read.
-		var valueObject:IrObject = {name: "Box", isValue: true, base: null, interfaces: [], fields: [{name: "v", type: I32}], methods: []};
+		var valueObject:IrObject = {
+			name: "Box",
+			isValue: true,
+			base: null,
+			interfaces: [],
+			fields: [{name: "v", type: I32}],
+			methods: []
+		};
 		var valueChecked = IrStaticNullChecks.run(sources, [valueObject], cache);
 		var read = byName(valueChecked).get("readA"), boxed = false, typedHelper = false;
 		for (block in read.blocks) for (located in block.instructions) switch located.value {
 			case ToDyn(_, _): boxed = true;
-			case Call(_, name, args) if (StringTools.startsWith(name, "$static$nonnull$value$") && Type.enumEq(args[0].type, Obj("Box"))):
+			case Call(_, name, args) if (StringTools.startsWith(name, "$static$nonnull$value$")
+				&& Type.enumEq(args[0].type, Obj("Box"))):
 				typedHelper = true;
 			default:
 		}
 		expect(!boxed && typedHelper, "value static checks keep their typed reference without a dynamic box");
-		var referenceObject:IrObject = {name: "Box", isValue: false, base: null, interfaces: [], fields: [{name: "v", type: I32}], methods: []};
+		var referenceObject:IrObject = {
+			name: "Box",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			fields: [{name: "v", type: I32}],
+			methods: []
+		};
 		var referenceChecked = IrStaticNullChecks.run(sources, [referenceObject], cache);
-		expect(byName(referenceChecked).exists("__static$nonnull$S.a"), "changing a value to a reference invalidates cached checks");
+		expect(byName(referenceChecked).exists("__static$nonnull$S.a"),
+			"changing a value to a reference invalidates cached checks");
 		var b = new IrBuilder(), dst = new IrValue(100, "dst", Obj("Box")), src = new IrValue(101, "src", Obj("Box"));
 		b.blocks[0].instructions.push(new Located(GlobalGet(dst, "S.dst"), SourceProvenance.generated("test")));
 		b.blocks[0].instructions.push(new Located(GlobalGet(src, "S.src"), SourceProvenance.generated("test")));
 		b.call(compiler.ir.IrOptionalFieldStorage.copyName("Box", "v", "Box", "v"), [dst, src], Void);
 		b.returnValue(b.constVoid());
-		var init = new IrFunction("__init", [], Void, b.blocks, Ordinary), checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");
+		var init = new IrFunction("__init", [], Void, b.blocks, Ordinary),
+			checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");
 		var checks:Array<String> = [];
 		for (block in checked.blocks) for (located in block.instructions) switch located.value {
 			case Call(_, name, _) if (StringTools.startsWith(name, "__static$nonnull$")): checks.push(name);
 			default:
 		}
-		expect(checks.join(",") == "__static$nonnull$S.src,__static$nonnull$S.dst", "optional copies check source before destination");
+		expect(checks.join(",") == "__static$nonnull$S.src,__static$nonnull$S.dst",
+			"optional copies check source before destination");
 		Sys.println("static null-check reuse OK");
 	}
 }

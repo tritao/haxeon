@@ -136,28 +136,32 @@ class Xml {
 	var children:Array<Xml>;
 	var attributeMap:Map<String, String>;
 
-	#if !cppia inline #end function get_nodeName() {
+	#if !cppia
+	inline #end function get_nodeName() {
 		if (nodeType != Element) {
 			throw 'Bad node type, expected Element but found ${typeName(nodeType)}';
 		}
 		return nodeName;
 	}
 
-	#if !cppia inline #end function set_nodeName(v) {
+	#if !cppia
+	inline #end function set_nodeName(v) {
 		if (nodeType != Element) {
 			throw 'Bad node type, expected Element but found ${typeName(nodeType)}';
 		}
 		return this.nodeName = v;
 	}
 
-	#if !cppia inline #end function get_nodeValue() {
+	#if !cppia
+	inline #end function get_nodeValue() {
 		if (nodeType == Document || nodeType == Element) {
 			throw 'Bad node type, unexpected ${typeName(nodeType)}';
 		}
 		return nodeValue;
 	}
 
-	#if !cppia inline #end function set_nodeValue(v) {
+	#if !cppia
+	inline #end function set_nodeValue(v) {
 		if (nodeType == Document || nodeType == Element) {
 			throw 'Bad node type, unexpected ${typeName(nodeType)}';
 		}

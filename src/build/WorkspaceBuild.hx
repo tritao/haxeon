@@ -30,7 +30,8 @@ class LoweredWorkspaceProject {
 	/** See `WorkspaceProject.shards`. */
 	public final shards:Int;
 
-	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>, cacheTests:Bool = true, ?testInputs:Array<String>,
+	public function new(name:String, project:ResolvedProject, output:String, actions:Array<ActionId>,
+			cacheTests:Bool = true, ?testInputs:Array<String>,
 			shards:Int = 1) {
 		this.name = name;
 		this.project = project;
@@ -53,7 +54,8 @@ class LoweredWorkspace {
 	/** For each merged action, the projects that requested it. */
 	public final requestedBy:Map<String, Array<String>>;
 
-	public function new(environment:BuildEnvironment, plan:ExecutionPlan, projects:Array<LoweredWorkspaceProject>, rawActionCount:Int,
+	public function new(environment:BuildEnvironment, plan:ExecutionPlan, projects:Array<LoweredWorkspaceProject>,
+			rawActionCount:Int,
 			requestedBy:Map<String, Array<String>>) {
 		this.environment = environment;
 		this.plan = plan;
@@ -69,17 +71,24 @@ class LoweredWorkspace {
  * that differs between projects is a conflict rather than a silent overwrite.
  */
 class WorkspaceBuild {
-	public static function lower(workspace:WorkspaceManifest, projects:Array<WorkspaceProject>, resolve:String->ResolvedProject, home:String,
+	public static function lower(workspace:WorkspaceManifest, projects:Array<WorkspaceProject>,
+			resolve:String->ResolvedProject, home:String,
 			defines:Array<String>):LoweredWorkspace {
-		var environment = new BuildEnvironment(workspace.root, workspace.buildRoot, BuildProfile.Debug), merged = new Map<String, ExecutionAction>(),
-			order:Array<String> = [], requestedBy = new Map<String, Array<String>>(), lowered:Array<LoweredWorkspaceProject> = [], raw = 0;
+		var environment = new BuildEnvironment(workspace.root, workspace.buildRoot, BuildProfile.Debug),
+			merged = new Map<String, ExecutionAction>(),
+			order:Array<String> = [],
+			requestedBy = new Map<String, Array<String>>(),
+			lowered:Array<LoweredWorkspaceProject> = [],
+			raw = 0;
 		for (member in projects) {
 			var project = resolve(member.manifestPath);
 			if (project.manifest.target != "host")
 				throw 'Workspace project "${member.name}" targets "${project.manifest.target}"; workspace builds support "host" only';
 			var output = Path.join([project.root, project.manifest.outputDir, "host", "main.hl"]),
-				plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
-				execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, false, true)),
+				plan = BuildPlanner.project(project, BuildIntent.Build, environment.target,
+					NativeArtifactDemand.Shared),
+				execution = PlanLowerer.lower(plan,
+					new LoweringContext(environment, null, project, output, home, defines, false, true)),
 				ids:Array<ActionId> = [];
 			for (action in execution.actions) {
 				var key = action.id.key(), existing = merged.get(key);
@@ -88,15 +97,18 @@ class WorkspaceBuild {
 					order.push(key);
 					requestedBy.set(key, [member.name]);
 				} else {
-					merged.set(key, ActionMerge.combine(existing, action, requestedBy.get(key).join(", "), member.name));
+					merged.set(key,
+						ActionMerge.combine(existing, action, requestedBy.get(key).join(", "), member.name));
 					requestedBy.get(key).push(member.name);
 				}
 				ids.push(action.id);
 				raw++;
 			}
-			lowered.push(new LoweredWorkspaceProject(member.name, project, output, ids, member.cacheTests, member.testInputs, member.shards));
+			lowered.push(new LoweredWorkspaceProject(member.name, project, output, ids, member.cacheTests,
+				member.testInputs, member.shards));
 		}
-		return new LoweredWorkspace(environment, new ExecutionPlan([for (key in order) merged.get(key)]), lowered, raw, requestedBy);
+		return new LoweredWorkspace(environment, new ExecutionPlan([for (key in order) merged.get(key)]), lowered, raw,
+			requestedBy);
 	}
 
 	/**
@@ -127,7 +139,7 @@ class WorkspaceBuild {
 			var directories = [Path.join([home, "out"]), build.HashLinkPath.directory(home)], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
 			// the native libraries it loads, and the files beside its project. The project directory
 			// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.
-				inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
+			inputs = [member.output, member.project.root].concat(runtime).concat(member.testInputs);
 			for (resolvedPackage in member.project.packages.packages) {
 				var packageRoot = context.layout.packageRoot(resolvedPackage.name);
 				directories.push(packageRoot);
@@ -149,11 +161,16 @@ class WorkspaceBuild {
 					log = Path.join([testsDirectory, safeName + ".log"]),
 					stamp = Path.join([testsDirectory, safeName + ".passed"]), // The stamp exists only while the last run of this action passed; the executor skips the run
 				// when it exists and every input is unchanged since a passing run.
-					arguments = sharded ? " --shard " + shard + "/" + member.shards : "",
-					script = 'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)}$arguments > ${quote(log)} 2>&1; status=$$?; '
-						+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
-				actions.push(new ExecutionAction(new ActionId("test:" + runName), member.actions, inputs, [stamp], 'Test $runName (log: $log)',
-					Process("sh", ["-c", script], member.project.root, environment), true, !(useCache && member.cacheTests)));
+				arguments = sharded ? " --shard " + shard + "/" + member.shards : "",
+					script =
+					'mkdir -p ${quote(testsDirectory)} && rm -f ${quote(stamp)} && ${quote(hashlink)} ${quote(member.output)}$arguments > ${quote(log)} 2>&1; status=$$?; '
+					+ 'if [ $$status -eq 0 ]; then tail -n 1 ${quote(log)}; touch ${quote(stamp)}; else tail -n 40 ${quote(log)}; fi; exit $$status';
+				actions.push(new ExecutionAction(new ActionId("test:" + runName), member.actions, inputs, [stamp],
+					'Test $runName (log: $log)',
+					Process("sh", [
+						"-c",
+						script
+					], member.project.root, environment), true, !(useCache && member.cacheTests)));
 			}
 		}
 		return new ExecutionPlan(actions);
@@ -168,10 +185,10 @@ class WorkspaceBuild {
 					var path = Path.join([directory, entry]);
 					if (!sys.FileSystem.isDirectory(path)
 						&& (entry == "hl"
-							|| StringTools.endsWith(entry, ".hdll")
-							|| StringTools.endsWith(entry, ".so")
-							|| entry.indexOf(".so.") > 0
-							|| StringTools.endsWith(entry, ".dylib")))
+						|| StringTools.endsWith(entry, ".hdll")
+						|| StringTools.endsWith(entry, ".so")
+						|| entry.indexOf(".so.") > 0
+						|| StringTools.endsWith(entry, ".dylib")))
 						files.push(path);
 				}
 		return files;

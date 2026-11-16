@@ -26,8 +26,7 @@ class Mask {
 				throw "Mask parameters must be finite";
 		if ((kind == MaskKind.RoundedRect || kind == MaskKind.Circle) && radius < 0.0)
 			throw "Mask radius must be non-negative";
-		if (kind == MaskKind.LinearGradient &&
-			(alpha0 < 0.0 || alpha0 > 1.0 || alpha1 < 0.0 || alpha1 > 1.0))
+		if (kind == MaskKind.LinearGradient && (alpha0 < 0.0 || alpha0 > 1.0 || alpha1 < 0.0 || alpha1 > 1.0))
 			throw "Mask gradient alpha must be in the range 0..1";
 		if (kind == MaskKind.Image && (image == null || image.isDisposed()))
 			throw "Image masks require a live image";
@@ -66,9 +65,8 @@ class Mask {
 
 	/** By hand: the image is compared by identity, which the generated equality does not do for a plain class. */
 	public function isEqual(other:Mask):Bool
-		return other != null && kind == other.kind && radius == other.radius && x0 == other.x0 &&
-			y0 == other.y0 && x1 == other.x1 && y1 == other.y1 && alpha0 == other.alpha0 &&
-			alpha1 == other.alpha1 && image == other.image;
+		return other != null && kind == other.kind && radius == other.radius && x0 == other.x0 && y0 == other.y0 && x1
+			== other.x1 && y1 == other.y1 && alpha0 == other.alpha0 && alpha1 == other.alpha1 && image == other.image;
 
 	public function describe():String {
 		return switch kind {

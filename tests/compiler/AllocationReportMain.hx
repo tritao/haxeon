@@ -7,7 +7,8 @@ import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 class AllocationReportMain {
-	static final source = '
+	static final source =
+		'
 class Box { public var v:Int; public function new(v:Int) { this.v = v; } }
 @:value class P { public var x:Float; public var y:Float; public function new(x:Float, y:Float) { this.x = x; this.y = y; } }
 class Base { public function new() {} public function f():Int return 0; }
@@ -72,23 +73,27 @@ function main():Int { var t = new T(); return t.pure(1) + t.dispatch(new Heavy()
 		expect(kinds(rows, "T.mapGetInt") == "alloc", "a map of primitives boxes the value it returns");
 		expect(kinds(rows, "T.mapIter") == "alloc", "iterating a map values snapshot allocates");
 		expect(kinds(rows, "T.concat") == "alloc,alloc,alloc", "boxing, string conversion and concatenation");
-		expect(kinds(rows, "T.closure") == "alloc,alloc,dynamic", "closure environment, closure and an unresolved call");
+		expect(kinds(rows, "T.closure") == "alloc,alloc,dynamic",
+			"closure environment, closure and an unresolved call");
 
 		// The finding is attributed to the callee, with the path that reaches it.
 		var outer = rows.filter(row -> row.root == "T.outer")[0];
 		expect(outer.findings.length == 1 && outer.findings[0].inFunction == "T.loopy", "callee allocation is found");
-		expect(outer.findings[0].chain.join(">") == "T.outer>T.loopy", "chain names every call: " + outer.findings[0].chain.join(">"));
+		expect(outer.findings[0].chain.join(">") == "T.outer>T.loopy",
+			"chain names every call: " + outer.findings[0].chain.join(">"));
 		expect(outer.findings[0].line > 0 && outer.findings[0].path != null, "findings carry a source location");
 
 		// A method call reaches every override, and an interface call every implementor.
 		var dispatch = rows.filter(row -> row.root == "T.dispatch")[0];
 		expect(dispatch.findings.length == 1 && dispatch.findings[0].inFunction == "Heavy.f", "override is followed");
 		var shape = rows.filter(row -> row.root == "T.viaInterface")[0];
-		expect(shape.findings.length == 1 && shape.findings[0].inFunction == "Sq.area", "interface implementor is followed");
+		expect(shape.findings.length == 1 && shape.findings[0].inFunction == "Sq.area",
+			"interface implementor is followed");
 
 		// Roots: exact names, prefixes, and no match.
 		expect(IrAllocationReport.analyze(program, ["T.pure"]).length == 1, "exact root");
-		expect(IrAllocationReport.analyze(program, " T.pure , T.rec".split(",")).length == 2, "comma list ignores spaces");
+		expect(IrAllocationReport.analyze(program, " T.pure , T.rec".split(",")).length == 2,
+			"comma list ignores spaces");
 		expect(IrAllocationReport.analyze(program, ["Nope.*"]).length == 0, "unmatched pattern");
 
 		// Native classification.
@@ -96,11 +101,14 @@ function main():Int { var t = new T(); return t.pure(1) + t.dispatch(new Heavy()
 		expect(IrAllocationReport.classifyNative("__array_pop_i32") == null, "pop does not allocate");
 		expect(IrAllocationReport.classifyNative("__array_slice_ref").kind == "alloc", "slice copies");
 		expect(IrAllocationReport.classifyNative("__map_string_ref_set").kind == "grow", "map set can grow");
-		expect(IrAllocationReport.classifyNative("__map_string_ref_get") == null, "reference map get returns the stored reference");
-		expect(IrAllocationReport.classifyNative("__sys_get_cwd").kind == "unknown", "unclassified natives are reported, not assumed free");
+		expect(IrAllocationReport.classifyNative("__map_string_ref_get") == null,
+			"reference map get returns the stored reference");
+		expect(IrAllocationReport.classifyNative("__sys_get_cwd").kind == "unknown",
+			"unclassified natives are reported, not assumed free");
 
 		for (i in 0...program.functions.length)
-			expect(before[i].compare(IrFunctionStateCodec.encode(program.functions[i])) == 0, "the report does not change IR");
+			expect(before[i].compare(IrFunctionStateCodec.encode(program.functions[i])) == 0,
+				"the report does not change IR");
 		Sys.println("PASS: allocation report follows calls, overrides and interfaces without changing IR");
 	}
 }

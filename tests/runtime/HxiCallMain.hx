@@ -32,10 +32,8 @@ class HxiCallMain {
 			+ '\tstruct fixture_label_box @layout(16, 8) { label: fixture_label @offset(0); }\n'
 			+ '\tstruct fixture_padded @layout(8, 4) { tag: i8 @offset(0); value: i32 @offset(4); }\n'
 			+ '\tstruct fixture_gapped @layout(12, 4) { tag: i8 @offset(0); value: i32 @offset(8); }\n'
-			+
-			'\tstruct fixture_holder @layout(16, 8) { required: ptr<fixture_context> @offset(0) @borrowed; optional: nullable<ptr<fixture_context>> @offset(8) @borrowed; }\n'
-			+
-			'\tstruct fixture_arrays @layout(28, 4) { values: array<i16, 3> @offset(0); name: array<u8, 4> @offset(6); points: array<fixture_point, 2> @offset(12); }\n'
+			+ '\tstruct fixture_holder @layout(16, 8) { required: ptr<fixture_context> @offset(0) @borrowed; optional: nullable<ptr<fixture_context>> @offset(8) @borrowed; }\n'
+			+ '\tstruct fixture_arrays @layout(28, 4) { values: array<i16, 3> @offset(0); name: array<u8, 4> @offset(6); points: array<fixture_point, 2> @offset(12); }\n'
 			+ '\tcallback FixturePointCallback = fn(left: fixture_point, right: fixture_point) -> fixture_point;\n'
 			+ '\tcallback FixtureArraysCallback = fn(value: fixture_arrays) -> fixture_arrays;\n'
 			+ '\tcallback FixtureUtf8Callback = fn(value: utf8) -> utf8;\n'
@@ -47,13 +45,10 @@ class HxiCallMain {
 			+ '\textern fn getPoint(base: i32, point: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_get_point");\n'
 			+ '\textern fn doubleValue(value: ptr<i32> @inout) -> void @symbol("native_fixture_double_value");\n'
 			+ '\textern fn shiftPoint(point: ptr<fixture_point> @inout) -> i32 @symbol("native_fixture_shift_point");\n'
-			+
-			'\textern fn readBytes(first: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32 @symbol("native_fixture_read_bytes");\n'
+			+ '\textern fn readBytes(first: i32, data: nullable<ptr<u8>> @out_buffer("size"), size: ptr<u32> @inout) -> i32 @symbol("native_fixture_read_bytes");\n'
 			+ '\textern fn sumBytes(data: ptr<const<void>> @in_array("count"), count: u64) -> i32 @symbol("native_fixture_sum_void_bytes");\n'
-			+
-			'\textern fn mapPoints(values: ptr<const<fixture_point>> @in_array("count"), count: u64, results: ptr<fixture_point> @out_array("count")) -> i32 @symbol("native_fixture_map_points");\n'
-			+
-			'\textern fn mapValues(values: ptr<const<i16>> @in_array("count"), count: u64, results: ptr<u16> @out_array("count")) -> i32 @symbol("native_fixture_map_values");\n'
+			+ '\textern fn mapPoints(values: ptr<const<fixture_point>> @in_array("count"), count: u64, results: ptr<fixture_point> @out_array("count")) -> i32 @symbol("native_fixture_map_points");\n'
+			+ '\textern fn mapValues(values: ptr<const<i16>> @in_array("count"), count: u64, results: ptr<u16> @out_array("count")) -> i32 @symbol("native_fixture_map_values");\n'
 			+ '\textern fn fillValues(count: u64, results: ptr<u32> @out_array("count")) -> i32 @symbol("native_fixture_fill_values");\n'
 			+ '\textern fn checkBoxValue(box: fixture_box) -> i32 @symbol("native_fixture_check_box_value");\n'
 			+ '\textern fn checkArraysValue(arrays: fixture_arrays) -> i32 @symbol("native_fixture_check_arrays_value");\n'
@@ -75,12 +70,10 @@ class HxiCallMain {
 			+ '\textern fn systemAdd(left: i32, right: i32) -> i32 @symbol("native_fixture_add") @callconv("system");\n'
 			+ '\textern fn enumAdd(left: FixtureResult, right: FixtureResult) -> FixtureResult @symbol("native_fixture_add");\n'
 			+ '\textern fn callCallback(callback: FixtureBinary, left: i32, right: i32) -> i32 @symbol("native_fixture_call_callback");\n'
-			+
-			'\textern fn callSystemCallback(callback: FixtureSystemBinary, left: i32, right: i32) -> i32 @symbol("native_fixture_call_callback") @callconv("system");\n'
+			+ '\textern fn callSystemCallback(callback: FixtureSystemBinary, left: i32, right: i32) -> i32 @symbol("native_fixture_call_callback") @callconv("system");\n'
 			+ '\textern fn callCallbackOnThread(callback: FixtureBinary) -> i32 @symbol("native_fixture_call_callback_on_thread");\n'
 			+ '\textern fn callEvent(callback: FixtureEvent, withUserData: i32) -> i32 @symbol("native_fixture_call_event");\n'
-			+
-			'\textern fn callSurfaceEventResult(callback: FixtureNullableSurfaceEvent @retained, userData: nullable<ptr<void>>) -> FixtureResult @symbol("native_fixture_call_surface_event");\n'
+			+ '\textern fn callSurfaceEventResult(callback: FixtureNullableSurfaceEvent @retained, userData: nullable<ptr<void>>) -> FixtureResult @symbol("native_fixture_call_surface_event");\n'
 			+ '\textern fn callInvalidEvent(callback: FixtureEvent) -> i32 @symbol("native_fixture_call_invalid_event");\n'
 			+ '\textern fn setCallback(callback: FixtureBinary) -> void @symbol("native_fixture_set_callback");\n'
 			+ '\textern fn setNullableCallback(callback: nullable<FixtureBinary>) -> void @symbol("native_fixture_set_callback");\n'
@@ -88,17 +81,14 @@ class HxiCallMain {
 			+ '\textern fn callRetainedCallback(left: i32, right: i32) -> i32 @symbol("native_fixture_call_retained_callback");\n'
 			+ '\textern fn multiply(left: f64, right: f64) -> f64 @symbol("native_fixture_multiply");\n'
 			+ '\textern fn isNull(value: nullable<ptr<const<void>>>) -> i32 @symbol("native_fixture_is_null");\n'
-			+
-			'\textern fn sum16(a0: i32, a1: i32, a2: i32, a3: i32, a4: i32, a5: i32, a6: i32, a7: i32, a8: i32, a9: i32, a10: i32, a11: i32, a12: i32, a13: i32, a14: i32, a15: i32) -> i32 @symbol("native_fixture_sum16");\n'
+			+ '\textern fn sum16(a0: i32, a1: i32, a2: i32, a3: i32, a4: i32, a5: i32, a6: i32, a7: i32, a8: i32, a9: i32, a10: i32, a11: i32, a12: i32, a13: i32, a14: i32, a15: i32) -> i32 @symbol("native_fixture_sum16");\n'
 			+ '\textern fn i64Value() -> i64 @symbol("native_fixture_i64_value");\n'
 			+ '\textern fn i64Check(value: i64) -> i32 @symbol("native_fixture_i64_check");\n'
 			+ '\textern fn owned(value: i32) -> ptr<fixture_context> @symbol("native_fixture_owned") @owned("native_fixture_release");\n'
 			+ '\textern fn releaseOwnedContext(value: ptr<void>) -> void @symbol("native_fixture_release");\n'
-			+
-			'\textern fn ownedOut(value: i32, result: ptr<nullable<ptr<fixture_context>>> @out @owned("native_fixture_out_release")) -> void @symbol("native_fixture_owned_out");\n'
+			+ '\textern fn ownedOut(value: i32, result: ptr<nullable<ptr<fixture_context>>> @out @owned("native_fixture_out_release")) -> void @symbol("native_fixture_owned_out");\n'
 			+ '\textern fn releaseOwnedOut(value: ptr<void>) -> void @symbol("native_fixture_out_release");\n'
-			+
-			'\textern fn borrowedOut(present: i32, result: ptr<nullable<ptr<fixture_context>>> @out @borrowed) -> void @symbol("native_fixture_borrowed_out");\n'
+			+ '\textern fn borrowedOut(present: i32, result: ptr<nullable<ptr<fixture_context>>> @out @borrowed) -> void @symbol("native_fixture_borrowed_out");\n'
 			+ '\textern fn outWasReleased() -> i32 @symbol("native_fixture_out_was_released");\n'
 			+ '\textern fn borrowed() -> ptr<fixture_context> @symbol("native_fixture_borrowed") @borrowed;\n'
 			+ '\textern fn maybeBorrowed(present: i32) -> nullable<ptr<fixture_context>> @symbol("native_fixture_maybe_borrowed") @borrowed;\n'
@@ -106,12 +96,10 @@ class HxiCallMain {
 			+ '\textern fn pointerValue(value: ptr<const<fixture_context>>) -> i32 @symbol("native_fixture_pointer_value");\n'
 			+ '\textern fn nullablePointerValue(value: nullable<ptr<const<fixture_context>>>) -> i32 @symbol("native_fixture_pointer_value");\n'
 			+ '\textern fn wasReleased() -> i32 @symbol("native_fixture_was_released");\n'
-			+
-			'\textern fn ownedData(first: i32) -> ptr<u8> @symbol("native_fixture_owned_data") @owned("native_fixture_data_release") @length("native_fixture_data_length");\n'
+			+ '\textern fn ownedData(first: i32) -> ptr<u8> @symbol("native_fixture_owned_data") @owned("native_fixture_data_release") @length("native_fixture_data_length");\n'
 			+ '\textern fn releaseOwnedData(value: ptr<void>) -> void @symbol("native_fixture_data_release");\n'
 			+ '\textern fn dataLength(ignored: i32) -> c_size @symbol("native_fixture_data_length");\n'
-			+
-			'\textern fn borrowedData(present: i32) -> nullable<ptr<const<u8>>> @symbol("native_fixture_borrowed_data") @borrowed @length("native_fixture_data_length");\n'
+			+ '\textern fn borrowedData(present: i32) -> nullable<ptr<const<u8>>> @symbol("native_fixture_borrowed_data") @borrowed @length("native_fixture_data_length");\n'
 			+ '\textern fn dataWasReleased() -> i32 @symbol("native_fixture_data_was_released");\n'
 			+ '\textern fn dataCheck(data: ptr<const<u8>>) -> i32 @symbol("native_fixture_data_check");\n'
 			+ '\textern fn invalidData() -> ptr<const<u8>> @symbol("native_fixture_invalid_data") @borrowed @length("native_fixture_invalid_data_length");\n'
@@ -131,30 +119,32 @@ class HxiCallMain {
 		var traceUtf8 = traceEnabled ? 'trace("stage:utf8"); ' : "";
 		mainSource = StringTools.replace(mainSource, "function main():Int {", "function main():Int {" + traceStart);
 		mainSource = StringTools.replace(mainSource, "var borrowed = Fixture.borrowed();",
-			traceRecords +
-			'var arrays = new fixture_arrays(); arrays.set_values(0, 10); arrays.set_values(1, 11); arrays.set_values(2, 12); arrays.set_name_bytes(haxe.io.Bytes.ofString("ABCD")); arrays.set_points(0, start); arrays.set_points(1, end); var arrayFields = arrays.get_values(1) == 11 && arrays.get_name(2) == 67 && arrays.get_points(1).get_x() == 20 && Fixture.checkArrays(arrays) == 42; var borrowed = Fixture.borrowed();');
+			traceRecords
+			+ 'var arrays = new fixture_arrays(); arrays.set_values(0, 10); arrays.set_values(1, 11); arrays.set_values(2, 12); arrays.set_name_bytes(haxe.io.Bytes.ofString("ABCD")); arrays.set_points(0, start); arrays.set_points(1, end); var arrayFields = arrays.get_values(1) == 11 && arrays.get_name(2) == 67 && arrays.get_points(1).get_x() == 20 && Fixture.checkArrays(arrays) == 42; var borrowed = Fixture.borrowed();');
 		mainSource = StringTools.replace(mainSource, "var borrowed = Fixture.borrowed();",
 			'var mappedPoints = Fixture.mapPoints([start, end]); var mappedValues = Fixture.mapValues([2, 3, 4]); var filledValues = Fixture.fillValues(haxe.Int64.ofInt(3)); var emptyMapped = Fixture.mapPoints([]); var mappedChecks = mappedPoints.status == 42 && mappedPoints.results.length == 2 && mappedPoints.results[0].get_x() == 11 && mappedPoints.results[1].get_y() == 23 && mappedValues.status == 42 && mappedValues.results.length == 3 && mappedValues.results[0] == 4 && mappedValues.results[2] == 8 && filledValues.status == 42 && filledValues.results.length == 3 && filledValues.results[0] == 10 && filledValues.results[2] == 12 && emptyMapped.status == 42 && emptyMapped.results.length == 0; var borrowed = Fixture.borrowed();');
 		mainSource = StringTools.replace(mainSource, "var structure = ",
 			"var summed = Fixture.addPoints(start, end); var generated = Fixture.getPoint(10); var shifted = Fixture.shiftPoint(start); var read = Fixture.readBytes(40); var outputs = generated.status == 42 && generated.point.get_x() == 10 && generated.point.get_y() == 12 && Fixture.doubleValue(21) == 42 && shifted.status == 42 && shifted.point.get_x() == 11 && shifted.point.get_y() == 12 && read.status == 42 && Fixture.dataCheck(read.data) == 42; var padded = Fixture.makePadded(40); var gapped = Fixture.makeGapped(41); var byValue = outputs && summed.get_x() == 30 && summed.get_y() == 32 && Fixture.checkBoxValue(box) == 42 && Fixture.checkArraysValue(arrays) == 42 && padded.get_tag() == 2 && padded.get_value() == 40 && gapped.get_tag() == 3 && gapped.get_value() == 41; var structure = byValue && arrayFields && ");
-		mainSource = StringTools.replace(mainSource, "var structure = byValue &&", "var structure = mappedChecks && byValue &&");
+		mainSource = StringTools.replace(mainSource, "var structure = byValue &&",
+			"var structure = mappedChecks && byValue &&");
 		mainSource = StringTools.replace(mainSource, "var options = new fixture_options();",
 			'var callback = new FixtureBinaryCallback(function(left:Int, right:Int) return left + right); var surfaceFrame = false; var surfaceCallback = new FixtureSurfaceEventCallback(function(surface:fixture_surface, width:Int, height:Int, userData:Null<hl.Abstract<"native_pointer">>) { surfaceFrame = surface.rawValue() == 7 && width == 320 && height == 240 && userData == null; }); Fixture.callSurfaceEventResult_checked(null, null); Fixture.callSurfaceEventResult_checked(surfaceCallback, null); var checkedCallbacks = surfaceFrame; var callbacks = checkedCallbacks && Fixture.callCallback(callback, 19, 23) == 42; Fixture.setCallback(callback); callbacks = callbacks && Fixture.callRetainedCallback(20, 22) == 42; Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread(callback) == 0 && callback.errorKind() == HxiCallbackError.WrongThread && callback.takeError() != null && callback.errorKind() == HxiCallbackError.None && callback.close() && !callback.close(); var failing = new FixtureBinaryCallback(function(left:Int, right:Int) { if (left == 1) throw "callback boom"; return right; }); callbacks = callbacks && Fixture.callCallback(failing, 1, 2) == 0 && failing.errorKind() == HxiCallbackError.Exception; var failure = failing.takeError(); callbacks = callbacks && failure != null && failing.errorKind() == HxiCallbackError.None && failing.takeError() == null && failing.close(); var retained:Null<hl.Abstract<"native_pointer">> = null; var eventCallback = new FixtureEventCallback(function(event:fixture_point, userData:Null<hl.Abstract<"native_pointer">>) { retained = userData; return event.get_x() + event.get_y() + (userData == null ? 0 : 1); }); callbacks = callbacks && Fixture.callEvent(eventCallback, 1) == 22 && retained != null && NativePointer.native_pointer_is_closed(retained) && Fixture.callEvent(eventCallback, 0) == 21 && Fixture.callInvalidEvent(eventCallback) == 0 && eventCallback.errorKind() == HxiCallbackError.PointerContract; var pointerFailure = eventCallback.takeError(); callbacks = callbacks && pointerFailure != null && eventCallback.takeError() == null && eventCallback.close(); surfaceCallback.close(); var options = new fixture_options();');
 		mainSource = StringTools.replace(mainSource, "var buffers =",
 			"var payload = haxe.io.Bytes.alloc(3); payload.set(0, 9); payload.set(1, 13); payload.set(2, 20); var voidBuffers = Fixture.sumBytes(payload) == 42 && Fixture.sumBytes(haxe.io.Bytes.alloc(0)) == 0; var buffers = voidBuffers &&");
 		mainSource = StringTools.replace(mainSource, "var callback = new FixtureBinaryCallback",
-			traceManagedFields +
-			'var label = new fixture_label(); label.set_value("first"); label.set_optional("optional"); label.set_value("original"); label.set_optional(null); var labelBox = new fixture_label_box(); labelBox.set_label(label); label.set_value("changed"); var slicedLabel = labelBox.get_label(); var managedFields = labelBox.get_label().get_value() == "original" && slicedLabel.get_optional() == null; slicedLabel.set_value("slice"); managedFields = managedFields && labelBox.get_label().get_value() == "original" && slicedLabel.get_value() == "slice"; var callback = new FixtureBinaryCallback');
+			traceManagedFields
+			+ 'var label = new fixture_label(); label.set_value("first"); label.set_optional("optional"); label.set_value("original"); label.set_optional(null); var labelBox = new fixture_label_box(); labelBox.set_label(label); label.set_value("changed"); var slicedLabel = labelBox.get_label(); var managedFields = labelBox.get_label().get_value() == "original" && slicedLabel.get_optional() == null; slicedLabel.set_value("slice"); managedFields = managedFields && labelBox.get_label().get_value() == "original" && slicedLabel.get_value() == "slice"; var callback = new FixtureBinaryCallback');
 		mainSource = StringTools.replace(mainSource, "var callback = new FixtureBinaryCallback",
-			traceAggregateCallbacks +
-			"var pointCallback = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { var result = new fixture_point(); result.set_x(left.get_x() + right.get_x()); result.set_y(left.get_y() + right.get_y()); return result; }); var arraysCallback = new FixtureArraysCallbackCallback(function(value:fixture_arrays) return value); var aggregateCallbacks = Fixture.callPointCallback(pointCallback) == 42 && Fixture.callArraysCallback(arraysCallback) == 42 && Fixture.callPointCallbackOnThread(pointCallback) == 0 && pointCallback.errorKind() == HxiCallbackError.WrongThread && pointCallback.takeError() != null && pointCallback.close() && arraysCallback.close(); var systemCallback = new FixtureSystemBinaryCallback(function(left:Int, right:Int) return left + right); var systemCalls = Fixture.systemAdd(19, 23) == 42 && Fixture.callSystemCallback(systemCallback, 20, 22) == 42 && systemCallback.close(); var callback = new FixtureBinaryCallback");
+			traceAggregateCallbacks
+			+ "var pointCallback = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { var result = new fixture_point(); result.set_x(left.get_x() + right.get_x()); result.set_y(left.get_y() + right.get_y()); return result; }); var arraysCallback = new FixtureArraysCallbackCallback(function(value:fixture_arrays) return value); var aggregateCallbacks = Fixture.callPointCallback(pointCallback) == 42 && Fixture.callArraysCallback(arraysCallback) == 42 && Fixture.callPointCallbackOnThread(pointCallback) == 0 && pointCallback.errorKind() == HxiCallbackError.WrongThread && pointCallback.takeError() != null && pointCallback.close() && arraysCallback.close(); var systemCallback = new FixtureSystemBinaryCallback(function(left:Int, right:Int) return left + right); var systemCalls = Fixture.systemAdd(19, 23) == 42 && Fixture.callSystemCallback(systemCallback, 20, 22) == 42 && systemCallback.close(); var callback = new FixtureBinaryCallback");
 		mainSource = StringTools.replace(mainSource, "var systemCallback = new FixtureSystemBinaryCallback",
-			traceAggregateErrors +
-			'var invalidAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { return haxe.io.Bytes.alloc(1); }); var aggregateFailure = Fixture.callPointCallback(invalidAggregate) == 0 && invalidAggregate.errorKind() == HxiCallbackError.AggregateContract && invalidAggregate.takeError() != null && invalidAggregate.close(); var throwingAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { if (left.get_x() == 10) throw "aggregate callback boom"; return left; }); aggregateFailure = aggregateFailure && Fixture.callPointCallback(throwingAggregate) == 0 && throwingAggregate.errorKind() == HxiCallbackError.Exception && throwingAggregate.takeError() != null && throwingAggregate.close(); aggregateCallbacks = aggregateCallbacks && aggregateFailure; var systemCallback = new FixtureSystemBinaryCallback');
+			traceAggregateErrors
+			+ 'var invalidAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { return haxe.io.Bytes.alloc(1); }); var aggregateFailure = Fixture.callPointCallback(invalidAggregate) == 0 && invalidAggregate.errorKind() == HxiCallbackError.AggregateContract && invalidAggregate.takeError() != null && invalidAggregate.close(); var throwingAggregate = new FixturePointCallbackCallback(function(left:fixture_point, right:fixture_point) { if (left.get_x() == 10) throw "aggregate callback boom"; return left; }); aggregateFailure = aggregateFailure && Fixture.callPointCallback(throwingAggregate) == 0 && throwingAggregate.errorKind() == HxiCallbackError.Exception && throwingAggregate.takeError() != null && throwingAggregate.close(); aggregateCallbacks = aggregateCallbacks && aggregateFailure; var systemCallback = new FixtureSystemBinaryCallback');
 		mainSource = StringTools.replace(mainSource, "var systemCallback = new FixtureSystemBinaryCallback",
-			traceUtf8 +
-			'var utf8Callback = new FixtureUtf8CallbackCallback(function(value:String) return value); var utf8 = Fixture.checkUtf8("olá ✓") == 42 && Fixture.checkNullableUtf8(null) == 42 && Fixture.borrowedUtf8(1) == "olá ✓" && Fixture.borrowedUtf8(0) == null && Fixture.ownedUtf8() == "olá ✓" && Fixture.utf8WasReleased() == 42 && Fixture.callUtf8Callback(utf8Callback) == 42 && Fixture.callInvalidUtf8Callback(utf8Callback) == 0 && utf8Callback.errorKind() == HxiCallbackError.StringContract && utf8Callback.takeError() != null && utf8Callback.close(); var nullUtf8Callback = new FixtureUtf8CallbackCallback(function(value:String) { var result:String = null; return result; }); utf8 = utf8 && Fixture.callUtf8Callback(nullUtf8Callback) == 0 && nullUtf8Callback.errorKind() == HxiCallbackError.StringContract && nullUtf8Callback.takeError() != null && nullUtf8Callback.close(); var systemCallback = new FixtureSystemBinaryCallback');
-		mainSource = StringTools.replace(mainSource, "Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
+			traceUtf8
+			+ 'var utf8Callback = new FixtureUtf8CallbackCallback(function(value:String) return value); var utf8 = Fixture.checkUtf8("olá ✓") == 42 && Fixture.checkNullableUtf8(null) == 42 && Fixture.borrowedUtf8(1) == "olá ✓" && Fixture.borrowedUtf8(0) == null && Fixture.ownedUtf8() == "olá ✓" && Fixture.utf8WasReleased() == 42 && Fixture.callUtf8Callback(utf8Callback) == 42 && Fixture.callInvalidUtf8Callback(utf8Callback) == 0 && utf8Callback.errorKind() == HxiCallbackError.StringContract && utf8Callback.takeError() != null && utf8Callback.close(); var nullUtf8Callback = new FixtureUtf8CallbackCallback(function(value:String) { var result:String = null; return result; }); utf8 = utf8 && Fixture.callUtf8Callback(nullUtf8Callback) == 0 && nullUtf8Callback.errorKind() == HxiCallbackError.StringContract && nullUtf8Callback.takeError() != null && nullUtf8Callback.close(); var systemCallback = new FixtureSystemBinaryCallback');
+		mainSource = StringTools.replace(mainSource,
+			"Fixture.clearCallback(); callbacks = callbacks && Fixture.callCallbackOnThread",
 			"var replacement = new FixtureBinaryCallback(function(left:Int, right:Int) return left * right); Fixture.setNullableCallback(replacement); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 42; Fixture.setNullableCallback(null); callbacks = callbacks && Fixture.callRetainedCallback(6, 7) == 0 && replacement.close(); callbacks = callbacks && Fixture.callCallbackOnThread");
 		mainSource = StringTools.replace(mainSource, "return structure && buffers && pointers && ",
 			"return structure && buffers && pointers && Fixture.enumAdd(FixtureResult.Ten, FixtureResult.Eleven) == FixtureResult.TwentyOne && ");
@@ -172,20 +162,24 @@ class HxiCallMain {
 				"function(left:Int, right:Int) { if (!hl.Gc.incrementalPending()) throw \"callback ran outside pending GC\"; hl.Gc.step(0.001); return left + right; }");
 			mainSource = StringTools.replace(mainSource, "return managedFields &&",
 				"var gcCapture = [42]; var gcCallback = new FixtureBinaryCallback(function(left:Int, right:Int) return gcCapture[0]); var completed = false; for (slice in 0...10000) { if (hl.Gc.step(1000.0)) { completed = true; break; } } if (!completed || ballast[1999999] != \"gc-ballast\") return 92; if (Fixture.callCallback(gcCallback, 1, 2) != 42 || !gcCallback.close() || Fixture.checkOptions(options) != 42 || labelBox.get_label().get_value() != \"original\") return 93; return managedFields &&");
-			mainSource += " function main():Int { var status = exercise(); hl.Gc.major(); hl.Gc.enable(true); return status; }";
+			mainSource +=
+				" function main():Int { var status = exercise(); hl.Gc.major(); hl.Gc.enable(true); return status; }";
 		}
 		compiler.update("Main.hx", mainSource);
 		compiler.compile("Main");
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
-		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidNonNull() == null ? 1 : 0;");
+		compiler.update("Main.hx",
+			"import Fixture; function main():Int return Fixture.invalidNonNull() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-null", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidData() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-length", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx", "import Fixture; function main():Int return Fixture.invalidUtf8() == null ? 1 : 0;");
 		File.saveBytes(output + ".invalid-utf8", HlWriter.encode(compiler.compile("Main").module).flatten());
-		compiler.update("Main.hx", "import Fixture; function main():Int { var arrays = new fixture_arrays(); return arrays.get_values(3); }");
+		compiler.update("Main.hx",
+			"import Fixture; function main():Int { var arrays = new fixture_arrays(); return arrays.get_values(3); }");
 		File.saveBytes(output + ".invalid-index", HlWriter.encode(compiler.compile("Main").module).flatten());
-		compiler.update("Main.hx", "import Fixture; function main():Int { Fixture.fillValues(haxe.Int64.ofInt(67108865)); return 0; }");
+		compiler.update("Main.hx",
+			"import Fixture; function main():Int { Fixture.fillValues(haxe.Int64.ofInt(67108865)); return 0; }");
 		File.saveBytes(output + ".typed-array-overflow", HlWriter.encode(compiler.compile("Main").module).flatten());
 		compiler.update("Main.hx",
 			"import Fixture; function main():Int { var callback = new FixtureBinaryCallback(function(left:Int, right:Int) return left + right); callback.close(); Fixture.setNullableCallback(callback); return 0; }");

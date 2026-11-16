@@ -10,7 +10,10 @@ class TooltipOverlayHost implements View {
 	public function new(content:View) this.content = content;
 	public function build(context:BuildContext):RenderNode {
 		var lifted = context.lazyState(context.id("lifted-tooltips"),
-			function() return new Array<{tip:RenderNode, anchor:RenderNode}>()).value;
+			function() return new Array<{
+				tip:RenderNode,
+				anchor:RenderNode
+			}>()).value;
 		// Retained anchors must recover their tooltip before being reused.
 		for (entry in lifted) entry.anchor.add(entry.tip.detach());
 		lifted.resize(0);
@@ -35,7 +38,10 @@ class TooltipOverlayHost implements View {
 				var anchor = tip.parent;
 				if (anchor == null) continue;
 				var position = -1;
-				for (index in 0...lifted.length) if (lifted[index].tip.id.value == tip.id.value) { position = index; break; }
+				for (index in 0...lifted.length) if (lifted[index].tip.id.value == tip.id.value) {
+					position = index;
+					break;
+				}
 				var entry = {tip: tip, anchor: anchor};
 				if (position < 0) {
 					lifted.push(entry);
@@ -45,7 +51,8 @@ class TooltipOverlayHost implements View {
 				var previous = lifted[position].tip;
 				lifted[position] = entry;
 				tip.detach();
-				if (previous.parent == root) previous.replaceWith(tip); else root.add(tip);
+				if (previous.parent == root) previous.replaceWith(tip);
+				else root.add(tip);
 			}
 		};
 		return root;

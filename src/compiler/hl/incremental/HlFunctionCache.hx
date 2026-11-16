@@ -6,13 +6,22 @@ import compiler.ir.IrFunction;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 /** Serialized SSA body associated with a cached function name. */
-typedef HlCachedFunctionState = {final name:String; final bytes:haxe.io.Bytes;}
+typedef HlCachedFunctionState = {
+	final name:String;
+	final bytes:haxe.io.Bytes;
+}
 
 /** Persistent stable runtime identity associated with a function name. */
-typedef HlStableFunctionState = {final name:String; final id:Int;}
+typedef HlStableFunctionState = {
+	final name:String;
+	final id:Int;
+}
 
 /** Cached semantic signature used to classify function changes. */
-typedef HlFunctionSignatureState = {final name:String; final signature:String;}
+typedef HlFunctionSignatureState = {
+	final name:String;
+	final signature:String;
+}
 
 /** Complete persistable state of append-only function slots and bodies. */
 typedef HlFunctionCacheState = {
@@ -66,12 +75,16 @@ class HlFunctionCache {
 	}
 
 	public function exportState():HlFunctionCacheState {
-		var ids:Array<HlStableFunctionState> = [for (name => id in stableIds) {name: name, id: id}];
-		var signatureState:Array<HlFunctionSignatureState> = [for (name => value in signatures) {name: name, signature: value}];
-		var functionState:Array<HlCachedFunctionState> = [
-			for (name => fn in functions)
-				{name: name, bytes: IrFunctionStateCodec.encode(fn)}
-		];
+		var ids:Array<HlStableFunctionState> = [for (name => id in stableIds) {
+			name:name, id:id
+		}];
+		var signatureState:Array<HlFunctionSignatureState> = [for (name => value in signatures) {
+			name:name, signature:value
+		}];
+		var functionState:Array<HlCachedFunctionState> = [for (name => fn in functions)
+			{
+				name:name, bytes:IrFunctionStateCodec.encode(fn)
+			}];
 		ids.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		signatureState.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		functionState.sort(function(a, b) return Reflect.compare(a.name, b.name));
@@ -163,7 +176,10 @@ class HlFunctionCache {
 		for (entry in moved)
 			if (!sources.exists(entry.to) && (userSlots.exists(entry.to) || stableIds.exists(entry.to)))
 				throw 'Cannot rename function ${entry.from} to ${entry.to}, which exists';
-		var slotsOf:Map<String, Int> = [], idsOf:Map<String, Int> = [], bodies:Map<String, IrFunction> = [], signaturesOf:Map<String, String> = [];
+		var slotsOf:Map<String, Int> = [],
+			idsOf:Map<String, Int> = [],
+			bodies:Map<String, IrFunction> = [],
+			signaturesOf:Map<String, String> = [];
 		for (entry in moved) {
 			if (userSlots.exists(entry.from))
 				slotsOf.set(entry.from, userSlots.get(entry.from));
@@ -227,7 +243,8 @@ class HlFunctionCache {
 	}
 
 	static function validateStableId(name:String, id:Int):Void {
-		if (id < 0 || id > MAX_STABLE_ID || (id == INIT_STABLE_ID && name != "__init") || (name == "__init" && id != INIT_STABLE_ID))
+		if (id < 0 || id > MAX_STABLE_ID || (id == INIT_STABLE_ID && name != "__init")
+			|| (name == "__init" && id != INIT_STABLE_ID))
 			throw 'Invalid stable function ID for "$name"';
 	}
 

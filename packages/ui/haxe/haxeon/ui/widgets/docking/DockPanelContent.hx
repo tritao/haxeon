@@ -27,7 +27,8 @@ class DockPanelContent {
 	}
 
 	/** Like `observing`, for a panel that is always built at its pane width. */
-	public static function observingWithWidth(panelId:String, buildWithWidth:WidthAwareDockPanelBuilder):DockPanelContent {
+	public static function observingWithWidth(panelId:String,
+			buildWithWidth:WidthAwareDockPanelBuilder):DockPanelContent {
 		var content = new DockPanelContent(panelId, null, buildWithWidth);
 		content.observed = true;
 		return content;

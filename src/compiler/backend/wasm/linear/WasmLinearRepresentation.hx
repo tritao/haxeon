@@ -39,8 +39,10 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public final staticClosureDescriptors:Map<String, Int>;
 	public final closureAdapters:Null<WasmLinearClosureAdapters>;
 
-	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int, ?scalarAbi:WasmScalarAbi, ?functions:Map<String, Int>,
-			?fn:IrFunction, ?allocateLocal:WasmValueType->Int, ?staticClosureDescriptors:Map<String, Int>, ?closureAdapters:WasmLinearClosureAdapters) {
+	public function new(layout:WasmLayout, allocator:Int, bytesDataPointer:Int, cstringCopy:Int,
+			?scalarAbi:WasmScalarAbi, ?functions:Map<String, Int>,
+			?fn:IrFunction, ?allocateLocal:WasmValueType->Int, ?staticClosureDescriptors:Map<String, Int>,
+			?closureAdapters:WasmLinearClosureAdapters) {
 		this.layout = layout;
 		this.allocator = allocator;
 		this.bytesDataPointer = bytesDataPointer;
@@ -54,7 +56,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			if (object.isValue && object.nativeLayout == null)
 				valueObjects.set(object.name, true);
 		scalarLocals = scalarAbi == null
-			|| allocateLocal == null ? null : new WasmScalarLocals(fn, scalarAbi.isValue, physicalFields, valueType, allocateLocal);
+			|| allocateLocal == null ? null : new WasmScalarLocals(fn, scalarAbi.isValue, physicalFields, valueType,
+			allocateLocal);
 		if (scalarAbi != null && allocateLocal != null && fn != null)
 			for (block in fn.blocks)
 				for (located in block.instructions)
@@ -63,13 +66,15 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 							var signature = scalarAbi.signatures.get(name);
 							if (signature.mutatesReceiver || scalarAbi.isValue(signature.result))
 								reserveScalarResults(out, scalarAbi.resultTypes(signature));
-						case MethodCall(out, receiver, method, _, _) if (scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver.type, method))):
+						case MethodCall(out, receiver, method, _,
+							_) if (scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver.type, method))):
 							var virtual = scalarAbi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
 							if (virtual == null)
 								throw "Missing scalar virtual signature";
 							if (scalarAbi.isValue(virtual.signature.result))
 								reserveScalarResults(out, scalarAbi.valueTypes(virtual.signature.result));
-						case CallClosure(out, closure, _) if (scalarAbi.scalarClosures.exists(Std.string(closure.type))):
+						case CallClosure(out, closure,
+							_) if (scalarAbi.scalarClosures.exists(Std.string(closure.type))):
 							if (scalarAbi.isValue(out.type))
 								reserveScalarResults(out, scalarAbi.valueTypes(out.type));
 						default:
@@ -96,7 +101,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return switch instruction {
 			case ValueInit(out):
 				var candidate = scalarLocals.get(out);
-				if (candidate == null) null; else {
+				if (candidate == null) null;
+				else {
 					var body:Array<WasmInstruction> = [];
 					for (field in candidate.declarations) {
 						for (item in zeroValue(field.type))
@@ -107,13 +113,16 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				}
 			case FieldGet(out, owner, name):
 				var candidate = scalarLocals.get(owner);
-				if (candidate == null) null; else if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD) []; else [
+				if (candidate == null) null;
+				else if (name == compiler.backend.wasm.WasmFlattenValueFields.CHECK_FIELD)[];
+				else [
 					LocalGet(requiredScalarField(candidate.fields, name)),
 					LocalSet(requiredScalarValue(locals, out.id))
 				];
 			case FieldSet(owner, name, value):
 				var candidate = scalarLocals.get(owner);
-				if (candidate == null) null; else {
+				if (candidate == null) null;
+				else {
 					var body:Array<WasmInstruction> = [LocalGet(requiredScalarValue(locals, value.id))],
 						field:Null<IrObjectField> = null;
 					for (item in candidate.declarations)
@@ -215,7 +224,11 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function newObject(typeName:String, destination:Int):Array<WasmInstruction> {
 		var object = layout.object(typeName),
 			nativeLayout = object.nativeLayout,
-			body:Array<WasmInstruction> = [I32Const(layout.object(typeName).size), Call(allocator), LocalSet(destination)];
+			body:Array<WasmInstruction> = [
+				I32Const(layout.object(typeName).size),
+				Call(allocator),
+				LocalSet(destination)
+			];
 		if (nativeLayout != null)
 			body = body.concat([
 				LocalGet(destination),
@@ -231,7 +244,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return body;
 	}
 
-	public function fieldGet(object:IrValue, fieldName:String, destination:Int, objectLocal:Int):Array<WasmInstruction> {
+	public function fieldGet(object:IrValue, fieldName:String, destination:Int,
+			objectLocal:Int):Array<WasmInstruction> {
 		if (StringTools.startsWith(fieldName, WasmScalarAbi.RESULT_FIELD_PREFIX)) {
 			var index = Std.parseInt(fieldName.substr(WasmScalarAbi.RESULT_FIELD_PREFIX.length)),
 				results = scalarResults.get(object.id);
@@ -286,7 +300,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function hasScalarClosure(type:IrType):Bool
 		return scalarAbi != null && scalarAbi.scalarClosures.exists(IrTypeIdentity.text(type));
 
-	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue, outputLocal:Int,
+	public function scalarClosureCall(type:IrType, staticType:Int, instanceType:Int, closureLocal:Int, output:IrValue,
+			outputLocal:Int,
 			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		var abi = scalarAbi;
 		if (abi == null)
@@ -379,15 +394,16 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			default: true;
 		}))
 			for (type in abi.valueTypes(signature.result))
-				for (instruction in zeroValue(type))
-					result.push(instruction);
+			for (instruction in zeroValue(type))
+			result.push(instruction);
 		result.push(LocalGet(exception));
 		result.push(I32Const(1));
 		return result;
 	}
 
 	/** Preserve an inline receiver's writes when its method throws across the scalar ABI. */
-	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>, tag:Null<Int>,
+	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>,
+			tag:Null<Int>,
 			cleanup:Array<WasmInstruction>):Null<Array<WasmInstruction>> {
 		if (scalarAbi == null)
 			return null;
@@ -414,7 +430,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return result;
 	}
 
-	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>,
+	public function scalarCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>,
 			functionIndex:Int):Array<WasmInstruction> {
 		var abi = scalarAbi;
 		if (abi == null)
@@ -444,7 +461,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function hasScalarVirtual(receiver:IrType, method:String):Bool
 		return scalarAbi != null && scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver, method));
 
-	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue, outputLocal:Int, arguments:Array<IrValue>,
+	public function scalarVirtualCall(receiver:IrValue, method:String, receiverLocal:Int, output:IrValue,
+			outputLocal:Int, arguments:Array<IrValue>,
 			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		var abi = scalarAbi;
 		if (abi == null)
@@ -558,9 +576,13 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				default: null;
 			};
 			if (childName != null)
-				result = result.concat(assignValueField(destination, field.offset, source.concat([I32Load(field.offset)]), childName, next));
+				result = result.concat(assignValueField(destination, field.offset,
+					source.concat([I32Load(field.offset)]), childName, next));
 			else
-				result = result.concat(destination).concat(source).concat([load(field.type, field.offset), store(field.type, field.offset)]);
+				result = result.concat(destination).concat(source).concat([
+					load(field.type, field.offset),
+					store(field.type, field.offset)
+				]);
 		}
 		result.push(End);
 		return result;
@@ -765,7 +787,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function toVirtual(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int, rightLocal:Int):Array<WasmInstruction> {
+	public function equal(output:Int, left:IrValue, right:IrValue, leftLocal:Int,
+			rightLocal:Int):Array<WasmInstruction> {
 		var instruction = switch left.type {
 			case I64: I64Eq;
 			case F32 | F64: F64Eq;
@@ -777,7 +800,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function dynamicEqual(output:Int, leftLocal:Int, rightLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):WasmLoweringResult {
+	public function lowerRuntimeCall(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):WasmLoweringResult {
 		if (name == "__int64_to_float") {
 			if ((switch (output.type) {
 				case F64: false;
@@ -852,7 +876,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return UseDefault;
 	}
 
-	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>, importIndex:Int,
+	public function lowerCNativeCall(native:IrCNative, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>, importIndex:Int,
 			pointerLengthImportIndex:Int, pointerReleaseImportIndex:Int):WasmLoweringResult {
 		var abi = WasmCAbi.of(native), fixed = native.fixedResult;
 		if (!abi.adjustsCall() && (switch (native.result) {
@@ -905,7 +930,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		return body;
 	}
 
-	function pushNativeArguments(body:Array<WasmInstruction>, abi:WasmCAbi, arguments:Array<IrValue>, argumentLocals:Array<Int>):Void {
+	function pushNativeArguments(body:Array<WasmInstruction>, abi:WasmCAbi, arguments:Array<IrValue>,
+			argumentLocals:Array<Int>):Void {
 		for (index in 0...arguments.length) {
 			nativeArgument(body, arguments[index], argumentLocals[index]);
 			for (instruction in abi.lowerArgument(index))
@@ -913,10 +939,12 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		}
 	}
 
-	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int, indexLocal:Int):WasmLoweringResult
+	public function arrayGet(array:IrValue, index:IrValue, destination:Int, arrayLocal:Int,
+			indexLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int, valueLocal:Int):WasmLoweringResult
+	public function arraySet(array:IrValue, index:IrValue, value:IrValue, arrayLocal:Int, indexLocal:Int,
+			valueLocal:Int):WasmLoweringResult
 		return UseDefault;
 
 	public function arraySize(array:IrValue, destination:Int, arrayLocal:Int):WasmLoweringResult
@@ -928,16 +956,19 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function iteratorHasNext(iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult
+	public function iteratorNext(iterator:IrValue, output:IrValue, destination:Int,
+			iteratorLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int, argumentLocals:Array<Int>):WasmLoweringResult
+	public function makeEnum(typeName:String, constructor:Int, arguments:Array<IrValue>, destination:Int,
+			argumentLocals:Array<Int>):WasmLoweringResult
 		return UseDefault;
 
 	public function enumIndex(value:IrValue, destination:Int, valueLocal:Int):WasmLoweringResult
 		return UseDefault;
 
-	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int, valueLocal:Int):WasmLoweringResult
+	public function enumField(value:IrValue, constructor:Int, field:Int, destination:Int,
+			valueLocal:Int):WasmLoweringResult
 		return UseDefault;
 
 	function objectField(object:IrValue, name:String):WasmFieldLayout {

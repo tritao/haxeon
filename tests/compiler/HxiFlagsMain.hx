@@ -34,7 +34,8 @@ class HxiFlagsMain {
 			&& projection.indexOf("haxe.Int64.make(-2147483648, 0)") >= 0
 			&& projection.indexOf("haxe.Int64.make(0, -2147483648)") >= 0
 			&& projection.indexOf("function high():WideFlags") >= 0
-			&& projection.indexOf("function contains(flag:WideFlags):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0") >= 0
+			&& projection.indexOf("function contains(flag:WideFlags):Bool return haxe.Int64.compare(haxe.Int64.and(this, flag), flag) == 0")
+			>= 0
 			&& natives.length == 6,
 			"flags should project to nominal bitwise-friendly types without narrowing the ABI; natives="
 			+ [for (native in natives) native.name].join(","));
@@ -45,12 +46,18 @@ class HxiFlagsMain {
 			'import flag_widths.*; function main():Int { var first=read_word(); var updated=mutate_word(first.value); send_words([updated.value]); var values=read_words(2); return WideFlags.low().contains(WideFlags.low()) ? values[0].rawValue() : 0; }');
 		compiler.compile("FlagsMain");
 
-		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }', "unsigned 8/16/32/64-bit integer representation");
-		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u8 { A = 256; } }', "outside the representation");
-		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { A = 0x100000000; } }', "outside the representation");
-		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; UNKNOWN = 5; } }', "not declared by a single-bit flag");
-		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; DUPLICATE = 1; } }', "duplicates");
-		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u64 { A = 1 << 64; } }', "between 0 and 63");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : i32 { A = 1; } }',
+			"unsigned 8/16/32/64-bit integer representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u8 { A = 256; } }',
+			"outside the representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { A = 0x100000000; } }',
+			"outside the representation");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; UNKNOWN = 5; } }',
+			"not declared by a single-bit flag");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u32 { FIRST = 1; DUPLICATE = 1; } }',
+			"duplicates");
+		expectError('interface bad @target("x86_64-linux-gnu") { flags value : u64 { A = 1 << 64; } }',
+			"between 0 and 63");
 		Sys.println("PASS: HXI flags preserve fixed-width masks and reject invalid declarations");
 	}
 

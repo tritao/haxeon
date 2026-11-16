@@ -17,7 +17,8 @@ class PackageResolver {
 	public function new(sourceAcquirer:SourceAcquirer)
 		this.sourceAcquirer = sourceAcquirer;
 
-	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false, ?target:Target):ResolvedProject {
+	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false,
+			?target:Target):ResolvedProject {
 		if (locked && lockfile == null)
 			throw "haxeon.lock is required for --locked resolution";
 		var absoluteManifest = canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
@@ -34,19 +35,25 @@ class PackageResolver {
 				path:String
 			}> = new Map();
 		for (workspacePath in rootManifest.workspace) {
-			var workspaceRoot = resolveDirectory(projectRoot, workspacePath, "workspace member", rootManifest.packageName),
+			var workspaceRoot = resolveDirectory(projectRoot, workspacePath, "workspace member",
+				rootManifest.packageName),
 				workspaceManifestPath = Path.join([workspaceRoot, MANIFEST_NAME]);
 			if (!FileSystem.exists(workspaceManifestPath))
 				throw 'Workspace member "$workspacePath" has no $MANIFEST_NAME at $workspaceManifestPath';
-			var workspaceManifest = PackageManifest.parse(workspaceManifestPath, File.getContent(workspaceManifestPath));
+			var workspaceManifest = PackageManifest.parse(workspaceManifestPath,
+				File.getContent(workspaceManifestPath));
 			if (workspaceManifest.packageName == rootManifest.packageName)
 				throw 'Workspace member "$workspacePath" duplicates root package "${rootManifest.packageName}"';
 			if (workspaceMembers.exists(workspaceManifest.packageName))
 				throw 'Duplicate workspace package "${workspaceManifest.packageName}"';
-			workspaceMembers.set(workspaceManifest.packageName, {root: workspaceRoot, path: Path.normalize(workspacePath)});
+			workspaceMembers.set(workspaceManifest.packageName, {
+				root: workspaceRoot,
+				path: Path.normalize(workspacePath)
+			});
 		}
 
-		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource, ?manifestOverride:String):ResolvedPackage {
+		function resolvePackage(acquired:AcquiredSource, requestedSource:PackageSource,
+				?manifestOverride:String):ResolvedPackage {
 			var resolvedRoot = Path.normalize(FileSystem.fullPath(acquired.root)),
 				manifestFile = manifestOverride == null ? Path.join([resolvedRoot, MANIFEST_NAME]) : manifestOverride,
 				resolvedManifest = canonicalExistingFile(manifestFile, 'Project file not found: $manifestFile');
@@ -68,22 +75,30 @@ class PackageResolver {
 			var sourceRoots = [
 				for (sourceRoot in manifest.sourceRoots)
 					resolveDirectory(resolvedRoot, sourceRoot, 'source root', manifest.packageName)
-			], unscopedSourceRoots = [
-				for (sourceRoot in manifest.unscopedSourceRoots)
-					resolveDirectory(resolvedRoot, sourceRoot, 'unscoped source root', manifest.packageName)
+			],
+				unscopedSourceRoots = [
+					for (sourceRoot in manifest.unscopedSourceRoots)
+						resolveDirectory(resolvedRoot, sourceRoot, 'unscoped source root', manifest.packageName)
 				],
-				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot, manifest.legacySources,
+				sources = manifest.legacySources.length == 0 ? collectSources(sourceRoots) : resolveFiles(resolvedRoot,
+					manifest.legacySources,
 					manifest.packageName, "source"),
-				nativeSources:Array<String> = [], includeDirs:Array<String> = [], nativeCMakeInputs:Array<String> = [], ffiInterfaces:Array<String> = [],
-				ffiProjections:Array<String> = [], ffiImports:Array<ResolvedFfiImport> = [];
+				nativeSources:Array<String> = [],
+				includeDirs:Array<String> = [],
+				nativeCMakeInputs:Array<String> = [],
+				ffiInterfaces:Array<String> = [],
+				ffiProjections:Array<String> = [],
+				ffiImports:Array<ResolvedFfiImport> = [];
 			if (manifest.native != null) {
-				nativeSources = resolveFiles(resolvedRoot, manifest.native.sources, manifest.packageName, "native source");
+				nativeSources = resolveFiles(resolvedRoot, manifest.native.sources, manifest.packageName,
+					"native source");
 				includeDirs = [
 					for (includeDir in manifest.native.includeDirs)
 						resolveDirectory(resolvedRoot, includeDir, "native include directory", manifest.packageName)
 				];
 				if (manifest.native.cmake != null) {
-					resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory", manifest.packageName);
+					resolveDirectory(resolvedRoot, manifest.native.cmake.source, "native CMake source directory",
+						manifest.packageName);
 					nativeCMakeInputs = [
 						for (input in manifest.native.cmake.inputs)
 							resolveInput(resolvedRoot, input, "native CMake input", manifest.packageName)
@@ -91,10 +106,13 @@ class PackageResolver {
 				}
 			}
 			if (manifest.ffi != null) {
-				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfaces, manifest.packageName, "FFI interface");
-				ffiProjections = resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName, "FFI projection");
+				ffiInterfaces = resolveFiles(resolvedRoot, manifest.ffi.interfaces, manifest.packageName,
+					"FFI interface");
+				ffiProjections = resolveFiles(resolvedRoot, manifest.ffi.projections, manifest.packageName,
+					"FFI projection");
 				for (ffiPath in manifest.ffi.imports) {
-					var ffiManifestPath = resolveFiles(resolvedRoot, [ffiPath], manifest.packageName, "FFI manifest")[0];
+					var ffiManifestPath = resolveFiles(resolvedRoot, [ffiPath], manifest.packageName,
+						"FFI manifest")[0];
 					ffiImports.push(FfiImportManifest.resolve(ffiManifestPath, resolvedRoot));
 				}
 			}
@@ -133,27 +151,33 @@ class PackageResolver {
 				resolvedDependencies.push(resolved.name);
 			}
 			active.remove(resolvedRoot);
-			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots, unscopedSourceRoots, sources,
-				resolvedDependencies, nativeSources, includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections, ffiImports, acquired.source);
+			var resolvedPackage = new ResolvedPackage(manifest.packageName, resolvedRoot, manifest, sourceRoots,
+				unscopedSourceRoots, sources,
+				resolvedDependencies, nativeSources, includeDirs, nativeCMakeInputs, ffiInterfaces, ffiProjections,
+				ffiImports, acquired.source);
 			visited.set(resolvedRoot, resolvedPackage);
 			ordered.push(resolvedPackage);
-			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision, acquired.checksum,
+			lockEntries.push(new PackageLockEntry(manifest.packageId, requestedSource, acquired.resolvedRevision,
+				acquired.checksum,
 				[for (dependencyName in resolvedDependencies) new PackageId(dependencyName)]));
 			return resolvedPackage;
 		}
 
-		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")), PackageSource.Path("."), absoluteManifest);
+		var rootPackage = resolvePackage(new AcquiredSource(projectRoot, PackageSource.Path(".")),
+			PackageSource.Path("."), absoluteManifest);
 		var workspaceNames = [for (name in workspaceMembers.keys()) name];
 		workspaceNames.sort(Reflect.compare);
 		for (workspaceName in workspaceNames) {
 			var member = workspaceMembers.get(workspaceName);
 			if (member != null && visited.get(member.root) == null)
-				resolvePackage(new AcquiredSource(member.root, PackageSource.Workspace(member.path)), PackageSource.Workspace(member.path));
+				resolvePackage(new AcquiredSource(member.root, PackageSource.Workspace(member.path)),
+					PackageSource.Workspace(member.path));
 		}
 		var resolvedLockfile = new PackageLockfile(lockEntries);
 		if (locked)
 			lockfile.validateGraph(resolvedLockfile);
-		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage, new ResolvedPackageGraph(ordered), resolvedLockfile);
+		return new ResolvedProject(projectRoot, absoluteManifest, rootPackage.manifest, rootPackage,
+			new ResolvedPackageGraph(ordered), resolvedLockfile);
 	}
 
 	static function canonicalExistingFile(path:String, message:String):String {

@@ -230,7 +230,8 @@ class IrInstrumentation {
 		}
 		if (covered) {
 			var entry = blocks[0], firstOrdinary = 0;
-			while (firstOrdinary < entry.instructions.length && entry.instructions[firstOrdinary].value.match(Phi(_, _)))
+			while (firstOrdinary < entry.instructions.length
+				&& entry.instructions[firstOrdinary].value.match(Phi(_, _)))
 				firstOrdinary++;
 			entry.instructions.insert(firstOrdinary, op(Call(value(Void), Enter, [])));
 		}

@@ -68,7 +68,8 @@ class WasmLinearClosureAdapters {
 		};
 
 	/** Generate adapters for each semantic source and target of the same arity. */
-	public static function generate(program:IrProgram, scalarClosures:Map<String, Bool>, entry:String, roots:Array<String>):WasmLinearClosureAdapters {
+	public static function generate(program:IrProgram, scalarClosures:Map<String, Bool>, entry:String,
+			roots:Array<String>):WasmLinearClosureAdapters {
 		var adapters = new WasmLinearClosureAdapters(program);
 		if (Lambda.exists(program.functions, fn -> fn.name == SIGNATURE_FUNCTION))
 			throw "Linear Wasm closure adapters were generated twice for one program";
@@ -104,7 +105,8 @@ class WasmLinearClosureAdapters {
 							switch output.type {
 								case Function(_, _):
 									noteType(output.type);
-									if (reachable.exists(fn.name)) targetTypes.set(closureKey(output.type), output.type);
+									if (reachable.exists(fn.name)) targetTypes.set(closureKey(output.type),
+										output.type);
 								default:
 							}
 						case TypeValue(_, type):
@@ -132,7 +134,8 @@ class WasmLinearClosureAdapters {
 				sourcesNow = [for (key in sourceTypes.keys()) key];
 			for (target in targetsNow)
 				for (source in sourcesNow)
-					if (source != target && arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) {
+					if (source != target
+						&& arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length) {
 						var fn = adapters.adapter(sourceTypes.get(source), targetTypes.get(target));
 						for (block in fn.blocks)
 							for (located in block.instructions)
@@ -159,18 +162,17 @@ class WasmLinearClosureAdapters {
 			sources.push("varargs");
 			sourceTypes.set("varargs", WasmDynamicCalls.callbackType());
 		}
-		var pairs = [
-			for (target in targets)
-				{
-					target: target,
-					sources: [
+		var pairs = [for (target in targets)
+			{
+				target:target,
+					sources:[
 						for (source in sources)
 							if (source != target
-								&& (source == "varargs"
-									|| arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length)) source
+							&& (source == "varargs"
+							|| arguments(sourceTypes.get(source)).length == arguments(targetTypes.get(target)).length))
+							source
 					]
-				}
-		];
+			}];
 		program.functions.push(adapters.signatureQuery());
 		adapters.rewriteSignatureChecks();
 		for (pair in pairs) {
@@ -178,7 +180,9 @@ class WasmLinearClosureAdapters {
 			for (source in pair.sources)
 				if (source != "varargs")
 					program.functions.push(adapters.adapter(sourceTypes.get(source), targetType));
-			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {key: source, type: sourceTypes.get(source)}]));
+			program.functions.push(adapters.castFunction(targetType, [for (source in pair.sources) {
+				key:source, type:sourceTypes.get(source)
+			}]));
 		}
 		return adapters;
 	}
@@ -200,11 +204,14 @@ class WasmLinearClosureAdapters {
 				var target = new IrBlock(block.id);
 				for (located in block.instructions)
 					switch located.value {
-						case Call(out, "__closure_is_of_type", arguments) if (arguments.length == 2 && types.exists(arguments[1].id)):
+						case Call(out, "__closure_is_of_type",
+							arguments) if (arguments.length == 2 && types.exists(arguments[1].id)):
 							var type = types.get(arguments[1].id),
-								name = "$wasm:closure-type-check:" + haxe.crypto.Sha256.encode(IrTypeIdentity.text(type)).substr(0, 32);
+								name = "$wasm:closure-type-check:"
+									+ haxe.crypto.Sha256.encode(IrTypeIdentity.text(type)).substr(0, 32);
 							helpers.set(name, type);
-							target.instructions.push(new Located(IrInstruction.Call(out, name, [arguments[0]]), located.provenance));
+							target.instructions.push(new Located(IrInstruction.Call(out, name, [arguments[0]]),
+								located.provenance));
 							changed = true;
 						default:
 							target.instructions.push(located);
@@ -231,7 +238,8 @@ class WasmLinearClosureAdapters {
 		var builder = new IrBuilder();
 		builder.argument("closure", Dyn);
 		builder.returnValue(builder.constInt(0));
-		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, GeneratedHelper, null, false, Keep);
+		return new IrFunction(SIGNATURE_FUNCTION, builder.arguments, I32, builder.blocks, GeneratedHelper, null, false,
+			Keep);
 	}
 
 	public function defineSignatureQuery(module:WasmModule, functions:Map<String, Int>):Void {
@@ -291,23 +299,33 @@ class WasmLinearClosureAdapters {
 		when(signatureId(targetType), () -> builder.returnValue(closure));
 		for (source in sources)
 			when(source.key == "varargs" ? -1 : signatureId(source.type),
-				() ->
-					builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs" ? WasmDynamicCalls.varargsAdapterName(targetType) : adapterName(signatureId(source.type),
-						signatureId(targetType)),
-					closure, targetType))));
+				() -> builder.returnValue(builder.toDyn(builder.instanceClosure(source.key == "varargs"
+				? WasmDynamicCalls.varargsAdapterName(targetType) : adapterName(signatureId(source.type),
+				signatureId(targetType)),
+				closure, targetType))));
 		builder.throwValue(builder.toDyn(builder.constString('Cannot cast to ${Std.string(targetType)}')));
-		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, ClosureCast(targetType), null, false, Reachable);
+		return new IrFunction(castName(targetType), builder.arguments, Dyn, builder.blocks, ClosureCast(targetType),
+			null, false, Reachable);
 	}
 
 	/** Receives the original closure and the target's arguments; converts each way through Dynamic. */
 	function adapter(sourceType:IrType, targetType:IrType):IrFunction {
-		var builder = new IrBuilder(), original = builder.argument("closure", Dyn), targetTypes = arguments(targetType), targetArguments = [
-			for (index in 0...targetTypes.length)
-				builder.argument('argument$index', targetTypes[index])
-		], sourceArguments = arguments(sourceType), callee = builder.safeCast(original, sourceType), converted = [
-			for (index in 0...sourceArguments.length)
-				convert(builder, targetArguments[index], sourceArguments[index])
-			], sourceResult = result(sourceType), targetResult = result(targetType), value = builder.callClosure(callee, converted, sourceResult);
+		var builder = new IrBuilder(),
+			original = builder.argument("closure", Dyn),
+			targetTypes = arguments(targetType),
+			targetArguments = [
+				for (index in 0...targetTypes.length)
+					builder.argument('argument$index', targetTypes[index])
+			],
+			sourceArguments = arguments(sourceType),
+			callee = builder.safeCast(original, sourceType),
+			converted = [
+				for (index in 0...sourceArguments.length)
+					convert(builder, targetArguments[index], sourceArguments[index])
+			],
+			sourceResult = result(sourceType),
+			targetResult = result(targetType),
+			value = builder.callClosure(callee, converted, sourceResult);
 		builder.returnValue((switch (targetResult) {
 			case Void: true;
 			default: false;
@@ -318,7 +336,8 @@ class WasmLinearClosureAdapters {
 			case Void: true;
 			default: false;
 		}) ? zero(builder, targetResult) : convert(builder, value, targetResult));
-		return new IrFunction(adapterName(signatureId(sourceType), signatureId(targetType)), builder.arguments, targetResult, builder.blocks,
+		return new IrFunction(adapterName(signatureId(sourceType), signatureId(targetType)), builder.arguments,
+			targetResult, builder.blocks,
 			ClosureAdapter(sourceType, targetType), null, false, Reachable);
 	}
 
@@ -368,7 +387,8 @@ class WasmLinearClosureAdapters {
 			case Obj(name): inlineEnums.get(name);
 			default: null;
 		};
-		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)), [value], type);
+		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)),
+			[value], type);
 	}
 
 	static function zero(builder:IrBuilder, type:IrType):IrValue

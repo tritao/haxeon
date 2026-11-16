@@ -33,8 +33,8 @@ class FlowFacts {
 	static function isUnder(bindingId:String, prefix:String):Bool
 		return bindingId == prefix
 			|| (bindingId.length > prefix.length
-				&& bindingId.charCodeAt(prefix.length) == 46
-				&& StringTools.startsWith(bindingId, prefix));
+			&& bindingId.charCodeAt(prefix.length) == 46
+			&& StringTools.startsWith(bindingId, prefix));
 
 	public function new(?parent:FlowFacts) {
 		this.parent = parent;

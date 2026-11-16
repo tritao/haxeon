@@ -16,12 +16,16 @@ class TextEdit {
 	public final historyKind:TextEditHistoryKind;
 
 	public function new(action:TextEditAction, text:Null<String>, replaceStart:Int, replaceEnd:Int,
-		selectionStart:Int, selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
-		?selectionAffinity:Int = 0, ?historyKind:TextEditHistoryKind = TextEditHistoryKind.Generic) {
-		this.action = action; this.text = text;
-		this.replaceStart = replaceStart; this.replaceEnd = replaceEnd;
-		this.selectionStart = selectionStart; this.selectionEnd = selectionEnd;
-		this.compositionStart = compositionStart; this.compositionEnd = compositionEnd;
+			selectionStart:Int, selectionEnd:Int, compositionStart:Int, compositionEnd:Int,
+			?selectionAffinity:Int = 0, ?historyKind:TextEditHistoryKind = TextEditHistoryKind.Generic) {
+		this.action = action;
+		this.text = text;
+		this.replaceStart = replaceStart;
+		this.replaceEnd = replaceEnd;
+		this.selectionStart = selectionStart;
+		this.selectionEnd = selectionEnd;
+		this.compositionStart = compositionStart;
+		this.compositionEnd = compositionEnd;
 		this.selectionAffinity = selectionAffinity;
 		this.historyKind = historyKind;
 	}

@@ -31,7 +31,8 @@ class IrSourceRehash {
 			if (current == null || current == location.sourceHash)
 				return provenance;
 			changed = true;
-			return new SourceProvenance(new SourceLocation(location.path, location.start, location.end, location.line, location.column, location.endLine,
+			return new SourceProvenance(new SourceLocation(location.path, location.start, location.end, location.line,
+				location.column, location.endLine,
 				location.endColumn, current),
 				provenance.origin);
 		}
@@ -41,7 +42,8 @@ class IrSourceRehash {
 			for (instruction in block.instructions)
 				copy.instructions.push(new Located<IrInstruction>(instruction.value, fix(instruction.provenance)));
 			var terminator = block.terminator;
-			copy.terminator = terminator == null ? null : new Located<IrTerminator>(terminator.value, fix(terminator.provenance));
+			copy.terminator = terminator == null ? null : new Located<IrTerminator>(terminator.value,
+				fix(terminator.provenance));
 			blocks.push(copy);
 		}
 		return changed ? fn.withBlocks(blocks) : fn;

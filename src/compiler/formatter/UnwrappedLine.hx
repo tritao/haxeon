@@ -15,15 +15,13 @@ typedef UnwrappedLine = {
 	final sourceEnd:Int;
 
 	/** Start offsets of the comments that trail code on their source line; layout keeps each on that line. */
-	final ?trailingComments:Map<Int,
-	Bool>;
+	final ?trailingComments:Map<Int, Bool>;
 
 	/**
 	 * Start offsets of the tokens that began a source line inside this logical line. Layout keeps two of the author's choices from
 	 * them: a literal written one element per line, and a declaration written one declarator per line.
 	 */
-	final ?newlineBefore:Map<Int,
-	Bool>;
+	final ?newlineBefore:Map<Int, Bool>;
 }
 
 class UnwrappedLineTools {
@@ -179,7 +177,8 @@ class UnwrappedLineBuilder {
 					begin(token);
 					// A line comment ends the logical line, unless it trails a statement that goes on below it (`var a = 1, // why`
 					// then `b = 2;`, or an argument list): the rest keeps the statement's continuation indent.
-					if (current.length == 1 || token.kind.match(FormatTokenKind.LineComment) && !(trailing && statementContinues(current, syntax)))
+					if (current.length == 1 || token.kind.match(FormatTokenKind.LineComment)
+						&& !(trailing && statementContinues(current, syntax)))
 						flush();
 				case FormatTokenKind.Syntax(kind):
 					var isBlock = kind == TokenKind.LeftBrace
@@ -189,9 +188,9 @@ class UnwrappedLineBuilder {
 						isCloseBlock = !isEmptyClose
 							&& kind == TokenKind.RightBrace
 							&& (syntax.blockCloses.exists(token.start) || opaqueBlockDepth > 0),
-							isSwitchBlock = isBlock && containsKind(current,
-						TokenKind.Switch),
-							closesSwitch = isCloseBlock
+						isSwitchBlock = isBlock && containsKind(current,
+							TokenKind.Switch),
+						closesSwitch = isCloseBlock
 							&& switchCloses.length > 0
 							&& index == switchCloses[switchCloses.length - 1];
 					if (current.length > 0 && endsDeclaration(current[current.length - 1], syntax))
@@ -239,11 +238,12 @@ class UnwrappedLineBuilder {
 						&& (lastClosedBlock || startsDeclaration(kind))
 						&& kind != TokenKind.Else
 						&& kind != TokenKind.Catch
-						&& !(kind == TokenKind.While && syntax.roles.doBlockCloses.exists(current[current.length - 1].start))
+						&& !(kind == TokenKind.While
+						&& syntax.roles.doBlockCloses.exists(current[current.length - 1].start))
 						&& kind != TokenKind.Semicolon
-						// A bracket that closes after a block (`call(function() {...})`) closes the expression around it, and an operator
-						// or a conditional's `?` or `:` after one (`f == null ? function() {} : f`) continues it.
-						&& kind != TokenKind.RightParen
+					// A bracket that closes after a block (`call(function() {...})`) closes the expression around it, and an operator
+					// or a conditional's `?` or `:` after one (`f == null ? function() {} : f`) continues it.
+					&& kind != TokenKind.RightParen
 						&& kind != TokenKind.RightBracket
 						&& kind != TokenKind.Question
 						&& !(kind == TokenKind.Colon && syntax.roles.ternaryColons.exists(token.start))

@@ -187,7 +187,8 @@ class EReg {
 				index += 2;
 			} else if (code >= 49 && code <= 57) {
 				var group = code - 48;
-				if (group < regexpMatchedNum(expression)) output.add(matched(group)); else output.add("$" + replacement.charAt(index + 1));
+				if (group < regexpMatchedNum(expression)) output.add(matched(group));
+				else output.add("$" + replacement.charAt(index + 1));
 				index += 2;
 			} else
 				output.add(replacement.charAt(index++));
@@ -203,7 +204,8 @@ class EReg {
 		if (offset >= value.length) return value.length;
 		var first = value.charCodeAt(offset);
 		return first >= 0xD800 && first <= 0xDBFF && offset + 1 < value.length
-			&& value.charCodeAt(offset + 1) >= 0xDC00 && value.charCodeAt(offset + 1) <= 0xDFFF ? offset + 2 : offset + 1;
+			&& value.charCodeAt(offset + 1) >= 0xDC00
+			&& value.charCodeAt(offset + 1) <= 0xDFFF ? offset + 2 : offset + 1;
 	}
 
 	public static function escape(value:String):String {

@@ -130,8 +130,8 @@ class EffectChain {
 
 	static function isMatrixEffect(effect:VisualEffect):Bool
 		return switch effect.kind {
-			case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate |
-				EffectKind.HueRotate | EffectKind.ColorMatrix: true;
+			case EffectKind.Brightness | EffectKind.Contrast | EffectKind.Saturate | EffectKind.HueRotate
+				| EffectKind.ColorMatrix: true;
 			default: false;
 		};
 
@@ -166,17 +166,53 @@ class EffectChain {
 	}
 
 	static function brightnessMatrix(factor:Float):Array<Float>
-		return [factor, 0.0, 0.0, 0.0, 0.0,
-			0.0, factor, 0.0, 0.0, 0.0,
-			0.0, 0.0, factor, 0.0, 0.0,
-			0.0, 0.0, 0.0, 1.0, 0.0];
+		return [
+			factor,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			factor,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			factor,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			1.0,
+			0.0
+		];
 
 	static function contrastMatrix(factor:Float):Array<Float> {
 		var bias = 0.5 * (1.0 - factor);
-		return [factor, 0.0, 0.0, 0.0, bias,
-			0.0, factor, 0.0, 0.0, bias,
-			0.0, 0.0, factor, 0.0, bias,
-			0.0, 0.0, 0.0, 1.0, 0.0];
+		return [
+			factor,
+			0.0,
+			0.0,
+			0.0,
+			bias,
+			0.0,
+			factor,
+			0.0,
+			0.0,
+			bias,
+			0.0,
+			0.0,
+			factor,
+			0.0,
+			bias,
+			0.0,
+			0.0,
+			0.0,
+			1.0,
+			0.0
+		];
 	}
 
 	static function saturateMatrix(factor:Float):Array<Float> {
@@ -184,26 +220,56 @@ class EffectChain {
 		var green = 0.7152;
 		var blue = 0.0722;
 		var inverse = 1.0 - factor;
-		return [red * inverse + factor, green * inverse, blue * inverse, 0.0, 0.0,
-			red * inverse, green * inverse + factor, blue * inverse, 0.0, 0.0,
-			red * inverse, green * inverse, blue * inverse + factor, 0.0, 0.0,
-			0.0, 0.0, 0.0, 1.0, 0.0];
+		return [
+			red * inverse + factor,
+			green * inverse,
+			blue * inverse,
+			0.0,
+			0.0,
+			red * inverse,
+			green * inverse + factor,
+			blue * inverse,
+			0.0,
+			0.0,
+			red * inverse,
+			green * inverse,
+			blue * inverse + factor,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			1.0,
+			0.0
+		];
 	}
 
 	static function hueRotateMatrix(degrees:Float):Array<Float> {
 		var radians = degrees * Math.PI / 180.0;
 		var cosine = Math.cos(radians);
 		var sine = Math.sin(radians);
-		return [0.213 + cosine * 0.787 - sine * 0.213,
+		return [
+			0.213 + cosine * 0.787 - sine * 0.213,
 			0.715 - cosine * 0.715 - sine * 0.715,
-			0.072 - cosine * 0.072 + sine * 0.928, 0.0, 0.0,
+			0.072 - cosine * 0.072 + sine * 0.928,
+			0.0,
+			0.0,
 			0.213 - cosine * 0.213 + sine * 0.143,
 			0.715 + cosine * 0.285 + sine * 0.140,
-			0.072 - cosine * 0.072 - sine * 0.283, 0.0, 0.0,
+			0.072 - cosine * 0.072 - sine * 0.283,
+			0.0,
+			0.0,
 			0.213 - cosine * 0.213 - sine * 0.787,
 			0.715 - cosine * 0.715 + sine * 0.715,
-			0.072 + cosine * 0.928 + sine * 0.072, 0.0, 0.0,
-			0.0, 0.0, 0.0, 1.0, 0.0];
+			0.072 + cosine * 0.928 + sine * 0.072,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			0.0,
+			1.0,
+			0.0
+		];
 	}
 
 	/** Returns left * right for row-major 4x5 color matrices. */

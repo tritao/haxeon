@@ -15,8 +15,8 @@ extern abstract ChildProcess(ChildProcessHandle) {
 	/** Spawn an independent streaming process. Environment entries override inherited values. */
 	@:hlNative("haxeon_runtime", "__process_spawn")
 	public static function spawn(command:String, arguments:Array<String>, cwd:String = "",
-		?environmentKeys:Array<String>, ?environmentValues:Array<String>, detached:Bool = false,
-		newProcessGroup:Bool = true):ChildProcess;
+			?environmentKeys:Array<String>, ?environmentValues:Array<String>, detached:Bool = false,
+			newProcessGroup:Bool = true):ChildProcess;
 
 	@:hlNative("haxeon_runtime", "__child_read_stdout")
 	public function readStdout(bytes:Bytes, offset:Int, length:Int):Int;

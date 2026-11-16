@@ -25,28 +25,34 @@ class ValueStructMain {
 			}
 		if (!foundStructure || !foundPacked)
 			throw "value structures must emit HSTRUCT and packed embedded fields";
-		var restored = HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(result.module.types), result.module.strings.length, result.module.globals.length);
-		if ([
-			for (type in restored)
-				if (switch type {
-						case Structure(_, _, _, _, _): true;
-						default: false;
-					}) type
-		].length != 1)
-			throw "persisted backend state lost the value structure representation";
+		var restored = HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(result.module.types),
+			result.module.strings.length, result.module.globals.length);
+		if ([for (type in restored)
+			if (switch type {
+				case Structure(_, _, _, _, _): true;
+				default: false;
+			}) type].length != 1)
+				throw "persisted backend state lost the value structure representation";
 		var representationChange = new Compiler();
 		representationChange.update("Main.hx", "class Point { public var x:Int; } function main():Int return 0;");
 		representationChange.compile("Main");
-		representationChange.update("Main.hx", "@:value class Point { public var x:Int; } function main():Int return 0;");
+		representationChange.update("Main.hx",
+			"@:value class Point { public var x:Int; } function main():Int return 0;");
 		if (!representationChange.compile("Main").requiresReload)
 			throw "changing object/value representation must require a reload";
-		expectCompileError("class Base {} @:value class Point extends Base {} function main():Int return 0;", "cannot extend");
-		expectCompileError("interface Located {} @:value class Point implements Located {} function main():Int return 0;", "cannot implement");
-		expectCompileError('@:repr("C") class Point { public var x:Int; } function main():Int return 0;', "requires @:value");
-		expectCompileError('@:value @:repr("Rust") class Point { public var x:Int; } function main():Int return 0;', "Unsupported native representation");
-		expectCompileError("@:value @:repr class Point { public var x:Int; } function main():Int return 0;", "requires exactly one string argument");
+		expectCompileError("class Base {} @:value class Point extends Base {} function main():Int return 0;",
+			"cannot extend");
+		expectCompileError("interface Located {} @:value class Point implements Located {} function main():Int return 0;",
+			"cannot implement");
+		expectCompileError('@:repr("C") class Point { public var x:Int; } function main():Int return 0;',
+			"requires @:value");
+		expectCompileError('@:value @:repr("Rust") class Point { public var x:Int; } function main():Int return 0;',
+			"Unsupported native representation");
+		expectCompileError("@:value @:repr class Point { public var x:Int; } function main():Int return 0;",
+			"requires exactly one string argument");
 		var nativeValue = new Compiler();
-		nativeValue.update("Main.hx", '@:value @:repr("C") class Point { public var x:Int32; } function main():Int return 42;');
+		nativeValue.update("Main.hx",
+			'@:value @:repr("C") class Point { public var x:Int32; } function main():Int return 42;');
 		var nativeResult = nativeValue.compile("Main");
 		if ([for (object in nativeResult.ir.objects) if (object.name == "Point") object].length != 0)
 			throw "C-represented values must not produce HashLink object declarations";

@@ -61,8 +61,14 @@ class IrProviders {
 			case EnumDynamicView(type): {subject: TypeKey.of(type), operation: ProviderOperation.ViewDynamic};
 			case EnumTagBox(type): {subject: TypeKey.of(type), operation: ProviderOperation.EnumTagBox};
 			case EnumTagUnbox(type): {subject: TypeKey.of(type), operation: ProviderOperation.EnumTagUnbox};
-			case InlineEnumBox(type): {subject: TypeKey.of(type), operation: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")};
-			case InlineEnumUnbox(type): {subject: TypeKey.of(type), operation: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")};
+			case InlineEnumBox(type): {
+				subject: TypeKey.of(type),
+				operation: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")
+			};
+			case InlineEnumUnbox(type): {
+				subject: TypeKey.of(type),
+				operation: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")
+			};
 		};
 
 	/**

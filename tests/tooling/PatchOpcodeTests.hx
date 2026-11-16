@@ -1,20 +1,20 @@
+import Type as HaxeType;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
-import compiler.hl.HlWriter;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlType as HashLinkType;
-import Type as HaxeType;
-import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.patch.HlPatchReader;
+import compiler.hl.HlWriter;
 import compiler.hl.patch.HlPatchFormat;
+import compiler.hl.patch.HlPatchReader;
+import compiler.hl.patch.HlPatchWriter;
 import compiler.hl.persistence.HlRuntimeIdentity;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
+import runtime.PatchSet;
 import runtime.Runtime;
 import runtime.RuntimeError;
 import runtime.RuntimeStatus;
-import runtime.PatchSet;
 
 /** Wire fixtures are pinned to vendor/hashlink/src/opcodes.h, independent of the writer. */
 class PatchOpcodeTests {
@@ -235,7 +235,8 @@ class PatchOpcodeTests {
 		var code = module([LoadInt(0, 0), Return(0)]),
 			moduleId = HaxeBytes.alloc(16);
 		code.globals = [1];
-		var loaded = Runtime.load(HlWriter.encode(code).flatten(), HlRuntimeIdentity.encode(moduleId, 1, ["main" => 0], ["main" => 70000]));
+		var loaded = Runtime.load(HlWriter.encode(code).flatten(),
+			HlRuntimeIdentity.encode(moduleId, 1, ["main" => 0], ["main" => 70000]));
 		var invalid:Array<HlInstruction> = [
 			Mod(1, 0, 0),
 			ShiftLeft(0, 1, 0),
@@ -351,7 +352,10 @@ class PatchOpcodeTests {
 	 * A patch to the module after `existing` earlier patches each added one String constant: it adds `added` more, whose
 	 * lengths are 100, 101, ... in order, and returns the length of global `read`.
 	 */
-	static function stringsPatch(existing:Int, added:Int, read:Int, ?customize:HlCode->Void, ?revision:Int):{code:HlCode, bytes:HaxeBytes} {
+	static function stringsPatch(existing:Int, added:Int, read:Int, ?customize:HlCode->Void, ?revision:Int): {
+		code: HlCode,
+		bytes: HaxeBytes
+	} {
 		var code = stringModule();
 		for (i in 0...existing + added) {
 			code.ints.push(100 + i);
@@ -375,16 +379,18 @@ class PatchOpcodeTests {
 	}
 
 	static function loadStrings():runtime.LoadedModule
-		return Runtime.load(HlWriter.encode(stringModule()).flatten(), HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
+		return Runtime.load(HlWriter.encode(stringModule()).flatten(),
+			HlRuntimeIdentity.encode(HaxeBytes.alloc(16), 1, ["main" => 0], ["main" => 70000]));
 
-	static function readIndexAt(bytes:HaxeBytes, position:Int):{value:Int, next:Int} {
+	static function readIndexAt(bytes:HaxeBytes, position:Int): {value: Int, next: Int} {
 		var first = bytes.get(position);
 		if (first & 0x80 == 0)
 			return {value: first, next: position + 1};
 		if (first & 0x40 == 0)
 			return {value: bytes.get(position + 1) | ((first & 31) << 8), next: position + 2};
 		return {
-			value: (bytes.get(position + 1) << 16) | (bytes.get(position + 2) << 8) | bytes.get(position + 3) | ((first & 31) << 24),
+			value: (bytes.get(position + 1) << 16) | (bytes.get(position + 2) << 8) | bytes.get(position + 3)
+				| ((first & 31) << 24),
 			next: position + 4
 		};
 	}
@@ -463,26 +469,46 @@ class PatchOpcodeTests {
 		Runtime.dispose(loaded);
 
 		// Each defect is turned away without changing the module, which then takes the good patch.
-		var defects:Array<{name:String, bytes:HaxeBytes}> = [
-			{
-				name: "base globals that disagree with the module",
-				bytes: HlPatchWriter.encode(valid.code, HaxeBytes.alloc(16), [0], [0 => 70000], 1, 2, 2, 0, 4, 5, null, null, 0)
-			},
-			{
-				name: "a prefix hash from other global types",
-				bytes: stringsPatch(0, 1, 1, code -> {
-					code.globals[0] = 1;
-					code.constants.shift();
-				}).bytes
-			},
-			{name: "a global of a type the module lacks", bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 99).bytes},
-			{name: "a global that is not an object", bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 1).bytes},
-			{name: "a string index past the strings", bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [99, 2]}).bytes},
-			{name: "an int index past the ints", bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [4, 99]}).bytes},
-			{name: "fewer fields than the object has", bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [4]}).bytes},
-			{name: "a read past the added globals", bytes: stringsPatch(0, 1, 2).bytes},
-			{name: "more globals than were reserved", bytes: stringsPatch(0, 16385, 1).bytes}
-		];
+		var defects:Array<{name:String, bytes:HaxeBytes}> = [{
+			name: "base globals that disagree with the module",
+			bytes: HlPatchWriter.encode(valid.code, HaxeBytes.alloc(16), [0], [0 => 70000], 1, 2, 2, 0, 4, 5, null,
+				null, 0)
+		},
+			{name: "a prefix hash from other global types",
+			bytes: stringsPatch(0, 1, 1, code -> {
+				code.globals[0] = 1;
+				code.constants.shift();
+			}).bytes},
+				{
+					name: "a global of a type the module lacks",
+					bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 99).bytes
+				},
+					{
+						name: "a global that is not an object",
+						bytes: stringsPatch(0, 1, 1, code -> code.globals[1] = 1).bytes
+					},
+						{
+							name: "a string index past the strings",
+							bytes: stringsPatch(0, 1, 1, code -> code.constants[1] = {global: 1, fields: [99, 2]}).bytes
+						},
+							{
+								name: "an int index past the ints",
+								bytes: stringsPatch(0, 1, 1,
+									code -> code.constants[1] = {global: 1, fields: [4, 99]}).bytes
+							},
+								{
+									name: "fewer fields than the object has",
+									bytes: stringsPatch(0, 1, 1,
+										code -> code.constants[1] = {global: 1, fields: [4]}).bytes
+								},
+									{
+										name: "a read past the added globals",
+										bytes: stringsPatch(0, 1, 2).bytes
+									},
+										{
+											name: "more globals than were reserved",
+											bytes: stringsPatch(0, 16385, 1).bytes
+										}];
 		for (defect in defects) {
 			var target = loadStrings();
 			if (!turnedAway(target, 1, defect.bytes))

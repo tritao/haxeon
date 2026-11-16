@@ -56,7 +56,12 @@ class SuiteManifest {
 			for (group in groups)
 				if (GROUPS.indexOf(group) < 0)
 					throw '$path:$number: unknown group "$group" (known: ${GROUPS.join(", ")})';
-			var lane:Null<String> = null, pool:Null<String> = null, requires = [], unlessEnv = [], freshNative = false, cliLauncher = false;
+			var lane:Null<String> = null,
+				pool:Null<String> = null,
+				requires = [],
+				unlessEnv = [],
+				freshNative = false,
+				cliLauncher = false;
 			for (option in fields.slice(2)) {
 				var equals = option.indexOf("="),
 					key = equals < 0 ? option : option.substr(0, equals),

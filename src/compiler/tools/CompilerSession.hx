@@ -73,12 +73,12 @@ class CompilerSession {
 	}
 
 	/** Wasm guests import their host services through this stdlib interface. */
-	static function hostInterfaces(target:String):{interfaces:Array<String>, projections:Array<String>}
-		return switch target {
+	static function hostInterfaces(target:String): {interfaces: Array<String>,
+		projections: Array<String>} return switch target {
 			case "wasm32" | "wasm-gc" | "wasmgc": {
-					interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"],
-					projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]
-				};
+				interfaces: ["stdlib/haxeon/wasm/HaxeonHost.hxi", "stdlib/haxeon/wasm/HaxeonCrypto.hxi"],
+				projections: ["stdlib/haxeon/wasm/HaxeonHost.hxmap", "stdlib/haxeon/wasm/HaxeonCrypto.hxmap"]
+			};
 			case _: {interfaces: [], projections: []};
 		};
 
@@ -99,8 +99,12 @@ class CompilerSession {
 		var host = hostInterfaces(request.target),
 			interfacePaths = request.ffiInterfaces.concat(host.interfaces),
 			projectionPaths = request.ffiProjections.concat(host.projections);
-		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {path: path, text: read(path)}],
-			projections:Array<FfiProjectionSource> = [for (path in projectionPaths) {path: path, text: read(path)}],
+		var interfaces:Array<FfiInterfaceSource> = [for (path in interfacePaths) {
+			path:path, text:read(path)
+		}],
+			projections:Array<FfiProjectionSource> = [for (path in projectionPaths) {
+			path:path, text:read(path)
+		}],
 			identity = Json.stringify({
 				target: request.target,
 				buildMode: request.buildMode,
@@ -125,14 +129,18 @@ class CompilerSession {
 				if (before != null
 					&& after != before
 					&& hasStructuralDeclaration(path, before, after,
-						Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
+					Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
 					reset();
 					break;
 				}
 			}
 		if (compiler == null) {
-			interfaces = [for (path in interfacePaths) {path: path, text: read(path)}];
-			projections = [for (path in projectionPaths) {path: path, text: read(path)}];
+			interfaces = [for (path in interfacePaths) {
+				path:path, text:read(path)
+			}];
+			projections = [for (path in projectionPaths) {
+				path:path, text:read(path)
+			}];
 		}
 		// Modules resolved lazily (notably stdlib) have absolute source paths.
 		// Refresh those too: retaining only the explicit manifest would cache stale imports.
@@ -147,7 +155,7 @@ class CompilerSession {
 					var changed = readChanged(path);
 					if (changed != state.source.text
 						&& hasStructuralDeclaration(path, state.source.text, changed,
-							Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
+						Compiler.defineMap(request.defines.concat(CompilerDriver.targetDefines(request.target))))) {
 						// A typedef/enum/abstract edit can change an unchanged class's field ABI.
 						// Rebuild that semantic graph until transitive shape invalidation is complete.
 						reset();
@@ -279,13 +287,17 @@ class CompilerSession {
 	 * module (the whole module is on disk, its `.live.full` marker names the recorded revision) under this configuration
 	 * and compiler. Anything else (no history, a stale or partial module, another compiler) starts a new module.
 	 */
-	function resumeLiveModule(request:CompilerRequest, identity:String, interfaces:Array<FfiInterfaceSource>, projections:Array<FfiProjectionSource>,
+	function resumeLiveModule(request:CompilerRequest, identity:String, interfaces:Array<FfiInterfaceSource>,
+			projections:Array<FfiProjectionSource>,
 			report:String->Void):Null<Compiler> {
 		var published = request.publishedOutput == null ? request.output : request.publishedOutput;
-		if (published == null || !FileSystem.exists(published + ".live.full") || !FileSystem.exists(published + ".live.state"))
+		if (published == null || !FileSystem.exists(published + ".live.full")
+			|| !FileSystem.exists(published + ".live.state"))
 			return null;
 		try {
-			var key = liveStateKey(File.getContent(published + ".live.full"), identity), bytes = File.getBytes(published + ".live.state"), separator = -1;
+			var key = liveStateKey(File.getContent(published + ".live.full"), identity),
+				bytes = File.getBytes(published + ".live.state"),
+				separator = -1;
 			for (index in 0...bytes.length)
 				if (bytes.get(index) == "\n".code) {
 					separator = index;
@@ -295,7 +307,8 @@ class CompilerSession {
 				report("live history does not match the published module; starting a new module");
 				return null;
 			}
-			var resumed = new Compiler(bytes.sub(separator + 1, bytes.length - separator - 1), CompilerIntrinsics.configuration(),
+			var resumed = new Compiler(bytes.sub(separator + 1, bytes.length - separator - 1),
+				CompilerIntrinsics.configuration(),
 				new FfiConfiguration(interfaces, projections));
 			report("resuming the published live module " + File.getContent(published + ".live.full"));
 			return resumed;
@@ -306,7 +319,8 @@ class CompilerSession {
 	}
 
 	static function liveStateKey(marker:String, configuration:String):String
-		return marker + " " + build.execution.ContentDigest.makeHex(Bytes.ofString(configuration + "\n" + Path.withoutDirectory(Sys.programPath())));
+		return marker + " " + build.execution.ContentDigest
+			.makeHex(Bytes.ofString(configuration + "\n" + Path.withoutDirectory(Sys.programPath())));
 
 	function read(path:String):String {
 		var key = FileSystem.fullPath(path);
@@ -342,8 +356,8 @@ class CompilerSession {
 			if (!capturing
 				&& depth == 0
 				&& (token.kind == TokenKind.Typedef
-					|| token.kind == TokenKind.Enum
-					|| (token.kind == TokenKind.Identifier && token.text == "abstract"))) {
+				|| token.kind == TokenKind.Enum
+				|| (token.kind == TokenKind.Identifier && token.text == "abstract"))) {
 				capturing = true;
 				bodyDepth = 0;
 			}

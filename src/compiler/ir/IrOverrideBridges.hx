@@ -22,7 +22,10 @@ class IrOverrideBridges {
 	public static inline final BRIDGE_PREFIX = "$override-bridge:";
 	public static inline final CALL_PREFIX = "$override-call:";
 
-	public static function apply(functions:Array<IrFunction>, objects:Array<IrObject>):{functions:Array<IrFunction>, objects:Array<IrObject>} {
+	public static function apply(functions:Array<IrFunction>, objects:Array<IrObject>): {
+		functions: Array<IrFunction>,
+		objects: Array<IrObject>
+	} {
 		var byName = [for (object in objects) object.name => object],
 			index = new IrFunctionIndex("override-bridges", functions),
 			bridges:Array<IrFunction> = [],
@@ -40,27 +43,28 @@ class IrOverrideBridges {
 			}
 			return root;
 		}
-		var rewritten = [
-			for (object in objects) {
-				if (object.base == null || object.methods.length == 0) object; else {
-					var changed = false, methods = [
-						for (entry in object.methods) {
-							var implementation = index.get(entry.functionName), root = signatureOf(byName.get(object.base), entry.name);
-							if (implementation == null || root == null || sameSignature(implementation, root)) entry; else {
-								var name = BRIDGE_PREFIX + implementation.name;
-								if (!bridged.exists(name)) {
-									bridged.set(name, true);
-									bridges.push(bridge(name, implementation, root, byName));
-								}
-								changed = true;
-								{name: entry.name, functionName: name};
-							}
+		var rewritten = [for (object in objects) {
+			if (object.base == null || object.methods.length == 0) object;
+			else {
+				var changed = false, methods = [for (entry in object.methods) {
+					var implementation = index.get(entry.functionName),
+						root = signatureOf(byName.get(object.base), entry.name);
+					if (implementation == null || root == null || sameSignature(implementation, root)) entry;
+					else {
+						var name = BRIDGE_PREFIX + implementation.name;
+						if (!bridged.exists(name)) {
+							bridged.set(name, true);
+							bridges.push(bridge(name, implementation, root, byName));
 						}
-					];
-					changed ? IrObjectTools.withMethods(object, methods) : object;
-				}
+						changed = true;
+						{
+							name:entry.name, functionName:name
+						};
+					}
+				}];
+				changed ? IrObjectTools.withMethods(object, methods) : object;
 			}
-		];
+		}];
 		if (bridges.length == 0)
 			return {functions: functions, objects: objects};
 		var rewrittenByName = [for (object in rewritten) object.name => object],
@@ -74,11 +78,13 @@ class IrOverrideBridges {
 			return switch located.value {
 				case MethodCall(output, receiver, method, arguments, terminal):
 					var slot = slotSignature(receiver.type, method);
-					if (slot == null || callMatches(slot, arguments, output.type)) null; else {
+					if (slot == null || callMatches(slot, arguments, output.type)) null;
+					else {
 						var argumentTypes = [for (argument in arguments) argument.type],
 							name = callAdapterName(receiver.type, method, argumentTypes, output.type);
 						if (!adapters.exists(name))
-							adapters.set(name, callAdapter(name, receiver.type, method, argumentTypes, output.type, slot, rewrittenByName));
+							adapters.set(name, callAdapter(name, receiver.type, method, argumentTypes, output.type,
+								slot, rewrittenByName));
 						[
 							new Located(Call(output, name, [receiver].concat(arguments)), located.provenance)
 						];
@@ -95,12 +101,14 @@ class IrOverrideBridges {
 
 	/** One adapter per receiver class, method and caller signature. */
 	static function callAdapterName(receiver:IrType, method:String, arguments:Array<IrType>, result:IrType):String {
-		var signature = IrTypeIdentity.text(receiver) + ":" + IrTypeIdentity.listText(arguments) + ":" + IrTypeIdentity.text(result);
+		var signature = IrTypeIdentity.text(receiver) + ":" + IrTypeIdentity.listText(arguments) + ":"
+			+ IrTypeIdentity.text(result);
 		return CALL_PREFIX + method + ":" + haxe.crypto.Sha256.encode(signature).substr(0, 32);
 	}
 
 	static function sameSignature(implementation:IrFunction, root:IrFunction):Bool {
-		if (implementation.arguments.length != root.arguments.length || !IrTypeIdentity.same(implementation.result, root.result))
+		if (implementation.arguments.length != root.arguments.length
+			|| !IrTypeIdentity.same(implementation.result, root.result))
 			return false;
 		// The receiver is each declaration's own class; the slot's contract is the rest.
 		for (index in 1...implementation.arguments.length)
@@ -122,32 +130,47 @@ class IrOverrideBridges {
 	}
 
 	/** The slot entry for `implementation`: `root`'s signature, with `implementation`'s own receiver. */
-	static function bridge(name:String, implementation:IrFunction, root:IrFunction, objects:Map<String, IrObject>):IrFunction {
-		var builder = new IrBuilder(), receiver = builder.argument("receiver", implementation.arguments[0].type), arguments = [
-			for (index in 1...root.arguments.length)
-				builder.argument('argument$index', root.arguments[index].type)
-		], adapted = [
-			for (index in 0...arguments.length)
-				GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type, objects)
-			], result = builder.call(implementation.name, [receiver].concat(adapted), implementation.result);
-		builder.returnValue(isVoid(root.result) ? builder.constVoid() : GenericOwnerErasure.convert(builder, result, root.result, objects));
+	static function bridge(name:String, implementation:IrFunction, root:IrFunction,
+			objects:Map<String, IrObject>):IrFunction {
+		var builder = new IrBuilder(),
+			receiver = builder.argument("receiver", implementation.arguments[0].type),
+			arguments = [
+				for (index in 1...root.arguments.length)
+					builder.argument('argument$index', root.arguments[index].type)
+			],
+			adapted = [
+				for (index in 0...arguments.length)
+					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
+					objects)
+			],
+			result = builder.call(implementation.name, [receiver].concat(adapted), implementation.result);
+		builder.returnValue(isVoid(root.result) ? builder.constVoid() : GenericOwnerErasure.convert(builder, result,
+			root.result, objects));
 		return new IrFunction(name, builder.arguments, root.result, builder.blocks,
-			Provider(TypeKey.of(implementation.arguments[0].type), ProviderOperations.detailed(ProviderOperation.OverrideBridge, implementation.name)));
+			Provider(TypeKey.of(implementation.arguments[0].type),
+			ProviderOperations.detailed(ProviderOperation.OverrideBridge, implementation.name)));
 	}
 
 	/** A virtual call of `method` made with the caller's types, converted to and from the slot's signature. */
-	static function callAdapter(name:String, receiverType:IrType, method:String, argumentTypes:Array<IrType>, resultType:IrType, slot:IrFunction,
+	static function callAdapter(name:String, receiverType:IrType, method:String, argumentTypes:Array<IrType>,
+			resultType:IrType, slot:IrFunction,
 			objects:Map<String, IrObject>):IrFunction {
-		var builder = new IrBuilder(), receiver = builder.argument("receiver", receiverType), arguments = [
-			for (index in 0...argumentTypes.length)
-				builder.argument('argument${index + 1}', argumentTypes[index])
-		], adapted = [
-			for (index in 0...arguments.length)
-				GenericOwnerErasure.convert(builder, arguments[index], slot.arguments[index + 1].type, objects)
-			], result = builder.methodCall(receiver, method, adapted, slot.result);
-		builder.returnValue(isVoid(resultType) ? builder.constVoid() : GenericOwnerErasure.convert(builder, result, resultType, objects));
+		var builder = new IrBuilder(),
+			receiver = builder.argument("receiver", receiverType),
+			arguments = [
+				for (index in 0...argumentTypes.length)
+					builder.argument('argument${index + 1}', argumentTypes[index])
+			],
+			adapted = [
+				for (index in 0...arguments.length)
+					GenericOwnerErasure.convert(builder, arguments[index], slot.arguments[index + 1].type, objects)
+			],
+			result = builder.methodCall(receiver, method, adapted, slot.result);
+		builder.returnValue(isVoid(resultType) ? builder.constVoid() : GenericOwnerErasure.convert(builder, result,
+			resultType, objects));
 		return new IrFunction(name, builder.arguments, resultType, builder.blocks,
-			Provider(TypeKey.of(receiverType), ProviderOperations.detailed(ProviderOperation.OverrideBridge, "call:" + method)));
+			Provider(TypeKey.of(receiverType),
+			ProviderOperations.detailed(ProviderOperation.OverrideBridge, "call:" + method)));
 	}
 
 	static inline function isVoid(type:IrType):Bool

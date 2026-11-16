@@ -11,7 +11,8 @@ class FieldAssignmentContextMain {
 		+ 'return data.parts[0].faceRanges.length == 1 && Data.staticRanges.length == 1 ? 42 : 1; }';
 	static final invalid = 'function main():Int { var data = new Data(); data.parts[0].faceRanges = []; '
 		+ 'data.parts[0].faceRanges.push("wrong"); return 42; }';
-	static final invalidStatic = 'function main():Int { Data.staticRanges = []; Data.staticRanges.push("wrong"); return 42; }';
+	static final invalidStatic =
+		'function main():Int { Data.staticRanges = []; Data.staticRanges.push("wrong"); return 42; }';
 
 	static function compiler(source:String):Compiler {
 		var result = new Compiler();

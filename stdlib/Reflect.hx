@@ -57,7 +57,8 @@ function reflectCompare(left:Dynamic, right:Dynamic):Int {
 		if (!leftNumber || !rightNumber)
 			return DynamicOrder.INVALID;
 		var leftValue = numberValue(left), rightValue = numberValue(right);
-		return leftValue == rightValue ? 0 : leftValue > rightValue ? 1 : leftValue < rightValue ? -1 : DynamicOrder.INVALID;
+		return leftValue == rightValue ? 0 : leftValue > rightValue ? 1 : leftValue < rightValue
+			? -1 : DynamicOrder.INVALID;
 	}
 	if (Std.isOfType(left, Bool) || Std.isOfType(right, Bool)) {
 		if (!Std.isOfType(left, Bool) || !Std.isOfType(right, Bool))

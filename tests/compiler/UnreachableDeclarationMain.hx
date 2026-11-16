@@ -25,7 +25,8 @@ class UnreachableDeclarationMain {
 		expectObjects(compiler.compile("Main"), ["Holder", "Capture"], true, "initial build");
 
 		compiler.update("Main.hx", UNREFERENCED);
-		expectObjects(compiler.compile("Main"), ["Holder", "Capture"], false, "build after dropping the last references");
+		expectObjects(compiler.compile("Main"), ["Holder", "Capture"], false,
+			"build after dropping the last references");
 
 		compiler.update("Main.hx", REFERENCED);
 		expectObjects(compiler.compile("Main"), ["Holder", "Capture"], true, "build after restoring the references");
@@ -34,11 +35,13 @@ class UnreachableDeclarationMain {
 		compiler.compile("Main");
 		compiler.remove("Holder.hx");
 		compiler.remove("Capture.hx");
-		expectObjects(compiler.compile("Main"), ["Holder", "Capture"], false, "build after removing the unreachable modules");
+		expectObjects(compiler.compile("Main"), ["Holder", "Capture"], false,
+			"build after removing the unreachable modules");
 		Sys.println("unreachable declaration builds passed");
 	}
 
-	static function expectObjects(result:compiler.Compiler.CompileResult, names:Array<String>, present:Bool, label:String):Void {
+	static function expectObjects(result:compiler.Compiler.CompileResult, names:Array<String>, present:Bool,
+			label:String):Void {
 		var typeNames:Map<String, Bool> = [];
 		for (type in result.module.types)
 			switch type {

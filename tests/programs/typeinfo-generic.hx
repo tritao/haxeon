@@ -9,7 +9,8 @@ class Main {
 			richInfo = typeInfo<Rich>(),
 			flat = Registry.register(new TypeKey<FlatRecord>()),
 			rich = Registry.nested(new TypeKey<Rich>());
-		if (flat.identity != flatInfo.type || flat.name != flatInfo.name || flat.hash != flatInfo.hash || flat.hash.length != 64)
+		if (flat.identity != flatInfo.type || flat.name != flatInfo.name || flat.hash != flatInfo.hash
+			|| flat.hash.length != 64)
 			return 1;
 		if (flat.size != sizeof<FlatRecord>()
 			|| flat.size != flatInfo.size
@@ -23,7 +24,8 @@ class Main {
 			|| flat.fieldAlignment != flatInfo.fields[0].alignment
 			|| flat.fieldOffset != offsetof<FlatRecord>("x"))
 			return 2;
-		if (rich.identity != richInfo.type || rich.name != richInfo.name || rich.hash != richInfo.hash || rich.hash.length != 64)
+		if (rich.identity != richInfo.type || rich.name != richInfo.name || rich.hash != richInfo.hash
+			|| rich.hash.length != 64)
 			return 3;
 		if (rich.size != null || rich.alignment != null || rich.fieldType != "class:typeinfo_generic.FlatRecord<>")
 			return 4;

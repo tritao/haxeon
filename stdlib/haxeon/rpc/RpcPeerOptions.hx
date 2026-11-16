@@ -13,8 +13,10 @@ class RpcPeerOptions {
 	final capabilities:Array<String>;
 	final required:Array<String>;
 
-	public function new(application:String, capabilities:Array<String>, ?required:Array<String>, timeoutMs:Int = 5000, maxMessageBytes:Int = 4 * 1024 * 1024,
-			maxCalls:Int = 256, maxQueuedBytes:Int = 8 * 1024 * 1024, protocol:Int = RpcProtocol.VERSION, codec:Int = RpcProtocol.CODEC_VERSION) {
+	public function new(application:String, capabilities:Array<String>, ?required:Array<String>, timeoutMs:Int = 5000,
+			maxMessageBytes:Int = 4 * 1024 * 1024,
+			maxCalls:Int = 256, maxQueuedBytes:Int = 8 * 1024 * 1024, protocol:Int = RpcProtocol.VERSION,
+			codec:Int = RpcProtocol.CODEC_VERSION) {
 		RpcProtocol.validate(Hello(protocol, codec, application, capabilities));
 		var requirements = required == null ? [] : required.copy();
 		RpcProtocol.validate(Hello(protocol, codec, application, requirements));

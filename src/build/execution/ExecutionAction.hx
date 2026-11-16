@@ -30,8 +30,10 @@ class ExecutionAction {
 	 */
 	public final jobserverClient:Bool;
 
-	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>, description:String, action:ActionKind,
-			fingerprintDependencies:Bool = true, alwaysRun:Bool = false, jobserverClient:Bool = false, ?directoryOutputs:Array<String>) {
+	public function new(id:ActionId, dependencies:Array<ActionId>, inputs:Array<String>, outputs:Array<String>,
+			description:String, action:ActionKind,
+			fingerprintDependencies:Bool = true, alwaysRun:Bool = false, jobserverClient:Bool = false,
+			?directoryOutputs:Array<String>) {
 		this.jobserverClient = jobserverClient;
 		this.id = id;
 		this.dependencies = dependencies.copy();
@@ -52,5 +54,6 @@ class ExecutionAction {
 	}
 
 	public function outputExists(output:String):Bool
-		return sys.FileSystem.exists(output) && sys.FileSystem.isDirectory(output) == (directoryOutputs.indexOf(output) >= 0);
+		return sys.FileSystem.exists(output)
+			&& sys.FileSystem.isDirectory(output) == (directoryOutputs.indexOf(output) >= 0);
 }

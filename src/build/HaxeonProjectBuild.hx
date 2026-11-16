@@ -30,8 +30,10 @@ class HaxeonProjectBuild {
 		];
 	}
 
-	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int, planOnly:Bool, explain:Bool,
-			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false, live:Bool = false, instrument:Bool = false,
+	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int,
+			planOnly:Bool, explain:Bool,
+			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false,
+			live:Bool = false, instrument:Bool = false,
 			?session:BuildSession, developmentMetadata:Bool = true):Int {
 		if (project.manifest.target != "host")
 			throw 'The structured native package build currently supports target "host", got "${project.manifest.target}"';
@@ -39,11 +41,13 @@ class HaxeonProjectBuild {
 		timings.add("resolve", resolutionMs);
 		if (instrument)
 			defines = defines.concat(instrumentDefines(project));
-		var environment = new BuildEnvironment(project.root, outputDirectory(project, instrument), BuildProfile.Release, null, null,
+		var environment = new BuildEnvironment(project.root, outputDirectory(project, instrument), BuildProfile.Release,
+			null, null,
 			instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
-			execution = PlanLowerer.lower(plan, new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live, session,
+			execution = PlanLowerer.lower(plan,
+				new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live, session,
 				NativeCache.root(home, environment), developmentMetadata));
 		if (compilerOnly)
 			execution = compilerExecution(execution);
@@ -73,7 +77,8 @@ class HaxeonProjectBuild {
 		for (action in plan.actions)
 			switch action.action {
 				case Compiler(_, _, _, _, _):
-					actions.push(new ExecutionAction(action.id, [], action.inputs, action.outputs, action.description, action.action, false, action.alwaysRun));
+					actions.push(new ExecutionAction(action.id, [], action.inputs, action.outputs, action.description,
+						action.action, false, action.alwaysRun));
 				case Process(_, _, _, _):
 			}
 		if (actions.length == 0)

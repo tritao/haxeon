@@ -13,7 +13,8 @@ import haxe.io.BytesOutput;
 
 class ManagedBytesMain {
 	static function main():Void {
-		expect(IrTypeCodec.decode(IrTypeCodec.encode(ManagedBytes)) == ManagedBytes, "managed byte IR type must round-trip");
+		expect(IrTypeCodec.decode(IrTypeCodec.encode(ManagedBytes)) == ManagedBytes,
+			"managed byte IR type must round-trip");
 
 		var legacyType = new BytesOutput();
 		legacyType.bigEndian = false;
@@ -24,7 +25,8 @@ class ManagedBytesMain {
 
 		var value = new IrValue(0, "bytes", ManagedBytes),
 			values = IrValueTableCodec.decode(IrValueTableCodec.encode([value]));
-		expect(values.length == 1 && values[0].type == ManagedBytes, "managed byte values must persist in value tables");
+		expect(values.length == 1 && values[0].type == ManagedBytes,
+			"managed byte values must persist in value tables");
 
 		var builder = new IrBuilder(),
 			argument = builder.argument("bytes", ManagedBytes);
@@ -37,12 +39,14 @@ class ManagedBytesMain {
 		var program = new IrProgram("identity");
 		program.functions = [fn];
 		var restoredProgram = CanonicalIrCodec.decode(CanonicalIrCodec.encode(program));
-		expect(restoredProgram.functions[0].result == ManagedBytes, "managed byte signatures must persist in canonical IR");
+		expect(restoredProgram.functions[0].result == ManagedBytes,
+			"managed byte signatures must persist in canonical IR");
 
 		var symbols = new HlSymbolTable(),
 			managedBytesIndex = symbols.internType(ManagedBytes),
 			runtimeAbstractIndex = symbols.internType(Abstract("realtime_bytes"));
-		expect(managedBytesIndex == runtimeAbstractIndex, "managed bytes must share the runtime abstract HashLink type");
+		expect(managedBytesIndex == runtimeAbstractIndex,
+			"managed bytes must share the runtime abstract HashLink type");
 
 		var header = CHeaderEmitter.emit([
 			{

@@ -5,8 +5,14 @@ import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
-private typedef NullableScalarParts = {final present:IrValue; final payload:IrValue;}
-private typedef NullableScalarRewrite = {final fn:IrFunction; final eligible:Bool;}
+private typedef NullableScalarParts = {
+	final present:IrValue;
+	final payload:IrValue;
+}
+private typedef NullableScalarRewrite = {
+	final fn:IrFunction;
+	final eligible:Bool;
+}
 
 /** Keep nonescaping nullable scalars in presence/payload SSA form across control-flow joins. */
 class IrNullableScalarFlow {
@@ -62,7 +68,9 @@ class IrNullableScalarFlow {
 				builder.returnValue(builder.constBool(true));
 				builder.select(compare);
 				builder.returnValue(builder.equal(payload, otherPayload));
-				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "equal"))));
+				program.functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks,
+					Provider(TypeKey.of(type),
+					ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "equal"))));
 			} else {
 				var yes = builder.createBlock(), no = builder.createBlock();
 				builder.branch(present, yes, no);
@@ -70,7 +78,9 @@ class IrNullableScalarFlow {
 				builder.returnValue(payload);
 				builder.select(no);
 				builder.terminate(Throw(builder.toDyn(builder.constString("Null access"))));
-				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks, Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "require"))));
+				program.functions.push(new IrFunction(name, builder.arguments, type, builder.blocks,
+					Provider(TypeKey.of(type),
+					ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, "require"))));
 			}
 		}
 	}
@@ -78,11 +88,13 @@ class IrNullableScalarFlow {
 	/** Nullable argument expansion preserves an existing scalar result/stack-reference ABI. */
 	static function specializationName(name:String):String {
 		var scalar = IrScalarArguments.PREFIX;
-		return StringTools.startsWith(name, scalar) ? scalar + CALL_PREFIX + name.substr(scalar.length) : CALL_PREFIX + name;
+		return StringTools.startsWith(name, scalar)
+			? scalar + CALL_PREFIX + name.substr(scalar.length) : CALL_PREFIX + name;
 	}
 
 	static function isSpecialization(name:String):Bool
-		return StringTools.startsWith(name, CALL_PREFIX) || StringTools.startsWith(name, IrScalarArguments.PREFIX + CALL_PREFIX);
+		return StringTools.startsWith(name, CALL_PREFIX)
+			|| StringTools.startsWith(name, IrScalarArguments.PREFIX + CALL_PREFIX);
 
 	static function inner(type:IrType):Null<IrType>
 		return switch type {
@@ -102,7 +114,8 @@ class IrNullableScalarFlow {
 			default: throw 'Invalid nullable scalar payload ${value.type}';
 		};
 
-	static function rewriteFunction(fn:IrFunction, checks:Map<String, IrType>, functions:Map<String, IrFunction>, clone:Bool):NullableScalarRewrite {
+	static function rewriteFunction(fn:IrFunction, checks:Map<String, IrType>, functions:Map<String, IrFunction>,
+			clone:Bool):NullableScalarRewrite {
 		var candidates:Map<Int, IrValue> = [], nulls:Map<Int, Bool> = [], next = 0;
 		for (argument in fn.arguments) {
 			if (argument.id >= next)
@@ -119,7 +132,7 @@ class IrNullableScalarFlow {
 				for (inputIndex in 0...IrOperands.count(instruction)) {
 					var input = IrOperands.at(instruction, inputIndex);
 					if (input.id >= next)
-							next = input.id + 1;
+						next = input.id + 1;
 				}
 				if (out != null && inner(out.type) != null)
 					switch instruction {
@@ -162,7 +175,8 @@ class IrNullableScalarFlow {
 								eligible = args.length == called.arguments.length;
 							if (eligible)
 								for (index in 0...args.length)
-									if (inner(called.arguments[index].type) != null && !candidates.exists(args[index].id))
+									if (inner(called.arguments[index].type) != null
+										&& !candidates.exists(args[index].id))
 										eligible = false;
 							if (!eligible)
 								for (arg in args)
@@ -177,17 +191,17 @@ class IrNullableScalarFlow {
 							for (valueIndex in 0...IrOperands.count(instruction)) {
 								var value = IrOperands.at(instruction, valueIndex);
 								if (candidates.exists(value.id)) {
-										var allowed = switch instruction {
-											case SafeCast(out, input) if (input.id == value.id
-												&& Type.enumEq(out.type, inner(value.type))): true;
-											case Equal(_, left, right)
-												if ((left.id == value.id && nulls.exists(right.id))
-													|| (right.id == value.id && nulls.exists(left.id))): true;
-											default: false;
-										};
-										if (!allowed)
-											reject(value);
-									}
+									var allowed = switch instruction {
+										case SafeCast(out, input) if (input.id == value.id
+											&& Type.enumEq(out.type, inner(value.type))): true;
+										case Equal(_, left, right)
+											if ((left.id == value.id && nulls.exists(right.id))
+											|| (right.id == value.id && nulls.exists(left.id))): true;
+										default: false;
+									};
+									if (!allowed)
+										reject(value);
+								}
 							}
 					}
 				}
@@ -249,17 +263,24 @@ class IrNullableScalarFlow {
 									expanded.push(part.payload);
 								} else
 									expanded.push(args[index]);
-							target.instructions.push(new Located(Call(out, specializationName(name), expanded), located.provenance));
+							target.instructions.push(new Located(Call(out, specializationName(name), expanded),
+								located.provenance));
 						} else
 							target.instructions.push(located);
 					case Call(out, "__dynamic_equal", args)
-						if (args.length == 2 && parts.exists(args[0].id) && parts.exists(args[1].id) && Type.enumEq(args[0].type, args[1].type)):
+						if (args.length == 2 && parts.exists(args[0].id) && parts.exists(args[1].id)
+						&& Type.enumEq(args[0].type, args[1].type)):
 						var left = required(args[0]),
 							right = required(args[1]),
 							type = inner(args[0].type),
 							name = EQUAL_PREFIX + IrTypeIdentity.text(type);
 						checks.set(name, type);
-						target.instructions.push(new Located(Call(out, name, [left.present, left.payload, right.present, right.payload]), located.provenance));
+						target.instructions.push(new Located(Call(out, name, [
+							left.present,
+							left.payload,
+							right.present,
+							right.payload
+						]), located.provenance));
 					case ConstNull(out) if (parts.exists(out.id)):
 						var part = required(out);
 						target.instructions.push(new Located(ConstBool(part.present, false), located.provenance));
@@ -271,20 +292,26 @@ class IrNullableScalarFlow {
 					case Phi(out, inputs) if (parts.exists(out.id)):
 						var part = required(out);
 						target.instructions.push(new Located(Phi(part.present,
-							[for (input in inputs) {block: input.block, value: required(input.value).present}]), located.provenance));
+							[for (input in inputs) {
+								block:input.block, value:required(input.value).present
+							}]), located.provenance));
 						target.instructions.push(new Located(Phi(part.payload,
-							[for (input in inputs) {block: input.block, value: required(input.value).payload}]), located.provenance));
+							[for (input in inputs) {
+								block:input.block, value:required(input.value).payload
+							}]), located.provenance));
 					case SafeCast(out, value) if (parts.exists(value.id)):
 						var part = required(value),
 							name = PREFIX + Std.string(out.type);
 						checks.set(name, out.type);
-						target.instructions.push(new Located(Call(out, name, [part.present, part.payload]), located.provenance));
+						target.instructions.push(new Located(Call(out, name, [part.present, part.payload]),
+							located.provenance));
 					case Equal(out, left, right) if ((parts.exists(left.id) && nulls.exists(right.id))
 						|| (parts.exists(right.id) && nulls.exists(left.id))):
 						var value = nulls.exists(left.id) && parts.exists(right.id) ? right : left,
 							no = new IrValue(next++, "$nullable-false", Bool);
 						target.instructions.push(new Located(ConstBool(no, false), located.provenance));
-						target.instructions.push(new Located(Equal(out, required(value).present, no), located.provenance));
+						target.instructions.push(new Located(Equal(out, required(value).present, no),
+							located.provenance));
 					default:
 						target.instructions.push(located);
 				}
@@ -294,11 +321,12 @@ class IrNullableScalarFlow {
 		}
 		var debug = [for (binding in fn.debugBindings) if (!parts.exists(binding.value.id)) binding];
 		debug = IrInliner.substitute(blocks, substitutions, debug);
-		return {
-			fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks,
-				clone ? (switch fn.kind { case ScalarArguments: GeneratedHelper; default: NullableScalarArguments; }) : fn.kind, debug, fn.inlineHint,
+		return {fn: new IrFunction(clone ? specializationName(fn.name) : fn.name, arguments, fn.result, blocks,
+			clone ? (switch fn.kind {
+				case ScalarArguments: GeneratedHelper;
+				default: NullableScalarArguments;
+			}) : fn.kind, debug, fn.inlineHint,
 				clone ? compiler.ir.IrFunction.IrRetention.Reachable : fn.retention),
-			eligible: true
-		};
+				eligible: true};
 	}
 }

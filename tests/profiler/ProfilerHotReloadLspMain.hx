@@ -36,7 +36,8 @@ class ProfilerHotReloadLspMain {
 				throw Json.stringify(started);
 			if (started.result.metadataSchema != 4)
 				throw "Hot-reload profiling requires metadata schema 4";
-			var changed = waitFor(messages, mutex, available, value -> value.method == "haxeon/profilerMetadataChanged");
+			var changed = waitFor(messages, mutex, available,
+				value -> value.method == "haxeon/profilerMetadataChanged");
 			if (changed.params.oldRevision != 1 || changed.params.newRevision != 2)
 				throw "Profiler reported the wrong module revision transition";
 			var moduleId:String = changed.params.moduleId;

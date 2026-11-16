@@ -37,9 +37,12 @@ class FfiImportManifest {
 
 	public final projection:Bool;
 
-	function new(version:Int, name:String, language:String, profile:String, header:String, target:Null<String>, standard:String, clang:String,
-			includes:Array<String>, defines:Array<String>, compileCommands:Null<String>, library:Null<String>, interfaceName:Null<String>,
-			dependencies:Array<String>, excludedHeaders:Array<String>, sourceLabel:Null<String>, cxxSelections:Array<String>, trivialValues:Bool,
+	function new(version:Int, name:String, language:String, profile:String, header:String, target:Null<String>,
+			standard:String, clang:String,
+			includes:Array<String>, defines:Array<String>, compileCommands:Null<String>, library:Null<String>,
+			interfaceName:Null<String>,
+			dependencies:Array<String>, excludedHeaders:Array<String>, sourceLabel:Null<String>,
+			cxxSelections:Array<String>, trivialValues:Bool,
 			lifetimes:Bool, virtualDispatch:Bool, cxxThunks:Bool, cxxOwnership:Map<String, String>, projection:Bool) {
 		this.version = version;
 		this.name = name;
@@ -108,8 +111,9 @@ class FfiImportManifest {
 		if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
 			throw '$path "name" must be a single path-safe artifact name';
 		if (language != "c++"
-			&& (profile != "default" || cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch || cxxThunks
-				|| cxxOwnership.keys().hasNext()))
+			&& (profile != "default" || cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch
+			|| cxxThunks
+			|| cxxOwnership.keys().hasNext()))
 			throw '$path uses C++ options but language is "$language"';
 		if (profile == "direct" && (virtualDispatch || cxxThunks))
 			throw '$path C++ profile "direct" cannot enable "cxxVirtual" or "cxxThunks"';
@@ -117,8 +121,10 @@ class FfiImportManifest {
 			throw '$path enables "projection" but has no "library"';
 		if (cxxThunks && library == null)
 			throw '$path enables "cxxThunks" but has no "library"';
-		return new FfiImportManifest(version, name, language, profile, header, target, standard, clang, includes, defines, compileCommands, library,
-			interfaceName, dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership,
+		return new FfiImportManifest(version, name, language, profile, header, target, standard, clang, includes,
+			defines, compileCommands, library,
+			interfaceName, dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes,
+			virtualDispatch, cxxThunks, cxxOwnership,
 			projection);
 	}
 
@@ -126,9 +132,11 @@ class FfiImportManifest {
 		var absoluteManifest = FileSystem.fullPath(path),
 			config = parse(absoluteManifest, File.getContent(absoluteManifest)),
 			base = Path.directory(absoluteManifest);
-		return new ResolvedFfiImport(absoluteManifest, packageRoot, config, resolveFile(base, config.header, absoluteManifest, "header"),
+		return new ResolvedFfiImport(absoluteManifest, packageRoot, config,
+			resolveFile(base, config.header, absoluteManifest, "header"),
 			resolveDirectories(base, config.includes, absoluteManifest),
-			config.compileCommands == null ? null : resolveFile(base, config.compileCommands, absoluteManifest, "compile commands"),
+			config.compileCommands == null ? null : resolveFile(base, config.compileCommands, absoluteManifest,
+			"compile commands"),
 			resolveFiles(base, config.excludedHeaders, absoluteManifest, "excluded header"));
 	}
 
@@ -190,8 +198,8 @@ class FfiImportManifest {
 		if (!Std.isOfType(value, Array))
 			throw '$path "$field" must be an array of strings';
 		var result:Array<String> = [];
-		for (item in (cast value : Array<Dynamic>)) {
-			if (!Std.isOfType(item, String) || (cast item : String).length == 0)
+		for (item in (cast value:Array<Dynamic>)) {
+			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
 				throw '$path "$field" must contain non-empty strings';
 			result.push(cast item);
 		}
@@ -207,7 +215,7 @@ class FfiImportManifest {
 			throw '$path "$field" must be an object mapping C++ declarations to release functions';
 		for (key in Reflect.fields(value)) {
 			var release:Dynamic = Reflect.field(value, key);
-			if (key.length == 0 || !Std.isOfType(release, String) || (cast release : String).length == 0)
+			if (key.length == 0 || !Std.isOfType(release, String) || (cast release:String).length == 0)
 				throw '$path "$field" must map non-empty declaration names to non-empty release function names';
 			result.set(key, cast release);
 		}
@@ -234,7 +242,8 @@ class ResolvedFfiImport {
 	public final compileCommands:Null<String>;
 	public final excludedHeaders:Array<String>;
 
-	public function new(manifestPath:String, packageRoot:String, config:FfiImportManifest, header:String, includes:Array<String>,
+	public function new(manifestPath:String, packageRoot:String, config:FfiImportManifest, header:String,
+			includes:Array<String>,
 			compileCommands:Null<String>, excludedHeaders:Array<String>) {
 		this.manifestPath = manifestPath;
 		this.packageRoot = packageRoot;

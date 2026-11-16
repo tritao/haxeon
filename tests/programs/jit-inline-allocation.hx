@@ -60,7 +60,8 @@ class Links {
 		var z = new Small32();
 		var w = new Small40();
 		var link = new Links();
-		if (x.a != 0.0 || y.a != 0.0 || y.b != 0.0 || z.a != 0.0 || z.b != 0.0 || z.c != 0.0 || w.a != 0.0 || w.b != 0.0 || w.c != 0.0 || w.d != 0.0
+		if (x.a != 0.0 || y.a != 0.0 || y.b != 0.0 || z.a != 0.0 || z.b != 0.0 || z.c != 0.0 || w.a != 0.0 || w.b != 0.0
+			|| w.c != 0.0 || w.d != 0.0
 			|| link.next != null || link.text != null)
 			return -1.0;
 		x.a = 42.0;

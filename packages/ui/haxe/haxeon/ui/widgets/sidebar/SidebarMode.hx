@@ -12,7 +12,10 @@ class SidebarMode {
 	public var visible:Bool;
 	public function new(id:String, provider:Void->View, options:SidebarModeOptions, sequence:Int) {
 		this.sequence = sequence;
-		this.id = id; this.provider = provider; label = options.label; order = options.order;
+		this.id = id;
+		this.provider = provider;
+		label = options.label;
+		order = options.order;
 		visible = options.visible;
 	}
 }

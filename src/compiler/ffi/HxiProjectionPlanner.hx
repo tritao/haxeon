@@ -16,7 +16,8 @@ import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 
 /** Decides which Haxe-facing declarations and checked/output wrappers exist. */
 class HxiProjectionPlanner {
-	public static function plan(path:String, source:HxiInterface, ?omitted:Map<String, Bool>, ?visibleDeclarations:Map<String, HxiDeclaration>,
+	public static function plan(path:String, source:HxiInterface, ?omitted:Map<String, Bool>,
+			?visibleDeclarations:Map<String, HxiDeclaration>,
 			?providedAbi:HxiAbi, ?providedProfile:HxiProjectionProfile):HaxeProjectionModel {
 		var profile = providedProfile == null ? HxiProjectionProfile.empty() : providedProfile;
 		if (providedProfile != null && providedProfile.interfaceName != null)
@@ -37,35 +38,27 @@ class HxiProjectionPlanner {
 			switch declaration {
 				case Enumeration(name, _, flags, values, _):
 					var prefix = HxiHaxeEmitter.enumValuePrefix(values, profile, name);
-					enums.push({
-						nativeName: name,
+					enums.push({nativeName: name,
 						name: HxiHaxeEmitter.enumTypeName(name, profile),
 						flags: flags,
-						values: [
-							for (value in values)
-								{
-									nativeName: value.name,
-									name: HxiHaxeEmitter.enumValueName(value.name, prefix, name, profile),
-									value: haxe.Int64.toStr(value.value)
-								}
-						]
-					});
+						values: [for (value in values)
+						{
+							nativeName:value.name,
+								name:HxiHaxeEmitter.enumValueName(value.name, prefix, name, profile),
+								value:haxe.Int64.toStr(value.value)
+						}]});
 				case Structure(name, size, alignment, fields, _):
-					structures.push({
-						nativeName: name,
+					structures.push({nativeName: name,
 						name: HxiHaxeEmitter.projectedTypeName(name, profile),
 						size: size,
 						alignment: alignment,
-						fields: [
-							for (field in fields)
-								{
-									nativeName: field.name,
-									name: HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
-									type: field.type,
-									offset: field.offset
-								}
-						]
-					});
+						fields: [for (field in fields)
+						{
+							nativeName:field.name,
+								name:HxiHaxeEmitter.projectedFieldName(name, field.name, profile),
+								type:field.type,
+								offset:field.offset
+						}]});
 				case Handle(name, _, destroy, _):
 					var owner = destroy == null ? null : ownedHandle(name, destroy, profile);
 					handles.push({
@@ -99,10 +92,12 @@ class HxiProjectionPlanner {
 				case Alias(_, _, _) | Constant(_, _, _):
 			}
 		}
-		return new HaxeProjectionModel(source, omitted, visibleDeclarations, abi, profile, enums, structures, handles, callbacks, functions);
+		return new HaxeProjectionModel(source, omitted, visibleDeclarations, abi, profile, enums, structures, handles,
+			callbacks, functions);
 	}
 
-	static function projectFunction(source:HxiInterface, nativeName:String, parameters:Array<HxiParameter>, result:HxiType, signature:HxiFunctionAbi,
+	static function projectFunction(source:HxiInterface, nativeName:String, parameters:Array<HxiParameter>,
+			result:HxiType, signature:HxiFunctionAbi,
 			profile:HxiProjectionProfile, abi:HxiAbi):ProjectedFunction {
 		var publicName = HxiHaxeEmitter.projectedFunctionName(nativeName, profile),
 			derivedCountParameters:Map<String, Bool> = [],
@@ -119,7 +114,8 @@ class HxiProjectionPlanner {
 				case OutputHandle(handle, owned, cleanup):
 					outputs.push({
 						parameter: parameter.name,
-						type: owned ? HxiHaxeEmitter.ownedTypeName(handle, profile) : HxiHaxeEmitter.projectedTypeName(handle, profile),
+						type: owned ? HxiHaxeEmitter.ownedTypeName(handle,
+							profile) : HxiHaxeEmitter.projectedTypeName(handle, profile),
 						owned: owned,
 						destroy: cleanup,
 						semantics: parameter.kind
@@ -171,23 +167,23 @@ class HxiProjectionPlanner {
 			case _: null;
 		},
 			callbackResult = switch signature.result {
-				case CallbackValue(_, _, _, _): true;
-				case _: false;
-			},
+			case CallbackValue(_, _, _, _): true;
+			case _: false;
+		},
 			outputStrategy = outputStrategy(signature),
 			resultType = projectedResultType(signature, profile),
 			hasOutputParameters = outputStrategy != NoOutputWrapper,
 			aggregateResult = switch signature.result {
-				case AggregateValue(name, _, _): HxiHaxeEmitter.projectedTypeName(name, profile);
-				case _: null;
-			},
+			case AggregateValue(name, _, _): HxiHaxeEmitter.projectedTypeName(name, profile);
+			case _: null;
+		},
 			spanResult = signature.semantics.result.match(NativeSpan(_, _)),
 			rawName = hasOutputParameters
-				|| spanResult
-				|| ownedResult != null
-				|| aggregateResult != null
-				|| callbackResult
-				|| abi.isEnumValue(signature.result) ? '__hxi_raw_$nativeName' : publicName,
+			|| spanResult
+			|| ownedResult != null
+			|| aggregateResult != null
+			|| callbackResult
+			|| abi.isEnumValue(signature.result) ? '__hxi_raw_$nativeName' : publicName,
 			policy = HxiHaxeEmitter.resultErrorProjection(result, profile),
 			checked:Null<ProjectedCheckedFunction> = null,
 			byteSlice:Null<String> = null;

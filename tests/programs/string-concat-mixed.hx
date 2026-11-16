@@ -8,6 +8,7 @@ class Main {
 		var nothing:Dynamic = null;
 		var object:Dynamic = new Box();
 		var value = "value=" + number + ",flag=" + flag + ",fraction=" + fraction;
-		return value == "value=42,flag=true,fraction=3.5" && ("" + nothing) == "null" && ("" + object).length > 0 ? 42 : 1;
+		return value == "value=42,flag=true,fraction=3.5" && ("" + nothing) == "null"
+			&& ("" + object).length > 0 ? 42 : 1;
 	}
 }

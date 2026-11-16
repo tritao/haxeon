@@ -9,7 +9,8 @@ class EqualityMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		compiler.update("Main.hx", 'import haxeon.Equality;
+		compiler.update("Main.hx",
+			'import haxeon.Equality;
 import haxeon.Hashing;
 struct Point implements Hashable {
   public var x:Float;

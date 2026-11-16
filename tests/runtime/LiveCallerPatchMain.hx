@@ -19,7 +19,8 @@ class LiveCallerPatchMain {
 
 	static function main():Void {
 		var compiler = new Compiler();
-		compiler.update("Other.hx", "class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
+		compiler.update("Other.hx",
+			"class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
 		compiler.update("Main.hx", source(0));
 		var build = compiler.compile("Main"),
 			live = Runtime.load(HlWriter.encode(build.module).flatten(), build.runtimeIdentity),
@@ -31,7 +32,8 @@ class LiveCallerPatchMain {
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null)
 				throw 'version $version: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
-			Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			Runtime.patchSet(live,
+				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			build = changed;
 			var expected = fresh(changed);
 			expect(Runtime.callInt(live, mainId), expected, 'version $version, the patched module against a fresh one');
@@ -48,7 +50,8 @@ class LiveCallerPatchMain {
 	static function assemblerRecompilesCallers():Void {
 		var first = new Compiler(), second = new Compiler();
 		for (compiler in [first, second])
-			compiler.update("Other.hx", "class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
+			compiler.update("Other.hx",
+				"class Other {\n  public static function twice(v:Int):Int return Main.scale(v) + Main.scale(v);\n}\n");
 		first.update("Main.hx", source(0));
 		second.update("Main.hx", source(1));
 		var before = first.compile("Main").ir, after = second.compile("Main").ir;
@@ -59,7 +62,8 @@ class LiveCallerPatchMain {
 		var assembly = assembler.assemble(after, ["Main.scale"], Patch);
 		if (assembly.requiresReload)
 			throw 'the assembler reloaded: ${assembly.layoutReasons.join(", ")}';
-		var twiceId = assembler.cache.stableIds.get("Other.twice"), scaleSlot = assembly.functionIndices.get("Main.scale");
+		var twiceId = assembler.cache.stableIds.get("Other.twice"),
+			scaleSlot = assembly.functionIndices.get("Main.scale");
 		if (assembly.changedFunctions.indexOf(twiceId) < 0)
 			throw 'Other.twice calls the slot Main.scale left, but the patch does not compile it again';
 		var twiceSlot = assembly.functionIndices.get("Other.twice"), calls = 0;

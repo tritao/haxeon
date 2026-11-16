@@ -12,19 +12,18 @@ class WebViewPage {
 		if (!explorer.webViewAvailable()) {
 			items.push(explorer.keyed("unsupported", explorer.panel("webview-unsupported", [
 				explorer.keyed("heading", explorer.heading("WebView unavailable")),
-				explorer.keyed("copy", explorer.caption(
-					"This platform build does not advertise the native WebView capability."))
+				explorer.keyed("copy",
+					explorer.caption("This platform build does not advertise the native WebView capability."))
 			])));
 			return;
 		}
-		items.push(explorer.keyed("webview-info", explorer.panel("webview-info", [
-			explorer.keyed("heading", explorer.heading("Native content, Haxeon layout")),
-			explorer.keyed("copy", explorer.caption(
-				"The viewport below follows resolved Haxeon bounds. NativeKit supplies the platform WebView dependency and lifecycle.")),
+		items.push(explorer.keyed("webview-info", explorer.panel("webview-info",
+			[explorer.keyed("heading", explorer.heading("Native content, Haxeon layout")),
+			explorer.keyed("copy",
+			explorer.caption("The viewport below follows resolved Haxeon bounds. NativeKit supplies the platform WebView dependency and lifecycle.")),
 			explorer.keyed("reload", explorer.button("Reload demo", "reload-webview", function() {
 				explorer.reloadWebView();
-			}))
-		])));
+			}))])));
 		items.push(explorer.keyed("webview-slot", new WebViewSlot("catalog-webview")));
 	}
 }

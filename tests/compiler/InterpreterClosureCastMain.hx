@@ -3,8 +3,9 @@ import compiler.ir.IrInterpreter;
 
 /** The reference interpreter retains the semantic type of an adapted closure. */
 class InterpreterClosureCastMain {
- static function main():Void {
-  var source = '
+	static function main():Void {
+		var source =
+			'
 struct Anchor { public final x:Int; public function new(x:Int) this.x=x; }
 class Holder<A,B> { public var a:A; public var value:B; public var values:Array<B>; public function new(a:A,value:B) { this.a=a; this.value=value; values=null; } }
 function text(value:String):String return value;
@@ -29,8 +30,8 @@ function main():Int {
  if (!predicate(1)) return 3;
  return 42;
 }';
-  var result = new IrInterpreter(Frontend.compile(source)).run("main");
-  if (result != 42) throw 'interpreter closure cast returned $result';
-  Sys.println("PASS: interpreter preserves closure view signatures and conversions");
- }
+		var result = new IrInterpreter(Frontend.compile(source)).run("main");
+		if (result != 42) throw 'interpreter closure cast returned $result';
+		Sys.println("PASS: interpreter preserves closure view signatures and conversions");
+	}
 }

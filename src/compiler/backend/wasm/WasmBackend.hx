@@ -22,10 +22,17 @@ class WasmBackend implements Backend {
 	/** Compile the initial live module and retain its actual target-level type identities. */
 	public function compilePatchBase(program:IrProgram, options:BackendOptions):WasmPatchArtifact {
 		var compiled = compileInternal(program, developmentOptions(options), null);
-		return {bytes: compiled.artifact.bytes, manifest: WasmPatch.manifest(program), decision: Patch,
+		return {
+			bytes: compiled.artifact.bytes,
+			manifest: WasmPatch.manifest(program),
+			decision: Patch,
 			changed: [for (fn in program.functions) fn.name],
-			state: {abi: compiler.abi.RuntimeAbi.describe(IrNullableErasure.run(program)), target: options.target,
-				runtimeTypeIds: compiled.runtimeTypeIds}};
+			state: {
+				abi: compiler.abi.RuntimeAbi.describe(IrNullableErasure.run(program)),
+				target: options.target,
+				runtimeTypeIds: compiled.runtimeTypeIds
+			}
+		};
 	}
 
 	/**
@@ -34,7 +41,8 @@ class WasmBackend implements Backend {
 	 * for now so its runtime dependencies are validated by the same encoder as a
 	 * full build; the filtered manifest is what the host publishes atomically.
 	 */
-	public function compilePatch(previous:WasmPatchState, program:IrProgram, changed:Array<String>, options:BackendOptions):WasmPatchArtifact {
+	public function compilePatch(previous:WasmPatchState, program:IrProgram, changed:Array<String>,
+			options:BackendOptions):WasmPatchArtifact {
 		switch [previous.target, options.target] {
 			case [HashLink, HashLink] | [Wasm32, Wasm32] | [Wasm64, Wasm64] | [WasmGc, WasmGc]:
 			default: throw "Wasm patch cannot change the runtime target";
@@ -65,17 +73,20 @@ class WasmBackend implements Backend {
 			importMemory: options.importMemory, sharedMemory: options.sharedMemory, memoryBase: options.memoryBase,
 			memoryContract: options.memoryContract, wasmMemoryStats: options.wasmMemoryStats,
 			wasmGcAllocationCount: options.wasmGcAllocationCount, wasmGcStress: options.wasmGcStress,
-			wasmRuntimeNeutral: options.wasmRuntimeNeutral, exports: options.exports, wasmLinearRuntime: options.wasmLinearRuntime
+			wasmRuntimeNeutral: options.wasmRuntimeNeutral, exports: options.exports,
+			wasmLinearRuntime: options.wasmLinearRuntime
 		};
 
-	function compileInternal(program:IrProgram, options:BackendOptions, patchChanged:Null<Array<String>>):WasmCompilation {
+	function compileInternal(program:IrProgram, options:BackendOptions,
+			patchChanged:Null<Array<String>>):WasmCompilation {
 		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.
 		// Profiler probes record nothing on wasm yet.
 		var target = WasmTarget.forBackend(options.target, options.debugNames);
 		program = compiler.ir.IrArrayFactory.physical(program);
 		program = compiler.ir.IrInstrumentation.strip(program);
 		// Capture lane shapes while nullable element/field types still retain their logical layout.
-		var scalarAccessors = target.referenceModel == Gc ? new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(program) : null;
+		var scalarAccessors = target.referenceModel == Gc
+			? new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(program) : null;
 		if (scalarAccessors != null) program = scalarAccessors.program;
 		program = WasmDynamicCalls.run(IrNullableErasure.run(program));
 		if (scalarAccessors != null)

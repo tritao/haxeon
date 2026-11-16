@@ -35,10 +35,10 @@ class SsaBuilder {
 
 	var debugLocalBySlot:Array<Null<compiler.ir.cfg.Cfg.CfgDebugLocal>> = [];
 
-	static final emptyWords:ReadOnlyArray<Int> = ([] : Array<Int>);
+	static final emptyWords:ReadOnlyArray<Int> = ([]:Array<Int>);
 
 	/** The shared empty per-block list; `append` replaces it with a list of the block's own on first use. */
-	static final noBlocks:ReadOnlyArray<Int> = ([] : Array<Int>);
+	static final noBlocks:ReadOnlyArray<Int> = ([]:Array<Int>);
 
 	/** Per block, the slots that get a phi and, at the same positions, their phis. */
 	var phiSlots:Array<ReadOnlyArray<Int>> = [];
@@ -109,7 +109,7 @@ class SsaBuilder {
 		if (list == noBlocks)
 			lists[index] = [value];
 		else
-			(cast list : Array<Int>).push(value); // a list of its own, made just above on an earlier append
+			(cast list:Array<Int>).push(value); // a list of its own, made just above on an earlier append
 	}
 
 	function buildGraph():Void {
@@ -188,7 +188,7 @@ class SsaBuilder {
 		// Only a list of its own can hold two children; the shared empty one is never written.
 		for (nested in children)
 			if (nested.length > 1)
-				(cast nested : Array<Int>).sort(function(a, b) return a - b);
+				(cast nested:Array<Int>).sort(function(a, b) return a - b);
 	}
 
 	function dominancePostorder(id:Int, visited:Array<Bool>, result:Array<Int>):Void {
@@ -439,7 +439,7 @@ class SsaBuilder {
 				pushed: [],
 				entered: false
 			}
-			];
+		];
 		while (pending.length > 0) {
 			var frame = pending[pending.length - 1];
 			if (!frame.entered) {
@@ -620,7 +620,8 @@ class SsaBuilder {
 					emit(target, Upcast(result, resolve(value)), provenance);
 				case MethodCall(out, object, methodName, args, terminalReceiver):
 					var result = define(out);
-					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)], terminalReceiver), provenance);
+					emit(target, MethodCall(result, resolve(object), methodName, [for (arg in args) resolve(arg)],
+						terminalReceiver), provenance);
 				case NewObject(out, typeName):
 					var result = define(out);
 					emit(target, NewObject(result, typeName), provenance);
@@ -651,7 +652,8 @@ class SsaBuilder {
 					emit(target, IteratorNext(result, resolve(iterator)), provenance);
 				case MakeEnum(out, typeName, constructor, arguments):
 					var result = define(out);
-					emit(target, MakeEnum(result, typeName, constructor, [for (argument in arguments) resolve(argument)]), provenance);
+					emit(target, MakeEnum(result, typeName, constructor,
+						[for (argument in arguments) resolve(argument)]), provenance);
 				case EnumIndex(out, value):
 					var result = define(out);
 					emit(target, EnumIndex(result, resolve(value)), provenance);

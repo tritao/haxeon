@@ -38,7 +38,8 @@ class AudioLabSmoke {
 		// DaisySP release is an exponential time constant, not time to silence.
 		for (_ in 0...1000) lab.advance(0.01);
 		if (lab.activeVoices != 0 || lab.peak > 0.001)
-			throw "Audio Lab replacement voices did not release: active=" + lab.activeVoices + " peak=" + lab.peak + " frame=" + lab.frame;
+			throw "Audio Lab replacement voices did not release: active=" + lab.activeVoices + " peak=" + lab.peak
+				+ " frame=" + lab.frame;
 
 		lab.toggleTracker();
 		lab.advance(0.25);

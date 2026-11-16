@@ -60,7 +60,10 @@ class HxiValidator {
 			fail('Callback parameter "${parameter.name}" cannot use output direction metadata', parameter.span);
 		if (callback && metadata.exists("retained"))
 			fail('Callback parameter "${parameter.name}" cannot use @retained', parameter.span);
-		if ((metadata.exists("borrowed") || metadata.exists("owned")) && (switch (parameter.direction) { case Out: false; default: true; }))
+		if ((metadata.exists("borrowed") || metadata.exists("owned")) && (switch (parameter.direction) {
+			case Out: false;
+			default: true;
+		}))
 			fail('Parameter "${parameter.name}" can use @borrowed or @owned only with @out', parameter.span);
 	}
 
@@ -71,10 +74,11 @@ class HxiValidator {
 		if (owned != null
 			&& owned.length > 0
 			&& (owned.length != 1
-				|| !StringTools.startsWith(owned[0], '"')
-				|| !StringTools.endsWith(owned[0], '"')
-				|| owned[0].length <= 2))
-			fail('@owned on $owner accepts no value for a value handle or one non-empty string release symbol for an opaque pointer', span);
+			|| !StringTools.startsWith(owned[0], '"')
+			|| !StringTools.endsWith(owned[0], '"')
+			|| owned[0].length <= 2))
+			fail('@owned on $owner accepts no value for a value handle or one non-empty string release symbol for an opaque pointer',
+				span);
 	}
 
 	static function validateArrayLengths(declarations:Array<HxiDeclaration>):Void {
@@ -160,57 +164,73 @@ class HxiValidator {
 							structSizeFields++;
 							switch abi.classify(field.type) {
 								case IntegerValue(32, Unsigned):
-								case _: fail('@struct_size field "${field.name}" in struct "$name" must use an unsigned 32-bit integer', field.span);
+								case _: fail('@struct_size field "${field.name}" in struct "$name" must use an unsigned 32-bit integer',
+									field.span);
 							}
 							if (field.offset != 0)
-								fail('@struct_size field "${field.name}" in struct "$name" must be at offset zero', field.span);
+								fail('@struct_size field "${field.name}" in struct "$name" must be at offset zero',
+									field.span);
 						}
 						var layout = abi.layout(field.type);
 						if (layout == null)
 							fail('Field "${field.name}" in struct "$name" has no fixed C layout', field.span);
-						if (field.offset == null || field.offset < 0 || layout.align > align || field.offset % layout.align != 0
+						if (field.offset == null || field.offset < 0 || layout.align > align
+							|| field.offset % layout.align != 0
 							|| field.offset > size - layout.size)
 							fail('Field "${field.name}" has an invalid offset for struct "$name"', field.span);
 						for (range in ranges)
 							if (field.offset < range.end && field.offset + layout.size > range.start)
-								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"', field.span);
+								fail('Field "${field.name}" overlaps field "${range.name}" in struct "$name"',
+									field.span);
 						ranges.push({start: field.offset, end: field.offset + layout.size, name: field.name});
 						validateType(field.type, names, declarationsByName, field.span, false);
 						if (field.lengthField != null) {
-							if ((switch (field.ownership) { case Borrowed: false; default: true; })
+							if ((switch (field.ownership) {
+								case Borrowed: false;
+								default: true;
+							})
 								|| (!bytePointerLike(field.type, declarationsByName)
-									&& structurePointerType(field.type, declarationsByName) == null
-									&& !utf8ArrayPointer(field.type)))
-								fail('@length_field on "${field.name}" requires a borrowed byte, void, or structure pointer', field.span);
+								&& structurePointerType(field.type, declarationsByName) == null
+								&& !utf8ArrayPointer(field.type)))
+								fail('@length_field on "${field.name}" requires a borrowed byte, void, or structure pointer',
+								field.span);
 							var length = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 							if (length == null)
-								fail('@length_field on "${field.name}" references missing field "${field.lengthField}"', field.span);
+								fail('@length_field on "${field.name}" references missing field "${field.lengthField}"',
+									field.span);
 							switch abi.classify(length.type) {
 								case IntegerValue(32 | 64, Unsigned):
 								case _:
-									fail('@length_field on "${field.name}" requires an unsigned 32- or 64-bit length field', length.span);
+									fail('@length_field on "${field.name}" requires an unsigned 32- or 64-bit length field',
+										length.span);
 							}
 						}
 						switch field.ownership {
-							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
+							case Owned(_): fail('Owned pointer field "${field.name}" is not supported; keep ownership in a separate handle',
+								field.span);
 							case Borrowed:
 								if (field.lengthField == null
 									&& !opaquePointerLike(field.type,
-										declarationsByName)) fail('@borrowed field "${field.name}" requires a pointer to an opaque type', field.span);
+									declarationsByName))
+									fail('@borrowed field "${field.name}" requires a pointer to an opaque type',
+										field.span);
 							case Unspecified:
 						}
 						if (field.handleDisposition == Owned)
-							fail('Owned value handle field "${field.name}" is not supported; keep ownership in a separate handle', field.span);
+							fail('Owned value handle field "${field.name}" is not supported; keep ownership in a separate handle',
+								field.span);
 					}
 					if (structSizeFields > 1)
 						fail('Struct "$name" cannot declare more than one @struct_size field', span);
 				case Enumeration(name, representation, flags, values, span):
 					validateType(representation, names, declarationsByName, span, false);
 					var integer = switch abi.classify(representation) {
-						case IntegerValue(bits, sign) if ((!flags && bits <= 32) || (flags && bits <= 64 && sign == Unsigned)):
+						case IntegerValue(bits,
+							sign) if ((!flags && bits <= 32) || (flags && bits <= 64 && sign == Unsigned)):
 							{bits: bits, signed: sign == Signed};
 						case _:
-							fail(flags ? 'Flags "$name" require an unsigned 8/16/32/64-bit integer representation' : 'Enum "$name" requires an 8/16/32-bit integer representation',
+							fail(flags ? 'Flags "$name" require an unsigned 8/16/32/64-bit integer representation'
+								: 'Enum "$name" requires an 8/16/32-bit integer representation',
 								span);
 					};
 					var valueNames:Map<String, Bool> = [],
@@ -228,7 +248,8 @@ class HxiValidator {
 						}
 						var key = Int64.toStr(entry.value);
 						if (seenValues.exists(key))
-							fail('Value "${entry.name}" duplicates "${seenValues.get(key)}" in enum "$name"', entry.span);
+							fail('Value "${entry.name}" duplicates "${seenValues.get(key)}" in enum "$name"',
+								entry.span);
 						seenValues.set(key, entry.name);
 					}
 					if (flags) {
@@ -238,17 +259,22 @@ class HxiValidator {
 							mask = integer.bits == 64 ? Int64.ofInt(-1) : Int64.sub(Int64.shl(one, integer.bits), one);
 						for (entry in values) {
 							var minimum = integer.bits == 32 ? Int64.parseString("-2147483648") : zero,
-								maximum = integer.bits == 64 ? Int64.parseString("9223372036854775807") : Int64.sub(Int64.shl(one, integer.bits), one);
-							if (integer.bits != 64 && (Int64.compare(entry.value, minimum) < 0 || Int64.compare(entry.value, maximum) > 0))
-								fail('Flag value "${entry.name}" is outside the representation of flags "$name"', entry.span);
+								maximum = integer.bits == 64 ? Int64.parseString("9223372036854775807")
+									: Int64.sub(Int64.shl(one, integer.bits), one);
+							if (integer.bits != 64
+								&& (Int64.compare(entry.value, minimum) < 0 || Int64.compare(entry.value, maximum) > 0))
+								fail('Flag value "${entry.name}" is outside the representation of flags "$name"',
+									entry.span);
 							var value = Int64.and(entry.value, mask);
-							if (Int64.compare(value, zero) != 0 && Int64.compare(Int64.and(value, Int64.sub(value, one)), zero) == 0)
+							if (Int64.compare(value, zero) != 0
+								&& Int64.compare(Int64.and(value, Int64.sub(value, one)), zero) == 0)
 								knownBits = Int64.or(knownBits, value);
 						}
 						for (entry in values) {
 							var value = Int64.and(entry.value, mask);
 							if (Int64.compare(Int64.and(value, Int64.xor(knownBits, Int64.ofInt(-1))), zero) != 0)
-								fail('Flag value "${entry.name}" contains bits not declared by a single-bit flag in "$name"', entry.span);
+								fail('Flag value "${entry.name}" contains bits not declared by a single-bit flag in "$name"',
+									entry.span);
 						}
 					}
 				case Callback(name, parameters, result, callConvention, span):
@@ -273,41 +299,61 @@ class HxiValidator {
 						if (parameter.retained)
 							switch abi.classify(parameter.type) {
 								case CallbackValue(_, _, _, _):
-								case _: fail('Parameter "${parameter.name}" can use @retained only with a callback type', parameter.span);
+								case _: fail('Parameter "${parameter.name}" can use @retained only with a callback type',
+									parameter.span);
 							}
 						switch parameter.direction {
 							case OutBuffer(sizeParameter):
 								if (!bytePointerLike(parameter.type, declarationsByName))
 									fail('Output buffer "${parameter.name}" requires a byte pointer', parameter.span);
 								if (!nullablePointer(parameter.type))
-									fail('Output buffer "${parameter.name}" must be nullable for its size query', parameter.span);
-								outputBuffers.push({name: parameter.name, sizeParameter: sizeParameter, span: parameter.span});
+									fail('Output buffer "${parameter.name}" must be nullable for its size query',
+										parameter.span);
+								outputBuffers.push({
+									name: parameter.name,
+									sizeParameter: sizeParameter,
+									span: parameter.span
+								});
 							case OutArray(countParameter):
-								outputArrays.push({name: parameter.name, countParameter: countParameter, span: parameter.span});
+								outputArrays.push({
+									name: parameter.name,
+									countParameter: countParameter,
+									span: parameter.span
+								});
 							case Out | InOut:
 								if (!pointerLike(parameter.type))
-									fail('Output parameter "${parameter.name}" requires a pointer type', parameter.span);
+									fail('Output parameter "${parameter.name}" requires a pointer type',
+										parameter.span);
 								if (switch parameter.type {
-										case Nullable(_): true;
-										case _: false;
-									})
+									case Nullable(_): true;
+									case _: false;
+								})
 									fail('Output parameter "${parameter.name}" cannot be nullable', parameter.span);
-								validateOutputType(parameter.name, parameter.type, parameter.ownership, parameter.handleDisposition, abi, declarationsByName,
+								validateOutputType(parameter.name, parameter.type, parameter.ownership,
+									parameter.handleDisposition, abi, declarationsByName,
 									parameter.span);
 							case InArray(countParameter):
 								if (structurePointerType(parameter.type, declarationsByName) == null
 									&& !utf8ArrayPointer(parameter.type)
 									&& !bytePointerLike(parameter.type, declarationsByName)
-									&& (arrayPointee(parameter.type) == null || !typedArrayElement(arrayPointee(parameter.type), abi)))
-									fail('Input array "${parameter.name}" requires a byte, scalar, structure, or UTF-8 pointer array', parameter.span);
+									&& (arrayPointee(parameter.type) == null
+									|| !typedArrayElement(arrayPointee(parameter.type), abi)))
+									fail('Input array "${parameter.name}" requires a byte, scalar, structure, or UTF-8 pointer array',
+										parameter.span);
 								var count = Lambda.find(parameters, candidate -> candidate.name == countParameter);
 								if (count == null)
-									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"', parameter.span);
-								if ((switch (count.direction) { case In: false; default: true; }))
-									fail('Input array count parameter "${count.name}" must be passed by value', count.span);
+									fail('Input array "${parameter.name}" references missing count parameter "$countParameter"',
+										parameter.span);
+								if ((switch (count.direction) {
+									case In: false;
+									default: true;
+								}))
+									fail('Input array count parameter "${count.name}" must be passed by value',
+									count.span);
 								switch abi.classify(count.type) {
 									case IntegerValue(8 | 16 | 32 | 64, Unsigned):
-									case _: fail('Input array "${parameter.name}" requires an unsigned integer count parameter', count.span);
+									case _: fail('Input array "${parameter.name}" requires an unsigned integer count parameter',
+										count.span);
 								}
 							case In:
 						}
@@ -331,37 +377,48 @@ class HxiValidator {
 					// change between the calls, and nothing it hands over may be dropped.
 					var hasQueries = queried.keys().hasNext();
 					for (parameter in parameters) {
-						if (hasQueries && (switch (parameter.direction) { case InOut: true; default: false; }) && !queried.exists(parameter.name))
+						if (hasQueries && (switch (parameter.direction) {
+							case InOut: true;
+							default: false;
+						}) && !queried.exists(parameter.name))
 							fail('Function "$name" cannot combine the @inout parameter "${parameter.name}" with queried outputs, which may call it twice',
-								parameter.span);
+							parameter.span);
 						if (hasQueries
-							&& (switch (parameter.direction) { case Out: true; default: false; })
-							&& transfersOwnership(parameter.ownership, parameter.handleDisposition))
-							fail('Function "$name" cannot combine the owned output "${parameter.name}" with queried outputs, which may call it twice',
+							&& (switch (parameter.direction) {
+								case Out: true;
+								default: false;
+							})
+								&& transfersOwnership(parameter.ownership, parameter.handleDisposition))
+								fail('Function "$name" cannot combine the owned output "${parameter.name}" with queried outputs, which may call it twice',
 								parameter.span);
 						validateInitialCapacity(parameter, queried);
 					}
 					if (hasQueries && transfersOwnership(resultPolicy.ownership, resultPolicy.handleDisposition))
-						fail('Function "$name" cannot return an owned result alongside queried outputs, which may call it twice', span);
+						fail('Function "$name" cannot return an owned result alongside queried outputs, which may call it twice',
+							span);
 					validateType(result, names, declarationsByName, span, true);
 					if (resultPolicy.length != null && !bytePointerLike(result, declarationsByName))
 						fail('@length on "$name" requires a pointer to byte-sized data or void', span);
 					if (resultPolicy.span != null) {
 						if (resultPolicy.length != null)
-							fail('@span and @length on "$name" are exclusive: a span borrows the memory that @length copies', span);
+							fail('@span and @length on "$name" are exclusive: a span borrows the memory that @length copies',
+								span);
 						if (transfersOwnership(resultPolicy.ownership, resultPolicy.handleDisposition))
 							fail('@span on "$name" borrows its memory and cannot be @owned', span);
 						if (hasDirectedParameter(parameters))
-							fail('@span on "$name" requires plain input parameters, which its count function also takes', span);
+							fail('@span on "$name" requires plain input parameters, which its count function also takes',
+								span);
 						var element = spanElement(result, abi);
 						if (element == null || HxiHaxeEmitter.spanElementType(element, true) == null)
-							fail('@span on "$name" requires a pointer to 32- or 64-bit integers or 64-bit floats', span);
+							fail('@span on "$name" requires a pointer to 32- or 64-bit integers or 64-bit floats',
+								span);
 					}
 			}
 		validatePointerResultContracts(value, declarationsByName, abi);
 	}
 
-	static function validatePointerResultContracts(value:HxiInterface, declarations:Map<String, HxiDeclaration>, abi:HxiAbi):Void {
+	static function validatePointerResultContracts(value:HxiInterface, declarations:Map<String, HxiDeclaration>,
+			abi:HxiAbi):Void {
 		for (declaration in value.declarations)
 			switch declaration {
 				case Function(name, parameters, result, _, _, callConvention, resultPolicy, span):
@@ -369,14 +426,15 @@ class HxiValidator {
 						case Owned(releaseSymbol):
 							switch abi.classify(result, true) {
 								case HandleValue(_): fail('@owned("release_symbol") on value handle result "$name" is invalid; use bare @owned and declare @destroy on the handle',
-										span);
+									span);
 								case _: validateReleaseFunction(value, name, result, releaseSymbol, declarations, span);
 							}
 						case Borrowed:
 							switch abi.classify(result, true) {
 								case PointerValue(_, _, _, _) | Utf8Value(_):
 								case HandleValue(_):
-								case _: fail('@borrowed on "$name" requires a pointer return type or value handle', span);
+								case _: fail('@borrowed on "$name" requires a pointer return type or value handle',
+									span);
 							}
 						case Unspecified:
 					}
@@ -387,26 +445,33 @@ class HxiValidator {
 							case Owned(releaseSymbol):
 								var outputValue = pointerPointee(parameter.type, declarations);
 								if (outputValue == null)
-									fail('Owned output parameter "${parameter.name}" must point to a typed opaque pointer', parameter.span);
-								validateReleaseFunction(value, '$name.${parameter.name}', outputValue, releaseSymbol, declarations, parameter.span);
+									fail('Owned output parameter "${parameter.name}" must point to a typed opaque pointer',
+										parameter.span);
+								validateReleaseFunction(value, '$name.${parameter.name}', outputValue, releaseSymbol,
+									declarations, parameter.span);
 							case Borrowed | Unspecified:
 						}
 					for (parameter in parameters)
 						if (parameter.handleDisposition == Owned) {
 							var outputValue = pointerPointee(parameter.type, declarations);
 							if (outputValue == null)
-								fail('Owned output parameter "${parameter.name}" must point to a typed value handle', parameter.span);
-							validateOwnedValueHandle('$name.${parameter.name}', outputValue, declarations, abi, parameter.span);
+								fail('Owned output parameter "${parameter.name}" must point to a typed value handle',
+									parameter.span);
+							validateOwnedValueHandle('$name.${parameter.name}', outputValue, declarations, abi,
+								parameter.span);
 						}
 					if (resultPolicy.length != null)
-						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.length, declarations, abi, span);
+						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.length,
+							declarations, abi, span);
 					if (resultPolicy.span != null)
-						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.span, declarations, abi, span, "span");
+						validateLengthFunction(value, name, parameters, callConvention, resultPolicy.span, declarations,
+							abi, span, "span");
 				case _:
 			}
 	}
 
-	static function validateReleaseFunction(value:HxiInterface, owner:String, result:HxiType, releaseSymbol:String, declarations:Map<String, HxiDeclaration>,
+	static function validateReleaseFunction(value:HxiInterface, owner:String, result:HxiType, releaseSymbol:String,
+			declarations:Map<String, HxiDeclaration>,
 			span:SourceSpan):Void {
 		var release = referencedFunction(value, owner, "release", releaseSymbol, span);
 		switch release {
@@ -417,54 +482,67 @@ class HxiValidator {
 						case Primitive("void"): true;
 						case _: false;
 					},
-					matchesPointee = resultPointee != null
+						matchesPointee = resultPointee != null
 						&& releasePointee != null
-						&& (canonicalTypeKey(releasePointee, declarations) == canonicalTypeKey(Primitive("void"), declarations)
-							|| canonicalTypeKey(resultPointee, declarations) == canonicalTypeKey(releasePointee, declarations));
-				if (callConvention != "cdecl" || parameters.length != 1 || (switch (parameters[0].direction) { case In: false; default: true; }) || !matchesPointee || !returnsVoid)
+						&& (canonicalTypeKey(releasePointee, declarations) == canonicalTypeKey(Primitive("void"),
+						declarations)
+						|| canonicalTypeKey(resultPointee, declarations) == canonicalTypeKey(releasePointee,
+						declarations));
+				if (callConvention != "cdecl" || parameters.length != 1 || (switch (parameters[0].direction) {
+					case In: false;
+					default: true;
+				}) || !matchesPointee || !returnsVoid)
 					fail('Release function "$releaseName" for owned result "$owner" must be cdecl, accept one compatible input pointer, and return void',
-						releaseSpan);
+					releaseSpan);
 			case _:
 				fail('Internal error resolving release symbol "$releaseSymbol"', span);
 		}
 	}
 
-	static function validateLengthFunction(value:HxiInterface, owner:String, parameters:Array<HxiParameter>, callConvention:String, lengthSymbol:String,
+	static function validateLengthFunction(value:HxiInterface, owner:String, parameters:Array<HxiParameter>,
+			callConvention:String, lengthSymbol:String,
 			declarations:Map<String, HxiDeclaration>, abi:HxiAbi, span:SourceSpan, role:String = "length"):Void {
 		var length = referencedFunction(value, owner, role, lengthSymbol, span);
 		switch length {
 			case Function(lengthName, lengthParameters, lengthResult, _, _, lengthCallConvention, _, lengthSpan):
 				if (lengthCallConvention != callConvention)
-					fail('Length function "$lengthName" for "$owner" must use calling convention "$callConvention"', lengthSpan);
+					fail('Length function "$lengthName" for "$owner" must use calling convention "$callConvention"',
+						lengthSpan);
 				if (lengthParameters.length != parameters.length)
 					fail('Length function "$lengthName" for "$owner" must accept the same arguments', lengthSpan);
 				for (index in 0...parameters.length)
-					if (canonicalTypeKey(parameters[index].type, declarations) != canonicalTypeKey(lengthParameters[index].type, declarations))
+					if (canonicalTypeKey(parameters[index].type, declarations)
+						!= canonicalTypeKey(lengthParameters[index].type, declarations))
 						fail('Argument ${index + 1} of length function "$lengthName" for "$owner" must match the pointer function ABI type',
 							lengthParameters[index].span);
 				switch abi.classify(lengthResult, true) {
 					case IntegerValue(bits, Unsigned) if (bits == abi.pointerBits):
-					case _: fail('Length function "$lengthName" for "$owner" must return target-sized unsigned size_t', lengthSpan);
+					case _: fail('Length function "$lengthName" for "$owner" must return target-sized unsigned size_t',
+						lengthSpan);
 				}
 			case _:
 				fail('Internal error resolving length symbol "$lengthSymbol"', span);
 		}
 	}
 
-	static function referencedFunction(value:HxiInterface, owner:String, role:String, symbol:String, span:SourceSpan):HxiDeclaration {
+	static function referencedFunction(value:HxiInterface, owner:String, role:String, symbol:String,
+			span:SourceSpan):HxiDeclaration {
 		if (symbol.length == 0)
 			fail('@$role on "$owner" requires a non-empty native function symbol', span);
 		var found:Null<HxiDeclaration> = null;
 		for (declaration in value.declarations)
 			switch declaration {
-				case Function(name, _, _, declaredSymbol, _, _, _, _) if ((declaredSymbol == null ? name : declaredSymbol) == symbol):
+				case Function(name, _, _, declaredSymbol, _, _, _,
+					_) if ((declaredSymbol == null ? name : declaredSymbol) == symbol):
 					if (found != null)
-						fail('Native $role symbol "$symbol" referenced by "$owner" is ambiguous in interface "${value.name}"', span);
+						fail('Native $role symbol "$symbol" referenced by "$owner" is ambiguous in interface "${value.name}"',
+							span);
 					found = declaration;
 				case _:
 			}
 		if (found == null)
-			fail('Native $role symbol "$symbol" referenced by "$owner" must name a function declared in interface "${value.name}"', span);
+			fail('Native $role symbol "$symbol" referenced by "$owner" must name a function declared in interface "${value.name}"',
+				span);
 		return found;
 	}
 
@@ -495,7 +573,8 @@ class HxiValidator {
 			case Array(element, length): 'array<${canonicalTypeKey(element, declarations)},$length>';
 		};
 
-	static function validateOutputType(name:String, type:HxiType, ownership:HxiOwnership, handleDisposition:HxiHandleDisposition, abi:HxiAbi,
+	static function validateOutputType(name:String, type:HxiType, ownership:HxiOwnership,
+			handleDisposition:HxiHandleDisposition, abi:HxiAbi,
 			declarations:Map<String, HxiDeclaration>, span:SourceSpan):Void {
 		var pointee = switch type {
 			case Pointer(value):
@@ -513,26 +592,34 @@ class HxiValidator {
 			case HandleValue(handleName):
 				switch ownership {
 					case Unspecified | Borrowed:
-					case Owned(_): fail('Owned value handle output parameter "$name" uses @owned without arguments; its handle declares @destroy', span);
+					case Owned(_): fail('Owned value handle output parameter "$name" uses @owned without arguments; its handle declares @destroy',
+						span);
 				}
 				if (handleDisposition == Owned)
 					requireValueHandleDestroy(name, handleName, declarations, span);
-			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _):
-				if ((switch (ownership) { case Unspecified: false; default: true; }) || handleDisposition != Unspecified)
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _,
+				_):
+				if ((switch (ownership) {
+					case Unspecified: false;
+					default: true;
+				}) || handleDisposition != Unspecified)
 					fail('Output parameter "$name" ownership metadata requires a pointer to an opaque handle', span);
 			case PointerValue(_, _, opaquePointee, _) if (opaquePointee != null):
 				switch ownership {
 					case Borrowed | Owned(_):
-					case Unspecified: fail('Opaque pointer output parameter "$name" requires @borrowed or @owned("release_symbol")', span);
+					case Unspecified: fail('Opaque pointer output parameter "$name" requires @borrowed or @owned("release_symbol")',
+						span);
 				}
 				if (handleDisposition == Owned)
 					fail('Owned opaque pointer output parameter "$name" requires @owned("release_symbol")', span);
 			case _:
-				fail('Output parameter "$name" currently requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee', span);
+				fail('Output parameter "$name" currently requires a scalar, fixed-structure, or explicitly owned opaque-pointer pointee',
+					span);
 		}
 	}
 
-	static function validateOwnedValueHandle(owner:String, type:HxiType, declarations:Map<String, HxiDeclaration>, abi:HxiAbi, span:SourceSpan):Void {
+	static function validateOwnedValueHandle(owner:String, type:HxiType, declarations:Map<String, HxiDeclaration>,
+			abi:HxiAbi, span:SourceSpan):Void {
 		switch abi.classify(type) {
 			case HandleValue(name):
 				requireValueHandleDestroy(owner, name, declarations, span);
@@ -541,25 +628,31 @@ class HxiValidator {
 		}
 	}
 
-	static function requireValueHandleDestroy(owner:String, handleName:String, declarations:Map<String, HxiDeclaration>, span:SourceSpan):String {
+	static function requireValueHandleDestroy(owner:String, handleName:String, declarations:Map<String, HxiDeclaration>,
+			span:SourceSpan):String {
 		return switch declarations.get(handleName) {
 			case Handle(_, _, destroySymbol, _) if (destroySymbol != null): destroySymbol;
 			case _: fail('Owned value handle "$owner" requires handle "$handleName" to declare @destroy("...")', span);
 		};
 	}
 
-	static function validateValueHandleDestroy(value:HxiInterface, name:String, destroySymbol:String, declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
+	static function validateValueHandleDestroy(value:HxiInterface, name:String, destroySymbol:String,
+			declarations:Map<String, HxiDeclaration>, abi:HxiAbi,
 			span:SourceSpan):Void {
 		var destroy = referencedFunction(value, name, "destroy", destroySymbol, span);
 		switch destroy {
 			case Function(functionName, parameters, result, _, _, callConvention, _, functionSpan):
 				var acceptsHandle = parameters.length == 1
-					&& (switch (parameters[0].direction) { case In: true; default: false; })
-					&& canonicalTypeKey(parameters[0].type, declarations) == canonicalTypeKey(Named(name), declarations),
-					returnsSupported = switch abi.classify(result, true) {
-						case VoidValue | IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value: true;
-						case _: false;
-					};
+					&& (switch (parameters[0].direction) {
+						case In: true;
+						default: false;
+					})
+						&& canonicalTypeKey(parameters[0].type, declarations) == canonicalTypeKey(Named(name),
+						declarations),
+						returnsSupported = switch abi.classify(result, true) {
+					case VoidValue | IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value: true;
+					case _: false;
+				};
 				if (callConvention != "cdecl" || !acceptsHandle || !returnsSupported)
 					fail('Destroy function "$functionName" for value handle "$name" must be cdecl, accept that handle by value, and return void or an integer/enum status',
 						functionSpan);
@@ -568,14 +661,19 @@ class HxiValidator {
 		}
 	}
 
-	static function validateOutputBuffer(buffer:{name:String, sizeParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>, abi:HxiAbi):Void {
+	static function validateOutputBuffer(buffer: {name: String, sizeParameter: String, span: SourceSpan},
+			parameters:Array<HxiParameter>, abi:HxiAbi):Void {
 		var size:HxiParameter = null;
 		for (parameter in parameters)
 			if (parameter.name == buffer.sizeParameter)
 				size = parameter;
 		if (size == null)
-			fail('Output buffer "${buffer.name}" references missing size parameter "${buffer.sizeParameter}"', buffer.span);
-		if ((switch (size.direction) { case InOut: false; default: true; }))
+			fail('Output buffer "${buffer.name}" references missing size parameter "${buffer.sizeParameter}"',
+				buffer.span);
+		if ((switch (size.direction) {
+			case InOut: false;
+			default: true;
+		}))
 			fail('Output buffer size parameter "${size.name}" must use @inout', size.span);
 		var pointee = switch size.type {
 			case Pointer(value): value;
@@ -604,10 +702,12 @@ class HxiValidator {
 			if (output == parameter.name)
 				isQueried = true;
 		if (!isQueried)
-			fail('@initial_capacity on "${parameter.name}" requires an output buffer or array sized by an @inout count', parameter.span);
+			fail('@initial_capacity on "${parameter.name}" requires an output buffer or array sized by an @inout count',
+				parameter.span);
 		var value = values.length == 1 ? Std.parseInt(values[0]) : null;
 		if (value == null || value <= 0 || value > 268435456 || Std.string(value) != values[0])
-			fail('@initial_capacity on "${parameter.name}" requires one positive integer element count', parameter.span);
+			fail('@initial_capacity on "${parameter.name}" requires one positive integer element count',
+				parameter.span);
 	}
 
 	/**
@@ -616,18 +716,24 @@ class HxiValidator {
 		number of elements written. Otherwise its capacity is a count passed by
 		value.
 	**/
-	static function validateOutputArray(array:{name:String, countParameter:String, span:SourceSpan}, parameters:Array<HxiParameter>, abi:HxiAbi):Bool {
+	static function validateOutputArray(array: {name: String, countParameter: String, span: SourceSpan},
+			parameters:Array<HxiParameter>, abi:HxiAbi):Bool {
 		var count = Lambda.find(parameters, parameter -> parameter.name == array.countParameter);
 		if (count == null)
-			fail('Output array "${array.name}" references missing count parameter "${array.countParameter}"', array.span);
+			fail('Output array "${array.name}" references missing count parameter "${array.countParameter}"',
+				array.span);
 		var outputType = arrayType(array.name, parameters),
 			isUtf8Array = utf8ArrayPointer(outputType),
-			queried = (switch (count.direction) { case InOut: true; default: false; });
+			queried = (switch (count.direction) {
+				case InOut: true;
+				default: false;
+			});
 		if (isUtf8Array && !queried)
 			fail('Output array count parameter "${count.name}" must use @inout', count.span);
 		if (queried) {
 			if (!nullablePointer(outputType))
-				fail('Output array "${array.name}" with an @inout count must be nullable for its size query', array.span);
+				fail('Output array "${array.name}" with an @inout count must be nullable for its size query',
+					array.span);
 			var pointee = switch count.type {
 				case Pointer(value): value;
 				case _: fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
@@ -638,12 +744,16 @@ class HxiValidator {
 					fail('Output array count parameter "${count.name}" must be ptr<u32>', count.span);
 			}
 		} else {
-			if ((switch (count.direction) { case In: false; default: true; }))
+			if ((switch (count.direction) {
+				case In: false;
+				default: true;
+			}))
 				fail('Typed output array count parameter "${count.name}" must be passed by value', count.span);
 			switch abi.classify(count.type) {
 				case IntegerValue(8 | 16 | 32 | 64, Unsigned):
 				case _:
-					fail('Typed output array count parameter "${count.name}" requires an unsigned integer type', count.span);
+					fail('Typed output array count parameter "${count.name}" requires an unsigned integer type',
+						count.span);
 			}
 		}
 		if (!isUtf8Array) {
@@ -656,7 +766,8 @@ class HxiValidator {
 					array.span);
 			switch abi.classify(element) {
 				case AggregateValue(_, _, _) if (!pointerFreeArrayElement(element, abi.semanticDeclarations(), [])):
-					fail('Typed output array "${array.name}" cannot contain structures with pointer fields', array.span);
+					fail('Typed output array "${array.name}" cannot contain structures with pointer fields',
+						array.span);
 				case _:
 			}
 		}
@@ -697,11 +808,13 @@ class HxiValidator {
 
 	static function typedArrayElement(type:HxiType, abi:HxiAbi):Bool
 		return switch abi.classify(type) {
-			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _): true;
+			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_) | AggregateValue(_, _,
+				_): true;
 			case _: false;
 		};
 
-	static function pointerFreeArrayElement(type:HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool
+	static function pointerFreeArrayElement(type:HxiType, declarations:Map<String, HxiDeclaration>,
+			visiting:Map<String, Bool>):Bool
 		return switch type {
 			case Const(element): pointerFreeArrayElement(element, declarations, visiting);
 			case Named(name):
@@ -740,7 +853,8 @@ class HxiValidator {
 	static function validateCallConvention(name:String, convention:String, abi:HxiAbi, span:SourceSpan):Void {
 		if (convention != "cdecl" && convention != "stdcall" && convention != "system")
 			fail('Declaration "$name" has unsupported calling convention "$convention"', span);
-		if (convention == "stdcall" && abi.target.indexOf("windows") < 0 && abi.target.indexOf("mingw") < 0 && abi.target.indexOf("msvc") < 0)
+		if (convention == "stdcall" && abi.target.indexOf("windows") < 0 && abi.target.indexOf("mingw") < 0
+			&& abi.target.indexOf("msvc") < 0)
 			fail('Calling convention "stdcall" is only available for Windows targets', span);
 	}
 
@@ -748,10 +862,12 @@ class HxiValidator {
 		try {
 			switch abi.classify(type, allowVoid) {
 				case VoidValue if (allowVoid):
-				case IntegerValue(_, _) | EnumerationValue(_, _, _) | HandleValue(_) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
+				case IntegerValue(_, _) | EnumerationValue(_, _,
+					_) | HandleValue(_) | Boolean32Value | FloatValue(_) | AggregateValue(_, _, _) | Utf8Value(_):
 				case PointerValue(_, _, _, _) if (!allowVoid):
 				case _:
-					fail("Callbacks support scalar, aggregate, and pointer arguments with scalar, aggregate, or void results", span);
+					fail("Callbacks support scalar, aggregate, and pointer arguments with scalar, aggregate, or void results",
+						span);
 			}
 		} catch (error:Dynamic) {
 			fail(Std.string(error), span);
@@ -770,7 +886,8 @@ class HxiValidator {
 			visitAlias(name, aliases, visiting, complete);
 	}
 
-	static function visitAlias(name:String, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>, complete:Map<String, Bool>):Void {
+	static function visitAlias(name:String, aliases:Map<String, {type:HxiType, span:SourceSpan}>,
+			visiting:Map<String, Bool>, complete:Map<String, Bool>):Void {
 		if (complete.exists(name))
 			return;
 		var alias = aliases.get(name);
@@ -786,7 +903,10 @@ class HxiValidator {
 
 	static function hasDirectedParameter(parameters:Array<HxiParameter>):Bool {
 		for (parameter in parameters)
-			if ((switch (parameter.direction) { case In: false; default: true; }))
+			if ((switch (parameter.direction) {
+				case In: false;
+				default: true;
+			}))
 				return true;
 		return false;
 	}
@@ -870,7 +990,8 @@ class HxiValidator {
 			case _: false;
 		};
 
-	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>, visiting:Map<String, Bool>,
+	static function visitTypeAliases(type:HxiType, aliases:Map<String, {type:HxiType, span:SourceSpan}>,
+			visiting:Map<String, Bool>,
 			complete:Map<String, Bool>):Void
 		switch type {
 			case Named(name) if (aliases.exists(name)):
@@ -880,7 +1001,8 @@ class HxiValidator {
 			case _:
 		}
 
-	static function validateType(type:HxiType, names:Map<String, SourceSpan>, declarations:Map<String, HxiDeclaration>, span:SourceSpan, allowVoid:Bool):Void
+	static function validateType(type:HxiType, names:Map<String, SourceSpan>, declarations:Map<String, HxiDeclaration>,
+			span:SourceSpan, allowVoid:Bool):Void
 		switch type {
 			case Primitive("void") if (!allowVoid):
 				fail("Void is not valid in this ABI position", span);
@@ -908,12 +1030,12 @@ class HxiValidator {
 				validateType(element, names, declarations, span, false);
 		}
 
-	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
-		return switch value {
-			case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) |
-				Enumeration(name, _, _, _, span) | Callback(name, _, _, _, span) | Function(name, _, _, _, _, _, _, span):
-				{name: name, span: span};
-		}
+	static function declarationName(value:HxiDeclaration): {name: String, span: SourceSpan} return switch value {
+		case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _,
+			span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
+			span) | Function(name, _, _, _, _, _, _, span):
+			{name: name, span: span};
+	}
 
 	@:noReturn
 	static function fail(message:String, span:SourceSpan):Dynamic

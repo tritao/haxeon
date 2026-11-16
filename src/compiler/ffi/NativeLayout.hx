@@ -34,7 +34,8 @@ class NativeLayout {
 	public static function containsUnsupportedRuntimeValueType(type:CompilerType):Bool
 		return containsUnsupportedRuntimeValueWithin(type, null);
 
-	static function containsUnsupportedRuntimeValueWithin(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
+	static function containsUnsupportedRuntimeValueWithin(type:CompilerType,
+			explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
 			case TNativeScalar("u32"): false;
 			case TNullable(TNativeScalar("u32")): true;
@@ -56,12 +57,15 @@ class NativeLayout {
 		};
 
 	/** `explored` holds the anonymous structures already walked: one can contain itself, and a repeat adds nothing. */
-	static function containsNativeLayoutWithin(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
+	static function containsNativeLayoutWithin(type:CompilerType,
+			explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
 			case TNativeScalar(_) | TInstance(NominalKind.NativeValue, _, _): true;
-			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
+			case TAbstract(_, _, representation), TNullable(representation), TArray(representation),
+				TIterator(representation):
 				containsNativeLayoutWithin(representation, explored);
-			case TMap(key, value): containsNativeLayoutWithin(key, explored) || containsNativeLayoutWithin(value, explored);
+			case TMap(key, value): containsNativeLayoutWithin(key, explored)
+				|| containsNativeLayoutWithin(value, explored);
 			case TFunction(arguments, result):
 				var found = containsNativeLayoutWithin(result, explored);
 				for (argument in arguments)
@@ -87,7 +91,8 @@ class NativeLayout {
 			case TBool: Primitive("c_bool");
 			case TFloat: Primitive("f64");
 			case TNativeScalar(name): Primitive(name);
-			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): Pointer(Primitive("void"));
+			case TAbstract(declaration, _,
+				_) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): Pointer(Primitive("void"));
 			case TAbstract(_, _, representation): fieldType(representation);
 			case TInstance(NominalKind.NativeValue, name, _): Named(name);
 			case TInstance(NominalKind.Class, name, []): Named(name);
@@ -98,9 +103,16 @@ class NativeLayout {
 		return Structure(name, layout.size, layout.alignment, [], span);
 
 	/** Calculate a source-declared record by aligning each field as the ABI does. */
-	public static function record(target:String, name:String, fields:Array<{name:String, type:CompilerType, span:SourceSpan}>,
+	public static function record(target:String, name:String, fields:Array<{
+		name:String,
+		type:CompilerType,
+		span:SourceSpan
+	}>,
 			declarations:Map<String, HxiDeclaration>, span:SourceSpan):TypedNativeLayout {
-		var abi = HxiAbi.forTarget(target, declarations), placed:Array<TypedNativeFieldLayout> = [], cursor = 0, recordAlignment = 1;
+		var abi = HxiAbi.forTarget(target, declarations),
+			placed:Array<TypedNativeFieldLayout> = [],
+			cursor = 0,
+			recordAlignment = 1;
 		for (field in fields) {
 			var hxiType = fieldType(field.type), layout = abi.layout(hxiType);
 			if (layout == null || layout.size <= 0 || layout.align <= 0)

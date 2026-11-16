@@ -9,9 +9,11 @@ import compiler.ir.IrVerifier;
 class IncrementalSnapshotMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		compiler.update("Util.hx", "function one():Int { return 1; } function two():Int { return one() + 1; } function unused():Int { return 9; }");
+		compiler.update("Util.hx",
+			"function one():Int { return 1; } function two():Int { return one() + 1; } function unused():Int { return 9; }");
 		compiler.update("Main.hx",
-			"function helper():Int { return 5; } function other():Int { return helper() + 1; } " + "function main():Int { return Util.two() + other(); }");
+			"function helper():Int { return 5; } function other():Int { return helper() + 1; } "
+			+ "function main():Int { return Util.two() + other(); }");
 		compiler.compile("Main", null, false);
 
 		// Util.two gains an optional parameter, so its caller Main.main is invalidated and Main's module snapshot would be
@@ -29,9 +31,11 @@ class IncrementalSnapshotMain {
 		// The same edit with an index to maintain refreshes the whole module snapshot, which regenerates the IR of every function
 		// of the module. A function whose regenerated IR equals the published one is not reported, so it is not lowered or patched.
 		var indexed = new Compiler();
-		indexed.update("Util.hx", "function one():Int { return 1; } function two():Int { return one() + 1; } function unused():Int { return 9; }");
+		indexed.update("Util.hx",
+			"function one():Int { return 1; } function two():Int { return one() + 1; } function unused():Int { return 9; }");
 		indexed.update("Main.hx",
-			"function helper():Int { return 5; } function other():Int { return helper() + 1; } " + "function main():Int { return Util.two() + other(); }");
+			"function helper():Int { return 5; } function other():Int { return helper() + 1; } "
+			+ "function main():Int { return Util.two() + other(); }");
 		indexed.compile("Main");
 		indexed.update("Util.hx",
 			"function one():Int { return 10; } function two(extra:Int = 0):Int { return one() + 1 + extra; } function unused():Int { return 9; }");
@@ -59,11 +63,13 @@ class IncrementalSnapshotMain {
 			closures.update("Main.hx", captured);
 			var changedCapture = closures.compile("Main", null, withIndex);
 			IrVerifier.verify(changedCapture.ir);
-			if (new IrInterpreter(changedCapture.ir).run("Main.main") != 2) throw "A changed capture retained an obsolete closure";
+			if (new IrInterpreter(changedCapture.ir).run("Main.main") != 2)
+				throw "A changed capture retained an obsolete closure";
 			closures.update("Main.hx", first);
 			var restoredCapture = closures.compile("Main", null, withIndex);
 			IrVerifier.verify(restoredCapture.ir);
-			if (new IrInterpreter(restoredCapture.ir).run("Main.main") != 1) throw "Removing a capture retained an obsolete closure";
+			if (new IrInterpreter(restoredCapture.ir).run("Main.main") != 1)
+				throw "Removing a capture retained an obsolete closure";
 		}
 		Sys.println("PASS: unindexed incremental builds skip snapshot refreshes of unchanged modules");
 	}

@@ -14,10 +14,16 @@ abstract StableFieldId(Int) from Int to Int {}
 abstract StableMethodId(Int) from Int to Int {}
 
 /** Name and canonical semantic type supplied when declaring a field layout. */
-typedef DeclaredField = {final name:String; final type:String;}
+typedef DeclaredField = {
+	final name:String;
+	final type:String;
+}
 
 /** Name and canonical signature supplied when declaring a method. */
-typedef DeclaredMethod = {final name:String; final signature:String;}
+typedef DeclaredMethod = {
+	final name:String;
+	final signature:String;
+}
 
 /** Stable field identity and its current physical layout slot. */
 class TypeField {
@@ -105,7 +111,8 @@ class TypeRegistry {
 		return result;
 	}
 
-	public function declareClass(name:String, base:Null<String>, fields:Array<DeclaredField>, methods:Array<DeclaredMethod>,
+	public function declareClass(name:String, base:Null<String>, fields:Array<DeclaredField>,
+			methods:Array<DeclaredMethod>,
 			isValue = false):TypeDeclarationResult {
 		var typeId:StableTypeId = idFor("type:" + name);
 		var typeFields = [];
@@ -115,7 +122,8 @@ class TypeRegistry {
 		}
 		var typeMethods = [];
 		for (method in methods)
-			typeMethods.push(new TypeMethod(idFor("method:" + name + ":" + method.name), method.name, method.signature));
+			typeMethods.push(new TypeMethod(idFor("method:" + name + ":" + method.name), method.name,
+				method.signature));
 		var descriptor = new TypeDescriptor(typeId, name, base, typeFields, typeMethods, isValue),
 			previous = descriptors.get(name);
 		descriptors.set(name, descriptor);

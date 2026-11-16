@@ -31,7 +31,10 @@ typedef IndexedSemanticSymbol = {
 	final declaration:SourceSpan;
 }
 
-private typedef PositionBinding = {final span:SourceSpan; final symbol:SemanticSymbolId;}
+private typedef PositionBinding = {
+	final span:SourceSpan;
+	final symbol:SemanticSymbolId;
+}
 
 typedef SemanticCompletionLocal = {
 	final name:String;
@@ -117,13 +120,12 @@ class SemanticIndex {
 		}
 		for (enumDecl in declarations.enums)
 			for (enumCase in enumDecl.cases) {
-				var parameters = [
-					for (index in 0...enumCase.params.length) {
-						var parameter = enumCase.params[index];
-						(parameter.name == null ? "arg" + index : parameter.name) + ":" + displayAstType(parameter.type);
-					}
-				];
-				setDeclaredSignature(enumDecl.name + "." + enumCase.name, enumDecl.name + "." + enumCase.name + "(" + parameters.join(", ") + ")", parameters,
+				var parameters = [for (index in 0...enumCase.params.length) {
+					var parameter = enumCase.params[index];
+					(parameter.name == null ? "arg" + index : parameter.name) + ":" + displayAstType(parameter.type);
+				}];
+				setDeclaredSignature(enumDecl.name + "." + enumCase.name,
+					enumDecl.name + "." + enumCase.name + "(" + parameters.join(", ") + ")", parameters,
 					enumDecl.name);
 			}
 		for (classDecl in declarations.classes)
@@ -133,7 +135,8 @@ class SemanticIndex {
 						for (argument in method.arguments)
 							argument.name + ":" + displayAstType(argument.type)
 					];
-					setDeclaredSignature(classDecl.name, classDecl.name + "(" + parameters.join(", ") + ")", parameters, classDecl.name);
+					setDeclaredSignature(classDecl.name, classDecl.name + "(" + parameters.join(", ") + ")", parameters,
+						classDecl.name);
 				}
 		for (fn in declarations.classes)
 			indexDeclarationTypes(fn.name, fn.fields, fn.methods, declarations);
@@ -143,17 +146,20 @@ class SemanticIndex {
 			indexDeclarationTypes(fn.name, [], fn.methods, declarations);
 	}
 
-	function indexDeclarationTypes(owner:String, fields:Array<compiler.syntax.Ast.AstField>, methods:Array<compiler.syntax.Ast.AstFunction>,
+	function indexDeclarationTypes(owner:String, fields:Array<compiler.syntax.Ast.AstField>,
+			methods:Array<compiler.syntax.Ast.AstFunction>,
 			declarations:DeclarationIndex):Void {
 		for (field in fields)
 			if (field.type != null)
 				try
-					setDeclarationType(owner + "." + field.name, field.span, declarations.resolve(field.type, field.span))
+					setDeclarationType(owner + "." + field.name, field.span,
+						declarations.resolve(field.type, field.span))
 				catch (_:Dynamic)
 					setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
 		for (method in methods)
 			try
-				setDeclarationType(owner + "." + method.name, method.span, declarations.resolve(method.result, method.span))
+				setDeclarationType(owner + "." + method.name, method.span,
+					declarations.resolve(method.result, method.span))
 			catch (_:Dynamic)
 				setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
 	}
@@ -180,11 +186,16 @@ class SemanticIndex {
 	function indexInheritedConstructor(fn:TypedFunction, classId:Null<SemanticSymbolId>):Void {
 		if (classId == null || signatures.exists(classId))
 			return;
-		var owner = fn.owner == null ? "" : fn.owner, parameters = [
-			for (argument in fn.arguments)
-				sourceLocalName(argument.name) + ":" + displayType(argument.type)
-		];
-		signatures.set(classId, {label: sourceName(owner) + "(" + parameters.join(", ") + ")", parameters: parameters, result: sourceName(owner)});
+		var owner = fn.owner == null ? "" : fn.owner,
+			parameters = [
+				for (argument in fn.arguments)
+					sourceLocalName(argument.name) + ":" + displayType(argument.type)
+			];
+		signatures.set(classId, {
+			label: sourceName(owner) + "(" + parameters.join(", ") + ")",
+			parameters: parameters,
+			result: sourceName(owner)
+		});
 	}
 
 	/**
@@ -204,7 +215,8 @@ class SemanticIndex {
 		return end < 0 ? name : name.substring(9, end);
 	}
 
-	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>, resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
+	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>,
+			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,
 			?token:CancellationToken):Void {
 		var started = Sys.time();
 		if (token != null)
@@ -216,17 +228,19 @@ class SemanticIndex {
 			addCompletionLocal(argument.name, argument.type, fn.span, fn.span, 0);
 		}
 		if (fn.owner != null)
-			functionReceivers.push({span: fn.span, type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
+			functionReceivers.push({span: fn.span,
+				type: TInstance(compiler.types.Type.NominalKind.Class, fn.owner, [])});
 		var functionId = resolve(fn.name);
 		if (functionId == null && fn.isConstructor && fn.owner != null)
-			// A constructor the class inherits is not written anywhere in the module, so the class stands for it.
-			indexInheritedConstructor(fn, resolve(fn.owner));
+		// A constructor the class inherits is not written anywhere in the module, so the class stands for it.
+		indexInheritedConstructor(fn, resolve(fn.owner));
 		if (functionId != null) {
 			declarationTypes.set(functionId, fn.result);
 			var parameters = [
 				for (argument in fn.arguments)
 					sourceLocalName(argument.name) + ":" + displayType(argument.type)
-			], name = sourceName(fn.name);
+			],
+				name = sourceName(fn.name);
 			signatures.set(functionId, {
 				label: name + "(" + parameters.join(", ") + "):" + displayType(fn.result),
 				parameters: parameters,
@@ -268,7 +282,8 @@ class SemanticIndex {
 
 	function rememberRecoveredMember(owner:String, name:String, span:SourceSpan):Void
 		for (symbol in symbols)
-			if (sourceName(symbol.name) == name && symbol.declaration.start >= span.start && symbol.declaration.end <= span.end) {
+			if (sourceName(symbol.name) == name && symbol.declaration.start >= span.start
+				&& symbol.declaration.end <= span.end) {
 				recoveredMembers.set(owner + "." + name, symbol.id);
 				return;
 			}
@@ -289,7 +304,8 @@ class SemanticIndex {
 			// Member names belong to the receiver, even when a parameter shares the name.
 			if (index > 0 && tokens[index - 1].kind == TokenKind.Dot)
 				continue;
-			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start && token.span.end <= fn.span.end)
+			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start
+				&& token.span.end <= fn.span.end)
 				bindRecoveredLocal(token.text, token.span);
 		}
 		currentCaller = null;
@@ -302,13 +318,15 @@ class SemanticIndex {
 		return null;
 	}
 
-	function indexRecoveredStatements(functionKey:String, statements:Array<AstStatement>, scope:SourceSpan, depth:Int):Void {
+	function indexRecoveredStatements(functionKey:String, statements:Array<AstStatement>, scope:SourceSpan,
+			depth:Int):Void {
 		for (statement in statements)
 			switch statement {
 				case UninitializedDeclaration(name, type, span):
 					addRecoveredLocal(functionKey, name, recoveredType(type), span, scope, depth);
 				case VarDeclaration(name, type, initializer, span), ScopedDeclaration(name, type, initializer, span):
-					addRecoveredLocal(functionKey, name, type == null ? recoveredExpressionType(initializer) : recoveredType(type), span, scope, depth);
+					addRecoveredLocal(functionKey, name,
+						type == null ? recoveredExpressionType(initializer) : recoveredType(type), span, scope, depth);
 				case If(_, yes, no, span):
 					indexRecoveredStatements(functionKey, yes, span, depth + 1);
 					indexRecoveredStatements(functionKey, no, span, depth + 1);
@@ -319,7 +337,8 @@ class SemanticIndex {
 				case Try(body, catches, span):
 					indexRecoveredStatements(functionKey, body, span, depth + 1);
 					for (caught in catches) {
-						addRecoveredLocal(functionKey, caught.name, recoveredType(caught.type), caught.span, caught.span, depth + 1);
+						addRecoveredLocal(functionKey, caught.name, recoveredType(caught.type), caught.span,
+							caught.span, depth + 1);
 						indexRecoveredStatements(functionKey, caught.statements, caught.span, depth + 1);
 					}
 				case Switch(_, cases, fallback, _, span):
@@ -330,7 +349,8 @@ class SemanticIndex {
 			}
 	}
 
-	function addRecoveredLocal(functionKey:String, name:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
+	function addRecoveredLocal(functionKey:String, name:String, type:CompilerType, declaration:SourceSpan,
+			scope:SourceSpan, depth:Int):Void {
 		var token = declarationToken(tokens, declaration, name);
 		if (token == null)
 			return;
@@ -351,7 +371,8 @@ class SemanticIndex {
 	function indexRecoveredStatementUses(statements:Array<AstStatement>):Void {
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Return(value, _), Throw(value, _), Expression(value, _):
+				case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Return(value, _),
+					Throw(value, _), Expression(value, _):
 					indexRecoveredExpression(value);
 				case Assignment(name, value, span):
 					indexRecoveredExpression(Variable(name, span));
@@ -437,13 +458,18 @@ class SemanticIndex {
 				addCall(callee, span, name);
 				for (argument in arguments)
 					indexRecoveredExpression(argument);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
-				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
-				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
-				NotEqual(left, right, _), And(left, right, _), Or(left, right, _), Index(left, right, _), Range(left, right, _):
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _),
+				Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _),
+				UnsignedShiftRight(left, right, _),
+				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _),
+				Equal(left, right, _),
+				NotEqual(left, right, _), And(left, right, _), Or(left, right, _), Index(left, right, _),
+				Range(left, right, _):
 				indexRecoveredExpression(left);
 				indexRecoveredExpression(right);
-			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), PostfixIncrement(value, _, _):
+			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
+				PostfixIncrement(value, _, _):
 				indexRecoveredExpression(value);
 			case Conditional(predicate, yes, no, _):
 				indexRecoveredExpression(predicate);
@@ -492,9 +518,9 @@ class SemanticIndex {
 				&& span.start >= local.scope.start
 				&& span.end <= local.scope.end
 				&& (found == null
-					|| local.depth > found.depth
-					|| local.depth == found.depth
-					&& local.declaration.start > found.declaration.start))
+				|| local.depth > found.depth
+				|| local.depth == found.depth
+				&& local.declaration.start > found.declaration.start))
 				found = local;
 		if (found == null)
 			return null;
@@ -533,7 +559,8 @@ class SemanticIndex {
 						receiver = candidate.type;
 				receiver;
 			case Variable(name, span): var id = bindRecoveredLocal(name,
-					span); id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
+				span);
+				id == null || !declarationTypes.exists(id) ? TDynamic : declarationTypes.get(id);
 			case New(name, _, _), NewGeneric(name, _, _, _): TInstance(compiler.types.Type.NominalKind.Class, name, []);
 			default: recoveredExpressionType(expression);
 		};
@@ -618,7 +645,8 @@ class SemanticIndex {
 		return resolvedReferences.copy();
 
 	/** Index a typed field initializer under its field declaration identity. */
-	public function indexTypedInitializer(owner:String, expression:TypedExpression, resolve:String->Null<SemanticSymbolId>,
+	public function indexTypedInitializer(owner:String, expression:TypedExpression,
+			resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		currentCaller = resolve(owner);
 		currentCallerName = owner;
@@ -706,7 +734,8 @@ class SemanticIndex {
 	public function typeAt(position:Int):Null<CompilerType> {
 		var result:Null<CompilerType> = null, width = 0x3fffffff;
 		for (candidate in completionTypes)
-			if (position >= candidate.span.start && position <= candidate.span.end && candidate.span.end - candidate.span.start < width) {
+			if (position >= candidate.span.start && position <= candidate.span.end
+				&& candidate.span.end - candidate.span.start < width) {
 				result = candidate.type;
 				width = candidate.span.end - candidate.span.start;
 			}
@@ -719,7 +748,8 @@ class SemanticIndex {
 		return symbol == null ? null : declarationTypes.get(symbol);
 	}
 
-	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan, depth:Int):Void {
+	function addCompletionLocal(identity:String, type:CompilerType, declaration:SourceSpan, scope:SourceSpan,
+			depth:Int):Void {
 		var token = declarationToken(tokens, declaration, sourceLocalName(identity));
 		if (token != null)
 			completionLocals.push({
@@ -826,10 +856,12 @@ class SemanticIndex {
 			switch statement {
 				case TVar(_, value, _), TReturn(value, _), TThrow(value, _), TExpression(value, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TAssign(identity, value, span), TCellAssign(identity, _, value, span), TCellCapturedAssign(identity, _, value, span):
+				case TAssign(identity, value, span), TCellAssign(identity, _, value, span),
+					TCellCapturedAssign(identity, _, value, span):
 					bindLocalUse(fn, identity, span);
 					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TIncrement(identity, _, span), TCellIncrement(identity, _, _, _, span), TCellCapturedIncrement(identity, _, _, _, span):
+				case TIncrement(identity, _, span), TCellIncrement(identity, _, _, _, span),
+					TCellCapturedIncrement(identity, _, _, _, span):
 					bindLocalUse(fn, identity, span);
 				case TFieldAssign(object, name, value, span):
 					bindMember(resolve, object.type, name, span);
@@ -883,14 +915,20 @@ class SemanticIndex {
 				var token = referenceToken(tokens, expression.span, sourceLocalName(identity));
 				if (symbols.exists(id) && token != null)
 					bind(id, token.span);
-			case TEnumDynamicBox(value, _), TEnumDynamicView(value, _), TCopy(value, _), TNullableWrap(value), TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value),
-				TNot(value), TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value), TToInterface(value, _), TArrayLength(value),
+			case TEnumDynamicBox(value, _), TEnumDynamicView(value, _), TCopy(value, _), TNullableWrap(value),
+				TIntToFloat(value), TIntToInt64(value), TFloatToInt(value), TToDynamic(value), TNegate(value),
+				TNot(value), TThrowExpression(value), TNoReturn(value), TCast(value), TAbiCast(value),
+				TToInterface(value, _), TArrayLength(value),
 				TStringLength(value):
 				indexExpression(fn, value, resolve, resolveEnumCase);
-			case TAdd(left, right), TSub(left, right), TMul(left, right), TDiv(left, right), TMod(left, right), TBitAnd(left, right), TBitXor(left, right),
-				TBitOr(left, right), TShiftLeft(left, right), TShiftRight(left, right), TUnsignedShiftRight(left, right), TLess(left, right),
-				TLessEqual(left, right), TEqual(left, right), TAnd(left, right), TOr(left, right), TIndex(left, right), TMapGet(left, right),
-				TStringIndexOf(left, right), TStringCharAt(left, right), TStringCharCodeAt(left, right), TArrayPush(left, right), TArrayUnshift(left, right):
+			case TAdd(left, right), TSub(left, right), TMul(left, right), TDiv(left, right), TMod(left, right),
+				TBitAnd(left, right), TBitXor(left, right),
+				TBitOr(left, right), TShiftLeft(left, right), TShiftRight(left, right),
+				TUnsignedShiftRight(left, right), TLess(left, right),
+				TLessEqual(left, right), TEqual(left, right), TAnd(left, right), TOr(left, right), TIndex(left, right),
+				TMapGet(left, right),
+				TStringIndexOf(left, right), TStringCharAt(left, right), TStringCharCodeAt(left, right),
+				TArrayPush(left, right), TArrayUnshift(left, right):
 				indexExpression(fn, left, resolve, resolveEnumCase);
 				indexExpression(fn, right, resolve, resolveEnumCase);
 			case TConditional(condition, yes, no):
@@ -970,12 +1008,14 @@ class SemanticIndex {
 		var token = referenceToken(tokens, expression, sourceName(name));
 		var span = token == null ? expression : token.span;
 		for (edge in callEdges)
-			if (edge.caller == currentCaller && edge.callee == callee && edge.span.start == span.start && edge.span.end == span.end)
+			if (edge.caller == currentCaller && edge.callee == callee && edge.span.start == span.start
+				&& edge.span.end == span.end)
 				return;
 		callEdges.push({caller: currentCaller, callee: callee, span: span});
 	}
 
-	function indexCallTokens(fn:TypedFunction, caller:Null<SemanticSymbolId>, resolve:String->Null<SemanticSymbolId>):Void {
+	function indexCallTokens(fn:TypedFunction, caller:Null<SemanticSymbolId>,
+			resolve:String->Null<SemanticSymbolId>):Void {
 		if (caller == null)
 			return;
 		var declaration = declarationToken(tokens, fn.span, sourceName(fn.name));
@@ -1088,7 +1128,8 @@ class SemanticIndex {
 			var candidate = tokens[cursor].kind;
 			if (candidate == kind)
 				return true;
-			if (candidate == TokenKind.Semicolon || candidate == TokenKind.LeftBrace || candidate == TokenKind.RightBrace)
+			if (candidate == TokenKind.Semicolon || candidate == TokenKind.LeftBrace
+				|| candidate == TokenKind.RightBrace)
 				return false;
 			cursor--;
 		}
@@ -1138,7 +1179,8 @@ class SemanticIndex {
 			bindNamed(resolve, owner + "." + name, span);
 	}
 
-	function bindEnumCase(resolve:(String, Int) -> Null<SemanticSymbolId>, enumName:Null<String>, index:Int, span:SourceSpan):Void {
+	function bindEnumCase(resolve:(String, Int) -> Null<SemanticSymbolId>, enumName:Null<String>, index:Int,
+			span:SourceSpan):Void {
 		if (enumName == null || index < 0)
 			return;
 		var id = resolve(enumName, index);
@@ -1246,9 +1288,10 @@ class SemanticIndex {
 			case TMap(key, value): 'Map<${displayType(key)},${displayType(value)}>';
 			case TNullable(element): 'Null<${displayType(element)}>';
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
-					+ "<"
-					+ [for (argument in arguments) displayType(argument)].join(",") + ">";
-			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",") + ")->" + displayType(result);
+				+ "<"
+				+ [for (argument in arguments) displayType(argument)].join(",") + ">";
+			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",")
+				+ ")->" + displayType(result);
 			case TAnonymous(name, _) if (SemanticSignature.isRecursiveAnonymousName(name)): name;
 			default: Std.string(type);
 		};
@@ -1262,11 +1305,13 @@ class SemanticIndex {
 			case VoidType: "Void";
 			case InferredType: "_";
 			case NamedType(name): name;
-			case AppliedType(name, arguments): name + "<" + [for (argument in arguments) displayAstType(argument)].join(",") + ">";
+			case AppliedType(name,
+				arguments): name + "<" + [for (argument in arguments) displayAstType(argument)].join(",") + ">";
 			case ArrayType(element): 'Array<${displayAstType(element)}>';
 			case MapType(key, value): 'Map<${displayAstType(key)},${displayAstType(value)}>';
 			case NullableType(element): 'Null<${displayAstType(element)}>';
-			case FunctionType(arguments, result): "(" + [for (argument in arguments) displayAstType(argument)].join(",") + ")->" + displayAstType(result);
+			case FunctionType(arguments, result): "(" + [for (argument in arguments) displayAstType(argument)].join(",")
+				+ ")->" + displayAstType(result);
 			default: Std.string(type);
 		};
 }

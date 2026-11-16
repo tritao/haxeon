@@ -2,9 +2,9 @@ package haxeon;
 
 /** Program-defined counters recorded in a HashLink diagnostics profiler capture; each name becomes its own counter track. */
 class ProfileCounter {
-  public static function set(name:String, value:Float):Void {
-    nativeProfileCounter(name, value);
-  }
+	public static function set(name:String, value:Float):Void {
+		nativeProfileCounter(name, value);
+	}
 }
 
 #if wasm

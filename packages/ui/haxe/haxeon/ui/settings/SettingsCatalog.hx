@@ -58,7 +58,8 @@ class SettingsCatalog {
 		var text = filter == null ? "" : StringTools.trim(filter).toLowerCase();
 		if (text.length == 0)
 			return showAdvanced || !definition.advanced;
-		var haystack = (definition.label + " " + definition.path + " " + definition.path.split("/").join(" ").split("_").join(" ")
+		var haystack =
+			(definition.label + " " + definition.path + " " + definition.path.split("/").join(" ").split("_").join(" ")
 			+ " " + (definition.tooltip == null ? "" : definition.tooltip)).toLowerCase();
 		for (word in text.split(" "))
 			if (haystack.indexOf(word) < 0) return false;
@@ -70,7 +71,8 @@ class SettingsCatalog {
 		var result:Array<String> = [];
 		for (definition in store.registry.all()) {
 			var category = categoryOf(definition);
-			if ((onlyPaths == null || onlyPaths.indexOf(definition.path) >= 0) && visible(definition, filter, showAdvanced) && (!modifiedOnly || !store.isDefault(definition.path)) && result.indexOf(category) < 0)
+			if ((onlyPaths == null || onlyPaths.indexOf(definition.path) >= 0) && visible(definition, filter,
+				showAdvanced) && (!modifiedOnly || !store.isDefault(definition.path)) && result.indexOf(category) < 0)
 				result.push(category);
 		}
 		return result;
@@ -80,7 +82,8 @@ class SettingsCatalog {
 	public function categoryCounts(filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Map<String, Int> {
 		var counts:Map<String, Int> = new Map();
 		for (definition in store.registry.all()) {
-			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path))) continue;
+			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || !visible(definition, filter,
+				showAdvanced) || (modifiedOnly && store.isDefault(definition.path))) continue;
 			var category = categoryOf(definition), previous = counts.get(category);
 			counts.set(category, previous == null ? 1 : previous + 1);
 		}
@@ -88,11 +91,13 @@ class SettingsCatalog {
 	}
 
 	/** The category's visible settings as inspector sections: unsectioned first, then in definition order. */
-	public function sections(category:String, filter:String, showAdvanced:Bool, modifiedOnly:Bool = false):Array<PropertyInspectorSection> {
+	public function sections(category:String, filter:String, showAdvanced:Bool,
+			modifiedOnly:Bool = false):Array<PropertyInspectorSection> {
 		var order:Array<String> = [];
 		var grouped:Map<String, Array<PropertyDescriptor>> = new Map();
 		for (definition in store.registry.all()) {
-			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || categoryOf(definition) != category || !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path)))
+			if ((onlyPaths != null && onlyPaths.indexOf(definition.path) < 0) || categoryOf(definition) != category
+				|| !visible(definition, filter, showAdvanced) || (modifiedOnly && store.isDefault(definition.path)))
 				continue;
 			var section = sectionOf(definition);
 			if (!grouped.exists(section)) {
@@ -107,7 +112,8 @@ class SettingsCatalog {
 		}
 		var result:Array<PropertyInspectorSection> = [];
 		for (section in order) {
-			var label = section.length == 0 ? labelOf(category) : [for (part in section.split("/")) SettingDefinition.labelFor(part)].join(" › ");
+			var label = section.length == 0
+				? labelOf(category) : [for (part in section.split("/")) SettingDefinition.labelFor(part)].join(" › ");
 			result.push(new PropertyInspectorSection(section.length == 0 ? category : category + "/" + section, label,
 				grouped.get(section)));
 		}

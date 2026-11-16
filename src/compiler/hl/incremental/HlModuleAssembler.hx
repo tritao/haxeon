@@ -257,8 +257,8 @@ class HlModuleAssembler {
 		if (state.runtimeNatives != null)
 			result.runtimeNatives = state.runtimeNatives.copy();
 		else if (state.initialized)
-			// Import indices are part of the published layout; guessing can patch the wrong slots.
-			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
+		// Import indices are part of the published layout; guessing can patch the wrong slots.
+		throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
 		result.dispatchNatives = state.dispatchNatives == null ? null : state.dispatchNatives.copy();
 		if (state.retiredFields != null)
 			for (name in state.retiredFields)
@@ -286,7 +286,8 @@ class HlModuleAssembler {
 		result.publishedStrings = state.publishedStrings;
 		result.publishedTypes = state.publishedTypes;
 		// A baseline from before literals became globals published every global it had.
-		result.publishedGlobals = state.publishedGlobals == null ? result.symbols.globals.length : state.publishedGlobals;
+		result.publishedGlobals = state.publishedGlobals == null
+			? result.symbols.globals.length : state.publishedGlobals;
 		return result;
 	}
 
@@ -364,7 +365,8 @@ class HlModuleAssembler {
 			if (from == null || !renames.exists(from))
 				continue;
 			var old = cache.functions.get(name), target = byName.get(from);
-			var adapter = old == null || target == null ? null : signatureAdapter(name, old, target, program.parameterDefaults.get(from));
+			var adapter = old == null
+				|| target == null ? null : signatureAdapter(name, old, target, program.parameterDefaults.get(from));
 			if (adapter != null) {
 				cache.replaceBody(name, adapter);
 				adapted.push(name);
@@ -380,7 +382,8 @@ class HlModuleAssembler {
 	 * added is given its literal default (`defaults`); one it removed is dropped. Null when some argument has no safe value,
 	 * a parameter whose type narrowed or that has no literal default, or when the result cannot be converted back.
 	 */
-	static function signatureAdapter(name:String, old:IrFunction, target:IrFunction, defaults:Null<Map<String, IrDefault>>):Null<IrFunction> {
+	static function signatureAdapter(name:String, old:IrFunction, target:IrFunction,
+			defaults:Null<Map<String, IrDefault>>):Null<IrFunction> {
 		var builder = new IrBuilder(), given:Map<String, IrValue> = [];
 		for (argument in old.arguments)
 			given.set(parameterName(argument), builder.argument(argument.name, argument.type));
@@ -389,7 +392,8 @@ class HlModuleAssembler {
 			var name = parameterName(parameter),
 				value = given.get(name),
 				literal = defaults == null ? null : defaults.get(name);
-			var converted = value != null ? widen(builder, value, parameter.type) : literal == null ? null : defaultValue(builder, literal, parameter.type);
+			var converted = value != null ? widen(builder, value, parameter.type) : literal == null
+				? null : defaultValue(builder, literal, parameter.type);
 			if (converted == null)
 				return null;
 			passed.push(converted);
@@ -399,7 +403,8 @@ class HlModuleAssembler {
 		if (returned == null)
 			return null;
 		builder.returnValue(returned);
-		return new IrFunction(name, builder.arguments, old.result, builder.blocks, Ordinary, null, false, old.retention);
+		return new IrFunction(name, builder.arguments, old.result, builder.blocks, Ordinary, null, false,
+			old.retention);
 	}
 
 	/** The source name of a function's argument: IR names locals `$l<number>:<name>`. */
@@ -433,7 +438,8 @@ class HlModuleAssembler {
 					case Nullable(_), Dyn, Obj(_): return builder.constNull(type);
 					default: null;
 				};
-			case IntDefault(number): sameType(plain, I32) ? builder.constInt(number) : sameType(plain, F64) ? builder.constFloat(number) : null;
+			case IntDefault(number): sameType(plain, I32) ? builder.constInt(number) : sameType(plain, F64)
+				? builder.constFloat(number) : null;
 			case FloatDefault(number): sameType(plain, F64) ? builder.constFloat(number) : null;
 			case BoolDefault(flag): sameType(plain, Bool) ? builder.constBool(flag) : null;
 		};
@@ -501,8 +507,8 @@ class HlModuleAssembler {
 	static function referencesAny(fn:HlFunction, slots:Map<Int, Bool>):Bool {
 		for (opcode in fn.opcodes)
 			switch opcode {
-				case Call0(_, target) | Call1(_, target, _) | Call2(_, target, _, _) | CallN(_, target, _) | StaticClosure(_, target) |
-					InstanceClosure(_, target, _):
+				case Call0(_, target) | Call1(_, target, _) | Call2(_, target, _, _) | CallN(_, target,
+					_) | StaticClosure(_, target) | InstanceClosure(_, target, _):
 					if (slots.exists(target))
 						return true;
 				default:
@@ -575,8 +581,7 @@ class HlModuleAssembler {
 			layout:HlObjectLayout = {fields: [], previousTypes: [], migrations: []},
 			functions:Map<String, Bool> = [for (fn in program.functions) fn.name => true],
 			byName:Map<String, IrObject> = [for (object in program.objects) object.name => object],
-			valueObjects:Map<String,
-				Bool> = [for (object in program.objects) if (object.isValue) object.name => true], // Runtime natives only reach standard library objects, so the program's own natives name the user's.
+			valueObjects:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true], // Runtime natives only reach standard library objects, so the program's own natives name the user's.
 			nativeVisible = HlLower.nativeVisibleObjects(program.objects, [program.natives]);
 		reserveProgramTypes(program);
 		for (object in program.objects) {
@@ -588,7 +593,8 @@ class HlModuleAssembler {
 			switch published.definition {
 				case Object(_, _, _, _, methods, _):
 					planObjectFields(object, published.index, valueObjects, nativeVisible, layout, reasons);
-					planObjectMethods(object, [for (method in methods) symbols.strings[method.name]], program.objects, byName, reasons);
+					planObjectMethods(object, [for (method in methods) symbols.strings[method.name]], program.objects,
+						byName, reasons);
 				default:
 					continue;
 			}
@@ -619,7 +625,8 @@ class HlModuleAssembler {
 	 * Gives the fields `object` adds a reserved slot of its published type `type`, and records which of its published fields
 	 * the program no longer has (`retiredFields`). A field it has again keeps its slot and is no longer retired.
 	 */
-	function planObjectFields(object:IrObject, type:Int, valueObjects:Map<String, Bool>, nativeVisible:Map<String, Bool>, layout:HlObjectLayout,
+	function planObjectFields(object:IrObject, type:Int, valueObjects:Map<String, Bool>,
+			nativeVisible:Map<String, Bool>, layout:HlObjectLayout,
 			reasons:Array<AbiChange>):Void {
 		var native = object.nativeLayout != null || nativeVisible.exists(object.name),
 			exhausted = false,
@@ -639,7 +646,9 @@ class HlModuleAssembler {
 					retiredFields.set(object.name + "." + name, true);
 			}
 		for (field in object.fields) {
-			var fieldType = symbols.internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field)), slot = -1,
+			var fieldType = symbols.internObjectFieldType(field.type, valueObjects,
+				compiler.ir.IrFieldStorage.scalar(field)),
+				slot = -1,
 				own = ownFields(type);
 			for (index in 0...own.length)
 				if (symbols.strings[own[index].name] == field.name)
@@ -684,12 +693,14 @@ class HlModuleAssembler {
 		};
 
 	/** Checks the methods `object` adds or removes against the ones its published type has (`published`). */
-	function planObjectMethods(object:IrObject, published:Array<String>, objects:Array<IrObject>, byName:Map<String, IrObject>, reasons:Array<AbiChange>):Void {
+	function planObjectMethods(object:IrObject, published:Array<String>, objects:Array<IrObject>,
+			byName:Map<String, IrObject>, reasons:Array<AbiChange>):Void {
 		var inherited = object.base == null ? null : symbols.objectMethodSlots(Std.string(object.base));
 		for (method in object.methods) {
 			if (published.indexOf(method.name) >= 0)
 				continue;
-			var dispatched = runtimeMethods.indexOf(method.name) >= 0 || inherited != null && inherited.exists(method.name);
+			var dispatched = runtimeMethods.indexOf(method.name) >= 0 || inherited != null
+				&& inherited.exists(method.name);
 			if (!dispatched)
 				for (other in objects)
 					if (other != object && extendsObject(byName, other, object.name))
@@ -743,7 +754,8 @@ class HlModuleAssembler {
 	 * `dispatched`: the functions object prototypes dispatch to (`PatchPlanner.dispatchedFunctions`), which keep their slots
 	 * when their signatures change; described from `program` when not given.
 	 */
-	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision, ?relocated:Array<String>,
+	public function assemble(program:IrProgram, regenerated:Array<String>, decision:PatchDecision,
+			?relocated:Array<String>,
 			?dispatched:Map<String, Bool>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
 		var reload = switch decision {
@@ -755,7 +767,8 @@ class HlModuleAssembler {
 		if (initialized && !reload) {
 			var tag = Std.string(lastRevision() + 1);
 			var moves = moveChangedSignatures(program, tag,
-				dispatched != null ? dispatched : PatchPlanner.dispatchedFunctions(null, compiler.abi.RuntimeAbi.describe(program)));
+				dispatched != null ? dispatched : PatchPlanner.dispatchedFunctions(null,
+				compiler.abi.RuntimeAbi.describe(program)));
 			var listed:Map<String, Bool> = [for (name in regenerated) name => true];
 			function regenerate(name:String):Void
 				if (!listed.exists(name)) {
@@ -800,13 +813,15 @@ class HlModuleAssembler {
 			startFresh();
 		var cachePreparedAt = Sys.time() * 1000.0;
 		var previousNatives = runtimeNatives;
-		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0 ? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null);
+		runtimeNatives = HlLower.discoverRuntimeNatives(ordered, reuseLowered && previousNatives.length > 0
+			? previousNatives : null, reuseLowered && previousNatives.length > 0 ? regenerated : null);
 		// New runtime imports shift every function slot. Publish a fresh module,
 		// never reuse opcodes or patch a live module with the old slot layout.
 		if (reuseLowered && runtimeNatives.length != previousNatives.length) {
 			reload = true;
 			var known = [for (native in previousNatives) native.name => true];
-			layoutReasons.push('runtime natives added: ' + [for (native in runtimeNatives) if (!known.exists(native.name)) native.name].join(", "));
+			layoutReasons.push('runtime natives added: '
+				+ [for (native in runtimeNatives) if (!known.exists(native.name)) native.name].join(", "));
 			reuseLowered = false;
 			startFresh();
 			runtimeNatives = HlLower.discoverRuntimeNatives(ordered);
@@ -886,8 +901,10 @@ class HlModuleAssembler {
 				published = new HlLoweredCache();
 			liveCache = published;
 		}
-		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds, relocated == null ? regenerated : regenerated.concat(relocated),
-			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified, livePatching,
+		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds,
+			relocated == null ? regenerated : regenerated.concat(relocated),
+			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified,
+			livePatching,
 			name -> RetiredName.is(name) || !present.exists(name)),
 			module = lowered.code;
 		reusedFunctions = lowered.reusedFunctions;
@@ -914,8 +931,10 @@ class HlModuleAssembler {
 		// can only reach a revision without a patch by reloading.
 		var baseRevision = revision;
 		programNames = [for (fn in program.functions) fn.name => true];
-		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0 && objectLayout == null && baseInts == publishedInts
-			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes && baseGlobals == publishedGlobals;
+		var unchanged = initialized && !reload && changed.length == 0 && addedFunctions.length == 0
+			&& objectLayout == null && baseInts == publishedInts
+			&& baseFloats == publishedFloats && baseStrings == publishedStrings && baseTypes == publishedTypes
+			&& baseGlobals == publishedGlobals;
 		if (!unchanged)
 			revision = lastRevision() + 1;
 		initialized = true;

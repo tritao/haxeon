@@ -71,14 +71,16 @@ class AnimationInstance {
 
 	/** Removes one source's turn from a joint. */
 	public function clearJointRotation(joint:Int, source:Int = 0):Void
-		AnimationAsset.check(AnimKitNative.ak_instance_set_joint_rotation(handle(), source, joint, 0.0, 0.0, 0.0, 1.0, 0.0),
+		AnimationAsset.check(AnimKitNative.ak_instance_set_joint_rotation(handle(), source, joint, 0.0, 0.0, 0.0, 1.0,
+			0.0),
 			"instance.jointRotation");
 
 	/**
 	 * Replaces every turn of one source in a single call: joint i is turned by rotations[i] ([x, y, z, w])
 	 * at weights[i]. Turns of other sources stay. Nothing changes if any entry is invalid.
 	 */
-	public function setJointRotations(source:Int, joints:Array<Int>, rotations:Array<Array<Float>>, weights:Array<Float>):Void {
+	public function setJointRotations(source:Int, joints:Array<Int>, rotations:Array<Array<Float>>,
+			weights:Array<Float>):Void {
 		if (joints.length != rotations.length || joints.length != weights.length)
 			throw "Joint turns need one rotation and one weight per joint";
 		var records = Bytes.alloc(joints.length * JOINT_TURN_RECORD);
@@ -88,13 +90,15 @@ class AnimationInstance {
 			for (axis in 0...4) records.setFloat(at + 4 + axis * 4, rotations[index][axis]);
 			records.setFloat(at + 20, weights[index]);
 		}
-		AnimationAsset.check(AnimKitNative.ak_instance_set_joint_rotations_slice(handle(), source, records, 0, records.length),
+		AnimationAsset.check(AnimKitNative.ak_instance_set_joint_rotations_slice(handle(), source, records, 0,
+			records.length),
 			"instance.jointRotations");
 	}
 
 	/** Removes every turn of one source. */
 	public function clearJointRotations(source:Int):Void
-		AnimationAsset.check(AnimKitNative.ak_instance_clear_joint_rotations(handle(), source), "instance.jointRotations");
+		AnimationAsset.check(AnimKitNative.ak_instance_clear_joint_rotations(handle(), source),
+			"instance.jointRotations");
 
 	/** Disables one inverse kinematics chain. */
 	public function clearIk(chain:Int):Void
@@ -147,8 +151,14 @@ class AnimationInstance {
 		var value = new ak_bounds();
 		value.set_struct_size(ak_bounds.size());
 		AnimationAsset.check(AnimKitNative.ak_instance_get_bounds(handle(), value), "instance.bounds");
-		return [value.get_minimum(0), value.get_minimum(1), value.get_minimum(2),
-			value.get_maximum(0), value.get_maximum(1), value.get_maximum(2)];
+		return [
+			value.get_minimum(0),
+			value.get_minimum(1),
+			value.get_minimum(2),
+			value.get_maximum(0),
+			value.get_maximum(1),
+			value.get_maximum(2)
+		];
 	}
 
 	public function dispose():Void {

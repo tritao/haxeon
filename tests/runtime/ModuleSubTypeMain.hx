@@ -8,8 +8,10 @@ import sys.io.File;
  * even when nothing else loads the owning module.
  */
 class ModuleSubTypeMain {
-	static final ROBOT = "package app; typedef Part = {id:String, link:Int}; class Robot { public static function part(link:Int):Part return {id: \"a\", link: link}; }";
-	static final STOCK = "package app; class Stock { final part:Robot.Part; public function new(part:Robot.Part) this.part = part; public function link():Int return part.link; }";
+	static final ROBOT =
+		"package app; typedef Part = {id:String, link:Int}; class Robot { public static function part(link:Int):Part return {id: \"a\", link: link}; }";
+	static final STOCK =
+		"package app; class Stock { final part:Robot.Part; public function new(part:Robot.Part) this.part = part; public function link():Int return part.link; }";
 	static final MAIN = "package app; function main():Int return new Stock({id: \"a\", link: 42}).link();";
 
 	static function main():Void {

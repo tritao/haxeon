@@ -6,7 +6,8 @@ import compiler.formatter.LayoutSolver.LineLayout;
 
 /** Renders a solved logical line without consulting the original whitespace. */
 class Renderer {
-	public static function render(line:UnwrappedLine, layout:LineLayout, boundaries:Array<Boundary>, config:FormatConfig):Array<String> {
+	public static function render(line:UnwrappedLine, layout:LineLayout, boundaries:Array<Boundary>,
+			config:FormatConfig):Array<String> {
 		var result:Array<String> = [];
 		for (physical in layout.lines) {
 			var output = new StringBuf();

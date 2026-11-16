@@ -54,7 +54,8 @@ class AnalysisTransaction {
 			var diagnosticModules:Array<String> = [];
 			for (name => state in candidate.modules) {
 				var previous = snapshot.modules.get(name);
-				if (previous == null || diagnosticFingerprint(previous.diagnostics) != diagnosticFingerprint(state.diagnostics))
+				if (previous == null
+					|| diagnosticFingerprint(previous.diagnostics) != diagnosticFingerprint(state.diagnostics))
 					diagnosticModules.push(name);
 			}
 			diagnosticModules.sort(Reflect.compare);
@@ -88,5 +89,6 @@ class AnalysisTransaction {
 				+ ":"
 				+ diagnostic.span.end
 				+ ":"
-				+ diagnostic.message].join("\n");
+				+ diagnostic.message
+		].join("\n");
 }

@@ -27,12 +27,20 @@ class ProfilerLspMain {
 			if (commands.length != 9)
 				throw "Profiler commands were not advertised";
 
-			dispatcher.dispatch(command(2, "haxeon.profiler.connect", {port: port, timeoutSeconds: 3.0, leafCapacity: 32}));
+			dispatcher.dispatch(command(2, "haxeon.profiler.connect", {
+				port: port,
+				timeoutSeconds: 3.0,
+				leafCapacity: 32
+			}));
 			var connected = waitFor(messages, mutex, available, value -> value.id == 2);
 			if (connected.result.state != "connected")
 				throw "Profiler did not connect";
 
-			dispatcher.dispatch(command(3, "haxeon.profiler.start", {sampleRate: 250, allocationInterval: 1024, pollIntervalMs: 25}));
+			dispatcher.dispatch(command(3, "haxeon.profiler.start", {
+				sampleRate: 250,
+				allocationInterval: 1024,
+				pollIntervalMs: 25
+			}));
 			var started = waitFor(messages, mutex, available, value -> value.id == 3);
 			if (started.result.state != "running" || started.result.metadataSchema != 4)
 				throw "Profiler did not start with schema 4 metadata";
@@ -42,9 +50,10 @@ class ProfilerLspMain {
 				throw "Profiler capture did not start";
 			var notification = waitFor(messages, mutex, available,
 				value -> value.method == "haxeon/profilerSnapshot"
-					&& value.params.samples > 0
-					&& value.params.timeline.samples.length > 0);
-			if (notification.params.view != null || notification.params.stacks != null || notification.params.leaves != null)
+				&& value.params.samples > 0
+				&& value.params.timeline.samples.length > 0);
+			if (notification.params.view != null || notification.params.stacks != null
+				|| notification.params.leaves != null)
 				throw "Incremental profiler notification repeated full snapshot data";
 			dispatcher.dispatch(command(8, "haxeon.profiler.snapshot", {}));
 			var full = waitFor(messages, mutex, available, value -> value.id == 8).result;
@@ -72,12 +81,14 @@ class ProfilerLspMain {
 				|| notification.params.timeline.allocations.length == 0)
 				throw "Profiler snapshot omitted calibration or thread telemetry";
 			dispatcher.dispatch(command(7, "haxeon.profiler.captureStop", {}));
-			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive || !sys.FileSystem.exists(capturePath))
+			if (waitFor(messages, mutex, available, value -> value.id == 7).result.captureActive
+				|| !sys.FileSystem.exists(capturePath))
 				throw "Profiler capture did not finalize";
 
 			dispatcher.dispatch(command(4, "haxeon.profiler.pause", {}));
 			var paused = waitFor(messages, mutex, available, value -> value.id == 4);
-			if (paused.result.state != "paused" || paused.result.functions.length == 0 || paused.result.stacks.length == 0)
+			if (paused.result.state != "paused" || paused.result.functions.length == 0
+				|| paused.result.stacks.length == 0)
 				throw "Paused profiler snapshot omitted aggregates";
 			dispatcher.dispatch(command(5, "haxeon.profiler.disconnect", {}));
 			if (waitFor(messages, mutex, available, value -> value.id == 5).result.state != "disconnected")

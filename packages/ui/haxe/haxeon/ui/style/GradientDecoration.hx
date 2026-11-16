@@ -21,7 +21,10 @@ class GradientDecoration extends Decoration {
 	override public function paint(canvas:Canvas, geometry:ResolvedLayoutItem, style:ComputedStyle):Void {
 		canvas.fillLinearGradientRect(new Rect(0.0, 0.0, geometry.width, geometry.height),
 			0.0, 0.0, geometry.width, 0.0,
-			[new GradientStop(0.0, start), new GradientStop(1.0, end)]);
+			[
+				new GradientStop(0.0, start),
+				new GradientStop(1.0, end)
+			]);
 	}
 
 	override public function copy():Decoration
@@ -43,6 +46,6 @@ class GradientDecoration extends Decoration {
 	}
 
 	override public function describe():String
-		return 'linear-gradient(${start.red},${start.green},${start.blue},${start.alpha},' +
-			'${end.red},${end.green},${end.blue},${end.alpha})';
+		return 'linear-gradient(${start.red},${start.green},${start.blue},${start.alpha},'
+			+ '${end.red},${end.green},${end.blue},${end.alpha})';
 }

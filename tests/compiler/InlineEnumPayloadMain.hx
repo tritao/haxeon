@@ -72,7 +72,8 @@ class InlineEnumPayloadMain {
 		var optional = b.toDyn(b.constInt(-7), Nullable(I32)),
 			none = b.constNull(Nullable(Obj("Small")));
 		var value = access.construct(b, 1, [b.constInt(1234), record, optional, none, f32]);
-		var relayed = b.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [value], Obj(mixed.valueObject.name));
+		var relayed = b.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [value],
+			Obj(mixed.valueObject.name));
 		var wrapped = outside.construct(b, 0, [relayed]),
 			restored = outside.field(b, wrapped, 0, 0);
 		var restoredRecord = access.field(b, restored, 1, 1),
@@ -88,7 +89,8 @@ class InlineEnumPayloadMain {
 			b.equal(b.fieldGet(empty, "tag", I32), b.constInt(1)),
 			b.equal(b.fieldGet(nil, "tag", I32), b.constInt(0))
 		];
-		checks.push(b.equal(b.call("__f32_to_i32_bits", [access.field(b, restored, 1, 4)], I32), b.call("__f32_to_i32_bits", [f32], I32)));
+		checks.push(b.equal(b.call("__f32_to_i32_bits", [access.field(b, restored, 1, 4)], I32),
+			b.call("__f32_to_i32_bits", [f32], I32)));
 		var someRecord = b.toDyn(record, Nullable(Obj("Small")));
 		var other = access.construct(b, 1, [b.constInt(4321), record, b.constNull(Nullable(I32)), someRecord, f32]);
 		var otherRecord = b.safeCast(access.field(b, other, 1, 3), Obj("Small"));
@@ -97,16 +99,23 @@ class InlineEnumPayloadMain {
 		checks.push(b.equal(access.field(b, other, 1, 2), b.constNull(Nullable(I32))));
 		for (number in [-12.5, -0.0, Math.NaN]) {
 			var floating = b.constFloat(number),
-				wide = b.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [access.construct(b, 2, [floating, raw, type, callback])],
+				wide = b.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", [access.construct(b, 2, [
+					floating,
+					raw,
+					type,
+					callback
+				])],
 					Obj(mixed.valueObject.name));
 			checks.push(b.equal(b.call(compiler.ir.IrScalarWordBits.PACK, [access.field(b, wide, 2, 1)], I64),
 				b.call(compiler.ir.IrScalarWordBits.PACK, [raw], I64)));
 			checks.push(b.equal(b.call(compiler.ir.IrScalarWordBits.PACK, [access.field(b, wide, 2, 2)], I64),
 				b.call(compiler.ir.IrScalarWordBits.PACK, [type], I64)));
 			checks.push(b.equal(access.field(b, wide, 2, 3), callback));
-			checks.push(b.equal(b.call("__f64_to_i64_bits", [access.field(b, wide, 2, 0)], I64), b.call("__f64_to_i64_bits", [floating], I64)));
+			checks.push(b.equal(b.call("__f64_to_i64_bits", [access.field(b, wide, 2, 0)], I64),
+				b.call("__f64_to_i64_bits", [floating], I64)));
 			for (index in 0...mixed.references)
-				checks.push(b.equal(compiler.ir.IrInlineEnumReferenceAccess.read(b, wide, index, Obj("Source")), b.constNull(Obj("Source"))));
+				checks.push(b.equal(compiler.ir.IrInlineEnumReferenceAccess.read(b, wide, index, Obj("Source")),
+					b.constNull(Obj("Source"))));
 		}
 		var bad = b.createBlock();
 		for (check in checks) {
@@ -127,17 +136,22 @@ class InlineEnumPayloadMain {
 		for (field in mixed.valueObject.fields)
 			relay.fieldSet(output, field.name, relay.fieldGet(input, field.name, field.type));
 		relay.returnValue(output);
-		p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay", relay.arguments, Obj(mixed.valueObject.name),
+		p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay", relay.arguments,
+			Obj(mixed.valueObject.name),
 			relay.blocks,
 			Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)),
-				compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "relay"))));
+			compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper,
+			"relay"))));
 		var forward = new IrBuilder(),
 			input = forward.argument("value", Obj(mixed.valueObject.name));
-		forward.returnValue(forward.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay", [input], Obj(mixed.valueObject.name)));
-		p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", forward.arguments, Obj(mixed.valueObject.name),
+		forward.returnValue(forward.call(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "relay", [input],
+			Obj(mixed.valueObject.name)));
+		p.functions.push(new IrFunction(compiler.ir.IrInlineEnumCaseAccess.HELPER_PREFIX + "forward", forward.arguments,
+			Obj(mixed.valueObject.name),
 			forward.blocks,
 			Provider(compiler.ir.TypeKey.of(Obj(mixed.valueObject.name)),
-				compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper, "forward"))));
+			compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.InlineEnumHelper,
+			"forward"))));
 		compiler.ir.IrVerifier.verify(p);
 		// Raw host pointers are intentionally not interpreted in target-independent IR.
 		p.functions = new compiler.ir.IrOptionalScalarFlow(p.objects).rewrite(p.objects, p.functions);
@@ -151,7 +165,8 @@ class InlineEnumPayloadMain {
 				compiler.ir.IrScalarReplacement.rewrite(fn, table, false, target == HashLink)
 		];
 		compiler.ir.IrNullableScalarFlow.rewrite(p);
-		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
+		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+			inlineEnabled);
 		compiler.ir.IrVerifier.verify(p);
 		var entry = new IrBuilder(),
 			censusPaths:Array<{path:String, count:Int}> = [];
@@ -186,7 +201,8 @@ class InlineEnumPayloadMain {
 				result: Void
 			});
 			for (count in [8, 1024]) {
-				var path = tempRoot() + "/" + uniqueStem + "complete-case-probe-" + inlineEnabled + "-" + count + ".json";
+				var path = tempRoot() + "/" + uniqueStem + "complete-case-probe-" + inlineEnabled + "-" + count
+					+ ".json";
 				censusPaths.push({path: path, count: count});
 				entry.call("censusReset", [], Void);
 				entry.call("censusStart", [entry.constInt(0)], Void);
@@ -207,8 +223,12 @@ class InlineEnumPayloadMain {
 			result: Void
 		});
 		p.entryPoint = target == HashLink ? "entry" : "main";
-		var backendTarget:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32 ? Wasm32 : WasmGc;
-		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {target: backendTarget, debugNames: true})
+		var backendTarget:compiler.backend.Backend.BackendTarget = target == HashLink ? HashLink : target == Wasm32
+			? Wasm32 : WasmGc;
+		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+			target: backendTarget,
+			debugNames: true
+		})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: backendTarget,
 				debugNames: true,
@@ -222,8 +242,13 @@ class InlineEnumPayloadMain {
 			+ Std.string(target)
 			+ (target == HashLink ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, bytes);
-		var js = 'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const count=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const n of [8,1024]){const before=count();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("case result");const allocated=count()-before;if(allocated!==n)throw Error("extra enum payload boxes: "+allocated+" / "+n);}';
-		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : ["-e", js, path]);
+		var js =
+			'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const count=e.__allocation_count||e["haxeon.memory.allocation_count"];for(const n of [8,1024]){const before=count();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("case result");const allocated=count()-before;if(allocated!==n)throw Error("extra enum payload boxes: "+allocated+" / "+n);}';
+		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : [
+			"-e",
+			js,
+			path
+		]);
 		var output = child.stdout.readAll().toString(),
 			error = child.stderr.readAll().toString(),
 			code = child.exitCode();
@@ -235,7 +260,7 @@ class InlineEnumPayloadMain {
 			var census:Dynamic = haxe.Json.parse(sys.io.File.getContent(capture.path));
 			sys.FileSystem.deleteFile(capture.path);
 			var unexpected:Array<String> = [];
-			for (item in (census.types : Array<Dynamic>))
+			for (item in (census.types:Array<Dynamic>))
 				if (item.type != "Source")
 					unexpected.push(Std.string(item.type) + "=" + item.count);
 			if (census.allocations != capture.count || unexpected.length != 0)

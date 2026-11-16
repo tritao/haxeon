@@ -208,7 +208,8 @@ class DeclarationIndex {
 	 * passed down from there: most types name neither.
 	 */
 	public function resolve(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
-		return resolveInner(type, span == null ? fallbackSpan : span, null, substitutions == null ? noSubstitutions : substitutions);
+		return resolveInner(type, span == null ? fallbackSpan : span, null,
+			substitutions == null ? noSubstitutions : substitutions);
 
 	/** Resolve a constructor qualifier through typedefs, preserving bound enum arguments. */
 	public function enumQualifierType(name:String):Null<CompilerType> {
@@ -238,7 +239,8 @@ class DeclarationIndex {
 	}
 
 	public function resolvedFieldType(owner:String, field:compiler.syntax.Ast.AstField):AstType
-		return FieldInference.resolvedType(field, owner, classes, new compiler.semantic.AliasTable(), enums, enumAbstracts);
+		return FieldInference.resolvedType(field, owner, classes, new compiler.semantic.AliasTable(), enums,
+			enumAbstracts);
 
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');
@@ -251,7 +253,8 @@ class DeclarationIndex {
 			case TTypeParameter(owner, parameter):
 				var ownerName = Std.string(owner),
 					key = '$ownerName:$parameter';
-				if (visiting.indexOf(key) >= 0) false; else {
+				if (visiting.indexOf(key) >= 0) false;
+				else {
 					var constraints = typeConstraints.get(key),
 						parameters = typeParametersByOwner.get(ownerName),
 						substitutions:Map<String, CompilerType> = [];
@@ -265,7 +268,7 @@ class DeclarationIndex {
 							if (TypeRelations.equals(bound, expected)
 								|| inheritance.reaches(bound, expected)
 								|| (representationName(bound) == StructProperties.PORTABLE_TYPE_NAME
-									&& representationName(expected) == StructProperties.FLAT_TYPE_NAME)
+								&& representationName(expected) == StructProperties.FLAT_TYPE_NAME)
 								|| typeParameterSatisfiesWithin(bound, expected, visiting.concat([key])))
 								found = true;
 						}
@@ -288,23 +291,27 @@ class DeclarationIndex {
 		for (abstractDecl in program.abstracts) {
 			indexTypeParameters(abstractDecl.name, abstractDecl.typeParameters, abstractDecl.typeConstraints);
 			for (method in abstractDecl.methods)
-				indexTypeParameters(abstractDecl.name + "." + method.name, method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
+				indexTypeParameters(abstractDecl.name + "." + method.name,
+					method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
 		}
 		for (interfaceDecl in program.interfaces) {
 			indexTypeParameters(interfaceDecl.name, interfaceDecl.typeParameters, interfaceDecl.typeConstraints);
 			for (method in interfaceDecl.methods)
-				indexTypeParameters(interfaceDecl.name + "." + method.name, method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
+				indexTypeParameters(interfaceDecl.name + "." + method.name,
+					method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
 		}
 		for (classDecl in program.classes) {
 			indexTypeParameters(classDecl.name, classDecl.typeParameters, classDecl.typeConstraints);
 			for (method in classDecl.methods)
-				indexTypeParameters(classDecl.name + "." + method.name, method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
+				indexTypeParameters(classDecl.name + "." + method.name,
+					method.typeParameters == null ? [] : method.typeParameters, method.typeConstraints);
 		}
 		for (fn in program.functions)
 			indexTypeParameters(fn.name, fn.typeParameters == null ? [] : fn.typeParameters, fn.typeConstraints);
 	}
 
-	function indexTypeParameters(owner:String, parameters:Array<String>, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>):Void {
+	function indexTypeParameters(owner:String, parameters:Array<String>,
+			constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>):Void {
 		typeParametersByOwner.set(owner, parameters);
 		if (constraints != null)
 			for (constraint in constraints) {
@@ -316,7 +323,8 @@ class DeclarationIndex {
 			}
 	}
 
-	function resolveInner(type:AstType, span:SourceSpan, resolving:Null<Map<String, Bool>>, substitutions:Map<String, CompilerType>):CompilerType
+	function resolveInner(type:AstType, span:SourceSpan, resolving:Null<Map<String, Bool>>,
+			substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
 			case ErrorType(_): TDynamic;
 			case IntType: TInt;
@@ -329,7 +337,8 @@ class DeclarationIndex {
 				TDynamic;
 			case NativeAbstractType(declaration, tag):
 				if (!PlatformAbi.acceptsNativeTag(declaration)
-					&& (!abstracts.exists(declaration) || abstractRepresentation(abstracts.get(declaration)) != "nativeAbstract"))
+					&& (!abstracts.exists(declaration)
+					|| abstractRepresentation(abstracts.get(declaration)) != "nativeAbstract"))
 					fail('Type "$declaration" does not accept a native ABI tag', span);
 				TNativeAbstract(tag);
 			case NamedType(name):
@@ -369,7 +378,8 @@ class DeclarationIndex {
 				if (name == "KeyPath" || name == "WritableKeyPath") {
 					if (arguments.length != 2)
 						fail('Type "$name" expects 2 type arguments, got ${arguments.length}', span);
-					TKeyPath(resolveInner(arguments[0], span, resolving, substitutions), resolveInner(arguments[1], span, resolving, substitutions),
+					TKeyPath(resolveInner(arguments[0], span, resolving, substitutions),
+						resolveInner(arguments[1], span, resolving, substitutions),
 						name == "WritableKeyPath");
 				} else if (name == "List") {
 					if (arguments.length != 1)
@@ -382,7 +392,8 @@ class DeclarationIndex {
 				} else if (aliases.exists(name)) {
 					var alias = aliases.get(name);
 					if (arguments.length != alias.typeParameters.length)
-						fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}', span);
+						fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got ${arguments.length}',
+							span);
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
@@ -395,10 +406,12 @@ class DeclarationIndex {
 				} else if (abstracts.exists(name)) {
 					var decl = abstracts.get(name);
 					if (arguments.length != decl.typeParameters.length)
-						fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}', span);
+						fail('Type "$name" expects ${decl.typeParameters.length} type arguments, got ${arguments.length}',
+							span);
 					var abstractSubstitutions = [for (parameter => value in substitutions) parameter => value];
 					for (index in 0...arguments.length)
-						abstractSubstitutions.set(decl.typeParameters[index], resolveInner(arguments[index], span, resolving, substitutions));
+						abstractSubstitutions.set(decl.typeParameters[index],
+							resolveInner(arguments[index], span, resolving, substitutions));
 					var resolvedArguments = [
 						for (argument in arguments)
 							resolveInner(argument, span, resolving, substitutions)
@@ -406,7 +419,11 @@ class DeclarationIndex {
 					validateTypeArguments(name, decl.typeConstraints, abstractSubstitutions, span);
 					TAbstract(name, resolvedArguments, resolveAbstract(decl, span, resolving, abstractSubstitutions));
 				} else if (classes.exists(name) || interfaces.exists(name) || enums.exists(name)) {
-					var declaration:{typeParameters:Array<String>, typeConstraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, kind:NominalKind};
+					var declaration: {
+						typeParameters: Array<String>,
+						typeConstraints: Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+						kind: NominalKind
+					};
 					if (classes.exists(name)) {
 						var found = classes.get(name);
 						declaration = {
@@ -416,12 +433,20 @@ class DeclarationIndex {
 						};
 					} else if (interfaces.exists(name)) {
 						var found = interfaces.get(name);
-						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Interface};
+						declaration = {
+							typeParameters: found.typeParameters,
+							typeConstraints: found.typeConstraints,
+							kind: NominalKind.Interface
+						};
 					} else {
 						if (!enums.exists(name))
 							throw 'Missing nominal declaration "$name"';
 						var found = enums.get(name);
-						declaration = {typeParameters: found.typeParameters, typeConstraints: found.typeConstraints, kind: NominalKind.Enum};
+						declaration = {
+							typeParameters: found.typeParameters,
+							typeConstraints: found.typeConstraints,
+							kind: NominalKind.Enum
+						};
 					}
 					var parameters = declaration.typeParameters,
 						constraints = declaration.typeConstraints;
@@ -441,7 +466,8 @@ class DeclarationIndex {
 					TDynamic;
 				}
 			case ArrayType(element): TArray(resolveInner(element, span, resolving, substitutions));
-			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions), resolveInner(value, span, resolving, substitutions));
+			case MapType(key, value): TMap(resolveInner(key, span, resolving, substitutions),
+				resolveInner(value, span, resolving, substitutions));
 			case NullableType(element):
 				var resolved = resolveInner(element, span, resolving, substitutions);
 				switch resolved {
@@ -463,18 +489,17 @@ class DeclarationIndex {
 	 * Resolves declared fields into `target`, sorted by name. The fields are built aside and copied in at the end, so
 	 * a structure that refers to itself sees an empty `target` until it is complete, never a partial one.
 	 */
-	function fillAnonymousFields(parsedFields:Array<compiler.syntax.Ast.AstAnonymousField>, span:SourceSpan, resolving:Null<Map<String, Bool>>,
+	function fillAnonymousFields(parsedFields:Array<compiler.syntax.Ast.AstAnonymousField>, span:SourceSpan,
+			resolving:Null<Map<String, Bool>>,
 			substitutions:Map<String, CompilerType>, target:Array<AnonymousField>):Void {
-		var fields:Array<AnonymousField> = [
-			for (field in parsedFields)
-				{
-					name: field.name,
-					type: field.optional ? nullable(resolveInner(field.type, field.span, resolving,
-						substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
-					optional: field.optional,
-					isFinal: field.isFinal
-				}
-		];
+		var fields:Array<AnonymousField> = [for (field in parsedFields)
+			{
+				name:field.name,
+					type:field.optional ? nullable(resolveInner(field.type, field.span, resolving,
+					substitutions)) : resolveInner(field.type, field.span, resolving, substitutions),
+					optional:field.optional,
+					isFinal:field.isFinal
+			}];
 		fields.sort(function(left, right) return Reflect.compare(left.name, right.name));
 		for (i in 1...fields.length)
 			if (fields[i - 1].name == fields[i].name)
@@ -483,7 +508,8 @@ class DeclarationIndex {
 			target.push(field);
 	}
 
-	function validateTypeArguments(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>, substitutions:Map<String, CompilerType>,
+	function validateTypeArguments(name:String, constraints:Null<Array<compiler.syntax.Ast.AstTypeConstraint>>,
+			substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void {
 		if (constraints == null)
 			return;
@@ -494,7 +520,8 @@ class DeclarationIndex {
 			if (actual == null || !relations.satisfiesConstraint(actual, expected)) {
 				var detail = actual == null ? null : relations.constraintFailure(actual, expected);
 				if (actual != null && relations.recursiveCapabilityFailure(actual, expected))
-					throw new CompileError(new Diagnostic("E1025", 'Type argument for "${constraint.parameter}" does not satisfy constraint: $detail', span));
+					throw new CompileError(new Diagnostic("E1025",
+						'Type argument for "${constraint.parameter}" does not satisfy constraint: $detail', span));
 				fail('Type argument for "${constraint.parameter}" on "$name" does not satisfy constraint "${compiler.semantic.SemanticSignature.type(expected)}"'
 					+ (detail == null ? "" : ': $detail'),
 					span);
@@ -502,7 +529,8 @@ class DeclarationIndex {
 		}
 	}
 
-	function resolveNamedType(name:String, span:SourceSpan, resolving:Null<Map<String, Bool>>, substitutions:Map<String, CompilerType>):CompilerType {
+	function resolveNamedType(name:String, span:SourceSpan, resolving:Null<Map<String, Bool>>,
+			substitutions:Map<String, CompilerType>):CompilerType {
 		var substituted = substitutions.get(name);
 		if (substituted != null)
 			return substituted;
@@ -529,14 +557,17 @@ class DeclarationIndex {
 			return resolveBareNominal(name, NominalKind.Enum, enumDecl.typeParameters.length, span);
 		var classDecl = classes.get(name);
 		if (classDecl != null)
-			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class, classDecl.typeParameters.length, span);
-		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name); else {
+			return resolveBareNominal(name, isNativeValueClass(classDecl) ? NominalKind.NativeValue : NominalKind.Class,
+				classDecl.typeParameters.length, span);
+		return if (PlatformAbi.isType(name)) PlatformAbi.valueType(name);
+		else {
 			fail('Unknown type "$name"', span);
 			TVoid;
 		};
 	}
 
-	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int, span:SourceSpan):CompilerType {
+	function resolveBareNominal(name:String, kind:compiler.types.Type.NominalKind, arity:Int,
+			span:SourceSpan):CompilerType {
 		if (arity != 0)
 			fail('Type "$name" expects $arity type arguments, got 0', span);
 		return TInstance(kind, name, []);
@@ -578,7 +609,8 @@ class DeclarationIndex {
 	 * whichever typedef in it is resolved first: `A = Array<B>, B = {a:A}` is fine. A cycle that never enters a structure
 	 * (`A = B, B = A`, `A = Array<A>`) could never be expanded and is an error.
 	 */
-	function resolveAlias(alias:AstTypeAlias, resolving:Null<Map<String, Bool>>, substitutions:Map<String, CompilerType>):CompilerType {
+	function resolveAlias(alias:AstTypeAlias, resolving:Null<Map<String, Bool>>,
+			substitutions:Map<String, CompilerType>):CompilerType {
 		var cacheable = alias.typeParameters.length == 0 && isEmpty(substitutions);
 		if (cacheable) {
 			var cached = resolvedAliases.get(alias.name);
@@ -623,7 +655,9 @@ class DeclarationIndex {
 					openDepth--;
 					restoreOpenStructure(key, enclosing);
 					opened = false;
-					resolved = TAnonymous(recursiveAliases.exists(alias.name) ? compiler.semantic.SemanticSignature.recursiveAnonymousName(key) : compiler.semantic.SemanticSignature.anonymousTypeName(open.fields),
+					resolved = TAnonymous(recursiveAliases.exists(alias.name)
+						? compiler.semantic.SemanticSignature.recursiveAnonymousName(key)
+						: compiler.semantic.SemanticSignature.anonymousTypeName(open.fields),
 						open.fields);
 				default:
 					resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
@@ -722,7 +756,8 @@ class DeclarationIndex {
 			return alias.name;
 		var arguments = [
 			for (parameter in alias.typeParameters)
-				substitutions.exists(parameter) ? compiler.semantic.SemanticSignature.type(substitutions.get(parameter)) : "?"
+				substitutions.exists(parameter)
+				? compiler.semantic.SemanticSignature.type(substitutions.get(parameter)) : "?"
 		];
 		return alias.name + "<" + arguments.join(",") + ">";
 	}
@@ -783,7 +818,8 @@ class DeclarationIndex {
 	static function nullable(type:CompilerType):CompilerType
 		return switch type {
 			case TNullable(_): type;
-			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _):
+			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_),
+				TIterator(_), TFunction(_, _), TMap(_, _):
 				TNullable(type);
 			case TInstance(NominalKind.NativeValue, _, _): type;
 			case TInstance(_, _, _): TNullable(type);
@@ -807,15 +843,19 @@ class DeclarationIndex {
 			case TRange: "Range";
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
-			case TAbstract(name, arguments, _): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
-			case TInstance(_, name, arguments): arguments.length == 0 ? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
+			case TAbstract(name, arguments, _): arguments.length == 0
+				? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
+			case TInstance(_, name, arguments): arguments.length == 0
+				? name : '$name<${[for (argument in arguments) typeKey(argument)].join(",")}>';
 			case TNull: "null";
 			case TNullable(element): 'Null<${typeKey(element)}>';
 			case TArray(element): 'Array<${typeKey(element)}>';
 			case TIterator(element): 'Iterator<${typeKey(element)}>';
 			case TMap(key, value): 'Map<${typeKey(key)},${typeKey(value)}>';
-			case TKeyPath(root, value, writable): (writable ? "WritableKeyPath<" : "KeyPath<") + typeKey(root) + "," + typeKey(value) + ">";
-			case TFunction(arguments, result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
+			case TKeyPath(root, value,
+				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + typeKey(root) + "," + typeKey(value) + ">";
+			case TFunction(arguments,
+				result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 			case TAnonymous(name, _): name;
 		};
 
@@ -839,7 +879,8 @@ class DeclarationIndex {
 				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (interfaceType in decl.interfaces) {
 				var interfaceName = nominalName(resolve(interfaceType, decl.span, substitutions));
-				if (interfaceName == null || (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
+				if (interfaceName == null
+					|| (!interfaces.exists(interfaceName) && !StructProperties.isConstraintName(interfaceName)))
 					fail('Unknown interface "${ModuleCanonicalizer.astTypeName(interfaceType)}"', decl.span);
 			}
 		}
@@ -876,7 +917,8 @@ class DeclarationIndex {
 			if (inherited.exists(name)) {
 				var previous = inherited.get(name);
 				if (!TypeRelations.equals(previous, instance))
-					fail('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}', span);
+					fail('Conflicting inherited interface instantiations for "$name": ${typeKey(previous)} and ${typeKey(instance)}',
+						span);
 			}
 			inherited.set(name, instance);
 		}
@@ -888,7 +930,8 @@ class DeclarationIndex {
 			resolve(decl.underlying, decl.span, substitutions);
 			var fromKeys:Map<String, Bool> = [], toKeys:Map<String, Bool> = [];
 			for (type in decl.fromTypes)
-				validateAbstractConversion(decl.name, "from", resolve(type, decl.span, substitutions), fromKeys, decl.span);
+				validateAbstractConversion(decl.name, "from", resolve(type, decl.span, substitutions), fromKeys,
+					decl.span);
 			for (type in decl.toTypes)
 				validateAbstractConversion(decl.name, "to", resolve(type, decl.span, substitutions), toKeys, decl.span);
 			for (method in decl.methods)
@@ -952,22 +995,27 @@ class DeclarationIndex {
 						var member = decl.name + "." + method.name,
 							ancestor = baseName + "." + original.name;
 						if (method.isStatic != original.isStatic)
-							fail('Method "$member" conflicts with inherited "$ancestor": static and instance methods cannot share a slot', method.span);
+							fail('Method "$member" conflicts with inherited "$ancestor": static and instance methods cannot share a slot',
+								method.span);
 						if (!compatibleInheritedSignature(method, original, own, inherited, member))
-							fail('Method "$member" has an incompatible signature with inherited "$ancestor"', method.span);
+							fail('Method "$member" has an incompatible signature with inherited "$ancestor"',
+								method.span);
 						if (method.isPublic == false && original.isPublic == true)
-							fail('Method "$member" cannot reduce the public visibility of inherited "$ancestor"', method.span);
+							fail('Method "$member" cannot reduce the public visibility of inherited "$ancestor"',
+								method.span);
 					}
 				}
 				base = parent.base == null ? null : resolve(parent.base, parent.span, inherited);
 			}
 			for (method in decl.methods)
 				if (method.isOverride == true && !overrides.exists(method.name))
-					fail('Method "${decl.name}.${method.name}" is declared override but has no inherited instance method', method.span);
+					fail('Method "${decl.name}.${method.name}" is declared override but has no inherited instance method',
+						method.span);
 		}
 	}
 
-	function compatibleInheritedSignature(method:AstFunction, original:AstFunction, own:Map<String, CompilerType>, inherited:Map<String, CompilerType>,
+	function compatibleInheritedSignature(method:AstFunction, original:AstFunction, own:Map<String, CompilerType>,
+			inherited:Map<String, CompilerType>,
 			methodOwner:String):Bool {
 		var parameters = method.typeParameters == null ? [] : method.typeParameters;
 		var baseParameters = original.typeParameters == null ? [] : original.typeParameters;
@@ -981,12 +1029,14 @@ class DeclarationIndex {
 			right.set(baseParameters[index], parameter);
 		}
 		for (index in 0...parameters.length)
-			if (inheritedMethodConstraints(method, parameters[index], left) != inheritedMethodConstraints(original, baseParameters[index], right))
+			if (inheritedMethodConstraints(method, parameters[index], left) != inheritedMethodConstraints(original,
+				baseParameters[index], right))
 				return false;
 		for (index in 0...method.arguments.length) {
 			var argument = method.arguments[index],
 				baseArgument = original.arguments[index];
-			if (!TypeRelations.equals(inheritedArgumentType(argument, left), inheritedArgumentType(baseArgument, right)))
+			if (!TypeRelations.equals(inheritedArgumentType(argument, left),
+				inheritedArgumentType(baseArgument, right)))
 				return false;
 			if ((baseArgument.optional == true || baseArgument.defaultValue != null)
 				&& argument.optional != true
@@ -999,7 +1049,8 @@ class DeclarationIndex {
 			return true;
 		// Covariant class results have the same pointer ABI; arbitrary function-type coercions require adapters.
 		return switch [result, expected] {
-			case [TInstance(Class, _, _), TInstance(Class, _, _)]: var relations = new TypeRelations(this); !relations.isValueClass(result) && !relations.isValueClass(expected) && inheritance.reaches(result,
+			case [TInstance(Class, _, _), TInstance(Class, _, _)]: var relations = new TypeRelations(this);
+				!relations.isValueClass(result) && !relations.isValueClass(expected) && inheritance.reaches(result,
 					expected);
 			default: false;
 		};
@@ -1015,7 +1066,8 @@ class DeclarationIndex {
 		return type;
 	}
 
-	function inheritedMethodConstraints(method:AstFunction, parameter:String, substitutions:Map<String, CompilerType>):String {
+	function inheritedMethodConstraints(method:AstFunction, parameter:String,
+			substitutions:Map<String, CompilerType>):String {
 		var bounds:Array<String> = [], constraints = method.typeConstraints;
 		if (constraints != null)
 			for (constraint in constraints)
@@ -1025,7 +1077,8 @@ class DeclarationIndex {
 		return bounds.join("&");
 	}
 
-	function validateAbstractConversion(name:String, direction:String, type:CompilerType, seen:Map<String, Bool>, span:SourceSpan):Void {
+	function validateAbstractConversion(name:String, direction:String, type:CompilerType, seen:Map<String, Bool>,
+			span:SourceSpan):Void {
 		var key = typeKey(type);
 		if (seen.exists(key))
 			fail('Duplicate $direction conversion "$key" on abstract "$name"', span);
@@ -1033,7 +1086,8 @@ class DeclarationIndex {
 	}
 
 	function resolveFunction(fn:AstFunction, owner:String, ?ownerSubstitutions:Map<String, CompilerType>):Void {
-		var substitutions:Map<String, CompilerType> = ownerSubstitutions == null ? [] : [for (name => type in ownerSubstitutions) name => type],
+		var substitutions:Map<String, CompilerType> = ownerSubstitutions == null
+			? [] : [for (name => type in ownerSubstitutions) name => type],
 			typeParameters = fn.typeParameters;
 		if (typeParameters != null)
 			for (parameter in typeParameters)

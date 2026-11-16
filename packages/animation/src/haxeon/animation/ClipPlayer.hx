@@ -163,7 +163,8 @@ class ClipPlayer {
 			} else
 				instance.setLayer(index + 1, -1, 0.0, 0.0);
 		}
-		if (overlayClip >= 0 && overlayWeight > 0.0) instance.setLayer(OVERLAY_LAYER, overlayClip, overlayHold == null ? overlayTime : overlayHold, overlayWeight);
+		if (overlayClip >= 0 && overlayWeight > 0.0) instance.setLayer(OVERLAY_LAYER, overlayClip,
+			overlayHold == null ? overlayTime : overlayHold, overlayWeight);
 		else instance.setLayer(OVERLAY_LAYER, -1, 0.0, 0.0);
 		if (skin) instance.evaluate();
 		else instance.evaluatePose();

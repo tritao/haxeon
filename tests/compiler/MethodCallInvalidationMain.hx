@@ -14,7 +14,8 @@ class MethodCallInvalidationMain {
 		compiler.update("Main.hx", main);
 		compiler.compile("Main", null, false);
 		// The method gains an optional parameter: every caller still type-checks, but must be lowered again.
-		compiler.update("Gate.hx", "class Gate { public function new() {} public function worst(scale:Float = 1.0):Float return 1.0 * scale; }");
+		compiler.update("Gate.hx",
+			"class Gate { public function new() {} public function worst(scale:Float = 1.0):Float return 1.0 * scale; }");
 		var changed = compiler.compile("Main", null, false);
 		if (changed.regenerated.indexOf(callerName) >= 0)
 			return;
@@ -22,8 +23,12 @@ class MethodCallInvalidationMain {
 	}
 
 	static function main():Void {
-		check("local", "class Main { static function main():Int { var gate = new Gate(); return gate.worst() > 0.5 ? 0 : 1; } }", "Main.main");
-		check("field", "class Main { static final gate = new Gate(); static function main():Int return gate.worst() > 0.5 ? 0 : 1; }", "Main.main");
+		check("local",
+			"class Main { static function main():Int { var gate = new Gate(); return gate.worst() > 0.5 ? 0 : 1; } }",
+			"Main.main");
+		check("field",
+			"class Main { static final gate = new Gate(); static function main():Int return gate.worst() > 0.5 ? 0 : 1; }",
+			"Main.main");
 		check("parameter",
 			"class Main { static function main():Int return use(new Gate()); static function use(gate:Gate):Int return gate.worst() > 0.5 ? 0 : 1; }",
 			"Main.use");

@@ -27,10 +27,12 @@ class EnumEqualityGenerator {
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void
 		requestNamed(session, equalsName(type), type, origin, span);
 
-	public static function requestReflective(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void
+	public static function requestReflective(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan):Void
 		requestNamed(session, reflectiveName(type), type, origin, span);
 
-	static function requestNamed(session:TypingSession, name:String, type:CompilerType, origin:String, span:SourceSpan):Void {
+	static function requestNamed(session:TypingSession, name:String, type:CompilerType, origin:String,
+			span:SourceSpan):Void {
 		if (!session.enumEqualityRequests.exists(name))
 			session.enumEqualityRequests.set(name, {type: type, origin: origin, span: span});
 	}
@@ -58,7 +60,8 @@ class EnumEqualityGenerator {
 					if (custom != null) {
 						var customName = EnumConformanceMethods.name(request.type, "equals");
 						if (!generated.exists(customName))
-							generated.set(customName, EnumConformanceMethods.typeMethod(session, typer, request.type, custom, name));
+							generated.set(customName,
+								EnumConformanceMethods.typeMethod(session, typer, request.type, custom, name));
 					}
 					session.leaveBody(context);
 				} catch (error:Dynamic) {
@@ -80,7 +83,8 @@ class EnumEqualityGenerator {
 			statements:Array<TypedStatement> = [];
 		switch type {
 			case TNullable(element) if (enumType(element)):
-				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span),
+				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type,
+					span),
 					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, span),
 					rightAbsent = new TypedExpression(TEqual(right, nil), TBool, span),
 					leftValue = new TypedExpression(TCast(left), element, span),
@@ -90,7 +94,8 @@ class EnumEqualityGenerator {
 				else
 					request(session, element, req.origin, span);
 				statements.push(TIf(leftAbsent, [TReturn(rightAbsent, span)], [], span));
-				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
+				statements.push(TIf(rightAbsent, [TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)],
+					[], span));
 				statements.push(TReturn(call(element, leftValue, rightValue, span, reflective), span));
 			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.get(name);
@@ -98,7 +103,10 @@ class EnumEqualityGenerator {
 					BodyTyper.fail("E1025", 'Type.enumEq cannot resolve enum "$name"', span);
 				var custom = reflective ? null : EnumConformanceMethods.method(session, type, "equals");
 				if (custom != null) {
-					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "equals"), [left, right]), TBool, span), span));
+					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "equals"), [
+						left,
+						right
+					]), TBool, span), span));
 				} else if (!Lambda.exists(declaration.cases, constructor -> constructor.params.length != 0)) {
 					// A nominal tag has no payload to inspect. Keep this constant-size even when
 					// a Dynamic/reflection adapter needs a callable equality implementation.
@@ -106,31 +114,39 @@ class EnumEqualityGenerator {
 				} else {
 					var leftIndex = new TypedExpression(TEnumIndex(left), TInt, span),
 						rightIndex = new TypedExpression(TEnumIndex(right), TInt, span);
-					statements.push(TIf(new TypedExpression(TNot(new TypedExpression(TEqual(leftIndex, rightIndex), TBool, span)), TBool, span),
+					statements.push(TIf(new TypedExpression(TNot(new TypedExpression(TEqual(leftIndex, rightIndex),
+						TBool, span)), TBool, span),
 						[TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
 					for (constructorIndex in 0...declaration.cases.length) {
 						var constructor = declaration.cases[constructorIndex],
 							body:Array<TypedStatement> = [];
 						for (fieldIndex in 0...constructor.params.length) {
 							var parameter = constructor.params[fieldIndex],
-								fieldType = session.representation.enumParameterType(declaration.typeParameters, parameter, type),
-								storageType = session.representation.enumStorageType(declaration.typeParameters, parameter, type),
-								leftField = session.representation.boundaryCast(new TypedExpression(TEnumField(left, constructorIndex, fieldIndex),
+								fieldType = session.representation.enumParameterType(declaration.typeParameters,
+									parameter, type),
+								storageType = session.representation.enumStorageType(declaration.typeParameters,
+									parameter, type),
+								leftField = session.representation
+									.boundaryCast(new TypedExpression(TEnumField(left, constructorIndex, fieldIndex),
 									storageType, span), fieldType),
-								rightField = session.representation.boundaryCast(new TypedExpression(TEnumField(right, constructorIndex, fieldIndex),
+								rightField = session.representation
+									.boundaryCast(new TypedExpression(TEnumField(right, constructorIndex, fieldIndex),
 									storageType, span), fieldType),
 								comparison = compareField(session, fieldType, leftField, rightField, req, reflective);
 							body.push(TIf(new TypedExpression(TNot(comparison), TBool, span),
 								[TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span)], [], span));
 						}
 						body.push(TReturn(new TypedExpression(TBoolLiteral(true), TBool, span), span));
-						var selected = new TypedExpression(TEqual(leftIndex, new TypedExpression(TIntLiteral(constructorIndex), TInt, span)), TBool, span);
+						var selected = new TypedExpression(TEqual(leftIndex,
+							new TypedExpression(TIntLiteral(constructorIndex), TInt, span)), TBool, span);
 						statements.push(TIf(selected, body, [], span));
 					}
 					statements.push(TReturn(new TypedExpression(TBoolLiteral(false), TBool, span), span));
 				}
 			default:
-				BodyTyper.fail("E1025", 'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"', span);
+				BodyTyper.fail("E1025",
+					'Type.enumEq requires an enum value, got "${compiler.semantic.SemanticSignature.display(type)}"',
+					span);
 		}
 		return {
 			name: reflective ? reflectiveName(type) : equalsName(type),
@@ -156,7 +172,8 @@ class EnumEqualityGenerator {
 		};
 	}
 
-	static function compareField(session:TypingSession, type:CompilerType, left:TypedExpression, right:TypedExpression, requestInfo:EqualityRequest,
+	static function compareField(session:TypingSession, type:CompilerType, left:TypedExpression, right:TypedExpression,
+			requestInfo:EqualityRequest,
 			reflective:Bool):TypedExpression {
 		if (enumType(type)) {
 			if (reflective)
@@ -167,7 +184,8 @@ class EnumEqualityGenerator {
 		}
 		if (DeclaredConformance.usesEquality(session, type)) {
 			ValueEqualityGenerator.request(session, type, requestInfo.origin, requestInfo.span);
-			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(type), [left, right]), TBool, requestInfo.span);
+			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(type), [left, right]), TBool,
+				requestInfo.span);
 		}
 		return switch type {
 			case TNullable(element) if (enumType(element)):
@@ -175,7 +193,8 @@ class EnumEqualityGenerator {
 					requestReflective(session, element, requestInfo.origin, requestInfo.span);
 				else
 					request(session, element, requestInfo.origin, requestInfo.span);
-				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, left.span)), type, left.span),
+				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, left.span)), type,
+					left.span),
 					leftAbsent = new TypedExpression(TEqual(left, nil), TBool, left.span),
 					rightAbsent = new TypedExpression(TEqual(right, nil), TBool, left.span),
 					leftValue = new TypedExpression(TCast(left), element, left.span),
@@ -183,8 +202,9 @@ class EnumEqualityGenerator {
 					absentResult = new TypedExpression(TEqual(leftAbsent, rightAbsent), TBool, left.span),
 					presentResult = call(element, leftValue, rightValue, left.span, reflective);
 				new TypedExpression(TConditional(leftAbsent, absentResult,
-					new TypedExpression(TConditional(rightAbsent, new TypedExpression(TBoolLiteral(false), TBool, left.span), presentResult), TBool,
-						left.span)),
+					new TypedExpression(TConditional(rightAbsent,
+					new TypedExpression(TBoolLiteral(false), TBool, left.span), presentResult), TBool,
+					left.span)),
 					TBool, left.span);
 			case _: new TypedExpression(TEqual(left, right), TBool, left.span);
 		};
@@ -196,6 +216,8 @@ class EnumEqualityGenerator {
 			default: false;
 		};
 
-	static function call(type:CompilerType, left:TypedExpression, right:TypedExpression, span:SourceSpan, reflective:Bool):TypedExpression
-		return new TypedExpression(TCall(reflective ? reflectiveName(type) : equalsName(type), [left, right]), TBool, span);
+	static function call(type:CompilerType, left:TypedExpression, right:TypedExpression, span:SourceSpan,
+			reflective:Bool):TypedExpression
+		return new TypedExpression(TCall(reflective ? reflectiveName(type) : equalsName(type), [left, right]), TBool,
+			span);
 }

@@ -70,7 +70,7 @@ class ExplorerVisualCases {
 			case ExplorerVisualCase.Layout, ExplorerVisualCase.LayoutCompact:
 				state.selectedPage = "layout";
 			case ExplorerVisualCase.Lists, ExplorerVisualCase.ListsScrolled,
-					ExplorerVisualCase.ListsCompact:
+				ExplorerVisualCase.ListsCompact:
 				state.selectedPage = "lists";
 				if (caseId == ExplorerVisualCase.ListsScrolled)
 					state.listController.jumpTo(0.0, 414.0 * UiExplorer.LIST_ROW_HEIGHT);

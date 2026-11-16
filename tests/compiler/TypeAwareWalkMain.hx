@@ -25,14 +25,14 @@ class TypeAwareWalkMain {
 	}
 
 	static function object(name:String, interfaces:Array<String>, methods:Array<String>):IrObject
-		return {
-			name: name,
+		return {name: name,
 			isValue: false,
 			base: null,
 			interfaces: interfaces,
 			fields: [],
-			methods: [for (method in methods) {name: method, functionName: name + "." + method}]
-		};
+			methods: [for (method in methods) {
+				name:method, functionName:name + "." + method
+			}]};
 
 	static function empty(name:String, kind:IrFunctionKind, ?arguments:Array<IrType>, result:IrType = Void):IrFunction {
 		var builder = new IrBuilder();
@@ -111,7 +111,13 @@ class TypeAwareWalkMain {
 			];
 			// The native is declared to return the base class: exactly that class is created, not a subclass and not an unrelated class.
 			if (kind == "native")
-				program.natives = [{name: "makeHandle", library: "lib", symbol: "make", arguments: [Obj("Unrelated")], result: Obj("Base")}];
+				program.natives = [{
+					name: "makeHandle",
+					library: "lib",
+					symbol: "make",
+					arguments: [Obj("Unrelated")],
+					result: Obj("Base")
+				}];
 			else
 				program.cNatives = [
 					{
@@ -130,30 +136,34 @@ class TypeAwareWalkMain {
 				];
 			var result = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
 			expect(result.createdClasses.exists("Base"), kind + ": the result type of a called native is created");
-			expect(result.reached.exists("Base.update"), kind + ": the method of the class a native returns is reached");
-			expect(!result.reached.exists("Derived.update"), kind + ": a subclass of the declared result is not created: the contract is the declared class");
+			expect(result.reached.exists("Base.update"),
+				kind + ": the method of the class a native returns is reached");
+			expect(!result.reached.exists("Derived.update"),
+				kind + ": a subclass of the declared result is not created: the contract is the declared class");
 			expect(!result.reached.exists("Unrelated.update") && !result.createdClasses.exists("Unrelated"),
 				kind + ": the class of an argument is not created by the native");
 			// A native declared to return the subclass creates it.
-			program.natives = [for (native in program.natives) {name: native.name, library: native.library, symbol: native.symbol, arguments: native.arguments, result: Obj("Derived")}];
-			program.cNatives = [
-				for (native in program.cNatives) {
-					name: native.name,
-					library: native.library,
-					symbol: native.symbol,
-					signature: "",
-					pointerOwnership: "none",
-					pointerRelease: null,
-					pointerLength: null,
-					pointerNullable: false,
-					arguments: native.arguments,
-					argumentModes: native.argumentModes,
-					result: Obj("Derived")
-				}
-			];
+			program.natives = [for (native in program.natives) {
+				name:native.name, library:native.library, symbol:native.symbol, arguments:native.arguments,
+					result:Obj("Derived")
+			}];
+			program.cNatives = [for (native in program.cNatives) {
+				name:native.name,
+					library:native.library,
+					symbol:native.symbol,
+					signature:"",
+					pointerOwnership:"none",
+					pointerRelease:null,
+					pointerLength:null,
+					pointerNullable:false,
+					arguments:native.arguments,
+					argumentModes:native.argumentModes,
+					result:Obj("Derived")
+			}];
 			var subclass = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
 			expect(subclass.createdClasses.exists("Derived"), kind + ": a native's subclass result is created");
-			expect(subclass.reached.exists("Derived.update"), kind + ": the override on a class only native code makes is reached");
+			expect(subclass.reached.exists("Derived.update"),
+				kind + ": the override on a class only native code makes is reached");
 			// No call, no creation.
 			var idle = new IrBuilder();
 			idle.returnValue(idle.constInt(0));
@@ -186,7 +196,8 @@ class TypeAwareWalkMain {
 		expect(!result.reached.exists("onlyFromBase"), "what its body calls is not reached");
 		// Once something constructs the class the method is reached, with its body.
 		var grown = IrTypeAwareWalk.run(program, {functions: ["main"], types: [Obj("Base")]});
-		expect(grown.reached.exists("Base.update") && grown.reached.exists("onlyFromBase"), "a created class's method is reached with its body");
+		expect(grown.reached.exists("Base.update") && grown.reached.exists("onlyFromBase"),
+			"a created class's method is reached with its body");
 	}
 
 	static function interfaceCall():Void {
@@ -205,15 +216,19 @@ class TypeAwareWalkMain {
 		];
 		var result = IrTypeAwareWalk.run(program, {functions: ["main"], types: []});
 		expect(result.reached.exists("Used.area"), "the implementation of a created implementor is reached");
-		expect(!result.reached.exists("Idle.area"), "the implementation of an implementor nothing creates is not reached");
+		expect(!result.reached.exists("Idle.area"),
+			"the implementation of an implementor nothing creates is not reached");
 		// Once the second implementor is created by a root, its implementation is reached too: the edge is re-derived as types grow.
 		var grown = IrTypeAwareWalk.run(program, {functions: ["main"], types: [Obj("Idle")]});
-		expect(grown.reached.exists("Idle.area"), "a created implementor's implementation is reached when the root creates it");
+		expect(grown.reached.exists("Idle.area"),
+			"a created implementor's implementation is reached when the root creates it");
 		// Keeping the methods of a created class, as reflection by name needs, reaches the ones nothing calls.
 		program.objects = [object("Used", ["Shape"], ["area", "spare"]), object("Idle", ["Shape"], ["area"])];
 		program.functions.push(empty("Used.spare", Ordinary, [Obj("Used")], I32));
-		expect(!IrTypeAwareWalk.run(program, {functions: ["main"], types: []}).reached.exists("Used.spare"), "an uncalled method is not reached");
-		expect(IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, false, true).reached.exists("Used.spare"),
+		expect(!IrTypeAwareWalk.run(program, {functions: ["main"], types: []}).reached.exists("Used.spare"),
+			"an uncalled method is not reached");
+		expect(IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, false,
+			true).reached.exists("Used.spare"),
 			"every method of a created class is reached when asked");
 	}
 
@@ -227,8 +242,10 @@ class TypeAwareWalkMain {
 		var program = new IrProgram("main");
 		program.functions = [main];
 		var bare = IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true);
-		expect(bare.missingProviders.length == 1, "a typed operation with no row is reported once, got " + bare.missingProviders.length);
-		expect(bare.demanded.exists(ProviderOperation.EnumTagBox + "\n" + TypeKey.of(EnumTag("Color")).toString()), "the demand is recorded");
+		expect(bare.missingProviders.length == 1,
+			"a typed operation with no row is reported once, got " + bare.missingProviders.length);
+		expect(bare.demanded.exists(ProviderOperation.EnumTagBox + "\n" + TypeKey.of(EnumTag("Color")).toString()),
+			"the demand is recorded");
 		expect(IrProviders.checkTypedOperations(program.functions) != null, "the check names the missing provider");
 		// The first walk, before the producers have run, only collects the demand.
 		expect(IrTypeAwareWalk.run(program, {functions: ["main"], types: []}).missingProviders.length == 0,
@@ -255,17 +272,20 @@ class TypeAwareWalkMain {
 		var helper = function(name:String, detail:String):IrFunction {
 			var fn = empty(name, Ordinary, [I32], Dyn);
 			return new IrFunction(name, fn.arguments, Dyn, fn.blocks,
-				Provider(TypeKey.of(Enum("Opt")), compiler.Provides.ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, detail)));
+				Provider(TypeKey.of(Enum("Opt")),
+				compiler.Provides.ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, detail)));
 		};
 		var missing = IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true);
 		expect(missing.missingProviders.length == 1, "an inline enum box with no helper is reported");
-		expect(IrProviders.checkTypedOperations(program.functions) != null, "the check names the missing inline enum helper");
+		expect(IrProviders.checkTypedOperations(program.functions) != null,
+			"the check names the missing inline enum helper");
 		program.functions.push(helper("$unbox_Opt", "unbox"));
 		expect(IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true).missingProviders.length == 1,
 			"the unbox helper does not answer a box");
 		program.functions.push(helper("$box_Opt", "box"));
 		var served = IrTypeAwareWalk.run(program, {functions: ["main"], types: []}, null, true);
-		expect(served.missingProviders.length == 0 && served.reached.exists("$box_Opt"), "the box helper answers the box");
+		expect(served.missingProviders.length == 0 && served.reached.exists("$box_Opt"),
+			"the box helper answers the box");
 		expect(!served.reached.exists("$unbox_Opt"), "the unbox helper is not reached by a box");
 		expect(IrProviders.checkTypedOperations(program.functions) == null, "the check passes with the box helper");
 	}

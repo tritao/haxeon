@@ -48,57 +48,50 @@ class AccessibilityAudit {
 				"Interactive nodes need an accessibility role and state"));
 		if (semantics != null) {
 			var valueEnd = semantics.textStart + Utf8Text.length(semantics.value);
-			if (semantics.textStart < 0 || semantics.documentLength < 0 ||
-				valueEnd > semantics.documentLength)
+			if (semantics.textStart < 0 || semantics.documentLength < 0 || valueEnd > semantics.documentLength)
 				issues.push(new AccessibilityIssue(node.id.value, "text-range-out-of-bounds",
 					'Text range ${semantics.textStart}...${valueEnd} must fit within document length ${semantics.documentLength}'));
 			var noSelection = semantics.selectionStart == -1 && semantics.selectionEnd == -1;
-			var validSelection = semantics.selectionStart >= semantics.textStart &&
-				semantics.selectionStart <= semantics.selectionEnd &&
-				semantics.selectionEnd <= valueEnd;
+			var validSelection = semantics.selectionStart >= semantics.textStart
+				&& semantics.selectionStart <= semantics.selectionEnd && semantics.selectionEnd <= valueEnd;
 			if (!noSelection && !validSelection)
 				issues.push(new AccessibilityIssue(node.id.value, "selection-out-of-bounds",
 					'Selection ${semantics.selectionStart}...${semantics.selectionEnd} must be unset or fit within text range ${semantics.textStart}...${valueEnd}'));
-			if ((semantics.role == AccessibilityRole.Dialog ||
-				semantics.role == AccessibilityRole.MenuItem) &&
-				(semantics.label == null || isBlank(semantics.label))) {
+			if ((semantics.role == AccessibilityRole.Dialog || semantics.role == AccessibilityRole.MenuItem)
+				&& (semantics.label == null || isBlank(semantics.label))) {
 				var code = semantics.role == AccessibilityRole.Dialog
 					? "dialog-missing-name" : "menu-item-missing-name";
 				issues.push(new AccessibilityIssue(node.id.value, code,
 					"This accessibility role needs a non-empty accessible name"));
 			}
-			if (needsName(semantics.role) &&
-				(semantics.label == null || isBlank(semantics.label)))
+			if (needsName(semantics.role) && (semantics.label == null || isBlank(semantics.label)))
 				issues.push(new AccessibilityIssue(node.id.value, "missing-label",
 					"Interactive accessibility nodes need a non-empty label"));
 			if (semantics.role == AccessibilityRole.TabList && !hasSelectedTab(node))
 				issues.push(new AccessibilityIssue(node.id.value, "tab-list-no-selected-tab",
 					"A tab list needs one selected tab"));
-			if (semantics.role == AccessibilityRole.Tab &&
-				!semantics.actions.contains(AccessibilityAction.Select))
+			if (semantics.role == AccessibilityRole.Tab && !semantics.actions.contains(AccessibilityAction.Select))
 				issues.push(new AccessibilityIssue(node.id.value, "tab-no-select",
 					"Tabs need to expose the Select action"));
-			if (semantics.role == AccessibilityRole.Switch &&
-				!semantics.actions.contains(AccessibilityAction.Toggle))
+			if (semantics.role == AccessibilityRole.Switch && !semantics.actions.contains(AccessibilityAction.Toggle))
 				issues.push(new AccessibilityIssue(node.id.value, "switch-no-toggle",
 					"Switches need to expose the Toggle action"));
-			var isExpandable = (semantics.actions.contains(AccessibilityAction.Expand) || semantics.actions.contains(AccessibilityAction.Collapse)) ||
-				semantics.states.contains(AccessibilityState.Expanded) ||
-				(semantics.role == AccessibilityRole.TreeItem && node.children.length > 0);
+			var isExpandable = (semantics.actions.contains(AccessibilityAction.Expand)
+				|| semantics.actions.contains(AccessibilityAction.Collapse))
+				|| semantics.states.contains(AccessibilityState.Expanded)
+				|| (semantics.role == AccessibilityRole.TreeItem && node.children.length > 0);
 			var requiredExpansionAction = semantics.states.contains(AccessibilityState.Expanded)
 				? AccessibilityAction.Collapse : AccessibilityAction.Expand;
 			if (isExpandable && !semantics.actions.contains(requiredExpansionAction))
 				issues.push(new AccessibilityIssue(node.id.value, "expandable-missing-actions",
 					"Expandable items need an action matching their current expanded state"));
-			if ((semantics.role == AccessibilityRole.Slider ||
-				semantics.role == AccessibilityRole.ProgressBar) &&
-				(semantics.numericMinimum > semantics.numericMaximum ||
-				semantics.numericValue < semantics.numericMinimum ||
-				semantics.numericValue > semantics.numericMaximum))
+			if ((semantics.role == AccessibilityRole.Slider || semantics.role == AccessibilityRole.ProgressBar)
+				&& (semantics.numericMinimum > semantics.numericMaximum || semantics.numericValue
+				< semantics.numericMinimum || semantics.numericValue > semantics.numericMaximum))
 				issues.push(new AccessibilityIssue(node.id.value, "range-out-of-bounds",
 					"The numeric value must fall within its declared range"));
-			if (semantics.role == AccessibilityRole.CollectionItem &&
-				semantics.setSize > 0 && semantics.positionInSet > semantics.setSize)
+			if (semantics.role == AccessibilityRole.CollectionItem && semantics.setSize > 0
+				&& semantics.positionInSet > semantics.setSize)
 				issues.push(new AccessibilityIssue(node.id.value, "collection-position-out-of-range",
 					"An item's position cannot exceed the collection size"));
 			if (semantics.role == AccessibilityRole.Cell)
@@ -107,15 +100,14 @@ class AccessibilityAudit {
 				issues.push(new AccessibilityIssue(node.id.value, "modal-without-focus-trap",
 					"Modal elements need a focus trap"));
 		}
-		var effectiveEnabled = ancestorsEnabled && node.enabled &&
-			(semantics == null || !semantics.states.contains(AccessibilityState.Disabled));
-		var focusable = node.focusable || semantics != null &&
-			semantics.states.contains(AccessibilityState.Focusable);
+		var effectiveEnabled = ancestorsEnabled && node.enabled
+			&& (semantics == null || !semantics.states.contains(AccessibilityState.Disabled));
+		var focusable = node.focusable || semantics != null && semantics.states.contains(AccessibilityState.Focusable);
 		if (focusable && !effectiveEnabled)
 			issues.push(new AccessibilityIssue(node.id.value, "focusable-disabled",
 				"Disabled nodes cannot remain focusable"));
-		if (node.focusable && node.resolved != null && node.resolved.visible &&
-			(node.resolved.width <= 0.0 || node.resolved.height <= 0.0))
+		if (node.focusable && node.resolved != null && node.resolved.visible
+			&& (node.resolved.width <= 0.0 || node.resolved.height <= 0.0))
 			issues.push(new AccessibilityIssue(node.id.value, "empty-focus-bounds",
 				"Visible focusable nodes need positive resolved bounds"));
 		for (child in node.children)
@@ -127,8 +119,8 @@ class AccessibilityAudit {
 			var semantics:Null<Semantics> = cast child.semantics;
 			if (semantics != null && semantics.role == AccessibilityRole.TabList)
 				continue;
-			if (semantics != null && semantics.role == AccessibilityRole.Tab &&
-				semantics.states.contains(AccessibilityState.Selected))
+			if (semantics != null && semantics.role == AccessibilityRole.Tab
+				&& semantics.states.contains(AccessibilityState.Selected))
 				return true;
 			if (hasSelectedTab(child))
 				return true;
@@ -151,29 +143,27 @@ class AccessibilityAudit {
 			return;
 		var rowSpan = cell.rowSpan == 0 ? 1 : cell.rowSpan;
 		var columnSpan = cell.columnSpan == 0 ? 1 : cell.columnSpan;
-		var outside = cell.rowIndex >= 0 && grid.rowCount > 0 &&
-			(cell.rowIndex >= grid.rowCount || rowSpan > grid.rowCount - cell.rowIndex);
-		outside = outside || cell.columnIndex >= 0 && grid.columnCount > 0 &&
-			(cell.columnIndex >= grid.columnCount || columnSpan > grid.columnCount - cell.columnIndex);
+		var outside = cell.rowIndex >= 0 && grid.rowCount > 0
+			&& (cell.rowIndex >= grid.rowCount || rowSpan > grid.rowCount - cell.rowIndex);
+		outside = outside || cell.columnIndex >= 0 && grid.columnCount > 0
+			&& (cell.columnIndex >= grid.columnCount || columnSpan > grid.columnCount - cell.columnIndex);
 		if (outside)
 			issues.push(new AccessibilityIssue(node.id.value, "grid-cell-out-of-bounds",
 				"A grid cell must fit within its declared row and column counts"));
 	}
 
 	static function needsName(role:AccessibilityRole):Bool {
-		return role == AccessibilityRole.Button || role == AccessibilityRole.Checkbox ||
-			role == AccessibilityRole.Radio || role == AccessibilityRole.Link ||
-			role == AccessibilityRole.Slider || role == AccessibilityRole.TextField ||
-			role == AccessibilityRole.Switch || role == AccessibilityRole.Tab ||
-			role == AccessibilityRole.ComboBox ||
-			role == AccessibilityRole.ProgressBar;
+		return role == AccessibilityRole.Button || role == AccessibilityRole.Checkbox || role == AccessibilityRole.Radio
+			|| role == AccessibilityRole.Link || role == AccessibilityRole.Slider || role == AccessibilityRole.TextField
+			|| role == AccessibilityRole.Switch || role == AccessibilityRole.Tab || role == AccessibilityRole.ComboBox
+			|| role == AccessibilityRole.ProgressBar;
 	}
 
 	static function isBlank(value:String):Bool {
 		for (index in 0...value.length) {
 			var code = value.charCodeAt(index);
-			if (code != 9 && code != 10 && code != 11 && code != 12 && code != 13 &&
-				code != 32 && code != 160 && code != 0x3000)
+			if (code != 9 && code != 10 && code != 11 && code != 12 && code != 13 && code != 32 && code != 160
+				&& code != 0x3000)
 				return false;
 		}
 		return true;

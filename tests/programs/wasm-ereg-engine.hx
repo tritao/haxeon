@@ -50,7 +50,8 @@ function main():Int {
 	if (~/x*/g.replace("ée", "-") != "-é-e-")
 		return 7;
 	var emoji = ~/🙂+/;
-	if (!~/^.$/.match("🙂") || !emoji.match("a🙂🙂b") || emoji.matchedPos().pos != 1 || emoji.matchedPos().len != 4 || emoji.matched(0) != "🙂🙂"
+	if (!~/^.$/.match("🙂") || !emoji.match("a🙂🙂b") || emoji.matchedPos().pos != 1 || emoji.matchedPos().len != 4
+		|| emoji.matched(0) != "🙂🙂"
 		|| ~/x*/g.replace("🙂e", "-") != "-🙂-e-")
 		return 8;
 	var long = new StringBuf();

@@ -43,7 +43,8 @@ class ToolSchema {
 				JsonWriter.stringField("description", property.description)
 			];
 			if (property.choices.length > 0)
-				parts.push(JsonWriter.field("enum", JsonWriter.array([for (choice in property.choices) JsonWriter.quote(choice)])));
+				parts.push(JsonWriter.field("enum",
+					JsonWriter.array([for (choice in property.choices) JsonWriter.quote(choice)])));
 			fields.push(JsonWriter.field(property.name, JsonWriter.object(parts)));
 			if (property.required)
 				required.push(JsonWriter.quote(property.name));

@@ -204,7 +204,7 @@ class Socket {
 		#end
 	}
 
-	public function peer():{host:Host, port:Int} {
+	public function peer(): {host: Host, port: Int} {
 		#if wasm
 		throw "Sockets are not available on Wasm";
 		#else
@@ -212,7 +212,7 @@ class Socket {
 		#end
 	}
 
-	public function host():{host:Host, port:Int} {
+	public function host(): {host: Host, port: Int} {
 		#if wasm
 		throw "Sockets are not available on Wasm";
 		#else

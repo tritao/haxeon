@@ -21,24 +21,18 @@ class HxiOutputsMain {
 			+ '\tstruct fixture_point @layout(8, 4) { x: i32 @offset(0); y: i32 @offset(4); }\n'
 			+ '\textern fn calls() -> u32 @symbol("native_fixture_output_calls_take");\n'
 			+ '\textern fn squares(n: i32, values: nullable<ptr<i32>> @out_array("count"), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_squares");\n'
-			+
-			'\textern fn squaresHinted(n: i32, values: nullable<ptr<i32>> @out_array("count") @initial_capacity(4), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_squares");\n'
-			+
-			'\textern fn squaresOnly(n: i32, values: nullable<ptr<i32>> @out_array("count"), count: ptr<u32> @inout) -> void @symbol("native_fixture_squares");\n'
-			+
-			'\textern fn mixed(n: i32, points: nullable<ptr<fixture_point>> @out_array("pointCount"), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount"), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_mixed");\n'
-			+
-			'\textern fn mixedPartlyHinted(n: i32, points: nullable<ptr<fixture_point>> @out_array("pointCount") @initial_capacity(8), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount"), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_mixed");\n'
-			+
-			'\textern fn mixedHinted(n: i32, points: nullable<ptr<fixture_point>> @out_array("pointCount") @initial_capacity(8), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount") @initial_capacity(16), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_mixed");\n'
+			+ '\textern fn squaresHinted(n: i32, values: nullable<ptr<i32>> @out_array("count") @initial_capacity(4), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_squares");\n'
+			+ '\textern fn squaresOnly(n: i32, values: nullable<ptr<i32>> @out_array("count"), count: ptr<u32> @inout) -> void @symbol("native_fixture_squares");\n'
+			+ '\textern fn mixed(n: i32, points: nullable<ptr<fixture_point>> @out_array("pointCount"), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount"), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_mixed");\n'
+			+ '\textern fn mixedPartlyHinted(n: i32, points: nullable<ptr<fixture_point>> @out_array("pointCount") @initial_capacity(8), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount"), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_mixed");\n'
+			+ '\textern fn mixedHinted(n: i32, points: nullable<ptr<fixture_point>> @out_array("pointCount") @initial_capacity(8), pointCount: ptr<u32> @inout, bytes: nullable<ptr<u8>> @out_buffer("byteCount") @initial_capacity(16), byteCount: ptr<u32> @inout, total: ptr<i32> @out, last: ptr<fixture_point> @out) -> i32 @symbol("native_fixture_mixed");\n'
 			+ '\textern fn greedy(values: nullable<ptr<i32>> @out_array("count"), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_greedy");\n'
-			+
-			'\textern fn greedyHinted(values: nullable<ptr<i32>> @out_array("count") @initial_capacity(2), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_greedy");\n'
+			+ '\textern fn greedyHinted(values: nullable<ptr<i32>> @out_array("count") @initial_capacity(2), count: ptr<u32> @inout) -> i32 @symbol("native_fixture_greedy");\n'
 			+ '\textern fn fillSum(count: u64, results: ptr<u32> @out_array("count"), sum: ptr<u64> @out) -> i32 @symbol("native_fixture_fill_sum");\n'
-			+
-			'\textern fn splitPoints(values: ptr<const<fixture_point>> @in_array("count"), count: u64, xs: ptr<i32> @out_array("count"), ys: ptr<i32> @out_array("count")) -> i32 @symbol("native_fixture_split_points");\n'
+			+ '\textern fn splitPoints(values: ptr<const<fixture_point>> @in_array("count"), count: u64, xs: ptr<i32> @out_array("count"), ys: ptr<i32> @out_array("count")) -> i32 @symbol("native_fixture_split_points");\n'
 			+ '}');
-		compiler.update("Main.hx", 'import Outputs;
+		compiler.update("Main.hx",
+			'import Outputs;
 function point(x:Int, y:Int):fixture_point {
 	var result = new fixture_point();
 	result.set_x(x);

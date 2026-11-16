@@ -27,7 +27,8 @@ class KeyPathRuntime {
 	}
 
 	public function drain():Array<TypedFunction> {
-		var pending = [for (name in session.keyPathDefinitions.keys()) if (!emitted.exists(name)) name], result:Array<TypedFunction> = [];
+		var pending = [for (name in session.keyPathDefinitions.keys()) if (!emitted.exists(name)) name],
+			result:Array<TypedFunction> = [];
 		pending.sort(Reflect.compare);
 		for (name in pending) {
 			emitted.set(name, true);
@@ -35,51 +36,116 @@ class KeyPathRuntime {
 			if (definition == null) throw 'Missing key path definition "$name"';
 			var span = definition.span,
 				pathType = TKeyPath(definition.root, definition.value, definition.writable),
-				cacheName = cacheOwner(definition), fieldName = "$p$" + Sha256.encode(name).substr(0, 32),
+				cacheName = cacheOwner(definition),
+				fieldName = "$p$" + Sha256.encode(name).substr(0, 32),
 				cache = caches.get(cacheName);
 			new AnonymousTypeRegistry(session).register(pathType);
 			if (cache == null) {
-				cache = {name: cacheName, isValue: false, isFlat: false, isPortable: false, isNativeValue: false,
-					nativeLayouts: [], base: null, interfaces: [], fields: [], methods: [], span: span};
+				cache = {
+					name: cacheName,
+					isValue: false,
+					isFlat: false,
+					isPortable: false,
+					isNativeValue: false,
+					nativeLayouts: [],
+					base: null,
+					interfaces: [],
+					fields: [],
+					methods: [],
+					span: span
+				};
 				caches.set(cacheName, cache);
 				newClasses.push(cache);
 			}
 			// A cache class kept from an earlier build holds the field as it was typed then; the declaration it is placed at may have moved
 			// since, so the field is made again from the definition rather than kept.
-			var made:TypedField = {name: fieldName, type: pathType, metadata: [],
-				initializer: nil(pathType, span), inlineValue: null,
-				readAccess: null, writeAccess: null, isStatic: true, isInline: false, isFinal: false, span: span};
+			var made:TypedField = {
+				name: fieldName,
+				type: pathType,
+				metadata: [],
+				initializer: nil(pathType, span),
+				inlineValue: null,
+				readAccess: null,
+				writeAccess: null,
+				isStatic: true,
+				isInline: false,
+				isFinal: false,
+				span: span
+			};
 			var fieldIndex = -1;
 			for (index in 0...cache.fields.length) if (cache.fields[index].name == fieldName) fieldIndex = index;
 			if (fieldIndex < 0) cache.fields.push(made) else cache.fields[fieldIndex] = made;
-			var readName = name + ":read", writeName = name + ":write",
-				steps = [for (entry in definition.fields) "/" + entry.declaration.name + "." + entry.field.name].join(""),
+			var readName = name + ":read",
+				writeName = name + ":write",
+				steps =
+					[for (entry in definition.fields) "/" + entry.declaration.name + "." + entry.field.name].join(""),
 				tail = [for (entry in definition.fields) entry.field.name].join("."),
-				getterType = TFunction([definition.root], definition.value), setterType = TFunction([definition.root, definition.value], definition.root),
+				getterType = TFunction([definition.root], definition.value),
+				setterType = TFunction([
+					definition.root,
+					definition.value
+				], definition.root),
 				values:Array<compiler.types.TypedAst.TypedObjectField> = [
-					{name: "$get", value: new TypedExpression(TFunctionRef(readName), getterType, span)},
-					{name: "$set", value: definition.writable ? new TypedExpression(TFunctionRef(writeName), setterType, span) : nil(setterType, span)},
-					{name: "$key", value: string(SemanticSignature.type(definition.root) + ":" + steps, span)},
-					{name: "$steps", value: string(steps, span)}, {name: "$tail", value: string(tail, span)},
-					{name: "$display", value: string("\\" + SemanticSignature.display(definition.root) + "." + tail, span)},
-					{name: "$writeback", value: new TypedExpression(TBoolLiteral(definition.rootWriteback), TBool, span)}
+					{
+						name: "$get",
+						value: new TypedExpression(TFunctionRef(readName), getterType, span)
+					},
+					{
+						name: "$set",
+						value: definition.writable ? new TypedExpression(TFunctionRef(writeName), setterType,
+							span) : nil(setterType, span)
+					},
+					{
+						name: "$key",
+						value: string(SemanticSignature.type(definition.root) + ":" + steps, span)
+					},
+					{
+						name: "$steps",
+						value: string(steps, span)
+					}, {
+						name: "$tail",
+						value: string(tail, span)
+					},
+					{
+						name: "$display",
+						value: string("\\" + SemanticSignature.display(definition.root) + "." + tail, span)
+					},
+					{
+						name: "$writeback",
+						value: new TypedExpression(TBoolLiteral(definition.rootWriteback), TBool, span)
+					}
 				],
-				created = new TypedExpression(TObjectLiteral(KeyPathType.descriptorName(definition.root, definition.value),
-					[for (entry in values) {name: entry.name, value: entry.value}], false), pathType, span),
-				cached = new TypedExpression(TStaticField(cacheName, fieldName), pathType, span),
-				missing = new TypedExpression(TEqual(cached, nil(pathType, span)), TBool, span);
-			result.push(fn(name, definition, [], pathType, [TIf(missing, [TStaticFieldAssign(cacheName, fieldName, created, span)], [], span), TReturn(cached, span)]));
+				created =
+					new TypedExpression(TObjectLiteral(KeyPathType.descriptorName(definition.root, definition.value),
+					[for (entry in values) {
+						name:entry.name, value:entry.value
+					}], false), pathType, span),
+						cached = new TypedExpression(TStaticField(cacheName, fieldName), pathType, span),
+						missing = new TypedExpression(TEqual(cached, nil(pathType, span)), TBool, span);
+			result.push(fn(name, definition, [], pathType, [
+				TIf(missing, [TStaticFieldAssign(cacheName, fieldName, created, span)], [], span),
+				TReturn(cached, span)
+			]));
 			var root = new TypedExpression(TLocal("root"), definition.root, span), value = root;
 			for (entry in definition.fields) value = field(value, entry.field.name, span);
-			result.push(fn(readName, definition, [{name: "root", type: definition.root}], definition.value, [TReturn(value, span)]));
+			result.push(fn(readName, definition, [{name: "root", type: definition.root}], definition.value,
+				[TReturn(value, span)]));
 			if (definition.writable) {
 				var target = root;
-				for (index in 0...definition.fields.length - 1) target = field(target, definition.fields[index].field.name, span);
+				for (index in 0...definition.fields.length - 1) target = field(target,
+					definition.fields[index].field.name, span);
 				var last = definition.fields[definition.fields.length - 1],
 					physical = session.representation.resolveField(target.type, last.field.name, span).physical,
-					assigned = session.representation.boundaryCast(new TypedExpression(TLocal("value"), definition.value, span), physical);
-				result.push(fn(writeName, definition, [{name: "root", type: definition.root}, {name: "value", type: definition.value}], definition.root,
-					[TFieldAssign(target, last.field.name, assigned, span), TReturn(root, span)]));
+					assigned = session.representation.boundaryCast(new TypedExpression(TLocal("value"),
+						definition.value, span), physical);
+				result.push(fn(writeName, definition, [
+					{name: "root", type: definition.root},
+					{name: "value", type: definition.value}
+				], definition.root,
+					[
+						TFieldAssign(target, last.field.name, assigned, span),
+						TReturn(root, span)
+					]));
 			}
 		}
 		return result;
@@ -87,11 +153,15 @@ class KeyPathRuntime {
 
 	function field(receiver:TypedExpression, name:String, span:SourceSpan):TypedExpression {
 		var representation = session.representation.resolveField(receiver.type, name, span);
-		return session.representation.boundaryCast(new TypedExpression(TField(receiver, name), representation.physical, span), representation.semantic);
+		return session.representation.boundaryCast(new TypedExpression(TField(receiver, name), representation.physical,
+			span), representation.semantic);
 	}
 
 	static function cacheOwner(definition:KeyPathDefinition):String {
-		var rootName = switch definition.root { case TInstance(_, name, _): name; default: throw "Invalid key path root"; };
+		var rootName = switch definition.root {
+			case TInstance(_, name, _): name;
+			default: throw "Invalid key path root";
+		};
 		return rootName + ".$keypaths$" + Sha256.encode(SemanticSignature.type(definition.root)).substr(0, 16);
 	}
 
@@ -101,9 +171,23 @@ class KeyPathRuntime {
 	static function nil(type:CompilerType, span:SourceSpan):TypedExpression
 		return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type, span);
 
-	static function fn(name:String, definition:KeyPathDefinition, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType,
+	static function fn(name:String, definition:KeyPathDefinition, arguments:Array<{name:String, type:CompilerType}>,
+			result:CompilerType,
 			statements:Array<TypedStatement>):TypedFunction
-		return {name: name, role: ProviderFunction(definition.root, compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.KeyPath, name)),
-			origin: definition.origin, originKind: Helper, owner: null, isStatic: true, isConstructor: false,
-			arguments: arguments, result: result, statements: statements, cells: [], cellCaptures: [], span: definition.span};
+		return {
+			name: name,
+			role: ProviderFunction(definition.root,
+				compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.KeyPath, name)),
+			origin: definition.origin,
+			originKind: Helper,
+			owner: null,
+			isStatic: true,
+			isConstructor: false,
+			arguments: arguments,
+			result: result,
+			statements: statements,
+			cells: [],
+			cellCaptures: [],
+			span: definition.span
+		};
 }

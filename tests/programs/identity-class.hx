@@ -1,4 +1,4 @@
-interface IdentityClock {
+interface IdentityClock { // @formatter:off: NominalInterfaceTypeMain edits this file's text
   function tick(delta:Float):Bool;
 }
 interface IdentityWaitingClock extends IdentityClock {

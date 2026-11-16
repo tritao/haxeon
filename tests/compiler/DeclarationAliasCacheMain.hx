@@ -14,7 +14,8 @@ import compiler.types.Type.CompilerType;
  */
 class DeclarationAliasCacheMain {
 	static function main():Void {
-		var source = new SourceFile("Aliases.hx", "package demo;
+		var source = new SourceFile("Aliases.hx",
+			"package demo;
 typedef Inner = {a:Int, b:Float};
 typedef Outer = {first:Inner, second:Inner, third:Array<Inner>};
 typedef Wrapper<T> = {value:T};
@@ -58,9 +59,12 @@ class Marker {}
 
 		// Failures throw every time: a cyclic or broken alias is never cached as a value.
 		expectError(function() index.resolve(AstType.NamedType("Loop")), "a cyclic alias should be rejected");
-		expectError(function() index.resolve(AstType.NamedType("Loop")), "a cyclic alias should still be rejected on the second try");
-		expectError(function() index.resolve(AstType.NamedType("Broken")), "an alias to a missing type should be rejected");
-		expectError(function() index.resolve(AstType.NamedType("Broken")), "a broken alias should still be rejected on the second try");
+		expectError(function() index.resolve(AstType.NamedType("Loop")),
+			"a cyclic alias should still be rejected on the second try");
+		expectError(function() index.resolve(AstType.NamedType("Broken")),
+			"an alias to a missing type should be rejected");
+		expectError(function() index.resolve(AstType.NamedType("Broken")),
+			"a broken alias should still be rejected on the second try");
 		expect(spell(index.resolve(AstType.NamedType("Outer"))) == outer, "failures must not disturb cached aliases");
 
 		Sys.println("PASS: alias resolution memoization");

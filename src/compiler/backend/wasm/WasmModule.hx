@@ -24,7 +24,9 @@ typedef WasmImport = {
 	final type:WasmFunctionType;
 }
 
-typedef WasmLocal = {final type:WasmValueType;}
+typedef WasmLocal = {
+	final type:WasmValueType;
+}
 
 class WasmFunction {
 	public final type:WasmFunctionType;
@@ -38,7 +40,8 @@ class WasmFunction {
 	 */
 	public final encodedBody:Null<haxe.io.Bytes>;
 
-	public function new(name:String, type:WasmFunctionType, ?locals:Array<WasmLocal>, ?body:Array<WasmInstruction>, ?encodedBody:haxe.io.Bytes) {
+	public function new(name:String, type:WasmFunctionType, ?locals:Array<WasmLocal>, ?body:Array<WasmInstruction>,
+			?encodedBody:haxe.io.Bytes) {
 		this.name = name;
 		this.type = type;
 		this.locals = locals == null ? [] : locals;

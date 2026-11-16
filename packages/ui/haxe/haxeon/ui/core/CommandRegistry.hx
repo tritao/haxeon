@@ -36,7 +36,8 @@ class CommandRegistry implements Observable {
 			throw "Command registry cannot register null commands";
 		if (commands.exists(command.id))
 			throw 'Command ${command.id} is already registered';
-		var nextCommands = copyCommands(commands), nextScopes = copyScopes(commandScopes),
+		var nextCommands = copyCommands(commands),
+			nextScopes = copyScopes(commandScopes),
 			nextOrder = commandOrder.copy();
 		nextCommands.set(command.id, command);
 		nextScopes.set(command.id, scope);
@@ -49,7 +50,8 @@ class CommandRegistry implements Observable {
 	public function unregister(id:String):Bool {
 		if (id == null || !commands.exists(id))
 			return false;
-		var nextCommands = copyCommands(commands), nextScopes = copyScopes(commandScopes),
+		var nextCommands = copyCommands(commands),
+			nextScopes = copyScopes(commandScopes),
 			nextOrder = commandOrder.copy();
 		nextCommands.remove(id);
 		nextScopes.remove(id);
@@ -272,8 +274,7 @@ class CommandRegistry implements Observable {
 			while (commandIndex >= 0) {
 				var id = commandOrder[commandIndex];
 				var command = commands.get(id);
-				if (command != null && commandScopes.get(id) == scope &&
-					matches(id, command, key, normalized)) {
+				if (command != null && commandScopes.get(id) == scope && matches(id, command, key, normalized)) {
 					if (!command.isEnabled(actual)) {
 						disabled = CommandResult.disabled();
 						notifyInvocation(id, disabled);
@@ -303,9 +304,13 @@ class CommandRegistry implements Observable {
 			undoId:String = "edit.undo", redoId:String = "edit.redo"):Void {
 		if (history == null)
 			throw "History commands require an edit history";
-		register(new Command(undoId, "Undo", function() { history.undo(); },
+		register(new Command(undoId, "Undo", function() {
+			history.undo();
+		},
 			new Shortcut(UiKey.Z, UiModifier.Control), function() return history.canUndo));
-		register(new Command(redoId, "Redo", function() { history.redo(); },
+		register(new Command(redoId, "Redo", function() {
+			history.redo();
+		},
 			new Shortcut(UiKey.Y, UiModifier.Control), function() return history.canRedo));
 	}
 

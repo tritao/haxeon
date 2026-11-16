@@ -92,7 +92,8 @@ class SuiteRunner {
 	/** The suites a mode runs, one per line, with their scheduling. */
 	public static function list(home:String, mode:String):Int {
 		for (suite in SuiteManifest.select(SuiteManifest.parse(Path.join([home, "tests", "suites.txt"])), mode)) {
-			var placement = suite.lane != null ? ' lane=${suite.lane}' : suite.pool != null ? ' pool=${suite.pool}' : "";
+			var placement = suite.lane != null ? ' lane=${suite.lane}' : suite.pool != null
+				? ' pool=${suite.pool}' : "";
 			Sys.println('${suite.name}$placement${suite.requires.length > 0 ? " requires=" + suite.requires.join(",") : ""}');
 		}
 		return 0;
@@ -109,7 +110,9 @@ class SuiteRunner {
 		}
 		record("build: ok");
 
-		var lanes:Array<{lock:Lock, results:Array<SuiteResult>}> = [], startedLanes = new Map<String, Bool>(), index = 0;
+		var lanes:Array<{lock:Lock, results:Array<SuiteResult>}> = [],
+			startedLanes = new Map<String, Bool>(),
+			index = 0;
 		while (index < suites.length) {
 			var suite = suites[index];
 			if (suite.lane != null) {
@@ -145,12 +148,17 @@ class SuiteRunner {
 			console(File.getContent(nativeLog));
 			return false;
 		}
-		var artifacts = new ToolArtifacts(home), pins = [
-			{variable: "HAXEON_MAIN_HL", main: "Main"},
-			{variable: "HAXEON_COMPILER_HL", main: "compiler.tools.HaxeonCompiler"},
-			{variable: "HAXEON_BUILD_HL", main: "build.HaxeonBuild"},
-			{variable: "HAXEON_TEST_CLI_HL", main: "tools.HaxeonCli"}
-		], resolved = new Map<String, String>(), errors = [], done = new Lock(), mutex = new Mutex();
+		var artifacts = new ToolArtifacts(home),
+			pins = [
+				{variable: "HAXEON_MAIN_HL", main: "Main"},
+				{variable: "HAXEON_COMPILER_HL", main: "compiler.tools.HaxeonCompiler"},
+				{variable: "HAXEON_BUILD_HL", main: "build.HaxeonBuild"},
+				{variable: "HAXEON_TEST_CLI_HL", main: "tools.HaxeonCli"}
+			],
+			resolved = new Map<String, String>(),
+			errors = [],
+			done = new Lock(),
+			mutex = new Mutex();
 		for (pin in pins) {
 			var existing = Sys.getEnv(pin.variable);
 			if (existing != null && existing != "" && FileSystem.exists(existing)) {
@@ -188,7 +196,7 @@ class SuiteRunner {
 		return true;
 	}
 
-	function startLane(members:Array<Suite>):{lock:Lock, results:Array<SuiteResult>} {
+	function startLane(members:Array<Suite>): {lock: Lock, results: Array<SuiteResult>} {
 		var lane = {lock: new Lock(), results: []};
 		console('${prefix()}lane ${members[0].lane}, in the background: ${members.map(suite -> suite.name).join(" ")}');
 		Thread.create(() -> {
@@ -200,8 +208,12 @@ class SuiteRunner {
 	}
 
 	function runPool(members:Array<Suite>):Void {
-		var limit = Std.int(Math.max(1, Math.min(options.jobs, POOL_LIMIT))), results:Array<Null<SuiteResult>> = [for (_ in members) null], next = 0,
-			mutex = new Mutex(), done = new Lock(), workers = Std.int(Math.min(limit, members.length));
+		var limit = Std.int(Math.max(1, Math.min(options.jobs, POOL_LIMIT))),
+			results:Array<Null<SuiteResult>> = [for (_ in members) null],
+			next = 0,
+			mutex = new Mutex(),
+			done = new Lock(),
+			workers = Std.int(Math.min(limit, members.length));
 		console('${prefix()}pool ${members[0].pool}, $workers at a time: ${members.map(suite -> suite.name).join(" ")}');
 		for (_ in 0...workers)
 			Thread.create(() -> {

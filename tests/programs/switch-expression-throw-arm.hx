@@ -18,9 +18,9 @@ function settle(poll:Poll):Outcome {
 			var message = "broken " + code;
 			throw message;
 		case Lost(code): {
-				var message = "lost " + code;
-				throw message;
-			}
+			var message = "lost " + code;
+			throw message;
+		}
 		case Done(value):
 			Resolved(value);
 	};

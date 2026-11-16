@@ -51,7 +51,8 @@ class DocumentationTools {
 			var commentStart = position,
 				documentation = position + 2 < bytes.length && bytes.get(position + 2) == "*".code;
 			position += 2;
-			while (position + 1 < bytes.length && !(bytes.get(position) == "*".code && bytes.get(position + 1) == "/".code))
+			while (position + 1 < bytes.length
+				&& !(bytes.get(position) == "*".code && bytes.get(position + 1) == "/".code))
 				position++;
 			if (position + 1 >= bytes.length) {
 				if (documentation)
@@ -68,7 +69,8 @@ class DocumentationTools {
 		return result;
 	}
 
-	public static function forSpan(file:SourceFile, comments:Array<DocumentationComment>, span:SourceSpan):Documentation {
+	public static function forSpan(file:SourceFile, comments:Array<DocumentationComment>,
+			span:SourceSpan):Documentation {
 		var low = 0, high = comments.length;
 		while (low < high) {
 			var middle = low + ((high - low) >> 1);
@@ -78,7 +80,8 @@ class DocumentationTools {
 				high = middle;
 		}
 		var candidate:Null<DocumentationComment> = low == 0 ? null : comments[low - 1];
-		return candidate != null && isDocumentationGap(file.slice(candidate.end, span.start)) ? candidate.documentation : empty();
+		return candidate != null
+			&& isDocumentationGap(file.slice(candidate.end, span.start)) ? candidate.documentation : empty();
 	}
 
 	public static function empty():Documentation
@@ -166,7 +169,8 @@ class DocumentationTools {
 
 	static function isDeclarationWord(value:String):Bool
 		return switch value {
-			case "public" | "private" | "static" | "final" | "extern" | "override" | "inline" | "dynamic" | "function" | "var": true;
+			case "public" | "private" | "static" | "final" | "extern" | "override" | "inline" | "dynamic" | "function"
+				| "var": true;
 			case _: false;
 		};
 

@@ -5,7 +5,11 @@ import compiler.Provides.ProviderOperations;
 import compiler.ir.Ir;
 import compiler.ir.codec.IrTypeCodec;
 
-private typedef IrValueArraySnapshot = {final slot:Int; final value:IrValue; final ?active:IrValue;}
+private typedef IrValueArraySnapshot = {
+	final slot:Int;
+	final value:IrValue;
+	final ?active:IrValue;
+}
 
 /** Dynamic escapes materialize a value; ordinary typed lane access never calls these helpers. */
 class IrValueArrayBridge {
@@ -59,7 +63,8 @@ class IrValueArrayBridge {
 		for (leaf in leaves)
 			if (helpers.subtree([])[leaf.slot].slot.isReference) {
 				// Unpacking a carrier is a pointer move, not a Dynamic conversion. Only inspect nullness here.
-				var reference = IrValueLaneReference.isCarrier(leaf.value.type) ? write.call(IrValueLaneReference.UNPACK, [leaf.value], Dyn) : leaf.value;
+				var reference = IrValueLaneReference.isCarrier(leaf.value.type)
+					? write.call(IrValueLaneReference.UNPACK, [leaf.value], Dyn) : leaf.value;
 				var empty = write.createBlock(),
 					present = write.createBlock(),
 					join = write.createBlock();
@@ -95,12 +100,12 @@ class IrValueArrayBridge {
 				case EnumTag(name): Enum(name);
 				default: valueType(element);
 			},
-			type = accepts.typeValue(logical);
+				type = accepts.typeValue(logical);
 		var matches = accepts.call("__std_is_exact_type", [value, type], Bool);
 		if (isOptional(element) || switch element {
-				case Enum(_), EnumTag(_): true;
-				default: false;
-			}) {
+			case Enum(_), EnumTag(_): true;
+			default: false;
+		}) {
 			var nil = accepts.equal(value, accepts.constNull(Dyn)),
 				absent = accepts.createBlock(),
 				present = accepts.createBlock();
@@ -108,15 +113,18 @@ class IrValueArrayBridge {
 			accepts.select(absent);
 			accepts.returnValue(accepts.constBool(true));
 			accepts.select(present);
-			}
+		}
 		accepts.returnValue(matches);
 		return [
 			new IrFunction(readName(), read.arguments, Dyn, read.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, readName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, readName()))),
 			new IrFunction(writeName(), write.arguments, Void, write.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, writeName()))),
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, writeName()))),
 			new IrFunction(acceptsName(), accepts.arguments, Bool, accepts.blocks,
-				Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, acceptsName())))
+				Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayAccess, acceptsName())))
 		];
 	}
 
@@ -129,10 +137,10 @@ class IrValueArrayBridge {
 					done = b.createBlock();
 				b.branch(b.equal(value, b.constNull(type)), absent, present);
 				b.select(absent);
-				var presence = helpers.slot(path, true), empty = [
-					for (leaf in helpers.subtree(path))
-						{slot: leaf.index, value: zero(b, leaf.slot.type), active: b.constBool(leaf.index == presence)}
-				], absentEnd = b.currentBlock().id;
+				var presence = helpers.slot(path, true), empty = [for (leaf in helpers.subtree(path))
+					{
+						slot:leaf.index, value:zero(b, leaf.slot.type), active:b.constBool(leaf.index == presence)
+					}], absentEnd = b.currentBlock().id;
 				b.jump(done);
 				b.select(present);
 				var unwrapped = b.safeCast(value, inner),
@@ -141,31 +149,33 @@ class IrValueArrayBridge {
 					live.push({slot: helpers.slot(path, false, true), value: unwrapped});
 				else
 					live = live.concat(snapshot(b, unwrapped, inner, path));
-				var active = [
-					for (leaf in live)
-						{slot: leaf.slot, value: leaf.active == null ? b.constBool(true) : leaf.active}
-				], presentEnd = b.currentBlock().id;
+				var active = [for (leaf in live)
+					{
+						slot:leaf.slot, value:leaf.active == null ? b.constBool(true) : leaf.active
+					}], presentEnd = b.currentBlock().id;
 				b.jump(done);
 				b.select(done);
-				[
-					for (leaf in empty) {
-						var actual = [for (item in live) if (item.slot == leaf.slot) item.value],
-							actualActive = [for (item in active) if (item.slot == leaf.slot) item.value];
-						if (actual.length != 1) throw "Incomplete dynamic value-array snapshot";
-						{
-							slot: leaf.slot,
-							value: b.phi(leaf.value.type, [{block: absentEnd, value: leaf.value}, {block: presentEnd, value: actual[0]}]),
-							active: b.phi(Bool, [
-								{block: absentEnd, value: leaf.active},
-								{block: presentEnd, value: actualActive[0]}
-							])
-						};
-					}
-				];
+				[for (leaf in empty) {
+					var actual = [for (item in live) if (item.slot == leaf.slot) item.value],
+						actualActive = [for (item in active) if (item.slot == leaf.slot) item.value];
+					if (actual.length != 1) throw "Incomplete dynamic value-array snapshot";
+					{
+						slot:leaf.slot,
+							value:b.phi(leaf.value.type, [
+								{block: absentEnd, value: leaf.value},
+								{block: presentEnd, value: actual[0]}
+							]),
+								active:b.phi(Bool, [
+									{block: absentEnd, value: leaf.active},
+									{block: presentEnd, value: actualActive[0]}
+								])
+					};
+				}];
 			case Obj(name) if (isValue(type)):
 				var leaves:Array<IrValueArraySnapshot> = [];
 				for (field in requireObject(name).fields)
-					leaves = leaves.concat(snapshot(b, b.fieldGet(value, field.name, field.type), field.type, path.concat([field.name])));
+					leaves = leaves.concat(snapshot(b, b.fieldGet(value, field.name, field.type), field.type,
+						path.concat([field.name])));
 				leaves;
 			default: [{slot: helpers.slot(path), value: value}];
 		};
@@ -182,7 +192,8 @@ class IrValueArrayBridge {
 			default: b.constNull(type);
 		};
 
-	public function readValue(builder:IrBuilder, array:IrValue, index:IrValue, type:IrType, path:Array<String>):IrValue {
+	public function readValue(builder:IrBuilder, array:IrValue, index:IrValue, type:IrType,
+			path:Array<String>):IrValue {
 		return switch type {
 			case Nullable(inner) if (isValue(inner) || isScalar(inner)):
 				var flag = builder.call(helpers.getter(helpers.slot(path, true)), [array, index], Bool),
@@ -195,7 +206,10 @@ class IrValueArrayBridge {
 					absentBlock = builder.currentBlock();
 				builder.jump(done);
 				builder.select(present);
-				var payload = isScalar(inner) ? builder.call(helpers.getter(helpers.slot(path, false, true)), [array, index],
+				var payload = isScalar(inner) ? builder.call(helpers.getter(helpers.slot(path, false, true)), [
+					array,
+					index
+				],
 					inner) : readValue(builder, array, index, inner, path);
 				var boxed = builder.toDyn(payload, type),
 					presentBlock = builder.currentBlock();
@@ -206,13 +220,15 @@ class IrValueArrayBridge {
 				var result = builder.valueInit(className),
 					object = requireObject(className);
 				for (field in object.fields)
-					builder.fieldSet(result, field.name, readValue(builder, array, index, field.type, path.concat([field.name])));
+					builder.fieldSet(result, field.name,
+						readValue(builder, array, index, field.type, path.concat([field.name])));
 				result;
 			default: builder.call(helpers.getter(helpers.slot(path)), [array, index], type);
 		};
 	}
 
-	public function writeValue(builder:IrBuilder, array:IrValue, index:IrValue, value:IrValue, type:IrType, path:Array<String>):Void {
+	public function writeValue(builder:IrBuilder, array:IrValue, index:IrValue, value:IrValue, type:IrType,
+			path:Array<String>):Void {
 		switch type {
 			case Nullable(inner) if (isValue(inner) || isScalar(inner)):
 				var absent = builder.createBlock(),
@@ -233,7 +249,8 @@ class IrValueArrayBridge {
 				builder.select(done);
 			case Obj(className) if (isValue(type)):
 				for (field in requireObject(className).fields)
-					writeValue(builder, array, index, builder.fieldGet(value, field.name, field.type), field.type, path.concat([field.name]));
+					writeValue(builder, array, index, builder.fieldGet(value, field.name, field.type), field.type,
+						path.concat([field.name]));
 			default:
 				builder.call(helpers.setter(helpers.slot(path)), [array, index, value], Void);
 		}
@@ -241,7 +258,8 @@ class IrValueArrayBridge {
 
 	function isValue(type:IrType):Bool
 		return switch type {
-			case Obj(name): var object = objects.get(name); object != null && object.isValue;
+			case Obj(name): var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 

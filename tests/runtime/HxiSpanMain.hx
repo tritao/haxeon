@@ -23,19 +23,18 @@ class HxiSpanMain {
 			+ '\textern fn ticksCount() -> c_size @symbol("native_fixture_span_ticks_count");\n'
 			+ '\textern fn codes() -> ptr<const<u32>> @span("native_fixture_span_codes_count") @symbol("native_fixture_span_codes");\n'
 			+ '\textern fn codesCount() -> c_size @symbol("native_fixture_span_codes_count");\n'
-			+
-			'\textern fn weightedSum(values: ptr<const<f64>> @in_array("count"), weights: ptr<const<f64>> @in_array("count"), count: u32, bias: f64) -> f64 @symbol("native_fixture_span_weighted_sum");\n'
+			+ '\textern fn weightedSum(values: ptr<const<f64>> @in_array("count"), weights: ptr<const<f64>> @in_array("count"), count: u32, bias: f64) -> f64 @symbol("native_fixture_span_weighted_sum");\n'
 			+ '\textern fn byteSum(bytes: ptr<const<u8>> @in_array("length"), length: u32) -> u32 @symbol("native_fixture_span_byte_sum");\n'
 			+ '\tstruct fixture_pick @layout(8, 4) { index: i32 @offset(0); scale: i32 @offset(4); }\n'
 			+ '\tstruct fixture_bias @layout(8, 8) { bias: f64 @offset(0); }\n'
-			+
-			'\textern fn pick(bias: ptr<const<fixture_bias>>, values: ptr<const<f64>> @in_array("count"), count: u32, picks: ptr<const<fixture_pick>> @in_array("pickCount"), pickCount: u32) -> f64 @symbol("native_fixture_span_pick");\n'
+			+ '\textern fn pick(bias: ptr<const<fixture_bias>>, values: ptr<const<f64>> @in_array("count"), count: u32, picks: ptr<const<fixture_pick>> @in_array("pickCount"), pickCount: u32) -> f64 @symbol("native_fixture_span_pick");\n'
 			+ '}');
 		compiler.update("Main.hx", MAIN);
 		File.saveBytes(output, HlWriter.encode(compiler.compile("Main").module).flatten());
 	}
 
-	static final MAIN = "import Spans;
+	static final MAIN =
+		"import Spans;
 import runtime.memory.NativeSpan;
 
 class Owner implements runtime.memory.NativeSpanOwner {

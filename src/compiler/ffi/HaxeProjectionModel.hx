@@ -114,8 +114,10 @@ class HaxeProjectionModel {
 	public final callbacks:Array<ProjectedCallback>;
 	public final functions:Array<ProjectedFunction>;
 
-	public function new(source:HxiInterface, omitted:Null<Map<String, Bool>>, visibleDeclarations:Null<Map<String, compiler.ffi.HxiModel.HxiDeclaration>>,
-			abi:HxiAbi, profile:HxiProjectionProfile, enums:Array<ProjectedEnum>, structures:Array<ProjectedStruct>, handles:Array<ProjectedHandle>,
+	public function new(source:HxiInterface, omitted:Null<Map<String, Bool>>,
+			visibleDeclarations:Null<Map<String, compiler.ffi.HxiModel.HxiDeclaration>>,
+			abi:HxiAbi, profile:HxiProjectionProfile, enums:Array<ProjectedEnum>, structures:Array<ProjectedStruct>,
+			handles:Array<ProjectedHandle>,
 			callbacks:Array<ProjectedCallback>, functions:Array<ProjectedFunction>) {
 		this.source = source;
 		this.omitted = omitted;

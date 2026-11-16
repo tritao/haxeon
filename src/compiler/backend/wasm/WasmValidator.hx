@@ -132,7 +132,8 @@ class WasmValidator {
 		}
 	}
 
-	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>, module:WasmModule, tableMin:Null<Int>,
+	static function validateFunction(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>,
+			module:WasmModule, tableMin:Null<Int>,
 			tagType:Null<Int>):Void {
 		var labels:Array<{isIf:Bool, result:Null<WasmValueType>}> = [],
 			localCount = fn.type.parameters.length + fn.locals.length;
@@ -159,8 +160,9 @@ class WasmValidator {
 									target = labels[labels.length - label - 1];
 								if (parameters.length != (target.result == null ? 0 : 1)
 									|| (target.result != null
-										&& !isValueSubtype(parameters[0], target.result,
-											module))) throw 'Wasm function ${fn.name} has an exception catch incompatible with label $label';
+									&& !isValueSubtype(parameters[0], target.result,
+									module)))
+									throw 'Wasm function ${fn.name} has an exception catch incompatible with label $label';
 							case CatchAll(label):
 								validateDepth(fn, label, labels.length);
 								if (labels[labels.length - label - 1].result != null)
@@ -207,15 +209,18 @@ class WasmValidator {
 					validateHeapType(heapType, module, module.typeCount());
 				case RefTest(type), RefCast(type):
 					validateHeapType(type.heap, module, module.typeCount());
-				case StructNew(typeIndex), StructNewDefault(typeIndex), StructGet(typeIndex, _), StructGetSigned(typeIndex, _),
+				case StructNew(typeIndex), StructNewDefault(typeIndex), StructGet(typeIndex, _),
+					StructGetSigned(typeIndex, _),
 					StructGetUnsigned(typeIndex, _), StructSet(typeIndex, _):
 					structType(module, typeIndex);
 					switch instruction {
-						case StructGet(_, fieldIndex), StructGetSigned(_, fieldIndex), StructGetUnsigned(_, fieldIndex), StructSet(_, fieldIndex):
+						case StructGet(_, fieldIndex), StructGetSigned(_, fieldIndex), StructGetUnsigned(_, fieldIndex),
+							StructSet(_, fieldIndex):
 							structField(module, typeIndex, fieldIndex);
 						default:
 					}
-				case ArrayNew(typeIndex), ArrayNewDefault(typeIndex), ArrayNewData(typeIndex, _), ArrayGet(typeIndex), ArrayGetSigned(typeIndex),
+				case ArrayNew(typeIndex), ArrayNewDefault(typeIndex), ArrayNewData(typeIndex, _), ArrayGet(typeIndex),
+					ArrayGetSigned(typeIndex),
 					ArrayGetUnsigned(typeIndex), ArraySet(typeIndex), ArrayFill(typeIndex):
 					arrayType(module, typeIndex);
 				case ArrayCopy(destinationTypeIndex, sourceTypeIndex):
@@ -229,7 +234,8 @@ class WasmValidator {
 		validateStack(fn, functions, globals, module, tagType);
 	}
 
-	static function validateStack(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>, module:WasmModule, tagType:Null<Int>):Void {
+	static function validateStack(fn:WasmFunction, functions:Array<WasmFunctionType>, globals:Array<WasmGlobal>,
+			module:WasmModule, tagType:Null<Int>):Void {
 		var locals:Array<WasmValueType> = fn.type.parameters.copy();
 		for (local in fn.locals)
 			locals.push(local.type);
@@ -485,7 +491,8 @@ class WasmValidator {
 				case F64Const(_):
 					if (reachable)
 						stack.push(F64);
-				case I32Add, I32Sub, I32Mul, I32DivS, I32RemS, I32And, I32Xor, I32Or, I32Shl, I32ShrS, I32ShrU, I32Eq, I32LtS, I32LeS:
+				case I32Add, I32Sub, I32Mul, I32DivS, I32RemS, I32And, I32Xor, I32Or, I32Shl, I32ShrS, I32ShrU, I32Eq,
+					I32LtS, I32LeS:
 					binary(stack, I32, I32, fn);
 				case I64Add, I64Sub, I64Mul, I64DivS, I64RemS, I64And, I64Xor, I64Or, I64Shl, I64ShrS, I64ShrU:
 					binary(stack, I64, I64, fn);
@@ -718,7 +725,8 @@ class WasmValidator {
 		}
 	}
 
-	static function binary(stack:Array<WasmValueType>, input:WasmValueType, output:WasmValueType, fn:WasmFunction):Void {
+	static function binary(stack:Array<WasmValueType>, input:WasmValueType, output:WasmValueType,
+			fn:WasmFunction):Void {
 		pop(stack, input, fn);
 		pop(stack, input, fn);
 		stack.push(output);
@@ -793,7 +801,8 @@ class WasmValidator {
 	static function isCompositeSubtype(actual:WasmCompositeType, expected:WasmCompositeType, module:WasmModule):Bool {
 		return switch [actual, expected] {
 			case [Struct(actualFields), Struct(expectedFields)]:
-				if (actualFields.length < expectedFields.length) false; else {
+				if (actualFields.length < expectedFields.length) false;
+				else {
 					var matches = true;
 					for (index in 0...expectedFields.length)
 						if (!isFieldSubtype(actualFields[index], expectedFields[index], module))
@@ -803,14 +812,15 @@ class WasmValidator {
 			case [Array(actualField), Array(expectedField)]: isFieldSubtype(actualField, expectedField, module);
 			case [Func(actualType), Func(expectedType)]:
 				actualType.parameters.length == expectedType.parameters.length
-				&& actualType.results.length == expectedType.results.length
-				&& resultTypesSubtype(expectedType.parameters, actualType.parameters, module)
-				&& resultTypesSubtype(actualType.results, expectedType.results, module);
+					&& actualType.results.length == expectedType.results.length
+					&& resultTypesSubtype(expectedType.parameters, actualType.parameters, module)
+					&& resultTypesSubtype(actualType.results, expectedType.results, module);
 			default: false;
 		};
 	}
 
-	static function resultTypesSubtype(actual:Array<WasmValueType>, expected:Array<WasmValueType>, module:WasmModule):Bool {
+	static function resultTypesSubtype(actual:Array<WasmValueType>, expected:Array<WasmValueType>,
+			module:WasmModule):Bool {
 		if (actual.length != expected.length)
 			return false;
 		for (index in 0...actual.length)
@@ -834,7 +844,8 @@ class WasmValidator {
 		};
 	}
 
-	static function popTypedReference(stack:Array<WasmValueType>, typeIndex:Int, fn:WasmFunction, module:WasmModule):Void {
+	static function popTypedReference(stack:Array<WasmValueType>, typeIndex:Int, fn:WasmFunction,
+			module:WasmModule):Void {
 		var type = popReference(stack, fn);
 		if (!isHeapSubtype(type.heap, Type(typeIndex), module))
 			throw 'Wasm function ${fn.name} expected a reference to heap type $typeIndex, got $type';
@@ -853,8 +864,9 @@ class WasmValidator {
 	static function isValueSubtype(actual:WasmValueType, expected:WasmValueType, module:WasmModule):Bool {
 		return switch [actual, expected] {
 			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(actualType), Ref(expectedType)]: (!actualType.nullable || expectedType.nullable) && isHeapSubtype(actualType.heap, expectedType.heap,
-					module);
+			case [Ref(actualType), Ref(expectedType)]: (!actualType.nullable || expectedType.nullable)
+				&& isHeapSubtype(actualType.heap, expectedType.heap,
+				module);
 			default: false;
 		};
 	}
@@ -876,13 +888,52 @@ class WasmValidator {
 						isHeapSubtype(root, expected, module);
 					default: false;
 				};
-			case I31: (switch (expected) { case Eq: true; default: false; }) || (switch (expected) { case Any: true; default: false; });
-			case Struct, Array: (switch (expected) { case Eq: true; default: false; }) || (switch (expected) { case Any: true; default: false; });
-			case Eq: (switch (expected) { case Any: true; default: false; });
-			case None: (switch (expected) { case Any: true; default: false; }) || (switch (expected) { case Eq: true; default: false; }) || (switch (expected) { case I31: true; default: false; }) || (switch (expected) { case Struct: true; default: false; }) || (switch (expected) { case Array: true; default: false; });
-			case NoFunc: (switch (expected) { case Func: true; default: false; });
-			case NoExtern: (switch (expected) { case Extern: true; default: false; });
-			case NoExn: (switch (expected) { case Exn: true; default: false; });
+			case I31: (switch (expected) {
+					case Eq: true;
+					default: false;
+				}) || (switch (expected) {
+					case Any: true;
+					default: false;
+				});
+			case Struct, Array: (switch (expected) {
+					case Eq: true;
+					default: false;
+				}) || (switch (expected) {
+					case Any: true;
+					default: false;
+				});
+			case Eq: (switch (expected) {
+					case Any: true;
+					default: false;
+				});
+			case None: (switch (expected) {
+					case Any: true;
+					default: false;
+				}) || (switch (expected) {
+					case Eq: true;
+					default: false;
+				}) || (switch (expected) {
+					case I31: true;
+					default: false;
+				}) || (switch (expected) {
+					case Struct: true;
+					default: false;
+				}) || (switch (expected) {
+					case Array: true;
+					default: false;
+				});
+			case NoFunc: (switch (expected) {
+					case Func: true;
+					default: false;
+				});
+			case NoExtern: (switch (expected) {
+					case Extern: true;
+					default: false;
+				});
+			case NoExn: (switch (expected) {
+					case Exn: true;
+					default: false;
+				});
 			default: false;
 		};
 	}
@@ -902,14 +953,30 @@ class WasmValidator {
 	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool
 		return switch [left, right] {
 			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(leftType), Ref(rightType)]: (!leftType.nullable || rightType.nullable) && sameHeapType(leftType.heap, rightType.heap);
+			case [Ref(leftType), Ref(rightType)]: (!leftType.nullable || rightType.nullable)
+				&& sameHeapType(leftType.heap, rightType.heap);
 			default: false;
 		};
 
 	static function sameHeapType(left:WasmHeapType, right:WasmHeapType):Bool {
 		return switch [left, right] {
-			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
-				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
+			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [
+				None,
+				None
+			], [
+				NoExtern,
+				NoExtern
+			],
+				[
+					NoFunc,
+					NoFunc
+				], [
+					Exn,
+					Exn
+				], [
+					NoExn,
+					NoExn
+				]: true;
 			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
 			default: false;
 		};
@@ -921,7 +988,8 @@ class WasmValidator {
 		return stack.pop();
 	}
 
-	static function reset(stack:Array<WasmValueType>, height:Int, result:Null<WasmValueType>, reachable:Bool, fn:WasmFunction, module:WasmModule,
+	static function reset(stack:Array<WasmValueType>, height:Int, result:Null<WasmValueType>, reachable:Bool,
+			fn:WasmFunction, module:WasmModule,
 			emitResult:Bool):Void {
 		if (reachable) {
 			var resultCount = result == null ? 0 : 1;

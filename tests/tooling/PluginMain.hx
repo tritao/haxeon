@@ -31,7 +31,7 @@ class PluginMain {
 				disposedModules++;
 				Runtime.dispose(cast module);
 			}),
-			firstPlugin = loadedPlugin(live, first.functionIds);
+				firstPlugin = loadedPlugin(live, first.functionIds);
 		domain.activateWithModule(firstPlugin, live);
 		compiler.acknowledgePublication(first.revision);
 		if (call(live, first.functionIds, "Main.documentCount") != 1
@@ -53,16 +53,19 @@ class PluginMain {
 		for (name in bodyEdit.retyped)
 			if (bodyEdit.regenerated.indexOf(name) < 0)
 				throw 'Plugin body edit did not regenerate invalidated function "$name"';
-			else if (!StringTools.startsWith(name, pluginPrefix) && !StringTools.startsWith(name, "$lambda:" + pluginPrefix))
+			else if (!StringTools.startsWith(name, pluginPrefix)
+				&& !StringTools.startsWith(name, "$lambda:" + pluginPrefix))
 				throw 'Plugin body edit invalidated another module function "$name"';
-		Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
 		compiler.acknowledgePublication(bodyEdit.revision);
 		var patchedCommand = call(live, bodyEdit.functionIds, "Main.runCommand"),
 			patchedCursor = call(live, bodyEdit.functionIds, "Main.cursor");
 		if (patchedCommand != 7 || patchedCursor != 7)
 			throw 'Body patch did not preserve plugin state or update callback behavior ($patchedCommand/$patchedCursor)';
 		try {
-			Runtime.patchSet(live, new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
+			Runtime.patchSet(live,
+				new PatchSet(first.revision, bodyEdit.revision, bodyEdit.patchBytes, bodyEdit.changedFunctions));
 			throw "Stale plugin patch unexpectedly succeeded";
 		} catch (error:runtime.RuntimeError) {
 			if (error.status != runtime.RuntimeStatus.StalePatch)
@@ -83,7 +86,8 @@ class PluginMain {
 		resumed.update("Main.hx", mainSource);
 		compiler = resumed;
 
-		compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(patchedSource, "public function find():Int", "public function find():Bool"));
+		compiler.update("pragtical/plugins/SearchPlugin.hx",
+			StringTools.replace(patchedSource, "public function find():Int", "public function find():Bool"));
 		try {
 			compiler.compile("Main");
 			throw "Invalid plugin edit unexpectedly compiled";
@@ -94,32 +98,41 @@ class PluginMain {
 
 		var structuralEditor = StringTools.replace(editorSource, "public var documents:Array<Document>;",
 			"public var documents:Array<Document>; public var generation:Int;");
-		structuralEditor = StringTools.replace(structuralEditor, "this.documents = new Array<pragtical.api.Document>(0);",
+		structuralEditor = StringTools.replace(structuralEditor,
+			"this.documents = new Array<pragtical.api.Document>(0);",
 			"this.documents = new Array<pragtical.api.Document>(0); this.generation = 2;");
 		// An added field alone patches into a reserved slot; a new base class changes the layout every subclass field sits at.
-		structuralEditor = StringTools.replace(structuralEditor, "class Editor {", "class EditorBase {}\n\nclass Editor extends EditorBase {");
+		structuralEditor = StringTools.replace(structuralEditor, "class Editor {",
+			"class EditorBase {}\n\nclass Editor extends EditorBase {");
 		compiler.update("pragtical/api/Editor.hx", structuralEditor);
-		var activationFailureSource = StringTools.replace(mainSource, "searchPlugin.activate();", "throw \"activation failed\";");
+		var activationFailureSource = StringTools.replace(mainSource, "searchPlugin.activate();",
+			"throw \"activation failed\";");
 		compiler.update("Main.hx", activationFailureSource);
 		var activationFailure = compiler.compile("Main"),
-			activationCandidate = Runtime.load(HlWriter.encode(activationFailure.module).flatten(), activationFailure.runtimeIdentity);
+			activationCandidate = Runtime.load(HlWriter.encode(activationFailure.module).flatten(),
+				activationFailure.runtimeIdentity);
 		try {
-			domain.reloadWithModule(loadedPlugin(activationCandidate, activationFailure.functionIds), activationCandidate);
+			domain.reloadWithModule(loadedPlugin(activationCandidate, activationFailure.functionIds),
+				activationCandidate);
 			throw "Plugin activation failure unexpectedly published";
 		} catch (_:Dynamic) {}
-		if (!domain.active || domain.generation != 1 || disposedModules != 1 || call(live, bodyEdit.functionIds, "Main.cursor") != 7)
+		if (!domain.active || domain.generation != 1 || disposedModules != 1
+			|| call(live, bodyEdit.functionIds, "Main.cursor") != 7)
 			throw "Plugin activation failure did not recover the previous generation";
 		compiler.rejectPublication(activationFailure.revision);
 
-		var restoreFailureSource = StringTools.replace(mainSource, "searchPlugin.restoreState(value);", "throw \"restore failed\";");
+		var restoreFailureSource = StringTools.replace(mainSource, "searchPlugin.restoreState(value);",
+			"throw \"restore failed\";");
 		compiler.update("Main.hx", restoreFailureSource);
 		var restoreFailure = compiler.compile("Main"),
-			restoreCandidate = Runtime.load(HlWriter.encode(restoreFailure.module).flatten(), restoreFailure.runtimeIdentity);
+			restoreCandidate = Runtime.load(HlWriter.encode(restoreFailure.module).flatten(),
+				restoreFailure.runtimeIdentity);
 		try {
 			domain.reloadWithModule(loadedPlugin(restoreCandidate, restoreFailure.functionIds), restoreCandidate);
 			throw "Plugin restore failure unexpectedly published";
 		} catch (_:Dynamic) {}
-		if (!domain.active || domain.generation != 1 || disposedModules != 2 || call(live, bodyEdit.functionIds, "Main.cursor") != 7)
+		if (!domain.active || domain.generation != 1 || disposedModules != 2
+			|| call(live, bodyEdit.functionIds, "Main.cursor") != 7)
 			throw "Plugin restore failure did not retire its callbacks and recover";
 		compiler.rejectPublication(restoreFailure.revision);
 		compiler.update("Main.hx", mainSource);
@@ -138,12 +151,14 @@ class PluginMain {
 			|| disposedModules != 3)
 			throw "Structural reload did not restore observable editor/plugin state";
 
-		compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(patchedSource, "state.cursor + 2", "state.cursor + 3"));
+		compiler.update("pragtical/plugins/SearchPlugin.hx",
+			StringTools.replace(patchedSource, "state.cursor + 2", "state.cursor + 3"));
 		var afterReloadPatch = compiler.compile("Main");
 		if (afterReloadPatch.requiresReload || afterReloadPatch.patchBytes == null)
 			throw "Post-reload plugin body edit did not produce a patch";
 		Runtime.patchSet(replacement,
-			new PatchSet(structural.revision, afterReloadPatch.revision, afterReloadPatch.patchBytes, afterReloadPatch.changedFunctions));
+			new PatchSet(structural.revision, afterReloadPatch.revision, afterReloadPatch.patchBytes,
+			afterReloadPatch.changedFunctions));
 		compiler.acknowledgePublication(afterReloadPatch.revision);
 		if (call(replacement, afterReloadPatch.functionIds, "Main.runCommand") != 10)
 			throw "Post-reload patch did not retain restored state";
@@ -160,7 +175,8 @@ class PluginMain {
 	}
 
 	static function loadedPlugin(module:Dynamic, ids:Map<String, Int>):LoadedPlugin
-		return new LoadedPlugin(cast module, ids.get("Main.activate"), ids.get("Main.deactivate"), ids.get("Main.saveState"), ids.get("Main.restoreState"));
+		return new LoadedPlugin(cast module, ids.get("Main.activate"), ids.get("Main.deactivate"),
+			ids.get("Main.saveState"), ids.get("Main.restoreState"));
 
 	static function call(module:Dynamic, ids:Map<String, Int>, name:String):Int
 		return Runtime.callInt(cast module, ids.get(name));

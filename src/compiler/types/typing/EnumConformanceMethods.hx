@@ -25,9 +25,11 @@ class EnumConformanceMethods {
 	}
 
 	public static function name(type:CompilerType, method:String):String
-		return "$enum-custom:" + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
+		return "$enum-custom:" + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0,
+			32);
 
-	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String, span:SourceSpan):Void {
+	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String,
+			span:SourceSpan):Void {
 		var key = name(type, method);
 		if (!session.enumMethodRequests.exists(key))
 			session.enumMethodRequests.set(key, {type: type, method: method, origin: origin, span: span});
@@ -52,7 +54,8 @@ class EnumConformanceMethods {
 		return [for (key in keys) generated.get(key)];
 	}
 
-	public static function typeMethod(session:TypingSession, typer:BodyTyper, type:CompilerType, method:AstFunction, origin:String):TypedFunction {
+	public static function typeMethod(session:TypingSession, typer:BodyTyper, type:CompilerType, method:AstFunction,
+			origin:String):TypedFunction {
 		return switch type {
 			case TInstance(NominalKind.Enum, owner, arguments):
 				var declaration = session.enumDecls.get(owner), substitutions:Map<String, CompilerType> = [];
@@ -62,10 +65,12 @@ class EnumConformanceMethods {
 						: TTypeParameter(owner, declaration.typeParameters[index]));
 				var typed = typer.typeFunction(method, owner, true, substitutions, name(type, method.name), type);
 				{
-					name: typed.name, role: ProviderFunction(type, ProviderOperations.detailed(ProviderOperation.CustomMethod, method.name)), origin: origin, originKind: Helper, typeArguments: null, owner: null,
-					isStatic: true, isConstructor: false, isInline: typed.isInline, isKept: false, isExposed: false,
-					arguments: typed.arguments, result: typed.result, statements: typed.statements,
-					cells: typed.cells, cellCaptures: typed.cellCaptures, span: typed.span
+					name:typed.name, role:ProviderFunction(type,
+						ProviderOperations.detailed(ProviderOperation.CustomMethod, method.name)), origin:origin,
+						originKind:Helper, typeArguments:null, owner:null,
+						isStatic:true, isConstructor:false, isInline:typed.isInline, isKept:false, isExposed:false,
+						arguments:typed.arguments, result:typed.result, statements:typed.statements,
+						cells:typed.cells, cellCaptures:typed.cellCaptures, span:typed.span
 				};
 			default: throw 'Invalid enum conformance method receiver "$type"';
 		};

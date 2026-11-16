@@ -108,9 +108,11 @@ class Renderer {
 	public function beginRenderPass(desc:RenderPassDesc):Void {
 		ensureLive();
 		if (!frameActive || passActive)
-			throw BindingError.invalidState("Renderer.beginRenderPass", "GPU render pass requires a frame without an active pass");
+			throw BindingError.invalidState("Renderer.beginRenderPass",
+				"GPU render pass requires a frame without an active pass");
 		if (desc == null)
-			throw BindingError.invalidArgument("Renderer.beginRenderPass", "GPU render-pass descriptor must not be null");
+			throw BindingError.invalidArgument("Renderer.beginRenderPass",
+				"GPU render-pass descriptor must not be null");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_render_pass(value, desc.nativeValue()),
 			"renderer.beginRenderPass");
 		passActive = true;
@@ -120,7 +122,8 @@ class Renderer {
 	public function beginComputePass():Void {
 		ensureLive();
 		if (!frameActive || passActive)
-			throw BindingError.invalidState("Renderer.beginComputePass", "GPU compute pass requires a frame without an active pass");
+			throw BindingError.invalidState("Renderer.beginComputePass",
+				"GPU compute pass requires a frame without an active pass");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_compute_pass(value), "renderer.beginComputePass");
 		passActive = true;
 	}
@@ -129,7 +132,8 @@ class Renderer {
 	public function beginCopyPass():Void {
 		ensureLive();
 		if (!frameActive || passActive)
-			throw BindingError.invalidState("Renderer.beginCopyPass", "GPU copy pass requires a frame without an active pass");
+			throw BindingError.invalidState("Renderer.beginCopyPass",
+				"GPU copy pass requires a frame without an active pass");
 		GpuResult.check(NativeKitGpu.nkgpu_begin_copy_pass(value), "renderer.beginCopyPass");
 		passActive = true;
 	}
@@ -153,12 +157,12 @@ class Renderer {
 
 	/** Copies a byte range between buffers in the active copy pass. */
 	public function copyBuffer(source:Buffer, destination:Buffer, size:Int,
-		sourceOffset:Int = 0, destinationOffset:Int = 0):Void {
+			sourceOffset:Int = 0, destinationOffset:Int = 0):Void {
 		ensureFrame();
 		source.ensureLive();
 		destination.ensureLive();
-		if (source.rendererOwner() != this || destination.rendererOwner() != this || size <= 0 ||
-			sourceOffset < 0 || destinationOffset < 0)
+		if (source.rendererOwner() != this || destination.rendererOwner() != this || size <= 0 || sourceOffset < 0
+			|| destinationOffset < 0)
 			throw BindingError.invalidArgument("Renderer.copyBuffer", "GPU buffer-copy arguments are invalid");
 		var desc = new nkgpu_buffer_copy_desc();
 		desc.set_struct_size(nkgpu_buffer_copy_desc.size());
@@ -172,12 +176,12 @@ class Renderer {
 
 	/** Copies a 2D image region in the active copy pass. */
 	public function copyImage(source:Image, destination:Image, width:Int, height:Int,
-		sourceX:Int = 0, sourceY:Int = 0, destinationX:Int = 0, destinationY:Int = 0):Void {
+			sourceX:Int = 0, sourceY:Int = 0, destinationX:Int = 0, destinationY:Int = 0):Void {
 		ensureFrame();
 		source.ensureLive();
 		destination.ensureLive();
-		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 ||
-			height <= 0 || sourceX < 0 || sourceY < 0 || destinationX < 0 || destinationY < 0)
+		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 || height <= 0
+			|| sourceX < 0 || sourceY < 0 || destinationX < 0 || destinationY < 0)
 			throw BindingError.invalidArgument("Renderer.copyImage", "GPU image-copy arguments are invalid");
 		var desc = new nkgpu_image_copy_desc();
 		desc.set_struct_size(nkgpu_image_copy_desc.size());
@@ -198,14 +202,13 @@ class Renderer {
 
 	/** Uploads a buffer rectangle into an image in the active copy pass. */
 	public function bufferToImage(source:Buffer, destination:Image, width:Int, height:Int,
-		rowPitch:Int = 0, bufferOffset:Int = 0, x:Int = 0, y:Int = 0,
-		mipLevel:Int = 0, layer:Int = 0):Void {
+			rowPitch:Int = 0, bufferOffset:Int = 0, x:Int = 0, y:Int = 0,
+			mipLevel:Int = 0, layer:Int = 0):Void {
 		ensureFrame();
 		source.ensureLive();
 		destination.ensureLive();
-		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 ||
-			height <= 0 || rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 ||
-			mipLevel < 0 || layer < 0)
+		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 || height <= 0
+			|| rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 || mipLevel < 0 || layer < 0)
 			throw BindingError.invalidArgument("Renderer.bufferToImage", "GPU buffer-to-image arguments are invalid");
 		var desc = new nkgpu_buffer_image_copy_desc();
 		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
@@ -224,14 +227,13 @@ class Renderer {
 
 	/** Downloads an image rectangle into a buffer in top-to-bottom row order. */
 	public function imageToBuffer(source:Image, destination:Buffer, width:Int, height:Int,
-		rowPitch:Int = 0, bufferOffset:Int = 0, x:Int = 0, y:Int = 0,
-		mipLevel:Int = 0, layer:Int = 0):Void {
+			rowPitch:Int = 0, bufferOffset:Int = 0, x:Int = 0, y:Int = 0,
+			mipLevel:Int = 0, layer:Int = 0):Void {
 		ensureFrame();
 		source.ensureLive();
 		destination.ensureLive();
-		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 ||
-			height <= 0 || rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 ||
-			mipLevel < 0 || layer < 0)
+		if (source.rendererOwner() != this || destination.rendererOwner() != this || width <= 0 || height <= 0
+			|| rowPitch < 0 || bufferOffset < 0 || x < 0 || y < 0 || mipLevel < 0 || layer < 0)
 			throw BindingError.invalidArgument("Renderer.imageToBuffer", "GPU image-to-buffer arguments are invalid");
 		var desc = new nkgpu_buffer_image_copy_desc();
 		desc.set_struct_size(nkgpu_buffer_image_copy_desc.size());
@@ -258,10 +260,11 @@ class Renderer {
 
 	/** Applies or disables a framebuffer-pixel scissor rectangle. */
 	public function scissor(enabled:Bool, x:Int = 0, y:Int = 0, width:Int = 0,
-		height:Int = 0):Void {
+			height:Int = 0):Void {
 		ensureFrame();
 		if (enabled && (width <= 0 || height <= 0))
-			throw BindingError.invalidArgument("Renderer.scissor", "GPU scissor dimensions must be positive when enabled");
+			throw BindingError.invalidArgument("Renderer.scissor",
+				"GPU scissor dimensions must be positive when enabled");
 		GpuResult.check(NativeKitGpu.nkgpu_apply_scissor(value, enabled ? 1 : 0, x, y, width, height),
 			"renderer.scissor");
 	}
@@ -341,6 +344,7 @@ class Renderer {
 	function ensureResourceOperation():Void {
 		ensureLive();
 		if (frameActive)
-			throw BindingError.invalidState("Renderer.ensureResourceOperation", "GPU resources can only change while the renderer is idle");
+			throw BindingError.invalidState("Renderer.ensureResourceOperation",
+				"GPU resources can only change while the renderer is idle");
 	}
 }

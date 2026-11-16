@@ -66,7 +66,8 @@ class HxiSemanticInterface {
 
 /** Resolves raw HXI parameter and result annotations once after validation. */
 class HxiSemantics {
-	public static function normalize(model:HxiInterface, abi:HxiAbi, ?visibleDeclarations:Map<String, HxiDeclaration>):HxiSemanticInterface {
+	public static function normalize(model:HxiInterface, abi:HxiAbi,
+			?visibleDeclarations:Map<String, HxiDeclaration>):HxiSemanticInterface {
 		var declarations:Map<String, HxiDeclaration> = [];
 		if (visibleDeclarations != null)
 			for (name => declaration in visibleDeclarations)
@@ -78,12 +79,14 @@ class HxiSemantics {
 		for (declaration in model.declarations)
 			switch declaration {
 				case Function(name, parameters, result, symbol, _, callConvention, resultPolicy, _):
-					var normalizedParameters = [for (parameter in parameters) normalizeParameter(parameter, abi, declarations)],
+					var normalizedParameters = [for (parameter in parameters) normalizeParameter(parameter, abi,
+						declarations)],
 						nativeResult = abi.classify(result, true),
 						semanticResult = resultPolicy.span != null ? NativeSpan(resultPolicy.span,
 							pointeeValue(result,
-								abi)) : normalizeResult(result, nativeResult, resultPolicy.ownership, resultPolicy.handleDisposition, resultPolicy.length,
-								declarations);
+							abi)) : normalizeResult(result, nativeResult, resultPolicy.ownership,
+							resultPolicy.handleDisposition, resultPolicy.length,
+							declarations);
 					functions.push({
 						name: name,
 						symbol: symbol == null ? name : symbol,
@@ -96,15 +99,19 @@ class HxiSemantics {
 		return new HxiSemanticInterface(model, functions);
 	}
 
-	static function normalizeParameter(parameter:HxiParameter, abi:HxiAbi, declarations:Map<String, HxiDeclaration>):HxiSemanticParameter {
+	static function normalizeParameter(parameter:HxiParameter, abi:HxiAbi,
+			declarations:Map<String, HxiDeclaration>):HxiSemanticParameter {
 		var nativeValue = abi.classify(parameter.type),
 			kind:HxiSemanticParameterKind = switch parameter.direction {
 				case In:
-					if (parameter.retained) RetainedCallback(nativeValue); else InputValue(nativeValue);
+					if (parameter.retained) RetainedCallback(nativeValue);
+					else InputValue(nativeValue);
 				case InArray(count):
-					if (isByteType(pointeeType(parameter.type), declarations, [])) InputBytes(count); else InputArray(pointeeValue(parameter.type, abi), count);
+					if (isByteType(pointeeType(parameter.type), declarations, [])) InputBytes(count);
+					else InputArray(pointeeValue(parameter.type, abi), count);
 				case OutArray(count):
-					if (utf8ArrayPointer(parameter.type)) OutputStringArray(count); else OutputArray(pointeeValue(parameter.type, abi), count);
+					if (utf8ArrayPointer(parameter.type)) OutputStringArray(count);
+					else OutputArray(pointeeValue(parameter.type, abi), count);
 				case OutBuffer(size):
 					OutputBuffer(size);
 				case Out:
@@ -115,7 +122,8 @@ class HxiSemantics {
 		return {name: parameter.name, kind: kind, nativeValue: nativeValue};
 	}
 
-	static function normalizeOutput(parameter:HxiParameter, abi:HxiAbi, declarations:Map<String, HxiDeclaration>, inout:Bool):HxiSemanticParameterKind {
+	static function normalizeOutput(parameter:HxiParameter, abi:HxiAbi, declarations:Map<String, HxiDeclaration>,
+			inout:Bool):HxiSemanticParameterKind {
 		var valueType = pointeeType(parameter.type),
 			value = abi.classify(valueType);
 		return switch value {
@@ -133,7 +141,8 @@ class HxiSemantics {
 		};
 	}
 
-	static function normalizeResult(type:HxiType, value:HxiAbiValue, ownership:HxiOwnership, disposition:HxiHandleDisposition, length:Null<String>,
+	static function normalizeResult(type:HxiType, value:HxiAbiValue, ownership:HxiOwnership,
+			disposition:HxiHandleDisposition, length:Null<String>,
 			declarations:Map<String, HxiDeclaration>):HxiSemanticResultKind {
 		if (length != null)
 			return ManagedBytes(length, value, ownership, disposition);
@@ -192,8 +201,9 @@ class HxiSemantics {
 
 	static function declarationName(value:HxiDeclaration):String
 		return switch value {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
-				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
+				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_): name;
 		};
 
 	static function utf8ArrayPointer(type:HxiType):Bool

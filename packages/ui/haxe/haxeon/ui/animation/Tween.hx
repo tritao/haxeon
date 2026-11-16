@@ -10,8 +10,8 @@ class Tween {
 	public final easing:Int;
 
 	public function new(from:Float, to:Float, duration:Float, easing:Int = Easing.Linear) {
-		if (!finite(from) || !finite(to) || !finite(duration) || duration < 0.0 ||
-			easing < Easing.Linear || easing > Easing.EaseInOut)
+		if (!finite(from) || !finite(to) || !finite(duration) || duration < 0.0 || easing < Easing.Linear
+			|| easing > Easing.EaseInOut)
 			throw "Tween endpoints, duration, and easing must be valid";
 		this.from = from;
 		this.to = to;

@@ -6,7 +6,7 @@ import haxeon.ui.core.View;
 
 /** A component is its structural description; its native owner runs this body directly. */
 interface ScopeView extends View {
-  function scopeKey():String;
-  function inputsEqual(previous:ScopeView):Bool;
-  function buildBody(context:BuildContext):RenderNode;
+	function scopeKey():String;
+	function inputsEqual(previous:ScopeView):Bool;
+	function buildBody(context:BuildContext):RenderNode;
 }

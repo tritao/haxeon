@@ -5,23 +5,23 @@ import haxeon.platform.input.TextEdit;
 import haxeon.ui.TextLayout.TextPosition;
 import haxeon.ui.TextLayout.TextRangeRect;
 
-import nativekit.ffi.NativeKitTypes.TextEditAction;
-import haxeon.ui.FontCollection;
-import haxeon.ui.semantics.SemanticsValueSource;
-import haxeon.ui.editing.EditHistory;
-import haxeon.ui.editing.EditOperation;
+import haxeon.editor.TextDocument;
+import haxeon.editor.TextDocument.TextDocumentBuffer;
+import haxeon.editor.TextOffsetMap;
 import haxeon.ui.Color;
-import haxeon.ui.TextColorRange;
+import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutMeasureConstraints;
 import haxeon.ui.LayoutMeasureResult;
 import haxeon.ui.LayoutMeasuredContent;
 import haxeon.ui.LayoutRenderableContent;
 import haxeon.ui.ParagraphStyle;
 import haxeon.ui.Rect;
+import haxeon.ui.TextColorRange;
 import haxeon.ui.TextStyle;
-import haxeon.editor.TextDocument;
-import haxeon.editor.TextDocument.TextDocumentBuffer;
-import haxeon.editor.TextOffsetMap;
+import haxeon.ui.editing.EditHistory;
+import haxeon.ui.editing.EditOperation;
+import haxeon.ui.semantics.SemanticsValueSource;
+import nativekit.ffi.NativeKitTypes.TextEditAction;
 
 /** Persistent editable text, selection and IME composition state for one widget ID. */
 class TextEditorState implements SemanticsValueSource {
@@ -86,14 +86,18 @@ class TextEditorState implements SemanticsValueSource {
 
 	public function configureHistory(enabled:Bool):Void {
 		if (historyEnabled != enabled) {
-			history.clear(); lastHistoryEdit = null;
+			history.clear();
+			lastHistoryEdit = null;
 			historyFlags = enabled ? 1 : 0;
 		}
 	}
 
 	public function breakHistoryGroup(?deferUntilResolved:Bool = false):Void {
 		if (deferUntilResolved) historyFlags |= 4;
-		else { history.breakCoalescing(); historyFlags &= ~4; }
+		else {
+			history.breakCoalescing();
+			historyFlags &= ~4;
+		}
 		lastHistoryEdit = null;
 	}
 	public function undo():Bool {
@@ -126,21 +130,25 @@ class TextEditorState implements SemanticsValueSource {
 		var edit = new FieldHistoryEdit(transaction, before,
 			new TextSelection(selectionAnchor, selectionFocus, selectionAnchorAffinity, selectionFocusAffinity));
 		var previous = lastHistoryEdit;
-		var compositionJoin = previous != null && previous.composing && edit.composition &&
-			edit.start == previous.start && edit.removed == previous.inserted;
-		var join = transaction.historyKind == TextEditorHistoryKind.Typing && previous != null &&
-			previous.typing && edit.removed == "" && previous.removed == "" &&
-			edit.start == previous.start + TextOffsetMap.countCodepoints(previous.inserted) &&
-			edit.time - previous.time < 1.0 && previous.inserted.length + edit.inserted.length < 4096 &&
-			previous.inserted.indexOf(" ") < 0 && edit.inserted.indexOf(" ") < 0 &&
-			previous.inserted.indexOf("\n") < 0 && edit.inserted.indexOf("\n") < 0;
+		var compositionJoin = previous != null && previous.composing && edit.composition && edit.start == previous.start
+			&& edit.removed == previous.inserted;
+		var join = transaction.historyKind == TextEditorHistoryKind.Typing && previous != null && previous.typing
+			&& edit.removed == "" && previous.removed == "" && edit.start
+			== previous.start + TextOffsetMap.countCodepoints(previous.inserted) && edit.time - previous.time < 1.0
+			&& previous.inserted.length + edit.inserted.length < 4096 && previous.inserted.indexOf(" ") < 0
+			&& edit.inserted.indexOf(" ") < 0 && previous.inserted.indexOf("\n") < 0 && edit.inserted.indexOf("\n") < 0;
 		join = join || compositionJoin;
 		if (!join) history.breakCoalescing();
 		var bytes = 256 + (edit.removed.length + edit.inserted.length) * 4;
 		if (join && previous != null) bytes += 256 + (previous.removed.length + previous.inserted.length) * 4;
-		if (bytes > history.maxEstimatedBytes) { history.clear(); lastHistoryEdit = null; return; }
+		if (bytes > history.maxEstimatedBytes) {
+			history.clear();
+			lastHistoryEdit = null;
+			return;
+		}
 		history.record(new EditOperation("Edit text", function() replayHistory(edit, false),
-			function() replayHistory(edit, true), edit.typing ? "typing" : edit.composition ? "composition" : null, function(next) {
+			function() replayHistory(edit, true), edit.typing ? "typing" : edit.composition ? "composition" : null,
+			function(next) {
 				var following:FieldHistoryEdit = cast next.mergeData;
 				edit.inserted = edit.composition ? following.inserted : edit.inserted + following.inserted;
 				edit.composing = following.composing;
@@ -211,7 +219,10 @@ class TextEditorState implements SemanticsValueSource {
 		if (next == offsets.text)
 			return false;
 		if (deferHistoryClear) historyFlags |= 2;
-		else { history.clear(); historyFlags &= ~2; }
+		else {
+			history.clear();
+			historyFlags &= ~2;
+		}
 		lastHistoryEdit = null;
 		cancelPointerClick();
 		offsets.replace(0, offsets.codepointCount, next);
@@ -234,11 +245,11 @@ class TextEditorState implements SemanticsValueSource {
 
 	/** Uses a caller-owned document as the source of truth for this editor. */
 	/** Presentation callbacks may change without text or measurement changing. */
-	public function configurePresentation(foreground:Null<(Int, Int)->Array<TextColorRange>>,
-			decorations:Null<(Int, Int)->Array<TextDecoration>>, revision:Int):Void {
+	public function configurePresentation(foreground:Null<(Int, Int) -> Array<TextColorRange>>,
+			decorations:Null<(Int, Int) -> Array<TextDecoration>>, revision:Int):Void {
 		ensureLive();
-		if (revision != presentationRevision || foreground != layout.colorRangeProvider ||
-			decorations != layout.decorationProvider)
+		if (revision != presentationRevision || foreground != layout.colorRangeProvider
+			|| decorations != layout.decorationProvider)
 			renderContent.invalidatePaint();
 		layout.colorRangeProvider = foreground;
 		layout.decorationProvider = decorations;
@@ -257,7 +268,10 @@ class TextEditorState implements SemanticsValueSource {
 		if (offsets == nextOffsets && sharedRevision == lastLayoutRevision)
 			return false;
 		if (deferHistoryClear) historyFlags |= 2;
-		else { history.clear(); historyFlags &= ~2; }
+		else {
+			history.clear();
+			historyFlags &= ~2;
+		}
 		lastHistoryEdit = null;
 		cancelPointerClick();
 		var sameDocument = offsets == nextOffsets;
@@ -315,7 +329,8 @@ class TextEditorState implements SemanticsValueSource {
 	function relayoutDocument(width:Float):Void {
 		var edit = width == lastLayoutWidth ? offsets.editSince(lastLayoutRevision) : null;
 		if (edit != null)
-			layout.setTextAfterEdit(offsets, edit.start, edit.oldEnd, edit.start, edit.newEnd, edit.previousCodepointCount);
+			layout.setTextAfterEdit(offsets, edit.start, edit.oldEnd, edit.start, edit.newEnd,
+				edit.previousCodepointCount);
 		else
 			layout.updateDocument(offsets, width, textStyle, paragraphStyle);
 	}
@@ -325,14 +340,11 @@ class TextEditorState implements SemanticsValueSource {
 		ensureLive();
 		if (nextTextStyle == null || nextParagraphStyle == null)
 			throw "Text editor styles cannot be null";
-		var changed = textStyle.font != nextTextStyle.font ||
-			textStyle.fontSize != nextTextStyle.fontSize ||
-			textStyle.letterSpacing != nextTextStyle.letterSpacing ||
-			paragraphStyle.wrap != nextParagraphStyle.wrap ||
-			paragraphStyle.alignment != nextParagraphStyle.alignment ||
-			paragraphStyle.lineHeight != nextParagraphStyle.lineHeight ||
-			paragraphStyle.direction != nextParagraphStyle.direction ||
-			paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
+		var changed = textStyle.font != nextTextStyle.font || textStyle.fontSize != nextTextStyle.fontSize
+			|| textStyle.letterSpacing != nextTextStyle.letterSpacing || paragraphStyle.wrap != nextParagraphStyle.wrap
+			|| paragraphStyle.alignment != nextParagraphStyle.alignment || paragraphStyle.lineHeight
+			!= nextParagraphStyle.lineHeight || paragraphStyle.direction != nextParagraphStyle.direction
+			|| paragraphStyle.tabWidth != nextParagraphStyle.tabWidth;
 		if (!changed)
 			return false;
 		textStyle = nextTextStyle;
@@ -352,7 +364,8 @@ class TextEditorState implements SemanticsValueSource {
 	}
 
 	/** Replaces a code-point range and places a collapsed caret after the insertion. */
-	public function replace(start:Int, end:Int, value:String, kind:TextEditorHistoryKind = TextEditorHistoryKind.Generic):Bool {
+	public function replace(start:Int, end:Int, value:String,
+			kind:TextEditorHistoryKind = TextEditorHistoryKind.Generic):Bool {
 		ensureLive();
 		var count = offsets.codepointCount;
 		var first = clamp(start, 0, count);
@@ -371,7 +384,8 @@ class TextEditorState implements SemanticsValueSource {
 		ensureLive();
 		if (transaction == null) return false;
 		lastEditTransaction = null;
-		var historyBefore = new TextSelection(selectionAnchor, selectionFocus, selectionAnchorAffinity, selectionFocusAffinity);
+		var historyBefore = new TextSelection(selectionAnchor, selectionFocus, selectionAnchorAffinity,
+			selectionFocusAffinity);
 		var count = offsets.codepointCount;
 		var first = clamp(transaction.replacementStart, 0, count);
 		var last = clamp(transaction.replacementEnd, 0, count);
@@ -401,8 +415,8 @@ class TextEditorState implements SemanticsValueSource {
 		}
 		setSelection(transaction.selectionStart, transaction.selectionEnd,
 			transaction.selectionAffinity);
-		if (transaction.hasComposition && transaction.compositionStart >= 0 &&
-			transaction.compositionEnd >= transaction.compositionStart)
+		if (transaction.hasComposition && transaction.compositionStart >= 0
+			&& transaction.compositionEnd >= transaction.compositionStart)
 			setComposition(transaction.compositionStart, transaction.compositionEnd);
 		else
 			clearComposition();
@@ -413,11 +427,11 @@ class TextEditorState implements SemanticsValueSource {
 				transaction.historyKind, replacedText);
 		var appliedEdit = lastEditTransaction;
 		if (textChanged && appliedEdit != null) recordHistory(appliedEdit, historyBefore);
-		if (!transaction.hasComposition && transaction.historyKind == TextEditorHistoryKind.Composition) breakHistoryGroup();
-		return textChanged || previousStart != selectionStart || previousEnd != selectionEnd ||
-			previousAnchorAffinity != selectionAnchorAffinity ||
-			previousFocusAffinity != selectionFocusAffinity ||
-			previousCompositionStart != compositionStart || previousCompositionEnd != compositionEnd;
+		if (!transaction.hasComposition
+			&& transaction.historyKind == TextEditorHistoryKind.Composition) breakHistoryGroup();
+		return textChanged || previousStart != selectionStart || previousEnd != selectionEnd
+			|| previousAnchorAffinity != selectionAnchorAffinity || previousFocusAffinity != selectionFocusAffinity
+			|| previousCompositionStart != compositionStart || previousCompositionEnd != compositionEnd;
 	}
 
 	public function documentOffsets():TextDocumentBuffer {
@@ -464,15 +478,16 @@ class TextEditorState implements SemanticsValueSource {
 		var reportedStart = Std.int(Math.max(start, Math.min(end, selectionStart)));
 		var reportedEnd = Std.int(Math.max(start, Math.min(end, selectionEnd)));
 		var cached = surroundingWindow;
-		if (cached != null && surroundingDocument == offsets && surroundingRevision == offsets.revision &&
-			cached.start == start && cached.end == end) {
+		if (cached != null && surroundingDocument == offsets && surroundingRevision == offsets.revision
+			&& cached.start == start && cached.end == end) {
 			if (cached.selectionStart == reportedStart && cached.selectionEnd == reportedEnd) return cached;
 			surroundingWindow = new TextInputWindow(cached.text, start, end, reportedStart, reportedEnd);
 			return surroundingWindow;
 		}
 		surroundingDocument = offsets;
 		surroundingRevision = offsets.revision;
-		surroundingWindow = new TextInputWindow(offsets.sliceCodepoints(start, end), start, end, reportedStart, reportedEnd);
+		surroundingWindow = new TextInputWindow(offsets.sliceCodepoints(start, end), start, end, reportedStart,
+			reportedEnd);
 		return surroundingWindow;
 	}
 
@@ -482,9 +497,8 @@ class TextEditorState implements SemanticsValueSource {
 		if (edit == null)
 			return false;
 		var historyKind = textEditHistoryKind(edit.historyKind);
-		if (historyKind == TextEditorHistoryKind.Generic &&
-			(edit.action == TextEditAction.Compose ||
-				(edit.action == TextEditAction.Commit && compositionStart >= 0)))
+		if (historyKind == TextEditorHistoryKind.Generic && (edit.action == TextEditAction.Compose
+			|| (edit.action == TextEditAction.Commit && compositionStart >= 0)))
 			historyKind = TextEditorHistoryKind.Composition;
 		var previousStart = selectionStart;
 		var previousEnd = selectionEnd;
@@ -511,18 +525,17 @@ class TextEditorState implements SemanticsValueSource {
 			case _:
 				return false;
 		}
-		return previousStart != selectionStart || previousEnd != selectionEnd ||
-			previousAnchorAffinity != selectionAnchorAffinity ||
-			previousFocusAffinity != selectionFocusAffinity ||
-			previousCompositionStart != compositionStart || previousCompositionEnd != compositionEnd;
+		return previousStart != selectionStart || previousEnd != selectionEnd
+			|| previousAnchorAffinity != selectionAnchorAffinity || previousFocusAffinity != selectionFocusAffinity
+			|| previousCompositionStart != compositionStart || previousCompositionEnd != compositionEnd;
 	}
 
 	/** Imports an external anchored selection only when its logical value differs. */
 	public function setAnchoredSelection(value:TextSelection, ?deferHistoryBreak:Bool = false):Bool {
 		ensureLive();
 		if (value == null) throw "Anchored selection is required";
-		if (value.anchor == selectionAnchor && value.focus == selectionFocus &&
-			value.anchorAffinity == selectionAnchorAffinity && value.focusAffinity == selectionFocusAffinity)
+		if (value.anchor == selectionAnchor && value.focus == selectionFocus
+			&& value.anchorAffinity == selectionAnchorAffinity && value.focusAffinity == selectionFocusAffinity)
 			return false;
 		placeCaret(value.anchor, false, value.anchorAffinity, deferHistoryBreak);
 		placeCaret(value.focus, true, value.focusAffinity, deferHistoryBreak);
@@ -540,11 +553,10 @@ class TextEditorState implements SemanticsValueSource {
 			first = last;
 			last = swap;
 		}
-		var changed = first != selectionStart || last != selectionEnd ||
-			selectionAnchor != first || selectionFocus != last ||
-			selectionAnchorLayoutOffset != first || selectionFocusLayoutOffset != last ||
-			selectionAnchorAffinity != (first == last ? focusAffinity : 0) ||
-			selectionFocusAffinity != focusAffinity;
+		var changed = first != selectionStart || last != selectionEnd || selectionAnchor != first
+			|| selectionFocus != last || selectionAnchorLayoutOffset != first || selectionFocusLayoutOffset != last
+			|| selectionAnchorAffinity != (first == last ? focusAffinity : 0)
+			|| selectionFocusAffinity != focusAffinity;
 		selectionStart = first;
 		selectionEnd = last;
 		selectionAnchor = first;
@@ -573,11 +585,10 @@ class TextEditorState implements SemanticsValueSource {
 	public function selectAll():Bool {
 		preserveViewport();
 		breakHistoryGroup();
-		var first = selectionStart != 0 || selectionEnd != offsets.codepointCount ||
-			selectionAnchor != 0 || selectionFocus != offsets.codepointCount ||
-			selectionAnchorLayoutOffset != 0 ||
-			selectionFocusLayoutOffset != offsets.codepointCount ||
-			selectionAnchorAffinity != 0 || selectionFocusAffinity != 0;
+		var first = selectionStart != 0 || selectionEnd != offsets.codepointCount || selectionAnchor != 0
+			|| selectionFocus != offsets.codepointCount || selectionAnchorLayoutOffset != 0
+			|| selectionFocusLayoutOffset != offsets.codepointCount || selectionAnchorAffinity != 0
+			|| selectionFocusAffinity != 0;
 		selectionAnchor = 0;
 		selectionFocus = offsets.codepointCount;
 		selectionAnchorLayoutOffset = 0;
@@ -610,9 +621,8 @@ class TextEditorState implements SemanticsValueSource {
 		}
 		selectionFocus = next;
 		selectionFocusLayoutOffset = next;
-		var changed = selectionAnchorLayoutOffset != previousAnchorLayoutOffset ||
-			selectionFocusLayoutOffset != previousFocusLayoutOffset ||
-			selectionAnchorAffinity != affinity || selectionFocusAffinity != affinity;
+		var changed = selectionAnchorLayoutOffset != previousAnchorLayoutOffset || selectionFocusLayoutOffset
+			!= previousFocusLayoutOffset || selectionAnchorAffinity != affinity || selectionFocusAffinity != affinity;
 		selectionFocusAffinity = affinity;
 		var first = selectionAnchor < next ? selectionAnchor : next;
 		var last = selectionAnchor > next ? selectionAnchor : next;
@@ -680,8 +690,8 @@ class TextEditorState implements SemanticsValueSource {
 			desiredVerticalX = currentCaret.x;
 			hasDesiredVerticalX = true;
 		}
-		var lineStep = paragraphStyle.lineHeight == null ?
-			absolute(currentCaret.descender - currentCaret.ascender) : paragraphStyle.lineHeight;
+		var lineStep = paragraphStyle.lineHeight == null
+			? absolute(currentCaret.descender - currentCaret.ascender) : paragraphStyle.lineHeight;
 		lineStep = Math.max(1.0, lineStep);
 
 		var candidate:TextPosition = null;
@@ -692,8 +702,8 @@ class TextEditorState implements SemanticsValueSource {
 			var distance = lineStep * (1.0 + probe * 0.25);
 			var hit = layout.hitTest(desiredVerticalX, currentCaret.y + direction * distance);
 			var hitCaret = layout.caret(hit);
-			if ((direction < 0 && hitCaret.y < currentCaret.y - 0.01) ||
-				(direction > 0 && hitCaret.y > currentCaret.y + 0.01)) {
+			if ((direction < 0 && hitCaret.y < currentCaret.y - 0.01)
+				|| (direction > 0 && hitCaret.y > currentCaret.y + 0.01)) {
 				candidate = hit;
 				break;
 			}
@@ -840,8 +850,8 @@ class TextEditorState implements SemanticsValueSource {
 		}
 		var first = extend ? (selectionAnchor < next ? selectionAnchor : next) : next;
 		var last = extend ? (selectionAnchor > next ? selectionAnchor : next) : next;
-		var changed = first != selectionStart || last != selectionEnd ||
-			selectionFocusLayoutOffset != next || selectionFocusAffinity != 0;
+		var changed = first != selectionStart || last != selectionEnd || selectionFocusLayoutOffset != next
+			|| selectionFocusAffinity != 0;
 		selectionFocus = next;
 		selectionFocusLayoutOffset = next;
 		selectionFocusAffinity = 0;
@@ -996,11 +1006,16 @@ class TextEditorState implements SemanticsValueSource {
 
 	public function extendPointerSelection(position:TextPosition):Bool {
 		if (pointerGesture.granularity == 1) return placeCaretAt(position, true);
-		var first:Int; var last:Int;
+		var first:Int;
+		var last:Int;
 		if (pointerGesture.granularity == 2) {
-			var word = layout.wordRange(position); first = word[0]; last = word[1];
+			var word = layout.wordRange(position);
+			first = word[0];
+			last = word[1];
 		} else {
-			var line = layout.lineRangeAt(position.offset); first = line.start; last = line.end;
+			var line = layout.lineRangeAt(position.offset);
+			first = line.start;
+			last = line.end;
 		}
 		var range = pointerGesture.extend(first, last);
 		return setAnchoredSelection(new TextSelection(range.anchor, range.focus));
@@ -1018,12 +1033,13 @@ class TextEditorState implements SemanticsValueSource {
 		return pointerGesture.register(range[0] + ":" + range[1], timestamp, x, y);
 	}
 
-	public function completePointerClick(x:Float,y:Float):Void pointerGesture.complete(x,y);
-	public function cancelPointerClickIfMoved(x:Float,y:Float):Void pointerGesture.cancelIfMoved(x,y);
+	public function completePointerClick(x:Float, y:Float):Void pointerGesture.complete(x, y);
+	public function cancelPointerClickIfMoved(x:Float, y:Float):Void pointerGesture.cancelIfMoved(x, y);
 	public function cancelPointerClick():Void pointerGesture.cancel();
 
 	public function dispose():Void {
-		history.clear(); lastHistoryEdit = null;
+		history.clear();
+		lastHistoryEdit = null;
 		if (disposed)
 			return;
 		renderContent.dispose();
@@ -1127,7 +1143,9 @@ private class FieldHistoryEdit {
 		start = edit.replacementStart;
 		removed = edit.replacedText == null ? "" : edit.replacedText;
 		inserted = edit.replacementText == null ? "" : edit.replacementText;
-		this.before = before; this.after = after; time = Sys.time();
+		this.before = before;
+		this.after = after;
+		time = Sys.time();
 		typing = edit.historyKind == TextEditorHistoryKind.Typing;
 		composition = edit.historyKind == TextEditorHistoryKind.Composition;
 		composing = edit.hasComposition;

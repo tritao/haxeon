@@ -89,13 +89,14 @@ class BenchmarkMain {
 		if (["combined", "compiler", "runtime"].indexOf(soakMode) < 0)
 			throw "--soak-mode must be combined, compiler, or runtime";
 
-		var results:Dynamic = {}, scenarios = [
-			{name: "cold_compile_load", run: coldCompileLoad},
-			{name: "noop_rebuild", run: noopRebuild},
-			{name: "body_edit_patch", run: bodyEditPatch},
-			{name: "signature_edit_reload", run: signatureEditReload},
-			{name: "structural_edit_reload", run: structuralEditReload}
-		];
+		var results:Dynamic = {},
+			scenarios = [
+				{name: "cold_compile_load", run: coldCompileLoad},
+				{name: "noop_rebuild", run: noopRebuild},
+				{name: "body_edit_patch", run: bodyEditPatch},
+				{name: "signature_edit_reload", run: signatureEditReload},
+				{name: "structural_edit_reload", run: structuralEditReload}
+			];
 		if (!onlySoak && !onlyScale)
 			for (scenario in scenarios) {
 				for (_ in 0...warmup)
@@ -135,14 +136,16 @@ class BenchmarkMain {
 			bytes = HlWriter.encode(build.module),
 			module = Runtime.load(bytes, build.runtimeIdentity);
 		Runtime.dispose(module);
-		return sample(started, compileDone, stamp(), bytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
+		return sample(started, compileDone, stamp(), bytes.length, build.metrics.retypedFunctions,
+			build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function noopRebuild():Sample {
 		var compiler = fixtureCompiler();
 		compiler.compile("Main");
 		var started = stamp(), build = compiler.compile("Main"), done = stamp();
-		return sample(started, done, done, 0, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
+		return sample(started, done, done, 0, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions,
+			build.metrics);
 	}
 
 	static function bodyEditPatch():Sample {
@@ -150,14 +153,17 @@ class BenchmarkMain {
 			initial = compiler.compile("Main"),
 			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
 			source = fixture("pragtical/plugins/SearchPlugin.hx");
-		compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(source, "state.cursor + 1", "state.cursor + 2"));
+		compiler.update("pragtical/plugins/SearchPlugin.hx",
+			StringTools.replace(source, "state.cursor + 1", "state.cursor + 2"));
 		var started = stamp(),
 			build = compiler.compile("Main"),
 			compileDone = stamp();
-		Runtime.patchSet(module, new PatchSet(initial.revision, build.revision, build.patchBytes, build.changedFunctions));
+		Runtime.patchSet(module,
+			new PatchSet(initial.revision, build.revision, build.patchBytes, build.changedFunctions));
 		var done = stamp();
 		Runtime.dispose(module);
-		return sample(started, compileDone, done, build.patchBytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
+		return sample(started, compileDone, done, build.patchBytes.length, build.metrics.retypedFunctions,
+			build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function signatureEditReload():Sample {
@@ -178,16 +184,22 @@ class BenchmarkMain {
 			module = Runtime.load(HlWriter.encode(initial.module), initial.runtimeIdentity),
 			editor = fixture("pragtical/api/Editor.hx");
 		compiler.update("pragtical/api/Editor.hx",
-			StringTools.replace(editor, "public var documents:Array<Document>;", "public var documents:Array<Document>; public var generation:Int;"));
+			StringTools.replace(editor, "public var documents:Array<Document>;",
+			"public var documents:Array<Document>; public var generation:Int;"));
 		return compileReload(compiler, module);
 	}
 
 	static function compileReload(compiler:Compiler, oldModule:LoadedModule):Sample {
-		var started = stamp(), build = compiler.compile("Main"), compileDone = stamp(), bytes = HlWriter.encode(build.module),
-			module = Runtime.load(bytes, build.runtimeIdentity), done = stamp();
+		var started = stamp(),
+			build = compiler.compile("Main"),
+			compileDone = stamp(),
+			bytes = HlWriter.encode(build.module),
+			module = Runtime.load(bytes, build.runtimeIdentity),
+			done = stamp();
 		Runtime.dispose(oldModule);
 		Runtime.dispose(module);
-		return sample(started, compileDone, done, bytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
+		return sample(started, compileDone, done, bytes.length, build.metrics.retypedFunctions,
+			build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function patchSoak(iterations:Int, mode:String):Dynamic {
@@ -208,7 +220,8 @@ class BenchmarkMain {
 			}> = [];
 			for (i in 0...iterations) {
 				var replacement = i % 2 == 0 ? "state.cursor + 2" : "state.cursor + 3";
-				compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(source, "state.cursor + 1", replacement));
+				compiler.update("pragtical/plugins/SearchPlugin.hx",
+					StringTools.replace(source, "state.cursor + 1", replacement));
 				var build = compiler.compile("Main");
 				patches.push({
 					base: revision,
@@ -230,13 +243,16 @@ class BenchmarkMain {
 		}
 		for (i in 0...iterations) {
 			var replacement = i % 2 == 0 ? "state.cursor + 2" : "state.cursor + 3";
-			compiler.update("pragtical/plugins/SearchPlugin.hx", StringTools.replace(source, "state.cursor + 1", replacement));
+			compiler.update("pragtical/plugins/SearchPlugin.hx",
+				StringTools.replace(source, "state.cursor + 1", replacement));
 			var started = stamp(),
 				build = compiler.compile("Main"),
 				compileDone = stamp();
 			if (mode == "combined")
-				Runtime.patchSet(module, new PatchSet(revision, build.revision, build.patchBytes, build.changedFunctions));
-			samples.push(sample(started, compileDone, stamp(), build.patchBytes.length, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions,
+				Runtime.patchSet(module,
+					new PatchSet(revision, build.revision, build.patchBytes, build.changedFunctions));
+			samples.push(sample(started, compileDone, stamp(), build.patchBytes.length, build.metrics.retypedFunctions,
+				build.metrics.regeneratedFunctions,
 				build.metrics));
 			revision = build.revision;
 		}
@@ -323,8 +339,9 @@ class BenchmarkMain {
 			compileDone = stamp(),
 			artifactBytes = scenario == "cold_compile" ? HlWriter.encode(build.module)
 				.length : build.patchBytes != null ? build.patchBytes.length : build.changedFunctions.length == 0
-					&& !build.requiresReload ? 0 : HlWriter.encode(build.module).length;
-		return sample(started, compileDone, compileDone, artifactBytes, build.metrics.retypedFunctions, build.metrics.regeneratedFunctions, build.metrics);
+				&& !build.requiresReload ? 0 : HlWriter.encode(build.module).length;
+		return sample(started, compileDone, compileDone, artifactBytes, build.metrics.retypedFunctions,
+			build.metrics.regeneratedFunctions, build.metrics);
 	}
 
 	static function generatedCompiler(size:Int):Compiler {
@@ -370,7 +387,8 @@ class BenchmarkMain {
 		return File.getContent(diskPath);
 	}
 
-	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int, ?metrics:CompileMetrics):Sample
+	static function sample(started:Float, compileDone:Float, done:Float, bytes:Int, retyped:Int, regenerated:Int,
+			?metrics:CompileMetrics):Sample
 		return {
 			totalMs: (done - started) * 1000.0,
 			compileMs: (compileDone - started) * 1000.0,
@@ -444,7 +462,8 @@ class BenchmarkMain {
 	static function printSummaryRow(name:String, result:Dynamic):Void {
 		var total:Dynamic = Reflect.field(result, "totalMs"),
 			bytes:Dynamic = Reflect.field(result, "artifactBytes");
-		Sys.println(StringTools.rpad(name, " ", 28) + StringTools.lpad(format(total.median), " ", 10) + StringTools.lpad(format(total.p95), " ", 10)
+		Sys.println(StringTools.rpad(name, " ", 28) + StringTools.lpad(format(total.median), " ",
+			10) + StringTools.lpad(format(total.p95), " ", 10)
 			+ StringTools.lpad(format(total.p99), " ", 10) + StringTools.lpad(format(bytes.median), " ", 9));
 	}
 

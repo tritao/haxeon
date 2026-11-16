@@ -55,16 +55,14 @@ class Voice {
 	/** Schedules playback at an absolute process-wide audio time in PCM frames. */
 	public function scheduleStart(timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_voice_schedule_start(value, timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_voice_schedule_start(value, timeFrames),
 			"audio.voice.scheduleStart");
 	}
 
 	/** Schedules playback to stop at an absolute process-wide audio time in PCM frames. */
 	public function scheduleStop(timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_voice_schedule_stop(value, timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_voice_schedule_stop(value, timeFrames),
 			"audio.voice.scheduleStop");
 	}
 
@@ -78,18 +76,16 @@ class Voice {
 	/** Fades between linear gains over a duration in PCM frames. */
 	public function fade(volumeBegin:Float, volumeEnd:Float, durationFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_voice_fade(value, volumeBegin, volumeEnd, durationFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_voice_fade(value, volumeBegin, volumeEnd, durationFrames),
 			"audio.voice.fade");
 	}
 
 	/** Fades between linear gains at an absolute process-wide audio time in PCM frames. */
 	public function fadeAt(volumeBegin:Float, volumeEnd:Float, durationFrames:haxe.Int64,
-		timeFrames:haxe.Int64):Void {
+			timeFrames:haxe.Int64):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_voice_fade_at(value, volumeBegin, volumeEnd, durationFrames,
-				timeFrames),
+		AudioResult.check(NativeKitAudio.nk_audio_voice_fade_at(value, volumeBegin, volumeEnd, durationFrames,
+			timeFrames),
 			"audio.voice.fadeAt");
 	}
 
@@ -322,8 +318,7 @@ class Voice {
 	/** Sets the minimum and maximum distances used by attenuation. */
 	public function setDistanceLimits(minDistance:Float, maxDistance:Float):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_voice_set_distance_limits(value, minDistance, maxDistance),
+		AudioResult.check(NativeKitAudio.nk_audio_voice_set_distance_limits(value, minDistance, maxDistance),
 			"audio.voice.setDistanceLimits");
 	}
 
@@ -371,8 +366,7 @@ class Voice {
 	/** Sets how strongly source direction affects per-channel spatial gain. */
 	public function setDirectionalAttenuationFactor(factor:Float):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_voice_set_directional_attenuation_factor(value, factor),
+		AudioResult.check(NativeKitAudio.nk_audio_voice_set_directional_attenuation_factor(value, factor),
 			"audio.voice.setDirectionalAttenuationFactor");
 	}
 

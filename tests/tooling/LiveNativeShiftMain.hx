@@ -14,21 +14,21 @@ class LiveNativeShiftMain {
 		var root = FileSystem.fullPath(".") + "/out/live-native-shift-test-" + Std.random(0x3fffffff);
 		FileSystem.createDirectory(root);
 		var main = root + "/Main.hx";
-		var shape = "class Box { final v:Int; public function new(v:Int) this.v = v; public function get():Int return v; public function twice():Int return v * 2; public function negated():Int return -v; }\n"
+		var shape =
+			"class Box { final v:Int; public function new(v:Int) this.v = v; public function get():Int return v; public function twice():Int return v * 2; public function negated():Int return -v; }\n"
 			+ "class Loud extends Box { public function new(v:Int) super(v); override public function twice():Int return v * 3; }\n";
 		var first = shape
-			+
-			"class Main { public static function main():Int { var box:Box = Std.random(1) == 0 ? new Box(20) : new Loud(20); return box.get() + box.twice() + box.negated(); } }";
+			+ "class Main { public static function main():Int { var box:Box = Std.random(1) == 0 ? new Box(20) : new Loud(20); return box.get() + box.twice() + box.negated(); } }";
 		// The same program, now also formatting a float: the first use of a string conversion native.
 		var second = shape
-			+
-			"class Main { public static function main():Int { var box:Box = Std.random(1) == 0 ? new Box(20) : new Loud(20); var text = \"\" + 1.5; return box.get() + box.twice() + box.negated() + text.length; } }";
+			+ "class Main { public static function main():Int { var box:Box = Std.random(1) == 0 ? new Box(20) : new Loud(20); var text = \"\" + 1.5; return box.get() + box.twice() + box.negated() + text.length; } }";
 		var args = ["--target=hl", "--entry=Main", "--root=" + root];
 
 		function compile(session:CompilerSession, source:String, extra:Array<String>, name:String):String {
 			File.saveContent(main, source);
 			var output = root + "/" + name + ".hl";
-			CompilerDriver.compile(CompilerArguments.parse(args.concat(extra).concat(["--output=" + output, main])), _ -> {}, session);
+			CompilerDriver.compile(CompilerArguments.parse(args.concat(extra).concat(["--output=" + output, main])),
+				_ -> {}, session);
 			return output;
 		}
 		function run(output:String):Int {
@@ -43,7 +43,8 @@ class LiveNativeShiftMain {
 			var session = new CompilerSession();
 			expect(run(compile(session, first, mode, label + "-first")) == 40, "the first revision must return 40");
 			var actual = run(compile(session, second, mode, label + "-second"));
-			expect(actual == expected, '$label: the incremental build of the second revision returned $actual, a cold build returns $expected');
+			expect(actual == expected,
+				'$label: the incremental build of the second revision returned $actual, a cold build returns $expected');
 		}
 
 		for (path in FileSystem.readDirectory(root))

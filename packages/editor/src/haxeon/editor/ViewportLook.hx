@@ -102,7 +102,8 @@ class ViewportLook {
 	/** Exposure before tone mapping; zero shows shading clamped, without tone mapping. */
 	public final exposure:Float;
 
-	function new(lights:Array<ViewportLight>, sky:Array<Float>, ground:Array<Float>, reflection:Float, occlusionRadius:Float,
+	function new(lights:Array<ViewportLight>, sky:Array<Float>, ground:Array<Float>, reflection:Float,
+			occlusionRadius:Float,
 			occlusionStrength:Float, occlusionBias:Float, roughnessFloor:Float, exposure:Float) {
 		this.lights = lights;
 		this.sky = sky;
@@ -128,12 +129,18 @@ class ViewportLook {
 				new ViewportLight(rim, intensities[2], white, radii[2])
 			];
 		return switch checked(preset) {
-			case Soft: new ViewportLook(rig([0.65, 0.45, 0.25], [0.6, 0.9, 0.5]), [0.45, 0.47, 0.49], [0.38, 0.38, 0.40], 1.0, 0.025,
-					0.50, 0.08, 0.48, 1.0);
-			case Contrast: new ViewportLook(rig([0.95, 0.20, 0.65], [0.3, 0.5, 0.25]), [0.32, 0.34, 0.36], [0.08, 0.08, 0.09], 0.8,
-					0.025, 0.75, 0.08, 0.40, 1.0);
-			default: new ViewportLook(rig([0.95, 0.16, 0.30], [0.45, 0.7, 0.35]), [0.50, 0.53, 0.58], [0.22, 0.23, 0.26], 1.0, 0.025,
-					0.75, 0.08, 0.40, 1.0);
+			case Soft: new ViewportLook(rig([0.65, 0.45, 0.25], [0.6, 0.9, 0.5]), [0.45, 0.47, 0.49],
+				[0.38, 0.38, 0.40], 1.0, 0.025,
+				0.50, 0.08, 0.48, 1.0);
+			case Contrast: new ViewportLook(rig([0.95, 0.20, 0.65], [0.3, 0.5, 0.25]), [0.32, 0.34, 0.36], [
+				0.08,
+				0.08,
+				0.09
+			], 0.8,
+				0.025, 0.75, 0.08, 0.40, 1.0);
+			default: new ViewportLook(rig([0.95, 0.16, 0.30], [0.45, 0.7, 0.35]), [0.50, 0.53, 0.58],
+				[0.22, 0.23, 0.26], 1.0, 0.025,
+				0.75, 0.08, 0.40, 1.0);
 		};
 	}
 

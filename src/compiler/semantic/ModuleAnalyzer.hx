@@ -29,7 +29,8 @@ class ModuleAnalyzer {
 	final lookupParses:Map<String, LookupParse> = [];
 	final importedMembers:Map<String, {ast:compiler.syntax.Ast.AstProgram, members:Map<String, Bool>}> = [];
 
-	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool, defines:Map<String, String>,
+	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool,
+			defines:Map<String, String>,
 			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners) {
 		this.modules = modules;
 		this.types = types;
@@ -45,11 +46,13 @@ class ModuleAnalyzer {
 					indexDeclarations(name, state.parsedAst());
 	}
 
-	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>, signatureChanged:Map<String, Bool>,
+	public function parse(state:ModuleState, entry:String, bodyChanged:Map<String, Bool>,
+			signatureChanged:Map<String, Bool>,
 			structuralChanged:Map<String, Bool>):Void {
 		if (state.ast != null) {
 			if (buildSemanticModels && state.semanticModel == null)
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
+					state.revision, state.tokens);
 			return;
 		}
 		try {
@@ -61,7 +64,8 @@ class ModuleAnalyzer {
 			declarationOwners.release(state.name);
 			indexDeclarations(state.name, state.parsedAst());
 			if (buildSemanticModels)
-				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source, state.revision, state.tokens);
+				state.semanticModel = new compiler.semantic.SemanticModel(state.parsedAst(), state.source,
+					state.revision, state.tokens);
 			state.parseVersion++;
 		} catch (error:CompileError) {
 			state.diagnostics.push(error.diagnostic);
@@ -170,7 +174,8 @@ class ModuleAnalyzer {
 			}
 			var sourceModule = sourceModuleForDependency(dependency);
 			if (sourceModule == null
-				&& (PlatformAbi.isType(dependency) || isPlatformDependency(dependency) && ast.imports.indexOf(dependency) < 0)) {
+				&& (PlatformAbi.isType(dependency) || isPlatformDependency(dependency)
+				&& ast.imports.indexOf(dependency) < 0)) {
 				dependencies.remove(dependency);
 				continue;
 			}
@@ -328,7 +333,8 @@ class ModuleAnalyzer {
 	public static inline function importModulePath(path:String):String
 		return isWildcardImport(path) ? path.substring(0, path.length - 2) : path;
 
-	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool, moduleAlias:String, bare:Bool):Void {
+	function addModuleAliases(moduleName:String, aliases:Map<String, String>, includeFunctions:Bool, moduleAlias:String,
+			bare:Bool):Void {
 		var ast = moduleAst(moduleName);
 		if (ast == null)
 			return;
@@ -349,7 +355,8 @@ class ModuleAnalyzer {
 				addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 	}
 
-	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>, moduleAlias:String, bare:Bool):Void {
+	function addDeclarationAlias(moduleName:String, declarationName:String, aliases:Map<String, String>,
+			moduleAlias:String, bare:Bool):Void {
 		var sourceName = ModuleCanonicalizer.sourceDeclarationPath(moduleName, declarationName),
 			importedName = importedDeclarationName(sourceName);
 		if (bare && !aliases.exists(declarationName))
@@ -396,8 +403,10 @@ class ModuleAnalyzer {
 		return new LookupParse(state.source, conditional.defines, tokens, program);
 	}
 
-	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>, ?ownerParameters:Array<String>):Void {
-		var parameters = (ownerParameters == null ? [] : ownerParameters).concat(fn.typeParameters == null ? [] : fn.typeParameters);
+	function addFunctionTypeDependencies(fn:AstFunction, state:ModuleState, dependencies:Map<String, Bool>,
+			?ownerParameters:Array<String>):Void {
+		var parameters = (ownerParameters == null ? [] : ownerParameters).concat(fn.typeParameters == null
+			? [] : fn.typeParameters);
 		for (argument in fn.arguments)
 			addModuleTypeDependency(argument.type, state, dependencies, parameters);
 		addModuleTypeDependency(fn.result, state, dependencies, parameters);
@@ -405,7 +414,8 @@ class ModuleAnalyzer {
 			addModuleTypeDependency(constraint.type, state, dependencies, parameters);
 	}
 
-	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState, dependencies:Map<String, Bool>, ?parameters:Array<String>):Void
+	function addModuleTypeDependency(type:compiler.syntax.Ast.AstType, state:ModuleState,
+			dependencies:Map<String, Bool>, ?parameters:Array<String>):Void
 		switch type {
 			case NamedType(name):
 				if (parameters == null || parameters.indexOf(name) < 0) {
@@ -582,7 +592,8 @@ class ModuleAnalyzer {
 
 	static function isPlatformDependency(path:String):Bool {
 		var root = QualifiedName.first(path);
-		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math" || root == "Reflect"
+		return root == "haxe" || root == "sys" || root == "hl" || root == "Array" || root == "String" || root == "Math"
+			|| root == "Reflect"
 			|| root == "Std" || root == "StringTools" || root == "Type";
 	}
 

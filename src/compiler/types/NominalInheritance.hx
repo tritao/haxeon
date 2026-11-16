@@ -84,7 +84,8 @@ class NominalInheritance {
 			default: null;
 		};
 
-	static function bind(parameters:Array<String>, arguments:Array<CompilerType>, result:Map<String, CompilerType>):Void {
+	static function bind(parameters:Array<String>, arguments:Array<CompilerType>,
+			result:Map<String, CompilerType>):Void {
 		if (parameters.length != arguments.length)
 			throw "Nominal type argument arity mismatch";
 		for (index in 0...arguments.length)

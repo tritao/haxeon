@@ -60,7 +60,8 @@ class SurfaceFrame {
 	function ensureRenderer(renderer:Renderer):Void {
 		ensureOpen();
 		if (!renderer.ownsSurface(surface))
-			throw BindingError.invalidArgument("SurfaceFrame.ensureRenderer", "GPU surface frame belongs to another renderer");
+			throw BindingError.invalidArgument("SurfaceFrame.ensureRenderer",
+				"GPU surface frame belongs to another renderer");
 	}
 
 	function ensureOpen():Void {

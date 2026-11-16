@@ -6,16 +6,20 @@ import compiler.types.DeclarationIndex.DeclarationKind;
 
 class SemanticModelMain {
 	static function main():Void {
-		var source = new SourceFile("Types.hx", "package demo; typedef Count = Missing; class Counter {} function make():Count return 1;");
+		var source = new SourceFile("Types.hx",
+			"package demo; typedef Count = Missing; class Counter {} function make():Count return 1;");
 		var tokens = new Lexer(source).tokenize(),
 			program = new Parser(tokens).parseProgram();
 		var model = new SemanticModel(program, source, 7, tokens);
 
 		expect(model.revision == 7, "semantic model should retain its source revision");
 		expect(model.program == program, "semantic model should retain its parsed program");
-		expect(model.declarations.symbol(DeclarationKind.Alias, "Count") != null, "semantic model should index aliases");
-		expect(model.declarations.symbol(DeclarationKind.Class, "Counter") != null, "semantic model should index classes");
-		expect(model.declarations.symbol(DeclarationKind.Function, "make") != null, "semantic model should index functions");
+		expect(model.declarations.symbol(DeclarationKind.Alias, "Count") != null,
+			"semantic model should index aliases");
+		expect(model.declarations.symbol(DeclarationKind.Class, "Counter") != null,
+			"semantic model should index classes");
+		expect(model.declarations.symbol(DeclarationKind.Function, "make") != null,
+			"semantic model should index functions");
 		var make = model.index.symbolAt(source.text.indexOf("make"));
 		expect(make != null
 			&& make.name == "make"

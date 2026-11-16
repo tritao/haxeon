@@ -91,13 +91,15 @@ class CallbackMethodCensus {
 function main():Int {
 	if (!CallbackMethodCensus.checkPlain())
 		return 3;
-	if (CallbackMethodCensus.enums(8) != 672 || CallbackMethodCensus.records(8) != 672 || CallbackMethodCensus.concrete(8) != 672)
+	if (CallbackMethodCensus.enums(8) != 672 || CallbackMethodCensus.records(8) != 672
+		|| CallbackMethodCensus.concrete(8) != 672)
 		return 1;
 	#if !wasm
 	for (count in [8, 1024]) {
 		hl.Gc.censusStart(0);
 		var before = hl.Gc.totalAllocated();
-		var total = CallbackMethodCensus.enums(count) + CallbackMethodCensus.records(count) + CallbackMethodCensus.concrete(count);
+		var total = CallbackMethodCensus.enums(count) + CallbackMethodCensus.records(count)
+			+ CallbackMethodCensus.concrete(count);
 		var allocated = hl.Gc.totalAllocated() - before;
 		hl.Gc.censusStop();
 		if (total != 252 * count || allocated != 0)

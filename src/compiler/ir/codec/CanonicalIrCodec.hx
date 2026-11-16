@@ -110,7 +110,8 @@ class CanonicalIrCodec {
 				symbol: symbol,
 				arguments: arguments,
 				result: resultType,
-				generatedFunctionDependencies: generatedFunctionDependencies.length == 0 ? null : generatedFunctionDependencies
+				generatedFunctionDependencies: generatedFunctionDependencies.length == 0
+					? null : generatedFunctionDependencies
 			});
 		}
 		return result;
@@ -323,7 +324,10 @@ class CanonicalIrCodec {
 				});
 			}
 			for (_ in 0...readCount(input))
-				methods.push({name: IrTypeCodec.readString(input, limit), functionName: IrTypeCodec.readString(input, limit)});
+				methods.push({
+					name: IrTypeCodec.readString(input, limit),
+					functionName: IrTypeCodec.readString(input, limit)
+				});
 			result.push({
 				name: name,
 				isValue: isValue,
@@ -358,7 +362,11 @@ class CanonicalIrCodec {
 				name = IrTypeCodec.readString(input, limit),
 				bases = readStrings(input, limit);
 			for (_ in 0...readCount(input))
-				methods.push({name: IrTypeCodec.readString(input, limit), arguments: readTypes(input, limit), result: IrTypeCodec.readType(input, limit, 0)});
+				methods.push({
+					name: IrTypeCodec.readString(input, limit),
+					arguments: readTypes(input, limit),
+					result: IrTypeCodec.readType(input, limit, 0)
+				});
 			result.push({name: name, bases: bases, methods: methods});
 		}
 		return result;
@@ -484,10 +492,10 @@ class CanonicalIrCodec {
 		return switch input.readByte() {
 			case 0: null;
 			case 1: {
-					size: input.readInt32(),
-					alignment: input.readInt32(),
-					pointerFree: readByteBool(input)
-				};
+				size: input.readInt32(),
+				alignment: input.readInt32(),
+				pointerFree: readByteBool(input)
+			};
 			default: throw "Invalid canonical IR fixed layout";
 		};
 	}

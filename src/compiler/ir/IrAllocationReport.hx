@@ -54,7 +54,8 @@ class IrAllocationReport {
 		if (spec == null || spec == "")
 			return;
 		// `@path` names a file of patterns, one per line, read on every compile: a compiler server reads its environment once.
-		var patterns = StringTools.startsWith(spec, "@") ? sys.io.File.getContent(spec.substr(1)).split("\n") : spec.split(",");
+		var patterns = StringTools.startsWith(spec, "@")
+			? sys.io.File.getContent(spec.substr(1)).split("\n") : spec.split(",");
 		for (row in analyze(program, patterns))
 			Sys.stderr().writeString("IR_ALLOC " + haxe.Json.stringify(row) + "\n");
 	}
@@ -71,7 +72,8 @@ class IrAllocationReport {
 			var text = StringTools.trim(pattern);
 			if (text.length == 0)
 				continue;
-			if (StringTools.endsWith(text, "*") ? StringTools.startsWith(name, text.substr(0, text.length - 1)) : name == text)
+			if (StringTools.endsWith(text, "*") ? StringTools.startsWith(name, text.substr(0, text.length - 1)) : name
+				== text)
 				return true;
 		}
 		return false;
@@ -79,7 +81,8 @@ class IrAllocationReport {
 
 	/** How a runtime native relates to the heap, or null when it never allocates. */
 	public static function classifyNative(name:String):Null<{kind:String, what:String}> {
-		if (IrScalarWordBits.matches(name) || name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE
+		if (IrScalarWordBits.matches(name) || name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD
+			|| name == IrHlScalarRef.STORE
 			|| name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME)
 			return null;
 		if (!StringTools.startsWith(name, "__"))
@@ -120,8 +123,10 @@ class IrAllocationReport {
 			};
 		if (StringTools.startsWith(body, "string_"))
 			return switch body {
-				case "string_length", "string_equal", "string_compare_full", "string_char_code_at", "string_starts_with", "string_ends_with",
-					"string_index_of", "string_index_of_from", "string_last_index_of", "string_last_index_of_from", "string_is_space":
+				case "string_length", "string_equal", "string_compare_full", "string_char_code_at",
+					"string_starts_with", "string_ends_with",
+					"string_index_of", "string_index_of_from", "string_last_index_of", "string_last_index_of_from",
+					"string_is_space":
 					null;
 				default: {kind: Alloc, what: name};
 			};
@@ -129,25 +134,31 @@ class IrAllocationReport {
 			return {kind: Alloc, what: name};
 		if (StringTools.startsWith(body, "bytes_"))
 			return switch body {
-				case "bytes_get", "bytes_get_i32", "bytes_get_data", "bytes_set", "bytes_set_i32", "bytes_length", "bytes_compare", "bytes_blit": null;
+				case "bytes_get", "bytes_get_i32", "bytes_get_data", "bytes_set", "bytes_set_i32", "bytes_length",
+					"bytes_compare", "bytes_blit": null;
 				default: {
-						kind: StringTools.startsWith(body, "bytes_input_")
+					kind: StringTools.startsWith(body, "bytes_input_")
 						|| StringTools.startsWith(body, "bytes_output_") ? Unknown : Alloc,
-						what: name
-					};
+					what: name
+				};
 			};
 		if (StringTools.startsWith(body, "math_"))
 			return null;
 		if (StringTools.startsWith(body, "int64_"))
 			return body == "int64_compare"
-				|| body == "int64_unsigned_compare" ? null : {kind: Unknown, what: name + " (Int64 representation not checked)"};
+				|| body == "int64_unsigned_compare" ? null : {
+					kind: Unknown,
+					what: name + " (Int64 representation not checked)"
+				};
 		if (body == "iterator_new")
 			return {kind: Alloc, what: name};
 		if (body == "iterator_has_next" || body == "iterator_next_i32" || body == "iterator_next_f64")
 			return null;
 		switch body {
-			case "exit", "dynamic_equal", "f64_to_i64_bits", "i64_to_f64_bits", "f32_to_i32_bits", "i32_to_f32_bits", "std_int_f64", "std_int_dynamic",
-				"std_is_exact_type", "std_is_of_type", "std_parse_float", "std_parse_int", "std_random", "exception_matches", "sys_profile_counter",
+			case "exit", "dynamic_equal", "f64_to_i64_bits", "i64_to_f64_bits", "f32_to_i32_bits", "i32_to_f32_bits",
+				"std_int_f64", "std_int_dynamic",
+				"std_is_exact_type", "std_is_of_type", "std_parse_float", "std_parse_int", "std_random",
+				"exception_matches", "sys_profile_counter",
 				"sys_profile_frame", "sys_profile_span":
 				return null;
 			default:
@@ -181,7 +192,10 @@ private class Walker {
 	}
 
 	public function from(root:String):AllocationRootReport {
-		var parent:Map<String, Null<String>> = [root => null], queue = [root], findings:Array<AllocationFinding> = [], head = 0;
+		var parent:Map<String, Null<String>> = [root => null],
+			queue = [root],
+			findings:Array<AllocationFinding> = [],
+			head = 0;
 		var chainTo = function(name:String):Array<String> {
 			var chain:Array<String> = [];
 			var step:Null<String> = name;
@@ -241,7 +255,8 @@ private class Walker {
 							found(IrAllocationReport.Alloc, "closure " + functionName);
 							reach(functionName);
 						case StaticClosure(_, functionName):
-							found(IrAllocationReport.Unknown, "static closure " + functionName + " (allocation not checked)");
+							found(IrAllocationReport.Unknown,
+								"static closure " + functionName + " (allocation not checked)");
 							reach(functionName);
 						case ToVirtual(_, _):
 							found(IrAllocationReport.Unknown, "virtual wrapper (allocation not checked)");
@@ -264,9 +279,11 @@ private class Walker {
 						case MethodCall(_, receiver, methodName, _, _):
 							var targets = implementations(receiver, methodName);
 							if (targets == null)
-								found(IrAllocationReport.Dynamic, "method call " + methodName + ", target not resolved");
+								found(IrAllocationReport.Dynamic,
+									"method call " + methodName + ", target not resolved");
 							else if (targets.length > IrAllocationReport.FanOutLimit)
-								found(IrAllocationReport.Dynamic, "method call " + methodName + ", " + targets.length + " implementations, not followed");
+								found(IrAllocationReport.Dynamic, "method call " + methodName + ", " + targets.length
+									+ " implementations, not followed");
 							else
 								for (target in targets)
 									reach(target);

@@ -137,7 +137,8 @@ class WasmGcTypePlan {
 	final subtypes:Array<WasmSubtype> = [];
 	final plannedFunctionTypes:Map<String, WasmFunctionType> = [];
 
-	public function new(program:IrProgram, inlineValueFields = false, ?scalarSignatures:Map<String, WasmScalarAbi.WasmScalarSignature>,
+	public function new(program:IrProgram, inlineValueFields = false,
+			?scalarSignatures:Map<String, WasmScalarAbi.WasmScalarSignature>,
 			?scalarClosures:Map<String, Bool>, ?scalarVirtuals:Map<String, WasmScalarAbi.WasmScalarVirtual>) {
 		this.program = program;
 		this.runtimeTypeIds = compiler.backend.wasm.WasmTypeIdPlan.forProgram(program);
@@ -192,9 +193,9 @@ class WasmGcTypePlan {
 		var pending:Array<String> = [];
 		for (object in program.objects) if (object.nativeLayout != null)
 			for (field in object.fields) if (field.nativeLayout != null && field.nativeLayout.inlineRecord) {
-				pending.push(object.name);
-				break;
-			}
+			pending.push(object.name);
+			break;
+		}
 		while (pending.length > 0) {
 			var name = pending.pop();
 			if (bytePayloadObjects.exists(name)) continue;
@@ -202,7 +203,10 @@ class WasmGcTypePlan {
 			var object = objectDeclarations.get(name);
 			if (object == null) throw 'Missing Wasm GC record "$name"';
 			for (field in object.fields) if (field.nativeLayout != null && field.nativeLayout.inlineRecord)
-				switch field.type { case Obj(child): pending.push(child); default: throw 'Invalid inline record ${field.name}'; }
+				switch field.type {
+				case Obj(child): pending.push(child);
+				default: throw 'Invalid inline record ${field.name}';
+			}
 		}
 	}
 
@@ -314,8 +318,7 @@ class WasmGcTypePlan {
 	}
 
 	public function wasmFunctionType(arguments:Array<IrType>, result:IrType):WasmFunctionType {
-		return {
-			parameters: [for (argument in arguments) valueType(argument)],
+		return {parameters: [for (argument in arguments) valueType(argument)],
 			results: switch result {
 				case Void: [];
 				default: [valueType(result)];
@@ -328,7 +331,10 @@ class WasmGcTypePlan {
 		var parameters:Array<WasmValueType> = [];
 		for (argument in arguments)
 			for (part in scalarValueTypes(argument)) parameters.push(part);
-		return {parameters: parameters, results: (switch (result) { case Void: true; default: false; }) ? [] : scalarValueTypes(result)};
+		return {parameters: parameters, results: (switch (result) {
+			case Void: true;
+			default: false;
+		}) ? [] : scalarValueTypes(result)};
 	}
 
 	public function scalarSignatureType(signature:WasmScalarAbi.WasmScalarSignature):WasmFunctionType {
@@ -340,8 +346,14 @@ class WasmGcTypePlan {
 	public function scalarResultTypes(signature:WasmScalarAbi.WasmScalarSignature):Array<WasmValueType> {
 		var result:Array<WasmValueType> = [];
 		if (signature.mutatesReceiver) for (part in scalarValueTypes(signature.arguments[0])) result.push(part);
-		if ((switch (signature.result) { case Void: false; default: true; })) for (part in scalarValueTypes(signature.result)) result.push(part);
-		if (signature.throwsReceiver) { result.push(valueType(Dyn)); result.push(I32); }
+		if ((switch (signature.result) {
+			case Void: false;
+			default: true;
+		})) for (part in scalarValueTypes(signature.result)) result.push(part);
+		if (signature.throwsReceiver) {
+			result.push(valueType(Dyn));
+			result.push(I32);
+		}
 		return result;
 	}
 
@@ -352,7 +364,8 @@ class WasmGcTypePlan {
 
 	public function closureFunctionType(type:IrType):WasmFunctionType
 		return switch type {
-			case Function(arguments, result): scalarClosures.exists(IrTypeIdentity.text(type)) ? scalarFunctionType(arguments, result) : wasmFunctionType(arguments, result);
+			case Function(arguments, result): scalarClosures.exists(IrTypeIdentity.text(type))
+				? scalarFunctionType(arguments, result) : wasmFunctionType(arguments, result);
 			default: throw 'Not a Wasm GC closure type: $type';
 		};
 
@@ -418,9 +431,9 @@ class WasmGcTypePlan {
 			case Iterator(element): "R" + segment(typeKey(element));
 			case Function(arguments, result):
 				"F"
-				+ arguments.length
-				+ ":"
-				+ [for (argument in arguments) segment(typeKey(argument))].join("") + segment(typeKey(result));
+					+ arguments.length
+					+ ":"
+					+ [for (argument in arguments) segment(typeKey(argument))].join("") + segment(typeKey(result));
 		};
 	}
 
@@ -544,7 +557,10 @@ class WasmGcTypePlan {
 	}
 
 	function collectType(type:IrType):Void {
-		if ((switch (type) { case Void: false; default: true; })) {
+		if ((switch (type) {
+			case Void: false;
+			default: true;
+		})) {
 			var key = typeKey(type);
 			if (!seenValueTypes.exists(key)) {
 				seenValueTypes.set(key, true);
@@ -611,7 +627,8 @@ class WasmGcTypePlan {
 			enumConstructorTypeIndices.set(enumDecl.name, constructorTypes);
 		}
 		for (object in orderedObjects) {
-			var inherited:Array<IrObjectField> = object.base == null ? [] : flattenedObjectFields.get(object.base).copy();
+			var inherited:Array<IrObjectField> = object.base == null
+				? [] : flattenedObjectFields.get(object.base).copy();
 			inherited = inherited.concat(object.fields);
 			flattenedObjectFields.set(object.name, inherited);
 			var physical = inlineValueFields ? values.fields(inherited) : inherited;
@@ -756,10 +773,15 @@ class WasmGcTypePlan {
 			{type: Value(I32), mutable: true},
 			{type: Value(Ref({nullable: true, heap: Any})), mutable: true}
 		]));
-		setType(nativePointerTypeIndex, true, [], Struct([
-			{type: Value(I32), mutable: true}, // Raw host pointer value.
-			{type: Value(I32), mutable: true}, // Release import function index, or -1 for borrowed pointers.
-			{type: Value(I32), mutable: true} // Closed state.
+		setType(nativePointerTypeIndex, true, [], Struct([{type: Value(I32), mutable: true}, // Raw host pointer value.
+			{
+				type: Value(I32),
+				mutable: true
+			}, // Release import function index, or -1 for borrowed pointers.
+				{
+					type: Value(I32),
+					mutable: true
+				} // Closed state.
 		]));
 		// Table slot (low bit set for a static target), receiver, and the signature it was created with.
 		setType(closureTypeIndex, true, [], Struct([
@@ -777,8 +799,12 @@ class WasmGcTypePlan {
 			{key: "type-ref", type: I32}
 		];
 		for (entry in boxedEntries)
-			setType(requireIndex(boxedPrimitiveTypeIndices, entry.key, 'Missing boxed primitive type "${entry.key}"'), true, [],
-				Struct([{type: Value(entry.type), mutable: false}]));
+			setType(requireIndex(boxedPrimitiveTypeIndices, entry.key, 'Missing boxed primitive type "${entry.key}"'),
+				true, [],
+				Struct([{
+					type: Value(entry.type),
+					mutable: false
+				}]));
 	}
 
 	function defineGenericTypes():Void {
@@ -787,30 +813,67 @@ class WasmGcTypePlan {
 			setType(plan.storageTypeIndex, true, [], Array({type: Value(wasmElement), mutable: true}));
 		}
 		if (arrayElements.length != 0) {
-			var wrapper = arrayPlan(arrayElements[0]).wrapperTypeIndex, base:Array<WasmFieldType> = [
-				{type: Value(I32), mutable: true},
-				{type: Value(Ref({nullable: false, heap: WasmHeapType.Array})), mutable: true},
-				{type: Value(I32), mutable: true}
-			];
+			var wrapper = arrayPlan(arrayElements[0]).wrapperTypeIndex,
+				base:Array<WasmFieldType> = [
+					{type: Value(I32), mutable: true},
+					{type: Value(Ref({nullable: false, heap: WasmHeapType.Array})), mutable: true},
+					{type: Value(I32), mutable: true}
+				];
 			setType(wrapper, valueArrayWrapperTypeIndex < 0, [], Struct(base));
 			if (valueArrayWrapperTypeIndex >= 0) {
 				// The inherited data field holds the scalar lane, or the reference lane when there are no scalar words.
 				// The extra lane is nullable so a one-lane value does not allocate a second backing array.
 				setType(valueArrayWrapperTypeIndex, true, [wrapper], Struct(base.concat([
-					{type: Value(Ref({nullable: true, heap: WasmHeapType.Array})), mutable: true},
-					{type: Value(I32), mutable: false}, {type: Value(I32), mutable: false},
-					{type: Value(I32), mutable: false}, {type: Value(I32), mutable: false},
-					{type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})), mutable: true},
-					{type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})), mutable: true},
-					{type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})), mutable: true},
-					{type: Value(I32), mutable: true},
-					{type: Value(Ref({nullable: true, heap: Type(wrapper)})), mutable: true}
+					{
+						type: Value(Ref({nullable: true, heap: WasmHeapType.Array})),
+						mutable: true
+					},
+					{
+						type: Value(I32),
+						mutable: false
+					}, {
+						type: Value(I32),
+						mutable: false
+					},
+					{
+						type: Value(I32),
+						mutable: false
+					}, {
+						type: Value(I32),
+						mutable: false
+					},
+					{
+						type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})),
+						mutable: true
+					},
+					{
+						type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})),
+						mutable: true
+					},
+					{
+						type: Value(Ref({nullable: true, heap: Type(closureTypeIndex)})),
+						mutable: true
+					},
+					{
+						type: Value(I32),
+						mutable: true
+					},
+					{
+						type: Value(Ref({nullable: true, heap: Type(wrapper)})),
+						mutable: true
+					}
 				])));
 				setType(valueArrayI32LaneTypeIndex, true, [], Array({type: Value(I32), mutable: true}));
 				setType(valueArrayI64LaneTypeIndex, true, [], Array({type: Value(I64), mutable: true}));
-				setType(valueArrayReferenceLaneTypeIndex, true, [], Array({type: Value(Ref({nullable: true, heap: Any})), mutable: true}));
+				setType(valueArrayReferenceLaneTypeIndex, true, [], Array({
+					type: Value(Ref({nullable: true, heap: Any})),
+					mutable: true
+				}));
 				// An ordinary dynamic header can forward to a lane descriptor without changing its identity.
-				setType(valueArrayForwardLaneTypeIndex, true, [], Array({type: Value(Ref({nullable: true, heap: Type(valueArrayWrapperTypeIndex)})), mutable: true}));
+				setType(valueArrayForwardLaneTypeIndex, true, [], Array({
+					type: Value(Ref({nullable: true, heap: Type(valueArrayWrapperTypeIndex)})),
+					mutable: true
+				}));
 			}
 		}
 		for (element in iteratorElements) {
@@ -841,7 +904,8 @@ class WasmGcTypePlan {
 
 	function defineFunctionTypes():Void {
 		for (key in plannedFunctionTypes.keys())
-			setType(requireIndex(functionTypeIndices, key, 'Missing Wasm GC function type "$key"'), true, [], Func(plannedFunctionTypes.get(key)));
+			setType(requireIndex(functionTypeIndices, key, 'Missing Wasm GC function type "$key"'), true, [],
+				Func(plannedFunctionTypes.get(key)));
 	}
 
 	function arrayPlan(element:IrType):WasmGcArrayTypePlan {
@@ -871,7 +935,8 @@ class WasmGcTypePlan {
 			"_i64")) I64 else if (StringTools.endsWith(mapName,
 			"_bool")) Bool else if (StringTools.endsWith(mapName,
 			"_f64")) F64 else if (StringTools.endsWith(mapName,
-			"_bytes")) Bytes else if (StringTools.endsWith(mapName, "_ref")) Dyn else throw 'Unknown Wasm GC map value type "$mapName"';
+			"_bytes")) Bytes else if (StringTools.endsWith(mapName, "_ref")) Dyn
+			else throw 'Unknown Wasm GC map value type "$mapName"';
 	}
 
 	function reserveType():Int {
@@ -897,16 +962,17 @@ class WasmGcTypePlan {
 		return value.length + ":" + value;
 
 	static function irFunctionSignatureKey(arguments:Array<IrType>, result:IrType):String
-		return arguments.length + ":" + [for (argument in arguments) segment(typeKey(argument))].join("") + segment(typeKey(result));
+		return arguments.length + ":" + [for (argument in arguments) segment(typeKey(argument))].join("")
+			+ segment(typeKey(result));
 
 	static function wasmFunctionTypeKey(type:WasmFunctionType):String
 		return type.parameters.length
 			+ ":"
 			+ [for (parameter in type.parameters) segment(wasmValueTypeKey(parameter))].join("")
-				+ ">"
-				+ type.results.length
-				+ ":"
-				+ [for (result in type.results) segment(wasmValueTypeKey(result))].join("");
+			+ ">"
+			+ type.results.length
+			+ ":"
+			+ [for (result in type.results) segment(wasmValueTypeKey(result))].join("");
 
 	static function wasmValueTypeKey(type:WasmValueType):String {
 		return switch type {

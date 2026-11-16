@@ -159,7 +159,8 @@ class BreakAnalyzer {
 			if (canBreak && UnwrappedLineTools.beganSourceLine(line, right))
 				mustBreak = true;
 			// Metadata written on its own line stays there, above its declaration at the same indent.
-			if (syntax.roles.metadataEnds.exists(tokens[index].start) && UnwrappedLineTools.beganSourceLine(line, right)) {
+			if (syntax.roles.metadataEnds.exists(tokens[index].start)
+				&& UnwrappedLineTools.beganSourceLine(line, right)) {
 				canBreak = true;
 				mustBreak = true;
 				layout = At(line.indent);
@@ -509,7 +510,8 @@ class BreakAnalyzer {
 			&& (rightKind == TokenKind.Greater || rightKind == TokenKind.GreaterEqual));
 	}
 
-	static function spacing(tokens:Array<FormatToken>, index:Int, left:Null<TokenKind>, right:Null<TokenKind>, syntax:SyntaxInfo):Int {
+	static function spacing(tokens:Array<FormatToken>, index:Int, left:Null<TokenKind>, right:Null<TokenKind>,
+			syntax:SyntaxInfo):Int {
 		if (tokens[index + 1].kind.match(FormatTokenKind.LineComment)
 			|| tokens[index + 1].kind.match(FormatTokenKind.DocComment)
 			|| tokens[index + 1].kind.match(FormatTokenKind.BlockComment))

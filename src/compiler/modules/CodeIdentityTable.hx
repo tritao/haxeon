@@ -23,7 +23,8 @@ class CodeIdentityTable {
 	static inline final END = "/*IDENTITY-END*/";
 
 	/** Refreshes the generated table if the program reaches it (a program that never reads identities pays nothing). */
-	public static function refresh(context:CompilationContext, names:Array<String>, rollback:Map<String, ModuleState>, entry:String,
+	public static function refresh(context:CompilationContext, names:Array<String>, rollback:Map<String, ModuleState>,
+			entry:String,
 			body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void {
 		if (names.indexOf(MODULE) < 0)
 			return;
@@ -47,7 +48,8 @@ class CodeIdentityTable {
 	 * Diagnostics for `haxeon identity-path`: when `HAXEON_IDENTITY_GRAPH` names a file, the import graph the identities were made
 	 * from is written there, one module per line: `name`, a tab, then its imports separated by commas.
 	 */
-	static function dumpGraph(modules:Map<String, ModuleState>, names:Array<String>, computed:Map<String, String>):Void {
+	static function dumpGraph(modules:Map<String, ModuleState>, names:Array<String>,
+			computed:Map<String, String>):Void {
 		var path = Sys.getEnv("HAXEON_IDENTITY_GRAPH");
 		if (path == null || path == "")
 			return;
@@ -83,7 +85,8 @@ class CodeIdentityTable {
 	}
 
 	/** The identity of each module in `names` (the generated table module itself excluded, and edges to it ignored). */
-	public static function identities(modules:Map<String, ModuleState>, names:Array<String>, salt:String):Map<String, String> {
+	public static function identities(modules:Map<String, ModuleState>, names:Array<String>,
+			salt:String):Map<String, String> {
 		var known:Map<String, Bool> = [], edges:Map<String, Array<String>> = [];
 		var members = [for (name in names) if (name != MODULE && modules.exists(name)) name];
 		members.sort(Reflect.compare);
@@ -102,7 +105,10 @@ class CodeIdentityTable {
 		}
 		// Tarjan's strongly connected components, iteratively (a module graph can be thousands deep). A component completes
 		// after every component it depends on, so its identity can be made the moment it completes.
-		var index:Map<String, Int> = [], low:Map<String, Int> = [], onStack:Map<String, Bool> = [], stack:Array<String> = [];
+		var index:Map<String, Int> = [],
+			low:Map<String, Int> = [],
+			onStack:Map<String, Bool> = [],
+			stack:Array<String> = [];
 		var componentOf:Map<String, String> = [], result:Map<String, String> = [];
 		var counter = 0;
 		for (root in members) {
@@ -160,7 +166,8 @@ class CodeIdentityTable {
 		return result;
 	}
 
-	static function componentIdentity(modules:Map<String, ModuleState>, edges:Map<String, Array<String>>, component:Array<String>,
+	static function componentIdentity(modules:Map<String, ModuleState>, edges:Map<String, Array<String>>,
+			component:Array<String>,
 			done:Map<String, String>, salt:String):String {
 		var inside:Map<String, Bool> = [];
 		for (member in component)

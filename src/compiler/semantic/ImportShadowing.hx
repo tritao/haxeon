@@ -15,7 +15,8 @@ import compiler.syntax.Ast.AstProgram;
  */
 class ImportShadowing {
 	/** The names `importedTypes` would silently take from `packageTypes`, each mapped to its marker. */
-	public static function ambiguousNames(ast:AstProgram, importedTypes:Map<String, String>, packageTypes:Map<String, String>):Map<String, String> {
+	public static function ambiguousNames(ast:AstProgram, importedTypes:Map<String, String>,
+			packageTypes:Map<String, String>):Map<String, String> {
 		var named:Map<String, Bool> = [], result:Map<String, String> = [];
 		for (path in ast.imports)
 			if (!ModuleAnalyzer.isWildcardImport(path))

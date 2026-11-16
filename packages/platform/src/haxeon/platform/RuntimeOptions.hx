@@ -8,8 +8,7 @@ class RuntimeOptions {
 	public var applicationId:Null<String> = null;
 	public var applicationName:Null<String> = null;
 
-	public function new() {
-	}
+	public function new() {}
 
 	public function nativeValue():InitOptions {
 		var value = new InitOptions();

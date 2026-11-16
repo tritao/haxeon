@@ -10,17 +10,22 @@ import compiler.ir.IrFunction.IrFunctionKind;
 class IrScalarAbiEligibility {
 	public static function permits(kind:IrFunctionKind, wasm:Bool):Bool
 		return switch kind {
-			case Ordinary, GenericSpecialization, SourceLambda, IterationAdapter, OptionalScalar(_), ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_): true;
+			case Ordinary, GenericSpecialization, SourceLambda, IterationAdapter, OptionalScalar(_),
+				ClosureAdapter(_, _), ClosureCast(_), ClosureVarargs(_): true;
 			case Provider(_, operation):
 				switch IrProviders.base(operation) {
-					case ProviderOperation.Equals, ProviderOperation.ReflectEquals, ProviderOperation.Hash, ProviderOperation.InlineEnumHelper,
-						ProviderOperation.TypedInterfaceEntry, ProviderOperation.InterfaceUnbox, ProviderOperation.GenericMethodReference,
-						ProviderOperation.KeyPath, ProviderOperation.OptionalBox, ProviderOperation.OptionalUnbox, ProviderOperation.ValueArrayElement,
+					case ProviderOperation.Equals, ProviderOperation.ReflectEquals, ProviderOperation.Hash,
+						ProviderOperation.InlineEnumHelper,
+						ProviderOperation.TypedInterfaceEntry, ProviderOperation.InterfaceUnbox,
+						ProviderOperation.GenericMethodReference,
+						ProviderOperation.KeyPath, ProviderOperation.OptionalBox, ProviderOperation.OptionalUnbox,
+						ProviderOperation.ValueArrayElement,
 						ProviderOperation.DynamicDispatch, ProviderOperation.OptionalCopy: true;
 					default: false;
 				}
 			case EnumEquality(_): true;
 			case NullableScalarArguments, WasmClosureRestore: wasm;
-			case GeneratedHelper, ScalarArguments, ValueArraySlot(_, _, _), EnumDynamicUnbox(_), EnumTagAdapter(_, _): false;
+			case GeneratedHelper, ScalarArguments, ValueArraySlot(_, _, _), EnumDynamicUnbox(_),
+				EnumTagAdapter(_, _): false;
 		};
 }

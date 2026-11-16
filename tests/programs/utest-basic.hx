@@ -201,7 +201,8 @@ function main():Int {
 	runner.addCase(explicit);
 	Report.create(runner);
 	runner.run();
-	if (lifecycle.events.length != 8 || lifecycle.events[0] != 1 || lifecycle.events[1] != 2 || lifecycle.events[2] != 3 || lifecycle.events[3] != 5
+	if (lifecycle.events.length != 8 || lifecycle.events[0] != 1 || lifecycle.events[1] != 2 || lifecycle.events[2] != 3
+		|| lifecycle.events[3] != 5
 		|| lifecycle.events[4] != 2 || lifecycle.events[5] != 4 || lifecycle.events[6] != 5 || lifecycle.events[7] != 6)
 		return 3;
 	if (!observer.started

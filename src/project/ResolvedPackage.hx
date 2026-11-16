@@ -20,9 +20,12 @@ class ResolvedPackage {
 	public final ffiProjections:Array<String>;
 	public final ffiImports:Array<ResolvedFfiImport>;
 
-	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>, unscopedSourceRoots:Array<String>,
-			sources:Array<String>, dependencies:Array<String>, nativeSources:Array<String>, includeDirs:Array<String>, nativeCMakeInputs:Array<String>,
-			ffiInterfaces:Array<String>, ffiProjections:Array<String>, ?ffiImports:Array<ResolvedFfiImport>, ?source:PackageSource) {
+	public function new(name:String, root:String, manifest:PackageManifest, sourceRoots:Array<String>,
+			unscopedSourceRoots:Array<String>,
+			sources:Array<String>, dependencies:Array<String>, nativeSources:Array<String>, includeDirs:Array<String>,
+			nativeCMakeInputs:Array<String>,
+			ffiInterfaces:Array<String>, ffiProjections:Array<String>, ?ffiImports:Array<ResolvedFfiImport>,
+			?source:PackageSource) {
 		this.id = manifest.packageId;
 		this.name = name;
 		this.root = root;

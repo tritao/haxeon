@@ -11,7 +11,8 @@ class PackageLockEntry {
 	public final checksum:Null<String>;
 	public final dependencies:Array<PackageId>;
 
-	public function new(id:PackageId, source:PackageSource, ?resolvedRevision:String, ?checksum:String, ?dependencies:Array<PackageId>) {
+	public function new(id:PackageId, source:PackageSource, ?resolvedRevision:String, ?checksum:String,
+			?dependencies:Array<PackageId>) {
 		this.id = id;
 		this.source = source;
 		this.resolvedRevision = resolvedRevision;
@@ -110,7 +111,7 @@ class PackageLockfile {
 		if (!Std.isOfType(packages, Array))
 			throw '$path "packages" must be an array';
 		var entries:Array<PackageLockEntry> = [];
-		for (rawPackage in (cast packages : Array<Dynamic>)) {
+		for (rawPackage in (cast packages:Array<Dynamic>)) {
 			if (rawPackage == null || !Reflect.isObject(rawPackage) || Std.isOfType(rawPackage, Array))
 				throw '$path contains an invalid package entry';
 			var name = requiredString(rawPackage, "name", path),
@@ -126,7 +127,7 @@ class PackageLockfile {
 
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value:Dynamic = Reflect.field(raw, field);
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw '$path requires a non-empty "$field" string';
 		return cast value;
 	}
@@ -135,7 +136,7 @@ class PackageLockfile {
 		var value:Dynamic = Reflect.field(raw, field);
 		if (value == null)
 			return null;
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw 'Lockfile field "$field" must be a non-empty string';
 		return cast value;
 	}
@@ -147,8 +148,8 @@ class PackageLockfile {
 		if (!Std.isOfType(value, Array))
 			throw '$path "$field" must be an array of strings';
 		var result:Array<String> = [];
-		for (item in (cast value : Array<Dynamic>)) {
-			if (!Std.isOfType(item, String) || (cast item : String).length == 0)
+		for (item in (cast value:Array<Dynamic>)) {
+			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
 				throw '$path "$field" must contain only non-empty strings';
 			result.push(cast item);
 		}

@@ -8,7 +8,8 @@ class MemberModuleShadowMain {
 			+ 'class Base { public var value:Int; public var callback:Int->Int; '
 			+ 'public function new() { value=20; callback=function(x:Int):Int return x; } '
 			+ 'public function get():Int return value+1; }';
-		var consumer = 'function value():Int return 100; function get():Int return 100; function standalone():Int return 0; '
+		var consumer =
+			'function value():Int return 100; function get():Int return 100; function standalone():Int return 0; '
 			+ 'function bonus():Int return 100; function field():Int return 100; '
 			+ 'function callback(x:Int):Int return 100; '
 			+ 'struct Point { public var field:Int; public function new(field:Int) this.field=field; public function read():Int return field; } '
@@ -33,7 +34,8 @@ class MemberModuleShadowMain {
 		var emptyBase = 'class Base { public function new() {} }';
 		var memberBase = 'class Base { public function new() {} public function value():Int return 41; }';
 		rebound.update("Base.hx", emptyBase);
-		rebound.update("Main.hx", 'function value():Int return 42; class Main extends Base { public function new() super(); '
+		rebound.update("Main.hx",
+			'function value():Int return 42; class Main extends Base { public function new() super(); '
 			+ 'function read():Int return value(); static function main():Int return new Main().read(); }');
 		check(rebound, 42);
 		rebound.update("Base.hx", memberBase);

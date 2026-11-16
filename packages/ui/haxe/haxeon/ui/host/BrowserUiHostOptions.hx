@@ -25,14 +25,12 @@ class BrowserUiHostOptions extends UiHostOptions {
 	public function new() super();
 
 	override public function validate():Void {
-		if (title == null || title.length == 0 || width <= 0 || height <= 0 ||
-			eventQueueCapacity <= 0)
+		if (title == null || title.length == 0 || width <= 0 || height <= 0 || eventQueueCapacity <= 0)
 			throw "Browser UI host options are invalid";
 		if (fonts == null) throw "Browser UI font assets cannot be null";
 		for (font in fonts)
-			if (font == null || font.name == null || font.name.length == 0 ||
-				font.uri == null || font.uri.length == 0 || font.bundledPath == null ||
-				font.bundledPath.length == 0)
+			if (font == null || font.name == null || font.name.length == 0 || font.uri == null || font.uri.length == 0
+				|| font.bundledPath == null || font.bundledPath.length == 0)
 				throw "Browser UI font asset is invalid";
 	}
 }

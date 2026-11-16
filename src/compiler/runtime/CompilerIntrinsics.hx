@@ -10,7 +10,8 @@ class CompilerIntrinsics {
 
 	public static function register(compiler:Compiler):Void {
 		for (native in configuration())
-			compiler.registerNative(native.name, native.library, native.symbol, native.arguments, native.result, native.generatedFunctionDependencies);
+			compiler.registerNative(native.name, native.library, native.symbol, native.arguments, native.result,
+				native.generatedFunctionDependencies);
 	}
 
 	static final PURE:Array<String> = [
@@ -55,25 +56,45 @@ class CompilerIntrinsics {
 		definitions.push(native("trace", "haxeon_runtime", "__sys_print", [TString], TVoid));
 		definitions.push(native("__std_int_f64", "haxeon_runtime", "__std_int_f64", [TFloat], TInt));
 		definitions.push(native("__std_int_dynamic", "haxeon_runtime", "__std_int_dynamic", [TDynamic], TInt));
-		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString, ["runtime.Ryu.format", "Std.arrayString"]));
+		definitions.push(native("__std_string", "haxeon_runtime", "__std_string", [TDynamic], TString, [
+			"runtime.Ryu.format",
+			"Std.arrayString"
+		]));
 		definitions.push(native("__dynamic_equal", "haxeon_runtime", "__dynamic_equal", [TDynamic, TDynamic], TBool));
-		definitions.push(native("__iterator_new", "haxeon_runtime", "__iterator_new", [TDynamic], TNativeAbstract("realtime_iterator")));
-		definitions.push(native("__iterator_has_next", "haxeon_runtime", "__iterator_has_next", [TNativeAbstract("realtime_iterator")], TBool));
-		definitions.push(native("__iterator_next", "haxeon_runtime", "__iterator_next", [TNativeAbstract("realtime_iterator")], TDynamic));
+		definitions.push(native("__iterator_new", "haxeon_runtime", "__iterator_new", [TDynamic],
+			TNativeAbstract("realtime_iterator")));
+		definitions.push(native("__iterator_has_next", "haxeon_runtime", "__iterator_has_next",
+			[TNativeAbstract("realtime_iterator")], TBool));
+		definitions.push(native("__iterator_next", "haxeon_runtime", "__iterator_next",
+			[TNativeAbstract("realtime_iterator")], TDynamic));
 		definitions.push(native("__reflect_is_object", "haxeon_runtime", "__reflect_is_object", [TDynamic], TBool));
 		definitions.push(native("__math_ceil", "haxeon_runtime", "__math_ceil", [TFloat], TInt));
 		definitions.push(native("__math_floor", "haxeon_runtime", "__math_floor", [TFloat], TInt));
 		definitions.push(native("__math_fmod", "haxeon_runtime", "__math_fmod", [TFloat, TFloat], TFloat));
 
 		// Primitive String methods lowered directly by the typer.
-		definitions.push(native("__string_compare_full", "haxeon_runtime", "__string_compare_full", [TString, TString], TInt));
-		definitions.push(native("__string_last_index_of", "haxeon_runtime", "__string_last_index_of", [TString, TString], TInt));
-		definitions.push(native("__string_last_index_of_from", "haxeon_runtime", "__string_last_index_of_from", [TString, TString, TInt], TInt));
-		definitions.push(native("__string_index_of_from", "haxeon_runtime", "__string_index_of_from", [TString, TString, TInt], TInt));
-		definitions.push(native("__string_to_lower_case", "haxeon_runtime", "__string_to_lower_case", [TString], TString));
-		definitions.push(native("__string_to_upper_case", "haxeon_runtime", "__string_to_upper_case", [TString], TString));
-		definitions.push(native("__string_split", "haxeon_runtime", "__string_split", [TString, TString], TArray(TString)));
-		definitions.push(native("__string_from_bytes", "haxeon_runtime", "__string_from_bytes", [THlBytes, TInt], TString));
+		definitions.push(native("__string_compare_full", "haxeon_runtime", "__string_compare_full", [TString, TString],
+			TInt));
+		definitions.push(native("__string_last_index_of", "haxeon_runtime", "__string_last_index_of",
+			[TString, TString], TInt));
+		definitions.push(native("__string_last_index_of_from", "haxeon_runtime", "__string_last_index_of_from", [
+			TString,
+			TString,
+			TInt
+		], TInt));
+		definitions.push(native("__string_index_of_from", "haxeon_runtime", "__string_index_of_from", [
+			TString,
+			TString,
+			TInt
+		], TInt));
+		definitions.push(native("__string_to_lower_case", "haxeon_runtime", "__string_to_lower_case", [TString],
+			TString));
+		definitions.push(native("__string_to_upper_case", "haxeon_runtime", "__string_to_upper_case", [TString],
+			TString));
+		definitions.push(native("__string_split", "haxeon_runtime", "__string_split", [TString, TString],
+			TArray(TString)));
+		definitions.push(native("__string_from_bytes", "haxeon_runtime", "__string_from_bytes", [THlBytes, TInt],
+			TString));
 		definitions.push(native("__string_bytes", "haxeon_runtime", "__string_bytes", [TString], THlBytes));
 		definitions.push(native("__hl_bytes_ucs2_length", "std", "ucs2length", [THlBytes, TInt], TInt));
 		var bytes:CompilerType = TBytes;
@@ -89,15 +110,18 @@ class CompilerIntrinsics {
 		definitions.push(native("__bytes_set_i32", "haxeon_runtime", "__bytes_set_i32", [bytes, TInt, TInt], TVoid));
 		definitions.push(native("__bytes_set_float", "haxeon_runtime", "setF32", [bytes, TInt, TFloat], TVoid));
 		definitions.push(native("__bytes_set_double", "haxeon_runtime", "setF64", [bytes, TInt, TFloat], TVoid));
-		definitions.push(native("__bytes_blit", "haxeon_runtime", "__bytes_blit", [bytes, TInt, bytes, TInt, TInt], TVoid));
+		definitions.push(native("__bytes_blit", "haxeon_runtime", "__bytes_blit", [bytes, TInt, bytes, TInt, TInt],
+			TVoid));
 		definitions.push(native("__bytes_sub", "haxeon_runtime", "__bytes_sub", [bytes, TInt, TInt], bytes));
 		definitions.push(native("__bytes_compare", "haxeon_runtime", "__bytes_compare", [bytes, bytes], TInt));
 		definitions.push(native("__bytes_to_string", "haxeon_runtime", "__bytes_to_string", [bytes], TString));
-		definitions.push(native("__bytes_get_string", "haxeon_runtime", "__bytes_get_string", [bytes, TInt, TInt], TString));
+		definitions.push(native("__bytes_get_string", "haxeon_runtime", "__bytes_get_string", [bytes, TInt, TInt],
+			TString));
 		return definitions;
 	}
 
-	static function native(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
+	static function native(name:String, library:String, symbol:String, arguments:Array<CompilerType>,
+			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):NativeFunction
 		return {
 			name: name,
@@ -105,6 +129,7 @@ class CompilerIntrinsics {
 			symbol: symbol,
 			arguments: arguments,
 			result: result,
-			generatedFunctionDependencies: generatedFunctionDependencies == null ? null : generatedFunctionDependencies.copy()
+			generatedFunctionDependencies: generatedFunctionDependencies == null
+				? null : generatedFunctionDependencies.copy()
 		};
 }

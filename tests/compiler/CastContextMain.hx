@@ -5,14 +5,10 @@ import compiler.runtime.CompilerIntrinsics;
 class CastContextMain {
 	static final source = 'import haxe.io.Bytes; @:hlNative("haxeon_runtime") class Native { '
 		+ 'public static function call_managed_bytes(module:hl.Abstract<"realtime_module">, index:Int):hl.Abstract<"realtime_bytes"> return null; } '
-		+
-		'class Host { static function invoke<T>(module:hl.Abstract<"realtime_module">, index:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T return operation(module); '
-		+
-		'public static function convert(module:hl.Abstract<"realtime_module">, index:Int):Bytes return cast invoke(module, index, 7, function(handle) return Native.call_managed_bytes(handle, index)); '
-		+
-		'public static function roundTrip(bytes:Bytes):Bytes { var pointer:hl.Abstract<"realtime_bytes"> = cast bytes; return cast invoke(null, 0, 7, function(handle) return pointer); } } '
-		+
-		'function main():Int { var bytes = Host.roundTrip(Bytes.ofString("ok")); var rejected = false; try { var wrong:hl.Abstract<"wrong_bytes"> = cast bytes; } catch (error:Dynamic) rejected = true; if (!rejected) return 99; return bytes.length; }';
+		+ 'class Host { static function invoke<T>(module:hl.Abstract<"realtime_module">, index:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T return operation(module); '
+		+ 'public static function convert(module:hl.Abstract<"realtime_module">, index:Int):Bytes return cast invoke(module, index, 7, function(handle) return Native.call_managed_bytes(handle, index)); '
+		+ 'public static function roundTrip(bytes:Bytes):Bytes { var pointer:hl.Abstract<"realtime_bytes"> = cast bytes; return cast invoke(null, 0, 7, function(handle) return pointer); } } '
+		+ 'function main():Int { var bytes = Host.roundTrip(Bytes.ofString("ok")); var rejected = false; try { var wrong:hl.Abstract<"wrong_bytes"> = cast bytes; } catch (error:Dynamic) rejected = true; if (!rejected) return 99; return bytes.length; }';
 
 	static function main():Void {
 		var result = new Compiler(null, CompilerIntrinsics.configuration());

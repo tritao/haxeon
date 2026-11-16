@@ -11,17 +11,17 @@ class NullableScalarResultAbiMain {
 	static function check(target:BackendTarget, inlineEnabled:Bool, managed:Bool):Void {
 		var source = managed
 			? 'class Owner { public function new() {} } '
-				+ 'class Census { public static var owner:Owner; @:expose public static function prepare():Void owner=new Owner(); } '
-				+ 'struct Pair { public final a:Int; public final b:Int; public final owner:Owner; '
-				+ 'public function new(a:Int,b:Int,owner:Owner) { this.a=a; this.b=b; this.owner=owner; } } '
-				+ 'function make(v:Null<Int>,o:Owner):Pair { var x=v==null?0:v; return new Pair(x,2,o); } '
-				+ 'function forward(v:Null<Int>,o:Owner):Pair return make(v,o); '
-				+ 'function main():Int { if(Census.owner==null) return 1; var a=forward(40,Census.owner); var b=forward(null,Census.owner); '
-				+ 'if(a.owner!=Census.owner || b.owner!=Census.owner) return 1; return a.a+a.b+b.a==42?42:1; }'
+			+ 'class Census { public static var owner:Owner; @:expose public static function prepare():Void owner=new Owner(); } '
+			+ 'struct Pair { public final a:Int; public final b:Int; public final owner:Owner; '
+			+ 'public function new(a:Int,b:Int,owner:Owner) { this.a=a; this.b=b; this.owner=owner; } } '
+			+ 'function make(v:Null<Int>,o:Owner):Pair { var x=v==null?0:v; return new Pair(x,2,o); } '
+			+ 'function forward(v:Null<Int>,o:Owner):Pair return make(v,o); '
+			+ 'function main():Int { if(Census.owner==null) return 1; var a=forward(40,Census.owner); var b=forward(null,Census.owner); '
+			+ 'if(a.owner!=Census.owner || b.owner!=Census.owner) return 1; return a.a+a.b+b.a==42?42:1; }'
 			: 'struct Pair { public final a:Int; public final b:Int; public function new(a:Int,b:Int) { this.a=a; this.b=b; } } '
-				+ 'function make(v:Null<Int>):Pair { var x=v==null?0:v; return new Pair(x,2); } '
-				+ 'function forward(v:Null<Int>):Pair return make(v); '
-				+ 'function main():Int { var a=forward(40); var b=forward(null); return a.a+a.b+b.a==42?42:1; }';
+			+ 'function make(v:Null<Int>):Pair { var x=v==null?0:v; return new Pair(x,2); } '
+			+ 'function forward(v:Null<Int>):Pair return make(v); '
+			+ 'function main():Int { var a=forward(40); var b=forward(null); return a.a+a.b+b.a==42?42:1; }';
 		var p = compiler.Frontend.compile(source), interpreter = new compiler.ir.IrInterpreter(p);
 		if (managed) interpreter.run("Census.prepare");
 		if (interpreter.run("main") != 42) throw "Nullable source result";
@@ -29,10 +29,12 @@ class NullableScalarResultAbiMain {
 		compiler.ir.IrValuePhiScalarization.rewrite(p);
 		compiler.ir.IrScalarArguments.rewrite(p, target != HashLink);
 		var objects = compiler.ir.IrObjectTable.of([for (object in p.objects) object.name => object]);
-		p.functions = [for (fn in p.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, target == HashLink)];
+		p.functions = [for (fn in p.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false,
+			target == HashLink)];
 		compiler.ir.IrNullableScalarFlow.rewrite(p);
 		compiler.ir.IrVerifier.verify(p);
-		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
+		compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+			inlineEnabled);
 		compiler.ir.IrVerifier.verify(p);
 		var root = Sys.getEnv("TMPDIR");
 		if (root == null) root = "/tmp";
@@ -41,10 +43,16 @@ class NullableScalarResultAbiMain {
 		if (managed) b.call("Census.prepare", [], Void);
 		var result = b.call("main", [], I32);
 		if (target == HashLink) {
-			p.natives.push({name:"start",library:"std",symbol:"gc_census_start",arguments:[I32],result:Void});
-			p.natives.push({name:"stop",library:"std",symbol:"gc_census_stop",arguments:[],result:Void});
-			p.natives.push({name:"reset",library:"std",symbol:"gc_census_reset",arguments:[],result:Void});
-			p.natives.push({name:"dump",library:"haxeon_runtime",symbol:"__gc_census_dump",arguments:[Bytes],result:Void});
+			p.natives.push({name: "start", library: "std", symbol: "gc_census_start", arguments: [I32], result: Void});
+			p.natives.push({name: "stop", library: "std", symbol: "gc_census_stop", arguments: [], result: Void});
+			p.natives.push({name: "reset", library: "std", symbol: "gc_census_reset", arguments: [], result: Void});
+			p.natives.push({
+				name: "dump",
+				library: "haxeon_runtime",
+				symbol: "__gc_census_dump",
+				arguments: [Bytes],
+				result: Void
+			});
 			for (n in [8, 1024]) {
 				var path = stem + "-" + n + ".json";
 				captures.push(path);
@@ -61,22 +69,31 @@ class NullableScalarResultAbiMain {
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		var bytes = target == HashLink
 			? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true}).bytes
-			: new compiler.backend.wasm.WasmBackend().compile(p, {target: target, debugNames: true,
-				wasmGcAllocationCount: target == WasmGc, wasmMemoryStats: target == Wasm32}).bytes;
+			: new compiler.backend.wasm.WasmBackend().compile(p, {
+				target: target,
+				debugNames: true,
+				wasmGcAllocationCount: target == WasmGc,
+				wasmMemoryStats: target == Wasm32
+			}).bytes;
 		var path = stem + (target == HashLink ? ".hl" : ".wasm");
 		try {
 			sys.io.File.saveBytes(path, bytes);
-			var js = 'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports,'
+			var js =
+				'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports,'
 				+ 'c=e.__allocation_count||e["haxeon.memory.allocation_count"];'
-				+ (managed ? 'if(typeof e["Census.prepare"]!=="function")throw Error("missing managed setup export");e["Census.prepare"]();' : "")
+				+ (managed
+				? 'if(typeof e["Census.prepare"]!=="function")throw Error("missing managed setup export");e["Census.prepare"]();'
+				: "")
 				+ 'if(e.main()!==42)throw Error("warm result");'
 				+ 'for(const n of [8,1024]){const b=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("result");'
 				+ 'if(c()!==b)throw Error("nullable/value ABI allocated "+(c()-b));}';
-			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), command = target == HashLink ? (vm == null ? "scripts/hl" : vm + "/hl") : "node";
+			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
+				command = target == HashLink ? (vm == null ? "scripts/hl" : vm + "/hl") : "node";
 			var child = new sys.io.Process(command, target == HashLink ? [path] : ["-e", js, path]);
 			var error = child.stderr.readAll().toString(), code = child.exitCode();
 			child.close();
-			if (code != (target == HashLink ? 42 : 0)) throw '$target inline=$inlineEnabled managed=$managed: $code $error';
+			if (code != (target == HashLink ? 42 : 0))
+				throw '$target inline=$inlineEnabled managed=$managed: $code $error';
 			for (capture in captures) {
 				var data:Dynamic = haxe.Json.parse(sys.io.File.getContent(capture));
 				if (data.allocations != 0) throw 'Nullable value-result calls allocated: ${haxe.Json.stringify(data)}';

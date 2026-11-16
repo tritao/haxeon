@@ -11,8 +11,8 @@ class IrValueArrayScalarLowering {
 			if (StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX)
 				&& StringTools.endsWith(fn.name, suffix)
 				&& (expandAll
-					|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "optional-")
-					|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "iterator-next:")))
+				|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "optional-")
+				|| StringTools.startsWith(fn.name, IrValueArrayElements.PREFIX + "iterator-next:")))
 				helpers.set(fn.name, fn);
 		if (!helpers.keys().hasNext())
 			return;

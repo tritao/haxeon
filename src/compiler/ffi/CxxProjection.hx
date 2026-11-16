@@ -76,7 +76,8 @@ class CxxProjection {
 		return result;
 	}
 
-	static function emitOwnedRecord(hxi:HxiInterface, record:CxxRecord, typeName:String, profile:Null<HxiProjectionProfile>):String {
+	static function emitOwnedRecord(hxi:HxiInterface, record:CxxRecord, typeName:String,
+			profile:Null<HxiProjectionProfile>):String {
 		var nativeType = CxxAbiLowerer.hxiNameForQualified(record.qualifiedName),
 			rawOwnedType = HxiHaxeEmitter.ownedTypeName(nativeType, profile),
 			ownerType = "Owned" + typeName,
@@ -96,7 +97,8 @@ class CxxProjection {
 		return output.toString();
 	}
 
-	static function emit(model:CxxModel, hxi:HxiInterface, record:CxxRecord, typeName:String, profile:Null<HxiProjectionProfile>,
+	static function emit(model:CxxModel, hxi:HxiInterface, record:CxxRecord, typeName:String,
+			profile:Null<HxiProjectionProfile>,
 			nativePlans:Null<Array<HxiFunctionAbi>>):String {
 		var abi = HxiAbi.forInterface(hxi),
 			plans:Map<String, HxiFunctionAbi> = [],
@@ -180,7 +182,8 @@ class CxxProjection {
 				setup:Array<String> = [],
 				argumentCursor = argumentOffset;
 			for (parameterIndex in 0...method.parameters.length) {
-				argumentCursor = appendProjectedParameter(arguments, calls, setup, method.parameters[parameterIndex], plan.arguments, argumentCursor, profile,
+				argumentCursor = appendProjectedParameter(arguments, calls, setup, method.parameters[parameterIndex],
+					plan.arguments, argumentCursor, profile,
 					parameterIndex, method.qualifiedName);
 			}
 			if (argumentCursor != plan.arguments.length)
@@ -214,7 +217,8 @@ class CxxProjection {
 				}
 			} else {
 				var signature = HxiHaxeEmitter.nativeSignature(hxi, plan),
-					virtualCall = '$virtualHelper.native_virtual_invoke_${method.parameters.length}("${escape(signature)}", cast nativeHandle(), ${virtual.index}, ${virtual.adjustment}${calls.length == 0 ? "" : ", " + calls.join(", ")})';
+					virtualCall =
+						'$virtualHelper.native_virtual_invoke_${method.parameters.length}("${escape(signature)}", cast nativeHandle(), ${virtual.index}, ${virtual.adjustment}${calls.length == 0 ? "" : ", " + calls.join(", ")})';
 				if (result.haxeType == "Void")
 					output.add('\t\t$virtualCall;\n');
 				else
@@ -264,7 +268,8 @@ class CxxProjection {
 					projected = HxiHaxeEmitter.project(argument, false, profile);
 				if (projected == null)
 					throw 'CXX201 unsupported Haxe projection for ${constructor.qualifiedName} parameter ${parameterIndex + 1}';
-				var argumentName = identifier(constructor.parameters[parameterIndex].name) ? constructor.parameters[parameterIndex].name : 'arg$parameterIndex';
+				var argumentName = identifier(constructor.parameters[parameterIndex].name)
+					? constructor.parameters[parameterIndex].name : 'arg$parameterIndex';
 				constructorArguments.push('$argumentName:${projected.haxeType}');
 				constructorCalls.push(argumentName);
 			}
@@ -281,7 +286,8 @@ class CxxProjection {
 		return output.toString();
 	}
 
-	static function emitFunctions(model:CxxModel, hxi:HxiInterface, profile:Null<HxiProjectionProfile>, nativePlans:Null<Array<HxiFunctionAbi>>,
+	static function emitFunctions(model:CxxModel, hxi:HxiInterface, profile:Null<HxiProjectionProfile>,
+			nativePlans:Null<Array<HxiFunctionAbi>>,
 			ownedRecords:Map<String, String>):String {
 		var abi = HxiAbi.forInterface(hxi),
 			plans:Map<String, HxiFunctionAbi> = [],
@@ -304,7 +310,8 @@ class CxxProjection {
 		var counts:Map<String, Int> = [], indices:Map<String, Int> = [];
 		for (functionModel in functions)
 			if (functionModel.thunkSymbol != null || ownedRecords.exists(functionModel.qualifiedName))
-				counts.set(functionModel.name, (counts.get(functionModel.name) == null ? 0 : counts.get(functionModel.name)) + 1);
+				counts.set(functionModel.name,
+					(counts.get(functionModel.name) == null ? 0 : counts.get(functionModel.name)) + 1);
 		for (functionModel in functions) {
 			if (functionModel.thunkSymbol == null && !ownedRecords.exists(functionModel.qualifiedName))
 				continue;
@@ -315,21 +322,24 @@ class CxxProjection {
 			if (index == null)
 				index = 0;
 			indices.set(functionModel.name, index + 1);
-			var functionName = counts.get(functionModel.name) == 1 ? functionModel.name : functionModel.name + "_" + index;
+			var functionName = counts.get(functionModel.name) == 1
+				? functionModel.name : functionModel.name + "_" + index;
 			validateFunctionName(functionName, functionModel);
 			var arguments:Array<String> = [],
 				calls:Array<String> = [],
 				setup:Array<String> = [],
 				argumentCursor = 0;
 			for (parameterIndex in 0...functionModel.parameters.length) {
-				argumentCursor = appendProjectedParameter(arguments, calls, setup, functionModel.parameters[parameterIndex], plan.arguments, argumentCursor,
+				argumentCursor = appendProjectedParameter(arguments, calls, setup,
+					functionModel.parameters[parameterIndex], plan.arguments, argumentCursor,
 					profile, parameterIndex, functionModel.qualifiedName);
 			}
 			if (argumentCursor != plan.arguments.length)
 				throw 'CXX201 native parameter expansion mismatch for ${functionModel.qualifiedName}';
 			var ownedRecordType = ownedRecords.get(functionModel.qualifiedName),
 				result = ownedRecordType == null ? HxiHaxeEmitter.project(plan.result, true, profile) : null,
-				resultType = ownedRecordType == null ? result == null ? null : result.haxeType : "Owned" + ownedRecordType;
+				resultType = ownedRecordType == null ? result == null
+					? null : result.haxeType : "Owned" + ownedRecordType;
 			if (resultType == null)
 				throw 'CXX201 unsupported Haxe projection for ${functionModel.qualifiedName} result';
 			var nativeName = HxiHaxeEmitter.projectedFunctionName(functionModel.loweredName, profile);
@@ -371,20 +381,24 @@ class CxxProjection {
 			case _: null;
 		};
 
-	static function appendProjectedParameter(arguments:Array<String>, calls:Array<String>, setup:Array<String>, parameter:CxxParameter,
-			nativeArguments:Array<HxiAbiValue>, cursor:Int, profile:Null<HxiProjectionProfile>, index:Int, owner:String):Int {
+	static function appendProjectedParameter(arguments:Array<String>, calls:Array<String>, setup:Array<String>,
+			parameter:CxxParameter,
+			nativeArguments:Array<HxiAbiValue>, cursor:Int, profile:Null<HxiProjectionProfile>, index:Int,
+			owner:String):Int {
 		var argumentName = identifier(parameter.name) ? parameter.name : 'arg$index';
 		if (CxxTypeTools.isStringView(parameter.type)) {
 			var stringValue = HxiHaxeEmitter.project(nativeArguments[cursor], false, profile),
 				lengthValue = HxiHaxeEmitter.project(nativeArguments[cursor + 1], false, profile);
-			if (stringValue == null || stringValue.haxeType != "String" || lengthValue == null || lengthValue.haxeType != "Int"
+			if (stringValue == null || stringValue.haxeType != "String" || lengthValue == null
+				|| lengthValue.haxeType != "Int"
 				&& lengthValue.haxeType != "haxe.Int64")
 				throw 'CXX201 unsupported Haxe std::string_view projection for $owner parameter ${index + 1}';
 			arguments.push('$argumentName:String');
 			var bytesName = '__cxx_${argumentName}_bytes_$index';
 			setup.push('var $bytesName = haxe.io.Bytes.ofString($argumentName);');
 			calls.push(argumentName);
-			calls.push(lengthValue.haxeType == "haxe.Int64" ? 'haxe.Int64.ofInt($bytesName.length)' : '$bytesName.length');
+			calls.push(lengthValue.haxeType == "haxe.Int64"
+				? 'haxe.Int64.ofInt($bytesName.length)' : '$bytesName.length');
 			return cursor + 2;
 		}
 		if (CxxTypeTools.isByteSpan(parameter.type)) {
@@ -398,7 +412,8 @@ class CxxProjection {
 				throw 'CXX201 unsupported Haxe std::span projection for $owner parameter ${index + 1}';
 			arguments.push('$argumentName:haxe.io.Bytes');
 			calls.push(argumentName);
-			calls.push(lengthValue.haxeType == "haxe.Int64" ? 'haxe.Int64.ofInt($argumentName.length)' : '$argumentName.length');
+			calls.push(lengthValue.haxeType == "haxe.Int64"
+				? 'haxe.Int64.ofInt($argumentName.length)' : '$argumentName.length');
 			return cursor + 2;
 		}
 		var projected = HxiHaxeEmitter.project(nativeArguments[cursor], false, profile);
@@ -446,12 +461,14 @@ class CxxProjection {
 	}
 
 	static function validateTypeName(name:String, record:CxxRecord):Void {
-		if (!identifier(name) || name == "Bool" || name == "Float" || name == "Int" || name == "String" || name == "Void")
+		if (!identifier(name) || name == "Bool" || name == "Float" || name == "Int" || name == "String"
+			|| name == "Void")
 			throw 'CXX202 invalid projected class name "$name" for ${record.qualifiedName}';
 	}
 
 	static function validateMethodName(name:String, method:CxxMethod):Void
-		if (!identifier(name) || name == "fromNative" || name == "nativeHandle" || name == "isClosed" || name == "close")
+		if (!identifier(name) || name == "fromNative" || name == "nativeHandle" || name == "isClosed"
+			|| name == "close")
 			throw 'CXX202 invalid projected method name "$name" for ${method.qualifiedName}';
 
 	static function validateFunctionName(name:String, functionModel:CxxFunction):Void
@@ -471,10 +488,11 @@ class CxxProjection {
 				return false;
 		}
 		return switch value {
-			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "else" | "enum" | "extends" | "extern" |
-				"false" | "final" | "for" | "function" | "if" | "import" | "in" | "interface" | "macro" | "new" | "null" | "override" | "package" |
-				"private" | "public" | "return" | "static" | "super" | "switch" | "this" | "throw" | "true" | "try" | "typedef" | "untyped" | "using" |
-				"var" | "while": false;
+			case "abstract" | "break" | "case" | "cast" | "catch" | "class" | "continue" | "default" | "do" | "else"
+				| "enum" | "extends" | "extern" | "false" | "final" | "for" | "function" | "if" | "import" | "in"
+				| "interface" | "macro" | "new" | "null" | "override" | "package" | "private" | "public" | "return"
+				| "static" | "super" | "switch" | "this" | "throw" | "true" | "try" | "typedef" | "untyped" | "using"
+				| "var" | "while": false;
 			case _: true;
 		};
 	}

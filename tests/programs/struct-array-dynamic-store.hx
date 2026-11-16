@@ -6,13 +6,19 @@ class StoreOwner {
 struct StoreInner {
 	public var owner:StoreOwner;
 	public var number:Int;
-	public function new(owner:StoreOwner, number:Int) { this.owner = owner; this.number = number; }
+	public function new(owner:StoreOwner, number:Int) {
+		this.owner = owner;
+		this.number = number;
+	}
 }
 
 struct StoreValue {
 	public var number:Int;
 	public var inner:Null<StoreInner>;
-	public function new(number:Int, inner:Null<StoreInner>) { this.number = number; this.inner = inner; }
+	public function new(number:Int, inner:Null<StoreInner>) {
+		this.number = number;
+		this.inner = inner;
+	}
 }
 
 class DynamicStoreCensus {
@@ -25,7 +31,9 @@ class DynamicStoreCensus {
 		owner = new StoreOwner(2);
 		present = new StoreValue(40, new StoreInner(owner, 7));
 		absent = new StoreValue(42, null);
-		items = []; items.resize(8); view = cast items;
+		items = [];
+		items.resize(8);
+		view = cast items;
 		// Materialize a lazy reference lane before the measured window.
 		view[0] = present;
 	}
@@ -36,7 +44,8 @@ class DynamicStoreCensus {
 		var saved = items[0];
 		view.insert(0, absent);
 		var moved = items[1].inner, snapshot = saved.inner;
-		if (items[0].inner != null || moved == null || moved.owner != owner || snapshot == null || snapshot.number != 7) return 2;
+		if (items[0].inner != null || moved == null || moved.owner != owner || snapshot == null
+			|| snapshot.number != 7) return 2;
 		items.resize(8);
 		return items[1].number + moved.owner.id;
 	}
@@ -57,11 +66,19 @@ function main():Int {
 	#end
 	var owner = new StoreOwner(3), items = [new StoreValue(39, new StoreInner(owner, 5))];
 	var view:Array<Dynamic> = cast items, alias = items, failed = false;
-	try { view[100] = "wrong type"; } catch (_:Dynamic) { failed = true; }
+	try {
+		view[100] = "wrong type";
+	} catch (_:Dynamic) {
+		failed = true;
+	}
 	var original = alias[0].inner;
 	if (!failed || alias.length != 1 || alias[0].number != 39 || original == null || original.owner != owner) return 2;
 	failed = false;
-	try { view.insert(-100, "wrong type"); } catch (_:Dynamic) { failed = true; }
+	try {
+		view.insert(-100, "wrong type");
+	} catch (_:Dynamic) {
+		failed = true;
+	}
 	original = alias[0].inner;
 	if (!failed || alias.length != 1 || original == null || original.number != 5) return 3;
 	var boxed:Dynamic = new StoreValue(42, null);
@@ -82,7 +99,8 @@ function main():Int {
 	freshView[100] = withOwner;
 	var grown = fresh[100].inner;
 	if (fresh.length != 101 || grown == null || grown.owner != owner || grown.number != 5) return 8;
-	var inserted:Array<StoreValue> = []; inserted.resize(4);
+	var inserted:Array<StoreValue> = [];
+	inserted.resize(4);
 	var insertedView:Array<Dynamic> = cast inserted;
 	insertedView.insert(2, withOwner);
 	var moved = inserted[2].inner;

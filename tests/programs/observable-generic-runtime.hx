@@ -5,7 +5,7 @@ class ImplicitRuntimeFeature {
 class ImplicitRuntimeOwner implements Observable {
 	public var count:Int = 0;
 	public function new() {}
-	public function add<T:ImplicitRuntimeFeature>(value:T):T {
+	public function add < T:ImplicitRuntimeFeature > (value:T):T {
 		count++;
 		return value;
 	}

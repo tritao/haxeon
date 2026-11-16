@@ -26,18 +26,19 @@ class GenericCallableAbiMain {
 
 	static function main():Void {
 		var separate = new Compiler(null, CompilerIntrinsics.configuration());
-		var declarations = 'class Value { public final number:Int; public function new(number:Int) this.number = number; }'
-			+
-			' class Comparator<T> { final compare:T->T->Bool; public function new(compare:T->T->Bool) this.compare = compare; public function equal(a:T, b:T):Bool return compare(a,b); }'
-			+
-			' class Values { public static final comparator = new Comparator<Value>(equal); static function equal(a:Value, b:Value):Bool return a.number == b.number; }';
+		var declarations =
+			'class Value { public final number:Int; public function new(number:Int) this.number = number; }'
+			+ ' class Comparator<T> { final compare:T->T->Bool; public function new(compare:T->T->Bool) this.compare = compare; public function equal(a:T, b:T):Bool return compare(a,b); }'
+			+ ' class Values { public static final comparator = new Comparator<Value>(equal); static function equal(a:Value, b:Value):Bool return a.number == b.number; }';
 		separate.update("Values.hx", declarations);
-		var consumer = 'import Values.Value; function main():Int { return Values.comparator.equal(new Value(42), new Value(42)) ? 42 : 1; }';
+		var consumer =
+			'import Values.Value; function main():Int { return Values.comparator.equal(new Value(42), new Value(42)) ? 42 : 1; }';
 		run(separate, consumer, 42);
 		run(separate, StringTools.replace(consumer, "? 42 : 1", "? 41 : 1"), 41);
 		run(separate, consumer, 42);
 		separate.update("Values.hx",
-			StringTools.replace(declarations, "new Comparator<Value>(equal)", "new Comparator<Value>(function(a:Value, b:Value):Bool return false)"));
+			StringTools.replace(declarations, "new Comparator<Value>(equal)",
+			"new Comparator<Value>(function(a:Value, b:Value):Bool return false)"));
 		run(separate, consumer, 1);
 		separate.update("Values.hx", declarations);
 		run(separate, consumer, 42);
@@ -47,9 +48,11 @@ class GenericCallableAbiMain {
 		run(result, StringTools.replace(source, "value + 0.5", "value + 1.5"), 6);
 		run(result, source, 42);
 		for (candidate in [result, new Compiler(null, CompilerIntrinsics.configuration())]) {
-			reject(candidate, StringTools.replace(source, "Functions.optional(true)", "function(left:String, right:String):Bool return left == right"),
+			reject(candidate, StringTools.replace(source, "Functions.optional(true)",
+				"function(left:String, right:String):Bool return left == right"),
 				"E1003");
-			reject(candidate, StringTools.replace(source, "integers.operation = value -> value + 3", 'integers.operation = value -> "wrong"'), "E1003");
+			reject(candidate, StringTools.replace(source, "integers.operation = value -> value + 3",
+				'integers.operation = value -> "wrong"'), "E1003");
 		}
 		run(result, source, 42);
 		Sys.println("PASS: generic callable ABI, nullable/evaluation semantics and cold/incremental rejection");

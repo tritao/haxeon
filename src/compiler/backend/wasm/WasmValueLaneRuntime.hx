@@ -15,9 +15,11 @@ class WasmValueLaneRuntime {
 
 	public static function attach(program:IrProgram, reachable:Map<String, Bool>, used:Map<String, Bool>):Void {
 		var needed = false;
-		for (native in program.natives) if (used.exists(native.name) && StringTools.startsWith(native.symbol, "__value_array_")) needed = true;
+		for (native in program.natives) if (used.exists(native.name)
+			&& StringTools.startsWith(native.symbol, "__value_array_")) needed = true;
 		if (!needed) return;
-		for (fn in program.functions) if (StringTools.startsWith(fn.name, IrValueLaneRuntime.PREFIX)) throw "Lane runtime linked twice";
+		for (fn in program.functions) if (StringTools.startsWith(fn.name, IrValueLaneRuntime.PREFIX))
+			throw "Lane runtime linked twice";
 		// Keep existing Wasm backing-lane sizes: sparse requests need no geometric over-reservation.
 		var policy = IrValueLaneRuntime.program(false);
 		program.functions = program.functions.concat(policy.functions);
@@ -27,7 +29,8 @@ class WasmValueLaneRuntime {
 	}
 
 	/** Runtime callers need these indices before ordinary program functions are declared. */
-	public static function declare(module:WasmModule, functions:Map<String, Int>, program:IrProgram, type:IrFunction->WasmFunctionType):Void {
+	public static function declare(module:WasmModule, functions:Map<String, Int>, program:IrProgram,
+			type:IrFunction->WasmFunctionType):Void {
 		for (fn in program.functions) if (StringTools.startsWith(fn.name, IrValueLaneRuntime.PREFIX))
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type(fn))));
 	}
@@ -50,7 +53,8 @@ class WasmValueLaneRuntime {
 	public static function bind(functions:Map<String, Int>, native:IrNative):Bool {
 		var name = operation(native.symbol);
 		if (name == null) return false;
-		functions.set(native.name, WasmModuleSupport.requiredFunctionIndex(functions, IrValueLaneRuntime.PREFIX + name));
+		functions.set(native.name,
+			WasmModuleSupport.requiredFunctionIndex(functions, IrValueLaneRuntime.PREFIX + name));
 		return true;
 	}
 }

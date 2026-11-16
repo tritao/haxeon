@@ -22,7 +22,8 @@ class TypedProgramAssembler {
 		this.registerAnonymousType = registerAnonymousType;
 	}
 
-	public function registerProgramTypes(functions:Array<TypedFunction>, classes:Array<TypedClass>, interfaces:Array<TypedInterface>, enums:Array<TypedEnum>,
+	public function registerProgramTypes(functions:Array<TypedFunction>, classes:Array<TypedClass>,
+			interfaces:Array<TypedInterface>, enums:Array<TypedEnum>,
 			natives:Array<TypedNative>):Void {
 		function register(type:CompilerType, ?origin:String):Void {
 			registerAnonymousType(type);
@@ -39,16 +40,20 @@ class TypedProgramAssembler {
 			// owner, without any source-level conversion naming its concrete type.
 			// Register its declared conformance with its runtime type, independently
 			// of which escape the source happened to use. Unused helpers are pruned.
-			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : functions.length > 0 ? functions[0].name : null;
+			var origin = classDecl.methods.length > 0 ? classDecl.methods[0].name : functions.length > 0
+				? functions[0].name : null;
 			if (classDecl.isValue && !classDecl.isNativeValue && origin != null) {
-				var type = TInstance(NominalKind.Class, classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin,
+				var type = TInstance(NominalKind.Class,
+					classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin,
 					classDecl.specializationArguments == null ? [] : classDecl.specializationArguments);
-				if (!session.representation.containsTypeParameter(type, []) && DeclaredConformance.has(session, type, "Equatable"))
+				if (!session.representation.containsTypeParameter(type, [])
+					&& DeclaredConformance.has(session, type, "Equatable"))
 					ValueEqualityGenerator.request(session, type, origin, classDecl.span);
 			}
 			for (field in classDecl.fields)
 				register(field.type,
-					RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX + (classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin));
+					RuntimeDependencyTracker.TYPE_ORIGIN_PREFIX
+					+ (classDecl.specializationOrigin == null ? classDecl.name : classDecl.specializationOrigin));
 		}
 		for (interfaceDecl in interfaces)
 			for (method in interfaceDecl.methods) {
@@ -67,7 +72,8 @@ class TypedProgramAssembler {
 		}
 	}
 
-	public function assemble(enums:Array<TypedEnum>, interfaces:Array<TypedInterface>, classes:Array<TypedClass>, functions:Array<TypedFunction>,
+	public function assemble(enums:Array<TypedEnum>, interfaces:Array<TypedInterface>, classes:Array<TypedClass>,
+			functions:Array<TypedFunction>,
 			natives:Array<TypedNative>, nativeTypeDescriptors:Array<NativeTypeDescriptorData>):TypedProgram {
 		return {
 			nativeAbiTarget: session.nativeAbiTarget,
@@ -84,7 +90,10 @@ class TypedProgramAssembler {
 		};
 	}
 
-	public function runtimeDependencies():Array<{var functionName:String; var target:String;}>
+	public function runtimeDependencies():Array<{
+		var functionName:String;
+		var target:String;
+	}>
 		return session.runtimeDependencyTracker.ordered();
 
 	function anonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> {
@@ -92,7 +101,9 @@ class TypedProgramAssembler {
 		for (unit => uses in session.anonymousUnits) {
 			var names = [for (name in uses.keys()) name];
 			names.sort(Reflect.compare);
-			result.set(unit, [for (name in names) {name: name, fields: uses.get(name)}]);
+			result.set(unit, [for (name in names) {
+				name:name, fields:uses.get(name)
+			}]);
 		}
 		return result;
 	}
@@ -100,6 +111,8 @@ class TypedProgramAssembler {
 	function orderedAnonymousTypes():Array<compiler.types.TypedAst.TypedAnonymous> {
 		var names = [for (name in session.anonymousTypes.keys()) name];
 		names.sort(Reflect.compare);
-		return [for (name in names) {name: name, fields: session.anonymousTypes.get(name)}];
+		return [for (name in names) {
+			name:name, fields:session.anonymousTypes.get(name)
+		}];
 	}
 }

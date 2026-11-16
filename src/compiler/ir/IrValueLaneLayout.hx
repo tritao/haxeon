@@ -83,7 +83,8 @@ class IrValueLaneLayout {
 					for (leaf in leaves) if (leaf.scalar != null && leaf.scalar.bits > 32) wordBits = 64;
 			}
 		if (payloadWordBits != null) {
-			if (payloadWordBits < wordBits) throw 'Payload word width $payloadWordBits cannot hold a $wordBits-bit leaf';
+			if (payloadWordBits < wordBits)
+				throw 'Payload word width $payloadWordBits cannot hold a $wordBits-bit leaf';
 			wordBits = payloadWordBits;
 		}
 		var slots:Array<IrValueLaneSlot> = [], scalarBits = 0, references = 0;
@@ -92,8 +93,17 @@ class IrValueLaneLayout {
 				case Leaf(leaf):
 					var scalar = leaf.scalar;
 					if (scalar == null) {
-						slots.push({path: leaf.path, type: leaf.type, isPresence: leaf.isPresence, nullablePayload: leaf.nullablePayload,
-							index: references++, isReference: true, bitOffset: 0, bitWidth: 0, signed: false});
+						slots.push({
+							path: leaf.path,
+							type: leaf.type,
+							isPresence: leaf.isPresence,
+							nullablePayload: leaf.nullablePayload,
+							index: references++,
+							isReference: true,
+							bitOffset: 0,
+							bitWidth: 0,
+							signed: false
+						});
 					} else {
 						var offset = scalarBits % wordBits;
 						if (offset + scalar.bits > wordBits) scalarBits += wordBits - offset;
@@ -105,10 +115,19 @@ class IrValueLaneLayout {
 					for (leaf in leaves) slots.push(scalarSlot(leaf, aligned + leaf.flatOffset, wordBits));
 					scalarBits = aligned + size * 8;
 			}
-		var cLayout = switch type { case Obj(name): isFlat(name); default: false; };
+		var cLayout = switch type {
+			case Obj(name): isFlat(name);
+			default: false;
+		};
 		var stride = cLayout ? scalarBits : align(scalarBits, wordBits);
-		return {scalarWordBits: wordBits, scalarStrideBits: stride, scalarWords: Std.int((stride + wordBits - 1) / wordBits),
-			references: references, cLayout: cLayout, slots: slots};
+		return {
+			scalarWordBits: wordBits,
+			scalarStrideBits: stride,
+			scalarWords: Std.int((stride + wordBits - 1) / wordBits),
+			references: references,
+			cLayout: cLayout,
+			slots: slots
+		};
 	}
 
 	/** Capacity uses the bit stride, not rounded words per element: Flat records can share a word. */
@@ -126,7 +145,8 @@ class IrValueLaneLayout {
 		return Std.int(slots);
 	}
 
-	function append(type:IrType, path:Array<String>, visiting:Array<String>, storage:Null<IrScalarStorage>, parts:Array<LanePart>):Void {
+	function append(type:IrType, path:Array<String>, visiting:Array<String>, storage:Null<IrScalarStorage>,
+			parts:Array<LanePart>):Void {
 		switch type {
 			case Nullable(Obj(name)) if (isValue(name)):
 				parts.push(Leaf(presence(path)));
@@ -141,18 +161,34 @@ class IrValueLaneLayout {
 				} else
 					for (field in object.fields)
 						append(field.type, path.concat([field.name]), next,
-							field.nullableScalarStorage == null ? IrFieldStorage.scalar(field) : field.nullableScalarStorage, parts);
+							field.nullableScalarStorage == null
+							? IrFieldStorage.scalar(field) : field.nullableScalarStorage, parts);
 			case Nullable(inner) if (primitive(inner)):
 				parts.push(Leaf(presence(path)));
-				parts.push(Leaf({path: path, type: inner, isPresence: false, nullablePayload: true, scalar: scalar(inner, storage), flatOffset: 0}));
+				parts.push(Leaf({
+					path: path,
+					type: inner,
+					isPresence: false,
+					nullablePayload: true,
+					scalar: scalar(inner, storage),
+					flatOffset: 0
+				}));
 			case Void: throw 'Void cannot be stored in a value lane';
 			default:
-				parts.push(Leaf({path: path, type: type, isPresence: false, nullablePayload: false, scalar: scalar(type, storage), flatOffset: 0}));
+				parts.push(Leaf({
+					path: path,
+					type: type,
+					isPresence: false,
+					nullablePayload: false,
+					scalar: scalar(type, storage),
+					flatOffset: 0
+				}));
 		}
 	}
 
 	/** Preserve every nested C offset; no reference is permitted in a Flat record. */
-	function appendFlat(object:IrObject, path:Array<String>, visiting:Array<String>, base:Int, leaves:Array<LaneLeaf>):Void {
+	function appendFlat(object:IrObject, path:Array<String>, visiting:Array<String>, base:Int,
+			leaves:Array<LaneLeaf>):Void {
 		if (visiting.indexOf(object.name) >= 0) throw 'Value layout contains a by-value cycle at "${object.name}"';
 		var next = visiting.concat([object.name]);
 		for (field in object.fields) {
@@ -160,25 +196,51 @@ class IrValueLaneLayout {
 			if (native == null) throw 'Missing Flat field layout for "${object.name}.${field.name}"';
 			var fieldPath = path.concat([field.name]), offset = base + native.offset;
 			if (native.inlineRecord) {
-				var child = switch field.type { case Obj(name): requireValue(name); default: throw 'Invalid Flat field "${object.name}.${field.name}"'; };
+				var child = switch field.type {
+					case Obj(name): requireValue(name);
+					default: throw 'Invalid Flat field "${object.name}.${field.name}"';
+				};
 				if (child.nativeLayout == null) throw 'Missing Flat layout for "${child.name}"';
 				appendFlat(child, fieldPath, next, offset, leaves);
 			} else {
 				var representation = scalar(field.type, IrFieldStorage.scalar(field));
 				if (representation == null) throw 'Flat field "${object.name}.${field.name}" is not scalar';
-				leaves.push({path: fieldPath, type: field.type, isPresence: false, nullablePayload: false, scalar: representation, flatOffset: offset * 8});
+				leaves.push({
+					path: fieldPath,
+					type: field.type,
+					isPresence: false,
+					nullablePayload: false,
+					scalar: representation,
+					flatOffset: offset * 8
+				});
 			}
 		}
 	}
 
 	static function presence(path:Array<String>):LaneLeaf
-		return {path: path, type: Bool, isPresence: true, nullablePayload: false, scalar: {bits: 8, signed: false}, flatOffset: 0};
+		return {
+			path: path,
+			type: Bool,
+			isPresence: true,
+			nullablePayload: false,
+			scalar: {bits: 8, signed: false},
+			flatOffset: 0
+		};
 
 	static function scalarSlot(leaf:LaneLeaf, start:Int, wordBits:Int):IrValueLaneSlot {
 		var scalar = leaf.scalar;
 		if (scalar == null) throw 'Reference leaf cannot occupy the scalar lane';
-		return {path: leaf.path, type: leaf.type, isPresence: leaf.isPresence, nullablePayload: leaf.nullablePayload,
-			index: Std.int(start / wordBits), isReference: false, bitOffset: start % wordBits, bitWidth: scalar.bits, signed: scalar.signed};
+		return {
+			path: leaf.path,
+			type: leaf.type,
+			isPresence: leaf.isPresence,
+			nullablePayload: leaf.nullablePayload,
+			index: Std.int(start / wordBits),
+			isReference: false,
+			bitOffset: start % wordBits,
+			bitWidth: scalar.bits,
+			signed: scalar.signed
+		};
 	}
 
 	static function align(bits:Int, alignment:Int):Int {
@@ -218,7 +280,13 @@ class IrValueLaneLayout {
 			case Abstract("native_callback") if (target != HashLink): 32;
 			default: return null;
 		};
-		if (storage != null && ((switch (type) { case I32: true; default: false; }) || (switch (type) { case I64: true; default: false; }))) bits = storage.size * 8;
+		if (storage != null && ((switch (type) {
+			case I32: true;
+			default: false;
+		}) || (switch (type) {
+			case I64: true;
+			default: false;
+		}))) bits = storage.size * 8;
 		return {bits: bits, signed: storage != null && storage.signed};
 	}
 }

@@ -2,7 +2,10 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
-private typedef BoundsLoop = {final header:Int; final members:Map<Int, Bool>;}
+private typedef BoundsLoop = {
+	final header:Int;
+	final members:Map<Int, Bool>;
+}
 
 /** Read-only proofs for unit-step counted loops, including the pre-increment form emitted by SsaBuilder. */
 class IrLoopBounds {
@@ -62,10 +65,29 @@ class IrLoopBounds {
 		for (native in natives)
 			if (native.library == "haxeon_runtime")
 				switch native.symbol {
-					case "__math_sqrt", "__math_abs", "__math_floor", "__math_ceil", "__math_min", "__math_max", "__math_is_finite", "__math_is_nan":
-						var scalar = (switch (native.result) { case F64: true; default: false; }) || (switch (native.result) { case I32: true; default: false; }) || (switch (native.result) { case Bool: true; default: false; });
+					case "__math_sqrt", "__math_abs", "__math_floor", "__math_ceil", "__math_min", "__math_max",
+						"__math_is_finite", "__math_is_nan":
+						var scalar = (switch (native.result) {
+							case F64: true;
+							default: false;
+						}) || (switch (native.result) {
+							case I32: true;
+							default: false;
+						}) || (switch (native.result) {
+							case Bool: true;
+							default: false;
+						});
 						for (argument in native.arguments)
-							if ((switch (argument) { case F64: false; default: true; }) && (switch (argument) { case I32: false; default: true; }) && (switch (argument) { case Bool: false; default: true; }))
+							if ((switch (argument) {
+								case F64: false;
+								default: true;
+							}) && (switch (argument) {
+								case I32: false;
+								default: true;
+							}) && (switch (argument) {
+								case Bool: false;
+								default: true;
+							}))
 								scalar = false;
 						if (scalar)
 							result.set(native.name, true);
@@ -125,11 +147,13 @@ class IrLoopBounds {
 				var block = graph.block(id);
 				if (block.terminator != null)
 					switch block.terminator.value {
-						case Branch(condition, yes, no) if (loop.members.exists(yes) && !loop.members.exists(no) && graph.dominates(yes, accessBlock)):
+						case Branch(condition, yes, no) if (loop.members.exists(yes) && !loop.members.exists(no)
+							&& graph.dominates(yes, accessBlock)):
 							switch definitions.get(condition.id) {
 								case Less(_, left, right) if (left.id == index.id):
 									switch definitions.get(right.id) {
-										case ArraySize(_, receiver) if (receiver.id == array.id): return unchangedSince(right, id);
+										case ArraySize(_,
+											receiver) if (receiver.id == array.id): return unchangedSince(right, id);
 										default:
 									}
 								default:
@@ -149,7 +173,10 @@ class IrLoopBounds {
 			default:
 		}
 		var home = homes.get(phi.id);
-		if (home == null || home != loop.header || (switch (phi.type) { case I32: false; default: true; }))
+		if (home == null || home != loop.header || (switch (phi.type) {
+			case I32: false;
+			default: true;
+		}))
 			return null;
 		var inputs = switch definitions.get(phi.id) {
 			case Phi(_, incoming): incoming;
@@ -196,7 +223,8 @@ class IrLoopBounds {
 			case ConstInt(_, n): n;
 			case Add(_, left, right), Sub(_, left, right):
 				var a = integer(left, seen), b = integer(right, seen);
-				if (a == null || b == null) null; else switch definitions.get(value.id) {
+				if (a == null || b == null) null;
+				else switch definitions.get(value.id) {
 					case Add(_, _, _): a + b;
 					default: a - b;
 				}
@@ -231,7 +259,8 @@ class IrLoopBounds {
 						var block = graph.block(id);
 						if (block.terminator != null)
 							switch block.terminator.value {
-								case Branch(condition, yes, no) if (loop.members.exists(yes) && !loop.members.exists(no) && graph.dominates(yes, atBlock)):
+								case Branch(condition, yes, no) if (loop.members.exists(yes) && !loop.members.exists(no)
+									&& graph.dominates(yes, atBlock)):
 									switch definitions.get(condition.id) {
 										case Less(_, left, right) if (left.id == value.id):
 											switch definitions.get(right.id) {
@@ -294,7 +323,8 @@ class IrLoopBounds {
 		return switch instruction {
 			case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME): false;
 			case Call(_, name, _) if (pureCalls.exists(name)): false;
-			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), MemoryStore(_, _, _), ArraySet(_, _, _),
+			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _),
+				MemoryStore(_, _, _), ArraySet(_, _, _),
 				IteratorNew(_, _), IteratorNext(_, _), IteratorHasNext(_, _), SafeCast(_, _), ToVirtual(_, _): true;
 			case FieldSet(receiver, _, _): switch receiver.type {
 					case Obj(_): false;

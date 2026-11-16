@@ -9,7 +9,8 @@ class WasmCryptoRuntime {
 	static var runtime:Null<haxe.io.Bytes>;
 	static var runtimeNeutral:Null<haxe.io.Bytes>;
 
-	public static function link(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>, ?fuelChargeFunction:Int):Void {
+	public static function link(module:WasmModule, functions:Map<String, Int>, program:IrProgram,
+			used:Map<String, Bool>, ?fuelChargeFunction:Int):Void {
 		var needed = [
 			for (native in program.cNatives)
 				if (native.library == LIBRARY && used.exists(native.name)) native
@@ -38,7 +39,10 @@ class WasmCryptoRuntime {
 			if (native.symbol != "haxeon_sha256" || type.parameters.length != 6 || type.results.length != 0)
 				throw 'Invalid crypto kernel signature "${native.symbol}"';
 			for (parameter in type.parameters)
-				if ((switch (parameter) { case compiler.backend.wasm.WasmTypes.WasmValueType.I32: false; default: true; }))
+				if ((switch (parameter) {
+					case compiler.backend.wasm.WasmTypes.WasmValueType.I32: false;
+					default: true;
+				}))
 					throw 'Invalid crypto kernel argument "${native.symbol}"';
 			functions.set(native.name, index);
 		}

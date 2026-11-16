@@ -59,14 +59,20 @@ class CommandPalette implements View {
 			query = queryState.value;
 			var selection:State<Int> = context.state(context.id("selection"), -1);
 			var model = new CommandPaletteModel(commands, actualContext, query, selection.value,
-				function(next) { query = next; queryState.update(next); selection.update(-1); },
-				function(next) selection.update(next), onResult, onDismiss);
+				function(next) {
+					query = next;
+					queryState.update(next);
+					selection.update(-1);
+				},
+					function(next) selection.update(next), onResult, onDismiss);
 			var picker = context.resourceState(context.id("picker"), function() return new SearchPicker(key, model,
 				function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered),
 				function() {}, function() {}), function(_) {}).value;
 			picker.model = model;
 			picker.buildRow = function(_, index, selected, hovered, _) return model.buildItem(index, selected, hovered);
-			picker.onDismiss = function() { if (onDismiss != null) onDismiss(); };
+			picker.onDismiss = function() {
+				if (onDismiss != null) onDismiss();
+			};
 			picker.width = 504;
 			picker.rowHeight = 36;
 			picker.maxListHeight = 320;
@@ -74,7 +80,8 @@ class CommandPalette implements View {
 			picker.placeholder = "Search commands";
 			picker.centered = centered;
 			picker.x = x;
-			var listHeight = Math.min(Math.max(36, model.count() * 36), Math.max(36, Math.min(320, context.viewportHeight - 80)));
+			var listHeight = Math.min(Math.max(36, model.count() * 36),
+				Math.max(36, Math.min(320, context.viewportHeight - 80)));
 			picker.y = centered ? Math.max(8, (context.viewportHeight - listHeight - 58) / 2) : y;
 			picker.dimBackdrop = true;
 			picker.menuSurface = false;
@@ -96,7 +103,8 @@ private class CommandPaletteModel implements SearchPickerModel {
 	final onDismiss:Null<Void->Void>;
 
 	public function new(registry:CommandRegistry, context:CommandContext, query:String, selected:Int,
-			onQuery:String->Void, onSelection:Int->Void, onResult:Null<CommandResult->Void>, onDismiss:Null<Void->Void>) {
+			onQuery:String->Void, onSelection:Int->Void, onResult:Null<CommandResult->Void>,
+			onDismiss:Null<Void->Void>) {
 		commands = [];
 		this.context = context == null ? new CommandContext() : context;
 		this.queryValue = query;
@@ -130,7 +138,10 @@ private class CommandPaletteModel implements SearchPickerModel {
 		if (result.succeeded && onDismiss != null) onDismiss();
 	}
 	public function navigate(key:Int, modifiers:UiModifier, pageSize:Int):Void {
-		if (key == UiKey.Enter) { activate(selectedIndex()); return; }
+		if (key == UiKey.Enter) {
+			activate(selectedIndex());
+			return;
+		}
 		if (firstEnabledIndex() < 0) return;
 		var step = key == UiKey.Up || key == UiKey.PageUp ? -1 : 1;
 		var count = key == UiKey.PageUp || key == UiKey.PageDown ? pageSize : 1;
@@ -144,7 +155,8 @@ private class CommandPaletteModel implements SearchPickerModel {
 		onSelection(next);
 	}
 	public function buildItem(index:Int, selected:Bool, hovered:Bool):View
-		return new CommandPaletteItem(commands[index].label, enabledAt(index), commands[index].isChecked(context), selected, hovered);
+		return new CommandPaletteItem(commands[index].label, enabledAt(index), commands[index].isChecked(context),
+			selected, hovered);
 	static function matches(command:Command, needle:String):Bool
 		return command.id.toLowerCase().indexOf(needle) >= 0 || command.label.toLowerCase().indexOf(needle) >= 0;
 }
@@ -160,17 +172,20 @@ private class CommandPaletteItem implements View {
 		this.label = label;
 		this.enabled = enabled;
 		this.checked = checked;
-		this.selected = selected; this.hovered = hovered;
+		this.selected = selected;
+		this.hovered = hovered;
 	}
 
 	public function build(context:BuildContext):RenderNode {
-		var color = !enabled ? context.theme.tokens.textDisabled : selected ? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary;
+		var color = !enabled ? context.theme.tokens.textDisabled : selected
+			? context.theme.tokens.textOnAccent : context.theme.tokens.textPrimary;
 		var rowStyle = new LayoutStyle();
 		rowStyle.width = LayoutAxis.grow();
 		rowStyle.height = LayoutAxis.fixed(36.0);
 		rowStyle.padding = new Insets(12.0, 0.0, 12.0, 0.0);
 		rowStyle.childGap = 8.0;
-		rowStyle.background = selected ? context.theme.tokens.accent : hovered ? context.theme.tokens.navigationHover : context.theme.tokens.navigationBackground;
+		rowStyle.background = selected ? context.theme.tokens.accent : hovered
+			? context.theme.tokens.navigationHover : context.theme.tokens.navigationBackground;
 		rowStyle.childAlignY = LayoutAlignmentY.Center;
 		var children:Array<KeyedView> = [
 			new KeyedView("label", new Text(label, null, color))

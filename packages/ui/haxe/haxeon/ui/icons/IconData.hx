@@ -7,19 +7,26 @@ import haxeon.ui.PathBuilder;
 class IconData {
 	public static function build(name:IconName):Path {
 		return switch name {
-			case IconName.ArrowUp: new PathBuilder().moveTo(12, 19).lineTo(12, 5).moveTo(5, 12).lineTo(12, 5).lineTo(19, 12).build();
-			case IconName.ArrowDown: new PathBuilder().moveTo(12, 5).lineTo(12, 19).moveTo(5, 12).lineTo(12, 19).lineTo(19, 12).build();
-			case IconName.ArrowLeft: new PathBuilder().moveTo(19, 12).lineTo(5, 12).moveTo(12, 5).lineTo(5, 12).lineTo(12, 19).build();
-			case IconName.ArrowRight: new PathBuilder().moveTo(5, 12).lineTo(19, 12).moveTo(12, 5).lineTo(19, 12).lineTo(12, 19).build();
-			case IconName.NewFolder: new PathBuilder().moveTo(20, 11).lineTo(20, 7).lineTo(10, 7).lineTo(8, 4).lineTo(3, 4).lineTo(3, 20).lineTo(12, 20)
+			case IconName.ArrowUp: new PathBuilder().moveTo(12, 19).lineTo(12, 5).moveTo(5, 12).lineTo(12, 5).lineTo(19,
+				12).build();
+			case IconName.ArrowDown: new PathBuilder().moveTo(12, 5).lineTo(12, 19).moveTo(5, 12).lineTo(12,
+				19).lineTo(19, 12).build();
+			case IconName.ArrowLeft: new PathBuilder().moveTo(19, 12).lineTo(5, 12).moveTo(12, 5).lineTo(5,
+				12).lineTo(12, 19).build();
+			case IconName.ArrowRight: new PathBuilder().moveTo(5, 12).lineTo(19, 12).moveTo(12, 5).lineTo(19,
+				12).lineTo(12, 19).build();
+			case IconName.NewFolder: new PathBuilder().moveTo(20, 11).lineTo(20, 7).lineTo(10, 7).lineTo(8, 4).lineTo(3,
+				4).lineTo(3, 20).lineTo(12, 20)
 				.moveTo(15, 17).lineTo(23, 17).moveTo(19, 13).lineTo(19, 21).build();
 			case IconName.CollapseAll: new PathBuilder().moveTo(8, 3).lineTo(21, 3).lineTo(21, 16)
 				.moveTo(3, 8).lineTo(16, 8).lineTo(16, 21).lineTo(3, 21).lineTo(3, 8)
 				.moveTo(6, 14).lineTo(13, 14).build();
 			case IconName.Settings: settings();
 			case IconName.WindowMinimize: new PathBuilder().moveTo(5, 12).lineTo(19, 12).build();
-			case IconName.WindowMaximize: new PathBuilder().moveTo(5, 5).lineTo(19, 5).lineTo(19, 19).lineTo(5, 19).lineTo(5, 5).build();
-			case IconName.WindowRestore: new PathBuilder().moveTo(8, 8).lineTo(8, 4).lineTo(20, 4).lineTo(20, 16).lineTo(16, 16)
+			case IconName.WindowMaximize: new PathBuilder().moveTo(5, 5).lineTo(19, 5).lineTo(19, 19).lineTo(5,
+				19).lineTo(5, 5).build();
+			case IconName.WindowRestore: new PathBuilder().moveTo(8, 8).lineTo(8, 4).lineTo(20, 4).lineTo(20,
+				16).lineTo(16, 16)
 				.moveTo(4, 8).lineTo(16, 8).lineTo(16, 20).lineTo(4, 20).lineTo(4, 8).build();
 			case IconName.Check: new PathBuilder().moveTo(4, 12).lineTo(9, 17).lineTo(20, 6).build();
 			case IconName.Remote: new PathBuilder().moveTo(15, 3).lineTo(21, 9).lineTo(15, 15)
@@ -57,7 +64,8 @@ class IconData {
 			case IconName.Reset: new PathBuilder().moveTo(4, 5).lineTo(4, 10).lineTo(9, 10)
 				.moveTo(4, 10).cubicTo(6, 6, 9, 4, 13, 4).cubicTo(18, 4, 21, 8, 21, 12)
 				.cubicTo(21, 17, 17, 20, 12, 20).cubicTo(9, 20, 6, 18, 5, 15).build();
-			case IconName.Stop: new PathBuilder().moveTo(6, 6).lineTo(18, 6).lineTo(18, 18).lineTo(6, 18).lineTo(6, 6).build();
+			case IconName.Stop: new PathBuilder().moveTo(6, 6).lineTo(18, 6).lineTo(18, 18).lineTo(6, 18).lineTo(6,
+				6).build();
 			case IconName.ChevronDown: new PathBuilder().moveTo(6, 9).lineTo(12, 15).lineTo(18, 9).build();
 			case IconName.ChevronRight: new PathBuilder().moveTo(9, 6).lineTo(15, 12).lineTo(9, 18).build();
 			case IconName.Plus: new PathBuilder().moveTo(12, 5).lineTo(12, 19)
@@ -94,7 +102,8 @@ class IconData {
 			var angle = -Math.PI / 2 + index * Math.PI / 16;
 			var radius = index % 4 == 0 || index % 4 == 3 ? 8 : 10;
 			var x = 12 + Math.cos(angle) * radius, y = 12 + Math.sin(angle) * radius;
-			if (index == 0) path.moveTo(x, y); else path.lineTo(x, y);
+			if (index == 0) path.moveTo(x, y);
+			else path.lineTo(x, y);
 		}
 		path.close();
 		path.moveTo(15, 12).cubicTo(15, 13.657, 13.657, 15, 12, 15)

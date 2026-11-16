@@ -16,7 +16,8 @@ class ProcessOutputCaptureMain {
 		var result = ProcessOutputCapture.capture(runtime, [program, "--emit-pipe-flood"], 4096, 10);
 		expect(result.exitCode == 0, 'flood child should exit successfully: ${result.exitCode}');
 		expect(result.stdout.length == 256 * 1024, "stdout should be completely drained while stderr is full");
-		expect(result.stderr.length == 4096 && result.stderrTruncated, "stderr capture should be bounded while excess bytes are still drained");
+		expect(result.stderr.length == 4096 && result.stderrTruncated,
+			"stderr capture should be bounded while excess bytes are still drained");
 		var complete = ProcessOutputCapture.capture(runtime, [program, "--emit-pipe-flood"], null, 10);
 		expect(complete.exitCode == 0, 'unbounded flood child should exit successfully: ${complete.exitCode}');
 		expect(complete.stderr.length == 256 * 1024
@@ -27,10 +28,12 @@ class ProcessOutputCaptureMain {
 	static function testIterators():Void {
 		var values = [10, 20], iterator = values.iterator();
 		expect(iterator.hasNext() && iterator.next() == 10, "array iterator should yield its first value");
-		expect(iterator.hasNext() && iterator.next() == 20 && !iterator.hasNext(), "array iterator should advance independently");
+		expect(iterator.hasNext() && iterator.next() == 20 && !iterator.hasNext(),
+			"array iterator should advance independently");
 		expect(values.length == 2 && values[0] == 10, "array iteration must not mutate its source");
 		var mapped:Map<String, Int> = ["answer" => 42], keys = mapped.keys();
-		expect(keys.hasNext() && keys.next() == "answer" && !keys.hasNext(), "map key iterators should retain their element type and state");
+		expect(keys.hasNext() && keys.next() == "answer" && !keys.hasNext(),
+			"map key iterators should retain their element type and state");
 		var total = 0;
 		for (key in mapped.keys())
 			total += mapped.get(key);

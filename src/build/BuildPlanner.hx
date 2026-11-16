@@ -17,16 +17,19 @@ import project.ResolvedProject;
 /** Pure entry points for producing the first logical build graphs. */
 class BuildPlanner {
 	public static function nativeRuntime(environment:BuildEnvironment, ?variant:String):BuildPlan {
-		var id = new ArtifactId("haxeon", NativeRuntime, environment.target, variant == null ? Std.string(environment.profile) : variant);
+		var id = new ArtifactId("haxeon", NativeRuntime, environment.target,
+			variant == null ? Std.string(environment.profile) : variant);
 		return new BuildPlan([id], [new Artifact(id)]);
 	}
 
-	public static function module(packageId:String, target:Target, kind:Artifact.ArtifactKind, ?dependencies:Array<ArtifactId>):BuildPlan {
+	public static function module(packageId:String, target:Target, kind:Artifact.ArtifactKind,
+			?dependencies:Array<ArtifactId>):BuildPlan {
 		var id = new ArtifactId(packageId, kind, target);
 		return new BuildPlan([id], [new Artifact(id, dependencies)]);
 	}
 
-	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target, nativeDemand:NativeArtifactDemand):BuildPlan {
+	public static function project(project:ResolvedProject, intent:BuildIntent, target:Target,
+			nativeDemand:NativeArtifactDemand):BuildPlan {
 		NativeTargetSupport.validate(project, target);
 		var artifacts:Array<Artifact> = [],
 			nativeShared = new Map<String, ArtifactId>(),
@@ -44,7 +47,8 @@ class BuildPlanner {
 			}
 		for (resolvedPackage in project.packages.packages) {
 			var thunkImports = [for (ffi in resolvedPackage.ffiImports) if (ffi.config.cxxThunks) ffi];
-			if (resolvedPackage.nativeSources.length == 0 && resolvedPackage.manifest.native == null && thunkImports.length == 0)
+			if (resolvedPackage.nativeSources.length == 0 && resolvedPackage.manifest.native == null
+				&& thunkImports.length == 0)
 				continue;
 			var objects:Array<ArtifactId> = [],
 				baseObjects:Array<ArtifactId> = [],
@@ -80,14 +84,19 @@ class BuildPlanner {
 					var thunkObject = thunkObjects.get(ffi.config.name);
 					if (thunkObject == null)
 						throw 'Missing generated thunk object for FFI import ${ffi.config.name}';
-					var ffiLibraryId = new ArtifactId(resolvedPackage.name, FfiNativeSharedLibrary, target, ffi.config.name),
+					var ffiLibraryId = new ArtifactId(resolvedPackage.name, FfiNativeSharedLibrary, target,
+						ffi.config.name),
 						ffiDependencies = baseObjects.concat([thunkObject]);
 					if (resolvedPackage.manifest.native != null && resolvedPackage.manifest.native.cmake != null)
 						ffiDependencies.push(new ArtifactId(resolvedPackage.name, NativeSharedLibrary, target));
-					artifacts.push(new Artifact(ffiLibraryId, ffiDependencies, ["library" => resolvedPackage.name, "ffi" => ffi.config.name]));
+					artifacts.push(new Artifact(ffiLibraryId, ffiDependencies, [
+						"library" => resolvedPackage.name,
+						"ffi" => ffi.config.name
+					]));
 					ffiNativeLibraries.push(ffiLibraryId);
 				}
-			if (resolvedPackage.nativeSources.length > 0 && NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {
+			if (resolvedPackage.nativeSources.length > 0
+				&& NativeArtifactDemands.includes(nativeDemand, NativeStaticLibrary)) {
 				var staticId = new ArtifactId(resolvedPackage.name, NativeStaticLibrary, target);
 				nativeStatic.set(resolvedPackage.name, staticId);
 				artifacts.push(new Artifact(staticId, objects, ["library" => resolvedPackage.name]));
@@ -102,7 +111,8 @@ class BuildPlanner {
 					if (resolvedPackage.manifest.native.cmake.library != null)
 						sharedDetails.set("cmake.library", resolvedPackage.manifest.native.cmake.library);
 					if (resolvedPackage.manifest.native.cmake.libraries.length > 0)
-						sharedDetails.set("cmake.libraries", haxe.Json.stringify(resolvedPackage.manifest.native.cmake.libraries));
+						sharedDetails.set("cmake.libraries",
+							haxe.Json.stringify(resolvedPackage.manifest.native.cmake.libraries));
 				}
 				artifacts.push(new Artifact(sharedId, objects, sharedDetails));
 			}
@@ -130,20 +140,21 @@ class BuildPlanner {
 	}
 
 	/** Native-only request used by package consumers such as Android packaging. */
-	public static function nativePackages(project:ResolvedProject, target:Target, nativeDemand:NativeArtifactDemand):BuildPlan {
+	public static function nativePackages(project:ResolvedProject, target:Target,
+			nativeDemand:NativeArtifactDemand):BuildPlan {
 		var full = BuildPlanner.project(project, BuildIntent.Build, target, nativeDemand),
 			artifacts:Array<Artifact> = [
 				for (artifact in full.artifacts)
 					if (artifact.id.kind == NativeObject
-						|| artifact.id.kind == NativeStaticLibrary
-						|| artifact.id.kind == NativeSharedLibrary
-						|| artifact.id.kind == FfiNativeSharedLibrary) artifact
+					|| artifact.id.kind == NativeStaticLibrary
+					|| artifact.id.kind == NativeSharedLibrary
+					|| artifact.id.kind == FfiNativeSharedLibrary) artifact
 			],
 			requested:Array<ArtifactId> = [
 				for (artifact in artifacts)
 					if (artifact.id.kind == NativeStaticLibrary
-						|| artifact.id.kind == NativeSharedLibrary
-						|| artifact.id.kind == FfiNativeSharedLibrary) artifact.id
+					|| artifact.id.kind == NativeSharedLibrary
+					|| artifact.id.kind == FfiNativeSharedLibrary) artifact.id
 			];
 		return new BuildPlan(requested, artifacts);
 	}

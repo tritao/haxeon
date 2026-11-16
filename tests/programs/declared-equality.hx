@@ -29,7 +29,10 @@ struct RecordKey implements Hashable {
 class Editable implements Diffable {
 	public var x:Int;
 	public var y:Int;
-	public function new(x:Int, y:Int) { this.x = x; this.y = y; }
+	public function new(x:Int, y:Int) {
+		this.x = x;
+		this.y = y;
+	}
 }
 
 class Identity {
@@ -54,7 +57,10 @@ struct Nested implements Hashable {
 struct Managed implements Equatable {
 	public final label:String;
 	public final record:Null<Record>;
-	public function new(label:String, record:Null<Record>) { this.label = label; this.record = record; }
+	public function new(label:String, record:Null<Record>) {
+		this.label = label;
+		this.record = record;
+	}
 }
 
 struct NativeNumbers implements Hashable {
@@ -63,7 +69,9 @@ struct NativeNumbers implements Hashable {
 	public final fraction:Float32;
 	public final unsigned:UInt64;
 	public function new(negative:Bool) {
-		this.small = cast 3; this.wide = haxe.Int64.ofInt(4); this.fraction = cast (negative ? -0.0 : 0.0);
+		this.small = cast 3;
+		this.wide = haxe.Int64.ofInt(4);
+		this.fraction = cast(negative ? -0.0 : 0.0);
 		this.unsigned = cast 5;
 	}
 }
@@ -78,7 +86,10 @@ struct ModValue implements Hashable {
 struct EditableValue implements Diffable {
 	public var x:Int;
 	public var y:Int;
-	public function new(x:Int, y:Int) { this.x = x; this.y = y; }
+	public function new(x:Int, y:Int) {
+		this.x = x;
+		this.y = y;
+	}
 }
 
 struct FingerprintLeaf implements Hashable {
@@ -92,7 +103,8 @@ struct FingerprintValues implements Diffable {
 	public var nested:FingerprintLeaf;
 	public var optional:Null<FingerprintLeaf>;
 	public var enabled:Bool;
-	public function new(whole:Int, label:Null<String>, nested:FingerprintLeaf, optional:Null<FingerprintLeaf>, enabled:Bool) {
+	public function new(whole:Int, label:Null<String>, nested:FingerprintLeaf, optional:Null<FingerprintLeaf>,
+			enabled:Bool) {
 		this.whole = whole;
 		this.label = label;
 		this.nested = nested;
@@ -106,8 +118,8 @@ class GenericFingerprint<T> implements Diffable {
 	public function new(value:T) this.value = value;
 }
 
-function keepEquatable<T:Equatable>(value:T):T return value;
-function keepHashable<T:Hashable>(value:T):T return value;
+function keepEquatable < T:Equatable > (value:T):T return value;
+function keepHashable < T:Hashable > (value:T):T return value;
 
 function main():Int {
 	var a = new Record(7);
@@ -121,12 +133,17 @@ function main():Int {
 	var target = new Editable(1, 2);
 	var mask = haxeon.Diff.mask(before, after);
 	var applied = haxeon.Diff.apply(target, before, after);
-	var valueBefore = new EditableValue(1, 2), valueAfter = new EditableValue(1, 3), valueTarget = new EditableValue(1, 2);
-	var valueMask = haxeon.Diff.mask(valueBefore, valueAfter), valueApplied = haxeon.Diff.apply(valueTarget, valueBefore, valueAfter);
+	var valueBefore = new EditableValue(1, 2),
+		valueAfter = new EditableValue(1, 3),
+		valueTarget = new EditableValue(1, 2);
+	var valueMask = haxeon.Diff.mask(valueBefore, valueAfter),
+		valueApplied = haxeon.Diff.apply(valueTarget, valueBefore, valueAfter);
 	var fingerprintBefore = haxeon.Diff.fingerprint(before), fingerprintAfter = haxeon.Diff.fingerprint(after);
-	var expectedFingerprint = haxeon.Hashing.mix(haxeon.Hashing.mix(17, haxeon.Hashing.hash(before.x)), haxeon.Hashing.hash(before.y));
+	var expectedFingerprint = haxeon.Hashing.mix(haxeon.Hashing.mix(17, haxeon.Hashing.hash(before.x)),
+		haxeon.Hashing.hash(before.y));
 	var nestedZero = new FingerprintValues(4, "record", new FingerprintLeaf(-0.0), new FingerprintLeaf(Math.NaN), true);
-	var nestedPositiveZero = new FingerprintValues(4, "record", new FingerprintLeaf(0.0), new FingerprintLeaf(Math.NaN), true);
+	var nestedPositiveZero = new FingerprintValues(4, "record", new FingerprintLeaf(0.0), new FingerprintLeaf(Math.NaN),
+		true);
 	var nestedDifferent = new FingerprintValues(4, "record", new FingerprintLeaf(0.0), null, true);
 	var genericFingerprint:GenericFingerprint<FingerprintLeaf> = new GenericFingerprint(new FingerprintLeaf(3.0));
 	var genericFingerprintCopy:GenericFingerprint<FingerprintLeaf> = new GenericFingerprint(new FingerprintLeaf(3.0));
@@ -152,7 +169,8 @@ function main():Int {
 	var customValueMap = new Map<Hashed, Int>();
 	customValueMap.set(new Hashed(2), 20);
 	customValueMap.set(new Hashed(12), 30);
-	var customValueMapMatches = customValueMap.size() == 1 && customValueMap.get(new Hashed(22)) == 30 && customValueMap.exists(new Hashed(32));
+	var customValueMapMatches = customValueMap.size() == 1 && customValueMap.get(new Hashed(22)) == 30
+		&& customValueMap.exists(new Hashed(32));
 	var customValueMapRemoved = customValueMap.remove(new Hashed(42));
 	customValueMap.clear();
 	var synthesizedValueMap = new Map<RecordKey, String>();
@@ -168,11 +186,13 @@ function main():Int {
 		&& haxeon.Diff.fingerprint(pair) == haxeon.Hashing.hash(pair)
 		&& haxeon.Diff.fingerprint(nestedZero) == haxeon.Diff.fingerprint(nestedPositiveZero)
 		&& haxeon.Diff.fingerprint(nestedZero) != haxeon.Diff.fingerprint(nestedDifferent)
-		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Hashing.mix(17, haxeon.Hashing.hash(genericFingerprint.value))
+		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Hashing.mix(17,
+		haxeon.Hashing.hash(genericFingerprint.value))
 		&& haxeon.Diff.fingerprint(genericFingerprint) == haxeon.Diff.fingerprint(genericFingerprintCopy)
 		&& haxeon.Diff.all(Editable) == 3 && zero == negativeZero
 		&& haxeon.Hashing.hash(zero) == haxeon.Hashing.hash(negativeZero)
-		&& haxeon.Hashing.hash(optionalZero) == haxeon.Hashing.hash(zero) && haxeon.Hashing.hash(absentScalar) == 0 && nan != nan
+		&& haxeon.Hashing.hash(optionalZero) == haxeon.Hashing.hash(zero) && haxeon.Hashing.hash(absentScalar) == 0
+		&& nan != nan
 		&& new Nested(zero) == new Nested(negativeZero) && new Nested(null) != new Nested(zero)
 		&& haxeon.Hashing.hash(new Nested(zero)) == haxeon.Hashing.hash(new Nested(negativeZero))
 		&& new Managed("same", a) == new Managed("same", b)
@@ -183,7 +203,8 @@ function main():Int {
 		&& haxeon.Hashing.hash(new ModValue(1)) == haxeon.Hashing.hash(new ModValue(11))
 		&& haxeon.Diff.mask(refBefore, refSame) == 0 && haxeon.Diff.mask(refBefore, refChanged) == 1
 		&& pairMap.size() == 1 && pairMap.get(new Pair(4)) == "last" && pairMapCopy.get(new Pair(4)) == "last"
-		&& pairKeyTotal == 4 && pairValueTotal == 4 && customValueMapMatches && customValueMapRemoved && customValueMap.size() == 0
+		&& pairKeyTotal == 4 && pairValueTotal == 4 && customValueMapMatches && customValueMapRemoved
+		&& customValueMap.size() == 0
 		&& synthesizedValueMap.get(new RecordKey(7)) == "seven"
 		&& keepEquatable(7) == 7 && keepHashable("value") == "value" ? 42 : 0;
 }

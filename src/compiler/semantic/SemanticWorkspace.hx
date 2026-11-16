@@ -106,7 +106,8 @@ class SemanticWorkspace {
 		resolutionIndexesValid = true;
 	}
 
-	static function addResolutionCandidate(index:Map<String, Null<SemanticSymbolId>>, name:String, id:SemanticSymbolId):Void {
+	static function addResolutionCandidate(index:Map<String, Null<SemanticSymbolId>>, name:String,
+			id:SemanticSymbolId):Void {
 		if (!index.exists(name))
 			index.set(name, id);
 		else if (index.get(name) != id)
@@ -114,7 +115,8 @@ class SemanticWorkspace {
 	}
 
 	static function isTypeKind(kind:DeclarationKind):Bool
-		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract || kind == DeclarationKind.Interface
+		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract
+			|| kind == DeclarationKind.Interface
 			|| kind == DeclarationKind.Class;
 
 	public function resolveEnumCaseId(enumName:String, index:Int):Null<SemanticSymbolId> {
@@ -130,7 +132,8 @@ class SemanticWorkspace {
 				continue;
 			var packagePrefix = model.program.packageName == null ? "" : Std.string(model.program.packageName) + ".";
 			for (declaration in model.program.enums)
-				if ((declaration.name == enumName || packagePrefix + declaration.name == enumName) && index < declaration.cases.length) {
+				if ((declaration.name == enumName || packagePrefix + declaration.name == enumName)
+					&& index < declaration.cases.length) {
 					var symbolName = declaration.name + "." + declaration.cases[index].name;
 					for (symbol in model.index.symbols)
 						if (symbol.name == symbolName)
@@ -169,7 +172,10 @@ class SemanticWorkspace {
 		return null;
 	}
 
-	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken):Array<{state:ModuleState, span:SourceSpan}> {
+	public function indexedLocations(id:SemanticSymbolId, ?token:CancellationToken):Array<{
+		state:ModuleState,
+		span:SourceSpan
+	}> {
 		var result = [];
 		for (state in orderedStates()) {
 			if (token != null)
@@ -257,7 +263,8 @@ class SemanticWorkspace {
 		return result;
 	}
 
-	function hasDirectParent(state:ModuleState, parents:Array<compiler.syntax.Ast.AstType>, target:SemanticSymbolId):Bool {
+	function hasDirectParent(state:ModuleState, parents:Array<compiler.syntax.Ast.AstType>,
+			target:SemanticSymbolId):Bool {
 		for (parent in parents) {
 			var declaration = global(state, ModuleCanonicalizer.astTypeName(parent)),
 				symbol = declaration == null ? null : symbolFor(declaration);
@@ -364,7 +371,8 @@ class SemanticWorkspace {
 						parents.push(decl.base);
 					for (parent in parents) {
 						var name = ModuleCanonicalizer.astTypeName(parent);
-						if (typeNameMatches(name, target) || inheritsFrom(resolveTypeIdentity(state, name), target, visiting))
+						if (typeNameMatches(name, target)
+							|| inheritsFrom(resolveTypeIdentity(state, name), target, visiting))
 							return true;
 					}
 				}
@@ -372,7 +380,8 @@ class SemanticWorkspace {
 				if (qualifiedType(model, decl.name) == candidate)
 					for (base in decl.bases) {
 						var name = ModuleCanonicalizer.astTypeName(base);
-						if (typeNameMatches(name, target) || inheritsFrom(resolveTypeIdentity(state, name), target, visiting))
+						if (typeNameMatches(name, target)
+							|| inheritsFrom(resolveTypeIdentity(state, name), target, visiting))
 							return true;
 					}
 		}
@@ -404,7 +413,8 @@ class SemanticWorkspace {
 	static function sameSpan(left:SourceSpan, right:SourceSpan):Bool
 		return left.file.path == right.file.path && left.start == right.start && left.end == right.end;
 
-	static function addImplementation(result:Array<WorkspaceDeclaration>, seen:Map<String, Bool>, state:ModuleState, key:String, span:SourceSpan):Void {
+	static function addImplementation(result:Array<WorkspaceDeclaration>, seen:Map<String, Bool>, state:ModuleState,
+			key:String, span:SourceSpan):Void {
 		var identity = span.file.path + ":" + span.start + ":" + span.end;
 		if (!seen.exists(identity)) {
 			seen.set(identity, true);
@@ -453,7 +463,8 @@ class SemanticWorkspace {
 			if (model == null)
 				continue;
 			for (symbol in model.index.symbols)
-				if (symbol.name.indexOf(".") < 0 && (isTypeKind(symbol.kind) || symbol.kind == DeclarationKind.Function)) {
+				if (symbol.name.indexOf(".") < 0
+					&& (isTypeKind(symbol.kind) || symbol.kind == DeclarationKind.Function)) {
 					var matches = byName.get(symbol.name);
 					if (matches == null)
 						byName.set(symbol.name, matches = []);
@@ -594,7 +605,8 @@ class SemanticWorkspace {
 		return false;
 	}
 
-	static function ownsType(state:ModuleState, model:compiler.semantic.SemanticModel, declaredName:String, requestedName:String):Bool {
+	static function ownsType(state:ModuleState, model:compiler.semantic.SemanticModel, declaredName:String,
+			requestedName:String):Bool {
 		if (requestedName == declaredName || requestedName == state.name)
 			return true;
 		var packageName = model.program.packageName;
@@ -602,5 +614,6 @@ class SemanticWorkspace {
 	}
 
 	static function effectiveModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
+		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null
+			? state.recoveredSemanticModel : state.lastGoodSemanticModel;
 }

@@ -38,9 +38,11 @@ class DspWavetable {
 		if (samples == null)
 			throw BindingError.invalidArgument("DspWavetable.fromBytes", "DSP wavetable sample bytes must not be null");
 		if (sampleCount < MIN_SAMPLE_COUNT || sampleCount > MAX_SAMPLE_COUNT || (sampleCount & (sampleCount - 1)) != 0)
-			throw BindingError.invalidArgument("DspWavetable.fromBytes", "DSP wavetable sample count must be a power of two between 32 and 4096");
+			throw BindingError.invalidArgument("DspWavetable.fromBytes",
+				"DSP wavetable sample count must be a power of two between 32 and 4096");
 		if (samples.length != sampleCount * 4)
-			throw BindingError.invalidArgument("DspWavetable.fromBytes", "DSP wavetable sample bytes must contain exactly one float32 per sample");
+			throw BindingError.invalidArgument("DspWavetable.fromBytes",
+				"DSP wavetable sample bytes must contain exactly one float32 per sample");
 		var values:Array<Float> = [];
 		for (index in 0...sampleCount) values.push(samples.getFloat(index * 4));
 		var made = NativeKitAudio.nk_audio_dsp_wavetable_create(values);

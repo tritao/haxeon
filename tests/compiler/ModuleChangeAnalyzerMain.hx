@@ -42,7 +42,8 @@ class ModuleChangeAnalyzerMain {
 		Sys.println("PASS: module change classification");
 	}
 
-	static function analyze(state:ModuleState, types:TypeRegistry, compiledOnce:Bool):compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis {
+	static function analyze(state:ModuleState, types:TypeRegistry,
+			compiledOnce:Bool):compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis {
 		var aliases = new AliasTable();
 		ModuleCanonicalizer.addDeclaredTypeAliases(aliases, state.parsedAst(), state.parsedAst().packageName);
 		return ModuleChangeAnalyzer.analyze(state, state.name, aliases, types, compiledOnce);
@@ -60,7 +61,8 @@ class ModuleChangeAnalyzerMain {
 		state.ast = new Parser(state.tokens).parseProgram();
 	}
 
-	static function publish(state:ModuleState, analysis:compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis):Void {
+	static function publish(state:ModuleState,
+			analysis:compiler.semantic.ModuleChangeAnalyzer.ModuleChangeAnalysis):Void {
 		state.signatureFingerprints = analysis.signatureFingerprints;
 		state.bodyFingerprints = analysis.bodyFingerprints;
 		state.interfaceFingerprints = analysis.interfaceFingerprints;

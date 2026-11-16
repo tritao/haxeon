@@ -6,7 +6,8 @@ import haxe.ds.ReadOnlyArray;
 class SysTools {
 	/** Character codes of the characters that will be escaped by `quoteWinArg(_, true)`. */
 	public static final winMetaCharacters:ReadOnlyArray<Int> = [
-		" ".code, "(".code, ")".code, "%".code, "!".code, "^".code, "\"".code, "<".code, ">".code, "&".code, "|".code, "\n".code, "\r".code, ",".code, ";".code
+		" ".code, "(".code, ")".code, "%".code, "!".code, "^".code, "\"".code, "<".code, ">".code, "&".code, "|".code,
+		"\n".code, "\r".code, ",".code, ";".code
 	];
 
 	/** `argument` as a single command line argument on Unix: quoted, or escaped if necessary. */
@@ -28,7 +29,8 @@ class SysTools {
 		// Unless there is no space, tab, slash, backslash or double quote and it is not empty. Based on cpython's subprocess.list2cmdline().
 		if (!~/^(\/)?[^ \t\/\\"]+$/.match(argument)) {
 			var result = new StringBuf();
-			var needquote = argument.indexOf(" ") != -1 || argument.indexOf("\t") != -1 || argument == "" || argument.indexOf("/") > 0;
+			var needquote = argument.indexOf(" ") != -1 || argument.indexOf("\t") != -1 || argument == ""
+				|| argument.indexOf("/") > 0;
 			if (needquote)
 				result.add('"');
 			var backslashes = new StringBuf();

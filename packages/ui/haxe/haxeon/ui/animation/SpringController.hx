@@ -22,8 +22,8 @@ class SpringController implements Animation {
 	public function new(initial:Float, stiffness:Float = 180.0, damping:Float = 24.0,
 			mass:Float = 1.0, tolerance:Float = 0.001,
 			?scheduler:AnimationScheduler, ?onUpdate:Float->Void) {
-		if (!finite(initial) || !finite(stiffness) || !finite(damping) || !finite(mass) ||
-			!finite(tolerance) || stiffness <= 0.0 || damping < 0.0 || mass <= 0.0 || tolerance <= 0.0)
+		if (!finite(initial) || !finite(stiffness) || !finite(damping) || !finite(mass) || !finite(tolerance)
+			|| stiffness <= 0.0 || damping < 0.0 || mass <= 0.0 || tolerance <= 0.0)
 			throw "Spring parameters must be finite and physically valid";
 		value = initial;
 		velocity = 0.0;
@@ -79,8 +79,7 @@ class SpringController implements Animation {
 			value += velocity * step;
 			remaining -= step;
 		}
-		if (lessThanAbsolute(value - target, tolerance) &&
-			lessThanAbsolute(velocity, tolerance)) {
+		if (lessThanAbsolute(value - target, tolerance) && lessThanAbsolute(velocity, tolerance)) {
 			value = target;
 			velocity = 0.0;
 			active = false;

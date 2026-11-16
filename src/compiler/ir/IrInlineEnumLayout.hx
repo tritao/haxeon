@@ -61,11 +61,13 @@ class IrInlineEnumLayout {
 		var existing = results.get(name);
 		if (existing != null) return existing;
 		var declaration = declarations.get(name);
-		if (declaration == null || declaration.isRecursive == true || recursive(name, name, [], [])) return reject(name);
+		if (declaration == null || declaration.isRecursive == true
+			|| recursive(name, name, [], [])) return reject(name);
 		if (!canonical) {
 			if (decisionPlanner == null)
 				decisionPlanner = new IrInlineEnumLayout([for (entry in declarations) entry],
-					classificationObjects == null ? [for (object in objects) object] : classificationObjects, 64, HashLink, null, true);
+					classificationObjects == null ? [for (object in objects) object] : classificationObjects, 64,
+					HashLink, null, true);
 			if (decisionPlanner.shape(name) == null) return reject(name);
 		}
 		var cases:Array<{name:String, object:IrObject}> = [];
@@ -74,34 +76,66 @@ class IrInlineEnumLayout {
 			var fields:Array<IrObjectField> = [];
 			for (parameter in 0...constructor.params.length)
 				fields.push({name: Std.string(parameter), type: payloadType(constructor.params[parameter])});
-			var object:IrObject = {name: caseName, isValue: true, base: null, interfaces: [], fields: fields, methods: []};
+			var object:IrObject = {
+				name: caseName,
+				isValue: true,
+				base: null,
+				interfaces: [],
+				fields: fields,
+				methods: []
+			};
 			objects.set(caseName, object);
 			cases.push({name: constructor.name, object: object});
 		}
-		var table = IrObjectTable.of(objects), lanes = new IrValueLaneLayout(table, pointerBits, target), wordBits = canonical ? 64 : 32;
+		var table = IrObjectTable.of(objects),
+			lanes = new IrValueLaneLayout(table, pointerBits, target),
+			wordBits = canonical ? 64 : 32;
 		for (entry in cases) if (lanes.shape(Obj(entry.object.name)).scalarWordBits == 64) wordBits = 64;
 		var mapped:Array<IrInlineEnumCaseShape> = [], scalarWords = 0, references = 0, largest = 0, second = 0;
 		for (entry in cases) {
 			var payload = lanes.shape(Obj(entry.object.name), wordBits);
-			mapped.push({name: entry.name, parameters: [for (field in entry.object.fields) field.type], payload: payload});
+			mapped.push({
+				name: entry.name,
+				parameters: [for (field in entry.object.fields) field.type],
+				payload: payload
+			});
 			if (payload.scalarWords > scalarWords) scalarWords = payload.scalarWords;
 			if (payload.references > references) references = payload.references;
 			var size = payload.scalarWords + payload.references;
-			if (size > largest) { second = largest; largest = size; } else if (size > second) second = size;
+			if (size > largest) {
+				second = largest;
+				largest = size;
+			} else if (size > second) second = size;
 		}
 		if (canonical && largest > 8 && largest > 2 * (second < 1 ? 1 : second)) return reject(name);
 		var fields:Array<IrObjectField> = [{name: "tag", type: I32}];
 		for (index in 0...scalarWords) fields.push({name: 'scalar$index', type: wordBits == 64 ? I64 : I32});
 		for (index in 0...references) fields.push({name: 'reference$index', type: IrValueLaneReference.type()});
-		var valueObject:IrObject = {name: VALUE_PREFIX + name, isValue: true, base: null, interfaces: [], fields: fields, methods: []};
+		var valueObject:IrObject = {
+			name: VALUE_PREFIX + name,
+			isValue: true,
+			base: null,
+			interfaces: [],
+			fields: fields,
+			methods: []
+		};
 		objects.set(valueObject.name, valueObject);
-		var result:IrInlineEnumShape = {name: name, wordBits: wordBits, scalarWords: scalarWords, references: references,
-			cases: mapped, valueObject: valueObject};
+		var result:IrInlineEnumShape = {
+			name: name,
+			wordBits: wordBits,
+			scalarWords: scalarWords,
+			references: references,
+			cases: mapped,
+			valueObject: valueObject
+		};
 		results.set(name, result);
 		return result;
 	}
 
-	function reject(name:String):Null<IrInlineEnumShape> { rejected.set(name, true); return null; }
+	function reject(name:String):Null<IrInlineEnumShape> {
+		rejected.set(name, true);
+		return null;
+	}
 
 	/** Enum value declarations created while planning the requested shapes, in deterministic order. */
 	public function generatedObjects():Array<IrObject> {
@@ -116,17 +150,21 @@ class IrInlineEnumLayout {
 
 	/** Nested inline enum values contribute their complete tag and payload as value fields. */
 	public function payloadType(type:IrType):IrType return switch type {
-		case Enum(name): var nested = shape(name); nested == null ? type : Obj(nested.valueObject.name);
-		case Nullable(Enum(name)): var nested = shape(name); nested == null ? type : Obj(nested.valueObject.name);
+		case Enum(name): var nested = shape(name);
+			nested == null ? type : Obj(nested.valueObject.name);
+		case Nullable(Enum(name)): var nested = shape(name);
+			nested == null ? type : Obj(nested.valueObject.name);
 		// Containers and closures are reference leaves. Preserve their semantic element
 		// and call types; a private payload record must not become their public ABI.
 		case Array(_), Iterator(_), Function(_, _): type;
 		case Obj(name):
 			var object = objects.get(name);
-			if (object == null || !object.isValue) type; else Obj(payloadValueObject(object));
+			if (object == null || !object.isValue) type;
+			else Obj(payloadValueObject(object));
 		case Nullable(Obj(name)):
 			var object = objects.get(name);
-			if (object == null || !object.isValue) type; else Nullable(Obj(payloadValueObject(object)));
+			if (object == null || !object.isValue) type;
+			else Nullable(Obj(payloadValueObject(object)));
 		case Nullable(inner): Nullable(payloadType(inner));
 		default: type;
 	};
@@ -142,11 +180,18 @@ class IrInlineEnumLayout {
 		var name = object.name;
 		valueCopies.set(object.name, name);
 		var fields:Array<IrObjectField> = [for (field in object.fields) {
-			name: field.name, type: payloadType(field.type), nativeLayout: field.nativeLayout,
-			scalarStorage: field.scalarStorage, nullableScalarStorage: field.nullableScalarStorage
+			name:field.name, type:payloadType(field.type), nativeLayout:field.nativeLayout,
+				scalarStorage:field.scalarStorage, nullableScalarStorage:field.nullableScalarStorage
 		}];
-		objects.set(name, {name: name, isValue: true, nativeLayout: object.nativeLayout, base: object.base,
-			interfaces: object.interfaces, fields: fields, methods: object.methods});
+		objects.set(name, {
+			name: name,
+			isValue: true,
+			nativeLayout: object.nativeLayout,
+			base: object.base,
+			interfaces: object.interfaces,
+			fields: fields,
+			methods: object.methods
+		});
 		return name;
 	}
 
@@ -160,14 +205,17 @@ class IrInlineEnumLayout {
 		return false;
 	}
 
-	function contains(root:String, type:IrType, seenEnums:Array<String>, seenObjects:Array<String>):Bool return switch type {
-		case Enum(name): name == root || (seenEnums.indexOf(name) < 0 && recursive(root, name, seenEnums, seenObjects));
-		case Nullable(inner): contains(root, inner, seenEnums, seenObjects);
-		case Obj(name):
-			var object = objects.get(name), found = false;
-			if (object != null && object.isValue && seenObjects.indexOf(name) < 0)
-				for (field in object.fields) if (contains(root, field.type, seenEnums, seenObjects.concat([name]))) found = true;
-			found;
-		default: false;
-	};
+	function contains(root:String, type:IrType, seenEnums:Array<String>,
+			seenObjects:Array<String>):Bool return switch type {
+				case Enum(name): name == root
+					|| (seenEnums.indexOf(name) < 0 && recursive(root, name, seenEnums, seenObjects));
+				case Nullable(inner): contains(root, inner, seenEnums, seenObjects);
+				case Obj(name):
+					var object = objects.get(name), found = false;
+					if (object != null && object.isValue && seenObjects.indexOf(name) < 0)
+						for (field in object.fields) if (contains(root, field.type, seenEnums,
+							seenObjects.concat([name]))) found = true;
+					found;
+				default: false;
+			};
 }

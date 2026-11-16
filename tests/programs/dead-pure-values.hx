@@ -9,7 +9,8 @@ class Counter {
 
 function choose(flag:Bool):Int {
 	var value = 0;
-	if (flag) value = 20; else value = 21;
+	if (flag) value = 20;
+	else value = 21;
 	var unused = (value + 9) * 3;
 	return value;
 }

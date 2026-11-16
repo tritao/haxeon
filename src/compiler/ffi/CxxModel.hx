@@ -76,7 +76,8 @@ class CxxFunction {
 	public var loweredName:Null<String>;
 	public var thunkSymbol:Null<String>;
 
-	public function new(name:String, qualifiedName:String, symbol:String, parameters:Array<CxxParameter>, result:CxxType, isNoexcept:Bool, span:SourceSpan) {
+	public function new(name:String, qualifiedName:String, symbol:String, parameters:Array<CxxParameter>,
+			result:CxxType, isNoexcept:Bool, span:SourceSpan) {
 		this.name = name;
 		this.qualifiedName = qualifiedName;
 		this.symbol = symbol;
@@ -107,8 +108,10 @@ class CxxMethod {
 	public var virtualAbi:Null<CxxVirtualMethodAbi>;
 	public var thunkSymbol:Null<String>;
 
-	public function new(owner:String, name:String, qualifiedName:String, symbol:String, access:String, isStatic:Bool, isConst:Bool, isNoexcept:Bool,
-			isVirtual:Bool, parameters:Array<CxxParameter>, result:CxxType, span:SourceSpan, isConstructor:Bool = false, isDestructor:Bool = false) {
+	public function new(owner:String, name:String, qualifiedName:String, symbol:String, access:String, isStatic:Bool,
+			isConst:Bool, isNoexcept:Bool,
+			isVirtual:Bool, parameters:Array<CxxParameter>, result:CxxType, span:SourceSpan, isConstructor:Bool = false,
+			isDestructor:Bool = false) {
 		this.owner = owner;
 		this.name = name;
 		this.qualifiedName = qualifiedName;
@@ -144,8 +147,10 @@ class CxxRecord {
 	public final methods:Array<CxxMethod>;
 	public final span:SourceSpan;
 
-	public function new(name:String, qualifiedName:String, tagUsed:String, completeDefinition:Bool, isAbstract:Bool, size:Int, align:Int,
-			isStandardLayout:Bool, isTriviallyCopyable:Bool, hasVirtualMembers:Bool, bases:Array<CxxBase>, fields:Array<CxxField>, methods:Array<CxxMethod>,
+	public function new(name:String, qualifiedName:String, tagUsed:String, completeDefinition:Bool, isAbstract:Bool,
+			size:Int, align:Int,
+			isStandardLayout:Bool, isTriviallyCopyable:Bool, hasVirtualMembers:Bool, bases:Array<CxxBase>,
+			fields:Array<CxxField>, methods:Array<CxxMethod>,
 			span:SourceSpan) {
 		this.name = name;
 		this.qualifiedName = qualifiedName;
@@ -172,7 +177,8 @@ class CxxEnum {
 	public final values:Array<CxxEnumValue>;
 	public final span:SourceSpan;
 
-	public function new(name:String, qualifiedName:String, scoped:Bool, underlying:CxxType, values:Array<CxxEnumValue>, span:SourceSpan) {
+	public function new(name:String, qualifiedName:String, scoped:Bool, underlying:CxxType, values:Array<CxxEnumValue>,
+			span:SourceSpan) {
 		this.name = name;
 		this.qualifiedName = qualifiedName;
 		this.scoped = scoped;
@@ -206,7 +212,8 @@ class CxxModel {
 	public final aliases:Array<CxxAlias>;
 	public final functions:Array<CxxFunction>;
 
-	public function new(target:String, header:String, span:SourceSpan, records:Array<CxxRecord>, enums:Array<CxxEnum>, aliases:Array<CxxAlias>,
+	public function new(target:String, header:String, span:SourceSpan, records:Array<CxxRecord>, enums:Array<CxxEnum>,
+			aliases:Array<CxxAlias>,
 			functions:Array<CxxFunction>) {
 		this.target = target;
 		this.header = header;

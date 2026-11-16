@@ -2,9 +2,9 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
-import compiler.ir.IrObjectTable;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.IrLoadStoreForwarding;
+import compiler.ir.IrObjectTable;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
@@ -66,40 +66,75 @@ class LoadStoreMain {
 
 	static function crossBlockCases():Void {
 		for (kind in 0...4) {
-			var b = new IrBuilder(), object = b.argument("object", Obj("Box")), alias = b.argument("alias", Obj("Box")),
-				condition = b.argument("condition", Bool), first = b.fieldGet(object, "n", I32),
-				yes = b.createBlock(), no = b.createBlock(), join = b.createBlock();
+			var b = new IrBuilder(),
+				object = b.argument("object", Obj("Box")),
+				alias = b.argument("alias", Obj("Box")),
+				condition = b.argument("condition", Bool),
+				first = b.fieldGet(object, "n", I32),
+				yes = b.createBlock(),
+				no = b.createBlock(),
+				join = b.createBlock();
 			b.branch(condition, yes, no);
 			b.select(yes);
 			if (kind == 1) b.call("mutate", [object], Void);
 			if (kind == 2) b.fieldSet(alias, "n", b.constInt(0));
 			if (kind == 3) b.fieldSet(alias, "other", b.constInt(0));
-			b.jump(join); b.select(no); b.jump(join); b.select(join);
-			var second = b.fieldGet(object, "n", I32), result = IrLoadStoreForwarding.run(finish(b, b.add(first, second)));
+			b.jump(join);
+			b.select(no);
+			b.jump(join);
+			b.select(join);
+			var second = b.fieldGet(object, "n", I32),
+				result = IrLoadStoreForwarding.run(finish(b, b.add(first, second)));
 			expect(loads(result) == (kind == 1 || kind == 2 ? 2 : 1), 'join clobber case $kind');
 		}
 		for (clobber in [false, true]) for (before in [false, true]) {
-			var b = new IrBuilder(), object = b.argument("object", Obj("Box")), condition = b.argument("condition", Bool),
-				header = b.createBlock(), body = b.createBlock(), exit = b.createBlock();
+			var b = new IrBuilder(),
+				object = b.argument("object", Obj("Box")),
+				condition = b.argument("condition", Bool),
+				header = b.createBlock(),
+				body = b.createBlock(),
+				exit = b.createBlock();
 			if (before) b.fieldGet(object, "n", I32);
-			b.jump(header); b.select(header); var value = b.fieldGet(object, "n", I32); b.branch(condition, body, exit);
-			b.select(body); if (clobber) b.fieldSet(object, "n", b.constInt(2)); b.jump(header);
-			b.select(exit); var result = IrLoadStoreForwarding.run(finish(b, value));
+			b.jump(header);
+			b.select(header);
+			var value = b.fieldGet(object, "n", I32);
+			b.branch(condition, body, exit);
+			b.select(body);
+			if (clobber) b.fieldSet(object, "n", b.constInt(2));
+			b.jump(header);
+			b.select(exit);
+			var result = IrLoadStoreForwarding.run(finish(b, value));
 			expect(loads(result) == (before && clobber ? 2 : 1), 'loop before=$before clobber=$clobber');
 		}
-		var b = new IrBuilder(), object = b.argument("object", Obj("Box")), condition = b.argument("condition", Bool),
-			yes = b.createBlock(), no = b.createBlock(), join = b.createBlock();
+		var b = new IrBuilder(),
+			object = b.argument("object", Obj("Box")),
+			condition = b.argument("condition", Bool),
+			yes = b.createBlock(),
+			no = b.createBlock(),
+			join = b.createBlock();
 		b.branch(condition, yes, no);
-		b.select(yes); b.fieldGet(object, "n", I32); b.jump(join);
-		b.select(no); b.jump(join); b.select(join);
+		b.select(yes);
+		b.fieldGet(object, "n", I32);
+		b.jump(join);
+		b.select(no);
+		b.jump(join);
+		b.select(join);
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 2,
 			"a load on one branch does not dominate the join");
-		b = new IrBuilder(); object = b.argument("object", Obj("Box")); var storeNext = b.createBlock();
-		b.fieldSet(object, "n", b.constInt(7)); b.jump(storeNext); b.select(storeNext);
+		b = new IrBuilder();
+		object = b.argument("object", Obj("Box"));
+		var storeNext = b.createBlock();
+		b.fieldSet(object, "n", b.constInt(7));
+		b.jump(storeNext);
+		b.select(storeNext);
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 1,
 			"a store does not create a cross-block load fact");
-		b = new IrBuilder(); object = b.argument("object", Obj("Box")); var next = b.createBlock();
-		b.fieldGet(object, "n", I32); b.blocks[0].instructions.push(located(EndTry(0, false))); b.jump(next);
+		b = new IrBuilder();
+		object = b.argument("object", Obj("Box"));
+		var next = b.createBlock();
+		b.fieldGet(object, "n", I32);
+		b.blocks[0].instructions.push(located(EndTry(0, false)));
+		b.jump(next);
 		b.select(next);
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(object, "n", I32)))) == 2,
 			"exception regions do not propagate field facts across blocks");
@@ -129,19 +164,24 @@ class LoadStoreMain {
 			default:
 				throw "return";
 		}
-		expect(result.blocks[0].instructions[1].provenance == fn.blocks[0].instructions[1].provenance, "surviving provenance");
+		expect(result.blocks[0].instructions[1].provenance == fn.blocks[0].instructions[1].provenance,
+			"surviving provenance");
 		fieldCase("repeat", function(b, o, a) {}, 1);
 		fieldCase("alias", function(b, o, a) b.fieldSet(a, "n", b.constInt(8)), 2);
 		fieldCase("other field", function(b, o, a) b.fieldSet(a, "m", b.constInt(8)), 1);
 		fieldCase("call", function(b, o, a) b.call("mutate", [o], Void), 2);
-		fieldCase("receiver check preserves loaded fields", function(b, o, a) b.call(compiler.ir.IrReceiverCheck.NAME, [a], Void), 1);
+		fieldCase("receiver check preserves loaded fields",
+			function(b, o, a) b.call(compiler.ir.IrReceiverCheck.NAME, [a], Void), 1);
 		fieldCase("native call", function(b, o, a) b.cNativeCall("mutate", [o], Void), 2);
 		fieldCase("closure", function(b, o, a) b.callClosure(b.argument("closure", Function([], Void)), [], Void), 2);
-		fieldCase("method", function(b, o, a) b.blocks[0].instructions.push(located(MethodCall(new IrValue(100, "call", Void), o, "mutate", [], false))), 2);
+		fieldCase("method", function(b, o, a) b.blocks[0].instructions
+			.push(located(MethodCall(new IrValue(100, "call", Void), o, "mutate", [], false))), 2);
 		fieldCase("try", function(b, o, a) b.blocks[0].instructions.push(located(BeginTry(1, 2, false))), 2);
 		fieldCase("end try", function(b, o, a) b.blocks[0].instructions.push(located(EndTry(1, false))), 2);
-		fieldCase("catch", function(b, o, a) b.blocks[0].instructions.push(located(Catch(new IrValue(100, "error", Dyn)))), 2);
-		fieldCase("raw store", function(b, o, a) b.blocks[0].instructions.push(located(MemoryStore(b.argument("ptr", RawPtr), b.constInt(8), 4))), 2);
+		fieldCase("catch",
+			function(b, o, a) b.blocks[0].instructions.push(located(Catch(new IrValue(100, "error", Dyn)))), 2);
+		fieldCase("raw store", function(b, o,
+				a) b.blocks[0].instructions.push(located(MemoryStore(b.argument("ptr", RawPtr), b.constInt(8), 4))), 2);
 		fieldCase("fresh allocation", function(b, o, a) b.newObject("Box"), 1);
 		arrayCase("same constant", false, false, true, 1);
 		arrayCase("distinct constants", false, false, false, 1);
@@ -169,34 +209,60 @@ class LoadStoreMain {
 		b.fieldSet(o, "v", value);
 		var v1 = b.fieldGet(o, "v", Obj("Value")),
 			v2 = b.fieldGet(o, "v", Obj("Value"));
-		expect(loads(IrLoadStoreForwarding.run(finish(b, v2), IrObjectTable.of(objects))) == 2, "inline value fields must not be forwarded");
+		expect(loads(IrLoadStoreForwarding.run(finish(b, v2), IrObjectTable.of(objects))) == 2,
+			"inline value fields must not be forwarded");
 		objects.set("Narrow", {
 			name: "Narrow", isValue: true, base: null, interfaces: [], methods: [],
 			fields: [
-				{name: "small", type: I32, nativeLayout: {size: 2, alignment: 2, offset: 0, signed: true, inlineRecord: false}},
-				{name: "wide", type: I32, nativeLayout: {size: 4, alignment: 4, offset: 4, signed: true, inlineRecord: false}},
-				{name: "fraction", type: F32, nativeLayout: {size: 4, alignment: 4, offset: 8, signed: true, inlineRecord: false}}
+				{
+					name: "small",
+					type: I32,
+					nativeLayout: {size: 2, alignment: 2, offset: 0, signed: true, inlineRecord: false}
+				},
+				{
+					name: "wide",
+					type: I32,
+					nativeLayout: {size: 4, alignment: 4, offset: 4, signed: true, inlineRecord: false}
+				},
+				{
+					name: "fraction",
+					type: F32,
+					nativeLayout: {size: 4, alignment: 4, offset: 8, signed: true, inlineRecord: false}
+				}
 			]
 		});
-		b = new IrBuilder(); o = b.argument("narrow", Obj("Narrow")); stored = b.constInt(65535);
+		b = new IrBuilder();
+		o = b.argument("narrow", Obj("Narrow"));
+		stored = b.constInt(65535);
 		b.fieldSet(o, "small", stored);
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "small", I32)), IrObjectTable.of(objects))) == 1,
 			"a narrow native store must be loaded back after truncation and sign extension");
-		b = new IrBuilder(); o = b.argument("wide", Obj("Narrow")); stored = b.constInt(65535);
+		b = new IrBuilder();
+		o = b.argument("wide", Obj("Narrow"));
+		stored = b.constInt(65535);
 		b.fieldSet(o, "wide", stored);
 		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "wide", I32)), IrObjectTable.of(objects))) == 0,
 			"a full-width native store can still be forwarded");
-		b = new IrBuilder(); o = b.argument("float", Obj("Narrow")); var f32 = b.argument("fraction", F32);
+		b = new IrBuilder();
+		o = b.argument("float", Obj("Narrow"));
+		var f32 = b.argument("fraction", F32);
 		b.fieldSet(o, "fraction", f32);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects))) == 1,
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects)))
+			== 1,
 			"a native Float32 store must be read after rounding");
 		objects.set("ManagedFloat", {
 			name: "ManagedFloat", isValue: true, base: null, interfaces: [], methods: [],
-			fields: [{name: "fraction", type: F32}, {name: "text", type: Bytes}]
+			fields: [
+				{name: "fraction", type: F32},
+				{name: "text", type: Bytes}
+			]
 		});
-		b = new IrBuilder(); o = b.argument("managed", Obj("ManagedFloat")); f32 = b.argument("fraction", F32);
+		b = new IrBuilder();
+		o = b.argument("managed", Obj("ManagedFloat"));
+		f32 = b.argument("fraction", F32);
 		b.fieldSet(o, "fraction", f32);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects))) == 1,
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(o, "fraction", F32)), IrObjectTable.of(objects)))
+			== 1,
 			"Float32 storage rounds even in an object without a native layout");
 		// Replacing an inline value also changes primitive fields reached through interior pointers.
 		b = new IrBuilder();
@@ -205,7 +271,8 @@ class LoadStoreMain {
 		value = b.argument("replacement", Obj("Value"));
 		b.fieldGet(interior, "n", I32);
 		b.fieldSet(o, "v", value);
-		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(interior, "n", I32)), IrObjectTable.of(objects))) == 2,
+		expect(loads(IrLoadStoreForwarding.run(finish(b, b.fieldGet(interior, "n", I32)), IrObjectTable.of(objects)))
+			== 2,
 			"inline copies kill interior facts");
 		// Available field facts cross clean edges, and eliminated values are substituted in successor phis.
 		b = new IrBuilder();
@@ -239,7 +306,8 @@ class LoadStoreMain {
 		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).length == 0, "memo unchanged");
 		IrLoadStoreForwarding.enabled = false;
 		program.functions = [fn];
-		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).indexOf("test") >= 0, "switch changes published bytes");
+		expect(IrInliner.run(program, cache, compiler.ir.TargetProfile.wasm).indexOf("test") >= 0,
+			"switch changes published bytes");
 		expect(program.functions[0] == fn, "disabled pass identity");
 		IrInliner.enabled = oldInline;
 		IrLoadStoreForwarding.enabled = oldForward;

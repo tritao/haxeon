@@ -9,8 +9,18 @@ import compiler.ir.Ir.IrType;
 import compiler.ir.IrInlineValueLayout;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 
-private typedef WasmInlineSlot = {final path:Array<String>; final presence:Bool; final offset:Int; final size:Int; final signed:Bool;}
-private typedef WasmInlineLayout = {final size:Int; final alignment:Int; final slots:Array<WasmInlineSlot>;}
+private typedef WasmInlineSlot = {
+	final path:Array<String>;
+	final presence:Bool;
+	final offset:Int;
+	final size:Int;
+	final signed:Bool;
+}
+private typedef WasmInlineLayout = {
+	final size:Int;
+	final alignment:Int;
+	final slots:Array<WasmInlineSlot>;
+}
 
 typedef WasmFieldLayout = {
 	final name:String;
@@ -156,7 +166,11 @@ class WasmLayout {
 			if (payload > maxPayload)
 				maxPayload = payload;
 		}
-		return {name: enumDecl.name, size: align(HEADER_SIZE + 4 + maxPayload, 8), cases: [for (constructor in enumDecl.cases) constructor.params]};
+		return {
+			name: enumDecl.name,
+			size: align(HEADER_SIZE + 4 + maxPayload, 8),
+			cases: [for (constructor in enumDecl.cases) constructor.params]
+		};
 	}
 
 	function buildObjectLayout(object:IrObject, visiting:Array<String>):WasmObjectLayout {
@@ -168,18 +182,17 @@ class WasmLayout {
 		nextVisiting.push(object.name);
 		var nativeLayout = object.nativeLayout;
 		if (nativeLayout != null) {
-			var fields:Array<WasmFieldLayout> = [
-				for (field in object.fields) {
-					var native = field.nativeLayout;
-					if (native == null) throw 'Flat Wasm object "${object.name}" is missing native field layout "${field.name}"';
-					{
-						name: field.name,
-						offset: FLAT_HEADER_SIZE + native.offset,
-						type: field.type,
-						nativeLayout: native
-					};
-				}
-			];
+			var fields:Array<WasmFieldLayout> = [for (field in object.fields) {
+				var native = field.nativeLayout;
+				if (native == null)
+					throw 'Flat Wasm object "${object.name}" is missing native field layout "${field.name}"';
+				{
+					name:field.name,
+						offset:FLAT_HEADER_SIZE + native.offset,
+						type:field.type,
+						nativeLayout:native
+				};
+			}];
 			var result:WasmObjectLayout = {
 				name: object.name,
 				size: align(FLAT_HEADER_SIZE + nativeLayout.size, 8),
@@ -203,7 +216,10 @@ class WasmLayout {
 		}
 		var logical = logicalObjects.get(object.name), declared = logical == null ? object.fields : logical.fields;
 		for (field in declared) {
-			var valueObject = switch field.type { case Obj(name): logicalObjects.get(name); default: null; },
+			var valueObject = switch field.type {
+				case Obj(name): logicalObjects.get(name);
+				default: null;
+			},
 				isInline = valueObject != null && valueObject.isValue,
 				physical = isInline ? valueLayout.fields([field]) : [field];
 			if (valueObject != null && valueObject.isValue) {
@@ -215,15 +231,28 @@ class WasmLayout {
 					var part = physical[index], slot = slots[index], placement = shape.slots[index];
 					if (slot.path.join(".") != placement.path.join(".") || slot.isPresence != placement.presence)
 						throw 'Mismatched inline value path "${object.name}.${part.name}"';
-					fields.push({name: part.name, offset: offset + placement.offset, type: part.type, nativeLayout: null,
-						scalarStorage: {size: placement.size, signed: placement.signed}});
+					fields.push({
+						name: part.name,
+						offset: offset + placement.offset,
+						type: part.type,
+						nativeLayout: null,
+						scalarStorage: {size: placement.size, signed: placement.signed}
+					});
 				}
 				offset += shape.size;
 			} else for (part in physical) {
 				offset = align(offset, alignmentOf(part.type));
 				var native = part.nativeLayout;
-				fields.push({name: part.name, offset: offset, type: part.type, nativeLayout: null,
-					scalarStorage: part.scalarStorage != null ? part.scalarStorage : native == null ? null : {size: native.size, signed: native.signed}});
+				fields.push({
+					name: part.name,
+					offset: offset,
+					type: part.type,
+					nativeLayout: null,
+					scalarStorage: part.scalarStorage != null ? part.scalarStorage : native == null ? null : {
+						size: native.size,
+						signed: native.signed
+					}
+				});
 				offset += sizeOf(part.type);
 			}
 		}
@@ -248,7 +277,13 @@ class WasmLayout {
 			for (slot in valueLayout.leaves(Obj(name))) {
 				var native = valueLayout.nativeLeaf(Obj(name), slot);
 				if (native == null) throw 'Missing native leaf for "$name"';
-				slots.push({path: slot.path, presence: slot.isPresence, offset: native.offset, size: native.size, signed: native.signed});
+				slots.push({
+					path: slot.path,
+					presence: slot.isPresence,
+					offset: native.offset,
+					size: native.size,
+					signed: native.signed
+				});
 			}
 			return {size: nativeLayout.size, alignment: nativeLayout.alignment, slots: slots};
 		}
@@ -261,28 +296,45 @@ class WasmLayout {
 				default: null;
 			};
 			if (childName != null) {
-				var optional = switch field.type { case Nullable(_): true; default: false; };
-				if (optional) { slots.push({path: [field.name], presence: true, offset: offset++, size: 1, signed: false}); }
+				var optional = switch field.type {
+					case Nullable(_): true;
+					default: false;
+				};
+				if (optional) {
+					slots.push({path: [field.name], presence: true, offset: offset++, size: 1, signed: false});
+				}
 				var nested = inlineLayout(childName, next);
 				offset = align(offset, nested.alignment);
 				if (nested.alignment > maximum) maximum = nested.alignment;
-				for (slot in nested.slots) slots.push({path: [field.name].concat(slot.path), presence: slot.presence,
-					offset: offset + slot.offset, size: slot.size, signed: slot.signed});
+				for (slot in nested.slots) slots.push({
+					path: [field.name].concat(slot.path),
+					presence: slot.presence,
+					offset: offset + slot.offset,
+					size: slot.size,
+					signed: slot.signed
+				});
 				offset += nested.size;
 			} else {
-				var storage = compiler.ir.IrFieldStorage.scalar(field), size = storage == null ? sizeOf(field.type) : storage.size,
+				var storage = compiler.ir.IrFieldStorage.scalar(field),
+					size = storage == null ? sizeOf(field.type) : storage.size,
 					alignment = size > 8 ? 8 : size;
 				if (alignment < 1) throw 'Invalid inline field "$name.${field.name}"';
 				offset = align(offset, alignment);
 				if (alignment > maximum) maximum = alignment;
-				slots.push({path: [field.name], presence: false, offset: offset, size: size, signed: storage != null && storage.signed});
+				slots.push({
+					path: [field.name],
+					presence: false,
+					offset: offset,
+					size: size,
+					signed: storage != null && storage.signed
+				});
 				offset += size;
 			}
 		}
 		return {size: align(offset, maximum), alignment: maximum, slots: slots};
 	}
 
-	public function enumField(typeName:String, constructor:Int, field:Int):{type:IrType, offset:Int} {
+	public function enumField(typeName:String, constructor:Int, field:Int): {type: IrType, offset: Int} {
 		var layout = enumType(typeName);
 		if (constructor < 0 || constructor >= layout.cases.length)
 			throw 'Unknown constructor $constructor in Wasm enum layout "$typeName"';
@@ -305,7 +357,16 @@ class WasmLayout {
 		};
 
 	public static function arrayStride(type:IrType):Int
-		return (switch (type) { case F32: true; default: false; }) || (switch (type) { case F64: true; default: false; }) || (switch (type) { case I64: true; default: false; }) ? 8 : 4;
+		return (switch (type) {
+			case F32: true;
+			default: false;
+		}) || (switch (type) {
+			case F64: true;
+			default: false;
+		}) || (switch (type) {
+			case I64: true;
+			default: false;
+		}) ? 8 : 4;
 
 	public static function arrayAllocationSize(type:IrType, length:Int):Int
 		return ARRAY_HEADER_SIZE + arrayStride(type) * length;
@@ -330,7 +391,16 @@ class WasmLayout {
 	public static inline final CLOSURE_TYPE_ID = 0x484C4346;
 
 	public static function alignmentOf(type:IrType):Int
-		return (switch (type) { case F32: true; default: false; }) || (switch (type) { case F64: true; default: false; }) || (switch (type) { case I64: true; default: false; }) ? 8 : 4;
+		return (switch (type) {
+			case F32: true;
+			default: false;
+		}) || (switch (type) {
+			case F64: true;
+			default: false;
+		}) || (switch (type) {
+			case I64: true;
+			default: false;
+		}) ? 8 : 4;
 
 	static function align(value:Int, boundary:Int):Int
 		return (value + boundary - 1) & ~(boundary - 1);

@@ -118,7 +118,8 @@ class BindingWalker implements AstChildVisitor {
 
 	// Hooks.
 
-	function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {}
+	function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
+			initializer:Null<AstExpression>):Void {}
 
 	/** A bare read of a name, resolved to its declaration, or null when it is not a local. */
 	function used(name:String, declaration:Null<String>, span:SourceSpan):Void {}

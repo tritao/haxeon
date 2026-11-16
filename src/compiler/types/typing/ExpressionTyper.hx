@@ -51,10 +51,13 @@ typedef ExpressionArrayElementTypeCallback = (CompilerType, SourceSpan) -> Compi
 typedef ContextualExpressionTypeCallback = (AstExpression, Scope) -> Null<CompilerType>;
 typedef LowerExpressionTypeCallback = (type:AstType, span:SourceSpan) -> CompilerType;
 typedef ExpressionVariableCallback = (String, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
-typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, String, SourceSpan, Scope, Null<CompilerType>, Bool) -> TypedExpression;
+typedef ExpressionLambdaCallback = (Array<AstArgument>, Array<AstStatement>, String, SourceSpan, Scope,
+	Null<CompilerType>, Bool) -> TypedExpression;
 typedef ExpressionMemberCallback = (AstExpression, String, SourceSpan, Scope) -> TypedExpression;
-typedef ExpressionBlockCallback = (Array<AstStatement>, AstExpression, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
-typedef ExpressionMethodCallCallback = (AstExpression, String, Array<AstExpression>, SourceSpan, Scope, Null<CompilerType>) -> TypedExpression;
+typedef ExpressionBlockCallback = (Array<AstStatement>, AstExpression, SourceSpan, Scope,
+	Null<CompilerType>) -> TypedExpression;
+typedef ExpressionMethodCallCallback = (AstExpression, String, Array<AstExpression>, SourceSpan, Scope,
+	Null<CompilerType>) -> TypedExpression;
 
 typedef ExpressionDispatchRules = {
 	variable:ExpressionVariableCallback,
@@ -79,9 +82,11 @@ class ExpressionTyper {
 	final dispatchRules:ExpressionDispatchRules;
 	var typedAnnotationValues:Map<String, Array<NativeTypeAnnotationData>> = [];
 
-	public function new(session:TypingSession, conversionResolver:ConversionResolver, callResolver:CallResolver, typeExpression:ExpressionTypeCallback,
+	public function new(session:TypingSession, conversionResolver:ConversionResolver, callResolver:CallResolver,
+			typeExpression:ExpressionTypeCallback,
 			coerce:ExpressionCoerceCallback, switchRules:SwitchTypingRules, anonymousTypeRegistry:AnonymousTypeRegistry,
-			arrayElementType:ExpressionArrayElementTypeCallback, lowerType:LowerExpressionTypeCallback, dispatchRules:ExpressionDispatchRules) {
+			arrayElementType:ExpressionArrayElementTypeCallback, lowerType:LowerExpressionTypeCallback,
+			dispatchRules:ExpressionDispatchRules) {
 		this.session = session;
 		this.conversionResolver = conversionResolver;
 		this.callResolver = callResolver;
@@ -95,13 +100,16 @@ class ExpressionTyper {
 	}
 
 	/** Dispatches each source expression to its focused typing rule or semantic resolver. */
-	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType, inferDynamicLambdaResult:Bool = false):TypedExpression {
+	public function typeExpression(expression:AstExpression, scope:Scope, ?expectedType:CompilerType,
+			inferDynamicLambdaResult:Bool = false):TypedExpression {
 		var result = switch expression {
-			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_), Unreachable(_), EmptyExpression(_),
+			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
+				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): dispatchRules.variable(name, span, scope, expectedType);
-			case Lambda(arguments, body, identity, span): dispatchRules.lambda(arguments, body, identity, span, scope, expectedType, inferDynamicLambdaResult);
+			case Lambda(arguments, body, identity, span): dispatchRules.lambda(arguments, body, identity, span, scope,
+				expectedType, inferDynamicLambdaResult);
 			case Member(object, name, span): dispatchRules.member(object, name, span, scope);
 			case Add(left, right, span): arithmetic(left, right, scope, true, span, expectedType);
 			case Sub(left, right, span): arithmetic(left, right, scope, false, span, expectedType);
@@ -125,32 +133,38 @@ class ExpressionTyper {
 			case And(left, right, span): logical(left, right, scope, true, span);
 			case Or(left, right, span): logical(left, right, scope, false, span);
 			case Conditional(predicate, whenTrue, whenFalse, span):
-				typeConditional(predicate, whenTrue, whenFalse, span, scope, expectedType, dispatchRules.contextualType);
-			case BlockExpression(statements, result, span): dispatchRules.block(statements, result, span, scope, expectedType);
+				typeConditional(predicate, whenTrue, whenFalse, span, scope, expectedType,
+					dispatchRules.contextualType);
+			case BlockExpression(statements, result, span): dispatchRules.block(statements, result, span, scope,
+				expectedType);
 			case ThrowExpression(value, span): throwExpression(value, span, scope);
 			case Capture(_, _, span):
 				fail("E1019", "A capture `name = pattern` binds only where the pattern itself is matched", span);
 				null;
 			case Cast(value, target, span): typeCast(value, target, span, scope, expectedType, lowerType);
 			case PostfixIncrement(target, delta, span): postfixIncrement(target, delta, span, scope);
-			case SwitchExpression(subject, cases, defaultExpression, span): typeSwitchExpression(subject, cases, defaultExpression, span, scope, expectedType);
+			case SwitchExpression(subject, cases, defaultExpression, span): typeSwitchExpression(subject, cases,
+				defaultExpression, span, scope, expectedType);
 			case ObjectLiteral(fields, span): typeObjectLiteral(fields, span, scope, expectedType);
 			case ArrayLiteral(values, span): typeArrayLiteral(values, span, scope, expectedType);
 			case MapLiteral(entries, span): typeMapLiteral(entries, span, scope, expectedType);
 			case ArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, span):
-				typeArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, span, scope, expectedType);
+				typeArrayComprehension(keyName, valueName, iterable, predicate, value, flattened, span, scope,
+					expectedType);
 			case MapComprehension(keyName, valueName, iterable, predicate, key, value, span):
 				typeMapComprehension(keyName, valueName, iterable, predicate, key, value, span, scope, expectedType);
 			case Range(start, rangeEnd, span): typeRange(start, rangeEnd, span, scope);
 			case NativeLayoutQuery(kind, type, field, span): typeNativeLayoutQuery(kind, type, field, span, scope);
 			case KeyPathLiteral(root, fields, span): KeyPathTyping.literal(session, root, fields, span);
 			case NewGeneric(typeName, typeArguments, arguments, span):
-				var constructed = callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope, expectedType, true);
+				var constructed = callResolver.typeConstruction(typeName, typeArguments, arguments, span, scope,
+					expectedType, true);
 				if (!session.isPureCall(compiler.types.analysis.PurityInference.constructorFact(typeName)))
 					session.invalidateUnknownCall(scope);
 				constructed;
 			case New(typeName, arguments, span):
-				var constructed = callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType, false);
+				var constructed = callResolver.typeConstruction(typeName, [], arguments, span, scope, expectedType,
+					false);
 				if (!session.isPureCall(compiler.types.analysis.PurityInference.constructorFact(typeName)))
 					session.invalidateUnknownCall(scope);
 				constructed;
@@ -170,7 +184,8 @@ class ExpressionTyper {
 				if (builtinCall != null)
 					return builtinCall;
 				callResolver.typeNamedCall(name, arguments, span, scope, expectedType);
-			case ClosureCall(callee, arguments, span): callResolver.typeClosureCall(callee, arguments, span, scope, null, true, expectedType);
+			case ClosureCall(callee, arguments, span): callResolver.typeClosureCall(callee, arguments, span, scope,
+				null, true, expectedType);
 			case MethodCall(object, name, arguments, span):
 				var call = dispatchRules.methodCall(object, name, arguments, span, scope, expectedType);
 				if (!isPureCallExpression(call))
@@ -181,7 +196,8 @@ class ExpressionTyper {
 		return result;
 	}
 
-	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>, span:SourceSpan,
+	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>,
+			span:SourceSpan,
 			scope:Scope):TypedExpression {
 		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
 		if (kind == TypeInfo)
@@ -214,7 +230,8 @@ class ExpressionTyper {
 		var declaration = session.classDecls.get(name);
 		return declaration != null
 			&& (declaration.isStruct == true || hasCRepresentation(declaration))
-			&& StructProperties.satisfies(session.declarations, TInstance(NominalKind.Class, name, []), StructProperties.FLAT_TYPE_NAME);
+			&& StructProperties.satisfies(session.declarations, TInstance(NominalKind.Class, name, []),
+			StructProperties.FLAT_TYPE_NAME);
 	}
 
 	static function hasCRepresentation(declaration:compiler.syntax.Ast.AstClass):Bool {
@@ -228,7 +245,8 @@ class ExpressionTyper {
 		return false;
 	}
 
-	function typeRecordLayoutQuery(name:String, kind:compiler.syntax.Ast.NativeLayoutQueryKind, field:Null<String>, span:SourceSpan):TypedExpression {
+	function typeRecordLayoutQuery(name:String, kind:compiler.syntax.Ast.NativeLayoutQueryKind, field:Null<String>,
+			span:SourceSpan):TypedExpression {
 		var layout = session.nativeLayoutsByName.get(name);
 		if (layout == null)
 			fail("E1022", 'Record "$name" has no layout for ABI target "${session.nativeAbiTarget}"', span);
@@ -253,7 +271,9 @@ class ExpressionTyper {
 	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
 		var name = descriptorRecordName(resolved);
 		if (name == null)
-			fail("E1022", 'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.display(resolved)}"', span);
+			fail("E1022",
+				'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.display(resolved)}"',
+				span);
 		var descriptor = buildNativeTypeDescriptor(resolved);
 		if (descriptor == null)
 			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
@@ -487,8 +507,10 @@ class ExpressionTyper {
 				objectField("alignment", nullableInteger(descriptor.alignment, span), span),
 				objectField("annotations", stringArray(descriptor.annotations, span), span),
 				objectField("annotationValues", annotationValuesExpression(descriptor.annotationValues, span), span),
-				objectField("fields", ArrayLiteral([for (field in descriptor.fields) descriptorFieldExpression(field, span)], span), span),
-				objectField("arguments", ArrayLiteral([for (argument in descriptor.arguments) descriptorFieldExpression(argument, span)], span), span),
+				objectField("fields", ArrayLiteral([for (field in descriptor.fields) descriptorFieldExpression(field,
+					span)], span), span),
+				objectField("arguments", ArrayLiteral([for (argument in descriptor.arguments)
+					descriptorFieldExpression(argument, span)], span), span),
 				objectField("hash", StringLiteral(descriptor.hash, span), span)
 			], span);
 		return typeExpressionCallback(descriptorExpression, scope, descriptorType, false);
@@ -526,7 +548,9 @@ class ExpressionTyper {
 					fail("E1024", 'Annotation struct "${declaration.name}" cannot declare methods', declaration.span);
 				for (field in declaration.fields)
 					if (field.isStatic || field.type == null)
-						fail("E1024", 'Annotation struct "${declaration.name}" requires explicitly typed instance fields', field.span);
+						fail("E1024",
+							'Annotation struct "${declaration.name}" requires explicitly typed instance fields',
+							field.span);
 				if (abstractSchemas.exists(declaration.name))
 					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
 				structSchemas.set(declaration.name, declaration);
@@ -538,7 +562,9 @@ class ExpressionTyper {
 				validateAnnotationMarker(declaration.metadata);
 				var underlying = session.declarations.resolve(declaration.underlying, declaration.span, []);
 				if (!isAnnotationScalar(underlying))
-					fail("E1024", 'Annotation enum abstract "${declaration.name}" must use a supported scalar representation', declaration.span);
+					fail("E1024",
+						'Annotation enum abstract "${declaration.name}" must use a supported scalar representation',
+						declaration.span);
 				abstractSchemas.set(declaration.name, declaration);
 			}
 
@@ -552,22 +578,30 @@ class ExpressionTyper {
 			for (field in schema.fields) {
 				var expected = session.declarations.resolve(field.type, field.span, []);
 				if (!isAnnotationScalar(expected))
-					fail("E1024", 'Annotation field "${name}.${field.name}" must use a supported scalar type', field.span);
+					fail("E1024", 'Annotation field "${name}.${field.name}" must use a supported scalar type',
+						field.span);
 				if (field.initializer != null)
-					typeAnnotationArgument(field.name, expected, field.initializer, {name: name, arguments: [], span: field.span});
+					typeAnnotationArgument(field.name, expected, field.initializer, {
+						name: name,
+						arguments: [],
+						span: field.span
+					});
 			}
 		}
 
 		for (declaration in program.classes)
 			if (isStructDeclaration(session.classDecls.get(declaration.name))) {
-				typeAnnotationUses(declaration.metadata, declaration.name, annotationNames, structSchemas, abstractSchemas);
+				typeAnnotationUses(declaration.metadata, declaration.name, annotationNames, structSchemas,
+					abstractSchemas);
 				for (field in declaration.fields)
 					if (!field.isStatic)
-						typeAnnotationUses(field.metadata, declaration.name + "." + field.name, annotationNames, structSchemas, abstractSchemas);
+						typeAnnotationUses(field.metadata, declaration.name + "." + field.name, annotationNames,
+							structSchemas, abstractSchemas);
 			}
 	}
 
-	function typeAnnotationUses(metadata:Array<AstMetadata>, owner:String, annotationNames:Map<String, Bool>, structSchemas:Map<String, AstClass>,
+	function typeAnnotationUses(metadata:Array<AstMetadata>, owner:String, annotationNames:Map<String, Bool>,
+			structSchemas:Map<String, AstClass>,
 			abstractSchemas:Map<String, AstEnumAbstract>):Void {
 		var seen:Map<String, Bool> = [];
 		for (annotation in metadata) {
@@ -591,15 +625,20 @@ class ExpressionTyper {
 					if (named != null) {
 						namedSeen = true;
 						if (!fieldsByName.exists(named.name))
-							fail("E1024", 'Annotation "${annotation.name}" has unknown named argument "${named.name}"', named.span);
+							fail("E1024", 'Annotation "${annotation.name}" has unknown named argument "${named.name}"',
+								named.span);
 						if (argumentsByName.exists(named.name))
-							fail("E1024", 'Duplicate named argument "${named.name}" for annotation "${annotation.name}"', named.span);
+							fail("E1024",
+								'Duplicate named argument "${named.name}" for annotation "${annotation.name}"',
+								named.span);
 						argumentsByName.set(named.name, named.value);
 					} else {
 						if (namedSeen)
-							fail("E1024", "Positional annotation arguments cannot follow named arguments", annotation.span);
+							fail("E1024", "Positional annotation arguments cannot follow named arguments",
+								annotation.span);
 						if (positionalCount >= fields.length)
-							fail("E1024", 'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
+							fail("E1024",
+								'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
 								annotation.span);
 						argumentsByName.set(fields[positionalCount].name, argument);
 						positionalCount++;
@@ -613,9 +652,11 @@ class ExpressionTyper {
 						expression = field.initializer;
 					if (expression == null) {
 						if (!namedSeen && annotation.arguments.length < fields.length)
-							fail("E1024", 'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
+							fail("E1024",
+								'Annotation "${annotation.name}" expects ${fields.length} arguments, got ${annotation.arguments.length}',
 								annotation.span);
-						fail("E1024", 'Annotation "${annotation.name}" is missing required argument "${field.name}"', annotation.span);
+						fail("E1024", 'Annotation "${annotation.name}" is missing required argument "${field.name}"',
+							annotation.span);
 					}
 					arguments.push(typeAnnotationArgument(field.name, expected, expression, annotation));
 				}
@@ -625,11 +666,18 @@ class ExpressionTyper {
 					fail("E1024", 'Unknown annotation "${annotation.name}" on "$owner"', annotation.span);
 				var expected = session.declarations.resolve(schema.underlying, schema.span, []);
 				if (annotation.arguments.length != 1)
-					fail("E1024", 'Annotation "${annotation.name}" expects one argument, got ${annotation.arguments.length}', annotation.span);
+					fail("E1024",
+						'Annotation "${annotation.name}" expects one argument, got ${annotation.arguments.length}',
+						annotation.span);
 				var nominal = TAbstract(schema.name, [], expected),
-					typed = coerce(typeExpressionCallback(annotation.arguments[0], new Scope(), nominal, false), nominal, 'annotation argument "value"',
+					typed = coerce(typeExpressionCallback(annotation.arguments[0], new Scope(), nominal, false),
+						nominal, 'annotation argument "value"',
 						"E1024");
-				arguments.push({name: "value", type: SemanticSignature.type(expected), value: annotationConstant(typed, annotation)});
+				arguments.push({
+					name: "value",
+					type: SemanticSignature.type(expected),
+					value: annotationConstant(typed, annotation)
+				});
 			}
 			typedAnnotationValues.set(metadataKey(annotation), [{name: annotation.name, arguments: arguments}]);
 		}
@@ -645,7 +693,11 @@ class ExpressionTyper {
 				switch statements[0] {
 					case compiler.syntax.Ast.AstStatement.Assignment(assignedName, value, _):
 						switch result {
-							case Variable(resultName, _) if (assignedName == resultName): {name: assignedName, value: value, span: span};
+							case Variable(resultName, _) if (assignedName == resultName): {
+								name: assignedName,
+								value: value,
+								span: span
+							};
 							case _: null;
 						}
 					case _: null;
@@ -654,8 +706,10 @@ class ExpressionTyper {
 		};
 	}
 
-	function typeAnnotationArgument(name:String, expected:CompilerType, expression:AstExpression, annotation:AstMetadata):NativeTypeAnnotationArgument {
-		var typed = coerce(typeExpressionCallback(expression, new Scope(), expected, false), expected, 'annotation argument "$name"', "E1024"),
+	function typeAnnotationArgument(name:String, expected:CompilerType, expression:AstExpression,
+			annotation:AstMetadata):NativeTypeAnnotationArgument {
+		var typed = coerce(typeExpressionCallback(expression, new Scope(), expected, false), expected,
+			'annotation argument "$name"', "E1024"),
 			value = annotationConstant(typed, annotation);
 		return {name: name, type: SemanticSignature.type(expected), value: value};
 	}
@@ -688,7 +742,8 @@ class ExpressionTyper {
 		};
 
 	static function invalidAnnotationConstant(annotation:AstMetadata):NativeTypeAnnotationValue
-		return throw new CompileError(new Diagnostic("E1024", "Annotation values must be compile-time scalar constants", annotation.span));
+		return throw new CompileError(new Diagnostic("E1024", "Annotation values must be compile-time scalar constants",
+			annotation.span));
 
 	function typedMetadata(metadata:Array<AstMetadata>):Array<NativeTypeAnnotationData> {
 		var result:Array<NativeTypeAnnotationData> = [];
@@ -698,11 +753,15 @@ class ExpressionTyper {
 					fail("E1024", "@:renamedFrom requires exactly one string literal", annotation.span);
 				var oldName = switch annotation.arguments[0] {
 					case StringLiteral(value, _): value;
-					case _: throw new CompileError(new Diagnostic("E1024", "@:renamedFrom requires exactly one string literal", annotation.span));
+					case _: throw new CompileError(new Diagnostic("E1024",
+						"@:renamedFrom requires exactly one string literal", annotation.span));
 				};
 				if (oldName.length == 0)
 					fail("E1024", "@:renamedFrom cannot name an empty field", annotation.span);
-				result.push({name: "renamedFrom", arguments: [{name: "value", type: "String", value: StringValue(oldName)}]});
+				result.push({
+					name: "renamedFrom",
+					arguments: [{name: "value", type: "String", value: StringValue(oldName)}]
+				});
 				continue;
 			}
 			var values = typedAnnotationValues.get(metadataKey(annotation));
@@ -738,9 +797,10 @@ class ExpressionTyper {
 
 	static function isBuiltInMetadata(name:String):Bool
 		return switch name {
-			case "access" | "allow" | "annotation" | "arrayAccess" | "cNative" | "discoverMethods" | "expose" | "flat" | "forward" | "from" | "hiddenUnless" |
-				"hlNative" | "hlType" | "id" | "isVar" | "keep" | "metadata" | "noCompletion" | "noInline" | "op" | "optional" | "portable" |
-				"privateAccess" | "pure" | "renamedFrom" | "repr" | "value" | "wire": true;
+			case "access" | "allow" | "annotation" | "arrayAccess" | "cNative" | "discoverMethods" | "expose" | "flat"
+				| "forward" | "from" | "hiddenUnless" | "hlNative" | "hlType" | "id" | "isVar" | "keep" | "metadata"
+				| "noCompletion" | "noInline" | "op" | "optional" | "portable" | "privateAccess" | "pure"
+				| "renamedFrom" | "repr" | "value" | "wire": true;
 			case _: false;
 		};
 
@@ -751,7 +811,8 @@ class ExpressionTyper {
 		var declaration = session.classDecls.get(name);
 		if (declaration == null)
 			return null;
-		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name], typedMetadata(declaration.metadata), []),
+		var root = descriptorNode(name, resolved, null, [for (metadata in declaration.metadata) metadata.name],
+			typedMetadata(declaration.metadata), []),
 			identity = SemanticSignature.type(resolved),
 			sourceKind = descriptorSourceKind(declaration),
 			interfaces = descriptorInterfaces(resolved);
@@ -769,13 +830,15 @@ class ExpressionTyper {
 			annotationValues: root.annotationValues,
 			fields: root.fields,
 			arguments: root.arguments,
-			hash: NativeTypeDescriptor.contentHash(identity, name, root.type, sourceKind, interfaces, root.flat, root.portable, root.size, root.alignment,
+			hash: NativeTypeDescriptor.contentHash(identity, name, root.type, sourceKind, interfaces, root.flat,
+				root.portable, root.size, root.alignment,
 				root.annotations, root.annotationValues, root.fields, root.arguments)
 		};
 	}
 
 	static function descriptorSourceKind(declaration:AstClass):String
-		return if (declaration.isStruct == true) "struct" else if (hasCRepresentation(declaration)) "native-value" else "class";
+		return if (declaration.isStruct == true) "struct" else if (hasCRepresentation(declaration)) "native-value"
+			else "class";
 
 	function descriptorInterfaces(type:CompilerType):Array<String> {
 		var unique:Map<String, Bool> = [], values:Array<String> = [];
@@ -829,10 +892,12 @@ class ExpressionTyper {
 			fields:Array<NativeTypeDescriptorField> = [];
 		for (field in declaration.fields)
 			if (!field.isStatic && descriptorFieldHasStorage(field) && field.type != null) {
-				var fieldType = session.declarations.resolve(field.type, field.span, session.currentContext.typeSubstitutions),
+				var fieldType = session.declarations.resolve(field.type, field.span,
+					session.currentContext.typeSubstitutions),
 					fieldAnnotations = [for (metadata in field.metadata) metadata.name],
 					defaultValue = descriptorDefaultValue(name, field.name, fieldType, field.initializer, field.span);
-				fields.push(descriptorNode(field.name, fieldType, offsets.get(field.name), fieldAnnotations, typedMetadata(field.metadata), nestedVisiting,
+				fields.push(descriptorNode(field.name, fieldType, offsets.get(field.name), fieldAnnotations,
+					typedMetadata(field.metadata), nestedVisiting,
 					defaultValue));
 			}
 		return fields;
@@ -845,7 +910,8 @@ class ExpressionTyper {
 		var value = descriptorDefaultConstant(type, initializer);
 		if (value == null) {
 			var reason = switch initializer {
-				case NullLiteral(_) if (!isNullableDefaultType(type)): "null requires an explicitly nullable field type";
+				case NullLiteral(_) if (!isNullableDefaultType(type))
+					: "null requires an explicitly nullable field type";
 				case _:
 					var nativeInteger = switch type {
 						case TNativeScalar(name): {name: name};
@@ -855,8 +921,8 @@ class ExpressionTyper {
 					if (nativeInteger != null
 						&& integer != null
 						&& !NativeTypeDescriptor.integerDefaultFits('native-scalar:${nativeInteger.name}',
-							integer)) 'integer literal $integer is outside the range of native scalar ${nativeInteger.name}' else
-						"only scalar literal defaults are supported; executable and computed defaults are unsupported";
+						integer)) 'integer literal $integer is outside the range of native scalar ${nativeInteger.name}'
+					else "only scalar literal defaults are supported; executable and computed defaults are unsupported";
 			};
 			fail("E1024", 'Native descriptor field "$owner.$fieldName" has an unsupported default: $reason', span);
 		}
@@ -880,14 +946,15 @@ class ExpressionTyper {
 			case TAbstract(_, _, representation): descriptorDefaultConstant(representation, initializer);
 			case TNativeScalar("f32"):
 				var value = floatDefaultLiteral(initializer);
-				if (value == null) null; else {
+				if (value == null) null;
+				else {
 					var rounded = NativeTypeDescriptor.float32DefaultValue(value);
 					if (rounded == null)
 						null
-					else
-						FloatValue(cast rounded);
+							else FloatValue(cast rounded);
 				};
-			case TNativeScalar(name): var integer = integerDefaultLiteral(initializer); integer == null || !NativeTypeDescriptor.integerDefaultFits('native-scalar:$name',
+			case TNativeScalar(name): var integer = integerDefaultLiteral(initializer);
+				integer == null || !NativeTypeDescriptor.integerDefaultFits('native-scalar:$name',
 					integer) ? null : IntValue(integer);
 			case TInt:
 				switch initializer {
@@ -895,7 +962,8 @@ class ExpressionTyper {
 					case Negate(IntegerLiteral(value, _), _): IntValue(-value);
 					case _: null;
 				};
-			case TFloat: var value = floatDefaultLiteral(initializer); value == null || !Math.isFinite(value) ? null : FloatValue(value);
+			case TFloat: var value = floatDefaultLiteral(initializer);
+				value == null || !Math.isFinite(value) ? null : FloatValue(value);
 			case TString:
 				switch initializer {
 					case StringLiteral(value, _): StringValue(value);
@@ -937,22 +1005,22 @@ class ExpressionTyper {
 			case TNullable(element) | TArray(element) | TIterator(element): [{name: "element", type: element}];
 			case TMap(key, value): [{name: "key", type: key}, {name: "value", type: value}];
 			case TFunction(parameters, result):
-				[
-					for (index in 0...parameters.length)
-						{name: 'parameter$index', type: parameters[index]}
-				].concat([{name: "result", type: result}]);
+				[for (index in 0...parameters.length)
+					{
+						name:'parameter$index', type:parameters[index]
+					}].concat([{name: "result", type: result}]);
 			case TAbstract(_, parameters, representation):
-				var values = [
-					for (index in 0...parameters.length)
-						{name: 'argument$index', type: parameters[index]}
-				];
+				var values = [for (index in 0...parameters.length)
+					{
+						name:'argument$index', type:parameters[index]
+					}];
 				if (parameters.length == 0 && SemanticSignature.type(representation) != SemanticSignature.type(type))
 					values.push({name: "representation", type: representation});
 				values;
-			case TInstance(_, _, parameters): [
-					for (index in 0...parameters.length)
-						{name: 'argument$index', type: parameters[index]}
-				];
+			case TInstance(_, _, parameters): [for (index in 0...parameters.length)
+				{
+						name:'argument$index', type:parameters[index]
+					}];
 			case _: [];
 		};
 		return [
@@ -1000,7 +1068,8 @@ class ExpressionTyper {
 
 	static function descriptorHasDirectAccess(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
 		return switch access {
-			case compiler.syntax.Ast.AstFieldAccess.GetAccess | compiler.syntax.Ast.AstFieldAccess.SetAccess | compiler.syntax.Ast.AstFieldAccess.NeverAccess: false;
+			case compiler.syntax.Ast.AstFieldAccess.GetAccess | compiler.syntax.Ast.AstFieldAccess.SetAccess
+				| compiler.syntax.Ast.AstFieldAccess.NeverAccess: false;
 			case _: true;
 		};
 
@@ -1022,8 +1091,10 @@ class ExpressionTyper {
 			objectField("defaultValue", descriptorDefaultExpression(field.defaultValue, span), span),
 			objectField("annotations", stringArray(field.annotations, span), span),
 			objectField("annotationValues", annotationValuesExpression(field.annotationValues, span), span),
-			objectField("fields", ArrayLiteral([for (child in field.fields) descriptorFieldExpression(child, span)], span), span),
-			objectField("arguments", ArrayLiteral([for (argument in field.arguments) descriptorFieldExpression(argument, span)], span), span),
+			objectField("fields",
+				ArrayLiteral([for (child in field.fields) descriptorFieldExpression(child, span)], span), span),
+			objectField("arguments", ArrayLiteral([for (argument in field.arguments) descriptorFieldExpression(argument,
+				span)], span), span),
 			objectField("recursive", BoolLiteral(field.recursive, span), span)
 		], span);
 
@@ -1045,9 +1116,9 @@ class ExpressionTyper {
 								objectField("type", StringLiteral(argument.type, span), span),
 								objectField("value", annotationConstantExpression(argument.value, span), span)
 							], span)
-					], span), span)
-				], span)
-		], span);
+						], span), span)
+					], span)
+				], span);
 
 	static function annotationConstantExpression(value:NativeTypeAnnotationValue, span:SourceSpan):AstExpression
 		return switch value {
@@ -1061,7 +1132,8 @@ class ExpressionTyper {
 	static function objectField(name:String, value:AstExpression, span:SourceSpan):AstObjectField
 		return {name: name, value: value, span: span};
 
-	public function typeObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+	public function typeObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression {
 		var objectExpected = objectLiteralExpectation(expectedType),
 			expectedFields = anonymousFields(objectExpected),
 			seen:Map<String, Bool> = [],
@@ -1073,7 +1145,8 @@ class ExpressionTyper {
 			var expectedField = anonymousField(expectedFields, field.name);
 			if (expectedFields != null && expectedField == null)
 				fail("E1002", 'Unexpected object field "${field.name}"', field.span);
-			var value = typeExpressionCallback(field.value, scope, expectedField == null ? null : expectedField.type, false);
+			var value = typeExpressionCallback(field.value, scope, expectedField == null ? null : expectedField.type,
+				false);
 			if (expectedField != null)
 				value = coerce(value, expectedField.type, 'object field "${field.name}"', "E1002");
 			else if ((switch (value.type) {
@@ -1089,15 +1162,13 @@ class ExpressionTyper {
 					fail("E1002", 'Missing object field "${field.name}"', span);
 		var resolvedResult:CompilerType;
 		if (objectExpected == null) {
-			var inferred:Array<AnonymousField> = [
-				for (field in typedFields)
-					{
-						name: field.name,
-						type: field.value.type,
-						optional: false,
-						isFinal: false
-					}
-			];
+			var inferred:Array<AnonymousField> = [for (field in typedFields)
+				{
+					name:field.name,
+						type:field.value.type,
+						optional:false,
+						isFinal:false
+				}];
 			inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
 			resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);
 		} else
@@ -1111,7 +1182,8 @@ class ExpressionTyper {
 		if (isDynamic)
 			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
 		anonymousTypeRegistry.register(resolvedResult);
-		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic), isDynamic ? TDynamic : resolvedResult, span);
+		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic),
+			isDynamic ? TDynamic : resolvedResult, span);
 	}
 
 	static function isDynamicExpectation(type:Null<CompilerType>):Bool
@@ -1121,7 +1193,8 @@ class ExpressionTyper {
 			default: false;
 		};
 
-	public function typeArrayLiteral(values:Array<AstExpression>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+	public function typeArrayLiteral(values:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression {
 		var expectedMap = mapExpectation(expectedType);
 		if (values.length == 0 && expectedMap != null) {
 			DeclaredConformance.requestHashableMapKey(session, expectedMap.key, span);
@@ -1146,11 +1219,13 @@ class ExpressionTyper {
 				default: false;
 			}) || dynamicContext ? null : elementType, false);
 			if (expectedElement == null) {
-				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType, typedValue.type);
+				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType,
+					typedValue.type);
 				if (joined == null && dynamicContext)
 					joined = TDynamic;
 				if (joined == null)
-					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array", typedValue.span);
+					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array",
+						typedValue.span);
 				// Dynamic permits mixed storage, but homogeneous arrays keep their exact element contract.
 				elementType = joined == null ? TDynamic : joined;
 			}
@@ -1163,7 +1238,8 @@ class ExpressionTyper {
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
 	}
 
-	public function typeMapLiteral(entries:Array<AstMapEntry>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+	public function typeMapLiteral(entries:Array<AstMapEntry>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression {
 		var expected = mapExpectation(expectedType),
 			keyType = expected == null ? null : expected.key,
 			valueType = expected == null ? null : expected.value,
@@ -1183,7 +1259,10 @@ class ExpressionTyper {
 				valueType = resolvedValue;
 			} else
 				resolvedValue = valueType;
-			typedEntries.push({key: coerce(key, resolvedKey, "map key", "E1003"), value: coerce(value, resolvedValue, "map value", "E1003")});
+			typedEntries.push({
+				key: coerce(key, resolvedKey, "map key", "E1003"),
+				value: coerce(value, resolvedValue, "map value", "E1003")
+			});
 		}
 		if (keyType == null || valueType == null)
 			fail("E1003", "An empty map literal requires an expected key and value type", span);
@@ -1201,10 +1280,12 @@ class ExpressionTyper {
 	 * `expression` evaluated with `element` bound to `held[index]`. A nested `for` is flattened into its parent, so the
 	 * binding goes into each part of that inner comprehension rather than around it, which would hide it.
 	 */
-	static function bindElement(element:String, held:String, index:String, expression:AstExpression, span:SourceSpan):AstExpression
+	static function bindElement(element:String, held:String, index:String, expression:AstExpression,
+			span:SourceSpan):AstExpression
 		return switch expression {
 			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
-				ArrayComprehension(innerKey, innerValue, bindElement(element, held, index, iterable, span), bindOptional(element, held, index, filter, span),
+				ArrayComprehension(innerKey, innerValue, bindElement(element, held, index, iterable, span),
+					bindOptional(element, held, index, filter, span),
 					bindElement(element, held, index, value, span), true, innerSpan);
 			default:
 				BlockExpression([
@@ -1212,10 +1293,12 @@ class ExpressionTyper {
 				], expression, span);
 		};
 
-	static function bindOptional(element:String, held:String, index:String, expression:Null<AstExpression>, span:SourceSpan):Null<AstExpression>
+	static function bindOptional(element:String, held:String, index:String, expression:Null<AstExpression>,
+			span:SourceSpan):Null<AstExpression>
 		return expression == null ? null : bindElement(element, held, index, expression, span);
 
-	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, value:AstExpression,
+	public function typeArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression,
+			predicate:Null<AstExpression>, value:AstExpression,
 			flattened:Bool, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedIterable = unwrapNullable(typeExpressionCallback(iterable, scope, null, false));
 		if (IterationProtocol.structuralIterator(typedIterable.type))
@@ -1232,15 +1315,19 @@ class ExpressionTyper {
 			loopScope = new Scope(scope),
 			keyType:Null<CompilerType> = null,
 			bodyExpressions = predicate == null ? [value] : [predicate, value];
-		LoopFlow.enterExpressions(session, scope, bodyExpressions, span, valueName == null ? [keyName] : [keyName, valueName]);
+		LoopFlow.enterExpressions(session, scope, bodyExpressions, span, valueName == null ? [keyName] : [
+			keyName,
+			valueName
+		]);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {
 					// `[for (index => element in array) ...]` loops over the indices and binds each element.
 					var held = "__haxeon_array" + span.start;
 					return typeExpressionCallback(BlockExpression([VarDeclaration(held, null, iterable, span)],
-						ArrayComprehension(keyName, null, indexRange(held, span), bindOptional(valueName, held, keyName, predicate, span),
-							bindElement(valueName, held, keyName, value, span), flattened, span),
+						ArrayComprehension(keyName, null, indexRange(held, span),
+						bindOptional(valueName, held, keyName, predicate, span),
+						bindElement(valueName, held, keyName, value, span), flattened, span),
 						span),
 						scope, expectedType, false);
 				}
@@ -1259,11 +1346,14 @@ class ExpressionTyper {
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				keyType = valueName == null ? mapValue : key;
 				if (valueName == null)
-					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
+					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue),
+						span);
 			default:
-				keyType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type, false) : null;
+				keyType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type,
+					false) : null;
 				if (keyType == null)
-					fail("E1014", "Array comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
+					fail("E1014",
+						"Array comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (keyType == null)
 			throw "Array comprehension item type was not resolved";
@@ -1278,26 +1368,30 @@ class ExpressionTyper {
 		if (map == null)
 			map = valueName == null ? FlowAnalysis.mapKeySource(originalIterable, scope) : null;
 		if (valueName == null
-			&& !AstScan.mayRemoveMapEntries([for (expression in bodyExpressions) Expression(expression, span)], keyName)) {
+			&& !AstScan.mayRemoveMapEntries([for (expression in bodyExpressions) Expression(expression, span)],
+			keyName)) {
 			if (map != null) {
 				var key = new TypedExpression(TLocal(loopScope.requireId(keyName)), keyType, span),
 					entryPath = FlowAnalysis.mapEntryPath(map, key);
 				if (entryPath != null)
 					switch map.type {
 						case TMap(_, value):
-							loopScope.refineExpression(entryPath, value, FlowAnalysis.entryFactsSurviveCalls(scope, map));
+							loopScope.refineExpression(entryPath, value,
+								FlowAnalysis.entryFactsSurviveCalls(scope, map));
 						default:
 					}
 			}
 		}
-		var typedCondition = predicate == null ? null : plain(typeExpressionCallback(predicate, loopScope, TBool, false));
+		var typedCondition = predicate == null
+			? null : plain(typeExpressionCallback(predicate, loopScope, TBool, false));
 		if (typedCondition != null && (switch (typedCondition.type) {
 			case TBool: false;
 			default: true;
 		}))
 			fail("E1004", "Array comprehension condition must be Bool", span);
 		// The value is only computed where the condition holds, so it sees what the condition proves.
-		var valueScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
+		var valueScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition,
+			true, session.isPureCall);
 		// A flattened inner comprehension (`for (x in a) for (y in b) v`) builds the arrays whose items become this array's, so
 		// it is typed to the same element type: an inner array of a subtype would be read back as the wider one.
 		var expectedElement = arrayElementExpectation(expectedType),
@@ -1305,37 +1399,43 @@ class ExpressionTyper {
 				case ArrayComprehension(_, _, _, _, _, true, _): true;
 				case _: false;
 			}) ? TArray(expectedElement) : expectedElement,
-			typedValue = typeExpressionCallback(value, valueScope, valueExpectation, false),
-			flattenedElement = switch typedValue.expression {
-				case TArrayComprehension(_, _, _, _, _, true): arrayElementType(typedValue.type, span);
-				case _: switch value {
-						case ArrayComprehension(_, _, _, _, _, true, _): arrayElementType(typedValue.type, span);
-						case _: null;
-					}
-			},
-			elementType = expectedElement == null ? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
+				typedValue = typeExpressionCallback(value, valueScope, valueExpectation, false),
+				flattenedElement = switch typedValue.expression {
+			case TArrayComprehension(_, _, _, _, _, true): arrayElementType(typedValue.type, span);
+			case _: switch value {
+					case ArrayComprehension(_, _, _, _, _, true, _): arrayElementType(typedValue.type, span);
+					case _: null;
+				}
+		},
+			elementType = expectedElement == null
+			? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
 		if (flattenedElement == null)
 			typedValue = coerce(typedValue, elementType, "array comprehension value", "E1003");
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var resultType = TArray(elementType),
 				resultName = "$comprehension-result:" + span.start;
 			var result = new TypedExpression(TLocal(resultName), resultType, span);
-			var append:TypedStatement = TExpression(new TypedExpression(TCollectionCall(result, "push", [typedValue]), TInt, span), span);
+			var append:TypedStatement = TExpression(new TypedExpression(TCollectionCall(result, "push", [typedValue]),
+				TInt, span), span);
 			if (flattenedElement != null) {
 				var inner = "$comprehension-item:" + span.start;
 				append = TForIn(inner, null, typedValue, [
-					TExpression(new TypedExpression(TCollectionCall(result, "push", [new TypedExpression(TLocal(inner), elementType, span)]), TInt, span), span)
+					TExpression(new TypedExpression(TCollectionCall(result, "push",
+						[new TypedExpression(TLocal(inner), elementType, span)]), TInt, span), span)
 				], span);
 			}
-			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition, append, resultName,
+			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition, append,
+				resultName,
 				new TypedExpression(TArrayLiteral([]), resultType, span), result, span);
 		}
-		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
+		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName),
+			valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue, flattened),
 			TArray(elementType), span, false, map);
 	}
 
-	public function typeMapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, predicate:Null<AstExpression>, key:AstExpression,
+	public function typeMapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression,
+			predicate:Null<AstExpression>, key:AstExpression,
 			value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedIterable = unwrapNullable(typeExpressionCallback(iterable, scope, null, false));
 		if (IterationProtocol.structuralIterator(typedIterable.type))
@@ -1348,14 +1448,19 @@ class ExpressionTyper {
 			loopScope = new Scope(scope),
 			itemType:Null<CompilerType> = null;
 		LoopFlow.enterExpressions(session, scope, predicate == null ? [key, value] : [predicate, key, value], span,
-			valueName == null ? [keyName] : [keyName, valueName]);
+			valueName == null ? [keyName] : [
+				keyName,
+				valueName
+			]);
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {
 					var held = "__haxeon_array" + span.start;
 					return typeExpressionCallback(BlockExpression([VarDeclaration(held, null, iterable, span)],
-						MapComprehension(keyName, null, indexRange(held, span), bindOptional(valueName, held, keyName, predicate, span),
-							bindElement(valueName, held, keyName, key, span), bindElement(valueName, held, keyName, value, span), span),
+						MapComprehension(keyName, null, indexRange(held, span),
+						bindOptional(valueName, held, keyName, predicate, span),
+						bindElement(valueName, held, keyName, key, span),
+						bindElement(valueName, held, keyName, value, span), span),
 						span),
 						scope, expectedType, false);
 				}
@@ -1374,11 +1479,14 @@ class ExpressionTyper {
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				itemType = valueName == null ? mapValue : mapKey;
 				if (valueName == null)
-					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue), span);
+					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(mapValue),
+						span);
 			default:
-				itemType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type, false) : null;
+				itemType = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type,
+					false) : null;
 				if (itemType == null)
-					fail("E1014", "Map comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
+					fail("E1014",
+						"Map comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (itemType == null)
 			throw "Map comprehension item type was not resolved";
@@ -1389,14 +1497,16 @@ class ExpressionTyper {
 					loopScope.define(valueName, mapValue, span);
 				default:
 			}
-		var typedCondition = predicate == null ? null : plain(typeExpressionCallback(predicate, loopScope, TBool, false));
+		var typedCondition = predicate == null
+			? null : plain(typeExpressionCallback(predicate, loopScope, TBool, false));
 		if (typedCondition != null && (switch (typedCondition.type) {
 			case TBool: false;
 			default: true;
 		}))
 			fail("E1004", "Map comprehension condition must be Bool", span);
 		// The entry is only computed where the condition holds, so it sees what the condition proves.
-		var entryScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition, true, session.isPureCall);
+		var entryScope = typedCondition == null ? loopScope : FlowAnalysis.narrowedScope(loopScope, typedCondition,
+			true, session.isPureCall);
 		var expected = mapExpectation(expectedType),
 			typedKey = typeExpressionCallback(key, entryScope, expected == null ? null : expected.key, false),
 			typedValue = typeExpressionCallback(value, entryScope, expected == null ? null : expected.value, false),
@@ -1411,15 +1521,18 @@ class ExpressionTyper {
 			var resultType = TMap(resultKey, resultValue),
 				resultName = "$comprehension-result:" + span.start;
 			var result = new TypedExpression(TLocal(resultName), resultType, span);
-			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition, TMapAssign(result, typedKey, typedValue, span),
+			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition,
+				TMapAssign(result, typedKey, typedValue, span),
 				resultName, new TypedExpression(TMapLiteral([]), resultType, span), result, span);
 		}
-		return new TypedExpression(TMapComprehension(loopScope.requireId(keyName), valueName == null ? null : loopScope.requireId(valueName),
+		return new TypedExpression(TMapComprehension(loopScope.requireId(keyName),
+			valueName == null ? null : loopScope.requireId(valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
 			TMap(resultKey, resultValue), span);
 	}
 
-	function structuralComprehension(iterable:TypedExpression, item:String, condition:Null<TypedExpression>, append:TypedStatement, resultName:String,
+	function structuralComprehension(iterable:TypedExpression, item:String, condition:Null<TypedExpression>,
+			append:TypedStatement, resultName:String,
 			initial:TypedExpression, result:TypedExpression, span:SourceSpan):TypedExpression {
 		var held = "$comprehension-iterator:" + span.start;
 		var receiver = new TypedExpression(TLocal(held), iterable.type, span);
@@ -1434,7 +1547,8 @@ class ExpressionTyper {
 		], result), result.type, span);
 	}
 
-	public function typeRange(start:AstExpression, rangeEnd:AstExpression, span:SourceSpan, scope:Scope):TypedExpression {
+	public function typeRange(start:AstExpression, rangeEnd:AstExpression, span:SourceSpan,
+			scope:Scope):TypedExpression {
 		var typedStart = plain(typeExpressionCallback(start, scope, TInt, false)),
 			typedEnd = plain(typeExpressionCallback(rangeEnd, scope, TInt, false));
 		if ((switch (typedStart.type) {
@@ -1462,24 +1576,31 @@ class ExpressionTyper {
 				var typedKey = coerce(typedIndex, key, "map key", "E1002"),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedKey),
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
-				new TypedExpression(TMapGet(typedArray, typedKey), refined == null ? CallResolver.nullableMapValue(value) : refined, span);
-			default: typedIndex = plain(typedIndex); if ((switch typedIndex.type {
+				new TypedExpression(TMapGet(typedArray, typedKey),
+					refined == null ? CallResolver.nullableMapValue(value) : refined, span);
+			default: typedIndex = plain(typedIndex);
+				if ((switch typedIndex.type {
 					case TNever: true;
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
 					default: false;
-				})) typedIndex = coerce(typedIndex, TInt, "array index", "E1014"); if ((switch (typedIndex.type) {
+				})) typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
+				if ((switch (typedIndex.type) {
 					case TInt: false;
 					default: true;
 				})) fail("E1014", "Array index must be Int",
-					typedIndex.span); var element = arrayElementType(typedArray.type,
-					span); var access = new TypedExpression(TIndex(typedArray, typedIndex), element, span),
+					typedIndex.span);
+				var element = arrayElementType(typedArray.type,
+					span);
+				var access = new TypedExpression(TIndex(typedArray, typedIndex), element, span),
 					path = FlowAnalysis.accessPath(access),
-					refined = path == null ? null : scope.resolveExpression(path); refined == null || TypeRelations.equals(refined,
+					refined = path == null ? null : scope.resolveExpression(path);
+				refined == null || TypeRelations.equals(refined,
 					element) ? access : new TypedExpression(TCast(access), refined, span);
 		};
 	}
 
-	public function typeNewArray(element:AstType, length:AstExpression, span:SourceSpan, scope:Scope, lowerType:LowerExpressionTypeCallback):TypedExpression {
+	public function typeNewArray(element:AstType, length:AstExpression, span:SourceSpan, scope:Scope,
+			lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var typedLength = typeExpressionCallback(length, scope, null, false);
 		if ((switch (typedLength.type) {
 			case TInt: false;
@@ -1490,7 +1611,8 @@ class ExpressionTyper {
 		return new TypedExpression(TNewArray(loweredElement, typedLength), TArray(loweredElement), span);
 	}
 
-	public function typeNewMap(key:AstType, value:AstType, span:SourceSpan, lowerType:LowerExpressionTypeCallback):TypedExpression {
+	public function typeNewMap(key:AstType, value:AstType, span:SourceSpan,
+			lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var loweredKey = lowerType(key, span),
 			loweredValue = lowerType(value, span);
 		DeclaredConformance.requestHashableMapKey(session, loweredKey, span);
@@ -1499,7 +1621,8 @@ class ExpressionTyper {
 		return new TypedExpression(TNewMap(loweredKey, loweredValue), TMap(loweredKey, loweredValue), span);
 	}
 
-	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>,
+	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
+			defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var typedSubject = typeExpressionCallback(expression, scope, null, false),
 			constantType = switchRules.constantType(typedSubject.type);
@@ -1535,10 +1658,12 @@ class ExpressionTyper {
 				arrayPattern = classified.arrayPattern,
 				pattern = classified.enumPattern,
 				typedValue = isCatchAll
-					|| arrayPattern != null ? typedSubject : pattern == null ? typeCaseConstant(classified.value, typedSubject.type, constantType,
-						scope) : pattern.value;
+					|| arrayPattern != null ? typedSubject : pattern == null ? typeCaseConstant(classified.value,
+					typedSubject.type, constantType,
+					scope) : pattern.value;
 			var parsedGuard = switchCase.guard,
-				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003"),
+				typedGuard = parsedGuard == null ? null : coerce(typeExpressionCallback(parsedGuard, caseScope, null,
+					false), TBool, "switch guard", "E1003"),
 				caseIndex = typedCases.length,
 				typedResult:TypedExpression;
 			if (typedGuard != null)
@@ -1547,7 +1672,8 @@ class ExpressionTyper {
 				deferredCaseResults.set(caseIndex, {expression: switchCase.result, scope: caseScope});
 				typedResult = new TypedExpression(TUnreachable, TNever, switchCase.span);
 			} else
-				typedResult = typeExpressionCallback(switchCase.result, caseScope, expectedType == null ? resultType : expectedType, false);
+				typedResult = typeExpressionCallback(switchCase.result, caseScope,
+					expectedType == null ? resultType : expectedType, false);
 			var enumName:Null<String> = pattern == null ? null : pattern.enumName,
 				constructorIndex = pattern == null ? -1 : pattern.index,
 				predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
@@ -1555,7 +1681,8 @@ class ExpressionTyper {
 				case TNever: false;
 				default: true;
 			})) {
-				var joined = resultType == null ? typedResult.type : commonConditionalType(resultType, typedResult.type);
+				var joined = resultType == null ? typedResult.type : commonConditionalType(resultType,
+					typedResult.type);
 				if (joined == null)
 					fail("E1003", "Switch branches must have matching types", switchCase.span);
 				resultType = joined;
@@ -1567,7 +1694,8 @@ class ExpressionTyper {
 					constructorIndex = literal.index;
 				}
 			}
-			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue, predicates) : switchRules.arrayPatternKey(arrayPattern);
+			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue,
+				predicates) : switchRules.arrayPatternKey(arrayPattern);
 			if (isCatchAll)
 				seenCases.set("$catchall", true);
 			if (caseKey != null && typedGuard == null) {
@@ -1600,26 +1728,25 @@ class ExpressionTyper {
 		}
 		if (resultType == null)
 			fail("E1003", "Switch expression has no result branches", span);
-		typedCases = [
-			for (index in 0...typedCases.length) {
-				var switchCase = typedCases[index],
-					deferred = deferredCaseResults.get(index),
-					result = deferred == null ? switchCase.result : typeExpressionCallback(deferred.expression, deferred.scope, resultType, false);
-				{
-					value: switchCase.value,
-					subjectBinding: switchCase.subjectBinding,
-					arrayPattern: switchCase.arrayPattern,
-					span: switchCase.span,
-					isCatchAll: switchCase.isCatchAll,
-					guard: switchCase.guard,
-					result: branchResult(result, resultType, "switch branch"),
-					enumName: switchCase.enumName,
-					constructorIndex: switchCase.constructorIndex,
-					bindings: switchCase.bindings,
-					predicates: switchCase.predicates
-				}
+		typedCases = [for (index in 0...typedCases.length) {
+			var switchCase = typedCases[index],
+				deferred = deferredCaseResults.get(index),
+				result = deferred == null ? switchCase.result : typeExpressionCallback(deferred.expression,
+					deferred.scope, resultType, false);
+			{
+				value:switchCase.value,
+					subjectBinding:switchCase.subjectBinding,
+					arrayPattern:switchCase.arrayPattern,
+					span:switchCase.span,
+					isCatchAll:switchCase.isCatchAll,
+					guard:switchCase.guard,
+					result:branchResult(result, resultType, "switch branch"),
+					enumName:switchCase.enumName,
+					constructorIndex:switchCase.constructorIndex,
+					bindings:switchCase.bindings,
+					predicates:switchCase.predicates
 			}
-		];
+		}];
 		if (deferredDefault != null)
 			typedDefault = typeExpressionCallback(deferredDefault.expression, deferredDefault.scope, resultType, false);
 		if (typedDefault == null && !seenCases.exists("$catchall"))
@@ -1631,16 +1758,14 @@ class ExpressionTyper {
 		if (switchRules.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(switchRules.enumName(typedSubject.type)),
 				missing:Array<String> = [],
-				coverageCases:Array<TypedSwitchCoverageCase> = [
-					for (switchCase in typedCases)
-						{
-							constructorIndex: switchCase.constructorIndex,
-							subjectBinding: switchCase.subjectBinding,
-							isCatchAll: switchCase.isCatchAll,
-							guard: switchCase.guard,
-							predicates: switchCase.predicates
-						}
-				];
+				coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in typedCases)
+					{
+						constructorIndex:switchCase.constructorIndex,
+							subjectBinding:switchCase.subjectBinding,
+							isCatchAll:switchCase.isCatchAll,
+							guard:switchCase.guard,
+							predicates:switchCase.predicates
+					}];
 			if (session.enumDecls.exists(resolvedEnumName)) {
 				var enumDecl = session.enumDecls.get(resolvedEnumName);
 				for (index in 0...enumDecl.cases.length)
@@ -1663,8 +1788,10 @@ class ExpressionTyper {
 		};
 
 	/** A constant case, typed as the subject's value: `case null` alone is typed as the (nullable) subject. */
-	function typeCaseConstant(value:AstExpression, subjectType:CompilerType, constantType:Null<CompilerType>, scope:Scope):TypedExpression {
-		var type = constantType == null || compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
+	function typeCaseConstant(value:AstExpression, subjectType:CompilerType, constantType:Null<CompilerType>,
+			scope:Scope):TypedExpression {
+		var type = constantType == null
+			|| compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
 		return coerce(typeExpressionCallback(value, scope, type, false), type, "switch case", "E1019");
 	}
 
@@ -1674,8 +1801,10 @@ class ExpressionTyper {
 			default: false;
 		};
 
-	public function typeConditional(predicate:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression, span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, contextualExpressionType:ContextualExpressionTypeCallback):TypedExpression {
+	public function typeConditional(predicate:AstExpression, whenTrue:AstExpression, whenFalse:AstExpression,
+			span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>,
+			contextualExpressionType:ContextualExpressionTypeCallback):TypedExpression {
 		var typedCondition = plain(typeExpressionCallback(predicate, scope, TBool, false));
 		if (!sameType(typedCondition.type, TBool))
 			fail("E1011", "Conditional expression requires a Bool condition", span);
@@ -1692,8 +1821,8 @@ class ExpressionTyper {
 					case TNull: false;
 					default: true;
 				})
-				&& (containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse)))
-				contextualType = TNullable(contextualType);
+					&& (containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse)))
+					contextualType = TNullable(contextualType);
 		}
 		// An empty literal takes its type from the other branch, whichever side it is on.
 		var earlyFalse:Null<TypedExpression> = null;
@@ -1713,10 +1842,11 @@ class ExpressionTyper {
 				case TNull: false;
 				default: true;
 			}) && (switch (typedTrue.type) {
-				case TNever: false;
-				default: true;
-			}) ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
-			typedFalse = earlyFalse != null ? earlyFalse : typeExpressionCallback(whenFalse, falseScope, branchExpected, false),
+			case TNever: false;
+			default: true;
+		}) ? (containsNullLiteral(whenFalse) ? CompilerType.TNullable(typedTrue.type) : typedTrue.type) : expectedType,
+			typedFalse = earlyFalse != null ? earlyFalse : typeExpressionCallback(whenFalse, falseScope, branchExpected,
+			false),
 			resultType = expectedType == null ? commonConditionalType(typedTrue.type, typedFalse.type) : expectedType;
 		if (resultType == null)
 			fail("E1003", "Conditional branches must have matching types", span);
@@ -1738,7 +1868,8 @@ class ExpressionTyper {
 			default: false;
 		}))
 			return coerce(value, resultType, context, "E1003");
-		return new TypedExpression(TBlockExpression([TExpression(value, value.span)], new TypedExpression(TVoidLiteral, TVoid, value.span)), TVoid, value.span);
+		return new TypedExpression(TBlockExpression([TExpression(value, value.span)],
+			new TypedExpression(TVoidLiteral, TVoid, value.span)), TVoid, value.span);
 	}
 
 	static function isEmptyLiteral(expression:AstExpression):Bool
@@ -1748,7 +1879,8 @@ class ExpressionTyper {
 			default: false;
 		};
 
-	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
+	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>,
 			lowerType:LowerExpressionTypeCallback):TypedExpression {
 		var targetType = target == null ? expectedType : lowerType(target, span);
 		if (targetType == null)
@@ -1771,27 +1903,28 @@ class ExpressionTyper {
 	function coerceCastNull(value:TypedExpression, expected:CompilerType):TypedExpression {
 		return switch value.expression {
 			case TBlockExpression(statements, result):
-				new TypedExpression(TBlockExpression(statements, coerceCastNull(result, expected)), expected, value.span);
+				new TypedExpression(TBlockExpression(statements, coerceCastNull(result, expected)), expected,
+					value.span);
 			case TConditional(condition, whenTrue, whenFalse):
-				new TypedExpression(TConditional(condition, coerceCastNull(whenTrue, expected), coerceCastNull(whenFalse, expected)), expected, value.span);
+				new TypedExpression(TConditional(condition, coerceCastNull(whenTrue, expected),
+					coerceCastNull(whenFalse, expected)), expected, value.span);
 			case TSwitchExpression(subject, cases, defaultExpression):
-				var converted:Array<TypedSwitchExpressionCase> = [
-					for (item in cases)
-						{
-							value: item.value,
-							subjectBinding: item.subjectBinding,
-							arrayPattern: item.arrayPattern,
-							span: item.span,
-							isCatchAll: item.isCatchAll,
-							guard: item.guard,
-							result: coerceCastNull(item.result, expected),
-							enumName: item.enumName,
-							constructorIndex: item.constructorIndex,
-							bindings: item.bindings,
-							predicates: item.predicates
-						}
-				];
-				new TypedExpression(TSwitchExpression(subject, converted, defaultExpression == null ? null : coerceCastNull(defaultExpression, expected)),
+				var converted:Array<TypedSwitchExpressionCase> = [for (item in cases)
+					{
+						value:item.value,
+							subjectBinding:item.subjectBinding,
+							arrayPattern:item.arrayPattern,
+							span:item.span,
+							isCatchAll:item.isCatchAll,
+							guard:item.guard,
+							result:coerceCastNull(item.result, expected),
+							enumName:item.enumName,
+							constructorIndex:item.constructorIndex,
+							bindings:item.bindings,
+							predicates:item.predicates
+					}];
+				new TypedExpression(TSwitchExpression(subject, converted,
+					defaultExpression == null ? null : coerceCastNull(defaultExpression, expected)),
 					expected, value.span);
 			default: coerce(value, expected, "cast", "E1003");
 		};
@@ -1817,7 +1950,8 @@ class ExpressionTyper {
 		return new TypedExpression(TCall("haxeon.DynamicOps." + name, boxed), result, span);
 	}
 
-	public function negate(value:AstExpression, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+	public function negate(value:AstExpression, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):TypedExpression {
 		var typedValue = typeExpressionCallback(value, scope, (switch (expectedType) {
 			case TInt64: true;
 			default: false;
@@ -1899,7 +2033,8 @@ class ExpressionTyper {
 			default:
 		}
 		return switch typedTarget.expression {
-			case TField(object, name): session.representation.resolveField(object.type, name, typedTarget.span).semantic;
+			case TField(object, name): session.representation.resolveField(object.type, name,
+				typedTarget.span).semantic;
 			default: typedTarget.type;
 		};
 	}
@@ -1918,7 +2053,8 @@ class ExpressionTyper {
 	 */
 	function rewrittenPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		var old = "__haxeon_incremented", // Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
-			updated = Add(Variable(old, span), delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span), span),
+			updated = Add(Variable(old, span),
+				delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span), span),
 			store = switch target {
 				case Variable(name, _): Assignment(name, updated, span);
 				case Member(object, field, _): FieldAssignment(object, field, updated, span);
@@ -1926,13 +2062,15 @@ class ExpressionTyper {
 					fail("E1018", "Postfix increment target is not assignable", span);
 					Assignment("", updated, span);
 			};
-		return typeExpressionCallback(BlockExpression([VarDeclaration(old, null, target, span), store], Variable(old, span), span), scope, null, false);
+		return typeExpressionCallback(BlockExpression([VarDeclaration(old, null, target, span), store],
+			Variable(old, span), span), scope, null, false);
 	}
 
 	public static function containsNullLiteral(expression:AstExpression):Bool
 		return switch expression {
 			case NullLiteral(_): true;
-			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue) || containsNullLiteral(whenFalse);
+			case Conditional(_, whenTrue, whenFalse, _): containsNullLiteral(whenTrue)
+				|| containsNullLiteral(whenFalse);
 			default: false;
 		};
 
@@ -2022,7 +2160,8 @@ class ExpressionTyper {
 			default: throw "ExpressionTyper.typeLiteral requires a literal expression";
 		};
 
-	public function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan, expected:Null<CompilerType>):TypedExpression {
+	public function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan,
+			expected:Null<CompilerType>):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
 		var overloaded = callResolver.typeAbstractOperator(add ? "+" : "-", [left, right], span, scope);
@@ -2063,7 +2202,8 @@ class ExpressionTyper {
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span);
-		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right), promoted.type, span);
+		return new TypedExpression(add ? TAdd(promoted.left, promoted.right) : TSub(promoted.left, promoted.right),
+			promoted.type, span);
 	}
 
 	public function logical(a:AstExpression, b:AstExpression, scope:Scope, and:Bool, span:SourceSpan):TypedExpression {
@@ -2075,7 +2215,8 @@ class ExpressionTyper {
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
 	}
 
-	public function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
+	public function numeric(a:AstExpression, b:AstExpression, scope:Scope, operation:Int,
+			span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
 		var overloaded = callResolver.typeAbstractOperator(operation == 2 ? "*" : "/", [left, right], span, scope);
@@ -2089,7 +2230,8 @@ class ExpressionTyper {
 		if (!isNumeric(left.type) || !isNumeric(right.type))
 			fail("E1010", "Arithmetic requires matching numeric operands", span);
 		var promoted = promoteNumericOperands(left, right, span, operation != 2);
-		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left, promoted.right), promoted.type, span);
+		return new TypedExpression(operation == 2 ? TMul(promoted.left, promoted.right) : TDiv(promoted.left,
+			promoted.right), promoted.type, span);
 	}
 
 	public function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
@@ -2108,20 +2250,35 @@ class ExpressionTyper {
 		var promoted = promoteNumericOperands(left, right, span);
 		return sameType(promoted.type, TInt)
 			|| sameType(promoted.type,
-				TInt64) ? new TypedExpression(TMod(promoted.left, promoted.right), promoted.type,
-				span) : new TypedExpression(TCall("__math_fmod", [promoted.left, promoted.right]), TFloat, span);
+			TInt64) ? new TypedExpression(TMod(promoted.left, promoted.right), promoted.type,
+			span) : new TypedExpression(TCall("__math_fmod", [
+				promoted.left,
+				promoted.right
+			]), TFloat, span);
 	}
 
-	public function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan):TypedExpression {
+	public function bitwise(a:AstExpression, b:AstExpression, scope:Scope, operation:Int,
+			span:SourceSpan):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, null, false);
-		var overloaded = callResolver.typeAbstractOperator(["&", "^", "|", "<<", ">>", ">>>"][operation], [left, right], span, scope);
+		var overloaded = callResolver.typeAbstractOperator(["&", "^", "|", "<<", ">>", ">>>"][operation], [left, right],
+			span, scope);
 		if (overloaded != null)
 			return overloaded;
 
 		left = plain(left);
 		right = plain(right);
-		var dynamicResult = dynamicOperation(["bitAnd", "bitXor", "bitOr", "shiftLeft", "shiftRight", "unsignedShiftRight"][operation], [left, right], TInt,
+		var dynamicResult = dynamicOperation([
+			"bitAnd",
+			"bitXor",
+			"bitOr",
+			"shiftLeft",
+			"shiftRight",
+			"unsignedShiftRight"
+		][operation], [
+			left,
+			right
+		], TInt,
 			span);
 		if (dynamicResult != null)
 			return dynamicResult;
@@ -2144,7 +2301,8 @@ class ExpressionTyper {
 			return new TypedExpression(shift, left.type, span);
 		}
 
-		if ((!sameType(left.type, TInt) && !sameType(left.type, TInt64)) || (!sameType(right.type, TInt) && !sameType(right.type, TInt64)))
+		if ((!sameType(left.type, TInt) && !sameType(left.type, TInt64))
+			|| (!sameType(right.type, TInt) && !sameType(right.type, TInt64)))
 			fail("E1010", "Bitwise operators require integer operands", span);
 		var operandType = sameType(left.type, TInt64) || sameType(right.type, TInt64) ? TInt64 : TInt;
 		left = coerce(left, operandType, "bitwise operand", "E1010");
@@ -2158,7 +2316,8 @@ class ExpressionTyper {
 		return new TypedExpression(expression, operandType, span);
 	}
 
-	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan, ?symbol:String,
+	public function comparison(a:AstExpression, b:AstExpression, scope:Scope, operation:Int, span:SourceSpan,
+			?symbol:String,
 			reversed:Bool = false):TypedExpression {
 		var left = typeExpressionCallback(a, scope, null, false),
 			right = typeExpressionCallback(b, scope, left.type, false);
@@ -2175,18 +2334,22 @@ class ExpressionTyper {
 	 * constructor. Its implicit default throws: a value outside the declared set, such as a native code newer than the
 	 * binding, fails at the switch instead of reaching an arm that does not belong to it.
 	 */
-	function exhaustiveEnumAbstractDefault(subject:CompilerType, seenCases:Map<String, Bool>, span:SourceSpan):Null<TypedExpression> {
+	function exhaustiveEnumAbstractDefault(subject:CompilerType, seenCases:Map<String, Bool>,
+			span:SourceSpan):Null<TypedExpression> {
 		var values = switchRules.closedEnumAbstractValues(subject);
 		if (values == null)
 			return null;
 		var missing = [for (value in values) if (!seenCases.exists(value.key)) value.name];
 		if (missing.length > 0)
 			fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
-		var message = new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(subject)} value'), TString, span);
+		var message =
+			new TypedExpression(TStringLiteral('Unmatched ${compiler.semantic.SemanticSignature.display(subject)} value'),
+			TString, span);
 		return new TypedExpression(TThrowExpression(message), TNever, span);
 	}
 
-	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool, ?scope:Scope):TypedExpression {
+	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool,
+			?scope:Scope):TypedExpression {
 		if (operation == 2) {
 			var test = constructorComparison(left, right, span, scope);
 			if (test != null)
@@ -2225,7 +2388,8 @@ class ExpressionTyper {
 				if (!DeclaredConformance.has(session, type, "Equatable"))
 					fail("E1025", 'Enum "$name" does not conform to Equatable', comparison.span);
 				EnumEqualityGenerator.request(session, type, session.currentContext.name, comparison.span);
-				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(type), [left, right]), TBool, comparison.span);
+				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(type), [left, right]), TBool,
+					comparison.span);
 			default:
 				return comparison;
 		}
@@ -2237,7 +2401,8 @@ class ExpressionTyper {
 	 * counts by what it is known to hold, not how it is written: a constructor, or a local never reassigned after being
 	 * initialized with one. Null for any other comparison; enums without arguments anywhere already compare that way.
 	 */
-	function constructorComparison(left:TypedExpression, right:TypedExpression, span:SourceSpan, scope:Null<Scope>):Null<TypedExpression> {
+	function constructorComparison(left:TypedExpression, right:TypedExpression, span:SourceSpan,
+			scope:Null<Scope>):Null<TypedExpression> {
 		var literal = knownConstructor(right, scope), other = left;
 		if (literal < 0) {
 			literal = knownConstructor(left, scope);
@@ -2258,7 +2423,8 @@ class ExpressionTyper {
 	/** Whether `value` is the constructor at `index`; a null value is none, so a nullable one is read once and checked first. */
 	function constructorTest(value:TypedExpression, index:Int, span:SourceSpan):TypedExpression {
 		function indexIs(subject:TypedExpression):TypedExpression
-			return new TypedExpression(TEqual(new TypedExpression(TEnumIndex(subject), TInt, span), new TypedExpression(TIntLiteral(index), TInt, span)),
+			return new TypedExpression(TEqual(new TypedExpression(TEnumIndex(subject), TInt, span),
+				new TypedExpression(TIntLiteral(index), TInt, span)),
 				TBool, span);
 		var element = switch value.type {
 			case TNullable(inner): inner;
@@ -2272,7 +2438,8 @@ class ExpressionTyper {
 		}
 		var absent = compareOperands(held, new TypedExpression(TNullLiteral, TNull, span), 2, span, false),
 			present = new TypedExpression(TNot(absent), TBool, span),
-			test = new TypedExpression(TAnd(present, indexIs(new TypedExpression(held.expression, element, span))), TBool, span);
+			test = new TypedExpression(TAnd(present, indexIs(new TypedExpression(held.expression, element, span))),
+				TBool, span);
 		return statements.length == 0 ? test : new TypedExpression(TBlockExpression(statements, test), TBool, span);
 	}
 
@@ -2309,7 +2476,8 @@ class ExpressionTyper {
 			default: DeclaredConformance.usesEquality(session, type);
 		};
 
-	function compareOperands(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+	function compareOperands(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan,
+			reversed:Bool):TypedExpression {
 		if (operation == 2 && TypeRelations.equals(left.type, right.type)) {
 			// A plain abstract without an `==` overload compares as its representation.
 			var leftValue = DeclaredConformance.abstractEqualityOperand(session, left),
@@ -2324,7 +2492,9 @@ class ExpressionTyper {
 					default: operand.type;
 				};
 				if (session.relations.isStruct(valueType) && !DeclaredConformance.supportsEquality(session, valueType))
-					fail("E1025", 'Struct "${compiler.semantic.SemanticSignature.display(valueType)}" does not conform to Equatable', span);
+					fail("E1025",
+						'Struct "${compiler.semantic.SemanticSignature.display(valueType)}" does not conform to Equatable',
+						span);
 			}
 		if (operation != 2 && sameType(left.type, TString) && sameType(right.type, TString)) {
 			// Compare content in source operand order; reversing the numeric result
@@ -2346,17 +2516,17 @@ class ExpressionTyper {
 				case TNull: false;
 				default: true;
 			})
-			&& !TypeRelations.isReference(right.type)) || (sameType(right.type, TNull)
+				&& !TypeRelations.isReference(right.type)) || (sameType(right.type, TNull)
 				&& !isNullable(left.type)
 				&& (switch (left.type) {
-					case TNull: false;
-					default: true;
-				})
-				&& !TypeRelations.isReference(left.type))))
+			case TNull: false;
+			default: true;
+		})
+			&& !TypeRelations.isReference(left.type))))
 			return new TypedExpression(TBoolLiteral(false), TBool, span);
 		if (operation == 2
 			&& ((sameType(left.type, TNull) && session.relations.isStruct(right.type))
-				|| (sameType(right.type, TNull) && session.relations.isStruct(left.type))))
+			|| (sameType(right.type, TNull) && session.relations.isStruct(left.type))))
 			return new TypedExpression(TBoolLiteral(false), TBool, span);
 		if (operation == 2) {
 			if (sameType(left.type, TNull) && isNullable(right.type))
@@ -2371,9 +2541,11 @@ class ExpressionTyper {
 				case TNullable(element): session.relations.isStruct(element) || usesOperatorEquality(element);
 				default: false;
 			};
-			if ((session.relations.isNullableValueClass(left.type) || declaredNullable) && !isNullOperand(left) && !isNullOperand(right)) {
+			if ((session.relations.isNullableValueClass(left.type) || declaredNullable) && !isNullOperand(left)
+				&& !isNullOperand(right)) {
 				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool,
+					span);
 			}
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		}
@@ -2381,13 +2553,14 @@ class ExpressionTyper {
 			var nullableElement:Null<CompilerType> = switch left.type {
 				case TNullable(element)
 					if ((session.relations.isStruct(element) || usesOperatorEquality(element))
-						&& TypeRelations.equals(element, right.type)): element;
+					&& TypeRelations.equals(element, right.type)): element;
 				default: null;
 			};
 			if (nullableElement != null) {
 				right = coerce(right, left.type, "equality comparison", "E1011");
 				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool,
+					span);
 			}
 			nullableElement = switch right.type {
 				case TNullable(element) if ((session.relations.isStruct(element) || usesOperatorEquality(element))
@@ -2397,7 +2570,8 @@ class ExpressionTyper {
 			if (nullableElement != null) {
 				left = coerce(left, right.type, "equality comparison", "E1011");
 				ValueEqualityGenerator.request(session, right.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(right.type), [left, right]), TBool, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(right.type), [left, right]), TBool,
+					span);
 			}
 		}
 		if (operation == 2 && sameType(left.type, TString) && sameType(right.type, TString))
@@ -2428,7 +2602,7 @@ class ExpressionTyper {
 		}
 		if (operation == 2
 			&& ((sameType(left.type, TNull) && TypeRelations.isReference(right.type))
-				|| (sameType(right.type, TNull) && TypeRelations.isReference(left.type)))) {
+			|| (sameType(right.type, TNull) && TypeRelations.isReference(left.type)))) {
 			if (sameType(left.type, TNull))
 				left = new TypedExpression(TNullableWrap(left), right.type, left.span);
 			else
@@ -2454,7 +2628,8 @@ class ExpressionTyper {
 		}
 		if (operation == 2 && sameType(left.type, right.type))
 			switch left.type {
-				case TDynamic, TNativeAbstract(_), TAbstract(_, _, _), TInstance(Class, _, []), TInstance(Interface, _, []), TInstance(Enum, _, _),
+				case TDynamic, TNativeAbstract(_), TAbstract(_, _, _), TInstance(Class, _, []),
+					TInstance(Interface, _, []), TInstance(Enum, _, _),
 					TNullable(_), TArray(_), TIterator(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
@@ -2522,11 +2697,12 @@ class ExpressionTyper {
 	public function isNumeric(type:CompilerType):Bool
 		return numericRepresentation(type) != null;
 
-	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, span:SourceSpan, forceFloat:Bool = false):{
-		left:TypedExpression,
-		right:TypedExpression,
-		type:CompilerType
-	} {
+	function promoteNumericOperands(left:TypedExpression, right:TypedExpression, span:SourceSpan,
+			forceFloat:Bool = false): {
+				left: TypedExpression,
+				right: TypedExpression,
+				type: CompilerType
+			} {
 		var leftNumeric = numericRepresentation(left.type),
 			rightNumeric = numericRepresentation(right.type);
 		if (leftNumeric == null || rightNumeric == null)
@@ -2536,7 +2712,11 @@ class ExpressionTyper {
 		if (hasInt64 && hasFloat)
 			fail("E1010", "Int64 and Float arithmetic requires an explicit conversion", span);
 		var type = hasInt64 ? TInt64 : forceFloat || hasFloat ? TFloat : TInt;
-		return {left: coerce(left, type, "numeric operand", "E1010"), right: coerce(right, type, "numeric operand", "E1010"), type: type};
+		return {
+			left: coerce(left, type, "numeric operand", "E1010"),
+			right: coerce(right, type, "numeric operand", "E1010"),
+			type: type
+		};
 	}
 
 	function isStringConvertible(type:CompilerType):Bool

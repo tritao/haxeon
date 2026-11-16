@@ -42,14 +42,13 @@ class UiHostFrameState {
 	}
 
 	public function canRender():Bool {
-		return surfaceAvailable && logicalWidth > 0.0 && logicalHeight > 0.0 &&
-			framebufferWidth > 0 && framebufferHeight > 0;
+		return surfaceAvailable && logicalWidth > 0.0 && logicalHeight > 0.0 && framebufferWidth > 0
+			&& framebufferHeight > 0;
 	}
 
 	/** Elapsed time since the last frame, capped so a stall does not jump an animation. */
 	public function nextDelta(timeSeconds:Float, maxSeconds:Float = 0.1):Float {
-		var delta = previousTime < 0.0 ? 0.0 :
-			Math.max(0.0, Math.min(maxSeconds, timeSeconds - previousTime));
+		var delta = previousTime < 0.0 ? 0.0 : Math.max(0.0, Math.min(maxSeconds, timeSeconds - previousTime));
 		previousTime = timeSeconds;
 		return delta;
 	}

@@ -12,7 +12,8 @@ import compiler.types.TypedAst.TypedProgram;
 	reused keeps it, and what was deleted drops it. Every module's diagnostics then hold its errors and all its warnings.
 **/
 class TypingWarnings {
-	public static function publish(context:CompilationContext, entryModule:String, names:Array<String>, typed:TypedProgram,
+	public static function publish(context:CompilationContext, entryModule:String, names:Array<String>,
+			typed:TypedProgram,
 			rollbackModules:Map<String, ModuleState>):Void {
 		var moduleByPath:Map<String, String> = [];
 		for (name in names) {
@@ -40,13 +41,17 @@ class TypingWarnings {
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields)
 				if (field.initializer != null)
-					record(moduleByPath.get(field.span.file.path), classDecl.name + ".__init." + field.name, field.warnings);
+					record(moduleByPath.get(field.span.file.path), classDecl.name + ".__init." + field.name,
+						field.warnings);
 		for (name in names) {
 			var state = context.modules.get(name);
 			if (state == null)
 				continue;
-			var stored = state.typingWarnings, byKey = typedNow.get(name), next:Map<String, Array<Diagnostic>> = [],
-				declared = declarations(state, entryModule), pruned = false;
+			var stored = state.typingWarnings,
+				byKey = typedNow.get(name),
+				next:Map<String, Array<Diagnostic>> = [],
+				declared = declarations(state, entryModule),
+				pruned = false;
 			for (key => warnings in stored)
 				if (declared.exists(declarationOf(key)))
 					next.set(key, warnings);
@@ -60,7 +65,8 @@ class TypingWarnings {
 			// Nothing typed again or deleted, and the diagnostics already list these warnings: leave the module as it is.
 			if (byKey == null
 				&& !pruned
-				&& sameWarnings([for (diagnostic in state.diagnostics) if (isWarning(diagnostic)) diagnostic], warnings))
+				&& sameWarnings([for (diagnostic in state.diagnostics) if (isWarning(diagnostic)) diagnostic],
+				warnings))
 				continue;
 			state = context.writableState(name, rollbackModules);
 			state.typingWarnings = next;

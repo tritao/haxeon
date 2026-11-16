@@ -37,8 +37,9 @@ class EnumTagEqualityMain {
 							case EnumEquality(_), Provider(_, _): true;
 							default: false;
 						})):
-							if (arguments.length == 2 && compiler.ir.IrVerifier.sameType(arguments[0].type, EnumTag("Wide")))
-								throw "Typed tag equality retained a helper call";
+							if (arguments.length == 2
+							&& compiler.ir.IrVerifier.sameType(arguments[0].type, EnumTag("Wide")))
+							throw "Typed tag equality retained a helper call";
 						case Equal(_, left, right) if (fn.name == "Compare.same"):
 							if (!compiler.ir.IrVerifier.sameType(left.type, EnumTag("Wide"))
 								|| !compiler.ir.IrVerifier.sameType(right.type, left.type))
@@ -52,7 +53,11 @@ class EnumTagEqualityMain {
 					}
 		if (scalarComparisons != 1 || new IrInterpreter(program).run("main") != 42)
 			throw "Tag equality changed its scalar shape or nullable/field semantics";
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, developmentMetadata: false, debugNames: true})
+		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+			target: HashLink,
+			developmentMetadata: false,
+			debugNames: true
+		})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				developmentMetadata: false,
@@ -61,12 +66,18 @@ class EnumTagEqualityMain {
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null)
 			temp = "out";
-		var path = temp + "/tag-equality-" + target + inlining + "-" + Std.random(0x7fffffff) + (target == "hl" ? ".hl" : ".wasm");
+		var path = temp + "/tag-equality-" + target + inlining + "-" + Std.random(0x7fffffff)
+			+ (target == "hl" ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var js =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42||!e["Compare.same"](32,32)||e["Compare.same"](1,32))throw Error("tag equality");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", js, path]);
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"-e",
+				js,
+				path
+			]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();

@@ -49,13 +49,13 @@ function main():Int {
 	if (!compareMethods(callback, callback) || compareMethods(callback, adder.add))
 		return 6;
 	// Bool and Int share a Wasm i32 representation, but a varargs adapter must box the requested type.
-	var booleanClosure:(Int, Bool)->Void = WasmGcVarargsCheck.booleanArgument;
+	var booleanClosure:(Int, Bool) -> Void = WasmGcVarargsCheck.booleanArgument;
 	var dynamicVarargs:Dynamic = makeVarargs(arguments -> {
 		var argument:Int = arguments[1];
 		WasmGcVarargsCheck.observed = argument;
 		return null;
 	});
-	var integerClosure:(Int, Int)->Void = cast dynamicVarargs;
+	var integerClosure:(Int, Int) -> Void = cast dynamicVarargs;
 	integerClosure(1, 42);
 	if (WasmGcVarargsCheck.observed != 42) return 7;
 	var boolVarargs:Dynamic = makeVarargs(arguments -> {
@@ -63,11 +63,11 @@ function main():Int {
 		WasmGcVarargsCheck.observed = enabled ? 9 : -9;
 		return null;
 	});
-	var boolAdapter:(Int, Bool)->Void = cast boolVarargs;
+	var boolAdapter:(Int, Bool) -> Void = cast boolVarargs;
 	boolAdapter(1, true);
 	if (WasmGcVarargsCheck.observed != 9) return 9;
 	var typedSource:Dynamic = booleanClosure;
-	var integerView:(Int, Int)->Void = cast typedSource;
+	var integerView:(Int, Int) -> Void = cast typedSource;
 	if (compareMethods(booleanClosure, integerView)) return 10;
 	integerView(8, 2);
 	if (WasmGcVarargsCheck.observed != 8) return 11;

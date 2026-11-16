@@ -7,7 +7,8 @@ import runtime.Runtime;
 class TryExitPatchMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		var program = (early:Int, late:Int) -> "class Gate { public static var open:Bool = true; public static function pick():Int { try { if (open) return "
+		var program = (early:Int,
+			late:Int) -> "class Gate { public static var open:Bool = true; public static function pick():Int { try { if (open) return "
 			+ early
 			+ "; open = true; } catch (error:Dynamic) { return 0; } return "
 			+ late
@@ -22,7 +23,8 @@ class TryExitPatchMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw "A body edit did not produce a compatible patch";
-		Runtime.patchSet(live, new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		// The first run left Gate.open true again, so the patched body takes the early exit and then the late one.
 		if (Runtime.callInt(live, mainId) != 304)
 			throw "The patched function kept its old body";

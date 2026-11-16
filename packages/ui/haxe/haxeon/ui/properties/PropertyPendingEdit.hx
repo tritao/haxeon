@@ -9,14 +9,19 @@ class PropertyPendingEdit {
 	final listeners:Array<PropertyEditResult->Void> = [];
 	public function new() {}
 	public function onComplete(listener:PropertyEditResult->Void):Void {
-		if (result == null) listeners.push(listener); else listener(result);
+		if (result == null) listeners.push(listener);
+		else listener(result);
 	}
 	public function resolve(next:PropertyEditResult):Void {
 		if (next == null) throw "A terminal property result is required";
-		switch next { case Pending(_): throw "Completion cannot be pending"; default: }
+		switch next {
+			case Pending(_): throw "Completion cannot be pending";
+			default:
+		}
 		if (result != null) throw "Property edit already completed";
 		result = next;
-		var callbacks = listeners.copy(); listeners.resize(0);
+		var callbacks = listeners.copy();
+		listeners.resize(0);
 		for (callback in callbacks) callback(next);
 	}
 }

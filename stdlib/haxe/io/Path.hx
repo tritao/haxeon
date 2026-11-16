@@ -71,7 +71,8 @@ class Path {
 
 	public static function isAbsolute(path:String):Bool
 		return path.length > 0
-			&& (path.charCodeAt(0) == "/".code || path.charCodeAt(0) == "\\".code || path.length > 2 && path.charCodeAt(1) == ":".code);
+			&& (path.charCodeAt(0) == "/".code || path.charCodeAt(0) == "\\".code || path.length > 2
+			&& path.charCodeAt(1) == ":".code);
 
 	static function lastSeparator(path:String):Int {
 		var slash = path.lastIndexOf("/"), backslash = path.lastIndexOf("\\");

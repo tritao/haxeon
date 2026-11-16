@@ -18,7 +18,8 @@ import compiler.types.analysis.BindingWalker.BindingKind;
  * lambda variable, is a different map.
  */
 class MapEscapeAnalysis extends BindingWalker {
-	public static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator", "copy"];
+	public static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator",
+		"copy"];
 
 	final fresh:Map<String, Bool> = [];
 	final escaped:Map<String, Bool> = [];
@@ -34,8 +35,10 @@ class MapEscapeAnalysis extends BindingWalker {
 		return new MapPrivacy(privateDeclarations, analysis.operandUses);
 	}
 
-	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
-		if (kind == BindingKind.Local && initializer != null && (createsMap(initializer) || isEmptyLiteralOfMap(type, initializer)))
+	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
+			initializer:Null<AstExpression>):Void {
+		if (kind == BindingKind.Local && initializer != null
+			&& (createsMap(initializer) || isEmptyLiteralOfMap(type, initializer)))
 			fresh.set(declaration, true);
 	}
 
@@ -52,7 +55,8 @@ class MapEscapeAnalysis extends BindingWalker {
 	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
 		if (declaration == null)
 			return;
-		if (method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0 || (insideLambda() && removesEntries(method)))
+		if (method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0
+			|| (insideLambda() && removesEntries(method)))
 			escaped.set(declaration, true);
 		else
 			operandUses.set(BindingWalker.key(local, span), true);

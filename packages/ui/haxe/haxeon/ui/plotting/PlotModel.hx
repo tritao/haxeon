@@ -57,8 +57,8 @@ class PlotModel implements Observable {
 			throw "Plot X range must be increasing";
 		if (minimumY != null && maximumY != null && minimumY >= maximumY)
 			throw "Plot Y range must be increasing";
-		if (this.minimumX == minimumX && this.maximumX == maximumX &&
-			this.minimumY == minimumY && this.maximumY == maximumY)
+		if (this.minimumX == minimumX && this.maximumX == maximumX && this.minimumY == minimumY
+			&& this.maximumY == maximumY)
 			return;
 		this.minimumX = minimumX;
 		this.maximumX = maximumX;
@@ -103,12 +103,12 @@ class PlotModel implements Observable {
 		if (lowX == null || highX == null || lowY == null || highY == null)
 			return null;
 		if (deriveLowX && deriveHighX && lowX == highX) {
-				lowX -= 0.5;
-				highX += 0.5;
+			lowX -= 0.5;
+			highX += 0.5;
 		}
 		if (deriveLowY && deriveHighY && lowY == highY) {
-				lowY -= 0.5;
-				highY += 0.5;
+			lowY -= 0.5;
+			highY += 0.5;
 		}
 		return new PlotRange(lowX, highX, lowY, highY);
 	}

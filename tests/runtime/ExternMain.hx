@@ -4,8 +4,10 @@ import compiler.Compiler;
 class ExternMain {
 	static function main():Void {
 		var compiler = new Compiler();
-		compiler.update("Clock.hx", 'extern abstract Clock(Float) from Float { @:hlNative("std", "sys_time") public function shifted():Float; }');
-		compiler.update("Main.hx", "import Clock; function read(value:Clock):Float return value.shifted(); function main():Int return 42;");
+		compiler.update("Clock.hx",
+			'extern abstract Clock(Float) from Float { @:hlNative("std", "sys_time") public function shifted():Float; }');
+		compiler.update("Main.hx",
+			"import Clock; function read(value:Clock):Float return value.shifted(); function main():Int return 42;");
 		var result = compiler.compile("Main");
 		var found = false;
 		for (native in result.module.natives)
@@ -32,7 +34,8 @@ class ExternMain {
 			throw "Extern class native library inheritance or method override was not preserved";
 		var bytesCompiler = new Compiler();
 		bytesCompiler.update("hl/Bytes.hx", sys.io.File.getContent("stdlib/hl/Bytes.hx"));
-		bytesCompiler.update("Main.hx", "function identity(value:hl.Bytes):hl.Bytes return value; function main():Int return 42;");
+		bytesCompiler.update("Main.hx",
+			"function identity(value:hl.Bytes):hl.Bytes return value; function main():Int return 42;");
 		bytesCompiler.compile("Main");
 		var handleCompiler = new Compiler();
 		handleCompiler.update("hl/Abstract.hx", sys.io.File.getContent("stdlib/hl/Abstract.hx"));

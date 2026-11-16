@@ -46,7 +46,7 @@ private class ValueArrayFunctionIndex {
 			default: null;
 		};
 
-	function summary(fn:IrFunction):{source:IrFunction, elements:Map<String, Bool>, dynamicViews:Bool} {
+	function summary(fn:IrFunction): {source: IrFunction, elements: Map<String, Bool>, dynamicViews: Bool} {
 		var known = types.get(fn.name);
 		if (known != null && known.source == fn)
 			return known;
@@ -105,7 +105,8 @@ class IrValueArrayProgramRewrite {
 	/** Discover every concrete value array in the assembled program before generating any helpers. */
 	public static function rewriteAll(program:IrProgram, pointerBits:Int, target:IrValueLaneTarget):Void {
 		var values:Map<String, Bool> = [for (object in program.objects) if (object.isValue) object.name => true],
-			inlineEnums:Map<String, Bool> = [for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
+			inlineEnums:Map<String, Bool> =
+				[for (entry in program.enums) if (entry.inlineStorage != null) entry.name => true],
 			elements:Map<String, IrType> = [];
 		var seenTags:Map<String, Bool> = [],
 			seenEnums:Map<String, Bool> = [],
@@ -184,7 +185,8 @@ class IrValueArrayProgramRewrite {
 	}
 
 	public static function rewrite(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget):Void {
-		rewriteIndexed(program, element, pointerBits, target, new ValueArrayFunctionIndex([element]), nextSlotNamespace(program));
+		rewriteIndexed(program, element, pointerBits, target, new ValueArrayFunctionIndex([element]),
+			nextSlotNamespace(program));
 	}
 
 	static function nextSlotNamespace(program:IrProgram):Int {
@@ -199,7 +201,8 @@ class IrValueArrayProgramRewrite {
 		return next;
 	}
 
-	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget, index:ValueArrayFunctionIndex,
+	static function rewriteIndexed(program:IrProgram, element:IrType, pointerBits:Int, target:IrValueLaneTarget,
+			index:ValueArrayFunctionIndex,
 			slotNamespace:Int):Void {
 		switch element {
 			case EnumTag(name):
@@ -234,7 +237,8 @@ class IrValueArrayProgramRewrite {
 				current = IrValueArrayRangeRewrite.rewrite(current, element, factory);
 				var roots = IrValueArrayPlaceRewrite.roots(current, element);
 				if (roots.keys().hasNext())
-					current = IrValueArrayPlaceRewrite.rewrite(current, element, objects, factory.helpers, methods, roots);
+					current = IrValueArrayPlaceRewrite.rewrite(current, element, objects, factory.helpers, methods,
+						roots);
 				if (optional != null)
 					current = IrValueArrayOptionalRewrite.rewrite(current, element, optional);
 				current = IrValueArrayElementRewrite.rewrite(current, element, elements, tagUnboxes);
@@ -420,11 +424,10 @@ class IrValueArrayProgramRewrite {
 					case SafeCast(out, input) if (Type.enumEq(out.type, Array(element)) && (switch (input.type) {
 						case Dyn: true;
 						default: false;
-					})):
-						var dynamicView = new IrValue(next++, "$value-array-dynamic-view", Array(Dyn));
-						target.instructions.push(new Located(SafeCast(dynamicView, input), located.provenance));
-						target.instructions.push(new Located(Call(out, retype, [dynamicView]), located.provenance));
-						changed = true;
+					})): var dynamicView = new IrValue(next++, "$value-array-dynamic-view", Array(Dyn));
+					target.instructions.push(new Located(SafeCast(dynamicView, input), located.provenance));
+					target.instructions.push(new Located(Call(out, retype, [dynamicView]), located.provenance));
+					changed = true;
 					default:
 						target.instructions.push(located);
 				}
@@ -454,9 +457,12 @@ class IrValueArrayProgramRewrite {
 			case Call(_, name, args) if (args.length > 0 && (switch args[0].type {
 				case Array(Dyn): true;
 				default: false;
-			}) && (name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref" || name == "__array_reverse_ref"
-				|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref" || name == "__array_splice_ref"
-				|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref" || name == "__array_index_of_ref"
+			}) && (name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref"
+				|| name == "__array_reverse_ref"
+				|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref"
+				|| name == "__array_splice_ref"
+				|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref"
+				|| name == "__array_index_of_ref"
 				|| name == "__array_remove_ref")): 3;
 			default: 0;
 		};
@@ -496,7 +502,8 @@ class IrValueArrayProgramRewrite {
 										next = output.id + 1;
 								}
 						}
-						Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any", [array, index, value]);
+						Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any",
+							[array, index, value]);
 					case Call(out, name, args): Call(out, name.substr(0, name.length - 3) + "any", args);
 					default: throw "Dynamic array classifier disagrees with its rewrite";
 				};
@@ -521,7 +528,8 @@ class IrValueArrayProgramRewrite {
 			for (located in block.instructions) {
 				var instruction = switch located.value {
 					case Call(out, name, arguments)
-						if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref") && IrVerifier.sameType(out.type, arrayType)):
+						if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref")
+						&& IrVerifier.sameType(out.type, arrayType)):
 						if (arguments.length != 1)
 							throw "Invalid array factory arguments";
 						changed = true;

@@ -6,8 +6,14 @@ class ArgumentOwner {
 struct ArgumentValue {
 	public var number:Int;
 	public var owner:ArgumentOwner;
-	public function new(number:Int, owner:ArgumentOwner) { this.number = number; this.owner = owner; }
-	public function bump():Int { number += 1; return number; }
+	public function new(number:Int, owner:ArgumentOwner) {
+		this.number = number;
+		this.owner = owner;
+	}
+	public function bump():Int {
+		number += 1;
+		return number;
+	}
 }
 
 class ArgumentHolder {
@@ -65,7 +71,9 @@ function main():Int {
 	#if !wasm
 	for (count in [8, 1024]) {
 		hl.Gc.censusStart(0);
-		var before = hl.Gc.totalAllocated(), result = ValueArgumentCensus.perform(count), bytes = hl.Gc.totalAllocated() - before;
+		var before = hl.Gc.totalAllocated(),
+			result = ValueArgumentCensus.perform(count),
+			bytes = hl.Gc.totalAllocated() - before;
 		hl.Gc.censusStop();
 		if (result != 42 * count || bytes != 0) return 7;
 	}

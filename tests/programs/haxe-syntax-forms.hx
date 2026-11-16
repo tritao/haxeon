@@ -2,7 +2,8 @@
 // next `catch` without a semicolon, an arrow function whose body is a loop, and `{}` as an empty object in `c ? a : b`.
 function quotedFields():Int {
 	var value = {version: 1, "package": {name: "pkg"}, "default": 2};
-	return Reflect.field(value, "package").name == "pkg" && Reflect.field(value, "default") == 2 && value.version == 1 ? 0 : 1;
+	return Reflect.field(value, "package").name == "pkg" && Reflect.field(value, "default") == 2
+		&& value.version == 1 ? 0 : 1;
 }
 
 function untypedCatch():Int {

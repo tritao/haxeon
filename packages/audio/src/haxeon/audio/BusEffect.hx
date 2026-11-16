@@ -25,13 +25,13 @@ class BusEffect {
 		return value;
 	}
 
-    /** Latest applied linear duck gain; read without altering the audio envelope. */
-    public function duckGain():Float {
-        ensureLive();
-        var result=NativeKitAudio.nk_audio_bus_effect_get_duck_gain(value);
-        AudioResult.check(result.status,"audio.busEffect.duckGain");
-        return result.out_gain;
-    }
+	/** Latest applied linear duck gain; read without altering the audio envelope. */
+	public function duckGain():Float {
+		ensureLive();
+		var result = NativeKitAudio.nk_audio_bus_effect_get_duck_gain(value);
+		AudioResult.check(result.status, "audio.busEffect.duckGain");
+		return result.out_gain;
+	}
 
 	public function type():EffectType {
 		ensureLive();
@@ -40,13 +40,14 @@ class BusEffect {
 		return result.out_type;
 	}
 
-    /** Native clock binding; tempo continues to follow music during UI stalls. */
-    public function followTransportTempo(engine:DspEngine, beats:Float = 0.5):Void {
-        ensureLive();
-        if (engine == null) throw BindingError.invalidArgument("BusEffect.followTransportTempo", "Transport tempo requires a DSP engine");
-        AudioResult.check(NativeKitAudio.nk_audio_bus_effect_bind_dsp_tempo(value,
-            engine.nativeHandle(), beats), "audio.busEffect.followTransportTempo");
-    }
+	/** Native clock binding; tempo continues to follow music during UI stalls. */
+	public function followTransportTempo(engine:DspEngine, beats:Float = 0.5):Void {
+		ensureLive();
+		if (engine == null) throw BindingError.invalidArgument("BusEffect.followTransportTempo",
+			"Transport tempo requires a DSP engine");
+		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_bind_dsp_tempo(value,
+			engine.nativeHandle(), beats), "audio.busEffect.followTransportTempo");
+	}
 
 	public function setEnabled(enabled:Bool):Void {
 		ensureLive();
@@ -78,8 +79,7 @@ class BusEffect {
 
 	public function setLowPass(cutoffFrequencyHz:Float, order:Int):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_bus_effect_set_low_pass(value, cutoffFrequencyHz, order),
+		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_low_pass(value, cutoffFrequencyHz, order),
 			"audio.busEffect.setLowPass");
 	}
 
@@ -92,8 +92,7 @@ class BusEffect {
 
 	public function setHighPass(cutoffFrequencyHz:Float, order:Int):Void {
 		ensureLive();
-		AudioResult.check(
-			NativeKitAudio.nk_audio_bus_effect_set_high_pass(value, cutoffFrequencyHz, order),
+		AudioResult.check(NativeKitAudio.nk_audio_bus_effect_set_high_pass(value, cutoffFrequencyHz, order),
 			"audio.busEffect.setHighPass");
 	}
 

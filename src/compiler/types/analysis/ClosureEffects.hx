@@ -39,7 +39,8 @@ class ClosureEffects extends BindingWalker {
 	 * `scope` is where the closure's free names resolve: the scope it was created in. `visited` holds the local
 	 * functions already analysed, so a recursive one is analysed once.
 	 */
-	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>, scope:Scope, ?visited:Array<LocalFunction>,
+	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>, scope:Scope,
+			?visited:Array<LocalFunction>,
 			?isPureCall:String->Bool):ClosureEffects {
 		var effects = new ClosureEffects(scope, visited == null ? [] : visited, isPureCall);
 		effects.lambdaDepth = 1;
@@ -54,7 +55,8 @@ class ClosureEffects extends BindingWalker {
 		this.isPureCall = isPureCall;
 	}
 
-	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>):Void {
+	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
+			initializer:Null<AstExpression>):Void {
 		switch initializer {
 			case Lambda(_, _, _, _):
 				lambdaDeclarations.set(declaration, true);
@@ -66,8 +68,8 @@ class ClosureEffects extends BindingWalker {
 		if (declaration == null)
 			writes.set(BindingWalker.rootOf(name), true);
 		else if (lambdaDeclarations.exists(declaration))
-			// A local function assigned a different function value is no longer the lambda it was declared with.
-			unknown = true;
+		// A local function assigned a different function value is no longer the lambda it was declared with.
+		unknown = true;
 	}
 
 	/** A call of a plain name: a local function value, or a top-level function that may invoke an escaped closure. */
@@ -87,7 +89,8 @@ class ClosureEffects extends BindingWalker {
 
 	/** `local.member(...)` is a method call or a call of a function stored in a field; either may run a closure. */
 	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
-		if (declaration != null || scope.resolve(local) != null || isPureCall != null && !isPureCall(local + "." + method))
+		if (declaration != null || scope.resolve(local) != null || isPureCall != null
+			&& !isPureCall(local + "." + method))
 			unknown = true;
 	}
 
@@ -129,7 +132,8 @@ class ClosureEffects extends BindingWalker {
 		if (visited.indexOf(known) >= 0)
 			return;
 		visited.push(known);
-		var inner = ClosureEffects.of(known.arguments, known.body, known.declaredIn == null ? scope : known.declaredIn, visited, isPureCall);
+		var inner = ClosureEffects.of(known.arguments, known.body, known.declaredIn == null ? scope : known.declaredIn,
+			visited, isPureCall);
 		for (written in inner.writes.keys())
 			writes.set(written, true);
 		if (inner.unknown)

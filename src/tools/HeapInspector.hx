@@ -68,7 +68,8 @@ class HeapInspector {
 		])
 			if (!FileSystem.exists(file) || FileSystem.isDirectory(file))
 				throw 'Heap inspection input is missing: $file';
-		var reportPath = report == null ? Path.join([Path.directory(dump), "heap-report.txt"]) : FileSystem.fullPath(report);
+		var reportPath = report == null
+			? Path.join([Path.directory(dump), "heap-report.txt"]) : FileSystem.fullPath(report);
 		var scratch = Path.join([
 			Sys.getEnv("TMPDIR") == null ? "/tmp" : Sys.getEnv("TMPDIR"),
 			"haxeon-hlmem-" + Std.random(0x7fffffff)
@@ -86,9 +87,19 @@ class HeapInspector {
 		return status;
 	}
 
-	static function inspect(haxe:String, hl:String, hlmem:String, format:String, home:String, analyzer:String, bytecode:String, dump:String,
+	static function inspect(haxe:String, hl:String, hlmem:String, format:String, home:String, analyzer:String,
+			bytecode:String, dump:String,
 			reportPath:String):Int {
-		var compile = build.execution.ProcessRunner.run(haxe, ["-cp", hlmem, "-cp", format, "-main", "hlmem.Main", "-hl", analyzer], home, new Map());
+		var compile = build.execution.ProcessRunner.run(haxe, [
+			"-cp",
+			hlmem,
+			"-cp",
+			format,
+			"-main",
+			"hlmem.Main",
+			"-hl",
+			analyzer
+		], home, new Map());
 		if (compile != 0)
 			return compile;
 		var process = new Process(hl, [analyzer, bytecode, dump, "--no-color", "--args", "stats", "types", "quit"]);
@@ -119,7 +130,8 @@ class HeapInspector {
 		if (artifacts == null)
 			throw "Capture manifest has no artifacts";
 		var relative:Dynamic = Reflect.field(artifacts, name);
-		if (!Std.isOfType(relative, String) || relative == "" || Path.isAbsolute(relative) || relative.indexOf("..") >= 0)
+		if (!Std.isOfType(relative, String) || relative == "" || Path.isAbsolute(relative)
+			|| relative.indexOf("..") >= 0)
 			throw 'Capture manifest has no valid $name artifact';
 		return Path.join([directory, relative]);
 	}

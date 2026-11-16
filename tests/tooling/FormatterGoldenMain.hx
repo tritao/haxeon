@@ -17,7 +17,8 @@ class FormatterGoldenMain {
 			// A `stable.hx` case is already formatted in the default style (tabs, 120 columns): formatting it must change nothing.
 			var stablePath = Path.join([directoryPath, "stable.hx"]);
 			if (FileSystem.exists(stablePath)) {
-				var source = File.getContent(stablePath), formatted = Formatter.format(source, ProjectFormat.standard());
+				var source = File.getContent(stablePath),
+					formatted = Formatter.format(source, ProjectFormat.standard());
 				if (formatted != source)
 					throw 'Stable formatter case "$directory" changed:\n$formatted';
 				count++;

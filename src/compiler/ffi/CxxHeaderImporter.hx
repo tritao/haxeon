@@ -37,9 +37,12 @@ private typedef CxxSelectionClosure = {
 
 /** Imports the supported C++ source semantics and immediately lowers them to HXI. */
 class CxxHeaderImporter {
-	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++", ?library:String,
-			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>, standard:String = "c++20", ?defines:Array<String>,
-			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false, cxxThunks:Bool = false,
+	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang++",
+			?library:String,
+			?interfaceName:String, ?dependencies:Array<String>, ?excludedHeaders:Array<String>,
+			standard:String = "c++20", ?defines:Array<String>,
+			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
+			cxxThunks:Bool = false,
 			?selectedDeclarations:Array<String>, ?cxxOwnership:Map<String, String>):CxxImportResult {
 		var frontend = ClangFrontend.run({
 			header: header,
@@ -60,11 +63,13 @@ class CxxHeaderImporter {
 		if (excludedHeaders != null)
 			for (excludedHeader in excludedHeaders)
 				excluded.push(ClangAstTools.pathKey(FileSystem.fullPath(excludedHeader)));
-		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts, selectedDeclarations, cxxOwnership);
+		var builder = new CxxAstBuilder(sourcePath, roots, excluded, frontend.layouts, frontend.vtableLayouts,
+			selectedDeclarations, cxxOwnership);
 		builder.visit(frontend.ast, [], null, sourcePath);
 		var model = builder.finish(target);
 		CxxSubsetValidator.throwIfInvalid(model, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
-		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes, virtualDispatch, cxxThunks, cxxOwnership);
+		var hxi = CxxAbiLowerer.lower(model, target, library, interfaceName, dependencies, trivialValues, lifetimes,
+			virtualDispatch, cxxThunks, cxxOwnership);
 		return {
 			model: model,
 			hxi: hxi,
@@ -90,8 +95,10 @@ private class CxxAstBuilder {
 	final selectedDeclarations:Null<Array<String>>;
 	final cxxOwnership:Null<Map<String, String>>;
 
-	public function new(sourcePath:String, roots:Array<String>, excluded:Array<String>, layouts:Map<String, RecordLayout>,
-			vtableLayouts:Map<String, VtableLayout>, selectedDeclarations:Null<Array<String>>, ?cxxOwnership:Map<String, String>) {
+	public function new(sourcePath:String, roots:Array<String>, excluded:Array<String>,
+			layouts:Map<String, RecordLayout>,
+			vtableLayouts:Map<String, VtableLayout>, selectedDeclarations:Null<Array<String>>,
+			?cxxOwnership:Map<String, String>) {
 		this.sourcePath = sourcePath;
 		this.roots = roots;
 		this.excluded = excluded;
@@ -107,7 +114,8 @@ private class CxxAstBuilder {
 		currentFile = ClangAstTools.updateFile(node, currentFile);
 		var kind:String = ClangAstTools.field(node, "kind"),
 			name:String = ClangAstTools.field(node, "name"),
-			user = ClangAstTools.isUserDeclaration(node, roots, currentFile) && excluded.indexOf(ClangAstTools.pathKey(currentFile)) < 0;
+			user = ClangAstTools.isUserDeclaration(node, roots, currentFile)
+				&& excluded.indexOf(ClangAstTools.pathKey(currentFile)) < 0;
 		switch kind {
 			case "TranslationUnitDecl" | "LinkageSpecDecl" | "ExternCContextDecl":
 				for (child in ClangAstTools.children(node))
@@ -151,8 +159,8 @@ private class CxxAstBuilder {
 					&& name.length != 0
 					&& ClangAstTools.field(node, "isImplicit") != true
 					&& (user
-						&& ClangAstTools.isSpelledInRoots(node, roots, currentFile)
-						|| explicitlySelected(qualify(name, namespaces)))) {
+					&& ClangAstTools.isSpelledInRoots(node, roots, currentFile)
+					|| explicitlySelected(qualify(name, namespaces)))) {
 					var alias = makeAlias(node, qualify(name, namespaces), namespaces, owner);
 					if (!aliasNames.exists(alias.qualifiedName)) {
 						aliasNames.set(alias.qualifiedName, true);
@@ -188,7 +196,8 @@ private class CxxAstBuilder {
 					missing.push(name);
 			if (missing.length > 0) {
 				missing.sort(Reflect.compare);
-				throw "CXX019 " + sourcePath + ": selected C++ declarations require unavailable type dependencies: " + missing.join(", ");
+				throw "CXX019 " + sourcePath + ": selected C++ declarations require unavailable type dependencies: "
+					+ missing.join(", ");
 			}
 			selectedRecords = [];
 			for (record in records)
@@ -220,8 +229,10 @@ private class CxxAstBuilder {
 		selectedEnums.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
 		selectedAliases.sort(function(left, right) return Reflect.compare(left.qualifiedName, right.qualifiedName));
 		selectedFunctions.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
-		var source = new SourceFile(sourcePath, FileSystem.exists(sourcePath) ? sys.io.File.getContent(sourcePath) : "");
-		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), selectedRecords, selectedEnums, selectedAliases, selectedFunctions);
+		var source = new SourceFile(sourcePath,
+			FileSystem.exists(sourcePath) ? sys.io.File.getContent(sourcePath) : "");
+		return new CxxModel(target, sourcePath, source.span(0, source.bytes.length), selectedRecords, selectedEnums,
+			selectedAliases, selectedFunctions);
 	}
 
 	function explicitlySelected(name:String):Bool {
@@ -272,7 +283,8 @@ private class CxxAstBuilder {
 			changed = false;
 			for (alias in aliases)
 				if (declarations.exists(alias.qualifiedName))
-					changed = markType(alias.target, byValue.exists(alias.qualifiedName), declarations, types, byValue) || changed;
+					changed = markType(alias.target, byValue.exists(alias.qualifiedName), declarations, types, byValue)
+						|| changed;
 			for (enumModel in enums)
 				if (declarations.exists(enumModel.qualifiedName))
 					changed = markType(enumModel.underlying, true, declarations, types, byValue) || changed;
@@ -302,7 +314,8 @@ private class CxxAstBuilder {
 		return {declarations: declarations, types: types, byValue: byValue};
 	}
 
-	function markName(name:String, byValueRequired:Bool, declarations:Map<String, Bool>, types:Map<String, Bool>, byValue:Map<String, Bool>):Bool {
+	function markName(name:String, byValueRequired:Bool, declarations:Map<String, Bool>, types:Map<String, Bool>,
+			byValue:Map<String, Bool>):Bool {
 		var changed = false;
 		if (!declarations.exists(name)) {
 			declarations.set(name, true);
@@ -319,7 +332,8 @@ private class CxxAstBuilder {
 		return changed;
 	}
 
-	function markType(type:CxxType, byValueRequired:Bool, declarations:Map<String, Bool>, types:Map<String, Bool>, byValue:Map<String, Bool>):Bool {
+	function markType(type:CxxType, byValueRequired:Bool, declarations:Map<String, Bool>, types:Map<String, Bool>,
+			byValue:Map<String, Bool>):Bool {
 		return switch type {
 			case CxxType.CxxConst(element): markType(element, byValueRequired, declarations, types, byValue);
 			case CxxType.CxxPointer(element) | CxxType.CxxReference(element) | CxxType.CxxRValueReference(element):
@@ -350,7 +364,8 @@ private class CxxAstBuilder {
 		if (rawBases != null)
 			for (base in rawBases)
 				bases.push({
-					name: qualifyType(ClangAstTools.field(ClangAstTools.field(base, "type"), "qualType"), namespaces, qualified),
+					name: qualifyType(ClangAstTools.field(ClangAstTools.field(base, "type"), "qualType"), namespaces,
+						qualified),
 					access: stringOr(ClangAstTools.field(base, "access"), "private"),
 					isVirtual: ClangAstTools.field(base, "isVirtual") == true,
 					span: ClangAstTools.sourceSpan(node, sourcePath)
@@ -390,9 +405,12 @@ private class CxxAstBuilder {
 							method.virtualAbi = {vtableIndex: entry.index, thisAdjustment: entry.thisAdjustment};
 							break;
 						}
-		return new CxxRecord(name, qualified, tagUsed == null ? "class" : tagUsed, ClangAstTools.field(node, "completeDefinition") == true,
-			ClangAstTools.field(definitionData, "isAbstract") == true, layout == null ? 0 : layout.size, layout == null ? 0 : layout.align,
-			ClangAstTools.field(definitionData, "isStandardLayout") == true, ClangAstTools.field(definitionData, "isTriviallyCopyable") == true, hasVirtual,
+		return new CxxRecord(name, qualified, tagUsed == null ? "class" : tagUsed,
+			ClangAstTools.field(node, "completeDefinition") == true,
+			ClangAstTools.field(definitionData, "isAbstract") == true, layout == null ? 0 : layout.size,
+			layout == null ? 0 : layout.align,
+			ClangAstTools.field(definitionData, "isStandardLayout") == true,
+			ClangAstTools.field(definitionData, "isTriviallyCopyable") == true, hasVirtual,
 			bases, fields, methods, ClangAstTools.sourceSpan(node, sourcePath));
 	}
 
@@ -405,23 +423,29 @@ private class CxxAstBuilder {
 			constructor = kind == "CXXConstructorDecl",
 			destructor = kind == "CXXDestructorDecl";
 		return new CxxMethod(owner, name == null ? "" : name, owner + "::" + (name == null ? "" : name), symbol, access,
-			ClangAstTools.field(node, "storageClass") == "static", isConstMethod(qualifiedType), qualifiedType.indexOf("noexcept") >= 0,
+			ClangAstTools.field(node, "storageClass") == "static", isConstMethod(qualifiedType),
+			qualifiedType.indexOf("noexcept") >= 0,
 			ClangAstTools.field(node, "virtual") == true,
-			parameters(node, namespaces, owner), constructor || destructor ? CxxType.CxxVoid : parseType(resultType(qualifiedType), namespaces, owner),
+			parameters(node, namespaces, owner),
+			constructor || destructor ? CxxType.CxxVoid : parseType(resultType(qualifiedType), namespaces, owner),
 			ClangAstTools.sourceSpan(node, sourcePath),
 			constructor, destructor);
 	}
 
 	function makeFunction(node:Dynamic, qualified:String):CxxFunction {
-		var qualifiedType:String = stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "qualType"), "void ()");
-		return new CxxFunction(ClangAstTools.field(node, "name"), qualified, stringOr(ClangAstTools.field(node, "mangledName"), ""),
-			parameters(node, namespaceOf(qualified), null), parseType(resultType(qualifiedType), namespaceOf(qualified), null),
+		var qualifiedType:String = stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "qualType"),
+			"void ()");
+		return new CxxFunction(ClangAstTools.field(node, "name"), qualified,
+			stringOr(ClangAstTools.field(node, "mangledName"), ""),
+			parameters(node, namespaceOf(qualified), null),
+			parseType(resultType(qualifiedType), namespaceOf(qualified), null),
 			qualifiedType.indexOf("noexcept") >= 0, ClangAstTools.sourceSpan(node, sourcePath));
 	}
 
 	function makeEnum(node:Dynamic, qualified:String):CxxEnum {
 		var fixed:Dynamic = ClangAstTools.field(node, "fixedUnderlyingType"),
-			underlying = fixed == null ? CxxType.CxxPrimitive("c_int") : parseType(ClangAstTools.field(fixed, "qualType"), namespaceOf(qualified), null),
+			underlying = fixed == null ? CxxType.CxxPrimitive("c_int")
+				: parseType(ClangAstTools.field(fixed, "qualType"), namespaceOf(qualified), null),
 			values:Array<CxxEnumValue> = [];
 		for (child in ClangAstTools.children(node))
 			if (ClangAstTools.field(child, "kind") == "EnumConstantDecl")
@@ -430,13 +454,15 @@ private class CxxAstBuilder {
 					value: stringOr(constantValue(child), "0"),
 					span: ClangAstTools.sourceSpan(child, sourcePath)
 				});
-		return new CxxEnum(ClangAstTools.field(node, "name"), qualified, ClangAstTools.field(node, "scopedEnumTag") != null, underlying, values,
+		return new CxxEnum(ClangAstTools.field(node, "name"), qualified,
+			ClangAstTools.field(node, "scopedEnumTag") != null, underlying, values,
 			ClangAstTools.sourceSpan(node, sourcePath));
 	}
 
 	function makeAlias(node:Dynamic, qualified:String, namespaces:Array<String>, owner:Null<String>):CxxAlias
 		return new CxxAlias(ClangAstTools.field(node, "name"), qualified,
-			parseType(stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "qualType"), "void"), namespaces, owner),
+			parseType(stringOr(ClangAstTools.field(ClangAstTools.field(node, "type"), "qualType"), "void"), namespaces,
+			owner),
 			ClangAstTools.sourceSpan(node, sourcePath));
 
 	function parameters(node:Dynamic, namespaces:Array<String>, owner:Null<String>):Array<CxxParameter> {
@@ -467,21 +493,26 @@ private class CxxAstBuilder {
 				for (argument in functionPointer.arguments)
 					parseType(argument, namespaces, owner)
 			];
-			return CxxType.CxxFunctionPointer(parameters, parseType(functionPointer.result, namespaces, owner), functionPointer.isNoexcept);
+			return CxxType.CxxFunctionPointer(parameters, parseType(functionPointer.result, namespaces, owner),
+				functionPointer.isNoexcept);
 		}
 		if (StringTools.endsWith(value, "&&"))
-			return CxxType.CxxRValueReference(parseType(StringTools.trim(value.substring(0, value.length - 2)), namespaces, owner));
+			return CxxType.CxxRValueReference(parseType(StringTools.trim(value.substring(0, value.length - 2)),
+				namespaces, owner));
 		if (StringTools.endsWith(value, "&"))
-			return CxxType.CxxReference(parseType(StringTools.trim(value.substring(0, value.length - 1)), namespaces, owner));
+			return CxxType.CxxReference(parseType(StringTools.trim(value.substring(0, value.length - 1)), namespaces,
+				owner));
 		if (StringTools.endsWith(value, "]"))
 			return CxxType.CxxUnsupported(value, "array types are not supported");
 		if (StringTools.endsWith(value, "* const"))
 			value = StringTools.trim(value.substring(0, value.length - 6));
 		if (StringTools.endsWith(value, "*"))
-			return CxxType.CxxPointer(parseType(StringTools.trim(value.substring(0, value.length - 1)), namespaces, owner));
+			return CxxType.CxxPointer(parseType(StringTools.trim(value.substring(0, value.length - 1)), namespaces,
+				owner));
 		if (StringTools.startsWith(value, "const "))
 			return CxxType.CxxConst(parseType(StringTools.trim(value.substring(6)), namespaces, owner));
-		if (StringTools.startsWith(value, "class ") || StringTools.startsWith(value, "struct ") || StringTools.startsWith(value, "enum "))
+		if (StringTools.startsWith(value, "class ") || StringTools.startsWith(value, "struct ")
+			|| StringTools.startsWith(value, "enum "))
 			value = StringTools.trim(value.substring(value.indexOf(" ") + 1));
 		if (isStringViewName(value))
 			return CxxType.CxxStringView;
@@ -493,7 +524,8 @@ private class CxxAstBuilder {
 		if (value.indexOf("<") >= 0 || value.indexOf(">") >= 0)
 			return CxxType.CxxUnsupported(value, "dependent or template types are not supported");
 		var primitive = primitiveType(value);
-		return primitive == null ? CxxType.CxxNamed(qualifyType(value, namespaces, owner)) : CxxType.CxxPrimitive(primitive);
+		return primitive == null
+			? CxxType.CxxNamed(qualifyType(value, namespaces, owner)) : CxxType.CxxPrimitive(primitive);
 	}
 
 	static function primitiveType(value:String):Null<String> {
@@ -548,7 +580,8 @@ private class CxxAstBuilder {
 			comma = contents.indexOf(","),
 			element = comma < 0 ? contents : contents.substring(0, comma),
 			extent = comma < 0 ? "" : contents.substring(comma + 1);
-		if (extent.length != 0 && extent != "std::dynamic_extent" && extent != "18446744073709551615" && extent != "18446744073709551615UL")
+		if (extent.length != 0 && extent != "std::dynamic_extent" && extent != "18446744073709551615"
+			&& extent != "18446744073709551615UL")
 			return null;
 		return switch element {
 			case "std::byte": CxxSpanElement.CxxStdByte;
@@ -573,7 +606,8 @@ private class CxxAstBuilder {
 			desugared:String = ClangAstTools.field(type, "desugaredQualType");
 		// Preserve a named function-pointer alias such as `Callback` while still
 		// using Clang's desugared spelling for ordinary aliases and platform types.
-		if (qualified != null && (parseFunctionPointer(qualified) != null || desugared != null && parseFunctionPointer(desugared) != null))
+		if (qualified != null && (parseFunctionPointer(qualified) != null || desugared != null
+			&& parseFunctionPointer(desugared) != null))
 			return qualified;
 		return stringOr(desugared, stringOr(qualified, ""));
 	}
@@ -631,7 +665,8 @@ private class CxxAstBuilder {
 
 	static function qualify(name:String, namespaces:Array<String>):String
 		return name.indexOf("::") >= 0
-			|| namespaces.length == 0 ? StringTools.startsWith(name, "::") ? name.substring(2) : name : namespaces.join("::") + "::" + name;
+			|| namespaces.length == 0 ? StringTools.startsWith(name, "::")
+			? name.substring(2) : name : namespaces.join("::") + "::" + name;
 
 	static function qualifyType(name:String, namespaces:Array<String>, owner:Null<String>):String {
 		name = StringTools.trim(name);

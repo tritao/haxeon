@@ -72,7 +72,8 @@ class CxxThunkGenerator {
 	static function emitFunction(output:StringBuf, functionModel:CxxFunction):Void {
 		var arguments = thunkParameterDeclarations(functionModel.parameters);
 		output.add('extern "C" HAXEON_CXX_THUNK_EXPORT ${cppType(functionModel.result)} ${functionModel.thunkSymbol}(${arguments.join(", ")}) noexcept {\n');
-		emitTry(output, '${functionModel.qualifiedName}(${callArguments(functionModel.parameters)})', functionModel.result);
+		emitTry(output, '${functionModel.qualifiedName}(${callArguments(functionModel.parameters)})',
+			functionModel.result);
 		output.add("}\n\n");
 	}
 
@@ -127,7 +128,9 @@ class CxxThunkGenerator {
 		var result:Array<String> = [];
 		for (index in 0...parameters.length) {
 			var type = parameters[index].type;
-			result.push(CxxTypeTools.isStringView(type) ? 'std::string_view(arg$index, arg${index}__length)' : CxxTypeTools.isByteSpan(type) ? 'std::span<const ${spanElementType(type)}>(arg$index, arg${index}__length)' : 'arg$index');
+			result.push(CxxTypeTools.isStringView(type)
+				? 'std::string_view(arg$index, arg${index}__length)' : CxxTypeTools.isByteSpan(type)
+				? 'std::span<const ${spanElementType(type)}>(arg$index, arg${index}__length)' : 'arg$index');
 		}
 		return result.join(", ");
 	}
@@ -152,7 +155,8 @@ class CxxThunkGenerator {
 			case CxxReference(element): cppType(element) + " &";
 			case CxxRValueReference(_): throw "CXX016 cannot generate a thunk for an rvalue reference";
 			case CxxFunctionPointer(parameters, result, isNoexcept):
-				cppType(result) + " (*) (" + [for (parameter in parameters) cppType(parameter)].join(", ") + ")" + (isNoexcept ? " noexcept" : "");
+				cppType(result) + " (*) (" + [for (parameter in parameters) cppType(parameter)].join(", ") + ")"
+					+ (isNoexcept ? " noexcept" : "");
 			case CxxStringView: throw "CXX016 std::string_view is emitted through the adapter parameter expansion";
 			case CxxByteSpan(_): throw "CXX016 byte std::span is emitted through the adapter parameter expansion";
 			case CxxUnsupported(raw, reason): throw 'CXX016 cannot generate a thunk for "$raw": $reason';

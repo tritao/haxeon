@@ -23,7 +23,8 @@ typedef ProcessCaptureResult = {
 class ProcessOutputCapture {
 	public static inline final defaultDiagnosticLimit = 64 * 1024;
 
-	public static function capture(command:String, arguments:Array<String>, stderrLimit:Null<Int>, ?timeoutSeconds:Float):ProcessCaptureResult {
+	public static function capture(command:String, arguments:Array<String>, stderrLimit:Null<Int>,
+			?timeoutSeconds:Float):ProcessCaptureResult {
 		if (stderrLimit != null && stderrLimit < 0)
 			throw "Process stderr limit cannot be negative";
 		if (timeoutSeconds != null && timeoutSeconds <= 0)
@@ -103,7 +104,8 @@ class ProcessOutputCapture {
 	}
 
 	#if eval
-	static function captureSequential(command:String, arguments:Array<String>, stderrLimit:Null<Int>):ProcessCaptureResult {
+	static function captureSequential(command:String, arguments:Array<String>,
+			stderrLimit:Null<Int>):ProcessCaptureResult {
 		var process = new Process(command, arguments),
 			stdoutBytes:Null<Bytes> = null,
 			stderrResult:Null<CapturedBytes> = null,

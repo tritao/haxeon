@@ -1,9 +1,9 @@
+import haxe.io.Bytes;
 import runtime.Plugin;
 import runtime.ReloadablePlugin;
 import runtime.RuntimeDomain;
 import runtime.RuntimeDomain.RuntimeDomainStatus;
 import runtime.RuntimeStateEnvelope;
-import haxe.io.Bytes;
 
 class RuntimeDomainMain {
 	static function main():Void {
@@ -58,7 +58,10 @@ class RuntimeDomainMain {
 		domain.deactivate();
 		if (domain.active || domain.generation != 2)
 			throw "runtime domain did not deactivate cleanly";
-		var disposed = 0, owned = new RuntimeDomain("owned", function(_) disposed++), firstModule:Dynamic = {}, secondModule:Dynamic = {};
+		var disposed = 0,
+			owned = new RuntimeDomain("owned", function(_) disposed++),
+			firstModule:Dynamic = {},
+			secondModule:Dynamic = {};
 		owned.activateWithModule(new TestPlugin("owned-first", events), firstModule);
 		owned.reloadWithModule(new TestPlugin("owned-second", events), secondModule);
 		if (disposed != 1)
@@ -103,7 +106,8 @@ class RuntimeDomainMain {
 		var suffix = events.slice(events.length - 6).join(",");
 		if (!domain.active
 			|| domain.generation != 1
-			|| suffix != "restore-first.save,restore-first.deactivate,restore-candidate.activate,restore-candidate.restore,restore-candidate.deactivate,restore-first.activate")
+			|| suffix
+			!= "restore-first.save,restore-first.deactivate,restore-candidate.activate,restore-candidate.restore,restore-candidate.deactivate,restore-first.activate")
 			throw "runtime domain did not recover in order after restore failure";
 		domain.deactivate();
 	}
@@ -137,8 +141,10 @@ class RuntimeDomainMain {
 	}
 
 	static function testCandidateCleanupFailure(events:Array<String>):Void {
-		var disposed = 0, domain = new RuntimeDomain("candidate-cleanup", function(_) disposed++),
-			previous = new TestPlugin("candidate-cleanup-first", events), candidate = new TestPlugin("candidate-cleanup-second", events);
+		var disposed = 0,
+			domain = new RuntimeDomain("candidate-cleanup", function(_) disposed++),
+			previous = new TestPlugin("candidate-cleanup-first", events),
+			candidate = new TestPlugin("candidate-cleanup-second", events);
 		previous.state = "cursor:9";
 		candidate.failRestoreState = true;
 		candidate.failDeactivationCount = 1;

@@ -8,43 +8,40 @@ import haxeon.ui.core.StateStore;
 import haxeon.ui.theme.Theme;
 
 struct LifetimeProps implements Equatable {
-  public var value:Int;
-  public function new(value:Int) this.value = value;
+	public var value:Int;
+	public function new(value:Int) this.value = value;
 }
 
 /** Cached mounted text must keep its native dependency owner alive. */
 class BindingLifetimeMain {
-  static function main():Int {
-    var store = new StateStore();
-    var context = new BuildContext(store, null, null, null, Theme.light());
-    var value = new Signal<Int>(0);
-    var view = new TrackedScope(
-      "lifetime",
-      () -> new EqualChild<LifetimeProps>(
-        "stable",
-        new LifetimeProps(1),
-        (_, _) -> new BoundText("text", () -> Std.string(value.value))
-      )
-    );
-    context.beginFrame();
-    context.trackReads(() -> view.build(context));
-    store.endFrame();
-    context.beginFrame();
-    var marker = context.stateUsageMarker();
-    var root = context.trackReads(() -> view.build(context));
-    var ids = context.stateIdsUsedSince(marker);
-    store.endFrame();
-    // Retain the native owner and its resources without rebuilding the mounted body.
-    context.beginFrame();
-    context.retainStateIds(ids);
-    store.endFrame();
-    value.value = 1;
-    context.flushTextBindings(root);
-    var textMatches = false;
-    root.walk(node -> {if (node.layout.text == "1") textMatches = true;
-    });
-    var valid = value.hasFieldReaders(0) && textMatches;
-    context.dispose();
-    return valid ? 42 : 5;
-  }
+	static function main():Int {
+		var store = new StateStore();
+		var context = new BuildContext(store, null, null, null, Theme.light());
+		var value = new Signal<Int>(0);
+		var view = new TrackedScope("lifetime",
+			() -> new EqualChild<LifetimeProps>("stable",
+			new LifetimeProps(1),
+			(_, _) -> new BoundText("text", () -> Std.string(value.value))));
+		context.beginFrame();
+		context.trackReads(() -> view.build(context));
+		store.endFrame();
+		context.beginFrame();
+		var marker = context.stateUsageMarker();
+		var root = context.trackReads(() -> view.build(context));
+		var ids = context.stateIdsUsedSince(marker);
+		store.endFrame();
+		// Retain the native owner and its resources without rebuilding the mounted body.
+		context.beginFrame();
+		context.retainStateIds(ids);
+		store.endFrame();
+		value.value = 1;
+		context.flushTextBindings(root);
+		var textMatches = false;
+		root.walk(node -> {
+			if (node.layout.text == "1") textMatches = true;
+		});
+		var valid = value.hasFieldReaders(0) && textMatches;
+		context.dispose();
+		return valid ? 42 : 5;
+	}
 }

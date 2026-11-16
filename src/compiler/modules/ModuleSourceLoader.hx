@@ -161,7 +161,8 @@ class ModuleSourceLoader {
 						text = File.getContent(path);
 					if (declaresOther(text, packageName))
 						continue;
-					modules.set(moduleName, new ModuleState(moduleName, new SourceFile(path, text, root.isStandardLibrary)));
+					modules.set(moduleName,
+						new ModuleState(moduleName, new SourceFile(path, text, root.isStandardLibrary)));
 				}
 				if (result.indexOf(moduleName) < 0)
 					result.push(moduleName);
@@ -266,7 +267,11 @@ class ModuleSourceLoader {
 	public function copy():ModuleSourceLoader {
 		var result = new ModuleSourceLoader();
 		for (root in roots)
-			result.roots.push({path: root.path, packagePrefix: root.packagePrefix, isStandardLibrary: root.isStandardLibrary});
+			result.roots.push({
+				path: root.path,
+				packagePrefix: root.packagePrefix,
+				isStandardLibrary: root.isStandardLibrary
+			});
 		return result;
 	}
 

@@ -22,7 +22,8 @@ class NativeRegistry {
 	public function new(?configuration:Array<NativeDefinition>) {
 		if (configuration != null)
 			for (native in configuration)
-				registerNative(native.name, native.library, native.symbol, native.arguments, native.result, native.generatedFunctionDependencies);
+				registerNative(native.name, native.library, native.symbol, native.arguments, native.result,
+					native.generatedFunctionDependencies);
 	}
 
 	public function clone():NativeRegistry {
@@ -32,7 +33,8 @@ class NativeRegistry {
 		return result;
 	}
 
-	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
+	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>,
+			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):Void {
 		if (isReserved(name))
 			throw 'Native "$name" is reserved by the compiler runtime ABI';
@@ -44,7 +46,8 @@ class NativeRegistry {
 			symbol: symbol,
 			arguments: arguments.copy(),
 			result: result,
-			generatedFunctionDependencies: generatedFunctionDependencies == null ? null : generatedFunctionDependencies.copy()
+			generatedFunctionDependencies: generatedFunctionDependencies == null
+				? null : generatedFunctionDependencies.copy()
 		});
 	}
 
@@ -70,19 +73,18 @@ class NativeRegistry {
 	}
 
 	public function irNatives():Array<IrNative>
-		return [
-			for (name in sortedNames()) {
-				var native = requireDefinition(name);
-				{
-					name: native.name,
-					library: native.library,
-					symbol: native.symbol,
-					arguments: [for (argument in native.arguments) irType(argument)],
-					result: irType(native.result),
-					generatedFunctionDependencies: native.generatedFunctionDependencies == null ? null : native.generatedFunctionDependencies.copy()
-				};
-			}
-		];
+		return [for (name in sortedNames()) {
+			var native = requireDefinition(name);
+			{
+				name:native.name,
+					library:native.library,
+					symbol:native.symbol,
+					arguments:[for (argument in native.arguments) irType(argument)],
+					result:irType(native.result),
+					generatedFunctionDependencies:native.generatedFunctionDependencies == null
+					? null : native.generatedFunctionDependencies.copy()
+			};
+		}];
 
 	function sortedNames():Array<String> {
 		var names = [for (name in definitions.keys()) name];
@@ -103,7 +105,8 @@ class NativeRegistry {
 			symbol: native.symbol,
 			arguments: native.arguments.copy(),
 			result: native.result,
-			generatedFunctionDependencies: native.generatedFunctionDependencies == null ? null : native.generatedFunctionDependencies.copy()
+			generatedFunctionDependencies: native.generatedFunctionDependencies == null
+				? null : native.generatedFunctionDependencies.copy()
 		};
 
 	static function irType(type:CompilerType):IrType

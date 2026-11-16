@@ -4,11 +4,16 @@ class NullVirtualProbe {
 
 class NullVirtualBase {
 	public function new() {}
-	public function get():Int { NullVirtualProbe.entered++; return 7; }
+	public function get():Int {
+		NullVirtualProbe.entered++;
+		return 7;
+	}
 }
 
 class NullVirtualChild extends NullVirtualBase {
-	public function new() { super(); }
+	public function new() {
+		super();
+	}
 	override public function get():Int return 8;
 }
 

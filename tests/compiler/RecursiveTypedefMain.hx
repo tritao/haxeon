@@ -17,7 +17,8 @@ import compiler.types.TypeRelations;
  */
 class RecursiveTypedefMain {
 	static function main():Void {
-		var source = new SourceFile("Recursive.hx", "package demo;
+		var source = new SourceFile("Recursive.hx",
+			"package demo;
 typedef Tree = {name:String, children:Array<Tree>};
 typedef Chain = {value:Int, next:Null<Chain>};
 typedef Same = {name:String, children:Array<Same>};
@@ -47,7 +48,8 @@ class Marker {}
 		expect(children != null, "the recursive field is present");
 		switch children.type {
 			case CompilerType.TArray(element):
-				expect(fieldsOf(element) == treeFields, "the element type is the structure itself, sharing its field list");
+				expect(fieldsOf(element) == treeFields,
+					"the element type is the structure itself, sharing its field list");
 				expect(nameOf(element) == nameOf(tree), "and carries the same name");
 			default:
 				expect(false, "children should be an array of the structure");
@@ -60,7 +62,8 @@ class Marker {}
 
 		// A typedef that does not refer to itself is spelled from its fields, exactly as before.
 		var plain = resolve("Plain");
-		expect(nameOf(plain) == "$anon:{count:Int,name:String}", 'a plain structure keeps its structural name, got ${nameOf(plain)}');
+		expect(nameOf(plain) == "$anon:{count:Int,name:String}",
+			'a plain structure keeps its structural name, got ${nameOf(plain)}');
 		expect(!SemanticSignature.isRecursiveAnonymousName(nameOf(plain)), "a plain structure is not recursive");
 
 		// Resolving again gives the same structure.
@@ -80,7 +83,8 @@ class Marker {}
 		expect(TypeRelations.equals(tree, tree), "a recursive type equals itself");
 		expect(TypeRelations.equals(tree, resolve("Same")), "two typedefs with the same recursive shape are equal");
 		expect(TypeRelations.equals(resolve("Same"), tree), "in both directions");
-		expect(!TypeRelations.equals(tree, resolve("Different")), "a different field type makes recursive shapes differ");
+		expect(!TypeRelations.equals(tree, resolve("Different")),
+			"a different field type makes recursive shapes differ");
 		expect(!TypeRelations.equals(tree, chain), "different shapes differ");
 		expect(!TypeRelations.equals(tree, plain), "a recursive and a plain structure differ");
 
@@ -91,7 +95,8 @@ class Marker {}
 			case CompilerType.TNullable(rightType):
 				var back = field(fieldsOf(rightType), "left");
 				switch back.type {
-					case CompilerType.TNullable(leftType): expect(TypeRelations.equals(leftType, left), "following the pair round returns to Left");
+					case CompilerType.TNullable(leftType): expect(TypeRelations.equals(leftType, left),
+						"following the pair round returns to Left");
 					default: expect(false, "Right.left should be nullable");
 				}
 				expect(TypeRelations.equals(rightType, right), "Left.right is Right");
@@ -110,13 +115,15 @@ class Marker {}
 		// A generic typedef is recursive per instantiation, and instantiations stay apart.
 		var wrapInt = index.resolve(AstType.AppliedType("Wrap", [AstType.IntType])),
 			wrapFloat = index.resolve(AstType.AppliedType("Wrap", [AstType.FloatType]));
-		expect(TypeRelations.equals(wrapInt, index.resolve(AstType.AppliedType("Wrap", [AstType.IntType]))), "Wrap<Int> equals itself");
+		expect(TypeRelations.equals(wrapInt, index.resolve(AstType.AppliedType("Wrap", [AstType.IntType]))),
+			"Wrap<Int> equals itself");
 		expect(!TypeRelations.equals(wrapInt, wrapFloat), "Wrap<Int> and Wrap<Float> differ");
 		expect(nameOf(wrapInt) != nameOf(wrapFloat), "and are named apart");
 		expect(field(fieldsOf(wrapInt), "item").type == CompilerType.TInt, "the type argument is substituted");
 
 		// Everything that walks a structure must finish.
-		expect(SemanticSignature.type(CompilerType.TArray(tree)).indexOf("Array<") == 0, "spelling a type that contains a recursive one finishes");
+		expect(SemanticSignature.type(CompilerType.TArray(tree)).indexOf("Array<") == 0,
+			"spelling a type that contains a recursive one finishes");
 		expect(!NativeLayout.containsNativeLayoutType(tree), "a recursive type holds no native layout");
 
 		// Only cycles through an anonymous structure are allowed: anything else could never be expanded.

@@ -19,15 +19,13 @@ class StyleInspectionEntry {
 	/** Formats common typed values for headless logs and the interactive inspector. */
 	public function describe():String {
 		return switch name {
-			case "background" | "borderColor" | "outlineColor" | "shadowColor" | "textColor" |
-				"progressTrackColor" | "progressFillColor" | "sliderTrackColor" |
-				"sliderFillColor" | "sliderThumbColor":
+			case "background" | "borderColor" | "outlineColor" | "shadowColor" | "textColor" | "progressTrackColor"
+				| "progressFillColor" | "sliderTrackColor" | "sliderFillColor" | "sliderThumbColor":
 				var color:Null<Color> = cast value;
 				color == null ? "null" : 'rgba(${color.red}, ${color.green}, ${color.blue}, ${color.alpha})';
 			case "padding":
 				var insets:Null<Insets> = cast value;
-				insets == null ? "null" :
-					'${insets.left}, ${insets.top}, ${insets.right}, ${insets.bottom}';
+				insets == null ? "null" : '${insets.left}, ${insets.top}, ${insets.right}, ${insets.bottom}';
 			case "width" | "height":
 				var axis:Null<LayoutAxis> = cast value;
 				axis == null ? "null" : Std.string(axis.sizing) + "(" + Std.string(axis.value) + ")";

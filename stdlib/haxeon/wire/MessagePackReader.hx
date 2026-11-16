@@ -27,7 +27,8 @@ class MessagePackReader {
 	final maxBytes:Int;
 	var bufferedMarker:Null<Int>;
 
-	public function new(bytes:Bytes, ?maxContainer:Int = DEFAULT_MAX_CONTAINER, ?maxDepth:Int = DEFAULT_MAX_DEPTH, ?maxBytes:Int = DEFAULT_MAX_BYTES) {
+	public function new(bytes:Bytes, ?maxContainer:Int = DEFAULT_MAX_CONTAINER, ?maxDepth:Int = DEFAULT_MAX_DEPTH,
+			?maxBytes:Int = DEFAULT_MAX_BYTES) {
 		if (bytes == null)
 			throw new MessagePackError("MessagePack input cannot be null");
 		if (maxContainer < 0 || maxDepth < 0 || maxBytes < 0)
@@ -282,7 +283,8 @@ class MessagePackReader {
 			skipValue(depth);
 	}
 
-	function readLength(marker:Int, fixedLimit:Int, fixedBase:Int, smallTag:Int, mediumTag:Int, largeTag:Int, kind:String):Int {
+	function readLength(marker:Int, fixedLimit:Int, fixedBase:Int, smallTag:Int, mediumTag:Int, largeTag:Int,
+			kind:String):Int {
 		if (fixedBase >= 0 && marker >= fixedBase && marker <= fixedBase + fixedLimit)
 			return checkedLength(marker - fixedBase, kind);
 		if (marker == smallTag)

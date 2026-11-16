@@ -129,7 +129,8 @@ class LspProtocol {
 		if (method == null)
 			return id != null
 				&& (Reflect.hasField(request,
-					"result") || Reflect.hasField(request, "error")) ? serverResponse(id) : id == null ? [] : [error(id, -32600, "Invalid Request")];
+				"result") || Reflect.hasField(request, "error")) ? serverResponse(id) : id == null
+				? [] : [error(id, -32600, "Invalid Request")];
 		if (shutdownRequested && method != "exit")
 			return id == null ? [] : [error(id, -32600, "Server has shut down")];
 		try {
@@ -160,13 +161,16 @@ class LspProtocol {
 				case "textDocument/documentHighlight": cancellable(id, token -> documentHighlights(request, token));
 				case "textDocument/diagnostic": cancellable(id, token -> documentDiagnostic(request, token));
 				case "textDocument/semanticTokens/full": cancellable(id, token -> semanticTokens(request, token));
-				case "textDocument/semanticTokens/full/delta": cancellable(id, token -> semanticTokenDelta(request, token));
+				case "textDocument/semanticTokens/full/delta": cancellable(id,
+					token -> semanticTokenDelta(request, token));
 				case "textDocument/codeAction": cancellable(id, token -> codeActions(request, token));
 				case "textDocument/inlayHint": cancellable(id, token -> inlayHints(request, token));
-				case "textDocument/prepareCallHierarchy": cancellable(id, token -> prepareCallHierarchy(request, token));
+				case "textDocument/prepareCallHierarchy": cancellable(id,
+					token -> prepareCallHierarchy(request, token));
 				case "callHierarchy/incomingCalls": cancellable(id, token -> callHierarchyCalls(request, token, true));
 				case "callHierarchy/outgoingCalls": cancellable(id, token -> callHierarchyCalls(request, token, false));
-				case "textDocument/prepareTypeHierarchy": cancellable(id, token -> prepareTypeHierarchy(request, token));
+				case "textDocument/prepareTypeHierarchy": cancellable(id,
+					token -> prepareTypeHierarchy(request, token));
 				case "typeHierarchy/supertypes": cancellable(id, token -> typeHierarchyTypes(request, token, true));
 				case "typeHierarchy/subtypes": cancellable(id, token -> typeHierarchyTypes(request, token, false));
 				case "textDocument/foldingRange": cancellable(id, token -> foldingRanges(request, token));
@@ -200,7 +204,8 @@ class LspProtocol {
 		return exitRequested;
 
 	public function enableProfilerNotifications(emit:String->Void):Void
-		profiler.setEmitter(message -> emit(notification(Reflect.field(message, "method"), Reflect.field(message, "params"))));
+		profiler.setEmitter(message -> emit(notification(Reflect.field(message, "method"),
+			Reflect.field(message, "params"))));
 
 	public function dispose():Void
 		profiler.close();
@@ -271,7 +276,10 @@ class LspProtocol {
 		var id:Dynamic = selected == null ? null : Reflect.field(selected, "configuration");
 		if (id != null && !Std.isOfType(id, String))
 			return [
-				notification("window/showMessage", {type: 1, message: "haxeon.configuration must be a build id or configuration path"})
+				notification("window/showMessage", {
+					type: 1,
+					message: "haxeon.configuration must be a build id or configuration path"
+				})
 			];
 		if (!project.selectConfiguration(cast id))
 			return [
@@ -427,15 +435,15 @@ class LspProtocol {
 		if (deferDiagnostics)
 			for (target in targets)
 				pendingDiagnosticTargets.set(target, true);
-		else {
-			for (target in targets)
-				try
-					service.analyze(target)
-				catch (_:Dynamic) {}
-			if (generation == analysisGeneration)
-				for (message in diagnosticNotifications(generation))
-					result.push(message);
-		}
+			else {
+				for (target in targets)
+					try
+						service.analyze(target)
+					catch (_:Dynamic) {}
+				if (generation == analysisGeneration)
+					for (message in diagnosticNotifications(generation))
+						result.push(message);
+			}
 		return result;
 	}
 
@@ -560,7 +568,11 @@ class LspProtocol {
 			};
 			if (open != null)
 				Reflect.setField(params, "version", open.version);
-			pending.push({uri: uri, fingerprint: fingerprint, message: notification("textDocument/publishDiagnostics", params)});
+			pending.push({
+				uri: uri,
+				fingerprint: fingerprint,
+				message: notification("textDocument/publishDiagnostics", params)
+			});
 		}
 		if (generation != analysisGeneration)
 			return [];
@@ -578,7 +590,8 @@ class LspProtocol {
 				+ ":"
 				+ diagnostic.span.end
 				+ ":"
-				+ diagnostic.message].join("\n");
+				+ diagnostic.message
+		].join("\n");
 
 	function documentDiagnostic(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
@@ -591,7 +604,8 @@ class LspProtocol {
 		var previous:Dynamic = Reflect.field(required(request, "params"), "previousResultId");
 		if (previous != null && !Std.isOfType(previous, String))
 			throw new LspRequestError(-32602, 'Field "previousResultId" must be a string');
-		return diagnosticReport(document.uri, document.version, diagnosticContext(document.path), state.diagnostics, cast previous);
+		return diagnosticReport(document.uri, document.version, diagnosticContext(document.path), state.diagnostics,
+			cast previous);
 	}
 
 	function workspaceDiagnostic(request:Dynamic, token:CancellationToken):Dynamic {
@@ -619,7 +633,8 @@ class LspProtocol {
 			catch (_:CompileError) {} catch (_:Dynamic) {}
 		}
 		var states = [for (state in service.compiler.modules) state];
-		states.sort(function(left, right) return Reflect.compare(project.diskPath(left.source.path), project.diskPath(right.source.path)));
+		states.sort(function(left, right) return Reflect.compare(project.diskPath(left.source.path),
+			project.diskPath(right.source.path)));
 		var items:Array<Dynamic> = [];
 		for (state in states) {
 			token.check();
@@ -627,7 +642,8 @@ class LspProtocol {
 				uri = documents.uri(diskPath),
 				open = documents.forPath(diskPath),
 				version:Null<Int> = open == null ? null : open.version,
-				report:Dynamic = diagnosticReport(uri, version, diagnosticContext(diskPath), state.diagnostics, previous.get(uri));
+				report:Dynamic = diagnosticReport(uri, version, diagnosticContext(diskPath), state.diagnostics,
+					previous.get(uri));
 			Reflect.setField(report, "uri", uri);
 			Reflect.setField(report, "version", version);
 			items.push(report);
@@ -635,14 +651,17 @@ class LspProtocol {
 		return {items: items};
 	}
 
-	function diagnosticReport(uri:String, version:Null<Int>, context:String, diagnostics:Array<Diagnostic>, previous:Null<String>):Dynamic {
+	function diagnosticReport(uri:String, version:Null<Int>, context:String, diagnostics:Array<Diagnostic>,
+			previous:Null<String>):Dynamic {
 		var fingerprint = diagnosticFingerprint(diagnostics), resultId:String;
 		pullDiagnosticMutex.acquire();
 		var snapshot = pullDiagnosticSnapshots.get(uri);
-		if (snapshot != null && snapshot.context == context && snapshot.version == version && snapshot.fingerprint == fingerprint)
+		if (snapshot != null && snapshot.context == context && snapshot.version == version
+			&& snapshot.fingerprint == fingerprint)
 			resultId = snapshot.resultId;
 		else {
-			resultId = context + ":" + (version == null ? "disk" : Std.string(version)) + ":" + pullDiagnosticSequence++;
+			resultId = context + ":" + (version == null ? "disk" : Std.string(version)) + ":"
+				+ pullDiagnosticSequence++;
 			pullDiagnosticSnapshots.set(uri, {
 				context: context,
 				version: version,
@@ -651,7 +670,9 @@ class LspProtocol {
 			});
 		}
 		pullDiagnosticMutex.release();
-		return previous == resultId ? {kind: "unchanged", resultId: resultId} : {
+		return previous == resultId ? {
+			kind:"unchanged", resultId:resultId
+		} : {
 			kind: "full",
 			resultId: resultId,
 			items: [for (diagnostic in diagnostics) diagnosticJson(diagnostic)]
@@ -662,31 +683,27 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		return [
-			for (symbol in service.documentSymbols(compilerPath(document)))
-				{
-					name: symbol.name,
-					kind: symbolKind(symbol.kind),
-					detail: symbol.detail,
-					range: document.range(symbol.span.start, symbol.span.end),
-					selectionRange: document.range(symbol.span.start, symbol.span.end)
-				}
-		];
+		return [for (symbol in service.documentSymbols(compilerPath(document)))
+			{
+				name:symbol.name,
+					kind:symbolKind(symbol.kind),
+					detail:symbol.detail,
+					range:document.range(symbol.span.start, symbol.span.end),
+					selectionRange:document.range(symbol.span.start, symbol.span.end)
+			}];
 	}
 
 	function workspaceSymbols(request:Dynamic, token:CancellationToken):Array<Dynamic> {
 		var query = requiredString(required(request, "params"), "query");
-		return [
-			for (symbol in service.workspaceSymbols(query, token))
-				{
-					name: symbol.name,
-					kind: symbolKind(symbol.kind),
-					containerName: symbol.container,
-					tags: symbol.deprecated ? [1] : null,
+		return [for (symbol in service.workspaceSymbols(query, token))
+			{
+				name:symbol.name,
+					kind:symbolKind(symbol.kind),
+					containerName:symbol.container,
+					tags:symbol.deprecated ? [1] : null,
 					location: {uri: documents.uri(project.diskPath(symbol.path))},
 					data: {identity: symbol.identity, revision: symbol.revision}
-				}
-		];
+			}];
 	}
 
 	function resolveWorkspaceSymbol(request:Dynamic, token:CancellationToken):Dynamic {
@@ -714,33 +731,29 @@ class LspProtocol {
 		var offset = positionOffset(document, position(request)),
 			start = identifierStart(document.source, offset),
 			completion = service.completeResult(compilerPath(document), offset, token, deferDiagnostics);
-		return {
-			isIncomplete: completion.isIncomplete,
-			items: [
-				for (item in completion.items) {
-					var insertion = item.insertText == null ? item.label : item.insertText,
-						snippet = completionSnippets && StringTools.endsWith(insertion, "("),
-						result:Dynamic = {
-							label: item.label,
-							kind: completionKind(item.kind),
-							detail: item.detail,
-							sortText: item.sortText,
-							insertTextFormat: snippet ? 2 : 1,
-							textEdit: {
-								range: document.range(start, offset),
-								newText: snippet ? insertion + "${1})" : insertion
-							}
-						};
-					if (item.identity != null) Reflect.setField(result, "data", {
-						uri: document.uri,
-						identity: item.identity,
-						revision: item.revision,
-						importPath: item.importPath
-					});
-					result;
-				}
-			]
-		};
+		return {isIncomplete: completion.isIncomplete,
+			items: [for (item in completion.items) {
+				var insertion = item.insertText == null ? item.label : item.insertText,
+					snippet = completionSnippets && StringTools.endsWith(insertion, "("),
+					result:Dynamic = {
+						label: item.label,
+						kind: completionKind(item.kind),
+						detail: item.detail,
+						sortText: item.sortText,
+						insertTextFormat: snippet ? 2 : 1,
+						textEdit: {
+							range: document.range(start, offset),
+							newText: snippet ? insertion + "${1})" : insertion
+						}
+					};
+				if (item.identity != null) Reflect.setField(result, "data", {
+					uri: document.uri,
+					identity: item.identity,
+					revision: item.revision,
+					importPath: item.importPath
+				});
+				result;
+			}]};
 	}
 
 	function resolveCompletion(request:Dynamic, token:CancellationToken):Dynamic {
@@ -761,10 +774,10 @@ class LspProtocol {
 			throw new LspRequestError(-32801, "Completion item no longer matches the current document version");
 		Reflect.setField(item, "detail", resolved.detail);
 		Reflect.setField(item, "documentation", {kind: "markdown", value: resolved.documentation});
-		Reflect.setField(item, "additionalTextEdits", [
-			for (edit in resolved.edits)
-				{range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}
-		]);
+		Reflect.setField(item, "additionalTextEdits", [for (edit in resolved.edits)
+			{
+				range:document.range(edit.span.start, edit.span.end), newText:edit.replacement
+			}]);
 		return item;
 	}
 
@@ -772,10 +785,11 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		return [
-			for (highlight in service.documentHighlights(compilerPath(document), positionOffset(document, position(request)), token))
-				{range: document.range(highlight.span.start, highlight.span.end), kind: highlight.write ? 3 : 2}
-		];
+		return [for (highlight in service.documentHighlights(compilerPath(document),
+			positionOffset(document, position(request)), token))
+			{
+				range:document.range(highlight.span.start, highlight.span.end), kind:highlight.write ? 3 : 2
+			}];
 	}
 
 	function semanticTokens(request:Dynamic, token:CancellationToken):Dynamic {
@@ -826,7 +840,8 @@ class LspProtocol {
 		for (semantic in service.semanticTokens(compilerPath(document), token)) {
 			var start:Dynamic = document.position(semantic.span.start),
 				end:Dynamic = document.position(semantic.span.end);
-			appendSemanticToken(data, start.line, start.character, Std.int(end.character - start.character), semantic.type, semantic.modifiers, previousLine,
+			appendSemanticToken(data, start.line, start.character, Std.int(end.character - start.character),
+				semantic.type, semantic.modifiers, previousLine,
 				previousCharacter);
 			previousLine = start.line;
 			previousCharacter = start.character;
@@ -841,36 +856,33 @@ class LspProtocol {
 			start = positionOffset(document, required(range, "start")),
 			end = positionOffset(document, required(range, "end"));
 		token.check();
-		return [
-			for (action in service.codeActions(compilerPath(document), start, end)) {
-				var changes:Map<String, Array<Dynamic>> = [],
-					targets:Map<String, LspDocument> = [];
-				for (edit in action.edits) {
-					var uri = documents.uri(project.diskPath(edit.path)),
-						target = documentForPath(edit.path),
-						existing = changes.get(uri);
-					if (existing == null)
-						changes.set(uri, existing = []);
-					targets.set(uri, target);
-					existing.push({range: target.range(edit.span.start, edit.span.end), newText: edit.replacement});
-				}
-				{
-					title: action.title,
-					kind: "quickfix",
-					diagnostics: [diagnosticJson(action.diagnostic)],
-					isPreferred: true,
-					edit: {
-						documentChanges: [
-							for (uri => edits in changes)
-								{
-									textDocument: {uri: uri, version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version},
-									edits: edits
-								}
-						]
-					}
-				}
+		return [for (action in service.codeActions(compilerPath(document), start, end)) {
+			var changes:Map<String, Array<Dynamic>> = [],
+				targets:Map<String, LspDocument> = [];
+			for (edit in action.edits) {
+				var uri = documents.uri(project.diskPath(edit.path)),
+					target = documentForPath(edit.path),
+					existing = changes.get(uri);
+				if (existing == null)
+					changes.set(uri, existing = []);
+				targets.set(uri, target);
+				existing.push({range: target.range(edit.span.start, edit.span.end), newText: edit.replacement});
 			}
-		];
+			{
+				title:action.title,
+					kind:"quickfix",
+					diagnostics:[diagnosticJson(action.diagnostic)],
+					isPreferred:true,
+					edit: {documentChanges: [for (uri => edits in changes)
+					{
+						textDocument: {
+							uri: uri,
+							version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version
+						},
+							edits:edits
+					}]}
+			}
+		}];
 	}
 
 	function inlayHints(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -878,17 +890,16 @@ class LspProtocol {
 			range = required(required(request, "params"), "range");
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		return [
-			for (hint in service.inlayHints(compilerPath(document), positionOffset(document, required(range, "start")),
-				positionOffset(document, required(range, "end")), token))
-				{
-					position: document.position(hint.position),
-					label: hint.label,
-					kind: hint.kind == "type" ? 1 : 2,
-					paddingLeft: hint.paddingLeft,
-					paddingRight: hint.paddingRight
-				}
-		];
+		return [for (hint in service.inlayHints(compilerPath(document),
+			positionOffset(document, required(range, "start")),
+			positionOffset(document, required(range, "end")), token))
+			{
+				position:document.position(hint.position),
+					label:hint.label,
+					kind:hint.kind == "type" ? 1 : 2,
+					paddingLeft:hint.paddingLeft,
+					paddingRight:hint.paddingRight
+			}];
 	}
 
 	function prepareCallHierarchy(request:Dynamic, token:CancellationToken):Dynamic {
@@ -906,18 +917,21 @@ class LspProtocol {
 			revision = requiredInt(data, "revision");
 		if (!service.isCallHierarchyCurrent(identity, revision))
 			throw new LspRequestError(-32801, "Call hierarchy item no longer matches its source revision");
-		var relations = incoming ? service.incomingCalls(identity, revision, token) : service.outgoingCalls(identity, revision, token);
-		return incoming ? [
-			for (relation in relations) {
-				var target = documentForPath(relation.item.path);
-				{from: callHierarchyItem(relation.item), fromRanges: [for (range in relation.ranges) target.range(range.start, range.end)]};
-			}
-		] : [
-			for (relation in relations) {
-				var target = documentForPath(relation.item.path);
-				{to: callHierarchyItem(relation.item), fromRanges: [for (range in relation.ranges) target.range(range.start, range.end)]};
-			}
-			];
+		var relations = incoming ? service.incomingCalls(identity, revision, token) : service.outgoingCalls(identity,
+			revision, token);
+		return incoming ? [for (relation in relations) {
+			var target = documentForPath(relation.item.path);
+			{
+				from:callHierarchyItem(relation.item),
+					fromRanges:[for (range in relation.ranges) target.range(range.start, range.end)]
+			};
+		}] : [for (relation in relations) {
+			var target = documentForPath(relation.item.path);
+			{
+				to:callHierarchyItem(relation.item),
+					fromRanges:[for (range in relation.ranges) target.range(range.start, range.end)]
+			};
+		}];
 	}
 
 	function callHierarchyItem(item:compiler.service.LanguageService.CallHierarchyItem):Dynamic {
@@ -952,7 +966,8 @@ class LspProtocol {
 			revision = requiredInt(data, "revision");
 		if (!service.isTypeHierarchyCurrent(identity, revision))
 			throw new LspRequestError(-32801, "Type hierarchy item no longer matches its source revision");
-		var related = supertypes ? service.typeSupertypes(identity, revision, token) : service.typeSubtypes(identity, revision, token);
+		var related = supertypes ? service.typeSupertypes(identity, revision, token) : service.typeSubtypes(identity,
+			revision, token);
 		return [for (entry in related) typeHierarchyItem(entry)];
 	}
 
@@ -1008,14 +1023,16 @@ class LspProtocol {
 		}
 		var path = compilerPath(document),
 			edits = service.format(path, start, end, new compiler.formatter.ProjectFormat().forFile(path));
-		return [
-			for (edit in edits)
-				{range: document.range(edit.span.start, edit.span.end), newText: edit.replacement}
-		];
+		return [for (edit in edits)
+			{
+				range:document.range(edit.span.start, edit.span.end), newText:edit.replacement
+			}];
 	}
 
 	function selectionRanges(request:Dynamic, token:CancellationToken):Array<Dynamic> {
-		var document = document(request), positions:Array<Dynamic> = cast required(required(request, "params"), "positions"), offsets = [];
+		var document = document(request),
+			positions:Array<Dynamic> = cast required(required(request, "params"), "positions"),
+			offsets = [];
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		for (position in positions) {
@@ -1044,14 +1061,12 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		return [
-			for (link in service.documentLinks(compilerPath(document), token))
-				{
-					range: document.range(link.span.start, link.span.end),
-					target: documents.uri(project.diskPath(link.targetPath)),
-					tooltip: link.tooltip
-				}
-		];
+		return [for (link in service.documentLinks(compilerPath(document), token))
+			{
+				range:document.range(link.span.start, link.span.end),
+					target:documents.uri(project.diskPath(link.targetPath)),
+					tooltip:link.tooltip
+			}];
 	}
 
 	function hover(request:Dynamic, token:CancellationToken):Dynamic {
@@ -1061,7 +1076,9 @@ class LspProtocol {
 			value = service.hover(compilerPath(document), offset),
 			documentation = service.hoverDocumentation(compilerPath(document), offset);
 		return value == null ? null : documentation == null
-			|| documentation.markdown.length == 0 ? {contents: {kind: "plaintext", value: value}} : {
+			|| documentation.markdown.length == 0 ? {
+				contents: {kind: "plaintext", value: value}
+			} : {
 				contents: {kind: "markdown", value: "```haxe\n" + value + "\n```\n\n" + documentation.markdown}
 			};
 	}
@@ -1070,26 +1087,22 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		var value = service.signatureHelp(compilerPath(document), positionOffset(document, position(request)));
-		return value == null ? null : {
-			signatures: [
+		return value == null ? null : {signatures: [{label: value.label,
+			documentation: value.documentation == null ? null : {
+				kind: "markdown",
+				value: value.documentation
+			},
+				parameters: [for (index in 0...value.parameters.length)
 				{
-					label: value.label,
-					documentation: value.documentation == null ? null : {kind: "markdown", value: value.documentation},
-					parameters: [
-						for (index in 0...value.parameters.length)
-							{
-								label: value.parameters[index],
-								documentation: value.parameterDocumentation == null
-								|| value.parameterDocumentation[index] == null ? null : {
-									kind: "markdown",
-									value: value.parameterDocumentation[index]
-								}}
-					]
-				}
-			],
-			activeSignature: 0,
-			activeParameter: value.activeParameter
-		};
+					label:value.parameters[index],
+						documentation:value.parameterDocumentation == null
+						|| value.parameterDocumentation[index] == null ? null : {
+							kind: "markdown",
+							value: value.parameterDocumentation[index]
+						}
+				}]}],
+					activeSignature: 0,
+					activeParameter: value.activeParameter};
 	}
 
 	function definition(request:Dynamic, token:CancellationToken):Dynamic {
@@ -1099,20 +1112,25 @@ class LspProtocol {
 		requireNavigationSyntax(document);
 		var location = service.definition(compilerPath(document), positionOffset(document, position(request)));
 		if (location == null && !service.isCurrent(compilerPath(document)) && foregroundAnalysisFailure != null)
-			throw new LspRequestError(-32801, "Definition could not be resolved because analysis failed: " + foregroundAnalysisFailure);
+			throw new LspRequestError(-32801,
+				"Definition could not be resolved because analysis failed: " + foregroundAnalysisFailure);
 		return location == null
-			|| location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
+			|| location.stale ? null : locationJson(location.path, location.span.start, location.span.end,
+			location.span.file);
 	}
 
 	function typeDefinition(request:Dynamic, token:CancellationToken):Dynamic {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireNavigationSyntax(document);
-		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)), token);
+		var location = service.typeDefinition(compilerPath(document), positionOffset(document, position(request)),
+			token);
 		if (location == null && !service.isCurrent(compilerPath(document)) && foregroundAnalysisFailure != null)
-			throw new LspRequestError(-32801, "Type information is unavailable because analysis failed: " + foregroundAnalysisFailure);
+			throw new LspRequestError(-32801,
+				"Type information is unavailable because analysis failed: " + foregroundAnalysisFailure);
 		return location == null
-			|| location.stale ? null : locationJson(location.path, location.span.start, location.span.end, location.span.file);
+			|| location.stale ? null : locationJson(location.path, location.span.start, location.span.end,
+			location.span.file);
 	}
 
 	function implementations(request:Dynamic, token:CancellationToken):Array<Dynamic> {
@@ -1120,7 +1138,8 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		return [
-			for (location in service.implementations(compilerPath(document), positionOffset(document, position(request)), token))
+			for (location in service.implementations(compilerPath(document),
+				positionOffset(document, position(request)), token))
 				locationJson(location.path, location.span.start, location.span.end)
 		];
 	}
@@ -1238,7 +1257,8 @@ class LspProtocol {
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
 		var params:Dynamic = required(request, "params"),
-			edits = service.rename(compilerPath(document), positionOffset(document, position(request)), requiredString(params, "newName")),
+			edits = service.rename(compilerPath(document), positionOffset(document, position(request)),
+				requiredString(params, "newName")),
 			grouped:Map<String, Array<Dynamic>> = [],
 			targets:Map<String, LspDocument> = [];
 		for (edit in edits) {
@@ -1252,22 +1272,19 @@ class LspProtocol {
 			targets.set(uri, target);
 			existing.push({range: target.range(edit.span.start, edit.span.end), newText: edit.replacement});
 		}
-		return {
-			documentChanges: [
-				for (uri => textEdits in grouped)
-					{
-						textDocument: {
-							uri: uri,
-							version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version
-						},
-						edits: textEdits
-					}
-			]
-		};
+		return {documentChanges: [for (uri => textEdits in grouped)
+			{
+				textDocument: {
+					uri: uri,
+					version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version
+				},
+					edits:textEdits
+			}]};
 	}
 
 	function locationJson(path:String, start:Int, end:Int, ?source:compiler.Source.SourceFile):Dynamic {
-		var target = source == null ? documentForPath(path) : new LspDocument(documents.uri(project.diskPath(path)), path, 0, source.text);
+		var target = source == null ? documentForPath(path) : new LspDocument(documents.uri(project.diskPath(path)),
+			path, 0, source.text);
 		return {uri: documents.uri(project.diskPath(path)), range: target.range(start, end)};
 	}
 
@@ -1294,8 +1311,9 @@ class LspProtocol {
 	function requireCurrent(document:LspDocument):Void {
 		if (!service.isCurrent(compilerPath(document)))
 			throw new LspRequestError(-32801,
-				foregroundAnalysisFailure == null ? "Language analysis has not produced current type information for this file" : "Language analysis could not complete: " +
-				foregroundAnalysisFailure);
+				foregroundAnalysisFailure == null
+				? "Language analysis has not produced current type information for this file"
+				: "Language analysis could not complete: " + foregroundAnalysisFailure);
 	}
 
 	function compilerPath(document:LspDocument):String
@@ -1312,7 +1330,8 @@ class LspProtocol {
 	}
 
 	function configure(configuration:editor.lsp.ProjectWorkspace.HaxeProjectConfiguration):Void
-		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi, configuration.ffiIdentity);
+		service.configure(configuration.id, configuration.scopeId, configuration.defines.copy(), configuration.ffi,
+			configuration.ffiIdentity);
 
 	static function documentUri(request:Dynamic):String
 		return requiredString(required(required(request, "params"), "textDocument"), "uri");
@@ -1396,7 +1415,8 @@ class LspProtocol {
 		return [beginRefresh(feature)];
 	}
 
-	static function appendSemanticToken(data:Array<Int>, line:Int, character:Int, length:Int, type:String, modifiers:Array<String>, previousLine:Int,
+	static function appendSemanticToken(data:Array<Int>, line:Int, character:Int, length:Int, type:String,
+			modifiers:Array<String>, previousLine:Int,
 			previousCharacter:Int):Void {
 		var modifierBits = 0;
 		for (modifier in modifiers) {
@@ -1490,7 +1510,8 @@ class LspProtocol {
 
 	static function diagnosticJson(diagnostic:Diagnostic):Dynamic
 		return {
-			range: new LspDocument("", diagnostic.span.file.path, 0, diagnostic.span.file.text).range(diagnostic.span.start, diagnostic.span.end),
+			range: new LspDocument("", diagnostic.span.file.path, 0,
+				diagnostic.span.file.text).range(diagnostic.span.start, diagnostic.span.end),
 			severity: Std.string(diagnostic.severity) == "Warning" ? 2 : 1,
 			code: diagnostic.code,
 			source: "haxeon",

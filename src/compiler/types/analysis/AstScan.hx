@@ -152,9 +152,11 @@ class AstScan {
 
 	static function removesEntries(expression:AstExpression, visitedKey:Null<String>):Bool
 		return switch expression {
-			case MethodCall(_, name, arguments, _): name == "remove" ? !isOnlyKey(arguments, visitedKey) : name == "clear";
+			case MethodCall(_, name, arguments, _): name == "remove" ? !isOnlyKey(arguments, visitedKey) : name
+				== "clear";
 			case Call(name, arguments, _):
-				StringTools.endsWith(name, ".remove") ? !isOnlyKey(arguments, visitedKey) : StringTools.endsWith(name, ".clear");
+				StringTools.endsWith(name, ".remove") ? !isOnlyKey(arguments, visitedKey) : StringTools.endsWith(name,
+					".clear");
 			default: false;
 		};
 

@@ -14,7 +14,8 @@ class CompilationTransaction {
 	final startingAssembler:Null<HlModuleAssembler>;
 	final indexSemantics:Bool;
 
-	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>, startingAssembler:Null<HlModuleAssembler>,
+	public function new(compiler:Compiler, entryModule:String, token:Null<CancellationToken>,
+			startingAssembler:Null<HlModuleAssembler>,
 			?indexSemantics = true) {
 		this.compiler = compiler;
 		this.entryModule = entryModule;
@@ -33,7 +34,8 @@ class CompilationTransaction {
 		try {
 			var context = new CompilationContext(candidate, indexSemantics);
 			var frontendStartedAt = Sys.time() * 1000.0;
-			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules, transactionStartedAt, snapshotDoneAt, frontendStartedAt,
+			var result = CompilationPipeline.compile(context, entryModule, token, snapshot.modules,
+				transactionStartedAt, snapshotDoneAt, frontendStartedAt,
 				indexSemantics, compiler.publication.baseline());
 			var abi = candidate.publishedAbi;
 			if (abi == null)

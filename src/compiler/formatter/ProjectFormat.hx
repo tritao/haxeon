@@ -69,7 +69,8 @@ class ProjectFormat {
 	}
 
 	public static function parse(section:Dynamic, origin:String):FormatConfig {
-		if (section == null || !Reflect.isObject(section) || Std.isOfType(section, String) || Std.isOfType(section, Array))
+		if (section == null || !Reflect.isObject(section) || Std.isOfType(section, String)
+			|| Std.isOfType(section, Array))
 			throw '$origin: "format" must be an object';
 		var spaces = false, indentWidth = 4, lineWidth = 120;
 		for (key in Reflect.fields(section)) {
@@ -93,7 +94,7 @@ class ProjectFormat {
 	}
 
 	static function positive(value:Dynamic, origin:String, key:String):Int {
-		if (!Std.isOfType(value, Int) || (value : Int) < 1)
+		if (!Std.isOfType(value, Int) || (value:Int) < 1)
 			throw '$origin: format.$key must be a whole number of at least 1';
 		return value;
 	}

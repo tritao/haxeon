@@ -5,11 +5,21 @@ function main():Int {
 	var functionNull:Void->Int = cast null;
 	var explicitNull:String = cast(null, String);
 	var calls = 0;
-	var blockNull:String = cast { calls++; null; };
-	var conditionalNull:String = cast (calls == 1 ? null : null);
-	var switchNull:String = cast switch (calls) { case 1: {calls++; null;} default: null; };
+	var blockNull:String = cast {
+		calls++;
+		null;
+	};
+	var conditionalNull:String = cast(calls == 1 ? null : null);
+	var switchNull:String = cast switch (calls) {
+		case 1: {
+			calls++;
+			null;
+		}
+		default: null;
+	};
 	if (calls != 2 || blockNull != null || conditionalNull != null || switchNull != null) return 1;
-	if (dynamicNull != null || stringNull != null || optionalNull != null || functionNull != null || explicitNull != null)
+	if (dynamicNull != null || stringNull != null || optionalNull != null || functionNull != null
+		|| explicitNull != null)
 		return 1;
 	#if hl
 	var zero:Int = cast null;

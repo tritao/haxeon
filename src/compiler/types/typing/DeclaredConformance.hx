@@ -17,7 +17,8 @@ class DeclaredConformance {
 			case TArray(element): supportsEquality(session, element);
 			case TAnonymous(_, _): has(session, type, "Equatable");
 			case TNullable(element): usesEquality(session, element);
-			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type)
+				&& has(session, type, "Equatable");
 			default: false;
 		};
 
@@ -33,7 +34,8 @@ class DeclaredConformance {
 			case TNullable(element): supportsEquality(session, element);
 			case TArray(element): supportsEquality(session, element);
 			case TAnonymous(_, _): has(session, type, "Equatable");
-			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Equatable");
+			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type)
+				&& has(session, type, "Equatable");
 			case TInstance(NominalKind.Enum, _, _), TTypeParameter(_, _): has(session, type, "Equatable");
 			default: false;
 		};
@@ -43,7 +45,8 @@ class DeclaredConformance {
 	 * representation, or null when it is not a plain abstract or its representation is a primitive that already
 	 * compares correctly as it is.
 	 */
-	public static function abstractEqualityOperand(session:TypingSession, operand:TypedExpression):Null<TypedExpression> {
+	public static function abstractEqualityOperand(session:TypingSession,
+			operand:TypedExpression):Null<TypedExpression> {
 		var nullable = false, type = operand.type;
 		switch type {
 			case TNullable(element):
@@ -55,7 +58,8 @@ class DeclaredConformance {
 			case TAbstract(name, _, representation) if (!session.declarations.enumAbstracts.exists(name)):
 				switch representation {
 					case TInt | TInt64 | TFloat | TBool | TString | TNativeScalar(_): null;
-					default: new TypedExpression(TCast(operand), nullable ? TNullable(representation) : representation, operand.span);
+					default: new TypedExpression(TCast(operand), nullable ? TNullable(representation) : representation,
+						operand.span);
 				}
 			default: null;
 		};
@@ -64,7 +68,8 @@ class DeclaredConformance {
 	public static function supportsHash(session:TypingSession, type:CompilerType):Bool
 		return switch type {
 			case TInt, TInt64, TFloat, TBool, TString, TNativeScalar(_), TKeyPath(_, _, _): true;
-			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name)): supportsHash(session, representation);
+			case TAbstract(name, _, representation) if (session.declarations.enumAbstracts.exists(name))
+				: supportsHash(session, representation);
 			case TNullable(element): supportsHash(session, element);
 			case TAnonymous(_, _): has(session, type, "Hashable");
 			case TInstance(NominalKind.Class, _, _): session.relations.isStruct(type) && has(session, type, "Hashable");
@@ -75,7 +80,8 @@ class DeclaredConformance {
 	public static function capabilityError(session:TypingSession, type:CompilerType, capability:String):String {
 		var field = session.relations.recursiveAnonymousField(type, [], null);
 		var message = 'Type "${compiler.semantic.SemanticSignature.display(type)}" does not conform to $capability';
-		return field == null ? message : message + ' (recursive field "$field"; use a struct or class with explicit equals)';
+		return field == null
+			? message : message + ' (recursive field "$field"; use a struct or class with explicit equals)';
 	}
 
 	/** Map operations need the same generated equality/hash helpers as ordinary value operations. */

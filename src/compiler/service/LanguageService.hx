@@ -250,7 +250,8 @@ class LanguageService {
 		return removed;
 	}
 
-	public function configure(identity:String, scopeIdentity:String, defines:Array<String>, ?ffi:compiler.Compiler.FfiConfiguration,
+	public function configure(identity:String, scopeIdentity:String, defines:Array<String>,
+			?ffi:compiler.Compiler.FfiConfiguration,
 			ffiIdentity:String = ""):Void {
 		var key = haxe.Json.stringify({scope: scopeIdentity, ffi: ffiIdentity});
 		if (activeConfiguration != key) {
@@ -325,7 +326,8 @@ class LanguageService {
 				var recovered = new Parser(tokens).parseProgramRecovering();
 				state.recoveredTokens = tokens;
 				state.recoveredAst = recovered.program;
-				state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision, tokens);
+				state.recoveredSemanticModel = new SemanticModel(recovered.program, state.source, state.revision,
+					tokens);
 				state.recoveredSemanticModel.index.indexRecoveredSyntax(recovered.program);
 				for (diagnostic in recovered.diagnostics) {
 					var duplicate = -1;
@@ -346,7 +348,8 @@ class LanguageService {
 		compiler.semanticWorkspace.invalidateResolutionCache();
 	}
 
-	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):compiler.Compiler.ValidationResult
+	public function validate(path:String, source:String, entryModule:String,
+			?token:CancellationToken):compiler.Compiler.ValidationResult
 		return compiler.validate(path, source, entryModule, token);
 
 	public function diagnostics(path:String):Array<Diagnostic> {
@@ -362,21 +365,17 @@ class LanguageService {
 			if (diagnostic.span.end < start || diagnostic.span.start > end)
 				continue;
 			for (fix in diagnostic.fixes)
-				result.push({
-					id: diagnostic.code + ":" + fix.id,
+				result.push({id: diagnostic.code + ":" + fix.id,
 					title: fix.title,
 					diagnostic: diagnostic,
-					edits: [
-						for (edit in fix.edits)
-							{
-								path: edit.span.file.path,
-								span: edit.span,
-								replacement: edit.replacement,
-								revision: state.revision,
-								stale: false
-							}
-					]
-				});
+					edits: [for (edit in fix.edits)
+					{
+						path:edit.span.file.path,
+							span:edit.span,
+							replacement:edit.replacement,
+							revision:state.revision,
+							stale:false
+					}]});
 		}
 		return result;
 	}
@@ -521,7 +520,8 @@ class LanguageService {
 						});
 				}
 			}
-			if (current.kind == LeftParen && index > 0 && (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == New))
+			if (current.kind == LeftParen && index > 0
+				&& (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == New))
 				addParameterHints(path, tokens, index, start, end, result);
 		}
 		result.sort(function(left, right) return Reflect.compare(left.position, right.position));
@@ -592,7 +592,8 @@ class LanguageService {
 		return [
 			{
 				path: path,
-				span: state.source.span(state.source.byteOffsetForStringOffset(prefix), state.source.byteOffsetForStringOffset(sourceSuffix)),
+				span: state.source.span(state.source.byteOffsetForStringOffset(prefix),
+					state.source.byteOffsetForStringOffset(sourceSuffix)),
 				replacement: formatted.substring(prefix, formattedSuffix),
 				revision: state.revision,
 				stale: false
@@ -620,7 +621,8 @@ class LanguageService {
 			spans.sort(function(left, right) return Reflect.compare(left.end - left.start, right.end - right.start));
 			var unique:Array<SourceSpan> = [];
 			for (span in spans)
-				if (unique.length == 0 || unique[unique.length - 1].start != span.start || unique[unique.length - 1].end != span.end)
+				if (unique.length == 0 || unique[unique.length - 1].start != span.start
+					|| unique[unique.length - 1].end != span.end)
 					unique.push(span);
 			result.push(unique);
 		}
@@ -656,7 +658,11 @@ class LanguageService {
 			var importPath = parts.join("."),
 				target = importedModule(importPath);
 			if (target != null)
-				result.push({span: state.source.span(start, end), targetPath: target.source.path, tooltip: "Open " + importPath});
+				result.push({
+					span: state.source.span(start, end),
+					targetPath: target.source.path,
+					tooltip: "Open " + importPath
+				});
 		}
 		return result;
 	}
@@ -694,8 +700,8 @@ class LanguageService {
 				case DeclarationKind.Member if (signature != null): "method";
 				default: return null;
 			},
-			documentation = documentationFor(resolved.state, resolved.symbol.declaration),
-			detail = signature == null ? resolved.symbol.name : signature.label;
+				documentation = documentationFor(resolved.state, resolved.symbol.declaration),
+				detail = signature == null ? resolved.symbol.name : signature.label;
 		if (documentation.markdown.length > 0)
 			detail += " — " + documentation.markdown.split("\n")[0];
 		return {
@@ -710,7 +716,8 @@ class LanguageService {
 		};
 	}
 
-	function hierarchyCalls(identity:String, revision:Int, incoming:Bool, ?token:CancellationToken):Array<CallHierarchyRelation> {
+	function hierarchyCalls(identity:String, revision:Int, incoming:Bool,
+			?token:CancellationToken):Array<CallHierarchyRelation> {
 		var origin = callHierarchyItem(cast identity),
 			grouped:Map<String, CallHierarchyRelation> = [];
 		if (origin == null || origin.revision != revision)
@@ -758,7 +765,8 @@ class LanguageService {
 		};
 	}
 
-	function hierarchyTypes(identity:String, revision:Int, supertypes:Bool, ?token:CancellationToken):Array<TypeHierarchyItem> {
+	function hierarchyTypes(identity:String, revision:Int, supertypes:Bool,
+			?token:CancellationToken):Array<TypeHierarchyItem> {
 		var origin = typeHierarchyItem(cast identity);
 		if (origin == null || origin.revision != revision)
 			return [];
@@ -870,7 +878,8 @@ class LanguageService {
 	public function complete(path:String, position:Int, ?token:CancellationToken):Array<CompletionItem>
 		return completeResult(path, position, token).items;
 
-	public function completeResult(path:String, position:Int, ?token:CancellationToken, ?allowPartialWorkspaceIndex:Bool = false):CompletionResult {
+	public function completeResult(path:String, position:Int, ?token:CancellationToken,
+			?allowPartialWorkspaceIndex:Bool = false):CompletionResult {
 		if (token != null)
 			token.check();
 		var state = stateFor(path),
@@ -912,7 +921,11 @@ class LanguageService {
 				if (classDecl.name == qualifier) {
 					for (field in classDecl.fields)
 						if (field.isStatic && (prefix.length == 0 || StringTools.startsWith(field.name, prefix)))
-							result.push({label: field.name, kind: "field", detail: '${field.name}:${typeName(field.type)}'});
+							result.push({
+								label: field.name,
+								kind: "field",
+								detail: '${field.name}:${typeName(field.type)}'
+							});
 					for (method in classDecl.methods)
 						if (method.isStatic && (prefix.length == 0 || StringTools.startsWith(method.name, prefix)))
 							result.push({
@@ -930,7 +943,8 @@ class LanguageService {
 		if (semanticContext != null)
 			for (local in semanticContext.locals)
 				addMember(local.name, "variable", local.name + ":" + compilerTypeName(local.type), prefix,
-					result, semanticContext.expected != null && completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
+					result, semanticContext.expected != null
+					&& completionTypeCompatible(local.type, semanticContext.expected) ? 0 : 2);
 		if (!isCurrent(path))
 			addRecoveredLocals(ast, position, prefix, result);
 		if (semanticContext != null && semanticContext.expected != null)
@@ -951,7 +965,8 @@ class LanguageService {
 			for (candidate in compiler.semanticWorkspace.importableSymbols(state, token)) {
 				var symbol = candidate.symbol,
 					signature = compiler.semanticWorkspace.indexedSignature(symbol.id);
-				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4, signature == null ? null : symbol.name + "(",
+				addMember(symbol.name, completionDeclarationKind(symbol.kind), symbol.name, prefix, result, 4,
+					signature == null ? null : symbol.name + "(",
 					Std.string(symbol.id), candidate.importPath);
 			}
 		if (qualifier == null) {
@@ -971,7 +986,8 @@ class LanguageService {
 					&& isImportableCompletionKind(candidate.kind)
 					&& (counts.get(candidate.name) == 1 || workspaceIndexIncomplete)
 					&& module != state.name)
-					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null, "workspace|" + candidate.identity,
+					addMember(candidate.name, candidate.kind, candidate.detail, prefix, result, 4, null,
+						"workspace|" + candidate.identity,
 						workspaceIndexIncomplete ? null : module);
 			}
 		}
@@ -982,7 +998,8 @@ class LanguageService {
 		return completionResult(result, workspaceIndexIncomplete);
 	}
 
-	public function resolveCompletion(path:String, identity:String, revision:Int, ?importPath:String):Null<ResolvedCompletion> {
+	public function resolveCompletion(path:String, identity:String, revision:Int,
+			?importPath:String):Null<ResolvedCompletion> {
 		var state = stateFor(path);
 		if (state == null || state.revision != revision)
 			return null;
@@ -997,7 +1014,7 @@ class LanguageService {
 			return {
 				detail: candidate.detail,
 				documentation: candidate.documentation == null
-				|| candidate.documentation.length == 0 ? "Declared in " + candidate.path : candidate.documentation,
+					|| candidate.documentation.length == 0 ? "Declared in " + candidate.path : candidate.documentation,
 				edits: edits
 			};
 		}
@@ -1014,7 +1031,8 @@ class LanguageService {
 		var documentation = documentationFor(resolved.state, resolved.symbol.declaration);
 		return {
 			detail: signature == null ? resolved.symbol.name + ":" + Std.string(resolved.symbol.kind) : signature.label,
-			documentation: documentation.markdown.length == 0 ? "Declared in " + resolved.state.source.path : documentation.markdown,
+			documentation: documentation.markdown.length == 0
+				? "Declared in " + resolved.state.source.path : documentation.markdown,
 			edits: edits
 		};
 	}
@@ -1033,7 +1051,8 @@ class LanguageService {
 				token.check();
 			result.push({
 				span: span,
-				write: declaration != null && sameSpan(span, declaration.declaration) || assignmentFollows(source, span.end)
+				write: declaration != null && sameSpan(span, declaration.declaration)
+					|| assignmentFollows(source, span.end)
 			});
 		}
 		result.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
@@ -1056,12 +1075,15 @@ class LanguageService {
 				continue;
 			var type:Null<String> = switch lexical.kind {
 				case Identifier: var semantic = semanticTokenType(model, lexical.span.start,
-						semanticTypes); semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
+					semanticTypes);
+					semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
 				case Integer, Float: "number";
 				case StringLiteral: "string";
-				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign, MinusAssign, Increment, Decrement, Plus,
-					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual, Not, BitNot, AndAnd, OrOr, Ampersand,
+				case LeftParen, RightParen, LeftBrace, RightBrace, Colon, Semicolon, Comma, Dot, Assign, PlusAssign,
+					MinusAssign, Increment, Decrement, Plus,
+					Minus, Arrow, Star, Slash, Percent, Less, Greater, LessEqual, GreaterEqual, EqualEqual, NotEqual,
+					Not, BitNot, AndAnd, OrOr, Ampersand,
 					Pipe, Caret, LeftBracket, RightBracket, Question, At: "operator";
 				default: "keyword";
 			};
@@ -1109,8 +1131,7 @@ class LanguageService {
 				if (enumDecl.name == qualifier)
 					for (caseDecl in enumDecl.cases)
 						if (caseDecl.name == name)
-							return
-								'${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})';
+							return '${enumDecl.name}.${caseDecl.name}(${[for (param in caseDecl.params) (param.optional ? "?" : "") + typeName(param.type)].join(",")})';
 			for (classDecl in ast.classes)
 				if (classDecl.name == qualifier)
 					for (field in classDecl.fields)
@@ -1169,13 +1190,11 @@ class LanguageService {
 			documentation = resolved == null ? null : documentationFor(resolved.state, resolved.symbol.declaration);
 		if (documentation != null) {
 			Reflect.setField(result, "documentation", documentation.markdown);
-			Reflect.setField(result, "parameterDocumentation", [
-				for (parameter in signature.parameters) {
-					var separator = parameter.indexOf(":"),
-						name = separator < 0 ? parameter : parameter.substring(0, separator);
-					documentation.parameters.get(name);
-				}
-			]);
+			Reflect.setField(result, "parameterDocumentation", [for (parameter in signature.parameters) {
+				var separator = parameter.indexOf(":"),
+					name = separator < 0 ? parameter : parameter.substring(0, separator);
+				documentation.parameters.get(name);
+			}]);
 		}
 		tagResults([result], state);
 		return result;
@@ -1239,7 +1258,8 @@ class LanguageService {
 		else {
 			var declaration = typeDeclaration(context.model.index.typeAt(position));
 			if (declaration != null)
-				target = isCurrent(path) ? compiler.semanticWorkspace.resolveTypeSymbolId(declaration) : recoveredTypeSymbol(context.model, declaration,
+				target = isCurrent(path) ? compiler.semanticWorkspace.resolveTypeSymbolId(declaration)
+					: recoveredTypeSymbol(context.model, declaration,
 					symbol == null ? position : symbol.symbol.declaration.start);
 		}
 		if (target == null)
@@ -1267,7 +1287,8 @@ class LanguageService {
 			methods = methods.concat(owner.methods);
 		}
 		for (method in methods)
-			if (position >= method.span.start && position <= method.span.end && method.typeParameters.indexOf(name) >= 0)
+			if (position >= method.span.start && position <= method.span.end
+				&& method.typeParameters.indexOf(name) >= 0)
 				return null;
 		if (name.indexOf(".") >= 0)
 			return compiler.semanticWorkspace.resolveTypeSymbolId(name);
@@ -1288,15 +1309,13 @@ class LanguageService {
 		var context = semanticQuery(path, position);
 		if (context == null || context.symbol == null)
 			return [];
-		return [
-			for (implementation in compiler.semanticWorkspace.implementations(context.symbol, token))
-				{
-					path: implementation.span.file.path,
-					span: implementation.span,
-					revision: snapshotRevision(implementation.state),
-					stale: snapshotRevision(implementation.state) != implementation.state.revision
-				}
-		];
+		return [for (implementation in compiler.semanticWorkspace.implementations(context.symbol, token))
+			{
+				path:implementation.span.file.path,
+					span:implementation.span,
+					revision:snapshotRevision(implementation.state),
+					stale:snapshotRevision(implementation.state) != implementation.state.revision
+			}];
 	}
 
 	static function typeDeclaration(type:Null<CompilerType>):Null<String>
@@ -1307,7 +1326,8 @@ class LanguageService {
 		};
 
 	static function isTypeDeclaration(kind:DeclarationKind):Bool
-		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract || kind == DeclarationKind.Interface
+		return kind == DeclarationKind.Alias || kind == DeclarationKind.Enum || kind == DeclarationKind.Abstract
+			|| kind == DeclarationKind.Interface
 			|| kind == DeclarationKind.Class;
 
 	function indexedDefinition(path:String, position:Int):Null<SymbolLocation> {
@@ -1318,19 +1338,20 @@ class LanguageService {
 		return resolved == null ? null : definitionLocation(resolved.state, resolved.symbol);
 	}
 
-	function definitionLocation(state:ModuleState, symbol:compiler.semantic.SemanticIndex.IndexedSemanticSymbol):SymbolLocation {
+	function definitionLocation(state:ModuleState,
+			symbol:compiler.semantic.SemanticIndex.IndexedSemanticSymbol):SymbolLocation {
 		var origin = compiler.ffiSourceOrigin(symbol.declaration.file.path, symbol.name);
 		return origin == null ? {
-			path: symbol.declaration.file.path,
-			span: symbol.declaration,
-			revision: snapshotRevision(state),
-			stale: snapshotRevision(state) != state.revision
+			path:symbol.declaration.file.path,
+				span:symbol.declaration,
+				revision:snapshotRevision(state),
+				stale:snapshotRevision(state) != state.revision
 		} : {
 			path: origin.file.path,
 			span: origin,
 			revision: 0,
 			stale: false
-			};
+		};
 	}
 
 	public function references(path:String, position:Int, ?token:CancellationToken):Array<SymbolLocation> {
@@ -1345,15 +1366,13 @@ class LanguageService {
 		var id = context.symbol;
 		if (id == null)
 			return null;
-		var result:Array<SymbolLocation> = [
-			for (location in compiler.semanticWorkspace.indexedLocations(id, token))
-				{
-					path: location.span.file.path,
-					span: location.span,
-					revision: snapshotRevision(location.state),
-					stale: snapshotRevision(location.state) != location.state.revision
-				}
-		];
+		var result:Array<SymbolLocation> = [for (location in compiler.semanticWorkspace.indexedLocations(id, token))
+			{
+				path:location.span.file.path,
+					span:location.span,
+					revision:snapshotRevision(location.state),
+					stale:snapshotRevision(location.state) != location.state.revision
+			}];
 		result.sort(function(left, right) {
 			var path = Reflect.compare(left.path, right.path);
 			return path == 0 ? Reflect.compare(left.span.start, right.span.start) : path;
@@ -1395,7 +1414,8 @@ class LanguageService {
 				for (token in tokens)
 					if (token.kind == Identifier && token.text == replacement) {
 						var existing = model.index.symbolIdAt(token.span.start + 1);
-						if (existing != null && Std.string(existing) != Std.string(target) && semanticNamesCollide(target, existing))
+						if (existing != null && Std.string(existing) != Std.string(target)
+							&& semanticNamesCollide(target, existing))
 							return true;
 					}
 		}
@@ -1474,7 +1494,8 @@ class LanguageService {
 		};
 
 	static function isImportableCompletionKind(kind:String):Bool
-		return kind == "type" || kind == "abstract" || kind == "class" || kind == "interface" || kind == "enum" || kind == "function";
+		return kind == "type" || kind == "abstract" || kind == "class" || kind == "interface" || kind == "enum"
+			|| kind == "function";
 
 	function addInstanceMembers(type:CompilerType, prefix:String, result:Array<CompletionItem>):Void {
 		switch type {
@@ -1488,14 +1509,16 @@ class LanguageService {
 							if (classDecl.name == name) {
 								for (field in classDecl.fields)
 									if (!field.isStatic)
-										addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix, result);
+										addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix,
+											result);
 								for (method in classDecl.methods)
 									if (!method.isStatic)
 										addMember(method.name, "method",
 											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
 											prefix, result);
 								if (classDecl.base != null)
-									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base), []), prefix, result);
+									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base),
+										[]), prefix, result);
 							}
 				}
 			case TInstance(Interface, name, []):
@@ -1534,9 +1557,11 @@ class LanguageService {
 		}
 	}
 
-	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>, ?rank:Int = 3, ?insertText:String,
+	static function addMember(label:String, kind:String, detail:String, prefix:String, result:Array<CompletionItem>,
+			?rank:Int = 3, ?insertText:String,
 			?identity:String, ?importPath:String):Void {
-		if ((prefix.length == 0 || StringTools.startsWith(label, prefix)) && [for (item in result) item.label].indexOf(label) < 0)
+		if ((prefix.length == 0 || StringTools.startsWith(label, prefix))
+			&& [for (item in result) item.label].indexOf(label) < 0)
 			result.push({
 				label: label,
 				kind: kind,
@@ -1602,7 +1627,8 @@ class LanguageService {
 			next = position + 1 < source.bytes.length ? source.bytes.get(position + 1) : -1;
 		if (current == "=".code)
 			return next != "=".code && next != ">".code;
-		return (current == "+".code || current == "-".code || current == "*".code || current == "/".code || current == "%".code || current == "&".code
+		return (current == "+".code || current == "-".code || current == "*".code || current == "/".code
+			|| current == "%".code || current == "&".code
 			|| current == "|".code || current == "^".code)
 			&& next == "=".code;
 	}
@@ -1700,19 +1726,23 @@ class LanguageService {
 				position += 2;
 				while (position < source.length && source.charCodeAt(position) != 10)
 					position++;
-				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position), "comment", [], result);
+				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position),
+					"comment", [], result);
 			} else if (next == "*") {
 				position += 2;
-				while (position + 1 < source.length && !(source.charAt(position) == "*" && source.charAt(position + 1) == "/"))
+				while (position + 1 < source.length
+					&& !(source.charAt(position) == "*" && source.charAt(position + 1) == "/"))
 					position++;
 				position = Std.int(Math.min(source.length, position + 2));
-				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position), "comment", [], result);
+				addSemanticSpan(file, file.byteOffsetForStringOffset(start), file.byteOffsetForStringOffset(position),
+					"comment", [], result);
 			} else
 				position++;
 		}
 	}
 
-	static function addSemanticSpan(file:compiler.Source.SourceFile, start:Int, end:Int, type:String, modifiers:Array<String>,
+	static function addSemanticSpan(file:compiler.Source.SourceFile, start:Int, end:Int, type:String,
+			modifiers:Array<String>,
 			result:Array<SemanticToken>):Void {
 		var partStart = start, position = start;
 		while (position < end) {
@@ -1737,7 +1767,8 @@ class LanguageService {
 		};
 	}
 
-	function addParameterHints(path:String, tokens:Array<compiler.syntax.Token>, open:Int, start:Int, end:Int, result:Array<InlayHint>):Void {
+	function addParameterHints(path:String, tokens:Array<compiler.syntax.Token>, open:Int, start:Int, end:Int,
+			result:Array<InlayHint>):Void {
 		var signature = signatureHelp(path, tokens[open].span.end);
 		if (signature == null || signature.parameters.length == 0)
 			return;
@@ -1750,12 +1781,14 @@ class LanguageService {
 				case RightParen, RightBracket, RightBrace:
 					depth--;
 					if (depth == 0) {
-						addParameterHint(tokens, argumentStart, cursor, argument, signature.parameters, start, end, result);
+						addParameterHint(tokens, argumentStart, cursor, argument, signature.parameters, start, end,
+							result);
 						break;
 					}
 				case Comma:
 					if (depth == 1) {
-						addParameterHint(tokens, argumentStart, cursor, argument++, signature.parameters, start, end, result);
+						addParameterHint(tokens, argumentStart, cursor, argument++, signature.parameters, start, end,
+							result);
 						argumentStart = cursor + 1;
 					}
 				default:
@@ -1764,7 +1797,8 @@ class LanguageService {
 		}
 	}
 
-	static function addParameterHint(tokens:Array<compiler.syntax.Token>, startIndex:Int, endIndex:Int, argument:Int, parameters:Array<String>,
+	static function addParameterHint(tokens:Array<compiler.syntax.Token>, startIndex:Int, endIndex:Int, argument:Int,
+			parameters:Array<String>,
 			rangeStart:Int, rangeEnd:Int, result:Array<InlayHint>):Void {
 		if (argument >= parameters.length || startIndex >= endIndex)
 			return;
@@ -1772,7 +1806,8 @@ class LanguageService {
 			parameter = parameters[argument],
 			separator = parameter.indexOf(":"),
 			name = separator < 0 ? parameter : parameter.substring(0, separator);
-		if (first.span.start < rangeStart || first.span.start > rangeEnd || first.kind == Identifier && first.text == name)
+		if (first.span.start < rangeStart || first.span.start > rangeEnd || first.kind == Identifier
+			&& first.text == name)
 			return;
 		result.push({
 			position: first.span.start,
@@ -1796,9 +1831,11 @@ class LanguageService {
 		var result:Array<WorkspaceSymbol> = [];
 		if (ast != null) {
 			for (fn in ast.functions)
-				addWorkspaceSymbol(result, state, fn.name, "function", null, '${fn.name}():${typeName(fn.result)}', fn.span);
+				addWorkspaceSymbol(result, state, fn.name, "function", null, '${fn.name}():${typeName(fn.result)}',
+					fn.span);
 			for (alias in ast.aliases)
-				addWorkspaceSymbol(result, state, alias.name, "type", null, 'typedef ${alias.name}=${typeName(alias.type)}', alias.span);
+				addWorkspaceSymbol(result, state, alias.name, "type", null,
+					'typedef ${alias.name}=${typeName(alias.type)}', alias.span);
 			for (decl in ast.abstracts)
 				addWorkspaceSymbol(result, state, decl.name, "type", null, 'abstract ${decl.name}', decl.span);
 			for (decl in ast.enumAbstracts)
@@ -1806,19 +1843,23 @@ class LanguageService {
 			for (decl in ast.interfaces) {
 				addWorkspaceSymbol(result, state, decl.name, "interface", null, 'interface ${decl.name}', decl.span);
 				for (method in decl.methods)
-					addWorkspaceSymbol(result, state, method.name, "method", decl.name, '${method.name}():${typeName(method.result)}', method.span);
+					addWorkspaceSymbol(result, state, method.name, "method", decl.name,
+						'${method.name}():${typeName(method.result)}', method.span);
 			}
 			for (decl in ast.enums) {
 				addWorkspaceSymbol(result, state, decl.name, "enum", null, 'enum ${decl.name}', decl.span);
 				for (item in decl.cases)
-					addWorkspaceSymbol(result, state, item.name, "enumCase", decl.name, decl.name + "." + item.name, item.span);
+					addWorkspaceSymbol(result, state, item.name, "enumCase", decl.name, decl.name + "." + item.name,
+						item.span);
 			}
 			for (decl in ast.classes) {
 				addWorkspaceSymbol(result, state, decl.name, "class", null, 'class ${decl.name}', decl.span);
 				for (field in decl.fields)
-					addWorkspaceSymbol(result, state, field.name, "field", decl.name, '${field.name}:${typeName(field.type)}', field.span);
+					addWorkspaceSymbol(result, state, field.name, "field", decl.name,
+						'${field.name}:${typeName(field.type)}', field.span);
 				for (method in decl.methods)
-					addWorkspaceSymbol(result, state, method.name, "method", decl.name, '${method.name}():${typeName(method.result)}', method.span);
+					addWorkspaceSymbol(result, state, method.name, "method", decl.name,
+						'${method.name}():${typeName(method.result)}', method.span);
 			}
 		}
 		workspaceIndex.set(state.name, {revision: state.revision, symbols: result});
@@ -1913,7 +1954,8 @@ class LanguageService {
 		return result;
 	}
 
-	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>, containers:Array<SourceSpan>):Void {
+	static function addConditionalFolds(file:compiler.Source.SourceFile, folds:Array<FoldingRegion>,
+			containers:Array<SourceSpan>):Void {
 		var source = file.text, offset = 0, stack:Array<Int> = [];
 		while (offset < source.length) {
 			var newline = source.indexOf("\n", offset),
@@ -1930,7 +1972,8 @@ class LanguageService {
 		}
 	}
 
-	function addWorkspaceSymbol(result:Array<WorkspaceSymbol>, state:ModuleState, name:String, kind:String, container:Null<String>, detail:String,
+	function addWorkspaceSymbol(result:Array<WorkspaceSymbol>, state:ModuleState, name:String, kind:String,
+			container:Null<String>, detail:String,
 			span:SourceSpan):Void {
 		var documentation = documentationFor(state, span);
 		result.push({
@@ -1966,12 +2009,15 @@ class LanguageService {
 		return state.ast != null ? state.ast : state.recoveredAst != null ? state.recoveredAst : state.lastGoodAst;
 
 	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>>
-		return state.ast != null ? state.tokens : state.recoveredAst != null ? state.recoveredTokens : state.lastGoodTokens;
+		return state.ast != null ? state.tokens : state.recoveredAst != null
+			? state.recoveredTokens : state.lastGoodTokens;
 
 	static function effectiveSemanticModel(state:ModuleState):Null<compiler.semantic.SemanticModel>
-		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null ? state.recoveredSemanticModel : state.lastGoodSemanticModel;
+		return state.ast != null ? state.semanticModel : state.recoveredSemanticModel != null
+			? state.recoveredSemanticModel : state.lastGoodSemanticModel;
 
-	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String, result:Array<CompletionItem>):Void {
+	static function addRecoveredLocals(ast:compiler.syntax.Ast.AstProgram, position:Int, prefix:String,
+			result:Array<CompletionItem>):Void {
 		for (fn in ast.functions)
 			addRecoveredFunctionLocals(fn, position, prefix, result);
 		for (owner in ast.classes)
@@ -1985,7 +2031,8 @@ class LanguageService {
 				addRecoveredFunctionLocals(fn, position, prefix, result);
 	}
 
-	static function addRecoveredFunctionLocals(fn:compiler.syntax.Ast.AstFunction, position:Int, prefix:String, result:Array<CompletionItem>):Void {
+	static function addRecoveredFunctionLocals(fn:compiler.syntax.Ast.AstFunction, position:Int, prefix:String,
+			result:Array<CompletionItem>):Void {
 		if (position < fn.span.start || position > fn.span.end)
 			return;
 		for (argument in fn.arguments)
@@ -1995,12 +2042,14 @@ class LanguageService {
 				case UninitializedDeclaration(name, type, span) if (span.start <= position):
 					addMember(name, "variable", name + ":" + typeName(type), prefix, result, 2);
 				case VarDeclaration(name, type, _, span) if (span.start <= position):
-					addMember(name, "variable", name + ":" + (type == null ? "Dynamic" : typeName(type)), prefix, result, 2);
+					addMember(name, "variable", name + ":" + (type == null ? "Dynamic" : typeName(type)), prefix,
+						result, 2);
 				default:
 			}
 	}
 
-	static function recoveredQualifierType(ast:compiler.syntax.Ast.AstProgram, qualifier:String, position:Int):Null<CompilerType> {
+	static function recoveredQualifierType(ast:compiler.syntax.Ast.AstProgram, qualifier:String,
+			position:Int):Null<CompilerType> {
 		for (fn in ast.functions) {
 			var found = recoveredFunctionLocalType(fn, qualifier, position);
 			if (found != null)
@@ -2018,7 +2067,8 @@ class LanguageService {
 		return null;
 	}
 
-	static function recoveredFunctionLocalType(fn:compiler.syntax.Ast.AstFunction, name:String, position:Int):Null<CompilerType> {
+	static function recoveredFunctionLocalType(fn:compiler.syntax.Ast.AstFunction, name:String,
+			position:Int):Null<CompilerType> {
 		if (position < fn.span.start || position > fn.span.end)
 			return null;
 		for (argument in fn.arguments)
@@ -2106,7 +2156,8 @@ class LanguageService {
 			case ArrayType(element): 'Array<${typeName(element)}>';
 			case MapType(key, value): 'Map<${typeName(key)},${typeName(value)}>';
 			case NullableType(element): 'Null<${typeName(element)}>';
-			case FunctionType(arguments, result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
+			case FunctionType(arguments,
+				result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
 		};
 	}
@@ -2124,9 +2175,10 @@ class LanguageService {
 			case TMap(key, value): 'Map<${compilerTypeName(key)},${compilerTypeName(value)}>';
 			case TNullable(element): 'Null<${compilerTypeName(element)}>';
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
-					+ "<"
-					+ [for (argument in arguments) compilerTypeName(argument)].join(",") + ">";
-			case TFunction(arguments, result): "(" + [for (argument in arguments) compilerTypeName(argument)].join(",") + ")->" + compilerTypeName(result);
+				+ "<"
+				+ [for (argument in arguments) compilerTypeName(argument)].join(",") + ">";
+			case TFunction(arguments, result): "(" + [for (argument in arguments) compilerTypeName(argument)].join(",")
+				+ ")->" + compilerTypeName(result);
 			default: Std.string(type);
 		};
 }

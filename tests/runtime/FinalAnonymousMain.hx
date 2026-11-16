@@ -10,7 +10,8 @@ class FinalAnonymousMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
+		compiler.update("Main.hx",
+			'typedef Frame = { final x:Float; }
 	typedef Occurrence = { final pose:Frame; }
 	function main():Int { var value:Occurrence = {pose: {x: 2.0}}; value.pose.x = 3.0; return 42; }');
 		try {
@@ -20,7 +21,8 @@ class FinalAnonymousMain {
 			if (error.diagnostic.code != "E1024")
 				throw error;
 		}
-		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
+		compiler.update("Main.hx",
+			'typedef Frame = { final x:Float; }
 	function main():Int { var value:Frame = {x: 2.0}; value.x++; return 42; }');
 		try {
 			compiler.compile("Main");
@@ -29,7 +31,8 @@ class FinalAnonymousMain {
 			if (error.diagnostic.code != "E1024")
 				throw error;
 		}
-		compiler.update("Main.hx", 'typedef Frame = { final x:Float; }
+		compiler.update("Main.hx",
+			'typedef Frame = { final x:Float; }
 	function main():Int { var value:Frame = {x: 2.0}; return value.x == 2.0 ? 42 : 1; }');
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").module).flatten());
 	}

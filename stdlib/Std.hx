@@ -40,7 +40,8 @@ function stdParseInt(value:String):Int {
 		negative = value.charCodeAt(position++) == "-".code;
 	if (position < value.length && value.charCodeAt(position) == "0".code) {
 		base = 8;
-		if (position + 2 < value.length && (value.charCodeAt(position + 1) == "x".code || value.charCodeAt(position + 1) == "X".code)
+		if (position + 2 < value.length
+			&& (value.charCodeAt(position + 1) == "x".code || value.charCodeAt(position + 1) == "X".code)
 			&& digitValue(value.charCodeAt(position + 2)) < 16) {
 			base = 16;
 			position += 2;
@@ -142,7 +143,8 @@ function skipSpace(value:String, position:Int):Int {
 }
 
 function digitValue(code:Int):Int
-	return code >= "0".code && code <= "9".code ? code - "0".code : code >= "a".code && code <= "z".code ? code - "a".code + 10 : code >= "A".code
+	return code >= "0".code && code <= "9".code ? code - "0".code : code >= "a".code
+		&& code <= "z".code ? code - "a".code + 10 : code >= "A".code
 		&& code <= "Z".code ? code - "A".code + 10 : 99;
 #end
 

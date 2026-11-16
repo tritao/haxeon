@@ -117,7 +117,10 @@ class SignatureInference {
 			for (method in methods) {
 				var environment = new InferenceEnvironment();
 				for (argument in method.arguments)
-					if ((switch (argument.type) { case InferredType: false; default: true; }))
+					if ((switch (argument.type) {
+						case InferredType: false;
+						default: true;
+					}))
 						environment.set(argument.name, argument.type);
 				collectCallConstraints(method.statements, environment, byName, calleeConstraints);
 			}
@@ -156,7 +159,8 @@ class SignatureInference {
 			if (field.name == propertyName
 				&& field.type != null
 				&& field.isStatic == method.isStatic
-				&& (isGetter ? field.readAccess == AstFieldAccess.GetAccess : field.writeAccess == AstFieldAccess.SetAccess))
+				&& (isGetter ? field.readAccess == AstFieldAccess.GetAccess : field.writeAccess
+				== AstFieldAccess.SetAccess))
 				propertyType = field.type;
 		if (propertyType == null)
 			return method;
@@ -164,7 +168,10 @@ class SignatureInference {
 		if (isSetter) {
 			if (arguments.length != 1)
 				return method;
-			if ((switch (arguments[0].type) { case InferredType: true; default: false; })) {
+			if ((switch (arguments[0].type) {
+				case InferredType: true;
+				default: false;
+			})) {
 				var argument = arguments[0];
 				arguments = [
 					{
@@ -178,8 +185,7 @@ class SignatureInference {
 			}
 		} else if (arguments.length != 0)
 			return method;
-		return {
-			name: method.name,
+		return {name: method.name,
 			isStatic: method.isStatic,
 			isPublic: method.isPublic,
 			isOverride: method.isOverride,
@@ -189,16 +195,19 @@ class SignatureInference {
 			typeParameters: method.typeParameters,
 			typeConstraints: method.typeConstraints,
 			arguments: arguments,
-			result: (switch (method.result) { case InferredType: true; default: false; }) ? propertyType : method.result,
-			statements: method.statements,
-			span: method.span
-		};
+			result: (switch (method.result) {
+				case InferredType: true;
+				default: false;
+			}) ? propertyType : method.result,
+				statements: method.statements,
+				span: method.span};
 	}
 
 	function constraintsFor(constraints:Map<String, Map<String, AstType>>, name:String):Map<String, AstType>
 		return constraints.exists(name) ? constraints.get(name) : [];
 
-	function collectCallConstraints(statements:Array<AstStatement>, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
+	function collectCallConstraints(statements:Array<AstStatement>, environment:InferenceEnvironment,
+			methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		for (statement in statements)
 			switch statement {
@@ -233,7 +242,8 @@ class SignatureInference {
 				default:
 			}
 
-	function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment, methods:Map<String, AstFunction>,
+	function collectExpressionCallConstraint(expression:AstExpression, environment:InferenceEnvironment,
+			methods:Map<String, AstFunction>,
 			constraints:Map<String, Map<String, AstType>>):Void
 		switch expression {
 			case Call(name, arguments, _), MethodCall(_, name, arguments, _):
@@ -248,12 +258,16 @@ class SignatureInference {
 						constraints.set(methodName, inferred);
 					}
 					for (index in 0...arguments.length)
-						if (index < callee.arguments.length && (switch (callee.arguments[index].type) { case InferredType: true; default: false; }))
+						if (index < callee.arguments.length && (switch (callee.arguments[index].type) {
+							case InferredType: true;
+							default: false;
+						}))
 							switch arguments[index] {
-								case Variable(argumentName, _):
-									if (environment.exists(argumentName)) inferred.set(callee.arguments[index].name, environment.get(argumentName));
-								default:
-							}
+							case Variable(argumentName, _):
+								if (environment.exists(argumentName)) inferred.set(callee.arguments[index].name,
+									environment.get(argumentName));
+							default:
+						}
 				}
 			case ClosureCall(callee, arguments, _):
 				collectExpressionCallConstraint(callee, environment, methods, constraints);
@@ -269,7 +283,8 @@ class SignatureInference {
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
-			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _),
+			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _),
+				NotEqual(_, _, _), Not(_, _), And(_, _, _),
 				Or(_, _, _):
 				BoolType;
 			case New(name, _, _): NamedType(name);
@@ -278,14 +293,16 @@ class SignatureInference {
 			default: null;
 		};
 
-	function inferCallBoundArguments(fn:AstFunction, owner:AstClass, methods:Map<String, AstFunction>, constructors:Map<String, AstFunction>,
+	function inferCallBoundArguments(fn:AstFunction, owner:AstClass, methods:Map<String, AstFunction>,
+			constructors:Map<String, AstFunction>,
 			classes:Map<String, AstClass>):AstFunction {
 		var inferred:Map<String, AstType> = [];
 		for (statement in fn.statements)
 			switch statement {
 				case Assignment(path, value, _):
 					switch value {
-						case Variable(argumentName, _): inferAssignmentBoundArgument(path, argumentName, owner, classes, inferred);
+						case Variable(argumentName, _): inferAssignmentBoundArgument(path, argumentName, owner, classes,
+							inferred);
 						default:
 					}
 				case Return(expression, _), Expression(expression, _):
@@ -295,7 +312,8 @@ class SignatureInference {
 		return replaceArguments(fn, inferred);
 	}
 
-	function inferAssignmentBoundArgument(path:String, argumentName:String, owner:AstClass, classes:Map<String, AstClass>,
+	function inferAssignmentBoundArgument(path:String, argumentName:String, owner:AstClass,
+			classes:Map<String, AstClass>,
 			inferred:Map<String, AstType>):Void {
 		var fieldType = resolveMemberPath(path, owner, classes);
 		if (fieldType == null)
@@ -339,12 +357,15 @@ class SignatureInference {
 			return;
 		var callable = callables.get(name);
 		for (index in 0...arguments.length)
-			if (index < callable.arguments.length && (switch (callable.arguments[index].type) { case InferredType: false; default: true; }))
+			if (index < callable.arguments.length && (switch (callable.arguments[index].type) {
+				case InferredType: false;
+				default: true;
+			}))
 				switch arguments[index] {
-					case Variable(argumentName, _):
-						inferred.set(argumentName, callable.arguments[index].type);
-					default:
-				}
+				case Variable(argumentName, _):
+					inferred.set(argumentName, callable.arguments[index].type);
+				default:
+			}
 	}
 
 	function resolveMemberPath(path:String, owner:AstClass, classes:Map<String, AstClass>):Null<AstType> {
@@ -376,12 +397,19 @@ class SignatureInference {
 		return compiler.QualifiedName.split(path);
 	}
 
-	function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>, ?owner:AstClass):AstFunction {
-		if ((switch (fn.result) { case InferredType: false; default: true; }))
+	function inferFunction(fn:AstFunction, enums:Map<String, AstEnum>, ?methods:Map<String, AstFunction>,
+			?owner:AstClass):AstFunction {
+		if ((switch (fn.result) {
+			case InferredType: false;
+			default: true;
+		}))
 			return fn;
 		var environment = new InferenceEnvironment();
 		for (argument in fn.arguments)
-			if ((switch (argument.type) { case InferredType: false; default: true; }))
+			if ((switch (argument.type) {
+				case InferredType: false;
+				default: true;
+			}))
 				environment.set(argument.name, argument.type);
 		if (owner != null)
 			for (field in owner.fields)
@@ -413,7 +441,8 @@ class SignatureInference {
 			span: fn.span
 		};
 
-	function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment, enums:Map<String, AstEnum>,
+	function collectReturnTypes(statements:Array<AstStatement>, environment:InferenceEnvironment,
+			enums:Map<String, AstEnum>,
 			methods:Null<Map<String, AstFunction>>, output:Array<AstType>):Bool {
 		var found = false;
 		for (statement in statements)
@@ -448,7 +477,8 @@ class SignatureInference {
 			case FloatLiteral(_, _): FloatType;
 			case StringLiteral(_, _): StringType;
 			case BoolLiteral(_, _): BoolType;
-			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _), NotEqual(_, _, _), Not(_, _), And(_, _, _),
+			case Less(_, _, _), LessEqual(_, _, _), Greater(_, _, _), GreaterEqual(_, _, _), Equal(_, _, _),
+				NotEqual(_, _, _), Not(_, _), And(_, _, _),
 				Or(_, _, _):
 				BoolType;
 			case Variable(name, _): environment.get(name);
@@ -457,12 +487,17 @@ class SignatureInference {
 			case NewArray(element, _, _): ArrayType(element);
 			case Call(name, _, _):
 				var method = methods == null ? null : methods.get(localMethodName(name));
-				if (method != null && (switch (method.result) { case InferredType: false; default: true; })) method.result; else inferQualifiedCollectionCall(name, environment);
+				if (method != null && (switch (method.result) {
+					case InferredType: false;
+					default: true;
+				})) method.result;
+				else inferQualifiedCollectionCall(name, environment);
 			case ClosureCall(callee, _, _): switch inferExpression(callee, environment, enums, methods) {
 					case FunctionType(_, result): result;
 					default: null;
 				};
-			case MethodCall(object, name, _, _): inferCollectionMethod(inferExpression(object, environment, enums, methods), name);
+			case MethodCall(object, name, _,
+				_): inferCollectionMethod(inferExpression(object, environment, enums, methods), name);
 			case SwitchExpression(subject, cases, fallback, _):
 				var subjectType = inferExpression(subject, environment, enums, methods),
 					inferred:Null<AstType> = null;
@@ -500,7 +535,8 @@ class SignatureInference {
 			default: null;
 		};
 
-	function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment, enums:Map<String, AstEnum>):Void {
+	function bindPattern(pattern:AstExpression, subjectType:Null<AstType>, environment:InferenceEnvironment,
+			enums:Map<String, AstEnum>):Void {
 		if (subjectType == null)
 			return;
 		var enumName = switch subjectType {
@@ -517,7 +553,8 @@ class SignatureInference {
 					if (caseDecl.name == caseName)
 						for (index in 0...arguments.length)
 							switch arguments[index] {
-								case Variable(binding, _) | Capture(binding, _, _) if (binding != "_" && index < caseDecl.params.length):
+								case Variable(binding, _) | Capture(binding, _,
+									_) if (binding != "_" && index < caseDecl.params.length):
 									environment.set(binding, caseDecl.params[index].type);
 								default:
 							}
@@ -567,7 +604,8 @@ class SignatureInference {
 					default: false;
 				};
 			case NativeAbstractType(declaration, tag): switch right {
-					case NativeAbstractType(otherDeclaration, otherTag): declaration == otherDeclaration && tag == otherTag;
+					case NativeAbstractType(otherDeclaration, otherTag): declaration == otherDeclaration
+						&& tag == otherTag;
 					default: false;
 				};
 			case NamedType(name): switch right {
@@ -575,7 +613,8 @@ class SignatureInference {
 					default: false;
 				};
 			case AppliedType(name, arguments): switch right {
-					case AppliedType(otherName, otherArguments): name == otherName && sameTypes(arguments, otherArguments);
+					case AppliedType(otherName, otherArguments): name == otherName
+						&& sameTypes(arguments, otherArguments);
 					default: false;
 				};
 			case ArrayType(element): switch right {
@@ -591,7 +630,8 @@ class SignatureInference {
 					default: false;
 				};
 			case FunctionType(arguments, result): switch right {
-					case FunctionType(otherArguments, otherResult): sameTypes(arguments, otherArguments) && sameType(result, otherResult);
+					case FunctionType(otherArguments, otherResult): sameTypes(arguments, otherArguments)
+						&& sameType(result, otherResult);
 					default: false;
 				};
 			case AnonymousType(fields): switch right {
@@ -609,12 +649,14 @@ class SignatureInference {
 		return true;
 	}
 
-	function sameFields(left:Array<compiler.syntax.Ast.AstAnonymousField>, right:Array<compiler.syntax.Ast.AstAnonymousField>):Bool {
+	function sameFields(left:Array<compiler.syntax.Ast.AstAnonymousField>,
+			right:Array<compiler.syntax.Ast.AstAnonymousField>):Bool {
 		if (left.length != right.length)
 			return false;
 		for (index in 0...left.length) {
 			var field = left[index], other = right[index];
-			if (field.name != other.name || field.optional != other.optional || field.isFinal != other.isFinal || !sameType(field.type, other.type))
+			if (field.name != other.name || field.optional != other.optional || field.isFinal != other.isFinal
+				|| !sameType(field.type, other.type))
 				return false;
 		}
 		return true;
@@ -635,13 +677,15 @@ class SignatureInference {
 						default:
 					}
 				case Assignment(fieldPath, value, _) if (StringTools.startsWith(fieldPath, "this.")):
-					constrainExpressionFromField(inferred, value, fieldPath.substring("this.".length, fieldPath.length), classDecl);
+					constrainExpressionFromField(inferred, value, fieldPath.substring("this.".length, fieldPath.length),
+						classDecl);
 				default:
 			}
 		return replaceArguments(fn, inferred);
 	}
 
-	function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String, classDecl:AstClass):Void
+	function constrainExpressionFromField(inferred:Map<String, AstType>, expression:AstExpression, fieldName:String,
+			classDecl:AstClass):Void
 		switch expression {
 			case Variable(argumentName, _):
 				constrainFromField(inferred, argumentName, fieldName, classDecl);
@@ -663,7 +707,10 @@ class SignatureInference {
 	function inferDefaultBoundArguments(fn:AstFunction):AstFunction {
 		var inferred:Map<String, AstType> = [];
 		for (argument in fn.arguments)
-			if ((switch (argument.type) { case InferredType: true; default: false; }) && argument.defaultValue != null) {
+			if ((switch (argument.type) {
+				case InferredType: true;
+				default: false;
+			}) && argument.defaultValue != null) {
 				var defaultType = inferSimpleExpression(argument.defaultValue, new InferenceEnvironment());
 				if (defaultType != null)
 					inferred.set(argument.name, defaultType);
@@ -674,24 +721,28 @@ class SignatureInference {
 	function replaceArguments(fn:AstFunction, inferred:Map<String, AstType>):AstFunction {
 		var changed = false;
 		for (argument in fn.arguments)
-			if ((switch (argument.type) { case InferredType: true; default: false; }) && inferred.get(argument.name) != null) {
+			if ((switch (argument.type) {
+				case InferredType: true;
+				default: false;
+			}) && inferred.get(argument.name) != null) {
 				changed = true;
 				break;
 			}
 		if (!changed)
 			return fn;
-		var arguments:Array<AstArgument> = [
-			for (argument in fn.arguments) {
-				var inferredType = (switch (argument.type) { case InferredType: true; default: false; }) && inferred.exists(argument.name) ? inferred.get(argument.name) : null;
-				{
-					name: argument.name,
-					type: inferredType == null ? argument.type : inferredType,
-					span: argument.span,
-					optional: argument.optional,
-					defaultValue: argument.defaultValue
-				};
-			}
-		];
+		var arguments:Array<AstArgument> = [for (argument in fn.arguments) {
+			var inferredType = (switch (argument.type) {
+				case InferredType: true;
+				default: false;
+			}) && inferred.exists(argument.name) ? inferred.get(argument.name) : null;
+			{
+				name:argument.name,
+					type:inferredType == null ? argument.type : inferredType,
+					span:argument.span,
+					optional:argument.optional,
+					defaultValue:argument.defaultValue
+			};
+		}];
 		return {
 			name: fn.name,
 			isStatic: fn.isStatic,
@@ -706,7 +757,8 @@ class SignatureInference {
 		};
 	}
 
-	function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String, classDecl:AstClass):Void
+	function constrainFromField(inferred:Map<String, AstType>, argumentName:String, fieldName:String,
+			classDecl:AstClass):Void
 		for (field in classDecl.fields)
 			if (field.name == fieldName) {
 				var fieldType = field.type;

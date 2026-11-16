@@ -11,7 +11,7 @@ import sys.io.File;
 class IdentityPath {
 	static final valueOptions = ["--project", "--target", "--build-mode", "--define", "--device", "--jobs"];
 
-	public static function run(arguments:Array<String>, build:Array<String> -> Int):Int {
+	public static function run(arguments:Array<String>, build:Array<String>->Int):Int {
 		var options = [], names = [], index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -26,11 +26,17 @@ class IdentityPath {
 			Sys.println("Usage: haxeon identity-path [--project PATH] FROM TO");
 			return 2;
 		}
-		var scratch = (Sys.getEnv("TMPDIR") ?? "/tmp") + "/haxeon-identity-path-" + Sys.getEnv("USER") + "-" + Std.int(Sys.time());
+		var scratch = (Sys.getEnv("TMPDIR") ?? "/tmp") + "/haxeon-identity-path-" + Sys.getEnv("USER") + "-"
+			+ Std.int(Sys.time());
 		FileSystem.createDirectory(scratch);
 		var graph = scratch + "/graph.txt";
 		Sys.putEnv("HAXEON_IDENTITY_GRAPH", graph);
-		var status = build(options.concat(["--output", scratch + "/identity.hl", "--define", "identity-graph=" + Std.int(Sys.time())]));
+		var status = build(options.concat([
+			"--output",
+			scratch + "/identity.hl",
+			"--define",
+			"identity-graph=" + Std.int(Sys.time())
+		]));
 		if (status != 0)
 			return status;
 		if (!FileSystem.exists(graph)) {
@@ -79,7 +85,8 @@ class IdentityPath {
 			importers.sort(Reflect.compare);
 			lines.push('Reachable modules that import $to directly (${importers.length}):');
 			for (importer in importers)
-				lines.push("  " + (parent.get(importer) == "" ? "(the module itself)" : parent.get(importer) + " -> ") + importer + " -> " + to);
+				lines.push("  " + (parent.get(importer) == "" ? "(the module itself)" : parent.get(importer) + " -> ")
+					+ importer + " -> " + to);
 		}
 		return lines.join("\n");
 	}

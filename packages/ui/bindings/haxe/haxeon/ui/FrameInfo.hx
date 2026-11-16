@@ -11,8 +11,10 @@ class FrameInfo {
 	public var framebufferHeight:Int;
 	public var pixelScale:Float;
 
-	public function new(logicalWidth:Float, logicalHeight:Float, framebufferWidth:Int, framebufferHeight:Int, pixelScale:Float) {
-		if (logicalWidth <= 0.0 || logicalHeight <= 0.0 || framebufferWidth <= 0 || framebufferHeight <= 0 || pixelScale <= 0.0)
+	public function new(logicalWidth:Float, logicalHeight:Float, framebufferWidth:Int, framebufferHeight:Int,
+			pixelScale:Float) {
+		if (logicalWidth <= 0.0 || logicalHeight <= 0.0 || framebufferWidth <= 0 || framebufferHeight <= 0
+			|| pixelScale <= 0.0)
 			throw "Frame dimensions and pixel scale must be positive";
 		this.logicalWidth = logicalWidth;
 		this.logicalHeight = logicalHeight;
@@ -25,8 +27,8 @@ class FrameInfo {
 	/** Updates this reusable frame description without allocating a new ABI struct. */
 	public function set(logicalWidth:Float, logicalHeight:Float, framebufferWidth:Int,
 			framebufferHeight:Int, pixelScale:Float):FrameInfo {
-		if (logicalWidth <= 0.0 || logicalHeight <= 0.0 || framebufferWidth <= 0 ||
-				framebufferHeight <= 0 || pixelScale <= 0.0)
+		if (logicalWidth <= 0.0 || logicalHeight <= 0.0 || framebufferWidth <= 0 || framebufferHeight <= 0
+			|| pixelScale <= 0.0)
 			throw "Frame dimensions and pixel scale must be positive";
 		this.logicalWidth = logicalWidth;
 		this.logicalHeight = logicalHeight;

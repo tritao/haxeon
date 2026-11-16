@@ -13,7 +13,13 @@ class WasmTypeIdPlanMain {
 	public static function run():Void {
 		var a:IrType = Obj("CaxscQFXbw"), b:IrType = Obj("CVqowVrIwv");
 		if (IrTypeIdentity.id(a) != IrTypeIdentity.id(b)) throw "collision fixture no longer collides";
-		var first = new WasmTypeIdPlan([a, b, Bytes, Array(Dyn)]), reversed = new WasmTypeIdPlan([Array(Dyn), Bytes, b, a]);
+		var first = new WasmTypeIdPlan([a, b, Bytes, Array(Dyn)]),
+			reversed = new WasmTypeIdPlan([
+				Array(Dyn),
+				Bytes,
+				b,
+				a
+			]);
 		if (first.id(a) == first.id(b)) throw "colliding runtime types share an ID";
 		if (first.id(a) != reversed.id(a) || first.id(b) != reversed.id(b)) throw "type IDs depend on collection order";
 		if (first.remapped().length != 1 || !first.compatibleWith(reversed)) throw "collision metadata is inconsistent";
@@ -27,7 +33,9 @@ class WasmTypeIdPlanMain {
 		if (planned.id(a) == planned.id(b) || planned.id(Array(Dyn)) == planned.id(Dyn))
 			throw "program plan omitted or conflated a runtime type";
 		for (target in [compiler.backend.Backend.BackendTarget.Wasm32, compiler.backend.Backend.BackendTarget.WasmGc]) {
-			var previous = patchProgram(false), next = patchProgram(true), backend = new WasmBackend(),
+			var previous = patchProgram(false),
+				next = patchProgram(true),
+				backend = new WasmBackend(),
 				options:compiler.backend.Backend.BackendOptions = {target: target, debugNames: true};
 			if (WasmPatch.plan(previous, next) != compiler.abi.PatchPlanner.PatchDecision.Patch)
 				throw "type ID patch fixture unexpectedly changes the semantic ABI";
@@ -48,7 +56,9 @@ class WasmTypeIdPlanMain {
 		builder.returnValue(builder.constInt(42));
 		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		program.objects = [for (name in ["CbXKjoemVa", "ChobQKjKLS"])
-			{name:name, isValue:false, base:null, interfaces:[], fields:[], methods:[]}];
+			{
+				name:name, isValue:false, base:null, interfaces:[], fields:[], methods:[]
+			}];
 		return program;
 	}
 }

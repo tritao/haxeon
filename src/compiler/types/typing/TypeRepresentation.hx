@@ -90,11 +90,13 @@ class TypeRepresentation {
 		return semanticType(type, span, substitutions);
 
 	/** Resolve a method result through the receiver's nominal projection. */
-	public function resolveMethodResult(receiver:CompilerType, owner:String, method:AstFunction):TypeRepresentationResult
+	public function resolveMethodResult(receiver:CompilerType, owner:String,
+			method:AstFunction):TypeRepresentationResult
 		return resolve(method.result, method.span, methodSubstitutions(receiver, owner));
 
 	/** Resolve all method parameters through the receiver's nominal projection. */
-	public function resolveMethodArguments(receiver:CompilerType, owner:String, method:AstFunction):Array<TypeRepresentationResult> {
+	public function resolveMethodArguments(receiver:CompilerType, owner:String,
+			method:AstFunction):Array<TypeRepresentationResult> {
 		var substitutions = methodSubstitutions(receiver, owner),
 			result:Array<TypeRepresentationResult> = [];
 		for (argument in method.arguments)
@@ -103,11 +105,13 @@ class TypeRepresentation {
 	}
 
 	/** Resolve one method parameter through the receiver's nominal projection. */
-	public function resolveMethodArgument(receiver:CompilerType, owner:String, argument:AstArgument):TypeRepresentationResult
+	public function resolveMethodArgument(receiver:CompilerType, owner:String,
+			argument:AstArgument):TypeRepresentationResult
 		return resolveArgument(argument, methodSubstitutions(receiver, owner));
 
 	/** Adapt semantic call arguments to the physical method signature. */
-	public function adaptMethodArguments(receiver:CompilerType, owner:String, method:AstFunction, arguments:Array<TypedExpression>):Array<TypedExpression> {
+	public function adaptMethodArguments(receiver:CompilerType, owner:String, method:AstFunction,
+			arguments:Array<TypedExpression>):Array<TypedExpression> {
 		return adaptArguments(arguments, [
 			for (representation in resolveMethodArguments(receiver, owner, method))
 				representation.physical
@@ -124,7 +128,8 @@ class TypeRepresentation {
 	}
 
 	/** Build substitutions for a declaration when an omitted argument is erased. */
-	public function typeParameterSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, CompilerType> {
+	public function typeParameterSubstitutions(parameters:Array<String>,
+			arguments:Array<CompilerType>):Map<String, CompilerType> {
 		var result:Map<String, CompilerType> = [];
 		for (index in 0...parameters.length)
 			result.set(parameters[index], index < arguments.length ? arguments[index] : TDynamic);
@@ -132,7 +137,8 @@ class TypeRepresentation {
 	}
 
 	/** Resolve an enum payload through the use-site instance. */
-	public function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:Null<CompilerType>):CompilerType {
+	public function enumParameterType(typeParameters:Array<String>, parameter:AstEnumParameter,
+			instance:Null<CompilerType>):CompilerType {
 		var arguments = switch enumInstance(instance) {
 			case TInstance(Enum, _, values): values;
 			default: [];
@@ -148,7 +154,8 @@ class TypeRepresentation {
 			declaration = session.classDecls.get(owner);
 		if (declaration != null)
 			for (parameter in declaration.typeParameters)
-				arguments.push(substitutions != null && substitutions.exists(parameter) ? substitutions.get(parameter) : TDynamic);
+				arguments.push(substitutions != null
+					&& substitutions.exists(parameter) ? substitutions.get(parameter) : TDynamic);
 		return TInstance(NominalKind.Class, owner, arguments);
 	}
 
@@ -156,12 +163,14 @@ class TypeRepresentation {
 	 * Select the physical substitutions for a generic function body. This is
 	 * the only typing service entry point that applies shape specialization.
 	 */
-	public function genericFunction(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>):GenericRepresentationResult {
+	public function genericFunction(fn:AstFunction,
+			semanticSubstitutions:Map<String, CompilerType>):GenericRepresentationResult {
 		var substitutions = copyMap(semanticSubstitutions),
 			policies:Array<String> = [];
 		for (parameter in functionTypeParameters(fn)) {
 			var semantic = requiredMapValue(semanticSubstitutions, parameter),
-				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic, type -> requiresLayoutSpecialization(type)
+				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic,
+					type -> requiresLayoutSpecialization(type)
 					|| functionUsesGenericEnum(fn, parameter));
 			substitutions.set(parameter, decision.representation);
 			policies.push(decision.policy);
@@ -184,36 +193,50 @@ class TypeRepresentation {
 	public function genericOwner(type:CompilerType):Null<GenericOwnerRepresentation> {
 		var name:String, arguments:Array<CompilerType>;
 		switch type {
-			case TInstance(NominalKind.Class, owner, values): name = owner; arguments = values;
+			case TInstance(NominalKind.Class, owner, values): name = owner;
+				arguments = values;
 			default: return null;
 		}
 		var declaration = session.classDecls.get(name);
-		if (declaration == null || declaration.typeParameters.length == 0 || arguments.length != declaration.typeParameters.length)
+		if (declaration == null || declaration.typeParameters.length == 0
+			|| arguments.length != declaration.typeParameters.length)
 			return null;
 		var needsSpecialization = declaration.typeConstraints != null && declaration.typeConstraints.length > 0;
 		if (declaration.typeConstraints != null)
 			for (constraint in declaration.typeConstraints) {
 				var index = declaration.typeParameters.indexOf(constraint.parameter);
-				if (index >= 0 && (switch (arguments[index]) { case TDynamic: true; default: false; })) return null;
+				if (index >= 0 && (switch (arguments[index]) {
+					case TDynamic: true;
+					default: false;
+				})) return null;
 			}
 		for (index in 0...arguments.length) {
 			var argument = arguments[index];
 			if (containsTypeParameter(argument, [])) return null;
 			// A generic implementation of a generic interface must retain scalar carriers in
 			// its physical methods. Follow inherited interfaces as well as direct ones.
-			if (switch argument { case TInt | TInt64 | TFloat | TBool: true; default: false; })
+			if (switch argument {
+				case TInt | TInt64 | TFloat | TBool: true;
+				default: false;
+			})
 				for (interfaceType in session.declarations.inheritance.inheritedInterfaces(type))
-					switch interfaceType {
-						case TInstance(Interface, _, parameters):
-							for (parameter in parameters) if (TypeRelations.equals(argument, parameter)) needsSpecialization = true;
-						default:
-					}
-			if (ownerContainsValue(argument) || (switch argument { case TDynamic: false; default: ownerUsesGenericEnum(declaration, declaration.typeParameters[index]); }))
+				switch interfaceType {
+				case TInstance(Interface, _, parameters):
+					for (parameter in parameters) if (TypeRelations.equals(argument, parameter)) needsSpecialization =
+						true;
+				default:
+			}
+			if (ownerContainsValue(argument) || (switch argument {
+				case TDynamic: false;
+				default: ownerUsesGenericEnum(declaration, declaration.typeParameters[index]);
+			}))
 				needsSpecialization = true;
 		}
 		if (!needsSpecialization)
 			return null;
-		var substitutions:Map<String, CompilerType> = [], policies:Array<String> = [], representations:Array<CompilerType> = [];
+		var substitutions:Map<String, CompilerType> = [],
+			policies:Array<String> = [],
+			representations:Array<CompilerType> = [];
 		for (index in 0...arguments.length) {
 			var parameter = declaration.typeParameters[index],
 				decision = GenericSpecializationPolicy.decideOwner(declaration, parameter, arguments[index],
@@ -244,27 +267,38 @@ class TypeRepresentation {
 		var remaining = [MAX_OWNER_TYPE_NODES];
 		for (argument in arguments)
 			if (exceedsOwnerComplexity(argument, 1, [], remaining))
-				throw new CompileError(new Diagnostic("E1028", 'Generic owner "$name" exceeds the specialization type complexity limit ($MAX_OWNER_TYPE_DEPTH nesting levels or $MAX_OWNER_TYPE_NODES type nodes); check for polymorphic recursion', span));
+				throw new CompileError(new Diagnostic("E1028",
+					'Generic owner "$name" exceeds the specialization type complexity limit ($MAX_OWNER_TYPE_DEPTH nesting levels or $MAX_OWNER_TYPE_NODES type nodes); check for polymorphic recursion',
+					span));
 	}
 
 	/** Follow structural type arguments, stopping at recursive anonymous records. */
-	static function exceedsOwnerComplexity(type:CompilerType, depth:Int, active:Array<Array<compiler.types.Type.AnonymousField>>, remaining:Array<Int>):Bool {
+	static function exceedsOwnerComplexity(type:CompilerType, depth:Int,
+			active:Array<Array<compiler.types.Type.AnonymousField>>, remaining:Array<Int>):Bool {
 		remaining[0]--;
 		if (depth > MAX_OWNER_TYPE_DEPTH || remaining[0] < 0) return true;
 		return switch type {
 			case TInstance(_, _, arguments): anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining);
 			case TAbstract(_, arguments, representation):
-				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining) || exceedsOwnerComplexity(representation, depth + 1, active, remaining);
-			case TNullable(inner), TArray(inner), TIterator(inner): exceedsOwnerComplexity(inner, depth + 1, active, remaining);
-			case TMap(key, value): exceedsOwnerComplexity(key, depth + 1, active, remaining) || exceedsOwnerComplexity(value, depth + 1, active, remaining);
-			case TKeyPath(root, value, _): exceedsOwnerComplexity(root, depth + 1, active, remaining) || exceedsOwnerComplexity(value, depth + 1, active, remaining);
+				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining)
+					|| exceedsOwnerComplexity(representation, depth + 1, active, remaining);
+			case TNullable(inner), TArray(inner),
+				TIterator(inner): exceedsOwnerComplexity(inner, depth + 1, active, remaining);
+			case TMap(key, value): exceedsOwnerComplexity(key, depth + 1, active, remaining)
+				|| exceedsOwnerComplexity(value, depth + 1, active, remaining);
+			case TKeyPath(root, value, _): exceedsOwnerComplexity(root, depth + 1, active, remaining)
+				|| exceedsOwnerComplexity(value, depth + 1, active, remaining);
 			case TFunction(arguments, result):
-				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining) || exceedsOwnerComplexity(result, depth + 1, active, remaining);
+				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining)
+					|| exceedsOwnerComplexity(result, depth + 1, active, remaining);
 			case TAnonymous(_, fields):
 				if (active.indexOf(fields) >= 0) false else {
 					active.push(fields);
 					var exceeded = false;
-					for (field in fields) if (exceedsOwnerComplexity(field.type, depth + 1, active, remaining)) { exceeded = true; break; }
+					for (field in fields) if (exceedsOwnerComplexity(field.type, depth + 1, active, remaining)) {
+						exceeded = true;
+						break;
+					}
 					active.pop();
 					exceeded;
 				}
@@ -272,7 +306,8 @@ class TypeRepresentation {
 		};
 	}
 
-	static function anyExceedsOwnerComplexity(types:Array<CompilerType>, depth:Int, active:Array<Array<compiler.types.Type.AnonymousField>>, remaining:Array<Int>):Bool {
+	static function anyExceedsOwnerComplexity(types:Array<CompilerType>, depth:Int,
+			active:Array<Array<compiler.types.Type.AnonymousField>>, remaining:Array<Int>):Bool {
 		for (type in types) if (exceedsOwnerComplexity(type, depth, active, remaining)) return true;
 		return false;
 	}
@@ -323,7 +358,10 @@ class TypeRepresentation {
 
 	/** Record the typer's selected map representation under the source Map type as well as its generic owner. */
 	public function specializedMapOwner(key:CompilerType, value:CompilerType):Void {
-		var owner = genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [session.specializedMapKey(key), value]));
+		var owner = genericOwner(TInstance(NominalKind.Class, RuntimeType.SPECIALIZED_MAP, [
+			session.specializedMapKey(key),
+			value
+		]));
 		if (owner != null) ownerAliases.set(SemanticSignature.type(TMap(key, value)), owner.name);
 	}
 
@@ -331,7 +369,8 @@ class TypeRepresentation {
 	public function discoverGenericOwners(type:CompilerType, ?origin:String):Void
 		discoverOwners(type, [], origin);
 
-	function discoverOwners(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>, origin:Null<String>):Void {
+	function discoverOwners(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>,
+			origin:Null<String>):Void {
 		switch type {
 			case TInstance(_, _, arguments):
 				genericOwner(type);
@@ -345,8 +384,10 @@ class TypeRepresentation {
 					if (origin != null) session.runtimeDependencyTracker.record(origin, RuntimeType.SPECIALIZED_MAP);
 					specializedMapOwner(key, value);
 				}
-				discoverOwners(key, explored, origin); discoverOwners(value, explored, origin);
-			case TKeyPath(root, value, _): discoverOwners(root, explored, origin); discoverOwners(value, explored, origin);
+				discoverOwners(key, explored, origin);
+				discoverOwners(value, explored, origin);
+			case TKeyPath(root, value, _): discoverOwners(root, explored, origin);
+				discoverOwners(value, explored, origin);
 			case TFunction(arguments, result):
 				for (argument in arguments) discoverOwners(argument, explored, origin);
 				discoverOwners(result, explored, origin);
@@ -359,15 +400,19 @@ class TypeRepresentation {
 		}
 	}
 
-	public function containsTypeParameter(type:CompilerType, explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
+	public function containsTypeParameter(type:CompilerType,
+			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
 		return switch type {
 			case TTypeParameter(_, _): true;
 			case TInstance(_, _, arguments): anyTypeParameter(arguments, explored);
-			case TAbstract(_, arguments, representation): anyTypeParameter(arguments, explored) || containsTypeParameter(representation, explored);
+			case TAbstract(_, arguments, representation): anyTypeParameter(arguments, explored)
+				|| containsTypeParameter(representation, explored);
 			case TNullable(inner), TArray(inner), TIterator(inner): containsTypeParameter(inner, explored);
 			case TMap(key, value): containsTypeParameter(key, explored) || containsTypeParameter(value, explored);
-			case TKeyPath(root, value, _): containsTypeParameter(root, explored) || containsTypeParameter(value, explored);
-			case TFunction(arguments, result): anyTypeParameter(arguments, explored) || containsTypeParameter(result, explored);
+			case TKeyPath(root, value, _): containsTypeParameter(root, explored)
+				|| containsTypeParameter(value, explored);
+			case TFunction(arguments, result): anyTypeParameter(arguments, explored)
+				|| containsTypeParameter(result, explored);
 			case TAnonymous(_, fields):
 				var found = false;
 				if (explored.indexOf(fields) < 0) {
@@ -379,7 +424,8 @@ class TypeRepresentation {
 			default: false;
 		};
 
-	function anyTypeParameter(types:Array<CompilerType>, explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
+	function anyTypeParameter(types:Array<CompilerType>,
+			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
 		for (type in types)
 			if (containsTypeParameter(type, explored)) return true;
 		return false;
@@ -393,12 +439,15 @@ class TypeRepresentation {
 		seen.push(key);
 		var found = owner.base != null && enumContainsParameter(owner.base, parameter, seen);
 		for (contract in owner.interfaces) if (enumContainsParameter(contract, parameter, seen)) found = true;
-		for (field in owner.fields) if (!field.isStatic && field.type != null && enumContainsParameter(field.type, parameter, seen)) found = true;
+		for (field in owner.fields) if (!field.isStatic && field.type != null
+			&& enumContainsParameter(field.type, parameter, seen)) found = true;
 		for (method in owner.methods) {
-			if (method.isStatic || method.typeParameters != null && method.typeParameters.indexOf(parameter) >= 0) continue;
+			if (method.isStatic || method.typeParameters != null
+				&& method.typeParameters.indexOf(parameter) >= 0) continue;
 			for (argument in method.arguments) if (enumContainsParameter(argument.type, parameter, seen)) found = true;
 			if (enumContainsParameter(method.result, parameter, seen)) found = true;
-			if (!found && compiler.types.analysis.GenericEnumUsage.uses(method, type -> enumContainsParameter(type, parameter, seen))) found = true;
+			if (!found && compiler.types.analysis.GenericEnumUsage.uses(method,
+				type -> enumContainsParameter(type, parameter, seen))) found = true;
 		}
 		seen.pop();
 		return found;
@@ -407,7 +456,8 @@ class TypeRepresentation {
 	function enumContainsParameter(type:AstType, parameter:String, seen:Array<String>):Bool return switch type {
 		case AppliedType(name, arguments):
 			var found = false, alias = session.declarations.aliases.get(name), owner = session.classDecls.get(name);
-			if (session.enumDecls.exists(name)) for (argument in arguments) if (containsSyntaxParameter(argument, parameter)) found = true;
+			if (session.enumDecls.exists(name)) for (argument in arguments) if (containsSyntaxParameter(argument,
+				parameter)) found = true;
 			if (alias != null) {
 				var key = "alias:" + name;
 				if (seen.indexOf(key) < 0) {
@@ -420,11 +470,12 @@ class TypeRepresentation {
 			}
 			if (owner != null) for (index in 0...arguments.length)
 				if (index < owner.typeParameters.length && containsSyntaxParameter(arguments[index], parameter)
-					&& ownerUsesGenericEnum(owner, owner.typeParameters[index], seen)) found = true;
+				&& ownerUsesGenericEnum(owner, owner.typeParameters[index], seen)) found = true;
 			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
 			found;
 		case ArrayType(element), NullableType(element): enumContainsParameter(element, parameter, seen);
-		case MapType(key, value): enumContainsParameter(key, parameter, seen) || enumContainsParameter(value, parameter, seen);
+		case MapType(key, value): enumContainsParameter(key, parameter, seen)
+			|| enumContainsParameter(value, parameter, seen);
 		case FunctionType(arguments, result):
 			var found = enumContainsParameter(result, parameter, seen);
 			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
@@ -460,7 +511,8 @@ class TypeRepresentation {
 		return switch type {
 			case TAbstract(_, _, representation), TNullable(representation): ownerContainsValue(representation);
 			case TInstance(NominalKind.Class, _, _): session.relations.isValueClass(type);
-			case TInstance(NominalKind.Enum, _, _), TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_), THlBytes: true;
+			case TInstance(NominalKind.Enum, _, _), TInstance(NominalKind.NativeValue, _, _), TNativeScalar(_),
+				THlBytes: true;
 			default: false;
 		};
 
@@ -468,12 +520,15 @@ class TypeRepresentation {
 	function requiresLayoutSpecialization(type:CompilerType):Bool
 		return NativeLayout.containsNativeLayoutType(type) || containsExactValueLayout(type, null);
 
-	function containsExactValueLayout(type:CompilerType, explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
+	function containsExactValueLayout(type:CompilerType,
+			explored:Null<Array<Array<compiler.types.Type.AnonymousField>>>):Bool
 		return switch type {
 			case THlBytes: true; // A raw pointer is a scalar carrier, not a shared managed reference.
-			case TInstance(NominalKind.Class, name, _) if (session.nativeLayoutsByName.exists(name) || session.relations.isValueClass(type)): true;
+			case TInstance(NominalKind.Class, name,
+				_) if (session.nativeLayoutsByName.exists(name) || session.relations.isValueClass(type)): true;
 			case TInstance(NominalKind.Enum, _, _): true;
-			case TAbstract(_, _, representation), TNullable(representation), TArray(representation), TIterator(representation):
+			case TAbstract(_, _, representation), TNullable(representation), TArray(representation),
+				TIterator(representation):
 				containsExactValueLayout(representation, explored);
 			case TMap(key, value): containsExactValueLayout(key, explored) || containsExactValueLayout(value, explored);
 			case TKeyPath(_, _, _): true;
@@ -496,7 +551,8 @@ class TypeRepresentation {
 		};
 
 	/** Resolve and adapt one generic call across its shared-body ABI boundary. */
-	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>, arguments:Array<TypedExpression>,
+	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>,
+			arguments:Array<TypedExpression>,
 			argumentType:GenericArgumentTypeResolver):GenericCallRepresentationResult {
 		var representation = genericFunction(fn, semanticSubstitutions),
 			argumentTypes = [
@@ -549,7 +605,8 @@ class TypeRepresentation {
 		if (hasMapStorageChange(mapBoundaryType(value.type), mapBoundaryType(target), [])) {
 			var context = owner == null ? "Generic map boundary" : 'Type "${SemanticSignature.display(owner)}"';
 			throw new CompileError(new Diagnostic("E1009",
-				'$context: scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary (${SemanticSignature.display(value.type)} to ${SemanticSignature.display(target)})', value.span));
+				'$context: scalar map values in unspecialized generic owners are not supported yet at a storage-changing boundary (${SemanticSignature.display(value.type)} to ${SemanticSignature.display(target)})',
+				value.span));
 		}
 	}
 
@@ -575,43 +632,52 @@ class TypeRepresentation {
 			seen:Array<ScalarMapRecordPair>):Bool {
 		return switch actual {
 			case TAbstract(_, _, representation):
-				hasMapStorageChange(representation, switch physical { case TAbstract(_, _, value): value; default: physical; }, seen);
+				hasMapStorageChange(representation, switch physical {
+					case TAbstract(_, _, value): value;
+					default: physical;
+				}, seen);
 			case TMap(key, value): switch physical {
-				case TMap(erasedKey, erasedValue):
-					var storage = mapStorageName(key, value), erasedStorage = mapStorageName(erasedKey, erasedValue);
-					(storage != null && erasedStorage != null && storage != erasedStorage)
-						|| hasMapStorageChange(key, erasedKey, seen) || hasMapStorageChange(value, erasedValue, seen);
-				default: false;
-			};
+					case TMap(erasedKey, erasedValue):
+						var storage = mapStorageName(key, value),
+							erasedStorage = mapStorageName(erasedKey, erasedValue);
+						(storage != null && erasedStorage != null && storage != erasedStorage)
+							|| hasMapStorageChange(key, erasedKey, seen)
+							|| hasMapStorageChange(value, erasedValue, seen);
+					default: false;
+				};
 			case TNullable(value), TArray(value), TIterator(value): switch physical {
-				case TNullable(erasedValue), TArray(erasedValue), TIterator(erasedValue): hasMapStorageChange(value, erasedValue, seen);
-				default: false;
-			};
+					case TNullable(erasedValue), TArray(erasedValue),
+						TIterator(erasedValue): hasMapStorageChange(value, erasedValue, seen);
+					default: false;
+				};
 			case TInstance(_, _, values): switch physical {
-				case TInstance(_, _, erasedValues): scalarMapArguments(values, erasedValues, seen);
-				default: false;
-			};
+					case TInstance(_, _, erasedValues): scalarMapArguments(values, erasedValues, seen);
+					default: false;
+				};
 			case TFunction(values, result): switch physical {
-				case TFunction(erasedValues, erasedResult): scalarMapArguments(values, erasedValues, seen) || hasMapStorageChange(result, erasedResult, seen);
-				default: false;
-			};
+					case TFunction(erasedValues, erasedResult): scalarMapArguments(values, erasedValues, seen)
+						|| hasMapStorageChange(result, erasedResult, seen);
+					default: false;
+				};
 			case TKeyPath(root, value, _): switch physical {
-				case TKeyPath(erasedRoot, erasedValue, _): hasMapStorageChange(root, erasedRoot, seen) || hasMapStorageChange(value, erasedValue, seen);
-				default: false;
-			};
+					case TKeyPath(erasedRoot, erasedValue, _): hasMapStorageChange(root, erasedRoot, seen)
+						|| hasMapStorageChange(value, erasedValue, seen);
+					default: false;
+				};
 			case TAnonymous(_, fields): switch physical {
-				case TAnonymous(_, erasedFields) if (fields.length == erasedFields.length):
-					var active = false;
-					for (pair in seen) if (pair.semantic == fields && pair.physical == erasedFields) active = true;
-					if (active) false else {
-						seen.push({semantic: fields, physical: erasedFields});
-						var found = false;
-						for (index in 0...fields.length) if (hasMapStorageChange(fields[index].type, erasedFields[index].type, seen)) found = true;
-						seen.pop();
-						found;
-					}
-				default: false;
-			};
+					case TAnonymous(_, erasedFields) if (fields.length == erasedFields.length):
+						var active = false;
+						for (pair in seen) if (pair.semantic == fields && pair.physical == erasedFields) active = true;
+						if (active) false else {
+							seen.push({semantic: fields, physical: erasedFields});
+							var found = false;
+							for (index in 0...fields.length) if (hasMapStorageChange(fields[index].type,
+								erasedFields[index].type, seen)) found = true;
+							seen.pop();
+							found;
+						}
+					default: false;
+				};
 			default: false;
 		};
 	}
@@ -631,7 +697,8 @@ class TypeRepresentation {
 	}
 
 	/** Physical storage type for an enum constructor payload. */
-	public function enumStorageType(typeParameters:Array<String>, parameter:AstEnumParameter, instance:CompilerType):CompilerType
+	public function enumStorageType(typeParameters:Array<String>, parameter:AstEnumParameter,
+			instance:CompilerType):CompilerType
 		return session.enumRepresentations.storage(typeParameters, parameter, instance);
 
 	/** Resolve an abstract's underlying representation without losing identity. */
@@ -644,13 +711,20 @@ class TypeRepresentation {
 	public function nominalSubstitutions(type:CompilerType):Map<String, CompilerType>
 		return session.declarations.inheritance.substitutions(type);
 
-	public function methodSubstitutions(receiver:CompilerType, owner:String):{semantic:Map<String, CompilerType>, physical:Map<String, CompilerType>} {
+	public function methodSubstitutions(receiver:CompilerType, owner:String): {
+		semantic: Map<String, CompilerType>,
+		physical: Map<String, CompilerType>
+	} {
 		var projected = projectNominal(receiver, owner),
 			semantic = nominalSubstitutions(projected),
 			specialization = genericOwner(projected),
-			typedInterface = switch projected { case TInstance(Interface, _, arguments) if (arguments.length > 0): true; default: false; },
-			physical = specialization != null ? copyMap(specialization.substitutions)
-				: typedInterface ? copyMap(semantic) : isGenericNominal(projected) ? erasedNominalSubstitutions(owner) : copyMap(semantic);
+			typedInterface = switch projected {
+				case TInstance(Interface, _, arguments) if (arguments.length > 0): true;
+				default: false;
+			},
+				physical = specialization != null ? copyMap(specialization.substitutions)
+				: typedInterface ? copyMap(semantic) : isGenericNominal(projected)
+				? erasedNominalSubstitutions(owner) : copyMap(semantic);
 		return {semantic: semantic, physical: physical};
 	}
 
@@ -660,7 +734,8 @@ class TypeRepresentation {
 			default: false;
 		};
 
-	function adaptArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>, ?owner:CompilerType):Array<TypedExpression> {
+	function adaptArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>,
+			?owner:CompilerType):Array<TypedExpression> {
 		return [
 			for (index in 0...arguments.length)
 				boundaryCast(arguments[index], expected[index], owner)
@@ -675,14 +750,20 @@ class TypeRepresentation {
 		};
 
 	function resolve(type:AstType, span:SourceSpan,
-			substitutions:{semantic:Map<String, CompilerType>, physical:Map<String, CompilerType>}):TypeRepresentationResult
+			substitutions: {
+				semantic: Map<String, CompilerType>,
+				physical: Map<String, CompilerType>
+			}):TypeRepresentationResult
 		return {
 			semantic: semanticType(type, span, substitutions.semantic),
 			physical: physicalType(type, span, substitutions.physical)
 		};
 
 	function resolveArgument(argument:AstArgument,
-			substitutions:{semantic:Map<String, CompilerType>, physical:Map<String, CompilerType>}):TypeRepresentationResult {
+			substitutions: {
+				semantic: Map<String, CompilerType>,
+				physical: Map<String, CompilerType>
+			}):TypeRepresentationResult {
 		var result = resolve(argument.type, argument.span, substitutions);
 		var alreadyNullable = switch result.semantic {
 			case TNullable(_): true;
@@ -712,10 +793,12 @@ class TypeRepresentation {
 				if (declaration != null) {
 					for (field in declaration.fields)
 						if (field.name == name && !field.isStatic)
-							return session.declarations.resolve(session.declarations.resolvedFieldType(className, field), field.span,
+							return session.declarations.resolve(session.declarations.resolvedFieldType(className,
+								field), field.span,
 								nominalSubstitutions(type));
 					if (declaration.base != null)
-						return fieldType(session.declarations.resolve(declaration.base, declaration.span, nominalSubstitutions(type)), name, span);
+						return fieldType(session.declarations.resolve(declaration.base, declaration.span,
+							nominalSubstitutions(type)), name, span);
 				}
 				throw new CompileError(new Diagnostic("E1005", 'Unknown field "$className.$name"', span));
 			default:
@@ -728,13 +811,17 @@ class TypeRepresentation {
 			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
 				var declaration = requiredMapValue(session.classDecls, className),
 					specialization = genericOwner(type),
-					substitutions = specialization == null ? erasedNominalSubstitutions(className) : specialization.substitutions,
+					substitutions = specialization == null
+						? erasedNominalSubstitutions(className) : specialization.substitutions,
 					result:Null<CompilerType> = null;
 				for (field in declaration.fields)
 					if (field.name == name && !field.isStatic)
-						result = physicalType(session.declarations.resolvedFieldType(className, field), field.span, substitutions);
-				if (result != null) result; else if (declaration.base != null) physicalFieldType(session.declarations.resolve(declaration.base,
-					declaration.span, substitutions), name, span); else fieldType(type, name, span);
+						result = physicalType(session.declarations.resolvedFieldType(className, field), field.span,
+							substitutions);
+				if (result != null) result;
+				else if (declaration.base != null) physicalFieldType(session.declarations.resolve(declaration.base,
+					declaration.span, substitutions), name, span);
+				else fieldType(type, name, span);
 			default:
 				fieldType(type, name, span);
 		};

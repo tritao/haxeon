@@ -93,10 +93,15 @@ class WasmGcRoots {
 					if (WasmTarget.isReference(input.type))
 						setBit(current, requiredIndex(referenceIndices, input.id));
 				if (isSafepoint(instruction, fields))
-					result.push({block: id, instruction: block.instructions.length - 1 - index, liveReferences: liveReferenceIds(current, referenceIds)});
+					result.push({
+						block: id,
+						instruction: block.instructions.length - 1 - index,
+						liveReferences: liveReferenceIds(current, referenceIds)
+					});
 			}
 		}
-		result.sort(function(left, right) return left.block == right.block ? left.instruction - right.instruction : left.block - right.block);
+		result.sort(function(left, right) return left.block == right.block
+			? left.instruction - right.instruction : left.block - right.block);
 		return result;
 	}
 
@@ -142,7 +147,8 @@ class WasmGcRoots {
 	// ValueInit is pure in IR, but a surviving non-scalar value can allocate when lowered.
 	static function isSafepoint(instruction:IrInstruction, fields:Map<String, Bool>):Bool
 		return switch instruction {
-			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), NewObject(_, _), ValueInit(_),
+			case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), NewObject(_, _),
+				ValueInit(_),
 				InstanceClosure(_, _, _), IteratorNew(_, _), BeginTry(_, _, _): true;
 			case MakeEnum(output, _, _, _): switch output.type {
 					case EnumTag(_): false;

@@ -13,7 +13,8 @@ class PackageCompatibility {
 	public final nativeRequirements:Array<String>;
 	public final features:Array<String>;
 
-	public function new(?haxeon:String, ?targets:Array<String>, ?runtimeAbi:String, ?nativeRequirements:Array<String>, ?features:Array<String>) {
+	public function new(?haxeon:String, ?targets:Array<String>, ?runtimeAbi:String, ?nativeRequirements:Array<String>,
+			?features:Array<String>) {
 		this.haxeon = haxeon;
 		this.targets = targets == null ? [] : targets.copy();
 		this.runtimeAbi = runtimeAbi;
@@ -125,7 +126,7 @@ class PackageCompatibility {
 		var value:Dynamic = Reflect.field(raw, field);
 		if (value == null)
 			return null;
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw '$path "$field" must be a non-empty string';
 		return cast value;
 	}
@@ -137,8 +138,8 @@ class PackageCompatibility {
 		if (!Std.isOfType(value, Array))
 			throw '$path "$field" must be an array of strings';
 		var result:Array<String> = [];
-		for (item in (cast value : Array<Dynamic>)) {
-			if (!Std.isOfType(item, String) || (cast item : String).length == 0)
+		for (item in (cast value:Array<Dynamic>)) {
+			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
 				throw '$path "$field" must contain only non-empty strings';
 			result.push(cast item);
 		}

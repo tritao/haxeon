@@ -107,8 +107,10 @@ class CfgBuilder {
 	public function jumpFrom(source:CfgBlock, target:CfgBlock):Void {
 		if (source.terminator != null)
 			throw 'CFG block ${source.id} already has a terminator';
-		var anchor = source.instructions.length == 0 ? provenance.location : source.instructions[source.instructions.length - 1].provenance.location;
-		source.terminator = new Located(Jump(target.id), new SourceProvenance(anchor, SourceOrigin.CompilerGenerated("structured-join")));
+		var anchor = source.instructions.length == 0
+			? provenance.location : source.instructions[source.instructions.length - 1].provenance.location;
+		source.terminator = new Located(Jump(target.id),
+			new SourceProvenance(anchor, SourceOrigin.CompilerGenerated("structured-join")));
 	}
 
 	public function branch(condition:CfgValue, yes:CfgBlock, no:CfgBlock):Void
@@ -398,7 +400,8 @@ class CfgBuilder {
 		return out;
 	}
 
-	public function methodCall(object:CfgValue, methodName:String, args:Array<CfgValue>, result:IrType, terminalReceiver:Bool = false):CfgValue {
+	public function methodCall(object:CfgValue, methodName:String, args:Array<CfgValue>, result:IrType,
+			terminalReceiver:Bool = false):CfgValue {
 		var out = temporary(result);
 		emit(MethodCall(out, object, methodName, args, terminalReceiver));
 		return out;

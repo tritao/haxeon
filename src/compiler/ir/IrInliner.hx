@@ -26,7 +26,8 @@ class InlineMemo {
 
 	public final result:IrFunction;
 
-	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, objects:Map<String, Int>, result:IrFunction) {
+	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, objects:Map<String, Int>,
+			result:IrFunction) {
 		this.source = source;
 		this.fingerprint = fingerprint;
 		this.dependencies = dependencies;
@@ -344,8 +345,12 @@ class IrInliner {
 					}
 			edges.push(targets);
 		}
-		var order:Array<Int> = [for (_ in 0...count) -1], low:Array<Int> = [for (_ in 0...count) 0], onStack:Array<Bool> = [for (_ in 0...count) false],
-			stack:Array<Int> = [], counter = 0, component = 0;
+		var order:Array<Int> = [for (_ in 0...count) -1],
+			low:Array<Int> = [for (_ in 0...count) 0],
+			onStack:Array<Bool> = [for (_ in 0...count) false],
+			stack:Array<Int> = [],
+			counter = 0,
+			component = 0;
 		for (root in 0...count) {
 			if (order[root] >= 0)
 				continue;
@@ -400,23 +405,25 @@ class IrInliner {
 	/** Include every field storage fact consulted by scalar replacement and load/store forwarding. */
 	static function describe(object:IrObject):String {
 		var methods = [for (method in object.methods) method.name + "=" + method.functionName].join(",");
-		var fields = [
-			for (field in object.fields)
-				if (object.isValue
-					|| IrFieldStorage.scalar(field) != null
-					|| field.nullableScalarStorage != null
-					|| (switch (field.type) {
-						case F32: true;
-						default: false;
-					})) {var native = field.nativeLayout, scalar = IrFieldStorage.scalar(field), nullable = field.nullableScalarStorage;
-					field.name
-					+ "="
-					+ Std.string(field.type)
-					+ (native == null ? "" : ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
-					+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}')
-					+ (nullable == null ? "" : ':nullable=${nullable.size}:${nullable.signed}');
-					}
-		].join(",");
+		var fields = [for (field in object.fields)
+			if (object.isValue
+			|| IrFieldStorage.scalar(field) != null
+			|| field.nullableScalarStorage != null
+			|| (switch (field.type) {
+				case F32: true;
+				default: false;
+			})) {
+			var native = field.nativeLayout,
+				scalar = IrFieldStorage.scalar(field),
+				nullable = field.nullableScalarStorage;
+			field.name
+				+ "="
+				+ Std.string(field.type)
+				+ (native == null ? ""
+				: ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
+				+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}')
+				+ (nullable == null ? "" : ':nullable=${nullable.size}:${nullable.signed}');
+		}].join(",");
 		return object.name + "<" + Std.string(object.base) + ":" + object.isValue + ":" + methods + ":" + fields;
 	}
 
@@ -571,7 +578,8 @@ class IrInliner {
 		var consultedObjects:Map<String, Bool> = [];
 		objectFrames.push(consultedObjects);
 		table.consulted = consultedObjects;
-		var result = allowInline ? inlineCalls(original) : profile.packedValueFields ? IrScalarReplacement.rewrite(original, table, false, true) : original;
+		var result = allowInline ? inlineCalls(original) : profile.packedValueFields
+			? IrScalarReplacement.rewrite(original, table, false, true) : original;
 		if (IrLoadStoreForwarding.enabled)
 			result = IrLoadStoreForwarding.run(result, table);
 		if (IrStrengthReduction.enabled)
@@ -592,7 +600,8 @@ class IrInliner {
 				dependencies.push(functions[consultedId]);
 				dependencyIds.push(consultedId);
 			}
-		var objectPrintsOf:Map<String, Int> = [for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
+		var objectPrintsOf:Map<String, Int> =
+			[for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
 		if (usable && checkingMemo && memo != null) {
 			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
 				throw 'HAXEON_CHECK_REUSE: the inlined form of $name differs from the one its memo holds';
@@ -715,7 +724,8 @@ class IrInliner {
 		// A call on a class with more than MaxSubclassWalk classes below it stays unresolved, as it did when this walked the subclasses
 		// itself and gave up after that many. Lifting the limit resolves calls on very wide hierarchies (MachineComponent in the app),
 		// which changes the output, so it is a separate measured step.
-		return resolution.subtreeOf(typeName).length > MaxSubclassWalk ? null : resolution.uniqueImplementation(typeName, method);
+		return resolution.subtreeOf(typeName).length > MaxSubclassWalk
+			? null : resolution.uniqueImplementation(typeName, method);
 	}
 
 	/** Cheap syntactic screen on the original body, before the callee's own calls are inlined. */
@@ -838,7 +848,8 @@ class IrInliner {
 				nextValue = splice(block, position, callee, substitutions, nextValue);
 				continue;
 			}
-			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock, needsReceiverCheck(block.instructions[position].value));
+			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock,
+				needsReceiverCheck(block.instructions[position].value));
 			nextValue = expansion.nextValue;
 			nextBlock = expansion.nextBlock;
 			// Continue with the first inlined block; calls left in it were not candidates.
@@ -851,7 +862,8 @@ class IrInliner {
 		if (profile.packedValueFields)
 			replaced = {
 				substitutions: replaced.substitutions,
-				nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue, replaced.substitutions)
+				nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue,
+					replaced.substitutions)
 			};
 		if (replaced.substitutions.keys().hasNext())
 			bindings = substitute(blocks, replaced.substitutions, bindings);
@@ -868,14 +880,16 @@ class IrInliner {
 	function needsReceiverCheck(instruction:IrInstruction):Bool
 		return switch instruction {
 			case MethodCall(_, receiver, _, _, _): switch receiver.type {
-					case Obj(name): var object = table.get(name); object == null || !object.isValue;
+					case Obj(name): var object = table.get(name);
+						object == null || !object.isValue;
 					default: true;
 				};
 			default: false;
 		};
 
 	/** Replaces the call at `block.instructions[position]` by the callee's instructions; the result is substituted for the call's output. */
-	function splice(block:IrBlock, position:Int, callee:IrFunction, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
+	function splice(block:IrBlock, position:Int, callee:IrFunction, substitutions:Map<Int, IrValue>,
+			nextValue:Int):Int {
 		var call = block.instructions[position],
 			callOutput:IrValue = null,
 			actuals:Array<IrValue> = [];
@@ -894,9 +908,11 @@ class IrInliner {
 			copies:Array<Located<IrInstruction>> = [];
 		if (needsReceiverCheck(call.value)) {
 			var checked = new IrValue(nextValue++, "$receiver-check", Void);
-			copies.push(new Located(Call(checked, IrReceiverCheck.NAME, [resolve(actuals[0], substitutions)]), call.provenance));
+			copies.push(new Located(Call(checked, IrReceiverCheck.NAME, [resolve(actuals[0], substitutions)]),
+				call.provenance));
 		}
-		nextValue = bindArguments(callee, [for (actual in actuals) resolve(actual, substitutions)], values, copies, call.provenance, nextValue);
+		nextValue = bindArguments(callee, [for (actual in actuals) resolve(actual, substitutions)], values, copies,
+			call.provenance, nextValue);
 		for (located in source.instructions) {
 			var output = IrOperands.output(located.value);
 			if (output != null)
@@ -940,7 +956,8 @@ class IrInliner {
 	 * Binds the callee's parameters to the caller's arguments. A call passes an object of a subclass where its parameter
 	 * takes the base class; spliced in, that value is upcast first, so the body keeps the types it was verified with.
 	 */
-	static function bindArguments(callee:IrFunction, actuals:Array<IrValue>, values:Map<Int, IrValue>, upcasts:Array<Located<IrInstruction>>,
+	static function bindArguments(callee:IrFunction, actuals:Array<IrValue>, values:Map<Int, IrValue>,
+			upcasts:Array<Located<IrInstruction>>,
 			provenance:SourceProvenance, nextValue:Int):Int {
 		for (index in 0...callee.arguments.length) {
 			var formal = callee.arguments[index], actual = actuals[index];
@@ -972,7 +989,8 @@ class IrInliner {
 	}
 
 	/** Rewrites every use of a spliced call's output to the value the callee returned. */
-	public static function substitute(blocks:Array<IrBlock>, substitutions:Map<Int, IrValue>, bindings:Array<IrDebugBinding>):Array<IrDebugBinding> {
+	public static function substitute(blocks:Array<IrBlock>, substitutions:Map<Int, IrValue>,
+			bindings:Array<IrDebugBinding>):Array<IrDebugBinding> {
 		var use = function(value:IrValue):IrValue return resolve(value, substitutions);
 		var sameBlock = function(id:Int):Int return id;
 		for (block in blocks) {
@@ -991,17 +1009,15 @@ class IrInliner {
 					case Branch(condition, whenTrue, whenFalse): Branch(use(condition), whenTrue, whenFalse);
 				}, terminator.provenance);
 		}
-		return [
-			for (binding in bindings)
-				{
-					identity: binding.identity,
-					name: binding.name,
-					value: use(binding.value),
-					path: binding.path,
-					scopeStart: binding.scopeStart,
-					scopeEnd: binding.scopeEnd
-				}
-		];
+		return [for (binding in bindings)
+			{
+				identity:binding.identity,
+					name:binding.name,
+					value:use(binding.value),
+					path:binding.path,
+					scopeStart:binding.scopeStart,
+					scopeEnd:binding.scopeEnd
+			}];
 	}
 
 	/**
@@ -1009,8 +1025,12 @@ class IrInliner {
 	 * instructions before the call and jumps into the copy; a fresh continuation block takes the instructions after the
 	 * call and the original terminator, and merges the returned values with a phi.
 	 */
-	public static function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int, nextBlock:Int,
-			?checkReceiver:Bool):{nextValue:Int, nextBlock:Int} {
+	public static function expand(blocks:Array<IrBlock>, index:Int, position:Int, callee:IrFunction, nextValue:Int,
+			nextBlock:Int,
+			?checkReceiver:Bool): {
+				nextValue: Int,
+				nextBlock: Int
+			} {
 		var head = blocks[index],
 			call = head.instructions[position],
 			callOutput:IrValue = null,
@@ -1081,7 +1101,8 @@ class IrInliner {
 				case Jump(destination):
 					copy.terminator = new Located(Jump(target(destination)), terminator.provenance);
 				case Branch(condition, whenTrue, whenFalse):
-					copy.terminator = new Located(Branch(use(condition), target(whenTrue), target(whenFalse)), terminator.provenance);
+					copy.terminator = new Located(Branch(use(condition), target(whenTrue), target(whenFalse)),
+						terminator.provenance);
 			}
 			cloned.push(copy);
 		}
@@ -1155,7 +1176,9 @@ class IrInliner {
 	/** The instruction with every value (inputs and outputs alike) passed through `use` and every block id through `block`. */
 	public static function remap(instruction:IrInstruction, use:IrValue->IrValue, block:Int->Int):IrInstruction {
 		return switch instruction {
-			case Phi(out, inputs): Phi(use(out), [for (input in inputs) {block: block(input.block), value: use(input.value)}]);
+			case Phi(out, inputs): Phi(use(out), [for (input in inputs) {
+					block:block(input.block), value:use(input.value)
+				}]);
 			case ConstVoid(out): ConstVoid(use(out));
 			case ConstInt(out, value): ConstInt(use(out), value);
 			case ConstFloat(out, value): ConstFloat(use(out), value);
@@ -1174,7 +1197,8 @@ class IrInliner {
 			case FloatToFloat(out, value): FloatToFloat(use(out), use(value));
 			case SafeCast(out, value): SafeCast(use(out), use(value));
 			// Callees with handlers are never cloned (see fits); these arise when a caller is rewritten in place.
-			case BeginTry(catchBlock, afterBlock, preserveExceptionStack): BeginTry(block(catchBlock), block(afterBlock), preserveExceptionStack);
+			case BeginTry(catchBlock, afterBlock, preserveExceptionStack): BeginTry(block(catchBlock),
+				block(afterBlock), preserveExceptionStack);
 			case EndTry(catchBlock, preserveExceptionStack): EndTry(block(catchBlock), preserveExceptionStack);
 			case Catch(out): Catch(use(out));
 			case GlobalGet(out, name): GlobalGet(use(out), name);
@@ -1194,16 +1218,20 @@ class IrInliner {
 			case LessEqual(out, a, b): LessEqual(use(out), use(a), use(b));
 			case Equal(out, a, b): Equal(use(out), use(a), use(b));
 			case Call(out, name, arguments): Call(use(out), name, [for (argument in arguments) use(argument)]);
-			case Intrinsic(out, operation, arguments): Intrinsic(use(out), operation, [for (argument in arguments) use(argument)]);
-			case CNativeCall(out, name, arguments): CNativeCall(use(out), name, [for (argument in arguments) use(argument)]);
+			case Intrinsic(out, operation, arguments): Intrinsic(use(out), operation,
+				[for (argument in arguments) use(argument)]);
+			case CNativeCall(out, name, arguments): CNativeCall(use(out), name,
+				[for (argument in arguments) use(argument)]);
 			case StaticClosure(out, name): StaticClosure(use(out), name);
 			case InstanceClosure(out, name, receiver): InstanceClosure(use(out), name, use(receiver));
-			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure), [for (argument in arguments) use(argument)]);
+			case CallClosure(out, closure, arguments): CallClosure(use(out), use(closure),
+				[for (argument in arguments) use(argument)]);
 			case ToVirtual(out, value): ToVirtual(use(out), use(value));
 			case Upcast(out, value): Upcast(use(out), use(value));
 			case ClassId(out, value): ClassId(use(out), use(value));
 			case MethodCall(out, object, name, arguments,
-				terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)], terminalReceiver);
+				terminalReceiver): MethodCall(use(out), use(object), name, [for (argument in arguments) use(argument)],
+				terminalReceiver);
 			case NewObject(out, typeName): NewObject(use(out), typeName);
 			case ValueInit(out): ValueInit(use(out));
 			case FieldGet(out, object, name): FieldGet(use(out), use(object), name);
@@ -1214,7 +1242,8 @@ class IrInliner {
 			case IteratorNew(out, array): IteratorNew(use(out), use(array));
 			case IteratorHasNext(out, iterator): IteratorHasNext(use(out), use(iterator));
 			case IteratorNext(out, iterator): IteratorNext(use(out), use(iterator));
-			case MakeEnum(out, typeName, constructor, arguments): MakeEnum(use(out), typeName, constructor, [for (argument in arguments) use(argument)]);
+			case MakeEnum(out, typeName, constructor, arguments): MakeEnum(use(out), typeName, constructor,
+				[for (argument in arguments) use(argument)]);
 			case EnumIndex(out, value): EnumIndex(use(out), use(value));
 			case EnumField(out, value, constructor, field): EnumField(use(out), use(value), constructor, field);
 		};

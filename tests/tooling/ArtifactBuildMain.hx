@@ -17,21 +17,27 @@ class ArtifactBuildMain {
 		var finalSource = "class Main { public static function main():Int { return \"aa\".length; } }";
 		// Intermediate revision: a new method of the same class and a new string constant. The method is recursive so it is not
 		// inlined: a function nothing reaches is not in the module.
-		var intermediateSource = "class Main { public static function main():Int { return \"bbbbbbbb\".length + extra(0); } static function extra(n:Int):Int { return n > 0 ? extra(n - 1) : 3; } }";
+		var intermediateSource =
+			"class Main { public static function main():Int { return \"bbbbbbbb\".length + extra(0); } static function extra(n:Int):Int { return n > 0 ? extra(n - 1) : 3; } }";
 		File.saveContent(main, finalSource);
 		var args = ["--target=hl", "--entry=Main", "--root=" + root];
 
-		function compile(session:CompilerSession, extra:Array<String>, name:String):{bytes:haxe.io.Bytes, functions:String} {
+		function compile(session:CompilerSession, extra:Array<String>, name:String): {
+			bytes: haxe.io.Bytes,
+			functions: String
+		} {
 			var output = root + "/" + name + ".hl";
-			CompilerDriver.compile(CompilerArguments.parse(args.concat(extra).concat(["--output=" + output, main])), _ -> {}, session);
+			CompilerDriver.compile(CompilerArguments.parse(args.concat(extra).concat(["--output=" + output, main])),
+				_ -> {}, session);
 			return {bytes: File.getBytes(output), functions: File.getContent(output + ".functions")};
 		}
-		function history(extra:Array<String>, name:String):{bytes:haxe.io.Bytes, functions:String} {
+		function history(extra:Array<String>, name:String): {bytes: haxe.io.Bytes, functions: String} {
 			var session = new CompilerSession();
 			compile(session, extra, name + "-first");
 			File.saveContent(main, intermediateSource);
 			var changed = compile(session, extra, name + "-changed");
-			expect(changed.functions.indexOf("\tMain.extra\n") >= 0, "the intermediate revision must build the added function");
+			expect(changed.functions.indexOf("\tMain.extra\n") >= 0,
+				"the intermediate revision must build the added function");
 			File.saveContent(main, finalSource);
 			return compile(session, extra, name + "-reverted");
 		}
@@ -42,7 +48,8 @@ class ArtifactBuildMain {
 		// Artifact mode (the default): the history leaves no trace.
 		var artifact = history([], "artifact");
 		expect(artifact.functions == cold.functions,
-			"artifact builds must not keep functions from earlier revisions: " + firstDifference(cold.functions, artifact.functions));
+			"artifact builds must not keep functions from earlier revisions: " + firstDifference(cold.functions,
+			artifact.functions));
 		expect(artifact.bytes.compare(cold.bytes) == 0, "artifact bytes must equal a cold build of the same source");
 
 		// Repeating the same compile changes nothing either.

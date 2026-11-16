@@ -21,7 +21,8 @@ class StructPropertiesMain {
 			+ "\tvar address = requireFlat(new Address());\n\tvar forwarded = relayFlat(point);\n\tvar portable = requirePortable(forwarded);\n"
 			+ "\tvar scalar = requirePortable(42);\n"
 			+ "\treturn portable.y + scalar - 2;\n}\n");
-		expectError("@:flat struct HasString { public var name:String; } function main():Int return 0;", "HasString.name", "@:flat");
+		expectError("@:flat struct HasString { public var name:String; } function main():Int return 0;",
+			"HasString.name", "@:flat");
 		expectError("struct Inner { public var name:String; } @:flat struct Outer { public var inner:Inner; } function main():Int return 0;",
 			"Outer.inner.name", "@:flat");
 		expectError("abstract RawPtr<T>(hl.Bytes) {} @:portable struct Address { public var pointer:RawPtr<Int>; } function main():Int return 0;",
@@ -81,24 +82,28 @@ class StructPropertiesMain {
 				|| constantReturn(typed.functions, "nestedTail") != 16)
 				throw '$target did not fold flat-struct layout queries';
 		}
-		expectTypingError("struct Managed { public var name:String; } function bad():Int return sizeof<Managed>();", "no fixed native ABI layout");
+		expectTypingError("struct Managed { public var name:String; } function bad():Int return sizeof<Managed>();",
+			"no fixed native ABI layout");
 	}
 
-	static function requireClass(classes:Array<compiler.types.TypedAst.TypedClass>, name:String):compiler.types.TypedAst.TypedClass {
+	static function requireClass(classes:Array<compiler.types.TypedAst.TypedClass>,
+			name:String):compiler.types.TypedAst.TypedClass {
 		for (declaration in classes)
 			if (declaration.name == name)
 				return declaration;
 		throw 'Missing typed struct "$name"';
 	}
 
-	static function requireLayout(layouts:Array<compiler.types.TypedAst.TypedNativeLayout>, target:String):compiler.types.TypedAst.TypedNativeLayout {
+	static function requireLayout(layouts:Array<compiler.types.TypedAst.TypedNativeLayout>,
+			target:String):compiler.types.TypedAst.TypedNativeLayout {
 		for (layout in layouts)
 			if (layout.target == target)
 				return layout;
 		throw 'Missing struct layout for "$target"';
 	}
 
-	static function layoutField(fields:Array<compiler.types.TypedAst.TypedNativeFieldLayout>, name:String):compiler.types.TypedAst.TypedNativeFieldLayout {
+	static function layoutField(fields:Array<compiler.types.TypedAst.TypedNativeFieldLayout>,
+			name:String):compiler.types.TypedAst.TypedNativeFieldLayout {
 		for (layout in fields)
 			if (layout.name == name)
 				return layout;

@@ -10,9 +10,11 @@ class InlineEnumAbstractConstantMain {
 	static function checkIncremental(indexed:Bool):Void {
 		var compiler = new Compiler();
 		compiler.update("Mode.hx", mode(41));
-		var constants = 'import Mode; class Constants {public static inline var ACTIVE:Mode = Mode.Active; public static inline var ALIAS:Mode = ACTIVE;}';
+		var constants =
+			'import Mode; class Constants {public static inline var ACTIVE:Mode = Mode.Active; public static inline var ALIAS:Mode = ACTIVE;}';
 		compiler.update("Constants.hx", constants);
-		compiler.update("Api.hx", 'import Mode; import Constants; function read(value:Mode = Constants.ALIAS):Int return value;');
+		compiler.update("Api.hx",
+			'import Mode; import Constants; function read(value:Mode = Constants.ALIAS):Int return value;');
 		compiler.update("Main.hx", 'import Api; function main():Int return Api.read();');
 		if (new IrInterpreter(compiler.compile("Main", null, indexed).ir).run("main") != 41)
 			throw "The folded enum abstract constant lost its initial value";
@@ -30,7 +32,8 @@ class InlineEnumAbstractConstantMain {
 
 	static function reject(declarations:String, initializer:String, message:String):Void {
 		var compiler = new Compiler();
-		compiler.update("Main.hx", declarations + ' class Constants {public static inline var VALUE:Mode = $initializer;} function main():Int return 0;');
+		compiler.update("Main.hx", declarations
+			+ ' class Constants {public static inline var VALUE:Mode = $initializer;} function main():Int return 0;');
 		try {
 			compiler.compile("Main");
 		} catch (error:CompileError) {

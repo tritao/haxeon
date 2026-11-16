@@ -108,17 +108,15 @@ class Semantics {
 			return true;
 		if (left == null || right == null)
 			return false;
-		return left.role == right.role && left.label == right.label && left.sameValue(right) &&
-			left.states == right.states && left.actions == right.actions &&
-			left.numericValue == right.numericValue && left.numericMinimum == right.numericMinimum &&
-			left.numericMaximum == right.numericMaximum && left.textStart == right.textStart &&
-			left.documentLength == right.documentLength && left.selectionStart == right.selectionStart &&
-			left.selectionEnd == right.selectionEnd && left.setSize == right.setSize &&
-			left.positionInSet == right.positionInSet && left.rowCount == right.rowCount &&
-			left.columnCount == right.columnCount && left.rowIndex == right.rowIndex &&
-			left.columnIndex == right.columnIndex && left.rowSpan == right.rowSpan &&
-			left.columnSpan == right.columnSpan && left.hierarchyLevel == right.hierarchyLevel &&
-			left.orientation == right.orientation;
+		return left.role == right.role && left.label == right.label && left.sameValue(right)
+			&& left.states == right.states && left.actions == right.actions && left.numericValue == right.numericValue
+			&& left.numericMinimum == right.numericMinimum && left.numericMaximum == right.numericMaximum
+			&& left.textStart == right.textStart && left.documentLength == right.documentLength && left.selectionStart
+			== right.selectionStart && left.selectionEnd == right.selectionEnd && left.setSize == right.setSize
+			&& left.positionInSet == right.positionInSet && left.rowCount == right.rowCount && left.columnCount
+			== right.columnCount && left.rowIndex == right.rowIndex && left.columnIndex == right.columnIndex
+			&& left.rowSpan == right.rowSpan && left.columnSpan == right.columnSpan
+			&& left.hierarchyLevel == right.hierarchyLevel && left.orientation == right.orientation;
 	}
 
 	function get_value():Null<String> {

@@ -12,29 +12,33 @@ import sys.io.File;
 
 /** One project-level request to the persistent Haxeon compiler service. */
 class CompilerProvider {
-	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId, dependencies:Array<ActionId>,
+	public static function action(project:ResolvedProject, context:LoweringContext, actionId:ActionId,
+			dependencies:Array<ActionId>,
 			output:String):ExecutionAction {
 		if (project == null)
 			throw "CompilerProvider requires a resolved project";
 		if (project.manifest.entry == null)
 			throw 'Root package "${project.rootPackage.name}" must declare an "entry" for a build';
-		var suffix = Sys.systemName() == "Windows" ? ".exe" : "", compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
+		var suffix = Sys.systemName() == "Windows" ? ".exe" : "",
+			compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
 			compilerSourcePath = compilerSource == null
 				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
-			sourcePaths:Array<String> = [], arguments = [
+			sourcePaths:Array<String> = [],
+			arguments = [
 				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
 				"--build-mode=" + (context.live || context.developmentMetadata ? "development" : "release"),
 				"--output=" + output,
 				"--entry=" + project.manifest.entry,
 				"--inputs-output=" + output + ".inputs.json"
-			], inputs:Array<String> = [];
+			],
+			inputs:Array<String> = [];
 		for (resolvedPackage in project.packages.packages) {
 			for (sourceRoot in resolvedPackage.sourceRoots)
 				arguments.push("--root=" + sourceRoot);
 			var shouldScopeRoot = resolvedPackage.manifest.scopeSourceRoots
 				&& (resolvedPackage.name != project.rootPackage.name
-					|| project.manifest.entry == resolvedPackage.name
-					|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + "."));
+				|| project.manifest.entry == resolvedPackage.name
+				|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + "."));
 			if (shouldScopeRoot)
 				for (sourceRoot in resolvedPackage.sourceRoots)
 					if (resolvedPackage.unscopedSourceRoots.indexOf(sourceRoot) < 0)
@@ -53,7 +57,8 @@ class CompilerProvider {
 				inputs.push(interfacePath);
 				if (ffi.config.projection) {
 					var projectionPath = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
-						projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name);
+						projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name,
+							ffi.config.name);
 					arguments.push("--root=" + projectionPath);
 					arguments.push("--sources-file=" + projectionManifest);
 					inputs.push(projectionManifest);
@@ -83,7 +88,10 @@ class CompilerProvider {
 			environment = runtimeLibraryEnvironment(context.compilerHome);
 		} else {
 			command = haxe.io.Path.join([context.compilerHome, ".tools", "haxe", "haxe" + suffix]);
-			argumentsWithLauncher = build.CompilerSources.classPath(compilerSourcePath).concat(["--run", "compiler.tools.HaxeonCompiler"]).concat(arguments);
+			argumentsWithLauncher = build.CompilerSources.classPath(compilerSourcePath).concat([
+				"--run",
+				"compiler.tools.HaxeonCompiler"
+			]).concat(arguments);
 			inputs.push(command);
 			for (root in build.CompilerSources.roots(compilerSourcePath))
 				inputs.push(root);
@@ -104,7 +112,8 @@ class CompilerProvider {
 				Directories.ensure(haxe.io.Path.directory(sourceManifest));
 				File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 				// Only a resident worker can keep what it compiles; with none there is nothing to warm.
-				return CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root, () -> 0,
+				return CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome,
+					context.environment.buildRoot, project.root, () -> 0,
 					session, true);
 			};
 		var invoke = function():Int {
@@ -114,10 +123,12 @@ class CompilerProvider {
 			Directories.ensure(haxe.io.Path.directory(sourceManifest));
 			File.saveContent(sourceManifest, sourcePaths.join("\n") + "\n");
 			return context.selfHosted ? ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome,
-				environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot, project.root,
-				() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome, context.environment.buildRoot,
-					runtimeLibraryEnvironment(context.compilerHome),
-					() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)),
+				environment) : CompilerClient.run(command, compilerSourcePath, arguments, context.compilerHome,
+				context.environment.buildRoot, project.root,
+				() -> CompilerClient.runOneShot(command, compilerSourcePath, arguments, context.compilerHome,
+				context.environment.buildRoot,
+				runtimeLibraryEnvironment(context.compilerHome),
+				() -> ProcessRunner.run(command, argumentsWithLauncher, context.compilerHome, environment)),
 				context.session);
 		};
 		return new ExecutionAction(actionId, dependencies, inputs, [
@@ -143,7 +154,8 @@ class CompilerProvider {
 		var directories = [
 			haxe.io.Path.join([compilerHome, "out"]),
 			build.HashLinkPath.directory(compilerHome)
-		], existing = Sys.getEnv(variable);
+		],
+			existing = Sys.getEnv(variable);
 		if (existing != null && existing.length > 0)
 			directories.push(existing);
 		var environment = new Map<String, String>();

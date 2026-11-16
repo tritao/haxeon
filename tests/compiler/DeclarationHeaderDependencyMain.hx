@@ -7,7 +7,8 @@ import compiler.Compiler;
  * Every program declares `ui.Derived`, which `Main` imports.
  */
 class DeclarationHeaderDependencyMain {
-	static final use = "class Main { static function use(value:Derived):Int return value.state(); public static function main():Int return 0; }";
+	static final use =
+		"class Main { static function use(value:Derived):Int return value.state(); public static function main():Int return 0; }";
 
 	static function main():Void {
 		expectAnalyzes("an interface extending a same-package interface", [
@@ -26,23 +27,24 @@ class DeclarationHeaderDependencyMain {
 		expectAnalyzes("a class extending a generic class applied to a same-package type", [
 			"ui/Box.hx" => "package ui; class Box<T> { public var value:Null<T>; public function new() {} }",
 			"ui/Event.hx" => "package ui; class Event { public function new() {} }",
-			"ui/Derived.hx" => "package ui; class Derived extends Box<Event> { public function new() super(); public function state():Int return 1; }"
+			"ui/Derived.hx"
+				=> "package ui; class Derived extends Box<Event> { public function new() super(); public function state():Int return 1; }"
 		]);
 		expectAnalyzes("a class implementing a generic interface applied to a same-package type", [
 			"ui/Listener.hx" => "package ui; interface Listener<T> { public function heard(value:T):Void; }",
 			"ui/Event.hx" => "package ui; class Event { public function new() {} }",
-			"ui/Derived.hx" =>
-			"package ui; class Derived implements Listener<Event> { public function new() {} public function heard(value:Event):Void {} public function state():Int return 1; }"
+			"ui/Derived.hx"
+				=> "package ui; class Derived implements Listener<Event> { public function new() {} public function heard(value:Event):Void {} public function state():Int return 1; }"
 		]);
 		expectAnalyzes("an abstract over a same-package class", [
 			"ui/Inner.hx" => "package ui; class Inner { public function new() {} }",
-			"ui/Derived.hx" =>
-			"package ui; abstract Derived(Inner) { public inline function new(inner:Inner) this = inner; public function state():Int return 1; }"
+			"ui/Derived.hx"
+				=> "package ui; abstract Derived(Inner) { public inline function new(inner:Inner) this = inner; public function state():Int return 1; }"
 		]);
 		expectAnalyzes("an abstract method signature naming a same-package class", [
 			"ui/Inner.hx" => "package ui; class Inner { public function new() {} }",
-			"ui/Derived.hx" =>
-			"package ui; abstract Derived(Int) { public inline function new(value:Int) this = value; public function state():Int return this; public function with(inner:Inner):Int return this; }"
+			"ui/Derived.hx"
+				=> "package ui; abstract Derived(Int) { public inline function new(value:Int) this = value; public function state():Int return this; public function with(inner:Inner):Int return this; }"
 		]);
 		expectAnalyzes("an enum abstract over a same-package abstract", [
 			"ui/Code.hx" => "package ui; abstract Code(Int) { public inline function new(value:Int) this = value; }",

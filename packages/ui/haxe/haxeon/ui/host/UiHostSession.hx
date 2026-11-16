@@ -45,11 +45,10 @@ class UiHostSession {
 		if (state == next) return;
 		var valid = switch (state) {
 			case UiHostLifecycle.Starting:
-				next == UiHostLifecycle.LoadingResources || next == UiHostLifecycle.Running ||
-				next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
+				next == UiHostLifecycle.LoadingResources || next == UiHostLifecycle.Running
+					|| next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
 			case UiHostLifecycle.LoadingResources:
-				next == UiHostLifecycle.Running || next == UiHostLifecycle.Stopping ||
-				next == UiHostLifecycle.Failed;
+				next == UiHostLifecycle.Running || next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
 			case UiHostLifecycle.Running:
 				next == UiHostLifecycle.Stopping || next == UiHostLifecycle.Failed;
 			case UiHostLifecycle.Stopping:
@@ -74,13 +73,12 @@ class UiHostSession {
 	function cleanupFailed(stage:String, cause:Dynamic):Void
 		cleanupErrors.push(new UiHostError(stage, cause));
 
-	public function isActive():Bool return state == UiHostLifecycle.Starting ||
-		state == UiHostLifecycle.LoadingResources || state == UiHostLifecycle.Running;
+	public function isActive():Bool return state == UiHostLifecycle.Starting
+		|| state == UiHostLifecycle.LoadingResources || state == UiHostLifecycle.Running;
 
 	/** Stops the hosted application. Browser hosts do not claim to close the tab. */
 	public function stop():Void {
-		if (disposed || stopNotified || state == UiHostLifecycle.Stopped ||
-			state == UiHostLifecycle.Failed) return;
+		if (disposed || stopNotified || state == UiHostLifecycle.Stopped || state == UiHostLifecycle.Failed) return;
 		stopNotified = true;
 		state = UiHostLifecycle.Stopping;
 		stopCallback();

@@ -31,11 +31,8 @@ class VirtualListBenchmark {
 
 		var fonts = FontCollection.create();
 		fonts.add(fontPath);
-		var valid = run(fonts, 10000) && run(fonts, 100000) &&
-			runModel(fonts, 10000) && runModel(fonts, 100000) &&
-			runTree(fonts, 100000) &&
-			runSubmitComparison(fonts, 10000) &&
-			runSubmitComparison(fonts, 100000);
+		var valid = run(fonts, 10000) && run(fonts, 100000) && runModel(fonts, 10000) && runModel(fonts, 100000)
+			&& runTree(fonts, 100000) && runSubmitComparison(fonts, 10000) && runSubmitComparison(fonts, 100000);
 		fonts.dispose();
 		return valid ? 0 : 1;
 	}
@@ -92,8 +89,8 @@ class VirtualListBenchmark {
 				'submit-retained-$itemCount');
 			retainedSeconds += Sys.time() - started;
 			var metrics:Null<UiFrameMetrics> = retainedContext.frameMetrics;
-			if (metrics == null || !metrics.reusedSubmission || !metrics.nativeLayoutReused ||
-				metrics.nodeCount <= 0 || retainedRows.length != 0)
+			if (metrics == null || !metrics.reusedSubmission || !metrics.nativeLayoutReused || metrics.nodeCount <= 0
+				|| retainedRows.length != 0)
 				return false;
 			retainedNodes += metrics.nodeCount;
 			retainedFrames++;
@@ -103,9 +100,9 @@ class VirtualListBenchmark {
 		var fullMicros = fullSeconds * 1000000.0 / samples;
 		var retainedMicros = retainedSeconds * 1000000.0 / samples;
 		var speedup = retainedMicros <= 0.0 ? 0.0 : fullMicros / retainedMicros;
-		Sys.println('submit_compare items=$itemCount full_us=$fullMicros retained_us=$retainedMicros ' +
-			'speedup=$speedup full_nodes=${fullNodes / samples} retained_nodes=${retainedNodes / samples} ' +
-			'retained_frames=$retainedFrames');
+		Sys.println('submit_compare items=$itemCount full_us=$fullMicros retained_us=$retainedMicros '
+			+ 'speedup=$speedup full_nodes=${fullNodes / samples} retained_nodes=${retainedNodes / samples} '
+			+ 'retained_frames=$retainedFrames');
 		return retainedFrames == samples;
 	}
 
@@ -149,8 +146,7 @@ class VirtualListBenchmark {
 				valid = false;
 			if (fraction == 0.0 && (builtRows.length == 0 || builtRows[0] != 0))
 				valid = false;
-			if (fraction == 1.0 &&
-				(builtRows.length == 0 || builtRows[builtRows.length - 1] != itemCount - 1))
+			if (fraction == 1.0 && (builtRows.length == 0 || builtRows[builtRows.length - 1] != itemCount - 1))
 				valid = false;
 			totalSeconds += elapsed;
 			totalRows += rowCount;
@@ -164,10 +160,9 @@ class VirtualListBenchmark {
 		var averageRows = totalRows / samples;
 		var averageNodes = totalNodes / samples;
 		var averageMicros = totalSeconds * 1000000.0 / samples;
-		Sys.println('items=$itemCount first_rows=$firstRows ' +
-			'avg_rows=$averageRows max_rows=$maxRows ' +
-			'avg_nodes=$averageNodes max_nodes=$maxNodes ' +
-			'first_us=${firstSeconds * 1000000.0} avg_us=$averageMicros');
+		Sys.println('items=$itemCount first_rows=$firstRows ' + 'avg_rows=$averageRows max_rows=$maxRows '
+			+ 'avg_nodes=$averageNodes max_nodes=$maxNodes '
+			+ 'first_us=${firstSeconds * 1000000.0} avg_us=$averageMicros');
 
 		context.dispose();
 		return valid;
@@ -189,8 +184,8 @@ class VirtualListBenchmark {
 		var firstSeconds = Sys.time() - firstStart;
 		var firstRows = builtRows.length;
 		var maxExpectedRows = Std.int(Math.ceil(viewportHeight / 20.0)) + 4;
-		var valid = firstRows > 0 && firstRows <= maxExpectedRows &&
-			model.extentCalls > 0 && model.extentCalls < itemCount;
+		var valid = firstRows > 0 && firstRows <= maxExpectedRows && model.extentCalls > 0
+			&& model.extentCalls < itemCount;
 		var extentCallsBeforeUpdate = model.extentCalls;
 		model.bumpExtent(Std.int(itemCount / 2));
 		builtRows.resize(0);
@@ -218,8 +213,7 @@ class VirtualListBenchmark {
 				valid = false;
 			if (fraction == 0.0 && (builtRows.length == 0 || builtRows[0] != 0))
 				valid = false;
-			if (fraction == 1.0 &&
-				(builtRows.length == 0 || builtRows[builtRows.length - 1] != itemCount - 1))
+			if (fraction == 1.0 && (builtRows.length == 0 || builtRows[builtRows.length - 1] != itemCount - 1))
 				valid = false;
 			totalSeconds += elapsed;
 			totalRows += rowCount;
@@ -233,12 +227,10 @@ class VirtualListBenchmark {
 		var averageRows = totalRows / samples;
 		var averageNodes = totalNodes / samples;
 		var averageMicros = totalSeconds * 1000000.0 / samples;
-		Sys.println('model_items=$itemCount first_rows=$firstRows ' +
-			'avg_rows=$averageRows max_rows=$maxRows ' +
-			'avg_nodes=$averageNodes max_nodes=$maxNodes ' +
-			'extent_calls=${model.extentCalls} extent_reuses=${list.extentReuses} ' +
-			'first_us=${firstSeconds * 1000000.0} ' +
-			'avg_us=$averageMicros');
+		Sys.println('model_items=$itemCount first_rows=$firstRows ' + 'avg_rows=$averageRows max_rows=$maxRows '
+			+ 'avg_nodes=$averageNodes max_nodes=$maxNodes '
+			+ 'extent_calls=${model.extentCalls} extent_reuses=${list.extentReuses} '
+			+ 'first_us=${firstSeconds * 1000000.0} ' + 'avg_us=$averageMicros');
 
 		context.dispose();
 		return valid && model.extentCalls < itemCount;
@@ -257,11 +249,10 @@ class VirtualListBenchmark {
 		var firstStart = Sys.time();
 		context.submit(tree, frame);
 		var firstSeconds = Sys.time() - firstStart;
-	var firstRows = builtKeys.length;
-	var maxExpectedRows = Std.int(Math.ceil(viewportHeight / 24.0)) + 4;
-		var valid = firstRows > 0 && firstRows <= maxExpectedRows &&
-			model.extentCalls > 0 && model.extentCalls < itemCount &&
-			model.childCalls > 0 && model.childCalls < itemCount;
+		var firstRows = builtKeys.length;
+		var maxExpectedRows = Std.int(Math.ceil(viewportHeight / 24.0)) + 4;
+		var valid = firstRows > 0 && firstRows <= maxExpectedRows && model.extentCalls > 0
+			&& model.extentCalls < itemCount && model.childCalls > 0 && model.childCalls < itemCount;
 
 		var totalSeconds = 0.0;
 		var totalRows = 0;
@@ -283,8 +274,8 @@ class VirtualListBenchmark {
 				valid = false;
 			if (fraction == 0.0 && (builtKeys.length == 0 || builtKeys[0] != "root:0"))
 				valid = false;
-			if (fraction == 1.0 &&
-				(builtKeys.length == 0 || builtKeys[builtKeys.length - 1] != 'root:${itemCount - 1}'))
+			if (fraction == 1.0
+				&& (builtKeys.length == 0 || builtKeys[builtKeys.length - 1] != 'root:${itemCount - 1}'))
 				valid = false;
 			totalSeconds += elapsed;
 			totalRows += rowCount;
@@ -298,11 +289,10 @@ class VirtualListBenchmark {
 		var averageRows = totalRows / samples;
 		var averageNodes = totalNodes / samples;
 		var averageMicros = totalSeconds * 1000000.0 / samples;
-		Sys.println('tree_items=$itemCount first_rows=$firstRows ' +
-			'avg_rows=$averageRows max_rows=$maxRows ' +
-			'avg_nodes=$averageNodes max_nodes=$maxNodes ' +
-			'extent_calls=${model.extentCalls} child_calls=${model.childCalls} ' +
-			'first_us=${firstSeconds * 1000000.0} avg_us=$averageMicros');
+		Sys.println('tree_items=$itemCount first_rows=$firstRows ' + 'avg_rows=$averageRows max_rows=$maxRows '
+			+ 'avg_nodes=$averageNodes max_nodes=$maxNodes '
+			+ 'extent_calls=${model.extentCalls} child_calls=${model.childCalls} '
+			+ 'first_us=${firstSeconds * 1000000.0} avg_us=$averageMicros');
 
 		context.dispose();
 		return valid && model.extentCalls < itemCount && model.childCalls < itemCount;

@@ -39,11 +39,12 @@ class IrValueTableCodec {
 		}
 	}
 
-	public static function write(output:BytesOutput, values:Array<IrValue>, named:Bool = true, erase:Bool = false):Void {
+	public static function write(output:BytesOutput, values:Array<IrValue>, named:Bool = true,
+			erase:Bool = false):Void {
 		if (values.length > MAX_VALUES)
 			throw "Too many IR values";
 		var ordered = values.copy();
-		ordered.sort(function(a, b) return (a.id : Int) - (b.id : Int));
+		ordered.sort(function(a, b) return (a.id:Int) - (b.id:Int));
 		output.writeInt32(ordered.length);
 		var previous = -1;
 		for (value in ordered) {

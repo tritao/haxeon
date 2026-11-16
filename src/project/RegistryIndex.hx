@@ -59,7 +59,7 @@ class RegistryIndex {
 			if (!Reflect.isObject(packageData) || Std.isOfType(packageData, Array) || !Std.isOfType(rawVersions, Array))
 				throw '$path package "$name" requires a versions array';
 			var versions:Array<RegistryVersion> = [];
-			for (rawVersion in (cast rawVersions : Array<Dynamic>)) {
+			for (rawVersion in (cast rawVersions:Array<Dynamic>)) {
 				if (!Reflect.isObject(rawVersion) || Std.isOfType(rawVersion, Array))
 					throw '$path package "$name" contains an invalid release';
 				var version = requiredString(rawVersion, "version", path),
@@ -80,7 +80,8 @@ class RegistryIndex {
 	}
 
 	/** Append a release to a local registry index without replacing existing versions. */
-	public static function appendRelease(path:String, name:String, version:String, checksum:String, compatibility:PackageCompatibility,
+	public static function appendRelease(path:String, name:String, version:String, checksum:String,
+			compatibility:PackageCompatibility,
 			native:Null<NativeManifest>):Void {
 		var raw:Dynamic;
 		if (FileSystem.exists(path)) {
@@ -103,7 +104,7 @@ class RegistryIndex {
 		var rawVersions:Dynamic = Reflect.field(packageData, "versions");
 		if (!Std.isOfType(rawVersions, Array))
 			throw '$path package "$name" requires a versions array';
-		for (existing in (cast rawVersions : Array<Dynamic>))
+		for (existing in (cast rawVersions:Array<Dynamic>))
 			if (Reflect.field(existing, "version") == version)
 				throw 'Registry release "$name@$version" is already published';
 		var release:Dynamic = {version: version, checksum: checksum, yanked: false};
@@ -115,12 +116,13 @@ class RegistryIndex {
 			Reflect.setField(release, "runtimeAbi", compatibility.runtimeAbi);
 		if (native != null)
 			Reflect.setField(release, "native", nativeMetadata(native));
-		(cast rawVersions : Array<Dynamic>).push(release);
+		(cast rawVersions:Array<Dynamic>).push(release);
 		var names = Reflect.fields(rawPackages);
 		names.sort(Reflect.compare);
 		for (packageName in names) {
 			var versions:Array<Dynamic> = cast Reflect.field(rawPackages, packageName).versions;
-			versions.sort((left, right) -> compareVersions(cast Reflect.field(left, "version"), cast Reflect.field(right, "version")));
+			versions.sort((left, right) -> compareVersions(cast Reflect.field(left, "version"),
+				cast Reflect.field(right, "version")));
 		}
 		var directory = Path.directory(path);
 		if (directory != "" && directory != "." && !FileSystem.exists(directory))
@@ -144,7 +146,8 @@ class RegistryIndex {
 	}
 
 	static function isExactVersion(value:String):Bool
-		return !StringTools.startsWith(value, "<") && !StringTools.startsWith(value, ">") && !StringTools.startsWith(value, "^")
+		return !StringTools.startsWith(value, "<") && !StringTools.startsWith(value, ">")
+			&& !StringTools.startsWith(value, "^")
 			&& !StringTools.startsWith(value, "~") && value.indexOf(",") < 0 && value.indexOf(" ") < 0;
 
 	static function compareVersions(left:String, right:String):Int {
@@ -170,7 +173,7 @@ class RegistryIndex {
 
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value:Dynamic = Reflect.field(raw, field);
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw '$path requires a non-empty "$field" string';
 		return cast value;
 	}

@@ -69,29 +69,32 @@ private class BatchCompilers {
 
 	public function start(arguments:Array<String>):PendingCompile {
 		// Standard error joins standard output, so no pipe is left unread while the process waits for its next request.
-		var worker = idle.length > 0 ? idle.pop() : new Process("sh", ["-c", 'exec "$0" "$@" 2>&1', hl, main, "--batch"]);
+		var worker = idle.length > 0 ? idle.pop() : new Process("sh",
+			["-c", 'exec "$0" "$@" 2>&1', hl, main, "--batch"]);
 		worker.stdin.writeString(arguments.join("\t") + "\n");
 		worker.stdin.flush();
-		return {
-			finish: function():CommandResult {
-				var output = new StringBuf();
-				while (true) {
-					var line:String;
-					try
-						line = worker.stdout.readLine()
-					catch (_:haxe.io.Eof) {
-						var status = worker.exitCode();
-						worker.close();
-						return {status: status == 0 ? 1 : status, output: output.toString() + "the batch compiler process ended before answering\n"};
-					}
-					if (StringTools.startsWith(line, DONE)) {
-						idle.push(worker);
-						return {status: Std.parseInt(line.substr(DONE.length)), output: output.toString()};
-					}
-					output.add(line);
-					output.add("\n");
+		return {finish: function(): CommandResult {
+			var output = new StringBuf();
+			while (true) {
+				var line:String;
+				try
+					line = worker.stdout.readLine()
+				catch (_:haxe.io.Eof) {
+					var status = worker.exitCode();
+					worker.close();
+					return {
+						status: status == 0 ? 1 : status,
+						output: output.toString() + "the batch compiler process ended before answering\n"
+					};
 				}
+				if (StringTools.startsWith(line, DONE)) {
+					idle.push(worker);
+					return {status: Std.parseInt(line.substr(DONE.length)), output: output.toString()};
+				}
+				output.add(line);
+				output.add("\n");
 			}
+		}
 		};
 	}
 
@@ -150,11 +153,18 @@ class TestRunner {
 
 	/** Compile a program to HashLink: with the prebuilt compiler when available (in a batch process), else `haxe --run Main`. */
 	function compileProgram(source:String, output:String, run:ProgramRun):PendingCompile {
-		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain ? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []));
+		var arguments = [source, output].concat((run.warm ? ["--warm-edit"] : run.plain
+			? ["--plain"] : []).concat(run.unpruned ? ["--no-early-prune"] : []));
 		if (batch != null)
 			return batch.start(arguments);
 		var process = prebuiltMain != null ? new Process(hl,
-			[prebuiltMain].concat(arguments)) : new Process(haxe, ["--cwd", root, "common.hxml", "--run", "Main"].concat(arguments));
+			[prebuiltMain].concat(arguments)) : new Process(haxe, [
+				"--cwd",
+				root,
+				"common.hxml",
+				"--run",
+				"Main"
+			].concat(arguments));
 		return {finish: () -> finishCommand(process)};
 	}
 
@@ -164,7 +174,8 @@ class TestRunner {
 	 * marker cannot outlive its cause. Nothing else is allowed to fail; do not add a name without a note that explains it.
 	 */
 	static final warmEditKnownFailures:Map<String, String> = [
-		"enum-generated-dependencies" => "docs/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
+		"enum-generated-dependencies"
+			=> "docs/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
 	];
 
 	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */
@@ -175,13 +186,14 @@ class TestRunner {
 		if (compilation.status == 0)
 			return {
 				passed: false,
-				output: compilation.output +
-				'FAIL: ${runName(run)} is marked as a known failure ($note) but its warm rebuild now equals a fresh build: remove the marker\n'
+				output: compilation.output
+					+ 'FAIL: ${runName(run)} is marked as a known failure ($note) but its warm rebuild now equals a fresh build: remove the marker\n'
 			};
 		if (compilation.output.indexOf("differs from a fresh build") < 0)
 			return {
 				passed: false,
-				output: compilation.output + 'FAIL: ${runName(run)} is marked as a known failure ($note) but failed in another way\n'
+				output: compilation.output
+					+ 'FAIL: ${runName(run)} is marked as a known failure ($note) but failed in another way\n'
 			};
 		return {passed: true, output: 'PASS: ${runName(run)} is a known failure, as marked ($note)\n'};
 	}
@@ -236,33 +248,27 @@ class TestRunner {
 				if (!TestCatalog.ownProgramMains.contains(test.name)) test.name
 		];
 		var program = shared.length > 1 ? compileSharedMains(shared) : null;
-		return runPipelines([
-			for (test in tests) {
-				var name = test.name,
-					failure = (status:Int) -> status == 0 ? null : 'FAIL: $name exited with $status';
-				if (program != null && shared.contains(name)) {
-					steps: [
-						{
-							start: () -> {
-								Sys.putEnv(NAMED_MAIN, name);
-								startProgram(program);
-							},
-							failure: failure
-						}
+		return runPipelines([for (test in tests) {
+			var name = test.name,
+				failure = (status:Int) -> status == 0 ? null : 'FAIL: $name exited with $status';
+			if (program != null && shared.contains(name)) {
+				steps:[{start: () -> {
+					Sys.putEnv(NAMED_MAIN, name);
+					startProgram(program);
+				},
+					failure: failure}],
+					success:""
+			} else {
+				var compiled = testMainOutput(name);
+				{
+					steps:[
+						compileMainStep(name, compiled),
+						{start: () -> startProgram(compiled), failure: failure}
 					],
-					success: ""
-				} else {
-					var compiled = testMainOutput(name);
-					{
-						steps: [
-							compileMainStep(name, compiled),
-							{start: () -> startProgram(compiled), failure: failure}
-						],
-						success: ""
-					};
-				}
+						success:""
+				};
 			}
-		], jobs);
+		}], jobs);
 	}
 
 	static inline final NAMED_MAIN = "HAXEON_NAMED_MAIN";
@@ -279,7 +285,14 @@ class TestRunner {
 			source.add('\t\t\tcase "$main": @:privateAccess $main.main();\n');
 		source.add("\t\t\tcase name: throw 'no named main ' + name;\n\t\t}\n\t}\n}\n");
 		File.saveContent(Path.join([directory, "NamedMains.hx"]), source.toString());
-		var command = finishCommand(new Process(haxe, testClassPath().concat(["-cp", directory, "-hl", output, "-main", "NamedMains"])));
+		var command = finishCommand(new Process(haxe, testClassPath().concat([
+			"-cp",
+			directory,
+			"-hl",
+			output,
+			"-main",
+			"NamedMains"
+		])));
 		if (command.status == 0)
 			return output;
 		Sys.println(command.output + "the named mains do not compile as one program; compiling each on its own");
@@ -296,21 +309,31 @@ class TestRunner {
 				// These mains are short compiler-API runners: interpreting them beats compiling each to HashLink.
 				case HaxeMain(main, arguments):
 					[
-						{start: () -> new Process(haxe, haxeMainArguments(main).concat(resolveArguments(output, arguments))), failure: setupFailure}
+						{
+							start: () -> new Process(haxe,
+								haxeMainArguments(main).concat(resolveArguments(output, arguments))),
+							failure: setupFailure
+						}
 					];
 				case Hxml(path):
 					[
-						{start: () -> new Process(haxe, ["--cwd", root, Path.join([root, path]), "-hl", output]), failure: setupFailure}
+						{
+							start: () -> new Process(haxe, ["--cwd", root, Path.join([root, path]), "-hl", output]),
+							failure: setupFailure
+						}
 					];
 			},
-			expected = test.expectedExit,
-			exitDescription = (status:Int) -> expected == null ? 'non-zero exit $status' : 'exit $expected';
+				expected = test.expectedExit,
+				exitDescription = (status:Int) -> expected == null ? 'non-zero exit $status' : 'exit $expected';
 		steps.push({
 			start: () -> startProgram(output, resolveArguments(output, test.runtimeArguments)),
-			failure: status ->
-				(expected == null ? status != 0 : status == expected) ? null : 'FAIL: ${test.name} expected ${exitDescription(status)}, got $status'
+			failure: status -> (expected == null ? status != 0 : status == expected)
+				? null : 'FAIL: ${test.name} expected ${exitDescription(status)}, got $status'
 		});
-		return {steps: steps, success: 'PASS: ${test.message} (${expected == null ? "non-zero exit" : 'exit $expected'})'};
+		return {
+			steps: steps,
+			success: 'PASS: ${test.message} (${expected == null ? "non-zero exit" : 'exit $expected'})'
+		};
 	}
 
 	/** Output path for a compiled test main; one per case, since several cases share a main. */
@@ -318,19 +341,19 @@ class TestRunner {
 		return Path.join([root, "out", "test-mains", name + ".hl"]);
 
 	function compileMainStep(main:String, output:String):PipelineStep
-		return {
-			start: () -> {
-				FileSystem.createDirectory(Path.directory(output));
-				new Process(haxe, testClassPath().concat(["-hl", output, "-main", main]));
-			},
-			failure: status -> status == 0 ? null : 'FAIL: $main failed to compile'
-		};
+		return {start: () -> {
+			FileSystem.createDirectory(Path.directory(output));
+			new Process(haxe, testClassPath().concat(["-hl", output, "-main", main]));
+		},
+			failure: status -> status == 0 ? null : 'FAIL: $main failed to compile'};
 
 	/** Run pipelines on `jobs` workers, reporting each test's output in catalog order. */
 	function runPipelines(pipelines:Array<Pipeline>, jobs:Int):Int {
 		if (pipelines.length == 0)
 			return 0;
-		var workerCount = Std.int(Math.max(1, Math.min(jobs, pipelines.length))), results:Array<ProgramResult> = [], active:Array<ActivePipeline> = [],
+		var workerCount = Std.int(Math.max(1, Math.min(jobs, pipelines.length))),
+			results:Array<ProgramResult> = [],
+			active:Array<ActivePipeline> = [],
 			next = 0;
 		while (next < pipelines.length || active.length > 0) {
 			while (next < pipelines.length && active.length < workerCount) {
@@ -355,7 +378,11 @@ class TestRunner {
 				active.push(current);
 			} else {
 				var success = current.pipeline.success;
-				results[current.index] = {index: current.index, passed: true, output: current.output + (success == "" ? "" : success + "\n")};
+				results[current.index] = {
+					index: current.index,
+					passed: true,
+					output: current.output + (success == "" ? "" : success + "\n")
+				};
 			}
 		}
 		return reportResults(results);
@@ -503,7 +530,8 @@ class TestRunner {
 			var execution = finishCommand(job.process);
 			var expected = job.run.test.expectedExit;
 			var passed = execution.status == expected;
-			var message = passed ? 'PASS: ${runName(job.run)} source compiled and executed (exit $expected)\n' : 'FAIL: ${runName(job.run)} expected exit $expected, got ${execution.status}\n';
+			var message = passed ? 'PASS: ${runName(job.run)} source compiled and executed (exit $expected)\n'
+				: 'FAIL: ${runName(job.run)} expected exit $expected, got ${execution.status}\n';
 			results[job.index] = {
 				index: job.index,
 				passed: passed,
@@ -532,13 +560,15 @@ class TestRunner {
 			return {
 				index: index,
 				passed: false,
-				output: compilation.output + execution.output + 'FAIL: ${runName(run)} expected exit ${test.expectedExit}, got ${execution.status}\n'
+				output: compilation.output + execution.output
+					+ 'FAIL: ${runName(run)} expected exit ${test.expectedExit}, got ${execution.status}\n'
 			};
 		}
 		return {
 			index: index,
 			passed: true,
-			output: compilation.output + execution.output + 'PASS: ${runName(run)} source compiled and executed (exit ${test.expectedExit})\n'
+			output: compilation.output + execution.output
+				+ 'PASS: ${runName(run)} source compiled and executed (exit ${test.expectedExit})\n'
 		};
 	}
 
@@ -575,7 +605,8 @@ class TestRunner {
 
 	function configureRuntimeLibraryPath():Void {
 		var paths = ["out", Sys.getEnv("HAXEON_HASHLINK_DIR")]; // "out" is relative so it is the out of the directory a run starts in
-		var variable = Sys.systemName() == "Windows" ? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
+		var variable = Sys.systemName() == "Windows"
+			? "PATH" : (Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH");
 		var existing = Sys.getEnv(variable);
 		if (existing != null && existing != "")
 			paths.push(existing);

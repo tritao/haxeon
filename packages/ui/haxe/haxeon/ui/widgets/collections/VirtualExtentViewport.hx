@@ -19,8 +19,8 @@ class VirtualExtentViewport {
 
 	public function new(extents:Array<Float>, viewportExtent:Float, offset:Float,
 			leadingOverscan:Int = 1, trailingOverscan:Int = 1) {
-		if (extents == null || viewportExtent <= 0.0 || !finite(viewportExtent) ||
-			!finite(offset) || offset < 0.0 || leadingOverscan < 0 || trailingOverscan < 0)
+		if (extents == null || viewportExtent <= 0.0 || !finite(viewportExtent) || !finite(offset) || offset < 0.0
+			|| leadingOverscan < 0 || trailingOverscan < 0)
 			throw "Variable virtual viewport requires finite dimensions and overscan";
 		itemCount = extents.length;
 		var builtOffsets:Array<Float> = [0.0];
@@ -40,8 +40,8 @@ class VirtualExtentViewport {
 	/** Repositions this extent index without rebuilding its prefix-offset cache. */
 	public function update(viewportExtent:Float, offset:Float,
 			leadingOverscan:Int = 1, trailingOverscan:Int = 1):Void {
-		if (viewportExtent <= 0.0 || !finite(viewportExtent) || !finite(offset) || offset < 0.0 ||
-			leadingOverscan < 0 || trailingOverscan < 0)
+		if (viewportExtent <= 0.0 || !finite(viewportExtent) || !finite(offset) || offset < 0.0 || leadingOverscan < 0
+			|| trailingOverscan < 0)
 			throw "Variable virtual viewport requires finite dimensions and overscan";
 		this.viewportExtent = viewportExtent;
 		this.offset = Math.min(offset, Math.max(0.0, totalExtent - viewportExtent));

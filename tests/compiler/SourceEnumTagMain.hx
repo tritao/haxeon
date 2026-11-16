@@ -35,7 +35,8 @@ class SourceEnumTagMain {
 			|| Lambda.exists(holder.fields, field -> !compiler.ir.IrVerifier.sameType(field.type, EnumTag("Mode"))))
 			throw "Reflected class fields must use four-byte tags, including nullable enum fields";
 		var pair = Lambda.find(program.objects, object -> object.name == "TaggedPair");
-		if (pair == null || pair.nativeLayout == null || pair.nativeLayout.size != 8 || pair.fields[0].nativeLayout.size != 4)
+		if (pair == null || pair.nativeLayout == null || pair.nativeLayout.size != 8
+			|| pair.fields[0].nativeLayout.size != 4)
 			throw "Flat enum fields lost their native scalar size";
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null)
@@ -129,7 +130,10 @@ class SourceEnumTagMain {
 			program.entryPoint = "cacheEntry";
 		}
 		compiler.ir.IrVerifier.verify(program);
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, debugNames: true})
+		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+			target: HashLink,
+			debugNames: true
+		})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				debugNames: true,
@@ -139,15 +143,20 @@ class SourceEnumTagMain {
 			}).bytes;
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var js =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("tag semantics "+e.main());'
 				+ 'e["Probe.prepare"]();if(e["Probe.perform"](2)!==84)throw Error("cached case root lost");'
 				+ 'const c=e.__allocation_count||e["haxeon.memory.allocation_count"];'
 				+ 'for(const n of [8,1024]){const before=c();if(e["Probe.perform"](n)!==42*n)throw Error("case result");'
 				+ 'if(c()!==before)throw Error("nullary references allocated "+(c()-before)+" objects for "+n+" iterations");}'
-				+
-				'e["Probe.allocateArray"](1024);const counts=[];for(const n of [8,1024]){const before=c();if(e["Probe.allocateArray"](n)!==n)throw Error("array length");counts.push(c()-before);}if(counts[0]!==counts[1])throw Error("per-element array allocations: "+counts);';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
+				+ 'e["Probe.allocateArray"](1024);const counts=[];for(const n of [8,1024]){const before=c();if(e["Probe.allocateArray"](n)!==n)throw Error("array length");counts.push(c()-before);}if(counts[0]!==counts[1])throw Error("per-element array allocations: "+counts);';
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"--expose-gc",
+				"-e",
+				js,
+				path
+			]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();
@@ -168,11 +177,12 @@ class SourceEnumTagMain {
 				var bytes:Array<Float> = [];
 				for (census in arrayCensuses) {
 					var total = 0.0;
-					for (entry in (cast census.types : Array<Dynamic>))
+					for (entry in (cast census.types:Array<Dynamic>))
 						total += entry.bytes;
 					bytes.push(total);
 				}
-				if (arrayCensuses.length != 2 || arrayCensuses[0].allocations != arrayCensuses[1].allocations || bytes[1] <= bytes[0])
+				if (arrayCensuses.length != 2 || arrayCensuses[0].allocations != arrayCensuses[1].allocations
+					|| bytes[1] <= bytes[0])
 					throw "Tag array construction must have constant object count: " + haxe.Json.stringify(bytes);
 				Sys.println('HashLink tag arrays: 8/1024 elements, objects=${arrayCensuses[0].allocations}/${arrayCensuses[1].allocations}, bytes='
 					+ bytes.join("/"));
@@ -182,7 +192,8 @@ class SourceEnumTagMain {
 			throw error;
 		}
 		cleanup(path, captures);
-		Sys.println("PASS: " + target + " inline=" + inlining + ": source tags and checked reflection; zero objects for 8/1024 iterations");
+		Sys.println("PASS: " + target + " inline=" + inlining
+			+ ": source tags and checked reflection; zero objects for 8/1024 iterations");
 	}
 
 	static function cleanup(path:String, captures:Array<String>):Void {

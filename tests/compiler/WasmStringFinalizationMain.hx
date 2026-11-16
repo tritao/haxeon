@@ -1,12 +1,12 @@
-import compiler.ir.Ir;
 import compiler.backend.Backend.BackendTarget;
-import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.EnumStringDescriptors;
+import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule;
-import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.WasmTypeIdPlan;
+import compiler.backend.wasm.WasmTypes;
 import compiler.backend.wasm.linear.WasmLinearContext;
 import compiler.backend.wasm.linear.WasmLinearRuntime;
+import compiler.ir.Ir;
 
 /** Finalization fills existing slots: appending an orphan duplicated the whole stringifier. */
 @:access(compiler.ir.IrBuilder)
@@ -51,8 +51,14 @@ class WasmStringFinalizationMain {
 				strings.set(text, index);
 				index += 8;
 			}
-			var allocator = module.addFunction(new WasmFunction("allocator", {parameters: [I32], results: [I32]}, [], [I32Const(0), Return]));
-			var context = new WasmLinearContext(module, program, new WasmLayout(program), {target: Wasm32, debugNames: true}, {
+			var allocator = module.addFunction(new WasmFunction("allocator", {parameters: [I32], results: [I32]}, [], [
+				I32Const(0),
+				Return
+			]));
+			var context = new WasmLinearContext(module, program, new WasmLayout(program), {
+				target: Wasm32,
+				debugNames: true
+			}, {
 				functions: functions,
 				globals: [],
 				rootGlobals: [],
@@ -87,7 +93,9 @@ class WasmStringFinalizationMain {
 				constructors:Array<compiler.ir.Ir.IrEnumCase> = [];
 			for (i in 0...cases)
 				constructors.push({name: "Case" + i, params: [I32]});
-			program.enums = [for (i in 0...enums) {name: "Sample" + i, cases: constructors}];
+			program.enums = [for (i in 0...enums) {
+				name:"Sample" + i, cases:constructors
+			}];
 			var selected:Map<String, Bool> = [];
 			for (entry in program.enums)
 				selected.set(entry.name, true);
@@ -189,7 +197,8 @@ class WasmStringFinalizationMain {
 		function make(name:String, matcher:Int):compiler.backend.wasm.gc.WasmGcEnumStringTable {
 			var program = new IrProgram("main");
 			program.enums = [{name: "E", cases: [{name: name, params: []}]}];
-			return new compiler.backend.wasm.gc.WasmGcEnumStringTable(new EnumStringDescriptors(program, ["E" => true], program.enums), ["E" => [-1]],
+			return new compiler.backend.wasm.gc.WasmGcEnumStringTable(new EnumStringDescriptors(program, ["E" => true],
+				program.enums), ["E" => [-1]],
 				["E" => matcher]);
 		}
 		var small = make("Short", 17),
@@ -219,8 +228,12 @@ class WasmStringFinalizationMain {
 			{name: "B", cases: [{name: "B1", params: []}]},
 			{name: "A;e:B", cases: [{name: "Combined", params: []}]}
 		]);
-		var table = new compiler.backend.wasm.gc.WasmGcEnumStringTable(new EnumStringDescriptors(program, ["Carrier" => true], declarations),
-			["Carrier" => [1, 2]], ["Carrier" => 0]);
+		var table = new compiler.backend.wasm.gc.WasmGcEnumStringTable(new EnumStringDescriptors(program,
+			["Carrier" => true], declarations),
+			["Carrier" => [
+				1,
+				2
+			]], ["Carrier" => 0]);
 		if (!table.narrow)
 			throw "Expected compact descriptors";
 		var casesAt = table.bytes.getUInt16(6 * 2),
@@ -236,12 +249,14 @@ class WasmStringFinalizationMain {
 		var name = StringTools.lpad("X", "x", 65536);
 		var session = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		session.addStandardLibrarySourceRoot("stdlib");
-		session.configure("enum-string-wide", "enum-string-wide", compiler.tools.CompilerDriver.targetDefines("wasm-gc"));
+		session.configure("enum-string-wide", "enum-string-wide",
+			compiler.tools.CompilerDriver.targetDefines("wasm-gc"));
 		session.update("Main.hx",
 			'enum LongName { $name(v:Int); } function main():Int { var value:Dynamic = $name(7); return Std.string(value).length == 65539 ? 42 : 1; }');
 		var program = session.compile("Main").ir;
 		var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {target: WasmGc, debugNames: false}).bytes;
-		var script = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(0))).exports;if(e.main()!==42)throw Error("wide descriptor");';
+		var script =
+			'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(0))).exports;if(e.main()!==42)throw Error("wide descriptor");';
 		var child = new sys.io.Process("node", ["-e", script]);
 		child.stdin.write(bytes);
 		child.stdin.close();
@@ -271,23 +286,27 @@ class WasmStringFinalizationMain {
 			strings.set(text, index);
 			index += 8;
 		}
-		var allocator = module.addFunction(new WasmFunction("allocator", {parameters: [I32], results: [I32]}, [], [I32Const(0), Return])),
-			context = new WasmLinearContext(module, program, new WasmLayout(program), {target: Wasm32, debugNames: true}, {
-				functions: functions,
-				globals: [],
-				rootGlobals: [],
-				strings: strings,
-				heapStart: 0,
-				rootBase: 0,
-				rootTop: 0,
-				rootFrameTop: 0,
-				rootLimit: 0,
-				markStackTop: 0,
-				heapState: 0,
-				reflectionTable: 0,
-				reflectionCount: 0,
-				reflectionBytes: null
-			});
+		var allocator = module.addFunction(new WasmFunction("allocator", {parameters: [I32], results: [I32]}, [], [
+			I32Const(0),
+			Return
+		])),
+			context = new WasmLinearContext(module, program, new WasmLayout(program),
+				{target: Wasm32, debugNames: true}, {
+					functions: functions,
+					globals: [],
+					rootGlobals: [],
+					strings: strings,
+					heapStart: 0,
+					rootBase: 0,
+					rootTop: 0,
+					rootFrameTop: 0,
+					rootLimit: 0,
+					markStackTop: 0,
+					heapState: 0,
+					reflectionTable: 0,
+					reflectionCount: 0,
+					reflectionBytes: null
+				});
 		context.allocatorFunction = allocator;
 		WasmLinearRuntime.register(context);
 		var slot = functions.get("__std_string"),
@@ -338,7 +357,8 @@ class WasmStringFinalizationMain {
 		var exposed = new compiler.ir.IrBuilder();
 		exposed.argument("hostValue", Dyn);
 		exposed.returnValue(exposed.constInt(42));
-		program.functions.push(new compiler.ir.IrFunction("entry", exposed.arguments, I32, exposed.blocks, Ordinary, null, false, Expose));
+		program.functions.push(new compiler.ir.IrFunction("entry", exposed.arguments, I32, exposed.blocks, Ordinary,
+			null, false, Expose));
 		reached.set("entry", true);
 		if (!compiler.backend.wasm.WasmModuleSupport.stringifiableEnums(program, reached).exists("Dead"))
 			throw "an exposed Dynamic parameter must preserve possible enum inputs";
@@ -369,8 +389,12 @@ class WasmStringFinalizationMain {
 		program.functions = [new compiler.ir.IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		if (Lambda.exists(compiler.ir.IrEnumRuntimeTypes.physical(program).enums, entry -> entry.name == "TagOnly"))
 			throw "the test requires a tag-only enum with no physical descriptor";
-		for (target in ([Wasm32, WasmGc] : Array<BackendTarget>)) {
-			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {target: target, debugNames: true, developmentMetadata: false}).bytes;
+		for (target in ([Wasm32, WasmGc]:Array<BackendTarget>)) {
+			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
+				target: target,
+				debugNames: true,
+				developmentMetadata: false
+			}).bytes;
 			if (!containsBytes(bytes, "One"))
 				throw 'missing logical tag name for $target';
 		}
@@ -404,19 +428,31 @@ class WasmStringFinalizationMain {
 			+ 'return Std.string(number)=="17" && Std.string(tone)=="Light" && Std.string(payload)=="Shade(7)" && Std.string(label)=="label" '
 			+ '&& Std.string(true)=="true" && Std.string(null)=="null" ? 42 : 1; }');
 		var program = session.compile("Main").ir;
-		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {target: HashLink, debugNames: true})
-			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {target: target == "wasm32" ? Wasm32 : WasmGc, debugNames: true}).bytes;
+		var binary = target == "hl" ? new compiler.backend.hl.HlBackend().compile(program, {
+			target: HashLink,
+			debugNames: true
+		})
+			.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
+				target: target == "wasm32" ? Wasm32 : WasmGc,
+				debugNames: true
+			}).bytes;
 		if (target != "hl" && containsBytes(binary, "NeverSeen("))
 			throw target + " emitted formatting for an unreachable enum";
 		var temp = Sys.getEnv("TMPDIR");
 		if (temp == null)
 			temp = "/tmp";
-		var path = temp + "/string-finalization-" + target + inlining + "-" + Std.random(0x7fffffff) + (target == "hl" ? ".hl" : ".wasm");
+		var path = temp + "/string-finalization-" + target + inlining + "-" + Std.random(0x7fffffff)
+			+ (target == "hl" ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, binary);
 		try {
-			var script = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var script =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("dynamic stringification");';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["-e", script, path]);
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"-e",
+				script,
+				path
+			]);
 			var output = child.stdout.readAll().toString(),
 				error = child.stderr.readAll().toString(),
 				status = child.exitCode();

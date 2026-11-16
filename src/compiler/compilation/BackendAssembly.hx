@@ -91,7 +91,8 @@ class BackendAssembly {
 		return "module tables or debug sections differ";
 	}
 
-	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>, relocated:Array<String>,
+	public static function assemble(context:CompilationContext, ir:IrProgram, regenerated:Array<String>,
+			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
 		compiler.ir.IrReachabilityReport.report("final program", ir);
@@ -127,7 +128,8 @@ class BackendAssembly {
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
 		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
 		if (context.livePatching && !context.isWasmTarget() && baseAssembler.isPublished() && previousAbi != null) {
-			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional, Std.string(baseAssembler.lastRevision() + 1),
+			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional,
+				Std.string(baseAssembler.lastRevision() + 1),
 				LambdaAlignment.placesOf(previousAbi, nextAbi));
 			if (alignment.steps.length > 0) {
 				baseAssembler = baseAssembler.copy();
@@ -152,7 +154,8 @@ class BackendAssembly {
 		// Without live patching nothing addresses this module by slot, symbol index or stable id, so assemble
 		// from scratch: the result depends only on the source, never on what the session compiled before.
 		// A plain build links the functions of the last one whose IR is unchanged instead of lowering them again (see `HlLoweredCache`).
-		var loweredCache:Null<compiler.hl.incremental.HlLoweredCache> = context.livePatching ? null : context.loweredCache;
+		var loweredCache:Null<compiler.hl.incremental.HlLoweredCache> = context.livePatching
+			? null : context.loweredCache;
 		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
@@ -167,7 +170,8 @@ class BackendAssembly {
 		}
 		var assemblerCopiedAt = Sys.time() * 1000.0;
 		var allocationAfterCopy = AllocationMeter.sample();
-		var assembly = candidateAssembler.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision, relocated,
+		var assembly = candidateAssembler.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr),
+			decision, relocated,
 			PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
@@ -184,7 +188,8 @@ class BackendAssembly {
 			fresh.developmentMetadata = candidateAssembler.developmentMetadata;
 			fresh.irVerified = candidateAssembler.irVerified;
 			fresh.loweredCache = new compiler.hl.incremental.HlLoweredCache();
-			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision, relocated,
+			var freshAssembly = fresh.assemble(assemblyIr, context.rehydratedChanges(regenerated, assemblyIr), decision,
+				relocated,
 				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);
@@ -202,15 +207,16 @@ class BackendAssembly {
 		// slot), and a patch is only meaningful against the layout the running module has.
 		var patchBytes = reloadReasons.length > 0
 			|| assembly.requiresReload
-			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId, assembly.changedSlots,
-				context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision, assembly.revision, assembly.baseInts,
-				assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions, assembly.baseGlobals, assembly.objectLayout, [
-					for (guard in assembly.guards)
-						if (candidateAssembler.cache.stableIds.exists(guard.name)) {
-							stableId: candidateAssembler.cache.stableIds.get(guard.name) ?? 0,
-							description: guard.description
-						}
-				], candidateAssembler.symbols.namedGlobals());
+			|| assembly.changedFunctions.length == 0 ? null : HlPatchWriter.encode(assembly.module, context.moduleId,
+			assembly.changedSlots,
+			context.stableIdsBySlot(candidateAssembler, assembly.functionIndices), assembly.baseRevision,
+			assembly.revision, assembly.baseInts,
+			assembly.baseFloats, assembly.baseStrings, assembly.baseTypes, null, assembly.addedFunctions,
+			assembly.baseGlobals, assembly.objectLayout, [for (guard in assembly.guards)
+			if (candidateAssembler.cache.stableIds.exists(guard.name)) {
+				stableId:candidateAssembler.cache.stableIds.get(guard.name) ?? 0,
+					description:guard.description
+			}], candidateAssembler.symbols.namedGlobals());
 		var allocationAfterPatch = AllocationMeter.sample();
 		return {
 			assembly: assembly,
@@ -264,8 +270,11 @@ class BackendAssembly {
 				throw 'Source snapshot hash collision for ${source.path}';
 			byHash.set(hash, content);
 		}
-		code.sourceSnapshots = [for (hash => content in byHash) {sourceHash: hash, content: content}];
-		code.sourceSnapshots.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
+		code.sourceSnapshots = [for (hash => content in byHash) {
+			sourceHash:hash, content:content
+		}];
+		code.sourceSnapshots.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash
+			> right.sourceHash ? 1 : 0);
 		if (code.sourceSnapshots.length > 0)
 			code.debugSections.push(compiler.hl.HlCode.HlDebugSection.lazy(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
 				_ -> HlWriter.encodeSourceSnapshots(code.sourceSnapshots)));

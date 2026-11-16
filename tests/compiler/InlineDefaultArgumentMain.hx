@@ -5,14 +5,20 @@ import compiler.ir.IrInterpreter;
 class InlineDefaultArgumentMain {
 	static function main():Void {
 		for (indexed in [false, true]) {
-			check(indexed, "static method", "class Api { public static function read(value:Int = Constants.VALUE):Int return value; }", "Api.read()");
-			check(indexed, "instance method", "class Api { public function new() {} public function read(value:Int = Constants.VALUE):Int return value; }",
+			check(indexed, "static method",
+				"class Api { public static function read(value:Int = Constants.VALUE):Int return value; }",
+				"Api.read()");
+			check(indexed, "instance method",
+				"class Api { public function new() {} public function read(value:Int = Constants.VALUE):Int return value; }",
 				"new Api().read()");
-			check(indexed, "constructor", "class Api { public var value:Int; public function new(value:Int = Constants.VALUE) this.value = value; }",
+			check(indexed, "constructor",
+				"class Api { public var value:Int; public function new(value:Int = Constants.VALUE) this.value = value; }",
 				"new Api().value");
 			check(indexed, "function", "function read(value:Int = Constants.VALUE):Int return value;", "Api.read()");
-			check(indexed, "generic function", "function read<T>(unused:T, value:Int = Constants.VALUE):Int return value;", "Api.read(0)");
-			check(indexed, "coerced expression", "function read(value:Float = Constants.VALUE + 1):Int return value > 2.5 ? 2 : 1;", "Api.read()");
+			check(indexed, "generic function",
+				"function read<T>(unused:T, value:Int = Constants.VALUE):Int return value;", "Api.read(0)");
+			check(indexed, "coerced expression",
+				"function read(value:Float = Constants.VALUE + 1):Int return value > 2.5 ? 2 : 1;", "Api.read()");
 		}
 		checkRemovedDependency();
 		Sys.println("PASS: inline constants in default arguments invalidate cached callers");

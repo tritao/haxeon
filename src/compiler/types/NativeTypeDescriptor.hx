@@ -87,7 +87,8 @@ class NativeTypeDescriptor {
 		if (open <= "interface:".length || length <= open + 1 || !StringTools.endsWith(value, ">"))
 			return false;
 		var name = value.substring("interface:".length, open);
-		if (name.length == 0 || StringTools.startsWith(name, ".") || StringTools.endsWith(name, ".") || name.indexOf("..") >= 0)
+		if (name.length == 0 || StringTools.startsWith(name, ".") || StringTools.endsWith(name, ".")
+			|| name.indexOf("..") >= 0)
 			return false;
 		var depth = 0;
 		for (index in open...length) {
@@ -128,7 +129,8 @@ class NativeTypeDescriptor {
 			sign = ((bits >>> 31) == 0) ? 1.0 : -1.0,
 			exponent = (bits >>> 23) & 0xff,
 			fraction = bits & 0x7fffff;
-		return exponent == 0 ? sign * fraction * Math.pow(2.0, -149.0) : sign * (1.0 + fraction / 8388608.0) * Math.pow(2.0, exponent - 127.0);
+		return exponent == 0 ? sign * fraction * Math.pow(2.0,
+			-149.0) : sign * (1.0 + fraction / 8388608.0) * Math.pow(2.0, exponent - 127.0);
 	}
 
 	/** Return the IEEE-754 binary32 bits for a finite value, or null on overflow. */
@@ -192,11 +194,14 @@ class NativeTypeDescriptor {
 	public static function integerDefaultFits(type:String, value:Int):Bool
 		return switch type {
 			case "native-scalar:i32" | "native-scalar:u32": true;
-			case _: var range = narrowIntegerDefaultRange(type); range != null && value >= range.min && value <= range.max;
+			case _: var range = narrowIntegerDefaultRange(type);
+				range != null && value >= range.min && value <= range.max;
 		};
 
-	public static function contentHash(identity:String, name:String, type:String, sourceKind:String, interfaces:Array<String>, flat:Bool, portable:Bool,
-			size:Null<Int>, alignment:Null<Int>, annotations:Array<String>, annotationValues:Array<NativeTypeAnnotationData>,
+	public static function contentHash(identity:String, name:String, type:String, sourceKind:String,
+			interfaces:Array<String>, flat:Bool, portable:Bool,
+			size:Null<Int>, alignment:Null<Int>, annotations:Array<String>,
+			annotationValues:Array<NativeTypeAnnotationData>,
 			fields:Array<NativeTypeDescriptorField>, arguments:Array<NativeTypeDescriptorField>):String {
 		var canonical = new StringBuf();
 		append(canonical, identity);
@@ -239,7 +244,8 @@ class NativeTypeDescriptor {
 		}
 	}
 
-	static function appendDefault(buffer:StringBuf, node:NativeTypeDescriptorField, value:Null<NativeTypeDescriptorDefault>):Void {
+	static function appendDefault(buffer:StringBuf, node:NativeTypeDescriptorField,
+			value:Null<NativeTypeDescriptorDefault>):Void {
 		if (value == null) {
 			append(buffer, "0");
 			return;
@@ -272,7 +278,8 @@ class NativeTypeDescriptor {
 		if (node.type == "native-scalar:f32")
 			return true;
 		for (argument in node.arguments)
-			if ((argument.name == "representation" || (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
+			if ((argument.name == "representation"
+				|| (StringTools.startsWith(node.type, "Null<") && argument.name == "element"))
 				&& containsFloat32(argument))
 				return true;
 		return false;

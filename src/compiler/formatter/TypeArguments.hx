@@ -6,10 +6,8 @@ import compiler.syntax.Token.TokenKind;
 
 /** Matched `<` and `>` token indexes of every type argument list in a token array. */
 typedef TypeArgumentPairs = {
-	final opens:Map<Int,
-	Int>;
-	final closes:Map<Int,
-	Int>;
+	final opens:Map<Int, Int>;
+	final closes:Map<Int, Int>;
 
 	/** Indexes of `>=` tokens that really close a list and start an assignment: `Array<Int>= []`. */
 	final splits:Array<Int>;

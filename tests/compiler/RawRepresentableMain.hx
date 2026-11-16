@@ -9,7 +9,8 @@ class RawRepresentableMain {
 	static function makeCompiler(target:String, inlining:Bool):Compiler {
 		var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		c.addStandardLibrarySourceRoot("stdlib");
-		c.configure("raw-" + target + inlining, "raw", CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+		c.configure("raw-" + target + inlining, "raw",
+			CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 		return c;
 	}
 
@@ -33,15 +34,22 @@ class RawRepresentableMain {
 			"Type mismatch");
 		rejected('enum abstract Mime(String) implements RawRepresentable { var Text="text"; } function main():Int { var bad:String=Mime.Text; return 42; }',
 			"Type mismatch");
-		rejected('enum abstract Code(Int) from Int implements RawRepresentable { var A=4; } function main():Int return 42;', "cannot declare implicit");
-		rejected('enum abstract Code(Int) to Int implements RawRepresentable { var A=4; } function main():Int return 42;', "cannot declare implicit");
-		rejected('enum abstract Bad(Float) implements RawRepresentable { var A=1.0; } function main():Int return 42;', "requires an Int or String");
+		rejected('enum abstract Code(Int) from Int implements RawRepresentable { var A=4; } function main():Int return 42;',
+			"cannot declare implicit");
+		rejected('enum abstract Code(Int) to Int implements RawRepresentable { var A=4; } function main():Int return 42;',
+			"cannot declare implicit");
+		rejected('enum abstract Bad(Float) implements RawRepresentable { var A=1.0; } function main():Int return 42;',
+			"requires an Int or String");
 		rejected(decl + 'function main():Int { Code.fromRaw("wrong"); return 42; }', "Type mismatch");
-		rejected(decl + 'function accepts<T:RawRepresentable>(value:T):Int return 42; function main():Int return accepts(4);', "constraint");
-		rejected(decl + 'enum abstract Other(Int) implements RawRepresentable { var A=4; } function main():Int { var bad:Other=Code.A; return 42; }',
+		rejected(decl
+			+ 'function accepts<T:RawRepresentable>(value:T):Int return 42; function main():Int return accepts(4);',
+			"constraint");
+		rejected(decl
+			+ 'enum abstract Other(Int) implements RawRepresentable { var A=4; } function main():Int { var bad:Other=Code.A; return 42; }',
 			"Type mismatch");
 
-		rejected(decl + 'function main():Int { var values:Array<Code>=[Code.A]; return values.indexOf(4); }', "Type mismatch");
+		rejected(decl + 'function main():Int { var values:Array<Code>=[Code.A]; return values.indexOf(4); }',
+			"Type mismatch");
 		rejected(decl + 'function main():Int { var values=[42]; return values[Code.A]; }', "Array index must be Int");
 		incremental();
 		for (target in ["hl", "wasm32", "wasm-gc"])
@@ -53,7 +61,8 @@ class RawRepresentableMain {
 	static function incremental():Void {
 		var c = makeCompiler("hl", true);
 		c.update("Code.hx", 'enum abstract Code(Int) implements RawRepresentable { var A=4; }');
-		c.update("Main.hx", 'function main():Int { var value=Code.fromRaw(7); return value==null ? 0 : value.rawValue(); }');
+		c.update("Main.hx",
+			'function main():Int { var value=Code.fromRaw(7); return value==null ? 0 : value.rawValue(); }');
 		function result():Int
 			return new compiler.ir.IrInterpreter(c.compile("Main").ir).run("main");
 		if (result() != 0)
@@ -68,7 +77,8 @@ class RawRepresentableMain {
 		if (result() != 7)
 			throw "Replaced constant did not update raw helper";
 		var imported = makeCompiler("hl", true);
-		imported.update("wire/Code.hx", 'package wire; enum abstract Code(Int) implements RawRepresentable { var A=4; }');
+		imported.update("wire/Code.hx",
+			'package wire; enum abstract Code(Int) implements RawRepresentable { var A=4; }');
 		imported.update("Main.hx",
 			'import wire.Code as WireCode; function main():Int { var value=WireCode.fromRaw(4); return value==null ? 0 : value.rawValue(); }');
 		if (new compiler.ir.IrInterpreter(imported.compile("Main").ir).run("main") != 4)
@@ -180,7 +190,8 @@ class RawRepresentableMain {
 			p.functions.push(new IrFunction("rawEntry", b.arguments, Void, b.blocks, Ordinary));
 			p.entryPoint = "rawEntry";
 		}
-		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p, {target: HashLink, debugNames: true})
+		var bytes = target == "hl" ? new compiler.backend.hl.HlBackend().compile(p,
+			{target: HashLink, debugNames: true})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target == "wasm32" ? Wasm32 : WasmGc,
 				debugNames: true,
@@ -189,13 +200,17 @@ class RawRepresentableMain {
 			}).bytes;
 		sys.io.File.saveBytes(path, bytes);
 		try {
-			var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
+			var js =
+				'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;'
 				+ 'if(e.main()!==42)throw Error("raw semantics"); const count=e.__allocation_count||e["haxeon.memory.allocation_count"];'
-				+
-				'e["Probe.raw"](2);for(const n of [8,1024]){const before=count();if(e["Probe.raw"](n)!==11*n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
-				+
-				'e["Probe.fromRaw32"](2);for(const n of [8,1024]){const before=count();if(e["Probe.fromRaw32"](n)!==(n===8?28:15872))throw Error("raw switch result");const objects=count()-before;if(objects>n)throw Error("extra raw switch boxes");console.log("CENSUS fromRaw32 n="+n+" objects="+objects);}';
-			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : ["--expose-gc", "-e", js, path]);
+				+ 'e["Probe.raw"](2);for(const n of [8,1024]){const before=count();if(e["Probe.raw"](n)!==11*n)throw Error("raw loop");if(count()!==before)throw Error("raw values boxed");}'
+				+ 'e["Probe.fromRaw32"](2);for(const n of [8,1024]){const before=count();if(e["Probe.fromRaw32"](n)!==(n===8?28:15872))throw Error("raw switch result");const objects=count()-before;if(objects>n)throw Error("extra raw switch boxes");console.log("CENSUS fromRaw32 n="+n+" objects="+objects);}';
+			var child = new sys.io.Process(target == "hl" ? "scripts/hl" : "node", target == "hl" ? [path] : [
+				"--expose-gc",
+				"-e",
+				js,
+				path
+			]);
 			var output = child.stdout.readAll().toString() + child.stderr.readAll().toString(),
 				code = child.exitCode();
 			child.close();
@@ -215,7 +230,7 @@ class RawRepresentableMain {
 					if (census.allocations > n)
 						throw "Extra fromRaw32 boxes";
 					var bytes = 0.0;
-					for (type in (cast census.types : Array<Dynamic>))
+					for (type in (cast census.types:Array<Dynamic>))
 						bytes += type.bytes;
 					Sys.println('CENSUS fromRaw32 hl inline=$inlining n=$n objects=${census.allocations} bytes=$bytes');
 				}

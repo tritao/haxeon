@@ -22,7 +22,8 @@ class ControlFlow {
 	 * Whether the statements certainly return or throw. Code after such statements is reported as unreachable, so this
 	 * recognises only the forms that rule has always been written against; an infinite loop is not one of them.
 	 */
-	public static function alwaysReturns(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
+	public static function alwaysReturns(statements:Array<TypedStatement>,
+			exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
 		return alwaysTerminates(statements, exhaustive, false, false);
 
 	/**
@@ -30,13 +31,16 @@ class ControlFlow {
 	 * arm `case _:` has a default and a bare block runs its body, which `alwaysReturns` does not count: dead code after
 	 * one of them has always been accepted.
 	 */
-	public static function returnsOnEveryPath(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
+	public static function returnsOnEveryPath(statements:Array<TypedStatement>,
+			exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
 		return alwaysTerminates(statements, exhaustive, false, true);
 
-	public static function alwaysExits(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
+	public static function alwaysExits(statements:Array<TypedStatement>,
+			exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool):Bool
 		return alwaysTerminates(statements, exhaustive, true, false);
 
-	static function alwaysTerminates(statements:Array<TypedStatement>, exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool, loopExit:Bool,
+	static function alwaysTerminates(statements:Array<TypedStatement>,
+			exhaustive:(CompilerType, Array<TypedSwitchCase>) -> Bool, loopExit:Bool,
 			complete:Bool):Bool {
 		for (statement in statements)
 			switch statement {
@@ -44,8 +48,10 @@ class ControlFlow {
 					return true;
 				case TBreak(_), TContinue(_) if (loopExit):
 					return true;
-				case TExpression(expression, _) if ((switch (expression.type) { case TNever: true; default: false; })):
-					return true;
+				case TExpression(expression, _) if ((switch (expression.type) {
+					case TNever: true;
+					default: false;
+				})): return true;
 				case TIf(condition, yes, no, _):
 					// A bare block always runs its body. `alwaysReturns`, the unreachable-code rule, still does not count it: dead code after
 					// one has always been accepted.

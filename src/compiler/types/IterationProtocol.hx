@@ -32,7 +32,7 @@ class IterationProtocol {
 				optional: false,
 				isFinal: true
 			}
-			];
+		];
 		return TAnonymous(SemanticSignature.anonymousTypeName(fields), fields);
 	}
 
@@ -72,7 +72,10 @@ class IterationProtocol {
 		return hasNext && next;
 	}
 
-	public static function method(declarations:DeclarationIndex, type:CompilerType, name:String):Null<{type:CompilerType, owner:Null<String>}> {
+	public static function method(declarations:DeclarationIndex, type:CompilerType, name:String):Null<{
+		type:CompilerType,
+		owner:Null<String>
+	}> {
 		switch type {
 			case TArray(element):
 				if (name == "iterator")
@@ -103,7 +106,8 @@ class IterationProtocol {
 					methods = declaration.methods;
 				}
 				for (method in methods)
-					if (method.name == name && !method.isStatic && (method.typeParameters == null || method.typeParameters.length == 0)) {
+					if (method.name == name && !method.isStatic
+						&& (method.typeParameters == null || method.typeParameters.length == 0)) {
 						var substitutions = declarations.inheritance.substitutions(type);
 						return {
 							type: TFunction([
@@ -148,10 +152,20 @@ class IterationProtocol {
 			return iterator == null ? null : element(declarations, iterator, false);
 		}
 		var next = result(declarations, type, "next");
-		return (switch (result(declarations, type, "hasNext")) { case TBool: true; default: false; }) && (switch (next) { case TVoid: false; default: true; }) && (switch (next) { case TNever: false; default: true; }) ? next : null;
+		return (switch (result(declarations, type, "hasNext")) {
+			case TBool: true;
+			default: false;
+		}) && (switch (next) {
+			case TVoid: false;
+			default: true;
+		}) && (switch (next) {
+			case TNever: false;
+			default: true;
+		}) ? next : null;
 	}
 
-	public static function conforms(declarations:DeclarationIndex, relations:TypeRelations, actual:CompilerType, expected:CompilerType):Bool {
+	public static function conforms(declarations:DeclarationIndex, relations:TypeRelations, actual:CompilerType,
+			expected:CompilerType):Bool {
 		return switch expected {
 			case TAnonymous(_, fields):
 				var valid = true;
@@ -173,19 +187,22 @@ class IterationProtocol {
 			throw new CompileError(new Diagnostic("E1014", 'Iteration requires "$name()"', span));
 		var result = switch found.type {
 			case TFunction([], result): result;
-			default: throw new CompileError(new Diagnostic("E1014", 'Iteration requires a zero-argument "$name()"', span));
+			default: throw new CompileError(new Diagnostic("E1014", 'Iteration requires a zero-argument "$name()"',
+				span));
 		};
 		var expression:TypedExpression;
 		switch receiver.type {
 			case TArray(_), TMap(_, _) if (name == "iterator"):
 				var values = switch receiver.type {
-					case TMap(_, element): new TypedExpression(TCollectionCall(receiver, "values", []), TArray(element), span);
+					case TMap(_, element): new TypedExpression(TCollectionCall(receiver, "values", []), TArray(element),
+						span);
 					default: receiver;
 				};
 				var dynamicValues = new TypedExpression(TToDynamic(values), TDynamic, span);
 				expression = new TypedExpression(TCall("__iterator_new", [dynamicValues]), result, span);
 			case TIterator(_):
-				expression = new TypedExpression(TCall(name == "next" ? "__iterator_next" : "__iterator_has_next", [receiver]), result, span);
+				expression = new TypedExpression(TCall(name == "next" ? "__iterator_next" : "__iterator_has_next",
+					[receiver]), result, span);
 			case _ if (found.owner == null):
 				var representation = session.representation.resolveField(receiver.type, name, span);
 				var physicalResult = switch representation.physical {
@@ -193,13 +210,16 @@ class IterationProtocol {
 					default: throw "Expected callable iteration field";
 				};
 				var field = new TypedExpression(TField(receiver, name), representation.physical, span);
-				expression = session.representation.boundaryCast(new TypedExpression(TClosureCall(field, []), physicalResult, span), result);
+				expression = session.representation.boundaryCast(new TypedExpression(TClosureCall(field, []),
+					physicalResult, span), result);
 			default:
 				var signature = session.signatures.get(found.owner + "." + name);
 				if (signature == null)
 					throw new CompileError(new Diagnostic("E1007", 'Missing iteration method signature "$name"', span));
-				var physical = session.representation.resolveMethodResult(receiver.type, found.owner, signature).physical;
-				expression = session.representation.boundaryCast(new TypedExpression(TMethodCall(receiver, found.owner + "." + name, []), physical, span),
+				var physical = session.representation.resolveMethodResult(receiver.type, found.owner,
+					signature).physical;
+				expression = session.representation.boundaryCast(new TypedExpression(TMethodCall(receiver,
+					found.owner + "." + name, []), physical, span),
 					result);
 		}
 		return expression;

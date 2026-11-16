@@ -190,7 +190,8 @@ class AudioBank {
 
 	function ensureNameAvailable(name:String):Void {
 		if (indexOf(name) >= 0)
-			throw BindingError.invalidState("AudioBank.ensureNameAvailable", "Audio bank entry name is already registered: " + name);
+			throw BindingError.invalidState("AudioBank.ensureNameAvailable",
+				"Audio bank entry name is already registered: " + name);
 	}
 
 	static function validateName(name:String):Void {

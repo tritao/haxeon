@@ -91,13 +91,20 @@ class StyleValue {
 	public static inline function matrixOf(value:StyleValue):Transform2D return (cast value:StyleTransformValue).value;
 	public static inline function numberOf(value:StyleValue):Float return (cast value:StyleFloatValue).value;
 	public static inline function integerOf(value:StyleValue):Int return (cast value:StyleIntegerValue).value;
-	public static inline function directionOf(value:StyleValue):LayoutDirection return (cast value:StyleDirectionValue).value;
-	public static inline function alignmentXOf(value:StyleValue):LayoutAlignmentX return (cast value:StyleChildAlignXValue).value;
-	public static inline function alignmentYOf(value:StyleValue):LayoutAlignmentY return (cast value:StyleChildAlignYValue).value;
-	public static inline function distributionOf(value:StyleValue):LayoutDistribution return (cast value:StyleChildDistributionValue).value;
-	public static inline function positioningOf(value:StyleValue):LayoutPositioning return (cast value:StylePositioningValue).value;
-	public static inline function wrapModeOf(value:StyleValue):LayoutWrapMode return (cast value:StyleWrapModeValue).value;
-	public static inline function selfAlignmentOf(value:StyleValue):LayoutSelfAlignment return (cast value:StyleAlignSelfValue).value;
+	public static inline function directionOf(value:StyleValue):LayoutDirection return (cast value:StyleDirectionValue)
+		.value;
+	public static inline function alignmentXOf(value:StyleValue):LayoutAlignmentX return (cast value:StyleChildAlignXValue)
+		.value;
+	public static inline function alignmentYOf(value:StyleValue):LayoutAlignmentY return (cast value:StyleChildAlignYValue)
+		.value;
+	public static inline function distributionOf(value:StyleValue):LayoutDistribution return (cast value:StyleChildDistributionValue)
+		.value;
+	public static inline function positioningOf(value:StyleValue):LayoutPositioning return (cast value:StylePositioningValue)
+		.value;
+	public static inline function wrapModeOf(value:StyleValue):LayoutWrapMode return (cast value:StyleWrapModeValue)
+		.value;
+	public static inline function selfAlignmentOf(value:StyleValue):LayoutSelfAlignment return (cast value:StyleAlignSelfValue)
+		.value;
 	public static inline function booleanOf(value:StyleValue):Bool return (cast value:StyleBoolValue).value;
 	public static inline function decorationsOf(value:StyleValue):DecorationChain
 		return (cast value:StyleReferenceValue<DecorationChain>).value;
@@ -114,56 +121,88 @@ class StyleValue {
 		result.resize(StyleProperty.slotCount());
 		result[StyleProperty.Width.slot] = axis(StyleProperty.Width, StyleProperty.Width.defaultValue);
 		result[StyleProperty.Height.slot] = axis(StyleProperty.Height, StyleProperty.Height.defaultValue);
-		result[StyleProperty.Direction.slot] = new StyleDirectionValue(StyleProperty.Direction, StyleProperty.Direction.defaultValue);
-		result[StyleProperty.ChildAlignX.slot] = new StyleChildAlignXValue(StyleProperty.ChildAlignX, StyleProperty.ChildAlignX.defaultValue);
-		result[StyleProperty.ChildAlignY.slot] = new StyleChildAlignYValue(StyleProperty.ChildAlignY, StyleProperty.ChildAlignY.defaultValue);
-		result[StyleProperty.ChildDistribution.slot] = new StyleChildDistributionValue(StyleProperty.ChildDistribution, StyleProperty.ChildDistribution.defaultValue);
-		result[StyleProperty.Positioning.slot] = new StylePositioningValue(StyleProperty.Positioning, StyleProperty.Positioning.defaultValue);
-		result[StyleProperty.AspectRatio.slot] = number(StyleProperty.AspectRatio, StyleProperty.AspectRatio.defaultValue);
-		result[StyleProperty.WrapMode.slot] = new StyleWrapModeValue(StyleProperty.WrapMode, StyleProperty.WrapMode.defaultValue);
+		result[StyleProperty.Direction.slot] = new StyleDirectionValue(StyleProperty.Direction,
+			StyleProperty.Direction.defaultValue);
+		result[StyleProperty.ChildAlignX.slot] = new StyleChildAlignXValue(StyleProperty.ChildAlignX,
+			StyleProperty.ChildAlignX.defaultValue);
+		result[StyleProperty.ChildAlignY.slot] = new StyleChildAlignYValue(StyleProperty.ChildAlignY,
+			StyleProperty.ChildAlignY.defaultValue);
+		result[StyleProperty.ChildDistribution.slot] = new StyleChildDistributionValue(StyleProperty.ChildDistribution,
+			StyleProperty.ChildDistribution.defaultValue);
+		result[StyleProperty.Positioning.slot] = new StylePositioningValue(StyleProperty.Positioning,
+			StyleProperty.Positioning.defaultValue);
+		result[StyleProperty.AspectRatio.slot] = number(StyleProperty.AspectRatio,
+			StyleProperty.AspectRatio.defaultValue);
+		result[StyleProperty.WrapMode.slot] = new StyleWrapModeValue(StyleProperty.WrapMode,
+			StyleProperty.WrapMode.defaultValue);
 		result[StyleProperty.RowGap.slot] = number(StyleProperty.RowGap, StyleProperty.RowGap.defaultValue);
 		result[StyleProperty.ColumnGap.slot] = number(StyleProperty.ColumnGap, StyleProperty.ColumnGap.defaultValue);
-		result[StyleProperty.AlignSelf.slot] = new StyleAlignSelfValue(StyleProperty.AlignSelf, StyleProperty.AlignSelf.defaultValue);
+		result[StyleProperty.AlignSelf.slot] = new StyleAlignSelfValue(StyleProperty.AlignSelf,
+			StyleProperty.AlignSelf.defaultValue);
 		result[StyleProperty.PositionX.slot] = number(StyleProperty.PositionX, StyleProperty.PositionX.defaultValue);
 		result[StyleProperty.PositionY.slot] = number(StyleProperty.PositionY, StyleProperty.PositionY.defaultValue);
-		result[StyleProperty.ZIndex.slot] = new StyleIntegerValue(StyleProperty.ZIndex, cast StyleProperty.ZIndex.defaultValue);
+		result[StyleProperty.ZIndex.slot] = new StyleIntegerValue(StyleProperty.ZIndex,
+			cast StyleProperty.ZIndex.defaultValue);
 		result[StyleProperty.Overlay.slot] = boolean(StyleProperty.Overlay, StyleProperty.Overlay.defaultValue);
-		result[StyleProperty.ClipToParent.slot] = boolean(StyleProperty.ClipToParent, StyleProperty.ClipToParent.defaultValue);
+		result[StyleProperty.ClipToParent.slot] = boolean(StyleProperty.ClipToParent,
+			StyleProperty.ClipToParent.defaultValue);
 		result[StyleProperty.Padding.slot] = insets(StyleProperty.Padding, StyleProperty.Padding.defaultValue);
 		result[StyleProperty.ChildGap.slot] = number(StyleProperty.ChildGap, StyleProperty.ChildGap.defaultValue);
 		result[StyleProperty.Background.slot] = color(StyleProperty.Background, StyleProperty.Background.defaultValue);
-		result[StyleProperty.RadiusTopLeft.slot] = number(StyleProperty.RadiusTopLeft, StyleProperty.RadiusTopLeft.defaultValue);
-		result[StyleProperty.RadiusTopRight.slot] = number(StyleProperty.RadiusTopRight, StyleProperty.RadiusTopRight.defaultValue);
-		result[StyleProperty.RadiusBottomRight.slot] = number(StyleProperty.RadiusBottomRight, StyleProperty.RadiusBottomRight.defaultValue);
-		result[StyleProperty.RadiusBottomLeft.slot] = number(StyleProperty.RadiusBottomLeft, StyleProperty.RadiusBottomLeft.defaultValue);
-		result[StyleProperty.ClipHorizontal.slot] = boolean(StyleProperty.ClipHorizontal, StyleProperty.ClipHorizontal.defaultValue);
-		result[StyleProperty.ClipVertical.slot] = boolean(StyleProperty.ClipVertical, StyleProperty.ClipVertical.defaultValue);
+		result[StyleProperty.RadiusTopLeft.slot] = number(StyleProperty.RadiusTopLeft,
+			StyleProperty.RadiusTopLeft.defaultValue);
+		result[StyleProperty.RadiusTopRight.slot] = number(StyleProperty.RadiusTopRight,
+			StyleProperty.RadiusTopRight.defaultValue);
+		result[StyleProperty.RadiusBottomRight.slot] = number(StyleProperty.RadiusBottomRight,
+			StyleProperty.RadiusBottomRight.defaultValue);
+		result[StyleProperty.RadiusBottomLeft.slot] = number(StyleProperty.RadiusBottomLeft,
+			StyleProperty.RadiusBottomLeft.defaultValue);
+		result[StyleProperty.ClipHorizontal.slot] = boolean(StyleProperty.ClipHorizontal,
+			StyleProperty.ClipHorizontal.defaultValue);
+		result[StyleProperty.ClipVertical.slot] = boolean(StyleProperty.ClipVertical,
+			StyleProperty.ClipVertical.defaultValue);
 		result[StyleProperty.Visible.slot] = boolean(StyleProperty.Visible, StyleProperty.Visible.defaultValue);
 		result[StyleProperty.Transform.slot] = matrix(StyleProperty.Transform, StyleProperty.Transform.defaultValue);
-		result[StyleProperty.TransformOriginX.slot] = number(StyleProperty.TransformOriginX, StyleProperty.TransformOriginX.defaultValue);
-		result[StyleProperty.TransformOriginY.slot] = number(StyleProperty.TransformOriginY, StyleProperty.TransformOriginY.defaultValue);
-		result[StyleProperty.BorderColor.slot] = color(StyleProperty.BorderColor, StyleProperty.BorderColor.defaultValue);
-		result[StyleProperty.BorderWidth.slot] = number(StyleProperty.BorderWidth, StyleProperty.BorderWidth.defaultValue);
-		result[StyleProperty.OutlineColor.slot] = color(StyleProperty.OutlineColor, StyleProperty.OutlineColor.defaultValue);
-		result[StyleProperty.OutlineWidth.slot] = number(StyleProperty.OutlineWidth, StyleProperty.OutlineWidth.defaultValue);
-		result[StyleProperty.ShadowColor.slot] = color(StyleProperty.ShadowColor, StyleProperty.ShadowColor.defaultValue);
-		result[StyleProperty.ShadowOffsetX.slot] = number(StyleProperty.ShadowOffsetX, StyleProperty.ShadowOffsetX.defaultValue);
-		result[StyleProperty.ShadowOffsetY.slot] = number(StyleProperty.ShadowOffsetY, StyleProperty.ShadowOffsetY.defaultValue);
+		result[StyleProperty.TransformOriginX.slot] = number(StyleProperty.TransformOriginX,
+			StyleProperty.TransformOriginX.defaultValue);
+		result[StyleProperty.TransformOriginY.slot] = number(StyleProperty.TransformOriginY,
+			StyleProperty.TransformOriginY.defaultValue);
+		result[StyleProperty.BorderColor.slot] = color(StyleProperty.BorderColor,
+			StyleProperty.BorderColor.defaultValue);
+		result[StyleProperty.BorderWidth.slot] = number(StyleProperty.BorderWidth,
+			StyleProperty.BorderWidth.defaultValue);
+		result[StyleProperty.OutlineColor.slot] = color(StyleProperty.OutlineColor,
+			StyleProperty.OutlineColor.defaultValue);
+		result[StyleProperty.OutlineWidth.slot] = number(StyleProperty.OutlineWidth,
+			StyleProperty.OutlineWidth.defaultValue);
+		result[StyleProperty.ShadowColor.slot] = color(StyleProperty.ShadowColor,
+			StyleProperty.ShadowColor.defaultValue);
+		result[StyleProperty.ShadowOffsetX.slot] = number(StyleProperty.ShadowOffsetX,
+			StyleProperty.ShadowOffsetX.defaultValue);
+		result[StyleProperty.ShadowOffsetY.slot] = number(StyleProperty.ShadowOffsetY,
+			StyleProperty.ShadowOffsetY.defaultValue);
 		result[StyleProperty.ShadowBlur.slot] = number(StyleProperty.ShadowBlur, StyleProperty.ShadowBlur.defaultValue);
-		result[StyleProperty.ShadowSpread.slot] = number(StyleProperty.ShadowSpread, StyleProperty.ShadowSpread.defaultValue);
+		result[StyleProperty.ShadowSpread.slot] = number(StyleProperty.ShadowSpread,
+			StyleProperty.ShadowSpread.defaultValue);
 		result[StyleProperty.Decorations.slot] = decorations(StyleProperty.Decorations.defaultValue);
 		result[StyleProperty.Opacity.slot] = number(StyleProperty.Opacity, StyleProperty.Opacity.defaultValue);
 		result[StyleProperty.Effects.slot] = effects(StyleProperty.Effects.defaultValue);
 		result[StyleProperty.BackdropEffects.slot] = backdropEffects(StyleProperty.BackdropEffects.defaultValue);
 		result[StyleProperty.Mask.slot] = mask(StyleProperty.Mask.defaultValue);
-		result[StyleProperty.ProgressTrackColor.slot] = color(StyleProperty.ProgressTrackColor, StyleProperty.ProgressTrackColor.defaultValue);
-		result[StyleProperty.ProgressFillColor.slot] = color(StyleProperty.ProgressFillColor, StyleProperty.ProgressFillColor.defaultValue);
-		result[StyleProperty.SliderTrackColor.slot] = color(StyleProperty.SliderTrackColor, StyleProperty.SliderTrackColor.defaultValue);
-		result[StyleProperty.SliderFillColor.slot] = color(StyleProperty.SliderFillColor, StyleProperty.SliderFillColor.defaultValue);
-		result[StyleProperty.SliderThumbColor.slot] = color(StyleProperty.SliderThumbColor, StyleProperty.SliderThumbColor.defaultValue);
+		result[StyleProperty.ProgressTrackColor.slot] = color(StyleProperty.ProgressTrackColor,
+			StyleProperty.ProgressTrackColor.defaultValue);
+		result[StyleProperty.ProgressFillColor.slot] = color(StyleProperty.ProgressFillColor,
+			StyleProperty.ProgressFillColor.defaultValue);
+		result[StyleProperty.SliderTrackColor.slot] = color(StyleProperty.SliderTrackColor,
+			StyleProperty.SliderTrackColor.defaultValue);
+		result[StyleProperty.SliderFillColor.slot] = color(StyleProperty.SliderFillColor,
+			StyleProperty.SliderFillColor.defaultValue);
+		result[StyleProperty.SliderThumbColor.slot] = color(StyleProperty.SliderThumbColor,
+			StyleProperty.SliderThumbColor.defaultValue);
 		result[StyleProperty.TextColor.slot] = color(StyleProperty.TextColor, StyleProperty.TextColor.defaultValue);
 		result[StyleProperty.FontSize.slot] = number(StyleProperty.FontSize, StyleProperty.FontSize.defaultValue);
-		result[StyleProperty.LetterSpacing.slot] = number(StyleProperty.LetterSpacing, StyleProperty.LetterSpacing.defaultValue);
+		result[StyleProperty.LetterSpacing.slot] = number(StyleProperty.LetterSpacing,
+			StyleProperty.LetterSpacing.defaultValue);
 		for (property in StyleProperty.all())
 			if (result[property.slot] == null) throw 'Missing typed default for ${property.name}';
 		defaultValues = result;
@@ -238,8 +277,12 @@ class StyleValue {
 		return new StyleFloatValue(property, value);
 
 	public static function radiusAll(value:Float):Array<StyleValue>
-		return [radius(StyleProperty.RadiusTopLeft, value), radius(StyleProperty.RadiusTopRight, value),
-			radius(StyleProperty.RadiusBottomRight, value), radius(StyleProperty.RadiusBottomLeft, value)];
+		return [
+			radius(StyleProperty.RadiusTopLeft, value),
+			radius(StyleProperty.RadiusTopRight, value),
+			radius(StyleProperty.RadiusBottomRight, value),
+			radius(StyleProperty.RadiusBottomLeft, value)
+		];
 
 	public static function textColor(value:Color):StyleValue
 		return new StyleColorValue(StyleProperty.TextColor, value);
@@ -266,7 +309,10 @@ class StyleValue {
 		return new StyleColorValue(StyleProperty.ShadowColor, value);
 
 	public static function shadowOffset(x:Float, y:Float):Array<StyleValue>
-		return [new StyleFloatValue(StyleProperty.ShadowOffsetX, x), new StyleFloatValue(StyleProperty.ShadowOffsetY, y)];
+		return [
+			new StyleFloatValue(StyleProperty.ShadowOffsetX, x),
+			new StyleFloatValue(StyleProperty.ShadowOffsetY, y)
+		];
 
 	public static function shadowBlur(value:Float):StyleValue
 		return new StyleFloatValue(StyleProperty.ShadowBlur, value);
@@ -310,59 +356,78 @@ class StyleValue {
 
 private class StyleColorValue extends StyleValue {
 	public final value:Color;
-	public function new(property:StyleColorProperty, value:Color) { super(property); this.value = value; }
+	public function new(property:StyleColorProperty, value:Color) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return value.red + "," + value.green + "," + value.blue + "," + value.alpha;
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleColorValue) &&
-			(cast property:StyleColorProperty).sameColor(value, (cast other:StyleColorValue).value);
+		return other != null && property == other.property && Std.isOfType(other, StyleColorValue)
+			&& (cast property:StyleColorProperty).sameColor(value, (cast other:StyleColorValue).value);
 	override public function interpolateTo(other:StyleValue, amount:Float):StyleValue {
 		var typed:StyleColorProperty = cast property;
-		if (!typed.hasInterpolation || other.property != property) throw "Style property does not support interpolation";
+		if (!typed.hasInterpolation
+			|| other.property != property) throw "Style property does not support interpolation";
 		return new StyleColorValue(typed, typed.interpolateColor(value, (cast other:StyleColorValue).value, amount));
 	}
 }
 
 private class StyleInsetsValue extends StyleValue {
 	public final value:Insets;
-	public function new(property:StyleInsetsProperty, value:Insets) { super(property); this.value = value; }
+	public function new(property:StyleInsetsProperty, value:Insets) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return value.left + "," + value.top + "," + value.right + "," + value.bottom;
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleInsetsValue) &&
-			(cast property:StyleInsetsProperty).sameInsets(value, (cast other:StyleInsetsValue).value);
+		return other != null && property == other.property && Std.isOfType(other, StyleInsetsValue)
+			&& (cast property:StyleInsetsProperty).sameInsets(value, (cast other:StyleInsetsValue).value);
 }
 
 private class StyleAxisValue extends StyleValue {
 	public final value:LayoutAxis;
-	public function new(property:StyleAxisProperty, value:LayoutAxis) { super(property); this.value = value; }
+	public function new(property:StyleAxisProperty, value:LayoutAxis) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return Std.string(value.sizing) + "," + value.value + "," + value.min + "," + value.max + "," + value.growWeight;
+	override public function key():String return Std.string(value.sizing) + "," + value.value + "," + value.min + ","
+		+ value.max + "," + value.growWeight;
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleAxisValue) &&
-			(cast property:StyleAxisProperty).sameAxis(value, (cast other:StyleAxisValue).value);
+		return other != null && property == other.property && Std.isOfType(other, StyleAxisValue)
+			&& (cast property:StyleAxisProperty).sameAxis(value, (cast other:StyleAxisValue).value);
 }
 
 private class StyleTransformValue extends StyleValue {
 	public final value:Transform2D;
-	public function new(property:StyleTransformProperty, value:Transform2D) { super(property); this.value = value; }
+	public function new(property:StyleTransformProperty, value:Transform2D) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
-	override public function key():String return value.a + "," + value.b + "," + value.c + "," + value.d + "," + value.tx + "," + value.ty;
+	override public function key():String return value.a + "," + value.b + "," + value.c + "," + value.d + ","
+		+ value.tx + "," + value.ty;
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleTransformValue) &&
-			(cast property:StyleTransformProperty).sameTransform(value, (cast other:StyleTransformValue).value);
+		return other != null && property == other.property && Std.isOfType(other, StyleTransformValue)
+			&& (cast property:StyleTransformProperty).sameTransform(value, (cast other:StyleTransformValue).value);
 }
 
 private class StyleFloatValue extends StyleValue {
 	public final value:Float;
-	public function new(property:StyleProperty<Float>, value:Float) { super(property); this.value = value; }
+	public function new(property:StyleProperty<Float>, value:Float) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value);
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleFloatValue) &&
-			value == (cast other:StyleFloatValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleFloatValue)
+			&& value == (cast other:StyleFloatValue).value;
 	override public function interpolateTo(other:StyleValue, amount:Float):StyleValue {
-		if (!property.hasInterpolation || other.property != property) throw "Style property does not support interpolation";
+		if (!property.hasInterpolation
+			|| other.property != property) throw "Style property does not support interpolation";
 		var typed:StyleInterpolatedProperty<Float> = cast property;
 		return new StyleFloatValue(typed, typed.interpolate(value, (cast other:StyleFloatValue).value, amount));
 	}
@@ -370,101 +435,132 @@ private class StyleFloatValue extends StyleValue {
 
 private class StyleDirectionValue extends StyleValue {
 	public final value:LayoutDirection;
-	public function new(property:StyleProperty<LayoutDirection>, value:LayoutDirection) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutDirection>, value:LayoutDirection) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleDirectionValue) &&
-			value == (cast other:StyleDirectionValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleDirectionValue)
+			&& value == (cast other:StyleDirectionValue).value;
 }
 
 private class StyleChildAlignXValue extends StyleValue {
 	public final value:LayoutAlignmentX;
-	public function new(property:StyleProperty<LayoutAlignmentX>, value:LayoutAlignmentX) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutAlignmentX>, value:LayoutAlignmentX) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignXValue) &&
-			value == (cast other:StyleChildAlignXValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignXValue)
+			&& value == (cast other:StyleChildAlignXValue).value;
 }
 
 private class StyleChildAlignYValue extends StyleValue {
 	public final value:LayoutAlignmentY;
-	public function new(property:StyleProperty<LayoutAlignmentY>, value:LayoutAlignmentY) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutAlignmentY>, value:LayoutAlignmentY) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignYValue) &&
-			value == (cast other:StyleChildAlignYValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleChildAlignYValue)
+			&& value == (cast other:StyleChildAlignYValue).value;
 }
 
 private class StyleChildDistributionValue extends StyleValue {
 	public final value:LayoutDistribution;
-	public function new(property:StyleProperty<LayoutDistribution>, value:LayoutDistribution) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutDistribution>, value:LayoutDistribution) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleChildDistributionValue) &&
-			value == (cast other:StyleChildDistributionValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleChildDistributionValue)
+			&& value == (cast other:StyleChildDistributionValue).value;
 }
 
 private class StylePositioningValue extends StyleValue {
 	public final value:LayoutPositioning;
-	public function new(property:StyleProperty<LayoutPositioning>, value:LayoutPositioning) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutPositioning>, value:LayoutPositioning) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(Type.enumIndex(value));
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StylePositioningValue) &&
-			value == (cast other:StylePositioningValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StylePositioningValue)
+			&& value == (cast other:StylePositioningValue).value;
 }
 
 private class StyleWrapModeValue extends StyleValue {
 	public final value:LayoutWrapMode;
-	public function new(property:StyleProperty<LayoutWrapMode>, value:LayoutWrapMode) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutWrapMode>, value:LayoutWrapMode) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleWrapModeValue) &&
-			value == (cast other:StyleWrapModeValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleWrapModeValue)
+			&& value == (cast other:StyleWrapModeValue).value;
 }
 
 private class StyleAlignSelfValue extends StyleValue {
 	public final value:LayoutSelfAlignment;
-	public function new(property:StyleProperty<LayoutSelfAlignment>, value:LayoutSelfAlignment) { super(property); this.value = value; }
+	public function new(property:StyleProperty<LayoutSelfAlignment>, value:LayoutSelfAlignment) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value.rawValue());
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleAlignSelfValue) &&
-			value == (cast other:StyleAlignSelfValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleAlignSelfValue)
+			&& value == (cast other:StyleAlignSelfValue).value;
 }
 
 private class StyleIntegerValue extends StyleValue {
 	public final value:Int;
-	public function new(property:StylePropertyBase, value:Int) { super(property); this.value = value; }
+	public function new(property:StylePropertyBase, value:Int) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value);
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleIntegerValue) &&
-			value == (cast other:StyleIntegerValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleIntegerValue)
+			&& value == (cast other:StyleIntegerValue).value;
 }
 
 private class StyleBoolValue extends StyleValue {
 	public final value:Bool;
-	public function new(property:StyleProperty<Bool>, value:Bool) { super(property); this.value = value; }
+	public function new(property:StyleProperty<Bool>, value:Bool) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String return Std.string(value);
 	override public function sameAs(other:StyleValue):Bool
-		return other != null && property == other.property && Std.isOfType(other, StyleBoolValue) &&
-			value == (cast other:StyleBoolValue).value;
+		return other != null && property == other.property && Std.isOfType(other, StyleBoolValue)
+			&& value == (cast other:StyleBoolValue).value;
 }
 
 private class StyleReferenceValue<T> extends StyleValue {
 	public final value:T;
-	public function new(property:StyleProperty<T>, value:T) { super(property); this.value = value; }
+	public function new(property:StyleProperty<T>, value:T) {
+		super(property);
+		this.value = value;
+	}
 	override public function inspect():Dynamic return value;
 	override public function key():String {
 		if (value == null) return "null";
-		if (property == StyleProperty.Effects || property == StyleProperty.BackdropEffects) return StyleValue.effectsOf(this).key();
+		if (property == StyleProperty.Effects
+			|| property == StyleProperty.BackdropEffects) return StyleValue.effectsOf(this).key();
 		if (property == StyleProperty.Decorations) return StyleValue.decorationsOf(this).key();
 		if (property == StyleProperty.Mask) return StyleValue.maskOf(this).describe();
 		throw 'No typed cache key for ${property.name}';
@@ -486,8 +582,10 @@ private class StyleReferenceValue<T> extends StyleValue {
 		throw 'Unknown reference property ${property.name}';
 	}
 	override public function interpolateTo(other:StyleValue, amount:Float):StyleValue {
-		if (!property.hasInterpolation || other.property != property) throw "Style property does not support interpolation";
+		if (!property.hasInterpolation
+			|| other.property != property) throw "Style property does not support interpolation";
 		var typed:StyleInterpolatedProperty<T> = cast property;
-		return new StyleReferenceValue(typed, typed.interpolate(value, (cast other:StyleReferenceValue<T>).value, amount));
+		return new StyleReferenceValue(typed,
+			typed.interpolate(value, (cast other:StyleReferenceValue<T>).value, amount));
 	}
 }

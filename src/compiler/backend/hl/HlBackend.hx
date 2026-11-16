@@ -18,7 +18,8 @@ class HlBackend implements Backend {
 		program = compiler.ir.IrArrayFactory.physical(program);
 		var indices = new Map<String, Int>(),
 			module = options.developmentMetadata == false
-				? HlLower.lowerStableMeasured(program, new compiler.hl.incremental.HlSymbolTable(), indices, null, null, null, null, 0, false).code
+				? HlLower.lowerStableMeasured(program, new compiler.hl.incremental.HlSymbolTable(), indices, null, null,
+				null, null, 0, false).code
 				: HlLower.lower(program, indices);
 		return {target: HashLink, bytes: HlWriter.encode(module).flatten(), functionIndices: indices};
 	}

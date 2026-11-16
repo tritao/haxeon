@@ -1,8 +1,8 @@
 import compiler.Frontend;
 import compiler.ir.Ir;
+import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
-import compiler.ir.IrBuilder;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.IrLoopBounds;
 import compiler.ir.IrOpportunityCensus;
@@ -16,7 +16,8 @@ class OpportunityCensusMain {
 	}
 
 	static function main():Void {
-		var source = 'class Box { public var value:Int; public function new() { value=7; } } function scan():Int { var b=new Box(); var sum=0; for(i in 0...10) sum+=b.value; return sum; } function main():Int return 0;';
+		var source =
+			'class Box { public var value:Int; public function new() { value=7; } } function scan():Int { var b=new Box(); var sum=0; for(i in 0...10) sum+=b.value; return sum; } function main():Int return 0;';
 		var program = Frontend.compile(source);
 		IrInliner.run(program, new IrInlineCache(), compiler.ir.TargetProfile.wasm, true);
 		var objects:Map<String, IrObject> = [];
@@ -48,10 +49,14 @@ class OpportunityCensusMain {
 		b.call("sideEffect", [], I32); // An unused result is not proof that its instruction is dead.
 		var yes = b.createBlock(), no = b.createBlock(), bridge = b.createBlock(), exit = b.createBlock();
 		b.branch(condition, yes, no);
-		b.select(yes); b.jump(bridge);
-		b.select(no); b.jump(exit);
-		b.select(bridge); b.jump(exit);
-		b.select(exit); b.returnValue(b.constInt(42));
+		b.select(yes);
+		b.jump(bridge);
+		b.select(no);
+		b.jump(exit);
+		b.select(bridge);
+		b.jump(exit);
+		b.select(exit);
+		b.returnValue(b.constInt(42));
 		var flow = new IrFunction("flow", b.arguments, I32, b.blocks, Ordinary),
 			flowRow = IrOpportunityCensus.inspect(flow, pure, objects, true);
 		expect(flowRow.counts[9] == 2, "unused call results count even when the call may have side effects");
@@ -65,21 +70,29 @@ class OpportunityCensusMain {
 		b.safeCast(fresh, Obj("Box"));
 		b.safeCast(fresh, Dyn);
 		b.returnValue(b.constInt(42));
-		var checks = IrOpportunityCensus.inspect(new IrFunction("checks", b.arguments, I32, b.blocks, Ordinary), pure, objects, true);
+		var checks = IrOpportunityCensus.inspect(new IrFunction("checks", b.arguments, I32, b.blocks, Ordinary), pure,
+			objects, true);
 		expect(checks.counts[14] == 1, "only a receiver check on a fresh value is counted");
 		expect(checks.counts[15] == 1, "count casts with identical source and destination types");
-		b = new IrBuilder(); unknown = b.argument("unknown", Obj("Box"));
-		b.fieldSet(unknown, "value", b.constInt(1)); b.fieldSet(unknown, "value", b.constInt(2));
-		b.fieldGet(unknown, "value", I32); b.fieldSet(unknown, "value", b.constInt(3));
-		b.call("small", [], I32); b.returnValue(b.constInt(42));
-		var stores = IrOpportunityCensus.inspect(new IrFunction("stores", b.arguments, I32, b.blocks, Ordinary), pure, objects, true, ["small" => true]);
+		b = new IrBuilder();
+		unknown = b.argument("unknown", Obj("Box"));
+		b.fieldSet(unknown, "value", b.constInt(1));
+		b.fieldSet(unknown, "value", b.constInt(2));
+		b.fieldGet(unknown, "value", I32);
+		b.fieldSet(unknown, "value", b.constInt(3));
+		b.call("small", [], I32);
+		b.returnValue(b.constInt(42));
+		var stores = IrOpportunityCensus.inspect(new IrFunction("stores", b.arguments, I32, b.blocks, Ordinary), pure,
+			objects, true, ["small" => true]);
 		expect(stores.counts[16] == 1, "a field read stops the overwritten-store candidate scan");
 		expect(stores.counts[17] == 1, "count direct calls to small known functions");
 		expect(before.compare(IrFunctionStateCodec.encode(fn)) == 0, "diagnostics do not mutate IR");
-		expect(IrOpportunityCensus.encodeRow(row) == IrOpportunityCensus.encodeRow(IrOpportunityCensus.inspect(fn, pure, objects, true)), "deterministic report");
+		expect(IrOpportunityCensus.encodeRow(row) == IrOpportunityCensus.encodeRow(IrOpportunityCensus.inspect(fn, pure,
+			objects, true)), "deterministic report");
 		expect(haxe.Json.parse(IrOpportunityCensus.encodeRow(row)).name == fn.name, "stable row is valid JSON");
 		expect(IrOpportunityCensus.isPowerOfTwo(2.0) && IrOpportunityCensus.isPowerOfTwo(-0.5), "signed normal powers");
-		expect(IrOpportunityCensus.isPowerOfTwo(8.98846567431158e307), "large power excluded from strength reduction remains a power");
+		expect(IrOpportunityCensus.isPowerOfTwo(8.98846567431158e307),
+			"large power excluded from strength reduction remains a power");
 		expect(IrOpportunityCensus.isPowerOfTwo(5e-324), "subnormal power");
 		expect(!IrOpportunityCensus.isPowerOfTwo(3.0) && !IrOpportunityCensus.isPowerOfTwo(0.0), "nonpowers and zero");
 		expect(!IrOpportunityCensus.isPowerOfTwo(Math.NaN)

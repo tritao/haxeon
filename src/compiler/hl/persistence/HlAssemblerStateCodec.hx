@@ -67,7 +67,8 @@ class HlAssemblerStateCodec {
 				cache: readSection(input, bytes.length),
 				runtimeNatives: version >= 2 ? readNatives(input, bytes.length) : null,
 				dispatchNatives: version >= 3 ? readDispatchNatives(input, bytes.length) : null,
-				retiredFields: version >= 5 ? [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, bytes.length)] : null
+				retiredFields: version >= 5
+					? [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, bytes.length)] : null
 			};
 			if (input.position != bytes.length)
 				throw "Trailing HashLink assembler state data";

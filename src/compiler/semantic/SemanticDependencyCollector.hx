@@ -9,7 +9,8 @@ import compiler.modules.ModuleState.SemanticDependencyKind;
 
 /** Records semantic dependency edges without owning module/session invalidation. */
 class SemanticDependencyCollector {
-	public static function collectSemanticDependencies(state:ModuleState, entry:String, typeAliases:AliasTable):Map<String, Array<SemanticDependency>> {
+	public static function collectSemanticDependencies(state:ModuleState, entry:String,
+			typeAliases:AliasTable):Map<String, Array<SemanticDependency>> {
 		var result:Map<String, Array<SemanticDependency>> = [],
 			ast = state.parsedAst();
 		for (fn in ast.functions) {
@@ -29,7 +30,8 @@ class SemanticDependencyCollector {
 				for (parameter in constructor.params)
 					addTypeDependency(result, enumName, SemanticDependencyKind.Layout, parameter.type, typeAliases);
 			if (enumDecl.methods != null) for (method in enumDecl.methods) {
-				for (argument in method.arguments) addTypeDependency(result, enumName, SemanticDependencyKind.Signature, argument.type, typeAliases);
+				for (argument in method.arguments) addTypeDependency(result, enumName, SemanticDependencyKind.Signature,
+					argument.type, typeAliases);
 				addTypeDependency(result, enumName, SemanticDependencyKind.Signature, method.result, typeAliases);
 				addBodyDependencies(result, enumName, method.statements, state.name, entry);
 				scanNativeLayoutQueryStatements(result, enumName, method.statements, typeAliases);
@@ -50,10 +52,12 @@ class SemanticDependencyCollector {
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, interfaceType, typeAliases);
 			for (field in classDecl.fields) {
 				addAnnotationDependencies(result, className, field.metadata, typeAliases);
-				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field), typeAliases);
+				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field),
+					typeAliases);
 				var initializer = field.initializer;
 				if (initializer != null) {
-					addExpressionDependencies(result, className + "." + field.name, SemanticDependencyKind.Initializer, initializer, state.name, entry);
+					addExpressionDependencies(result, className + "." + field.name, SemanticDependencyKind.Initializer,
+						initializer, state.name, entry);
 					scanNativeLayoutQueryExpression(result, className + "." + field.name, initializer, typeAliases);
 				}
 			}
@@ -69,14 +73,17 @@ class SemanticDependencyCollector {
 		return result;
 	}
 
-	static function addAnnotationDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, metadata:Array<compiler.syntax.Ast.AstMetadata>,
+	static function addAnnotationDependencies(result:Map<String, Array<SemanticDependency>>, owner:String,
+			metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			aliases:AliasTable):Void {
 		for (annotation in metadata)
 			if (aliases.exists(annotation.name))
-				addDependency(result, owner, SemanticDependencyKind.Layout, ModuleCanonicalizer.resolveTypeName(annotation.name, aliases));
+				addDependency(result, owner, SemanticDependencyKind.Layout,
+					ModuleCanonicalizer.resolveTypeName(annotation.name, aliases));
 	}
 
-	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+	public static function addTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind,
 			type:compiler.syntax.Ast.AstType, aliases:AliasTable):Void
 		switch type {
 			case NativeAbstractType(declaration, _):
@@ -103,7 +110,8 @@ class SemanticDependencyCollector {
 			case IntType, BoolType, FloatType, StringType, VoidType, InferredType, ErrorType(_):
 		}
 
-	public static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>, module:String,
+	public static function addBodyDependencies(result:Map<String, Array<SemanticDependency>>, owner:String,
+			statements:Array<AstStatement>, module:String,
 			entry:String):Void
 		for (statement in statements)
 			switch statement {
@@ -111,13 +119,15 @@ class SemanticDependencyCollector {
 				case UninitializedDeclaration(_, type, _):
 					addTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 				case ScopedDeclaration(_, type, expression, _):
-					addTypeDependency(result, owner, SemanticDependencyKind.Body, NamedType("Disposable"), new AliasTable());
+					addTypeDependency(result, owner, SemanticDependencyKind.Body, NamedType("Disposable"),
+						new AliasTable());
 					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case VarDeclaration(_, type, expression, _):
 					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
-				case Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
+					Expression(expression, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case IndexAssignment(array, offset, expression, _):
 					for (item in [array, offset, expression])
@@ -147,19 +157,24 @@ class SemanticDependencyCollector {
 				case Switch(expression, cases, fallback, _, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 					for (switchCase in cases) {
-						addExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.value, module, entry);
-						addOptionalExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.guard, module, entry);
+						addExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.value, module,
+							entry);
+						addOptionalExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.guard,
+							module, entry);
 						addBodyDependencies(result, owner, switchCase.statements, module, entry);
 					}
 					addBodyDependencies(result, owner, fallback, module, entry);
 				case ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
 			}
 
-	static function scanNativeLayoutQueryStatements(result:Map<String, Array<SemanticDependency>>, owner:String, statements:Array<AstStatement>,
+	static function scanNativeLayoutQueryStatements(result:Map<String, Array<SemanticDependency>>, owner:String,
+			statements:Array<AstStatement>,
 			aliases:AliasTable):Void
 		for (statement in statements)
 			switch statement {
-				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _),
+					Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
+					Expression(expression, _):
 					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
 				case IndexAssignment(array, offset, expression, _):
 					for (item in [array, offset, expression])
@@ -195,22 +210,26 @@ class SemanticDependencyCollector {
 						scanNativeLayoutQueryStatements(result, owner, switchCase.statements, aliases);
 					}
 					scanNativeLayoutQueryStatements(result, owner, fallback, aliases);
-				case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_), Increment(_, _, _):
+				case ErrorStatement(_), UninitializedDeclaration(_, _, _), ReturnVoid(_), Break(_), Continue(_),
+					Increment(_, _, _):
 			}
 
-	static function scanNativeLayoutQueryExpression(result:Map<String, Array<SemanticDependency>>, owner:String, expression:AstExpression,
+	static function scanNativeLayoutQueryExpression(result:Map<String, Array<SemanticDependency>>, owner:String,
+			expression:AstExpression,
 			aliases:AliasTable):Void {
 		switch expression {
 			case NativeLayoutQuery(_, type, _, _):
 				addTypeDependency(result, owner, SemanticDependencyKind.Layout, type, aliases);
 			case KeyPathLiteral(type, _, _):
 				addTypeDependency(result, owner, SemanticDependencyKind.Layout, type, aliases);
-			case Member(object, _, _) | Not(object, _) | Negate(object, _) | ThrowExpression(object, _) | PostfixIncrement(object, _, _):
+			case Member(object, _, _) | Not(object, _) | Negate(object, _) | ThrowExpression(object,
+				_) | PostfixIncrement(object, _, _):
 				scanNativeLayoutQueryExpression(result, owner, object, aliases);
-			case Add(left, right, _) | Sub(left, right, _) | Mul(left, right, _) | Div(left, right, _) | Mod(left, right, _) | BitAnd(left, right, _) |
-				BitXor(left, right, _) | BitOr(left, right, _) | ShiftLeft(left, right, _) | ShiftRight(left, right, _) | UnsignedShiftRight(left, right, _) |
-				Less(left, right, _) | LessEqual(left, right, _) | Greater(left, right, _) | GreaterEqual(left, right, _) | Equal(left, right, _) |
-				NotEqual(left, right, _) | And(left, right, _) | Or(left, right, _) | Range(left, right, _):
+			case Add(left, right, _) | Sub(left, right, _) | Mul(left, right, _) | Div(left, right, _) | Mod(left,
+				right, _) | BitAnd(left, right, _) | BitXor(left, right, _) | BitOr(left, right, _) | ShiftLeft(left,
+				right, _) | ShiftRight(left, right, _) | UnsignedShiftRight(left, right, _) | Less(left, right,
+				_) | LessEqual(left, right, _) | Greater(left, right, _) | GreaterEqual(left, right, _) | Equal(left,
+				right, _) | NotEqual(left, right, _) | And(left, right, _) | Or(left, right, _) | Range(left, right, _):
 				scanNativeLayoutQueryExpression(result, owner, left, aliases);
 				scanNativeLayoutQueryExpression(result, owner, right, aliases);
 			case Conditional(predicate, yes, no, _):
@@ -253,7 +272,8 @@ class SemanticDependencyCollector {
 					scanNativeLayoutQueryExpression(result, owner, predicate, aliases);
 				scanNativeLayoutQueryExpression(result, owner, key, aliases);
 				scanNativeLayoutQueryExpression(result, owner, value, aliases);
-			case Call(_, arguments, _) | ClosureCall(_, arguments, _) | MethodCall(_, _, arguments, _) | New(_, arguments, _) | NewGeneric(_, _, arguments, _):
+			case Call(_, arguments, _) | ClosureCall(_, arguments, _) | MethodCall(_, _, arguments, _) | New(_,
+				arguments, _) | NewGeneric(_, _, arguments, _):
 				for (argument in arguments)
 					scanNativeLayoutQueryExpression(result, owner, argument, aliases);
 			case NewArray(_, length, _):
@@ -263,24 +283,27 @@ class SemanticDependencyCollector {
 				scanNativeLayoutQueryExpression(result, owner, offset, aliases);
 			case Lambda(_, body, _, _):
 				scanNativeLayoutQueryStatements(result, owner, body, aliases);
-			case IntegerLiteral(_, _) | FloatLiteral(_, _) | StringLiteral(_, _) | BoolLiteral(_, _) | NullLiteral(_) | Unreachable(_) | EmptyExpression(_) |
-				ErrorExpression(_) | Variable(_, _) | NewMap(_, _, _):
+			case IntegerLiteral(_, _) | FloatLiteral(_, _) | StringLiteral(_, _) | BoolLiteral(_, _) | NullLiteral(_)
+				| Unreachable(_) | EmptyExpression(_) | ErrorExpression(_) | Variable(_, _) | NewMap(_, _, _):
 		}
 	}
 
-	public static function addOptionalTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+	public static function addOptionalTypeDependency(result:Map<String, Array<SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind,
 			type:Null<compiler.syntax.Ast.AstType>, aliases:AliasTable):Void {
 		if (type != null)
 			addTypeDependency(result, owner, kind, type, aliases);
 	}
 
-	public static function addOptionalExpressionDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+	public static function addOptionalExpressionDependencies(result:Map<String, Array<SemanticDependency>>,
+			owner:String, kind:SemanticDependencyKind,
 			expression:Null<AstExpression>, module:String, entry:String):Void {
 		if (expression != null)
 			addExpressionDependencies(result, owner, kind, expression, module, entry);
 	}
 
-	public static function addExpressionDependencies(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind,
+	public static function addExpressionDependencies(result:Map<String, Array<SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind,
 			expression:AstExpression, module:String, entry:String):Void {
 		var calls:Map<String, Bool> = [], locals:Map<String, String> = [];
 		scanCallExpression(expression, calls, locals);
@@ -288,7 +311,8 @@ class SemanticDependencyCollector {
 			addDependency(result, owner, kind, ModuleCanonicalizer.canonicalName(module, entry, name));
 	}
 
-	public static function addDependency(result:Map<String, Array<SemanticDependency>>, owner:String, kind:SemanticDependencyKind, target:String,
+	public static function addDependency(result:Map<String, Array<SemanticDependency>>, owner:String,
+			kind:SemanticDependencyKind, target:String,
 			?targetId:String):Void {
 		var dependencies:Array<SemanticDependency>;
 		if (result.exists(owner))
@@ -304,7 +328,8 @@ class SemanticDependencyCollector {
 	}
 
 	public static function sameDependencyTarget(dependency:String, changed:String):Bool
-		return dependency == changed || StringTools.endsWith(dependency, "." + changed) || StringTools.endsWith(changed, "." + dependency);
+		return dependency == changed || StringTools.endsWith(dependency, "." + changed)
+			|| StringTools.endsWith(changed, "." + dependency);
 
 	public static function scanCalls(statement:AstStatement, calls:Map<String, Bool>, aliases:Map<String, String>):Void
 		switch statement {
@@ -374,7 +399,8 @@ class SemanticDependencyCollector {
 				scanCallExpression(e, calls, aliases);
 		}
 
-	public static function scanCallExpression(e:AstExpression, calls:Map<String, Bool>, aliases:Map<String, String>):Void
+	public static function scanCallExpression(e:AstExpression, calls:Map<String, Bool>,
+			aliases:Map<String, String>):Void
 		switch e {
 			case Call(name, args, _):
 				var target = aliases.exists(name) ? aliases.get(name) : name;
@@ -394,8 +420,10 @@ class SemanticDependencyCollector {
 			case Variable(name, _):
 				if (name.indexOf(".") >= 0)
 					calls.set(name, true);
-			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _), BitOr(a, b, _), ShiftLeft(a, b, _),
-				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _), GreaterEqual(a, b, _), Equal(a, b, _),
+			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
+				BitOr(a, b, _), ShiftLeft(a, b, _),
+				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _),
+				GreaterEqual(a, b, _), Equal(a, b, _),
 				NotEqual(a, b, _):
 				scanCallExpression(a, calls, aliases);
 				scanCallExpression(b, calls, aliases);

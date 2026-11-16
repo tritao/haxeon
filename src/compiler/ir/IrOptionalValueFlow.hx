@@ -98,7 +98,8 @@ class IrOptionalValueFlow {
 				if (isOptionalValue(field.type, objects)) {
 					for (index in 1...slots.length) {
 						var slot = slots[index];
-						if (slot.path.length < fieldPath.length || !samePath(slot.path.slice(0, fieldPath.length), fieldPath))
+						if (slot.path.length < fieldPath.length
+							|| !samePath(slot.path.slice(0, fieldPath.length), fieldPath))
 							continue;
 						var sub:IrInlineValueSlot = {
 							path: slot.path.slice(fieldPath.length),
@@ -106,7 +107,8 @@ class IrOptionalValueFlow {
 							isPresence: slot.isPresence,
 							nativeLayout: slot.nativeLayout
 						};
-						builder.fieldSet(value, IrInlineValueLayout.slotName(field.name, sub), builder.fieldGet(wrapper, "$slot" + index, slot.type));
+						builder.fieldSet(value, IrInlineValueLayout.slotName(field.name, sub),
+							builder.fieldGet(wrapper, "$slot" + index, slot.type));
 					}
 				} else
 					switch field.type {
@@ -117,7 +119,8 @@ class IrOptionalValueFlow {
 							for (index in 1...slots.length) {
 								var slot = slots[index];
 								if (!slot.isPresence && samePath(slot.path, fieldPath)) {
-									builder.fieldSet(value, field.name, builder.fieldGet(wrapper, "$slot" + index, slot.type));
+									builder.fieldSet(value, field.name,
+										builder.fieldGet(wrapper, "$slot" + index, slot.type));
 									found = true;
 									break;
 								}
@@ -133,8 +136,12 @@ class IrOptionalValueFlow {
 			presentBlock = builder.currentBlock();
 		builder.jump(done);
 		builder.select(done);
-		builder.returnValue(builder.phi(type, [{block: absentBlock.id, value: nil}, {block: presentBlock.id, value: boxed}]));
-		return new IrFunction(boxName(name), builder.arguments, type, builder.blocks, Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalBox));
+		builder.returnValue(builder.phi(type, [
+			{block: absentBlock.id, value: nil},
+			{block: presentBlock.id, value: boxed}
+		]));
+		return new IrFunction(boxName(name), builder.arguments, type, builder.blocks,
+			Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalBox));
 	}
 
 	static function unboxHelper(name:String, objects:Map<String, IrObject>, shapes:IrInlineValueLayout):IrFunction {
@@ -162,7 +169,8 @@ class IrOptionalValueFlow {
 						isPresence: slot.isPresence,
 						nativeLayout: slot.nativeLayout
 					};
-					builder.fieldSet(wrapper, "$slot" + index, builder.fieldGet(current, IrInlineValueLayout.slotName(part, sub), slot.type));
+					builder.fieldSet(wrapper, "$slot" + index,
+						builder.fieldGet(current, IrInlineValueLayout.slotName(part, sub), slot.type));
 					break;
 				}
 				var value = builder.fieldGet(current, part, field.type);
@@ -175,7 +183,8 @@ class IrOptionalValueFlow {
 		builder.jump(done);
 		builder.select(done);
 		builder.returnValue(wrapper);
-		return new IrFunction(unboxName(name), builder.arguments, Obj(IrOptionalScalarFlow.wrapperName(name)), builder.blocks,
+		return new IrFunction(unboxName(name), builder.arguments, Obj(IrOptionalScalarFlow.wrapperName(name)),
+			builder.blocks,
 			Provider(TypeKey.of(Obj(name)), ProviderOperation.OptionalUnbox));
 	}
 

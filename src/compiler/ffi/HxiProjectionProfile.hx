@@ -39,12 +39,17 @@ class HxiProjectionProfile {
 	public final constantNames:Map<String, String>;
 	public final resultPolicies:Map<String, HxiResultErrorProjection>;
 
-	public function new(?interfaceName:Null<String>, ?typePrefix:Null<String>, ?enumValuePrefixes:Array<String>, ?typeNames:Map<String, String>,
-			?enumNames:Map<String, String>, ?enumValueNames:Map<String, Map<String, String>>, ?functionNames:Map<String, String>,
-			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>, functionCase:String = "preserve",
+	public function new(?interfaceName:Null<String>, ?typePrefix:Null<String>, ?enumValuePrefixes:Array<String>,
+			?typeNames:Map<String, String>,
+			?enumNames:Map<String, String>, ?enumValueNames:Map<String, Map<String, String>>,
+			?functionNames:Map<String, String>,
+			?fieldNames:Map<String, String>, ?constantNames:Map<String, String>, ?functionPrefix:Null<String>,
+			functionCase:String = "preserve",
 			fieldCase:String = "preserve", ?constantPrefix:Null<String>, constantCase:String = "preserve",
-			?resultPolicies:Map<String, HxiResultErrorProjection>, ?callbackErrorType:Null<String>, ?packageName:Null<String>, ?functionModule:Null<String>,
-			?typeModule:Null<String>, ?constantModule:Null<String>, ?dependencyModules:Map<String, String>, ?dependencyTypeModules:Map<String, String>) {
+			?resultPolicies:Map<String, HxiResultErrorProjection>, ?callbackErrorType:Null<String>,
+			?packageName:Null<String>, ?functionModule:Null<String>,
+			?typeModule:Null<String>, ?constantModule:Null<String>, ?dependencyModules:Map<String, String>,
+			?dependencyTypeModules:Map<String, String>) {
 		this.interfaceName = interfaceName;
 		this.packageName = packageName;
 		this.functionModule = functionModule == null ? interfaceName : functionModule;
@@ -122,9 +127,12 @@ class HxiProjectionProfile {
 		}
 		if (functionModule == null)
 			functionModule = interfaceName;
-		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames, enumValueNames, functionNames,
-			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix, constantCase, resultPolicies,
-			callbackErrorType, packageName, functionModule, typeModule, constantModule, dependencyModules, dependencyTypeModules);
+		return new HxiProjectionProfile(interfaceName, typePrefix, enumValuePrefixes, typeNames, enumNames,
+			enumValueNames, functionNames,
+			flattenFieldNames(fieldNames), constantNames, functionPrefix, functionCase, fieldCase, constantPrefix,
+			constantCase, resultPolicies,
+			callbackErrorType, packageName, functionModule, typeModule, constantModule, dependencyModules,
+			dependencyTypeModules);
 	}
 
 	static function moduleString(value:Dynamic, field:String, path:String):Null<String> {

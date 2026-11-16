@@ -35,7 +35,8 @@ class FinalFieldRules {
 	}
 
 	/** Rejects a write to `object.name` unless it is `this.name` in the declaring class's constructor. */
-	public static function rejectInstanceMutation(session:TypingSession, object:TypedExpression, name:String, span:SourceSpan):Void {
+	public static function rejectInstanceMutation(session:TypingSession, object:TypedExpression, name:String,
+			span:SourceSpan):Void {
 		var owner = finalInstanceFieldOwner(session, object.type, name);
 		if (owner == null)
 			return;
@@ -45,11 +46,13 @@ class FinalFieldRules {
 		};
 		if (viaThis && session.currentContext.sourceFunctionName == owner + ".new")
 			return;
-		fail("E1026", 'Final field "$owner.$name" can only be assigned through this in the constructor of "$owner"', span);
+		fail("E1026", 'Final field "$owner.$name" can only be assigned through this in the constructor of "$owner"',
+			span);
 	}
 
 	/** Rejects a write to a static final field: it is given its value where it is declared. */
-	public static function rejectStaticMutation(session:TypingSession, owner:String, name:String, span:SourceSpan):Void {
+	public static function rejectStaticMutation(session:TypingSession, owner:String, name:String,
+			span:SourceSpan):Void {
 		var declaration = session.classDecls.get(owner);
 		if (declaration == null)
 			return;

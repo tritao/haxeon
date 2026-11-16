@@ -2,7 +2,8 @@ import compiler.Compiler;
 
 /** Method calls whose receiver is a static field reached through a qualified type path. */
 class QualifiedStaticReceiverMain {
-	static final HOLDER = "package shapes; class Box { public var sides:Array<Int>; public function new() sides = [4, 6]; } "
+	static final HOLDER =
+		"package shapes; class Box { public var sides:Array<Int>; public function new() sides = [4, 6]; } "
 		+ "class Holder { public static final VALUES:Array<Int> = [1, 2, 3]; public static final BOX = new Box(); "
 		+ "public static function values():Array<Int> return VALUES; }";
 

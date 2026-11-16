@@ -71,16 +71,20 @@ class ModuleSourceLoaderCacheMain {
 		check(loader.loadPackage("pkg.sub", packageModules).join(",") == "pkg.sub.Deep", "nested package not listed");
 		check(loader.loadPackage("pkg.none", packageModules).length == 0, "missing package listed modules");
 		check(loader.loadPackage("pkg.Foo", packageModules).length == 0, "a module file was treated as a package");
-		check(loader.loadPackage("shape", packageModules).length == 0, "a file named like a package was treated as a package");
+		check(loader.loadPackage("shape", packageModules).length == 0,
+			"a file named like a package was treated as a package");
 		check(loader.loadPackage("Pkg", packageModules).length == 0, "package lookup aliased by case");
-		check(loader.loadPackage("", packageModules).join(",") == "Top,shape", "root package listing: " + loader.loadPackage("", packageModules).join(","));
+		check(loader.loadPackage("", packageModules).join(",") == "Top,shape",
+			"root package listing: " + loader.loadPackage("", packageModules).join(","));
 
 		// Freshness: a copy (the next compile request) sees files created after this loader cached its listings.
 		write(root + "/pkg/Added.hx", "package pkg;\nclass Added {}\n");
 		var next = loader.copy();
 		check(next.listingReads == 0, "a copy inherited the listing counter");
-		check(next.load("pkg.Added", new Map<String, ModuleState>()) != null, "a new loader missed a file added since the last request");
-		check(next.loadPackage("pkg", new Map<String, ModuleState>()).join(",") == "pkg.Added,pkg.Bar,pkg.Foo", "a new loader's package listing was stale");
+		check(next.load("pkg.Added", new Map<String, ModuleState>()) != null,
+			"a new loader missed a file added since the last request");
+		check(next.loadPackage("pkg", new Map<String, ModuleState>()).join(",") == "pkg.Added,pkg.Bar,pkg.Foo",
+			"a new loader's package listing was stale");
 
 		remove(root);
 		Sys.println("PASS: module source loader lists each directory once per loader, stays case-exact, and re-lists on copy");

@@ -6,7 +6,8 @@ import compiler.runtime.CompilerIntrinsics;
  * methods; a class that is mentioned keeps all of them, so a method that is only ever called by name still works.
  */
 class ReachabilityPruneMain {
-	static final source = "class Live { public function new() {} public function hidden():Int return 42; public function spare():Int return 7; } "
+	static final source =
+		"class Live { public function new() {} public function hidden():Int return 42; public function spare():Int return 7; } "
 		+ "class Dead { public function new() {} public function never():Int return 1; } "
 		+ "function unusedFree():Int return 5; "
 		+ "function main():Int { var live = new Live(); var f:Dynamic = Reflect.field(live, \"hidden\"); return f == null ? 1 : f(); }";
@@ -22,14 +23,19 @@ class ReachabilityPruneMain {
 		// A plain build prunes at the prune point of the pipeline (`IrEntryPrune`), so its program in the result is already pruned; a live build
 		// (the default of a `Compiler`) keeps every function, and its program in the result is complete.
 		var irNames:Map<String, Bool> = [for (fn in result.ir.functions) fn.name => true];
-		expect(!irNames.exists("Main.unusedFree") && !irNames.exists("Dead.never"), "the program of a plain build is pruned");
+		expect(!irNames.exists("Main.unusedFree") && !irNames.exists("Dead.never"),
+			"the program of a plain build is pruned");
 		var names = result.functionIndices;
 		expect(names.exists("main"), "main stays");
-		expect(!names.exists("Main.unusedFree") && !names.exists("unusedFree"), "a function nothing calls is not in the module");
-		expect(!names.exists("Dead.never") && !names.exists("Dead.new"), "the methods of a class nothing mentions are not in the module");
+		expect(!names.exists("Main.unusedFree") && !names.exists("unusedFree"),
+			"a function nothing calls is not in the module");
+		expect(!names.exists("Dead.never") && !names.exists("Dead.new"),
+			"the methods of a class nothing mentions are not in the module");
 		expect(names.exists("Live.hidden"), "a mentioned class keeps its methods");
-		expect(names.exists("Live.spare"), "a mentioned class keeps the methods nothing calls too: they can be reached by name");
-		expect(GeneratedProgramRunner.exitCode(result) == 42, "a method reached only by name through Reflect.field runs");
+		expect(names.exists("Live.spare"),
+			"a mentioned class keeps the methods nothing calls too: they can be reached by name");
+		expect(GeneratedProgramRunner.exitCode(result) == 42,
+			"a method reached only by name through Reflect.field runs");
 		var liveCompiler = new Compiler();
 		CompilerIntrinsics.register(liveCompiler);
 		liveCompiler.addStandardLibrarySourceRoot("stdlib");
@@ -38,7 +44,8 @@ class ReachabilityPruneMain {
 			for (fn in liveCompiler.compile("Main", null, false).ir.functions)
 				fn.name => true
 		];
-		expect(liveNames.exists("Main.unusedFree") && liveNames.exists("Dead.never"), "the program of a live build is complete");
+		expect(liveNames.exists("Main.unusedFree") && liveNames.exists("Dead.never"),
+			"the program of a live build is complete");
 		// A call on a class nothing constructs keeps the method's slot, as a stub that throws; what the body called is gone.
 		var stubCompiler = new Compiler();
 		stubCompiler.livePatching = false;
@@ -50,7 +57,8 @@ class ReachabilityPruneMain {
 			+ "function viaReceiver(b:Null<Base>):Int return b == null ? 0 : b.update(); "
 			+ "function main():Int { var none:Null<Base> = null; return viaReceiver(none) == 0 ? 42 : 1; }");
 		var stubbed = stubCompiler.compile("Main", null, false);
-		expect(stubbed.functionIndices.exists("Base.update"), "the method named by a call on an uncreated class keeps its slot");
+		expect(stubbed.functionIndices.exists("Base.update"),
+			"the method named by a call on an uncreated class keeps its slot");
 		expect(!stubbed.functionIndices.exists("fromBodyOnly") && !stubbed.functionIndices.exists("Main.fromBodyOnly"),
 			"what the body of such a method calls is not in the module");
 		expect(GeneratedProgramRunner.exitCode(stubbed) == 42, "the program with a declaration-only method runs");

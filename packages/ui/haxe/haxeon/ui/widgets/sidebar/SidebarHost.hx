@@ -22,22 +22,28 @@ class SidebarHost implements View {
 	public var headerActions:Null<String->Null<View>> = null;
 	/** Evaluate against the built pane; hidden actions retain their layout space. */
 	public var headerActionsVisible:Null<RenderNode->Bool> = null;
-	public function new(key:String, model:SidebarModel, onSelect:String->Void, ?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false) {
+	public function new(key:String, model:SidebarModel, onSelect:String->Void,
+			?iconProvider:String->Null<haxeon.ui.icons.IconName>, activeOnly:Bool = false) {
 		this.activeOnly = activeOnly;
 		this.iconProvider = iconProvider;
-		this.key = key; this.model = model; this.onSelect = onSelect;
+		this.key = key;
+		this.model = model;
+		this.onSelect = onSelect;
 	}
 	public function build(context:BuildContext):RenderNode {
-		if (!model.visible) return new haxeon.ui.widgets.layout.Spacer(key, LayoutAxis.fixed(0), LayoutAxis.fixed(0)).build(context);
+		if (!model.visible) return new haxeon.ui.widgets.layout.Spacer(key, LayoutAxis.fixed(0),
+			LayoutAxis.fixed(0)).build(context);
 		var selected = model.selected();
 		if (selected == null) return new Text("No sidebar modes").build(context);
 		var items:Array<TabItem> = [];
 		for (mode in model.modes) if (mode.visible && (!activeOnly || mode.id == selected.id))
-			items.push(new TabItem(mode.id, mode.label, new SidebarPage(mode), true, iconProvider == null ? null : iconProvider(mode.id)));
+			items.push(new TabItem(mode.id, mode.label, new SidebarPage(mode), true,
+			iconProvider == null ? null : iconProvider(mode.id)));
 		var options = new TabsOptions();
 		options.selectionMode = TabsSelectionMode.Controlled;
 		options.style = new LayoutStyle();
-		options.style.width = LayoutAxis.stretch(); options.style.height = LayoutAxis.grow();
+		options.style.width = LayoutAxis.stretch();
+		options.style.height = LayoutAxis.grow();
 		options.style.clipHorizontal = true;
 		// The tab stack must shrink its page to the available height. Vertical
 		// clipping here makes Clay treat the whole stack as scroll content and
@@ -46,7 +52,10 @@ class SidebarHost implements View {
 		var actions:Null<SidebarHeaderActions> = null;
 		if (headerActions != null) {
 			var content = headerActions(selected.id);
-			if (content != null) { actions = new SidebarHeaderActions(content); options.headerTrailing = actions; }
+			if (content != null) {
+				actions = new SidebarHeaderActions(content);
+				options.headerTrailing = actions;
+			}
 		}
 		var tabs = Tabs.withOptions(key, items, selected.id, onSelect, options);
 		var node = tabs.build(context);

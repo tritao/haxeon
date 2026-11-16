@@ -8,6 +8,7 @@ class NativeArtifactDemands {
 			case None: false;
 			case Static: kind == ArtifactKind.NativeStaticLibrary;
 			case Shared: kind == ArtifactKind.NativeSharedLibrary || kind == ArtifactKind.FfiNativeSharedLibrary;
-			case Both: kind == ArtifactKind.NativeStaticLibrary || kind == ArtifactKind.NativeSharedLibrary || kind == ArtifactKind.FfiNativeSharedLibrary;
+			case Both: kind == ArtifactKind.NativeStaticLibrary || kind == ArtifactKind.NativeSharedLibrary
+				|| kind == ArtifactKind.FfiNativeSharedLibrary;
 		};
 }

@@ -6,16 +6,16 @@ package haxeon;
   through the FFI, which any call into it does. While no session records, the library's trace points call nothing.
 **/
 class ProfileNativeTrace {
-  /** Returns false when `library` is not loaded or has no trace sink. */
-  public static function install(library:String):Bool {
-    return nativeTraceInstall(library);
-  }
+	/** Returns false when `library` is not loaded or has no trace sink. */
+	public static function install(library:String):Bool {
+		return nativeTraceInstall(library);
+	}
 }
 
 #if wasm
 // Browser builds have no HashLink profiler to record native trace points.
 function nativeTraceInstall(library:String):Bool {
-  return false;
+	return false;
 }
 #else
 @:hlNative("haxeon_runtime", "native_trace_install")

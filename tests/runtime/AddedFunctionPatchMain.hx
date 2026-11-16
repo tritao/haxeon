@@ -24,27 +24,24 @@ class AddedFunctionPatchMain {
 			mainId = build.functionIds.get("main");
 		if (Runtime.callInt(live, mainId) != 2)
 			throw "The program did not run correctly before the edits";
-		var edits = [
-			{
-				label: "a new static function, called directly and through a closure, and a new lambda",
-				source: program("  public static function bonus(x:Int):Int return x * 7;\n",
-					" + Ui.bonus(2) + { var f = Ui.bonus; f(1); } + { var extra = (y:Int) -> y + 100; extra(0); }"),
-				// The stored handler still adds one: 2 + 14 + 7 + 100.
-				expected: 123
-			},
+		var edits = [{label: "a new static function, called directly and through a closure, and a new lambda",
+			source: program("  public static function bonus(x:Int):Int return x * 7;\n",
+			" + Ui.bonus(2) + { var f = Ui.bonus; f(1); } + { var extra = (y:Int) -> y + 100; extra(0); }"),
+		// The stored handler still adds one: 2 + 14 + 7 + 100.
+		expected: 123},
 			{
 				label: "an edit of the added function",
 				source: program("  public static function bonus(x:Int):Int return x * 8;\n",
 					" + Ui.bonus(2) + { var f = Ui.bonus; f(1); } + { var extra = (y:Int) -> y + 100; extra(0); }"),
 				expected: 126
-			}
-		];
+			}];
 		for (edit in edits) {
 			compiler.update("Main.hx", edit.source);
 			var changed = compiler.compile("Main");
 			if (changed.requiresReload || changed.patchBytes == null)
 				throw '${edit.label} required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
-			Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+			Runtime.patchSet(live,
+				new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 			var result = Runtime.callInt(live, mainId);
 			if (result != edit.expected)
 				throw 'After ${edit.label} the patched module returned $result instead of ${edit.expected}';

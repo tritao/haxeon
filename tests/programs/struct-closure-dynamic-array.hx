@@ -6,20 +6,28 @@ class DynamicCallbackOwner {
 struct DynamicCallbackInner {
 	public var number:Int;
 	public var owner:DynamicCallbackOwner;
-	public function new(number:Int, owner:DynamicCallbackOwner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:DynamicCallbackOwner) {
+		this.number = number;
+		this.owner = owner;
+	}
 }
 
 struct DynamicCallbackValue {
 	public var inner:DynamicCallbackInner;
 	public final name:String;
 	public function new(number:Int, owner:DynamicCallbackOwner, name:String) {
-		inner = new DynamicCallbackInner(number, owner); this.name = name;
+		inner = new DynamicCallbackInner(number, owner);
+		this.name = name;
 	}
 }
 
 class DynamicCallbackHost {
 	public static var saved:Dynamic;
-	public static function identity(value:Dynamic):Dynamic { saved = value; hl.Gc.major(); return value; }
+	public static function identity(value:Dynamic):Dynamic {
+		saved = value;
+		hl.Gc.major();
+		return value;
+	}
 	public static function fail(value:Dynamic):Dynamic throw "expected";
 }
 
@@ -57,7 +65,8 @@ function main():Int {
 	var afterGcAgain:DynamicCallbackValue = cast onlyRoot;
 	if (afterGcAgain.inner.number != 33 || afterGcAgain.inner.owner.id != 91) return 8;
 	var caught = false;
-	var failure:Dynamic = DynamicCallbackHost.fail, failureView:DynamicCallbackValue->DynamicCallbackValue = cast failure;
+	var failure:Dynamic = DynamicCallbackHost.fail,
+		failureView:DynamicCallbackValue->DynamicCallbackValue = cast failure;
 	caught = false;
 	try failureView(original) catch (_:Dynamic) caught = true;
 	if (!caught || original.inner.number != 9) return 7;

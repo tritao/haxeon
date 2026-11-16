@@ -64,11 +64,10 @@ class WasmDynamicCalls {
 						copy.instructions.push(new Located(value, ins.provenance));
 					switch ins.value {
 						case SafeCast(out, _) if (switch out.type {
-								case Function(_, _): true;
-								default: false;
-							}):
-							targets.set(Std.string(out.type), out.type);
-							copy.instructions.push(ins);
+							case Function(_, _): true;
+							default: false;
+						}): targets.set(Std.string(out.type), out.type);
+						copy.instructions.push(ins);
 						case Call(out, name, args) if (makers.exists(name)):
 							varargs = true;
 							var capture = temp(Obj(CAPTURE)),
@@ -84,14 +83,18 @@ class WasmDynamicCalls {
 							});
 							if (dynamicCall)
 								needsFunctionTest = true;
-							var signature:IrType = dynamicCall ? Function([for (a in args) a.type], out.type) : closure.type;
+							var signature:IrType = dynamicCall ? Function([for (a in args) a.type],
+								out.type) : closure.type;
 							if (dynamicCall)
 								targets.set(IrTypeIdentity.text(signature), signature);
 							var key = (dynamicCall ? "dynamic:" : "typed:") + IrTypeIdentity.text(signature);
 							if (!helpers.exists(key)) {
-								var privateAbi = !dynamicCall && compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
-									prefix = privateAbi ? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:" : "__haxeon_invoke_";
-								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature, dynamicCall, isFunction, privateAbi));
+								var privateAbi = !dynamicCall
+									&& compiler.ir.IrScalarArguments.isPrivateClosureType(signature),
+									prefix = privateAbi ? compiler.ir.IrScalarArguments.PREFIX + "$wasm:closure-check:"
+										: "__haxeon_invoke_";
+								helpers.set(key, callHelper(prefix + [for (_ in helpers.keys()) 1].length, signature,
+									dynamicCall, isFunction, privateAbi));
 							}
 							var callee = closure;
 							if (dynamicCall) {
@@ -140,7 +143,8 @@ class WasmDynamicCalls {
 			var names = [for (key in targets.keys()) key];
 			names.sort(Reflect.compare);
 			for (key in names)
-				result.functions.push(varargsAdapter(varargsAdapterName(targets.get(key)), targets.get(key), program.enums));
+				result.functions.push(varargsAdapter(varargsAdapterName(targets.get(key)), targets.get(key),
+					program.enums));
 			result.natives.push({
 				name: VARARGS_CALL,
 				library: "haxeon_runtime",
@@ -220,7 +224,8 @@ class WasmDynamicCalls {
 				case Dyn: true;
 				default: false;
 			}) ? values[i] : toDynamic(values[i]);
-			b.currentBlock().instructions.push(new Located(ArraySet(array, index, value), SourceProvenance.generated("wasm-varargs")));
+			b.currentBlock().instructions.push(new Located(ArraySet(array, index, value),
+				SourceProvenance.generated("wasm-varargs")));
 		}
 		var called = b.call(VARARGS_CALL, [original, array], Dyn);
 		b.returnValue((switch (result) {
@@ -233,7 +238,8 @@ class WasmDynamicCalls {
 		return new IrFunction(name, b.arguments, result, b.blocks, ClosureVarargs(type), null, false, Keep);
 	}
 
-	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String, privateAbi:Bool):IrFunction {
+	static function callHelper(name:String, type:IrType, dynamicCall:Bool, isFunction:String,
+			privateAbi:Bool):IrFunction {
 		var b = new IrBuilder(),
 			closure = b.argument("closure", dynamicCall ? Dyn : type),
 			params:Array<IrType> = [],

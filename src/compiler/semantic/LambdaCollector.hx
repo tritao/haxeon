@@ -5,12 +5,15 @@ import compiler.syntax.Ast.AstStatement;
 
 /** Discovers compiler-generated lambda functions in canonical syntax trees. */
 class LambdaCollector {
-	public static function collect(statements:Array<AstStatement>, functionName:String, module:String, generatedByModule:Map<String, Map<String, Bool>>):Void {
+	public static function collect(statements:Array<AstStatement>, functionName:String, module:String,
+			generatedByModule:Map<String, Map<String, Bool>>):Void {
 		for (statement in statements)
 			switch statement {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
-				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _), Assignment(_, expression, _), Return(expression, _), Throw(expression, _), Expression(expression, _):
+				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _),
+					Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
+					Expression(expression, _):
 					collectExpression(expression, functionName, module, generatedByModule);
 				case Try(tryBranch, catches, _):
 					collect(tryBranch, functionName, module, generatedByModule);
@@ -81,9 +84,12 @@ class LambdaCollector {
 					collectLambdaExpression(argument, functionName, module, generatedByModule);
 			case Member(object, _, _):
 				collectLambdaExpression(object, functionName, module, generatedByModule);
-			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _), Mod(left, right, _), BitAnd(left, right, _),
-				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _), UnsignedShiftRight(left, right, _),
-				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _), Equal(left, right, _),
+			case Add(left, right, _), Sub(left, right, _), Mul(left, right, _), Div(left, right, _),
+				Mod(left, right, _), BitAnd(left, right, _),
+				BitXor(left, right, _), BitOr(left, right, _), ShiftLeft(left, right, _), ShiftRight(left, right, _),
+				UnsignedShiftRight(left, right, _),
+				Less(left, right, _), LessEqual(left, right, _), Greater(left, right, _), GreaterEqual(left, right, _),
+				Equal(left, right, _),
 				NotEqual(left, right, _):
 				collectLambdaExpression(left, functionName, module, generatedByModule);
 				collectLambdaExpression(right, functionName, module, generatedByModule);

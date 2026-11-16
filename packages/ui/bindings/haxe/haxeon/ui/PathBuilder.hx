@@ -29,7 +29,7 @@ class PathBuilder {
 
 	/** Adds a clockwise rounded rectangle with a radius clamped to its bounds. */
 	public function roundRect(x:Float, y:Float, width:Float, height:Float,
-		radius:Float):PathBuilder {
+			radius:Float):PathBuilder {
 		if (width <= 0.0 || height <= 0.0)
 			throw "Rounded rectangle requires positive bounds";
 		var value = Math.max(0.0, Math.min(radius, Math.min(width, height) * 0.5));
@@ -40,13 +40,13 @@ class PathBuilder {
 		var control = value * k;
 		moveTo(x + value, y).lineTo(x + width - value, y)
 			.cubicTo(x + width - value + control, y, x + width, y + value - control,
-				x + width, y + value)
+			x + width, y + value)
 			.lineTo(x + width, y + height - value)
 			.cubicTo(x + width, y + height - value + control, x + width - value + control,
-				y + height, x + width - value, y + height)
+			y + height, x + width - value, y + height)
 			.lineTo(x + value, y + height)
 			.cubicTo(x + value - control, y + height, x, y + height - value + control,
-				x, y + height - value)
+			x, y + height - value)
 			.lineTo(x, y + value)
 			.cubicTo(x, y + value - control, x + value - control, y, x + value, y)
 			.close();
@@ -58,12 +58,14 @@ class PathBuilder {
 		return this;
 	}
 
-	public function cubicTo(control1X:Float, control1Y:Float, control2X:Float, control2Y:Float, x:Float, y:Float):PathBuilder {
+	public function cubicTo(control1X:Float, control1Y:Float, control2X:Float, control2Y:Float, x:Float,
+			y:Float):PathBuilder {
 		append(UiPathVerb.BezierTo, 6, control1X, control1Y, control2X, control2Y, x, y);
 		return this;
 	}
 
-	public function arcTo(tangent1X:Float, tangent1Y:Float, tangent2X:Float, tangent2Y:Float, radius:Float):PathBuilder {
+	public function arcTo(tangent1X:Float, tangent1Y:Float, tangent2X:Float, tangent2Y:Float,
+			radius:Float):PathBuilder {
 		append(UiPathVerb.ArcTo, 5, tangent1X, tangent1Y, tangent2X, tangent2Y, radius);
 		return this;
 	}

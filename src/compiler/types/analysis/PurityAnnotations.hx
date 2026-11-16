@@ -14,18 +14,22 @@ import compiler.syntax.Ast.AstMetadata;
  * resolves them against a plain canonical program, before any type is connected).
  */
 class PurityAnnotations {
-	public static function isTypeName(name:String, classDecls:Map<String, AstClass>, interfaceDecls:Map<String, AstInterface>, enumDecls:Map<String, AstEnum>,
+	public static function isTypeName(name:String, classDecls:Map<String, AstClass>,
+			interfaceDecls:Map<String, AstInterface>, enumDecls:Map<String, AstEnum>,
 			enumAbstractDecls:Map<String, AstEnumAbstract>, abstractDecls:Map<String, AstAbstract>):Bool
-		return classDecls.exists(name) || interfaceDecls.exists(name) || enumDecls.exists(name) || enumAbstractDecls.exists(name) || abstractDecls.exists(name);
+		return classDecls.exists(name) || interfaceDecls.exists(name) || enumDecls.exists(name)
+			|| enumAbstractDecls.exists(name) || abstractDecls.exists(name);
 
 	/** Annotated functions and read-only compiler intrinsics; purity inference seeds from these. */
-	public static function isDeclaredPure(name:String, signatures:Map<String, AstFunction>, classDecls:Map<String, AstClass>):Bool
+	public static function isDeclaredPure(name:String, signatures:Map<String, AstFunction>,
+			classDecls:Map<String, AstClass>):Bool
 		return StringTools.startsWith(name, compiler.types.typing.FlagsGenerator.PREFIX)
 			|| StringTools.startsWith(name, compiler.types.typing.RawRepresentableGenerator.PREFIX)
 			|| compiler.runtime.CompilerIntrinsics.isPure(name) || hasPureAnnotation(name, signatures, classDecls);
 
 	/** `@:pure` on a function, or on the class of a static method. */
-	public static function hasPureAnnotation(name:String, signatures:Map<String, AstFunction>, classDecls:Map<String, AstClass>):Bool {
+	public static function hasPureAnnotation(name:String, signatures:Map<String, AstFunction>,
+			classDecls:Map<String, AstClass>):Bool {
 		var fn = signatures.get(name);
 		if (fn == null)
 			return false;

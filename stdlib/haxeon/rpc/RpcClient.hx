@@ -28,7 +28,8 @@ class RpcClient {
 	var polling:Bool = false;
 
 	public function new(connector:RpcConnector, clock:Void->Float, random:Void->Float, options:RpcPeerOptions,
-			ready:(RpcConnection, Int, Array<String>) -> Void, baseBackoffMs:Int = 100, maxBackoffMs:Int = 10000, connectTimeoutMs:Int = 10000) {
+			ready:(RpcConnection, Int, Array<String>) -> Void, baseBackoffMs:Int = 100, maxBackoffMs:Int = 10000,
+			connectTimeoutMs:Int = 10000) {
 		if (baseBackoffMs < 1 || maxBackoffMs < baseBackoffMs || connectTimeoutMs < 1)
 			throw "Invalid RPC reconnect limits";
 		this.connector = connector;
@@ -87,9 +88,12 @@ class RpcClient {
 	}
 
 	static function terminal(code:String):Bool {
-		return code == "unauthorized" || code == "authentication_refused" || code == "authorization_failed" || code == "unsupported_protocol"
-			|| code == "unsupported_codec" || code == "missing_capability" || code == "capability_widening" || code == "invalid_handshake"
-			|| code == "invalid_envelope" || code == "invalid_notification" || code == "duplicate_request" || code == "unexpected_handshake"
+		return code == "unauthorized" || code == "authentication_refused" || code == "authorization_failed"
+			|| code == "unsupported_protocol"
+			|| code == "unsupported_codec" || code == "missing_capability" || code == "capability_widening"
+			|| code == "invalid_handshake"
+			|| code == "invalid_envelope" || code == "invalid_notification" || code == "duplicate_request"
+			|| code == "unexpected_handshake"
 			|| code == "oversized_message";
 	}
 
@@ -166,7 +170,7 @@ class RpcClient {
 						failed(error, retryable);
 				}
 			})
-		catch (error:Dynamic) {
+				catch (error:Dynamic) {
 			if (generation != token || state != Connecting)
 				throw error;
 			failed({code: "connect_failed", message: "connect_failed", ambiguous: false}, true);
@@ -206,8 +210,11 @@ class RpcClient {
 					var established = negotiating.connection;
 					if (established == null) {
 						var failure = negotiating.failure;
-						failed(failure == null ? {code: "handshake_failed", message: "handshake_failed",
-							ambiguous: false} : failure, failure == null || failure.code == "disconnected" || failure.code == "handshake_timeout");
+						failed(failure == null ? {
+							code:"handshake_failed", message:"handshake_failed",
+								ambiguous:false
+						} : failure,
+							failure == null || failure.code == "disconnected" || failure.code == "handshake_timeout");
 					} else {
 						handshake = null;
 						connection = established;
@@ -231,7 +238,11 @@ class RpcClient {
 					if (clock() - connectedAt >= maxBackoffMs)
 						retryStep = baseBackoffMs;
 					var reason = established.closeReason;
-					failed({code: reason == null ? "disconnected" : reason, message: reason == null ? "disconnected" : reason, ambiguous: false}, true);
+					failed({
+						code: reason == null ? "disconnected" : reason,
+						message: reason == null ? "disconnected" : reason,
+						ambiguous: false
+					}, true);
 				}
 			case Closed:
 		}

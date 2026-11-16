@@ -40,7 +40,8 @@ class AndroidBuild {
 		var absoluteProjectPath = FileSystem.fullPath(projectPath),
 			lockPath = Path.join([Path.directory(absoluteProjectPath), "haxeon.lock"]),
 			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null,
-			project = new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(absoluteProjectPath, lockfile, lockfile != null,
+			project = new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(absoluteProjectPath,
+				lockfile, lockfile != null,
 				Target.parse("android"));
 		buildResolved(project, outputPath);
 	}
@@ -49,12 +50,15 @@ class AndroidBuild {
 		var roots = [
 			for (resolvedPackage in project.packages.packages)
 				for (root in resolvedPackage.sourceRoots)
-					root
-		], sources = [
-			for (resolvedPackage in project.packages.packages)
-				for (source in resolvedPackage.sources)
+				root
+		],
+			sources = [
+				for (resolvedPackage in project.packages.packages)
+					for (source in resolvedPackage.sources)
 					source
-			], packageRoots:Array<PackageSourceRoot> = [], defines = project.manifest.defines.copy();
+			],
+			packageRoots:Array<PackageSourceRoot> = [],
+			defines = project.manifest.defines.copy();
 		for (resolvedPackage in project.packages.packages) {
 			var shouldScopeRoot = resolvedPackage.name != project.rootPackage.name
 				|| project.manifest.entry == resolvedPackage.name
@@ -66,7 +70,8 @@ class AndroidBuild {
 		build(sources, roots, project.manifest.entry, defines, outputPath, packageRoots);
 	}
 
-	static function build(sources:Array<String>, roots:Array<String>, entry:String, projectDefines:Array<String>, outputPath:String,
+	static function build(sources:Array<String>, roots:Array<String>, entry:String, projectDefines:Array<String>,
+			outputPath:String,
 			?packageRoots:Array<PackageSourceRoot>):Void {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
@@ -116,6 +121,7 @@ class AndroidBuild {
 	}
 
 	static function sidecar(outputPath:String, suffix:String):String {
-		return StringTools.endsWith(outputPath, ".hl") ? outputPath.substr(0, outputPath.length - 3) + suffix : outputPath + suffix;
+		return StringTools.endsWith(outputPath, ".hl") ? outputPath.substr(0,
+			outputPath.length - 3) + suffix : outputPath + suffix;
 	}
 }

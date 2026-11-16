@@ -73,8 +73,8 @@ class ProgressPainter {
 			return;
 		}
 		var segment = geometry.width * 0.32;
-		var start = reducedMotion ? (geometry.width - segment) * 0.5 :
-			loop.phase * (geometry.width + segment) - segment;
+		var start = reducedMotion
+			? (geometry.width - segment) * 0.5 : loop.phase * (geometry.width + segment) - segment;
 		var left = Math.max(0.0, start);
 		var right = Math.min(geometry.width, start + segment);
 		canvas.fillRectIfPositive(new Rect(left, 0.0, right - left, geometry.height), fill);

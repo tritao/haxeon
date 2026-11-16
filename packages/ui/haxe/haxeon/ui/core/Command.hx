@@ -35,8 +35,8 @@ class Command {
 	public function addShortcut(value:Shortcut):Command {
 		if (value == null)
 			throw "Alternate shortcuts cannot be null";
-		if ((shortcut == null || !shortcut.equals(value)) &&
-			!Lambda.exists(alternateShortcuts, function(existing) return existing.equals(value)))
+		if ((shortcut == null || !shortcut.equals(value))
+			&& !Lambda.exists(alternateShortcuts, function(existing) return existing.equals(value)))
 			alternateShortcuts.push(value);
 		return this;
 	}

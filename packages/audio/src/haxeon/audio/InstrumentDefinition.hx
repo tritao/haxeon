@@ -5,5 +5,5 @@ package haxeon.audio;
  * The returned instrument participates in the engine's native note/transport API.
  */
 interface InstrumentDefinition {
-    public function createInstrument(engine:DspEngine):DspInstrument;
+	public function createInstrument(engine:DspEngine):DspInstrument;
 }

@@ -10,7 +10,7 @@ class SelectionDragController implements Animation {
 	var scheduler:AnimationScheduler;
 	var active:Void->Bool;
 	var geometry:Void->Null<ResolvedLayoutItem>;
-	var selectAt:(Float, Float)->Void;
+	var selectAt:(Float, Float) -> Void;
 	var scroll:Float->Bool;
 	var handle:Null<AnimationHandle>;
 	var selectionPending:Bool = false;
@@ -20,12 +20,13 @@ class SelectionDragController implements Animation {
 	public function new() {}
 
 	public function configure(scheduler:AnimationScheduler, editor:TextEditorState,
-			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float)->Void, scroll:Float->Bool):Void {
-		configureAdapter(scheduler, function() return !editor.isDisposed() && editor.draggingSelection, geometry, selectAt, scroll);
+			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float) -> Void, scroll:Float->Bool):Void {
+		configureAdapter(scheduler, function() return !editor.isDisposed() && editor.draggingSelection, geometry,
+			selectAt, scroll);
 	}
 
 	public function configureAdapter(scheduler:AnimationScheduler, active:Void->Bool,
-			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float)->Void, scroll:Float->Bool):Void {
+			geometry:Void->Null<ResolvedLayoutItem>, selectAt:(Float, Float) -> Void, scroll:Float->Bool):Void {
 		this.scheduler = scheduler;
 		this.active = active;
 		this.geometry = geometry;
@@ -34,7 +35,8 @@ class SelectionDragController implements Animation {
 	}
 
 	public function update(x:Float, y:Float):Void {
-		this.x = x; this.y = y;
+		this.x = x;
+		this.y = y;
 		if (velocity() == 0.0) stop();
 		else if (handle == null || !handle.active) handle = scheduler.track(this);
 	}
@@ -44,8 +46,8 @@ class SelectionDragController implements Animation {
 		if (bounds == null || bounds.clipBounds.height <= 0.0) return 0.0;
 		var clip = bounds.clipBounds;
 		var margin = Math.min(16.0, clip.height / 4.0);
-		var distance = y < clip.y + margin ? y - clip.y - margin :
-			y > clip.y + clip.height - margin ? y - clip.y - clip.height + margin : 0.0;
+		var distance = y < clip.y + margin ? y - clip.y - margin : y > clip.y + clip.height - margin
+			? y - clip.y - clip.height + margin : 0.0;
 		return Math.max(-600.0, Math.min(600.0, distance * 12.0));
 	}
 

@@ -46,8 +46,10 @@ class WasmGcValueArrayAccessors {
 	}
 
 	public static function isScalar(symbol:String):Bool return switch symbol {
-		case "__value_array_read_i32", "__value_array_read_i64", "__value_array_read_bool", "__value_array_read_f32", "__value_array_read_f64",
-			"__value_array_write_i32", "__value_array_write_i64", "__value_array_write_bool", "__value_array_write_f32", "__value_array_write_f64",
+		case "__value_array_read_i32", "__value_array_read_i64", "__value_array_read_bool", "__value_array_read_f32",
+			"__value_array_read_f64",
+			"__value_array_write_i32", "__value_array_write_i64", "__value_array_write_bool", "__value_array_write_f32",
+			"__value_array_write_f64",
 			"__value_array_read_ptr", "__value_array_write_ptr", "__value_array_read_type", "__value_array_write_type",
 			"__value_array_read_callback", "__value_array_write_callback", "__value_array_clear_scalar": true;
 		default: false;
@@ -81,8 +83,10 @@ class WasmGcValueArrayAccessors {
 							var specialized = specialize(native, arguments, constants);
 							if (specialized != null) {
 								var operands = arguments.slice(0, 2);
-								if (StringTools.startsWith(native.symbol, "__value_array_write_")) operands.push(arguments[arguments.length - 1]);
-								instruction = Call(output, specialized, operands); changed = true;
+								if (StringTools.startsWith(native.symbol, "__value_array_write_"))
+									operands.push(arguments[arguments.length - 1]);
+								instruction = Call(output, specialized, operands);
+								changed = true;
 							}
 						}
 					default:
@@ -105,16 +109,24 @@ class WasmGcValueArrayAccessors {
 		};
 		switch element {
 			case Obj(name), Nullable(Obj(name)):
-				var object = objects.get(name); if (object == null || !object.isValue) return null;
+				var object = objects.get(name);
+				if (object == null || !object.isValue) return null;
 			case Enum(name), Nullable(Enum(name)):
 				if (compiler.ir.IrInlineEnumStorage.resolve(enums, objects, name) == null) return null;
 			default: return null;
 		}
 		var key = haxe.crypto.Base64.encode(compiler.ir.codec.IrTypeCodec.encode(element)), layout = layouts.get(key);
-		if (layout == null) { layout = new IrValueArrayLayout(objects, element, 32, WasmGc, enums); layouts.set(key, layout); }
-		var symbol = native.symbol, clear = symbol == "__value_array_clear_scalar", write = clear || StringTools.startsWith(symbol, "__value_array_write_"),
-			suffix = clear ? "clear" : symbol.substr(write ? "__value_array_write_".length : "__value_array_read_".length),
-			integer = suffix == "i32" || suffix == "i64", variableWidth = integer || suffix == "ptr" || suffix == "type" || clear;
+		if (layout == null) {
+			layout = new IrValueArrayLayout(objects, element, 32, WasmGc, enums);
+			layouts.set(key, layout);
+		}
+		var symbol = native.symbol,
+			clear = symbol == "__value_array_clear_scalar",
+			write = clear || StringTools.startsWith(symbol, "__value_array_write_"),
+			suffix = clear
+				? "clear" : symbol.substr(write ? "__value_array_write_".length : "__value_array_read_".length),
+			integer = suffix == "i32" || suffix == "i64",
+			variableWidth = integer || suffix == "ptr" || suffix == "type" || clear;
 		var width = suffix == "bool" ? 8 : suffix == "f32" || suffix == "callback" ? 32 : 64, signed = false;
 		if (variableWidth) {
 			if (arguments.length < 4) return null;
@@ -131,15 +143,28 @@ class WasmGcValueArrayAccessors {
 		var shape = layout.lanes;
 		// Untyped native accesses retain their runtime validation, including deliberately invalid operands.
 		if (offset < 0 || (offset & 7) != 0 || (width != 8 && width != 16 && width != 32 && width != 64)
-				|| width > shape.scalarWordBits || offset * 1.0 + width > shape.scalarStrideBits
-				|| (suffix == "i32" && width > 32) || ((suffix == "ptr" || suffix == "type") && width != 32)) return null;
-		var specialized = '$$value-array:scalar:$symbol:${shape.scalarWordBits}:${shape.scalarStrideBits}:$offset:$width:$signed:${layout.hasValidity}';
+			|| width > shape.scalarWordBits || offset * 1.0 + width > shape.scalarStrideBits
+			|| (suffix == "i32" && width > 32) || ((suffix == "ptr" || suffix == "type") && width != 32)) return null;
+		var specialized =
+			'$$value-array:scalar:$symbol:${shape.scalarWordBits}:${shape.scalarStrideBits}:$offset:$width:$signed:${layout.hasValidity}';
 		if (!accesses.exists(specialized)) {
-			accesses.set(specialized, {wordBits:shape.scalarWordBits, strideBits:shape.scalarStrideBits, offsetBits:offset, widthBits:width,
-				signed:signed, hasValidity:layout.hasValidity});
+			accesses.set(specialized, {
+				wordBits: shape.scalarWordBits,
+				strideBits: shape.scalarStrideBits,
+				offsetBits: offset,
+				widthBits: width,
+				signed: signed,
+				hasValidity: layout.hasValidity
+			});
 			var types = native.arguments.slice(0, 2);
 			if (write && !clear) types.push(native.arguments[native.arguments.length - 1]);
-			added.push({name:specialized, library:native.library, symbol:symbol, arguments:types, result:native.result});
+			added.push({
+				name: specialized,
+				library: native.library,
+				symbol: symbol,
+				arguments: types,
+				result: native.result
+			});
 		}
 		return specialized;
 	}

@@ -1,13 +1,13 @@
-import compiler.syntax.Lexer;
-import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
+import compiler.runtime.RuntimeType;
+import compiler.semantic.SemanticModel;
 import compiler.semantic.SemanticWorkspace;
 import compiler.semantic.SemanticWorkspace.WorkspaceResolution;
-import compiler.semantic.SemanticModel;
-import compiler.types.Type.CompilerType;
 import compiler.service.LanguageService;
-import compiler.runtime.RuntimeType;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
+import compiler.types.Type.CompilerType;
 
 class SemanticWorkspaceMain {
 	static function main():Void {
@@ -23,14 +23,18 @@ class SemanticWorkspaceMain {
 		var resolvedBase = workspace.resolveTypeSymbolId("Base");
 		expect(resolvedBase != null
 			&& workspace.resolveTypeSymbolId("Base") == resolvedBase, "type resolution should be stable when cached");
-		expect(workspace.resolveTypeSymbolId("demo.Base") == resolvedBase, "qualified type resolution should share the indexed symbol");
-		expect(workspace.resolveSymbolId("Base") == resolvedBase && workspace.resolveSymbolId("demo.Base") == resolvedBase,
+		expect(workspace.resolveTypeSymbolId("demo.Base") == resolvedBase,
+			"qualified type resolution should share the indexed symbol");
+		expect(workspace.resolveSymbolId("Base") == resolvedBase
+			&& workspace.resolveSymbolId("demo.Base") == resolvedBase,
 			"general symbol resolution should support bare and qualified names");
 		workspace.invalidateResolutionCache();
-		expect(workspace.resolveTypeSymbolId("Base") == resolvedBase, "invalidating resolution caches should preserve results");
+		expect(workspace.resolveTypeSymbolId("Base") == resolvedBase,
+			"invalidating resolution caches should preserve results");
 
 		var global = workspace.global(child, "Base");
-		expect(global != null && global.state == base && global.key == "class:Base", "imports should resolve through the workspace");
+		expect(global != null && global.state == base && global.key == "class:Base",
+			"imports should resolve through the workspace");
 		var inherited = workspace.member(TInstance(Class, "demo.Child", []), "value");
 		expect(inherited != null && inherited.state == base && inherited.key == "class:Base:method:value",
 			"qualified classes should resolve inherited members across modules");
@@ -56,7 +60,8 @@ class SemanticWorkspaceMain {
 		service.compiler.modules.set(query.name, query);
 		service.compiler.modules.set(base.name, base);
 		service.compiler.modules.set(other.name, other);
-		expect(service.definition("Query.hx", query.source.text.indexOf("Base") + 1) == null, "editor queries should not guess an unbound ambiguous symbol");
+		expect(service.definition("Query.hx", query.source.text.indexOf("Base") + 1) == null,
+			"editor queries should not guess an unbound ambiguous symbol");
 
 		Sys.println("PASS: cross-module semantic workspace");
 	}

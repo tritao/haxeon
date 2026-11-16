@@ -28,7 +28,8 @@ class NativeLibrary {
 			encodedTypes = Bytes.alloc(arguments.length);
 		for (index in 0...arguments.length)
 			encodedTypes.set(index, arguments[index]);
-		var resolved = NativeCallApi.native_resolve(handle, encodedSymbol.getData(), encodedSymbol.length, encodedTypes.getData(), encodedTypes.length, result);
+		var resolved = NativeCallApi.native_resolve(handle, encodedSymbol.getData(), encodedSymbol.length,
+			encodedTypes.getData(), encodedTypes.length, result);
 		if (resolved == null)
 			throw new NativeCallError(NativeCallApi.lastError());
 		return new NativeFunction(resolved, arguments, result);

@@ -4,7 +4,11 @@ import compiler.ir.Ir;
 import compiler.semantic.SemanticSignature;
 import compiler.types.typing.EnumRuntimeType;
 
-private typedef EnumUseNode = {final parents:Array<Int>; final bits:Array<Int>; var queued:Bool;}
+private typedef EnumUseNode = {
+	final parents:Array<Int>;
+	final bits:Array<Int>;
+	var queued:Bool;
+}
 
 /** Conservative first source subset. A rejected enum keeps its nominal storage everywhere in the program. */
 class IrInlineEnumEligibility {
@@ -165,18 +169,24 @@ class IrInlineEnumEligibility {
 					var instruction = located.value;
 					for (input in IrOperands.inputs(instruction))
 						if (descriptors.exists(input.id)) {
-							descriptorUses.set(input.id, (descriptorUses.exists(input.id) ? descriptorUses.get(input.id) : 0) + 1);
+							descriptorUses.set(input.id,
+								(descriptorUses.exists(input.id) ? descriptorUses.get(input.id) : 0) + 1);
 							switch instruction {
-								case Call(_, "__closure_is_of_type", arguments) if (arguments.length == 2 && arguments[1].id == input.id
+								case Call(_, "__closure_is_of_type",
+									arguments) if (arguments.length == 2 && arguments[1].id == input.id
 									&& supportsCallableEscape(descriptors.get(input.id))):
 									callableDescriptorUses.set(input.id, true);
-							case Call(_, "__std_is_exact_type" | "__std_is_of_type", arguments) if (arguments.length == 2 && arguments[1].id == input.id
-								&& isReferenceTypeDescriptor(descriptors.get(input.id))):
-								referenceTypeDescriptorUses.set(input.id, true);
-								case Call(_, "__array_alloc_typed_ref", arguments) if (arguments.length == 2 && arguments[1].id == input.id):
+								case Call(_, "__std_is_exact_type" | "__std_is_of_type",
+									arguments) if (arguments.length == 2 && arguments[1].id == input.id
+									&& isReferenceTypeDescriptor(descriptors.get(input.id))):
+									referenceTypeDescriptorUses.set(input.id, true);
+								case Call(_, "__array_alloc_typed_ref",
+									arguments) if (arguments.length == 2 && arguments[1].id == input.id):
 									arrayDescriptors.set(input.id, true);
-								case Call(_, "__std_is_exact_type" | "__std_is_of_type", arguments) if (arguments.length == 2 && arguments[1].id == input.id
-									&& logicalEnumDescriptorFunction(fn.name) && isSelectedEnumDescriptor(descriptors.get(input.id))):
+								case Call(_, "__std_is_exact_type" | "__std_is_of_type",
+									arguments) if (arguments.length == 2 && arguments[1].id == input.id
+									&& logicalEnumDescriptorFunction(fn.name)
+									&& isSelectedEnumDescriptor(descriptors.get(input.id))):
 									logicalEnumDescriptorUses.set(input.id, true);
 								default:
 									otherDescriptors.set(input.id, true);
@@ -188,22 +198,26 @@ class IrInlineEnumEligibility {
 							var operation = name.substr(name.lastIndexOf("_ref_") + 5);
 							switch operation {
 								case "set" if (arguments.length >= 3):
-								// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;
-								// a direct enum or value struct still needs its nominal boxed representation here.
-								escapeMapReference(arguments[arguments.length - 1].type, "native reference map storage");
+									// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;
+									// a direct enum or value struct still needs its nominal boxed representation here.
+									escapeMapReference(arguments[arguments.length - 1].type,
+										"native reference map storage");
 								case "get" | "values":
-								escapeMapReference(out.type, "native reference map storage");
+									escapeMapReference(out.type, "native reference map storage");
 								default:
 							}
 						case ToDyn(out, value) if (!supportsCallableEscape(value.type)):
 							escape(value.type, "Dynamic escape");
-						case SafeCast(out, value) if (!((switch (value.type) { case Dyn: true; default: false; }) && supportsCallableEscape(out.type))):
-							escape(out.type, "checked escape");
-							escape(value.type, "checked escape");
+						case SafeCast(out, value) if (!((switch (value.type) {
+							case Dyn: true;
+							default: false;
+						}) && supportsCallableEscape(out.type))): escape(out.type, "checked escape");
+						escape(value.type, "checked escape");
 						case Phi(_, inputs):
 							for (input in inputs)
 								if (descriptors.exists(input.value.id)) {
-									descriptorUses.set(input.value.id, (descriptorUses.exists(input.value.id) ? descriptorUses.get(input.value.id) : 0) + 1);
+									descriptorUses.set(input.value.id, (descriptorUses.exists(input.value.id)
+										? descriptorUses.get(input.value.id) : 0) + 1);
 									otherDescriptors.set(input.value.id, true);
 								}
 						case MethodCall(out, receiver, _, arguments, _):
@@ -219,7 +233,8 @@ class IrInlineEnumEligibility {
 						case InstanceClosure(out, _, receiver):
 							switch receiver.type {
 								case Virtual(_):
-								case Obj(name) if (StringTools.startsWith(name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
+								case Obj(name) if (StringTools.startsWith(name,
+									compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)):
 								default:
 									value(receiver.type, "bound value receiver");
 									callableValue(out.type, "bound value method", true);
@@ -254,12 +269,13 @@ class IrInlineEnumEligibility {
 				else if (!arrayDescriptors.exists(id) || otherDescriptors.exists(id) || descriptorUses.get(id) != 1)
 					{
 					escape(type, "runtime type descriptor");
-					}
+				}
 			}
 			if (validCallableDescriptors.keys().hasNext()) callableDescriptors.set(fn.name, validCallableDescriptors);
 		}
 		for (reason in escapeOrder)
-			for (name in reflectionReach.collect(escapeRoots.get(reason), supportsCallableEscape).keys()) block(name, reason);
+			for (name in reflectionReach.collect(escapeRoots.get(reason), supportsCallableEscape).keys()) block(name,
+				reason);
 		for (name in names)
 			if (!reasons.exists(name))
 				allowed.set(name, true);
@@ -270,7 +286,10 @@ class IrInlineEnumEligibility {
 			|| StringTools.startsWith(name, "$enum-dynamic-test:");
 
 	function isSelectedEnumDescriptor(type:IrType):Bool
-		return switch type { case Enum(name): planner.shape(name) != null; default: false; };
+		return switch type {
+			case Enum(name): planner.shape(name) != null;
+			default: false;
+		};
 
 	/** A class type check consumes nominal identity without observing the class's field layout. */
 	function isReferenceTypeDescriptor(type:IrType):Bool
@@ -285,12 +304,14 @@ class IrInlineEnumEligibility {
 	function nativePayload(type:IrType, seen:Array<String>):Bool
 		return switch type {
 			case Enum(name):
-				if (seen.contains(name)) false; else {
+				if (seen.contains(name)) false;
+				else {
 					var declaration = declarations.get(name);
-					declaration != null && Lambda.exists(declaration.cases, item -> Lambda.exists(item.params, p -> nativePayload(p, seen.concat([name]))))
-					;
+					declaration != null && Lambda.exists(declaration.cases,
+						item -> Lambda.exists(item.params, p -> nativePayload(p, seen.concat([name]))));
 				}
-			case Obj(name): var object = objects.get(name); object != null && object.isValue && (object.nativeLayout != null
+			case Obj(name): var object = objects.get(name);
+				object != null && object.isValue && (object.nativeLayout != null
 					|| Lambda.exists(object.fields, field -> nativePayload(field.type, seen)));
 			case Nullable(inner): nativePayload(inner, seen);
 			default: false;
@@ -314,11 +335,11 @@ class IrInlineEnumEligibility {
 			case Enum(name):
 				edge(parent, named(enumNodes, name));
 			case Obj(name):
-			var object = objects.get(name);
-			// Ordinary classes are reference leaves in every value layout. Their fields and methods matter only when
-			// that class itself crosses a Dynamic/reflection or typed-call boundary.
-			if (object != null && object.isValue)
-				edge(parent, named(objectNodes, name));
+				var object = objects.get(name);
+				// Ordinary classes are reference leaves in every value layout. Their fields and methods matter only when
+				// that class itself crosses a Dynamic/reflection or typed-call boundary.
+				if (object != null && object.isValue)
+					edge(parent, named(objectNodes, name));
 			case Virtual(name):
 				edge(parent, named(interfaceNodes, name));
 			case Array(inner), Iterator(inner), Nullable(inner):
@@ -377,15 +398,22 @@ class IrInlineEnumEligibility {
 	public function supportsCallableEscape(type:IrType):Bool {
 		var signature:Null<IrType> = switch type {
 			case Function(_, _): type;
-			case Nullable(inner): switch inner { case Function(_, _): inner; default: null; };
+			case Nullable(inner): switch inner {
+					case Function(_, _): inner;
+					default: null;
+				};
 			default: null;
 		};
 		if (signature == null) return false;
-		var parts:Array<IrType> = switch signature { case Function(arguments, result): arguments.concat([result]); default: []; };
+		var parts:Array<IrType> = switch signature {
+			case Function(arguments, result): arguments.concat([result]);
+			default: [];
+		};
 		var found = false;
 		for (part in parts)
 			switch part {
-				case Enum(name) if (planner.shape(name) != null && EnumRuntimeType.declaration(name) == name && !nativePayload(Enum(name), [])):
+				case Enum(name) if (planner.shape(name) != null && EnumRuntimeType.declaration(name) == name
+					&& !nativePayload(Enum(name), [])):
 					found = true;
 				default:
 					if (hasSelectedEnum(part, [])) return false;
@@ -397,7 +425,8 @@ class IrInlineEnumEligibility {
 		return switch type {
 			case Enum(name): planner.shape(name) != null;
 			case Nullable(inner), Array(inner), Iterator(inner): hasSelectedEnum(inner, seenValues);
-			case Function(arguments, result): Lambda.exists(arguments, argument -> hasSelectedEnum(argument, seenValues)) || hasSelectedEnum(result, seenValues);
+			case Function(arguments, result): Lambda.exists(arguments,
+				argument -> hasSelectedEnum(argument, seenValues)) || hasSelectedEnum(result, seenValues);
 			case Obj(name):
 				var object = objects.get(name);
 				object != null && object.isValue && !seenValues.contains(name)
@@ -435,7 +464,8 @@ class IrInlineEnumEligibility {
 			escapeRoots.set(reason, roots);
 			escapeOrder.push(reason);
 		}
-		if (reason == "native signature" || reason == "C native signature") IrEnumEscapeReach.addNativeRoot(roots, type);
+		if (reason == "native signature" || reason == "C native signature") IrEnumEscapeReach.addNativeRoot(roots,
+			type);
 		else roots.push(type);
 	}
 

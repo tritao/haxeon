@@ -65,8 +65,8 @@ class Utf8Text {
 
 	static function nextOffset(bytes:Bytes, offset:Int):Int {
 		var first = bytes.get(offset);
-		var count = first < 0x80 ? 1 : first >= 0xc2 && first <= 0xdf ? 2 :
-			first >= 0xe0 && first <= 0xef ? 3 : first >= 0xf0 && first <= 0xf4 ? 4 : 0;
+		var count = first < 0x80 ? 1 : first >= 0xc2 && first <= 0xdf ? 2 : first >= 0xe0
+			&& first <= 0xef ? 3 : first >= 0xf0 && first <= 0xf4 ? 4 : 0;
 		if (count == 0 || offset > bytes.length - count)
 			throw "Invalid UTF-8 text";
 		for (index in 1...count)
@@ -74,8 +74,8 @@ class Utf8Text {
 				throw "Invalid UTF-8 text";
 		if (count >= 3) {
 			var second = bytes.get(offset + 1);
-			if ((first == 0xe0 && second < 0xa0) || (first == 0xed && second >= 0xa0) ||
-				(first == 0xf0 && second < 0x90) || (first == 0xf4 && second >= 0x90))
+			if ((first == 0xe0 && second < 0xa0) || (first == 0xed && second >= 0xa0)
+				|| (first == 0xf0 && second < 0x90) || (first == 0xf4 && second >= 0x90))
 				throw "Invalid UTF-8 text";
 		}
 		return offset + count;

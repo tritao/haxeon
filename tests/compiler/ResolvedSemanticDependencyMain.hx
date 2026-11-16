@@ -20,12 +20,16 @@ class ResolvedSemanticDependencyMain {
 			}
 		if (resolved != 1 || guessed != 0)
 			throw 'Expected one resolved demo.Box.read edge and no textual read edge, got $dependencies';
-		expectDependency(compiler.modules.get("Main").semanticDependencies.get("Main.consume"), SemanticDependencyKind.Signature, "demo.Box",
+		expectDependency(compiler.modules.get("Main").semanticDependencies.get("Main.consume"),
+			SemanticDependencyKind.Signature, "demo.Box",
 			"demo.Box:class:Box");
-		expectDependency(compiler.modules.get("Main").semanticDependencies.get("Main.consume"), SemanticDependencyKind.Body, "demo.Box.value",
+		expectDependency(compiler.modules.get("Main").semanticDependencies.get("Main.consume"),
+			SemanticDependencyKind.Body, "demo.Box.value",
 			"demo.Box:member:Box.value");
-		expectDependency(compiler.modules.get("Main").semanticDependencies.get("Holder"), SemanticDependencyKind.Layout, "demo.Box", "demo.Box:class:Box");
-		expectDependency(compiler.modules.get("demo.Box").semanticDependencies.get("demo.Box.value"), SemanticDependencyKind.Initializer, "demo.Box.seed",
+		expectDependency(compiler.modules.get("Main").semanticDependencies.get("Holder"), SemanticDependencyKind.Layout,
+			"demo.Box", "demo.Box:class:Box");
+		expectDependency(compiler.modules.get("demo.Box").semanticDependencies.get("demo.Box.value"),
+			SemanticDependencyKind.Initializer, "demo.Box.seed",
 			"demo.Box:function:seed");
 
 		compiler.update("demo/Box.hx",
@@ -48,7 +52,8 @@ class ResolvedSemanticDependencyMain {
 		Sys.println("PASS: resolved semantic dependencies");
 	}
 
-	static function expectDependency(dependencies:Array<compiler.modules.ModuleState.SemanticDependency>, kind:SemanticDependencyKind, target:String,
+	static function expectDependency(dependencies:Array<compiler.modules.ModuleState.SemanticDependency>,
+			kind:SemanticDependencyKind, target:String,
 			targetId:String):Void {
 		if (dependencies != null)
 			for (dependency in dependencies)

@@ -135,7 +135,11 @@ class HlTypeDefStateCodec {
 						fields.push({name: input.readInt32(), type: input.readInt32()});
 					var methods:Array<HlObjectMethod> = [];
 					for (_ in 0...readCount(input))
-						methods.push({name: input.readInt32(), functionIndex: input.readInt32(), prototype: input.readInt32()});
+						methods.push({
+							name: input.readInt32(),
+							functionIndex: input.readInt32(),
+							prototype: input.readInt32()
+						});
 					Object(name, base, global, fields, methods, readInts(input));
 				case 7:
 					var name = input.readInt32(), global = input.readInt32();
@@ -144,7 +148,11 @@ class HlTypeDefStateCodec {
 						fields.push({name: input.readInt32(), type: input.readInt32()});
 					var methods:Array<HlObjectMethod> = [];
 					for (_ in 0...readCount(input))
-						methods.push({name: input.readInt32(), functionIndex: input.readInt32(), prototype: input.readInt32()});
+						methods.push({
+							name: input.readInt32(),
+							functionIndex: input.readInt32(),
+							prototype: input.readInt32()
+						});
 					Structure(name, global, fields, methods, readInts(input));
 				case 4:
 					var name = input.readInt32();
@@ -207,7 +215,8 @@ class HlTypeDefStateCodec {
 					}
 					for (method in methods) {
 						validateStringReference(method.name, strings);
-						if (method.functionIndex < 0 || method.prototype < 0 && method.prototype != compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE)
+						if (method.functionIndex < 0 || method.prototype < 0
+							&& method.prototype != compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE)
 							throw "Invalid HashLink object method";
 					}
 					for (binding in bindings)

@@ -9,17 +9,25 @@ class HlOpcodeSchema {
 	public static function arity(opcode:Int):Int
 		return switch opcode {
 			case HlOpcode.Label: 0;
-			case HlOpcode.NullCheck, HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow, HlOpcode.EndTrap, HlOpcode.EndCleanupTrap, HlOpcode.New: 1;
-			case HlOpcode.Mov, HlOpcode.Int, HlOpcode.Float, HlOpcode.Bool, HlOpcode.String, HlOpcode.StaticClosure, HlOpcode.GetGlobal, HlOpcode.SetGlobal,
-				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.ToInt, HlOpcode.SafeCast, HlOpcode.UnsafeCast, HlOpcode.Ref, HlOpcode.Unref, HlOpcode.Setref,
-				HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.CleanupTrap, HlOpcode.ArraySize, HlOpcode.RefData, HlOpcode.Type, HlOpcode.JTrue, HlOpcode.JNull, HlOpcode.Call0,
+			case HlOpcode.NullCheck, HlOpcode.Null, HlOpcode.JAlways, HlOpcode.Ret, HlOpcode.Throw, HlOpcode.Rethrow,
+				HlOpcode.EndTrap, HlOpcode.EndCleanupTrap, HlOpcode.New: 1;
+			case HlOpcode.Mov, HlOpcode.Int, HlOpcode.Float, HlOpcode.Bool, HlOpcode.String, HlOpcode.StaticClosure,
+				HlOpcode.GetGlobal, HlOpcode.SetGlobal,
+				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.ToInt, HlOpcode.SafeCast, HlOpcode.UnsafeCast, HlOpcode.Ref,
+				HlOpcode.Unref, HlOpcode.Setref,
+				HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.CleanupTrap, HlOpcode.ArraySize, HlOpcode.RefData,
+				HlOpcode.Type, HlOpcode.JTrue, HlOpcode.JNull, HlOpcode.Call0,
 				HlOpcode.EnumAlloc, HlOpcode.EnumIndex: 2;
-			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr, HlOpcode.UShr, HlOpcode.And,
-				HlOpcode.Or, HlOpcode.Xor, HlOpcode.Call1, HlOpcode.InstanceClosure, HlOpcode.Field, HlOpcode.SetField, HlOpcode.GetArray, HlOpcode.SetArray,
-				HlOpcode.GetI8, HlOpcode.GetI16, HlOpcode.GetMem, HlOpcode.SetI8, HlOpcode.SetI16, HlOpcode.SetMem, HlOpcode.JSLt, HlOpcode.JSLte,
+			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr,
+				HlOpcode.UShr, HlOpcode.And,
+				HlOpcode.Or, HlOpcode.Xor, HlOpcode.Call1, HlOpcode.InstanceClosure, HlOpcode.Field, HlOpcode.SetField,
+				HlOpcode.GetArray, HlOpcode.SetArray,
+				HlOpcode.GetI8, HlOpcode.GetI16, HlOpcode.GetMem, HlOpcode.SetI8, HlOpcode.SetI16, HlOpcode.SetMem,
+				HlOpcode.JSLt, HlOpcode.JSLte,
 				HlOpcode.JULt, HlOpcode.JEq, HlOpcode.RefOffset: 3;
 			case HlOpcode.Call2, HlOpcode.EnumField: 4;
-			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure, HlOpcode.MakeEnum: VARIABLE_ARITY;
+			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure,
+				HlOpcode.MakeEnum: VARIABLE_ARITY;
 			default: UNSUPPORTED;
 		}
 

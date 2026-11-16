@@ -57,7 +57,8 @@ class FrameGcScheduler {
 			if (pressure() >= ForcePressure) {
 				forcedCollections++;
 				Gc.major();
-			} else if (incremental && Gc.frameRemaining() > 0.0 && (Gc.incrementalPending() || pressure() >= IdlePressure)) {
+			} else if (incremental && Gc.frameRemaining() > 0.0
+				&& (Gc.incrementalPending() || pressure() >= IdlePressure)) {
 				incrementalSlices++;
 				Gc.step(sliceMicros);
 			}

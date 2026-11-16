@@ -14,12 +14,14 @@ class NativeAnnotationsMain {
 			+ "@:annotation struct Options { public var label:String; public var enabled:Bool; public var parent:Null<Int>; public var count:Int; } "
 			+ "@:Range(0.25, 1.0) struct Position { @:Replicate(owner) public var flags:Int; } "
 			+ "@:Options(\"server\", true, null, -2) struct Config { public var id:Int; }",
-			typed = Typer.typeLibrary(new Parser(new Lexer(new SourceFile("NativeAnnotations.hx", source)).tokenize()).parseProgram()),
+			typed = Typer.typeLibrary(new Parser(new Lexer(new SourceFile("NativeAnnotations.hx", source)).tokenize())
+				.parseProgram()),
 			position = requireDescriptor(typed.nativeTypeDescriptors, "Position"),
 			range = position.annotationValues[0],
 			replicate = position.fields[0].annotationValues[0],
 			options = requireDescriptor(typed.nativeTypeDescriptors, "Config").annotationValues[0];
-		expect(range.name == "Range" && range.arguments.length == 2, "struct annotation values must use their declared fields");
+		expect(range.name == "Range" && range.arguments.length == 2,
+			"struct annotation values must use their declared fields");
 		expect(range.arguments[0].name == "min"
 			&& range.arguments[0].type == "Float"
 			&& Type.enumEq(range.arguments[0].value, FloatValue(0.25)),
@@ -41,11 +43,14 @@ class NativeAnnotationsMain {
 		expect(NativeTypeDescriptorCodec.toJson(decoded).indexOf('"value": 0.25') >= 0,
 			"typed annotation values must survive descriptor artifact serialization");
 		var defaultedAnnotation = Typer.typeLibrary(new Parser(new Lexer(new SourceFile("AnnotationDefaults.hx",
-			"@:annotation struct Options { public var label:String; public var enabled:Bool = true; public var retries:Int = 3; } " +
-			"@:Options(retries = 5, label = \"server\") struct Config { public var id:Int; } " +
-			"@:Options(\"client\", retries = 2) struct MixedConfig { public var id:Int; }")).tokenize()).parseProgram()),
-			defaultedValues = requireDescriptor(defaultedAnnotation.nativeTypeDescriptors, "Config").annotationValues[0].arguments,
-			mixedValues = requireDescriptor(defaultedAnnotation.nativeTypeDescriptors, "MixedConfig").annotationValues[0].arguments;
+			"@:annotation struct Options { public var label:String; public var enabled:Bool = true; public var retries:Int = 3; } "
+			+ "@:Options(retries = 5, label = \"server\") struct Config { public var id:Int; } "
+			+ "@:Options(\"client\", retries = 2) struct MixedConfig { public var id:Int; }")).tokenize())
+			.parseProgram()),
+			defaultedValues = requireDescriptor(defaultedAnnotation.nativeTypeDescriptors,
+				"Config").annotationValues[0].arguments,
+			mixedValues = requireDescriptor(defaultedAnnotation.nativeTypeDescriptors,
+				"MixedConfig").annotationValues[0].arguments;
 		expect(defaultedValues.length == 3
 			&& defaultedValues[0].name == "label"
 			&& Type.enumEq(defaultedValues[0].value, StringValue("server"))
@@ -60,8 +65,10 @@ class NativeAnnotationsMain {
 			"a positional prefix may be combined with named arguments and defaults");
 
 		var incremental = new Compiler();
-		incremental.update("schema/Range.hx", "package schema; @:annotation struct Range { public var min:Float; public var max:Float; }");
-		incremental.update("schema/Replicate.hx", "package schema; @:annotation enum abstract Replicate(Int) { var all = 1; var owner = 2; }");
+		incremental.update("schema/Range.hx",
+			"package schema; @:annotation struct Range { public var min:Float; public var max:Float; }");
+		incremental.update("schema/Replicate.hx",
+			"package schema; @:annotation enum abstract Replicate(Int) { var all = 1; var owner = 2; }");
 		incremental.update("game/Position.hx",
 			"package game; import schema.Range; import schema.Replicate; struct Position { @:Range(0.25, 1.0) public var x:Int; @:Replicate(owner) public var flags:Int; }");
 		incremental.update("game/Main.hx",
@@ -69,7 +76,8 @@ class NativeAnnotationsMain {
 		var firstCompile = incremental.compile("game.Main", null, false),
 			firstPosition = requireDescriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "game.Position"),
 			firstHash = firstPosition.hash;
-		expect(containsString(firstCompile.module.strings, firstHash), "typeInfo for an imported annotation must publish a descriptor hash");
+		expect(containsString(firstCompile.module.strings, firstHash),
+			"typeInfo for an imported annotation must publish a descriptor hash");
 		incremental.update("game/Position.hx",
 			"package game; import schema.Range; import schema.Replicate; struct Position { @:Range(0.5, 1.0) public var x:Int; @:Replicate(owner) public var flags:Int; }");
 		var changedCompile = incremental.compile("game.Main", null, false),
@@ -80,27 +88,34 @@ class NativeAnnotationsMain {
 			'annotation metadata edits must invalidate typeInfo callers across modules (retyped=${changedCompile.retyped})');
 		expect(Type.enumEq(changedPosition.fields[0].annotationValues[0].arguments[0].value, FloatValue(0.5)),
 			"imported annotation declarations must resolve and the updated artifact must hold the new value");
-		incremental.update("schema/Range.hx", "package schema; @:annotation struct Range { public var floor:Float; public var ceiling:Float; }");
+		incremental.update("schema/Range.hx",
+			"package schema; @:annotation struct Range { public var floor:Float; public var ceiling:Float; }");
 		var schemaCompile = incremental.compile("game.Main", null, false),
 			schemaPosition = requireDescriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "game.Position");
 		expect(schemaPosition.fields[0].annotationValues[0].arguments[0].name == "floor",
 			"annotation schema edits must refresh dependent descriptor argument names");
-		expect(schemaPosition.hash != changedPosition.hash && containsString(schemaCompile.module.strings, schemaPosition.hash),
+		expect(schemaPosition.hash != changedPosition.hash
+			&& containsString(schemaCompile.module.strings, schemaPosition.hash),
 			"annotation schema edits must refresh the emitted typeInfo descriptor hash");
-		expect(schemaCompile.retyped.indexOf("game.Main.main") >= 0, "annotation schema edits must invalidate imported typeInfo callers");
+		expect(schemaCompile.retyped.indexOf("game.Main.main") >= 0,
+			"annotation schema edits must invalidate imported typeInfo callers");
 		var schemaHash = schemaPosition.hash;
-		incremental.update("schema/Replicate.hx", "package schema; @:annotation enum abstract Replicate(Int) { var all = 1; var owner = 7; }");
+		incremental.update("schema/Replicate.hx",
+			"package schema; @:annotation enum abstract Replicate(Int) { var all = 1; var owner = 7; }");
 		var abstractCompile = incremental.compile("game.Main", null, false),
 			abstractPosition = requireDescriptor(incremental.lastTypedProgram.nativeTypeDescriptors, "game.Position");
 		expect(Type.enumEq(abstractPosition.fields[1].annotationValues[0].arguments[0].value, IntValue(7)),
 			"enum abstract value edits must refresh imported typed annotations");
-		expect(abstractPosition.hash != schemaHash && containsString(abstractCompile.module.strings, abstractPosition.hash),
+		expect(abstractPosition.hash != schemaHash
+			&& containsString(abstractCompile.module.strings, abstractPosition.hash),
 			"enum abstract value edits must refresh the emitted descriptor hash");
-		expect(abstractCompile.retyped.indexOf("game.Main.main") >= 0, "enum abstract value edits must invalidate imported typeInfo callers");
+		expect(abstractCompile.retyped.indexOf("game.Main.main") >= 0,
+			"enum abstract value edits must invalidate imported typeInfo callers");
 		var defaultIncremental = new Compiler();
 		defaultIncremental.update("schema/Options.hx",
 			"package schema; @:annotation struct Options { public var label:String; public var enabled:Bool = true; }");
-		defaultIncremental.update("game/Config.hx", "package game; import schema.Options; @:Options(\"server\") struct Config { public var id:Int; }");
+		defaultIncremental.update("game/Config.hx",
+			"package game; import schema.Options; @:Options(\"server\") struct Config { public var id:Int; }");
 		defaultIncremental.update("game/Main.hx",
 			"package game; import game.Config; class Main { static function main():Int return typeInfo<Config>().hash.length; }");
 		defaultIncremental.compile("game.Main", null, false);
@@ -115,7 +130,8 @@ class NativeAnnotationsMain {
 		expect(Type.enumEq(changedConfig.annotationValues[0].arguments[1].value, BoolValue(false))
 			&& changedConfig.hash != firstConfigHash,
 			"an imported annotation default edit must update typed descriptor values and hashes");
-		expect(defaultCompile.retyped.indexOf("game.Main.main") >= 0, "imported annotation default edits must invalidate descriptor callers");
+		expect(defaultCompile.retyped.indexOf("game.Main.main") >= 0,
+			"imported annotation default edits must invalidate descriptor callers");
 
 		expectTypeError("struct Position { @:Unknown(1) public var value:Int; }", 'Unknown annotation "Unknown"');
 		expectTypeError("@:annotation class Range { public var min:Float; }", "requires a value struct");
@@ -137,7 +153,8 @@ class NativeAnnotationsMain {
 		expectTypeError("@:annotation struct Options { public var label:String; public var count:Int = 1; } "
 			+ "@:Options(label = \"server\", 2) struct Config { public var id:Int; }",
 			"Positional annotation arguments cannot follow named arguments");
-		expectTypeError("@:annotation struct Options { public var enabled:Bool = !false; }", "compile-time scalar constants");
+		expectTypeError("@:annotation struct Options { public var enabled:Bool = !false; }",
+			"compile-time scalar constants");
 		Sys.println("PASS: declared annotations are checked and typed values reach descriptors");
 	}
 
@@ -158,7 +175,8 @@ class NativeAnnotationsMain {
 
 	static function expectTypeError(source:String, expected:String):Void {
 		try {
-			Typer.typeLibrary(new Parser(new Lexer(new SourceFile("InvalidAnnotation.hx", source)).tokenize()).parseProgram());
+			Typer.typeLibrary(new Parser(new Lexer(new SourceFile("InvalidAnnotation.hx", source)).tokenize())
+				.parseProgram());
 			throw 'expected an annotation diagnostic containing "$expected"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.message.indexOf(expected) < 0)

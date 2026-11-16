@@ -114,7 +114,8 @@ class PositionalName {
 				text.add("=");
 				text.add(fold(child));
 			}
-			var print = haxe.crypto.Base64.encode(build.execution.ContentDigest.make(haxe.io.Bytes.ofString(text.toString())));
+			var print =
+				haxe.crypto.Base64.encode(build.execution.ContentDigest.make(haxe.io.Bytes.ofString(text.toString())));
 			result.set(name, print);
 			return print;
 		}

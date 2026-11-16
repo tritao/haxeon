@@ -4,7 +4,8 @@ import compiler.ir.IrInterpreter;
 /** Declared conformance helpers keep their semantics when the optimizer is toggled. */
 class DeclaredEqualityInliningMain {
 	static function main():Void {
-		var source = 'struct Record implements Equatable { public final value:Int; public function new(value:Int) this.value = value; } '
+		var source =
+			'struct Record implements Equatable { public final value:Int; public function new(value:Int) this.value = value; } '
 			+ 'struct Modulo implements Equatable { public final value:Int; public function new(value:Int) this.value = value; '
 			+ 'public function equals(other:Modulo):Bool return value % 10 == other.value % 10; } '
 			+ 'struct Scalar implements Hashable { public final value:Int; public function new(value:Int) this.value = value; } '
@@ -29,8 +30,10 @@ class DeclaredEqualityInliningMain {
 			compiler.update("Equatable.hx", "interface Equatable {}\n");
 			compiler.update("Hashable.hx", "interface Hashable extends Equatable {}\n");
 			compiler.update("Diffable.hx", "interface Diffable {}\n");
-			compiler.update("haxeon/Diff.hx", "package haxeon; class Diff { public static function fingerprint<T:Diffable>(value:T):Int throw \"intrinsic\"; }\n");
-			compiler.update("haxeon/Hashing.hx", "package haxeon; class Hashing { public static function hash<T:Hashable>(value:T):Int throw \"intrinsic\"; public static function mix(hash:Int, value:Int):Int return hash * 31 + value; }\n");
+			compiler.update("haxeon/Diff.hx",
+				"package haxeon; class Diff { public static function fingerprint<T:Diffable>(value:T):Int throw \"intrinsic\"; }\n");
+			compiler.update("haxeon/Hashing.hx",
+				"package haxeon; class Hashing { public static function hash<T:Hashable>(value:T):Int throw \"intrinsic\"; public static function mix(hash:Int, value:Int):Int return hash * 31 + value; }\n");
 			compiler.update("Main.hx", source);
 			compiler.configure(inlineEnabled ? "inline-on" : "inline-off", "test",
 				["haxeon-inline=" + (inlineEnabled ? "1" : "0")]);

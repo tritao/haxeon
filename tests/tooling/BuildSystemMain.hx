@@ -7,48 +7,48 @@ import build.BuildIntent;
 import build.BuildPlan;
 import build.BuildPlanner;
 import build.BuildSession;
-import build.execution.CompilerClient;
-import build.execution.ContentDigestCache;
-import tools.DirectoryWatcher;
-import tools.WatchRun;
+import build.NativeArtifactDemand.NativeArtifactDemand;
 import build.Target;
 import build.TargetLayout;
-import build.NativeArtifactDemand.NativeArtifactDemand;
 import build.WorkspaceBuild;
 import build.WorkspaceBuild.LoweredWorkspace;
 import build.WorkspaceBuild.LoweredWorkspaceProject;
 import build.execution.ActionFingerprint;
-import build.execution.ArtifactCache;
 import build.execution.ActionId;
 import build.execution.ActionResult;
+import build.execution.ArtifactCache;
+import build.execution.CompilerClient;
+import build.execution.ContentDigestCache;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
-import build.execution.ExecutionPlan;
-import build.execution.ProcessRunner;
 import build.execution.ExecutionBackend.ExecutionBackendFactory;
+import build.execution.ExecutionPlan;
 import build.execution.Executor;
 import build.execution.JobServer;
+import build.execution.ProcessRunner;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeDependencyScanner;
 import build.native.NativeToolchain;
+import haxe.crypto.Sha256;
 import haxe.io.Path;
-import project.ProjectDiscovery;
-import project.PackageManifest;
-import project.PackageManifest.InstrumentManifest;
 import project.FfiManifest.FfiImportManifest;
-import project.PackageSourceTools;
-import project.PackageResolver;
+import project.HaxelibSourceAcquirer;
 import project.PackageLockfile;
 import project.PackageLockfile.PackageLockEntry;
+import project.PackageManifest;
+import project.PackageManifest.InstrumentManifest;
+import project.PackageResolver;
+import project.PackageSourceTools;
 import project.PathSourceAcquirer;
-import project.HaxelibSourceAcquirer;
-import project.RegistrySourceAcquirer;
+import project.ProjectDiscovery;
 import project.RegistryPublisher;
-import haxe.crypto.Sha256;
+import project.RegistrySourceAcquirer;
 import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
+import tools.DirectoryWatcher;
+import tools.WatchRun;
 #if (target.threaded && !eval)
 import sys.thread.Lock;
 import sys.thread.Mutex;
@@ -124,9 +124,11 @@ class BuildSystemMain {
 				for (name in ["alpha", "beta"])
 					expect([
 						for (output in action.outputs)
-							if (Path.withoutDirectory(output) == prefix + name + environment.toolchain.sharedLibrarySuffix) output
+							if (Path.withoutDirectory(output)
+							== prefix + name + environment.toolchain.sharedLibrarySuffix) output
 					].length == 1, "aggregate outputs must use the target's real library filenames");
-				expect(action.outputs.join("\n").indexOf(".hdll") < 0, "aggregate outputs must not include a synthetic HDLL");
+				expect(action.outputs.join("\n").indexOf(".hdll") < 0,
+					"aggregate outputs must not include a synthetic HDLL");
 				for (output in action.outputs) {
 					ensureDirectory(Path.directory(output));
 					File.saveContent(output, "library");
@@ -158,15 +160,21 @@ class BuildSystemMain {
 			"a successful command missing a declared output must fail with its path");
 		if (Sys.systemName() != "Windows") {
 			var ran = false,
-				process = new ExecutionAction(new ActionId("missing-process-output"), [], [], [output], "missing process output",
-					Process("sh", ["-c", "exit 0"], root, new Map())),
+				process = new ExecutionAction(new ActionId("missing-process-output"), [], [], [output],
+					"missing process output",
+					Process("sh", [
+						"-c",
+						"exit 0"
+					], root, new Map())),
 				dependent = new ExecutionAction(new ActionId("dependent"), [process.id], [], [], "dependent",
 					Compiler("fixture", [], root, new Map(),
-						() -> {
-							ran = true;
-							return 0;
-						})), failure = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([process, dependent]));
-			expect(failure.exitCode != 0 && !ran, "a missing process output must block dependents in either executor backend");
+					() -> {
+						ran = true;
+						return 0;
+					})), failure = new Executor(environment, 2,
+						_ -> {}).execute(new ExecutionPlan([process, dependent]));
+			expect(failure.exitCode != 0 && !ran,
+				"a missing process output must block dependents in either executor backend");
 		}
 		removeTree(root);
 	}
@@ -182,9 +190,10 @@ class BuildSystemMain {
 					ensureDirectory(directory);
 					return 0;
 				}), true, false, false, [directory]),
-			plan = new ExecutionPlan([action]);
+					plan = new ExecutionPlan([action]);
 		expect(!ActionFingerprint.outputsExist(action), "a missing directory output invalidates the action");
-		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0, "declared directory outputs must pass execution validation");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0,
+			"declared directory outputs must pass execution validation");
 		expect(ActionFingerprint.outputsExist(action), "an existing declared directory completes the action");
 		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && invocations == 1,
 			"complete directory outputs permit project-local skipping");
@@ -193,9 +202,11 @@ class BuildSystemMain {
 		expect(ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
 			[]) != ActionFingerprint.compute(fileAction, environment.buildRoot, environment.target.toString(), []),
 			"output kinds participate in the fingerprint");
-		var processAction = new ExecutionAction(new ActionId("projection-process"), [], [], [directory], "directory output",
+		var processAction = new ExecutionAction(new ActionId("projection-process"), [], [], [directory],
+			"directory output",
 			Process("fixture", [], root, new Map()), true, false, false, [directory]);
-		expect(!ArtifactCache.isShareable(processAction), "directory outputs are excluded from the portable file artifact cache");
+		expect(!ArtifactCache.isShareable(processAction),
+			"directory outputs are excluded from the portable file artifact cache");
 		removeTree(directory);
 		File.saveContent(directory, "wrong kind");
 		expect(!ActionFingerprint.outputsExist(action), "a file cannot satisfy a directory output");
@@ -203,7 +214,8 @@ class BuildSystemMain {
 			Compiler("fixture", [], root, new Map(), () -> 0), true, true, false, [directory]);
 		expect(new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([wrongKind])).exitCode != 0,
 			"a successful process with the wrong output kind fails validation");
-		expectThrows(() -> new ExecutionAction(action.id, [], [], [], "invalid", action.action, true, false, false, [directory]),
+		expectThrows(() -> new ExecutionAction(action.id, [], [], [], "invalid", action.action, true, false, false,
+			[directory]),
 			"directory outputs must also appear in declared outputs");
 		removeTree(root);
 	}
@@ -218,7 +230,8 @@ class BuildSystemMain {
 		expect(linux.toString() == "linux-x86_64-gnu", "Linux target triples should be canonical");
 		expect(mac.toString() == "macos-arm64"
 			&& mac.equals(Target.parse("macos-arm64-darwin")), "Apple targets should accept architecture aliases");
-		expect(android.isAndroid() && android.toString() == "android-arm64", "Android targets should have a stable short identity");
+		expect(android.isAndroid() && android.toString() == "android-arm64",
+			"Android targets should have a stable short identity");
 		expect(wasm.isWasm() && wasm.toString() == "wasm32", "Wasm should be a first-class target");
 		var androidToolchain = ToolchainInfo.detect(android),
 			wasmToolchain = ToolchainInfo.detect(wasm);
@@ -232,16 +245,20 @@ class BuildSystemMain {
 			layout = new TargetLayout(environment);
 		expect(layout.targetDirectory() == "android-arm64" && layout.packageRoot("foo").indexOf("android-arm64") >= 0,
 			"non-host artifacts should be isolated by target");
-		var msvcToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-msvc"]), BuildProfile.Debug, windows)),
+		var msvcToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-msvc"]),
+			BuildProfile.Debug, windows)),
 			gnuWindows = Target.parse("windows-x86_64-gnu"),
-			gnuToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-gnu"]), BuildProfile.Debug, gnuWindows)),
+			gnuToolchain = new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-gnu"]),
+				BuildProfile.Debug, gnuWindows)),
 			msvcCompile = msvcToolchain.compileArguments("fixture.cpp", "fixture.obj", [], "c++20"),
 			gnuCompile = gnuToolchain.compileArguments("fixture.cpp", "fixture.o", [], "c++20"),
 			msvcLink = msvcToolchain.sharedArguments("fixture.dll", ["fixture.obj"], ["foo.lib"]),
 			gnuLink = gnuToolchain.sharedArguments("fixture.dll", ["fixture.o"], ["libfoo.dll.a"]);
-		expect(msvcCompile.indexOf("/std:c++20") >= 0 && msvcLink.indexOf("/LD") >= 0 && msvcLink.indexOf("foo.lib") >= 0,
+		expect(msvcCompile.indexOf("/std:c++20") >= 0 && msvcLink.indexOf("/LD") >= 0
+			&& msvcLink.indexOf("foo.lib") >= 0,
 			"MSVC C++ toolchains should use cl standard, DLL, and import-library arguments");
-		expect(gnuCompile.indexOf("-std=c++20") >= 0 && gnuLink.indexOf("-shared") >= 0 && gnuLink.indexOf("libfoo.dll.a") >= 0,
+		expect(gnuCompile.indexOf("-std=c++20") >= 0 && gnuLink.indexOf("-shared") >= 0
+			&& gnuLink.indexOf("libfoo.dll.a") >= 0,
 			"MinGW C++ toolchains should use GNU standard, DLL, and import-library arguments");
 		testLinuxNativeInstrumentation(root);
 		removeTree(root);
@@ -253,7 +270,8 @@ class BuildSystemMain {
 			scope = new InstrumentManifest(null, null, ["native/**"], ["native/vendor/skipped.c"]);
 		function toolchain(clang:Bool, ?instrument:InstrumentManifest, ?home:String):NativeToolchain {
 			var info = new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null, null, clang);
-			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug, linux, info, instrument), home);
+			return new NativeToolchain(new BuildEnvironment(root, Path.join([root, "build-linux"]), BuildProfile.Debug,
+				linux, info, instrument), home);
 		}
 		var home = Sys.getCwd(),
 			clang = toolchain(true, scope, home),
@@ -264,19 +282,24 @@ class BuildSystemMain {
 			gccCompile = gcc.compileArguments("native/a.c", "a.o", [], null, root);
 		expect(clang.instrumenting() && !plain.instrumenting() && !noHome.instrumenting(),
 			"Linux instruments only the instrumented flavor, and only when the hooks can be found");
-		expect(clangCompile.indexOf("-finstrument-functions-after-inlining") >= 0 && clangCompile.indexOf("-finstrument-functions") < 0,
+		expect(clangCompile.indexOf("-finstrument-functions-after-inlining") >= 0
+			&& clangCompile.indexOf("-finstrument-functions") < 0,
 			"Clang should leave out functions it inlines");
 		expect(gccCompile.indexOf("-finstrument-functions") >= 0
 			&& gccCompile.indexOf("-finstrument-functions-exclude-file-list=/usr/include,/c++/") >= 0
-			&& gccCompile.indexOf("-finstrument-functions-after-inlining") < 0, "GCC should skip functions defined in system headers");
-		expect(clang.compileArguments("native/vendor/skipped.c", "s.o", [], null, root).indexOf("-finstrument-functions-after-inlining") < 0
-			&& clang.compileArguments("other/b.c", "b.o", [], null, root).indexOf("-finstrument-functions-after-inlining") < 0,
+			&& gccCompile.indexOf("-finstrument-functions-after-inlining") < 0,
+			"GCC should skip functions defined in system headers");
+		expect(clang.compileArguments("native/vendor/skipped.c", "s.o", [], null,
+			root).indexOf("-finstrument-functions-after-inlining") < 0
+			&& clang.compileArguments("other/b.c", "b.o", [], null,
+			root).indexOf("-finstrument-functions-after-inlining") < 0,
 			"sources outside the native scope, or excluded from it, are left alone");
 		expect(clang.compileArguments("native/a.c", "a.o", []).indexOf("-finstrument-functions-after-inlining") < 0,
 			"a source without an instrument root is left alone");
 		var hooks = Path.join([build.HashLinkPath.directory(home), "libhlprof_hooks.a"]),
 			link = clang.sharedArguments("a.so", ["a.o"], ["-lm"]);
-		expect(clang.instrumentHooks() == hooks && link.indexOf(hooks) > link.indexOf("a.o") && link.indexOf(hooks) > link.indexOf("-lm"),
+		expect(clang.instrumentHooks() == hooks && link.indexOf(hooks) > link.indexOf("a.o")
+			&& link.indexOf(hooks) > link.indexOf("-lm"),
 			"an instrumented module links the hooks after its objects and libraries");
 		expect(!clang.writesDebugDatabase() && plain.sharedArguments("a.so", ["a.o"], ["-lm"]).indexOf(hooks) < 0,
 			"a module is linked without a PDB, and without the hooks outside the instrumented flavor");
@@ -288,11 +311,14 @@ class BuildSystemMain {
 			module = new ArtifactId("app", ArtifactKind.HashLinkModule, target),
 			first = new BuildPlan([module], [new Artifact(module, [library]), new Artifact(library)]),
 			second = new BuildPlan([new ArtifactId("app", ArtifactKind.HashLinkModule, target)], [
-				new Artifact(new ArtifactId("app", ArtifactKind.HashLinkModule, target), [new ArtifactId("foo", ArtifactKind.NativeStaticLibrary, target)]),
+				new Artifact(new ArtifactId("app", ArtifactKind.HashLinkModule, target),
+					[new ArtifactId("foo", ArtifactKind.NativeStaticLibrary, target)]),
 				new Artifact(new ArtifactId("foo", ArtifactKind.NativeStaticLibrary, target))
 			]);
-		expect(module.equals(new ArtifactId("app", ArtifactKind.HashLinkModule, target)), "artifact identity should be deterministic");
-		expect(!module.equals(new ArtifactId("app", ArtifactKind.HashLinkModule, target, "debug")), "artifact variants should distinguish identity");
+		expect(module.equals(new ArtifactId("app", ArtifactKind.HashLinkModule, target)),
+			"artifact identity should be deterministic");
+		expect(!module.equals(new ArtifactId("app", ArtifactKind.HashLinkModule, target, "debug")),
+			"artifact variants should distinguish identity");
 		expect(module.toString().indexOf(target.toString()) >= 0, "artifact display should expose its target");
 		expect(first.toDebugString() == second.toDebugString(), "plan output should not depend on insertion order");
 		var cycleDetected = false;
@@ -332,7 +358,8 @@ class BuildSystemMain {
 			0;
 		});
 		var result = new Executor(environment, 4, _ -> {}).execute(new ExecutionPlan([last, second, first]));
-		expect(result.exitCode == 0 && result.actions.length == 3, "independent actions should succeed before their dependent");
+		expect(result.exitCode == 0 && result.actions.length == 3,
+			"independent actions should succeed before their dependent");
 		expect(order.indexOf("last") > order.indexOf("first")
 			&& order.indexOf("last") > order.indexOf("second"), "dependencies must complete first");
 
@@ -344,15 +371,20 @@ class BuildSystemMain {
 				independentRan = true;
 				0;
 			}),
-			dependent = action("dependent", [failure.id], "dependent", () -> {
-				dependentRan = true;
-				0;
-			}),
+				dependent = action("dependent", [failure.id], "dependent", () -> {
+			dependentRan = true;
+			0;
+		}),
 			deepDependent = action("deep-dependent", [dependent.id], "deep dependent", () -> {
-				deepDependentRan = true;
-				0;
-			});
-		var failed = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([deepDependent, dependent, failure, independent]));
+			deepDependentRan = true;
+			0;
+		});
+		var failed = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([
+			deepDependent,
+			dependent,
+			failure,
+			independent
+		]));
 		expect(failed.exitCode == 37, "the original action exit status should propagate");
 		expect(!dependentRan, "a failed dependency must prevent its consumer from executing");
 		expect(!deepDependentRan, "failure should block every level of dependent actions");
@@ -364,7 +396,8 @@ class BuildSystemMain {
 		var root = temporaryDirectory("executor-backend"),
 			environment = new BuildEnvironment(root, Path.join([root, "build"])),
 			backend = ExecutionBackendFactory.create(environment, 1, _ -> {});
-		expect(backend.name() == "native", "the native executor should be selected behind a replaceable backend boundary");
+		expect(backend.name() == "native",
+			"the native executor should be selected behind a replaceable backend boundary");
 		removeTree(root);
 	}
 
@@ -377,14 +410,17 @@ class BuildSystemMain {
 		Sys.putEnv(name, "original value");
 		var saved = ProcessRunner.environmentValue(name);
 		Sys.putEnv(name, "a replacement long enough to need new storage for the variable");
-		expect(saved == "original value", 'a value read through ProcessRunner should outlive the variable being set again, got "$saved"');
+		expect(saved == "original value",
+			'a value read through ProcessRunner should outlive the variable being set again, got "$saved"');
 		Sys.putEnv(name, "original value");
 		// HashLink itself is a program that is sure to start on Windows, where cmd's quoting rules get in the way.
 		var windows = Sys.systemName() == "Windows",
-			status = ProcessRunner.run(windows ? Sys.executablePath() : "sh", windows ? ["--version"] : ["-c", "exit 0"], null, [name => "launch override"],
+			status = ProcessRunner.run(windows ? Sys.executablePath() : "sh",
+				windows ? ["--version"] : ["-c", "exit 0"], null, [name => "launch override"],
 				false);
 		expect(status == 0, 'the launch should succeed, got $status');
-		expect(ProcessRunner.environmentValue(name) == "original value", "a launch should restore the variable it overrode");
+		expect(ProcessRunner.environmentValue(name) == "original value",
+			"a launch should restore the variable it overrode");
 	}
 
 	static function testIndependentProcessActionsRunConcurrently():Void {
@@ -396,22 +432,33 @@ class BuildSystemMain {
 			rightStarted = Path.join([root, "right.started"]),
 			leftDone = Path.join([root, "left.done"]),
 			rightDone = Path.join([root, "right.done"]),
-			leftScript = 'touch "$leftStarted"; for unused in 1 2 3 4 5 6 7 8 9 10; do if [ -f "$rightStarted" ]; then break; fi; sleep 0.05; done; test -f "$rightStarted" || exit 17; touch "$leftDone"',
-			rightScript = 'touch "$rightStarted"; for unused in 1 2 3 4 5 6 7 8 9 10; do if [ -f "$leftStarted" ]; then break; fi; sleep 0.05; done; test -f "$leftStarted" || exit 19; touch "$rightDone"',
+			leftScript =
+				'touch "$leftStarted"; for unused in 1 2 3 4 5 6 7 8 9 10; do if [ -f "$rightStarted" ]; then break; fi; sleep 0.05; done; test -f "$rightStarted" || exit 17; touch "$leftDone"',
+			rightScript =
+				'touch "$rightStarted"; for unused in 1 2 3 4 5 6 7 8 9 10; do if [ -f "$leftStarted" ]; then break; fi; sleep 0.05; done; test -f "$leftStarted" || exit 19; touch "$rightDone"',
 			left = new ExecutionAction(new ActionId("process-left"), [], [], [leftDone], "concurrent process left",
-				Process("sh", ["-c", leftScript], root, new Map())),
+				Process("sh", [
+					"-c",
+					leftScript
+				], root, new Map())),
 			right = new ExecutionAction(new ActionId("process-right"), [], [], [rightDone], "concurrent process right",
-				Process("sh", ["-c", rightScript], root, new Map())),
+				Process("sh", [
+					"-c",
+					rightScript
+				], root, new Map())),
 			result = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([left, right]));
 		expect(result.exitCode == 0 && FileSystem.exists(leftDone) && FileSystem.exists(rightDone),
-			'independent external process actions should overlap on host targets (exit ${result.exitCode}, action statuses ${[for (action in result.actions) action.exitCode].join(",")}, ' +
-			'markers: left=${FileSystem.exists(leftDone)}, right=${FileSystem.exists(rightDone)})');
+			'independent external process actions should overlap on host targets (exit ${result.exitCode}, action statuses ${[for (action in result.actions) action.exitCode].join(",")}, '
+			+ 'markers: left=${FileSystem.exists(leftDone)}, right=${FileSystem.exists(rightDone)})');
 		removeTree(root);
 	}
 
 	#if (target.threaded && !eval)
 	static function testIndependentActionsRunConcurrently():Void {
-		var root = temporaryDirectory("parallel"), environment = new BuildEnvironment(root, Path.join([root, "build"])), mutex = new Mutex(), active = 0,
+		var root = temporaryDirectory("parallel"),
+			environment = new BuildEnvironment(root, Path.join([root, "build"])),
+			mutex = new Mutex(),
+			active = 0,
 			peakActive = 0;
 		var invoke = function():Int {
 			mutex.acquire();
@@ -443,17 +490,18 @@ class BuildSystemMain {
 				slowFinished = true;
 				0;
 			}),
-			quick = action("quick", [], "quick", () -> {
-				Sys.sleep(0.02);
-				0;
-			}),
+				quick = action("quick", [], "quick", () -> {
+			Sys.sleep(0.02);
+			0;
+		}),
 			dependent = action("dependent", [quick.id], "dependent", () -> {
-				slowFinishedWhenDependentStarted = slowFinished;
-				0;
-			}),
+			slowFinishedWhenDependentStarted = slowFinished;
+			0;
+		}),
 			result = new Executor(environment, 2, _ -> {}).execute(new ExecutionPlan([slow, quick, dependent]));
 		expect(result.exitCode == 0 && result.actions.length == 3, "the work queue should finish every action");
-		expect(!slowFinishedWhenDependentStarted, "a ready dependent should start while a slow sibling still runs, not wait for a wave to end");
+		expect(!slowFinishedWhenDependentStarted,
+			"a ready dependent should start while a slow sibling still runs, not wait for a wave to end");
 		removeTree(root);
 	}
 
@@ -463,7 +511,8 @@ class BuildSystemMain {
 		var root = temporaryDirectory("jobserver"),
 			server = JobServer.start(root, 2);
 		expect(server != null, "a job server should start on hosts with FIFOs");
-		expect(server.makeFlags.indexOf("--jobserver-auth=fifo:" + server.path) >= 0, "clients find the pool through MAKEFLAGS");
+		expect(server.makeFlags.indexOf("--jobserver-auth=fifo:" + server.path) >= 0,
+			"clients find the pool through MAKEFLAGS");
 		expect(server.acquire() && server.acquire(), "a pool of two tokens hands out two tokens");
 		var third = false, finished = new Lock();
 		Thread.create(function() {
@@ -484,8 +533,16 @@ class BuildSystemMain {
 	static function testExecutorSharesJobServerTokens():Void {
 		if (Sys.systemName() == "Windows")
 			return;
-		var root = temporaryDirectory("jobserver-executor"), environment = new BuildEnvironment(root, Path.join([root, "build"])),
-			server = JobServer.start(root, 2), mutex = new Mutex(), active = 0, peakActive = 0, invoke = function():Int {
+		var root = temporaryDirectory("jobserver-executor"),
+			environment = new BuildEnvironment(root, Path.join([
+				root,
+				"build"
+			])),
+			server = JobServer.start(root, 2),
+			mutex = new Mutex(),
+			active = 0,
+			peakActive = 0,
+			invoke = function():Int {
 				mutex.acquire();
 				active++;
 				if (active > peakActive)
@@ -511,8 +568,15 @@ class BuildSystemMain {
 	}
 
 	static function testCompilerConcurrencyLimit():Void {
-		var root = temporaryDirectory("compiler-limit"), environment = new BuildEnvironment(root, Path.join([root, "build"])), mutex = new Mutex(),
-			active = 0, peakActive = 0, invoke = function():Int {
+		var root = temporaryDirectory("compiler-limit"),
+			environment = new BuildEnvironment(root, Path.join([
+				root,
+				"build"
+			])),
+			mutex = new Mutex(),
+			active = 0,
+			peakActive = 0,
+			invoke = function():Int {
 				mutex.acquire();
 				active++;
 				if (active > peakActive)
@@ -537,9 +601,11 @@ class BuildSystemMain {
 	#end
 
 	static function testFingerprintsAndSkipping():Void {
-		expect(build.execution.ContentDigest.makeHex(haxe.io.Bytes.ofString("")) == "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		expect(build.execution.ContentDigest.makeHex(haxe.io.Bytes.ofString(""))
+			== "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
 			"empty content digest must retain the canonical lowercase SHA-256 identity");
-		expect(build.execution.ContentDigest.makeHex(haxe.io.Bytes.ofString("abc")) == "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
+		expect(build.execution.ContentDigest.makeHex(haxe.io.Bytes.ofString("abc"))
+			== "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad",
 			"content digest must preserve the published SHA-256 test vector");
 		var root = temporaryDirectory("fingerprints"),
 			buildRoot = Path.join([root, "build"]),
@@ -558,23 +624,29 @@ class BuildSystemMain {
 		File.saveContent(Path.join([toolsDirectory, "tool.bin"]), "first installed tool\n");
 		File.saveContent(output, "artifact\n");
 		var digests = new build.execution.ContentDigestCache();
-		expect(digests.file(source) == Sha256.make(File.getBytes(source)).toHex(), "memoized digests preserve SHA-256 identity");
+		expect(digests.file(source) == Sha256.make(File.getBytes(source)).toHex(),
+			"memoized digests preserve SHA-256 identity");
 		File.saveContent(source, "int value(void) { return 420; }\n");
-		expect(digests.file(source) == Sha256.make(File.getBytes(source)).toHex(), "a changed tool/input must invalidate its memoized digest");
+		expect(digests.file(source) == Sha256.make(File.getBytes(source)).toHex(),
+			"a changed tool/input must invalidate its memoized digest");
 
 		var environment = new BuildEnvironment(root, buildRoot),
-			actionValue = new ExecutionAction(new ActionId("compile-foo"), [], [source, includeDirectory], [output], "compile foo.c",
+			actionValue = new ExecutionAction(new ActionId("compile-foo"), [], [source, includeDirectory], [output],
+				"compile foo.c",
 				Process("missing-tool-for-skip-test", [], root, new Map())),
 			baseline = ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), []);
 		ActionFingerprint.save(buildRoot, actionValue, baseline);
 		var skipped = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([actionValue]));
-		expect(skipped.exitCode == 0 && skipped.actions[0].skipped, "unchanged action with existing outputs should be skipped");
+		expect(skipped.exitCode == 0 && skipped.actions[0].skipped,
+			"unchanged action with existing outputs should be skipped");
 
-		var changedArguments = new ExecutionAction(new ActionId("compile-foo"), [], [source, includeDirectory], [output], "compile foo.c",
+		var changedArguments = new ExecutionAction(new ActionId("compile-foo"), [], [source, includeDirectory],
+			[output], "compile foo.c",
 			Process("missing-tool-for-skip-test", ["-O2"], root, new Map()));
 		expect(ActionFingerprint.compute(changedArguments, buildRoot, environment.target.toString(), []) != baseline,
 			"changed arguments should invalidate the action");
-		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), ["dependency-a"]) != baseline,
+		expect(ActionFingerprint.compute(actionValue, buildRoot, environment.target.toString(), ["dependency-a"])
+			!= baseline,
 			"changed dependencies should invalidate the action");
 		File.saveContent(Path.join([generatedDirectory, "generated.o"]), "changed generated output\n");
 		File.saveContent(Path.join([toolsDirectory, "tool.bin"]), "changed installed tool\n");
@@ -590,34 +662,50 @@ class BuildSystemMain {
 
 		var compilerOutput = Path.join([root, "compiled.hl"]),
 			compilerInvocations = 0,
-			compilerAction = new ExecutionAction(new ActionId("compile-haxe"), [], [source], [compilerOutput], "compile Haxe",
-				Compiler("haxeon-compiler", ["--target=hl", "--entry=Main"], root, new Map(), () -> {
+			compilerAction = new ExecutionAction(new ActionId("compile-haxe"), [], [source], [compilerOutput],
+				"compile Haxe",
+				Compiler("haxeon-compiler", [
+					"--target=hl",
+					"--entry=Main"
+				], root, new Map(), () -> {
 					compilerInvocations++;
 					File.saveContent(compilerOutput, "compiled\n");
 					return 0;
 				}));
 		var firstCompile = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([compilerAction])),
 			secondCompile = new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([compilerAction]));
-		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped && secondCompile.exitCode == 0 && secondCompile.actions[0].skipped
+		expect(firstCompile.exitCode == 0 && !firstCompile.actions[0].skipped && secondCompile.exitCode == 0
+			&& secondCompile.actions[0].skipped
 			&& compilerInvocations == 1,
 			"unchanged compiler actions with existing outputs should be skipped");
 		var discovered = Path.join([root, "Discovered.hx"]), report = compilerOutput + ".inputs.json";
 		File.saveContent(discovered, "first");
-		var reportedAction = new ExecutionAction(new ActionId("compile-discovered"), [], [source], [compilerOutput, report], "compile discovered Haxe",
+		var reportedAction = new ExecutionAction(new ActionId("compile-discovered"), [], [source], [
+			compilerOutput,
+			report
+		], "compile discovered Haxe",
 			Compiler("haxeon-compiler", ["--inputs-output=" + report], root, new Map(), () -> {
 				compilerInvocations++;
 				File.saveContent(compilerOutput, File.getContent(discovered));
-				File.saveContent(report, haxe.Json.stringify([["Discovered", discovered, build.execution.ContentDigest.makeHex(File.getBytes(discovered))], ["Generated", "ffi/Generated.hx", "generated digest"]]));
+				File.saveContent(report, haxe.Json.stringify([
+					["Discovered", discovered, build.execution.ContentDigest.makeHex(File.getBytes(discovered))],
+					["Generated", "ffi/Generated.hx", "generated digest"]
+				]));
 				return 0;
 			}));
-		function executeReported() return new Executor(environment, 1, _ -> {}).execute(new ExecutionPlan([reportedAction]));
-		expect(executeReported().exitCode == 0 && executeReported().actions[0].skipped, "discovered dependencies are cached after the first compile");
+		function executeReported() return new Executor(environment, 1,
+			_ -> {}).execute(new ExecutionPlan([reportedAction]));
+		expect(executeReported().exitCode == 0 && executeReported().actions[0].skipped,
+			"discovered dependencies are cached after the first compile");
 		File.saveContent(discovered, "second");
-		expect(!executeReported().actions[0].skipped && File.getContent(compilerOutput) == "second", "editing an unlisted loaded module rebuilds the binary");
+		expect(!executeReported().actions[0].skipped && File.getContent(compilerOutput) == "second",
+			"editing an unlisted loaded module rebuilds the binary");
 		expect(executeReported().actions[0].skipped, "rebuilt discovered inputs become clean");
-		var compiledFingerprint = ActionFingerprint.compute(reportedAction, buildRoot, environment.target.toString(), [], null, true);
+		var compiledFingerprint = ActionFingerprint.compute(reportedAction, buildRoot, environment.target.toString(),
+			[], null, true);
 		File.saveContent(discovered, "saved during compilation");
-		expect(ActionFingerprint.compute(reportedAction, buildRoot, environment.target.toString(), []) != compiledFingerprint,
+		expect(ActionFingerprint.compute(reportedAction, buildRoot, environment.target.toString(), [])
+			!= compiledFingerprint,
 			"an edit made after the compiler read a module must not be saved as clean");
 		FileSystem.deleteFile(report);
 		expect(!executeReported().actions[0].skipped, "missing dependency reports force compilation");
@@ -632,7 +720,8 @@ class BuildSystemMain {
 		var cache = new ContentDigestCache(true), now = Sys.time();
 		cache.clock = () -> now;
 		var first = cache.file(source);
-		expect(first == Sha256.make(File.getBytes(source)).toHex() && cache.hashes == 1, "a persistent cache hashes a file once");
+		expect(first == Sha256.make(File.getBytes(source)).toHex() && cache.hashes == 1,
+			"a persistent cache hashes a file once");
 		// Just written, so its timestamps are within the margin of the hash: the entry is racily clean and must not be trusted.
 		File.saveContent(source, "other contents
 ");
@@ -644,7 +733,8 @@ class BuildSystemMain {
 		now += 60.0;
 		var third = cache.file(source);
 		expect(third == second && cache.hashes == 3, "the lookup after the margin hashes once more and settles");
-		expect(cache.file(source) == second && cache.file(source) == second && cache.hashes == 3, "a settled entry is served without reading the file");
+		expect(cache.file(source) == second && cache.file(source) == second && cache.hashes == 3,
+			"a settled entry is served without reading the file");
 		File.saveContent(source, "a longer replacement
 ");
 		expect(cache.file(source) == Sha256.make(File.getBytes(source)).toHex()
@@ -664,7 +754,8 @@ class BuildSystemMain {
 			output = Path.join([root, "output.txt"]);
 		File.saveContent(source, "version one
 ");
-		var environment = new BuildEnvironment(root, buildRoot), runs = 0,
+		var environment = new BuildEnvironment(root, buildRoot),
+			runs = 0,
 			action = new ExecutionAction(new ActionId("shared-digests"), [], [source], [output], "write output",
 				Compiler("compiler", [], root, new Map(), () -> {
 					runs++;
@@ -674,7 +765,8 @@ class BuildSystemMain {
 				}));
 		var session = new BuildSession();
 		var executor = () -> new Executor(environment, 1, _ -> {}, session.digests);
-		expect(executor().execute(new ExecutionPlan([action])).exitCode == 0 && runs == 1, "the first execution runs the action");
+		expect(executor().execute(new ExecutionPlan([action])).exitCode == 0 && runs == 1,
+			"the first execution runs the action");
 		var again = executor().execute(new ExecutionPlan([action]));
 		expect(again.actions[0].skipped && runs == 1, "an unchanged input is skipped on a shared cache");
 		expect(ActionFingerprint.compute(action, buildRoot, environment.target.toString(), [],
@@ -683,7 +775,8 @@ class BuildSystemMain {
 		File.saveContent(source, "version two
 ");
 		var edited = executor().execute(new ExecutionPlan([action]));
-		expect(edited.exitCode == 0 && !edited.actions[0].skipped && runs == 2, "an edited input reruns the action through a shared cache");
+		expect(edited.exitCode == 0 && !edited.actions[0].skipped && runs == 2,
+			"an edited input reruns the action through a shared cache");
 		File.saveContent(source, "version 333
 ");
 		File.saveContent(source, "version 444
@@ -715,8 +808,10 @@ class BuildSystemMain {
 		expect(CompilerClient.workerVersion("haxe", source, home, root, null, session) == one
 			&& session.workerVersionsComputed == baseline,
 			"a watch session keeps the worker it chose after the compiler sources change");
-		expect(CompilerClient.workerVersion("haxe", source, home, root, null) != one, "without a session the version follows the sources");
-		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one, "a profile port selects a different worker");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, null) != one,
+			"without a session the version follows the sources");
+		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one,
+			"a profile port selects a different worker");
 		removeTree(root);
 	}
 
@@ -725,18 +820,26 @@ class BuildSystemMain {
 	static function testWatchSnapshot():Void {
 		var root = temporaryDirectory("watch-snapshot");
 		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}',
-			["src/Main.hx", "src/deep/er/B.hx", "src/notes.txt", "src/folder.hx/C.hx"]);
+			[
+				"src/Main.hx",
+				"src/deep/er/B.hx",
+				"src/notes.txt",
+				"src/folder.hx/C.hx"
+			]);
 		ensureDirectory(Path.join([root, "src", "empty"]));
-		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])), files = WatchRun.snapshot(project), names = [
-			for (path in files.keys())
-				path.split("\\").join("/").substr(root.split("\\").join("/").length + 1)
-		];
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])),
+			files = WatchRun.snapshot(project),
+			names = [
+				for (path in files.keys())
+					path.split("\\").join("/").substr(root.split("\\").join("/").length + 1)
+			];
 		names.sort(Reflect.compare);
 		expect(names.join(",") == "haxeon.json,src/Main.hx,src/deep/er/B.hx,src/folder.hx/C.hx",
 			"the snapshot holds the manifest and the Haxe files, not directories or other files: " + names.join(","));
 		for (path => stamp in files) {
 			var stat = FileSystem.stat(path);
-			expect(stamp == '${stat.mtime.getTime()}:${stat.size}', "a snapshot entry is the file's modification time and size");
+			expect(stamp == '${stat.mtime.getTime()}:${stat.size}',
+				"a snapshot entry is the file's modification time and size");
 		}
 		File.saveContent(Path.join([root, "src", "Main.hx"]), "class Main { static function main() {} }
 ");
@@ -751,10 +854,17 @@ class BuildSystemMain {
 	 */
 	static function testWatchBuildsSavesMadeDuringABuild():Void {
 		var root = temporaryDirectory("watch-during-build");
-		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}', ["src/Main.hx"]);
-		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])), source = Path.join([root, "src", "Main.hx"]);
+		writePackage(root, '{"version":1,"package":{"name":"watched"},"entry":"Main","sourceRoots":["src"]}',
+			["src/Main.hx"]);
+		var project = ProjectDiscovery.discover(Path.join([root, "haxeon.json"])),
+			source = Path.join([
+				root,
+				"src",
+				"Main.hx"
+			]);
 		var saves = 1;
-		function save():Void File.saveContent(source, "class Main { static function main() {} }" + StringTools.lpad("", " ", saves++) + "\n");
+		function save():Void File.saveContent(source,
+			"class Main { static function main() {} }" + StringTools.lpad("", " ", saves++) + "\n");
 		Thread.create(function() {
 			Sys.sleep(1.0);
 			save();
@@ -762,21 +872,22 @@ class BuildSystemMain {
 		var builds:Array<String> = [];
 		var program = Sys.programPath();
 		// The app sleeps long enough for every build; each successful build relaunches it.
-		var status = WatchRun.run(project, Sys.executablePath(), program, ["--watch-test-app", "6"], null, "Main", null, function(_) {
-			builds.push(File.getContent(source));
-			switch builds.length {
-				case 1:
-					// Saved during the first build, which fails.
-					save();
-					return null;
-				case 2:
-					// Saved during the second build, which succeeds.
-					save();
-					return project;
-				default:
-					return null;
-			}
-		});
+		var status = WatchRun.run(project, Sys.executablePath(), program, ["--watch-test-app", "6"], null, "Main", null,
+			function(_) {
+				builds.push(File.getContent(source));
+				switch builds.length {
+					case 1:
+						// Saved during the first build, which fails.
+						save();
+						return null;
+					case 2:
+						// Saved during the second build, which succeeds.
+						save();
+						return project;
+					default:
+						return null;
+				}
+			});
 		expect(status == 0, "the watched app exits normally");
 		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
 		expect(builds[2] == File.getContent(source), "the last build saw the last save");
@@ -853,33 +964,40 @@ class BuildSystemMain {
 			failNative = false;
 		File.saveContent(nativeSource, "first native implementation");
 		File.saveContent(binding, "first binding");
-		var nativeAction = new ExecutionAction(new ActionId("native-cmake-build:fixture"), [], [nativeSource], [stamp], "native",
+		var nativeAction = new ExecutionAction(new ActionId("native-cmake-build:fixture"), [], [nativeSource], [stamp],
+			"native",
 			Compiler("fixture-native", [], root, new Map(),
-				() -> {
-					nativeRuns++;
-					File.saveContent(stamp, Std.string(nativeRuns));
-					return failNative ? 1 : 0;
-				}),
-			true, true),
-			compileAction = new ExecutionAction(new ActionId("fixture-compile"), [nativeAction.id], [binding], [output], "compile",
+			() -> {
+				nativeRuns++;
+				File.saveContent(stamp, Std.string(nativeRuns));
+				return failNative ? 1 : 0;
+			}),
+				true, true),
+				compileAction = new ExecutionAction(new ActionId("fixture-compile"), [nativeAction.id], [binding],
+				[output], "compile",
 				Compiler("fixture-compiler", [], root, new Map(), () -> {
-					compilerRuns++;
-					File.saveContent(output, "bytecode");
-					return 0;
-				}), false),
+			compilerRuns++;
+			File.saveContent(output, "bytecode");
+			return 0;
+		}), false),
 			plan = new ExecutionPlan([nativeAction, compileAction]),
 			environment = new BuildEnvironment(root, buildRoot);
 		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0, "initial delegated build succeeds");
 		File.saveContent(nativeSource, "changed native implementation");
-		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && nativeRuns == 2 && compilerRuns == 1,
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && nativeRuns == 2
+			&& compilerRuns == 1,
 			"native changes run the delegate without recompiling independent bytecode");
 		File.saveContent(binding, "changed FFI binding");
-		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && compilerRuns == 2, "binding changes still recompile bytecode");
+		expect(new Executor(environment, 1, _ -> {}).execute(plan).exitCode == 0 && compilerRuns == 2,
+			"binding changes still recompile bytecode");
 		failNative = true;
 		var failed = new Executor(environment, 1, _ -> {}).execute(plan);
-		expect(failed.exitCode != 0 && failed.actions[1].blocked && compilerRuns == 2, "a failed ordering dependency blocks even cached bytecode");
-		var stampAction = new ExecutionAction(new ActionId("native-cmake-build:stamp"), [], [], [stamp], "stamp", Process("cmake", [], root, new Map()));
-		expect(!build.execution.ArtifactCache.isShareable(stampAction), "CMake package stamps cannot restore missing runtime libraries");
+		expect(failed.exitCode != 0 && failed.actions[1].blocked && compilerRuns == 2,
+			"a failed ordering dependency blocks even cached bytecode");
+		var stampAction = new ExecutionAction(new ActionId("native-cmake-build:stamp"), [], [], [stamp], "stamp",
+			Process("cmake", [], root, new Map()));
+		expect(!build.execution.ArtifactCache.isShareable(stampAction),
+			"CMake package stamps cannot restore missing runtime libraries");
 		removeTree(root);
 	}
 
@@ -896,10 +1014,18 @@ class BuildSystemMain {
 		if (Sys.systemName() != "Windows" && Sys.command("chmod", ["751", firstSource]) != 0)
 			throw "Could not prepare executable artifact-cache fixture";
 		Sys.putEnv("HAXEON_ARTIFACT_CACHE", cache);
-		var firstAction = new ExecutionAction(new ActionId("portable-copy"), [], [firstSource], [firstOutput], "portable copy",
-			Process("sh", ["-c", 'cp "$firstSource" "$firstOutput"'], firstRoot, new Map())),
-			secondAction = new ExecutionAction(new ActionId("portable-copy"), [], [secondSource], [secondOutput], "portable copy",
-				Process("sh", ["-c", 'cp "$secondSource" "$secondOutput"'], secondRoot, new Map())),
+		var firstAction = new ExecutionAction(new ActionId("portable-copy"), [], [firstSource], [firstOutput],
+			"portable copy",
+			Process("sh", [
+				"-c",
+				'cp "$firstSource" "$firstOutput"'
+			], firstRoot, new Map())),
+			secondAction = new ExecutionAction(new ActionId("portable-copy"), [], [secondSource], [secondOutput],
+				"portable copy",
+				Process("sh", [
+					"-c",
+					'cp "$secondSource" "$secondOutput"'
+				], secondRoot, new Map())),
 			firstEnvironment = new BuildEnvironment(firstRoot, Path.join([firstRoot, "build"])),
 			secondEnvironment = new BuildEnvironment(secondRoot, Path.join([secondRoot, "build"]));
 		var firstResult = new Executor(firstEnvironment, 1, _ -> {}).execute(new ExecutionPlan([firstAction]));
@@ -920,24 +1046,33 @@ class BuildSystemMain {
 			app = Path.join([root, "app"]),
 			foo = Path.join([root, "foo"]),
 			bar = Path.join([root, "bar"]);
-		writePackage(app, '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"foo":{"path":"../foo"}}}',
+		writePackage(app,
+			'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"foo":{"path":"../foo"}}}',
 			["src/Main.hx"]);
 		writePackage(foo,
 			'{"version":1,"package":{"name":"foo"},"sourceRoots":["src"],"dependencies":{"bar":{"path":"../bar"}},"native":{"sources":["native/foo.c"],"includeDirs":["native"],"std":"c++20"}}',
-			["src/Foo.hx", "native/foo.c", "native/foo.h"]);
+			[
+				"src/Foo.hx",
+				"native/foo.c",
+				"native/foo.h"
+			]);
 		writePackage(bar, '{"version":1,"package":{"name":"bar"},"sourceRoots":["src"]}', ["src/Bar.hx"]);
 		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"]));
 		expect(project.rootPackage.name == "app", "root package should be identified");
-		expect(project.packages.names().join(",") == "bar,foo,app", "nested packages should be ordered dependency-first");
-		expect(project.packages.get("foo").nativeSources.length == 1 && project.packages.get("foo").includeDirs.length == 1,
+		expect(project.packages.names().join(",") == "bar,foo,app",
+			"nested packages should be ordered dependency-first");
+		expect(project.packages.get("foo").nativeSources.length == 1
+			&& project.packages.get("foo").includeDirs.length == 1,
 			"native package metadata should be resolved");
-		expect(project.packages.get("foo").manifest.native.standard == "c++20", "native language standards should be resolved from package metadata");
+		expect(project.packages.get("foo").manifest.native.standard == "c++20",
+			"native language standards should be resolved from package metadata");
 		expect(project.rootPackage.sources.length == 1 && project.rootPackage.sources[0].indexOf("Main.hx") >= 0,
 			"source roots should expand into a deterministic Haxe source manifest");
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
-				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+				new LoweringContext(environment, null, project,
+				new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
 			executionText = execution.toDebugString();
 		expect(plan.toExplainString().indexOf("reason: requested output") >= 0
 			&& plan.toExplainString().indexOf("detail library: foo") >= 0,
@@ -946,8 +1081,10 @@ class BuildSystemMain {
 			&& executionText.indexOf("kind: compiler") >= 0
 			&& executionText.indexOf("outputs:") >= 0,
 			"execution plans should expose action kinds and outputs");
-		expect(plan.toDebugString().indexOf("foo:NativeSharedLibrary") >= 0, "the package build plan should require its shared native library");
-		expect(plan.toDebugString().indexOf("foo:NativeStaticLibrary") < 0, "the package build plan should not create an unrequested native archive");
+		expect(plan.toDebugString().indexOf("foo:NativeSharedLibrary") >= 0,
+			"the package build plan should require its shared native library");
+		expect(plan.toDebugString().indexOf("foo:NativeStaticLibrary") < 0,
+			"the package build plan should not create an unrequested native archive");
 		expect(executionText.indexOf("Compile C") >= 0
 			&& executionText.indexOf("Archive foo") < 0
 			&& executionText.indexOf("Link shared library foo") >= 0
@@ -955,19 +1092,23 @@ class BuildSystemMain {
 			"native sources, the requested shared library, and Haxe compilation should lower to concrete actions");
 		// The compiler reads only FFI interfaces, so it does not wait for native package actions and the two build side by side.
 		var compileAction = compilerAction(execution);
-		expect(compileAction != null && compileAction.dependencies.length == 0, "the Haxe compiler request must not wait for native package actions");
+		expect(compileAction != null && compileAction.dependencies.length == 0,
+			"the Haxe compiler request must not wait for native package actions");
 		var hasDescriptorBinary = false, hasDescriptorJson = false;
 		for (output in compileAction.outputs) {
 			hasDescriptorBinary = hasDescriptorBinary || StringTools.endsWith(output, ".descriptors");
 			hasDescriptorJson = hasDescriptorJson || StringTools.endsWith(output, ".descriptors.json");
 		}
-		expect(hasDescriptorBinary && hasDescriptorJson, "project module builds must track both descriptor sidecar outputs");
+		expect(hasDescriptorBinary && hasDescriptorJson,
+			"project module builds must track both descriptor sidecar outputs");
 		expect(execution.actions.length > 1, "the native package actions are still part of the plan");
 		// ... but whatever runs the module waits for everything built for it, the native libraries it loads included.
 		if (Sys.systemName() != "Windows") {
-			var member = new LoweredWorkspaceProject("app", project, new TargetLayout(environment).hashLinkModulePath("main"),
+			var member = new LoweredWorkspaceProject("app", project,
+				new TargetLayout(environment).hashLinkModulePath("main"),
 				[for (action in execution.actions) action.id]),
-				tests = WorkspaceBuild.withTests(new LoweredWorkspace(environment, execution, [member], execution.actions.length, new Map()), Sys.getCwd()),
+				tests = WorkspaceBuild.withTests(new LoweredWorkspace(environment, execution, [member],
+					execution.actions.length, new Map()), Sys.getCwd()),
 				testAction = [
 					for (action in tests.actions)
 						if (StringTools.startsWith(action.id.key(), "test:")) action
@@ -986,9 +1127,12 @@ class BuildSystemMain {
 				default: [];
 			};
 		}, liveExecution = PlanLowerer.lower(plan,
-			new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root, null, false, false, true));
-		expect(compilerArguments(execution).indexOf("--live") < 0, "an ordinary build must not request live compiler history");
-		expect(compilerArguments(liveExecution).indexOf("--live") >= 0, "a live build must request live compiler history");
+			new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"),
+			project.root, null, false, false, true));
+		expect(compilerArguments(execution).indexOf("--live") < 0,
+			"an ordinary build must not request live compiler history");
+		expect(compilerArguments(liveExecution).indexOf("--live") >= 0,
+			"a live build must request live compiler history");
 		var wasmDiagnostic:Null<String> = null;
 		try {
 			BuildPlanner.project(project, BuildIntent.Build, Target.parse("wasm32"), NativeArtifactDemand.Shared);
@@ -1000,30 +1144,40 @@ class BuildSystemMain {
 			&& wasmDiagnostic.indexOf("no wasm32 provider is available") >= 0,
 			"unsupported native Wasm combinations should fail with a planning diagnostic");
 
-		var staticPlan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Static),
+		var staticPlan = BuildPlanner.project(project, BuildIntent.Build, environment.target,
+			NativeArtifactDemand.Static),
 			staticPlanText = staticPlan.toDebugString();
-		expect(staticPlanText.indexOf("foo:NativeStaticLibrary") >= 0 && staticPlanText.indexOf("foo:NativeSharedLibrary") < 0,
+		expect(staticPlanText.indexOf("foo:NativeStaticLibrary") >= 0
+			&& staticPlanText.indexOf("foo:NativeSharedLibrary") < 0,
 			"an explicit static native demand should create only the archive");
 
 		var missing = Path.join([root, "missing-app"]);
-		writePackage(missing, '{"version":1,"package":{"name":"missing-app"},"entry":"Main","dependencies":{"foo":{"path":"../absent"}}}', ["src/Main.hx"]);
-		expectThrows(() -> ProjectDiscovery.discover(Path.join([missing, "haxeon.json"])), "missing dependency paths should be reported");
+		writePackage(missing,
+			'{"version":1,"package":{"name":"missing-app"},"entry":"Main","dependencies":{"foo":{"path":"../absent"}}}',
+			["src/Main.hx"]);
+		expectThrows(() -> ProjectDiscovery.discover(Path.join([missing, "haxeon.json"])),
+			"missing dependency paths should be reported");
 
 		var duplicate = Path.join([root, "duplicate"]),
 			first = Path.join([root, "first-shared"]),
 			second = Path.join([root, "second-shared"]),
 			nested = Path.join([duplicate, "foo"]);
-		writePackage(duplicate, '{"version":1,"package":{"name":"duplicate"},"dependencies":{"foo":{"path":"foo"},"shared":{"path":"../first-shared"}}}', []);
-		writePackage(nested, '{"version":1,"package":{"name":"foo"},"dependencies":{"shared":{"path":"../../second-shared"}}}', []);
+		writePackage(duplicate,
+			'{"version":1,"package":{"name":"duplicate"},"dependencies":{"foo":{"path":"foo"},"shared":{"path":"../first-shared"}}}',
+			[]);
+		writePackage(nested,
+			'{"version":1,"package":{"name":"foo"},"dependencies":{"shared":{"path":"../../second-shared"}}}', []);
 		writePackage(first, '{"version":1,"package":{"name":"shared"}}', []);
 		writePackage(second, '{"version":1,"package":{"name":"shared"}}', []);
-		expectThrows(() -> ProjectDiscovery.discover(Path.join([duplicate, "haxeon.json"])), "duplicate package names should be reported");
+		expectThrows(() -> ProjectDiscovery.discover(Path.join([duplicate, "haxeon.json"])),
+			"duplicate package names should be reported");
 
 		var cycle = Path.join([root, "cycle"]),
 			child = Path.join([cycle, "child"]);
 		writePackage(cycle, '{"version":1,"package":{"name":"cycle"},"dependencies":{"child":{"path":"child"}}}', []);
 		writePackage(child, '{"version":1,"package":{"name":"child"},"dependencies":{"cycle":{"path":".."}}}', []);
-		expectThrows(() -> ProjectDiscovery.discover(Path.join([cycle, "haxeon.json"])), "path dependency cycles should be reported");
+		expectThrows(() -> ProjectDiscovery.discover(Path.join([cycle, "haxeon.json"])),
+			"path dependency cycles should be reported");
 		removeTree(root);
 	}
 
@@ -1038,7 +1192,8 @@ class BuildSystemMain {
 		File.saveContent(first, '#include "second.h"\n');
 		File.saveContent(second, '#define SECOND 42\n');
 		var dependencies = NativeDependencyScanner.dependencies(source, [includeDirectory]);
-		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0 && dependencies[1].indexOf("second.h") >= 0,
+		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0
+			&& dependencies[1].indexOf("second.h") >= 0,
 			"native dependency scanning should follow recursive local includes");
 		removeTree(root);
 	}
@@ -1048,7 +1203,8 @@ class BuildSystemMain {
 			app = Path.join([root, "app"]),
 			manifestPath = Path.join([app, "ffi", "fixture.ffi.json"]),
 			headerPath = Path.join([app, "headers", "fixture.hpp"]);
-		writePackage(app, '{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"ffi":{"imports":["ffi/fixture.ffi.json"]}}',
+		writePackage(app,
+			'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"ffi":{"imports":["ffi/fixture.ffi.json"]}}',
 			["src/Main.hx"]);
 		ensureDirectory(Path.directory(manifestPath));
 		ensureDirectory(Path.directory(headerPath));
@@ -1067,7 +1223,8 @@ class BuildSystemMain {
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			execution = PlanLowerer.lower(plan,
-				new LoweringContext(environment, null, project, new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
+				new LoweringContext(environment, null, project,
+				new TargetLayout(environment).hashLinkModulePath("main"), project.root)),
 			planText = plan.toDebugString(),
 			executionText = execution.toDebugString();
 		expect(planText.indexOf("app:FfiInterface") >= 0
@@ -1081,12 +1238,14 @@ class BuildSystemMain {
 	static function testPackageSourceModel():Void {
 		var manifest = PackageManifest.parse("/tmp/example/haxeon.json",
 			'{"package":{"name":"app"},"sourceRoots":["src","examples"],"unscopedSourceRoots":["examples"],"dependencies":{"git-dependency":{"git":"https://example.invalid/foo.git","rev":"main"},"path-dependency":{"path":"../path-dependency"}}}');
-		expect(manifest.packageId.equals(new project.PackageId("app")), "package manifests should expose stable package identity");
+		expect(manifest.packageId.equals(new project.PackageId("app")),
+			"package manifests should expose stable package identity");
 		expect(manifest.unscopedSourceRoots.length == 1 && manifest.unscopedSourceRoots[0] == "examples",
 			"packages should select source roots that remain outside their namespace");
 		var git = manifest.dependencies.get("git-dependency"),
 			path = manifest.dependencies.get("path-dependency");
-		expect(git != null && path != null && PackageSourceTools.describe(git.source) == "git:https://example.invalid/foo.git@main",
+		expect(git != null && path != null
+			&& PackageSourceTools.describe(git.source) == "git:https://example.invalid/foo.git@main",
 			"git dependency metadata should remain a source declaration");
 		expect(switch path.source {
 			case project.PackageSource.Path(value): value == "../path-dependency";
@@ -1106,7 +1265,8 @@ class BuildSystemMain {
 		}
 		expect(rejected != null && rejected.indexOf("does not support target wasm32") >= 0,
 			"package compatibility should reject unsupported targets before compilation");
-		var badVersion = PackageManifest.parse("/tmp/incompatible/haxeon.json", '{"package":{"name":"incompatible"},"compatibility":{"haxeon":">=0.4"}}');
+		var badVersion = PackageManifest.parse("/tmp/incompatible/haxeon.json",
+			'{"package":{"name":"incompatible"},"compatibility":{"haxeon":">=0.4"}}');
 		rejected = null;
 		try {
 			badVersion.compatibility.validate("incompatible", Target.detectHost());
@@ -1114,7 +1274,8 @@ class BuildSystemMain {
 			rejected = Std.string(error);
 		}
 		expect(rejected != null
-			&& rejected.indexOf("requires Haxeon") >= 0, "package compatibility should reject incompatible Haxeon versions");
+			&& rejected.indexOf("requires Haxeon") >= 0,
+			"package compatibility should reject incompatible Haxeon versions");
 	}
 
 	static function testHaxelibAdapter():Void {
@@ -1124,17 +1285,23 @@ class BuildSystemMain {
 			foo = Path.join([cache, "foo", "1.0.0"]);
 		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"haxelib":"foo","version":"1.0.0"}}}', []);
 		ensureDirectory(Path.join([foo, "src"]));
-		File.saveContent(Path.join([foo, "haxelib.json"]), '{"name":"foo","version":"1.0.0","classPath":"src","dependencies":{}}\n');
+		File.saveContent(Path.join([foo, "haxelib.json"]),
+			'{"name":"foo","version":"1.0.0","classPath":"src","dependencies":{}}\n');
 		File.saveContent(Path.join([foo, "src", "Foo.hx"]), "class Foo {}\n");
 		var project = new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([app, "haxeon.json"]));
 		expect(project.packages.get("foo").source != null && FileSystem.exists(Path.join([foo, "haxeon.json"])),
 			"Haxelib metadata should be adapted into a cached Haxeon manifest");
 		var bad = Path.join([cache, "bad", "1.0.0"]);
 		ensureDirectory(bad);
-		File.saveContent(Path.join([bad, "haxelib.json"]), '{"name":"bad","version":"1.0.0","extraParams":["--macro","bad()"]}\n');
+		File.saveContent(Path.join([bad, "haxelib.json"]),
+			'{"name":"bad","version":"1.0.0","extraParams":["--macro","bad()"]}\n');
 		var badApp = Path.join([root, "bad-app"]);
-		writePackage(badApp, '{"package":{"name":"bad-app"},"dependencies":{"bad":{"haxelib":"bad","version":"1.0.0"}}}', []);
-		expectThrows(() -> new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([badApp, "haxeon.json"])),
+		writePackage(badApp,
+			'{"package":{"name":"bad-app"},"dependencies":{"bad":{"haxelib":"bad","version":"1.0.0"}}}', []);
+		expectThrows(() -> new PackageResolver(new HaxelibSourceAcquirer(cache)).resolve(Path.join([
+			badApp,
+			"haxeon.json"
+		])),
 			"unsupported Haxelib compiler parameters should be diagnosed");
 		removeTree(root);
 	}
@@ -1146,7 +1313,8 @@ class BuildSystemMain {
 			registryDirectory = Path.join([cache, Sha256.encode("local")]),
 			foo = Path.join([registryDirectory, "foo", "1.1.0"]),
 			checksum = "release-checksum";
-		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"registry":"local","version":"^1.0"}}}', []);
+		writePackage(app, '{"package":{"name":"app"},"dependencies":{"foo":{"registry":"local","version":"^1.0"}}}',
+			[]);
 		ensureDirectory(foo);
 		File.saveContent(Path.join([foo, "haxeon.json"]), '{"package":{"name":"foo"},"sourceRoots":["src"]}\n');
 		ensureDirectory(Path.join([foo, "src"]));
@@ -1161,9 +1329,11 @@ class BuildSystemMain {
 		expect(entry != null && entry.resolvedRevision == "1.1.0" && entry.checksum == checksum,
 			"registry resolution should select the highest non-yanked SemVer release and lock its checksum");
 		var locked = resolver.resolve(Path.join([app, "haxeon.json"]), project.lockfile, true);
-		expect(locked.packages.get("foo").source != null, "locked registry releases should resolve through the same adapter");
+		expect(locked.packages.get("foo").source != null,
+			"locked registry releases should resolve through the same adapter");
 		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "tampered\n");
-		expectThrows(() -> resolver.resolve(Path.join([app, "haxeon.json"])), "registry source checksums should be verified on every use");
+		expectThrows(() -> resolver.resolve(Path.join([app, "haxeon.json"])),
+			"registry source checksums should be verified on every use");
 		removeTree(root);
 	}
 
@@ -1171,12 +1341,16 @@ class BuildSystemMain {
 		var root = temporaryDirectory("registry-publish"),
 			packageRoot = Path.join([root, "package"]),
 			registryRoot = Path.join([root, "registry"]);
-		writePackage(packageRoot, '{"package":{"name":"published"},"sourceRoots":["src"],"compatibility":{"targets":["host"]}}', ["src/Published.hx"]);
-		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0", registryRoot),
+		writePackage(packageRoot,
+			'{"package":{"name":"published"},"sourceRoots":["src"],"compatibility":{"targets":["host"]}}',
+			["src/Published.hx"]);
+		var checksum = RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
+			registryRoot),
 			destination = Path.join([registryRoot, Sha256.encode("local"), "published", "1.0.0"]);
 		expect(checksum.length == 64 && FileSystem.exists(Path.join([destination, ".haxeon-checksum"])),
 			"registry publication should create a checksum-marked immutable release");
-		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0", registryRoot),
+		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
+			registryRoot),
 			"registry publication should reject replacing an existing version");
 		removeTree(root);
 	}
@@ -1210,10 +1384,13 @@ class BuildSystemMain {
 
 	static function testLockfileRoundTrip():Void {
 		var lock = new PackageLockfile([
-			new PackageLockEntry(new project.PackageId("app"), project.PackageSource.Path("."), null, null, [new project.PackageId("foo")]),
-			new PackageLockEntry(new project.PackageId("foo"), project.PackageSource.Git("https://example.invalid/foo.git", "main"),
+			new PackageLockEntry(new project.PackageId("app"), project.PackageSource.Path("."), null, null,
+				[new project.PackageId("foo")]),
+			new PackageLockEntry(new project.PackageId("foo"),
+				project.PackageSource.Git("https://example.invalid/foo.git", "main"),
 				"0123456789012345678901234567890123456789")
-		]), parsed = PackageLockfile.parse("haxeon.lock", lock.toJson());
+		]),
+			parsed = PackageLockfile.parse("haxeon.lock", lock.toJson());
 		lock.validateGraph(parsed);
 		expect(parsed.get("foo").resolvedRevision == "0123456789012345678901234567890123456789"
 			&& switch parsed.get("foo").resolvedSource() {
@@ -1222,7 +1399,8 @@ class BuildSystemMain {
 			}, "lockfiles should round-trip immutable Git revisions and dependency edges");
 	}
 
-	static function action(id:String, dependencies:Array<ActionId>, description:String, invoke:Void->Int):ExecutionAction
+	static function action(id:String, dependencies:Array<ActionId>, description:String,
+			invoke:Void->Int):ExecutionAction
 		return new ExecutionAction(new ActionId(id), dependencies, [], [], description,
 			Compiler("test-compiler", [description], Sys.getCwd(), new Map(), invoke));
 
@@ -1306,7 +1484,8 @@ class RecordingSourceAcquirer implements SourceAcquirer {
 		delegate = new PathSourceAcquirer();
 	}
 
-	public function acquire(source:project.PackageSource, ownerRoot:String, packageId:project.PackageId):project.AcquiredSource {
+	public function acquire(source:project.PackageSource, ownerRoot:String,
+			packageId:project.PackageId):project.AcquiredSource {
 		calls++;
 		return delegate.acquire(source, ownerRoot, packageId);
 	}

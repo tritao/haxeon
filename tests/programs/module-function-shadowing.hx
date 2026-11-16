@@ -42,15 +42,15 @@ function comprehended():Int {
 }
 
 function blockValue():Int {
-	var result = {
-		var values = 7;
-		values + 1;
+	var result = {var values = 7;
+	values + 1;
 	};
 	return result + values(1000);
 }
 
 function main():Int {
-	if (first([2.5]) != 5.0 || later() != 5 || viaLambda() != 11 || inLoop() != 13 || caught() != 2 || comprehended() != 104 || blockValue() != 1008)
+	if (first([2.5]) != 5.0 || later() != 5 || viaLambda() != 11 || inLoop() != 13 || caught() != 2
+		|| comprehended() != 104 || blockValue() != 1008)
 		return 1;
 	return 42;
 }

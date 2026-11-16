@@ -26,7 +26,10 @@ class HlCode {
 }
 
 /** A constant object: `fields` are table indices, in the object's field order (an int index, a string index, a type index or a global). */
-typedef HlConstant = {final global:Int; final fields:Array<Int>;}
+typedef HlConstant = {
+	final global:Int;
+	final fields:Array<Int>;
+}
 
 /** Independently versioned, length-delimited HLB debug metadata. */
 /**
@@ -43,7 +46,8 @@ class HlDebugSection {
 	final stored:Null<haxeon.io.SegmentedBytes>;
 	final produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>;
 
-	function new(kind:Int, version:Int, flags:Int, stored:Null<haxeon.io.SegmentedBytes>, produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>) {
+	function new(kind:Int, version:Int, flags:Int, stored:Null<haxeon.io.SegmentedBytes>,
+			produce:Null<Null<HlWriterCache>->haxeon.io.SegmentedBytes>) {
 		this.kind = kind;
 		this.version = version;
 		this.flags = flags;
@@ -55,7 +59,8 @@ class HlDebugSection {
 		return new HlDebugSection(kind, version, flags, haxeon.io.SegmentedBytes.ofBytes(payload), null);
 
 	/** `produce` gets the writer cache the module is being written with, if any, so it can reuse what it encoded for unchanged functions. */
-	public static function lazy(kind:Int, version:Int, flags:Int, produce:Null<HlWriterCache>->haxeon.io.SegmentedBytes):HlDebugSection
+	public static function lazy(kind:Int, version:Int, flags:Int,
+			produce:Null<HlWriterCache>->haxeon.io.SegmentedBytes):HlDebugSection
 		return new HlDebugSection(kind, version, flags, null, produce);
 
 	/** Whether the section has a payload at all, without producing a derived one. */
@@ -102,23 +107,37 @@ enum HlTypeDef {
 	Parameterized(kind:HlType, parameter:Int);
 	Abstract(name:Int);
 	Function(arguments:Array<Int>, result:Int);
-	Object(name:Int, base:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>, bindings:Array<Int>);
+	Object(name:Int, base:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>,
+		bindings:Array<Int>);
 	Structure(name:Int, global:Int, fields:Array<HlObjectField>, methods:Array<HlObjectMethod>, bindings:Array<Int>);
 	Virtual(name:Int, fields:Array<HlVirtualField>);
 	Enum(name:Int, global:Int, constructors:Array<HlEnumConstructor>);
 }
 
 /** Serialized object field expressed with string- and type-table indices. */
-typedef HlObjectField = {final name:Int; final type:Int;}
+typedef HlObjectField = {
+	final name:Int;
+	final type:Int;
+}
 
 /** Serialized object method binding expressed with global function indices. */
-typedef HlObjectMethod = {final name:Int; final functionIndex:Int; final prototype:Int;}
+typedef HlObjectMethod = {
+	final name:Int;
+	final functionIndex:Int;
+	final prototype:Int;
+}
 
 /** Serialized field contract in a HashLink virtual type. */
-typedef HlVirtualField = {final name:Int; final type:Int;}
+typedef HlVirtualField = {
+	final name:Int;
+	final type:Int;
+}
 
 /** Serialized enum constructor and its payload type indices. */
-typedef HlEnumConstructor = {final name:Int; final params:Array<Int>;}
+typedef HlEnumConstructor = {
+	final name:Int;
+	final params:Array<Int>;
+}
 
 /** Native binding entry in a HashLink module's global function namespace. */
 typedef HlNative = {

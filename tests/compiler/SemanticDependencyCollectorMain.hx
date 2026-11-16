@@ -1,18 +1,20 @@
-import compiler.semantic.AliasTable;
-import compiler.syntax.Lexer;
-import compiler.syntax.Parser;
 import compiler.Source.SourceFile;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleState.SemanticDependencyKind;
+import compiler.semantic.AliasTable;
 import compiler.semantic.SemanticDependencyCollector;
+import compiler.syntax.Lexer;
+import compiler.syntax.Parser;
 
 class SemanticDependencyCollectorMain {
 	static function main():Void {
-		var source = 'function helper(value:Alias):Alias { return value; } function run(value:Alias):Alias { helper(value); return helper(value); }',
+		var source =
+			'function helper(value:Alias):Alias { return value; } function run(value:Alias):Alias { helper(value); return helper(value); }',
 			file = new SourceFile("demo/Main.hx", source),
 			state = new ModuleState("demo.Main", file);
 		state.ast = new Parser(new Lexer(file).tokenize()).parseProgram();
-		var dependencies = SemanticDependencyCollector.collectSemanticDependencies(state, "demo.Main", AliasTable.of(["Alias" => "demo.Value"])),
+		var dependencies = SemanticDependencyCollector.collectSemanticDependencies(state, "demo.Main",
+			AliasTable.of(["Alias" => "demo.Value"])),
 			run = dependencies.get("demo.Main.run");
 		expect(run != null, "run should have recorded semantic dependencies");
 		expect(count(run, Signature, "demo.Value") == 1, "identical signature dependencies should be deduplicated");
@@ -22,13 +24,16 @@ class SemanticDependencyCollectorMain {
 			entryFile = new SourceFile("Main.hx", entrySource),
 			entry = new ModuleState("Main", entryFile);
 		entry.ast = new Parser(new Lexer(entryFile).tokenize()).parseProgram();
-		var entryDependencies = SemanticDependencyCollector.collectSemanticDependencies(entry, "Main", new AliasTable());
-		expect(count(entryDependencies.get("main"), Body, "Main.helper") == 1, "entry-point ownership should remain canonical");
+		var entryDependencies = SemanticDependencyCollector.collectSemanticDependencies(entry, "Main",
+			new AliasTable());
+		expect(count(entryDependencies.get("main"), Body, "Main.helper") == 1,
+			"entry-point ownership should remain canonical");
 
 		Sys.println("PASS: semantic dependency collection");
 	}
 
-	static function count(dependencies:Array<compiler.modules.ModuleState.SemanticDependency>, kind:SemanticDependencyKind, target:String):Int {
+	static function count(dependencies:Array<compiler.modules.ModuleState.SemanticDependency>,
+			kind:SemanticDependencyKind, target:String):Int {
 		var result = 0;
 		for (dependency in dependencies)
 			if (dependency.kind == kind && dependency.target == target)

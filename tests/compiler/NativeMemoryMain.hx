@@ -101,13 +101,13 @@ class NativeMemoryMain {
 		incrementalFlat.update("app/Reader.hx",
 			"package app; import model.Packet; import runtime.memory.NativeSpan; class Reader { public static function copy(span:NativeSpan<Packet>):Packet return span.get(0); }");
 		incrementalFlat.update("Main.hx",
-			"import app.Reader; import model.Packet; import runtime.memory.NativeSpan; import runtime.memory.RawPtr; " +
-			"function main():Int { var pointer:RawPtr<Packet> = RawPtr.nullPtr(), span:NativeSpan<Packet> = new NativeSpan<Packet>(pointer, 1); " +
-			"Reader.copy(span); return 42; }");
+			"import app.Reader; import model.Packet; import runtime.memory.NativeSpan; import runtime.memory.RawPtr; "
+			+ "function main():Int { var pointer:RawPtr<Packet> = RawPtr.nullPtr(), span:NativeSpan<Packet> = new NativeSpan<Packet>(pointer, 1); "
+			+ "Reader.copy(span); return 42; }");
 		incrementalFlat.compile("Main");
 		incrementalFlat.update("app/Reader.hx",
-			"package app; import model.Packet; import runtime.memory.NativeSpan; class Reader { public static function copy(span:NativeSpan<Packet>):Packet { " +
-			"var packet:Packet = span.get(0); return packet; } }");
+			"package app; import model.Packet; import runtime.memory.NativeSpan; class Reader { public static function copy(span:NativeSpan<Packet>):Packet { "
+			+ "var packet:Packet = span.get(0); return packet; } }");
 		var incrementalFlatResult = incrementalFlat.compile("Main"),
 			sawFlatGetSpecialization = false,
 			sawFlatMemoryLoad = false;
@@ -122,7 +122,8 @@ class NativeMemoryMain {
 							case _:
 						}
 			}
-		if (!incrementalFlatResult.retyped.contains("app.Reader.copy") || !sawFlatGetSpecialization || !sawFlatMemoryLoad)
+		if (!incrementalFlatResult.retyped.contains("app.Reader.copy") || !sawFlatGetSpecialization
+			|| !sawFlatMemoryLoad)
 			throw 'Incremental Flat RawPtr lowering must preserve its cached layout and exact specialization: retyped=${incrementalFlatResult.retyped}';
 
 		expectCompileError('class Bad { public var value:Null<UInt32>; } function main():Int return 0;',

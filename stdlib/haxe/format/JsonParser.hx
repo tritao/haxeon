@@ -195,8 +195,9 @@ class JsonParser {
 		if (position + 4 > inputLength) throw invalid("unfinished Unicode escape");
 		var value = 0;
 		for (_ in 0...4) {
-			var code = codeAt(position++), digit = code >= 48 && code <= 57 ? code - 48
-				: code >= 65 && code <= 70 ? code - 55 : code >= 97 && code <= 102 ? code - 87 : -1;
+			var code = codeAt(position++),
+				digit = code >= 48 && code <= 57 ? code - 48
+					: code >= 65 && code <= 70 ? code - 55 : code >= 97 && code <= 102 ? code - 87 : -1;
 			if (digit < 0) throw invalid("invalid Unicode escape");
 			value = value * 16 + digit;
 		}

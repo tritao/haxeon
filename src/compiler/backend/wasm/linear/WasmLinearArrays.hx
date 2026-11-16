@@ -44,7 +44,8 @@ class WasmLinearArrays {
 		for (native in context.program.natives) {
 			var stride = arrayStrideForNative(native.name);
 			if (stride != null)
-				context.functions.set(native.name, addArrayAllocator(context.module, native.name, stride, context.allocatorFunction));
+				context.functions.set(native.name,
+					addArrayAllocator(context.module, native.name, stride, context.allocatorFunction));
 		}
 	}
 
@@ -161,7 +162,8 @@ class WasmLinearArrays {
 		return module.addFunction(builder.finish());
 	}
 
-	public static function addArrayIndexOf(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
+	public static function addArrayIndexOf(module:WasmModule, name:String, stride:Int, elementType:WasmValueType,
+			stringEqual:Null<Int>):Int {
 		var compare = stringEqual == null ? arrayEqual(elementType) : null;
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
@@ -332,78 +334,82 @@ class WasmLinearArrays {
 	}
 
 	public static function addArrayConcat(module:WasmModule, name:String, stride:Int, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [for (_ in 0...4) {type: I32}], [
-			LocalGet(0),
-			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-			LocalSet(2),
-			LocalGet(1),
-			I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
-			LocalSet(3),
-			I32Const(WasmLayout.ARRAY_HEADER_SIZE),
-			Call(allocator),
-			LocalSet(4),
-			LocalGet(4),
-			LocalGet(2),
-			LocalGet(3),
-			I32Add,
-			I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
-			LocalGet(4),
-			LocalGet(2),
-			LocalGet(3),
-			I32Add,
-			I32Const(8),
-			I32Add,
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(4),
-			I32Const(module.runtimeTypeId(Array(Dyn))),
-			I32Store(0),
-			LocalGet(4),
-			LocalGet(0),
-			I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
-			I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
-			LocalGet(2),
-			LocalGet(3),
-			I32Add,
-			I32Const(8),
-			I32Add,
-			I32Const(stride),
-			I32Mul,
-			Call(allocator),
-			LocalSet(5),
-			LocalGet(5),
-			I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
-			I32Sub,
-			I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
-			I32Add,
-			LocalGet(4),
-			I32Store(0),
-			LocalGet(4),
-			LocalGet(5),
-			I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-			LocalGet(5),
-			LocalGet(0),
-			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-			LocalGet(2),
-			I32Const(stride),
-			I32Mul,
-			MemoryCopy,
-			LocalGet(5),
-			LocalGet(2),
-			I32Const(stride),
-			I32Mul,
-			I32Add,
-			LocalGet(1),
-			I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
-			LocalGet(3),
-			I32Const(stride),
-			I32Mul,
-			MemoryCopy,
-			LocalGet(4),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
+			[for (_ in 0...4) {
+				type:I32
+			}], [
+				LocalGet(0),
+				I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+				LocalSet(2),
+				LocalGet(1),
+				I32Load(WasmLayout.ARRAY_LENGTH_OFFSET),
+				LocalSet(3),
+				I32Const(WasmLayout.ARRAY_HEADER_SIZE),
+				Call(allocator),
+				LocalSet(4),
+				LocalGet(4),
+				LocalGet(2),
+				LocalGet(3),
+				I32Add,
+				I32Store(WasmLayout.ARRAY_LENGTH_OFFSET),
+				LocalGet(4),
+				LocalGet(2),
+				LocalGet(3),
+				I32Add,
+				I32Const(8),
+				I32Add,
+				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+				LocalGet(4),
+				I32Const(module.runtimeTypeId(Array(Dyn))),
+				I32Store(0),
+				LocalGet(4),
+				LocalGet(0),
+				I32Load(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
+				I32Store(WasmLayout.ARRAY_ELEMENT_TYPE_OFFSET),
+				LocalGet(2),
+				LocalGet(3),
+				I32Add,
+				I32Const(8),
+				I32Add,
+				I32Const(stride),
+				I32Mul,
+				Call(allocator),
+				LocalSet(5),
+				LocalGet(5),
+				I32Const(WasmLayout.GC_BLOCK_HEADER_SIZE),
+				I32Sub,
+				I32Const(WasmLayout.GC_BLOCK_LINK_OFFSET),
+				I32Add,
+				LocalGet(4),
+				I32Store(0),
+				LocalGet(4),
+				LocalGet(5),
+				I32Store(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+				LocalGet(5),
+				LocalGet(0),
+				I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+				LocalGet(2),
+				I32Const(stride),
+				I32Mul,
+				MemoryCopy,
+				LocalGet(5),
+				LocalGet(2),
+				I32Const(stride),
+				I32Mul,
+				I32Add,
+				LocalGet(1),
+				I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET),
+				LocalGet(3),
+				I32Const(stride),
+				I32Mul,
+				MemoryCopy,
+				LocalGet(4),
+				Return
+			]));
 	}
 
-	public static function addArrayPush(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+	public static function addArrayPush(module:WasmModule, name:String, stride:Int, elementType:WasmValueType,
+			allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
 			value = builder.parameter("value", 1),
@@ -511,7 +517,8 @@ class WasmLinearArrays {
 		return module.addFunction(builder.finish());
 	}
 
-	public static function addArrayUnshift(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+	public static function addArrayUnshift(module:WasmModule, name:String, stride:Int, elementType:WasmValueType,
+			allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
 			value = builder.parameter("value", 1),
@@ -613,7 +620,8 @@ class WasmLinearArrays {
 		return module.addFunction(builder.finish());
 	}
 
-	public static function addArrayInsert(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+	public static function addArrayInsert(module:WasmModule, name:String, stride:Int, elementType:WasmValueType,
+			allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, elementType], results: []}),
 			array = builder.parameter("array", 0),
 			requestedIndex = builder.parameter("requestedIndex", 1),
@@ -803,7 +811,8 @@ class WasmLinearArrays {
 		return module.addFunction(builder.finish());
 	}
 
-	public static function addArrayResize(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, allocator:Int):Int {
+	public static function addArrayResize(module:WasmModule, name:String, stride:Int, elementType:WasmValueType,
+			allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: []}),
 			array = builder.parameter("array", 0),
 			newLength = builder.parameter("newLength", 1),
@@ -866,32 +875,51 @@ class WasmLinearArrays {
 			});
 			// Clear both the newly exposed elements and the discarded tail. This
 			// also releases managed references when a live array is shrunk.
-			builder.localGet(length); builder.localGet(newLength); builder.emit(I32LtS);
+			builder.localGet(length);
+			builder.localGet(newLength);
+			builder.emit(I32LtS);
 			builder.ifElse(function(builder) {
-				builder.localGet(length); builder.localSet(cursor);
-				builder.localGet(newLength); builder.localSet(clearEnd);
+				builder.localGet(length);
+				builder.localSet(cursor);
+				builder.localGet(newLength);
+				builder.localSet(clearEnd);
 			}, function(builder) {
-				builder.localGet(newLength); builder.localSet(cursor);
-				builder.localGet(length); builder.localSet(clearEnd);
+				builder.localGet(newLength);
+				builder.localSet(cursor);
+				builder.localGet(length);
+				builder.localSet(clearEnd);
 			});
 			builder.block(function(builder) {
 				builder.loop(function(builder) {
-					builder.localGet(cursor); builder.localGet(clearEnd); builder.emit(I32LtS);
+					builder.localGet(cursor);
+					builder.localGet(clearEnd);
+					builder.emit(I32LtS);
 					builder.ifElse(function(builder) {
-						builder.localGet(array); builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
-						builder.localGet(cursor); builder.i32Const(stride); builder.emit(I32Mul); builder.i32Add();
-						builder.emit(arrayZero(elementType)); builder.emit(arrayStore(elementType, 0));
-						builder.localGet(cursor); builder.i32Const(1); builder.i32Add(); builder.localSet(cursor);
+						builder.localGet(array);
+						builder.emit(I32Load(WasmLayout.ARRAY_DATA_POINTER_OFFSET));
+						builder.localGet(cursor);
+						builder.i32Const(stride);
+						builder.emit(I32Mul);
+						builder.i32Add();
+						builder.emit(arrayZero(elementType));
+						builder.emit(arrayStore(elementType, 0));
+						builder.localGet(cursor);
+						builder.i32Const(1);
+						builder.i32Add();
+						builder.localSet(cursor);
 						builder.emit(Br(1));
 					}, function(builder) builder.emit(Br(2)));
 				});
 			});
-			builder.localGet(array); builder.localGet(newLength); builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
+			builder.localGet(array);
+			builder.localGet(newLength);
+			builder.emit(I32Store(WasmLayout.ARRAY_LENGTH_OFFSET));
 		});
 		return module.addFunction(builder.finish());
 	}
 
-	public static function addArrayRemove(module:WasmModule, name:String, stride:Int, elementType:WasmValueType, stringEqual:Null<Int>):Int {
+	public static function addArrayRemove(module:WasmModule, name:String, stride:Int, elementType:WasmValueType,
+			stringEqual:Null<Int>):Int {
 		var compare = stringEqual == null ? arrayEqual(elementType) : null,
 			builder = new WasmFunctionBuilder(name, {parameters: [I32, elementType], results: [I32]}),
 			array = builder.parameter("array", 0),
@@ -1249,7 +1277,8 @@ class WasmLinearArrays {
 			LocalGet(1),
 			Return
 		]);
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, type, [{type: I32}, {type: I32}, {type: I32}], body));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, type, [{type: I32}, {type: I32}, {type: I32}],
+			body));
 	}
 
 	/** Storage element type recorded by each allocator; reference arrays start as dynamic storage. */

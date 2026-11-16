@@ -18,9 +18,11 @@ import nativekit.ffi.NativeKitTypes.TransportOptions;
 class TransportInterop {
 	public static function options(port:Int, ?host:String = "127.0.0.1"):TransportOptions {
 		if (port <= 0 || port > 65535)
-			throw BindingError.invalidArgument("TransportInterop.options", "NativeKit transport port is outside the valid range");
+			throw BindingError.invalidArgument("TransportInterop.options",
+				"NativeKit transport port is outside the valid range");
 		if (host == null || host.length == 0)
-			throw BindingError.invalidArgument("TransportInterop.options", "NativeKit transport host must not be empty");
+			throw BindingError.invalidArgument("TransportInterop.options",
+				"NativeKit transport host must not be empty");
 		var value = new TransportOptions();
 		value.set_struct_size(TransportOptions.size());
 		value.set_kind(TransportKind.Tcp);
@@ -52,12 +54,14 @@ class TransportInterop {
 	}
 
 	/** WebSocket JSON/message transport; NativeKit owns the handshake and control frames. */
-	public static function websocket(host:String, port:Int, path:String, timeout:Float, secure:Bool = false):OwnedTransportHandle {
+	public static function websocket(host:String, port:Int, path:String, timeout:Float,
+			secure:Bool = false):OwnedTransportHandle {
 		if (!Math.isFinite(timeout) || timeout < 0.001 || timeout > 2147483.0)
 			throw BindingError.invalidArgument("TransportInterop.websocket", "Invalid WebSocket timeout");
 		var value = options(port, host);
 		value.set_kind(TransportKind.Websocket);
-		value.set_flags(TransportFlags.Messages | TransportFlags.Text | (secure ? TransportFlags.Secure : TransportFlags.empty()));
+		value.set_flags(TransportFlags.Messages | TransportFlags.Text
+			| (secure ? TransportFlags.Secure : TransportFlags.empty()));
 		value.set_path(path);
 		value.set_timeout_ms(Std.int(timeout * 1000));
 		var result = NativeKit.nk_transport_connect(value);
@@ -75,7 +79,8 @@ class TransportInterop {
 		if (result.status == Result.ErrorPayloadTooLarge) {
 			var needed = Int64.toInt(result.out_received);
 			if (needed < 0 || needed > 4 * 1024 * 1024)
-				throw new NativeKitError(result.status, "TransportInterop.receiveMessage", "NativeKit message exceeds receive limit");
+				throw new NativeKitError(result.status, "TransportInterop.receiveMessage",
+					"NativeKit message exceeds receive limit");
 			buffer = Bytes.alloc(needed);
 			result = NativeKit.nk_transport_receive(transport, buffer);
 		}
@@ -92,7 +97,8 @@ class TransportInterop {
 
 	public static function sendStatus(transport:TransportHandle, bytes:Bytes):Result {
 		if (bytes == null)
-			throw BindingError.invalidArgument("TransportInterop.sendStatus", "NativeKit transport cannot send null bytes");
+			throw BindingError.invalidArgument("TransportInterop.sendStatus",
+				"NativeKit transport cannot send null bytes");
 		return NativeKit.nk_transport_send(transport, bytes);
 	}
 
@@ -114,7 +120,8 @@ class TransportInterop {
 
 	public static function receive(transport:TransportHandle, ?capacity:Int = 64 * 1024):Bytes {
 		if (capacity <= 0)
-			throw BindingError.invalidArgument("TransportInterop.receive", "NativeKit transport receive capacity must be positive");
+			throw BindingError.invalidArgument("TransportInterop.receive",
+				"NativeKit transport receive capacity must be positive");
 		var buffer = Bytes.alloc(capacity);
 		var result = NativeKit.nk_transport_receive(transport, buffer);
 		if (result.status == Result.TransportWouldBlock)

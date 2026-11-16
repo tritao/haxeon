@@ -11,19 +11,26 @@ class IrValueInterfaceBoxes {
 	public static inline final UNBOX_PREFIX = "$value-interface-unbox:";
 	static inline final TYPE_ID = "$value-interface-object-type-id";
 
-	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>, ?existingFunctions:Array<IrFunction>):Array<IrFunction> {
+	public static function rewrite(functions:Array<IrFunction>, objects:Array<IrObject>, interfaces:Array<IrInterface>,
+			?existingFunctions:Array<IrFunction>):Array<IrFunction> {
 		var objectMap:Map<String, IrObject> = [for (object in objects) object.name => object],
-			functionMap = new IrFunctionIndex("value-interface-boxes", existingFunctions == null ? functions : existingFunctions.concat(functions)),
+			functionMap = new IrFunctionIndex("value-interface-boxes",
+				existingFunctions == null ? functions : existingFunctions.concat(functions)),
 			interfaceMap:Map<String, IrInterface> = [for (entry in interfaces) entry.name => entry],
-			boxes:Map<String, String> = [], unboxes:Map<String, String> = [], typeTests:Map<String, String> = [],
-			interfaceCasts:Map<String, String> = [], generated:Array<IrFunction> = [];
+			boxes:Map<String, String> = [],
+			unboxes:Map<String, String> = [],
+			typeTests:Map<String, String> = [],
+			interfaceCasts:Map<String, String> = [],
+			generated:Array<IrFunction> = [];
 		function boxFor(valueName:String):String {
 			var existing = boxes.get(valueName);
 			if (existing != null) return existing;
 			var value = objectMap.get(valueName);
 			if (value == null || !value.isValue) throw 'Missing value layout "$valueName"';
-			var boxName = BOX_PREFIX + valueName, methods:Array<IrObjectMethod> = [],
-				contracts:Map<String, IrInterfaceMethod> = [], visited:Map<String, Bool> = [];
+			var boxName = BOX_PREFIX + valueName,
+				methods:Array<IrObjectMethod> = [],
+				contracts:Map<String, IrInterfaceMethod> = [],
+				visited:Map<String, Bool> = [];
 			boxes.set(valueName, boxName);
 			if (objectMap.exists(boxName)) return boxName;
 			function collect(name:String):Void {
@@ -39,7 +46,11 @@ class IrValueInterfaceBoxes {
 			for (method in value.methods) if (!contracts.exists(method.name)) {
 				var fn = functionMap.get(method.functionName);
 				if (fn != null && fn.arguments.length > 0)
-					contracts.set(method.name, {name: method.name, arguments: [for (argument in fn.arguments.slice(1)) argument.type], result: fn.result});
+					contracts.set(method.name, {
+						name: method.name,
+						arguments: [for (argument in fn.arguments.slice(1)) argument.type],
+						result: fn.result
+					});
 			}
 			var methodNames = [for (methodName in contracts.keys()) methodName];
 			methodNames.sort(Reflect.compare);
@@ -47,22 +58,39 @@ class IrValueInterfaceBoxes {
 				var contract = contracts.get(methodName);
 				if (contract == null) throw 'Missing interface contract "$methodName"';
 				var implementation:Null<IrFunction> = null;
-				for (method in value.methods) if (method.name == methodName) implementation = functionMap.get(method.functionName);
+				for (method in value.methods) if (method.name == methodName) implementation =
+					functionMap.get(method.functionName);
 				if (implementation == null) throw 'Missing implementation of "$valueName.$methodName"';
-				var wrapper = boxName + "." + methodName, builder = new IrBuilder(), receiver = builder.argument("this", Obj(boxName)),
-					arguments = [for (index in 0...contract.arguments.length) builder.argument('argument$index', contract.arguments[index])],
+				var wrapper = boxName + "." + methodName,
+					builder = new IrBuilder(),
+					receiver = builder.argument("this", Obj(boxName)),
+					arguments = [for (index in 0...contract.arguments.length) builder.argument('argument$index',
+						contract.arguments[index])],
 					payload = builder.fieldGet(receiver, "value", Obj(valueName));
-				if (implementation.arguments.length != arguments.length + 1) throw 'Invalid interface implementation "$valueName.$methodName"';
+				if (implementation.arguments.length != arguments.length + 1)
+					throw 'Invalid interface implementation "$valueName.$methodName"';
 				var adapted = [for (index in 0...arguments.length)
-					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type, objectMap)];
+					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
+					objectMap)];
 				var result = builder.call(implementation.name, [payload].concat(adapted), implementation.result);
-				builder.returnValue((switch (contract.result) { case Void: true; default: false; }) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
+				builder.returnValue((switch (contract.result) {
+					case Void: true;
+					default: false;
+				}) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
 				methods.push({name: methodName, functionName: wrapper});
-				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperations.detailed(ProviderOperation.InterfaceBox, methodName))));
+				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks,
+					Provider(TypeKey.of(Obj(valueName)),
+					ProviderOperations.detailed(ProviderOperation.InterfaceBox, methodName))));
 			}
 			methods.sort((a, b) -> Reflect.compare(a.name, b.name));
-			var box:IrObject = {name: boxName, isValue: false, base: null, interfaces: value.interfaces.copy(),
-				fields: [{name: "value", type: Obj(valueName)}], methods: methods};
+			var box:IrObject = {
+				name: boxName,
+				isValue: false,
+				base: null,
+				interfaces: value.interfaces.copy(),
+				fields: [{name: "value", type: Obj(valueName)}],
+				methods: methods
+			};
 			objects.push(box);
 			objectMap.set(boxName, box);
 			return boxName;
@@ -70,24 +98,34 @@ class IrValueInterfaceBoxes {
 		function unboxFor(valueName:String):String {
 			var existing = unboxes.get(valueName);
 			if (existing != null) return existing;
-			var boxName = boxFor(valueName), name = UNBOX_PREFIX + valueName,
-				builder = new IrBuilder(), input = builder.argument("value", Dyn), boxed = builder.createBlock(), direct = builder.createBlock();
+			var boxName = boxFor(valueName),
+				name = UNBOX_PREFIX + valueName,
+				builder = new IrBuilder(),
+				input = builder.argument("value", Dyn),
+				boxed = builder.createBlock(),
+				direct = builder.createBlock();
 			unboxes.set(valueName, name);
 			if (functionMap.exists(name)) return name;
-			builder.branch(builder.call("__std_is_of_type", [input, builder.typeValue(Obj(boxName))], Bool), boxed, direct);
+			builder.branch(builder.call("__std_is_of_type", [input, builder.typeValue(Obj(boxName))], Bool), boxed,
+				direct);
 			builder.select(boxed);
 			builder.returnValue(builder.fieldGet(builder.safeCast(input, Obj(boxName)), "value", Obj(valueName)));
 			builder.select(direct);
 			builder.returnValue(builder.safeCast(input, Obj(valueName)));
-			generated.push(new IrFunction(name, builder.arguments, Obj(valueName), builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperation.InterfaceUnbox)));
+			generated.push(new IrFunction(name, builder.arguments, Obj(valueName), builder.blocks,
+				Provider(TypeKey.of(Obj(valueName)), ProviderOperation.InterfaceUnbox)));
 			return name;
 		}
 		function typeTestFor(valueName:String, exact:Bool):String {
 			var key = (exact ? "exact:" : "instance:") + valueName, existing = typeTests.get(key);
 			if (existing != null) return existing;
-			var name = "$value-interface-type-test:" + key, boxName = boxFor(valueName),
-				intrinsic = exact ? "__std_is_exact_type" : "__std_is_of_type", builder = new IrBuilder(),
-				input = builder.argument("value", Dyn), matched = builder.createBlock(), boxed = builder.createBlock();
+			var name = "$value-interface-type-test:" + key,
+				boxName = boxFor(valueName),
+				intrinsic = exact ? "__std_is_exact_type" : "__std_is_of_type",
+				builder = new IrBuilder(),
+				input = builder.argument("value", Dyn),
+				matched = builder.createBlock(),
+				boxed = builder.createBlock();
 			typeTests.set(key, name);
 			if (functionMap.exists(name)) return name;
 			builder.branch(builder.call(intrinsic, [input, builder.typeValue(Obj(valueName))], Bool), matched, boxed);
@@ -95,7 +133,9 @@ class IrValueInterfaceBoxes {
 			builder.returnValue(builder.constBool(true));
 			builder.select(boxed);
 			builder.returnValue(builder.call(intrinsic, [input, builder.typeValue(Obj(boxName))], Bool));
-			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks, Provider(TypeKey.of(Obj(valueName)), ProviderOperations.detailed(ProviderOperation.InterfaceTypeTest, exact ? "exact" : "instance"))));
+			generated.push(new IrFunction(name, builder.arguments, Bool, builder.blocks,
+				Provider(TypeKey.of(Obj(valueName)),
+				ProviderOperations.detailed(ProviderOperation.InterfaceTypeTest, exact ? "exact" : "instance"))));
 			return name;
 		}
 		function interfaceCastFor(interfaceName:String):String {
@@ -116,17 +156,24 @@ class IrValueInterfaceBoxes {
 				if (matches) candidates.push(object.name);
 			}
 			candidates.sort(Reflect.compare);
-			var name = "$value-interface-cast:" + interfaceName, builder = new IrBuilder(), input = builder.argument("value", Dyn);
+			var name = "$value-interface-cast:" + interfaceName,
+				builder = new IrBuilder(),
+				input = builder.argument("value", Dyn);
 			interfaceCasts.set(interfaceName, name);
 			if (functionMap.exists(name)) return name;
 			for (valueName in candidates) {
-				var existingBox = builder.createBlock(), checkValue = builder.createBlock(), matched = builder.createBlock(), next = builder.createBlock(),
+				var existingBox = builder.createBlock(),
+					checkValue = builder.createBlock(),
+					matched = builder.createBlock(),
+					next = builder.createBlock(),
 					boxName = boxFor(valueName);
-				builder.branch(builder.call("__std_is_of_type", [input, builder.typeValue(Obj(boxName))], Bool), existingBox, checkValue);
+				builder.branch(builder.call("__std_is_of_type", [input, builder.typeValue(Obj(boxName))], Bool),
+					existingBox, checkValue);
 				builder.select(existingBox);
 				builder.returnValue(builder.safeCast(input, Virtual(interfaceName)));
 				builder.select(checkValue);
-				builder.branch(builder.call("__std_is_of_type", [input, builder.typeValue(Obj(valueName))], Bool), matched, next);
+				builder.branch(builder.call("__std_is_of_type", [input, builder.typeValue(Obj(valueName))], Bool),
+					matched, next);
 				builder.select(matched);
 				var payload = builder.safeCast(input, Obj(valueName)), box = builder.newObject(boxName);
 				builder.fieldSet(box, "value", payload);
@@ -134,12 +181,15 @@ class IrValueInterfaceBoxes {
 				builder.select(next);
 			}
 			builder.returnValue(builder.safeCast(input, Virtual(interfaceName)));
-			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks, Provider(TypeKey.of(Virtual(interfaceName)), ProviderOperation.InterfaceCast)));
+			generated.push(new IrFunction(name, builder.arguments, Virtual(interfaceName), builder.blocks,
+				Provider(TypeKey.of(Virtual(interfaceName)), ProviderOperation.InterfaceCast)));
 			return name;
 		}
 		var rewritten:Array<IrFunction> = [], needsTypeId = false;
 		// The function being rewritten: its type values and next free value id are only worked out when an instruction needs them.
-		var current:IrFunction = new IrFunction("", [], Void, [], Ordinary), typesOfCurrent:Null<Map<Int, IrType>> = null, next = -1;
+		var current:IrFunction = new IrFunction("", [], Void, [], Ordinary),
+			typesOfCurrent:Null<Map<Int, IrType>> = null,
+			next = -1;
 		function types():Map<Int, IrType> {
 			if (typesOfCurrent == null) {
 				typesOfCurrent = [];
@@ -160,13 +210,21 @@ class IrValueInterfaceBoxes {
 				case Call(out, "__dynamic_object_type_id", arguments) if (current.name != TYPE_ID):
 					needsTypeId = true;
 					[new Located(Call(out, TYPE_ID, arguments), located.provenance)];
-				case Call(out, intrinsic, arguments) if ((intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type")
+				case Call(out, intrinsic,
+					arguments) if ((intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type")
 					&& arguments.length == 2 && types().exists(arguments[1].id)):
-					var object = switch types().get(arguments[1].id) { case Obj(name): objectMap.get(name); default: null; };
+					var object = switch types().get(arguments[1].id) {
+						case Obj(name): objectMap.get(name);
+						default: null;
+					};
 					if (object == null || !object.isValue || object.interfaces.length == 0) null;
-					else [new Located(Call(out, typeTestFor(object.name, intrinsic == "__std_is_exact_type"), [arguments[0]]), located.provenance)];
+					else [new Located(Call(out, typeTestFor(object.name, intrinsic == "__std_is_exact_type"),
+						[arguments[0]]), located.provenance)];
 				case ToVirtual(out, input):
-					var object = switch input.type { case Obj(name): objectMap.get(name); default: null; };
+					var object = switch input.type {
+						case Obj(name): objectMap.get(name);
+						default: null;
+					};
 					if (object == null || !object.isValue) null;
 					else {
 						var name = boxFor(object.name), box = new IrValue(freshId(), "$interface-box", Obj(name));
@@ -177,7 +235,10 @@ class IrValueInterfaceBoxes {
 						];
 					}
 				case SafeCast(out, input):
-					var interfaceName = switch [out.type, input.type] { case [Virtual(name), Dyn]: name; default: null; };
+					var interfaceName = switch [out.type, input.type] {
+						case [Virtual(name), Dyn]: name;
+						default: null;
+					};
 					if (interfaceName != null && interfaceMap.exists(interfaceName))
 						[new Located(Call(out, interfaceCastFor(interfaceName), [input]), located.provenance)];
 					else {
@@ -188,11 +249,15 @@ class IrValueInterfaceBoxes {
 						if (object == null || !object.isValue || object.interfaces.length == 0) null;
 						else {
 							var erased = input, instructions:Array<Located<IrInstruction>> = [];
-							if ((switch (input.type) { case Dyn: false; default: true; })) {
+							if ((switch (input.type) {
+								case Dyn: false;
+								default: true;
+							})) {
 								erased = new IrValue(freshId(), "$interface-erased", Dyn);
 								instructions.push(new Located(ToDyn(erased, input), located.provenance));
 							}
-							instructions.push(new Located(Call(out, unboxFor(object.name), [erased]), located.provenance));
+							instructions.push(new Located(Call(out, unboxFor(object.name), [erased]),
+								located.provenance));
 							instructions;
 						}
 					}
@@ -217,18 +282,23 @@ class IrValueInterfaceBoxes {
 				group.push(value);
 			}
 			for (group in byId) group.sort(Reflect.compare);
-			var builder = new IrBuilder(), input = builder.argument("value", Dyn),
-				physical = builder.call("__dynamic_object_type_id", [input], I32), missing = builder.createBlock();
+			var builder = new IrBuilder(),
+				input = builder.argument("value", Dyn),
+				physical = builder.call("__dynamic_object_type_id", [input], I32),
+				missing = builder.createBlock();
 			IrTypeHashDispatch.emit(builder, physical, [for (id in byId.keys()) id], function(id) {
 				for (value in byId.get(id)) {
 					var matched = builder.createBlock(), next = builder.createBlock();
-					builder.branch(builder.call("__std_is_exact_type", [input, builder.typeValue(Obj(boxes.get(value)))], Bool), matched, next);
-					builder.select(matched); builder.returnValue(builder.constInt(IrTypeIdentity.id(Obj(value))));
+					builder.branch(builder.call("__std_is_exact_type",
+						[input, builder.typeValue(Obj(boxes.get(value)))], Bool), matched, next);
+					builder.select(matched);
+					builder.returnValue(builder.constInt(IrTypeIdentity.id(Obj(value))));
 					builder.select(next);
 				}
 				builder.jump(missing);
 			}, missing);
-			builder.select(missing); builder.returnValue(physical);
+			builder.select(missing);
+			builder.returnValue(physical);
 			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks, GeneratedHelper));
 		}
 		return rewritten.concat(generated);

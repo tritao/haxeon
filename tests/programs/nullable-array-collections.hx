@@ -1,6 +1,8 @@
 struct NullableArrayValue {
 	public final value:Int;
-	public function new(value:Int) { this.value = value; }
+	public function new(value:Int) {
+		this.value = value;
+	}
 }
 
 function main():Int {

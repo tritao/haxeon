@@ -55,35 +55,44 @@ class Requests {
 
 	public function openResource(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
 		ensureLive();
-		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.openResource", "Parent and options cannot be null");
-		return resourceDialog(NativeKit.nk_dialog_open_resource_checked(new Handle(parent.nativeHandle().rawValue()), options.nativeValue()));
+		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.openResource",
+			"Parent and options cannot be null");
+		return resourceDialog(NativeKit.nk_dialog_open_resource_checked(new Handle(parent.nativeHandle().rawValue()),
+			options.nativeValue()));
 	}
 
 	public function saveResource(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
 		ensureLive();
-		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.saveResource", "Parent and options cannot be null");
-		return resourceDialog(NativeKit.nk_dialog_save_resource_checked(new Handle(parent.nativeHandle().rawValue()), options.nativeValue()));
+		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.saveResource",
+			"Parent and options cannot be null");
+		return resourceDialog(NativeKit.nk_dialog_save_resource_checked(new Handle(parent.nativeHandle().rawValue()),
+			options.nativeValue()));
 	}
 
 	public function selectResourceDirectory(parent:Window, options:FileDialogOptions):Future<Array<Resource>> {
 		ensureLive();
-		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.selectResourceDirectory", "Parent and options cannot be null");
-		return resourceDialog(NativeKit.nk_dialog_select_resource_directory_checked(new Handle(parent.nativeHandle().rawValue()), options.nativeValue()));
+		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.selectResourceDirectory",
+			"Parent and options cannot be null");
+		return resourceDialog(NativeKit.nk_dialog_select_resource_directory_checked(new Handle(parent.nativeHandle()
+			.rawValue()), options.nativeValue()));
 	}
 
 	/** Commits a raw writable stream; Success(true) means a download was initiated. */
 	public function commitResourceNative(stream:ResourceStreamHandle):Future<Bool> {
 		ensureLive();
 		return registerRequest(NativeKit.nk_resource_commit_checked(stream), function(value, _) switch value {
-			case ResourceCommit(_, result, downloadInitiated): resultOutcome(result, downloadInitiated, "Requests.commitResourceNative");
+			case ResourceCommit(_, result, downloadInitiated): resultOutcome(result, downloadInitiated,
+				"Requests.commitResourceNative");
 			case _: wrongEvent("resource commit");
 		});
 	}
 
 	public function messageDialog(parent:Window, options:MessageDialogOptions):Future<MessageResult> {
 		ensureLive();
-		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.messageDialog", "Parent and options cannot be null");
-		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue()), options.nativeValue());
+		if (parent == null || options == null) throw BindingError.invalidArgument("Requests.messageDialog",
+			"Parent and options cannot be null");
+		var request = NativeKit.nk_dialog_message_checked(new Handle(parent.nativeHandle().rawValue()),
+			options.nativeValue());
 		return registerRequest(request, function(value, cancellationRequested) switch value {
 			case DialogMessage(_, result, button, _): messageOutcome(result, button, cancellationRequested);
 			case _: wrongEvent("message dialog");
@@ -92,16 +101,19 @@ class Requests {
 
 	public function evaluateWebView(webview:WebView, script:String):Future<String> {
 		ensureLive();
-		if (webview == null || script == null) throw BindingError.invalidArgument("Requests.evaluateWebView", "WebView and script cannot be null");
-		return registerRequest(NativeKit.nk_webview_eval_checked(webview.nativeHandle(), script), function(value, _) switch value {
-			case WebViewEvaluation(_, _, result, json): resultOutcome(result, json, "Requests.evaluateWebView", result == Result.Ok ? null : json);
-			case _: wrongEvent("WebView evaluation");
-		});
+		if (webview == null || script == null) throw BindingError.invalidArgument("Requests.evaluateWebView",
+			"WebView and script cannot be null");
+		return registerRequest(NativeKit.nk_webview_eval_checked(webview.nativeHandle(), script),
+			function(value, _) switch value {
+				case WebViewEvaluation(_, _, result, json): resultOutcome(result, json, "Requests.evaluateWebView",
+					result == Result.Ok ? null : json);
+				case _: wrongEvent("WebView evaluation");
+			});
 	}
 
 	/** Explicit interop for a native request; decoder failures become terminal Failure outcomes. */
 	public function trackNative<T>(request:haxe.Int64, decode:PlatformEvent->Outcome<T>,
-		?cancelNative:Void->Void):Future<T> {
+			?cancelNative:Void->Void):Future<T> {
 		ensureLive();
 		if (decode == null) throw BindingError.invalidArgument("Requests.trackNative", "Decoder cannot be null");
 		return registerRequest(request, function(value, _) return decode(value), cancelNative);
@@ -110,7 +122,8 @@ class Requests {
 	/** Observes a native task without installing a managed worker callback. The caller owns the task. */
 	public function trackTask<T>(task:Task, decode:haxe.io.Bytes->T):Future<T> {
 		ensureLive();
-		if (task == null || decode == null) throw BindingError.invalidArgument("Requests.trackTask", "Task and decoder cannot be null");
+		if (task == null || decode == null) throw BindingError.invalidArgument("Requests.trackTask",
+			"Task and decoder cannot be null");
 		return register("task:" + Std.string(task.nativeHandle().rawValue()), function(value, _) switch value {
 			case TaskComplete(_, result, data):
 				// register() catches decoder exceptions separately from completion-observer exceptions.
@@ -125,19 +138,21 @@ class Requests {
 
 	function resourceDialog(request:haxe.Int64):Future<Array<Resource>> {
 		return registerRequest(request, function(value, _) switch value {
-			case Resources(EventKind.DialogResourcesComplete, _, result, accepted, items): acceptedOutcome(result, accepted, items);
+			case Resources(EventKind.DialogResourcesComplete, _, result, accepted, items): acceptedOutcome(result,
+				accepted, items);
 			case _: wrongEvent("resource dialog");
 		}, function() NativeKit.nk_dialog_cancel_checked(request));
 	}
 
 	function registerRequest<T>(request:haxe.Int64, decode:PlatformEvent->Bool->Outcome<T>,
-		?cancelNative:Void->Void):Future<T> {
-		if (request == haxe.Int64.ofInt(0)) throw BindingError.invalidArgument("Requests.registerRequest", "Request ID cannot be zero");
+			?cancelNative:Void->Void):Future<T> {
+		if (request == haxe.Int64.ofInt(0)) throw BindingError.invalidArgument("Requests.registerRequest",
+			"Request ID cannot be zero");
 		return register("request:" + Std.string(request), decode, cancelNative);
 	}
 
 	function register<T>(key:String, decode:PlatformEvent->Bool->Outcome<T>,
-		cancelNative:Null<Void->Void>):Future<T> {
+			cancelNative:Null<Void->Void>):Future<T> {
 		ensureLive();
 		if (entries.exists(key)) throw BindingError.invalidState("Requests.register", "Operation is already tracked");
 		var promise = new Promise<T>();
@@ -203,7 +218,8 @@ class Requests {
 
 	static function eventKey(value:PlatformEvent):Null<String> {
 		var key:Null<String> = switch value {
-			case TaskProgress(source, _) | TaskComplete(source, _, _) | TaskFailed(source, _, _) | TaskCancelled(source, _, _):
+			case TaskProgress(source, _) | TaskComplete(source, _, _) | TaskFailed(source, _, _) | TaskCancelled(source,
+				_, _):
 				return "task:" + Std.string(source.rawValue());
 			case ClipboardText(id, _, _): Std.string(id);
 			case ClipboardFiles(id, _, _): Std.string(id);
@@ -224,12 +240,13 @@ class Requests {
 	}
 
 	static function resultOutcome<T>(result:Result, value:T, operation:String,
-		?message:Null<String>):Outcome<T> {
-		return result == Result.Ok ? Success(value) : result == Result.ErrorCancelled ? Cancelled : Failure(new NativeKitError(result, operation, message));
+			?message:Null<String>):Outcome<T> {
+		return result == Result.Ok ? Success(value) : result == Result.ErrorCancelled
+			? Cancelled : Failure(new NativeKitError(result, operation, message));
 	}
 
 	static function acceptedOutcome<T>(result:Result, accepted:Bool,
-		value:T):Outcome<T> {
+			value:T):Outcome<T> {
 		if (result == Result.ErrorCancelled) return Cancelled;
 		if (result != Result.Ok)
 			return Failure(new NativeKitError(result, "Requests.resourceDialog", null));
@@ -237,7 +254,7 @@ class Requests {
 	}
 
 	static function messageOutcome(result:Result, button:MessageResult,
-		cancellationRequested:Bool):Outcome<MessageResult> {
+			cancellationRequested:Bool):Outcome<MessageResult> {
 		if (result == Result.ErrorCancelled) return Cancelled;
 		if (result != Result.Ok)
 			return Failure(new NativeKitError(result, "Requests.messageDialog", null));

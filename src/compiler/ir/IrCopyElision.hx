@@ -88,7 +88,11 @@ class IrCopyElision {
 
 	function tryElide(blocks:Array<IrBlock>, block:IrBlock, allocation:Int, copy:IrValue):Bool {
 		// The copy's fields are written from reads of one source, and the copy has one other use: a call argument.
-		var writes:Array<Int> = [], feeders:Array<Int> = [], source:Null<IrValue> = null, callPosition = -1, argument = -1;
+		var writes:Array<Int> = [],
+			feeders:Array<Int> = [],
+			source:Null<IrValue> = null,
+			callPosition = -1,
+			argument = -1;
 		for (other in blocks)
 			for (position in 0...other.instructions.length) {
 				var instruction = other.instructions[position].value;
@@ -125,7 +129,8 @@ class IrCopyElision {
 					case Call(_, _, arguments) if (callPosition < 0 && uses == 1):
 						callPosition = position;
 						argument = indexOf(arguments, copy);
-					case MethodCall(_, receiver, _, arguments, _) if (callPosition < 0 && uses == 1 && receiver.id != copy.id):
+					case MethodCall(_, receiver, _, arguments,
+						_) if (callPosition < 0 && uses == 1 && receiver.id != copy.id):
 						callPosition = position;
 						argument = indexOf(arguments, copy) + 1;
 					default:
@@ -232,14 +237,16 @@ class IrCopyElision {
 												found = true;
 										found;
 									case MethodCall(_, receiver, method, arguments, _):
-										var target = valueMethod(receiver, method), found = target == null && tainted.exists(receiver.id);
+										var target = valueMethod(receiver, method),
+											found = target == null && tainted.exists(receiver.id);
 										if (target != null
 											&& tainted.exists(receiver.id)
 											&& resultDependsOnParameter(target, 0, visiting, depth + 1))
 											found = true;
 										for (argument in 0...arguments.length)
 											if (tainted.exists(arguments[argument].id)
-												&& (target == null || resultDependsOnParameter(target, argument + 1, visiting, depth + 1)))
+												&& (target == null
+												|| resultDependsOnParameter(target, argument + 1, visiting, depth + 1)))
 												found = true;
 										found;
 									default:
@@ -277,7 +284,8 @@ class IrCopyElision {
 
 	static function canCarryIdentity(type:IrType):Bool
 		return switch type {
-			case Bytes, RawPtr, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): true;
+			case Bytes, RawPtr, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_),
+				Iterator(_), Function(_, _): true;
 			case Nullable(element): canCarryIdentity(element);
 			case _: false;
 		};
@@ -312,7 +320,8 @@ class IrCopyElision {
 				continue;
 			switch instruction {
 				case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME):
-				case Call(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _), CNativeCall(_, _, _), ArraySet(_, _, _), GlobalSet(_, _),
+				case Call(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _), CNativeCall(_, _, _),
+					ArraySet(_, _, _), GlobalSet(_, _),
 					MemoryStore(_, _, _), IteratorNext(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_):
 					return false;
 				case FieldSet(target, _, _):
@@ -332,10 +341,12 @@ class IrCopyElision {
 	}
 
 	static function replaceArgument(instruction:IrInstruction, from:IrValue, to:IrValue):IrInstruction {
-		var swap = function(values:Array<IrValue>):Array<IrValue> return [for (value in values) value.id == from.id ? to : value];
+		var swap = function(values:Array<IrValue>):Array<IrValue> return [for (value in values) value.id == from.id
+			? to : value];
 		return switch instruction {
 			case Call(out, name, arguments): Call(out, name, swap(arguments));
-			case MethodCall(out, receiver, name, arguments, terminalReceiver): MethodCall(out, receiver, name, swap(arguments), terminalReceiver);
+			case MethodCall(out, receiver, name, arguments, terminalReceiver): MethodCall(out, receiver, name,
+				swap(arguments), terminalReceiver);
 			default: instruction;
 		};
 	}
@@ -344,10 +355,14 @@ class IrCopyElision {
 	function calleeOf(instruction:IrInstruction, argument:Int):Null<{name:String, parameter:Int}> {
 		switch instruction {
 			case Call(_, name, _):
-				return byName.exists(name) ? {name: name, parameter: argument} : null;
+				return byName.exists(name) ? {
+					name:name, parameter:argument
+				} : null;
 			case MethodCall(_, receiver, method, _, _):
 				var target = valueMethod(receiver, method);
-				return target != null && byName.exists(target) ? {name: target, parameter: argument} : null;
+				return target != null && byName.exists(target) ? {
+					name:target, parameter:argument
+				} : null;
 			default:
 				return null;
 		}
@@ -388,7 +403,8 @@ class IrCopyElision {
 					case FieldGet(_, target, _) if (target.id == parameter.id):
 					case Call(_, callee, arguments):
 						for (position in 0...arguments.length)
-							if (arguments[position].id == parameter.id && !readsOnly(callee, position, visiting, depth + 1))
+							if (arguments[position].id == parameter.id
+								&& !readsOnly(callee, position, visiting, depth + 1))
 								ok = false;
 					case MethodCall(_, receiver, method, arguments, _):
 						var target = valueMethod(receiver, method);
@@ -398,7 +414,8 @@ class IrCopyElision {
 							if (receiver.id == parameter.id && !readsOnly(target, 0, visiting, depth + 1))
 								ok = false;
 							for (position in 0...arguments.length)
-								if (arguments[position].id == parameter.id && !readsOnly(target, position + 1, visiting, depth + 1))
+								if (arguments[position].id == parameter.id
+									&& !readsOnly(target, position + 1, visiting, depth + 1))
 									ok = false;
 						}
 					default:
@@ -451,7 +468,8 @@ class IrCopyElision {
 					case FieldSet(target, _, _):
 						if (!fresh.exists(target.id) && !(allowThis && receiver != null && target.id == receiver.id))
 							ok = false;
-					case ArraySet(_, _, _), GlobalSet(_, _), MemoryStore(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _):
+					case ArraySet(_, _, _), GlobalSet(_, _), MemoryStore(_, _, _), CNativeCall(_, _, _),
+						CallClosure(_, _, _):
 						ok = false;
 					case Call(_, callee, arguments):
 						var target = byName.get(callee);
@@ -460,9 +478,9 @@ class IrCopyElision {
 								case Void: true;
 								default: false;
 							})
-							&& StringTools.endsWith(callee, ".new")
-							&& arguments.length > 0
-							&& fresh.exists(arguments[0].id);
+								&& StringTools.endsWith(callee, ".new")
+								&& arguments.length > 0
+								&& fresh.exists(arguments[0].id);
 						if (!storesNothing(callee, constructor, visiting, depth + 1))
 							ok = false;
 					case MethodCall(_, receiverValue, method, _, _):

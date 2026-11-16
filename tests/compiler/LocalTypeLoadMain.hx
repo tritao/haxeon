@@ -32,7 +32,8 @@ class LocalTypeLoadMain {
 		// dependency is the module that resolved (`pk.Types`), not the dotted type name, which names no module.
 		var compiler = new Compiler();
 		compiler.update("pk/Types.hx", "package pk; class Types {} enum abstract Kind(Int) { var One = 1; }");
-		compiler.update("pk/User.hx", "package pk; class User { public static function f():Int { var k:Types.Kind = cast 1; return 0; } }");
+		compiler.update("pk/User.hx",
+			"package pk; class User { public static function f():Int { var k:Types.Kind = cast 1; return 0; } }");
 		compiler.update("Main.hx", "import pk.User;\nfunction main():Int return User.f();");
 		try {
 			compiler.analyze("Main");

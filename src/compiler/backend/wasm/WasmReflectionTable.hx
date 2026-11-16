@@ -2,7 +2,10 @@ package compiler.backend.wasm;
 
 import compiler.ir.Ir.IrProgram;
 
-private typedef ReflectionRow = {final typeId:Int; final functions:Array<Null<String>>;}
+private typedef ReflectionRow = {
+	final typeId:Int;
+	final functions:Array<Null<String>>;
+}
 
 /**
  * The table both Wasm backends use to dispatch field reflection over object layouts (`__reflect_object_*`): one row per
@@ -49,7 +52,9 @@ class WasmReflectionTable {
 		}
 		var result:Array<ReflectionRow> = [];
 		for (object in program.objects) {
-			var functions:Array<Null<String>> = [for (_ in OPERATIONS) null], owner:Null<String> = object.name, found = false;
+			var functions:Array<Null<String>> = [for (_ in OPERATIONS) null],
+				owner:Null<String> = object.name,
+				found = false;
 			while (owner != null && !found) {
 				for (index in 0...OPERATIONS.length) {
 					var native = nativeNames[index];
@@ -75,7 +80,8 @@ class WasmReflectionTable {
 		return declares(program) ? rows(program, typeIds).length * ROW_SIZE : 0;
 
 	/** Writes the rows once every function has a slot in the table; a function the program never reaches gets -1. */
-	public static function fill(bytes:haxe.io.Bytes, program:IrProgram, slots:Map<String, Int>, typeIds:WasmTypeIdPlan):Void {
+	public static function fill(bytes:haxe.io.Bytes, program:IrProgram, slots:Map<String, Int>,
+			typeIds:WasmTypeIdPlan):Void {
 		var all = rows(program, typeIds);
 		for (index in 0...all.length) {
 			var offset = index * ROW_SIZE;

@@ -84,8 +84,8 @@ class TextInputBridge {
 
 	/** Request one host frame when a focused caret next changes visibility. */
 	public function requestCaretFrameAt(timeSeconds:Float):Void {
-		if (requestedActive && Math.isFinite(timeSeconds) && timeSeconds >= 0.0 &&
-			(nextCaretFrameAt < 0.0 || timeSeconds < nextCaretFrameAt))
+		if (requestedActive && Math.isFinite(timeSeconds) && timeSeconds >= 0.0
+			&& (nextCaretFrameAt < 0.0 || timeSeconds < nextCaretFrameAt))
 			nextCaretFrameAt = timeSeconds;
 	}
 
@@ -102,8 +102,8 @@ class TextInputBridge {
 			inputType:Int, flags:TextInputFlags, cursor:Rect,
 			selectionRects:Array<TextRangeRect>, compositionRects:Array<TextRangeRect>):Void {
 		ensureLive();
-		if (surface == null || surface.isDisposed() || !requestedActive || cursor == null ||
-			(platformChecked && !platformSupported))
+		if (surface == null || surface.isDisposed() || !requestedActive || cursor == null
+			|| (platformChecked && !platformSupported))
 			return;
 		if (coordinateScale != 1.0) {
 			cursor = new Rect(cursor.x * coordinateScale, cursor.y * coordinateScale,
@@ -112,13 +112,12 @@ class TextInputBridge {
 			compositionRects = scaleRects(compositionRects);
 		}
 		var windowStart:Int = window.start;
-		var stateChanged = publishedText != window.text || publishedState.length == 0 ||
-			publishedState[0] != windowStart || publishedState[1] != documentLength ||
-			publishedState[2] != selectionStart || publishedState[3] != selectionEnd ||
-			publishedState[4] != compositionStart || publishedState[5] != compositionEnd ||
-			publishedState[6] != inputType || publishedState[7] != flags.rawValue() ||
-			publishedState[8] != cursor.x || publishedState[9] != cursor.y ||
-			publishedState[10] != cursor.width || publishedState[11] != cursor.height;
+		var stateChanged = publishedText != window.text || publishedState.length == 0 || publishedState[0]
+			!= windowStart || publishedState[1] != documentLength || publishedState[2] != selectionStart
+			|| publishedState[3] != selectionEnd || publishedState[4] != compositionStart
+			|| publishedState[5] != compositionEnd || publishedState[6] != inputType
+			|| publishedState[7] != flags.rawValue() || publishedState[8] != cursor.x || publishedState[9] != cursor.y
+			|| publishedState[10] != cursor.width || publishedState[11] != cursor.height;
 		if (stateChanged) {
 			var state = new TextInputState(window.text, documentLength, selectionStart, selectionEnd);
 			state.textStart = window.start;
@@ -146,9 +145,8 @@ class TextInputBridge {
 			publishedState[10] = cursor.width;
 			publishedState[11] = cursor.height;
 		}
-		if (!stateChanged && publishedGeometry &&
-			matchesRects(selectionRects, publishedSelection) &&
-			matchesRects(compositionRects, publishedComposition)) return;
+		if (!stateChanged && publishedGeometry && matchesRects(selectionRects, publishedSelection)
+			&& matchesRects(compositionRects, publishedComposition)) return;
 		var result = TextInput.updateGeometryResult(surface, selectionStart, selectionEnd,
 			compositionStart, compositionEnd, encodeRangeRects(selectionRects),
 			encodeRangeRects(compositionRects));
@@ -176,8 +174,7 @@ class TextInputBridge {
 	}
 
 	function activatePlatform():Void {
-		if (platformActive || (platformChecked && !platformSupported) || surface == null ||
-			surface.isDisposed())
+		if (platformActive || (platformChecked && !platformSupported) || surface == null || surface.isDisposed())
 			return;
 		if (checkPlatformResult(TextInput.setActiveResult(surface, true),
 			"text-input activation"))
@@ -222,10 +219,9 @@ class TextInputBridge {
 		for (index in 0...count) {
 			var rect = rects[index];
 			var offset = index * 7;
-			if (rect == null || values[offset] != rect.x || values[offset + 1] != rect.y ||
-				values[offset + 2] != rect.width || values[offset + 3] != rect.height ||
-				values[offset + 4] != rect.start || values[offset + 5] != rect.end ||
-				values[offset + 6] != (rect.visualLeftIsStart ? 1 : 0)) return false;
+			if (rect == null || values[offset] != rect.x || values[offset + 1] != rect.y || values[offset + 2]
+				!= rect.width || values[offset + 3] != rect.height || values[offset + 4] != rect.start || values[offset
+				+ 5] != rect.end || values[offset + 6] != (rect.visualLeftIsStart ? 1 : 0)) return false;
 		}
 		return true;
 	}
@@ -254,9 +250,8 @@ class TextInputBridge {
 		var bytes = haxe.io.Bytes.alloc(rects.length * 32);
 		for (index in 0...rects.length) {
 			var rect = rects[index];
-			if (rect == null || rect.start < 0 || rect.end < rect.start || !finite(rect.x) ||
-				!finite(rect.y) || !finite(rect.width) || !finite(rect.height) ||
-				rect.width < 0.0 || rect.height < 0.0)
+			if (rect == null || rect.start < 0 || rect.end < rect.start || !finite(rect.x) || !finite(rect.y)
+				|| !finite(rect.width) || !finite(rect.height) || rect.width < 0.0 || rect.height < 0.0)
 				throw "Text input range geometry contains an invalid rectangle";
 			var offset = index * 32;
 			bytes.setInt32(offset, 32);

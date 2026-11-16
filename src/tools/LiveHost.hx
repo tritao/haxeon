@@ -13,7 +13,10 @@ import sys.io.File;
 import tools.LivePublication.LiveDescription;
 import tools.LivePublication.LiveFunction;
 
-private typedef FullModule = {final module:haxe.io.Bytes; final identity:haxe.io.Bytes;}
+private typedef FullModule = {
+	final module:haxe.io.Bytes;
+	final identity:haxe.io.Bytes;
+}
 
 /** Stable process that calls one application pump step at a time. */
 class LiveHost {
@@ -64,7 +67,8 @@ class LiveHost {
 					&& (candidate.revision != revision || candidate.moduleIdentity != description.moduleIdentity)
 					&& publicationKey(candidate) != rejectedPublication) {
 					// The same module numbered from scratch is a history the running module never had, like a new session.
-					var restarted = candidate.moduleIdentity == description.moduleIdentity && candidate.revision < revision,
+					var restarted = candidate.moduleIdentity == description.moduleIdentity
+						&& candidate.revision < revision,
 						sameHistory = candidate.moduleIdentity == description.moduleIdentity && !restarted,
 						patchable = LivePublication.canPatch(description, candidate);
 					if (strict && !sameHistory && lostHistory == null)
@@ -73,10 +77,12 @@ class LiveHost {
 						rejectedPublication = refuse(path, description, revision, candidate,
 							'the compiler no longer has the history of the running module ($lostHistory), so none of its builds can patch it; restart the app to load revision ${candidate.revision}',
 							false);
-					else if (strict && sameHistory && candidate.patchAvailable && !candidate.requiresReload && candidate.baseRevision >= 0
+					else if (strict && sameHistory && candidate.patchAvailable && !candidate.requiresReload
+						&& candidate.baseRevision >= 0
 						&& candidate.baseRevision != revision)
 						rejectedPublication = refuse(path, description, revision, candidate,
-							'its patch applies to revision ${candidate.baseRevision}, which this app refused; the next build patches revision $revision', true);
+							'its patch applies to revision ${candidate.baseRevision}, which this app refused; the next build patches revision $revision',
+							true);
 					else if (patchable) {
 						var failure:Null<String> = null, applied = false, held = false, readAt = describedAt;
 						// The app's hooks that threw: its errors, reported apart. The patch's outcome is what the runtime did.
@@ -86,9 +92,12 @@ class LiveHost {
 							var patchBytes = File.getBytes(path + ".hlp");
 							readAt = Sys.time();
 							// An app that rebuilds its UI from its code lets go of it around the patch (`Runtime.patchSetRebuilding`).
-							Runtime.patchSetRebuilding(module, new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions),
-								optionalFunctionId(description, entry + "." + LIVE_RELEASE), optionalFunctionId(description, entry + "." + LIVE_REBUILD),
-								(rebuilding, error) -> hookErrors.push('$entry.${rebuilding ? LIVE_REBUILD : LIVE_RELEASE}() threw: $error'));
+							Runtime.patchSetRebuilding(module,
+								new PatchSet(revision, candidate.revision, patchBytes, candidate.changedFunctions),
+								optionalFunctionId(description, entry + "." + LIVE_RELEASE),
+								optionalFunctionId(description, entry + "." + LIVE_REBUILD),
+								(rebuilding,
+								error) -> hookErrors.push('$entry.${rebuilding ? LIVE_REBUILD : LIVE_RELEASE}() threw: $error'));
 							applied = true;
 						} catch (error:RuntimeError) {
 							failure = error.message;
@@ -111,15 +120,17 @@ class LiveHost {
 							report('haxeon: patch timing ms: description=${Math.round((describedAt - seenAt) * 1000)} read=${Math.round((readAt - describedAt) * 1000)} apply=${Math.round((Sys.time() - readAt) * 1000)}');
 							report('haxeon: patched live module to revision $revision');
 						} else if (applied && strict)
-							// The revision runs and cannot be taken back; the objects that missed their initializers stay as they are.
-							banner('LIVE PATCH INCOMPLETE (--strict-live): revision $revision runs, but objects made before it lack field values', [
-								failure,
-								'those fields hold zero values (null, 0, false); restart the app to run revision $revision from a fresh state'
-							]);
+						// The revision runs and cannot be taken back; the objects that missed their initializers stay as they are.
+						banner('LIVE PATCH INCOMPLETE (--strict-live): revision $revision runs, but objects made before it lack field values', [
+							failure,
+							'those fields hold zero values (null, 0, false); restart the app to run revision $revision from a fresh state'
+						]);
 						else if (strict)
-							rejectedPublication = refuse(path, description, revision, candidate, held ? failure : 'the runtime rejected its patch: $failure', true);
+							rejectedPublication = refuse(path, description, revision, candidate,
+								held ? failure : 'the runtime rejected its patch: $failure', true);
 						else {
-							report(applied ? 'haxeon: patch incomplete; reloading module: $failure' : 'haxeon: patch rejected; reloading module: $failure');
+							report(applied ? 'haxeon: patch incomplete; reloading module: $failure'
+								: 'haxeon: patch rejected; reloading module: $failure');
 							var full = completeDescription(path, candidate);
 							if (full == null)
 								rejectedPublication = publicationKey(candidate);
@@ -129,7 +140,8 @@ class LiveHost {
 							}
 						}
 					} else if (strict)
-						rejectedPublication = refuse(path, description, revision, candidate, reloadCause(description, candidate), true);
+						rejectedPublication = refuse(path, description, revision, candidate,
+							reloadCause(description, candidate), true);
 					else {
 						report('haxeon: revision ${candidate.revision} cannot patch revision $revision (${reloadCause(description, candidate)}); reloading module');
 						var full = completeDescription(path, candidate);
@@ -173,7 +185,8 @@ class LiveHost {
 		Runtime.dispose(module);
 	}
 
-	static function reload(current:LoadedModule, previous:LiveDescription, next:LiveDescription, bytes:FullModule, entry:String,
+	static function reload(current:LoadedModule, previous:LiveDescription, next:LiveDescription, bytes:FullModule,
+			entry:String,
 			arguments:String):Null<LoadedModule> {
 		ProfileSpan.begin("live.reload");
 		var replacement = try reloadModule(current, previous, next, bytes, entry, arguments) catch (error:Dynamic) {
@@ -184,7 +197,8 @@ class LiveHost {
 		return replacement;
 	}
 
-	static function reloadModule(current:LoadedModule, previous:LiveDescription, next:LiveDescription, bytes:FullModule, entry:String,
+	static function reloadModule(current:LoadedModule, previous:LiveDescription, next:LiveDescription, bytes:FullModule,
+			entry:String,
 			arguments:String):Null<LoadedModule> {
 		var state:String;
 		try
@@ -250,11 +264,15 @@ class LiveHost {
 			recordForCompiler:Bool):String {
 		if (recordForCompiler)
 			try
-				sys.io.AtomicFile.write(LiveRefusal.path(path), new LiveRefusal(current.moduleIdentity, revision, candidate.revision).encode())
+				sys.io.AtomicFile.write(LiveRefusal.path(path),
+					new LiveRefusal(current.moduleIdentity, revision, candidate.revision).encode())
 			catch (error:Dynamic)
 				report('haxeon: could not tell the compiler about the refusal: ${Std.string(error)}');
 		banner('LIVE PATCH REFUSED (--strict-live): revision ${candidate.revision} was not applied; still running revision $revision',
-			recordForCompiler ? [cause, 'the next build patches revision $revision with the refused edits in it'] : [cause]);
+			recordForCompiler ? [
+				cause,
+				'the next build patches revision $revision with the refused edits in it'
+			] : [cause]);
 		return publicationKey(candidate);
 	}
 
@@ -331,25 +349,27 @@ class LiveHost {
 		var base:Null<Dynamic> = value.baseRevision;
 		return {
 			revision: value.revision,
-			baseRevision: base == null ? -1 : (base : Int),
+			baseRevision: base == null ? -1 : (base: Int),
 			moduleIdentity: value.moduleIdentity,
 			requiresReload: value.requiresReload,
-			reloadReasons: reasons == null ? [] : [for (reason in reasons) Std.string(reason.code) + " " + Std.string(reason.entityId)],
+			reloadReasons: reasons == null
+				? [] : [for (reason in reasons) Std.string(reason.code) + " " + Std.string(reason.entityId)],
 			patchAvailable: value.patchAvailable,
-			changedFunctions: [for (id in changed) (id : Int)],
+			changedFunctions: [for (id in changed)(id: Int)],
 			identities: [
 				for (item in identities)
 					({
-						name:item.name, id:item.id
-					} : LiveFunction)
-			]
-		};
+						name: item.name, id: item.id
+					}: LiveFunction)
+				]
+			};
 	}
 
 	/** The small summary the compiler writes beside the full description, so a patch does not parse the whole function list. */
 	static function tryDescription(path:String):Null<LiveDescription> {
 		try
-			return readDescription(path, FileSystem.exists(path + ".live.patch.json") ? ".live.patch.json" : ".live.json")
+			return readDescription(path,
+				FileSystem.exists(path + ".live.patch.json") ? ".live.patch.json" : ".live.json")
 		catch (_:Dynamic)
 			return null;
 	}

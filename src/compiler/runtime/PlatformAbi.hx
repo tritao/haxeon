@@ -41,47 +41,92 @@ class PlatformAbi {
 		return switch type {
 			case CompilerType.TString:
 				name == "bytes" ? {
-					type: CompilerType.THlBytes,
-					get: "__string_bytes",
-					set: null
+					type:CompilerType.THlBytes,
+						get:"__string_bytes",
+						set:null
 				} : null;
-			case CompilerType.TBytes: name == "length" ? {type: CompilerType.TInt, get: "__bytes_length", set: null} : null;
+			case CompilerType.TBytes: name == "length" ? {
+					type:CompilerType.TInt, get:"__bytes_length", set:null
+				} : null;
 			case CompilerType.TAbstract(_, _, underlying): field(underlying, name);
 			default: null;
 		};
 
-	public static function method(type:CompilerType, name:String):Null<{arguments:Array<CompilerType>, result:CompilerType, nativeName:String}>
+	public static function method(type:CompilerType, name:String):Null<{
+		arguments:Array<CompilerType>,
+		result:CompilerType,
+		nativeName:String
+	}>
 		return switch type {
 			case CompilerType.TBytes: bytesMethod(name);
 			case CompilerType.THlBytes:
-				name == "ucs2Length" ? {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__hl_bytes_ucs2_length"} : null;
+				name == "ucs2Length" ? {
+					arguments:[CompilerType.TInt], result:CompilerType.TInt, nativeName:"__hl_bytes_ucs2_length"
+				} : null;
 			case CompilerType.TAbstract(_, _, underlying): method(underlying, name);
 			default: null;
 		};
 
-	static function bytesMethod(name:String):Null<{arguments:Array<CompilerType>, result:CompilerType, nativeName:String}>
+	static function bytesMethod(name:String):Null<{
+		arguments:Array<CompilerType>,
+		result:CompilerType,
+		nativeName:String
+	}>
 		return switch name {
 			case "getData": {
-					arguments: noArguments(),
-					result: CompilerType.THlBytes,
-					nativeName: "__bytes_get_data"
-				};
+				arguments: noArguments(),
+				result: CompilerType.THlBytes,
+				nativeName: "__bytes_get_data"
+			};
 			case "get": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get"};
 			case "getInt32": {arguments: [CompilerType.TInt], result: CompilerType.TInt, nativeName: "__bytes_get_i32"};
-			case "getFloat": {arguments: [CompilerType.TInt], result: CompilerType.TFloat, nativeName: "__bytes_get_float"};
-			case "getDouble": {arguments: [CompilerType.TInt], result: CompilerType.TFloat, nativeName: "__bytes_get_double"};
-			case "set": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set"};
-			case "setInt32": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TVoid, nativeName: "__bytes_set_i32"};
-			case "setFloat": {arguments: [CompilerType.TInt, CompilerType.TFloat], result: CompilerType.TVoid, nativeName: "__bytes_set_float"};
-			case "setDouble": {arguments: [CompilerType.TInt, CompilerType.TFloat], result: CompilerType.TVoid, nativeName: "__bytes_set_double"};
+			case "getFloat": {
+				arguments: [CompilerType.TInt],
+				result: CompilerType.TFloat,
+				nativeName: "__bytes_get_float"
+			};
+			case "getDouble": {
+				arguments: [CompilerType.TInt],
+				result: CompilerType.TFloat,
+				nativeName: "__bytes_get_double"
+			};
+			case "set": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TVoid,
+				nativeName: "__bytes_set"
+			};
+			case "setInt32": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TVoid,
+				nativeName: "__bytes_set_i32"
+			};
+			case "setFloat": {
+				arguments: [CompilerType.TInt, CompilerType.TFloat],
+				result: CompilerType.TVoid,
+				nativeName: "__bytes_set_float"
+			};
+			case "setDouble": {
+				arguments: [CompilerType.TInt, CompilerType.TFloat],
+				result: CompilerType.TVoid,
+				nativeName: "__bytes_set_double"
+			};
 			case "blit": {
-					arguments: [CompilerType.TInt, CompilerType.TBytes, CompilerType.TInt, CompilerType.TInt],
-					result: CompilerType.TVoid,
-					nativeName: "__bytes_blit"
-				};
-			case "sub": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TBytes, nativeName: "__bytes_sub"};
-			case "getString": {arguments: [CompilerType.TInt, CompilerType.TInt], result: CompilerType.TString, nativeName: "__bytes_get_string"};
-			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt, nativeName: "__bytes_compare"};
+				arguments: [CompilerType.TInt, CompilerType.TBytes, CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TVoid,
+				nativeName: "__bytes_blit"
+			};
+			case "sub": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TBytes,
+				nativeName: "__bytes_sub"
+			};
+			case "getString": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TString,
+				nativeName: "__bytes_get_string"
+			};
+			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt,
+				nativeName: "__bytes_compare"};
 			case "toString": {arguments: noArguments(), result: CompilerType.TString, nativeName: "__bytes_to_string"};
 			default: null;
 		};

@@ -100,7 +100,8 @@ class HldiStats {
 	public final rawBytes:Int64;
 	public final sentBytes:Int64;
 
-	public function new(chunksInUse:Int, chunkCount:Int, stalls:Int64, stallTicks:Int64, rawBytes:Int64, sentBytes:Int64) {
+	public function new(chunksInUse:Int, chunkCount:Int, stalls:Int64, stallTicks:Int64, rawBytes:Int64,
+			sentBytes:Int64) {
 		this.chunksInUse = chunksInUse;
 		this.chunkCount = chunkCount;
 		this.stalls = stalls;
@@ -137,7 +138,8 @@ class HldiSymbol {
 	public final name:String;
 	public final lines:Array<HldiSourceLine>;
 
-	public function new(moduleId:Int64, revision:Int, functionId:Int, start:Int64, end:Int64, name:String, lines:Array<HldiSourceLine>) {
+	public function new(moduleId:Int64, revision:Int, functionId:Int, start:Int64, end:Int64, name:String,
+			lines:Array<HldiSourceLine>) {
 		this.moduleId = moduleId;
 		this.revision = revision;
 		this.functionId = functionId;
@@ -186,7 +188,8 @@ class HldiRecord {
 	public final frames:Array<Int64>;
 	public final payload:Bytes;
 
-	public function new(kind:Int, flags:Int, timestamp:Float, threadId:Int, value:Int, frames:Array<Int64>, payload:Bytes) {
+	public function new(kind:Int, flags:Int, timestamp:Float, threadId:Int, value:Int, frames:Array<Int64>,
+			payload:Bytes) {
 		this.kind = kind;
 		this.flags = flags;
 		this.timestamp = timestamp;

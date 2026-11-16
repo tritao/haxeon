@@ -24,7 +24,8 @@ class InlineConstantResolver {
 	final coerce:InlineCoerceCallback;
 	final dependencyCollectors:Array<Map<String, Bool>> = [];
 
-	public function new(session:TypingSession, findStaticField:InlineStaticFieldLookup, typeInitializer:InlineInitializerTyper, coerce:InlineCoerceCallback) {
+	public function new(session:TypingSession, findStaticField:InlineStaticFieldLookup,
+			typeInitializer:InlineInitializerTyper, coerce:InlineCoerceCallback) {
 		this.session = session;
 		this.findStaticField = findStaticField;
 		this.typeInitializer = typeInitializer;
@@ -71,10 +72,12 @@ class InlineConstantResolver {
 		dependencyCollectors.push(dependencies);
 		var resolved:ResolvedInlineConstant;
 		try {
-			var initializer = typeInitializer(field.initializer, staticField.owner, name, staticField.type, classDecl.typeParameters),
+			var initializer = typeInitializer(field.initializer, staticField.owner, name, staticField.type,
+				classDecl.typeParameters),
 				literal = InlineConstantEvaluator.evaluate(initializer);
 			if (literal == null)
-				fail("E1002", 'Inline field "${staticField.owner}.$name" requires a compile-time constant initializer', field.span);
+				fail("E1002", 'Inline field "${staticField.owner}.$name" requires a compile-time constant initializer',
+					field.span);
 			var targets = [for (target in dependencies.keys()) target];
 			targets.sort(Reflect.compare);
 			resolved = {

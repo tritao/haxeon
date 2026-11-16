@@ -72,7 +72,8 @@ class ReceiverMutationInference extends BindingWalker {
 
 	override function statement(value:AstStatement):Void {
 		switch value {
-			case FieldAssignment(object, _, _, _), IndexAssignment(object, _, _, _) if (isReceiverPlace(object)): mutates = true;
+			case FieldAssignment(object, _, _, _),
+				IndexAssignment(object, _, _, _) if (isReceiverPlace(object)): mutates = true;
 			default:
 		}
 		super.statement(value);
@@ -87,8 +88,10 @@ class ReceiverMutationInference extends BindingWalker {
 			case MethodCall(target, _, _, _) if (isReceiverPlace(target)): mutates = true;
 			case Call(_, arguments, _), MethodCall(_, _, arguments, _):
 				for (argument in arguments) if (containsReceiver(argument)) mutates = true;
-			case Variable(name, _) if (resolve(name) == null && getters.exists(BindingWalker.rootOf(name))): mutates = true;
-			case Variable(name, _) if (StringTools.startsWith(name, "this.") && getters.exists(name.substr(5))): mutates = true;
+			case Variable(name,
+				_) if (resolve(name) == null && getters.exists(BindingWalker.rootOf(name))): mutates = true;
+			case Variable(name,
+				_) if (StringTools.startsWith(name, "this.") && getters.exists(name.substr(5))): mutates = true;
 			case Member(object, field, _) if (isReceiverPlace(object) && getters.exists(field)): mutates = true;
 			default:
 		}
@@ -108,7 +111,8 @@ class ReceiverMutationInference extends BindingWalker {
 		// Passing a primitive field passes its value, not a writable alias to the receiver.
 		// Keep the proof conservative for inferred and composite field types.
 		switch value {
-			case Variable(name, _) if (name == BindingWalker.rootOf(name) && resolve(name) == null && scalarFields.exists(name)):
+			case Variable(name,
+				_) if (name == BindingWalker.rootOf(name) && resolve(name) == null && scalarFields.exists(name)):
 				return false;
 			case Variable(name, _) if (StringTools.startsWith(name, "this.") && scalarFields.exists(name.substr(5))):
 				return false;

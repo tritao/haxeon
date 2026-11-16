@@ -19,8 +19,8 @@ function main():Int {
 		half:Dynamic = 0.5;
 	var mixed:Array<Dynamic> = [Red, Green, Blue];
 	var checks = [
-		// Dynamic enum equality follows declared value equality.
-		green == otherGreen
+	// Dynamic enum equality follows declared value equality.
+	green == otherGreen
 		&& green != red,
 		circle == otherCircle
 		&& circle == circle,
@@ -30,8 +30,8 @@ function main():Int {
 		mixed.remove(Red)
 		&& mixed.length == 2
 		&& !mixed.contains(Red),
-		// A Dynamic Int equals a Dynamic Float of the same value.
-		two == twoFloat
+	// A Dynamic Int equals a Dynamic Float of the same value.
+	two == twoFloat
 		&& twoFloat == two
 		&& two != threeFloat
 		&& threeFloat != two

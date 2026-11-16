@@ -5,7 +5,8 @@ import compiler.ir.Ir.IrPhiInput;
 
 /** Captures phi operands before any destination is overwritten on an edge. */
 class WasmPhiLower {
-	public static function capture(body:Array<WasmInstruction>, inputs:Array<IrPhiInput>, values:Map<Int, Int>, predecessor:Int, temporary:Int):Void {
+	public static function capture(body:Array<WasmInstruction>, inputs:Array<IrPhiInput>, values:Map<Int, Int>,
+			predecessor:Int, temporary:Int):Void {
 		for (input in inputs) {
 			push(body, [
 				WasmInstruction.LocalGet(predecessor),

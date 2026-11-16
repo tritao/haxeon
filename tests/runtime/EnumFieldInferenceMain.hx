@@ -10,7 +10,8 @@ class EnumFieldInferenceMain {
 	static function main():Void {
 		var compiler = new Compiler();
 		compiler.update("motion/MoveKind.hx", "package motion; enum MoveKind { Rapid; Feed(rate:Int); }");
-		compiler.update("motion/Mode.hx", "package motion; enum abstract Mode(Int) from Int to Int { var Slow = 3; var Fast = 7; }");
+		compiler.update("motion/Mode.hx",
+			"package motion; enum abstract Mode(Int) from Int to Int { var Slow = 3; var Fast = 7; }");
 		compiler.update("motion/Generic.hx", "package motion; enum Choice<T> { Some(value:T); None; }");
 		compiler.update("motion/Planner.hx",
 			"package motion; class Planner { public final kind = MoveKind.Rapid; public final feed = MoveKind.Feed(40); "

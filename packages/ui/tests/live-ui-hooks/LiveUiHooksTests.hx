@@ -47,7 +47,10 @@ class LiveUiHooksTests {
 		var context = new UiContext();
 		var oldClicks = 0, newClicks = 0, builds = 0;
 		var view = new ButtonsView(function(_) oldClicks++);
-		var build = function():View { builds++; return view; };
+		var build = function():View {
+			builds++;
+			return view;
+		};
 		var frame = new LayoutFrame(240, 160);
 		var root = context.submitCached(build, frame, "buttons");
 		var second = root.children[1].id;
@@ -63,7 +66,8 @@ class LiveUiHooksTests {
 		check(context.inspect().length == 0, "release must leave no inspectable tree");
 		check(context.events.hitTestPath(10, 10).length == 0, "release must leave nothing to hit");
 		check(context.focus.focusedNode() == null, "release must drop the focus order's nodes");
-		check(context.focus.focusedId != null && context.focus.focusedId.equals(second), "release must keep focus by ID");
+		check(context.focus.focusedId != null && context.focus.focusedId.equals(second),
+			"release must keep focus by ID");
 
 		// Input between release and rebuild finds no target and must not reach the released handlers.
 		click(context);
@@ -73,7 +77,8 @@ class LiveUiHooksTests {
 		context.text("commit", "x");
 		context.pointerLeave();
 		check(oldClicks == 1, "a released handler must not run");
-		check(context.focus.focusedId != null && context.focus.focusedId.equals(second), "input before rebuild must keep focus by ID");
+		check(context.focus.focusedId != null && context.focus.focusedId.equals(second),
+			"input before rebuild must keep focus by ID");
 		// A window blur and refocus before the rebuild hands the focus to the next submit.
 		context.windowFocusLost();
 		context.windowFocusGained();

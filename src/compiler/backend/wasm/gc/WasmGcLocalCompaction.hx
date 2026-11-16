@@ -5,7 +5,10 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 
 /** Remove local round trips and unused local slots after GC function lowering. */
 class WasmGcLocalCompaction {
-	public static function run(body:Array<WasmInstruction>, locals:Array<WasmLocal>, parameters:Int):{body:Array<WasmInstruction>, locals:Array<WasmLocal>} {
+	public static function run(body:Array<WasmInstruction>, locals:Array<WasmLocal>, parameters:Int): {
+		body: Array<WasmInstruction>,
+		locals: Array<WasmLocal>
+	} {
 		var current = body, previousLength:Int;
 		do {
 			previousLength = current.length;
@@ -33,22 +36,18 @@ class WasmGcLocalCompaction {
 				throw 'Missing Wasm local $index during compaction';
 			return result;
 		}
-		return {
-			body: [
-				for (instruction in current)
-					switch instruction {
-						case LocalGet(index):
-							LocalGet(translated(index));
-						case LocalSet(index):
-							LocalSet(translated(index));
-						case LocalTee(index):
-							LocalTee(translated(index));
-						default:
-							instruction;
-					}
-			],
-			locals: retained
-		};
+		return {body: [for (instruction in current)
+			switch instruction {
+				case LocalGet(index):
+					LocalGet(translated(index));
+				case LocalSet(index):
+					LocalSet(translated(index));
+				case LocalTee(index):
+					LocalTee(translated(index));
+				default:
+					instruction;
+			}],
+				locals: retained};
 	}
 
 	static function forward(body:Array<WasmInstruction>):Array<WasmInstruction> {
@@ -68,8 +67,16 @@ class WasmGcLocalCompaction {
 							result.push(LocalTee(left));
 						index += 2;
 						continue;
-					case [I32Const(_), LocalSet(local)] | [I64Const(_), LocalSet(local)] | [F64Const(_), LocalSet(local)] | [RefNull(_), LocalSet(local)] |
-						[LocalGet(_), LocalSet(local)] if (!reads.exists(local)):
+					case [I32Const(_), LocalSet(local)] | [I64Const(_), LocalSet(local)] | [
+						F64Const(_),
+						LocalSet(local)
+					] | [
+						RefNull(_),
+						LocalSet(local)
+					] | [
+						LocalGet(_),
+						LocalSet(local)
+					] if (!reads.exists(local)):
 						index += 2;
 						continue;
 					default:

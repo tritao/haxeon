@@ -27,7 +27,8 @@ class WasmFuelMetering {
 		}
 	}
 
-	static function rewrite(instructions:Array<WasmInstruction>, locals:Array<WasmLocal>, parameterCount:Int, fuelFunction:Int):Array<WasmInstruction> {
+	static function rewrite(instructions:Array<WasmInstruction>, locals:Array<WasmLocal>, parameterCount:Int,
+			fuelFunction:Int):Array<WasmInstruction> {
 		var result:Array<WasmInstruction> = [],
 			controls:Array<FuelControl> = [],
 			branchTableLocal = -1;

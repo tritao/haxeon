@@ -10,9 +10,10 @@ class AmbiguousEnumAbstractValueMain {
 		var first = [
 			"p/First.hx",
 			"package p; enum abstract First(Int) from Int to Int { var Red = 1; var Left = 3; }"
-		], second = [
-			"q/Second.hx",
-			"package q; enum abstract Second(Int) from Int to Int { var Red = 2; var Right = 4; }"
+		],
+			second = [
+				"q/Second.hx",
+				"package q; enum abstract Second(Int) from Int to Int { var Red = 2; var Right = 4; }"
 			];
 
 		// Neither abstract is in the using package: ambiguous, and the error lists both.
@@ -25,10 +26,13 @@ class AmbiguousEnumAbstractValueMain {
 			],
 			["Main.hx", "class Main { static function main():Int return r.User.pick(); }"]
 		]);
-		expect(foreign != null && foreign.indexOf("E1005") >= 0 && foreign.indexOf('Ambiguous enum abstract value "Red"') >= 0,
+		expect(foreign != null && foreign.indexOf("E1005") >= 0
+			&& foreign.indexOf('Ambiguous enum abstract value "Red"') >= 0,
 			'a bare value declared by two foreign enum abstracts must be ambiguous, got: $foreign');
-		expect(foreign.indexOf('"p.First"') >= 0 && foreign.indexOf('"q.Second"') >= 0, 'the error must name both abstracts, got: $foreign');
-		expect(foreign.indexOf("none of them is in the current package") >= 0, 'the error must say no abstract is in the current package, got: $foreign');
+		expect(foreign.indexOf('"p.First"') >= 0 && foreign.indexOf('"q.Second"') >= 0,
+			'the error must name both abstracts, got: $foreign');
+		expect(foreign.indexOf("none of them is in the current package") >= 0,
+			'the error must say no abstract is in the current package, got: $foreign');
 		expect(foreign.indexOf('"p.First.Red"') >= 0, 'the error must show how to qualify the value, got: $foreign');
 
 		// Two abstracts in the using package: the same-package rule cannot choose either.
@@ -43,7 +47,8 @@ class AmbiguousEnumAbstractValueMain {
 		]);
 		expect(local != null && local.indexOf('"r.Left"') >= 0 && local.indexOf('"r.Right"') >= 0,
 			'two same-package enum abstracts must be ambiguous and named, got: $local');
-		expect(local.indexOf("more than one of them is in the current package") >= 0, 'the error must say several are in the current package, got: $local');
+		expect(local.indexOf("more than one of them is in the current package") >= 0,
+			'the error must say several are in the current package, got: $local');
 
 		// Qualifying the value, or declaring one abstract in the using package, removes the ambiguity.
 		expect(failure([

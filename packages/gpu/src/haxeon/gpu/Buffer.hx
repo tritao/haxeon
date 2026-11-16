@@ -48,12 +48,15 @@ class Buffer {
 
 	public static function vertexFloats(renderer:Renderer, values:Array<Float>):Buffer {
 		if (values == null || values.length == 0 || values.length > 536870911)
-			throw BindingError.invalidArgument("Buffer.vertexFloats", "GPU vertex buffer requires a non-empty, bounded float array");
+			throw BindingError.invalidArgument("Buffer.vertexFloats",
+				"GPU vertex buffer requires a non-empty, bounded float array");
 		renderer.ensureResourceOperation();
-		var madeBuilder = NativeKitGpu.nkgpu_buffer_begin_kind(renderer.nativeHandle(), values.length * 4, BufferUsage.Vertex);
+		var madeBuilder = NativeKitGpu.nkgpu_buffer_begin_kind(renderer.nativeHandle(), values.length * 4,
+			BufferUsage.Vertex);
 		GpuResult.check(madeBuilder.status, "buffer.beginVertex");
 		for (index in 0...values.length)
-			GpuResult.check(NativeKitGpu.nkgpu_buffer_write_f32(madeBuilder.out_builder, index * 4, values[index]), "buffer.writeFloat");
+			GpuResult.check(NativeKitGpu.nkgpu_buffer_write_f32(madeBuilder.out_builder, index * 4, values[index]),
+				"buffer.writeFloat");
 		var made = NativeKitGpu.nkgpu_buffer_end(madeBuilder.out_builder);
 		GpuResult.check(made.status, "buffer.endVertex");
 		return new Buffer(renderer, made.out_buffer);
@@ -61,12 +64,15 @@ class Buffer {
 
 	public static function indices16(renderer:Renderer, values:Array<Int>):Buffer {
 		if (values == null || values.length == 0 || values.length > 1073741823)
-			throw BindingError.invalidArgument("Buffer.indices16", "GPU index buffer requires a non-empty, bounded index array");
+			throw BindingError.invalidArgument("Buffer.indices16",
+				"GPU index buffer requires a non-empty, bounded index array");
 		renderer.ensureResourceOperation();
-		var madeBuilder = NativeKitGpu.nkgpu_buffer_begin_kind(renderer.nativeHandle(), values.length * 2, BufferUsage.Index);
+		var madeBuilder = NativeKitGpu.nkgpu_buffer_begin_kind(renderer.nativeHandle(), values.length * 2,
+			BufferUsage.Index);
 		GpuResult.check(madeBuilder.status, "buffer.beginIndex");
 		for (index in 0...values.length)
-			GpuResult.check(NativeKitGpu.nkgpu_buffer_write_u16(madeBuilder.out_builder, index * 2, values[index]), "buffer.writeIndex");
+			GpuResult.check(NativeKitGpu.nkgpu_buffer_write_u16(madeBuilder.out_builder, index * 2, values[index]),
+				"buffer.writeIndex");
 		var made = NativeKitGpu.nkgpu_buffer_end(madeBuilder.out_builder);
 		GpuResult.check(made.status, "buffer.endIndex");
 		return new Buffer(renderer, made.out_buffer);
@@ -81,8 +87,10 @@ class Buffer {
 		ensureLive();
 		renderer.ensureFrame();
 		if (slot < 0 || offset < 0)
-			throw BindingError.invalidArgument("Buffer.applyVertex", "GPU vertex-buffer slot and offset must be non-negative");
-		GpuResult.check(NativeKitGpu.nkgpu_apply_vertex_buffer(renderer.nativeHandle(), slot, value, offset), "buffer.applyVertex");
+			throw BindingError.invalidArgument("Buffer.applyVertex",
+				"GPU vertex-buffer slot and offset must be non-negative");
+		GpuResult.check(NativeKitGpu.nkgpu_apply_vertex_buffer(renderer.nativeHandle(), slot, value, offset),
+			"buffer.applyVertex");
 	}
 
 	public function applyIndex(offset:Int = 0):Void {
@@ -90,7 +98,8 @@ class Buffer {
 		renderer.ensureFrame();
 		if (offset < 0)
 			throw BindingError.invalidArgument("Buffer.applyIndex", "GPU index-buffer offset must be non-negative");
-		GpuResult.check(NativeKitGpu.nkgpu_apply_index_buffer(renderer.nativeHandle(), value, offset), "buffer.applyIndex");
+		GpuResult.check(NativeKitGpu.nkgpu_apply_index_buffer(renderer.nativeHandle(), value, offset),
+			"buffer.applyIndex");
 	}
 
 	/** Binds this buffer as a storage resource in the active pass. */

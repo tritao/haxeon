@@ -107,7 +107,10 @@ class CfgBlock {
 }
 
 /** Named function input available as a local at CFG entry. */
-typedef CfgArgument = {final name:String; final type:IrType;}
+typedef CfgArgument = {
+	final name:String;
+	final type:IrType;
+}
 
 /** Source-level identity and lexical range for one CFG local. */
 typedef CfgDebugLocal = {

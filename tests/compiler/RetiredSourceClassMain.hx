@@ -3,7 +3,8 @@ import compiler.runtime.CompilerIntrinsics;
 
 /** A removed source declaration cannot be retained as a generated class on a warm build. */
 class RetiredSourceClassMain {
-	static final original = 'class P { public static function same(a:Shared,b:Shared):Bool { var x = new Spare(1), y = new Spare(1); '
+	static final original =
+		'class P { public static function same(a:Shared,b:Shared):Bool { var x = new Spare(1), y = new Spare(1); '
 		+ 'return haxeon.Equality.equals(a,b) && haxeon.Equality.equals(x,y); } } '
 		+ 'struct Spare implements Equatable { public final value:Int; public function new(value:Int) this.value=value; }';
 	static final replacement = 'class P { public static function same(a:Shared,b:Shared):Bool return true; }';
@@ -14,9 +15,11 @@ class RetiredSourceClassMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		compiler.update("Shared.hx", 'struct Shared implements Equatable { public final value:Int; public function new(value:Int) this.value=value; }');
+		compiler.update("Shared.hx",
+			'struct Shared implements Equatable { public final value:Int; public function new(value:Int) this.value=value; }');
 		compiler.update("P.hx", source);
-		compiler.update("Q.hx", 'class Q { public static function same(a:Shared,b:Shared):Bool return haxeon.Equality.equals(a,b); }');
+		compiler.update("Q.hx",
+			'class Q { public static function same(a:Shared,b:Shared):Bool return haxeon.Equality.equals(a,b); }');
 		compiler.update("Main.hx", entry);
 		return compiler;
 	}

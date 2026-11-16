@@ -41,6 +41,6 @@ class BackgroundDecoration extends Decoration {
 	}
 
 	override public function describe():String
-		return color == null ? "background(style)" :
-			'background(${color.red},${color.green},${color.blue},${color.alpha})';
+		return color == null
+			? "background(style)" : 'background(${color.red},${color.green},${color.blue},${color.alpha})';
 }

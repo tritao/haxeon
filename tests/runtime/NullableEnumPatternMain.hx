@@ -22,7 +22,10 @@ class NullableEnumPatternMain {
 				throw 'Nullable enum patterns ($build) returned $code: $output';
 			for (target in [Wasm32, WasmGc])
 				File.saveBytes(SuiteOutput.path('nullable-enum-pattern-$target-$build.wasm'),
-					new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
+					new WasmBackend().compile(result.ir, {
+						target: target,
+						debugNames: true
+					}).bytes);
 		}
 		Sys.println("PASS: nullable tuple and payload enum patterns, clean and incremental");
 	}

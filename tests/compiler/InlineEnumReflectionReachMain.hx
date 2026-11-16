@@ -40,18 +40,27 @@ class InlineEnumReflectionReachMain {
 			program.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 			program.entryPoint = "entry";
 			sys.io.File.saveBytes(module, new HlBackend().compile(program, {target: HashLink, debugNames: true}).bytes);
-			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"), process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [module]),
-				error = process.stderr.readAll().toString(), status = process.exitCode();
+			var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
+				process = new sys.io.Process(vm == null ? "scripts/hl" : vm + "/hl", [module]),
+				error = process.stderr.readAll().toString(),
+				status = process.exitCode();
 			process.close();
 			if (status != 42) throw '$target inline=$inlining reflection module failed ($status): $error';
 		} else {
 			var backendTarget:BackendTarget = target == "wasm32" ? Wasm32 : WasmGc,
-				bytes = new WasmBackend().compile(result.ir, {target: backendTarget, debugNames: true,
-					wasmMemoryStats: target == "wasm32", wasmGcAllocationCount: target == "wasm-gc"}).bytes;
+				bytes = new WasmBackend().compile(result.ir, {
+					target: backendTarget,
+					debugNames: true,
+					wasmMemoryStats: target == "wasm32",
+					wasmGcAllocationCount: target == "wasm-gc"
+				}).bytes;
 			sys.io.File.saveBytes(module, bytes);
-			var js = 'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;'
+			var js =
+				'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;'
 				+ 'const r=e.main();if(r!==42)throw Error("reflection result "+r);';
-			var process = new sys.io.Process("node", ["-e", js, module]), error = process.stderr.readAll().toString(), status = process.exitCode();
+			var process = new sys.io.Process("node", ["-e", js, module]),
+				error = process.stderr.readAll().toString(),
+				status = process.exitCode();
 			process.close();
 			if (status != 0) throw '$target inline=$inlining reflection module failed ($status): $error';
 		}

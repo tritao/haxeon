@@ -31,7 +31,7 @@ function main():Int {
 	var afterReset:Int = counter.total;
 	var holder:Dynamic = {inner: new Counter()};
 	var viaNested:Int = holder.inner.add(4);
-	var handlers:Dynamic = {double: (value:Int) -> value * 2};
+	var handlers:Dynamic = {double: (value: Int) -> value * 2};
 	var viaFunctionField:Int = handlers.double(21);
 	var checks = [
 		first == 5,

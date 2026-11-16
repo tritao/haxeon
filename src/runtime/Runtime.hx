@@ -6,7 +6,8 @@ import sys.thread.Mutex;
 /** Private declarations for the native module lifecycle and invocation ABI. */
 @:hlNative("haxeon_runtime")
 private class RuntimeNative {
-	public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes, identityLength:Int):hl.Abstract<"realtime_module">
+	public static function load(bytes:hl.Bytes, length:Int, identity:hl.Bytes,
+			identityLength:Int):hl.Abstract<"realtime_module">
 		return null;
 
 	public static function call_i32(module:hl.Abstract<"realtime_module">, index:Int):Int
@@ -17,7 +18,8 @@ private class RuntimeNative {
 	public static function call_bytes(module:hl.Abstract<"realtime_module">, index:Int):hl.Bytes
 		return null;
 
-	public static function call_managed_bytes(module:hl.Abstract<"realtime_module">, index:Int):hl.Abstract<"realtime_bytes">
+	public static function call_managed_bytes(module:hl.Abstract<"realtime_module">,
+			index:Int):hl.Abstract<"realtime_bytes">
 		return null;
 
 	public static function call_bytes1(module:hl.Abstract<"realtime_module">, index:Int, argument:hl.Bytes):Void {}
@@ -113,7 +115,7 @@ class Runtime {
 		return count;
 	}
 
-	public static function inspectPatch(bytes:Bytes):{baseRevision:Int, revision:Int, functionCount:Int} {
+	public static function inspectPatch(bytes:Bytes): {baseRevision: Int, revision: Int, functionCount: Int} {
 		var summary = RuntimeNative.inspect_patch(bytes.getData(), bytes.length);
 		if (summary < 0)
 			throw new RuntimeError(RuntimeStatus.BadFormat, "HashLink rejected the HLP bytes");
@@ -137,7 +139,8 @@ class Runtime {
 		});
 
 	public static function callString(module:LoadedModule, stableIndex:Int):String {
-		var bytes = invoke(module, stableIndex, 2, function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
+		var bytes = invoke(module, stableIndex, 2,
+			function(handle) return RuntimeNative.call_bytes(handle, stableIndex));
 		if (bytes == null)
 			return null;
 		return @:privateAccess String.__alloc__(bytes, bytes.ucs2Length(0));
@@ -145,7 +148,8 @@ class Runtime {
 
 	/** Call an isolated function that returns a copy of its packed haxe.io.Bytes value. */
 	public static function callBytes(module:LoadedModule, stableIndex:Int):Bytes
-		return cast invoke(module, stableIndex, 7, function(handle) return RuntimeNative.call_managed_bytes(handle, stableIndex));
+		return cast invoke(module, stableIndex, 7,
+			function(handle) return RuntimeNative.call_managed_bytes(handle, stableIndex));
 
 	public static function callStringArg(module:LoadedModule, stableIndex:Int, argument:String):Void
 		invoke(module, stableIndex, 3, function(handle) {
@@ -153,16 +157,19 @@ class Runtime {
 		});
 
 	public static function retainClosure(module:LoadedModule, stableIndex:Int):RetainedValue
-		return new RetainedValue(module, retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
+		return new RetainedValue(module,
+			retain(module, stableIndex, 4, function(handle) return RuntimeNative.call_closure(handle, stableIndex)));
 
 	public static function callRetainedClosureInt(closure:RetainedValue):Int
 		return closure.access(RuntimeNative.call_closure_i32);
 
 	public static function retainObject(module:LoadedModule, stableIndex:Int):RetainedValue
-		return new RetainedValue(module, retain(module, stableIndex, 5, function(handle) return RuntimeNative.call_object(handle, stableIndex)));
+		return new RetainedValue(module,
+			retain(module, stableIndex, 5, function(handle) return RuntimeNative.call_object(handle, stableIndex)));
 
 	public static function callIntObject(module:LoadedModule, stableIndex:Int, argument:RetainedValue):Int
-		return invoke(module, stableIndex, 6, function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
+		return invoke(module, stableIndex, 6,
+			function(handle) return RuntimeNative.call_i32_object(handle, stableIndex, argument.get()));
 
 	public static function retainedCodeAllocationCount(module:LoadedModule):Int
 		return module.access(RuntimeNative.allocation_count);
@@ -210,7 +217,8 @@ class Runtime {
 			// Native ABI: four consecutive little-endian Int32 fields in declaration order.
 			var bytes = Bytes.alloc(16);
 			RuntimeNative.retirement_status(handle, bytes.getData());
-			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8), bytes.getInt32(12));
+			return new ModuleRetirementStatus(bytes.getInt32(0), bytes.getInt32(4), bytes.getInt32(8),
+				bytes.getInt32(12));
 		});
 
 	public static function liveRevision(module:LoadedModule):Int
@@ -257,7 +265,8 @@ class Runtime {
 	public static function drainRetirements():Void {
 		var pending = retryRetirements();
 		if (pending != 0)
-			throw new RuntimeError(RuntimeStatus.RetirementBlocked, '$pending runtime module retirement(s) remain blocked');
+			throw new RuntimeError(RuntimeStatus.RetirementBlocked,
+				'$pending runtime module retirement(s) remain blocked');
 	}
 
 	static function tryDispose(module:LoadedModule):Bool
@@ -265,7 +274,9 @@ class Runtime {
 			var status:RuntimeStatus = RuntimeNative.dispose(handle);
 			if (status != RuntimeStatus.Ok)
 				throw new RuntimeError(status,
-					status == RuntimeStatus.RetirementBlocked ? "Runtime module retirement is waiting for managed borrowers" : 'HashLink rejected module retirement (status ${(status : Int)})');
+					status == RuntimeStatus.RetirementBlocked
+					? "Runtime module retirement is waiting for managed borrowers"
+					: 'HashLink rejected module retirement (status ${(status : Int)})');
 		});
 
 	/**
@@ -330,16 +341,20 @@ class Runtime {
 			return result;
 		});
 		if (status == RuntimeStatus.MigrationFailed)
-			throw new RuntimeError(status, 'revision ${patch.revision} applied, but ' + (message == null ? "initializers of the fields it added threw" : message));
+			throw new RuntimeError(status, 'revision ${patch.revision} applied, but '
+				+ (message == null ? "initializers of the fields it added threw" : message));
 		if (status == RuntimeStatus.ClosuresHeld)
-			throw new RuntimeError(status, message == null ? "stored closures still reach a function the patch drops" : message);
+			throw new RuntimeError(status,
+				message == null ? "stored closures still reach a function the patch drops" : message);
 		if (status != RuntimeStatus.Ok) {
 			var statusCode:Int = status;
-			throw new RuntimeError(status, 'HashLink rejected the patch transaction (status $statusCode)' + (message == null ? "" : ': $message'));
+			throw new RuntimeError(status,
+				'HashLink rejected the patch transaction (status $statusCode)' + (message == null ? "" : ': $message'));
 		}
 	}
 
-	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->T):T
+	static function invoke<T>(module:LoadedModule, stableIndex:Int, shape:Int,
+			operation:hl.Abstract<"realtime_module">->T):T
 		return module.access(function(handle) {
 			validateCall(handle, stableIndex, shape);
 			try {
@@ -351,7 +366,8 @@ class Runtime {
 			}
 		});
 
-	static function retain(module:LoadedModule, stableIndex:Int, shape:Int, operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
+	static function retain(module:LoadedModule, stableIndex:Int, shape:Int,
+			operation:hl.Abstract<"realtime_module">->Dynamic):Dynamic
 		return module.accessRetained(function(handle) {
 			validateCall(handle, stableIndex, shape);
 			try {

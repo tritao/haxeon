@@ -52,7 +52,8 @@ class OverrideAnalysis {
 	/** Every concrete body, anywhere in `owner`'s descendant tree, that redeclares `method` -
 	 * exactly the bodies a virtual call through `owner.method` could also reach at runtime.
 	 */
-	public static function overridingMethods(children:Map<String, Array<String>>, classes:Map<String, AstClass>, owner:String, method:String):Array<String> {
+	public static function overridingMethods(children:Map<String, Array<String>>, classes:Map<String, AstClass>,
+			owner:String, method:String):Array<String> {
 		var result:Array<String> = [], worklist = children.get(owner);
 		if (worklist == null)
 			return result;
@@ -81,7 +82,8 @@ class OverrideAnalysis {
 	/** For every method key some subclass overrides, the concrete override bodies required to
 	 * ALSO share an answer before that key's own answer can be trusted through a virtual call.
 	 */
-	public static function overrideFamilies(classes:Map<String, AstClass>, overridden:Map<String, Bool>):Map<String, Array<String>> {
+	public static function overrideFamilies(classes:Map<String, AstClass>,
+			overridden:Map<String, Bool>):Map<String, Array<String>> {
 		var children = childrenOf(classes),
 			result:Map<String, Array<String>> = [];
 		for (key in overridden.keys()) {

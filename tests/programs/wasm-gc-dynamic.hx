@@ -37,6 +37,7 @@ function main():Int {
 		overridden:WasmGcDynamicAdder = cast(derived, WasmGcDynamicAdder),
 		nullValue:Dynamic = null,
 		nullAdder:WasmGcDynamicAdder = cast(nullValue, WasmGcDynamicAdder);
-	return number == sameNumber && number != otherNumber && recoveredNumber == 40 && recoveredFlag && recoveredFloat == 1.5 && !(nanValue == nanValue)
+	return number == sameNumber && number != otherNumber && recoveredNumber == 40 && recoveredFlag
+		&& recoveredFloat == 1.5 && !(nanValue == nanValue)
 		&& concrete != null && nullAdder == null && adder.add(41) == 42 && overridden.add(40) == 42 ? 42 : 0;
 }

@@ -56,8 +56,12 @@ class IrValueArrayPlaceMethods {
 	public function valueSetter(type:IrType, path:Array<String>):String {
 		if (finished || (!isValue(type) && !isNullableScalar(type)))
 			throw "Invalid array place value setter";
-		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([haxe.crypto.Base64.encode(IrTypeCodec.encode(type)), path]))),
-			name = IrValueArrayElements.PREFIX + "place-write:" + encoded + ":" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
+		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([
+			haxe.crypto.Base64.encode(IrTypeCodec.encode(type)),
+			path
+		]))),
+			name = IrValueArrayElements.PREFIX + "place-write:" + encoded + ":"
+				+ haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
 		if (!valueWrites.exists(name))
 			valueWrites.set(name, {type: type, path: path.copy()});
 		return name;
@@ -67,8 +71,12 @@ class IrValueArrayPlaceMethods {
 	public function scalarGetter(type:IrType, path:Array<String>):String {
 		if (finished || !isNullableScalar(type))
 			throw "Invalid array place nullable scalar getter";
-		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([haxe.crypto.Base64.encode(IrTypeCodec.encode(type)), path]))),
-			name = IrValueArrayElements.PREFIX + "place-read:" + encoded + ":" + haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
+		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([
+			haxe.crypto.Base64.encode(IrTypeCodec.encode(type)),
+			path
+		]))),
+			name = IrValueArrayElements.PREFIX + "place-read:" + encoded + ":"
+				+ haxe.crypto.Base64.encode(IrTypeCodec.encode(element));
 		if (!scalarReads.exists(name))
 			scalarReads.set(name, {type: type, path: path.copy()});
 		return name;
@@ -84,7 +92,8 @@ class IrValueArrayPlaceMethods {
 				original = originals.get(originalName);
 			if (original == null)
 				throw 'Missing array place method "$originalName"';
-			result.push(specialize(Provider(TypeKey.of(element), ProviderOperations.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name,
+			result.push(specialize(Provider(TypeKey.of(element),
+				ProviderOperations.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name,
 				original, entry.path));
 		}
 		var writes = [for (name in valueWrites.keys()) name];
@@ -118,7 +127,8 @@ class IrValueArrayPlaceMethods {
 		return result;
 	}
 
-	public function specialize(kind:compiler.ir.IrFunction.IrFunctionKind, name:String, fn:IrFunction, path:Array<String>):IrFunction {
+	public function specialize(kind:compiler.ir.IrFunction.IrFunctionKind, name:String, fn:IrFunction,
+			path:Array<String>):IrFunction {
 		if (fn.arguments.length == 0 || !isValue(fn.arguments[0].type))
 			throw 'Array place method "$name" has no value receiver';
 		var receiver = fn.arguments[0],
@@ -138,10 +148,12 @@ class IrValueArrayPlaceMethods {
 							nulls.set(out.id, true);
 						case ValueInit(out) if (isValue(out.type)):
 							fresh.set(out.id, true);
-						case FieldGet(out, owner, field) if (aliases.exists(owner.id) && isValue(out.type) && !aliases.exists(out.id)):
+						case FieldGet(out, owner,
+							field) if (aliases.exists(owner.id) && isValue(out.type) && !aliases.exists(out.id)):
 							aliases.set(out.id, aliases.get(owner.id).concat([field]));
 							changed = true;
-						case SafeCast(out, value) if (aliases.exists(value.id) && isValue(out.type) && !aliases.exists(out.id)):
+						case SafeCast(out,
+							value) if (aliases.exists(value.id) && isValue(out.type) && !aliases.exists(out.id)):
 							aliases.set(out.id, aliases.get(value.id));
 							changed = true;
 						default:
@@ -168,7 +180,8 @@ class IrValueArrayPlaceMethods {
 		for (block in fn.blocks)
 			for (position in 0...block.instructions.length)
 				switch block.instructions[position].value {
-					case ToDyn(out, value) if (freshHomes.exists(value.id) && isNullable(out.type) && isValue(out.type)):
+					case ToDyn(out,
+						value) if (freshHomes.exists(value.id) && isNullable(out.type) && isValue(out.type)):
 						optionalHomes.set(out.id, {block: block.id, position: position, child: value.id});
 						optionalCandidates.set(out.id, true);
 					default:
@@ -200,7 +213,8 @@ class IrValueArrayPlaceMethods {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (optionalHomes.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value),
+						Branch(value, _, _) if (optionalHomes.exists(value.id)):
 						optionalCandidates.remove(value.id);
 					default:
 				}
@@ -231,10 +245,12 @@ class IrValueArrayPlaceMethods {
 								case FieldSet(owner, _, value) if (value.id == input.id && aliases.exists(owner.id)):
 									copiedFresh.set(input.id, true);
 									true;
-								case FieldSet(owner, _, value) if (value.id == input.id && owner.id != input.id && freshHomes.exists(owner.id)):
+								case FieldSet(owner, _, value) if (value.id == input.id && owner.id != input.id
+									&& freshHomes.exists(owner.id)):
 									freshLinks.push({child: input.id, parent: owner.id});
 									true;
-								case ToDyn(out, value) if (value.id == input.id && optionalCandidates.exists(out.id)): true;
+								case ToDyn(out,
+									value) if (value.id == input.id && optionalCandidates.exists(out.id)): true;
 								default: false;
 							};
 						if (!allowed)
@@ -250,7 +266,8 @@ class IrValueArrayPlaceMethods {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (freshHomes.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value),
+						Branch(value, _, _) if (freshHomes.exists(value.id)):
 						virtualFresh.remove(value.id);
 					default:
 				}
@@ -326,11 +343,16 @@ class IrValueArrayPlaceMethods {
 					continue;
 				var payload:IrValue = switch located.value {
 					case ToDyn(_, value) if (Type.enumEq(value.type, scalarInner(output.type))): value;
-					case FieldGet(_, owner, _) if (aliases.exists(owner.id)): new IrValue(next++, "$array-optional-payload", scalarInner(output.type));
-					case ConstNull(_), Phi(_, _): new IrValue(next++, "$array-optional-payload", scalarInner(output.type));
+					case FieldGet(_, owner, _) if (aliases.exists(owner.id)): new IrValue(next++,
+						"$array-optional-payload", scalarInner(output.type));
+					case ConstNull(_),
+						Phi(_, _): new IrValue(next++, "$array-optional-payload", scalarInner(output.type));
 					default: throw 'Unsupported nullable scalar array place producer ${Std.string(located.value)}';
 				};
-				optionalScalars.set(output.id, {present: new IrValue(next++, "$array-optional-present", Bool), payload: payload});
+				optionalScalars.set(output.id, {
+					present: new IrValue(next++, "$array-optional-present", Bool),
+					payload: payload
+				});
 			}
 		var blocks:Array<IrBlock> = [],
 			freshFields:Map<Int, Map<String, ArrayFreshField>> = [],
@@ -346,7 +368,8 @@ class IrValueArrayPlaceMethods {
 						case Phi(_, _):
 						default:
 							var check = new IrValue(next++, "$array-place-check", Void);
-							target.instructions.push(new Located(Call(check, helpers.checker(path, true), [array, index]),
+							target.instructions
+								.push(new Located(Call(check, helpers.checker(path, true), [array, index]),
 								compiler.ir.SourceProvenance.generated("array-place-receiver")));
 							needsEntryCheck = false;
 					}
@@ -379,7 +402,11 @@ class IrValueArrayPlaceMethods {
 							target.instructions.push(new Located(ConstBool(absent, false), located.provenance));
 							fields.set(field, {value: value, fields: [], present: absent});
 						} else
-							fields.set(field, {value: value, fields: nested == null ? null : nested.copy(), present: null});
+							fields.set(field, {
+								value: value,
+								fields: nested == null ? null : nested.copy(),
+								present: null
+							});
 						omit = true;
 						handled = true;
 					case ConstNull(out) if (optionalScalars.exists(out.id)):
@@ -389,7 +416,8 @@ class IrValueArrayPlaceMethods {
 						omit = true;
 						handled = true;
 					case ToDyn(out, _) if (optionalScalars.exists(out.id)):
-						target.instructions.push(new Located(ConstBool(optionalScalars.get(out.id).present, true), located.provenance));
+						target.instructions.push(new Located(ConstBool(optionalScalars.get(out.id).present, true),
+							located.provenance));
 						omit = true;
 						handled = true;
 					case Phi(out, inputs) if (optionalScalars.exists(out.id)):
@@ -410,15 +438,26 @@ class IrValueArrayPlaceMethods {
 					case FieldGet(out, owner, field) if (aliases.exists(owner.id)):
 						var fieldPath = aliases.get(owner.id).concat([field]);
 						var check = new IrValue(next++, "$array-place-check", Void);
-						target.instructions.push(new Located(Call(check, helpers.checker(fieldPath, false), [array, index]), located.provenance));
+						target.instructions.push(new Located(Call(check, helpers.checker(fieldPath, false), [
+							array,
+							index
+						]), located.provenance));
 						if (isValue(out.type))
 							omit = true;
 						else if (optionalScalars.exists(out.id)) {
 							var snapshot = optionalScalars.get(out.id);
-							target.instructions.push(new Located(Call(snapshot.present, helpers.getter(helpers.slot(fieldPath, true)), [array, index]),
-								located.provenance));
-							target.instructions.push(new Located(Call(snapshot.payload, helpers.getter(helpers.slot(fieldPath, false, true)), [array, index]),
-								located.provenance));
+							target.instructions.push(new Located(Call(snapshot.present,
+								helpers.getter(helpers.slot(fieldPath, true)), [
+									array,
+									index
+								]),
+									located.provenance));
+							target.instructions.push(new Located(Call(snapshot.payload,
+								helpers.getter(helpers.slot(fieldPath, false, true)), [
+									array,
+									index
+								]),
+									located.provenance));
 							omit = true;
 						} else {
 							instruction = Call(out, helpers.getter(helpers.slot(fieldPath)), [array, index]);
@@ -428,22 +467,35 @@ class IrValueArrayPlaceMethods {
 						var fieldPath = aliases.get(owner.id).concat([field]),
 							check = new IrValue(next++, "$array-place-check", Void),
 							ignored = new IrValue(next++, "$array-place-write", Void);
-						target.instructions.push(new Located(Call(check, helpers.checker(fieldPath, false), [array, index]), located.provenance));
+						target.instructions.push(new Located(Call(check, helpers.checker(fieldPath, false), [
+							array,
+							index
+						]), located.provenance));
 						if (isValue(value.type) && aliases.exists(value.id)) {
 							var sourcePath = aliases.get(value.id),
 								sourceCheck = new IrValue(next++, "$array-place-source-check", Void),
 								copies = helpers.copySlots(sourcePath, fieldPath),
 								values:Array<IrValue> = [];
-							target.instructions.push(new Located(Call(sourceCheck, helpers.checker(sourcePath, false), [array, index]), located.provenance));
+							target.instructions.push(new Located(Call(sourceCheck, helpers.checker(sourcePath, false), [
+								array,
+								index
+							]), located.provenance));
 							// Read all leaves first: the source and destination can share the same array element.
 							for (copy in copies) {
 								var leaf = new IrValue(next++, "$array-place-copy", copy.type);
-								target.instructions.push(new Located(Call(leaf, helpers.getter(copy.source), [array, index]), located.provenance));
+								target.instructions.push(new Located(Call(leaf, helpers.getter(copy.source), [
+									array,
+									index
+								]), located.provenance));
 								values.push(leaf);
 							}
 							for (i in 0...copies.length) {
 								var write = new IrValue(next++, "$array-place-copy-write", Void);
-								target.instructions.push(new Located(Call(write, helpers.setter(copies[i].target), [array, index, values[i]]),
+								target.instructions.push(new Located(Call(write, helpers.setter(copies[i].target), [
+									array,
+									index,
+									values[i]
+								]),
 									located.provenance));
 							}
 							omit = true;
@@ -478,7 +530,9 @@ class IrValueArrayPlaceMethods {
 								}
 								var fieldValue = field.value;
 								var scalar = optionalScalars.get(fieldValue.id),
-									leaf:Null<IrValue> = entry.slot.isPresence ? (field.present != null ? field.present : scalar == null ? null : scalar.present) : entry.slot.nullablePayload ? (scalar == null ? null : scalar.payload) : fieldValue;
+									leaf:Null<IrValue> = entry.slot.isPresence ? (field.present != null ? field.present
+										: scalar == null ? null : scalar.present) : entry.slot.nullablePayload
+										? (scalar == null ? null : scalar.payload) : fieldValue;
 								if (leaf == null)
 									throw 'Constructed array field "${relative[0]}" requires component specialization';
 								if (!IrVerifier.sameType(leaf.type, entry.slot.type))
@@ -487,7 +541,11 @@ class IrValueArrayPlaceMethods {
 							}
 							for (i in 0...slots.length) {
 								var write = new IrValue(next++, "$array-place-copy-write", Void);
-								target.instructions.push(new Located(Call(write, helpers.setter(slots[i].index), [array, index, sourceValues[i]]),
+								target.instructions.push(new Located(Call(write, helpers.setter(slots[i].index), [
+									array,
+									index,
+									sourceValues[i]
+								]),
 									located.provenance));
 							}
 							omit = true;
@@ -503,7 +561,8 @@ class IrValueArrayPlaceMethods {
 								for (part in entry.slot.path.slice(fieldPath.length)) {
 									var type = fieldType(current.type, part),
 										leaf = new IrValue(next++, "$array-place-source", type);
-									target.instructions.push(new Located(FieldGet(leaf, current, part), located.provenance));
+									target.instructions.push(new Located(FieldGet(leaf, current, part),
+										located.provenance));
 									current = leaf;
 								}
 								if (!IrVerifier.sameType(current.type, entry.slot.type))
@@ -512,7 +571,11 @@ class IrValueArrayPlaceMethods {
 							}
 							for (i in 0...slots.length) {
 								var write = new IrValue(next++, "$array-place-copy-write", Void);
-								target.instructions.push(new Located(Call(write, helpers.setter(slots[i].index), [array, index, sourceValues[i]]),
+								target.instructions.push(new Located(Call(write, helpers.setter(slots[i].index), [
+									array,
+									index,
+									sourceValues[i]
+								]),
 									located.provenance));
 							}
 							omit = true;
@@ -523,7 +586,12 @@ class IrValueArrayPlaceMethods {
 								inner = scalarInner(value.type);
 							if (snapshot == null)
 								throw 'Missing nullable scalar array place components';
-							instruction = Call(ignored, helpers.optionalSetter(fieldPath, inner), [array, index, snapshot.present, snapshot.payload]);
+							instruction = Call(ignored, helpers.optionalSetter(fieldPath, inner), [
+								array,
+								index,
+								snapshot.present,
+								snapshot.payload
+							]);
 						} else
 							instruction = Call(ignored, helpers.setter(helpers.slot(fieldPath)), [array, index, value]);
 						handled = true;
@@ -533,7 +601,7 @@ class IrValueArrayPlaceMethods {
 						handled = true;
 					case Equal(out, left, right)
 						if ((optionalScalars.exists(left.id) && nulls.exists(right.id))
-							|| (optionalScalars.exists(right.id) && nulls.exists(left.id))):
+						|| (optionalScalars.exists(right.id) && nulls.exists(left.id))):
 						var snapshot = optionalScalars.get(optionalScalars.exists(left.id) ? left.id : right.id),
 							no = new IrValue(next++, "$array-optional-false", Bool);
 						if (snapshot == null)
@@ -546,7 +614,8 @@ class IrValueArrayPlaceMethods {
 						instruction = Call(check, helpers.checker(aliases.get(value.id), true), [array, index]);
 						handled = true;
 					case Equal(out, left, right)
-						if ((aliases.exists(left.id) && nulls.exists(right.id)) || (aliases.exists(right.id) && nulls.exists(left.id))):
+						if ((aliases.exists(left.id) && nulls.exists(right.id))
+						|| (aliases.exists(right.id) && nulls.exists(left.id))):
 						var alias = aliases.exists(left.id) ? left : right;
 						if (!isNullable(alias.type))
 							throw 'Non-null array place compared with null';
@@ -555,7 +624,11 @@ class IrValueArrayPlaceMethods {
 							throw "Missing optional array place";
 						var present = new IrValue(next++, "$array-place-present", Bool),
 							no = new IrValue(next++, "$array-place-false", Bool);
-						target.instructions.push(new Located(Call(present, helpers.getter(helpers.slot(aliasPath, true)), [array, index]), located.provenance));
+						target.instructions
+							.push(new Located(Call(present, helpers.getter(helpers.slot(aliasPath, true)), [
+								array,
+								index
+							]), located.provenance));
 						target.instructions.push(new Located(ConstBool(no, false), located.provenance));
 						instruction = Equal(out, present, no);
 						handled = true;
@@ -567,7 +640,8 @@ class IrValueArrayPlaceMethods {
 						instruction = Call(out, nested, [array, index].concat(arguments));
 						handled = true;
 					case Call(out, method, arguments)
-						if (StringTools.startsWith(method, "$generic:") && arguments.length > 0 && aliases.exists(arguments[0].id)):
+						if (StringTools.startsWith(method, "$generic:") && arguments.length > 0
+						&& aliases.exists(arguments[0].id)):
 						for (argument in arguments.slice(1))
 							if (aliases.exists(argument.id) || optionalScalars.exists(argument.id))
 								throw 'Array place argument requires value specialization';
@@ -604,7 +678,8 @@ class IrValueArrayPlaceMethods {
 			if (source.terminator != null)
 				switch source.terminator.value {
 					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _)
-						if (aliases.exists(value.id) || optionalScalars.exists(value.id) || virtualFresh.exists(value.id)):
+						if (aliases.exists(value.id) || optionalScalars.exists(value.id)
+						|| virtualFresh.exists(value.id)):
 						throw 'Array place receiver escapes through a terminator';
 					default:
 				}
@@ -614,11 +689,12 @@ class IrValueArrayPlaceMethods {
 		var debug = [
 			for (binding in fn.debugBindings)
 				if (!aliases.exists(binding.value.id)
-					&& !optionalScalars.exists(binding.value.id)
-					&& !virtualFresh.exists(binding.value.id)
-					&& !optionalFresh.exists(binding.value.id)) binding
+				&& !optionalScalars.exists(binding.value.id)
+				&& !virtualFresh.exists(binding.value.id)
+				&& !optionalFresh.exists(binding.value.id)) binding
 		];
-		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, kind, debug, fn.inlineHint, fn.retention);
+		return new IrFunction(name, [array, index].concat(fn.arguments.slice(1)), fn.result, blocks, kind, debug,
+			fn.inlineHint, fn.retention);
 	}
 
 	function request(receiverType:IrType, method:String, path:Array<String>):String {
@@ -657,7 +733,8 @@ class IrValueArrayPlaceMethods {
 
 	function isValue(type:IrType):Bool
 		return switch type {
-			case Obj(name), Nullable(Obj(name)): var object = objects.get(name); object != null && object.isValue;
+			case Obj(name), Nullable(Obj(name)): var object = objects.get(name);
+				object != null && object.isValue;
 			default: false;
 		};
 

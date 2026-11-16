@@ -8,25 +8,49 @@ import compiler.ir.IrVerifier;
 /** Representation decisions must agree across targets, even where pointers and scalar words differ. */
 class InlineEnumLayoutMain {
 	static function declaration(name:String, large:Array<IrType>, ?small:Array<IrType>):IrEnum
-		return {name: name, cases: [{name: "Small", params: small == null ? [] : small}, {name: "Large", params: large}]};
+		return {
+			name: name,
+			cases: [{name: "Small", params: small == null ? [] : small}, {name: "Large", params: large}]
+		};
 
 	static function pointerObjects(bits:Int):Array<IrObject> {
 		var size = Std.int(bits / 8);
 		return [for (count in [8, 9]) {
-			name: count == 8 ? "EightPointers" : "NinePointers", isValue: true, base: null, interfaces: [], methods: [],
-			nativeLayout: {target: bits == 64 ? IrInlineEnumLayout.CANONICAL_ABI : "wasm32-wasi", size: count * size, alignment: size},
-			fields: [for (index in 0...count) {name: 'pointer$index', type: RawPtr,
-				nativeLayout: {offset: index * size, size: size, alignment: size, signed: false, inlineRecord: false}}]
+			name:count == 8 ? "EightPointers" : "NinePointers", isValue:true, base:null, interfaces:[], methods:[],
+				nativeLayout: {
+					target: bits == 64 ? IrInlineEnumLayout.CANONICAL_ABI : "wasm32-wasi",
+					size: count * size,
+					alignment: size
+				},
+					fields:[for (index in 0...count) {
+						name:'pointer$index', type:RawPtr,
+							nativeLayout: {
+								offset: index * size,
+								size: size,
+								alignment: size,
+								signed: false,
+								inlineRecord: false
+							}
+					}]
 		}];
 	}
 
 	static function main():Void {
 		var enums:Array<IrEnum> = [
-			{name: "Paint", cases: [{name: "Empty", params: []}, {name: "Rgb", params: [I32, I32, I32]},
-				{name: "Wide", params: [F64, Bytes]}]},
+			{
+				name: "Paint",
+				cases: [
+					{name: "Empty", params: []},
+					{name: "Rgb", params: [I32, I32, I32]},
+					{name: "Wide", params: [F64, Bytes]}
+				]
+			},
 			declaration("Wrapped", [Enum("Paint")]),
 			declaration("StructWrapped", [Obj("Holder")]),
-			declaration("Containers", [Array(Enum("Paint")), Function([Enum("Paint")], Enum("Paint"))]),
+			declaration("Containers", [
+				Array(Enum("Paint")),
+				Function([Enum("Paint")], Enum("Paint"))
+			]),
 			declaration("Optional", [Nullable(Obj("OptionalFields"))]),
 			declaration("Recursive", [Enum("Recursive")]),
 			declaration("RecursiveArray", [Array(Enum("RecursiveArray"))]),
@@ -43,18 +67,34 @@ class InlineEnumLayoutMain {
 			declaration("Pointers", [for (_ in 0...9) RawPtr]),
 			declaration("FlatPointers", [Obj("NinePointers")]),
 			declaration("SmallFlatPointers", [Obj("EightPointers")]),
-			{name: "SinglePayload", cases: [{name: "Some", params: [I32]}]}
+			{
+				name: "SinglePayload",
+				cases: [{name: "Some", params: [I32]}]
+			}
 		];
 		var objects:Array<IrObject> = [
-			{name: "Holder", isValue: true, base: null, interfaces: [], methods: [],
-				fields: [{name: "paint", type: Enum("Paint")}, {name: "count", type: I32}]},
-			{name: "OptionalFields", isValue: true, base: null, interfaces: [], methods: [],
-				fields: [{name: "number", type: Nullable(I32)}, {name: "owner", type: Bytes}]}
+			{
+				name: "Holder",
+				isValue: true,
+				base: null,
+				interfaces: [],
+				methods: [],
+				fields: [{name: "paint", type: Enum("Paint")}, {name: "count", type: I32}]
+			},
+			{
+				name: "OptionalFields",
+				isValue: true,
+				base: null,
+				interfaces: [],
+				methods: [],
+				fields: [{name: "number", type: Nullable(I32)}, {name: "owner", type: Bytes}]
+			}
 		];
 		for (target in [HashLink, Wasm32, WasmGc]) {
 			var bits = target == HashLink ? 64 : 32;
 			var physicalObjects = objects.concat(pointerObjects(bits));
-			var layout = new IrInlineEnumLayout(enums, physicalObjects, bits, target, objects.concat(pointerObjects(64)));
+			var layout = new IrInlineEnumLayout(enums, physicalObjects, bits, target,
+				objects.concat(pointerObjects(64)));
 			var paint = layout.shape("Paint"), wrapped = layout.shape("Wrapped");
 			if (paint == null || paint.wordBits != 64 || paint.scalarWords != 2 || paint.references != 1)
 				throw "cases must overlap their scalar and reference payloads";
@@ -75,14 +115,24 @@ class InlineEnumLayoutMain {
 			if (optional == null || optional.references != 1 || optional.cases[1].payload.slots.length != 4
 				|| !optional.cases[1].payload.slots[0].isPresence || !optional.cases[1].payload.slots[1].isPresence)
 				throw "nested nullability must keep distinct presence bits and traced references";
-			if (layout.shape("EightWords") == null || layout.shape("Balanced") == null || layout.shape("EightReferences") == null || layout.shape("SmallFlatPointers") == null)
+			if (layout.shape("EightWords") == null || layout.shape("Balanced") == null
+				|| layout.shape("EightReferences") == null || layout.shape("SmallFlatPointers") == null)
 				throw "the inline cutoff must count 64-bit scalar words plus references";
 			for (name in ["RecursiveArray", "RecursiveIterator", "RecursiveFunction"]) {
 				var referenceCycle = layout.shape(name);
 				if (referenceCycle == null || referenceCycle.scalarWords != 0 || referenceCycle.references != 1)
 					throw 'A reference payload must break the layout cycle for $name on $target';
 			}
-			for (name in ["Recursive", "MutualA", "MutualB", "NineWords", "Unbalanced", "NineReferences", "Pointers", "FlatPointers"])
+			for (name in [
+				"Recursive",
+				"MutualA",
+				"MutualB",
+				"NineWords",
+				"Unbalanced",
+				"NineReferences",
+				"Pointers",
+				"FlatPointers"
+			])
 				if (layout.shape(name) != null) throw 'Expected boxed representation for $name on $target';
 			var single = layout.shape("SinglePayload");
 			if (single == null || single.wordBits != 32 || single.scalarWords != 1 || single.references != 0
@@ -95,13 +145,16 @@ class InlineEnumLayoutMain {
 					throw "target-specific Flat offsets must never determine enum eligibility";
 			}
 			var error = "";
-			try new IrInlineEnumLayout(enums, physicalObjects, bits, target, objects) catch (caught:Dynamic) error = Std.string(caught);
+			try new IrInlineEnumLayout(enums, physicalObjects, bits, target,
+				objects) catch (caught:Dynamic) error = Std.string(caught);
 			if (error != 'Missing canonical value object "EightPointers" for inline enum classification')
 				throw "a missing canonical struct must not silently become a reference leaf";
 			var boxed = layout.shape("BoxedChild");
 			if (boxed == null || boxed.scalarWords != 0 || boxed.references != 1)
 				throw "a boxed recursive child belongs in a traced reference slot";
-			var generated = layout.generatedObjects(), names = [for (object in generated) object.name], sorted = names.copy();
+			var generated = layout.generatedObjects(),
+				names = [for (object in generated) object.name],
+				sorted = names.copy();
 			sorted.sort(Reflect.compare);
 			if (names.join(",") != sorted.join(",")) throw "generated declarations must have deterministic order";
 			if (!IrVerifier.sameType(layout.payloadType(Nullable(Enum("Paint"))), value))

@@ -43,9 +43,11 @@ class IrFunctionRewriteMain {
 		expect(after.count - before.count < 1000, "a rule that replaces nothing must allocate nothing");
 
 		var changed = IrFunctionRewrite.instructions(fn, threeForTwo);
-		expect(changed != fn && changed.name == fn.name && changed.result == fn.result && changed.arguments == fn.arguments, "one change makes a new function");
+		expect(changed != fn && changed.name == fn.name && changed.result == fn.result
+			&& changed.arguments == fn.arguments, "one change makes a new function");
 		expect(changed.blocks.length == fn.blocks.length, "the blocks keep their number");
-		expect(changed.blocks[0] == fn.blocks[0] && changed.blocks[2] == fn.blocks[2], "blocks without a change are shared");
+		expect(changed.blocks[0] == fn.blocks[0] && changed.blocks[2] == fn.blocks[2],
+			"blocks without a change are shared");
 		expect(changed.blocks[1] != fn.blocks[1], "the changed block is copied");
 		expect(switch changed.blocks[1].instructions[0].value {
 			case ConstInt(_, 3): true;

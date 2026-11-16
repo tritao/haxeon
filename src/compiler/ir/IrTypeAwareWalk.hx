@@ -75,9 +75,11 @@ class IrTypeAwareWalk {
 	 * `keepCreatedClassMethods`: every method of a created class is reached, as the plain HashLink prune does today for a mentioned class
 	 * (a method can be reached by name through reflection); off, only called methods are.
 	 */
-	public static function run(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>, requireProviders = false,
+	public static function run(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>,
+			requireProviders = false,
 			keepCreatedClassMethods = false, ?classDependencies:IrClassDependencies):IrWalkResult {
-		var walk = new IrTypeAwareWalkState(program, roots, dynamicSites == null ? defaultDynamicSites() : dynamicSites, requireProviders,
+		var walk = new IrTypeAwareWalkState(program, roots, dynamicSites == null ? defaultDynamicSites() : dynamicSites,
+			requireProviders,
 			keepCreatedClassMethods, classDependencies);
 		return walk.run();
 	}
@@ -112,8 +114,10 @@ class IrTypeAwareWalk {
 	 * The side-by-side counts of the diagnostic: everything present, what today's walk (`IrReachability`, the plain HashLink prune) keeps,
 	 * and what this walk keeps, as lines of text. Objects count the classes with a reached method.
 	 */
-	public static function compare(program:IrProgram, roots:IrWalkRoots, ?dynamicSites:Map<String, Array<String>>):Array<String> {
-		var today = IrReachability.withGeneratedRuntimeRoots(program, roots.functions[0], roots.functions.slice(1), true);
+	public static function compare(program:IrProgram, roots:IrWalkRoots,
+			?dynamicSites:Map<String, Array<String>>):Array<String> {
+		var today = IrReachability.withGeneratedRuntimeRoots(program, roots.functions[0], roots.functions.slice(1),
+			true);
 		var strict = run(program, roots, dynamicSites, false, false);
 		var wide = run(program, roots, dynamicSites, false, true);
 		var providersAll = 0;
@@ -202,7 +206,8 @@ private class IrTypeAwareWalkState {
 	final declarationOnly:Map<String, Bool> = [];
 	final calledNatives:Map<String, Bool> = [];
 
-	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>, requireProviders:Bool, keepCreatedClassMethods:Bool,
+	public function new(program:IrProgram, roots:IrWalkRoots, dynamicSites:Map<String, Array<String>>,
+			requireProviders:Bool, keepCreatedClassMethods:Bool,
 			classDependencies:Null<IrClassDependencies>) {
 		this.classDependencies = classDependencies;
 		this.program = program;
@@ -359,7 +364,8 @@ private class IrTypeAwareWalkState {
 
 	static function typeOfKey(operation:IrIntrinsic):IrType
 		return switch operation {
-			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type), InlineEnumUnbox(type):
+			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type),
+				InlineEnumUnbox(type):
 				type;
 		};
 
@@ -469,7 +475,8 @@ private class IrTypeAwareWalkState {
 		if (classDependencies != null)
 			for (name in [for (name in calledNatives.keys()) name]) {
 				var native = natives.get(name);
-				if (native == null || dependencySymbolsDone.exists(native.symbol) || classDependencies.symbols.indexOf(native.symbol) < 0)
+				if (native == null || dependencySymbolsDone.exists(native.symbol)
+					|| classDependencies.symbols.indexOf(native.symbol) < 0)
 					continue;
 				dependencySymbolsDone.set(native.symbol, true);
 				for (object in program.objects)

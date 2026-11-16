@@ -30,9 +30,10 @@ class GraphicsImageRef {
 	 */
 	@:allow(haxeon.gpu.Image, haxeon.gpu.RenderTarget, nativekit.scene.SceneRenderer)
 	private static function fromBorrowedHandle(value:GraphicsImage, width:Int, height:Int,
-		api:GraphicsApi):GraphicsImageRef {
+			api:GraphicsApi):GraphicsImageRef {
 		if (width <= 0 || height <= 0)
-			throw BindingError.invalidArgument("GraphicsImageRef.fromBorrowedHandle", "Graphics image dimensions must be positive");
+			throw BindingError.invalidArgument("GraphicsImageRef.fromBorrowedHandle",
+				"Graphics image dimensions must be positive");
 		NativeKit.nk_graphics_image_retain_checked(value);
 		return new GraphicsImageRef(value, width, height, api);
 	}

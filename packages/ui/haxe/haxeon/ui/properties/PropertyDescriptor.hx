@@ -28,8 +28,7 @@ class PropertyDescriptor {
 
 	public function new(id:String, label:String, type:PropertyType,
 			read:PropertyReader, write:PropertyWriter, ?settings:PropertyDescriptorOptions) {
-		if (id == null || id.length == 0 || label == null || label.length == 0 ||
-			read == null || write == null)
+		if (id == null || id.length == 0 || label == null || label.length == 0 || read == null || write == null)
 			throw "Property descriptors require an ID, label, reader, and writer";
 		var config = settings == null ? new PropertyDescriptorOptions() : settings;
 		if (config.minimum != null && config.maximum != null && config.minimum > config.maximum)

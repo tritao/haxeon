@@ -29,7 +29,7 @@ class PropertyEditorRegistry {
 		return typeId == null ? null : extensions.get(typeId);
 
 	public function validate(context:CommandContext, descriptor:PropertyDescriptor,
-		value:PropertyValue):Null<String> {
+			value:PropertyValue):Null<String> {
 		if (value == null)
 			return null;
 		return switch (value) {
@@ -53,8 +53,7 @@ class PropertyEditorRegistry {
 					false;
 				else {
 					var extension = get(typeA);
-					extension == null ? PropertyValueTools.same(first, second) :
-						extension.same(firstData, secondData);
+					extension == null ? PropertyValueTools.same(first, second) : extension.same(firstData, secondData);
 				}
 			default: PropertyValueTools.same(first, second);
 		};
@@ -66,8 +65,7 @@ class PropertyEditorRegistry {
 		return switch (value) {
 			case Custom(typeId, data):
 				var extension = get(typeId);
-				extension == null ? PropertyValueTools.display(value, mixedText) :
-				extension.display(data);
+				extension == null ? PropertyValueTools.display(value, mixedText) : extension.display(data);
 			case Mixed: mixedText;
 			default: PropertyValueTools.display(value, mixedText);
 		};
@@ -79,8 +77,7 @@ class PropertyEditorRegistry {
 		return switch (value) {
 			case Custom(typeId, data):
 				var extension = get(typeId);
-				extension == null ? PropertyValueTools.editableText(value) :
-				extension.editableText(data);
+				extension == null ? PropertyValueTools.editableText(value) : extension.editableText(data);
 			default: PropertyValueTools.editableText(value);
 		};
 	}

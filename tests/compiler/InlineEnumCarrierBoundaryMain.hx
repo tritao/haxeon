@@ -80,23 +80,24 @@ class InlineEnumCarrierBoundaryMain {
 			p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		}, "Invalid scalar reference intrinsic");
 		for (array in [false, true])
-			reject(array ? "scalar enum storage array boxed as Dynamic" : "scalar enum storage boxed as Dynamic", function(p) {
-				var name = "$inline-enum:Scalar";
-				p.objects = [
-					{
-						name: name,
-						isValue: true,
-						base: null,
-						interfaces: [],
-						methods: [],
-						fields: [{name: "tag", type: I32}, {name: "scalar0", type: I32}]
-					}
-				];
-				var b = new IrBuilder(),
-					value = array ? b.argument("array", Array(Obj(name))) : b.valueInit(name);
-				b.returnValue(b.toDyn(value));
-				p.functions = [new IrFunction("main", b.arguments, Dyn, b.blocks, Ordinary)];
-			}, "requires a logical Dynamic adapter");
+			reject(array ? "scalar enum storage array boxed as Dynamic" : "scalar enum storage boxed as Dynamic",
+				function(p) {
+					var name = "$inline-enum:Scalar";
+					p.objects = [
+						{
+							name: name,
+							isValue: true,
+							base: null,
+							interfaces: [],
+							methods: [],
+							fields: [{name: "tag", type: I32}, {name: "scalar0", type: I32}]
+						}
+					];
+					var b = new IrBuilder(),
+						value = array ? b.argument("array", Array(Obj(name))) : b.valueInit(name);
+					b.returnValue(b.toDyn(value));
+					p.functions = [new IrFunction("main", b.arguments, Dyn, b.blocks, Ordinary)];
+				}, "requires a logical Dynamic adapter");
 		for (nested in [false, true])
 			reject(nested ? "nested carrier record boxed as Dynamic" : "carrier record boxed as Dynamic", function(p) {
 				var packet:IrObject = {
@@ -146,14 +147,16 @@ class InlineEnumCarrierBoundaryMain {
 			var b = new IrBuilder();
 			b.returnValue(b.constInt(42));
 			p.functions = [
-				new IrFunction("main", b.arguments, I32, b.blocks, ValueArraySlot(-1, Obj("Packet"), Read(0, [], false)))
+				new IrFunction("main", b.arguments, I32, b.blocks,
+					ValueArraySlot(-1, Obj("Packet"), Read(0, [], false)))
 			];
 		}, "Invalid value-array slot namespace");
 		reject("negative slot index", function(p) {
 			var b = new IrBuilder();
 			b.returnValue(b.constInt(42));
 			p.functions = [
-				new IrFunction("main", b.arguments, I32, b.blocks, ValueArraySlot(0, Obj("Packet"), Read(-1, [], false)))
+				new IrFunction("main", b.arguments, I32, b.blocks,
+					ValueArraySlot(0, Obj("Packet"), Read(-1, [], false)))
 			];
 		}, "Invalid value-array slot");
 		for (wrongPath in [false, true])

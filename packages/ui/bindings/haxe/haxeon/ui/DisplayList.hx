@@ -37,7 +37,8 @@ class DisplayList {
 		ensureLive();
 		var result = NativeKitUI.nkui_display_list_get_info(value);
 		UiResult.check(result.status, "displayList.info");
-		return new DisplayListInfo(result.out_info.get_command_bytes(), result.out_info.get_command_count(), result.out_info.get_api_version());
+		return new DisplayListInfo(result.out_info.get_command_bytes(), result.out_info.get_command_count(),
+			result.out_info.get_api_version());
 	}
 
 	/** Releases this list. Repeated disposal is safe. */

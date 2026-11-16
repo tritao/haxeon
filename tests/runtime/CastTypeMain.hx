@@ -8,8 +8,10 @@ import sys.io.File;
  */
 class CastTypeMain {
 	static final SHAPE = "package app; class Shape { public function new() {} public function size():Int return 0; }";
-	static final CIRCLE = "package app; class Circle extends Shape { public function new() super(); override public function size():Int return 42; }";
-	static final MEASURE = "package app; import app.Shape; class Measure { public static function of(shape:Shape):Int { var circle = (cast shape:Circle); var loose:Dynamic = (cast shape:Dynamic); return circle == null ? same(42) : circle.size() - 1; } static function same<T>(value:T):T return (cast value:T); }";
+	static final CIRCLE =
+		"package app; class Circle extends Shape { public function new() super(); override public function size():Int return 42; }";
+	static final MEASURE =
+		"package app; import app.Shape; class Measure { public static function of(shape:Shape):Int { var circle = (cast shape:Circle); var loose:Dynamic = (cast shape:Dynamic); return circle == null ? same(42) : circle.size() - 1; } static function same<T>(value:T):T return (cast value:T); }";
 	static final MAIN = "package app; function main():Int return Measure.of(null);";
 
 	static function main():Void {

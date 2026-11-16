@@ -64,7 +64,8 @@ class RuntimeLibrary {
 			var start = index;
 			if (library.get(start) == 0x5F)
 				start++;
-			if (start + 4 <= length && library.get(start) == 0x68 && library.get(start + 1) == 0x6C && library.get(start + 2) == 0x70 && library.get(start + 3) == 0x5F) {
+			if (start + 4 <= length && library.get(start) == 0x68 && library.get(start + 1) == 0x6C
+				&& library.get(start + 2) == 0x70 && library.get(start + 3) == 0x5F) {
 				var end = start + 4;
 				while (end < length && library.get(end) != 0)
 					end++;

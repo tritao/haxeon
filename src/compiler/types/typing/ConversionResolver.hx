@@ -23,8 +23,10 @@ class ConversionResolver {
 	/** A Never value takes the expected type; a block's value is its result, so the result takes it too. */
 	static function neverAs(value:TypedExpression, expected:CompilerType):TypedExpression
 		return switch value.expression {
-			case TBlockExpression(statements, result) if ((switch (result.type) { case TNever: true; default: false; })):
-				new TypedExpression(TBlockExpression(statements, neverAs(result, expected)), expected, value.span);
+			case TBlockExpression(statements, result) if ((switch (result.type) {
+				case TNever: true;
+				default: false;
+			})): new TypedExpression(TBlockExpression(statements, neverAs(result, expected)), expected, value.span);
 			default:
 				new TypedExpression(value.expression, expected, value.span);
 		};
@@ -34,31 +36,38 @@ class ConversionResolver {
 	 * condition): a nullable of one reads as that type, null giving its default, so `total += stack.pop()` and `if (flag)` work
 	 * on nullables as in Haxe. Anything else is returned as it is. Equality keeps the nullable, so `x == null` still sees null.
 	 */
-	public static function plainValue(value:TypedExpression, coerce:(TypedExpression, CompilerType, String, String) -> TypedExpression):TypedExpression
+	public static function plainValue(value:TypedExpression,
+			coerce:(TypedExpression, CompilerType, String, String) -> TypedExpression):TypedExpression
 		return switch value.type {
-			case TNullable(element) if (TypeRelations.hasNullDefault(element)): coerce(value, element, "operand", "E1010");
+			case TNullable(element) if (TypeRelations.hasNullDefault(element)): coerce(value, element, "operand",
+				"E1010");
 			default: value;
 		};
 
 	/** `value ?? default`: a nullable scalar read as its element type, null giving the type's Haxe default. Evaluates `value` once. */
-	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String,
+			code:String):TypedExpression {
 		var element = switch value.type {
 			case TNullable(inner): inner;
 			default: value.type;
 		};
-		var span = value.span, id = '$' + 'nullable-default-value:${session.currentContext.nullableDefaultTemporary++}',
+		var span = value.span,
+			id = '$' + 'nullable-default-value:${session.currentContext.nullableDefaultTemporary++}',
 			local = new TypedExpression(TLocal(id), value.type, span),
-			nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+			nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type,
+				span),
 			isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
 			present = coerce(new TypedExpression(TCast(local), element, span), expected, context, code),
 			fallback = switch expected {
 				case TFloat: new TypedExpression(TFloatLiteral(0.0), TFloat, span);
 				case TBool: new TypedExpression(TBoolLiteral(false), TBool, span);
-				case TInt64: new TypedExpression(TIntToInt64(new TypedExpression(TIntLiteral(0), TInt, span)), TInt64, span);
+				case TInt64: new TypedExpression(TIntToInt64(new TypedExpression(TIntLiteral(0), TInt, span)), TInt64,
+					span);
 				default: new TypedExpression(TIntLiteral(0), TInt, span);
 			};
 		warnNullDefault(value, expected);
-		return new TypedExpression(TBlockExpression([TVar(id, value, span)], new TypedExpression(TConditional(isNull, fallback, present), expected, span)),
+		return new TypedExpression(TBlockExpression([TVar(id, value, span)],
+			new TypedExpression(TConditional(isNull, fallback, present), expected, span)),
 			expected, span);
 	}
 
@@ -73,7 +82,7 @@ class ConversionResolver {
 				case TBool: "false";
 				default: "0";
 			};
-		var fixes:Array<DiagnosticFix> = if (span.end > span.start) [
+		var fixes:Array<DiagnosticFix> = if (span.end > span.start)[
 			{
 				id: "explicit-null-default",
 				title: 'Write the default: ?? $defaultText',
@@ -85,14 +94,26 @@ class ConversionResolver {
 			span, Warning, fixes));
 	}
 
-	public function coerce(value:TypedExpression, expected:CompilerType, context:String, code:String = "E1009"):TypedExpression {
-		if ((switch (value.type) { case TNever: true; default: false; }))
+	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
+			code:String = "E1009"):TypedExpression {
+		if ((switch (value.type) {
+			case TNever: true;
+			default: false;
+		}))
 			return neverAs(value, expected);
-		if ((switch (value.type) { case TDynamic: true; default: false; }) && anonymousTarget(expected) != null)
+		if ((switch (value.type) {
+			case TDynamic: true;
+			default: false;
+		}) && anonymousTarget(expected) != null)
 			return dynamicStructure(value, expected);
-		if (IterationProtocol.name(expected) != null && (switch (value.type) { case TNull: false; default: true; }) && !TypeRelations.equals(value.type, expected)) {
+		if (IterationProtocol.name(expected) != null && (switch (value.type) {
+			case TNull: false;
+			default: true;
+		}) && !TypeRelations.equals(value.type, expected)) {
 			if (!session.relations.isAssignable(value.type, expected))
-				fail(code, 'Type mismatch for $context: iteration requires compatible iterator(), hasNext():Bool and next() methods', value.span);
+				fail(code,
+					'Type mismatch for $context: iteration requires compatible iterator(), hasNext():Bool and next() methods',
+					value.span);
 			return iterationAdapter(value, expected);
 		}
 		// An optional enum needs an adapter only when present. Bind its expression once before the presence check.
@@ -106,13 +127,20 @@ class ConversionResolver {
 					default: null;
 				};
 				if (interfaceType != null && session.relations.satisfiesConstraint(element, interfaceType)) {
-					var span = value.span, id = '$' + 'enum-interface-value:${session.currentContext.enumInterfaceTemporary++}',
+					var span = value.span,
+						id = '$' + 'enum-interface-value:${session.currentContext.enumInterfaceTemporary++}',
 						local = new TypedExpression(TLocal(id), value.type, span),
-						nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+						nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+							value.type, span),
 						isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
-						present = coerce(new TypedExpression(TCast(local), element, span), interfaceType, context, code),
-						nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span),
-						result = (switch expected { case TNullable(_): new TypedExpression(TNullableWrap(present), expected, span); default: present; });
+						present = coerce(new TypedExpression(TCast(local), element, span), interfaceType, context,
+							code),
+						nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+							expected, span),
+						result = (switch expected {
+							case TNullable(_): new TypedExpression(TNullableWrap(present), expected, span);
+							default: present;
+						});
 					return new TypedExpression(TBlockExpression([TVar(id, value, span)],
 						new TypedExpression(TConditional(isNull, nilResult, result), expected, span)), expected, span);
 				}
@@ -120,33 +148,45 @@ class ConversionResolver {
 		}
 		switch expected {
 			// A Dynamic converts to a nullable by one cast, below. Converting it to the element first would turn a null into a zero.
-			case TNullable(element) if ((switch (value.type) { case TNull: false; default: true; }) && (switch (value.type) { case TDynamic: false; default: true; }) && !isNullable(value.type)):
-				var converted = coerce(value, element, context, code);
-				return new TypedExpression(TNullableWrap(converted), expected, value.span);
+			case TNullable(element) if ((switch (value.type) {
+				case TNull: false;
+				default: true;
+			}) && (switch (value.type) {
+				case TDynamic: false;
+				default: true;
+			}) && !isNullable(value.type)): var converted = coerce(value, element, context, code);
+			return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
 		}
 		// Preserve null while converting a present nullable element through the abstract's @:from.
 		switch [value.type, expected] {
-			case [TNullable(element), TNullable(target)] if ((switch (target) { case TAbstract(_, _, _): true; default: false; }) && (switch (session.relations.conversion(element, target)) {
+			case [TNullable(element), TNullable(target)] if ((switch (target) {
+				case TAbstract(_, _, _): true;
+				default: false;
+			}) && (switch (session.relations.conversion(element, target)) {
 				case AbstractCast: true;
 				default: false;
-			})):
-				var span = value.span,
-					id = '$' + 'nullable-abstract-value:${session.currentContext.nullableAbstractTemporary++}',
-					local = new TypedExpression(TLocal(id), value.type, span),
-					nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
-					isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
-					present = coerce(new TypedExpression(TCast(local), element, span), target, context, code),
-					nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span),
-					result = new TypedExpression(TNullableWrap(present), expected, span);
-				return new TypedExpression(TBlockExpression([TVar(id, value, span)],
-					new TypedExpression(TConditional(isNull, nilResult, result), expected, span)), expected, span);
+			})): var span = value.span,
+				id = '$' + 'nullable-abstract-value:${session.currentContext.nullableAbstractTemporary++}',
+				local = new TypedExpression(TLocal(id), value.type, span),
+				nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+				value.type, span),
+				isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
+				present = coerce(new TypedExpression(TCast(local), element, span), target, context, code),
+				nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected,
+				span),
+				result = new TypedExpression(TNullableWrap(present), expected, span);
+			return new TypedExpression(TBlockExpression([TVar(id, value, span)],
+				new TypedExpression(TConditional(isNull, nilResult, result), expected, span)), expected, span);
 			default:
 		}
 		// A nullable converts through the abstract's @:from function for its element, so unwrap it first, as Haxe does.
 		switch [value.type, expected] {
-			case [TNullable(element), TAbstract(_, _, _)] if ((switch (session.relations.conversion(element, expected)) { case AbstractCast: true; default: false; })):
-				return coerce(new TypedExpression(TCast(value), element, value.span), expected, context, code);
+			case [TNullable(element),
+				TAbstract(_, _, _)] if ((switch (session.relations.conversion(element, expected)) {
+					case AbstractCast: true;
+					default: false;
+				})): return coerce(new TypedExpression(TCast(value), element, value.span), expected, context, code);
 			default:
 		}
 		return switch session.relations.conversion(value.type, expected) {
@@ -164,16 +204,20 @@ class ConversionResolver {
 			case AbstractCast:
 				var conversion = abstractFromFunction(value.type, expected);
 				conversion == null ? session.representation.boundaryCast(value,
-					expected) : new TypedExpression(TCall(conversion.name, [coerce(value, conversion.argument, context, code)]), expected, value.span);
+					expected) : new TypedExpression(TCall(conversion.name,
+					[coerce(value, conversion.argument, context, code)]), expected, value.span);
 			case ToDynamic:
 				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
 				var owned = ValueCopy.bind(session, value, value.type), enumType = EnumDynamicBox.enumType(value.type);
-				if (enumType != null) EnumDynamicBox.box(session, owned, enumType, value.span); else switch value.type {
+				if (enumType != null) EnumDynamicBox.box(session, owned, enumType, value.span);
+				else switch value.type {
 					case TArray(element):
 						var arrayEnum = EnumDynamicBox.enumType(element);
-						if (arrayEnum == null) new TypedExpression(TToDynamic(owned), expected, value.span); else {
+						if (arrayEnum == null) new TypedExpression(TToDynamic(owned), expected, value.span);
+						else {
 							var view = new TypedExpression(TCast(owned), TArray(TDynamic), value.span);
-							new TypedExpression(TToDynamic(EnumDynamicBox.view(session, view, arrayEnum, value.span)), expected, value.span);
+							new TypedExpression(TToDynamic(EnumDynamicBox.view(session, view, arrayEnum, value.span)),
+								expected, value.span);
 						}
 					default: new TypedExpression(TToDynamic(owned), expected, value.span);
 				};
@@ -182,7 +226,8 @@ class ConversionResolver {
 				var converted = switch value.type {
 					case TInstance(NominalKind.Enum, _, _):
 						var adapter = EnumInterfaceAdapter.request(session, value.type, expected, value.span);
-						new TypedExpression(TNew(adapter, [value], true), TInstance(NominalKind.Class, adapter, []), value.span);
+						new TypedExpression(TNew(adapter, [value], true), TInstance(NominalKind.Class, adapter, []),
+							value.span);
 					default: ValueCopy.bind(session, value, value.type);
 				};
 				new TypedExpression(TToInterface(converted, name), expected, value.span);
@@ -193,7 +238,8 @@ class ConversionResolver {
 			case UnwrapNullableDefault:
 				nullableWithDefault(value, expected, context, code);
 			case Incompatible:
-				fail(code, 'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
+				fail(code,
+					'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
 					value.span);
 				value;
 		};
@@ -227,7 +273,9 @@ class ConversionResolver {
 		var origin = session.currentContext.name, span = value.span;
 		var helper = "$dynamic-structure:" + origin + ":" + name;
 		if (session.dynamicStructureConversions.get(helper) == true)
-			fail("E1016", "Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly", span);
+			fail("E1016",
+				"Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly",
+				span);
 		if (!session.dynamicStructureConversions.exists(helper)) {
 			// Reject recursive copies: cyclic Dynamic input cannot be copied without an identity table.
 			session.dynamicStructureConversions.set(helper, true);
@@ -235,7 +283,8 @@ class ConversionResolver {
 			new AnonymousTypeRegistry(session).register(target);
 			var source = new TypedExpression(TLocal("source"), TDynamic, span);
 			var statements:Array<TypedStatement> = [];
-			var isNull = new TypedExpression(TEqual(source, coerce(new TypedExpression(TNullLiteral, TNull, span), TDynamic, "null comparison")), TBool, span);
+			var isNull = new TypedExpression(TEqual(source,
+				coerce(new TypedExpression(TNullLiteral, TNull, span), TDynamic, "null comparison")), TBool, span);
 			statements.push(TIf(isNull, [
 				TReturn(coerce(new TypedExpression(TNullLiteral, TNull, span), target, "null structure"), span)
 			], [], span));
@@ -247,17 +296,20 @@ class ConversionResolver {
 						var key = new TypedExpression(TStringLiteral(field.name), TString, span);
 						if (!field.optional) {
 							var present = new TypedExpression(TCall("Reflect.hasField", [source, key]), TBool, span);
-							var message = new TypedExpression(TStringLiteral('Missing required field "${field.name}" in dynamic structure conversion'),
+							var message =
+								new TypedExpression(TStringLiteral('Missing required field "${field.name}" in dynamic structure conversion'),
 								TString, span);
 							statements.push(TIf(new TypedExpression(TNot(present), TBool, span),
 								[TThrow(coerce(message, TDynamic, "conversion error"), span)], [], span));
 						}
 						var fieldLocal = "$field:" + field.name;
-						statements.push(TVar(fieldLocal, new TypedExpression(TCall("Reflect.field", [source, key]), TDynamic, span), span));
+						statements.push(TVar(fieldLocal,
+							new TypedExpression(TCall("Reflect.field", [source, key]), TDynamic, span), span));
 						var read = new TypedExpression(TLocal(fieldLocal), TDynamic, span);
 						var matches = dynamicFieldMatches(read, field.type);
 						if (matches != null) {
-							var message = new TypedExpression(TStringLiteral('Invalid type for field "${field.name}" in dynamic structure conversion'),
+							var message =
+								new TypedExpression(TStringLiteral('Invalid type for field "${field.name}" in dynamic structure conversion'),
 								TString, span);
 							statements.push(TIf(new TypedExpression(TNot(matches), TBool, span),
 								[TThrow(coerce(message, TDynamic, "conversion error"), span)], [], span));
@@ -273,15 +325,19 @@ class ConversionResolver {
 					var matches = dynamicFieldMatches(source, target);
 					if (matches == null)
 						throw "Missing array conversion check";
-					var message = new TypedExpression(TStringLiteral("Expected an array in dynamic structure conversion"), TString, span);
-					statements.push(TIf(new TypedExpression(TNot(matches), TBool, span), [TThrow(coerce(message, TDynamic, "conversion error"), span)], [],
+					var message =
+						new TypedExpression(TStringLiteral("Expected an array in dynamic structure conversion"),
+						TString, span);
+					statements.push(TIf(new TypedExpression(TNot(matches), TBool, span),
+						[TThrow(coerce(message, TDynamic, "conversion error"), span)], [],
 						span));
 					var array = new TypedExpression(TLocal("items"), TArray(TDynamic), span);
 					var copied = new TypedExpression(TLocal("copied"), target, span);
 					statements.push(TVar("items", new TypedExpression(TCast(source), TArray(TDynamic), span), span));
 					statements.push(TVar("copied", new TypedExpression(TArrayLiteral([]), target, span), span));
 					var item = dynamicStructure(new TypedExpression(TLocal("item"), TDynamic, span), element);
-					statements.push(TForIn("item", null, array, [TExpression(new TypedExpression(TArrayPush(copied, item), TInt, span), span)], span));
+					statements.push(TForIn("item", null, array,
+						[TExpression(new TypedExpression(TArrayPush(copied, item), TInt, span), span)], span));
 					result = copied;
 				default:
 					throw "Unsupported structural copy target";
@@ -309,14 +365,18 @@ class ConversionResolver {
 			session.dynamicStructureConversions.set(helper, false);
 		}
 		var converted = new TypedExpression(TCall(helper, [value]), target, value.span);
-		return TypeRelations.equals(target, expected) ? converted : new TypedExpression(TCast(converted), expected, value.span);
+		return TypeRelations.equals(target, expected) ? converted : new TypedExpression(TCast(converted), expected,
+			value.span);
 	}
 
 	/** Reject wrong primitive/callable kinds before backend casts, so malformed data throws a Haxe exception. */
 	function dynamicFieldMatches(value:TypedExpression, type:CompilerType):Null<TypedExpression> {
 		var span = value.span;
 		function typeTest(target:CompilerType):TypedExpression
-			return new TypedExpression(TCall("__std_is_of_type", [value, new TypedExpression(TClassRef(""), target, span)]), TBool, span);
+			return new TypedExpression(TCall("__std_is_of_type", [
+				value,
+				new TypedExpression(TClassRef(""), target, span)
+			]), TBool, span);
 		var matches:Null<TypedExpression> = switch type {
 			case TDynamic, TAnonymous(_, _): null;
 			case TNullable(element): dynamicFieldMatches(value, element);
@@ -328,9 +388,11 @@ class ConversionResolver {
 			case TFunction(_, _): new TypedExpression(TCall("Reflect.isFunction", [value]), TBool, span);
 			default: null;
 		};
-		if (matches != null && (isNullable(type) || TypeRelations.isReference(type) && !session.relations.isValueClass(type))) {
+		if (matches != null
+			&& (isNullable(type) || TypeRelations.isReference(type) && !session.relations.isValueClass(type))) {
 			var nil = coerce(new TypedExpression(TNullLiteral, TNull, span), TDynamic, "nullable field");
-			matches = new TypedExpression(TOr(new TypedExpression(TEqual(value, nil), TBool, span), matches), TBool, span);
+			matches = new TypedExpression(TOr(new TypedExpression(TEqual(value, nil), TBool, span), matches), TBool,
+				span);
 		}
 		return matches;
 	}
@@ -381,7 +443,10 @@ class ConversionResolver {
 				cellCaptures: [],
 				span: span
 			});
-			output.push({name: field.name, value: new TypedExpression(TLambda(functionName, environment, captures), field.type, span)});
+			output.push({
+				name: field.name,
+				value: new TypedExpression(TLambda(functionName, environment, captures), field.type, span)
+			});
 		}
 		new AnonymousTypeRegistry(session).register(expected);
 		var name = switch expected {
@@ -393,13 +458,15 @@ class ConversionResolver {
 			expected, span);
 	}
 
-	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<{name:String, argument:CompilerType}> {
+	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<{name:String,
+		argument:CompilerType}> {
 		return switch expected {
 			case TAbstract(name, arguments, _):
 				var declaration = session.declarations.abstracts.get(name);
 				if (declaration == null)
 					return null;
-				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters, arguments);
+				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
+					arguments);
 				for (exact in [true, false])
 					for (method in declaration.methods) {
 						if (!method.isStatic || method.arguments.length != 1)
@@ -411,8 +478,10 @@ class ConversionResolver {
 						for (entry in metadata)
 							if (entry.name == "from")
 								isFrom = true;
-						var argument = session.declarations.resolve(method.arguments[0].type, method.span, substitutions);
-						if (isFrom && (exact ? TypeRelations.equals(actual, argument) : compiler.types.AbstractConversionGraph.acceptsFromArgument(actual, argument)))
+						var argument = session.declarations.resolve(method.arguments[0].type, method.span,
+							substitutions);
+						if (isFrom && (exact ? TypeRelations.equals(actual,
+							argument) : compiler.types.AbstractConversionGraph.acceptsFromArgument(actual, argument)))
 							return {name: name + "." + method.name, argument: argument};
 					}
 				null;
@@ -421,8 +490,12 @@ class ConversionResolver {
 	}
 
 	public function adaptFunction(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
-		var converted = (switch (value.type) { case TDynamic: true; default: false; })
-			&& anonymousTarget(expected) != null ? dynamicStructure(value, expected) : functionAdapter(value, expected, span);
+		var converted = (switch (value.type) {
+			case TDynamic: true;
+			default: false;
+		})
+			&& anonymousTarget(expected) != null ? dynamicStructure(value, expected) : functionAdapter(value, expected,
+			span);
 		return switch [value.type, expected] {
 			case [TArray(element), TArray(TDynamic)]:
 				var enumType = EnumDynamicBox.enumType(element);
@@ -437,7 +510,8 @@ class ConversionResolver {
 			target = expectedFunctionType(expected);
 		return source != null
 			&& target != null
-			&& !TypeRelations.equals(TFunction(source.arguments, source.result), TFunction(target.arguments, target.result));
+			&& !TypeRelations.equals(TFunction(source.arguments, source.result),
+			TFunction(target.arguments, target.result));
 	}
 
 	function functionAdapter(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
@@ -449,16 +523,19 @@ class ConversionResolver {
 			// Evaluate the callable once and retain null as null rather than creating
 			// a non-null wrapper which would call a missing function later.
 			var contextName = session.currentContext.name,
-				adapterId = session.functionAdapterCounts.exists(contextName) ? session.functionAdapterCounts.get(contextName) : 0,
+				adapterId = session.functionAdapterCounts.exists(contextName)
+					? session.functionAdapterCounts.get(contextName) : 0,
 				localName = '$' + 'nullable-function-adapter:$contextName:$adapterId',
 				local = new TypedExpression(TLocal(localName), value.type, span),
 				sourceType = TFunction(sourceSignature.arguments, sourceSignature.result),
 				nonNull = new TypedExpression(TCast(local), sourceType, span),
 				adapted = functionAdapter(nonNull, expected, span),
-				nullValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type, span),
+				nullValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
+					value.type, span),
 				condition = new TypedExpression(TEqual(local, nullValue), TBool, span),
 				result = new TypedExpression(TConditional(condition,
-					new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span), adapted),
+					new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected, span),
+					adapted),
 					expected, span);
 			return new TypedExpression(TBlockExpression([TVar(localName, value, span)], result), expected, span);
 		}
@@ -469,31 +546,41 @@ class ConversionResolver {
 		if (sourceArguments.length != targetArguments.length || TypeRelations.equals(value.type, expected))
 			return new TypedExpression(TCast(value), expected, span);
 		var contextName = session.currentContext.name,
-			adapterId = session.functionAdapterCounts.exists(contextName) ? session.functionAdapterCounts.get(contextName) : 0;
+			adapterId = session.functionAdapterCounts.exists(contextName)
+				? session.functionAdapterCounts.get(contextName) : 0;
 		session.functionAdapterCounts.set(contextName, adapterId + 1);
-		var adapterName = '$' + 'function-adapter:$contextName:$adapterId', environmentName = '$' + 'function-adapter-env:$contextName:$adapterId',
-			captureName = '__adapted_callable', arguments = [
-				for (index in 0...targetArguments.length)
-					{
-						name: '$' + 'adapter_arg_$index',
-						type: targetArguments[index]
-					}
-			], captures:Array<TypedCapture> = [
+		var adapterName = '$' + 'function-adapter:$contextName:$adapterId',
+			environmentName = '$' + 'function-adapter-env:$contextName:$adapterId',
+			captureName = '__adapted_callable',
+			arguments = [for (index in 0...targetArguments.length)
 				{
-					field: captureName,
-					bindingId: captureName,
-					type: value.type,
-					storageType: value.type,
-					source: CaptureExpression(value)
-				}
-			], callable = new TypedExpression(TCaptured(captureName), value.type, span, false, null, value.type), callArguments = [
-				for (index in 0...arguments.length)
-					adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type, span), sourceArguments[index], span)
-			], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span), statements:Array<TypedStatement> = [];
-		if ((switch (targetResult) { case TVoid: true; default: false; })) {
+					name:'$' + 'adapter_arg_$index',
+						type:targetArguments[index]
+				}], captures:Array<TypedCapture> = [
+					{
+						field: captureName,
+						bindingId: captureName,
+						type: value.type,
+						storageType: value.type,
+						source: CaptureExpression(value)
+					}
+				], callable = new TypedExpression(TCaptured(captureName), value.type, span, false, null, value.type),
+					callArguments = [
+						for (index in 0...arguments.length)
+							adaptFunctionValue(new TypedExpression(TLocal(arguments[index].name), arguments[index].type,
+							span), sourceArguments[index], span)
+					], call = new TypedExpression(TClosureCall(callable, callArguments), sourceResult, span),
+						statements:Array<TypedStatement> = [];
+		if ((switch (targetResult) {
+			case TVoid: true;
+			default: false;
+		})) {
 			statements.push(TExpression(call, span));
 			statements.push(TReturnVoid(span));
-		} else if ((switch (sourceResult) { case TVoid: false; default: true; }))
+		} else if ((switch (sourceResult) {
+			case TVoid: false;
+			default: true;
+		}))
 			statements.push(TReturn(adaptFunctionValue(call, targetResult, span), span));
 		else
 			return new TypedExpression(TCast(value), expected, span);
@@ -520,16 +607,37 @@ class ConversionResolver {
 			return value;
 		if (functionSignaturesDiffer(value.type, target))
 			return functionAdapter(value, target, span);
-		if ((switch (value.type) { case TInt: true; default: false; }) && (switch (target) { case TFloat: true; default: false; }))
+		if ((switch (value.type) {
+			case TInt: true;
+			default: false;
+		}) && (switch (target) {
+			case TFloat: true;
+			default: false;
+		}))
 			return new TypedExpression(TIntToFloat(value), TFloat, span);
-		if ((switch (value.type) { case TInt: true; default: false; }) && (switch (target) { case TInt64: true; default: false; }))
+		if ((switch (value.type) {
+			case TInt: true;
+			default: false;
+		}) && (switch (target) {
+			case TInt64: true;
+			default: false;
+		}))
 			return new TypedExpression(TIntToInt64(value), TInt64, span);
-		if ((switch (value.type) { case TFloat: true; default: false; }) && (switch (target) { case TInt: true; default: false; }))
+		if ((switch (value.type) {
+			case TFloat: true;
+			default: false;
+		}) && (switch (target) {
+			case TInt: true;
+			default: false;
+		}))
 			return new TypedExpression(TFloatToInt(value), TInt, span);
 		return new TypedExpression(TCast(value), target, span);
 	}
 
-	static function expectedFunctionType(type:Null<CompilerType>):Null<{arguments:Array<CompilerType>, result:CompilerType}> {
+	static function expectedFunctionType(type:Null<CompilerType>):Null<{
+		arguments:Array<CompilerType>,
+		result:CompilerType
+	}> {
 		if (type == null)
 			return null;
 		return switch type {

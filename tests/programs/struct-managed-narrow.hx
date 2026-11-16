@@ -22,7 +22,9 @@ struct ManagedNarrow {
 class ManagedNarrowHolder {
 	public var value:ManagedNarrow;
 	public var optional:Null<ManagedNarrow>;
-	public function new() { value = new ManagedNarrow("held"); }
+	public function new() {
+		value = new ManagedNarrow("held");
+	}
 }
 
 struct ManagedLong {
@@ -58,9 +60,9 @@ function main():Int {
 	if ((cast holder.value.unsigned:Int) != 1 || (cast holder.value.signed:Int) != -1
 		|| (cast holder.value.small:Int) != -1 || (cast holder.value.wide:Int) != 1) return 1;
 	holder.value.unsigned = cast 255;
-	holder.value.unsigned = cast ((cast holder.value.unsigned:Int) + 1);
+	holder.value.unsigned = cast((cast holder.value.unsigned:Int) + 1);
 	holder.value.signed = cast 32767;
-	holder.value.signed = cast ((cast holder.value.signed:Int) + 1);
+	holder.value.signed = cast((cast holder.value.signed:Int) + 1);
 	if ((cast holder.value.unsigned:Int) != 0 || (cast holder.value.signed:Int) != -32768) return 2;
 	var copy = holder.value;
 	copy.setValues();
@@ -68,7 +70,8 @@ function main():Int {
 	holder.optional = new ManagedNarrow("held");
 	if (holder.optional != null) holder.optional.setValues();
 	var optional = holder.optional;
-	if (optional == null || optional.text != "held" || (cast optional.small:Int) != -1 || (cast optional.wide:Int) != 1) return 4;
+	if (optional == null || optional.text != "held" || (cast optional.small:Int) != -1
+		|| (cast optional.wide:Int) != 1) return 4;
 	var values:Array<ManagedNarrow> = [copy];
 	values[0].unsigned = cast 258;
 	if ((cast values[0].unsigned:Int) != 2 || (cast copy.unsigned:Int) != 1) return 5;

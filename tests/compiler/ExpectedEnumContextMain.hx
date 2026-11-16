@@ -2,7 +2,8 @@ import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
 
 class ExpectedEnumContextMain {
-	static final valid = 'import a.Expected; import b.Other; function make():a.Expected { var values = []; return Case(values); } function main():Int return switch make() { case a.Expected.Case(values): values.length + 7; };';
+	static final valid =
+		'import a.Expected; import b.Other; function make():a.Expected { var values = []; return Case(values); } function main():Int return switch make() { case a.Expected.Case(values): values.length + 7; };';
 
 	static function compiler():Compiler {
 		var result = new Compiler();

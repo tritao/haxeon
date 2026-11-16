@@ -1,20 +1,22 @@
 import compiler.Diagnostic.CompileError;
+import compiler.formatter.FormatConfig.FormatConfigTools;
+import compiler.formatter.Formatter;
 import compiler.service.CancellationToken;
 import compiler.service.LanguageService;
-import compiler.formatter.Formatter;
-import compiler.formatter.FormatConfig.FormatConfigTools;
 
 class LanguageServiceMain {
 	static function main():Void {
 		var inlineService = new LanguageService(),
-			inlineSource = "class Constants { public static inline final VALUE:Int = 42; } function main():Int return Constants.VALUE;";
+			inlineSource =
+				"class Constants { public static inline final VALUE:Int = 42; } function main():Int return Constants.VALUE;";
 		inlineService.update("InlineNavigation.hx", inlineSource);
 		inlineService.compile("InlineNavigation");
 		var inlinePosition = inlineSource.lastIndexOf("VALUE") + 1,
 			inlineDefinition = inlineService.definition("InlineNavigation.hx", inlinePosition);
 		if (inlineDefinition == null
 			|| inlineDefinition.path != "InlineNavigation.hx"
-			|| inlineDefinition.span.file.slice(inlineDefinition.span.start, inlineDefinition.span.end).indexOf("VALUE") < 0
+			|| inlineDefinition.span.file.slice(inlineDefinition.span.start, inlineDefinition.span.end).indexOf("VALUE")
+			< 0
 			|| inlineService.references("InlineNavigation.hx", inlinePosition).length != 2)
 			throw "constant folding discarded declaration or reference identity";
 
@@ -29,7 +31,8 @@ class LanguageServiceMain {
 			library.analyze("Helper")
 		catch (_:compiler.Diagnostic.CompileError)
 			rejectedBody = true;
-		if (!rejectedBody || library.isCurrent("Helper.hx") || library.compiler.modules.get("Helper").diagnostics.length == 0)
+		if (!rejectedBody || library.isCurrent("Helper.hx")
+			|| library.compiler.modules.get("Helper").diagnostics.length == 0)
 			throw "library analysis skipped body typing or published invalid source";
 		library.update("Helper.hx", "class Helper { public static function value():Int return 43; }");
 		library.analyze("Helper");
@@ -55,24 +58,31 @@ class LanguageServiceMain {
 				foundInferredField = true;
 		if (!foundInferredField)
 			throw "document symbols omitted an inferred field";
-		var formatSource = "function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
+		var formatSource =
+			"function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
 			formatted = Formatter.format(formatSource, FormatConfigTools.make(2, true)),
-			expectedFormat = "function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n";
+			expectedFormat =
+				"function main():Int {\n  var text = \"{ literal }\"; // }\n  /* keep { } */\n  if (true) {\n    return 42;\n  }\n}\n";
 		if (formatted != expectedFormat || Formatter.format(formatted, FormatConfigTools.make(2, true)) != formatted)
 			throw "source formatting was not trivia-preserving and idempotent";
 		var returnStart = formatSource.indexOf("return 42"),
 			returnEnd = returnStart + "return 42;   ".length,
 			rangeFormatted = Formatter.format(formatSource, FormatConfigTools.make(2, true), returnStart, returnEnd);
-		if (rangeFormatted == null || rangeFormatted.indexOf("\nvar text") < 0 || rangeFormatted.indexOf("\n    return 42;") < 0)
+		if (rangeFormatted == null || rangeFormatted.indexOf("\nvar text") < 0
+			|| rangeFormatted.indexOf("\n    return 42;") < 0)
 			throw "range formatting changed text outside the selected syntax line";
 		var crlfSource = StringTools.replace(formatSource, "\n", "\r\n"),
 			crlfFormatted = Formatter.format(crlfSource, FormatConfigTools.make(2, true));
-		if (crlfFormatted == null || crlfFormatted.indexOf("\r\n") < 0 || crlfFormatted.indexOf("\n") != crlfFormatted.indexOf("\r\n") + 1)
+		if (crlfFormatted == null || crlfFormatted.indexOf("\r\n") < 0
+			|| crlfFormatted.indexOf("\n") != crlfFormatted.indexOf("\r\n") + 1)
 			throw "source formatting did not preserve CRLF line endings";
 		if (Formatter.format("function main(:Int {", FormatConfigTools.make(2, true)) != null)
 			throw "source formatting rewrote malformed input";
-		var conditionalFormat = Formatter.format("#if missing\nfunction main():Int return 1;\n#else\nfunction main():Int {\nreturn 2;\n}\n#end\n", FormatConfigTools.make(2, true));
-		if (conditionalFormat == null || conditionalFormat.indexOf("#if missing") != 0 || conditionalFormat.indexOf("\n  return 2;") < 0)
+		var conditionalFormat =
+			Formatter.format("#if missing\nfunction main():Int return 1;\n#else\nfunction main():Int {\nreturn 2;\n}\n#end\n",
+			FormatConfigTools.make(2, true));
+		if (conditionalFormat == null || conditionalFormat.indexOf("#if missing") != 0
+			|| conditionalFormat.indexOf("\n  return 2;") < 0)
 			throw "source formatting did not preserve conditional compilation";
 		var service = new LanguageService();
 		service.update("Main.hx",
@@ -122,8 +132,11 @@ class LanguageServiceMain {
 			|| links[0].targetPath != "tools/Helper.hx"
 			|| aliasSource.substring(links[0].span.start, links[0].span.end) != "tools.Helper")
 			throw "language service did not resolve an aliased import's exact path span";
-		var kindStart = source.indexOf("Kind.One"), kindCompletionPosition = kindStart + "Kind.".length, kindPosition = kindStart + "Kind.One".length,
-			kindCompletion = service.complete("Main.hx", kindCompletionPosition), hasTwo = false;
+		var kindStart = source.indexOf("Kind.One"),
+			kindCompletionPosition = kindStart + "Kind.".length,
+			kindPosition = kindStart + "Kind.One".length,
+			kindCompletion = service.complete("Main.hx", kindCompletionPosition),
+			hasTwo = false;
 		for (item in kindCompletion)
 			if (item.label == "Two" && item.detail == "Kind.Two(Int)")
 				hasTwo = true;
@@ -154,7 +167,9 @@ class LanguageServiceMain {
 				hasLength = true;
 		if (!hasLength || service.hover("Main.hx", stringPosition + 3) != "length:Int")
 			throw "language service typed string completion failed";
-		var arrayPosition = source.indexOf("values.push") + "values.".length, arrayCompletion = service.complete("Main.hx", arrayPosition), hasPush = false,
+		var arrayPosition = source.indexOf("values.push") + "values.".length,
+			arrayCompletion = service.complete("Main.hx", arrayPosition),
+			hasPush = false,
 			hasPop = false;
 		for (item in arrayCompletion) {
 			if (item.label == "push" && item.detail == "push(value):Int")
@@ -165,11 +180,14 @@ class LanguageServiceMain {
 		if (!hasPush || !hasPop || service.hover("Main.hx", arrayPosition + 3) != "push(value):Int")
 			throw "language service typed array completion failed";
 		var scopeCompletionService = new LanguageService(),
-			scopeCompletionSource = "function main():Int { var value:Int = 1; if (true) { var value:String = \"inner\"; value; } return value; }";
+			scopeCompletionSource =
+				"function main():Int { var value:Int = 1; if (true) { var value:String = \"inner\"; value; } return value; }";
 		scopeCompletionService.update("ScopeCompletion.hx", scopeCompletionSource);
 		scopeCompletionService.compile("ScopeCompletion");
-		var innerCompletion = scopeCompletionService.complete("ScopeCompletion.hx", scopeCompletionSource.indexOf("value; }") + "value".length),
-			outerCompletion = scopeCompletionService.complete("ScopeCompletion.hx", scopeCompletionSource.lastIndexOf("value;") + "value".length),
+		var innerCompletion = scopeCompletionService.complete("ScopeCompletion.hx",
+			scopeCompletionSource.indexOf("value; }") + "value".length),
+			outerCompletion = scopeCompletionService.complete("ScopeCompletion.hx",
+				scopeCompletionSource.lastIndexOf("value;") + "value".length),
 			innerDetail:Null<String> = null,
 			outerDetail:Null<String> = null;
 		for (item in innerCompletion)
@@ -181,11 +199,15 @@ class LanguageServiceMain {
 		if (innerDetail != "value:String" || outerDetail != "value:Int")
 			throw "compiler completion context did not preserve lexical shadowing";
 		var expectedService = new LanguageService(),
-			expectedSource = "enum Choice { One; Two(value:Int); } function choose(candidate:Choice, count:Int):Choice return candidate; function main():Int return 0;";
+			expectedSource =
+				"enum Choice { One; Two(value:Int); } function choose(candidate:Choice, count:Int):Choice return candidate; function main():Int return 0;";
 		expectedService.update("Expected.hx", expectedSource);
 		expectedService.compile("Expected");
 		var expectedPosition = expectedSource.indexOf("return candidate") + "return ".length,
-			expectedCompletion = expectedService.complete("Expected.hx", expectedPosition), candidateIndex = -1, oneIndex = -1, twoIndex = -1;
+			expectedCompletion = expectedService.complete("Expected.hx", expectedPosition),
+			candidateIndex = -1,
+			oneIndex = -1,
+			twoIndex = -1;
 		for (index in 0...expectedCompletion.length)
 			switch expectedCompletion[index].label {
 				case "candidate":
@@ -216,7 +238,8 @@ class LanguageServiceMain {
 		if (edits.length != 2 || edits[0].replacement != "show" || edits[1].replacement != "show")
 			throw "language service rename query failed";
 		var localService = new LanguageService(),
-			localSource = "function first(value:Int):Int { return value; } function second(value:Int):Int { return value; } function main():Int { return first(42); }";
+			localSource =
+				"function first(value:Int):Int { return value; } function second(value:Int):Int { return value; } function main():Int { return first(42); }";
 		localService.update("Locals.hx", localSource);
 		localService.compile("Locals");
 		var localPosition = localSource.indexOf("return value") + "return ".length,
@@ -231,7 +254,8 @@ class LanguageServiceMain {
 			|| localEdits.length != 2)
 			throw "language service local symbol scope was not preserved";
 		var shadowService = new LanguageService(),
-			shadowSource = "function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
+			shadowSource =
+				"function main():Int { var value = 40; if (true) { var value = 2; value = value + 1; } return value + 2; }";
 		shadowService.update("Shadow.hx", shadowSource);
 		shadowService.compile("Shadow");
 		var innerUse = shadowSource.indexOf("value = value + 1") + "value = ".length,
@@ -247,14 +271,16 @@ class LanguageServiceMain {
 			|| outerReferences.length != 2)
 			throw "language service confused shadowed local identities";
 		var importService = new LanguageService();
-		importService.update("editor/util/Math.hx", "package editor.util; function add(a:Int, b:Int):Int { return a + b; }");
+		importService.update("editor/util/Math.hx",
+			"package editor.util; function add(a:Int, b:Int):Int { return a + b; }");
 		var importSource = "package editor; import editor.util.Math; function main():Int { return Math.add(20, 22); }";
 		importService.update("editor/Main.hx", importSource);
 		importService.compile("editor.Main");
 		var importedTokens = importService.semanticTokens("editor/Main.hx");
 		if ([
 			for (token in importedTokens)
-				if (token.span.start == importSource.indexOf("Math.add") + "Math.".length && token.type == "function") token
+				if (token.span.start == importSource.indexOf("Math.add") + "Math.".length
+				&& token.type == "function") token
 		].length != 1)
 			throw "semantic tokens did not classify an imported function through the workspace index";
 		var importedPosition = importSource.indexOf("Math.add") + "Math.".length,
@@ -269,10 +295,12 @@ class LanguageServiceMain {
 			throw "language service imported symbol resolution failed";
 		var enumService = new LanguageService();
 		enumService.update("model/Kind.hx", "package model; enum Kind { One; Two(value:Int); }");
-		var enumSource = "package app; import model.Kind; function read(value:Kind):Int return switch value { case Kind.One: 1; case Kind.Two(item): item; }; function main():Int { var first:Kind = Kind.One; var second:Kind = Kind.Two(41); return read(first) + read(second); }";
+		var enumSource =
+			"package app; import model.Kind; function read(value:Kind):Int return switch value { case Kind.One: 1; case Kind.Two(item): item; }; function main():Int { var first:Kind = Kind.One; var second:Kind = Kind.Two(41); return read(first) + read(second); }";
 		enumService.update("app/Main.hx", enumSource);
 		enumService.compile("app.Main");
-		var importedEnumCompletion = enumService.complete("app/Main.hx", enumSource.indexOf("Kind.One") + "Kind.".length),
+		var importedEnumCompletion = enumService.complete("app/Main.hx",
+			enumSource.indexOf("Kind.One") + "Kind.".length),
 			hasImportedEnumCase = false;
 		for (item in importedEnumCompletion)
 			if (item.label == "Two")
@@ -285,7 +313,8 @@ class LanguageServiceMain {
 			enumReferences = enumService.references("app/Main.hx", enumLiteralPosition),
 			enumRename = enumService.rename("app/Main.hx", enumConstructorPosition, "Pair");
 		if (enumService.compiler.modules.get("app.Main").semanticModel.index.symbolIdAt(enumLiteralPosition) == null
-			|| enumService.compiler.modules.get("app.Main").semanticModel.index.symbolIdAt(enumConstructorPosition) == null
+			|| enumService.compiler.modules.get("app.Main").semanticModel.index.symbolIdAt(enumConstructorPosition)
+			== null
 			|| enumDefinition == null
 			|| enumDefinition.path != "model/Kind.hx"
 			|| enumReferences.length != 3
@@ -295,11 +324,13 @@ class LanguageServiceMain {
 		if (enumSignature == null || enumSignature.label != "Kind.Two(value:Int)" || enumSignature.activeParameter != 0)
 			throw "language service enum-constructor signature help failed";
 		var signatureService = new LanguageService(),
-			signatureSource = "class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
+			signatureSource =
+				"class Box { public function new(value:Int) {} } function add(left:Int, right:Int):Int return left + right; function main():Int { var box = new Box(1); return add(20, add(1, 2)); }";
 		signatureService.update("Signatures.hx", signatureSource);
 		signatureService.compile("Signatures");
 		var nestedSignature = signatureService.signatureHelp("Signatures.hx", signatureSource.indexOf("2));") + 1),
-			constructorSignature = signatureService.signatureHelp("Signatures.hx", signatureSource.indexOf("Box(1)") + "Box(".length);
+			constructorSignature = signatureService.signatureHelp("Signatures.hx",
+				signatureSource.indexOf("Box(1)") + "Box(".length);
 		if (nestedSignature == null
 			|| nestedSignature.label != "add(left:Int, right:Int):Int"
 			|| nestedSignature.activeParameter != 1
@@ -307,7 +338,8 @@ class LanguageServiceMain {
 			|| constructorSignature.label != "Box(value:Int)")
 			throw "language service nested-call or constructor signature help failed";
 		var hierarchyService = new LanguageService(),
-			hierarchySource = "typedef ParentAlias = Parent; class Parent { public function value():Int { return 42; } } class Child extends Parent { } function main():Int { var child:Child = new Child(); return child.value(); }";
+			hierarchySource =
+				"typedef ParentAlias = Parent; class Parent { public function value():Int { return 42; } } class Child extends Parent { } function main():Int { var child:Child = new Child(); return child.value(); }";
 		hierarchyService.update("Hierarchy.hx", hierarchySource);
 		hierarchyService.compile("Hierarchy");
 		var inheritedUse = hierarchySource.lastIndexOf("value"),
@@ -325,26 +357,35 @@ class LanguageServiceMain {
 			throw "language service did not resolve inheritance and alias navigation";
 		var implementationService = new LanguageService(),
 			contractSource = "package api; interface Plugin { function run():Int; }",
-			baseSource = "package base; import api.Plugin; class Base implements Plugin { public function run():Int return 1; }",
-			directSource = "package impl; import api.Plugin; class Direct implements Plugin { public function run():Int return 2; }",
-			derivedSource = "package impl; import base.Base; class Derived extends Base { public function run():Int return 3; }",
-			implementationMain = "package impl; import impl.Direct; import impl.Derived; function main():Int return new Direct().run() + new Derived().run();";
+			baseSource =
+				"package base; import api.Plugin; class Base implements Plugin { public function run():Int return 1; }",
+			directSource =
+				"package impl; import api.Plugin; class Direct implements Plugin { public function run():Int return 2; }",
+			derivedSource =
+				"package impl; import base.Base; class Derived extends Base { public function run():Int return 3; }",
+			implementationMain =
+				"package impl; import impl.Direct; import impl.Derived; function main():Int return new Direct().run() + new Derived().run();";
 		implementationService.update("api/Plugin.hx", contractSource);
 		implementationService.update("base/Base.hx", baseSource);
 		implementationService.update("impl/Direct.hx", directSource);
 		implementationService.update("impl/Derived.hx", derivedSource);
 		implementationService.update("impl/Main.hx", implementationMain);
 		implementationService.compile("impl.Main");
-		var interfaceImplementations = implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2),
-			methodImplementations = implementationService.implementations("api/Plugin.hx", contractSource.indexOf("run") + 1),
+		var interfaceImplementations = implementationService.implementations("api/Plugin.hx",
+			contractSource.indexOf("Plugin") + 2),
+			methodImplementations = implementationService.implementations("api/Plugin.hx",
+				contractSource.indexOf("run") + 1),
 			baseImplementations = implementationService.implementations("base/Base.hx", baseSource.indexOf("Base") + 1),
-			baseMethodImplementations = implementationService.implementations("base/Base.hx", baseSource.indexOf("run") + 1),
-			leafImplementations = implementationService.implementations("impl/Direct.hx", directSource.indexOf("run") + 1);
+			baseMethodImplementations = implementationService.implementations("base/Base.hx",
+				baseSource.indexOf("run") + 1),
+			leafImplementations = implementationService.implementations("impl/Direct.hx",
+				directSource.indexOf("run") + 1);
 		var implementationCancellation = new CancellationToken(),
 			implementationCancelled = false;
 		implementationCancellation.cancel();
 		try
-			implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2, implementationCancellation)
+			implementationService.implementations("api/Plugin.hx", contractSource.indexOf("Plugin") + 2,
+				implementationCancellation)
 		catch (_:compiler.service.CancellationError)
 			implementationCancelled = true;
 		if (interfaceImplementations.length != 3
@@ -359,10 +400,12 @@ class LanguageServiceMain {
 		var hierarchyTypeService = new LanguageService(),
 			rootTypeSource = "package types; class Root {}",
 			namedTypeSource = "package types; interface Named {}",
-			branchTypeSource = "package types; import types.Root; import types.Named; class Branch extends Root implements Named {}",
+			branchTypeSource =
+				"package types; import types.Root; import types.Named; class Branch extends Root implements Named {}",
 			leafTypeSource = "package types; import types.Branch; class Leaf extends Branch {}",
 			detailedTypeSource = "package types; import types.Named; interface Detailed extends Named {}",
-			typeHierarchyMain = "package app; import types.Root; import types.Named; import types.Branch; import types.Leaf; import types.Detailed; function main():Int return 0;";
+			typeHierarchyMain =
+				"package app; import types.Root; import types.Named; import types.Branch; import types.Leaf; import types.Detailed; function main():Int return 0;";
 		hierarchyTypeService.update("types/Root.hx", rootTypeSource);
 		hierarchyTypeService.update("types/Named.hx", namedTypeSource);
 		hierarchyTypeService.update("types/Branch.hx", branchTypeSource);
@@ -370,17 +413,22 @@ class LanguageServiceMain {
 		hierarchyTypeService.update("types/Detailed.hx", detailedTypeSource);
 		hierarchyTypeService.update("app/TypeHierarchy.hx", typeHierarchyMain);
 		hierarchyTypeService.compile("app.TypeHierarchy");
-		var preparedRoot = hierarchyTypeService.prepareTypeHierarchy("types/Root.hx", rootTypeSource.indexOf("Root") + 1),
-			preparedBranch = hierarchyTypeService.prepareTypeHierarchy("types/Branch.hx", branchTypeSource.indexOf("Branch") + 1),
-			preparedNamed = hierarchyTypeService.prepareTypeHierarchy("types/Named.hx", namedTypeSource.indexOf("Named") + 1);
+		var preparedRoot = hierarchyTypeService.prepareTypeHierarchy("types/Root.hx",
+			rootTypeSource.indexOf("Root") + 1),
+			preparedBranch = hierarchyTypeService.prepareTypeHierarchy("types/Branch.hx",
+				branchTypeSource.indexOf("Branch") + 1),
+			preparedNamed = hierarchyTypeService.prepareTypeHierarchy("types/Named.hx",
+				namedTypeSource.indexOf("Named") + 1);
 		if (preparedRoot == null || preparedBranch == null || preparedNamed == null)
 			throw "language service did not prepare type hierarchy items";
 		var rootSubtypes = hierarchyTypeService.typeSubtypes(preparedRoot.identity, preparedRoot.revision),
 			branchSupertypes = hierarchyTypeService.typeSupertypes(preparedBranch.identity, preparedBranch.revision),
 			branchSubtypes = hierarchyTypeService.typeSubtypes(preparedBranch.identity, preparedBranch.revision),
 			namedSubtypes = hierarchyTypeService.typeSubtypes(preparedNamed.identity, preparedNamed.revision);
-		if (rootSubtypes.length != 1 || rootSubtypes[0].name != "Branch" || branchSupertypes.length != 2 || branchSupertypes[0].name != "Named"
-			|| branchSupertypes[1].name != "Root" || branchSubtypes.length != 1 || branchSubtypes[0].name != "Leaf" || namedSubtypes.length != 2
+		if (rootSubtypes.length != 1 || rootSubtypes[0].name != "Branch" || branchSupertypes.length != 2
+			|| branchSupertypes[0].name != "Named"
+			|| branchSupertypes[1].name != "Root" || branchSubtypes.length != 1 || branchSubtypes[0].name != "Leaf"
+			|| namedSubtypes.length != 2
 			|| namedSubtypes[0].name != "Branch" || namedSubtypes[1].name != "Detailed")
 			throw "language service type hierarchy did not return direct class and interface relationships";
 		hierarchyTypeService.update("types/Root.hx", rootTypeSource + " ");
@@ -388,7 +436,8 @@ class LanguageServiceMain {
 			throw "language service accepted a stale type hierarchy item";
 		var typeService = new LanguageService();
 		typeService.update("domain/Entity.hx", "package domain; class Entity {}");
-		var typeSource = "package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";
+		var typeSource =
+			"package usecase; import domain.Entity; typedef EntityAlias = Entity; class Child extends Entity {} class Holder { public var entity:Entity; public function get():Entity return entity; } function identity(value:Entity):Entity return value; function main():Int return 0;";
 		typeService.update("usecase/Main.hx", typeSource);
 		typeService.compile("usecase.Main");
 		var importedTypes = typeService.semanticTokens("usecase/Main.hx");
@@ -405,9 +454,12 @@ class LanguageServiceMain {
 		var typePosition = typeSource.indexOf(":Entity return") + 1,
 			typeDefinition = typeService.definition("usecase/Main.hx", typePosition),
 			explicitTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typePosition),
-			valueTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.indexOf("return value") + "return ".length),
-			fieldTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.indexOf("return entity") + "return ".length),
-			methodTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.indexOf("get():Entity") + 1),
+			valueTypeDefinition = typeService.typeDefinition("usecase/Main.hx",
+				typeSource.indexOf("return value") + "return ".length),
+			fieldTypeDefinition = typeService.typeDefinition("usecase/Main.hx",
+				typeSource.indexOf("return entity") + "return ".length),
+			methodTypeDefinition = typeService.typeDefinition("usecase/Main.hx",
+				typeSource.indexOf("get():Entity") + 1),
 			primitiveTypeDefinition = typeService.typeDefinition("usecase/Main.hx", typeSource.lastIndexOf("0")),
 			typeReferences = typeService.references("usecase/Main.hx", typePosition),
 			typeRename = typeService.rename("usecase/Main.hx", typePosition, "Record");
@@ -427,7 +479,8 @@ class LanguageServiceMain {
 			|| typeRename.length != 8)
 			throw 'language service type-reference index failed: explicit=${explicitTypeDefinition != null}, value=${valueTypeDefinition != null}, field=${fieldTypeDefinition != null}, method=${methodTypeDefinition != null}, primitive=${primitiveTypeDefinition != null}, references=${typeReferences.length}, rename=${typeRename.length}';
 		var collisionService = new LanguageService(),
-			collisionSource = "class Item { public function value():Int return 1; public function score():Int return value(); } function main():Int return new Item().value();";
+			collisionSource =
+				"class Item { public function value():Int return 1; public function score():Int return value(); } function main():Int return new Item().value();";
 		collisionService.update("Collision.hx", collisionSource);
 		collisionService.compile("Collision");
 		var collisionPosition = collisionSource.lastIndexOf("value") + 2;
@@ -435,13 +488,16 @@ class LanguageServiceMain {
 			|| collisionService.rename("Collision.hx", collisionPosition, "not-valid").length != 0)
 			throw "language service allowed an unsafe rename";
 		var inheritedCollisionService = new LanguageService(),
-			inheritedCollisionSource = "class Parent { public function value():Int return 1; public function score():Int return 2; } class Child extends Parent {} function main():Int return new Child().value();";
+			inheritedCollisionSource =
+				"class Parent { public function value():Int return 1; public function score():Int return 2; } class Child extends Parent {} function main():Int return new Child().value();";
 		inheritedCollisionService.update("InheritedCollision.hx", inheritedCollisionSource);
 		inheritedCollisionService.compile("InheritedCollision");
-		if (inheritedCollisionService.rename("InheritedCollision.hx", inheritedCollisionSource.lastIndexOf("value") + 1, "score").length != 0)
+		if (inheritedCollisionService.rename("InheritedCollision.hx", inheritedCollisionSource.lastIndexOf("value") + 1,
+			"score").length != 0)
 			throw "language service allowed an inherited-member rename collision";
 		var scopedRenameService = new LanguageService(),
-			scopedRenameSource = "function first(value:Int):Int return value; function second(item:Int):Int return item; function main():Int return first(42) + second(1);";
+			scopedRenameSource =
+				"function first(value:Int):Int return value; function second(item:Int):Int return item; function main():Int return first(42) + second(1);";
 		scopedRenameService.update("ScopedRename.hx", scopedRenameSource);
 		scopedRenameService.compile("ScopedRename");
 		var scopedRenamePosition = scopedRenameSource.indexOf("return value") + "return ".length;
@@ -453,13 +509,15 @@ class LanguageServiceMain {
 		var globalCollisionSource = "package app; import lib.Math; function main():Int return Math.add(20, 22);";
 		globalCollisionService.update("app/Collision.hx", globalCollisionSource);
 		globalCollisionService.compile("app.Collision");
-		if (globalCollisionService.rename("app/Collision.hx", globalCollisionSource.indexOf("add") + 1, "sum").length != 0)
+		if (globalCollisionService.rename("app/Collision.hx", globalCollisionSource.indexOf("add") + 1, "sum").length
+			!= 0)
 			throw "language service allowed a cross-module global rename collision";
 		if (enumService.rename("app/Main.hx", enumConstructorPosition, "One").length != 0)
 			throw "language service allowed an enum-case rename collision";
 		var incrementalService = new LanguageService();
 		incrementalService.update("inc/Values.hx", "package inc; function value():Int return 1;");
-		var incrementalSource = "package incapp; import inc.Values; function helper():Int return Values.value(); function main():Int return helper();";
+		var incrementalSource =
+			"package incapp; import inc.Values; function helper():Int return Values.value(); function main():Int return helper();";
 		incrementalService.update("incapp/Main.hx", incrementalSource);
 		incrementalService.compile("incapp.Main");
 		var valuesIndex = incrementalService.compiler.modules.get("inc.Values").semanticModel.index,
@@ -478,11 +536,13 @@ class LanguageServiceMain {
 			throw "semantic index refresh did not preserve declaration-level invalidation";
 		incrementalService.update("inc/Values.hx", "package inc; function value():Int return 2;");
 		var dependencyBodyAnalysis = incrementalService.compile("incapp.Main");
-		if (dependencyBodyAnalysis.retyped.indexOf("main") >= 0 || dependencyBodyAnalysis.retyped.indexOf("incapp.Main.helper") >= 0)
+		if (dependencyBodyAnalysis.retyped.indexOf("main") >= 0
+			|| dependencyBodyAnalysis.retyped.indexOf("incapp.Main.helper") >= 0)
 			throw "body-only dependency edit unnecessarily rebuilt consumer indexes";
 		var structuralService = new LanguageService();
 		structuralService.update("shape/Choice.hx", "package shape; enum Choice { One; }");
-		var structuralSource = "package shapeapp; import shape.Choice; function helper(value:Choice):Int return switch value { case Choice.One: 1; default: 0; }; function main():Int return helper(Choice.One);";
+		var structuralSource =
+			"package shapeapp; import shape.Choice; function helper(value:Choice):Int return switch value { case Choice.One: 1; default: 0; }; function main():Int return helper(Choice.One);";
 		structuralService.update("shapeapp/Main.hx", structuralSource);
 		structuralService.compile("shapeapp.Main");
 		var originalConsumerIndex = structuralService.compiler.modules.get("shapeapp.Main").semanticModel.index;
@@ -534,7 +594,8 @@ class LanguageServiceMain {
 		configuredService.analyze("Configured");
 		var defaultIndex = configuredService.compiler.modules.get("Configured").semanticModel.index;
 		configuredService.configure("build-a", "scope-a", []);
-		if (configuredService.compiler.configurationIdentity != "build-a" || configuredService.isCurrent("Configured.hx"))
+		if (configuredService.compiler.configurationIdentity != "build-a"
+			|| configuredService.isCurrent("Configured.hx"))
 			throw "compiler build identity did not invalidate semantic caches";
 		configuredService.analyze("Configured");
 		if (defaultIndex == configuredService.compiler.modules.get("Configured").semanticModel.index)
@@ -558,7 +619,8 @@ class LanguageServiceMain {
 		for (symbol in defineService.documentSymbols("Conditional.hx"))
 			if (symbol.name == "featureOnly")
 				hasFeature = true;
-		if (!hasFallback || !hasFeature || stableIndex != defineService.compiler.modules.get("Stable").semanticModel.index)
+		if (!hasFallback || !hasFeature
+			|| stableIndex != defineService.compiler.modules.get("Stable").semanticModel.index)
 			throw "conditional compilation did not switch branches incrementally";
 		var malformedConditional = new LanguageService();
 		malformedConditional.update("MalformedConditional.hx", "#if feature\nfunction main():Int return 1;");
@@ -584,7 +646,8 @@ class LanguageServiceMain {
 		if (staleRename.length != 2 || !staleRename[0].stale || !staleRename[1].stale)
 			throw "rename did not preserve last-good semantic snapshot metadata";
 		var partialService = new LanguageService();
-		partialService.update("Partial.hx", "function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
+		partialService.update("Partial.hx",
+			"function broken(:Int {} function alsoBroken(:Int {} function visible():Int return 42;");
 		try {
 			partialService.analyze("Partial");
 			throw "invalid partial source unexpectedly analyzed";
@@ -621,7 +684,8 @@ class LanguageServiceMain {
 		if (signatureSymbols.length != 1 || signatureSymbols[0].name != "pending")
 			throw "unfinished function signature did not produce a recovered declaration";
 		var memberService = new LanguageService();
-		memberService.update("Members.hx", "class Members { function broken(:Int {} function visible():Int return 42; }");
+		memberService.update("Members.hx",
+			"class Members { function broken(:Int {} function visible():Int return 42; }");
 		try
 			memberService.analyze("Members")
 		catch (_:CompileError) {}
@@ -654,7 +718,8 @@ class LanguageServiceMain {
 		if (completionNames.indexOf("argument") < 0 || completionNames.indexOf("available") < 0)
 			throw "recovered expression completion omitted current arguments or locals";
 		var brokenLocalService = new LanguageService(),
-			brokenLocalSource = 'class Paths { static function directory(path:String):Int { var slash = path.lastIndexOf("/"); var backslash = path.lastIndexOf("\\\\"); var separator = sl > backslash ? slash : backslash; return separator; } }';
+			brokenLocalSource =
+				'class Paths { static function directory(path:String):Int { var slash = path.lastIndexOf("/"); var backslash = path.lastIndexOf("\\\\"); var separator = sl > backslash ? slash : backslash; return separator; } }';
 		brokenLocalService.update("BrokenLocal.hx", brokenLocalSource);
 		try
 			brokenLocalService.analyze("BrokenLocal")
@@ -720,12 +785,18 @@ class LanguageServiceMain {
 				expandedHasSlate = true;
 		if (expandedCompletion.isIncomplete || !expandedHasSlate)
 			throw "workspace completion index did not recover after indexing a newly added module";
-		var discoveredRoot = haxe.io.Path.join([Sys.getCwd(), "out", "language-service-index-" + Std.int(Sys.time() * 1000)]),
+		var discoveredRoot = haxe.io.Path.join([
+			Sys.getCwd(),
+			"out",
+			"language-service-index-" + Std.int(Sys.time() * 1000)
+		]),
 			discoveredPath = discoveredRoot + "/workspace/lib/Loaded.hx",
 			discoveredService = new LanguageService();
 		sys.FileSystem.createDirectory(discoveredRoot + "/workspace/lib");
-		sys.io.File.saveContent(discoveredPath, "package workspace.lib; class Loaded { public static function discoveredSlate():Int return 42; }");
-		discoveredService.update("Entry.hx", "import workspace.lib.Loaded; function main():Int return Loaded.discoveredSlate();");
+		sys.io.File.saveContent(discoveredPath,
+			"package workspace.lib; class Loaded { public static function discoveredSlate():Int return 42; }");
+		discoveredService.update("Entry.hx",
+			"import workspace.lib.Loaded; function main():Int return Loaded.discoveredSlate();");
 		try
 			discoveredService.analyze("Entry")
 		catch (_:CompileError) {}
@@ -748,15 +819,19 @@ class LanguageServiceMain {
 		// clause of the interface it imports, as exosuit's app reaches UiApplication through DesktopUiApplication.
 		var headerService = new LanguageService(),
 			headerBaseSource = "package host; interface Application { public function context():Int; }",
-			headerShellSource = "package app; import host.DesktopApplication; class Shell { public static function run(application:DesktopApplication):Int return application.context(); }";
+			headerShellSource =
+				"package app; import host.DesktopApplication; class Shell { public static function run(application:DesktopApplication):Int return application.context(); }";
 		headerService.update("host/Application.hx", headerBaseSource);
-		headerService.update("host/DesktopApplication.hx", "package host; interface DesktopApplication extends Application { public function state():Int; }");
+		headerService.update("host/DesktopApplication.hx",
+			"package host; interface DesktopApplication extends Application { public function state():Int; }");
 		headerService.update("app/Shell.hx", headerShellSource);
 		headerService.analyze("app.Shell");
-		var inheritedDefinition = headerService.definition("app/Shell.hx", headerShellSource.lastIndexOf("context") + 1);
+		var inheritedDefinition = headerService.definition("app/Shell.hx",
+			headerShellSource.lastIndexOf("context") + 1);
 		if (inheritedDefinition == null
 			|| inheritedDefinition.path != "host/Application.hx"
-			|| inheritedDefinition.span.file.slice(inheritedDefinition.span.start, inheritedDefinition.span.end).indexOf("context") < 0)
+			|| inheritedDefinition.span.file.slice(inheritedDefinition.span.start,
+			inheritedDefinition.span.end).indexOf("context") < 0)
 			throw "definition through an interface extending a same-package sibling did not reach the sibling";
 		Sys.println("PASS: compiler-backed language service snapshot works");
 	}

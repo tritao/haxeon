@@ -15,7 +15,7 @@ enum Never implements Equatable {
 	public function equals(other:Never):Bool return false;
 }
 
-enum GenericValue<T:Equatable> implements Equatable {
+enum GenericValue < T:Equatable > implements Equatable {
 	Item(value:T);
 	Empty;
 }
@@ -29,7 +29,7 @@ class EnumHolder<T> {
 	public function new(item:T) this.item = item;
 }
 
-function makeGeneric<T:Equatable>(value:T):GenericValue<T> return GenericValue.Item(value);
+function makeGeneric < T:Equatable > (value:T):GenericValue<T> return GenericValue.Item(value);
 
 @:hlNative("haxeon_runtime", "__reflect_is_enum")
 extern function enumKindProbe(value:Dynamic):Bool;
@@ -60,15 +60,21 @@ function main():Int {
 	var dynamicNumbers:Array<Dynamic> = cast numbers, dynamicTexts:Array<Dynamic> = cast texts;
 	if (!(dynamicNumbers[0] == dynamicNumbers[1])) return 12;
 	if (dynamicNumbers[2] == dynamicTexts[1]) return 13;
-	if (!Type.enumEq(dynamicNumbers[0], dynamicNumbers[1]) || Type.enumEq(dynamicNumbers[2], dynamicTexts[1])) return 14;
+	if (!Type.enumEq(dynamicNumbers[0], dynamicNumbers[1])
+		|| Type.enumEq(dynamicNumbers[2], dynamicTexts[1])) return 14;
 	var erased:Dynamic = numbers;
 	var erasedView:Array<Dynamic> = cast erased;
 	if (!(erasedView[0] == erasedView[1])) return 15;
 	if (!Std.isOfType(dynamicNumbers[0], GenericValue)) return 16;
 	var restored:GenericValue<Int> = cast dynamicNumbers[0];
-	switch restored { case Item(value) if (value == 1): default: return 17; }
+	switch restored {
+		case Item(value) if (value == 1):
+		default: return 17;
+	}
 	var wrongTypeRejected = false;
-	try { var wrong:GenericValue<String> = cast dynamicNumbers[0]; } catch (_:Dynamic) wrongTypeRejected = true;
+	try {
+		var wrong:GenericValue<String> = cast dynamicNumbers[0];
+	} catch (_:Dynamic) wrongTypeRejected = true;
 	if (!wrongTypeRejected) return 18;
 	var reflectedA:Dynamic = Reflect.field(new EnumHolder(makeGeneric(7)), "item");
 	var reflectedB:Dynamic = Reflect.field(new EnumHolder(makeGeneric(7)), "item");
@@ -78,9 +84,12 @@ function main():Int {
 	var number:Dynamic = 7, decimal:Dynamic = 7.5, flag:Dynamic = false, text:Dynamic = "enum";
 	var list:Array<Int> = [], erasedList:Dynamic = list, object:Dynamic = new EnumHolder(7);
 	var callback:Dynamic = () -> 7;
-	if (!enumKindProbe(first) || !enumKindProbe(customFirst) || !enumKindProbe(never) || !enumKindProbe(dynamicNumbers[0])
-		|| !enumKindProbe(dynamicTexts[0]) || !enumKindProbe(dynamicNumbers[2]) || enumKindProbe(null) || enumKindProbe(number) || enumKindProbe(decimal)
-		|| enumKindProbe(flag) || enumKindProbe(text) || enumKindProbe(erasedList) || enumKindProbe(object) || enumKindProbe(callback)) return 23;
+	if (!enumKindProbe(first) || !enumKindProbe(customFirst) || !enumKindProbe(never)
+		|| !enumKindProbe(dynamicNumbers[0])
+		|| !enumKindProbe(dynamicTexts[0]) || !enumKindProbe(dynamicNumbers[2]) || enumKindProbe(null)
+		|| enumKindProbe(number) || enumKindProbe(decimal)
+		|| enumKindProbe(flag) || enumKindProbe(text) || enumKindProbe(erasedList) || enumKindProbe(object)
+		|| enumKindProbe(callback)) return 23;
 	#if wasm
 	if (Reflect.compare(number, number) != 0 || Reflect.compare(null, number) != -1) return 24;
 	#end

@@ -20,7 +20,7 @@ class RpcConnection {
 	final maxCalls:Int;
 	final maxQueuedBytes:Int;
 	final handlers:Map<Int, (Bytes, RpcRequestState) -> Void> = [];
-	final notifications:Map<Int, Bytes->Void> = [];
+	final notifications:Map<Int, Bytes -> Void> = [];
 	var pending:Map<Int, PendingCall> = [];
 	var active:Map<Int, RpcRequestState> = [];
 	final outgoing:Array<Bytes> = [];
@@ -35,7 +35,8 @@ class RpcConnection {
 	var sendMessagesLeft:Int = 0;
 	var sendBytesLeft:Int = 0;
 
-	public function new(transport:MessageTransport, clock:Void->Float, maxMessageBytes:Int = 4 * 1024 * 1024, maxCalls:Int = 256,
+	public function new(transport:MessageTransport, clock:Void->Float, maxMessageBytes:Int = 4 * 1024 * 1024,
+			maxCalls:Int = 256,
 			maxQueuedBytes:Int = 8 * 1024 * 1024) {
 		if (maxMessageBytes < 128
 			|| maxCalls < 1
@@ -73,7 +74,8 @@ class RpcConnection {
 	public function bufferedBytes():Int
 		return queuedBytes + (held == null ? 0 : held.length);
 
-	public function register<Request, Response>(method:RpcMethod<Request, Response>, handler:(Request, RpcContext<Response>) -> Void):Void {
+	public function register<Request, Response>(method:RpcMethod<Request, Response>,
+			handler:(Request, RpcContext<Response>) -> Void):Void {
 		if (handlers.exists(method.id))
 			throw "Duplicate RPC method id";
 		handlers.set(method.id, function(payload, state) {
@@ -84,7 +86,8 @@ class RpcConnection {
 				finish(state, Bytes.alloc(0), error("invalid_request", false));
 				return;
 			}
-			var context = new RpcContext(state, method.encodeResponse, function(bytes, error) return finish(state, bytes, error));
+			var context = new RpcContext(state, method.encodeResponse,
+				function(bytes, error) return finish(state, bytes, error));
 			handler(request, context);
 		});
 	}
@@ -111,7 +114,8 @@ class RpcConnection {
 	}
 
 	/** Zero means definitely not dispatched. Positive ids may already have executed. */
-	public function call<Request, Response>(method:RpcMethod<Request, Response>, request:Request, timeoutMs:Int, response:Response->Void,
+	public function call<Request, Response>(method:RpcMethod<Request, Response>, request:Request, timeoutMs:Int,
+			response:Response->Void,
 			failure:RpcError->Void):Int {
 		if (!isOpen()) {
 			failure(error("disconnected", false));
@@ -125,7 +129,8 @@ class RpcConnection {
 		}
 		var id = nextId++;
 		var deadline = clock() + timeoutMs;
-		var bytes = RpcProtocol.encode(Request(id, method.id, timeoutMs, method.encodeRequest(request)), maxMessageBytes);
+		var bytes = RpcProtocol.encode(Request(id, method.id, timeoutMs, method.encodeRequest(request)),
+			maxMessageBytes);
 		if (clock() >= deadline) {
 			failure(error("timeout", false));
 			return 0;
@@ -134,8 +139,7 @@ class RpcConnection {
 			failure(error(isOpen() ? "busy" : "disconnected", false));
 			return 0;
 		}
-		pending.set(id, {
-			deadline: deadline,
+		pending.set(id, {deadline: deadline,
 			response: function(bytes) {
 				var value:Response;
 				try
@@ -146,8 +150,7 @@ class RpcConnection {
 				}
 				response(value);
 			},
-			failure: failure
-		});
+				failure: failure});
 		pendingCount++;
 		return id;
 	}
@@ -173,7 +176,8 @@ class RpcConnection {
 	function finish(state:RpcRequestState, bytes:Bytes, failure:Null<RpcError>):Bool {
 		if (!open || !state.isActive() || active.get(state.id) != state)
 			return false;
-		var encoded = RpcProtocol.encode(failure == null ? Response(state.id, bytes) : Failed(state.id, failure), maxMessageBytes);
+		var encoded = RpcProtocol.encode(failure == null ? Response(state.id, bytes) : Failed(state.id, failure),
+			maxMessageBytes);
 		active.remove(state.id);
 		activeCount--;
 		state.finish(false);

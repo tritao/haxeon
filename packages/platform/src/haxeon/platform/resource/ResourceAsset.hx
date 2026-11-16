@@ -58,7 +58,8 @@ class ResourceAsset {
 		ensureLive();
 		var byteCount = size();
 		if (haxe.Int64.compare(byteCount, haxe.Int64.ofInt(0x7fffffff)) > 0)
-			throw BindingError.invalidArgument("ResourceAsset.copyData", "NativeKit resource asset is too large for a Haxe byte buffer");
+			throw BindingError.invalidArgument("ResourceAsset.copyData",
+				"NativeKit resource asset is too large for a Haxe byte buffer");
 		var bytes = Bytes.alloc(haxe.Int64.toInt(byteCount));
 		NativeKit.nk_resource_asset_copy_data_checked(value, bytes, byteCount);
 		return bytes;

@@ -30,7 +30,8 @@ class BorderDecoration extends Decoration {
 			return;
 		if (geometry.width <= 0.0 || geometry.height <= 0.0)
 			return;
-		canvas.drawRectBorder(new Rect(0.0, 0.0, geometry.width, geometry.height), hairline ? 0.0 : borderWidth, borderColor);
+		canvas.drawRectBorder(new Rect(0.0, 0.0, geometry.width, geometry.height), hairline ? 0.0 : borderWidth,
+			borderColor);
 	}
 
 	override public function copy():Decoration

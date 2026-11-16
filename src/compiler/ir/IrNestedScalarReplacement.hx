@@ -4,14 +4,18 @@ import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
 
-private typedef NestedAlias = {final path:Array<String>; final typeName:String;}
+private typedef NestedAlias = {
+	final path:Array<String>;
+	final typeName:String;
+}
 
 /** Scalar-replace a non-escaping value and recursively inline its value fields into independent SSA fields. */
 class IrNestedScalarReplacement {
 	/** Expand copies of a fresh value into inline fields, snapshot their leaves, and scalar-replace the source.
 	 * Publish the expansion only when all uses can be replaced; genuine escapes keep their original ABI.
 	 */
-	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, root:IrValue, typeName:String, home:IrBlock,
+	public static function constructInPlace(blocks:Array<IrBlock>, objects:IrObjectTable, root:IrValue, typeName:String,
+			home:IrBlock,
 			position:Int, substitutions:Map<Int, IrValue>, nextValue:Int):Int {
 		if (!hasFiniteKnownLayout(typeName, objects, [])) return nextValue;
 		var stores = 0;
@@ -32,10 +36,14 @@ class IrNestedScalarReplacement {
 				var destination:Null<IrValue> = null, field:Null<String> = null;
 				switch located.value {
 					case FieldSet(target, name, value) if (value.id == root.id && target.id != root.id):
-						destination = target; field = name;
+						destination = target;
+						field = name;
 					default:
 				}
-				if (destination == null || field == null) { copy.instructions.push(located); continue; }
+				if (destination == null || field == null) {
+					copy.instructions.push(located);
+					continue;
+				}
 				var target = new IrValue(next++, field, Obj(typeName));
 				copy.instructions.push(new Located(FieldGet(target, destination, field), located.provenance));
 				var pending:Array<{target:IrValue, field:String, value:IrValue}> = [];
@@ -52,11 +60,14 @@ class IrNestedScalarReplacement {
 							if (nested == null) return nextValue;
 							var child = new IrValue(next++, part, declared.type);
 							copy.instructions.push(new Located(FieldGet(child, dest, part), located.provenance));
-							source = value; dest = child; owner = nested;
+							source = value;
+							dest = child;
+							owner = nested;
 						}
 					}
 				}
-				for (entry in pending) copy.instructions.push(new Located(FieldSet(entry.target, entry.field, entry.value), located.provenance));
+				for (entry in pending) copy.instructions
+					.push(new Located(FieldSet(entry.target, entry.field, entry.value), located.provenance));
 			}
 			copy.terminator = block.terminator;
 			copies.push(copy);
@@ -80,10 +91,13 @@ class IrNestedScalarReplacement {
 		return result;
 	}
 
-	public static function tryReplace(blocks:Array<IrBlock>, objects:IrObjectTable, root:IrValue, typeName:String, home:IrBlock,
+	public static function tryReplace(blocks:Array<IrBlock>, objects:IrObjectTable, root:IrValue, typeName:String,
+			home:IrBlock,
 			position:Int, hasHandlers:Bool, substitutions:Map<Int, IrValue>, nextValue:Int, forcePhis = false):Int {
 		if (!hasFiniteKnownLayout(typeName, objects, [])) return nextValue;
-		var aliases:Map<Int, NestedAlias> = [root.id => {path: [], typeName: typeName}], changed = true;
+		var aliases:Map<Int, NestedAlias> = [root.id => {
+			path:[], typeName:typeName
+		}], changed = true;
 		while (changed) {
 			changed = false;
 			for (block in blocks)
@@ -101,14 +115,29 @@ class IrNestedScalarReplacement {
 					}
 		}
 		var graph = new IrGraph(new IrFunction("nested-scalar-check", [], Void, blocks, Ordinary));
-		if (!onlyFieldUses(blocks, aliases, home, position, hasHandlers && !unchangedAfterHandlers(blocks, aliases, home, graph), graph)) return nextValue;
-		var layout = new IrInlineValueLayout(objects), slots = layout.slots(Obj(typeName)), fields:Array<IrObjectField> = [];
+		if (!onlyFieldUses(blocks, aliases, home, position,
+			hasHandlers && !unchangedAfterHandlers(blocks, aliases, home, graph), graph)) return nextValue;
+		var layout = new IrInlineValueLayout(objects),
+			slots = layout.slots(Obj(typeName)),
+			fields:Array<IrObjectField> = [];
 		for (slot in slots) {
 			if (slot.isPresence) return nextValue;
-			fields.push({name: slotName(slot.path), type: slot.type, nativeLayout: slot.nativeLayout, scalarStorage: slot.scalarStorage,
-				nullableScalarStorage: slot.nullableScalarStorage});
+			fields.push({
+				name: slotName(slot.path),
+				type: slot.type,
+				nativeLayout: slot.nativeLayout,
+				scalarStorage: slot.scalarStorage,
+				nullableScalarStorage: slot.nullableScalarStorage
+			});
 		}
-		var descriptor:IrObject = {name: typeName, isValue: true, base: null, interfaces: [], fields: fields, methods: []};
+		var descriptor:IrObject = {
+			name: typeName,
+			isValue: true,
+			base: null,
+			interfaces: [],
+			fields: fields,
+			methods: []
+		};
 		var copies:Array<IrBlock> = [], next = nextValue;
 		for (block in blocks) {
 			var copy = new IrBlock(block.id);
@@ -117,31 +146,39 @@ class IrNestedScalarReplacement {
 				switch instruction {
 					case FieldGet(out, object, field) if (aliases.exists(object.id)):
 						var alias = aliases.get(object.id), path = alias.path.concat([field]);
-						if (!aliases.exists(out.id)) copy.instructions.push(new Located(FieldGet(out, root, slotName(path)), located.provenance));
+						if (!aliases.exists(out.id)) copy.instructions
+							.push(new Located(FieldGet(out, root, slotName(path)), located.provenance));
 					case FieldSet(object, field, value) if (aliases.exists(object.id)):
-						var alias = aliases.get(object.id), path = alias.path.concat([field]), declared = findField(objects, alias.typeName, field);
+						var alias = aliases.get(object.id),
+							path = alias.path.concat([field]),
+							declared = findField(objects, alias.typeName, field);
 						if (declared == null) return nextValue;
 						var nested = valueName(declared.type, objects);
 						if (nested == null) {
 							var slot = findSlot(slots, path);
 							if (slot == null) return nextValue;
-							copy.instructions.push(new Located(FieldSet(root, slotName(path), value), located.provenance));
+							copy.instructions.push(new Located(FieldSet(root, slotName(path), value),
+								located.provenance));
 						}
-						else {
+							else {
 							// Snapshot every leaf before writing any destination leaf, including overlapping source and destination.
 							var values:Array<{name:String, value:IrValue}> = [];
 							for (slot in slots) if (startsWith(slot.path, path)) {
-								var relative = slot.path.slice(path.length), source = aliases.get(value.id), leaf:IrValue;
+								var relative = slot.path.slice(path.length),
+									source = aliases.get(value.id),
+									leaf:IrValue;
 								if (source != null) {
 									leaf = new IrValue(next++, value.name + ".field", slot.type);
-									copy.instructions.push(new Located(FieldGet(leaf, root, slotName(source.path.concat(relative))), located.provenance));
+									copy.instructions.push(new Located(FieldGet(leaf, root,
+										slotName(source.path.concat(relative))), located.provenance));
 								} else {
 									var current = value, currentName = nested;
 									for (part in relative) {
 										var component = findField(objects, currentName, part);
 										if (component == null) return nextValue;
 										var loaded = new IrValue(next++, value.name + "." + part, component.type);
-										copy.instructions.push(new Located(FieldGet(loaded, current, part), located.provenance));
+										copy.instructions.push(new Located(FieldGet(loaded, current, part),
+											located.provenance));
 										current = loaded;
 										var child = valueName(component.type, objects);
 										if (child != null) currentName = child;
@@ -150,7 +187,8 @@ class IrNestedScalarReplacement {
 								}
 								values.push({name: slotName(slot.path), value: leaf});
 							}
-							for (entry in values) copy.instructions.push(new Located(FieldSet(root, entry.name, entry.value), located.provenance));
+							for (entry in values) copy.instructions
+								.push(new Located(FieldSet(root, entry.name, entry.value), located.provenance));
 						}
 					default: copy.instructions.push(located);
 				}
@@ -165,9 +203,15 @@ class IrNestedScalarReplacement {
 		if (copiedPosition < 0) return nextValue;
 		var copiedGraph = new IrGraph(new IrFunction("nested-scalar-replacement", [], Void, copies, Ordinary)),
 			localSubstitutions:Map<Int, IrValue> = [for (id => value in substitutions) id => value],
-			result = IrScalarReplacement.replace(copies, copiedGraph, IrScalarReplacement.dominanceFrontiers(copiedGraph),
-				IrScalarReplacement.dominatorChildren(copiedGraph), {object: root, typeName: typeName, block: copiedHome, position: copiedPosition},
-				descriptor, localSubstitutions, next, forcePhis);
+			result = IrScalarReplacement.replace(copies, copiedGraph,
+				IrScalarReplacement.dominanceFrontiers(copiedGraph),
+				IrScalarReplacement.dominatorChildren(copiedGraph), {
+					object: root,
+					typeName: typeName,
+					block: copiedHome,
+					position: copiedPosition
+				},
+					descriptor, localSubstitutions, next, forcePhis);
 		// The scalar pass can decline an unprofitable phi. Do not publish the temporary flattened form then.
 		if (IrScalarReplacement.allocationPosition(copiedHome, root) >= 0) return nextValue;
 		for (index in 0...blocks.length) {
@@ -181,11 +225,13 @@ class IrNestedScalarReplacement {
 	/** Values initialized before any handler and not changed afterwards have the same
 	 * field definitions on normal and exceptional edges. Stop at the allocation block:
 	 * a later loop iteration initializes a distinct value. */
-	static function unchangedAfterHandlers(blocks:Array<IrBlock>, aliases:Map<Int, NestedAlias>, home:IrBlock, graph:IrGraph):Bool {
+	static function unchangedAfterHandlers(blocks:Array<IrBlock>, aliases:Map<Int, NestedAlias>, home:IrBlock,
+			graph:IrGraph):Bool {
 		var writes:Map<Int, Array<Int>> = [], handlers:Array<{block:Int, position:Int}> = [];
 		for (block in blocks) for (position in 0...block.instructions.length) {
 			var instruction = block.instructions[position].value;
-			for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id) && !graph.dominates(home.id, block.id)) return false;
+			for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id)
+				&& !graph.dominates(home.id, block.id)) return false;
 			switch instruction {
 				case FieldSet(target, _, _) if (aliases.exists(target.id)):
 					if (!writes.exists(block.id)) writes.set(block.id, []);
@@ -214,7 +260,8 @@ class IrNestedScalarReplacement {
 		return true;
 	}
 
-	static function onlyFieldUses(blocks:Array<IrBlock>, aliases:Map<Int, NestedAlias>, home:IrBlock, allocation:Int, singleBlock:Bool,
+	static function onlyFieldUses(blocks:Array<IrBlock>, aliases:Map<Int, NestedAlias>, home:IrBlock, allocation:Int,
+			singleBlock:Bool,
 			graph:IrGraph):Bool {
 		for (block in blocks) {
 			for (position in 0...block.instructions.length) {
@@ -226,7 +273,8 @@ class IrNestedScalarReplacement {
 				var touches = false;
 				for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id)) touches = true;
 				if (!touches) continue;
-				if (block == home ? position <= allocation : singleBlock || !graph.blocks.exists(block.id)) return false;
+				if (block == home ? position <= allocation : singleBlock
+					|| !graph.blocks.exists(block.id)) return false;
 				switch instruction {
 					case FieldGet(_, target, _) if (aliases.exists(target.id)):
 					case FieldSet(target, _, value) if (aliases.exists(target.id)):
@@ -235,7 +283,8 @@ class IrNestedScalarReplacement {
 			}
 			var terminator = block.terminator;
 			if (terminator != null) switch terminator.value {
-				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)): return false;
+				case Return(value), Throw(value), Rethrow(value),
+					Branch(value, _, _) if (aliases.exists(value.id)): return false;
 				default:
 			}
 		}
@@ -249,7 +298,8 @@ class IrNestedScalarReplacement {
 		for (field in object.fields) switch field.type {
 			case Obj(child):
 				var nested = objects.get(child);
-				if (nested == null || (nested.isValue && !hasFiniteKnownLayout(child, objects, visiting.concat([name])))) return false;
+				if (nested == null
+					|| (nested.isValue && !hasFiniteKnownLayout(child, objects, visiting.concat([name])))) return false;
 			case Nullable(Obj(child)):
 				var nested = objects.get(child);
 				if (nested == null || nested.isValue) return false;
@@ -267,7 +317,8 @@ class IrNestedScalarReplacement {
 
 	static function valueName(type:IrType, objects:IrObjectTable):Null<String>
 		return switch type {
-			case Obj(name): var object = objects.get(name); object != null && object.isValue ? name : null;
+			case Obj(name): var object = objects.get(name);
+				object != null && object.isValue ? name : null;
 			default: null;
 		};
 

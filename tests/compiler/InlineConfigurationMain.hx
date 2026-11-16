@@ -25,16 +25,20 @@ class InlineConfigurationMain {
 
 	static function main():Void {
 		var base = '{"version":1,"package":{"name":"test"},"entry":"Main"';
-		expect(PackageManifest.parse("test/haxeon.json", base + '}').inlineEnabled == null, "inherit omitted inline setting");
-		expect(PackageManifest.parse("test/haxeon.json", base + ',"inline":false}').inlineEnabled == false, "parse inline false");
-		expect(PackageManifest.parse("test/haxeon.json", base + ',"inline":true}').inlineEnabled == true, "parse inline true");
+		expect(PackageManifest.parse("test/haxeon.json", base + '}').inlineEnabled == null,
+			"inherit omitted inline setting");
+		expect(PackageManifest.parse("test/haxeon.json", base + ',"inline":false}').inlineEnabled == false,
+			"parse inline false");
+		expect(PackageManifest.parse("test/haxeon.json", base + ',"inline":true}').inlineEnabled == true,
+			"parse inline true");
 		var rejected = false;
 		try
 			PackageManifest.parse("test/haxeon.json", base + ',"inline":"false"}')
 		catch (_:Dynamic)
 			rejected = true;
 		expect(rejected, "reject nonboolean inline setting");
-		var source = 'class Main { static inline function helper(x:Int):Int { return x + 1; } public static function main():Int { return helper(41); } }';
+		var source =
+			'class Main { static inline function helper(x:Int):Int { return x + 1; } public static function main():Int { return helper(41); } }';
 		var first = new Compiler(),
 			second = new Compiler(),
 			global = IrInliner.enabled;

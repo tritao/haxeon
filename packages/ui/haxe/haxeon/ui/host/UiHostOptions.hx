@@ -12,8 +12,7 @@ class UiHostOptions {
 	public function new() {}
 
 	public function validate():Void {
-		if (title == null || title.length == 0 || width <= 0 || height <= 0 ||
-			eventQueueCapacity <= 0)
+		if (title == null || title.length == 0 || width <= 0 || height <= 0 || eventQueueCapacity <= 0)
 			throw "UI host options are invalid";
 	}
 }

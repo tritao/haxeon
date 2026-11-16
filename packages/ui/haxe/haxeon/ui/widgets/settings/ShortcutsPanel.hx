@@ -114,7 +114,8 @@ class ShortcutsPanel implements View implements Observable {
 		var scope = bindings.commands.scopeOf(id);
 		if (scope != null)
 			for (shortcut in bindings.commands.shortcutsFor(id)) {
-				var others = [for (other in bindings.commands.commandsBoundTo(shortcut, scope)) if (other != id) labelOf(other)];
+				var others =
+					[for (other in bindings.commands.commandsBoundTo(shortcut, scope)) if (other != id) labelOf(other)];
 				if (others.length > 0)
 					notice = shortcut.label() + " is also used by " + others.join(", ") + ".";
 			}
@@ -156,7 +157,8 @@ class ShortcutsPanel implements View implements Observable {
 		for (group in groups()) {
 			var headingStyle = new LayoutStyle();
 			headingStyle.padding = new Insets(0.0, 10.0, 0.0, 2.0);
-			rows.push(new KeyedView("group:" + group.name, new Text(SettingDefinition.labelFor(group.name), headingStyle)));
+			rows.push(new KeyedView("group:" + group.name,
+				new Text(SettingDefinition.labelFor(group.name), headingStyle)));
 			for (id in group.ids)
 				rows.push(new KeyedView("command:" + id, row(id)));
 		}
@@ -170,8 +172,10 @@ class ShortcutsPanel implements View implements Observable {
 		listStyle.padding = new Insets(4.0, 0.0, 12.0, 8.0);
 		var scrollStyle = fill();
 		var children:Array<KeyedView> = [
-			new KeyedView("filter", new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter by name or shortcut")),
-			new KeyedView("list", new ScrollView(key + ":list", new Column(key + ":rows", rows, listStyle), scrollStyle))
+			new KeyedView("filter",
+				new SearchField(key + ":filter", filter, setFilter, searchStyle, "Filter by name or shortcut")),
+			new KeyedView("list",
+				new ScrollView(key + ":list", new Column(key + ":rows", rows, listStyle), scrollStyle))
 		];
 		if (notice != null)
 			children.push(new KeyedView("notice", new Text(notice)));

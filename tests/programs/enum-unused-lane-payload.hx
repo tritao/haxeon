@@ -30,5 +30,8 @@ function main():Int {
 	copy[2] = 1;
 	if (copy.splice(1, 1)[0] != null) return 6;
 	if ((cast copy.pop():Int) + (cast copy.shift():Int) != 42 || copy.length != 0) return 7;
-	return switch value { case Item(pair): pair.value; default: 0; };
+	return switch value {
+		case Item(pair): pair.value;
+		default: 0;
+	};
 }

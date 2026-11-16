@@ -17,7 +17,8 @@ class NullableStructIrMain {
 		for (fn in program.functions)
 			if (fn.name == "identity") {
 				found = true;
-				if (!Type.enumEq(fn.arguments[0].type, Nullable(Obj("Value"))) || !Type.enumEq(fn.result, Nullable(Obj("Value"))))
+				if (!Type.enumEq(fn.arguments[0].type, Nullable(Obj("Value")))
+					|| !Type.enumEq(fn.result, Nullable(Obj("Value"))))
 					throw 'nullable struct payload was erased in IR: ${fn.arguments[0].type} -> ${fn.result}';
 			}
 		if (!found)
@@ -32,20 +33,25 @@ class NullableStructIrMain {
 			type: Bool,
 			isPresence: true,
 			nativeLayout: null
-		}), payload = IrInlineValueLayout.slotName("value",
-			{
-				path: ["x"],
-				type: I32,
-				isPresence: false,
-				nativeLayout: null
-			}), holder = [for (object in physical.objects) if (object.name == "Holder") object][0];
-		if (holder == null || holder.fields.length != 2 || holder.fields[0].name != flag || holder.fields[1].name != payload)
+		}),
+			payload = IrInlineValueLayout.slotName("value",
+				{
+					path: ["x"],
+					type: I32,
+					isPresence: false,
+					nativeLayout: null
+				}),
+			holder = [for (object in physical.objects) if (object.name == "Holder") object][0];
+		if (holder == null || holder.fields.length != 2 || holder.fields[0].name != flag
+			|| holder.fields[1].name != payload)
 			throw "nullable field was not expanded into inline flag and payload slots";
-		var alreadyPublished = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed,
+		var alreadyPublished = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed,
+			compiler.ir.TargetProfile.portable), typed,
 			_ -> true, (_, field) -> field == flag);
 		if (alreadyPublished.length != 0)
 			throw "an existing optional field was treated as a newly published field";
-		var added = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable), typed, _ -> true,
+		var added = IrProgramAssembler.liveInitializersFrom(compiler.ir.IrGenerator.forProgram(typed,
+			compiler.ir.TargetProfile.portable), typed, _ -> true,
 			(_, _) -> false);
 		if (added.length != 1)
 			throw "a new optional field did not get its live initializer";

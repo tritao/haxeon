@@ -18,8 +18,10 @@ typedef HxiAuditReport = {
 
 /** Audits one C header for a portable, identical ABI across Clang targets. */
 class HxiAudit {
-	public static function audit(header:String, targets:Array<String>, includes:Array<String>, ?profile:String, ?library:String, ?interfaceName:String,
-			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?dependencyInterfaces:Array<HxiInterface>):HxiAuditReport {
+	public static function audit(header:String, targets:Array<String>, includes:Array<String>, ?profile:String,
+			?library:String, ?interfaceName:String,
+			?dependencies:Array<String>, ?excludedHeaders:Array<String>,
+			?dependencyInterfaces:Array<HxiInterface>):HxiAuditReport {
 		if (targets.length < 2)
 			throw "FFI audit requires at least two targets";
 		if (profile != null && profile != "portable-abi64" && profile != "portable-abi32")
@@ -29,7 +31,8 @@ class HxiAudit {
 			identical = true;
 		for (target in targets) {
 			try {
-				var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName, dependencies, excludedHeaders),
+				var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName,
+					dependencies, excludedHeaders),
 					source = HxiWriter.write(model, generatedHeader(header, target));
 				HxiValidator.validateComposition(model, dependencyInterfaces == null ? [] : dependencyInterfaces);
 				var visibleDeclarations:Map<String, HxiDeclaration> = [];
@@ -62,9 +65,11 @@ class HxiAudit {
 	}
 
 	/** Imports one verified target into the canonical spelling for the selected ABI profile. */
-	public static function canonical(header:String, target:String, includes:Array<String>, ?library:String, ?interfaceName:String, ?sourceLabel:String,
+	public static function canonical(header:String, target:String, includes:Array<String>, ?library:String,
+			?interfaceName:String, ?sourceLabel:String,
 			?excludedHeaders:Array<String>, ?dependencies:Array<String>, profile:String = "portable-abi64"):String {
-		var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName, dependencies, excludedHeaders),
+		var model = CHeaderImporter.importHeader(header, target, includes, "clang", library, interfaceName,
+			dependencies, excludedHeaders),
 			label = sourceLabel == null ? header : sourceLabel;
 		if (profile != "portable-abi64" && profile != "portable-abi32")
 			throw 'Unknown FFI audit profile "$profile"';
@@ -126,10 +131,15 @@ class HxiAudit {
 		return 'declaration count differs (${a.length} versus ${b.length} lines)';
 	}
 
-	static function auditPortable(model:HxiInterface, target:String, issues:Array<HxiAuditIssue>, profile:String, abi:HxiAbi):Void {
+	static function auditPortable(model:HxiInterface, target:String, issues:Array<HxiAuditIssue>, profile:String,
+			abi:HxiAbi):Void {
 		var requiredBits = profile == "portable-abi32" ? 32 : 64;
 		if (abi.pointerBits != requiredBits)
-			issues.push({target: target, kind: "non-portable-target", message: '$profile requires $requiredBits-bit pointers'});
+			issues.push({
+				target: target,
+				kind: "non-portable-target",
+				message: '$profile requires $requiredBits-bit pointers'
+			});
 		for (fn in abi.functions())
 			if (fn.semantics.parameters.length != fn.arguments.length)
 				issues.push({
@@ -162,8 +172,9 @@ class HxiAudit {
 
 	static function declarationName(value:HxiDeclaration):String
 		return switch value {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
-				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
+				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_): name;
 		};
 
 	static function auditType(type:HxiType, target:String, context:String, issues:Array<HxiAuditIssue>):Void

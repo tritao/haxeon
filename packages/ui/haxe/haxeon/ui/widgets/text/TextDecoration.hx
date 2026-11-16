@@ -52,9 +52,8 @@ class TextDecoration {
 			if (rect.width <= 0.0 || rect.height <= 0.0)
 				continue;
 			var previous = merged.length == 0 ? null : merged[merged.length - 1];
-			if (previous != null && Math.abs(previous.y - rect.y) < 0.01 &&
-				Math.abs(previous.height - rect.height) < 0.01 &&
-				rect.x <= previous.x + previous.width + 0.01)
+			if (previous != null && Math.abs(previous.y - rect.y) < 0.01
+				&& Math.abs(previous.height - rect.height) < 0.01 && rect.x <= previous.x + previous.width + 0.01)
 				merged[merged.length - 1] = new Rect(previous.x, previous.y,
 					Math.max(previous.x + previous.width, rect.x + rect.width) - previous.x,
 					previous.height);

@@ -115,9 +115,12 @@ class HlLower {
 		return code;
 	}
 
-	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>, ?stableIds:Map<String, Int>,
-			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
-			developmentMetadata:Bool = true, recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
+	public static function lowerStableMeasured(program:IrProgram, symbols:HlSymbolTable, indices:Map<String, Int>,
+			?stableIds:Map<String, Int>,
+			?regenerated:Array<String>, ?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache,
+			fieldReserve:Int = 0,
+			developmentMetadata:Bool = true, recordLowering:Bool = false,
+			?loweredCache:compiler.hl.incremental.HlLoweredCache, irVerified:Bool = false,
 			trustCache:Bool = false, ?frozen:String->Bool):MeasuredHlCode {
 		var startedAt = Sys.time() * 1000.0;
 		var allocationAtStart = AllocationMeter.sample();
@@ -137,7 +140,8 @@ class HlLower {
 		}
 		var verifiedAt = Sys.time() * 1000.0,
 			allocationAfterVerification = AllocationMeter.sample(),
-			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve, developmentMetadata, recordLowering,
+			lowerer = new HlLower(symbols, indices, stableIds, affected, runtimeNatives, debugCache, fieldReserve,
+				developmentMetadata, recordLowering,
 				loweredCache, trustCache, frozen),
 			code = lowerer.lowerProgram(program);
 		return {
@@ -184,9 +188,12 @@ class HlLower {
 	var finalizationMs = 0.0;
 	var allocationPhases:Array<PhaseAllocation> = [];
 
-	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>, ?regenerated:Array<String>,
-			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0, developmentMetadata:Bool = true,
-			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false, ?frozen:String->Bool) {
+	function new(symbols:HlSymbolTable, indices:Null<Map<String, Int>>, ?stableIds:Map<String, Int>,
+			?regenerated:Array<String>,
+			?runtimeNatives:Array<IrNative>, ?debugCache:HlDebugMetadataCache, fieldReserve:Int = 0,
+			developmentMetadata:Bool = true,
+			recordLowering:Bool = false, ?loweredCache:compiler.hl.incremental.HlLoweredCache, trustCache:Bool = false,
+			?frozen:String->Bool) {
 		this.frozen = frozen;
 		this.symbols = symbols;
 		// HAXEON_CHECK_REUSE=1 lowers with requests recorded so the link step can be checked against this very lowering.
@@ -217,7 +224,8 @@ class HlLower {
 	function lowerProgram(program:IrProgram):HlCode {
 		typedInterfaces = new HlTypedInterfaceTables(program);
 		view = new HlLoweringView(typedInterfaces.keys);
-		var runtimeNatives = preparedRuntimeNatives == null ? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
+		var runtimeNatives = preparedRuntimeNatives == null
+			? discoverRuntimeNatives(program) : preparedRuntimeNatives.copy();
 		for (native in program.cNatives) {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
@@ -250,9 +258,13 @@ class HlLower {
 			if (!dispatchArities.exists(dispatchKey)) {
 				dispatchArities.set(dispatchKey, true);
 				result.push({
-					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult ? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity' : utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
+					name: pointerResult ? '__c_native_pointer_invoke_$arity' : bytesResult
+						? '__c_native_bytes_invoke_$arity' : aggregateResult ? '__c_native_aggregate_invoke_$arity'
+						: utf8Result ? '__c_native_utf8_invoke_$arity' : '__c_native_invoke_$arity',
 					library: "haxeon_runtime",
-					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult ? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result ? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
+					symbol: pointerResult ? 'native_pointer_invoke_$arity' : bytesResult
+						? 'native_bytes_invoke_$arity' : aggregateResult ? 'native_aggregate_invoke_$arity' : utf8Result
+						? 'native_utf8_invoke_$arity' : 'native_invoke_$arity',
 					arguments: ((pointerResult || utf8Result) ? [
 						IrType.RawPtr,
 						IrType.RawPtr,
@@ -268,24 +280,35 @@ class HlLower {
 						IrType.RawPtr,
 						IrType.RawPtr,
 						IrType.Bool
-					] : [IrType.RawPtr, IrType.RawPtr, IrType.RawPtr]).concat([for (_ in 0...arity) IrType.Dyn]),
-					result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.Abstract("realtime_bytes") : utf8Result ? IrType.Bytes : IrType.Dyn
+					] : [
+						IrType.RawPtr,
+						IrType.RawPtr,
+						IrType.RawPtr
+					]).concat([for (_ in 0...arity) IrType.Dyn]),
+					result: pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
+						? IrType.Abstract("realtime_bytes") : utf8Result ? IrType.Bytes : IrType.Dyn
 				});
 			}
 		}
 		return result;
 	}
 
-	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>, ?selected:Array<String>):Array<IrNative> {
+	public static function discoverRuntimeNatives(program:IrProgram, ?baseline:Array<IrNative>,
+			?selected:Array<String>):Array<IrNative> {
 		var runtimeNatives = baseline == null ? program.natives.copy() : baseline.copy(),
 			selectedNames:Map<String, Bool> = [];
 		if (baseline != null)
 			for (native in program.natives)
-				ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library, native.symbol);
+				ensureNative(runtimeNatives, native.name, native.arguments, native.result, native.library,
+					native.symbol);
 		if (Lambda.exists(program.functions, fn -> compiler.ir.IrTypedInterfaceDispatch.isDispatchEntry(fn.name))) {
-			ensureNative(runtimeNatives, HlTypedInterfaceTables.SLOT_NATIVE, [IrType.TypeRef], IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE), "std",
+			ensureNative(runtimeNatives, HlTypedInterfaceTables.SLOT_NATIVE, [IrType.TypeRef],
+				IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE), "std",
 				"typed_method_slot");
-			ensureNative(runtimeNatives, HlTypedInterfaceTables.ENTRY_NATIVE, [IrType.Dyn, IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE)],
+			ensureNative(runtimeNatives, HlTypedInterfaceTables.ENTRY_NATIVE, [
+				IrType.Dyn,
+				IrType.Abstract(HlTypedInterfaceTables.SLOT_TYPE)
+			],
 				IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), "std", "typed_method_entry");
 		}
 		if (selected != null)
@@ -299,22 +322,26 @@ class HlLower {
 							case CallClosure(_, closure, _) if ((switch (closure.type) {
 								case IrType.Dyn: true;
 								default: false;
-							})):
-								ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
-								ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32], IrType.Bytes);
+							})): ensureNative(runtimeNatives, "__reflect_is_function", [IrType.Dyn], IrType.Bool);
+							ensureNative(runtimeNatives, "__string_from_bytes", [IrType.RawPtr, IrType.I32],
+								IrType.Bytes);
 							case PointerOffset(_, _, _):
-								ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32], IrType.RawPtr, "std", "bytes_offset");
+								ensureNative(runtimeNatives, "__hl_bytes_offset", [IrType.RawPtr, IrType.I32],
+									IrType.RawPtr, "std", "bytes_offset");
 							case IteratorNew(_, _):
-								ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn], IrType.Abstract("realtime_iterator"));
+								ensureNative(runtimeNatives, "__iterator_new", [IrType.Dyn],
+									IrType.Abstract("realtime_iterator"));
 							case IteratorHasNext(_, _):
-								ensureNative(runtimeNatives, "__iterator_has_next", [IrType.Abstract("realtime_iterator")], IrType.Bool);
+								ensureNative(runtimeNatives, "__iterator_has_next",
+									[IrType.Abstract("realtime_iterator")], IrType.Bool);
 							case ArrayGet(_, array, _):
 								ensureRawArrayNative(runtimeNatives, array.type, "check");
 							case ArraySet(array, _, _):
 								ensureRawArrayNative(runtimeNatives, array.type, "ensure");
 							case IteratorNext(output, _):
 								var nextNative = iteratorNextNative(output.type);
-								ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")], nextNative.result);
+								ensureNative(runtimeNatives, nextNative.name, [IrType.Abstract("realtime_iterator")],
+									nextNative.result);
 							default:
 						}
 		return runtimeNatives;
@@ -406,7 +433,8 @@ class HlLower {
 					view.define(object);
 					var slots = interfaceSlotsFor(object);
 					objectTypeIndices.set(object.name,
-						symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object), typedInterfaces.entries.get(object.name)));
+						symbols.internObject(object, functionIndices, valueObjects, slots, reservedSlots(object),
+						typedInterfaces.entries.get(object.name)));
 					progressed = true;
 				} else
 					remaining.push(object);
@@ -426,7 +454,8 @@ class HlLower {
 		var environment = checkingLinks ? symbols.copy() : null;
 		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
 		for (fn in program.functions) {
-			var kept = trustCache && !regenerated.exists(fn.name) && loweredCache != null ? loweredCache.entries.get(fn.name) : null;
+			var kept = trustCache && !regenerated.exists(fn.name)
+				&& loweredCache != null ? loweredCache.entries.get(fn.name) : null;
 			if (kept != null) {
 				// A frozen function is the code of an earlier signature, or of a lambda the program dropped, kept for closures that still call it; its stale IR lowered against this build is not what it holds.
 				if (checkingTrust && (frozen == null || !frozen(fn.name)))
@@ -437,7 +466,8 @@ class HlLower {
 				// A function whose IR is the one the last build lowered, and whose outside facts still hold, keeps its code: linking
 				// it replays its requests, which gives it this build's indices and makes the tables as lowering it would have.
 				var entry = loweredCache == null || trustCache ? null : loweredCache.entries.get(fn.name);
-				if (entry != null && (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
+				if (entry != null
+					&& (entry.source == fn || compiler.ir.codec.IrFunctionStateEquality.same(entry.source, fn))) {
 					var linked = compiler.hl.incremental.HlLink.link(entry, symbols, functionIndices, view);
 					if (linked.fn != null) {
 						code.functions.push(linked.fn);
@@ -457,10 +487,12 @@ class HlLower {
 					var lowered = lowerFunction(PhiEdges.split(fn));
 					code.functions.push(lowered);
 					if (trustCache) {
-						entries.set(fn.name, new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], []));
+						entries.set(fn.name,
+							new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, [], []));
 						requests = null;
 					} else if (recordLowering) {
-						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, requests, view.endFunction());
+						var entry = new compiler.hl.incremental.HlLoweredFunction(fn.name, fn, lowered, requests,
+							view.endFunction());
 						this.lowered.set(fn.name, entry);
 						entries.set(fn.name, entry);
 						requests = null;
@@ -489,7 +521,8 @@ class HlLower {
 		var allocationAfterFunctions = AllocationMeter.sample();
 		// The VM uses function identities for stack-trace and profiler names in every mode.
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];
-		code.debugSections.push(HlDebugSection.of(HlWriter.FUNCTION_IDENTITIES, 1, 0, HlWriter.encodeFunctionIdentities(identities)));
+		code.debugSections.push(HlDebugSection.of(HlWriter.FUNCTION_IDENTITIES, 1, 0,
+			HlWriter.encodeFunctionIdentities(identities)));
 		var allocationAfterIdentities = AllocationMeter.sample(),
 			allocationAfterSpanGroups = allocationAfterIdentities;
 		if (developmentMetadata) {
@@ -501,7 +534,8 @@ class HlLower {
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written.
-			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0, cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache)));
+			code.debugSections.push(HlDebugSection.lazy(HlWriter.OPCODE_SOURCE_SPANS, 2, 0,
+				cache -> HlWriter.encodeOpcodeSourceSpanGroups(spanGroups, cache)));
 		}
 		if (debugCache != null)
 			debugCache.endGeneration();
@@ -677,14 +711,14 @@ class HlLower {
 	}
 
 	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
-	static function iteratorNextNative(element:IrType):{name:String, result:IrType}
-		return switch element {
-			case F64: {name: "__iterator_next_f64", result: IrType.F64};
-			case I32: {name: "__iterator_next_i32", result: IrType.I32};
-			default: {name: "__iterator_next", result: IrType.Dyn};
-		};
+	static function iteratorNextNative(element:IrType): {name: String, result: IrType} return switch element {
+		case F64: {name: "__iterator_next_f64", result: IrType.F64};
+		case I32: {name: "__iterator_next_i32", result: IrType.I32};
+		default: {name: "__iterator_next", result: IrType.Dyn};
+	};
 
-	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType, ?library:String, ?symbol:String):Void {
+	static function ensureNative(natives:Array<IrNative>, name:String, arguments:Array<IrType>, result:IrType,
+			?library:String, ?symbol:String):Void {
 		var nativeLibrary = library == null ? "haxeon_runtime" : library,
 			nativeSymbol = symbol == null ? name : symbol;
 		for (native in natives)
@@ -713,10 +747,13 @@ class HlLower {
 			library: internString(native.library),
 			name: internString(native.symbol),
 			type: internFunctionType(StringTools.startsWith(native.name, "$scalar-closure:receiver:")
-				&& native.symbol == "__closure_receiver_if_match" ? [Dyn, Dyn] : native.arguments,
-				native.result),
-			functionIndex: requireFunction(native.name),
-		});
+				&& native.symbol == "__closure_receiver_if_match" ? [
+					Dyn,
+					Dyn
+				] : native.arguments,
+					native.result),
+				functionIndex: requireFunction(native.name),
+			});
 	}
 
 	function lowerFunction(fn:IrFunction):HlFunction {
@@ -820,9 +857,11 @@ class HlLower {
 				fusedComparison:Null<HlInstruction> = null;
 			if (block.terminator != null && block.instructions.length > 0)
 				switch block.terminator.value {
-					case Branch(condition, _, _) if (uses.get(condition.id) == 1 && !bindingsByValue.exists(condition.id)):
+					case Branch(condition, _,
+						_) if (uses.get(condition.id) == 1 && !bindingsByValue.exists(condition.id)):
 						switch block.instructions[block.instructions.length - 1].value {
-							case Less(output, _, _), LessEqual(output, _, _), Equal(output, _, _) if (output.id == condition.id):
+							case Less(output, _, _), LessEqual(output, _, _),
+								Equal(output, _, _) if (output.id == condition.id):
 								fusedCondition = condition.id;
 							default:
 						}
@@ -840,12 +879,15 @@ class HlLower {
 				// Native field/enum/array loads cannot turn a hardware fault into a Haxe exception.
 				// Emit an explicit check so the active handler works on every thread.
 				var receiver:Null<IrValue> = switch instruction.value {
-					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _, _), InstanceClosure(_, _, value), ArrayGet(_, value, _),
-						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value), IteratorNext(_, value),
+					case FieldGet(_, value, _), FieldSet(value, _, _), MethodCall(_, value, _, _, _),
+						InstanceClosure(_, _, value), ArrayGet(_, value, _),
+						ArraySet(value, _, _), ArraySize(_, value), IteratorNew(_, value), IteratorHasNext(_, value),
+						IteratorNext(_, value),
 						EnumIndex(_, value), EnumField(_, value, _, _): value;
 					case _: null;
 				};
-				if (receiver != null && scalarOptionals.get(receiver) == null && !nonNull.has(block.id, instructionIndex))
+				if (receiver != null && scalarOptionals.get(receiver) == null
+					&& !nonNull.has(block.id, instructionIndex))
 					instructions.push(HlInstruction.NullCheck(requireRegister(receiver, registers)));
 				switch instruction.value {
 					case Phi(_, _):
@@ -854,28 +896,36 @@ class HlLower {
 					case ConstVoid(output):
 						defineRegister(output, registers, registerTypes);
 					case ConstInt(output, value):
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(value)));
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+							internInt(value)));
 					case ConstFloat(output, value):
-						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes), internFloat(value)));
+						instructions.push(HlInstruction.LoadFloat(defineRegister(output, registers, registerTypes),
+							internFloat(value)));
 					case ConstString(output, value):
-						lowerStringLiteral(defineRegister(output, registers, registerTypes), value, registerTypes, instructions);
+						lowerStringLiteral(defineRegister(output, registers, registerTypes), value, registerTypes,
+							instructions);
 					case StaticDataAddress(output, _):
 						// RuntimeData is a Wasm-only intrinsic. The HashLink shadow module is
 						// still assembled for a Wasm compilation, but never executes this path.
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
+						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+							internInt(0)));
 					case PointerOffset(output, pointer, byteOffset):
-						instructions.push(HlInstruction.Call2(defineRegister(output, registers, registerTypes), requireFunction("__hl_bytes_offset"),
+						instructions.push(HlInstruction.Call2(defineRegister(output, registers, registerTypes),
+							requireFunction("__hl_bytes_offset"),
 							requireRegister(pointer, registers), requireRegister(byteOffset, registers)));
 					case MemoryLoad(output, pointer, size, signed):
 						var destination = defineRegister(output, registers, registerTypes),
 							zeroOffset = temporaryRegister(IrType.I32, registerTypes);
 						instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
 						if (size == 1)
-							instructions.push(HlInstruction.GetI8(destination, requireRegister(pointer, registers), zeroOffset));
+							instructions.push(HlInstruction.GetI8(destination, requireRegister(pointer, registers),
+								zeroOffset));
 						else if (size == 2)
-							instructions.push(HlInstruction.GetI16(destination, requireRegister(pointer, registers), zeroOffset));
+							instructions.push(HlInstruction.GetI16(destination, requireRegister(pointer, registers),
+								zeroOffset));
 						else
-							instructions.push(HlInstruction.GetMem(destination, requireRegister(pointer, registers), zeroOffset));
+							instructions.push(HlInstruction.GetMem(destination, requireRegister(pointer, registers),
+								zeroOffset));
 						if (signed && size < 4) {
 							var shift = temporaryRegister(IrType.I32, registerTypes),
 								shiftCount = internInt(size == 1 ? 24 : 16);
@@ -887,102 +937,135 @@ class HlLower {
 						var zeroOffset = temporaryRegister(IrType.I32, registerTypes);
 						instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
 						if (size == 1)
-							instructions.push(HlInstruction.SetI8(requireRegister(pointer, registers), zeroOffset, requireRegister(value, registers)));
+							instructions.push(HlInstruction.SetI8(requireRegister(pointer, registers), zeroOffset,
+								requireRegister(value, registers)));
 						else if (size == 2)
-							instructions.push(HlInstruction.SetI16(requireRegister(pointer, registers), zeroOffset, requireRegister(value, registers)));
+							instructions.push(HlInstruction.SetI16(requireRegister(pointer, registers), zeroOffset,
+								requireRegister(value, registers)));
 						else
-							instructions.push(HlInstruction.SetMem(requireRegister(pointer, registers), zeroOffset, requireRegister(value, registers)));
+							instructions.push(HlInstruction.SetMem(requireRegister(pointer, registers), zeroOffset,
+								requireRegister(value, registers)));
 					case ConstBool(output, value):
-						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes), value));
+						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes),
+							value));
 					case ConstNull(output):
 						switch output.type {
-							case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(0)));
-							default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers, registerTypes)));
+							case EnumTag(_): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers,
+								registerTypes), internInt(0)));
+							default: instructions.push(HlInstruction.LoadNull(defineRegister(output, registers,
+								registerTypes)));
 						}
 					case TypeValue(output, type):
-						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes), internType(type)));
+						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes),
+							internType(type)));
 					case ToDyn(output, value):
-						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case IntToFloat(output, value):
-						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case IntToInt64(output, value):
-						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case FloatToInt(output, value):
-						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.ToInt(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case FloatToFloat(output, value):
-						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case SafeCast(output, value):
-						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case BeginTry(catchBlock, _, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id has no catch value in block $catchBlock';
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
-						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock', preserveExceptionStack));
+						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock',
+							preserveExceptionStack));
 					case EndTry(catchBlock, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id ends with unknown handler block $catchBlock';
-						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers), preserveExceptionStack));
+						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers),
+							preserveExceptionStack));
 					case Catch(_):
 					case GlobalGet(output, name):
 						var global = requireGlobal(name);
-						instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes), global));
+						instructions.push(HlInstruction.GlobalGet(defineRegister(output, registers, registerTypes),
+							global));
 					case GlobalSet(name, source):
 						var global = requireGlobal(name);
 						instructions.push(HlInstruction.GlobalSet(global, requireRegister(source, registers)));
 					case Add(output, left, right):
-						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.Add(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Sub(output, left, right):
-						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Mul(output, left, right):
-						instructions.push(HlInstruction.Mul(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.Mul(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Div(output, left, right):
-						instructions.push(HlInstruction.Div(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.Div(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Mod(output, left, right):
-						instructions.push(HlInstruction.Mod(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.Mod(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case BitAnd(output, left, right):
-						instructions.push(HlInstruction.BitAnd(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.BitAnd(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case BitXor(output, left, right):
-						instructions.push(HlInstruction.BitXor(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.BitXor(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case BitOr(output, left, right):
-						instructions.push(HlInstruction.BitOr(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.BitOr(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case ShiftLeft(output, left, right):
-						instructions.push(HlInstruction.ShiftLeft(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.ShiftLeft(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case ShiftRight(output, left, right):
-						instructions.push(HlInstruction.ShiftRight(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.ShiftRight(defineRegister(output, registers, registerTypes),
+							requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case UnsignedShiftRight(output, left, right):
-						instructions.push(HlInstruction.UnsignedShiftRight(defineRegister(output, registers, registerTypes), requireRegister(left, registers),
+						instructions.push(HlInstruction.UnsignedShiftRight(defineRegister(output, registers,
+							registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Less(output, left, right) if (output.id == fusedCondition):
-						fusedComparison = comparisonJump(0, false, false, requireRegister(left, registers), requireRegister(right, registers), null);
+						fusedComparison = comparisonJump(0, false, false, requireRegister(left, registers),
+							requireRegister(right, registers), null);
 					case LessEqual(output, left, right) if (output.id == fusedCondition):
-						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers), requireRegister(right, registers), null);
+						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers),
+							requireRegister(right, registers), null);
 					case Equal(output, left, right) if (output.id == fusedCondition):
-						fusedComparison = comparisonJump(2, nullValues.exists(left.id), nullValues.exists(right.id), requireRegister(left, registers),
+						fusedComparison = comparisonJump(2, nullValues.exists(left.id), nullValues.exists(right.id),
+							requireRegister(left, registers),
 							requireRegister(right, registers), null);
 					case Less(output, left, right):
 						lowerComparison(output, left, right, 0, false, false, registers, registerTypes, instructions);
 					case LessEqual(output, left, right):
 						lowerComparison(output, left, right, 1, false, false, registers, registerTypes, instructions);
 					case Equal(output, left, right):
-						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id), registers, registerTypes,
+						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id),
+							registers, registerTypes,
 							instructions);
 					case Intrinsic(_, _, _):
 						throw "Unlowered IR intrinsic reached HashLink";
 					case Call(output, functionName, arguments):
-						if (functionName == compiler.ir.IrReceiverCheck.NAME && nonNull.has(block.id, instructionIndex)) {
+						if (functionName == compiler.ir.IrReceiverCheck.NAME
+							&& nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
-						} else if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers, registerTypes)) {
+						} else if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers,
+							registerTypes)) {
 							var destination = defineRegister(output, registers, registerTypes);
 							var functionIndex = requireFunction(functionName);
 							var args = [for (argument in arguments) requireRegister(argument, registers)];
@@ -998,7 +1081,8 @@ class HlLower {
 							switch args.length {
 								case 0: instructions.push(HlInstruction.Call0(destination, functionIndex));
 								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, args[0]));
-								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0], args[1]));
+								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, args[0],
+									args[1]));
 								default: instructions.push(HlInstruction.CallN(destination, functionIndex, args));
 							}
 						}
@@ -1006,9 +1090,11 @@ class HlLower {
 						var destination = defineRegister(output, registers, registerTypes),
 							boxedArray = temporaryRegister(IrType.Dyn, registerTypes);
 						instructions.push(HlInstruction.ToDyn(boxedArray, requireRegister(array, registers)));
-						instructions.push(HlInstruction.Call1(destination, requireFunction("__iterator_new"), boxedArray));
+						instructions.push(HlInstruction.Call1(destination, requireFunction("__iterator_new"),
+							boxedArray));
 					case IteratorHasNext(output, iterator):
-						instructions.push(HlInstruction.Call1(defineRegister(output, registers, registerTypes), requireFunction("__iterator_has_next"),
+						instructions.push(HlInstruction.Call1(defineRegister(output, registers, registerTypes),
+							requireFunction("__iterator_has_next"),
 							requireRegister(iterator, registers)));
 					case IteratorNext(output, iterator):
 						var destination = defineRegister(output, registers, registerTypes),
@@ -1018,10 +1104,12 @@ class HlLower {
 							default: false;
 						})) {
 							var dynamicResult = temporaryRegister(IrType.Dyn, registerTypes);
-							instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name), requireRegister(iterator, registers)));
+							instructions.push(HlInstruction.Call1(dynamicResult, requireFunction(nextNative.name),
+								requireRegister(iterator, registers)));
 							instructions.push(HlInstruction.SafeCast(destination, dynamicResult));
 						} else
-							instructions.push(HlInstruction.Call1(destination, requireFunction(nextNative.name), requireRegister(iterator, registers)));
+							instructions.push(HlInstruction.Call1(destination, requireFunction(nextNative.name),
+								requireRegister(iterator, registers)));
 					case CNativeCall(output, functionName, arguments):
 						var native = cNatives.get(functionName);
 						if (native == null)
@@ -1050,8 +1138,10 @@ class HlLower {
 							var ownership = temporaryRegister(IrType.RawPtr, registerTypes),
 								release = temporaryRegister(IrType.RawPtr, registerTypes),
 								nullable = temporaryRegister(IrType.Bool, registerTypes);
-							instructions.push(HlInstruction.LoadString(ownership, internString(native.pointerOwnership)));
-							instructions.push(HlInstruction.LoadString(release, internString(native.pointerRelease == null ? "" : native.pointerRelease)));
+							instructions.push(HlInstruction.LoadString(ownership,
+								internString(native.pointerOwnership)));
+							instructions.push(HlInstruction.LoadString(release,
+								internString(native.pointerRelease == null ? "" : native.pointerRelease)));
 							instructions.push(HlInstruction.LoadBool(nullable, native.pointerNullable));
 							callArguments.push(ownership);
 							callArguments.push(release);
@@ -1070,10 +1160,15 @@ class HlLower {
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
 							callArguments.push(boxed);
 						}
-						var dynamicResult = temporaryRegister(pointerResult ? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult) ? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
+						var dynamicResult = temporaryRegister(pointerResult
+							? IrType.Abstract("native_pointer") : (bytesResult || aggregateResult)
+							? IrType.ManagedBytes : utf8Result ? IrType.Bytes : IrType.Dyn,
 							registerTypes);
 						instructions.push(HlInstruction.CallN(dynamicResult,
-							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}' : bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult ? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result ? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
+							requireFunction(pointerResult ? '__c_native_pointer_invoke_${arguments.length}'
+							: bytesResult ? '__c_native_bytes_invoke_${arguments.length}' : aggregateResult
+							? '__c_native_aggregate_invoke_${arguments.length}' : utf8Result
+							? '__c_native_utf8_invoke_${arguments.length}' : '__c_native_invoke_${arguments.length}'),
 							callArguments));
 						if ((switch (native.result) {
 							case Void: true;
@@ -1081,13 +1176,17 @@ class HlLower {
 						}))
 							defineRegister(output, registers, registerTypes);
 						else if (pointerResult || bytesResult || aggregateResult || utf8Result)
-							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), dynamicResult));
+							instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes),
+								dynamicResult));
 						else
-							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes), dynamicResult));
+							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
+								dynamicResult));
 					case StaticClosure(output, functionName):
-						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName)));
+						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes),
+							requireFunction(functionName)));
 					case InstanceClosure(output, functionName, receiver):
-						instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers, registerTypes), requireFunction(functionName),
+						instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers,
+							registerTypes), requireFunction(functionName),
 							requireRegister(receiver, registers)));
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));
@@ -1098,22 +1197,27 @@ class HlLower {
 							var callable = temporaryRegister(IrType.Bool, registerTypes),
 								error = temporaryRegister(IrType.Bytes, registerTypes),
 								valid = "$callable:" + instructions.length;
-							instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"), requireRegister(closure, registers)));
+							instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"),
+								requireRegister(closure, registers)));
 							instructions.push(HlInstruction.JumpTrue(callable, valid));
 							lowerStringLiteral(error, "Cannot call a non-function value", registerTypes, instructions);
 							instructions.push(HlInstruction.Throw(error));
 							instructions.push(HlInstruction.Label(valid));
 						}
-						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes), requireRegister(closure, registers),
+						instructions.push(HlInstruction.CallClosure(defineRegister(output, registers, registerTypes),
+							requireRegister(closure, registers),
 							[for (argument in arguments) requireRegister(argument, registers)]));
 					case Upcast(output, value):
 						// HashLink accepts a subclass register wherever its base class is expected.
-						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.Move(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case ToVirtual(output, value):
-						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.ToVirtual(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case MethodCall(output, object, methodName, arguments, _):
 						var receiver = requireRegister(object, registers),
-							methodArguments = [receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
+							methodArguments =
+								[receiver].concat([for (argument in arguments) requireRegister(argument, registers)]),
 							valueMethod = valueMethodFunction(object, methodName);
 						if (valueMethod == null)
 							valueMethod = addedMethodFunction(object, methodName);
@@ -1123,9 +1227,12 @@ class HlLower {
 							var destination = defineRegister(output, registers, registerTypes),
 								functionIndex = requireFunction(valueMethod);
 							switch methodArguments.length {
-								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex, methodArguments[0]));
-								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex, methodArguments[0], methodArguments[1]));
-								default: instructions.push(HlInstruction.CallN(destination, functionIndex, methodArguments));
+								case 1: instructions.push(HlInstruction.Call1(destination, functionIndex,
+									methodArguments[0]));
+								case 2: instructions.push(HlInstruction.Call2(destination, functionIndex,
+									methodArguments[0], methodArguments[1]));
+								default: instructions.push(HlInstruction.CallN(destination, functionIndex,
+									methodArguments));
 							}
 						} else
 							instructions.push(HlInstruction.CallMethod(defineRegister(output, registers, registerTypes),
@@ -1142,9 +1249,11 @@ class HlLower {
 							}
 						}
 					case NewObject(output, typeName):
-						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(typeName), 0));
+						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
+							requireObjectType(typeName), 0));
 					case ValueInit(output):
-						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes), requireObjectType(compiler.ir.IrTypeTools.valueObjectName(output.type)), 0));
+						instructions.push(HlInstruction.New(defineRegister(output, registers, registerTypes),
+							requireObjectType(compiler.ir.IrTypeTools.valueObjectName(output.type)), 0));
 					case FieldGet(output, object, fieldName) if (scalarOptionals.get(object) != null):
 						var local:HlScalarValueLocal = cast scalarOptionals.get(object);
 						var source:Int = cast local.fields.get(fieldName);
@@ -1158,7 +1267,8 @@ class HlLower {
 							default: false;
 						}) && storageType != null) {
 							var stored = temporaryRegisterType(storageType, registerTypes);
-							instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers), requireObjectField(object, fieldName)));
+							instructions.push(HlInstruction.FieldGet(stored, requireRegister(object, registers),
+								requireObjectField(object, fieldName)));
 							instructions.push(HlInstruction.ToInt(destination, stored));
 							if (nativeLayout != null && !nativeLayout.signed) {
 								var shift = temporaryRegister(IrType.I32, registerTypes);
@@ -1167,13 +1277,15 @@ class HlLower {
 								instructions.push(HlInstruction.UnsignedShiftRight(destination, destination, shift));
 							}
 						} else
-							instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers), requireObjectField(object, fieldName)));
+							instructions.push(HlInstruction.FieldGet(destination, requireRegister(object, registers),
+								requireObjectField(object, fieldName)));
 						// Inline records produce an HSTRUCT pointer into their owner. Only scalar
 						// narrow fields need sign or zero extension after the field load.
 						if (nativeLayout != null && nativeLayout.size < 4) {
 							var maskOrShift = temporaryRegister(IrType.I32, registerTypes),
 								bits = nativeLayout.size * 8;
-							instructions.push(HlInstruction.LoadInt(maskOrShift, internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
+							instructions.push(HlInstruction.LoadInt(maskOrShift,
+								internInt(nativeLayout.signed ? 32 - bits : (1 << bits) - 1)));
 							if (nativeLayout.signed) {
 								instructions.push(HlInstruction.ShiftLeft(destination, destination, maskOrShift));
 								instructions.push(HlInstruction.ShiftRight(destination, destination, maskOrShift));
@@ -1188,7 +1300,8 @@ class HlLower {
 						var receiver = requireRegister(object, registers),
 							field = requireObjectField(object, fieldName),
 							source = requireRegister(value, registers),
-							nativeStorageType = internNativeStorage(value.type, objectFieldNativeLayout(object, fieldName));
+							nativeStorageType = internNativeStorage(value.type,
+								objectFieldNativeLayout(object, fieldName));
 						if (nativeStorageType != null) {
 							var storageSource = temporaryRegisterType(nativeStorageType, registerTypes);
 							instructions.push(HlInstruction.ToInt(storageSource, source));
@@ -1196,7 +1309,8 @@ class HlLower {
 						}
 						instructions.push(HlInstruction.FieldSet(receiver, field, source));
 					case ArrayGet(output, array, index) if (rawArrayShift(array.type) != null):
-						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
+						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
+							requireRegister(array, registers),
 							requireRegister(index, registers)));
 						var key = '${array.id}:${index.id}';
 						provenInRange.set(key, true);
@@ -1206,18 +1320,21 @@ class HlLower {
 						lowerRawArrayAccess(array, index, "ensure", true, instructions, registers, registerTypes,
 							(data, offset) -> HlInstruction.SetMem(data, offset, source));
 					case ArrayGet(output, array, index):
-						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes), requireRegister(array, registers),
+						instructions.push(HlInstruction.ArrayGet(defineRegister(output, registers, registerTypes),
+							requireRegister(array, registers),
 							requireRegister(index, registers)));
 					case ArraySet(array, index, value):
-						instructions.push(HlInstruction.ArraySet(requireRegister(array, registers), requireRegister(index, registers),
+						instructions.push(HlInstruction.ArraySet(requireRegister(array, registers),
+							requireRegister(index, registers),
 							requireRegister(value, registers)));
 					case ArraySize(output, array):
-						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes), requireRegister(array, registers)));
+						instructions.push(HlInstruction.ArraySize(defineRegister(output, registers, registerTypes),
+							requireRegister(array, registers)));
 					case MakeEnum(output, _, constructor, _) if (switch output.type {
-							case EnumTag(_): true;
-							default: false;
-						}):
-						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes), internInt(constructor + 1)));
+						case EnumTag(_): true;
+						default: false;
+					}): instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
+						internInt(constructor + 1)));
 					case MakeEnum(output, typeName, constructor, arguments):
 						var destination = defineRegister(output, registers, registerTypes),
 							enumConstructor = requireEnumConstructor(typeName, output.type, constructor),
@@ -1227,16 +1344,18 @@ class HlLower {
 						else
 							instructions.push(HlInstruction.MakeEnum(destination, enumConstructor, args));
 					case EnumIndex(output, value) if (switch value.type {
-							case EnumTag(_): true;
-							default: false;
-						}):
-						var one = temporaryRegister(IrType.I32, registerTypes);
-						instructions.push(HlInstruction.LoadInt(one, internInt(1)));
-						instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes), requireRegister(value, registers), one));
+						case EnumTag(_): true;
+						default: false;
+					}): var one = temporaryRegister(IrType.I32, registerTypes);
+					instructions.push(HlInstruction.LoadInt(one, internInt(1)));
+					instructions.push(HlInstruction.Sub(defineRegister(output, registers, registerTypes),
+						requireRegister(value, registers), one));
 					case EnumIndex(output, value):
-						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes), requireRegister(value, registers)));
+						instructions.push(HlInstruction.EnumIndex(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 					case EnumField(output, value, constructor, field):
-						instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes), requireRegister(value, registers),
+						instructions.push(HlInstruction.EnumField(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers),
 							constructor, field));
 				}
 				appendDebugLocations(debugLocations, instructions.length - instructionStart, instruction.provenance);
@@ -1248,7 +1367,11 @@ class HlLower {
 							var key = binding.identity + "@" + position;
 							if (!seenAssignments.exists(key)) {
 								seenAssignments.set(key, true);
-								debugAssignments.push({name: internString(binding.name), position: position, scopeEnd: -1});
+								debugAssignments.push({
+									name: internString(binding.name),
+									position: position,
+									scopeEnd: -1
+								});
 								assignmentBindings.push(binding);
 							}
 						}
@@ -1263,7 +1386,8 @@ class HlLower {
 				case Unreachable:
 					// The fatal runtime native aborts the process and is not an exception, so no Haxe code can catch it. The block still needs an
 					// ending the bytecode accepts: a throw of null that is never reached.
-					instructions.push(HlInstruction.Call0(temporaryRegister(IrType.Void, registerTypes), requireFunction("__unreachable")));
+					instructions.push(HlInstruction.Call0(temporaryRegister(IrType.Void, registerTypes),
+						requireFunction("__unreachable")));
 					var neverThrown = temporaryRegister(IrType.Dyn, registerTypes);
 					instructions.push(HlInstruction.LoadNull(neverThrown));
 					instructions.push(HlInstruction.Throw(neverThrown));
@@ -1283,7 +1407,11 @@ class HlLower {
 									var assignmentKey = binding.identity + "@" + write.position;
 									if (!seenAssignments.exists(assignmentKey)) {
 										seenAssignments.set(assignmentKey, true);
-										debugAssignments.push({name: internString(binding.name), position: write.position, scopeEnd: -1});
+										debugAssignments.push({
+											name: internString(binding.name),
+											position: write.position,
+											scopeEnd: -1
+										});
 										assignmentBindings.push(binding);
 									}
 								}
@@ -1309,7 +1437,8 @@ class HlLower {
 			scopedAssignments.push({
 				name: assignment.name,
 				position: assignment.position,
-				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position, instructions.length, lastScopeLocations)
+				scopeEnd: assignment.position < 0 ? -1 : scopeEndPosition(binding, debugLocations, assignment.position,
+					instructions.length, lastScopeLocations)
 			});
 		}
 		var key = view.typedInterfaceKey(fn.name);
@@ -1319,7 +1448,8 @@ class HlLower {
 				keyRegister = temporaryRegister(IrType.TypeRef, registerTypes),
 				receiver = temporaryRegister(IrType.Dyn, registerTypes),
 				entry = temporaryRegister(IrType.Abstract(HlTypedInterfaceTables.ENTRY_TYPE), registerTypes),
-				callable = temporaryRegister(IrType.Function([IrType.Dyn].concat([for (i in 1...fn.arguments.length) fn.arguments[i].type]), fn.result),
+				callable = temporaryRegister(IrType.Function([IrType.Dyn]
+					.concat([for (i in 1...fn.arguments.length) fn.arguments[i].type]), fn.result),
 					registerTypes),
 				result = temporaryRegister(fn.result, registerTypes),
 				global = internGlobalSlot("$typed-method-slot:" + key, handleType),
@@ -1343,7 +1473,8 @@ class HlLower {
 				HlInstruction.Return(result),
 				HlInstruction.Label(fallback)
 			];
-			var first = debugLocations.length == 0 ? debugLocation(SourceProvenance.generated("typed interface method table")) : debugLocations[0];
+			var first = debugLocations.length == 0
+				? debugLocation(SourceProvenance.generated("typed interface method table")) : debugLocations[0];
 			debugLocations = [for (_ in fast) first].concat(debugLocations);
 			instructions = fast.concat(instructions);
 			for (i in 0...scopedAssignments.length) {
@@ -1355,7 +1486,8 @@ class HlLower {
 				};
 			}
 		}
-		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result), requireFunction(fn.name), registerTypes,
+		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
+			requireFunction(fn.name), registerTypes,
 			instructions, debugLocations, scopedAssignments);
 	}
 
@@ -1366,7 +1498,7 @@ class HlLower {
 	static final generatedDebugLocation:HlDebugLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
 	/** The latest provenance and its location, replaced as one value: neighbouring opcodes nearly always share it. */
-	static var lastDebugLocation:{provenance:SourceProvenance, location:HlDebugLocation} = null;
+	static var lastDebugLocation: {provenance: SourceProvenance, location: HlDebugLocation} = null;
 
 	/** Locations are immutable, so opcodes from one provenance share a single one. */
 	static function debugLocation(provenance:SourceProvenance):HlDebugLocation {
@@ -1374,8 +1506,10 @@ class HlLower {
 		if (last != null && last.provenance == provenance)
 			return last.location;
 		var location = provenance.location;
-		var result:HlDebugLocation = location == null ? generatedDebugLocation : new HlDebugLocation(location.path, location.line, location.column,
-			location.endLine, location.endColumn, location.sourceHash, location.start, location.end, switch provenance.origin {
+		var result:HlDebugLocation = location == null ? generatedDebugLocation : new HlDebugLocation(location.path,
+			location.line, location.column,
+			location.endLine, location.endColumn, location.sourceHash, location.start, location.end,
+			switch provenance.origin {
 				case CompilerGenerated(_): 1;
 				case UserSource: 0;
 			});
@@ -1389,7 +1523,8 @@ class HlLower {
 		it falls at or after `position`, so it is found once per scope, not once per
 		assignment.
 	**/
-	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>, position:Int, instructionCount:Int,
+	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>,
+			position:Int, instructionCount:Int,
 			lastByScope:Map<String, Int>):Int {
 		var key = binding.identity + ":" + binding.scopeStart + ":" + binding.scopeEnd,
 			cached = lastByScope.get(key),
@@ -1439,7 +1574,8 @@ class HlLower {
 		return output;
 	}
 
-	static function appendReversePostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, entry:Int):Void {
+	static function appendReversePostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>,
+			entry:Int):Void {
 		var postorder:Array<IrBlock> = [];
 		visitPostorder(byId, seen, postorder, entry);
 		var index = postorder.length;
@@ -1503,13 +1639,20 @@ class HlLower {
 
 	/** The phi moves on the edge `from` to `to`, or null when it has none. */
 	static function edgeMoves(edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>>, from:Int,
-			to:Int):Null<Array<{destination:IrValue, source:IrValue}>> {
+			to:Int):Null<Array<{
+				destination:IrValue,
+				source:IrValue
+			}>> {
 		var targets = edges.get(from);
 		return targets == null ? null : targets.get(to);
 	}
 
-	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Map<Int, Int>, registerTypes:Array<Int>,
-			instructions:Array<HlInstruction>):Array<{value:IrValue, position:Int}> {
+	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Map<Int, Int>,
+			registerTypes:Array<Int>,
+			instructions:Array<HlInstruction>):Array<{
+				value:IrValue,
+				position:Int
+			}> {
 		var writes:Array<{value:IrValue, position:Int}> = [];
 		if (moves.length == 1) {
 			var destination = requireRegister(moves[0].destination, registers),
@@ -1535,7 +1678,8 @@ class HlLower {
 	}
 
 	/** The jump taken when a comparison holds; `target` may be filled in later with `withJumpTarget`. */
-	static function comparisonJump(operation:Int, leftNull:Bool, rightNull:Bool, leftReg:Int, rightReg:Int, target:Null<String>):HlInstruction {
+	static function comparisonJump(operation:Int, leftNull:Bool, rightNull:Bool, leftReg:Int, rightReg:Int,
+			target:Null<String>):HlInstruction {
 		var label = target == null ? "" : target;
 		if (operation == 2 && (leftNull || rightNull))
 			return HlInstruction.JumpNull(leftNull ? rightReg : leftReg, label);
@@ -1555,7 +1699,8 @@ class HlLower {
 			default: throw "Not a comparison jump";
 		};
 
-	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool, registers:Map<Int, Int>,
+	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool,
+			registers:Map<Int, Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
 		var destination = defineRegister(output, registers, registerTypes);
 		var leftReg = requireRegister(left, registers),
@@ -1584,7 +1729,8 @@ class HlLower {
 	 * created when the module loads, or, for a literal a patch introduces, when the patch is applied; evaluating it
 	 * allocates nothing.
 	 */
-	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void
+	function lowerStringLiteral(destination:Int, value:String, registerTypes:Array<Int>,
+			instructions:Array<HlInstruction>):Void
 		instructions.push(HlInstruction.GlobalGet(destination, internStringLiteral(value)));
 
 	var enumConstantUses = 0;
@@ -1594,7 +1740,8 @@ class HlLower {
 	 * every later evaluation is a global load. Making it on first use needs no initialization order, and a global a patch
 	 * adds simply starts out null.
 	 */
-	function lowerEnumConstant(destination:Int, typeName:String, constructor:Int, instructions:Array<HlInstruction>):Void {
+	function lowerEnumConstant(destination:Int, typeName:String, constructor:Int,
+			instructions:Array<HlInstruction>):Void {
 		var global = internEnumValue(typeName, constructor),
 			id = enumConstantUses++,
 			make = "__enum_make_" + id,
@@ -1629,10 +1776,14 @@ class HlLower {
 	 */
 	static function keepsArrayBounds(instruction:IrInstruction):Bool
 		return switch instruction {
-			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _), ToDyn(_, _),
-				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), Add(_, _, _), Sub(_, _, _), Mul(_, _, _), BitAnd(_, _, _),
-				BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
-				Equal(_, _, _), FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _), Phi(_, _): true;
+			case ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_),
+				TypeValue(_, _), ToDyn(_, _),
+				IntToFloat(_, _), IntToInt64(_, _), FloatToInt(_, _), FloatToFloat(_, _), Add(_, _, _), Sub(_, _, _),
+				Mul(_, _, _), BitAnd(_, _, _),
+				BitXor(_, _, _), BitOr(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _),
+				Less(_, _, _), LessEqual(_, _, _),
+				Equal(_, _, _), FieldGet(_, _, _), ArrayGet(_, _, _), ArraySet(_, _, _), ArraySize(_, _),
+				Phi(_, _): true;
 			default: false;
 		};
 
@@ -1651,7 +1802,8 @@ class HlLower {
 	 * where the write lands past the logical end instead of extending the array. Reads always re-test after a call,
 	 * so reading a removed element still raises.
 	 */
-	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, writes:Bool, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, writes:Bool,
+			instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>, access:(Int, Int) -> HlInstruction):Void {
 		var elementShift = rawArrayShift(array.type);
 		if (elementShift == null)
@@ -1668,7 +1820,8 @@ class HlLower {
 			instructions.push(HlInstruction.ArraySize(size, arrayRegister));
 			instructions.push(HlInstruction.JumpUnsignedLess(indexRegister, size, inRange));
 			instructions.push(HlInstruction.Label(outOfRange));
-			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(array.type, operation)), arrayRegister, indexRegister));
+			instructions.push(HlInstruction.Call2(unused, requireFunction(rawArrayNativeName(array.type, operation)),
+				arrayRegister, indexRegister));
 			instructions.push(HlInstruction.Label(inRange));
 			provenInRange.set(key, true);
 		}
@@ -1691,7 +1844,8 @@ class HlLower {
 	 * so this follows both 32- and 64-bit HashLink layouts without embedding the compiler host's pointer size.
 	 * The source object stays rooted; no interior reference is retained across a fast-path call.
 	 */
-	function runtimeFieldReference(object:Int, pointerSlots:Int, intSlots:Int, type:IrType, instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
+	function runtimeFieldReference(object:Int, pointerSlots:Int, intSlots:Int, type:IrType,
+			instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
 		var pointers = temporaryRegisterType(internReference(IrType.RawPtr), registerTypes);
 		var offset = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.UnsafeCast(pointers, object));
@@ -1707,7 +1861,8 @@ class HlLower {
 	}
 
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
-	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>,
+			instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>):Bool {
 		if (compiler.ir.IrScalarWordBits.matches(name)) {
 			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name, arguments[0].type, output.type))
@@ -1715,11 +1870,13 @@ class HlLower {
 			var scalar = name == compiler.ir.IrScalarWordBits.PACK ? arguments[0].type : output.type;
 			if (compiler.ir.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
 				throw "HashLink callbacks belong in the reference lane";
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+				requireRegister(arguments[0], registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
-			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+				requireRegister(arguments[0], registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrReferenceIdentity.NAME) {
@@ -1753,18 +1910,22 @@ class HlLower {
 			return true;
 		}
 		if (name == compiler.ir.IrHlScalarRef.ADDRESS) {
-			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			instructions.push(HlInstruction.Ref(defineRegister(output, registers, registerTypes),
+				requireRegister(arguments[0], registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrHlScalarRef.LOAD) {
-			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes), requireRegister(arguments[0], registers)));
+			instructions.push(HlInstruction.Unref(defineRegister(output, registers, registerTypes),
+				requireRegister(arguments[0], registers)));
 			return true;
 		}
 		if (name == compiler.ir.IrHlScalarRef.STORE) {
-			instructions.push(HlInstruction.Setref(requireRegister(arguments[0], registers), requireRegister(arguments[1], registers)));
+			instructions.push(HlInstruction.Setref(requireRegister(arguments[0], registers),
+				requireRegister(arguments[1], registers)));
 			return true;
 		}
-		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64" || name == "__array_push_bool"
+		var push = name == "__array_push_i32" || name == "__array_push_i64" || name == "__array_push_f64"
+			|| name == "__array_push_bool"
 			|| name == "__array_push_bytes" || name == "__array_push_ref";
 		var get = name == "__bytes_get", set = name == "__bytes_set";
 		if (!push && !get && !set)
@@ -1806,7 +1967,8 @@ class HlLower {
 			var dataRef = runtimeFieldReference(args[0], 1, 0, IrType.RawPtr, instructions, registerTypes);
 			var data = temporaryRegister(IrType.RawPtr, registerTypes);
 			instructions.push(HlInstruction.Unref(data, dataRef));
-			instructions.push(get ? HlInstruction.GetI8(destination, data, args[1]) : HlInstruction.SetI8(data, args[1], args[2]));
+			instructions.push(get ? HlInstruction.GetI8(destination, data, args[1]) : HlInstruction.SetI8(data, args[1],
+				args[2]));
 		}
 		instructions.push(HlInstruction.Jump(done));
 		instructions.push(HlInstruction.Label(slow));
@@ -1832,14 +1994,16 @@ class HlLower {
 
 	static function unsupportedCDispatchArgument(type:IrType):Bool
 		return switch type {
-			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes, IrType.Abstract("realtime_bytes"),
+			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
+				IrType.Abstract("realtime_bytes"),
 				IrType.Abstract("native_pointer"), IrType.Abstract("native_callback"): false;
 			default: true;
 		};
 
 	static function unsupportedCDispatchResult(type:IrType):Bool
 		return switch type {
-			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes, IrType.Abstract("native_pointer"),
+			case I32, I64, IrType.Bool, F32, F64, IrType.Bytes, IrType.RawPtr, IrType.ManagedBytes,
+				IrType.Abstract("native_pointer"),
 				IrType.Abstract("realtime_bytes"): false;
 			default: true;
 		};
@@ -2049,7 +2213,8 @@ class HlLower {
 	 * the signature spells out every field of an object it reaches, through bases, fields, nullables and functions
 	 * (`append_type` in module.c), so reserved slots there would not match the library's declared signature.
 	 */
-	public static function nativeVisibleObjects(objects:Array<IrObject>, natives:Array<Array<IrNative>>):Map<String, Bool> {
+	public static function nativeVisibleObjects(objects:Array<IrObject>,
+			natives:Array<Array<IrNative>>):Map<String, Bool> {
 		var byName:Map<String, IrObject> = [],
 			visible:Map<String, Bool> = [],
 			pending:Array<IrType> = [];
@@ -2176,12 +2341,10 @@ class HlLower {
 				inherited.set(name, true);
 			baseName = base.base == null ? "" : Std.string(base.base);
 		}
-		return [
-			for (name in closeInterfaces(object.interfaces))
-				// These interfaces describe compiler-selected value operations. Their calls are statically lowered, so
-				// caching an HL virtual on each instance only bloats objects and inline structs without serving dispatch.
-				if (!inherited.exists(name) && !isValueCapability(name)) name
-		];
+		return [for (name in closeInterfaces(object.interfaces))
+		// These interfaces describe compiler-selected value operations. Their calls are statically lowered, so
+		// caching an HL virtual on each instance only bloats objects and inline structs without serving dispatch.
+		if (!inherited.exists(name) && !isValueCapability(name)) name];
 	}
 
 	static function isValueCapability(name:String):Bool

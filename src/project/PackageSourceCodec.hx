@@ -19,7 +19,8 @@ class PackageSourceCodec {
 			gitValue:Dynamic = Reflect.field(raw, "git"),
 			registryValue:Dynamic = Reflect.field(raw, "registry"),
 			haxelibValue:Dynamic = Reflect.field(raw, "haxelib"),
-			count = (pathValue == null ? 0 : 1) + (workspaceValue == null ? 0 : 1) + (gitValue == null ? 0 : 1) + (registryValue == null ? 0 : 1)
+			count = (pathValue == null ? 0 : 1) + (workspaceValue == null ? 0 : 1) + (gitValue == null ? 0 : 1)
+				+ (registryValue == null ? 0 : 1)
 				+ (haxelibValue == null ? 0 : 1);
 		if (count != 1)
 			throw '$path must declare exactly one package source';
@@ -30,8 +31,10 @@ class PackageSourceCodec {
 		if (gitValue != null)
 			return PackageSource.Git(requiredString(gitValue, "git", path), requiredField(raw, "rev", path));
 		if (registryValue != null)
-			return PackageSource.Registry(requiredString(registryValue, "registry", path), name, requiredField(raw, "version", path));
-		return PackageSource.Haxelib(requiredString(haxelibValue, "haxelib", path), requiredField(raw, "version", path));
+			return PackageSource.Registry(requiredString(registryValue, "registry", path), name,
+				requiredField(raw, "version", path));
+		return PackageSource.Haxelib(requiredString(haxelibValue, "haxelib", path),
+			requiredField(raw, "version", path));
 	}
 
 	public static function equal(left:PackageSource, right:PackageSource):Bool
@@ -43,7 +46,8 @@ class PackageSourceCodec {
 				PackageSource.Registry(aRegistry, aName, aVersion),
 				PackageSource.Registry(bRegistry, bName, bVersion)
 			]: aRegistry == bRegistry && aName == bName && aVersion == bVersion;
-			case [PackageSource.Haxelib(aName, aVersion), PackageSource.Haxelib(bName, bVersion)]: aName == bName && aVersion == bVersion;
+			case [PackageSource.Haxelib(aName, aVersion), PackageSource.Haxelib(bName, bVersion)]: aName == bName
+				&& aVersion == bVersion;
 			case _: false;
 		};
 
@@ -51,7 +55,7 @@ class PackageSourceCodec {
 		return requiredString(Reflect.field(raw, field), field, path);
 
 	static function requiredString(value:Dynamic, field:String, path:String):String {
-		if (!Std.isOfType(value, String) || (cast value : String).length == 0)
+		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
 			throw '$path requires a non-empty "$field" string';
 		return cast value;
 	}

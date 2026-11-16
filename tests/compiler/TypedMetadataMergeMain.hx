@@ -15,15 +15,23 @@ import compiler.runtime.CompilerIntrinsics;
  */
 class TypedMetadataMergeMain {
 	static final outcomeSource = "enum Outcome<T> { Success(value:T); Cancelled; }";
-	static final futureSource = "class Future<T> { var outcome:Null<Outcome<T>>; public function new() {} public function finish(result:Outcome<T>):Void { outcome = result; } }";
-	static final promiseSource = "class Promise<T> { public final future:Future<T>; public function new() future = new Future<T>(); public function cancel():Void future.finish(Cancelled); }";
-	static final makerSource = "class Maker { public static function make():Promise<Array<String>> return new Promise<Array<String>>(); }";
+	static final futureSource =
+		"class Future<T> { var outcome:Null<Outcome<T>>; public function new() {} public function finish(result:Outcome<T>):Void { outcome = result; } }";
+	static final promiseSource =
+		"class Promise<T> { public final future:Future<T>; public function new() future = new Future<T>(); public function cancel():Void future.finish(Cancelled); }";
+	static final makerSource =
+		"class Maker { public static function make():Promise<Array<String>> return new Promise<Array<String>>(); }";
 	static final otherSource = "class Other { public static function make():Promise<Int> return new Promise<Int>(); }";
-	static final nodeSource = "class Node { public var width:Int = 1; public var height:Int = 2; public function new() {} }";
-	static final keepSource = "class Keep { public static function width(node:Node):Int return (\\Node.width).get(node); }";
-	static final editSource = "class Edit { public static function sum(node:Node):Int return (\\Node.width).get(node) + (\\Node.height).get(node); }";
-	static final editWithoutHeightSource = "class Edit { public static function sum(node:Node):Int return (\\Node.width).get(node) + 2; }";
-	static final binderSource = "class Binder { public static function bind(promise:Promise<Array<String>>):Void->Void return promise.cancel; }";
+	static final nodeSource =
+		"class Node { public var width:Int = 1; public var height:Int = 2; public function new() {} }";
+	static final keepSource =
+		"class Keep { public static function width(node:Node):Int return (\\Node.width).get(node); }";
+	static final editSource =
+		"class Edit { public static function sum(node:Node):Int return (\\Node.width).get(node) + (\\Node.height).get(node); }";
+	static final editWithoutHeightSource =
+		"class Edit { public static function sum(node:Node):Int return (\\Node.width).get(node) + 2; }";
+	static final binderSource =
+		"class Binder { public static function bind(promise:Promise<Array<String>>):Void->Void return promise.cancel; }";
 	static final mainSource = mainUsing(true, true, false);
 
 	/** `Main` reads a code identity, needs `Dynamic` arithmetic, and uses the modules that are asked for. */
@@ -42,15 +50,19 @@ class TypedMetadataMergeMain {
 		var failures:Array<String> = [];
 		attempt(failures, "second compile without an edit", files -> {});
 		attempt(failures, "after editing the entry module", files -> files.set("Main.hx", mainSource + " "));
-		attempt(failures, "after editing the module that makes the specialization", files -> files.set("Maker.hx", makerSource + " "));
-		attempt(failures, "after editing the module that binds the method", files -> files.set("Binder.hx", binderSource + " "));
+		attempt(failures, "after editing the module that makes the specialization",
+			files -> files.set("Maker.hx", makerSource + " "));
+		attempt(failures, "after editing the module that binds the method",
+			files -> files.set("Binder.hx", binderSource + " "));
 		attempt(failures, "after editing the generic class", files -> files.set("Promise.hx", promiseSource + " "));
 		attempt(failures, "after giving the generic class a method",
 			files -> files.set("Promise.hx",
-				StringTools.replace(promiseSource, "public function cancel()",
-					"public function again():Void future.finish(Cancelled); public function cancel()")));
-		attempt(failures, "after editing a function that shares a key path with an unchanged one", files -> files.set("Edit.hx", editSource + " "));
-		attempt(failures, "after an edited function stops using a key path", files -> files.set("Edit.hx", editWithoutHeightSource));
+			StringTools.replace(promiseSource, "public function cancel()",
+			"public function again():Void future.finish(Cancelled); public function cancel()")));
+		attempt(failures, "after editing a function that shares a key path with an unchanged one",
+			files -> files.set("Edit.hx", editSource + " "));
+		attempt(failures, "after an edited function stops using a key path",
+			files -> files.set("Edit.hx", editWithoutHeightSource));
 		attempt(failures, "after adding a module", files -> {
 			files.set("Extra.hx", "class Extra { public static function value():Int return 1; }");
 			files.set("Main.hx", mainUsing(true, true, true));

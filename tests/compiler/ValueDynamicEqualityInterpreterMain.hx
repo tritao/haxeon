@@ -17,7 +17,8 @@ class ValueDynamicEqualityInterpreterMain {
 			+ '&& new RefItem(1) != new RefItem(1) ? 42 : 1; }';
 		var result = new IrInterpreter(Frontend.compile(source)).run("main");
 		if (result != 42) throw 'interpreter Dynamic value equality returned $result';
-		var ownedSource = 'interface Equatable {} struct OwnedItem implements Equatable { public var value:Int; public var label:String; '
+		var ownedSource =
+			'interface Equatable {} struct OwnedItem implements Equatable { public var value:Int; public var label:String; '
 			+ 'public function new(value:Int) { this.value=value; label="owned"; } '
 			+ 'public function equals(other:OwnedItem):Bool { var same=value%10==other.value%10; '
 			+ 'value=100; label="left"; other.value=200; other.label="right"; return same; } } '
@@ -28,22 +29,26 @@ class ValueDynamicEqualityInterpreterMain {
 			throw "a mutating equality method changed its borrowed Dynamic boxes";
 		var compiler = new compiler.Compiler();
 		compiler.update("Equatable.hx", "interface Equatable {}");
-		compiler.update("Item.hx", "struct Item implements Equatable { public var value:Int; public function new(value:Int) this.value=value%10; }");
-		compiler.update("Main.hx", "function main():Int { var a:Dynamic=new Item(2); var b:Dynamic=new Item(12); return a == b ? 42 : 1; }");
+		compiler.update("Item.hx",
+			"struct Item implements Equatable { public var value:Int; public function new(value:Int) this.value=value%10; }");
+		compiler.update("Main.hx",
+			"function main():Int { var a:Dynamic=new Item(2); var b:Dynamic=new Item(12); return a == b ? 42 : 1; }");
 		if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 42)
 			throw "initial Dynamic equality did not use the declared fields";
 		compiler.update("Item.hx", "struct Item implements Equatable { public var value:Int; public var other:Int; "
 			+ "public function new(value:Int) { this.value=value%10; other=value; } }");
 		if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 1)
 			throw "Dynamic equality retained a stale field list after an incremental layout edit";
-		compiler.update("Item.hx", "struct Item { public var value:Int; public function new(value:Int) this.value=value; }");
+		compiler.update("Item.hx",
+			"struct Item { public var value:Int; public function new(value:Int) this.value=value; }");
 		var rejected = false;
 		try new IrInterpreter(compiler.compile("Main").ir).run("main") catch (error:Dynamic) {
 			if (Std.string(error) != "Struct value does not conform to Equatable") throw error;
 			rejected = true;
 		}
 		if (!rejected) throw "Dynamic equality retained conformance after its removal";
-		compiler.update("Item.hx", "struct Item implements Equatable { public var value:Int; public function new(value:Int) this.value=value; "
+		compiler.update("Item.hx",
+			"struct Item implements Equatable { public var value:Int; public function new(value:Int) this.value=value; "
 			+ "public function equals(other:Item):Bool return value%10==other.value%10; }");
 		if (new IrInterpreter(compiler.compile("Main").ir).run("main") != 42)
 			throw "Dynamic equality did not restore a new declared conformance";

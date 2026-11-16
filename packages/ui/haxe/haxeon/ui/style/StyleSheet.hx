@@ -39,12 +39,11 @@ class StyleSheet {
 		return result;
 	}
 
-	public function clear():Void
-		{
-			rules.resize(0);
-			transitions.resize(0);
-			revision++;
-		}
+	public function clear():Void {
+		rules.resize(0);
+		transitions.resize(0);
+		revision++;
+	}
 
 	public function isEmpty():Bool
 		return rules.length == 0;

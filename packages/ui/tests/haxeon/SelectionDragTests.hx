@@ -58,8 +58,8 @@ class SelectionDragTests {
 		// Starting at insertion zero and returning there is still an empty range.
 		editor.beginPointerSelection(editor.hitTest(firstX, firstY), 1, false);
 		editor.extendPointerSelection(editor.hitTestSelectionDrag(firstX, -1.0, 0.0));
-		if (editor.selectionStart != editor.selectionEnd ||
-			editor.layout.selectionRects(editor.anchorPosition(), editor.focusPosition()).length != 0)
+		if (editor.selectionStart != editor.selectionEnd
+			|| editor.layout.selectionRects(editor.anchorPosition(), editor.focusPosition()).length != 0)
 			throw "An empty drag acquired an artificial character selection";
 		editor.dispose();
 	}
@@ -79,8 +79,9 @@ class SelectionDragTests {
 				var start = offset == 7 ? 0 : offset;
 				var end = offset == 7 ? 8 : (offset == 8 ? 9 : 24);
 				if (code.selectionStart != start || code.selectionEnd != end)
-					throw "Code double-click crossed a dot boundary: glyph " + offset + " fraction " + fraction +
-						" hit " + hit.offset + "/" + hit.affinity + " selected " + code.selectionStart + ":" + code.selectionEnd;
+					throw "Code double-click crossed a dot boundary: glyph " + offset + " fraction " + fraction
+						+ " hit " + hit.offset + "/" + hit.affinity + " selected " + code.selectionStart + ":"
+						+ code.selectionEnd;
 			}
 		}
 		code.beginPointerSelection(new TextPosition(2, 2), 2, false);
@@ -116,7 +117,8 @@ class SelectionDragTests {
 			semanticDrag.extendPointerSelection(semanticDrag.hitTestSelectionDrag(x, 0.0, 0.0));
 			if (semanticDrag.selectionFocus != 0)
 				throw "drag at document top depended on horizontal position";
-			semanticDrag.extendPointerSelection(semanticDrag.hitTestSelectionDrag(x, semanticDrag.layout.measure().height + 1.0, 0.0));
+			semanticDrag.extendPointerSelection(semanticDrag.hitTestSelectionDrag(x,
+				semanticDrag.layout.measure().height + 1.0, 0.0));
 			if (semanticDrag.selectionAnchor != 15 || semanticDrag.selectionFocus != Utf8Text.length(semanticDrag.text))
 				throw "drag below document depended on horizontal position";
 			var insideY = semanticDrag.layout.measure().height * 0.5;
@@ -125,20 +127,25 @@ class SelectionDragTests {
 		}
 		semanticDrag.beginPointerSelection(new TextPosition(2, 0), 2, false);
 		semanticDrag.extendPointerSelection(new TextPosition(8, 0));
-		if (semanticDrag.selectionStart != 0 || semanticDrag.selectionEnd != 12) throw "word drag lost whole-word selection";
+		if (semanticDrag.selectionStart != 0
+			|| semanticDrag.selectionEnd != 12) throw "word drag lost whole-word selection";
 		semanticDrag.beginPointerSelection(new TextPosition(8, 0), 2, false);
 		semanticDrag.extendPointerSelection(new TextPosition(2, 0));
-		if (semanticDrag.selectionAnchor != 12 || semanticDrag.selectionFocus != 0) throw "backward word drag lost its anchor";
+		if (semanticDrag.selectionAnchor != 12
+			|| semanticDrag.selectionFocus != 0) throw "backward word drag lost its anchor";
 		semanticDrag.beginPointerSelection(new TextPosition(2, 0), 3, false);
 		semanticDrag.extendPointerSelection(new TextPosition(15, 0));
-		if (semanticDrag.selectionStart != 0 || semanticDrag.selectionEnd != 26) throw "line drag lost whole-line selection";
+		if (semanticDrag.selectionStart != 0
+			|| semanticDrag.selectionEnd != 26) throw "line drag lost whole-line selection";
 		semanticDrag.placeCaret(3, false);
 		semanticDrag.beginPointerSelection(new TextPosition(8, 0), 1, true);
 		semanticDrag.extendPointerSelection(new TextPosition(10, 0));
-		if (semanticDrag.selectionAnchor != 3 || semanticDrag.selectionFocus != 10) throw "shift drag changed its original anchor";
+		if (semanticDrag.selectionAnchor != 3
+			|| semanticDrag.selectionFocus != 10) throw "shift drag changed its original anchor";
 		semanticDrag.dispose();
 		var edgeStyle = new LayoutStyle();
-		edgeStyle.width = LayoutAxis.fixed(200.0); edgeStyle.height = LayoutAxis.fixed(64.0);
+		edgeStyle.width = LayoutAxis.fixed(200.0);
+		edgeStyle.height = LayoutAxis.fixed(64.0);
 		var edgeText = [for (line in 0...80) "row " + line].join("\n");
 		var edgeArea = new TextArea("selection-edge-scroll", edgeText, null, edgeStyle);
 		var edgeFrame = new LayoutFrame(200.0, 64.0);
@@ -192,7 +199,8 @@ class SelectionDragTests {
 		#if (mac || ios)
 		edgeEditor.placeCaret(2, false);
 		context.key(UiEventKind.KeyDown, UiKey.Right, UiModifier.Super | UiModifier.Shift);
-		if (edgeEditor.selectionAnchor != 2 || edgeEditor.selectionFocus != 5) throw "Cmd+Shift+Right did not select to line end";
+		if (edgeEditor.selectionAnchor != 2
+			|| edgeEditor.selectionFocus != 5) throw "Cmd+Shift+Right did not select to line end";
 		context.key(UiEventKind.KeyDown, UiKey.Left, UiModifier.Super);
 		if (edgeEditor.selectionFocus != 0) throw "Cmd+Left did not move to line start";
 		#end

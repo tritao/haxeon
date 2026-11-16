@@ -169,7 +169,9 @@ class UiExplorer {
 			state.gestures.tweenValue = value;
 		});
 		springController = new SpringController(state.gestures.springValue, 180.0, 24.0, 1.0, 0.001,
-			context.animations, function(value) { state.gestures.springValue = value; });
+			context.animations, function(value) {
+				state.gestures.springValue = value;
+			});
 		demoImage = createDemoImage(160, 96);
 		demoOverlayImage = createOverlayImage(64);
 		demoNineSliceImage = createNineSliceImage(48);
@@ -232,8 +234,8 @@ class UiExplorer {
 	public function attachInput(events:EventPump, window:Handle):NativeInputAdapter {
 		nativeWindow = window;
 		webViewSupported = supportsCapability(Capabilities.webview());
-		var accessibilitySource = nativeSurface == null || !supportsNativeAccessibility() ? window :
-			new Handle(nativeSurface.nativeHandle().rawValue());
+		var accessibilitySource = nativeSurface == null
+			|| !supportsNativeAccessibility() ? window : new Handle(nativeSurface.nativeHandle().rawValue());
 		var input = new NativeInputAdapter(context, window, accessibilitySource);
 		input.attach(events);
 		return input;
@@ -248,8 +250,7 @@ class UiExplorer {
 
 	public function setViewport(width:Float, height:Float, framebufferWidth:Int,
 			framebufferHeight:Int, pixelScale:Float):Void {
-		if (width <= 0.0 || height <= 0.0 || framebufferWidth <= 0 || framebufferHeight <= 0 ||
-			pixelScale <= 0.0)
+		if (width <= 0.0 || height <= 0.0 || framebufferWidth <= 0 || framebufferHeight <= 0 || pixelScale <= 0.0)
 			return;
 		this.width = width;
 		this.height = height;
@@ -271,8 +272,8 @@ class UiExplorer {
 	public function render(surface:SurfaceHandle, timeSeconds:Float):Void {
 		diagnosticStage = 1;
 		frame.setViewport(width, height);
-		frame.deltaSeconds = previousTime < 0.0 ? 1.0 / TARGET_FPS :
-			Math.max(0.0, Math.min(0.1, timeSeconds - previousTime));
+		frame.deltaSeconds = previousTime < 0.0 ? 1.0 / TARGET_FPS : Math.max(0.0,
+			Math.min(0.1, timeSeconds - previousTime));
 		previousTime = timeSeconds;
 		frameInfo.set(width, height, framebufferWidth, framebufferHeight, pixelScale);
 		diagnosticStage = 2;
@@ -373,8 +374,8 @@ class UiExplorer {
 	}
 
 	function syncWebView():Void {
-		var shouldShow = state.selectedPage == "webview" && !state.inspector.open &&
-			!state.overlays.dialogOpen && !state.overlays.popupOpen && !state.overlays.menuOpen;
+		var shouldShow = state.selectedPage == "webview" && !state.inspector.open && !state.overlays.dialogOpen
+			&& !state.overlays.popupOpen && !state.overlays.menuOpen;
 		if (!shouldShow) {
 			setWebViewVisible(false);
 			return;
@@ -393,18 +394,16 @@ class UiExplorer {
 				record.clipBounds.y + record.clipBounds.height);
 			var viewWidth = Std.int(Math.max(0.0, right - left));
 			var viewHeight = Std.int(Math.max(0.0, bottom - top));
-			var fullyVisible = Math.abs(left - record.bounds.x) < 0.5 &&
-				Math.abs(top - record.bounds.y) < 0.5 &&
-				Math.abs(right - record.bounds.x - record.bounds.width) < 0.5 &&
-				Math.abs(bottom - record.bounds.y - record.bounds.height) < 0.5;
+			var fullyVisible = Math.abs(left - record.bounds.x) < 0.5 && Math.abs(top - record.bounds.y) < 0.5
+				&& Math.abs(right - record.bounds.x - record.bounds.width) < 0.5
+				&& Math.abs(bottom - record.bounds.y - record.bounds.height) < 0.5;
 			if (!fullyVisible || viewWidth < 2 || viewHeight < 2) {
 				setWebViewVisible(false);
 				return;
 			}
 			var viewX = Std.int(left);
 			var viewY = Std.int(top);
-			if (viewX != webViewX || viewY != webViewY || viewWidth != webViewWidth ||
-					viewHeight != webViewHeight) {
+			if (viewX != webViewX || viewY != webViewY || viewWidth != webViewWidth || viewHeight != webViewHeight) {
 				webView.setBounds(viewX, viewY, viewWidth, viewHeight);
 				webViewX = viewX;
 				webViewY = viewY;
@@ -448,11 +447,15 @@ class UiExplorer {
 				var sunX = x - Std.int(width * 0.72);
 				var sunY = y - Std.int(height * 0.28);
 				if (sunX * sunX + sunY * sunY < 13 * 13) {
-					red = 255; green = 190; blue = 72;
+					red = 255;
+					green = 190;
+					blue = 72;
 				}
 				var offset = (y * width + x) * 4;
-				pixels.set(offset, red); pixels.set(offset + 1, green);
-				pixels.set(offset + 2, blue); pixels.set(offset + 3, 255);
+				pixels.set(offset, red);
+				pixels.set(offset + 1, green);
+				pixels.set(offset + 2, blue);
+				pixels.set(offset + 3, 255);
 			}
 		return Image.create(width, height, ImageFormat.Rgba8, pixels);
 	}
@@ -466,8 +469,10 @@ class UiExplorer {
 				var dy = y - center;
 				var inside = dx * dx + dy * dy <= center * center;
 				var offset = (y * size + x) * 4;
-				pixels.set(offset, inside ? 132 : 0); pixels.set(offset + 1, inside ? 92 : 0);
-				pixels.set(offset + 2, inside ? 242 : 0); pixels.set(offset + 3, inside ? 255 : 0);
+				pixels.set(offset, inside ? 132 : 0);
+				pixels.set(offset + 1, inside ? 92 : 0);
+				pixels.set(offset + 2, inside ? 242 : 0);
+				pixels.set(offset + 3, inside ? 255 : 0);
 			}
 		return Image.create(size, size, ImageFormat.Rgba8, pixels);
 	}
@@ -543,8 +548,7 @@ class UiExplorer {
 		if (context.root != null)
 			context.root.walk(function(node) {
 				var semantics:Semantics = cast node.semantics;
-				if (result != null || semantics == null ||
-					semantics.role != AccessibilityRole.ComboBox)
+				if (result != null || semantics == null || semantics.role != AccessibilityRole.ComboBox)
 					return;
 				result = node.id;
 			});
@@ -558,8 +562,8 @@ class UiExplorer {
 				if (result != null || node.semantics == null)
 					return;
 				var semantics:Semantics = cast node.semantics;
-				if (semantics.role == AccessibilityRole.ComboBox &&
-					semantics.states.contains(AccessibilityState.Expanded))
+				if (semantics.role == AccessibilityRole.ComboBox
+					&& semantics.states.contains(AccessibilityState.Expanded))
 					result = node.id;
 			});
 		return result;
@@ -578,22 +582,18 @@ class UiExplorer {
 		var metrics = latestFrameMetrics();
 		if (metrics == null)
 			return;
-		Sys.println('nativekit_ui_showcase style_frame=${metrics.frameNumber}' +
-			' nodes=${metrics.nodeCount}' +
-			' style_resolutions=${metrics.styleResolutions}' +
-			' style_changed=${metrics.styleChangedNodes}' +
-			' style_unchanged=${metrics.styleUnchangedNodes}' +
-			' invalidated=layout:${metrics.layoutInvalidatedNodes},text:${metrics.textLayoutInvalidatedNodes},' +
-			'paint:${metrics.paintInvalidatedNodes},composite:${metrics.compositeInvalidatedNodes},' +
-			'semantics:${metrics.semanticsInvalidatedNodes}' +
-			' paint_work=${metrics.paintedNodes} rebuilt,${metrics.paintSkippedNodes} skipped,${metrics.emptyPaintNodes} empty' +
-			' cache_hits=${metrics.styleCacheHits}' +
-			' cache_misses=${metrics.styleCacheMisses}' +
-			' cache_entries=${metrics.cachedStyleCount}' +
-			' submit_mode=${metrics.reusedSubmission ? "reused" : "full"}' +
-			' submit_ms=${milliseconds(metrics.submitSeconds)}' +
-			' render_ms=${milliseconds(metrics.renderSeconds)}' +
-			' total_ms=${milliseconds(metrics.totalSeconds)}');
+		Sys.println('nativekit_ui_showcase style_frame=${metrics.frameNumber}' + ' nodes=${metrics.nodeCount}'
+			+ ' style_resolutions=${metrics.styleResolutions}' + ' style_changed=${metrics.styleChangedNodes}'
+			+ ' style_unchanged=${metrics.styleUnchangedNodes}'
+			+ ' invalidated=layout:${metrics.layoutInvalidatedNodes},text:${metrics.textLayoutInvalidatedNodes},'
+			+ 'paint:${metrics.paintInvalidatedNodes},composite:${metrics.compositeInvalidatedNodes},'
+			+ 'semantics:${metrics.semanticsInvalidatedNodes}'
+			+ ' paint_work=${metrics.paintedNodes} rebuilt,${metrics.paintSkippedNodes} skipped,${metrics.emptyPaintNodes} empty'
+			+ ' cache_hits=${metrics.styleCacheHits}' + ' cache_misses=${metrics.styleCacheMisses}'
+			+ ' cache_entries=${metrics.cachedStyleCount}'
+			+ ' submit_mode=${metrics.reusedSubmission ? "reused" : "full"}'
+			+ ' submit_ms=${milliseconds(metrics.submitSeconds)}' + ' render_ms=${milliseconds(metrics.renderSeconds)}'
+			+ ' total_ms=${milliseconds(metrics.totalSeconds)}');
 	}
 
 	static function milliseconds(seconds:Float):String
@@ -603,8 +603,10 @@ class UiExplorer {
 		var rootStyle = new LayoutStyle();
 		rootStyle.width = LayoutAxis.grow();
 		rootStyle.height = LayoutAxis.grow();
-		var layers:Array<StackChild> = [new StackChild("explorer-shell", buildShell()),
-			new StackChild("window-resize-zones", buildWindowResizeZones(), 0.0, 0.0, -1)];
+		var layers:Array<StackChild> = [
+			new StackChild("explorer-shell", buildShell()),
+			new StackChild("window-resize-zones", buildWindowResizeZones(), 0.0, 0.0, -1)
+		];
 		OverlayHost.appendLayers(this, layers);
 		InspectionOverlay.addHighlight(this, layers);
 		return new Stack("showcase-root", layers, rootStyle);
@@ -710,10 +712,9 @@ class UiExplorer {
 	function textCommand(label:String, key:Int):Bool {
 		if (!focusTextEditor(label))
 			return false;
-		var modifiers = #if (mac || ios)
-			UiModifier.Super;
+		var modifiers = #if (mac || ios) UiModifier.Super;
 		#else
-			UiModifier.Control;
+		UiModifier.Control;
 		#end
 		context.key(UiEventKind.KeyDown, key, modifiers);
 		return true;

@@ -28,7 +28,8 @@ class TestDriver {
 				Sys.println('${entry.suite}\t${entry.name}');
 		}
 		if (!options.listOnly) {
-			failures += runner.runHaxeMains(namedCases.filter(entry -> matches(options, entry.suite, entry.name)), options.jobs);
+			failures += runner.runHaxeMains(namedCases.filter(entry -> matches(options, entry.suite, entry.name)),
+				options.jobs);
 			printTiming("named cases", phaseStarted);
 		}
 

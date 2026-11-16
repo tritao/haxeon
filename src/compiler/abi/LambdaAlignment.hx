@@ -82,7 +82,8 @@ class LambdaAlignment {
 		if (previous == null)
 			return {steps: steps, renamed: renamed, refused: names};
 		var current = [for (name => print in previous) name => print], before = groups(current);
-		var beforePlaces = places == null ? null : [for (name => place in places.before) name => place], lineMaps:Map<String, Map<Int, Int>> = [];
+		var beforePlaces = places == null ? null : [for (name => place in places.before) name => place],
+			lineMaps:Map<String, Map<Int, Int>> = [];
 		for (group in names) {
 			var old = before.get(group), now = after.get(group);
 			if (old == null)
@@ -93,7 +94,8 @@ class LambdaAlignment {
 				continue;
 			}
 			var known = beforePlaces, given = places;
-			var aligned = alignGroup(old, now, known == null || given == null ? null : (ordinal:Int) -> followEdit(group, known, given, lineMaps, ordinal));
+			var aligned = alignGroup(old, now, known == null
+				|| given == null ? null : (ordinal:Int) -> followEdit(group, known, given, lineMaps, ordinal));
 			if (aligned == null) {
 				refused.push(group);
 				continue;
@@ -118,7 +120,8 @@ class LambdaAlignment {
 	 * code started on, carried through the diff, is the line the new lambda starts on, and among the group's lambdas that
 	 * start on one line they keep their order. Null when the diff does not carry the line over or no lambda starts there.
 	 */
-	static function followEdit(group:String, beforePlaces:Map<String, String>, places:LambdaPlaces, lineMaps:Map<String, Map<Int, Int>>,
+	static function followEdit(group:String, beforePlaces:Map<String, String>, places:LambdaPlaces,
+			lineMaps:Map<String, Map<Int, Int>>,
 			ordinal:Int):Null<Int> {
 		var from = PositionalName.parsePlace(beforePlaces.get(member(group, ordinal)));
 		if (from == null)
@@ -136,14 +139,16 @@ class LambdaAlignment {
 		var rank = 0;
 		for (name => text in beforePlaces) {
 			var other = PositionalName.parsePlace(text);
-			if (other != null && PositionalName.is(name) && PositionalName.group(name) == group && other.path == from.path && other.line == from.line
+			if (other != null && PositionalName.is(name) && PositionalName.group(name) == group
+				&& other.path == from.path && other.line == from.line
 				&& other.offset < from.offset)
 				rank++;
 		}
 		var candidates:Array<{ordinal:Int, offset:Int}> = [];
 		for (name => text in places.after) {
 			var other = PositionalName.parsePlace(text);
-			if (other != null && PositionalName.is(name) && PositionalName.group(name) == group && other.path == from.path && other.line == line)
+			if (other != null && PositionalName.is(name) && PositionalName.group(name) == group
+				&& other.path == from.path && other.line == line)
 				candidates.push({ordinal: PositionalName.ordinal(name), offset: other.offset});
 		}
 		candidates.sort((a, b) -> a.offset - b.offset);
@@ -151,8 +156,12 @@ class LambdaAlignment {
 	}
 
 	/** The places of the lambdas of `previous` and `next`, when both builds recorded them. */
-	public static function placesOf(previous:RuntimeAbi.RuntimeAbiDescriptor, next:RuntimeAbi.RuntimeAbiDescriptor):Null<LambdaPlaces> {
-		var before = previous.places, after = next.places, beforeSources = previous.sources, afterSources = next.sources;
+	public static function placesOf(previous:RuntimeAbi.RuntimeAbiDescriptor,
+			next:RuntimeAbi.RuntimeAbiDescriptor):Null<LambdaPlaces> {
+		var before = previous.places,
+			after = next.places,
+			beforeSources = previous.sources,
+			afterSources = next.sources;
 		return before == null || after == null || beforeSources == null || afterSources == null ? null : {
 			before: before,
 			after: after,
@@ -182,7 +191,8 @@ class LambdaAlignment {
 	}
 
 	/** `abi` with the running module's names renamed as `steps` say. */
-	public static function renameAbi(abi:RuntimeAbi.RuntimeAbiDescriptor, steps:Array<NameRewrite>):RuntimeAbi.RuntimeAbiDescriptor {
+	public static function renameAbi(abi:RuntimeAbi.RuntimeAbiDescriptor,
+			steps:Array<NameRewrite>):RuntimeAbi.RuntimeAbiDescriptor {
 		var functions = abi.functions, objects = abi.objects, positional = abi.positional, places = abi.places;
 		for (step in steps) {
 			functions = step.entries(functions);
@@ -229,18 +239,22 @@ class LambdaAlignment {
 	 * The running ordinal each new ordinal stands for (`mapping`, from running to new), and the running ordinals whose names
 	 * the new build gives to another function (`retired`); null when the group cannot be matched.
 	 */
-	public static function alignGroup(before:Array<Null<String>>, after:Array<Null<String>>, ?followEdit:Int->Null<Int>):Null<GroupAlignment> {
+	public static function alignGroup(before:Array<Null<String>>, after:Array<Null<String>>,
+			?followEdit:Int->Null<Int>):Null<GroupAlignment> {
 		var mapping = matchSameCode(before, after);
 		var matchedNew:Map<Int, Bool> = [for (_ => to in mapping) to => true];
-		var unmatchedOld = [for (ordinal in 0...before.length) if (before[ordinal] != null && !mapping.exists(ordinal)) ordinal],
-			unmatchedNew = [for (ordinal in 0...after.length) if (after[ordinal] != null && !matchedNew.exists(ordinal)) ordinal];
+		var unmatchedOld =
+			[for (ordinal in 0...before.length) if (before[ordinal] != null && !mapping.exists(ordinal)) ordinal],
+			unmatchedNew =
+				[for (ordinal in 0...after.length) if (after[ordinal] != null && !matchedNew.exists(ordinal)) ordinal];
 		// The edit's text diff tells which edited lambda each running one became. The fingerprints keep it honest: a pair is
 		// taken only when neither's code appears elsewhere in its group, where a copy could be taken for an edit.
 		if (followEdit != null && unmatchedOld.length > 0 && unmatchedNew.length > 0) {
 			var open:Map<Int, Bool> = [for (ordinal in unmatchedNew) ordinal => true];
 			for (from in unmatchedOld) {
 				var to = followEdit(from);
-				if (to != null && open.exists(to) && occurrences(before, before[from]) == 1 && occurrences(after, after[to]) == 1) {
+				if (to != null && open.exists(to) && occurrences(before, before[from]) == 1
+					&& occurrences(after, after[to]) == 1) {
 					mapping.set(from, to);
 					open.remove(to);
 				}
@@ -248,12 +262,14 @@ class LambdaAlignment {
 			unmatchedOld = [for (ordinal in unmatchedOld) if (!mapping.exists(ordinal)) ordinal];
 			unmatchedNew = [for (ordinal in unmatchedNew) if (open.exists(ordinal)) ordinal];
 		}
-		if (unmatchedOld.length > 0 && unmatchedNew.length > 0 && !pairEdits(before, after, mapping, unmatchedOld, unmatchedNew))
+		if (unmatchedOld.length > 0 && unmatchedNew.length > 0
+			&& !pairEdits(before, after, mapping, unmatchedOld, unmatchedNew))
 			return null;
 		// A running sibling nothing stands for keeps its name, unless the new build gives that name to another function.
 		var retired = [
 			for (ordinal in 0...before.length)
-				if (before[ordinal] != null && !mapping.exists(ordinal) && ordinal < after.length && after[ordinal] != null) ordinal
+				if (before[ordinal] != null && !mapping.exists(ordinal) && ordinal < after.length
+				&& after[ordinal] != null) ordinal
 		];
 		return {mapping: mapping, retired: retired};
 	}
@@ -288,9 +304,12 @@ class LambdaAlignment {
 	 * Pairs the unmatched siblings on both sides as edits, adding them to `mapping`: only one running and one new sibling between
 	 * the same matched neighbours, neither of whose code appears elsewhere in its group. False when they cannot be told apart.
 	 */
-	static function pairEdits(before:Array<Null<String>>, after:Array<Null<String>>, mapping:Map<Int, Int>, unmatchedOld:Array<Int>,
+	static function pairEdits(before:Array<Null<String>>, after:Array<Null<String>>, mapping:Map<Int, Int>,
+			unmatchedOld:Array<Int>,
 			unmatchedNew:Array<Int>):Bool {
-		var pairs = [for (from => to in mapping) {from: from, to: to}];
+		var pairs = [for (from => to in mapping) {
+			from:from, to:to
+		}];
 		pairs.sort((a, b) -> a.from - b.from);
 		for (index in 1...pairs.length)
 			if (pairs[index].to < pairs[index - 1].to)
@@ -303,7 +322,7 @@ class LambdaAlignment {
 			return count;
 		}
 		var gaps:Map<Int, {olds:Array<Int>, news:Array<Int>}> = [];
-		function at(index:Int):{olds:Array<Int>, news:Array<Int>} {
+		function at(index:Int): {olds: Array<Int>, news: Array<Int>} {
 			var entry = gaps.get(index);
 			if (entry == null) {
 				entry = {olds: [], news: []};

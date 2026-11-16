@@ -45,7 +45,8 @@ class NativeKitHttpEventTests {
 						if (header.name.toLowerCase() == "x-relay-state") state = header.value;
 					}
 					observed.push('copied headers=$token/$state body="${response.body.toString()}"');
-					copiedValuesOk = status == Result.Ok && response.statusCode == 201 && token == "alpha" && state == "beta"
+					copiedValuesOk = status == Result.Ok && response.statusCode == 201 && token == "alpha"
+						&& state == "beta"
 						&& response.body.toString() == "ticket-ok";
 					sawComplete = true;
 				case _:

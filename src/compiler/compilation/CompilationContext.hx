@@ -70,14 +70,16 @@ class CompilationContext {
 		moduleId = owner.moduleId;
 		genericSpecializations = owner.genericSpecializations;
 		rootModules = owner.rootModules;
-		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines, owner.sourceLoader, buildSemanticModels,
+		moduleAnalyzer = new ModuleAnalyzer(modules, owner.types, owner.natives, owner.compiledOnce, owner.defines,
+			owner.sourceLoader, buildSemanticModels,
 			owner.declarationOwners);
 	}
 
 	public function writableState(name:String, rollback:Map<String, ModuleState>):ModuleState
 		return owner.writableState(name, rollback);
 
-	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>, structural:Map<String, Bool>):Void {
+	public function parse(state:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>,
+			structural:Map<String, Bool>):Void {
 		var startedAt = Sys.time() * 1000.0, before = AllocationMeter.sample();
 		moduleAnalyzer.parse(state, entry, body, signatures, structural);
 		var after = AllocationMeter.sample();
@@ -163,9 +165,10 @@ class CompilationContext {
 			return null;
 		if (option != "1")
 			throw "haxeon-instrument must be 0 or 1";
-		return
-			new compiler.ir.IrInstrumentation.IrInstrumentationScope(compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-include")),
-			compiler.ir.IrInstrumentation.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-exclude")));
+		return new compiler.ir.IrInstrumentation.IrInstrumentationScope(compiler.ir.IrInstrumentation
+			.IrInstrumentationScope.patterns(owner.defines.get("haxeon-instrument-include")),
+			compiler.ir.IrInstrumentation.IrInstrumentationScope
+			.patterns(owner.defines.get("haxeon-instrument-exclude")));
 	}
 
 	public function irCNatives():Array<IrCNative>

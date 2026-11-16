@@ -40,8 +40,7 @@ struct Transform2D implements Hashable implements Diffable {
 
 	/** Returns this transform followed by `other` in column-vector notation. */
 	public function multiply(other:Transform2D):Transform2D {
-		return new Transform2D(
-			a * other.a + c * other.b,
+		return new Transform2D(a * other.a + c * other.b,
 			b * other.a + d * other.b,
 			a * other.c + c * other.d,
 			b * other.c + d * other.d,
@@ -58,9 +57,8 @@ struct Transform2D implements Hashable implements Diffable {
 
 	public function isInvertible():Bool {
 		var value = determinant();
-		return Math.isFinite(value) && Math.abs(value) >= InvertibilityEpsilon &&
-			Math.isFinite(a) && Math.isFinite(b) && Math.isFinite(c) &&
-			Math.isFinite(d) && Math.isFinite(tx) && Math.isFinite(ty);
+		return Math.isFinite(value) && Math.abs(value) >= InvertibilityEpsilon && Math.isFinite(a) && Math.isFinite(b)
+			&& Math.isFinite(c) && Math.isFinite(d) && Math.isFinite(tx) && Math.isFinite(ty);
 	}
 
 	public function tryInverse():Null<Transform2D> {

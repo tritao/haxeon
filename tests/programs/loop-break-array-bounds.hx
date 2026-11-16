@@ -47,7 +47,8 @@ function main():Int {
 		ints[i] += 10;
 	for (i in 0...floats.length)
 		floats[i] *= 2.0;
-	if (ints.length != 4 || ints[0] != 11 || ints[3] != 14 || floats.length != 3 || floats[0] != 1.0 || floats[2] != 5.0)
+	if (ints.length != 4 || ints[0] != 11 || ints[3] != 14 || floats.length != 3 || floats[0] != 1.0
+		|| floats[2] != 5.0)
 		return 2;
 
 	// Out-of-range access raises instead of reading or writing outside the array.

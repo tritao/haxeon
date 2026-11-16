@@ -17,8 +17,8 @@ class StackChild {
 	public function new(key:String, view:View, x:Float = 0.0, y:Float = 0.0,
 			zIndex:Int = 0, ?width:LayoutAxis, ?height:LayoutAxis,
 			clipToParent:Bool = true) {
-		if (key == null || key.length == 0 || view == null || !finite(x) || !finite(y) ||
-			zIndex < -32768 || zIndex > 32767)
+		if (key == null || key.length == 0 || view == null || !finite(x) || !finite(y) || zIndex < -32768
+			|| zIndex > 32767)
 			throw "Stack children require a key, finite position, view, and valid z-index";
 		this.key = key;
 		this.view = view;

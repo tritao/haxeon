@@ -12,8 +12,8 @@ class GraphicsSurfaceViewportContent implements ViewportContent {
 	public var contentRevision(default, null):Int;
 
 	public function new(surface:GraphicsSurface, width:Float, height:Float) {
-		if (surface == null || surface.isDisposed() || width <= 0.0 || height <= 0.0 ||
-			!finite(width) || !finite(height))
+		if (surface == null || surface.isDisposed() || width <= 0.0 || height <= 0.0 || !finite(width)
+			|| !finite(height))
 			throw "Graphics viewport content requires a live surface and positive dimensions";
 		this.surface = surface;
 		contentWidth = width;

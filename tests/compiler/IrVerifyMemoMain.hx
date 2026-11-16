@@ -37,7 +37,8 @@ class IrVerifyMemoMain {
 	static function main():Void {
 		var memo = new IrVerifyMemo(), f = caller(), g = callee(I32);
 		IrVerifier.verifyReusing(program([f, g]), memo);
-		expect(memo.checkedFunctions == 2 && memo.skippedFunctions == 0, "the first verification checks every function");
+		expect(memo.checkedFunctions == 2 && memo.skippedFunctions == 0,
+			"the first verification checks every function");
 		IrVerifier.verifyReusing(program([f, g]), memo);
 		expect(memo.checkedFunctions == 0 && memo.skippedFunctions == 2, "an unchanged program is not checked again");
 		var rejected = false;
@@ -47,10 +48,12 @@ class IrVerifyMemoMain {
 			rejected = error.indexOf("f") >= 0;
 		expect(rejected, "a function accepted against another signature of its callee was not checked again");
 		IrVerifier.verifyReusing(program([f, g, callee(I32, "h")]), memo);
-		expect(memo.skippedFunctions == 2 && memo.checkedFunctions == 1, "an unrelated function made the others be checked again");
+		expect(memo.skippedFunctions == 2 && memo.checkedFunctions == 1,
+			"an unrelated function made the others be checked again");
 		var replaced = callee(I32);
 		IrVerifier.verifyReusing(program([f, replaced]), memo);
-		expect(memo.skippedFunctions == 2 && memo.checkedFunctions == 0, "a callee replaced by an equal one was checked again");
+		expect(memo.skippedFunctions == 2 && memo.checkedFunctions == 0,
+			"a callee replaced by an equal one was checked again");
 		Sys.println("PASS: function verification is reused only while the function and everything it read are unchanged");
 	}
 }

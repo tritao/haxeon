@@ -20,12 +20,21 @@ class InlineRequestModelMain {
 			{op: EnumDynamicView(logical), subject: logical, expected: ProviderOperation.ViewDynamic},
 			{op: EnumTagBox(tag), subject: tag, expected: ProviderOperation.EnumTagBox},
 			{op: EnumTagUnbox(tag), subject: tag, expected: ProviderOperation.EnumTagUnbox},
-			{op: InlineEnumBox(logical), subject: logical, expected: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")},
-			{op: InlineEnumUnbox(logical), subject: logical, expected: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")}
+			{
+				op: InlineEnumBox(logical),
+				subject: logical,
+				expected: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")
+			},
+			{
+				op: InlineEnumUnbox(logical),
+				subject: logical,
+				expected: ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")
+			}
 		];
 		for (entry in mappings) {
 			var row = IrProviders.typedOperation(entry.op);
-			if (row == null || row.subject.toString() != TypeKey.of(entry.subject).toString() || row.operation != entry.expected)
+			if (row == null || row.subject.toString() != TypeKey.of(entry.subject).toString()
+				|| row.operation != entry.expected)
 				throw 'Incorrect typed provider request: ${entry.op}';
 		}
 		var declaration:IrEnum = {name: "Payload", cases: [{name: "Value", params: [I32]}]},
@@ -65,14 +74,17 @@ class InlineRequestModelMain {
 		// Late Wasm varargs adapters must request enum conversions before escape resolution too.
 		for (valueType in [Obj(shape.valueObject.name), EnumTag("Tag")]) {
 			var signature:IrType = Function([valueType], valueType);
-			var adapter = compiler.backend.wasm.WasmDynamicCalls.varargsAdapter("varargs-test", signature, program.enums);
+			var adapter = compiler.backend.wasm.WasmDynamicCalls.varargsAdapter("varargs-test", signature,
+				program.enums);
 			var boxes = 0, unboxes = 0;
 			for (block in adapter.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Intrinsic(_, InlineEnumBox(Enum("Payload")), _) | Intrinsic(_, EnumTagBox(EnumTag("Tag")), _):
+						case Intrinsic(_, InlineEnumBox(Enum("Payload")), _) | Intrinsic(_, EnumTagBox(EnumTag("Tag")),
+							_):
 							boxes++;
-						case Intrinsic(_, InlineEnumUnbox(Enum("Payload")), _) | Intrinsic(_, EnumTagUnbox(EnumTag("Tag")), _):
+						case Intrinsic(_, InlineEnumUnbox(Enum("Payload")), _) | Intrinsic(_,
+							EnumTagUnbox(EnumTag("Tag")), _):
 							unboxes++;
 						default:
 					}
@@ -146,9 +158,11 @@ class InlineRequestModelMain {
 		if (generated.length != 2)
 			throw "Expected both inline enum providers";
 		var boxProvider = generated[0], unboxProvider = generated[1];
-		boxProvider = new IrFunction("opaque_box", boxProvider.arguments, boxProvider.result, boxProvider.blocks, boxProvider.kind, boxProvider.debugBindings,
+		boxProvider = new IrFunction("opaque_box", boxProvider.arguments, boxProvider.result, boxProvider.blocks,
+			boxProvider.kind, boxProvider.debugBindings,
 			boxProvider.inlineHint, boxProvider.retention);
-		unboxProvider = new IrFunction("opaque_unbox", unboxProvider.arguments, unboxProvider.result, unboxProvider.blocks, unboxProvider.kind,
+		unboxProvider = new IrFunction("opaque_unbox", unboxProvider.arguments, unboxProvider.result,
+			unboxProvider.blocks, unboxProvider.kind,
 			unboxProvider.debugBindings, unboxProvider.inlineHint, unboxProvider.retention);
 		// The Wasm scalar-closure pass resolves its generated requests at its existing boundary.
 		var wasmProgram = new IrProgram("wasm-main");
@@ -203,8 +217,10 @@ class InlineRequestModelMain {
 			unboxProvider
 		];
 		var originalLocated = program.functions[0].blocks[0].instructions[0];
-		var provenance = compiler.ir.SourceProvenance.user(new compiler.Source.SourceFile("fixture.hx", "x").span(0, 1));
-		program.functions[0].blocks[0].instructions[0] = new compiler.ir.SourceProvenance.Located(originalLocated.value, provenance);
+		var provenance = compiler.ir.SourceProvenance.user(new compiler.Source.SourceFile("fixture.hx", "x").span(0,
+			1));
+		program.functions[0].blocks[0].instructions[0] = new compiler.ir.SourceProvenance.Located(originalLocated.value,
+			provenance);
 		var originalTerminator = program.functions[0].blocks[0].terminator;
 		for (fn in [program.functions[0], program.functions[1]]) {
 			var unresolvedRejected = false;
@@ -219,14 +235,16 @@ class InlineRequestModelMain {
 				throw "Unresolved inline enum conversion passed the producer boundary";
 		}
 		var restored = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(program));
-		var restoredMain = compiler.ir.codec.IrFunctionStateCodec.decode(compiler.ir.codec.IrFunctionStateCodec.encode(program.functions[0]));
+		var restoredMain = compiler.ir.codec.IrFunctionStateCodec
+			.decode(compiler.ir.codec.IrFunctionStateCodec.encode(program.functions[0]));
 		for (fn in [restored.functions[0], restoredMain])
 			switch fn.blocks[0].instructions[0].value {
 				case Intrinsic(_, InlineEnumBox(Enum("Payload")), arguments) if (arguments.length == 1):
 				default:
 					throw "Typed inline-enum request did not survive IR codec roundtrip";
 			}
-		var restoredUnbox = compiler.ir.codec.IrFunctionStateCodec.decode(compiler.ir.codec.IrFunctionStateCodec.encode(program.functions[1]));
+		var restoredUnbox = compiler.ir.codec.IrFunctionStateCodec
+			.decode(compiler.ir.codec.IrFunctionStateCodec.encode(program.functions[1]));
 		for (fn in [restored.functions[1], restoredUnbox])
 			switch fn.blocks[0].instructions[0].value {
 				case Intrinsic(_, InlineEnumUnbox(Enum("Payload")), arguments) if (arguments.length == 1):
@@ -280,7 +298,8 @@ class InlineRequestModelMain {
 		var impostor = program.copy(), originalBox = program.functions[2];
 		impostor.functions = [
 			program.functions[0],
-			new IrFunction(IrInlineEnumEscapes.boxName("Payload"), originalBox.arguments, originalBox.result, originalBox.blocks, GeneratedHelper,
+			new IrFunction(IrInlineEnumEscapes.boxName("Payload"), originalBox.arguments, originalBox.result,
+				originalBox.blocks, GeneratedHelper,
 				originalBox.debugBindings, originalBox.inlineHint, originalBox.retention)
 		];
 		var rejectedImpostor = false;
@@ -302,14 +321,17 @@ class InlineRequestModelMain {
 		var missingMain = new IrFunction("main", missingBuilder.arguments, Dyn, missingBuilder.blocks, Ordinary);
 		var missingUnbox = new IrBuilder(),
 			missingDynamic = missingUnbox.argument("value", Dyn);
-		missingUnbox.returnValue(missingUnbox.intrinsic(InlineEnumUnbox(logical), [missingDynamic], Obj(shape.valueObject.name)));
+		missingUnbox.returnValue(missingUnbox.intrinsic(InlineEnumUnbox(logical), [missingDynamic],
+			Obj(shape.valueObject.name)));
 		missing.functions = [
 			missingMain,
-			new IrFunction("missingUnbox", missingUnbox.arguments, Obj(shape.valueObject.name), missingUnbox.blocks, Ordinary),
+			new IrFunction("missingUnbox", missingUnbox.arguments, Obj(shape.valueObject.name), missingUnbox.blocks,
+				Ordinary),
 			boxProvider
 		];
 		var missingProblem = IrProviders.checkTypedOperations(missing.functions);
-		if (missingProblem == null || missingProblem.indexOf(ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")) < 0)
+		if (missingProblem == null
+			|| missingProblem.indexOf(ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "unbox")) < 0)
 			throw 'The missing unbox provider was not identified: $missingProblem';
 		var rejected = false;
 		try
@@ -359,7 +381,8 @@ class InlineRequestModelMain {
 		badProvider.returnValue(badProvider.toDyn(badArgument));
 		badProviderProgram.functions = [
 			new IrFunction("main", badRequest.arguments, Dyn, badRequest.blocks, Ordinary),
-			new IrFunction("provider_with_wrong_signature", badProvider.arguments, Dyn, badProvider.blocks, boxProvider.kind)
+			new IrFunction("provider_with_wrong_signature", badProvider.arguments, Dyn, badProvider.blocks,
+				boxProvider.kind)
 		];
 		rejected = false;
 		try
@@ -390,7 +413,7 @@ class InlineRequestModelMain {
 			switch fn.kind {
 				case Provider(subject, operation)
 					if (subject.toString() == TypeKey.of(Enum("OtherPayload")).toString()
-						&& operation == ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")):
+					&& operation == ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, "box")):
 					expectedName = fn.name;
 				default:
 			}

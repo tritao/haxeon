@@ -6,7 +6,10 @@ import haxe.io.Path;
 /** Exercises the mapped-library check while this HashLink process keeps its runtime loaded. */
 class RuntimeBuildSafetyProbe {
 	static function main():Void {
-		var args = Sys.args(), output = args[0], mode = args[1], source = args[2],
+		var args = Sys.args(),
+			output = args[0],
+			mode = args[1],
+			source = args[2],
 			before = ContentDigest.makeHex(Bytes.ofString("runtime isolation")),
 			conflict = RuntimeBuildSafety.conflictingLibrary(output);
 		if (mode == "conflict") {

@@ -8,11 +8,13 @@ import compiler.ir.hl.HlLower;
 /** The writer cache keeps what it learned about a function when the list of debug files changes, except the function's encoding. */
 class HlWriterCacheMain {
 	static function main():Void {
-		var code = HlLower.lower(Frontend.compile("function add(a:Int, b:Int):Int return a + b; function main():Int return add(40, 2);")),
+		var code =
+			HlLower.lower(Frontend.compile("function add(a:Int, b:Int):Int return a + b; function main():Int return add(40, 2);")),
 			cache = new HlWriterCache();
 		HlWriter.encode(code, cache).flatten();
 		for (fn in code.functions)
-			expect(cache.isValidated(fn), "a function validated by the first encode stays validated after the writer prepared the cache");
+			expect(cache.isValidated(fn),
+				"a function validated by the first encode stays validated after the writer prepared the cache");
 		var function_ = code.functions[0];
 		expect(cache.get(function_) != null, "its encoding is cached");
 		cache.prepare(["other.hx"]);
@@ -27,7 +29,8 @@ class HlWriterCacheMain {
 			hash = (hash ^ content.get(index)) * 16777619;
 		var tampered = HlLower.lower(Frontend.compile("function main():Int return 1;"));
 		tampered.sourceSnapshots = [{sourceHash: hash, content: content}];
-		tampered.debugSections.push(HlDebugSection.of(HlWriter.SOURCE_SNAPSHOTS, 1, 0, haxe.io.Bytes.ofString("not the model")));
+		tampered.debugSections.push(HlDebugSection.of(HlWriter.SOURCE_SNAPSHOTS, 1, 0,
+			haxe.io.Bytes.ofString("not the model")));
 		var original = Sys.getEnv("HAXEON_CHECK_REUSE");
 		Sys.putEnv("HAXEON_CHECK_REUSE", "0");
 		HlValidator.validate(tampered);

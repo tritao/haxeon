@@ -23,7 +23,8 @@ class AssignmentTarget {
 				var receiverName = temporary("receiver", span);
 				// Keep a value receiver as a place, rather than binding an ordinary value copy.
 				// The typer checks its original expression before the generated local hides it.
-				bindings.push(VarDeclaration(receiverName, null, Call("$value.place", [object], spanOf(object)), spanOf(object)));
+				bindings.push(VarDeclaration(receiverName, null, Call("$value.place", [object], spanOf(object)),
+					spanOf(object)));
 				Member(Variable(receiverName, spanOf(object)), field, targetSpan);
 			case Variable(_, _): target;
 			default: target;

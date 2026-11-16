@@ -2,7 +2,8 @@ import compiler.Frontend;
 
 /** A generic type with a concrete argument is accepted where the same type with a Dynamic argument is expected, and no more than that. */
 class GenericDynamicArgumentMain {
-	static final prelude = 'class Box<T> { public var value:T; public function new(value:T) this.value = value; }
+	static final prelude =
+		'class Box<T> { public var value:T; public function new(value:T) this.value = value; }
 class IntBox extends Box<Int> { public function new(value:Int) super(value); }
 interface Source<T> { function next():T; }
 class Counter implements Source<Int> { public function new() {} public function next():Int return 1; }
@@ -37,7 +38,8 @@ class Counter implements Source<Int> { public function new() {} public function 
 
 		// Only a whole Dynamic argument on the expected side widens.
 		rejects("var box:Box<String> = new Box<Int>(1);", "different concrete arguments");
-		rejects("var box:Box<Int> = new Box<Dynamic>(1);", "Dynamic where a concrete argument is expected needs a cast");
+		rejects("var box:Box<Int> = new Box<Dynamic>(1);",
+			"Dynamic where a concrete argument is expected needs a cast");
 		rejects("var box:Box<Array<Dynamic>> = new Box<Array<Int>>([1]);", "Dynamic nested inside an argument");
 		Sys.println("PASS: a Dynamic type argument accepts any argument, and nothing else widens");
 	}

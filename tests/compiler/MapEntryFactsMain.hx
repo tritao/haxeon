@@ -7,19 +7,23 @@ import compiler.Frontend;
  */
 class MapEntryFactsMain {
 	// Entries are references, so reading `.n` needs the entry fact. (A missing Int entry would read as 0, as in Haxe.)
-	static final prelude = "class Entry { public final n:Int; public function new(n:Int) this.n = n; } class Box { public var n = 0; public function new() {} public function bump():Void { n++; } } "
+	static final prelude =
+		"class Entry { public final n:Int; public function new(n:Int) this.n = n; } class Box { public var n = 0; public function new() {} public function bump():Void { n++; } } "
 		+ "function drain(m:Map<String, Entry>):Void { m.remove(\"a\"); } ";
-	static final setup = "var m:Map<String, Entry> = new Map(); m.set(\"a\", new Entry(42)); var b = new Box(); var k = \"a\"; ";
+	static final setup =
+		"var m:Map<String, Entry> = new Map(); m.set(\"a\", new Entry(42)); var b = new Box(); var k = \"a\"; ";
 
 	static function main():Void {
-		expectCompiles("a private map keeps its entry across a call", "if (m.exists(k)) { b.bump(); return m.get(k).n; } return 0;");
+		expectCompiles("a private map keeps its entry across a call",
+			"if (m.exists(k)) { b.bump(); return m.get(k).n; } return 0;");
 		expectCompiles("and across several", "if (!m.exists(k)) return 0; b.bump(); b.bump(); return m.get(k).n;");
-		expectCompiles("a key the map was given keeps it across a call", "m.set(\"b\", new Entry(42)); b.bump(); return m.get(\"b\").n;");
+		expectCompiles("a key the map was given keeps it across a call",
+			"m.set(\"b\", new Entry(42)); b.bump(); return m.get(\"b\").n;");
 
 		// Declarations are told apart by scope, not by name.
 		expectCompiles("sibling blocks may each declare a private map of the same name",
-			"var flag = true; if (flag) { var parts:Map<String, Entry> = new Map(); parts.set(\"a\", new Entry(42)); if (parts.exists(k)) { b.bump(); return parts.get(k).n; } } " +
-			"else { var parts:Map<String, Entry> = new Map(); parts.set(\"a\", new Entry(42)); if (parts.exists(k)) { b.bump(); return parts.get(k).n; } } return 0;");
+			"var flag = true; if (flag) { var parts:Map<String, Entry> = new Map(); parts.set(\"a\", new Entry(42)); if (parts.exists(k)) { b.bump(); return parts.get(k).n; } } "
+			+ "else { var parts:Map<String, Entry> = new Map(); parts.set(\"a\", new Entry(42)); if (parts.exists(k)) { b.bump(); return parts.get(k).n; } } return 0;");
 		expectCompiles("a loop variable of the same name is another variable",
 			"var total = 0; for (m in [1, 2]) { total += m; } if (m.exists(k)) { b.bump(); return m.get(k).n; } return total;");
 		expectCompiles("so is a lambda parameter",
@@ -28,7 +32,8 @@ class MapEntryFactsMain {
 			"try { b.bump(); } catch (m:Dynamic) { b.bump(); } if (m.exists(k)) { b.bump(); return m.get(k).n; } return 0;");
 		expectError("an inner private map does not make an escaping outer one safe",
 			"{ var m:Map<String, Entry> = new Map(); m.set(\"z\", new Entry(1)); } drain(m); if (m.exists(k)) { b.bump(); return m.get(k).n; } return 0;");
-		expectError("a map handed to a function may lose the entry", "if (m.exists(k)) { drain(m); return m.get(k).n; } return 0;");
+		expectError("a map handed to a function may lose the entry",
+			"if (m.exists(k)) { drain(m); return m.get(k).n; } return 0;");
 		expectError("a map stored in an object may lose the entry",
 			"var holder = {inner: m}; if (m.exists(k)) { b.bump(); return m.get(k).n; } return holder.inner.size();");
 		expectCompiles("a lambda that only reads the map cannot remove entries",
@@ -41,7 +46,8 @@ class MapEntryFactsMain {
 			"var other:Map<String, Entry> = new Map(); m = other; if (m.exists(k)) { b.bump(); return m.get(k).n; } return 0;");
 
 		expectError("removing the entry forgets it", "if (m.exists(k)) { m.remove(k); return m.get(k).n; } return 0;");
-		expectError("removing another spelling of the key forgets it", "var j = \"a\"; if (m.exists(k)) { m.remove(j); return m.get(k).n; } return 0;");
+		expectError("removing another spelling of the key forgets it",
+			"var j = \"a\"; if (m.exists(k)) { m.remove(j); return m.get(k).n; } return 0;");
 		expectError("clearing the map forgets it", "if (m.exists(k)) { m.clear(); return m.get(k).n; } return 0;");
 		expectError("reassigning the key forgets it", "if (m.exists(k)) { k = \"b\"; return m.get(k).n; } return 0;");
 		expectError("incrementing an Int key forgets it",

@@ -1,10 +1,10 @@
+import compiler.compilation.AllocationMeter;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInliner;
 import compiler.ir.IrInliner.IrInlineCache;
 import compiler.ir.codec.IrFunctionStateCodec;
-import compiler.compilation.AllocationMeter;
 
 class InlinerSourceIdentityMain {
 	static function program(amount:Int):IrProgram {
@@ -48,7 +48,8 @@ class InlinerSourceIdentityMain {
 		var fresh = program(2);
 		IrInliner.run(fresh, new IrInlineCache(), compiler.ir.TargetProfile.wasm, true);
 		for (i in 0...fresh.functions.length)
-			if (IrFunctionStateCodec.encode(edited.functions[i]).compare(IrFunctionStateCodec.encode(fresh.functions[i])) != 0)
+			if (IrFunctionStateCodec.encode(edited.functions[i])
+				.compare(IrFunctionStateCodec.encode(fresh.functions[i])) != 0)
 				throw "Callee edit differs from a cold inlining run";
 		var unchanged = program(1);
 		IrInliner.run(unchanged, cache, compiler.ir.TargetProfile.wasm, true);

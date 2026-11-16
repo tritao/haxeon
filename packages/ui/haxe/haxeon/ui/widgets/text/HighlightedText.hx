@@ -14,9 +14,13 @@ class HighlightedText implements View {
 	final textStyle:Null<TextStyleOverride>;
 	final role:Null<TextRole>;
 	public function new(value:String, query:String, ?style:LayoutStyle, ?color:Color,
-		?textStyle:TextStyleOverride, ?role:TextRole) {
-		this.value = value; this.query = query; this.style = style;
-		this.color = color; this.textStyle = textStyle; this.role = role;
+			?textStyle:TextStyleOverride, ?role:TextRole) {
+		this.value = value;
+		this.query = query;
+		this.style = style;
+		this.color = color;
+		this.textStyle = textStyle;
+		this.role = role;
 	}
 
 	/** Native text ranges use codepoints; String searches use target-specific offsets. */
@@ -29,8 +33,10 @@ class HighlightedText implements View {
 			while (offset < lower.length) {
 				var found = lower.indexOf(term, offset);
 				if (found < 0) break;
-				result.push({start: new TextDocument(value.substr(0, found)).codepointCount,
-					end: new TextDocument(value.substr(0, found + term.length)).codepointCount});
+				result.push({
+					start: new TextDocument(value.substr(0, found)).codepointCount,
+					end: new TextDocument(value.substr(0, found + term.length)).codepointCount
+				});
 				offset = found + term.length;
 			}
 		}
@@ -38,7 +44,8 @@ class HighlightedText implements View {
 		var merged:Array<{start:Int, end:Int}> = [];
 		for (range in result) {
 			var previous = merged.length == 0 ? null : merged[merged.length - 1];
-			if (previous != null && range.start <= previous.end) previous.end = Std.int(Math.max(previous.end, range.end));
+			if (previous != null
+				&& range.start <= previous.end) previous.end = Std.int(Math.max(previous.end, range.end));
 			else merged.push(range);
 		}
 		return merged;
@@ -72,7 +79,8 @@ private class SearchTextLayout {
 	var ranges:Array<{start:Int, end:Int}> = [];
 	var signature:String = "";
 	public function new(fonts:FontCollection) {
-		text = new TextStyle(); paragraph = new ParagraphStyle();
+		text = new TextStyle();
+		paragraph = new ParagraphStyle();
 		layout = TextLayout.create(fonts, "", 100000, text, paragraph);
 		measurement = new LayoutMeasuredContent(function(constraints) {
 			var width = Math.max(1, Math.min(100000, constraints.maxWidth));
@@ -81,21 +89,50 @@ private class SearchTextLayout {
 			return new LayoutMeasureResult(Math.min(width, size.width), size.height);
 		});
 		content = new LayoutRenderableContent(measurement, function(canvas, _) {
-			for (range in ranges) for (rect in layout.selectionRects(new TextPosition(range.start, 0), new TextPosition(range.end, 0)))
+			for (range in ranges) for (rect in layout.selectionRects(new TextPosition(range.start, 0),
+				new TextPosition(range.end, 0)))
 				canvas.fillRectIfPositive(rect, highlight);
 			canvas.drawText(layout, 0, 0);
 		});
 	}
 	public function update(value:String, text:TextStyle, paragraph:ParagraphStyle, foreground:Color,
-		highlight:Color, ranges:Array<{start:Int, end:Int}>, query:String):Void {
-		var next = haxe.Json.stringify([value, query, text.font, text.fontSize, text.letterSpacing,
-			paragraph.wrap, paragraph.alignment, paragraph.lineHeight, paragraph.direction, paragraph.tabWidth,
-			foreground.red, foreground.green, foreground.blue, foreground.alpha, highlight.red, highlight.green, highlight.blue]);
+			highlight:Color, ranges:Array<{
+				start:Int,
+				end:Int
+			}>, query:String):Void {
+		var next = haxe.Json.stringify([
+			value,
+			query,
+			text.font,
+			text.fontSize,
+			text.letterSpacing,
+			paragraph.wrap,
+			paragraph.alignment,
+			paragraph.lineHeight,
+			paragraph.direction,
+			paragraph.tabWidth,
+			foreground.red,
+			foreground.green,
+			foreground.blue,
+			foreground.alpha,
+			highlight.red,
+			highlight.green,
+			highlight.blue
+		]);
 		if (next == signature) return;
-		signature = next; this.value = value; this.text = text; this.paragraph = paragraph;
-		this.highlight = highlight; this.ranges = ranges;
-		layout.update(value, layout.width, text, paragraph); layout.setColor(foreground);
-		measurement.invalidate(); content.invalidatePaint();
+		signature = next;
+		this.value = value;
+		this.text = text;
+		this.paragraph = paragraph;
+		this.highlight = highlight;
+		this.ranges = ranges;
+		layout.update(value, layout.width, text, paragraph);
+		layout.setColor(foreground);
+		measurement.invalidate();
+		content.invalidatePaint();
 	}
-	public function dispose():Void { content.dispose(); layout.dispose(); }
+	public function dispose():Void {
+		content.dispose();
+		layout.dispose();
+	}
 }

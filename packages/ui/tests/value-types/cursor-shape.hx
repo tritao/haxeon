@@ -7,12 +7,30 @@ import nativekit.ffi.NativeKitTypes.NativeCursorShape;
 @:access(haxeon.ui.core.UiContext)
 private class CursorShapeProbe {
 	public static function run():Int {
-		var shapes = [CursorShape.Arrow, CursorShape.Text, CursorShape.Crosshair, CursorShape.Hand,
-			CursorShape.HorizontalResize, CursorShape.VerticalResize, CursorShape.NwseResize,
-			CursorShape.Move, CursorShape.NotAllowed, CursorShape.NeswResize];
-		var native = [NativeCursorShape.Arrow, NativeCursorShape.Text, NativeCursorShape.Crosshair,
-			NativeCursorShape.Hand, NativeCursorShape.HorizontalResize, NativeCursorShape.VerticalResize,
-			NativeCursorShape.NwseResize, NativeCursorShape.Move, NativeCursorShape.NotAllowed, NativeCursorShape.NeswResize];
+		var shapes = [
+			CursorShape.Arrow,
+			CursorShape.Text,
+			CursorShape.Crosshair,
+			CursorShape.Hand,
+			CursorShape.HorizontalResize,
+			CursorShape.VerticalResize,
+			CursorShape.NwseResize,
+			CursorShape.Move,
+			CursorShape.NotAllowed,
+			CursorShape.NeswResize
+		];
+		var native = [
+			NativeCursorShape.Arrow,
+			NativeCursorShape.Text,
+			NativeCursorShape.Crosshair,
+			NativeCursorShape.Hand,
+			NativeCursorShape.HorizontalResize,
+			NativeCursorShape.VerticalResize,
+			NativeCursorShape.NwseResize,
+			NativeCursorShape.Move,
+			NativeCursorShape.NotAllowed,
+			NativeCursorShape.NeswResize
+		];
 		var node = new RenderNode(new WidgetId(1));
 		if (node.cursor != null || node.windowDecorationCursor != null) return 1;
 		for (index in 0...shapes.length) {

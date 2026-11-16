@@ -3,7 +3,10 @@ import haxe.Json;
 struct JsonPoint {
 	public var x:Int;
 	public var label:String;
-	public function new(x:Int, label:String) { this.x = x; this.label = label; }
+	public function new(x:Int, label:String) {
+		this.x = x;
+		this.label = label;
+	}
 }
 
 function main():Int {

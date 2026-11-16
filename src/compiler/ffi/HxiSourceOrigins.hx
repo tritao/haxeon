@@ -87,7 +87,8 @@ class HxiSourceOrigins {
 
 	static function span(declaration:HxiDeclaration):SourceSpan
 		return switch declaration {
-			case Opaque(_, span) | Alias(_, _, span) | Handle(_, _, _, span) | Constant(_, _, span) | Structure(_, _, _, _, span) |
-				Enumeration(_, _, _, _, span) | Callback(_, _, _, _, span) | Function(_, _, _, _, _, _, _, span): span;
+			case Opaque(_, span) | Alias(_, _, span) | Handle(_, _, _, span) | Constant(_, _, span) | Structure(_, _, _,
+				_, span) | Enumeration(_, _, _, _, span) | Callback(_, _, _, _, span) | Function(_, _, _, _, _, _, _,
+				span): span;
 		};
 }

@@ -112,16 +112,17 @@ class CompilerPublication {
 			case Untracked, Ready(_):
 		}
 
-	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:CompilerSnapshot, assembler:HlModuleAssembler):Void
+	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:CompilerSnapshot,
+			assembler:HlModuleAssembler):Void
 		state = switch state {
 			case Untracked: Untracked;
 			case Ready(baseline): Pending({
-					baseline: baseline,
-					revision: revision,
-					abi: abi,
-					snapshot: snapshot,
-					assembler: assembler
-				});
+				baseline: baseline,
+				revision: revision,
+				abi: abi,
+				snapshot: snapshot,
+				assembler: assembler
+			});
 			case Pending(candidate): throw 'Publication revision ${candidate.revision} is still pending';
 		};
 
@@ -175,23 +176,23 @@ class CompilerPublication {
 	public function status():PublicationStatus
 		return switch state {
 			case Untracked: {
-					tracking: false,
-					acknowledgedRevision: 0,
-					hasPendingRevision: false,
-					pendingRevision: 0
-				};
+				tracking: false,
+				acknowledgedRevision: 0,
+				hasPendingRevision: false,
+				pendingRevision: 0
+			};
 			case Ready(baseline): {
-					tracking: true,
-					acknowledgedRevision: baseline.revision,
-					hasPendingRevision: false,
-					pendingRevision: 0
-				};
+				tracking: true,
+				acknowledgedRevision: baseline.revision,
+				hasPendingRevision: false,
+				pendingRevision: 0
+			};
 			case Pending(candidate): {
-					tracking: true,
-					acknowledgedRevision: candidate.baseline.revision,
-					hasPendingRevision: true,
-					pendingRevision: candidate.revision
-				};
+				tracking: true,
+				acknowledgedRevision: candidate.baseline.revision,
+				hasPendingRevision: true,
+				pendingRevision: candidate.revision
+			};
 		};
 
 	public function baseline():Null<PublishedBaseline>
@@ -214,7 +215,9 @@ class CompilerPublication {
 			case Pending(candidate): ReloadDomain(PublicationPending(candidate.revision));
 			case Ready(baseline):
 				if (runtimeRevision != baseline.revision) ReloadDomain(RuntimeRevisionMismatch(runtimeRevision,
-					baseline.revision)); else if (baseline.revision > 0 && !baseline.backendAvailable) ReloadDomain(BackendBaselineUnavailable); else
+					baseline.revision));
+				else if (baseline.revision > 0 && !baseline.backendAvailable) ReloadDomain(BackendBaselineUnavailable);
+				else
 					ContinuePatching;
 		};
 

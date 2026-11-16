@@ -104,7 +104,8 @@ class Main {
 		// after it move: both kinds of function must come out as a fresh build has them.
 		var kept = "@:keep function __warmEditKept():Int return 424242;\n",
 			cut = original.lastIndexOf("\n}\n", Std.int(original.length / 2));
-		var inside = cut < 0 ? original + unused + kept : original.substr(0, cut + 3) + unused + kept + original.substr(cut + 3);
+		var inside = cut < 0 ? original + unused + kept : original.substr(0,
+			cut + 3) + unused + kept + original.substr(cut + 3);
 		var edits = [original + unused, original + unused + kept, inside];
 		for (editIndex in 0...edits.length) {
 			var edited = edits[editIndex];

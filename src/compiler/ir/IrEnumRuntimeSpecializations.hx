@@ -6,14 +6,21 @@ import compiler.types.typing.EnumRuntimeType;
 /** Select concrete runtime descriptors from current and cached IR, never from an erased template. */
 class IrEnumRuntimeSpecializations {
 	public static function materialize(enums:Array<IrEnum>, functions:Array<IrFunction>, objects:Array<IrObject>,
-			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>, cNatives:Array<IrCNative>):Array<IrEnum> {
-		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item], required:Map<String, Bool> = [], pending:Array<String> = [];
+			staticFields:Array<IrStaticField>, natives:Array<IrNative>, interfaces:Array<IrInterface>,
+			cNatives:Array<IrCNative>):Array<IrEnum> {
+		var declarations:Map<String, IrEnum> = [for (item in enums) item.name => item],
+			required:Map<String, Bool> = [],
+			pending:Array<String> = [];
 		function visit(type:IrType):Void switch type {
 			case Enum(name), EnumTag(name):
 				var base = EnumRuntimeType.declaration(name);
-				if (base != name && !required.exists(name)) { required.set(name, true); pending.push(name); }
+				if (base != name && !required.exists(name)) {
+					required.set(name, true);
+					pending.push(name);
+				}
 			case Array(element), Iterator(element), Nullable(element): visit(element);
-			case Function(arguments, result): for (argument in arguments) visit(argument); visit(result);
+			case Function(arguments, result): for (argument in arguments) visit(argument);
+				visit(result);
 			default:
 		}
 		for (fn in functions) {
@@ -26,16 +33,28 @@ class IrEnumRuntimeSpecializations {
 					var input = IrOperands.at(instruction, inputIndex);
 					visit(input.type);
 				}
-				switch instruction { case TypeValue(_, type): visit(type); default: }
+				switch instruction {
+					case TypeValue(_, type): visit(type);
+					default:
+				}
 			}
 		}
 		for (declaration in enums) if (EnumRuntimeType.declaration(declaration.name) == declaration.name)
 			for (constructor in declaration.cases) for (parameter in constructor.params) visit(parameter);
 		for (object in objects) for (field in object.fields) visit(field.type);
-		for (contract in interfaces) for (method in contract.methods) { for (argument in method.arguments) visit(argument); visit(method.result); }
+		for (contract in interfaces) for (method in contract.methods) {
+			for (argument in method.arguments) visit(argument);
+			visit(method.result);
+		}
 		for (field in staticFields) visit(field.type);
-		for (native in natives) { for (argument in native.arguments) visit(argument); visit(native.result); }
-		for (native in cNatives) { for (argument in native.arguments) visit(argument); visit(native.result); }
+		for (native in natives) {
+			for (argument in native.arguments) visit(argument);
+			visit(native.result);
+		}
+		for (native in cNatives) {
+			for (argument in native.arguments) visit(argument);
+			visit(native.result);
+		}
 		var index = 0;
 		while (index < pending.length) {
 			var name = pending[index++], declaration = declarations.get(name);

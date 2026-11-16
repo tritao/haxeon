@@ -10,7 +10,8 @@ class GenericStructFunctionMain {
 		var point = false, other = false, reference = false, constrained = false;
 		for (fn in program.functions) {
 			for (block in fn.blocks) for (instruction in block.instructions) switch instruction.value {
-				case ToDyn(_, value) if (Type.enumEq(value.type, Obj("ManagedPoint")) || Type.enumEq(value.type, Obj("ManagedOther"))):
+				case ToDyn(_, value) if (Type.enumEq(value.type, Obj("ManagedPoint"))
+					|| Type.enumEq(value.type, Obj("ManagedOther"))):
 					throw "a generic struct call crossed an erased Dynamic ABI";
 				default:
 			}
@@ -36,7 +37,8 @@ class GenericStructFunctionMain {
 			throw "generic struct value semantics failed";
 		var incremental = new compiler.Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 		for (expected in [42, 41, 42]) {
-			incremental.update("Main.hx", expected == 41 ? StringTools.replace(source, "? 42 : 1", "? 41 : 1") : source);
+			incremental.update("Main.hx",
+				expected == 41 ? StringTools.replace(source, "? 42 : 1", "? 41 : 1") : source);
 			if (GeneratedProgramRunner.exitCode(incremental.compile("Main")) != expected)
 				throw "generic struct specialization failed after an incremental edit";
 		}
@@ -62,16 +64,23 @@ class GenericStructFunctionMain {
 			compiler.ir.IrScalarArguments.rewrite(program, true);
 			compiler.ir.IrValuePhiScalarization.rewrite(program);
 			var objects = compiler.ir.IrObjectTable.of([for (object in program.objects) object.name => object]);
-			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, true)];
+			program.functions = [for (fn in program.functions) compiler.ir.IrScalarReplacement.rewrite(fn, objects,
+				false, true)];
 			compiler.ir.IrNullableScalarFlow.rewrite(program);
-			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
-			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {target: WasmGc, debugNames: true,
-				wasmGcAllocationCount: true, exports: ["Census.prepare", "Census.perform"]}).bytes;
+			compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(),
+				compiler.ir.TargetProfile.wasm, inlineEnabled);
+			var bytes = new compiler.backend.wasm.WasmBackend().compile(program, {
+				target: WasmGc,
+				debugNames: true,
+				wasmGcAllocationCount: true,
+				exports: ["Census.prepare", "Census.perform"]
+			}).bytes;
 			var directory = Sys.getCwd() + "/out/test-tools";
 			if (!sys.FileSystem.exists(directory)) sys.FileSystem.createDirectory(directory);
 			var path = directory + "/generic-struct-function-census-" + Std.random(0x7fffffff) + ".wasm";
 			File.saveBytes(path, bytes);
-			var script = 'const fs=require("fs"), i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+			var script =
+				'const fs=require("fs"), i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 				+ 'i.exports.main(); i.exports["Census.prepare"](); for(const n of [8,1024]) { const before=i.exports.__allocation_count(); '
 				+ 'const result=i.exports["Census.perform"](n), count=i.exports.__allocation_count()-before; '
 				+ 'if(result!==n*(n-1)/2 || count!==0) throw Error("n="+n+", result="+result+", allocations="+count); }';

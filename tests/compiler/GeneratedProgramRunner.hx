@@ -9,7 +9,8 @@ class GeneratedProgramRunner {
 		var directory = Sys.getCwd() + "/out/test-tools";
 		if (!FileSystem.exists(directory))
 			FileSystem.createDirectory(directory);
-		var path = directory + "/effects-" + StringTools.replace(Std.string(Sys.time()), ".", "-") + "-" + Std.random(0x7fffffff) + ".hl";
+		var path = directory + "/effects-" + StringTools.replace(Std.string(Sys.time()), ".",
+			"-") + "-" + Std.random(0x7fffffff) + ".hl";
 		File.saveBytes(path, HlWriter.encode(compiled.module).flatten());
 		var status:Int;
 		try {

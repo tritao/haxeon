@@ -13,7 +13,8 @@ private typedef ResolvedRoot = {
 
 /** Loads a deterministic explicit source manifest into a compiler instance. */
 class SourceManifestLoader {
-	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>, ?packageRoots:Array<PackageSourceRoot>,
+	public static function load(compiler:Compiler, roots:Array<String>, paths:Array<String>,
+			?packageRoots:Array<PackageSourceRoot>,
 			?readSource:String->Null<String>):Void {
 		var ordered = paths.copy(),
 			resolvedPackages = resolve(packageRoots == null ? [] : [for (root in packageRoots) root.path],
@@ -38,7 +39,7 @@ class SourceManifestLoader {
 	public static function projectPath(path:String, roots:Array<String>, ?packageRoots:Array<PackageSourceRoot>):String
 		return locate(path, resolve(roots),
 			resolve(packageRoots == null ? [] : [for (root in packageRoots) root.path],
-				packageRoots == null ? [] : [for (root in packageRoots) root.packageName]));
+			packageRoots == null ? [] : [for (root in packageRoots) root.packageName]));
 
 	/** The roots in `paths` resolved once, so that placing each of many files does not canonicalize every root again. */
 	static function resolve(paths:Array<String>, ?packageNames:Array<String>):Array<ResolvedRoot> {
@@ -47,7 +48,10 @@ class SourceManifestLoader {
 			var prefix = canonicalPath(paths[index]);
 			if (!StringTools.endsWith(prefix, "/"))
 				prefix += "/";
-			result.push({prefix: prefix, packagePrefix: packageNames == null ? null : packageNames[index].split(".").join("/") + "/"});
+			result.push({
+				prefix: prefix,
+				packagePrefix: packageNames == null ? null : packageNames[index].split(".").join("/") + "/"
+			});
 		}
 		return result;
 	}
@@ -68,7 +72,8 @@ class SourceManifestLoader {
 	/** An absolute path with forward slashes and no `.` or `..` segments; a path that does not exist is resolved against the working directory too. */
 	static function canonicalPath(path:String):String {
 		var normalized = normalizePath(path);
-		return normalizePath(haxe.io.Path.normalize(haxe.io.Path.isAbsolute(normalized) ? normalized : FileSystem.absolutePath(normalized)));
+		return normalizePath(haxe.io.Path.normalize(haxe.io.Path.isAbsolute(normalized)
+			? normalized : FileSystem.absolutePath(normalized)));
 	}
 
 	static function normalizePath(path:String):String

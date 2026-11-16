@@ -10,7 +10,8 @@ class DisposalRegistry {
 	public function new() {}
 
 	public function register(release:Void->Void):DisposalRegistration {
-		if (release == null) throw BindingError.invalidArgument("DisposalRegistry.register", "Release callback cannot be null");
+		if (release == null) throw BindingError.invalidArgument("DisposalRegistry.register",
+			"Release callback cannot be null");
 		var entry = new DisposalRegistration(this, release);
 		entries.push(entry);
 		return entry;
@@ -32,5 +33,7 @@ class DisposalRegistry {
 	public function count():Int return entries.length;
 
 	@:allow(DisposalRegistration)
-	function remove(entry:DisposalRegistration):Void { entries.remove(entry); }
+	function remove(entry:DisposalRegistration):Void {
+		entries.remove(entry);
+	}
 }

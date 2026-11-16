@@ -9,7 +9,8 @@ class JsonWireMain {
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
-		compiler.update("Main.hx", 'import haxeon.wire.JsonWire; import haxeon.wire.MessagePack;
+		compiler.update("Main.hx",
+			'import haxeon.wire.JsonWire; import haxeon.wire.MessagePack;
 @:wire enum State { @:id(1) Idle; @:id(2) Moving(steps:Array<Int>); }
 @:wire class Item { @:id(1) public var name:String; @:id(2) public var state:State; @:id(3) public var note:Null<String>; @:id(4) public var scores:Map<String, Int>; public function new() {} }
 @:wire typedef Point = { @:id(1) var x:Float; @:id(2) var y:Float; }

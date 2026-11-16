@@ -28,7 +28,8 @@ class RuntimeShapes {
 			// Matches IR lowering: a nullable reference keeps its element's representation; a nullable value is boxed.
 			case TNullable(element): TypeRelations.isReference(element) ? of(element) : RuntimeShape.Dynamic;
 			default:
-				if (TypeRelations.isReference(type)) RuntimeShape.Ref; else throw 'No runtime shape for ${SemanticSignature.type(type)}';
+				if (TypeRelations.isReference(type)) RuntimeShape.Ref;
+				else throw 'No runtime shape for ${SemanticSignature.type(type)}';
 		};
 
 	public static function representative(type:CompilerType):CompilerType

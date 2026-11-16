@@ -25,12 +25,18 @@ class ClangFrontend {
 	public static function run(options:ClangInvocationOptions):ClangFrontendResult {
 		var invocation = new ClangInvocation(options),
 			base = invocation.arguments(),
-			astProcess = ProcessOutputCapture.capture(options.clang, base.concat(["-Xclang", "-ast-dump=json", "-fsyntax-only", options.header]),
+			astProcess = ProcessOutputCapture.capture(options.clang, base.concat([
+				"-Xclang",
+				"-ast-dump=json",
+				"-fsyntax-only",
+				options.header
+			]),
 				ProcessOutputCapture.defaultDiagnosticLimit);
 		if (astProcess.exitCode != 0)
 			throw 'Clang could not import ${options.header}:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}';
 		var ast = Json.parse(astProcess.stdout),
-			layoutInput = options.language == "c++" ? cxxLayoutProbe(options.header, ast, options.includes) : options.header,
+			layoutInput = options.language == "c++" ? cxxLayoutProbe(options.header, ast,
+				options.includes) : options.header,
 			layoutProcess:ProcessCaptureResult;
 		try {
 			layoutProcess = ProcessOutputCapture.capture(options.clang, base.concat([
@@ -62,7 +68,14 @@ class ClangFrontend {
 			process:ProcessCaptureResult;
 		try {
 			process = ProcessOutputCapture.capture(options.clang,
-				invocation.arguments().concat(["-Xclang", "-fdump-vtable-layouts", "-c", probePath, "-o", platformNullDevice()]), null);
+				invocation.arguments().concat([
+					"-Xclang",
+					"-fdump-vtable-layouts",
+					"-c",
+					probePath,
+					"-o",
+					platformNullDevice()
+				]), null);
 		} catch (error:Dynamic) {
 			if (FileSystem.exists(probePath))
 				FileSystem.deleteFile(probePath);
@@ -98,7 +111,8 @@ class ClangFrontend {
 			tempRoot = Sys.getEnv("TMP");
 		if (tempRoot == null || tempRoot.length == 0)
 			tempRoot = "/tmp";
-		var suffix = StringTools.replace(Std.string(Sys.time()), ".", "_") + "-" + StringTools.hex(Std.random(0x7fffffff), 8),
+		var suffix = StringTools.replace(Std.string(Sys.time()), ".",
+			"_") + "-" + StringTools.hex(Std.random(0x7fffffff), 8),
 			probePath = Path.join([tempRoot, 'haxeon-cxx-layout-$suffix.cpp']),
 			includePath = StringTools.replace(StringTools.replace(sourcePath, "\\", "/"), '"', '\\"'),
 			content = new StringBuf();
@@ -125,7 +139,8 @@ class ClangFrontend {
 			tempRoot = Sys.getEnv("TMP");
 		if (tempRoot == null || tempRoot.length == 0)
 			tempRoot = "/tmp";
-		var suffix = StringTools.replace(Std.string(Sys.time()), ".", "_") + "-" + StringTools.hex(Std.random(0x7fffffff), 8),
+		var suffix = StringTools.replace(Std.string(Sys.time()), ".",
+			"_") + "-" + StringTools.hex(Std.random(0x7fffffff), 8),
 			probePath = Path.join([tempRoot, 'haxeon-cxx-vtable-$suffix.cpp']),
 			includePath = StringTools.replace(StringTools.replace(sourcePath, "\\", "/"), '"', '\\"'),
 			content = new StringBuf();
@@ -144,7 +159,8 @@ class ClangFrontend {
 		return probePath;
 	}
 
-	static function collectConstructibleCxxRecords(node:Dynamic, namespaces:Array<String>, owner:Null<String>, currentFile:String, roots:Array<String>,
+	static function collectConstructibleCxxRecords(node:Dynamic, namespaces:Array<String>, owner:Null<String>,
+			currentFile:String, roots:Array<String>,
 			names:Array<String>, seen:Map<String, Bool>, methods:Map<String, Array<VtableProbeMethod>>):Void {
 		if (node == null)
 			return;
@@ -183,7 +199,8 @@ class ClangFrontend {
 							access = ClangAstTools.field(child, "access");
 							continue;
 						}
-						if (access == "public" && childKind == "CXXMethodDecl" && ClangAstTools.field(child, "virtual") == true) {
+						if (access == "public" && childKind == "CXXMethodDecl"
+							&& ClangAstTools.field(child, "virtual") == true) {
 							var methodName:String = ClangAstTools.field(child, "name"),
 								argumentCount = 0;
 							for (parameter in ClangAstTools.children(child))
@@ -199,14 +216,16 @@ class ClangFrontend {
 			}
 			for (child in ClangAstTools.children(node))
 				if (ClangAstTools.field(child, "kind") == "CXXRecordDecl")
-					collectConstructibleCxxRecords(child, namespaces, qualifiedOwner, currentFile, roots, names, seen, methods);
+					collectConstructibleCxxRecords(child, namespaces, qualifiedOwner, currentFile, roots, names, seen,
+						methods);
 			return;
 		}
 		for (child in ClangAstTools.children(node))
 			collectConstructibleCxxRecords(child, namespaces, owner, currentFile, roots, names, seen, methods);
 	}
 
-	static function collectCxxRecords(node:Dynamic, namespaces:Array<String>, owner:Null<String>, currentFile:String, roots:Array<String>,
+	static function collectCxxRecords(node:Dynamic, namespaces:Array<String>, owner:Null<String>, currentFile:String,
+			roots:Array<String>,
 			names:Array<String>, seen:Map<String, Bool>):Void {
 		if (node == null)
 			return;
@@ -264,5 +283,6 @@ class ClangFrontend {
 	}
 
 	static function diagnostics(text:String, truncated:Bool):String
-		return truncated ? '$text\n[Clang diagnostics truncated after ${ProcessOutputCapture.defaultDiagnosticLimit} bytes]' : text;
+		return truncated
+			? '$text\n[Clang diagnostics truncated after ${ProcessOutputCapture.defaultDiagnosticLimit} bytes]' : text;
 }

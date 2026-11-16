@@ -6,7 +6,7 @@ package haxeon.build;
  * themselves are made by `compiler.modules.CodeIdentityTable`. Read it through `CodeIdentity`.
  */
 class CodeIdentityTable {
-	public static final data:String = /*IDENTITY-BEGIN*/""/*IDENTITY-END*/;
+	public static final data:String = /*IDENTITY-BEGIN*/"" /*IDENTITY-END*/;
 
 	static var index:Null<Map<String, String>>;
 

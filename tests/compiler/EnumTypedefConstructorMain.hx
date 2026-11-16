@@ -11,7 +11,8 @@ import sys.io.File;
 class EnumTypedefConstructorMain {
 	static final SOURCE = 'package document; enum SourceEdit { InsertBlock(path:Array<String>, block:String); Empty; }';
 	static final OTHER = 'package document; enum OtherEdit { Empty; InsertBlock(path:Array<String>, block:String); }';
-	static final BODY = 'var edit=Edit.InsertBlock(["root"],"hello"); return switch edit { case Edit.InsertBlock(path,block): path.length + block.length + 36; case Edit.Empty: 0; };';
+	static final BODY =
+		'var edit=Edit.InsertBlock(["root"],"hello"); return switch edit { case Edit.InsertBlock(path,block): path.length + block.length + 36; case Edit.Empty: 0; };';
 
 	static function compiler(alias = 'SourceEdit'):Compiler {
 		var result = new Compiler();
@@ -69,7 +70,8 @@ class EnumTypedefConstructorMain {
 
 		// A caller that uses the alias only as a nullary value must also be invalidated.
 		var nullary = compiler();
-		nullary.update("Main.hx", program('return switch Edit.Empty { case Edit.Empty: 42; case Edit.InsertBlock(_, _): 0; };'));
+		nullary.update("Main.hx",
+			program('return switch Edit.Empty { case Edit.Empty: 42; case Edit.InsertBlock(_, _): 0; };'));
 		execute(nullary.compile("Main"), 42);
 		nullary.update("document/Edits.hx", "package document; typedef Edit = OtherEdit;");
 		execute(nullary.compile("Main"), 42);
@@ -136,13 +138,15 @@ class EnumTypedefConstructorMain {
 				var isolated = new Compiler(null, CompilerIntrinsics.configuration());
 				isolated.addStandardLibrarySourceRoot("stdlib");
 				isolated.configure("enum-typedef-" + target + inlineEnabled, "enum-typedef",
-					CompilerDriver.targetDefines(target == Wasm32 ? "wasm32" : "wasm-gc").concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
+					CompilerDriver.targetDefines(target == Wasm32
+					? "wasm32" : "wasm-gc").concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
 				for (name => state in source.modules)
 					isolated.update(state.source.path, state.source.text, name);
 				var result = isolated.compile("Main"),
 					path = 'out/enum-typedef-$target-$label-$inlineEnabled.wasm';
 				File.saveBytes(path, new WasmBackend().compile(result.ir, {target: target, debugNames: true}).bytes);
-				var js = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("enum typedef result");';
+				var js =
+					'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("enum typedef result");';
 				if (Sys.command("node", ["-e", js, path]) != 0)
 					throw "Enum typedef Wasm execution failed";
 				sys.FileSystem.deleteFile(path);

@@ -19,8 +19,10 @@ import compiler.types.typing.CallResolver.DefaultExpressionCallback;
 import compiler.types.typing.CallResolver.TypeExpressionCallback;
 
 typedef GenericCoerceCallback = (TypedExpression, CompilerType, String, String) -> TypedExpression;
-typedef GenericCoerceArgumentsCallback = (Array<TypedExpression>, Array<CompilerType>, String) -> Array<TypedExpression>;
-typedef SpecializedFunctionTyper = (AstFunction, Null<String>, Bool, Null<Map<String, CompilerType>>, Null<String>, Null<CompilerType>) -> TypedFunction;
+typedef GenericCoerceArgumentsCallback = (Array<TypedExpression>, Array<CompilerType>,
+	String) -> Array<TypedExpression>;
+typedef SpecializedFunctionTyper = (AstFunction, Null<String>, Bool, Null<Map<String, CompilerType>>, Null<String>,
+	Null<CompilerType>) -> TypedFunction;
 
 /** Resolves generic substitutions and requests/reuses emitted function specializations. */
 class GenericInstantiation {
@@ -34,7 +36,8 @@ class GenericInstantiation {
 	final typeFunction:SpecializedFunctionTyper;
 
 	public function new(session:TypingSession, typeExpression:TypeExpressionCallback, coerce:GenericCoerceCallback,
-			coerceArguments:GenericCoerceArgumentsCallback, argumentType:ArgumentTypeCallback, typeDefaultExpression:DefaultExpressionCallback,
+			coerceArguments:GenericCoerceArgumentsCallback, argumentType:ArgumentTypeCallback,
+			typeDefaultExpression:DefaultExpressionCallback,
 			posInfosExpression:SourceSpan->AstExpression, typeFunction:SpecializedFunctionTyper) {
 		this.session = session;
 		this.typeExpression = typeExpression;
@@ -46,7 +49,8 @@ class GenericInstantiation {
 		this.typeFunction = typeFunction;
 	}
 
-	public function specialize(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan, scope:Scope, owner:Null<String>,
+	public function specialize(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>, span:SourceSpan,
+			scope:Scope, owner:Null<String>,
 			isStatic:Bool, ?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
 		var required = fn.arguments.length;
 		while (required > 0 && fn.arguments[required - 1].optional == true)
@@ -55,7 +59,8 @@ class GenericInstantiation {
 			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
 			fail("E1008", 'Function "$baseName" expects $expected arguments, got ${arguments.length}', span);
 		}
-		var substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : [for (parameter => type in presetSubstitutions) parameter => type],
+		var substitutions:Map<String, CompilerType> = presetSubstitutions == null
+			? [] : [for (parameter => type in presetSubstitutions) parameter => type],
 			parameters = functionTypeParameters(fn);
 		for (i in 0...arguments.length)
 			inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
@@ -70,8 +75,8 @@ class GenericInstantiation {
 				if (!session.relations.satisfiesConstraint(actual, expected)) {
 					var detail = session.relations.constraintFailure(actual, expected);
 					fail(session.relations.recursiveCapabilityFailure(actual, expected) ? "E1025" : "E1003",
-						'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"' +
-						(detail == null ? "" : ': $detail'),
+						'Type argument for "${constraint.parameter}" does not satisfy constraint "${SemanticSignature.type(expected)}"'
+						+ (detail == null ? "" : ': $detail'),
 						span);
 				}
 			}
@@ -84,9 +89,11 @@ class GenericInstantiation {
 				arguments.push(coerce(typeExpression(posInfosExpression(span), scope, expected, false), expected,
 					'position argument ${index + 1} to "$baseName"', "E1009"));
 			else if (defaultValue == null)
-				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected, 'default argument ${index + 1} to "$baseName"', "E1009"));
+				arguments.push(coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
+					'default argument ${index + 1} to "$baseName"', "E1009"));
 			else
-				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected, 'default argument ${index + 1} to "$baseName"',
+				arguments.push(coerce(typeDefaultExpression(defaultValue, expected, baseName), expected,
+					'default argument ${index + 1} to "$baseName"',
 					"E1009"));
 		}
 		// An iterable parameter is structural, but a generic body can keep its concrete
@@ -99,7 +106,8 @@ class GenericInstantiation {
 		for (expected in semanticExpected)
 			if (IterationProtocol.name(expected) != null)
 				hasIterationParameter = true;
-		var mutableAliases:Map<String, Bool> = hasIterationParameter ? compiler.types.analysis.MutableIterationAliases.ofFunction(fn) : [];
+		var mutableAliases:Map<String, Bool> = hasIterationParameter
+			? compiler.types.analysis.MutableIterationAliases.ofFunction(fn) : [];
 		for (index in 0...arguments.length) {
 			var argument = arguments[index],
 				expected = semanticExpected[index];
@@ -108,11 +116,12 @@ class GenericInstantiation {
 					case TNull: false;
 					default: true;
 				})
-				&& (switch (argument.type) {
-					case TNever: false;
-					default: true;
-				})
-				&& !mutableAliases.exists(compiler.types.analysis.BindingWalker.key(fn.arguments[index].name, fn.arguments[index].span))) {
+					&& (switch (argument.type) {
+				case TNever: false;
+				default: true;
+			})
+				&& !mutableAliases.exists(compiler.types.analysis.BindingWalker.key(fn.arguments[index].name,
+				fn.arguments[index].span))) {
 				if (!session.relations.isAssignable(argument.type, expected))
 					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
 				var hidden = "$iteration-argument:" + index,
@@ -155,32 +164,41 @@ class GenericInstantiation {
 		var constants:Map<String, String> = [],
 			constantIndices:Map<Int, Bool> = [],
 			constantPolicies:Array<String> = [],
-			assigned = compiler.types.analysis.AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations;
+			assigned = compiler.types.analysis.AssignedDeclarations.ofFunction(fn.arguments,
+				fn.statements).declarations;
 		for (index in 0...semanticArguments.length) {
 			var definition = KeyPathTyping.known(session, semanticArguments[index]),
 				parameter = fn.arguments[index];
-			if (definition != null && !assigned.exists(compiler.types.analysis.BindingWalker.key(parameter.name, parameter.span))) {
+			if (definition != null
+				&& !assigned.exists(compiler.types.analysis.BindingWalker.key(parameter.name, parameter.span))) {
 				constants.set(parameter.name, definition.name);
 				constantIndices.set(index, true);
 				constantPolicies.push("keypath:" + index + "=" + definition.name);
 			}
 		}
 		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments, argumentType),
-			genericRepresentation = genericCall.representation, representationSubstitutions = genericRepresentation.substitutions,
-			specializationPolicies = genericRepresentation.policies.concat(constantPolicies), representationResult = genericCall.result.physical,
+			genericRepresentation = genericCall.representation,
+			representationSubstitutions = genericRepresentation.substitutions,
+			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),
+			representationResult = genericCall.result.physical,
 			representationArguments = genericCall.typeArguments.concat(concrete),
-			specialization = session.genericSpecializations.request(baseName, representationArguments, specializationPolicies),
-			result = genericCall.result.semantic, typed = [
-				for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index)) genericCall.arguments[index]
+			specialization = session.genericSpecializations.request(baseName, representationArguments,
+				specializationPolicies),
+			result = genericCall.result.semantic,
+			typed = [
+				for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index))
+					genericCall.arguments[index]
 			];
 		session.keyPathParameters.set(specialization.name, constants);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
-			representationReceiver = session.declarations.abstracts.exists(requiredString(owner)) ? abstractReceiverType(requiredString(owner),
+			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))
+				? abstractReceiverType(requiredString(owner),
 				representationSubstitutions) : receiver.type;
 		if (!session.emittedGenericBodies.exists(specialization.name)) {
 			session.emittedGenericBodies.set(specialization.name, true);
-			session.closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true, representationSubstitutions,
+			session.closureConversion.addFunction(typeFunction(fn, owner, receiver == null ? isStatic : true,
+				representationSubstitutions,
 				specialization.name, representationReceiver));
 		}
 		if (receiver != null) {
@@ -194,7 +212,8 @@ class GenericInstantiation {
 		return session.representation.boundaryCast(call, result);
 	}
 
-	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>,
+	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void
 		switch pattern {
 			case NamedType(name) if (parameters.indexOf(name) >= 0):
@@ -218,7 +237,8 @@ class GenericInstantiation {
 					substitutions.set(name, actual);
 			case ArrayType(element):
 				switch actual {
-					case TArray(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions, span);
+					case TArray(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions,
+						span);
 					default:
 				}
 			case MapType(key, value):
@@ -230,7 +250,8 @@ class GenericInstantiation {
 				}
 			case NullableType(element):
 				switch actual {
-					case TNullable(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions, span);
+					case TNullable(actualElement): inferTypeParameters(element, actualElement, parameters,
+						substitutions, span);
 					default:
 				}
 			case AppliedType(name, patternArguments):
@@ -243,7 +264,8 @@ class GenericInstantiation {
 				if (projected != null)
 					actual = projected;
 				switch actual {
-					case TKeyPath(root, value, _) if ((name == "KeyPath" || name == "WritableKeyPath") && patternArguments.length == 2):
+					case TKeyPath(root, value,
+						_) if ((name == "KeyPath" || name == "WritableKeyPath") && patternArguments.length == 2):
 						inferTypeParameters(patternArguments[0], root, parameters, substitutions, span);
 						inferTypeParameters(patternArguments[1], value, parameters, substitutions, span);
 					case TIterator(actualElement) if (name == "Iterator" && patternArguments.length == 1):
@@ -251,18 +273,22 @@ class GenericInstantiation {
 					case TInstance(_, actualName, actualArguments) if (actualName == name
 						&& patternArguments.length == actualArguments.length):
 						for (index in 0...patternArguments.length)
-							inferTypeParameters(patternArguments[index], actualArguments[index], parameters, substitutions, span);
+							inferTypeParameters(patternArguments[index], actualArguments[index], parameters,
+								substitutions, span);
 					case TAbstract(actualName, actualArguments, _) if (actualName == name
 						&& patternArguments.length == actualArguments.length):
 						for (index in 0...patternArguments.length)
-							inferTypeParameters(patternArguments[index], actualArguments[index], parameters, substitutions, span);
+							inferTypeParameters(patternArguments[index], actualArguments[index], parameters,
+								substitutions, span);
 					default:
 				}
 			case FunctionType(patternArguments, patternResult):
 				switch actual {
-					case TFunction(actualArguments, actualResult) if (patternArguments.length == actualArguments.length):
+					case TFunction(actualArguments,
+						actualResult) if (patternArguments.length == actualArguments.length):
 						for (i in 0...patternArguments.length)
-							inferTypeParameters(patternArguments[i], actualArguments[i], parameters, substitutions, span);
+							inferTypeParameters(patternArguments[i], actualArguments[i], parameters, substitutions,
+								span);
 						inferTypeParameters(patternResult, actualResult, parameters, substitutions, span);
 					default:
 				}
@@ -280,14 +306,17 @@ class GenericInstantiation {
 		}
 
 	function abstractReceiverType(name:String, substitutions:Map<String, CompilerType>):CompilerType {
-		var decl = requiredMapValue(session.declarations.abstracts, name), arguments = [
-			for (parameter in decl.typeParameters)
-				requiredMapValue(substitutions, parameter)
-		], representation = session.representation.semanticType(decl.underlying, decl.span, substitutions);
+		var decl = requiredMapValue(session.declarations.abstracts, name),
+			arguments = [
+				for (parameter in decl.typeParameters)
+					requiredMapValue(substitutions, parameter)
+			],
+			representation = session.representation.semanticType(decl.underlying, decl.span, substitutions);
 		return TAbstract(name, arguments, representation);
 	}
 
-	static function anonymousField(fields:Null<Array<compiler.types.Type.AnonymousField>>, name:String):Null<compiler.types.Type.AnonymousField> {
+	static function anonymousField(fields:Null<Array<compiler.types.Type.AnonymousField>>,
+			name:String):Null<compiler.types.Type.AnonymousField> {
 		if (fields != null)
 			for (field in fields)
 				if (field.name == name)

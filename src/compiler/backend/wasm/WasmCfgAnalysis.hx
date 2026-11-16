@@ -93,7 +93,8 @@ class WasmCfgAnalysis {
 			for (candidate in candidates) {
 				var closest = true;
 				for (other in candidates)
-					if (other != candidate && hasBit(requiredBitSet(sets, other), requiredIndex(blockIndices, candidate))) {
+					if (other != candidate
+						&& hasBit(requiredBitSet(sets, other), requiredIndex(blockIndices, candidate))) {
 						closest = false;
 						break;
 					}
@@ -143,13 +144,15 @@ class WasmCfgAnalysis {
 				var successor = frame.successors[frame.next++];
 				if (!traversal.indices.exists(successor)) beginScc(graph, successor, traversal, pending);
 				else if (traversal.onStack.exists(successor))
-					traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id), requiredIndex(traversal.indices, successor))));
+					traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id),
+						requiredIndex(traversal.indices, successor))));
 				continue;
 			}
 			pending.pop();
 			if (pending.length > 0) {
 				var parent = pending[pending.length - 1].id;
-				traversal.low.set(parent, Std.int(Math.min(requiredIndex(traversal.low, parent), requiredIndex(traversal.low, id))));
+				traversal.low.set(parent,
+					Std.int(Math.min(requiredIndex(traversal.low, parent), requiredIndex(traversal.low, id))));
 			}
 			if (requiredIndex(traversal.low, id) != requiredIndex(traversal.indices, id)) continue;
 			var members:Array<Int> = [], member:Int;
@@ -168,7 +171,11 @@ class WasmCfgAnalysis {
 	}
 
 	static function beginScc(graph:IrGraph, id:Int, traversal:WasmSccTraversal,
-			pending:Array<{id:Int, next:Int, successors:Array<Int>}>):Void {
+			pending:Array<{
+				id:Int,
+				next:Int,
+				successors:Array<Int>
+			}>):Void {
 		traversal.indices.set(id, traversal.nextIndex);
 		traversal.low.set(id, traversal.nextIndex++);
 		traversal.stack.push(id);

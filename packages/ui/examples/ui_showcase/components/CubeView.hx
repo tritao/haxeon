@@ -33,8 +33,8 @@ class CubeView implements View {
 
 	public function new(key:String, rotation:Float, label:String, ?style:LayoutStyle,
 			animated:Bool = false, speed:Float = 0.12) {
-		if (key == null || key.length == 0 || label == null || label.length == 0 ||
-			!Math.isFinite(rotation) || !Math.isFinite(speed) || speed <= 0.0)
+		if (key == null || key.length == 0 || label == null || label.length == 0 || !Math.isFinite(rotation)
+			|| !Math.isFinite(speed) || speed <= 0.0)
 			throw "Cube views require a stable key, finite rotation, and accessible label";
 		this.key = key;
 		this.rotation = rotation;
@@ -49,7 +49,9 @@ class CubeView implements View {
 			var id = context.id("cube-view");
 			var painterState:State<CubeViewPainter> = context.resourceState(id,
 				function() return new CubeViewPainter(context.animations, rotation, speed),
-				function(value:CubeViewPainter) { value.dispose(); });
+				function(value:CubeViewPainter) {
+					value.dispose();
+				});
 			var painter = painterState.value;
 			painter.configure(rotation, speed, animated);
 			var node = new RenderNode(id, LayoutVisualKind.Custom, style);

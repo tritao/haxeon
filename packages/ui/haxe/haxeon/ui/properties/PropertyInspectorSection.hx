@@ -11,8 +11,8 @@ class PropertyInspectorSection implements Observable {
 
 	public function new(id:String, label:String, descriptors:Array<PropertyDescriptor>,
 			expanded:Bool = true) {
-		if (id == null || id.length == 0 || label == null || label.length == 0 ||
-			descriptors == null || descriptors.length == 0)
+		if (id == null || id.length == 0 || label == null || label.length == 0 || descriptors == null
+			|| descriptors.length == 0)
 			throw "Inspector sections require an ID, label, and descriptors";
 		this.id = id;
 		this.label = label;

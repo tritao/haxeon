@@ -33,11 +33,13 @@ class LiveKeptCheckMain {
 			}
 		if (!mutated)
 			throw "no integer load to change in value()";
-		var wrong = new HlFunction(entry.fn.type, entry.fn.functionIndex, entry.fn.registers, opcodes, entry.fn.debugLocations, entry.fn.debugAssignments);
+		var wrong = new HlFunction(entry.fn.type, entry.fn.functionIndex, entry.fn.registers, opcodes,
+			entry.fn.debugLocations, entry.fn.debugAssignments);
 		cache.entries.set("value", new HlLoweredFunction("value", entry.source, wrong, [], []));
 		var message:Null<String> = null;
 		try
-			HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false, true)
+			HlLower.lowerStableMeasured(program, symbols, layout, null, [], null, null, 0, true, false, cache, false,
+				true)
 		catch (error:Dynamic)
 			message = Std.string(error);
 		if (message == null || message.indexOf("kept function value") < 0 || message.indexOf("opcode") < 0)
@@ -48,7 +50,8 @@ class LiveKeptCheckMain {
 		var left:Array<HlInstruction> = [Jump("a"), Label("a"), CallN(0, 3, [1, 2]), LoadBool(0, true)];
 		var right:Array<HlInstruction> = [Jump("renamed"), Label("renamed"), CallN(0, 3, [1, 2]), LoadBool(0, true)];
 		var functionOf = function(ops:Array<HlInstruction>) return new HlFunction(0, 0, [], ops);
-		var compare = function(ops:Array<HlInstruction>) return compiler.hl.HlFunctionEquality.difference(functionOf(left), functionOf(ops));
+		var compare = function(ops:Array<HlInstruction>) return compiler.hl.HlFunctionEquality
+			.difference(functionOf(left), functionOf(ops));
 		if (compare(right) != null)
 			throw "Equivalent labels and copied register arrays must compare equal";
 		right[2] = CallN(0, 3, [1, 4]);
@@ -66,7 +69,10 @@ class LiveKeptCheckMain {
 		if (compare(right) == null)
 			throw "Different constructors must compare unequal";
 		if (compiler.hl.HlFunctionEquality.difference(functionOf([Label("a"), Label("b")]),
-			functionOf([Label("same"), Label("same")])) == null)
+			functionOf([
+				Label("same"),
+				Label("same")
+			])) == null)
 			throw "Label renaming must be one-to-one";
 		Sys.println("PASS: typed opcode comparison preserves operands and label bijections");
 	}

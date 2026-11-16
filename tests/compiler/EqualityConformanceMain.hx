@@ -8,8 +8,10 @@ class EqualityConformanceMain {
 			"Equatable");
 		rejected('class Ref { public function new() {} } function main():Int { var a:Array<Ref> = []; var b:Array<Ref> = []; return haxeon.Equality.equals(a, b) ? 1 : 0; }',
 			"Equatable");
-		rejected('enum E { Item(value:Int); } function main():Int return haxeon.Equality.equals(Item(1), Item(1)) ? 1 : 0;', "Equatable");
-		rejected('class Ref { public function new() {} } function main():Int return haxeon.Hashing.hash(new Ref());', "Hashable");
+		rejected('enum E { Item(value:Int); } function main():Int return haxeon.Equality.equals(Item(1), Item(1)) ? 1 : 0;',
+			"Equatable");
+		rejected('class Ref { public function new() {} } function main():Int return haxeon.Hashing.hash(new Ref());',
+			"Hashable");
 		rejected('struct S { public final value:Int; public function new(value:Int) this.value = value; } function main():Int return new S(1) == new S(1) ? 1 : 0;',
 			"Equatable");
 		rejected('struct S { public final value:Int; public function new(value:Int) this.value = value; } function main():Int { var a:Array<S> = [new S(1)]; return switch a { case [new S(1)]: 42; default: 0; }; }',

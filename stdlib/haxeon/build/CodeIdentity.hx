@@ -37,7 +37,8 @@ class CodeIdentity {
 			if (slash < 0)
 				continue;
 			var path = line.substr(slash);
-			if (!StringTools.startsWith(Path.withoutDirectory(path), namePrefix) || seen.exists(path) || !FileSystem.exists(path))
+			if (!StringTools.startsWith(Path.withoutDirectory(path), namePrefix) || seen.exists(path)
+				|| !FileSystem.exists(path))
 				continue;
 			seen.set(path, true);
 			paths.push(path);

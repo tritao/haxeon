@@ -17,7 +17,8 @@ import compiler.ir.Ir.IrType;
  */
 class IrReachability {
 	/** The functions reachable from `entry` and `additionalRoots` by calls, closures and method calls. */
-	public static function functions(program:IrProgram, entry:String, ?additionalRoots:Array<String>):Map<String, Bool> {
+	public static function functions(program:IrProgram, entry:String,
+			?additionalRoots:Array<String>):Map<String, Bool> {
 		var walk = new IrReachabilityWalk(program);
 		walk.visit(entry);
 		if (additionalRoots != null)
@@ -32,11 +33,13 @@ class IrReachability {
 	 * the core runtime ABI; keep the expansion centralized so the linear and GC backends cannot drift apart. The walk continues
 	 * from what it has reached whenever a new root appears, so it visits every function once.
 	 */
-	public static function withGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>, keepLiveClasses = false):Map<String, Bool>
+	public static function withGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>,
+			keepLiveClasses = false):Map<String, Bool>
 		return walkWithGeneratedRuntimeRoots(program, entry, additionalRoots, keepLiveClasses).reachable;
 
 	/** `withGeneratedRuntimeRoots`, with the finished walk: what it reached, the natives it calls and the classes it mentions. */
-	public static function walkWithGeneratedRuntimeRoots(program:IrProgram, entry:String, ?additionalRoots:Array<String>,
+	public static function walkWithGeneratedRuntimeRoots(program:IrProgram, entry:String,
+			?additionalRoots:Array<String>,
 			keepLiveClasses = false):IrReachabilityWalk {
 		var walk = new IrReachabilityWalk(program, keepLiveClasses);
 		walk.visit(entry);
@@ -64,7 +67,8 @@ class IrReachability {
 				}
 				if (native.generatedFunctionDependencies != null)
 					for (dependency in native.generatedFunctionDependencies)
-						if (!dependenciesDone.exists(dependency) && walk.layoutMayHaveInstances(native.name, dependency)) {
+						if (!dependenciesDone.exists(dependency)
+							&& walk.layoutMayHaveInstances(native.name, dependency)) {
 							dependenciesDone.set(dependency, true);
 							walk.visit(dependency);
 						}
@@ -80,12 +84,10 @@ class IrReachability {
 	 */
 	public static function prune(program:IrProgram, reachable:Map<String, Bool>):Void {
 		program.functions = [for (fn in program.functions) if (reachable.exists(fn.name)) fn];
-		program.objects = [
-			for (object in program.objects) {
-				var kept = [for (method in object.methods) if (reachable.exists(method.functionName)) method];
-				kept.length == object.methods.length ? object : IrObjectTools.withMethods(object, kept);
-			}
-		];
+		program.objects = [for (object in program.objects) {
+			var kept = [for (method in object.methods) if (reachable.exists(method.functionName)) method];
+			kept.length == object.methods.length ? object : IrObjectTools.withMethods(object, kept);
+		}];
 	}
 
 	/**
@@ -207,7 +209,8 @@ class IrReachability {
 
 	static function intrinsicType(operation:IrIntrinsic):IrType
 		return switch operation {
-			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type), InlineEnumUnbox(type): type;
+			case EnumDynamicBox(type), EnumDynamicView(type), EnumTagBox(type), EnumTagUnbox(type), InlineEnumBox(type),
+				InlineEnumUnbox(type): type;
 		};
 
 	/**
@@ -328,8 +331,7 @@ class IrReachabilityWalk {
 						case IteratorNext(output, _) if ((switch (output.type) {
 							case Dyn: true;
 							default: false;
-						})):
-							used.set("__array_get_any", true);
+						})): used.set("__array_get_any", true);
 						// With live classes a method call needs no edge: whatever it can reach belongs to a class with an instance, and that class
 						// is mentioned by the function that makes the instance, so it keeps all its methods.
 						case MethodCall(_, object, method, _, _) if (!keepLiveClasses):
@@ -366,7 +368,8 @@ class IrReachabilityWalk {
 			return;
 		instantiated.set(typeName, true);
 		for (call in dispatches)
-			if (call.isInterface ? index.implementsInterface(typeName, call.type) : index.isObjectSubtype(typeName, call.type))
+			if (call.isInterface ? index.implementsInterface(typeName, call.type) : index.isObjectSubtype(typeName,
+				call.type))
 				enqueue(index.findMethod(typeName, call.method), pending);
 	}
 
@@ -432,8 +435,7 @@ class IrReachabilityWalk {
 					case IteratorNext(output, _) if ((switch (output.type) {
 						case Dyn: true;
 						default: false;
-					})):
-						into.set("__array_get_any", true);
+					})): into.set("__array_get_any", true);
 					default:
 				}
 }

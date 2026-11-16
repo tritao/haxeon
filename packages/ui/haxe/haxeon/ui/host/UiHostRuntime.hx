@@ -76,8 +76,8 @@ class UiHostRuntime {
 	function get_surfaceReady():Bool return frameState.surfaceAvailable;
 
 	public function start(create:UiHostContext->UiApplication):Void {
-		if (started || disposed || session.state == UiHostLifecycle.Failed ||
-			session.state == UiHostLifecycle.Stopping || session.state == UiHostLifecycle.Stopped) {
+		if (started || disposed || session.state == UiHostLifecycle.Failed || session.state == UiHostLifecycle.Stopping
+			|| session.state == UiHostLifecycle.Stopped) {
 			fail("application-start", "UI host runtime cannot be started more than once or after termination");
 			return;
 		}
@@ -86,8 +86,8 @@ class UiHostRuntime {
 		try {
 			var created = create(context);
 			if (created == null) throw "UI application factory returned null";
-			if (disposeRequested || session.state != UiHostLifecycle.Starting &&
-				session.state != UiHostLifecycle.LoadingResources) {
+			if (disposeRequested || session.state != UiHostLifecycle.Starting
+				&& session.state != UiHostLifecycle.LoadingResources) {
 				try created.dispose() catch (error:Dynamic) session.cleanupFailed("application-dispose", error);
 			} else {
 				application = created;
@@ -130,20 +130,19 @@ class UiHostRuntime {
 
 	/** Renders at most once for the adapter's scheduling callback. */
 	public function render(timeSeconds:Float, repaintOnly:Bool = false):Bool {
-		if (disposed || session.state != UiHostLifecycle.Running || !frameState.canRender() ||
-			application == null || renderer == null)
+		if (disposed || session.state != UiHostLifecycle.Running || !frameState.canRender() || application == null
+			|| renderer == null)
 			return false;
 		var allocatedAt = AllocationProbe.now();
 		try {
 			callbackDepth++;
 			var phaseStarted = Sys.time();
 			var phaseAllocated = AllocationProbe.now();
-			var renderSurface = {
-				ProfileSpan.begin("ui.prepare");
-				defer ProfileSpan.end("ui.prepare");
-				var preparedSurface = Surface.fromNativeHandle(surface);
-				context.setGpuRenderer(renderer.prepare(preparedSurface));
-				preparedSurface;
+			var renderSurface = {ProfileSpan.begin("ui.prepare");
+			defer ProfileSpan.end("ui.prepare");
+			var preparedSurface = Surface.fromNativeHandle(surface);
+			context.setGpuRenderer(renderer.prepare(preparedSurface));
+			preparedSurface;
 			};
 			lastPrepareSeconds = Sys.time() - phaseStarted;
 			lastPrepareAllocatedBytes = AllocationProbe.now() - phaseAllocated;
@@ -153,7 +152,8 @@ class UiHostRuntime {
 			// A frame that ends an animation's wait must count the whole wait, not one capped frame.
 			var animationWait = application.context().animationWaitSeconds();
 			frame.deltaSeconds = frameState.nextDelta(timeSeconds, animationWait >= 0.0 ? animationWait + 0.1 : 0.1);
-			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight, frameState.renderScale);
+			frameInfo.set(frameState.layoutWidth, frameState.layoutHeight, framebufferWidth, framebufferHeight,
+				frameState.renderScale);
 			context.repaintOnly = repaintOnly;
 			application.context().buildContext.environment.pixelDensity = frameState.renderScale;
 			{

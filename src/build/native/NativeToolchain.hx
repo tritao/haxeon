@@ -31,7 +31,8 @@ class NativeToolchain {
 
 	function msvcX64():Bool {
 		var target = environment.target;
-		return target.os == TargetOs.Windows && target.abi == TargetAbi.Msvc && target.arch == build.Target.TargetArch.X64;
+		return target.os == TargetOs.Windows && target.abi == TargetAbi.Msvc
+			&& target.arch == build.Target.TargetArch.X64;
 	}
 
 	/**
@@ -49,7 +50,10 @@ class NativeToolchain {
 	public function instruments(source:String, root:String):Bool {
 		if (!instrumenting())
 			return false;
-		var absolute = haxe.io.Path.normalize(haxe.io.Path.isAbsolute(source) ? source : haxe.io.Path.join([root, source])),
+		var absolute = haxe.io.Path.normalize(haxe.io.Path.isAbsolute(source) ? source : haxe.io.Path.join([
+			root,
+			source
+		])),
 			prefix = haxe.io.Path.addTrailingSlash(haxe.io.Path.normalize(root)),
 			relative = StringTools.startsWith(absolute, prefix) ? absolute.substr(prefix.length) : absolute;
 		inline function matches(patterns:Array<String>):Bool {
@@ -65,7 +69,10 @@ class NativeToolchain {
 	}
 
 	public function instrumentHooks():String
-		return haxe.io.Path.join([build.HashLinkPath.directory(compilerHome), environment.target.os == TargetOs.Linux ? "libhlprof_hooks.a" : "hlprof_penter.lib"]);
+		return haxe.io.Path.join([
+			build.HashLinkPath.directory(compilerHome),
+			environment.target.os == TargetOs.Linux ? "libhlprof_hooks.a" : "hlprof_penter.lib"
+		]);
 
 	/** `*` within a path component, `**` across components, `?` one character (as in cmake/haxeon-instrument.cmake). */
 	static function globRegex(pattern:String):EReg {
@@ -102,7 +109,8 @@ class NativeToolchain {
 	}
 
 	/** instrumentRoot is the root native scope patterns are relative to; without it the source is not instrumented. */
-	public function compileArguments(source:String, output:String, includeDirs:Array<String>, ?standard:String, ?instrumentRoot:String):Array<String> {
+	public function compileArguments(source:String, output:String, includeDirs:Array<String>, ?standard:String,
+			?instrumentRoot:String):Array<String> {
 		var arguments:Array<String> = [];
 		switch environment.target.os {
 			case Windows:
@@ -147,22 +155,38 @@ class NativeToolchain {
 
 	public function archiveArguments(output:String, objects:Array<String>):Array<String>
 		return environment.target.os == TargetOs.Windows
-			&& environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/OUT:" + output].concat(objects) : ["rcs", output].concat(objects);
+			&& environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/OUT:" + output].concat(objects) : [
+				"rcs",
+				output
+			].concat(objects);
 
 	public function sharedCommand():String
 		return environment.toolchain.linker;
 
-	public function sharedArguments(output:String, objects:Array<String>, ?linkInputs:Array<String>, ?runtimeSearchPaths:Array<String>):Array<String> {
+	public function sharedArguments(output:String, objects:Array<String>, ?linkInputs:Array<String>,
+			?runtimeSearchPaths:Array<String>):Array<String> {
 		var inputs = linkInputs == null ? [] : linkInputs,
 			searchPaths = runtimeSearchPaths == null ? [] : runtimeSearchPaths;
 		var arguments = switch environment.target.os {
 			case TargetOs.Windows:
 				environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/LD", "/Fe:" + output].concat(objects)
-				.concat(inputs)
-				.concat(instrumenting() ? [instrumentHooks(), "/link", "/DEBUG", "/OPT:REF", "/OPT:ICF", "/INCREMENTAL:NO"] : []) : ["-shared", "-o", output].concat(objects)
-				.concat(inputs);
+					.concat(inputs)
+					.concat(instrumenting() ? [
+						instrumentHooks(),
+						"/link",
+						"/DEBUG",
+						"/OPT:REF",
+						"/OPT:ICF",
+						"/INCREMENTAL:NO"
+					] : []) : [
+						"-shared",
+						"-o",
+						output
+					].concat(objects)
+						.concat(inputs);
 			case TargetOs.MacOS: ["-dynamiclib", "-o", output].concat(objects).concat(inputs);
-			case TargetOs.Linux: ["-shared", "-o", output].concat(objects).concat(inputs).concat(instrumenting() ? [instrumentHooks()] : []);
+			case TargetOs.Linux: ["-shared", "-o",
+				output].concat(objects).concat(inputs).concat(instrumenting() ? [instrumentHooks()] : []);
 			case _: ["-shared", "-o", output].concat(objects).concat(inputs);
 		};
 		if (environment.target.os != TargetOs.Windows)

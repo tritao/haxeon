@@ -105,11 +105,11 @@ class WasmModuleSupport {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case MakeEnum(output, name, constructor, arguments) if (arguments.length == 0 && (switch output.type {
-								case Enum(_): true;
-								default: false;
-							})):
-								used.set(enumCaseKey(name, constructor), true);
+							case MakeEnum(output, name, constructor,
+								arguments) if (arguments.length == 0 && (switch output.type {
+									case Enum(_): true;
+									default: false;
+								})): used.set(enumCaseKey(name, constructor), true);
 							case _:
 						}
 		var result:Array<String> = [for (key in used.keys()) key];
@@ -122,12 +122,14 @@ class WasmModuleSupport {
 		module.exports.push({name: name, functionIndex: index});
 	}
 
-	public static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram, used:Map<String, Bool>):Void {
+	public static function addCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram,
+			used:Map<String, Bool>):Void {
 		for (native in program.cNatives) {
 			if (!used.exists(native.name) || native.library == WasmCryptoRuntime.LIBRARY)
 				continue;
 			var type:WasmFunctionType = WasmCAbi.of(native)
-				.importType([for (argument in native.arguments) requireValueType(argument)], resultTypes(native.result));
+				.importType([for (argument in native.arguments) requireValueType(argument)],
+				resultTypes(native.result));
 			var importModule = native.library == null || native.library == "" ? "env" : native.library,
 				importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 			functions.set(native.name, module.addImport(importModule, importName, type));
@@ -192,7 +194,11 @@ class WasmModuleSupport {
 		return Std.int(Math.ceil(bytes / 65536.0));
 
 	/** Place static data in linear memory as active data segments starting at `start`. */
-	public static function placeStaticData(program:IrProgram, module:WasmModule, start:Int, reachable:Map<String, Bool>):{addresses:Map<String, Int>, end:Int} {
+	public static function placeStaticData(program:IrProgram, module:WasmModule, start:Int,
+			reachable:Map<String, Bool>): {
+				addresses: Map<String, Int>,
+				end: Int
+			} {
 		var layout = layoutStaticData(program, start, reachable);
 		for (segment in layout.segments)
 			module.data.push(segment);
@@ -201,7 +207,11 @@ class WasmModuleSupport {
 
 	/** Assign each distinct static data blob an 8-byte-aligned address from `start`. */
 	public static function layoutStaticData(program:IrProgram, start:Int,
-			reachable:Map<String, Bool>):{addresses:Map<String, Int>, segments:Array<WasmDataSegment>, end:Int} {
+			reachable:Map<String, Bool>): {
+				addresses: Map<String, Int>,
+				segments: Array<WasmDataSegment>,
+				end: Int
+			} {
 		var addresses:Map<String, Int> = [], segments:Array<WasmDataSegment> = [], next = start;
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -257,7 +267,8 @@ class WasmModuleSupport {
 		};
 	}
 
-	public static function collectClosureTypes(module:WasmModule, program:IrProgram, ?abi:WasmScalarAbi):Map<String, WasmClosureTypes> {
+	public static function collectClosureTypes(module:WasmModule, program:IrProgram,
+			?abi:WasmScalarAbi):Map<String, WasmClosureTypes> {
 		var result:Map<String, WasmClosureTypes> = [];
 		for (fn in program.functions)
 			for (block in fn.blocks)
@@ -273,7 +284,8 @@ class WasmModuleSupport {
 									if (!result.exists(key)) result.set(key, {
 										staticType: module.typeIndex(type),
 										instanceType: module.typeIndex({
-											parameters: [compiler.backend.wasm.WasmTypes.WasmValueType.I32].concat(type.parameters),
+											parameters: [compiler.backend.wasm.WasmTypes.WasmValueType.I32]
+												.concat(type.parameters),
 											results: type.results
 										})
 									});
@@ -294,7 +306,8 @@ class WasmModuleSupport {
 							var closureSignature = closureFunctionType(output.type, closureArguments, resultType, abi),
 								staticType = module.typeIndex(closureSignature),
 								instanceType = module.typeIndex({
-									parameters: [requireValueType(target.arguments[0].type)].concat(closureSignature.parameters),
+									parameters: [requireValueType(target.arguments[0].type)]
+										.concat(closureSignature.parameters),
 									results: closureSignature.results
 								});
 							var key = Std.string(output.type),
@@ -308,7 +321,8 @@ class WasmModuleSupport {
 		return result;
 	}
 
-	static function closureFunctionType(type:IrType, arguments:Array<IrType>, result:IrType, abi:Null<WasmScalarAbi>):WasmFunctionType {
+	static function closureFunctionType(type:IrType, arguments:Array<IrType>, result:IrType,
+			abi:Null<WasmScalarAbi>):WasmFunctionType {
 		if (abi == null || !abi.scalarClosures.exists(IrTypeIdentity.text(type)))
 			return {parameters: [for (argument in arguments) requireValueType(argument)], results: resultTypes(result)};
 		var parameters:Array<WasmValueType> = [],
@@ -321,12 +335,13 @@ class WasmModuleSupport {
 			default: true;
 		}))
 			for (part in abi.valueTypes(result))
-				results.push(requireValueType(part));
+			results.push(requireValueType(part));
 		return {parameters: parameters, results: results};
 	}
 
 	/** Puts every named function in the table, sorted by name, or by `group` and then name. */
-	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>, ?group:String->String):Map<String, Int> {
+	public static function buildTableSlots(module:WasmModule, functions:Map<String, Int>,
+			?group:String->String):Map<String, Int> {
 		var names = [for (fn in module.functions) if (functions.exists(fn.name)) fn.name];
 		if (group == null)
 			names.sort(Reflect.compare);
@@ -430,7 +445,8 @@ class WasmModuleSupport {
 			case I64: I64;
 			case F32: F64;
 			case F64: F64;
-			case RawPtr, Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_), Iterator(_), Function(_, _): I32;
+			case RawPtr, Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_),
+				Iterator(_), Function(_, _): I32;
 			default: throw 'Wasm scalar backend does not yet support IR type ${Std.string(type)}';
 		};
 }

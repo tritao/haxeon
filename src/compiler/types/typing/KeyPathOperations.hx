@@ -13,7 +13,8 @@ import compiler.types.typing.CallResolver.TypeExpressionCallback;
 
 /** Path operations preserve typed field access instead of crossing Dynamic. */
 class KeyPathOperations {
-	public static function call(session:TypingSession, receiver:TypedExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
+	public static function call(session:TypingSession, receiver:TypedExpression, name:String,
+			arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope, typeExpression:TypeExpressionCallback, coerce:CoerceCallback,
 			member:TypeCallMemberWithFlowCallback):Null<TypedExpression> {
 		return switch receiver.type {
@@ -22,16 +23,21 @@ class KeyPathOperations {
 				var next = typeExpression(arguments[0], scope, null, false);
 				switch next.type {
 					case TKeyPath(nextRoot, result, nextWritable):
-						if (!TypeRelations.equals(value, nextRoot)) fail("E1009", "KeyPath.then requires matching intermediate types", span);
+						if (!TypeRelations.equals(value, nextRoot)) fail("E1009",
+							"KeyPath.then requires matching intermediate types", span);
 						var first = KeyPathTyping.known(session, receiver), second = KeyPathTyping.known(session, next);
 						if (first != null && second != null)
-							KeyPathTyping.define(session, root, result, first.fields.concat(second.fields), writable && nextWritable, span, false);
+							KeyPathTyping.define(session, root, result, first.fields.concat(second.fields),
+								writable && nextWritable, span, false);
 						else {
 							if (writable && nextWritable && session.relations.isValueClass(value)
 								&& (second == null || second.rootWriteback)
 								&& KeyPathTyping.mayProjectTrackedStruct(session, root, first))
-								fail("E1027", "Cannot mutate a struct inside Observable storage through an unknown composed path; compose a read-only KeyPath instead", span);
-							KeyPathComposition.create(session, receiver, next, root, value, result, writable && nextWritable, span);
+								fail("E1027",
+									"Cannot mutate a struct inside Observable storage through an unknown composed path; compose a read-only KeyPath instead",
+									span);
+							KeyPathComposition.create(session, receiver, next, root, value, result,
+								writable && nextWritable, span);
 						}
 					default:
 						fail("E1009", "KeyPath.then requires a key path", span);
@@ -43,7 +49,8 @@ class KeyPathOperations {
 				new TypedExpression(TField(receiver, "$display"), TString, span);
 			case TKeyPath(root, value, _) if (name == "get"):
 				if (arguments.length != 1)
-					throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E1008", 'KeyPath.get expects 1 argument, got ${arguments.length}', span));
+					throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E1008",
+						'KeyPath.get expects 1 argument, got ${arguments.length}', span));
 				var target = coerce(typeExpression(arguments[0], scope, root, false), root, "key path root", "E1009"),
 					definition = KeyPathTyping.known(session, receiver);
 				if (definition != null) {
@@ -52,35 +59,46 @@ class KeyPathOperations {
 					target;
 				} else {
 					new AnonymousTypeRegistry(session).register(receiver.type);
-					new TypedExpression(TClosureCall(new TypedExpression(TField(receiver, "$get"), TFunction([root], value), span), [target]), value, span);
+					new TypedExpression(TClosureCall(new TypedExpression(TField(receiver, "$get"),
+						TFunction([root], value), span), [target]), value, span);
 				}
 			case TKeyPath(root, value, writable) if (name == "set"):
-				if (arguments.length != 2) fail("E1008", 'KeyPath.set expects 2 arguments, got ${arguments.length}', span);
+				if (arguments.length != 2) fail("E1008", 'KeyPath.set expects 2 arguments, got ${arguments.length}',
+					span);
 				var definition = KeyPathTyping.known(session, receiver);
 				if (!writable || definition != null && !definition.writable) {
-					var message = definition != null && definition.writeError != null ? definition.writeError : "Cannot write through a read-only KeyPath";
-					fail(StringTools.startsWith(message, "Cannot mutate a struct inside Observable") ? "E1027" : "E1009", message, span);
+					var message = definition != null && definition.writeError != null
+						? definition.writeError : "Cannot write through a read-only KeyPath";
+					fail(StringTools.startsWith(message, "Cannot mutate a struct inside Observable")
+						? "E1027" : "E1009", message, span);
 				}
 				var target = typeExpression(arguments[0], scope, root, false);
-				if (!session.relations.isAssignable(target.type, root)) fail("E1009", "Type mismatch for key path root", target.span);
+				if (!session.relations.isAssignable(target.type, root)) fail("E1009", "Type mismatch for key path root",
+					target.span);
 				// A place must retain its storage: ordinary argument coercion copies structs.
-				if (!TypeRelations.equals(target.type, root)) target = session.representation.boundaryCast(target, root);
+				if (!TypeRelations.equals(target.type, root)) target = session.representation.boundaryCast(target,
+					root);
 				if (definition != null) {
 					for (index in 0...definition.fields.length - 1)
 						target = member(target, definition.fields[index].field.name, span, scope);
 					ValuePlaceRules.requireWritable(session, target, span);
 					var last = definition.fields[definition.fields.length - 1],
-						assigned = coerce(typeExpression(arguments[1], scope, value, false), value, "key path value", "E1009"),
+						assigned = coerce(typeExpression(arguments[1], scope, value, false), value, "key path value",
+							"E1009"),
 						physical = session.representation.resolveField(target.type, last.field.name, span).physical;
 					new TypedExpression(TBlockExpression([TFieldAssign(target, last.field.name,
-						session.representation.boundaryCast(assigned, physical), span)], new TypedExpression(TVoidLiteral, TVoid, span)), TVoid, span);
+						session.representation.boundaryCast(assigned, physical), span)],
+						new TypedExpression(TVoidLiteral, TVoid, span)), TVoid, span);
 				} else {
 					ValuePlaceRules.requireWritable(session, target, span);
-					var statements:Array<TypedStatement> = [], path = hold(session, receiver, "path", span, statements),
+					var statements:Array<TypedStatement> = [],
+						path = hold(session, receiver, "path", span, statements),
 						place = session.relations.isValueClass(root) ? capturePlace(session, target, span, statements)
 							: hold(session, target, "root", span, statements),
-						assigned = hold(session, coerce(typeExpression(arguments[1], scope, value, false), value, "key path value", "E1009"), "value", span, statements),
-						rootValue = session.relations.isValueClass(root) ? hold(session, ValueCopy.bind(session, place, root), "root", span, statements) : place;
+						assigned = hold(session, coerce(typeExpression(arguments[1], scope, value, false), value,
+							"key path value", "E1009"), "value", span, statements),
+						rootValue = session.relations.isValueClass(root) ? hold(session,
+							ValueCopy.bind(session, place, root), "root", span, statements) : place;
 					new AnonymousTypeRegistry(session).register(receiver.type);
 					var setter = new TypedExpression(TField(path, "$set"), TFunction([root, value], root), span),
 						updated = new TypedExpression(TClosureCall(setter, [rootValue, assigned]), root, span);
@@ -89,36 +107,46 @@ class KeyPathOperations {
 							writesRoot = new TypedExpression(TField(path, "$writeback"), TBool, span);
 						statements.push(TIf(writesRoot, storePlace(session, place, result, span), [], span));
 					} else statements.push(TExpression(updated, span));
-					new TypedExpression(TBlockExpression(statements, new TypedExpression(TVoidLiteral, TVoid, span)), TVoid, span);
+					new TypedExpression(TBlockExpression(statements, new TypedExpression(TVoidLiteral, TVoid, span)),
+						TVoid, span);
 				}
 			default: null;
 		};
 	}
 
-	public static function hold(session:TypingSession, value:TypedExpression, purpose:String, span:SourceSpan, statements:Array<TypedStatement>):TypedExpression {
+	public static function hold(session:TypingSession, value:TypedExpression, purpose:String, span:SourceSpan,
+			statements:Array<TypedStatement>):TypedExpression {
 		var name = "$keypath:" + purpose + ":" + span.start + ":" + session.currentContext.keyPathTemporary++;
 		statements.push(TVar(name, value, span));
 		return new TypedExpression(TLocal(name), value.type, span);
 	}
 
 	/** Capture reference receivers and indices once, without copying an enclosing struct place. */
-	static function capturePlace(session:TypingSession, place:TypedExpression, span:SourceSpan, statements:Array<TypedStatement>):TypedExpression
+	static function capturePlace(session:TypingSession, place:TypedExpression, span:SourceSpan,
+			statements:Array<TypedStatement>):TypedExpression
 		return switch place.expression {
 			case TCall("$rawptr.ref.flat", [pointer]):
-				new TypedExpression(TCall("$rawptr.ref.flat", [hold(session, pointer, "pointer", span, statements)]), place.type, place.span);
+				new TypedExpression(TCall("$rawptr.ref.flat", [hold(session, pointer, "pointer", span, statements)]),
+					place.type, place.span);
 			case TField(parent, name):
-				var receiver = session.relations.isValueClass(parent.type) || session.relations.isNullableValueClass(parent.type)
-					? capturePlace(session, parent, span, statements) : hold(session, parent, "owner", span, statements);
+				var receiver = session.relations.isValueClass(parent.type)
+					|| session.relations.isNullableValueClass(parent.type)
+					? capturePlace(session, parent, span, statements) : hold(session, parent, "owner", span,
+					statements);
 				new TypedExpression(TField(receiver, name), place.type, place.span);
 			case TIndex(array, index):
-				var receiver = hold(session, array, "array", span, statements), offset = hold(session, index, "index", span, statements);
+				var receiver = hold(session, array, "array", span, statements),
+					offset = hold(session, index, "index", span, statements);
 				new TypedExpression(TIndex(receiver, offset), place.type, place.span);
-			case TCast(inner): new TypedExpression(TCast(capturePlace(session, inner, span, statements)), place.type, place.span);
-			case TAbiCast(inner): new TypedExpression(TAbiCast(capturePlace(session, inner, span, statements)), place.type, place.span);
+			case TCast(inner): new TypedExpression(TCast(capturePlace(session, inner, span, statements)), place.type,
+				place.span);
+			case TAbiCast(inner): new TypedExpression(TAbiCast(capturePlace(session, inner, span, statements)),
+				place.type, place.span);
 			default: place;
 		};
 
-	static function storePlace(session:TypingSession, place:TypedExpression, value:TypedExpression, span:SourceSpan):Array<TypedStatement>
+	static function storePlace(session:TypingSession, place:TypedExpression, value:TypedExpression,
+			span:SourceSpan):Array<TypedStatement>
 		return switch place.expression {
 			case TCall("$rawptr.ref.flat", [_]): copyFields(session, place, value, span);
 			case TLocal(_) if (session.relations.isValueClass(place.type)): copyFields(session, place, value, span);
@@ -141,8 +169,8 @@ class KeyPathOperations {
 			default: throw "Unsupported key path root place";
 		};
 
-	static function copyFields(session:TypingSession, place:TypedExpression, value:TypedExpression, span:SourceSpan):Array<TypedStatement>
-	{
+	static function copyFields(session:TypingSession, place:TypedExpression, value:TypedExpression,
+			span:SourceSpan):Array<TypedStatement> {
 		var statements:Array<TypedStatement> = [];
 		for (entry in DiffIntrinsics.conformanceFields(session, place.type)) {
 			var physical = session.representation.resolveField(place.type, entry.field.name, span).physical;

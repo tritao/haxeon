@@ -26,10 +26,29 @@ class HlPatchReader {
 				revision = readUnsigned(input);
 			if (revision <= base)
 				throw "Invalid patch revision range";
-			var baseInts = -1, baseFloats = -1, baseStrings = -1, baseTypes = -1, intPrefixHash = 0, floatPrefixHash = 0, stringPrefixHash = 0,
-				typePrefixHash = 0, ints = [], floats = [], strings = [], types = [], functions = [], debugFiles = [], sourceSnapshots = [],
-				haveDebug = false, haveSnapshots = false, haveAdded = false, addedFunctions:Array<HlPatchAddedFunction> = [], haveGlobals = false,
-				baseGlobals = 0, globalPrefixHash = 0, globals:Array<HlPatchGlobal> = [];
+			var baseInts = -1,
+				baseFloats = -1,
+				baseStrings = -1,
+				baseTypes = -1,
+				intPrefixHash = 0,
+				floatPrefixHash = 0,
+				stringPrefixHash = 0,
+				typePrefixHash = 0,
+				ints = [],
+				floats = [],
+				strings = [],
+				types = [],
+				functions = [],
+				debugFiles = [],
+				sourceSnapshots = [],
+				haveDebug = false,
+				haveSnapshots = false,
+				haveAdded = false,
+				addedFunctions:Array<HlPatchAddedFunction> = [],
+				haveGlobals = false,
+				baseGlobals = 0,
+				globalPrefixHash = 0,
+				globals:Array<HlPatchGlobal> = [];
 			for (_ in 0...readUnsigned(input)) {
 				var tag = input.readByte(),
 					length = readUnsigned(input),
@@ -97,7 +116,8 @@ class HlPatchReader {
 									end = readIndex(input) - 1,
 									flags = readUnsigned(input),
 									validRange = start == -1 && end == -1 || start >= 0 && end >= start;
-								if (file >= debugFiles.length || line < 1 || column < 1 || endLine < line || endColumn < 1 || endLine == line
+								if (file >= debugFiles.length || line < 1 || column < 1 || endLine < line
+									|| endColumn < 1 || endLine == line
 									&& endColumn < column || !validRange)
 									throw "Invalid HLP debug location";
 								found.debug.push({
@@ -153,7 +173,11 @@ class HlPatchReader {
 							if (kind == 0)
 								globals.push({type: readUnsigned(input), constant: false, fields: []});
 							else if (kind == 1)
-								globals.push({type: readUnsigned(input), constant: true, fields: [for (_ in 0...readUnsigned(input)) readUnsigned(input)]});
+								globals.push({
+									type: readUnsigned(input),
+									constant: true,
+									fields: [for (_ in 0...readUnsigned(input)) readUnsigned(input)]
+								});
 							else
 								throw "Invalid HLP global kind";
 						}
@@ -211,18 +235,27 @@ class HlPatchReader {
 		if (tag == HlType.Enum || tag == HlType.EnumTag)
 			throw "Enum type patches require a structural reload";
 		if (tag == HlType.Obj || tag == HlType.Struct) {
-			var name = readIndex(input), base = readIndex(input), global = readUnsigned(input), fieldCount = readUnsigned(input),
-				methodCount = readUnsigned(input), bindingCount = readUnsigned(input);
-			var fields = [for (_ in 0...fieldCount) {name: readIndex(input), type: readIndex(input)}],
-				methods = [
-					for (_ in 0...methodCount)
-						{name: readIndex(input), functionIndex: readIndex(input), prototype: readIndex(input)}
-				],
+			var name = readIndex(input),
+				base = readIndex(input),
+				global = readUnsigned(input),
+				fieldCount = readUnsigned(input),
+				methodCount = readUnsigned(input),
+				bindingCount = readUnsigned(input);
+			var fields = [for (_ in 0...fieldCount) {
+				name:readIndex(input), type:readIndex(input)
+			}],
+				methods = [for (_ in 0...methodCount)
+				{
+				name:readIndex(input), functionIndex:readIndex(input), prototype:readIndex(input)
+			}],
 				bindings = [for (_ in 0...bindingCount * 2) readIndex(input)];
-			return tag == HlType.Obj ? Object(name, base, global, fields, methods, bindings) : Structure(name, global, fields, methods, bindings);
+			return tag == HlType.Obj ? Object(name, base, global, fields, methods, bindings) : Structure(name, global,
+				fields, methods, bindings);
 		}
 		if (tag == HlType.Virtual)
-			return Virtual(readIndex(input), [for (_ in 0...readUnsigned(input)) {name: readIndex(input), type: readIndex(input)}]);
+			return Virtual(readIndex(input), [for (_ in 0...readUnsigned(input)) {
+				name:readIndex(input), type:readIndex(input)
+			}]);
 		if (tag == HlType.Abstract)
 			return Abstract(readIndex(input));
 		if (tag == HlType.Ref || tag == HlType.Null || tag == HlType.Packed)
@@ -245,10 +278,10 @@ class HlPatchReader {
 			var opcode = input.readByte();
 			instructions.push({opcode: opcode, operands: readOperands(input, opcode)});
 		}
-		var relocations = [
-			for (_ in 0...readUnsigned(input))
-				{instruction: readUnsigned(input), stableId: readUnsigned(input)}
-		];
+		var relocations = [for (_ in 0...readUnsigned(input))
+			{
+				instruction:readUnsigned(input), stableId:readUnsigned(input)
+			}];
 		return {
 			type: type,
 			functionIndex: stableId,

@@ -95,7 +95,8 @@ class IrNullableScalarFields {
 		var raw = builder.safeCast(value, element),
 			shift = builder.constInt(bits - width),
 			shifted = builder.shiftLeft(raw, shift),
-			normalized = storage.signed ? builder.shiftRight(shifted, shift) : builder.unsignedShiftRight(shifted, shift);
+			normalized = storage.signed ? builder.shiftRight(shifted, shift) : builder.unsignedShiftRight(shifted,
+				shift);
 		builder.branch(builder.equal(raw, normalized), same, changed);
 		builder.select(same);
 		builder.returnValue(value);
@@ -103,7 +104,7 @@ class IrNullableScalarFields {
 		builder.returnValue(builder.toDyn(normalized, type));
 		helpers.set(name,
 			new IrFunction(name, builder.arguments, type, builder.blocks,
-				Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, name))));
+			Provider(TypeKey.of(type), ProviderOperations.detailed(ProviderOperation.NullableScalarHelper, name))));
 		return name;
 	}
 

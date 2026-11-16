@@ -4,7 +4,7 @@ abstract Box<T>(Array<T>) {
 		this = values;
 
 	public inline function all(index:Int):Array<T>
-		return (cast this : Array<T>);
+		return (cast this:Array<T>);
 
 	public inline function first(index:Int):T {
 		var values = all(index);

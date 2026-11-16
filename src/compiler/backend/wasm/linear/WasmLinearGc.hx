@@ -31,7 +31,8 @@ class WasmLinearGc {
 		for (index in 0...count) {
 			var fn = module.functions[index];
 			// The collector's own functions and the allocator hold no references; linked C functions are not rewritten.
-			if (fn.name == "__haxeon_gc_mark" || fn.name == "__haxeon_gc_trace" || fn.name == "__haxeon_gc_collect" || fn.name == "__haxeon_alloc"
+			if (fn.name == "__haxeon_gc_mark" || fn.name == "__haxeon_gc_trace" || fn.name == "__haxeon_gc_collect"
+				|| fn.name == "__haxeon_alloc"
 				|| fn.encodedBody != null)
 				continue;
 			module.setFunction(module.imports.length + index, wrapRuntimeFunction(context, fn));
@@ -46,10 +47,16 @@ class WasmLinearGc {
 			runtimeNeutral = context.options.wasmRuntimeNeutral == true;
 		var rootSlots:Array<Int> = [];
 		for (index in 0...fn.type.parameters.length)
-			if ((switch (fn.type.parameters[index]) { case I32: true; default: false; }))
+			if ((switch (fn.type.parameters[index]) {
+				case I32: true;
+				default: false;
+			}))
 				rootSlots.push(index);
 		for (index in 0...fn.locals.length)
-			if ((switch (fn.locals[index].type) { case I32: true; default: false; }))
+			if ((switch (fn.locals[index].type) {
+				case I32: true;
+				default: false;
+			}))
 				rootSlots.push(fn.type.parameters.length + index);
 		if (rootSlots.length == 0 && !runtimeNeutral)
 			return fn;
@@ -95,7 +102,10 @@ class WasmLinearGc {
 		for (instruction in fn.body) {
 			if (frame != null && (isRuntimeCall(instruction) || (runtimeNeutral && isRuntimeIndirectCall(instruction))))
 				appendRuntimeRootSnapshot(body, frame, rootSlots);
-			if ((switch (instruction) { case Return: true; default: false; }) && frame != null) {
+			if ((switch (instruction) {
+				case Return: true;
+				default: false;
+			}) && frame != null) {
 				emitRuntimeRootFrameRestore(body, frame, context);
 			}
 			body.push(instruction);
@@ -111,7 +121,10 @@ class WasmLinearGc {
 		// explicit Return instruction. Balance their shadow-root frame on that
 		// normal fallthrough path as well; otherwise each helper call permanently
 		// consumes root-stack space until a later call traps at rootLimit.
-		if (frame != null && (fn.body.length == 0 || (switch (fn.body[fn.body.length - 1]) { case Return: false; default: true; })))
+		if (frame != null && (fn.body.length == 0 || (switch (fn.body[fn.body.length - 1]) {
+			case Return: false;
+			default: true;
+		})))
 			emitRuntimeRootFrameRestore(body, frame, context);
 		if (exceptionTag != null) {
 			var wrapper = new WasmFunctionBuilder(fn.name, fn.type);
@@ -149,7 +162,8 @@ class WasmLinearGc {
 			default: null;
 		};
 
-	static function appendRuntimePendingCheck(body:Array<WasmInstruction>, locals:Array<compiler.backend.wasm.WasmModule.WasmLocal>, fn:WasmFunction,
+	static function appendRuntimePendingCheck(body:Array<WasmInstruction>,
+			locals:Array<compiler.backend.wasm.WasmModule.WasmLocal>, fn:WasmFunction,
 			callType:WasmFunctionType, frame:Null<Int>, context:WasmLinearContext):Void {
 		var pendingFlag = context.pendingExceptionFlag;
 		if (pendingFlag == null)
@@ -183,7 +197,8 @@ class WasmLinearGc {
 			case F64: [F64Const(0.0)];
 		};
 
-	static function emitRuntimeRootFrameRestore(body:Array<WasmInstruction>, frame:Int, context:WasmLinearContext):Void {
+	static function emitRuntimeRootFrameRestore(body:Array<WasmInstruction>, frame:Int,
+			context:WasmLinearContext):Void {
 		var rootTop = context.rootTop, rootFrameTop = context.rootFrameTop;
 		body.push(LocalGet(frame));
 		body.push(I32Load(WasmLayout.ROOT_PREVIOUS_TOP_OFFSET));
@@ -381,13 +396,15 @@ class WasmLinearGc {
 		builder.localTee(backingOwner);
 		builder.i32Eqz();
 		builder.ifElse(function(_) {}, function(builder) {
-			appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Array(Dyn)), function(builder) {
-				appendGcArrayContents(builder, value, backingOwner, entryCount, entryIndex, mark);
-			});
-			for (mapName in mapNames)
-				appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Abstract(mapName)), function(builder) {
-					appendGcMapContents(builder, value, backingOwner, entryCount, entryIndex, mark, mapName);
+			appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Array(Dyn)),
+				function(builder) {
+					appendGcArrayContents(builder, value, backingOwner, entryCount, entryIndex, mark);
 				});
+			for (mapName in mapNames)
+				appendGcBackingTraceCase(builder, backingOwner, context.module.runtimeTypeId(Abstract(mapName)),
+					function(builder) {
+						appendGcMapContents(builder, value, backingOwner, entryCount, entryIndex, mark, mapName);
+					});
 			appendGcConservativeTrace(builder, value, header, entryCount, entryIndex, mark);
 			builder.return_();
 		});
@@ -476,20 +493,25 @@ class WasmLinearGc {
 			builder.i32Const(WasmLayout.VALUE_ARRAY_MARKER);
 			builder.emit(I32Eq);
 			builder.if_(function(builder) {
-				for (offset in [WasmLayout.VALUE_ARRAY_REFERENCE_DATA_OFFSET, WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET,
-						WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET, WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET,
-						WasmLayout.VALUE_ARRAY_FORWARD_HEADER_OFFSET]) {
+				for (offset in [
+					WasmLayout.VALUE_ARRAY_REFERENCE_DATA_OFFSET,
+					WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET,
+					WasmLayout.VALUE_ARRAY_WRITE_BRIDGE_OFFSET,
+					WasmLayout.VALUE_ARRAY_ACCEPTS_BRIDGE_OFFSET,
+					WasmLayout.VALUE_ARRAY_FORWARD_HEADER_OFFSET
+				]) {
 					builder.localGet(value);
 					builder.emit(I32Load(offset));
 					builder.call(builder.functionRef(mark));
 				}
 			});
 		});
-		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract("realtime_iterator")), function(builder) {
-			builder.localGet(value);
-			builder.emit(I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET));
-			builder.call(builder.functionRef(mark));
-		});
+		appendGcTraceCase(builder, value, context.module.runtimeTypeId(Abstract("realtime_iterator")),
+			function(builder) {
+				builder.localGet(value);
+				builder.emit(I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET));
+				builder.call(builder.functionRef(mark));
+			});
 		appendGcTraceCase(builder, value, WasmLayout.CLOSURE_TYPE_ID, function(builder) {
 			builder.localGet(value);
 			builder.emit(I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET));
@@ -501,7 +523,8 @@ class WasmLinearGc {
 		return index;
 	}
 
-	static function appendGcTraceCase(builder:WasmFunctionBuilder, value:WasmLocalRef, id:Int, traceBody:WasmFunctionBuilder->Void):Void {
+	static function appendGcTraceCase(builder:WasmFunctionBuilder, value:WasmLocalRef, id:Int,
+			traceBody:WasmFunctionBuilder->Void):Void {
 		builder.localGet(value);
 		builder.emit(I32Load(0));
 		builder.i32Const(id);
@@ -512,7 +535,8 @@ class WasmLinearGc {
 		});
 	}
 
-	static function appendGcBackingTraceCase(builder:WasmFunctionBuilder, backingType:WasmLocalRef, id:Int, traceBody:WasmFunctionBuilder->Void):Void {
+	static function appendGcBackingTraceCase(builder:WasmFunctionBuilder, backingType:WasmLocalRef, id:Int,
+			traceBody:WasmFunctionBuilder->Void):Void {
 		builder.localGet(backingType);
 		builder.emit(I32Load(0));
 		builder.i32Const(id);
@@ -523,7 +547,8 @@ class WasmLinearGc {
 		});
 	}
 
-	static function appendGcArrayContents(builder:WasmFunctionBuilder, backing:WasmLocalRef, owner:WasmLocalRef, entryCount:WasmLocalRef,
+	static function appendGcArrayContents(builder:WasmFunctionBuilder, backing:WasmLocalRef, owner:WasmLocalRef,
+			entryCount:WasmLocalRef,
 			entryIndex:WasmLocalRef, mark:Int):Void {
 		builder.localGet(owner);
 		builder.emit(I32Load(WasmLayout.ARRAY_LENGTH_OFFSET));
@@ -564,7 +589,8 @@ class WasmLinearGc {
 		});
 	}
 
-	static function appendGcMapContents(builder:WasmFunctionBuilder, backing:WasmLocalRef, owner:WasmLocalRef, entryCount:WasmLocalRef,
+	static function appendGcMapContents(builder:WasmFunctionBuilder, backing:WasmLocalRef, owner:WasmLocalRef,
+			entryCount:WasmLocalRef,
 			entryIndex:WasmLocalRef, mark:Int, mapName:String):Void {
 		var keyType = WasmLinearRuntime.mapKeyType(mapName),
 			valueType = WasmLinearRuntime.mapValueType(mapName),
@@ -609,7 +635,8 @@ class WasmLinearGc {
 		});
 	}
 
-	static function appendGcConservativeTrace(builder:WasmFunctionBuilder, value:WasmLocalRef, header:WasmLocalRef, entryCount:WasmLocalRef,
+	static function appendGcConservativeTrace(builder:WasmFunctionBuilder, value:WasmLocalRef, header:WasmLocalRef,
+			entryCount:WasmLocalRef,
 			entryIndex:WasmLocalRef, mark:Int):Void {
 		builder.localGet(header);
 		builder.emit(I32Load(WasmLayout.GC_BLOCK_SIZE_OFFSET));

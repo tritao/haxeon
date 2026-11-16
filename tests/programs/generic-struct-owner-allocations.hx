@@ -9,7 +9,10 @@ class AllocationOwner {
 struct AllocationValue implements AllocationMeasured {
 	public var number:Int;
 	public var owner:AllocationOwner;
-	public function new(number:Int, owner:AllocationOwner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:AllocationOwner) {
+		this.number = number;
+		this.owner = owner;
+	}
 	public function measure():Int return number;
 }
 
@@ -26,7 +29,7 @@ class AllocationClosure {
 	public static function extract(value:AllocationValue):Int return value.number;
 }
 
-class AllocationMeter<T:AllocationMeasured> {
+class AllocationMeter < T:AllocationMeasured > {
 	public var value:T;
 	public function new(value:T) this.value = value;
 	public function measure():Int return value.measure();

@@ -21,7 +21,8 @@ class HlLoweredFunction {
 	public final requests:Array<HlSymbolRequest>;
 	public final facts:Array<HlFact>;
 
-	public function new(name:String, source:IrFunction, fn:HlFunction, requests:Array<HlSymbolRequest>, facts:Array<HlFact>) {
+	public function new(name:String, source:IrFunction, fn:HlFunction, requests:Array<HlSymbolRequest>,
+			facts:Array<HlFact>) {
 		this.name = name;
 		this.source = source;
 		this.fn = fn;

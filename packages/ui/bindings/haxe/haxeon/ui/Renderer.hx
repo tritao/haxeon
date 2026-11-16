@@ -32,12 +32,14 @@ class Renderer {
 
 	public function render(list:DisplayList, surface:Surface):Void {
 		ensureLive();
-		UiResult.check(NativeKitUI.nkui_renderer_render(value, list.nativeHandle(), surface.nativeHandle()), "renderer.render");
+		UiResult.check(NativeKitUI.nkui_renderer_render(value, list.nativeHandle(), surface.nativeHandle()),
+			"renderer.render");
 	}
 
 	public function renderFrame(list:DisplayList, surface:Surface, frame:FrameInfo):Void {
 		ensureLive();
-		UiResult.check(NativeKitUI.nkui_renderer_render_frame(value, list.nativeHandle(), surface.nativeHandle(), frame.nativeValue()), "renderer.renderFrame");
+		UiResult.check(NativeKitUI.nkui_renderer_render_frame(value, list.nativeHandle(), surface.nativeHandle(),
+			frame.nativeValue()), "renderer.renderFrame");
 	}
 
 	/** Composites a display list over contents already rendered in the current frame. */
@@ -61,8 +63,10 @@ class Renderer {
 		var result = NativeKitUI.nkui_renderer_get_stats(value);
 		UiResult.check(result.status, "renderer.stats");
 		var stats = result.out_stats;
-		return new RendererStats(stats.get_path_preparations(), stats.get_path_cache_hits(), stats.get_path_cache_misses(),
-			stats.get_path_vertices_generated(), stats.get_path_geometry_bytes_allocated(), stats.get_path_tessellation_nanoseconds(),
+		return new RendererStats(stats.get_path_preparations(), stats.get_path_cache_hits(),
+			stats.get_path_cache_misses(),
+			stats.get_path_vertices_generated(), stats.get_path_geometry_bytes_allocated(),
+			stats.get_path_tessellation_nanoseconds(),
 			stats.get_path_geometry_bytes_retained(), stats.get_raster_cache_hits(), stats.get_raster_cache_misses(),
 			stats.get_raster_cache_entries(), stats.get_raster_cache_bytes());
 	}
@@ -74,10 +78,14 @@ class Renderer {
 		var result = NativeKitUI.nkui_renderer_get_stats(value);
 		UiResult.check(result.status, "renderer.planReuse");
 		var stats = result.out_stats;
-		return new RenderPlanReuse(haxe.Int64.toFloat(stats.get_render_plan_compiles()), haxe.Int64.toFloat(stats.get_render_plan_reuses()),
-			haxe.Int64.toFloat(stats.get_render_plan_miss_epoch()), haxe.Int64.toFloat(stats.get_render_plan_miss_frame()),
-			haxe.Int64.toFloat(stats.get_render_plan_miss_lists()), haxe.Int64.toFloat(stats.get_render_plan_miss_dependencies()),
-			haxe.Int64.toFloat(stats.get_render_plan_miss_atlas()), haxe.Int64.toFloat(stats.get_render_plan_miss_unsettled()));
+		return new RenderPlanReuse(haxe.Int64.toFloat(stats.get_render_plan_compiles()),
+			haxe.Int64.toFloat(stats.get_render_plan_reuses()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_epoch()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_frame()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_lists()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_dependencies()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_atlas()),
+			haxe.Int64.toFloat(stats.get_render_plan_miss_unsettled()));
 	}
 
 	var gpuFrameTiming = false;
@@ -87,7 +95,8 @@ class Renderer {
 		if (enabled == gpuFrameTiming)
 			return;
 		ensureLive();
-		UiResult.check(NativeKitUI.nkui_renderer_set_gpu_frame_timing(value, enabled ? 1 : 0), "renderer.setGpuFrameTiming");
+		UiResult.check(NativeKitUI.nkui_renderer_set_gpu_frame_timing(value, enabled ? 1 : 0),
+			"renderer.setGpuFrameTiming");
 		gpuFrameTiming = enabled;
 	}
 
@@ -150,7 +159,8 @@ class RenderPlanReuse {
 	/** The first plan, or one not yet confirmed by a second identical build. */
 	public final missUnsettled:Float;
 
-	public function new(compiles:Float, reuses:Float, missEpoch:Float, missFrame:Float, missLists:Float, missDependencies:Float, missAtlas:Float,
+	public function new(compiles:Float, reuses:Float, missEpoch:Float, missFrame:Float, missLists:Float,
+			missDependencies:Float, missAtlas:Float,
 			missUnsettled:Float) {
 		this.compiles = compiles;
 		this.reuses = reuses;
@@ -177,10 +187,12 @@ class RendererStats {
 	public final rasterCacheEntries:haxe.Int64;
 	public final rasterCacheBytes:haxe.Int64;
 
-	public function new(pathPreparations:haxe.Int64, pathCacheHits:haxe.Int64, pathCacheMisses:haxe.Int64, pathVerticesGenerated:haxe.Int64,
-		pathGeometryBytesAllocated:haxe.Int64, pathTessellationNanoseconds:haxe.Int64, pathGeometryBytesRetained:haxe.Int64,
-		rasterCacheHits:haxe.Int64, rasterCacheMisses:haxe.Int64, rasterCacheEntries:haxe.Int64,
-		rasterCacheBytes:haxe.Int64) {
+	public function new(pathPreparations:haxe.Int64, pathCacheHits:haxe.Int64, pathCacheMisses:haxe.Int64,
+			pathVerticesGenerated:haxe.Int64,
+			pathGeometryBytesAllocated:haxe.Int64, pathTessellationNanoseconds:haxe.Int64,
+			pathGeometryBytesRetained:haxe.Int64,
+			rasterCacheHits:haxe.Int64, rasterCacheMisses:haxe.Int64, rasterCacheEntries:haxe.Int64,
+			rasterCacheBytes:haxe.Int64) {
 		this.pathPreparations = pathPreparations;
 		this.pathCacheHits = pathCacheHits;
 		this.pathCacheMisses = pathCacheMisses;

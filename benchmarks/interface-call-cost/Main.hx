@@ -118,10 +118,10 @@ class Main {
 			for (n in 0...CALLS) {
 				var o = hierarchy[n & (COUNT - 1)];
 				s += switch o.id {
-					case 0: (cast o : A).read();
-					case 1: (cast o : B).read();
-					case 2: (cast o : C).read();
-					default: (cast o : D).read();
+					case 0: (cast o:A).read();
+					case 1: (cast o:B).read();
+					case 2: (cast o:C).read();
+					default: (cast o:D).read();
 				};
 			}
 			return s;

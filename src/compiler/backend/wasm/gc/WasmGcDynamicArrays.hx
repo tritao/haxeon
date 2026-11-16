@@ -57,7 +57,8 @@ class WasmGcDynamicArrays {
 		return OPERATIONS.indexOf(name) >= 0;
 
 	/** Emit a module function for each dynamic-view native the program uses. */
-	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan, representation:WasmGcRepresentation,
+	public static function register(module:WasmModule, functions:Map<String, Int>, plan:WasmGcTypePlan,
+			representation:WasmGcRepresentation,
 			program:IrProgram, used:Map<String, Bool>):Void {
 		var operations = [
 			for (native in program.natives)
@@ -67,7 +68,8 @@ class WasmGcDynamicArrays {
 			return;
 		// Error messages name types by testing against every class or element type, so helpers share these
 		// functions; expanded in each arm of an element-type dispatch they grow with the square of the types.
-		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int, result:IrType = Bytes):Void {
+		function shared(name:String, arguments:Array<IrType>, build:WasmGcDynamicArrays->Int,
+				result:IrType = Bytes):Void {
 			if (functions.exists(name))
 				return;
 			var helper = new WasmGcDynamicArrays(module, plan, program, representation, arguments.length, functions),
@@ -83,14 +85,16 @@ class WasmGcDynamicArrays {
 				for (index in 0...prefix.length)
 					helper.body.insert(index, prefix[index]);
 			}
-			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, result), helper.locals, helper.body)));
+			functions.set(name, module.addFunction(new WasmFunction(name, plan.wasmFunctionType(arguments, result),
+				helper.locals, helper.body)));
 		}
 		shared(VALUE_TYPE_NAME, [Dyn], helper -> helper.inlineValueTypeName(0));
 		shared(TYPE_NAME, [I32], helper -> helper.inlineTypeName(0));
 		if (compiler.backend.wasm.WasmValueLaneRuntime.isLinked(functions)) {
 			var needsRead = false;
 			for (native in operations)
-				if (native.name == "__array_pop_any" || native.name == "__array_shift_any" || native.name == "__array_concat_any")
+				if (native.name == "__array_pop_any" || native.name == "__array_shift_any"
+					|| native.name == "__array_concat_any")
 					needsRead = true;
 			if (needsRead)
 				shared("$value-array:runtime:get", [Array(Dyn), I32], helper -> {
@@ -122,20 +126,20 @@ class WasmGcDynamicArrays {
 							-1;
 						}, Void);
 		for (native in operations)
-			functions.set(native.name, new WasmGcDynamicArrays(module, plan, program, representation, native.arguments.length, functions).emit(module, native));
+			functions.set(native.name, new WasmGcDynamicArrays(module, plan, program, representation,
+				native.arguments.length, functions).emit(module, native));
 	}
 
 	/** Nominal scalar enums always use lane bridges, never the ordinary primitive boxing arms. */
 	static function ordinaryElements(plan:WasmGcTypePlan):Array<IrType>
-		return [
-			for (element in plan.arrayElementTypes())
-				if (!(switch element {
-					case EnumTag(_): true;
-					default: false;
-				})) element
-		];
+		return [for (element in plan.arrayElementTypes())
+			if (!(switch element {
+				case EnumTag(_): true;
+				default: false;
+			})) element];
 
-	function new(module:WasmModule, plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation, argumentCount:Int,
+	function new(module:WasmModule, plan:WasmGcTypePlan, program:IrProgram, gcRepresentation:WasmGcRepresentation,
+			argumentCount:Int,
 			functions:Map<String, Int>) {
 		this.module = module;
 		this.plan = plan;
@@ -146,7 +150,11 @@ class WasmGcDynamicArrays {
 		nextLocal = argumentCount;
 		// The representation keeps some locals for the whole function (array references, the required
 		// length), so its locals never join the arms' shared pool.
-		representation = gcRepresentation.forFunction({allocateLocal: newLocal, exceptionTag: throws ? 0 : null, irFunction: null});
+		representation = gcRepresentation.forFunction({
+			allocateLocal: newLocal,
+			exceptionTag: throws ? 0 : null,
+			irFunction: null
+		});
 	}
 
 	/**
@@ -231,7 +239,8 @@ class WasmGcDynamicArrays {
 		if (result >= 0)
 			body.push(LocalGet(result));
 		body.push(Return);
-		return module.addFunction(new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result), locals, body));
+		return module.addFunction(new WasmFunction(native.name, plan.wasmFunctionType(native.arguments, native.result),
+			locals, body));
 	}
 
 	// Emission helpers.
@@ -262,7 +271,8 @@ class WasmGcDynamicArrays {
 		return [LocalGet(array), StructGet(wrapper(), field)];
 
 	function loadStorage(array:Int, element:IrType):Array<WasmInstruction>
-		return loadField(array, WasmGcTypePlan.arrayDataFieldIndex()).concat([RefCast(plan.arrayStorageReference(element))]);
+		return loadField(array,
+			WasmGcTypePlan.arrayDataFieldIndex()).concat([RefCast(plan.arrayStorageReference(element))]);
 
 	function elementType(array:Int):Int {
 		var local = allocateLocal(I32);
@@ -316,7 +326,8 @@ class WasmGcDynamicArrays {
 	}
 
 	/** Lowers a runtime operation inline, or calls the module function that implements it, such as Std.string. */
-	function lower(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int, argumentLocals:Array<Int>):Void
+	function lower(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):Void
 		switch representation.lowerRuntimeCall(name, output, arguments, outputLocal, argumentLocals) {
 			case Handled(instructions):
 				push(instructions);
@@ -435,7 +446,7 @@ class WasmGcDynamicArrays {
 		if (elements.length != 0)
 			when([RefTest({nullable: false, heap: Type(wrapper())})], "Array");
 		when([RefTest({nullable: false, heap: Type(plan.bytesTypeIndex)})], "String");
-		for (type in ([I32, Bool, I64, F64] : Array<IrType>))
+		for (type in ([I32, Bool, I64, F64]:Array<IrType>))
 			when([RefTest({nullable: false, heap: Type(plan.boxedPrimitiveType(type))})], staticTypeName(type));
 		when([RefIsNull], "null");
 		return result;
@@ -526,7 +537,7 @@ class WasmGcDynamicArrays {
 				push(representation.zeroValue(element));
 				push([LocalSet(result), Else]);
 				var opened = 0;
-				for (box in ([I32, Bool, I64, F64] : Array<IrType>)) {
+				for (box in ([I32, Bool, I64, F64]:Array<IrType>)) {
 					push(isBox(valueLocal, box).concat([If(null)]));
 					push(unboxAs(valueLocal, box, element));
 					push([LocalSet(result), Else]);
@@ -579,7 +590,11 @@ class WasmGcDynamicArrays {
 	/** Read element `index` of `element` storage and box it. */
 	function read(element:IrType, array:Int, index:Int):Int {
 		var stored = allocateLocal(plan.valueType(element));
-		push(loadStorage(array, element).concat([LocalGet(index), ArrayGet(plan.arrayStorageType(element)), LocalSet(stored)]));
+		push(loadStorage(array, element).concat([
+			LocalGet(index),
+			ArrayGet(plan.arrayStorageType(element)),
+			LocalSet(stored)
+		]));
 		return box(element, stored);
 	}
 
@@ -791,7 +806,8 @@ class WasmGcDynamicArrays {
 		var current = elementType(array);
 		dispatch(current, function(element) {
 			var encoded = encode(element, valueLocal, current);
-			push(handled(representation.arraySet(value(Array(element)), value(I32), value(element), array, index, encoded)));
+			push(handled(representation.arraySet(value(Array(element)), value(I32), value(element), array, index,
+				encoded)));
 		});
 	}
 
@@ -832,7 +848,10 @@ class WasmGcDynamicArrays {
 			if (operation == "push")
 				push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([LocalSet(position)]));
 			else
-				push(operation == "unshift" ? [I32Const(0), LocalSet(position)] : [LocalGet(extra[0]), LocalSet(position)]);
+				push(operation == "unshift" ? [I32Const(0), LocalSet(position)] : [
+					LocalGet(extra[0]),
+					LocalSet(position)
+				]);
 			push([
 				LocalGet(array),
 				LocalGet(position),
@@ -848,7 +867,8 @@ class WasmGcDynamicArrays {
 		dispatch(current, function(element) {
 			var encoded = encode(element, valueLocal, current),
 				arguments = [value(Array(element))].concat([for (_ in extra) value(I32)]).concat([value(element)]);
-			lower(concrete(operation, element), value(result >= 0 ? I32 : Void), arguments, result, [array].concat(extra).concat([encoded]));
+			lower(concrete(operation, element), value(result >= 0 ? I32 : Void), arguments, result,
+				[array].concat(extra).concat([encoded]));
 		});
 	}
 
@@ -866,7 +886,11 @@ class WasmGcDynamicArrays {
 				If(null)
 			]);
 			if (operation == "pop")
-				push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I32Const(1), I32Sub, LocalSet(position)]));
+				push(loadField(array, WasmGcTypePlan.arrayLengthFieldIndex()).concat([
+					I32Const(1),
+					I32Sub,
+					LocalSet(position)
+				]));
 			else
 				push([I32Const(0), LocalSet(position)]);
 			push([
@@ -942,7 +966,8 @@ class WasmGcDynamicArrays {
 			push([
 				LocalGet(left),
 				LocalGet(right),
-				Call(WasmModuleSupport.requiredFunctionIndex(functions, compiler.ir.IrValueLaneRuntime.PRIMITIVE + "compatible"))
+				Call(WasmModuleSupport.requiredFunctionIndex(functions,
+					compiler.ir.IrValueLaneRuntime.PRIMITIVE + "compatible"))
 			]);
 			push([
 				If(null),
@@ -954,7 +979,14 @@ class WasmGcDynamicArrays {
 				End
 			]);
 			push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U]));
-			push(loadField(right, WasmGcTypePlan.arrayLengthFieldIndex()).concat([I64ExtendI32U, I64Add, I64Const(0x7fffffff), I64LeS, I32Eqz, If(null)]));
+			push(loadField(right, WasmGcTypePlan.arrayLengthFieldIndex()).concat([
+				I64ExtendI32U,
+				I64Add,
+				I64Const(0x7fffffff),
+				I64LeS,
+				I32Eqz,
+				If(null)
+			]));
 			raiseText("Array is too large");
 			push([End]);
 			push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()));
@@ -992,7 +1024,11 @@ class WasmGcDynamicArrays {
 			length = allocateLocal(I32);
 		push([LocalGet(leftType), LocalGet(rightType), I32Eq, If(null)]);
 		dispatch(leftType, function(element) {
-			lower(concrete("concat", element), value(Array(element)), [value(Array(element)), value(Array(element))], result, [left, right]);
+			lower(concrete("concat", element), value(Array(element)), [value(Array(element)), value(Array(element))],
+				result, [
+					left,
+					right
+				]);
 		});
 		body.push(Else);
 		push(loadField(left, WasmGcTypePlan.arrayLengthFieldIndex()));
@@ -1047,7 +1083,8 @@ class WasmGcDynamicArrays {
 				case Void: true;
 				default: false;
 			}) ? Void : Array(element);
-			lower(concrete(operation, element), value(output), [value(Array(element))].concat([for (_ in extra) value(I32)]), result, [array].concat(extra));
+			lower(concrete(operation, element), value(output),
+				[value(Array(element))].concat([for (_ in extra) value(I32)]), result, [array].concat(extra));
 		});
 	}
 

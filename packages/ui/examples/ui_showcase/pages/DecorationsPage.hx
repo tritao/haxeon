@@ -60,37 +60,39 @@ class DecorationsPage {
 			"Compose geometry and image decoration values through the same stylesheet cascade as every other visual property.");
 		items.push(explorer.keyed("decorations-intro", explorer.panel("decorations-intro-panel", [
 			explorer.keyed("heading", explorer.heading("Visual layers stay in the style system")),
-			explorer.keyed("copy", explorer.caption(
-			"Backgrounds, gradients, borders, images, nine-slice frames, and shadows are ordered values. They can be selected by keys, inspected, copied, and transitioned without creating ad-hoc paint callbacks.")),
-			explorer.keyed("hint", explorer.caption(
-			"Inspect a preview to see the resolved decoration chain. Resize the window to verify that geometry decorations follow the node bounds."))
+			explorer.keyed("copy",
+				explorer.caption("Backgrounds, gradients, borders, images, nine-slice frames, and shadows are ordered values. They can be selected by keys, inspected, copied, and transitioned without creating ad-hoc paint callbacks.")),
+			explorer.keyed("hint",
+				explorer.caption("Inspect a preview to see the resolved decoration chain. Resize the window to verify that geometry decorations follow the node bounds."))
 		])));
 
 		items.push(explorer.keyed("decorations-basic", explorer.panel("decorations-basic-panel", [
 			explorer.keyed("heading", explorer.heading("Geometry and color")),
-			explorer.keyed("copy", explorer.caption("Each preview uses a normal CanvasView. The stylesheet supplies its decoration chain before the small content painter runs.")),
+			explorer.keyed("copy",
+				explorer.caption("Each preview uses a normal CanvasView. The stylesheet supplies its decoration chain before the small content painter runs.")),
 			explorer.keyed("samples", new Row("decorations-basic-row", [
 				explorer.keyed("card", sample(explorer, "decorations-card", "Background + border + shadow",
 					"Three ordered decorations form a reusable surface.")),
 				explorer.keyed("gradient", sample(explorer, "decorations-gradient", "GPU gradient + border",
 					"The gradient is one native paint operation, not a band approximation."))
-		], explorer.rowStyle(12.0)))
+			], explorer.rowStyle(12.0)))
 		])));
 
 		items.push(explorer.keyed("decorations-assets", explorer.panel("decorations-assets-panel", [
 			explorer.keyed("heading", explorer.heading("Images and scalable frames")),
-			explorer.keyed("copy", explorer.caption("Image-backed decorations share the same value and cascade contract. Nine-slice preserves its corners while the center stretches with the resolved geometry.")),
+			explorer.keyed("copy",
+				explorer.caption("Image-backed decorations share the same value and cascade contract. Nine-slice preserves its corners while the center stretches with the resolved geometry.")),
 			explorer.keyed("samples", new Row("decorations-assets-row", [
 				explorer.keyed("image", sample(explorer, "decorations-image", "Image decoration",
 					"A decoded image fills the resolved bounds.")),
 				explorer.keyed("nine-slice", sample(explorer, "decorations-nine-slice", "Nine-slice decoration",
 					"Edge insets remain stable as the preview resizes."))
-		], explorer.rowStyle(12.0)))
+			], explorer.rowStyle(12.0)))
 		])));
 	}
 
 	static function sample(explorer:UiExplorer, key:String, title:String,
-		caption:String):Column {
+			caption:String):Column {
 		var style = explorer.panelStyle();
 		style.width = LayoutAxis.grow();
 		style.padding = new Insets(12.0, 12.0, 12.0, 12.0);

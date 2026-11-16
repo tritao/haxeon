@@ -26,12 +26,19 @@ typedef WatchChange = {
 
 /** Host edit loop for a resolved Haxeon project. A failed build keeps the live process. */
 class WatchRun {
-	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>, liveHost:Null<String>, entry:String,
-			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>, ?session:build.BuildSession):Int {
+	public static function run(initial:ResolvedProject, runtime:String, output:String, arguments:Array<String>,
+			liveHost:Null<String>, entry:String,
+			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>,
+			?session:build.BuildSession):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw "haxeon run --watch currently requires Linux, macOS or Windows";
-		var project = initial, baseline = snapshot(project), logPath = output + ".watch.log", profile = startProfile(profiling),
-			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile), logOffset = 0, result = 0;
+		var project = initial,
+			baseline = snapshot(project),
+			logPath = output + ".watch.log",
+			profile = startProfile(profiling),
+			process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile),
+			logOffset = 0,
+			result = 0;
 		var watcher = openWatcher(project, baseline);
 		try {
 			while (true) {
@@ -195,7 +202,8 @@ class WatchRun {
 		return child == parent || StringTools.startsWith(child, parent + "/");
 
 	static function startProfile(profiling:Null<WatchProfiling>):Null<ProfileCapture>
-		return profiling == null ? null : new ProfileCapture(profiling.profiler, ProfileCapture.nextCapture(profiling.root), profiling.processName,
+		return profiling == null ? null : new ProfileCapture(profiling.profiler,
+			ProfileCapture.nextCapture(profiling.root), profiling.processName,
 			profiling.sources);
 
 	/** Called once the launch has exited: the recorder then finalizes its capture. */
@@ -243,11 +251,13 @@ class WatchRun {
 		}
 	}
 
-	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String, liveHost:Null<String>, entry:String,
+	static function launch(runtime:String, output:String, arguments:Array<String>, cwd:String, logPath:String,
+			liveHost:Null<String>, entry:String,
 			profile:Null<ProfileCapture>):Process {
 		var runtimeOptions = profile == null ? [] : profile.runtimeArguments();
 		var commandArguments = [runtime].concat(runtimeOptions)
-			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry, Json.stringify(arguments)]);
+			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry,
+			Json.stringify(arguments)]);
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
 		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
 		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
@@ -258,7 +268,10 @@ class WatchRun {
 			Sys.setCwd(cwd);
 			if (profile != null)
 				profile.keepBytecode(output);
-			var process = Sys.systemName() == "Windows" ? new Process(windowsCommand) : new Process("/bin/sh", ["-c", command]);
+			var process = Sys.systemName() == "Windows" ? new Process(windowsCommand) : new Process("/bin/sh", [
+				"-c",
+				command
+			]);
 			Sys.setCwd(previous);
 			// The app waits on its diagnostics port until the recorder attaches.
 			if (profile != null)

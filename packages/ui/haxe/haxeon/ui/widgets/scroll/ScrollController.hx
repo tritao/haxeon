@@ -24,7 +24,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 			throw "Scroll offsets must be finite and non-negative";
 		this.offsetX = offsetX;
 		this.offsetY = offsetY;
-		targetX = offsetX; targetY = offsetY;
+		targetX = offsetX;
+		targetY = offsetY;
 		viewportWidth = 0.0;
 		viewportHeight = 0.0;
 		contentWidth = 0.0;
@@ -47,7 +48,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		cancelAnimation();
 		var nextX = clampX(x);
 		var nextY = clampY(y);
-		targetX = nextX; targetY = nextY;
+		targetX = nextX;
+		targetY = nextY;
 		if (nextX == offsetX && nextY == offsetY)
 			return false;
 		offsetX = nextX;
@@ -59,7 +61,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	/** Enables time-based exponential movement; jumpTo always remains immediate. */
 	public function configureAnimation(enabled:Bool, duration:Float = 0.12):Void {
 		if (!Math.isFinite(duration) || duration < 0) throw "Scroll duration must be finite and non-negative";
-		animated = enabled; animationDuration = duration;
+		animated = enabled;
+		animationDuration = duration;
 		if (!enabled || duration == 0) jumpTo(targetX, targetY);
 	}
 
@@ -70,7 +73,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		var nextX = clampX((x * (targetX - offsetX) < 0 ? offsetX : targetX) + x);
 		var nextY = clampY((y * (targetY - offsetY) < 0 ? offsetY : targetY) + y);
 		if (nextX == targetX && nextY == targetY) return false;
-		targetX = nextX; targetY = nextY;
+		targetX = nextX;
+		targetY = nextY;
 		if (binding.scheduler != null) binding.scheduler.track(this);
 		notifyChanged();
 		return true;
@@ -85,30 +89,39 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		if (Math.abs(nextX - targetX) < 0.5) nextX = targetX;
 		if (Math.abs(nextY - targetY) < 0.5) nextY = targetY;
 		if (nextX != offsetX || nextY != offsetY) {
-			offsetX = nextX; offsetY = nextY; notifyChanged();
+			offsetX = nextX;
+			offsetY = nextY;
+			notifyChanged();
 		}
 		return offsetX != targetX || offsetY != targetY;
 	}
 
 	public function cancelAnimation():Void {
 		if (binding.scheduler != null) binding.scheduler.remove(this);
-		targetX = offsetX; targetY = offsetY;
+		targetX = offsetX;
+		targetY = offsetY;
 	}
 
 	inline function clampX(value:Float):Float return Math.max(0, hasMetrics ? Math.min(value, maxScrollX) : value);
 	inline function clampY(value:Float):Float return Math.max(0, hasMetrics ? Math.min(value, maxScrollY) : value);
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollBinding)
-	function bind(callback:ScrollController->Void, ?clock:haxeon.ui.animation.AnimationScheduler, ?owner:ScrollBinding):Void {
+	function bind(callback:ScrollController->Void, ?clock:haxeon.ui.animation.AnimationScheduler,
+			?owner:ScrollBinding):Void {
 		if (binding.scheduler != null && binding.scheduler != clock) binding.scheduler.remove(this);
-		binding.changed = callback; binding.scheduler = clock; binding.owner = owner;
+		binding.changed = callback;
+		binding.scheduler = clock;
+		binding.owner = owner;
 		if (binding.scheduler != null && (offsetX != targetX || offsetY != targetY)) binding.scheduler.track(this);
 	}
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollBinding)
 	function unbind(owner:ScrollBinding):Void {
 		if (binding.owner != owner) return;
-		cancelAnimation(); binding.changed = null; binding.scheduler = null; binding.owner = null;
+		cancelAnimation();
+		binding.changed = null;
+		binding.scheduler = null;
+		binding.owner = null;
 	}
 
 	@:allow(haxeon.ui.widgets.collections.ListView)
@@ -126,8 +139,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	@:allow(haxeon.ui.widgets.collections.TreeView)
 	function updateMetrics(viewportWidth:Float, viewportHeight:Float,
 			contentWidth:Float, contentHeight:Float):Void {
-		if (!finiteNonNegative(viewportWidth) || !finiteNonNegative(viewportHeight) ||
-			!finiteNonNegative(contentWidth) || !finiteNonNegative(contentHeight))
+		if (!finiteNonNegative(viewportWidth) || !finiteNonNegative(viewportHeight) || !finiteNonNegative(contentWidth)
+			|| !finiteNonNegative(contentHeight))
 			throw "Scroll metrics must be finite and non-negative";
 		this.viewportWidth = viewportWidth;
 		this.viewportHeight = viewportHeight;

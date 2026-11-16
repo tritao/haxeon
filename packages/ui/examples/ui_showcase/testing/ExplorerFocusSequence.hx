@@ -28,8 +28,8 @@ class ExplorerFocusSequence {
 		state.visualTextComposition = false;
 		var focused = false;
 		for (record in explorer.context.inspect())
-			if (!focused && ((targetLabel != null && record.label == targetLabel) ||
-				(targetLabel == null && record.role == AccessibilityRole.TextField))) {
+			if (!focused && ((targetLabel != null && record.label == targetLabel)
+				|| (targetLabel == null && record.role == AccessibilityRole.TextField))) {
 				var widgetId = new WidgetId(record.id);
 				focused = explorer.context.focusWidget(widgetId);
 				if (focused && (selectTextArea || showComposition)) {
@@ -47,7 +47,7 @@ class ExplorerFocusSequence {
 						editor.applyTextEdit(composition);
 						if (editor.compositionStart != 6 || editor.compositionEnd != 15)
 							throw "UI visual test could not set composition range";
-						}
+					}
 					editorState.update(editor);
 				}
 			}

@@ -56,7 +56,10 @@ class IrValue {
 }
 
 /** Value contributed by one predecessor to an SSA phi definition. */
-typedef IrPhiInput = {final block:Int; final value:IrValue;}
+typedef IrPhiInput = {
+	final block:Int;
+	final value:IrValue;
+}
 
 /** Compiler operations whose operands include semantic data rather than encoded linkage names. */
 enum IrIntrinsic {
@@ -246,10 +249,17 @@ typedef IrObjectFieldNativeLayout = {
 }
 
 /** C-compatible payload layout for a Flat record on the active ABI. */
-typedef IrObjectNativeLayout = {final target:String; final size:Int; final alignment:Int;}
+typedef IrObjectNativeLayout = {
+	final target:String;
+	final size:Int;
+	final alignment:Int;
+}
 
 /** Width and signedness of a stored scalar, independent of an enclosing record's native layout. */
-typedef IrScalarStorage = {final size:Int; final signed:Bool;}
+typedef IrScalarStorage = {
+	final size:Int;
+	final signed:Bool;
+}
 
 /** Runtime-visible field in an IR object layout. */
 typedef IrObjectField = {
@@ -263,7 +273,10 @@ typedef IrObjectField = {
 }
 
 /** Method name and implementing function attached to an IR object. */
-typedef IrObjectMethod = {final name:String; final functionName:String;}
+typedef IrObjectMethod = {
+	final name:String;
+	final functionName:String;
+}
 
 /** Object layout and dispatch metadata required by backend lowering. */
 typedef IrObject = {
@@ -286,13 +299,24 @@ class IrObjectTools {
 }
 
 /** Callable contract required by an IR interface. */
-typedef IrInterfaceMethod = {final name:String; final arguments:Array<IrType>; final result:IrType;}
+typedef IrInterfaceMethod = {
+	final name:String;
+	final arguments:Array<IrType>;
+	final result:IrType;
+}
 
 /** Interface inheritance and method contracts required by backend lowering. */
-typedef IrInterface = {final name:String; final bases:Array<String>; final methods:Array<IrInterfaceMethod>;}
+typedef IrInterface = {
+	final name:String;
+	final bases:Array<String>;
+	final methods:Array<IrInterfaceMethod>;
+}
 
 /** Ordered payload types of one IR enum constructor. */
-typedef IrEnumCase = {final name:String; final params:Array<IrType>;}
+typedef IrEnumCase = {
+	final name:String;
+	final params:Array<IrType>;
+}
 
 /** Enum layout required by backend lowering. */
 typedef IrEnum = {
@@ -305,7 +329,10 @@ typedef IrEnum = {
 }
 
 /** Module-level storage slot required by an IR program. */
-typedef IrStaticField = {final name:String; final type:IrType;}
+typedef IrStaticField = {
+	final name:String;
+	final type:IrType;
+}
 
 /**
  * The value a call that leaves out an optional parameter passes for it, when it is a literal (`IrProgram.parameterDefaults`).

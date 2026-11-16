@@ -26,7 +26,8 @@ class IrFunctionStateEquality {
 				return false;
 		for (i in 0...left.debugBindings.length) {
 			var a = left.debugBindings[i], b = right.debugBindings[i];
-			if (a.identity != b.identity || a.name != b.name || a.path != b.path || a.scopeStart != b.scopeStart || a.scopeEnd != b.scopeEnd
+			if (a.identity != b.identity || a.name != b.name || a.path != b.path || a.scopeStart != b.scopeStart
+				|| a.scopeEnd != b.scopeEnd
 				|| !value(a.value, b.value))
 				return false;
 		}
@@ -42,7 +43,8 @@ class IrFunctionStateEquality {
 					return false;
 			}
 			var x = a.terminator, y = b.terminator;
-			if (x != y && (x == null || y == null || !provenance(x.provenance, y.provenance) || !terminator(x.value, y.value)))
+			if (x != y
+				&& (x == null || y == null || !provenance(x.provenance, y.provenance) || !terminator(x.value, y.value)))
 				return false;
 		}
 		return true;
@@ -55,7 +57,8 @@ class IrFunctionStateEquality {
 			case [SourceLambda, SourceLambda]: true;
 			case [IterationAdapter, IterationAdapter]: true;
 			case [GeneratedHelper, GeneratedHelper]: true;
-			case [Provider(aSubject, aOperation), Provider(bSubject, bOperation)]: aSubject == bSubject && aOperation == bOperation;
+			case [Provider(aSubject, aOperation), Provider(bSubject, bOperation)]: aSubject == bSubject
+				&& aOperation == bOperation;
 			case [OptionalScalar(aOrigin), OptionalScalar(bOrigin)]: aOrigin == bOrigin;
 			case [NullableScalarArguments, NullableScalarArguments]: true;
 			case [EnumEquality(aReflective), EnumEquality(bReflective)]: aReflective == bReflective;
@@ -64,11 +67,12 @@ class IrFunctionStateEquality {
 			case [
 				ValueArraySlot(aNamespace, aElement, aOperation),
 				ValueArraySlot(bNamespace, bElement, bOperation)
-			]: aNamespace == bNamespace && IrVerifier.sameType(aElement, bElement) && sameSlotOperation(aOperation, bOperation);
+			]: aNamespace == bNamespace && IrVerifier.sameType(aElement, bElement)
+				&& sameSlotOperation(aOperation, bOperation);
 			case [WasmClosureRestore, WasmClosureRestore]: true;
 			case [ScalarArguments, ScalarArguments]: true;
 			case [ClosureAdapter(aSource, aTarget), ClosureAdapter(bSource, bTarget)]: IrVerifier.sameType(aSource,
-					bSource) && IrVerifier.sameType(aTarget, bTarget);
+				bSource) && IrVerifier.sameType(aTarget, bTarget);
 			case [ClosureCast(aTarget), ClosureCast(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
 			case [ClosureVarargs(aTarget), ClosureVarargs(bTarget)]: IrVerifier.sameType(aTarget, bTarget);
 			default: false;
@@ -85,7 +89,8 @@ class IrFunctionStateEquality {
 
 	static function sameSlotOperation(a:IrValueArraySlotOperation, b:IrValueArraySlotOperation):Bool
 		return switch [a, b] {
-			case [Read(ai, ap, ac), Read(bi, bp, bc)], [Write(ai, ap, ac), Write(bi, bp, bc)]: ai == bi && ac == bc && sameSlotPath(ap, bp);
+			case [Read(ai, ap, ac), Read(bi, bp, bc)],
+				[Write(ai, ap, ac), Write(bi, bp, bc)]: ai == bi && ac == bc && sameSlotPath(ap, bp);
 			case [Check(ap, ai), Check(bp, bi)]: ai == bi && sameSlotPath(ap, bp);
 			case [OptionalWrite(ap, at), OptionalWrite(bp, bt)]: sameSlotPath(ap, bp) && IrVerifier.sameType(at, bt);
 			case [RequireScalar(at), RequireScalar(bt)]: IrVerifier.sameType(at, bt);
@@ -102,8 +107,9 @@ class IrFunctionStateEquality {
 			return false;
 		var x = a.location, y = b.location;
 		return x == y
-			|| (x != null && y != null && x.path == y.path && x.start == y.start && x.end == y.end && x.line == y.line && x.column == y.column
-				&& x.endLine == y.endLine && x.endColumn == y.endColumn && x.sourceHash == y.sourceHash);
+			|| (x != null && y != null && x.path == y.path && x.start == y.start && x.end == y.end && x.line == y.line
+			&& x.column == y.column
+			&& x.endLine == y.endLine && x.endColumn == y.endColumn && x.sourceHash == y.sourceHash);
 	}
 
 	static function origin(a:SourceOrigin, b:SourceOrigin):Bool
@@ -149,16 +155,17 @@ class IrFunctionStateEquality {
 				};
 			case PointerOffset(output, pointer, offset): switch b {
 					case PointerOffset(otherOutput, otherPointer, otherOffset): value(output,
-							otherOutput) && value(pointer, otherPointer) && value(offset, otherOffset);
+						otherOutput) && value(pointer, otherPointer) && value(offset, otherOffset);
 					default: false;
 				};
 			case MemoryLoad(output, pointer, size, signed): switch b {
 					case MemoryLoad(otherOutput, otherPointer, otherSize, otherSigned): value(output,
-							otherOutput) && value(pointer, otherPointer) && size == otherSize && signed == otherSigned;
+						otherOutput) && value(pointer, otherPointer) && size == otherSize && signed == otherSigned;
 					default: false;
 				};
 			case MemoryStore(pointer, stored, size): switch b {
-					case MemoryStore(otherPointer, otherStored, otherSize): value(pointer, otherPointer) && value(stored, otherStored) && size == otherSize;
+					case MemoryStore(otherPointer, otherStored, otherSize): value(pointer, otherPointer)
+						&& value(stored, otherStored) && size == otherSize;
 					default: false;
 				};
 			case ConstBool(output, state): switch b {
@@ -194,7 +201,8 @@ class IrFunctionStateEquality {
 					default: false;
 				};
 			case BeginTry(catchBlock, afterBlock, preserve): switch b {
-					case BeginTry(otherCatch, otherAfter, otherPreserve): catchBlock == otherCatch && afterBlock == otherAfter && preserve == otherPreserve;
+					case BeginTry(otherCatch, otherAfter, otherPreserve): catchBlock == otherCatch
+						&& afterBlock == otherAfter && preserve == otherPreserve;
 					default: false;
 				};
 			case EndTry(catchBlock, preserve): switch b {
@@ -210,72 +218,104 @@ class IrFunctionStateEquality {
 					default: false;
 				};
 			case Add(output, left, right): switch b {
-					case Add(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Add(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case Sub(output, left, right): switch b {
-					case Sub(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Sub(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case Mul(output, left, right): switch b {
-					case Mul(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Mul(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case Div(output, left, right): switch b {
-					case Div(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Div(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case Mod(output, left, right): switch b {
-					case Mod(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Mod(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case BitAnd(output, left, right): switch b {
-					case BitAnd(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case BitAnd(otherOutput, otherLeft, otherRight): value(output, otherOutput)
+						&& value(left, otherLeft) && value(right, otherRight);
 					default: false;
 				};
 			case BitXor(output, left, right): switch b {
-					case BitXor(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case BitXor(otherOutput, otherLeft, otherRight): value(output, otherOutput)
+						&& value(left, otherLeft) && value(right, otherRight);
 					default: false;
 				};
 			case BitOr(output, left, right): switch b {
-					case BitOr(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case BitOr(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case ShiftLeft(output, left, right): switch b {
-					case ShiftLeft(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case ShiftLeft(otherOutput, otherLeft, otherRight): value(output, otherOutput)
+						&& value(left, otherLeft) && value(right, otherRight);
 					default: false;
 				};
 			case ShiftRight(output, left, right): switch b {
-					case ShiftRight(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case ShiftRight(otherOutput, otherLeft, otherRight): value(output, otherOutput)
+						&& value(left, otherLeft) && value(right, otherRight);
 					default: false;
 				};
 			case UnsignedShiftRight(output, left, right): switch b {
 					case UnsignedShiftRight(otherOutput, otherLeft, otherRight): value(output,
-							otherOutput) && value(left, otherLeft) && value(right, otherRight);
+						otherOutput) && value(left, otherLeft) && value(right, otherRight);
 					default: false;
 				};
 			case Less(output, left, right): switch b {
-					case Less(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Less(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case LessEqual(output, left, right): switch b {
-					case LessEqual(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case LessEqual(otherOutput, otherLeft, otherRight): value(output, otherOutput)
+						&& value(left, otherLeft) && value(right, otherRight);
 					default: false;
 				};
 			case Equal(output, left, right): switch b {
-					case Equal(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft) && value(right, otherRight);
+					case Equal(otherOutput, otherLeft, otherRight): value(output, otherOutput) && value(left, otherLeft)
+						&& value(right, otherRight);
 					default: false;
 				};
 			case Call(output, name, arguments): switch b {
-					case Call(otherOutput, otherName, otherArguments): value(output, otherOutput) && name == otherName && values(arguments, otherArguments);
+					case Call(otherOutput, otherName, otherArguments): value(output, otherOutput) && name == otherName
+						&& values(arguments, otherArguments);
 					default: false;
 				};
 			case Intrinsic(output, operation, arguments): switch b {
 					case Intrinsic(otherOutput, otherOperation, otherArguments): value(output,
-							otherOutput) && values(arguments, otherArguments) && switch [operation, otherOperation] {
-							case [EnumDynamicBox(aType), EnumDynamicBox(bType)], [EnumDynamicView(aType), EnumDynamicView(bType)],
-								[EnumTagBox(aType), EnumTagBox(bType)], [EnumTagUnbox(aType), EnumTagUnbox(bType)],
-								[InlineEnumBox(aType), InlineEnumBox(bType)], [InlineEnumUnbox(aType), InlineEnumUnbox(bType)]:
+						otherOutput) && values(arguments, otherArguments) && switch [
+							operation,
+							otherOperation
+						] {
+							case [EnumDynamicBox(aType), EnumDynamicBox(bType)], [
+								EnumDynamicView(aType),
+								EnumDynamicView(bType)
+							],
+								[
+									EnumTagBox(aType),
+									EnumTagBox(bType)
+								], [
+									EnumTagUnbox(aType),
+									EnumTagUnbox(bType)
+								],
+									[
+										InlineEnumBox(aType),
+										InlineEnumBox(bType)
+									], [
+										InlineEnumUnbox(aType),
+										InlineEnumUnbox(bType)
+									]:
 								IrVerifier.sameType(aType, bType);
 							default: false;
 						};
@@ -283,7 +323,7 @@ class IrFunctionStateEquality {
 				};
 			case CNativeCall(output, name, arguments): switch b {
 					case CNativeCall(otherOutput, otherName, otherArguments): value(output,
-							otherOutput) && name == otherName && values(arguments, otherArguments);
+						otherOutput) && name == otherName && values(arguments, otherArguments);
 					default: false;
 				};
 			case StaticClosure(output, name): switch b {
@@ -292,12 +332,12 @@ class IrFunctionStateEquality {
 				};
 			case InstanceClosure(output, name, receiver): switch b {
 					case InstanceClosure(otherOutput, otherName, otherReceiver): value(output,
-							otherOutput) && name == otherName && value(receiver, otherReceiver);
+						otherOutput) && name == otherName && value(receiver, otherReceiver);
 					default: false;
 				};
 			case CallClosure(output, closure, arguments): switch b {
 					case CallClosure(otherOutput, otherClosure, otherArguments): value(output,
-							otherOutput) && value(closure, otherClosure) && values(arguments, otherArguments);
+						otherOutput) && value(closure, otherClosure) && values(arguments, otherArguments);
 					default: false;
 				};
 			case ToVirtual(output, input): switch b {
@@ -315,10 +355,10 @@ class IrFunctionStateEquality {
 			case MethodCall(output, object, name, arguments, terminal): switch b {
 					case MethodCall(otherOutput, otherObject, otherName, otherArguments, otherTerminal):
 						value(output, otherOutput)
-						&& value(object, otherObject)
-						&& name == otherName
-						&& values(arguments, otherArguments)
-						&& terminal == otherTerminal;
+							&& value(object, otherObject)
+							&& name == otherName
+							&& values(arguments, otherArguments)
+							&& terminal == otherTerminal;
 					default: false;
 				};
 			case NewObject(output, name): switch b {
@@ -330,19 +370,23 @@ class IrFunctionStateEquality {
 					default: false;
 				};
 			case FieldGet(output, object, name): switch b {
-					case FieldGet(otherOutput, otherObject, otherName): value(output, otherOutput) && value(object, otherObject) && name == otherName;
+					case FieldGet(otherOutput, otherObject, otherName): value(output, otherOutput)
+						&& value(object, otherObject) && name == otherName;
 					default: false;
 				};
 			case FieldSet(object, name, stored): switch b {
-					case FieldSet(otherObject, otherName, otherStored): value(object, otherObject) && name == otherName && value(stored, otherStored);
+					case FieldSet(otherObject, otherName, otherStored): value(object, otherObject) && name == otherName
+						&& value(stored, otherStored);
 					default: false;
 				};
 			case ArrayGet(output, array, index): switch b {
-					case ArrayGet(otherOutput, otherArray, otherIndex): value(output, otherOutput) && value(array, otherArray) && value(index, otherIndex);
+					case ArrayGet(otherOutput, otherArray, otherIndex): value(output, otherOutput)
+						&& value(array, otherArray) && value(index, otherIndex);
 					default: false;
 				};
 			case ArraySet(array, index, stored): switch b {
-					case ArraySet(otherArray, otherIndex, otherStored): value(array, otherArray) && value(index, otherIndex) && value(stored, otherStored);
+					case ArraySet(otherArray, otherIndex, otherStored): value(array, otherArray)
+						&& value(index, otherIndex) && value(stored, otherStored);
 					default: false;
 				};
 			case ArraySize(output, array): switch b {
@@ -354,16 +398,19 @@ class IrFunctionStateEquality {
 					default: false;
 				};
 			case IteratorHasNext(output, iterator): switch b {
-					case IteratorHasNext(otherOutput, otherIterator): value(output, otherOutput) && value(iterator, otherIterator);
+					case IteratorHasNext(otherOutput, otherIterator): value(output, otherOutput)
+						&& value(iterator, otherIterator);
 					default: false;
 				};
 			case IteratorNext(output, iterator): switch b {
-					case IteratorNext(otherOutput, otherIterator): value(output, otherOutput) && value(iterator, otherIterator);
+					case IteratorNext(otherOutput, otherIterator): value(output, otherOutput)
+						&& value(iterator, otherIterator);
 					default: false;
 				};
 			case MakeEnum(output, name, constructor, arguments): switch b {
 					case MakeEnum(otherOutput, otherName, otherConstructor, otherArguments): value(output,
-							otherOutput) && name == otherName && constructor == otherConstructor && values(arguments, otherArguments);
+						otherOutput) && name == otherName && constructor == otherConstructor
+						&& values(arguments, otherArguments);
 					default: false;
 				};
 			case EnumIndex(output, input): switch b {
@@ -372,7 +419,8 @@ class IrFunctionStateEquality {
 				};
 			case EnumField(output, input, constructor, field): switch b {
 					case EnumField(otherOutput, otherInput, otherConstructor, otherField): value(output,
-							otherOutput) && value(input, otherInput) && constructor == otherConstructor && field == otherField;
+						otherOutput) && value(input, otherInput) && constructor == otherConstructor
+						&& field == otherField;
 					default: false;
 				};
 		};
@@ -400,7 +448,8 @@ class IrFunctionStateEquality {
 					default: false;
 				};
 			case Branch(condition, whenTrue, whenFalse): switch b {
-					case Branch(otherCondition, otherTrue, otherFalse): value(condition, otherCondition) && whenTrue == otherTrue && whenFalse == otherFalse;
+					case Branch(otherCondition, otherTrue, otherFalse): value(condition, otherCondition)
+						&& whenTrue == otherTrue && whenFalse == otherFalse;
 					default: false;
 				};
 		};

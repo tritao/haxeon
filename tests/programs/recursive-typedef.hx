@@ -1,11 +1,29 @@
 // A typedef may refer to itself through the fields of the structure it declares, as Haxe allows.
 
-typedef TreeNode = {final label:String; final children:Array<TreeNode>;}
-typedef Link = {final value:Int; final next:Null<Link>;}
-typedef Left = {final id:Int; final right:Null<Right>;}
-typedef Right = {final id:Int; final left:Null<Left>;}
-typedef Envelope<T> = {final payload:T; final replies:Array<Envelope<T>>;}
-typedef OtherTree = {final label:String; final children:Array<OtherTree>;}
+typedef TreeNode = {
+	final label:String;
+	final children:Array<TreeNode>;
+}
+typedef Link = {
+	final value:Int;
+	final next:Null<Link>;
+}
+typedef Left = {
+	final id:Int;
+	final right:Null<Right>;
+}
+typedef Right = {
+	final id:Int;
+	final left:Null<Left>;
+}
+typedef Envelope<T> = {
+	final payload:T;
+	final replies:Array<Envelope<T>>;
+}
+typedef OtherTree = {
+	final label:String;
+	final children:Array<OtherTree>;
+}
 
 function count(node:TreeNode):Int {
 	var total = 1;
@@ -62,7 +80,10 @@ function main():Int {
 	if (back == null || back.id != 3)
 		return 4;
 
-	var thread:Envelope<Int> = {payload: 1, replies: [{payload: 2, replies: []}, {payload: 3, replies: [{payload: 4, replies: []}]}]};
+	var thread:Envelope<Int> = {
+		payload: 1,
+		replies: [{payload: 2, replies: []}, {payload: 3, replies: [{payload: 4, replies: []}]}]
+	};
 	if (payloads(thread) != 10)
 		return 5;
 

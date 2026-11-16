@@ -37,7 +37,8 @@ class IrTerminatorCodec {
 			case 2: Rethrow(IrValueTableCodec.readReference(input, values));
 			case 3: Jump(readBlock(input, blocks));
 			case 5: Unreachable;
-			case 4: Branch(IrValueTableCodec.readReference(input, values), readBlock(input, blocks), readBlock(input, blocks));
+			case 4: Branch(IrValueTableCodec.readReference(input, values), readBlock(input, blocks),
+				readBlock(input, blocks));
 			default: throw "Unknown IR terminator tag";
 		};
 

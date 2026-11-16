@@ -39,7 +39,8 @@ class HlRuntimeIdentity {
 		return out;
 	}
 
-	public static function encode(moduleId:Bytes, revision:Int, indices:Map<String, Int>, stableIds:Map<String, Int>):Bytes {
+	public static function encode(moduleId:Bytes, revision:Int, indices:Map<String, Int>,
+			stableIds:Map<String, Int>):Bytes {
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
 		if (revision < 0)
@@ -65,8 +66,10 @@ class HlRuntimeIdentity {
 		return out.getBytes();
 	}
 
-	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes, ?publishedAbi:RuntimeAbiDescriptor,
-			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor, ?assemblerState:Bytes,
+	public static function encodePersistent(moduleId:Bytes, stableIds:Map<String, Int>, ?typeState:Bytes,
+			?publishedAbi:RuntimeAbiDescriptor,
+			?publicationTracking:Bool = false, ?acknowledgedRevision:Int = 0, ?acknowledgedAbi:RuntimeAbiDescriptor,
+			?assemblerState:Bytes,
 			?specializationState:Bytes):Bytes {
 		if (moduleId.length != 16)
 			throw "Module ID must contain 16 bytes";
@@ -155,7 +158,8 @@ class HlRuntimeIdentity {
 				|| acknowledgedLength > 0x10000000
 				|| acknowledgedLength > bytes.length - input.position)
 				throw "Invalid acknowledged publication state";
-			var acknowledgedAbi:Null<RuntimeAbiDescriptor> = acknowledgedLength == 0 ? null : RuntimeAbiCodec.decode(input.read(acknowledgedLength));
+			var acknowledgedAbi:Null<RuntimeAbiDescriptor> = acknowledgedLength == 0
+				? null : RuntimeAbiCodec.decode(input.read(acknowledgedLength));
 			if ((!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
 				|| (acknowledgedRevision > 0 && acknowledgedAbi == null))
 				throw "Invalid acknowledged publication state";
@@ -163,10 +167,12 @@ class HlRuntimeIdentity {
 			if (assemblerLength < 0 || assemblerLength > 0x10000000 || assemblerLength > bytes.length - input.position)
 				throw "Invalid assembler baseline state";
 			var assemblerState:Null<Bytes> = assemblerLength == 0 ? null : input.read(assemblerLength);
-			if ((acknowledgedRevision > 0 && assemblerState == null) || (acknowledgedRevision == 0 && assemblerState != null))
+			if ((acknowledgedRevision > 0 && assemblerState == null)
+				|| (acknowledgedRevision == 0 && assemblerState != null))
 				throw "Invalid acknowledged assembler baseline";
 			var specializationLength = input.readInt32();
-			if (specializationLength < 0 || specializationLength > 0x10000000 || specializationLength > bytes.length - input.position)
+			if (specializationLength < 0 || specializationLength > 0x10000000
+				|| specializationLength > bytes.length - input.position)
 				throw "Invalid generic specialization state";
 			var specializationState:Null<Bytes> = specializationLength == 0 ? null : input.read(specializationLength);
 			if (input.position != bytes.length)

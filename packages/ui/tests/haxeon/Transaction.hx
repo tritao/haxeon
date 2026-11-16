@@ -66,10 +66,14 @@ class Transaction {
 		var surface = createdSurface.out_surface.borrow();
 
 		var list = DisplayList.create();
-		var path = new PathBuilder().moveTo(0.0, 0.0).lineTo(244.0, 12.0).lineTo(244.0, 180.0).lineTo(12.0, 180.0).close().build();
+		var path = new PathBuilder().moveTo(0.0, 0.0).lineTo(244.0, 12.0).lineTo(244.0, 180.0).lineTo(12.0,
+			180.0).close().build();
 		var paint = SolidPaint.create(Color.rgba(0.2, 0.6, 0.9));
 		var pixels = Bytes.alloc(4);
-		pixels.set(0, 20); pixels.set(1, 80); pixels.set(2, 220); pixels.set(3, 255);
+		pixels.set(0, 20);
+		pixels.set(1, 80);
+		pixels.set(2, 220);
+		pixels.set(3, 255);
 		var image = Image.create(1, 1, ImageFormat.Rgba8, pixels);
 		var fonts = FontCollection.create();
 		var fontPath = Sys.getEnv("NKUI_TEST_FONT_PATH");
@@ -83,8 +87,8 @@ class Transaction {
 			textStyle, paragraphStyle);
 		textStyle = textStyle.withFontSize(30.0);
 		paragraphStyle = paragraphStyle.withWrap(TextWrap.None);
-		if (text.textStyle.fontSize != 18.0 || text.textStyle.letterSpacing != -0.25 ||
-			text.paragraphStyle.wrap != TextWrap.Word)
+		if (text.textStyle.fontSize != 18.0 || text.textStyle.letterSpacing != -0.25
+			|| text.paragraphStyle.wrap != TextWrap.Word)
 			return 18;
 		var updatedTextStyle = new TextStyle(19.5, FontFamily.Default, -0.5);
 		var updatedParagraphStyle = new ParagraphStyle(TextWrap.WordCharacter,
@@ -93,19 +97,19 @@ class Transaction {
 			updatedParagraphStyle);
 		updatedTextStyle = updatedTextStyle.withFontSize(28.0);
 		updatedParagraphStyle = updatedParagraphStyle.withAlignment(TextAlignment.End);
-		if (text.textStyle.fontSize != 19.5 || text.textStyle.letterSpacing != -0.5 ||
-			text.paragraphStyle.alignment != TextAlignment.Center ||
-			text.paragraphStyle.lineHeight != 22.0 ||
-			text.paragraphStyle.direction != TextDirection.Rtl || textStyle.fontSize != 30.0 ||
-			paragraphStyle.wrap != TextWrap.None)
+		if (text.textStyle.fontSize != 19.5 || text.textStyle.letterSpacing != -0.5 || text.paragraphStyle.alignment
+			!= TextAlignment.Center || text.paragraphStyle.lineHeight != 22.0 || text.paragraphStyle.direction
+			!= TextDirection.Rtl || textStyle.fontSize != 30.0 || paragraphStyle.wrap != TextWrap.None)
 			return 19;
 		var beforeColors = text.measure();
 		text.setColorRanges([new TextColorRange(0, 3, new Color(1.0, 0.0, 0.0))]);
 		text.setColor(new Color(0.0, 0.0, 1.0));
 		var overlapRejected = false;
 		try {
-			text.setColorRanges([new TextColorRange(0, 3, new Color(1.0, 0.0, 0.0)),
-				new TextColorRange(2, 4, new Color(0.0, 1.0, 0.0))]);
+			text.setColorRanges([
+				new TextColorRange(0, 3, new Color(1.0, 0.0, 0.0)),
+				new TextColorRange(2, 4, new Color(0.0, 1.0, 0.0))
+			]);
 		} catch (_:String) {
 			overlapRejected = true;
 		}
@@ -151,8 +155,7 @@ class Transaction {
 			events.poll();
 			if (ready) {
 				var size = NativeKit.nk_surface_get_framebuffer_size(surface);
-				if (size.status != Result.Ok || size.out_width <= 0 ||
-					size.out_height <= 0)
+				if (size.status != Result.Ok || size.out_width <= 0 || size.out_height <= 0)
 					return 14;
 				var scale = NativeKit.nk_window_get_scale(window);
 				if (scale.status != Result.Ok || scale.out_scale <= 0.0)

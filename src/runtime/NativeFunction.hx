@@ -22,7 +22,8 @@ class NativeFunction {
 		if (argumentSlots.length != arguments.length * SLOT_SIZE)
 			throw new NativeCallError("Native argument buffer has the wrong size");
 		var output = Bytes.alloc(SLOT_SIZE),
-			status = NativeCallApi.native_call(handle, argumentSlots.getData(), argumentSlots.length, output.getData(), output.length);
+			status = NativeCallApi.native_call(handle, argumentSlots.getData(), argumentSlots.length, output.getData(),
+				output.length);
 		if (status != 0)
 			throw new NativeCallError(NativeCallApi.lastError());
 		return output;

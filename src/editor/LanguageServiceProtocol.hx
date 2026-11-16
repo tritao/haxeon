@@ -65,11 +65,14 @@ class LanguageServiceProtocol {
 			switch method {
 				case "update":
 					service.update(requiredString(request, "path"), requiredString(request, "source"));
-					result = cast {updated: true};
+					result = cast {
+						updated:true
+					};
 				case "compile":
 					var build = service.compile(requiredString(request, "entry"), token);
 					var initialLoad = build.revision == 1 && !build.requiresReload && build.patchBytes == null,
-						artifactKind = build.patchBytes != null ? "patch" : build.requiresReload || initialLoad ? "module" : "none";
+						artifactKind = build.patchBytes != null ? "patch" : build.requiresReload
+							|| initialLoad ? "module" : "none";
 					result = cast {
 						compatibility: {
 							schemaVersion: AbiChangeSchema.VERSION,
@@ -80,16 +83,16 @@ class LanguageServiceProtocol {
 							artifactKind: artifactKind,
 							reasons: [for (reason in build.reloadReasons) AbiChangeSchema.encode(reason)]
 						},
-						revision: build.revision,
-						retyped: build.retyped,
-						regenerated: build.regenerated,
-						changedFunctions: build.changedFunctions,
-						requiresReload: build.requiresReload,
-						patchAvailable: build.patchBytes != null,
-						moduleBase64: Base64.encode(HlWriter.encode(build.module).flatten()),
-						patchBase64: build.patchBytes == null ? null : Base64.encode(build.patchBytes),
-						runtimeIdentityBase64: Base64.encode(build.runtimeIdentity),
-						metrics: build.metrics
+							revision:build.revision,
+							retyped:build.retyped,
+							regenerated:build.regenerated,
+							changedFunctions:build.changedFunctions,
+							requiresReload:build.requiresReload,
+							patchAvailable:build.patchBytes != null,
+							moduleBase64:Base64.encode(HlWriter.encode(build.module).flatten()),
+							patchBase64:build.patchBytes == null ? null : Base64.encode(build.patchBytes),
+							runtimeIdentityBase64:Base64.encode(build.runtimeIdentity),
+							metrics:build.metrics
 					};
 				case "acknowledge":
 					service.compiler.acknowledgePublication(requiredInt(request, "revision"));
@@ -99,48 +102,52 @@ class LanguageServiceProtocol {
 					result = cast publicationJson();
 				case "reconnect":
 					var identity = Base64.decode(requiredString(request, "domainIdentity"));
-					result = cast reconnectJson(service.compiler.reconcileRuntime(identity, requiredInt(request, "revision")));
+					result = cast reconnectJson(service.compiler.reconcileRuntime(identity,
+						requiredInt(request, "revision")));
 				case "validate":
-					var validation = service.validate(requiredString(request, "path"), requiredString(request, "source"), requiredString(request, "entry"),
+					var validation = service.validate(requiredString(request, "path"),
+						requiredString(request, "source"), requiredString(request, "entry"),
 						token);
 					result = cast {
-						valid: validation.valid,
-						diagnostic: validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
+						valid:validation.valid,
+							diagnostic:validation.diagnostic == null ? null : diagnosticJson(validation.diagnostic)
 					};
 				case "diagnostics":
-					result = cast [
+					result = cast[
 						for (diagnostic in service.diagnostics(requiredString(request, "path")))
 							cast diagnosticJson(diagnostic)
 					];
 				case "symbols":
-					result = cast [
+					result = cast[
 						for (symbol in service.documentSymbols(requiredString(request, "path")))
 							cast symbolJson(symbol)
 					];
 				case "complete":
-					result = cast [
-						for (item in service.complete(requiredString(request, "path"), requiredInt(request, "position"), token))
+					result = cast[
+						for (item in service.complete(requiredString(request, "path"), requiredInt(request, "position"),
+							token))
 							cast item
 					];
 				case "hover":
 					result = service.hover(requiredString(request, "path"), requiredInt(request, "position"));
 				case "definition":
-					result = cast locationJson(service.definition(requiredString(request, "path"), requiredInt(request, "position")));
+					result = cast locationJson(service.definition(requiredString(request, "path"),
+						requiredInt(request, "position")));
 				case "references":
-					result = cast [
-						for (location in service.references(requiredString(request, "path"), requiredInt(request, "position"), token))
+					result = cast[
+						for (location in service.references(requiredString(request, "path"),
+							requiredInt(request, "position"), token))
 							cast locationJson(location)
 					];
 				case "rename":
-					result = cast [
-						for (edit in service.rename(requiredString(request, "path"), requiredInt(request, "position"), requiredString(request, "replacement")))
-							cast {
-								text: edit.path,
-								start: edit.span.start,
-								end: edit.span.end,
-								replacement: edit.replacement
-							}
-					];
+					result = cast[for (edit in service.rename(requiredString(request, "path"),
+						requiredInt(request, "position"), requiredString(request, "replacement")))
+						cast {
+							text:edit.path,
+								start:edit.span.start,
+								end:edit.span.end,
+								replacement:edit.replacement
+						}];
 				default:
 					throw 'Unknown language-service method "$method"';
 			}
@@ -180,7 +187,8 @@ class LanguageServiceProtocol {
 	}
 
 	static function key(value:Dynamic):String
-		return value == null ? "null" : Std.isOfType(value, String) ? "string:" + cast(value, String) : "value:" + Json.stringify(value);
+		return value == null ? "null" : Std.isOfType(value, String) ? "string:" + cast(value,
+			String) : "value:" + Json.stringify(value);
 
 	static function requiredString(request:Dynamic, name:String):String {
 		var value:Dynamic = Reflect.field(request, name);
@@ -239,10 +247,10 @@ class LanguageServiceProtocol {
 			case PublicationTrackingDisabled: {code: "publication_tracking_disabled"};
 			case PublicationPending(revision): {code: "publication_pending", revision: revision};
 			case RuntimeRevisionMismatch(runtimeRevision, acknowledgedRevision): {
-					code: "runtime_revision_mismatch",
-					runtimeRevision: runtimeRevision,
-					acknowledgedRevision: acknowledgedRevision
-				};
+				code: "runtime_revision_mismatch",
+				runtimeRevision: runtimeRevision,
+				acknowledgedRevision: acknowledgedRevision
+			};
 			case BackendBaselineUnavailable: {code: "backend_baseline_unavailable"};
 			case ModuleIdentityMismatch: {code: "module_identity_mismatch"};
 		};

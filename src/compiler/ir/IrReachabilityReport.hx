@@ -22,7 +22,8 @@ class IrReachabilityReport {
 			if (fn.retention != Reachable)
 				entries.push(fn.name);
 		var lines = IrTypeAwareWalk.compare(program, {functions: entries, types: []});
-		var text = point + ", entry " + program.entryPoint + " (" + entries.length + " roots)\n  " + lines.join("\n  ") + "\n";
+		var text = point + ", entry " + program.entryPoint + " (" + entries.length + " roots)\n  " + lines.join("\n  ")
+			+ "\n";
 		sys.io.File.saveContent(path, (sys.FileSystem.exists(path) ? sys.io.File.getContent(path) : "") + text);
 	}
 }

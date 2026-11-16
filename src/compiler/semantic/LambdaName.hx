@@ -39,7 +39,8 @@ class LambdaName {
 		for (index in 0...key.length)
 			hash = (hash ^ key.charCodeAt(index)) * 16777619;
 		var ordinal = identity.lastIndexOf("#");
-		return identity.substring(0, ordinal) + "@" + StringTools.hex(hash & 0x7FFFFFFF, 8) + identity.substring(ordinal);
+		return identity.substring(0, ordinal) + "@" + StringTools.hex(hash & 0x7FFFFFFF,
+			8) + identity.substring(ordinal);
 	}
 
 	/**
@@ -50,7 +51,8 @@ class LambdaName {
 	public static function variant(identity:String, ordinal:Int):String {
 		var position = identity.lastIndexOf("#");
 		// An identity without an ordinal (none is built today) keeps all of itself rather than losing its last character.
-		return position < 0 ? identity + "~" + ordinal : identity.substring(0, position) + "~" + ordinal + identity.substring(position);
+		return position < 0 ? identity + "~" + ordinal : identity.substring(0,
+			position) + "~" + ordinal + identity.substring(position);
 	}
 
 	public static inline function is(name:String):Bool
@@ -58,7 +60,7 @@ class LambdaName {
 
 	/** The function or lambda `name` is written in, or null when `name` is not a lambda. */
 	public static function enclosing(name:String):Null<String> {
-		if (! is(name))
+		if (!is(name))
 			return null;
 		var end = name.lastIndexOf(":");
 		return end <= PREFIX.length ? null : name.substring(PREFIX.length, end);

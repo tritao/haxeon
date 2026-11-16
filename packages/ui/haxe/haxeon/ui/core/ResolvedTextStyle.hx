@@ -17,12 +17,12 @@ class ResolvedTextStyle {
 			?override:TextStyleOverride) {
 		if (textStyle == null || paragraphStyle == null)
 			throw "Resolved text styles require complete values";
-		this.textStyle = new TextStyle(
-			override == null || override.fontSize == null ? textStyle.fontSize : override.fontSize,
+		this.textStyle = new TextStyle(override == null
+			|| override.fontSize == null ? textStyle.fontSize : override.fontSize,
 			override == null || override.font == null ? textStyle.font : override.font,
 			override == null || override.letterSpacing == null ? textStyle.letterSpacing : override.letterSpacing);
-		this.paragraphStyle = new ParagraphStyle(
-			override == null || override.wrap == null ? paragraphStyle.wrap : override.wrap,
+		this.paragraphStyle = new ParagraphStyle(override == null
+			|| override.wrap == null ? paragraphStyle.wrap : override.wrap,
 			override == null || override.alignment == null ? paragraphStyle.alignment : override.alignment,
 			override == null || override.lineHeight == null ? paragraphStyle.lineHeight : override.lineHeight,
 			override == null || override.direction == null ? paragraphStyle.direction : override.direction,

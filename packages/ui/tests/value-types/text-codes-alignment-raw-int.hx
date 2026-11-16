@@ -1,2 +1,5 @@
 import haxeon.ui.TextAlignment;
-function main():Int { var state:TextAlignment = 1; return 0; }
+function main():Int {
+	var state:TextAlignment = 1;
+	return 0;
+}

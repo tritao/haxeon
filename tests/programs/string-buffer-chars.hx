@@ -32,7 +32,8 @@ function main():Int {
 
 	// charAt: in range, out of range, and repeated.
 	var text = "hello";
-	if (text.charAt(1) != "e" || text.charAt(4) != "o" || text.charAt(5) != "" || text.charAt(-1) != "" || text.charAt(0) + text.charAt(0) != "hh")
+	if (text.charAt(1) != "e" || text.charAt(4) != "o" || text.charAt(5) != "" || text.charAt(-1) != ""
+		|| text.charAt(0) + text.charAt(0) != "hh")
 		return 6;
 
 	// Characters from fromCharCode and charAt are ordinary strings: they compare, concatenate and index normally.

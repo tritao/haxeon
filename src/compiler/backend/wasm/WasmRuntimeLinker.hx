@@ -31,18 +31,23 @@ class WasmRuntimeLinker {
 	 * the module function index of each runtime export. Imports must all be in `module` already: appended
 	 * functions take the indices after the last one.
 	 */
-	public static function link(module:WasmModule, runtime:Bytes, guest:String->Int, ?entryFuelFunction:Int):Map<String, Int>
+	public static function link(module:WasmModule, runtime:Bytes, guest:String->Int,
+			?entryFuelFunction:Int):Map<String, Int>
 		return new WasmRuntimeLinker(runtime).linkInto(module, guest, entryFuelFunction);
 
 	function linkInto(module:WasmModule, guest:String->Int, entryFuelFunction:Null<Int>):Map<String, Int> {
 		if (bytes.length < 8 || bytes.getInt32(0) != 0x6d736100 || bytes.getInt32(4) != 1)
 			throw "The Wasm runtime is not a version 1 WebAssembly module";
 		position = 8;
-		var types:Array<WasmFunctionType> = [], importedFunctions:Array<String> = [], functionTypes:Array<Int> = [], runtimeGlobals:Array<WasmGlobal> = [],
+		var types:Array<WasmFunctionType> = [],
+			importedFunctions:Array<String> = [],
+			functionTypes:Array<Int> = [],
+			runtimeGlobals:Array<WasmGlobal> = [],
 			exports:Array<{
 				name:String,
 				index:Int
-			}> = [], bodies:Array<{start:Int, end:Int}> = [];
+			}> = [],
+			bodies:Array<{start:Int, end:Int}> = [];
 		while (position < bytes.length) {
 			var id = bytes.get(position++), size = u32(), end = position + size;
 			switch id {
@@ -93,7 +98,10 @@ class WasmRuntimeLinker {
 						var type = valueType(),
 							mutable = bytes.get(position++) != 0,
 							initializer:Array<WasmInstruction> = [];
-						if ((switch (type) { case I32: false; default: true; }))
+						if ((switch (type) {
+							case I32: false;
+							default: true;
+						}))
 							throw "The runtime-neutral Wasm runtime defines a non-i32 global";
 						if (bytes.get(position++) != 0x41)
 							throw "The runtime-neutral Wasm runtime uses a non-constant global initializer";
@@ -122,10 +130,13 @@ class WasmRuntimeLinker {
 		}
 		if (bodies.length != functionTypes.length)
 			throw "The Wasm runtime's function and code sections disagree";
-		var importCount = importedFunctions.length, firstIndex = module.functionCount(), globalBase = module.globals.length, targets = [
-			for (index in 0...importCount + bodies.length)
-				index < importCount ? guest(importedFunctions[index]) : firstIndex + index - importCount
-		];
+		var importCount = importedFunctions.length,
+			firstIndex = module.functionCount(),
+			globalBase = module.globals.length,
+			targets = [
+				for (index in 0...importCount + bodies.length)
+					index < importCount ? guest(importedFunctions[index]) : firstIndex + index - importCount
+			];
 		for (global in runtimeGlobals)
 			module.globals.push(global);
 		for (index in 0...bodies.length) {
@@ -137,7 +148,8 @@ class WasmRuntimeLinker {
 	}
 
 	/** Copies one body, renumbering `call` targets and block types. */
-	function relocate(start:Int, end:Int, targets:Array<Int>, types:Array<WasmFunctionType>, module:WasmModule, entryFuelFunction:Null<Int>,
+	function relocate(start:Int, end:Int, targets:Array<Int>, types:Array<WasmFunctionType>, module:WasmModule,
+			entryFuelFunction:Null<Int>,
 			globalBase:Int):Bytes {
 		var output = new BytesOutput();
 		position = start;
@@ -213,8 +225,9 @@ class WasmRuntimeLinker {
 							throw 'The Wasm runtime uses unsupported instruction 0xfc $sub';
 					}
 				case _
-					if (opcode <= 0x01 || opcode == 0x05 || opcode == 0x0b || opcode == 0x0f || opcode == 0x1a || opcode == 0x1b
-						|| (opcode >= 0x45 && opcode <= 0xc4)):
+					if (opcode <= 0x01 || opcode == 0x05 || opcode == 0x0b || opcode == 0x0f || opcode == 0x1a
+					|| opcode == 0x1b
+					|| (opcode >= 0x45 && opcode <= 0xc4)):
 				default:
 					throw 'The Wasm runtime uses unsupported instruction 0x${StringTools.hex(opcode, 2)}';
 			}

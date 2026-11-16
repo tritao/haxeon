@@ -19,7 +19,8 @@ class RuntimeLibraryMain {
 		checks++;
 	}
 
-	static function same(actual:String, expected:String, message:String):Void check(actual == expected, message + ": " + actual + " vs " + expected);
+	static function same(actual:String, expected:String, message:String):Void check(actual == expected,
+		message + ": " + actual + " vs " + expected);
 
 	/** A fake library: NUL-separated symbol names, as a symbol table holds them. */
 	static function library(symbols:Array<String>):Bytes {
@@ -51,19 +52,34 @@ class RuntimeLibraryMain {
 			"DEFINE_PRIM(_BOOL,__dir_watch_add,_BYTES _BYTES _BOOL)\nDEFINE_PRIM(_ABSTRACT(ereg), __regexp_new, _STRING _STRING)\n",
 			"// DEFINE_PRIM is mentioned here\nDEFINE_PRIM(_STRING,__reflect_class_name,_DYN);\nDEFINE_PRIM(_BOOL,__dir_watch_add,_BYTES)\n"
 		]);
-		same(defined.join(","), "__dir_watch_add,__regexp_new,__reflect_class_name", "natives defined by the sources, each once");
+		same(defined.join(","), "__dir_watch_add,__regexp_new,__reflect_class_name",
+			"natives defined by the sources, each once");
 		check(RuntimeLibrary.definedIn([]).length == 0, "no sources define nothing");
 
 		// Symbol parsing: hlp_<name> after a NUL, with or without a leading underscore; other names are not natives.
-		var exported = RuntimeLibrary.exportedNatives(library(["hlp___dir_watch_add", "realtime___dir_watch_add", "_hlp___regexp_new", "hlp_", "xhlp_wrong", "hl_regexp_new_options"]));
+		var exported = RuntimeLibrary.exportedNatives(library([
+			"hlp___dir_watch_add",
+			"realtime___dir_watch_add",
+			"_hlp___regexp_new",
+			"hlp_",
+			"xhlp_wrong",
+			"hl_regexp_new_options"
+		]));
 		check(exported.exists("__dir_watch_add"), "an hlp_ symbol is a native");
 		check(exported.exists("__regexp_new"), "a leading underscore is allowed (Mach-O)");
 		check(!exported.exists("wrong"), "a name that merely contains hlp_ is not one");
 		check(!exported.exists("__reflect_class_name"), "a native that is not there is not found");
-		check(RuntimeLibrary.exportedNatives(Bytes.alloc(0)).keys().hasNext() == false, "an empty file exports nothing");
-		check(RuntimeLibrary.exportedNatives(Bytes.ofString("hlp")).keys().hasNext() == false, "a tiny file exports nothing");
-		same(RuntimeLibrary.missingFrom(defined, library(["hlp___dir_watch_add", "hlp___regexp_new"])).join(","), "__reflect_class_name", "the missing native is named");
-		check(RuntimeLibrary.missingFrom(defined, library(["hlp___dir_watch_add", "hlp___regexp_new", "hlp___reflect_class_name"])).length == 0, "a complete library lacks nothing");
+		check(RuntimeLibrary.exportedNatives(Bytes.alloc(0)).keys().hasNext() == false,
+			"an empty file exports nothing");
+		check(RuntimeLibrary.exportedNatives(Bytes.ofString("hlp")).keys().hasNext() == false,
+			"a tiny file exports nothing");
+		same(RuntimeLibrary.missingFrom(defined, library(["hlp___dir_watch_add", "hlp___regexp_new"])).join(","),
+			"__reflect_class_name", "the missing native is named");
+		check(RuntimeLibrary.missingFrom(defined, library([
+			"hlp___dir_watch_add",
+			"hlp___regexp_new",
+			"hlp___reflect_class_name"
+		])).length == 0, "a complete library lacks nothing");
 
 		// The whole check on a temporary checkout.
 		var root = FileSystem.fullPath(".") + "/out/runtime-library-test-" + Std.random(0x3fffffff);
@@ -73,17 +89,21 @@ class RuntimeLibraryMain {
 		write(root + "/native/runtime.c", "DEFINE_PRIM(_I32,__a,_NO_ARG)\n");
 		write(root + "/native/runtime/more.c", "DEFINE_PRIM(_I32,__b,_NO_ARG)\nDEFINE_PRIM(_I32,__c,_NO_ARG)\n");
 		write(root + "/native/runtime/notes.txt", "DEFINE_PRIM(_I32,__ignored,_NO_ARG)\n");
-		same(RuntimeLibrary.definedNatives(root).join(","), "__a,__b,__c", "runtime.c, then runtime/*.c in name order, .c files only");
+		same(RuntimeLibrary.definedNatives(root).join(","), "__a,__b,__c",
+			"runtime.c, then runtime/*.c in name order, .c files only");
 		check(RuntimeLibrary.missing(root).length == 0, "sources but no library built yet: nothing to compare");
 		directories(root + "/out");
 		File.saveBytes(hdll, library(["hlp___a", "hlp___b"]));
 		var lacking = RuntimeLibrary.missing(root);
 		same(lacking.join(","), "__c", "an older library lacks the newer native");
 		var text = RuntimeLibrary.describe(root, lacking);
-		check(text.indexOf(hdll) >= 0 && text.indexOf("out of date") >= 0 && text.indexOf("__c") >= 0 && text.indexOf("lacks 1 function ") >= 0
-			&& text.indexOf("scripts/build-native.sh") >= 0, "the message names the library, the function and the rebuild command: " + text);
+		check(text.indexOf(hdll) >= 0 && text.indexOf("out of date") >= 0 && text.indexOf("__c") >= 0
+			&& text.indexOf("lacks 1 function ") >= 0
+			&& text.indexOf("scripts/build-native.sh") >= 0,
+			"the message names the library, the function and the rebuild command: " + text);
 		var long = RuntimeLibrary.describe(root, ["__1", "__2", "__3", "__4", "__5", "__6"]);
-		check(long.indexOf("lacks 6 functions") >= 0 && long.indexOf("__4, ...") >= 0 && long.indexOf("__5") < 0, "a long list is cut short with its count: " + long);
+		check(long.indexOf("lacks 6 functions") >= 0 && long.indexOf("__4, ...") >= 0 && long.indexOf("__5") < 0,
+			"a long list is cut short with its count: " + long);
 		var thrown = "";
 		try
 			RuntimeLibrary.requireCurrent(root)
@@ -107,7 +127,8 @@ class RuntimeLibraryMain {
 		var real = RuntimeLibrary.libraryPath(home);
 		if (FileSystem.exists(real) && RuntimeLibrary.definedNatives(home).length > 0) {
 			var realDefined = RuntimeLibrary.definedNatives(home);
-			check(realDefined.length > 600 && realDefined.indexOf("__reflect_class_name") >= 0, "the real sources define their natives: " + realDefined.length);
+			check(realDefined.length > 600 && realDefined.indexOf("__reflect_class_name") >= 0,
+				"the real sources define their natives: " + realDefined.length);
 			var bytes = File.getBytes(real);
 			var current = RuntimeLibrary.missingFrom(realDefined, bytes);
 			if (current.length == 0) {
@@ -127,9 +148,11 @@ class RuntimeLibraryMain {
 					}
 				}
 				check(found >= 1, "the real library exports __reflect_class_name");
-				same(RuntimeLibrary.missingFrom(realDefined, damaged).join(","), "__reflect_class_name", "the real library with that symbol taken out lacks exactly it");
+				same(RuntimeLibrary.missingFrom(realDefined, damaged).join(","), "__reflect_class_name",
+					"the real library with that symbol taken out lacks exactly it");
 			} else
-				Sys.println("note: the library at " + real + " is out of date (lacks " + current.join(", ") + "); the real-library check was skipped");
+				Sys.println("note: the library at " + real + " is out of date (lacks " + current.join(", ")
+					+ "); the real-library check was skipped");
 		} else
 			Sys.println("note: no built runtime library or no runtime sources here; the real-library check was skipped");
 

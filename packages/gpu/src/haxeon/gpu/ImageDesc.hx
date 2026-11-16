@@ -22,7 +22,7 @@ class ImageDesc {
 	public var type:ImageType;
 
 	public function new(width:Int, height:Int, format:ImageFormat = ImageFormat.Rgba8,
-		usage:ImageUsage = ImageUsage.Sampled) {
+			usage:ImageUsage = ImageUsage.Sampled) {
 		this.width = width;
 		this.height = height;
 		this.format = format;

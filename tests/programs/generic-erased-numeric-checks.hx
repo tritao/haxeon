@@ -1,9 +1,16 @@
-struct NumericBoundaryValue { public final number:Int; public function new(number:Int) this.number = number; }
+struct NumericBoundaryValue {
+	public final number:Int;
+	public function new(number:Int) this.number = number;
+}
 class NumericBoundary<A, B> {
 	public var anchor:A;
 	public var value:B;
 	public var storage:Array<B>;
-	public function new(anchor:A, value:B) { this.anchor = anchor; this.value = value; storage = []; }
+	public function new(anchor:A, value:B) {
+		this.anchor = anchor;
+		this.value = value;
+		storage = [];
+	}
 }
 function main():Int {
 	var ints = new NumericBoundary<NumericBoundaryValue, Int>(new NumericBoundaryValue(1), 42);
@@ -30,7 +37,8 @@ function main():Int {
 	if (!rejected || !flags.value) return 6;
 	flagView.value = false;
 	if (flags.value) return 7;
-	var wide = new NumericBoundary<NumericBoundaryValue, haxe.Int64>(new NumericBoundaryValue(1), haxe.Int64.make(1, 3));
+	var wide = new NumericBoundary<NumericBoundaryValue, haxe.Int64>(new NumericBoundaryValue(1),
+		haxe.Int64.make(1, 3));
 	var wideView:NumericBoundary<Dynamic, Dynamic> = wide;
 	rejected = false;
 	try wideView.value = 3 catch (_:Dynamic) rejected = true;

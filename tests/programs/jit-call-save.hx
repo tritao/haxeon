@@ -97,7 +97,9 @@ function rootChecksum(make:Int->RootBox, collect:Void->Void):Int {
 	var p = make(1), q = make(2), r = make(3), s = make(4);
 	var t = make(5), u = make(6), v = make(7);
 	collect();
-	return p.a + p.b + p.c + p.d + p.e + p.f + p.g + p.h + q.a + q.b + q.c + q.d + q.e + q.f + q.g + q.h + r.a + r.b + r.c + r.d + r.e + r.f + r.g + r.h
-		+ s.a + s.b + s.c + s.d + s.e + s.f + s.g + s.h + t.a + t.b + t.c + t.d + t.e + t.f + t.g + t.h + u.a + u.b + u.c + u.d + u.e + u.f + u.g + u.h + v.a
+	return p.a + p.b + p.c + p.d + p.e + p.f + p.g + p.h + q.a + q.b + q.c + q.d + q.e + q.f + q.g + q.h + r.a + r.b
+		+ r.c + r.d + r.e + r.f + r.g + r.h
+		+ s.a + s.b + s.c + s.d + s.e + s.f + s.g + s.h + t.a + t.b + t.c + t.d + t.e + t.f + t.g + t.h + u.a + u.b
+		+ u.c + u.d + u.e + u.f + u.g + u.h + v.a
 		+ v.b + v.c + v.d + v.e + v.f + v.g + v.h;
 }

@@ -37,7 +37,8 @@ class HxiNativeSignature {
 						callConvention: callConvention,
 						resultPolicy: resultPolicy,
 						semantics: semantic,
-						dispatch: dispatches == null || dispatches.get(name) == null ? DirectSymbol : dispatches.get(name)
+						dispatch: dispatches == null
+							|| dispatches.get(name) == null ? DirectSymbol : dispatches.get(name)
 					});
 				case _:
 			}

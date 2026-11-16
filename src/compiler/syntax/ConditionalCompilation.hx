@@ -21,8 +21,16 @@ class ConditionalCompilation {
 	public static function process(file:SourceFile, defines:Map<String, String>):ConditionalSource {
 		if (file.text.indexOf("#") < 0)
 			return {text: file.text, defines: []};
-		var source = file.bytes, output = new StringBuf(), referenced:Map<String, Bool> = [], frames:Array<ConditionalFrame> = [], cursor = 0, scan = 0,
-			quote = 0, escaped = false, lineComment = false, blockComment = false;
+		var source = file.bytes,
+			output = new StringBuf(),
+			referenced:Map<String, Bool> = [],
+			frames:Array<ConditionalFrame> = [],
+			cursor = 0,
+			scan = 0,
+			quote = 0,
+			escaped = false,
+			lineComment = false,
+			blockComment = false;
 		while (scan < source.length) {
 			var code = source.get(scan),
 				next = scan + 1 < source.length ? source.get(scan + 1) : -1;
@@ -119,9 +127,9 @@ class ConditionalCompilation {
 					var message = StringTools.trim(file.slice(nameEnd, lineEnd));
 					if (message.length >= 2
 						&& (message.charAt(0) == "\""
-							&& message.charAt(message.length - 1) == "\""
-							|| message.charAt(0) == "'"
-							&& message.charAt(message.length - 1) == "'"))
+						&& message.charAt(message.length - 1) == "\""
+						|| message.charAt(0) == "'"
+						&& message.charAt(message.length - 1) == "'"))
 						message = message.substring(1, message.length - 1);
 					fail(file, scan, message == "" ? "#error" : message);
 				}
@@ -157,7 +165,8 @@ class ConditionalCompilation {
 			parser = new DefineExpression(expression, [], [], file, nameEnd);
 		parser.parsePrefix();
 		var end = nameEnd + haxe.io.Bytes.ofString(expression.substring(0, parser.consumed())).length;
-		while (end > nameEnd && (source.get(end - 1) == " ".code || source.get(end - 1) == "\t".code || source.get(end - 1) == "\r".code))
+		while (end > nameEnd && (source.get(end - 1) == " ".code || source.get(end - 1) == "\t".code
+			|| source.get(end - 1) == "\r".code))
 			end--;
 		return end;
 	}
@@ -185,7 +194,8 @@ class ConditionalCompilation {
 	static function isActive(frames:Array<ConditionalFrame>):Bool
 		return frames.length == 0 || frames[frames.length - 1].active;
 
-	static function requireFrame(frames:Array<ConditionalFrame>, file:SourceFile, offset:Int, directive:String):ConditionalFrame {
+	static function requireFrame(frames:Array<ConditionalFrame>, file:SourceFile, offset:Int,
+			directive:String):ConditionalFrame {
 		if (frames.length == 0)
 			fail(file, offset, '$directive without #if');
 		return frames[frames.length - 1];
@@ -213,7 +223,8 @@ private class DefineExpression {
 	final baseOffset:Int;
 	var position = 0;
 
-	public function new(expression:String, defines:Map<String, String>, referenced:Map<String, Bool>, file:SourceFile, baseOffset:Int) {
+	public function new(expression:String, defines:Map<String, String>, referenced:Map<String, Bool>, file:SourceFile,
+			baseOffset:Int) {
 		this.expression = expression;
 		this.defines = defines;
 		this.referenced = referenced;
@@ -355,7 +366,8 @@ private class DefineExpression {
 		var start = position;
 		while (position < expression.length) {
 			var code = expression.charCodeAt(position);
-			if (!(code >= "A".code && code <= "Z".code || code >= "a".code && code <= "z".code || code >= "0".code && code <= "9".code || code == "_".code
+			if (!(code >= "A".code && code <= "Z".code || code >= "a".code && code <= "z".code || code >= "0".code
+				&& code <= "9".code || code == "_".code
 				|| code == ".".code))
 				break;
 			position++;

@@ -27,7 +27,8 @@ function jsonArrayGet(value:Dynamic, index:Int):Dynamic
 #end
 
 class JsonPrinter {
-	public static function print(value:Dynamic, ?replacer:(key:Dynamic, value:Dynamic) -> Dynamic, ?space:String):String {
+	public static function print(value:Dynamic, ?replacer:(key:Dynamic, value:Dynamic) -> Dynamic,
+			?space:String):String {
 		var printer = new JsonPrinter(replacer, space);
 		printer.write("", value);
 		return printer.output.toString();
@@ -59,7 +60,8 @@ class JsonPrinter {
 			case 4:
 				var number = cast(value, Float);
 				#if wasm
-				output.add(number == number && number != 1.0 / 0.0 && number != -1.0 / 0.0 ? Std.string(number) : "null");
+				output.add(number == number && number != 1.0 / 0.0
+					&& number != -1.0 / 0.0 ? Std.string(number) : "null");
 				#else
 				output.add(Math.isFinite(number) ? Std.string(number) : "null");
 				#end

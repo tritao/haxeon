@@ -124,7 +124,10 @@ class StyleEnvironment {
 	function get_scrollbarVisibility():Int return scrollbarVisibilityValue;
 	function set_scrollbarVisibility(value:Int):Int {
 		if (value < 0 || value > 2) throw "Invalid scrollbar visibility";
-		if (scrollbarVisibilityValue != value) { scrollbarVisibilityValue = value; revision++; }
+		if (scrollbarVisibilityValue != value) {
+			scrollbarVisibilityValue = value;
+			revision++;
+		}
 		return value;
 	}
 
@@ -147,6 +150,6 @@ class StyleEnvironment {
 	}
 
 	function refreshOrientation():Void
-		orientation = width <= 0.0 || height <= 0.0 ? EnvironmentOrientation.Unknown :
-			(width >= height ? EnvironmentOrientation.Landscape : EnvironmentOrientation.Portrait);
+		orientation = width <= 0.0 || height <= 0.0 ? EnvironmentOrientation.Unknown
+			: (width >= height ? EnvironmentOrientation.Landscape : EnvironmentOrientation.Portrait);
 }

@@ -6,7 +6,10 @@ enum ValueKey implements Hashable {
 	Empty;
 }
 
-enum GenericTag<T> { First; Second; }
+enum GenericTag<T> {
+	First;
+	Second;
+}
 
 function main():Int {
 	var values:Map<ValueKey, Int> = new Map();
@@ -22,7 +25,8 @@ function main():Int {
 	for (key in values.keys()) if (key == Pair(1, 2)) found = true;
 	if (!found) return 5;
 	var tags:Map<GenericTag<Int>, Int> = [];
-	tags.set(First, 1); tags.set(Second, 2);
+	tags.set(First, 1);
+	tags.set(Second, 2);
 	var count = 0;
 	for (tag in tags.keys()) if (tags.exists(tag)) count++;
 	return count == 2 ? 42 : 6;

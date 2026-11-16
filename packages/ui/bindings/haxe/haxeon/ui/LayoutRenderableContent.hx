@@ -50,8 +50,7 @@ class LayoutRenderableContent implements LayoutContent {
 		if (geometry == null)
 			throw "Renderable content requires resolved geometry";
 		var version = getVersion();
-		if (paintedGeometry != null && paintedVersion == version &&
-			geometryEqual(paintedGeometry, geometry))
+		if (paintedGeometry != null && paintedVersion == version && geometryEqual(paintedGeometry, geometry))
 			return list;
 
 		canvas.reset();
@@ -89,10 +88,9 @@ class LayoutRenderableContent implements LayoutContent {
 
 	static function geometryEqual(a:ResolvedLayoutItem, b:ResolvedLayoutItem):Bool {
 		// Everything but the id; the rectangles and the transform are compared by their classes' generated equality.
-		return a.flags == b.flags && a.x == b.x && a.y == b.y &&
-			a.width == b.width && a.height == b.height && a.baseline == b.baseline &&
-			haxeon.Equality.equals(a.clipBounds, b.clipBounds) &&
-			haxeon.Equality.equals(a.contentBounds, b.contentBounds) &&
-			haxeon.Equality.equals(a.transform, b.transform);
+		return a.flags == b.flags && a.x == b.x && a.y == b.y && a.width == b.width && a.height == b.height
+			&& a.baseline == b.baseline && haxeon.Equality.equals(a.clipBounds, b.clipBounds)
+			&& haxeon.Equality.equals(a.contentBounds, b.contentBounds)
+			&& haxeon.Equality.equals(a.transform, b.transform);
 	}
 }

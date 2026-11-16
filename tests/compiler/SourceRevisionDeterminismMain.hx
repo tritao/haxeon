@@ -25,9 +25,10 @@ class SourceRevisionDeterminismMain {
 			"class Main { static function compute(value:Int=42):Int return value; static function main():Int return compute(); }",
 			"struct Value implements Equatable { public var n:Int; public function new(n:Int) this.n=n; } function main():Int return new Value(1)==new Value(1)?42:1;",
 			"class Main { static var values:Array<Int>=[42]; static function main():Int return values[0]; }",
-			"inline function calc(n:Int):Int {" + [for (i in 0...30) "n=n+1;"].join("") + "return n;} function main():Int return calc(12);",
-			"class Main { static inline function calc(n:Int):Int {" + [for (i in 0...30) "n=n+1;"].join("") +
-				"return n;} static function main():Int return calc(12); }"
+			"inline function calc(n:Int):Int {" + [for (i in 0...30) "n=n+1;"].join("")
+				+ "return n;} function main():Int return calc(12);",
+			"class Main { static inline function calc(n:Int):Int {" + [for (i in 0...30) "n=n+1;"].join("")
+				+ "return n;} static function main():Int return calc(12); }"
 		];
 		for (source in cases) {
 			for (edited in [source + "\n// comment\n", " " + source, "\n" + source]) {
@@ -48,7 +49,11 @@ class SourceRevisionDeterminismMain {
 			"function wrap<T>(x:T):Int return Defaults.read(); function call():Int return wrap(0);",
 			"function call():Int return new Defaults().value;"
 		]) {
-			var defaults = caller.indexOf(".value") >= 0 ? "class Defaults {public var value:Int; public function new(n:Int=42) value=n;}" : caller.indexOf("new Defaults") >= 0 ? "class Defaults {public function new() {} public function read(n:Int=42):Int return n;}" : "class Defaults {public static function read(n:Int=42):Int return n;}";
+			var defaults = caller.indexOf(".value") >= 0
+				? "class Defaults {public var value:Int; public function new(n:Int=42) value=n;}"
+				: caller.indexOf("new Defaults") >= 0
+				? "class Defaults {public function new() {} public function read(n:Int=42):Int return n;}"
+				: "class Defaults {public static function read(n:Int=42):Int return n;}";
 			for (edited in [defaults + "\n// comment\n", " " + defaults, "\n" + defaults]) {
 				function program(text:String):Compiler {
 					var c = create("function main():Int return Caller.call()+Explicit.call();");

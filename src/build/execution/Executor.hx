@@ -21,7 +21,8 @@ class Executor implements ExecutionBackend {
 	/** Actions whose fingerprint another action consumes; see `fingerprintFor`. */
 	var dependedOn:Map<String, Bool> = [];
 
-	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void, ?sharedDigests:ContentDigestCache) {
+	public function new(environment:BuildEnvironment, ?workerCount:Int = 1, ?print:String->Void,
+			?sharedDigests:ContentDigestCache) {
 		this.sharedDigests = sharedDigests;
 		this.environment = environment;
 		this.workerCount = workerCount < 1 ? 1 : workerCount;
@@ -89,7 +90,8 @@ class Executor implements ExecutionBackend {
 					environment:Map<String, String>
 				}> = [];
 			for (action in wave) {
-				var dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
+				var dependencyFingerprints =
+					[for (dependency in action.dependencies) fingerprints.get(dependency.key())];
 				var fingerprint = fingerprintFor(action, dependencyFingerprints);
 				if (isUpToDate(action, fingerprint, dependencyFingerprints)) {
 					waveResults.set(action.id.key(), new ActionResult(action.id, 0, true, false, fingerprint));
@@ -107,10 +109,12 @@ class Executor implements ExecutionBackend {
 							});
 							processActions.push({action: action, fingerprint: fingerprint});
 						} catch (error:Dynamic) {
-							waveResults.set(action.id.key(), new ActionResult(action.id, 1, false, false, null, Std.string(error)));
+							waveResults.set(action.id.key(),
+								new ActionResult(action.id, 1, false, false, null, Std.string(error)));
 						}
 					case Compiler(_, _, _, _, _):
-						waveResults.set(action.id.key(), executeAction(action, dependencyFingerprints, fingerprint, true));
+						waveResults.set(action.id.key(),
+							executeAction(action, dependencyFingerprints, fingerprint, true));
 				}
 			}
 			if (processTasks.length > 0) {
@@ -120,7 +124,8 @@ class Executor implements ExecutionBackend {
 				} catch (error:Dynamic) {
 					statuses = [for (_ in processTasks) 1];
 					for (item in processActions)
-						waveResults.set(item.action.id.key(), new ActionResult(item.action.id, 1, false, false, null, Std.string(error)));
+						waveResults.set(item.action.id.key(),
+							new ActionResult(item.action.id, 1, false, false, null, Std.string(error)));
 				}
 				for (index in 0...processActions.length) {
 					var item = processActions[index];
@@ -135,12 +140,15 @@ class Executor implements ExecutionBackend {
 							if (ArtifactCache.isShareable(item.action))
 								artifactCache.publish(item.action,
 									ActionFingerprint.globalKey(item.action, environment.target.toString(),
-										[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())], digests));
+									[for (dependency in item.action.dependencies) fingerprints.get(dependency.key())],
+									digests));
 						}
 						waveResults.set(item.action.id.key(),
-							new ActionResult(item.action.id, status, false, false, item.fingerprint, status == 0 ? null : 'Action exited with status $status'));
+							new ActionResult(item.action.id, status, false, false, item.fingerprint,
+							status == 0 ? null : 'Action exited with status $status'));
 					} catch (error:Dynamic) {
-						waveResults.set(item.action.id.key(), new ActionResult(item.action.id, 1, false, false, null, Std.string(error)));
+						waveResults.set(item.action.id.key(),
+							new ActionResult(item.action.id, 1, false, false, null, Std.string(error)));
 					}
 				}
 			}
@@ -175,11 +183,20 @@ class Executor implements ExecutionBackend {
 	 * starts, so a slow action never idles the other workers behind a wave barrier.
 	 */
 	function executeQueued(plan:ExecutionPlan):ExecutionResult {
-		var started = Sys.time() * 1000.0, pending = new Map<String, ExecutionAction>(), completed = new Map<String, ActionResult>(),
-			fingerprints = new Map<String, String>(), results:Array<ActionResult> = [], depth = chainDepths(plan), finished:Array<{
+		var started = Sys.time() * 1000.0,
+			pending = new Map<String, ExecutionAction>(),
+			completed = new Map<String, ActionResult>(),
+			fingerprints = new Map<String, String>(),
+			results:Array<ActionResult> = [],
+			depth = chainDepths(plan),
+			finished:Array<{
 				action:ExecutionAction,
 				result:ActionResult
-			}> = [], mutex = new Mutex(), signal = new Lock(), running = 0, runningCompilers = 0;
+			}> = [],
+			mutex = new Mutex(),
+			signal = new Lock(),
+			running = 0,
+			runningCompilers = 0;
 		for (action in plan.actions)
 			pending.set(action.id.key(), action);
 
@@ -219,7 +236,8 @@ class Executor implements ExecutionBackend {
 					runningCompilers++;
 				print('[${action.id}] ${action.description}');
 				var currentAction = action,
-					dependencyFingerprints = [for (dependency in action.dependencies) fingerprints.get(dependency.key())];
+					dependencyFingerprints =
+						[for (dependency in action.dependencies) fingerprints.get(dependency.key())];
 				Thread.create(function() {
 					runtime.ThreadName.setCurrent("haxeon.build.action");
 					// Always report and release: an exception escaping this thread would leave the
@@ -228,7 +246,8 @@ class Executor implements ExecutionBackend {
 						holdsToken = server != null && server.acquire();
 					var actionStarted = Sys.time() * 1000.0;
 					var result = try executeAction(currentAction,
-						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false, false, null, Std.string(error));
+						dependencyFingerprints) catch (error:Dynamic) new ActionResult(currentAction.id, 1, false,
+						false, null, Std.string(error));
 					result.elapsedMs = Sys.time() * 1000.0 - actionStarted;
 					if (holdsToken)
 						server.release();
@@ -336,7 +355,8 @@ class Executor implements ExecutionBackend {
 
 	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>, ?preparedFingerprint:String,
 			freshnessChecked:Bool = false):ActionResult {
-		var fingerprint = preparedFingerprint == null ? fingerprintFor(action, dependencyFingerprints) : preparedFingerprint;
+		var fingerprint = preparedFingerprint == null ? fingerprintFor(action,
+			dependencyFingerprints) : preparedFingerprint;
 		if (!freshnessChecked && isUpToDate(action, fingerprint, dependencyFingerprints))
 			return new ActionResult(action.id, 0, true, false, fingerprint);
 		try {
@@ -352,12 +372,15 @@ class Executor implements ExecutionBackend {
 			if (status == 0 && isCacheable(action)) {
 				// Compilation may discover a different set of source dependencies. Save their completed fingerprint.
 				if (isCompiler(action))
-					fingerprint = ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints, digests, true);
+					fingerprint = ActionFingerprint.compute(action, environment.buildRoot,
+						environment.target.toString(), dependencyFingerprints, digests, true);
 				ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 				if (ArtifactCache.isShareable(action))
-					artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints, digests));
+					artifactCache.publish(action, ActionFingerprint.globalKey(action, environment.target.toString(),
+						dependencyFingerprints, digests));
 			}
-			return new ActionResult(action.id, status, false, false, fingerprint, status == 0 ? null : 'Action exited with status $status');
+			return new ActionResult(action.id, status, false, false, fingerprint,
+				status == 0 ? null : 'Action exited with status $status');
 		} catch (error:Dynamic) {
 			return new ActionResult(action.id, 1, false, false, null, Std.string(error));
 		}
@@ -378,16 +401,19 @@ class Executor implements ExecutionBackend {
 	function fingerprintFor(action:ExecutionAction, dependencyFingerprints:Array<String>):Null<String> {
 		if (!isCacheable(action) && !dependedOn.exists(action.id.key()))
 			return null;
-		return ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(), dependencyFingerprints, digests);
+		return ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
+			dependencyFingerprints, digests);
 	}
 
 	function isUpToDate(action:ExecutionAction, fingerprint:String, dependencyFingerprints:Array<String>):Bool {
 		if (!isCacheable(action))
 			return false;
-		if (ActionFingerprint.load(environment.buildRoot, action) == fingerprint && ActionFingerprint.outputsExist(action))
+		if (ActionFingerprint.load(environment.buildRoot, action) == fingerprint
+			&& ActionFingerprint.outputsExist(action))
 			return true;
 		if (ArtifactCache.isShareable(action)
-			&& artifactCache.restore(action, ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints, digests))) {
+			&& artifactCache.restore(action,
+			ActionFingerprint.globalKey(action, environment.target.toString(), dependencyFingerprints, digests))) {
 			ActionFingerprint.save(environment.buildRoot, action, fingerprint);
 			return true;
 		}

@@ -8,7 +8,8 @@ class AcquiredSource {
 	public final checksum:Null<String>;
 	public final compatibility:Null<PackageCompatibility>;
 
-	public function new(root:String, source:PackageSource, ?resolvedRevision:String, ?checksum:String, ?compatibility:PackageCompatibility) {
+	public function new(root:String, source:PackageSource, ?resolvedRevision:String, ?checksum:String,
+			?compatibility:PackageCompatibility) {
 		this.root = root;
 		this.source = source;
 		this.resolvedRevision = resolvedRevision;

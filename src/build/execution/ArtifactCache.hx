@@ -26,7 +26,8 @@ class ArtifactCache {
 		if (cacheOverride != null && cacheOverride.length > 0)
 			cacheRoot = Path.normalize(cacheOverride);
 		else {
-			var home = Sys.systemName() == "Windows" ? ProcessRunner.environmentValue("USERPROFILE") : ProcessRunner.environmentValue("HOME");
+			var home = Sys.systemName() == "Windows"
+				? ProcessRunner.environmentValue("USERPROFILE") : ProcessRunner.environmentValue("HOME");
 			if (home == null || home.length == 0)
 				home = Sys.getCwd();
 			cacheRoot = Path.join([home, ".haxeon", "cache", "artifacts"]);
@@ -97,9 +98,14 @@ class ArtifactCache {
 					cachedFile = 'output-$index',
 					destination = Path.join([temporary, cachedFile]);
 				File.copy(output, destination);
-				outputs.push({file: cachedFile, checksum: Sha256.make(File.getBytes(destination)).toHex(), mode: FileSystem.stat(output).mode & 0x1ff});
+				outputs.push({
+					file: cachedFile,
+					checksum: Sha256.make(File.getBytes(destination)).toHex(),
+					mode: FileSystem.stat(output).mode & 0x1ff
+				});
 			}
-			File.saveContent(Path.join([temporary, "manifest.json"]), Json.stringify({version: 2, outputs: outputs}) + "\n");
+			File.saveContent(Path.join([temporary, "manifest.json"]),
+				Json.stringify({version: 2, outputs: outputs}) + "\n");
 			Directories.ensure(cacheRoot);
 			if (!FileSystem.exists(directory))
 				FileSystem.rename(temporary, directory);
@@ -129,8 +135,8 @@ class ArtifactCache {
 			return false;
 		return switch action.action {
 			case Process(_, _, _, _): !StringTools.startsWith(action.id.key(),
-					"cmake-configure:") && !StringTools.startsWith(action.id.key(),
-					"native-cmake-configure:") // A package's coarse artifact can be a stamp, not its complete runtime outputs.
+				"cmake-configure:") && !StringTools.startsWith(action.id.key(),
+				"native-cmake-configure:") // A package's coarse artifact can be a stamp, not its complete runtime outputs.
 				&& !StringTools.startsWith(action.id.key(), "native-cmake-build:")
 				&& !StringTools.startsWith(action.id.key(), "native-cmake-publish:");
 			case Compiler(_, _, _, _, _): false;

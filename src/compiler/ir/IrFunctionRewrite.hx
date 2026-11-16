@@ -15,7 +15,8 @@ class IrFunctionRewrite {
 	 * `replace` is asked about each instruction in order and returns null to keep it, or the instructions that take its place.
 	 * Its side effects (helper requests, counters) happen exactly once per instruction, as in a hand-written loop.
 	 */
-	public static function instructions(fn:IrFunction, replace:Located<IrInstruction>->Null<Array<Located<IrInstruction>>>):IrFunction {
+	public static function instructions(fn:IrFunction,
+			replace:Located<IrInstruction>->Null<Array<Located<IrInstruction>>>):IrFunction {
 		var blocks:Null<Array<IrBlock>> = null;
 		for (blockIndex in 0...fn.blocks.length) {
 			var block = fn.blocks[blockIndex],
@@ -46,7 +47,8 @@ class IrFunctionRewrite {
 	}
 
 	/** The same rule for a pass that only removes instructions: `drop` is asked about each one with its block and index. */
-	public static function dropInstructions(fn:IrFunction, drop:(block:IrBlock, index:Int, located:Located<IrInstruction>) -> Bool):IrFunction {
+	public static function dropInstructions(fn:IrFunction,
+			drop:(block:IrBlock, index:Int, located:Located<IrInstruction>) -> Bool):IrFunction {
 		var blocks:Null<Array<IrBlock>> = null;
 		for (blockIndex in 0...fn.blocks.length) {
 			var block = fn.blocks[blockIndex],

@@ -41,7 +41,8 @@ class ImportOrder {
 	}
 
 	/** The runs of `source` that are out of order; `tokens` come from `tokens(path, source)`. */
-	public static function find(source:String, tokens:Array<Token>, resolve:String->Null<ImportTarget>):Array<ImportBlock> {
+	public static function find(source:String, tokens:Array<Token>,
+			resolve:String->Null<ImportTarget>):Array<ImportBlock> {
 		var blocks:Array<ImportBlock> = [];
 		for (run in runs(source, tokens)) {
 			var keys = run.map(line -> line.key);
@@ -96,7 +97,8 @@ class ImportOrder {
 			}
 			var first = index, parts:Array<String> = [], alias:Null<String> = null, wildcard = false;
 			index++;
-			while (index < tokens.length && tokens[index].kind != TokenKind.Semicolon && tokens[index].kind != TokenKind.Eof) {
+			while (index < tokens.length && tokens[index].kind != TokenKind.Semicolon
+				&& tokens[index].kind != TokenKind.Eof) {
 				var token = tokens[index];
 				if (token.kind == TokenKind.Star)
 					wildcard = true;

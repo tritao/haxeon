@@ -55,14 +55,24 @@ class DynamicRoot {
 	}
 }
 
-function isDirect(value:DirectIntent):Bool return switch value { case Value(1): true; default: false; };
-function isArray(value:ArrayIntent):Bool return switch value { case Value(2): true; default: false; };
-function isMap(value:MapIntent):Bool return switch value { case Value(3): true; default: false; };
+function isDirect(value:DirectIntent):Bool return switch value {
+	case Value(1): true;
+	default: false;
+};
+function isArray(value:ArrayIntent):Bool return switch value {
+	case Value(2): true;
+	default: false;
+};
+function isMap(value:MapIntent):Bool return switch value {
+	case Value(3): true;
+	default: false;
+};
 
 function main():Int {
 	var dynamic:Dynamic = new DynamicRoot(), root:DynamicRoot = cast dynamic;
 	var mapLeaf = root.byId.get("entry");
-	if (mapLeaf == null || !isDirect(root.branch.intent) || !isArray(root.items[0].intent) || !isMap(mapLeaf.intent)) return 1;
+	if (mapLeaf == null || !isDirect(root.branch.intent) || !isArray(root.items[0].intent)
+		|| !isMap(mapLeaf.intent)) return 1;
 	if (!root.update()) return 2;
 	return 42;
 }

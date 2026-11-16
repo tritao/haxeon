@@ -12,8 +12,7 @@ class FileDialogOptions {
 	public var flags:DialogFlags = DialogFlags.empty();
 	public var filters:Array<FileDialogFilter> = [];
 
-	public function new() {
-	}
+	public function new() {}
 
 	public function nativeValue():NativeFileDialogOptions {
 		var value = new NativeFileDialogOptions();

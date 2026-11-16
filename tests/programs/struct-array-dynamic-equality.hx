@@ -1,7 +1,10 @@
 struct DynamicArrayItem implements Equatable {
 	public var value:Int;
 	public var label:String;
-	public function new(value:Int) { this.value = value; label = "managed"; }
+	public function new(value:Int) {
+		this.value = value;
+		label = "managed";
+	}
 	public function equals(other:DynamicArrayItem):Bool return value % 10 == other.value % 10 && label == other.label;
 }
 
@@ -89,11 +92,16 @@ function erasedOnly():Int {
 struct SelfMutatingArrayItem implements Equatable {
 	public var value:Int;
 	public var label:String;
-	public function new(value:Int) { this.value = value; label = "owned"; }
+	public function new(value:Int) {
+		this.value = value;
+		label = "owned";
+	}
 	public function equals(other:SelfMutatingArrayItem):Bool {
 		var result = value % 10 == other.value % 10;
-		value = 100; label = "left";
-		other.value = 200; other.label = "right";
+		value = 100;
+		label = "left";
+		other.value = 200;
+		other.label = "right";
 		return result;
 	}
 }
@@ -159,7 +167,8 @@ function main():Int {
 	var boxedLeft:Dynamic = typedLeft, boxedRight:Dynamic = typedRight;
 	if (!(boxedLeft == boxedRight)) return 27;
 	var restoredLeft:SelfMutatingArrayItem = cast boxedLeft, restoredRight:SelfMutatingArrayItem = cast boxedRight;
-	if (restoredLeft.value != 1 || restoredRight.value != 11 || restoredLeft.label != "owned" || restoredRight.label != "owned") return 28;
+	if (restoredLeft.value != 1 || restoredRight.value != 11 || restoredLeft.label != "owned"
+		|| restoredRight.label != "owned") return 28;
 	if (erasedOwnerArray() != 42) return 24;
 	var ieee:Dynamic = new IeeeArrayItem(Math.NaN);
 	if (ieee == ieee) return 25;
@@ -175,7 +184,8 @@ function main():Int {
 	var nullable:Array<Null<DynamicArrayItem>> = [null, new DynamicArrayItem(7), null];
 	var view:Array<Dynamic> = cast nullable;
 	if (view.indexOf(null) != 0 || view.indexOf(new DynamicArrayItem(17)) != 1) return 6;
-	if (!view.remove(new DynamicArrayItem(27)) || nullable.length != 2 || nullable[0] != null || nullable[1] != null) return 7;
+	if (!view.remove(new DynamicArrayItem(27)) || nullable.length != 2 || nullable[0] != null
+		|| nullable[1] != null) return 7;
 	var reflectedLeft:Dynamic = Reflect.field(new ReflectedArrayOwner(4), "item");
 	var reflectedRight:Dynamic = Reflect.field(new ReflectedArrayOwner(14), "item");
 	if (!(reflectedLeft == reflectedRight)) return 8;
@@ -187,7 +197,9 @@ function main():Int {
 	if (mutatingView.remove(new MutatingArrayItem(2))) return 11;
 	if (MutationFixture.items.length != 1 || MutationFixture.items[0].value != 1) return 12;
 	var nonconforming:Dynamic = Reflect.field(new NonEquatableOwner(), "item"), rejected = false;
-	try { if (nonconforming == nonconforming) return 13; } catch (_:Dynamic) rejected = true;
+	try {
+		if (nonconforming == nonconforming) return 13;
+	} catch (_:Dynamic) rejected = true;
 	if (!rejected) return 14;
 	var callback:Dynamic = staticCallback;
 	if (callback != callback) return 15;

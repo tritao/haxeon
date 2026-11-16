@@ -80,9 +80,8 @@ class AudioBankEntry {
 
 	@:allow(haxeon.audio.AudioBank)
 	private function matches(source:Handle, eventRequest:haxe.Int64):Bool {
-		return !disposed && !asset.isDisposed() &&
-			asset.nativeHandle().rawValue() == source.rawValue() &&
-			haxe.Int64.compare(request, eventRequest) == 0;
+		return !disposed && !asset.isDisposed() && asset.nativeHandle().rawValue() == source.rawValue()
+			&& haxe.Int64.compare(request, eventRequest) == 0;
 	}
 
 	@:allow(haxeon.audio.AudioBank)
@@ -95,6 +94,7 @@ class AudioBankEntry {
 
 	function ensureLive():Void {
 		if (disposed)
-			throw BindingError.invalidArgument("AudioBankEntry.ensureLive", "Audio bank entry has been unloaded: " + name);
+			throw BindingError.invalidArgument("AudioBankEntry.ensureLive",
+				"Audio bank entry has been unloaded: " + name);
 	}
 }

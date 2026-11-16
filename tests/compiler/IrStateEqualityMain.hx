@@ -36,13 +36,17 @@ class IrStateEqualityMain {
 
 	static function main():Void {
 		var body = fn(ConstInt(new IrValue(0, "v", I32), 1));
-		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)),
+		var adapter = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+			ClosureAdapter(Function([I32], I32), Function([Dyn], Dyn)),
 			body.debugBindings, false, Reachable);
-		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureCast(Function([Dyn], Dyn)), body.debugBindings, false,
+		var castFunction = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+			ClosureCast(Function([Dyn], Dyn)), body.debugBindings, false,
 			Reachable);
-		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks, ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)),
+		var otherAdapter = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+			ClosureAdapter(Function([I64], I32), Function([Dyn], Dyn)),
 			body.debugBindings, false, Reachable);
-		var retained = new IrFunction(body.name, body.arguments, body.result, body.blocks, adapter.kind, body.debugBindings, true, Keep);
+		var retained = new IrFunction(body.name, body.arguments, body.result, body.blocks, adapter.kind,
+			body.debugBindings, true, Keep);
 		if (!IrFunctionStateEquality.same(retained, retained.withBlocks(retained.blocks)))
 			throw "Replacing blocks must preserve function metadata";
 		compare(adapter, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(adapter)));
@@ -74,8 +78,10 @@ class IrStateEqualityMain {
 			EnumTagAdapter(EnumTag("Example"), true),
 			EnumTagAdapter(EnumTag("Example"), false)
 		]) {
-			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind, body.debugBindings);
-			if (!IrFunctionStateEquality.same(functionWithKind, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
+			var functionWithKind = new IrFunction(body.name, body.arguments, body.result, body.blocks, kind,
+				body.debugBindings);
+			if (!IrFunctionStateEquality.same(functionWithKind,
+				IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(functionWithKind))))
 				throw 'Function role failed to round-trip: $kind';
 		}
 		for (operation in [
@@ -85,16 +91,20 @@ class IrStateEqualityMain {
 			OptionalWrite(["b"], I32),
 			RequireScalar(F64)
 		]) {
-			var slot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), operation));
+			var slot = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+				ValueArraySlot(3, Obj("Element"), operation));
 			if (!IrFunctionStateEquality.same(slot, IrFunctionStateCodec.decode(IrFunctionStateCodec.encode(slot))))
 				throw 'Value-array slot operation failed to round-trip: $operation';
 		}
-		var slotA = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["a"], true)));
-		var slotB = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(3, Obj("Element"), Read(2, ["b"], true)));
+		var slotA = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+			ValueArraySlot(3, Obj("Element"), Read(2, ["a"], true)));
+		var slotB = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+			ValueArraySlot(3, Obj("Element"), Read(2, ["b"], true)));
 		if (IrFunctionStateEquality.same(slotA, slotB))
 			throw "Distinct slot paths must differ";
 		compare(slotA, slotB);
-		var renamedSlot = new IrFunction(body.name, body.arguments, body.result, body.blocks, ValueArraySlot(4, Obj("Element"), Read(2, ["a"], true)));
+		var renamedSlot = new IrFunction(body.name, body.arguments, body.result, body.blocks,
+			ValueArraySlot(4, Obj("Element"), Read(2, ["a"], true)));
 		if (IrFunctionStateCodec.codeFingerprint(slotA) != IrFunctionStateCodec.codeFingerprint(renamedSlot))
 			throw "Slot linkage IDs must not change code fingerprints";
 		var v = new IrValue(0, "v", I32), w = new IrValue(1, "w", I32);
@@ -123,8 +133,14 @@ class IrStateEqualityMain {
 			},
 			{original: ConstVoid(v), changed: [ConstVoid(new IrValue(2, "changed", Bytes))]},
 			{original: ConstInt(v, 0), changed: [ConstInt(new IrValue(2, "changed", Bytes), 0), ConstInt(v, 1)]},
-			{original: ConstFloat(v, 1.5), changed: [ConstFloat(new IrValue(2, "changed", Bytes), 1.5), ConstFloat(v, -0.0)]},
-			{original: ConstString(v, "name"), changed: [ConstString(new IrValue(2, "changed", Bytes), "name"), ConstString(v, "changed")]},
+			{
+				original: ConstFloat(v, 1.5),
+				changed: [ConstFloat(new IrValue(2, "changed", Bytes), 1.5), ConstFloat(v, -0.0)]
+			},
+			{
+				original: ConstString(v, "name"),
+				changed: [ConstString(new IrValue(2, "changed", Bytes), "name"), ConstString(v, "changed")]
+			},
 			{
 				original: StaticDataAddress(v, [0, 255]),
 				changed: [
@@ -157,7 +173,10 @@ class IrStateEqualityMain {
 					MemoryStore(v, v, 1)
 				]
 			},
-			{original: ConstBool(v, true), changed: [ConstBool(new IrValue(2, "changed", Bytes), true), ConstBool(v, false)]},
+			{
+				original: ConstBool(v, true),
+				changed: [ConstBool(new IrValue(2, "changed", Bytes), true), ConstBool(v, false)]
+			},
 			{original: ConstNull(v), changed: [ConstNull(new IrValue(2, "changed", Bytes))]},
 			{
 				original: TypeValue(v, Function([Nullable(I64), Obj("Box")], Dyn)),
@@ -208,11 +227,20 @@ class IrStateEqualityMain {
 					SafeCast(v, new IrValue(2, "changed", Bytes))
 				]
 			},
-			{original: BeginTry(0, 0, true), changed: [BeginTry(1, 0, true), BeginTry(0, 1, true), BeginTry(0, 0, false)]},
+			{
+				original: BeginTry(0, 0, true),
+				changed: [BeginTry(1, 0, true), BeginTry(0, 1, true), BeginTry(0, 0, false)]
+			},
 			{original: EndTry(0, true), changed: [EndTry(1, true), EndTry(0, false)]},
 			{original: Catch(v), changed: [Catch(new IrValue(2, "changed", Bytes))]},
-			{original: GlobalGet(v, "name"), changed: [GlobalGet(new IrValue(2, "changed", Bytes), "name"), GlobalGet(v, "changed")]},
-			{original: GlobalSet("name", v), changed: [GlobalSet("changed", v), GlobalSet("name", new IrValue(2, "changed", Bytes))]},
+			{
+				original: GlobalGet(v, "name"),
+				changed: [GlobalGet(new IrValue(2, "changed", Bytes), "name"), GlobalGet(v, "changed")]
+			},
+			{
+				original: GlobalSet("name", v),
+				changed: [GlobalSet("changed", v), GlobalSet("name", new IrValue(2, "changed", Bytes))]
+			},
 			{
 				original: Add(v, v, v),
 				changed: [
@@ -388,7 +416,10 @@ class IrStateEqualityMain {
 					MethodCall(v, v, "name", [v, w], false)
 				]
 			},
-			{original: NewObject(v, "name"), changed: [NewObject(new IrValue(2, "changed", Bytes), "name"), NewObject(v, "changed")]},
+			{
+				original: NewObject(v, "name"),
+				changed: [NewObject(new IrValue(2, "changed", Bytes), "name"), NewObject(v, "changed")]
+			},
 			{
 				original: FieldGet(v, v, "name"),
 				changed: [
@@ -515,12 +546,16 @@ class IrStateEqualityMain {
 			}
 		];
 		for (changed in [
-			new IrFunction("renamed", original.arguments, original.result, original.blocks, Ordinary, original.debugBindings),
+			new IrFunction("renamed", original.arguments, original.result, original.blocks, Ordinary,
+				original.debugBindings),
 			new IrFunction(original.name, [w, v], original.result, original.blocks, Ordinary, original.debugBindings),
 			new IrFunction(original.name, original.arguments, I64, original.blocks, Ordinary, original.debugBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, changedBindings),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, original.debugBindings, true),
-			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary, original.debugBindings, false,
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary,
+				changedBindings),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary,
+				original.debugBindings, true),
+			new IrFunction(original.name, original.arguments, original.result, original.blocks, Ordinary,
+				original.debugBindings, false,
 				compiler.ir.IrFunction.IrRetention.Keep),
 			fn(ConstInt(v, 42), SourceProvenance.generated("first")),
 			fn(ConstInt(v, 42), SourceProvenance.generated("second"))
@@ -528,6 +563,7 @@ class IrStateEqualityMain {
 			compare(original, changed);
 			checks++;
 		}
-		Sys.println("PASS: " + checks + " exact-state checks across every IR instruction and IEEE float provenance edge cases");
+		Sys.println("PASS: " + checks
+			+ " exact-state checks across every IR instruction and IEEE float provenance edge cases");
 	}
 }

@@ -11,7 +11,8 @@ private class RuntimeWrites {
 	@:hlNative("haxeon_runtime", "__string_buffer_to_string") public static function text(b:StringBuffer):String
 		return null;
 
-	@:hlNative("haxeon_runtime", "__string_split") public static function split(s:String, separator:String):hl.NativeArray<String>
+	@:hlNative("haxeon_runtime", "__string_split") public static function split(s:String,
+			separator:String):hl.NativeArray<String>
 		return null;
 
 	@:hlNative("haxeon_runtime", "__sys_environment") public static function environment():hl.NativeArray<String>

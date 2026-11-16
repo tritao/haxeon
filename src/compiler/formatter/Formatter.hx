@@ -31,7 +31,8 @@ private typedef Replacement = {
  * in code being typed, are refused, since their layout would only confuse.
  */
 class Formatter {
-	public static function format(source:String, config:FormatConfig, ?rangeStart:Int, ?rangeEnd:Int, ?path:String):Null<String> {
+	public static function format(source:String, config:FormatConfig, ?rangeStart:Int, ?rangeEnd:Int,
+			?path:String):Null<String> {
 		var file = new SourceFile(path == null ? "<format>" : path, source);
 		var result:String;
 		try {
@@ -83,7 +84,8 @@ class Formatter {
 	 * of the block inherit how far past its statement the opening line went, and its `}` lines up with that line. The line builder
 	 * cannot know this; only the layout of the opening line does.
 	 */
-	static function renderUnits(units:Array<UnwrappedLine>, tokens:Array<FormatToken>, syntax:SyntaxInfo, config:FormatConfig):Array<RenderedUnit> {
+	static function renderUnits(units:Array<UnwrappedLine>, tokens:Array<FormatToken>, syntax:SyntaxInfo,
+			config:FormatConfig):Array<RenderedUnit> {
 		var indexAt = new Map<Int, Int>();
 		for (index in 0...tokens.length)
 			indexAt.set(tokens[index].start, index);
@@ -115,18 +117,20 @@ class Formatter {
 			// A block left open at the end of this line indents its body from the line's last physical line.
 			var last = lastSyntax(unit);
 			if (last != null && FormatTokenTools.syntaxKind(last) == TokenKind.LeftBrace
-				&& syntax.blockOpens.exists(last.start) && syntax.blockOpens.get(last.start) && layout.lines.length > 0) {
+				&& syntax.blockOpens.exists(last.start) && syntax.blockOpens.get(last.start)
+				&& layout.lines.length > 0) {
 				// A statement's own block (a function or control body) stays one level past the statement however its header wraps; a
 				// block inside an expression lives where the expression's line is.
 				if (!insideExpression(unit))
 					continue;
-				var open = indexAt.get(last.start), close = open == null ? null : syntax.matching.get(open),
+				var open = indexAt.get(last.start),
+					close = open == null ? null : syntax.matching.get(open),
 					beyond = layout.lines[layout.lines.length - 1].indent - unit.indent;
 				if (close != null && beyond > 0)
 					blocks.push({close: tokens[close].start, extra: beyond});
 				else if (close != null && extra > 0)
-					// The block still sits inside an indented one: its lines keep that block's extra levels until it closes.
-					blocks.push({close: tokens[close].start, extra: extra});
+				// The block still sits inside an indented one: its lines keep that block's extra levels until it closes.
+				blocks.push({close: tokens[close].start, extra: extra});
 			}
 		}
 		return rendered;
@@ -187,7 +191,8 @@ class Formatter {
 		return trailingNewline ? result + newline : result;
 	}
 
-	static function formatRange(file:SourceFile, tokens:Array<FormatToken>, syntax:SyntaxInfo, units:Array<UnwrappedLine>, rendered:Array<RenderedUnit>,
+	static function formatRange(file:SourceFile, tokens:Array<FormatToken>, syntax:SyntaxInfo,
+			units:Array<UnwrappedLine>, rendered:Array<RenderedUnit>,
 			newline:String, rangeStart:Int, rangeEnd:Int):String {
 		var start = file.byteOffsetForStringOffset(Std.int(Math.max(0, Math.min(file.text.length, rangeStart)))),
 			end = file.byteOffsetForStringOffset(Std.int(Math.max(0, Math.min(file.text.length, rangeEnd)))),
@@ -199,7 +204,8 @@ class Formatter {
 				selectedUnit = unit;
 			}
 		var region = intersectingUnits == 1
-			&& selectedUnit != null ? expandRange(tokens, syntax, start, end, selectedUnit.sourceStart, selectedUnit.sourceEnd) : {
+			&& selectedUnit != null ? expandRange(tokens, syntax, start, end, selectedUnit.sourceStart,
+			selectedUnit.sourceEnd) : {
 				start: start,
 				end: end
 			},
@@ -208,7 +214,8 @@ class Formatter {
 		end = region.end;
 		for (index in 0...units.length) {
 			var unit = units[index],
-				intersects = rangeStart == rangeEnd ? unit.sourceStart <= start && unit.sourceEnd >= start : unit.sourceEnd > start && unit.sourceStart < end;
+				intersects = rangeStart == rangeEnd ? unit.sourceStart <= start
+					&& unit.sourceEnd >= start : unit.sourceEnd > start && unit.sourceStart < end;
 			if (!intersects)
 				continue;
 			var first = file.lineAt(unit.sourceStart) - 1,
@@ -222,8 +229,10 @@ class Formatter {
 		// Formatting a physical line selects every logical unit sharing that line,
 		// which expands partial ranges to a consistent statement/declaration.
 		for (index in 0...units.length) {
-			var unit = units[index], first = file.lineAt(unit.sourceStart) - 1,
-				last = file.lineAt(unit.sourceEnd > unit.sourceStart ? unit.sourceEnd - 1 : unit.sourceEnd) - 1, shares = false;
+			var unit = units[index],
+				first = file.lineAt(unit.sourceStart) - 1,
+				last = file.lineAt(unit.sourceEnd > unit.sourceStart ? unit.sourceEnd - 1 : unit.sourceEnd) - 1,
+				shares = false;
 			for (line in first...last + 1)
 				if (selectedLines.exists(line)) {
 					shares = true;
@@ -281,7 +290,11 @@ class Formatter {
 	}
 
 	/** Expands a partial range to the smallest annotated syntax region containing it. */
-	static function expandRange(tokens:Array<FormatToken>, syntax:SyntaxInfo, start:Int, end:Int, safeStart:Int, safeEnd:Int):{start:Int, end:Int} {
+	static function expandRange(tokens:Array<FormatToken>, syntax:SyntaxInfo, start:Int, end:Int, safeStart:Int,
+			safeEnd:Int): {
+				start: Int,
+				end: Int
+			} {
 		var firstSyntax = -1, lastSyntax = -1;
 		for (index in 0...tokens.length)
 			if (FormatTokenTools.isSyntax(tokens[index]) && tokens[index].end > start && tokens[index].start < end) {

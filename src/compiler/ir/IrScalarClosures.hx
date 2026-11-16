@@ -86,7 +86,8 @@ class IrScalarClosures {
 							if (note(out.type) && !functions.exists(IrScalarArguments.PREFIX + name))
 								excluded.set(key(out.type), true);
 						case InstanceClosure(out, name, receiver):
-							if (note(out.type) && (isValue(receiver.type) || !functions.exists(IrScalarArguments.PREFIX + name)))
+							if (note(out.type)
+								&& (isValue(receiver.type) || !functions.exists(IrScalarArguments.PREFIX + name)))
 								excluded.set(key(out.type), true);
 						case CallClosure(_, closure, _):
 							note(closure.type);
@@ -118,12 +119,15 @@ class IrScalarClosures {
 	function note(type:IrType):Bool {
 		return switch type {
 			case Function(arguments, result): var found = isValue(result),
-					valid = scalarizable(result); for (argument in arguments) {
+				valid = scalarizable(result);
+				for (argument in arguments) {
 					if (isValue(argument))
 						found = true;
 					if (!scalarizable(argument))
 						valid = false;
-				} if (found && valid) candidates.set(key(type), type); found && valid;
+				}
+				if (found && valid) candidates.set(key(type), type);
+				found && valid;
 			default: false;
 		};
 	}
@@ -163,62 +167,53 @@ class IrScalarClosures {
 			generatedIndex = 0;
 		while (generatedIndex < generatedFunctions.length)
 			generated.push(rewriteFunction(generatedFunctions[generatedIndex++]));
-		var mappedObjects:Array<IrObject> = [
-			for (object in program.objects)
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					fields: [
-						for (field in object.fields)
-							{
-								name: field.name,
-								type: mapType(field.type),
-								nativeLayout: field.nativeLayout,
-								scalarStorage: field.scalarStorage,
-								nullableScalarStorage: field.nullableScalarStorage
-							}
-					],
-					methods: object.methods
-				}
-		];
+		var mappedObjects:Array<IrObject> = [for (object in program.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					fields:[for (field in object.fields)
+					{
+						name:field.name,
+							type:mapType(field.type),
+							nativeLayout:field.nativeLayout,
+							scalarStorage:field.scalarStorage,
+							nullableScalarStorage:field.nullableScalarStorage
+					}],
+						methods:object.methods
+			}];
 		for (object in generatedObjects)
 			mappedObjects.push(object);
 		program.objects = mappedObjects;
-		program.interfaces = [
-			for (interfaceDecl in program.interfaces)
-				{
-					name: interfaceDecl.name,
-					bases: interfaceDecl.bases,
-					methods: [
-						for (method in interfaceDecl.methods)
-							{
-								name: method.name,
-								arguments: [for (argument in method.arguments) mapType(argument)],
-								result: mapType(method.result)
-							}
-					]
-				}
-		];
-		program.enums = [
-			for (entry in program.enums)
-				{
-					name: entry.name,
-					isRecursive: entry.isRecursive,
-					inlineStorage: entry.inlineStorage,
-					cases: [
-						for (item in entry.cases)
-							{name: item.name, params: [for (type in item.params) mapType(type)]}
-					]
-				}
-		];
-		program.staticFields = [
-			for (field in program.staticFields)
-				{name: field.name, type: mapType(field.type)}
-		];
-		generated = IrValueInterfaceBoxes.rewrite(generated.concat(generatedMakers), program.objects, program.interfaces, rewritten);
+		program.interfaces = [for (interfaceDecl in program.interfaces)
+			{
+				name:interfaceDecl.name,
+					bases:interfaceDecl.bases,
+					methods:[for (method in interfaceDecl.methods)
+					{
+						name:method.name,
+							arguments:[for (argument in method.arguments) mapType(argument)],
+							result:mapType(method.result)
+					}]
+			}];
+		program.enums = [for (entry in program.enums)
+			{
+				name:entry.name,
+					isRecursive:entry.isRecursive,
+					inlineStorage:entry.inlineStorage,
+					cases:[for (item in entry.cases)
+					{
+						name:item.name, params:[for (type in item.params) mapType(type)]
+					}]
+			}];
+		program.staticFields = [for (field in program.staticFields)
+			{
+				name:field.name, type:mapType(field.type)
+			}];
+		generated = IrValueInterfaceBoxes.rewrite(generated.concat(generatedMakers), program.objects,
+			program.interfaces, rewritten);
 		generated = IrCheckedDynamicCasts.rewrite(generated, program.objects, false, rewritten);
 		program.functions = rewritten.concat(generated);
 		var hasTypeTest = false;
@@ -238,7 +233,8 @@ class IrScalarClosures {
 	/** An ordinary function can still need a boundary bridge for scalar callback arguments/results. */
 	function needsBoundaryAdapter(type:IrType):Bool
 		return switch type {
-			case Function(arguments, result): candidates.exists(key(type)) || Lambda.exists(arguments, needsBoundaryAdapter) || needsBoundaryAdapter(result);
+			case Function(arguments, result): candidates.exists(key(type))
+				|| Lambda.exists(arguments, needsBoundaryAdapter) || needsBoundaryAdapter(result);
 			case Nullable(inner): needsBoundaryAdapter(inner);
 			default: false;
 		};
@@ -266,25 +262,28 @@ class IrScalarClosures {
 			default:
 		}
 		var enumName = inlineEnum(type);
-		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)), [value], type);
+		return enumName == null ? builder.safeCast(value, type) : builder.intrinsic(InlineEnumUnbox(Enum(enumName)),
+			[value], type);
 	}
 
 	function mapType(type:IrType):IrType
 		return switch type {
-			case Abstract(_) if (IrHlScalarRef.element(type) != null): IrHlScalarRef.type(mapType(IrHlScalarRef.element(type)));
+			case Abstract(_) if (IrHlScalarRef.element(type) != null)
+				: IrHlScalarRef.type(mapType(IrHlScalarRef.element(type)));
 			case Function(arguments, result) if (candidates.exists(key(type))):
 				var physical:Array<IrType> = [];
 				for (argument in arguments)
 					if (isValue(argument))
 						for (slot in slots(argument))
 							physical.push(mapType(slot.type));
-					else
-						physical.push(mapType(argument));
+						else
+							physical.push(mapType(argument));
 				if (isValue(result))
 					for (slot in slots(result))
 						physical.push(IrHlScalarRef.type(mapType(slot.type)));
 				Function(physical, isValue(result) ? Void : mapType(result));
-			case Function(arguments, result): Function([for (argument in arguments) mapType(argument)], mapType(result));
+			case Function(arguments, result): Function([for (argument in arguments) mapType(argument)],
+				mapType(result));
 			case Array(element): Array(mapType(element));
 			case Iterator(element): Iterator(mapType(element));
 			case Nullable(element): Nullable(mapType(element));
@@ -295,7 +294,8 @@ class IrScalarClosures {
 	function changesType(type:IrType):Bool
 		return switch type {
 			case Abstract(_) if (IrHlScalarRef.element(type) != null): changesType(IrHlScalarRef.element(type));
-			case Function(arguments, result): candidates.exists(key(type)) || Lambda.exists(arguments, changesType) || changesType(result);
+			case Function(arguments, result): candidates.exists(key(type)) || Lambda.exists(arguments, changesType)
+				|| changesType(result);
 			case Array(element), Iterator(element), Nullable(element): changesType(element);
 			default: false;
 		};
@@ -330,24 +330,28 @@ class IrScalarClosures {
 				switch located.value {
 					case Call(out, "__closure_is_of_type", arguments)
 						if (arguments.length == 2
-							&& typeValues.exists(arguments[1].id)
-							&& needsBoundaryAdapter(typeValues.get(arguments[1].id))):
-						rewritten.instructions.push(new Located(Call(map(out), ensureSignatureCheck(typeValues.get(arguments[1].id)), [map(arguments[0])]),
+						&& typeValues.exists(arguments[1].id)
+						&& needsBoundaryAdapter(typeValues.get(arguments[1].id))):
+						rewritten.instructions.push(new Located(Call(map(out),
+							ensureSignatureCheck(typeValues.get(arguments[1].id)), [map(arguments[0])]),
 							located.provenance));
 					case ToDyn(out, input) if (needsBoundaryAdapter(input.type)):
 						var erasure = ensureErasure(input.type),
 							boxed = new IrValue(next++, "$scalar-closure:erased", erasedType(input.type));
-						rewritten.instructions.push(new Located(Call(boxed, erasure.maker, [map(input)]), located.provenance));
+						rewritten.instructions.push(new Located(Call(boxed, erasure.maker, [map(input)]),
+							located.provenance));
 						rewritten.instructions.push(new Located(ToDyn(map(out), boxed), located.provenance));
 					case SafeCast(out, input) if ((switch (input.type) {
 						case Dyn: true;
 						default: false;
-					}) && needsBoundaryAdapter(out.type)):
-						rewritten.instructions.push(new Located(Call(map(out), ensureRestoration(out.type), [map(input)]), located.provenance));
+					}) && needsBoundaryAdapter(out.type)): rewritten.instructions.push(new Located(Call(map(out),
+						ensureRestoration(out.type), [map(input)]), located.provenance));
 					case StaticClosure(out, name) if (candidates.exists(key(out.type))):
-						rewritten.instructions.push(new Located(StaticClosure(map(out), IrScalarArguments.PREFIX + name), located.provenance));
+						rewritten.instructions.push(new Located(StaticClosure(map(out),
+							IrScalarArguments.PREFIX + name), located.provenance));
 					case InstanceClosure(out, name, receiver) if (candidates.exists(key(out.type))):
-						rewritten.instructions.push(new Located(InstanceClosure(map(out), IrScalarArguments.PREFIX + name, map(receiver)), located.provenance));
+						rewritten.instructions.push(new Located(InstanceClosure(map(out),
+							IrScalarArguments.PREFIX + name, map(receiver)), located.provenance));
 					case CallClosure(out, closure, arguments) if (candidates.exists(key(closure.type))):
 						var expanded:Array<IrValue> = [];
 						for (argument in arguments) {
@@ -361,7 +365,8 @@ class IrScalarClosures {
 								for (part in slot.path) {
 									var field = fieldOf(logical, part),
 										leaf = new IrValue(next++, "$scalar-closure:field", mapType(field.type));
-									rewritten.instructions.push(new Located(FieldGet(leaf, current, part), located.provenance));
+									rewritten.instructions.push(new Located(FieldGet(leaf, current, part),
+										located.provenance));
 									current = leaf;
 									logical = field.type;
 								}
@@ -381,12 +386,14 @@ class IrScalarClosures {
 								default: ConstNull(zero);
 							};
 							rewritten.instructions.push(new Located(initial, located.provenance));
-							rewritten.instructions.push(new Located(Call(reference, IrHlScalarRef.ADDRESS, [zero]), located.provenance));
+							rewritten.instructions.push(new Located(Call(reference, IrHlScalarRef.ADDRESS, [zero]),
+								located.provenance));
 							references.push(reference);
 							expanded.push(reference);
 						}
 						if (resultSlots.length == 0)
-							rewritten.instructions.push(new Located(CallClosure(map(out), map(closure), expanded), located.provenance));
+							rewritten.instructions.push(new Located(CallClosure(map(out), map(closure), expanded),
+								located.provenance));
 						else {
 							var ignored = new IrValue(next++, "$scalar-closure:call", Void),
 								result = map(out),
@@ -394,29 +401,35 @@ class IrScalarClosures {
 									case Obj(value): value;
 									default: throw "Invalid scalar closure result";
 								};
-							rewritten.instructions.push(new Located(CallClosure(ignored, map(closure), expanded), located.provenance));
+							rewritten.instructions.push(new Located(CallClosure(ignored, map(closure), expanded),
+								located.provenance));
 							rewritten.instructions.push(new Located(ValueInit(result), located.provenance));
 							for (index in 0...resultSlots.length) {
 								var slot = resultSlots[index],
 									leaf = new IrValue(next++, "$scalar-closure:result", mapType(slot.type)),
 									current = result,
 									logical = out.type;
-								rewritten.instructions.push(new Located(Call(leaf, IrHlScalarRef.LOAD, [references[index]]), located.provenance));
+								rewritten.instructions.push(new Located(Call(leaf, IrHlScalarRef.LOAD,
+									[references[index]]), located.provenance));
 								for (position in 0...slot.path.length - 1) {
 									var part = slot.path[position],
 										field = fieldOf(logical, part),
 										child = new IrValue(next++, part, mapType(field.type));
-									rewritten.instructions.push(new Located(FieldGet(child, current, part), located.provenance));
+									rewritten.instructions.push(new Located(FieldGet(child, current, part),
+										located.provenance));
 									current = child;
 									logical = field.type;
 								}
-								rewritten.instructions.push(new Located(FieldSet(current, slot.path[slot.path.length - 1], leaf), located.provenance));
+								rewritten.instructions.push(new Located(FieldSet(current,
+									slot.path[slot.path.length - 1], leaf), located.provenance));
 							}
 						}
 					case TypeValue(out, type):
-						rewritten.instructions.push(new Located(TypeValue(map(out), mapType(type)), located.provenance));
+						rewritten.instructions.push(new Located(TypeValue(map(out), mapType(type)),
+							located.provenance));
 					default:
-						rewritten.instructions.push(new Located(IrInliner.remap(located.value, map, id -> id), located.provenance));
+						rewritten.instructions.push(new Located(IrInliner.remap(located.value, map, id -> id),
+							located.provenance));
 				}
 			var terminator = block.terminator;
 			if (terminator != null)
@@ -430,17 +443,15 @@ class IrScalarClosures {
 				}, terminator.provenance);
 			blocks.push(rewritten);
 		}
-		var debug:Array<compiler.ir.IrFunction.IrDebugBinding> = [
-			for (binding in fn.debugBindings)
-				{
-					identity: binding.identity,
-					name: binding.name,
-					value: map(binding.value),
-					path: binding.path,
-					scopeStart: binding.scopeStart,
-					scopeEnd: binding.scopeEnd
-				}
-		];
+		var debug:Array<compiler.ir.IrFunction.IrDebugBinding> = [for (binding in fn.debugBindings)
+			{
+				identity:binding.identity,
+					name:binding.name,
+					value:map(binding.value),
+					path:binding.path,
+					scopeStart:binding.scopeStart,
+					scopeEnd:binding.scopeEnd
+			}];
 		return fn.withBlocks(blocks, debug, [for (argument in fn.arguments) map(argument)], mapType(fn.result));
 	}
 
@@ -464,15 +475,18 @@ class IrScalarClosures {
 				case Function(args, result): Function([Obj(environment)].concat(args), result);
 				default: throw "Expected erased closure";
 			},
-			probe = b.staticClosure(wrapper, probeType),
-			found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [closure, probe], Dyn);
+				probe = b.staticClosure(wrapper, probeType),
+				found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [
+					closure,
+					probe
+				], Dyn);
 		b.returnValue(b.equal(b.equal(found, b.constNull(Dyn)), b.constBool(false)));
 		generatedMakers.push(new IrFunction(name, b.arguments, Bool, b.blocks, GeneratedHelper));
 		return name;
 	}
 
 	/** Materialize a boxed closure only at a real Dynamic escape, keeping null and ordinary typed calls unchanged. */
-	function ensureErasure(type:IrType):{maker:String, environment:String} {
+	function ensureErasure(type:IrType): {maker: String, environment: String} {
 		var signature = key(type), existing = erasures.get(signature);
 		if (existing != null)
 			return existing;
@@ -483,8 +497,10 @@ class IrScalarClosures {
 					default: false;
 				}))
 					throw "Nullable scalar closure erasure requires a function";
-				var innerErasure = ensureErasure(inner), suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
-					maker = "$scalar-closure:erase-nullable:" + suffix, result = {
+				var innerErasure = ensureErasure(inner),
+					suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
+					maker = "$scalar-closure:erase-nullable:" + suffix,
+					result = {
 						maker: maker,
 						environment: innerErasure.environment
 					};
@@ -498,15 +514,19 @@ class IrScalarClosures {
 				b.select(absent);
 				b.returnValue(b.constNull(outputType));
 				b.select(present);
-				b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)), outputType));
+				b.returnValue(b.safeCast(b.call(innerErasure.maker, [b.safeCast(source, inner)], erasedType(inner)),
+					outputType));
 				generatedMakers.push(new IrFunction(maker, b.arguments, outputType, b.blocks, GeneratedHelper));
 				return result;
 			case Function(_, _):
 			default:
 				throw "Scalar closure erasure requires a function";
 		}
-		var suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32), environment = "$scalar-closure:environment:" + suffix,
-			wrapper = "$scalar-closure:erased-call:" + suffix, maker = "$scalar-closure:erase:" + suffix, result = {
+		var suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
+			environment = "$scalar-closure:environment:" + suffix,
+			wrapper = "$scalar-closure:erased-call:" + suffix,
+			maker = "$scalar-closure:erase:" + suffix,
+			result = {
 				maker: maker,
 				environment: environment
 			};
@@ -516,16 +536,17 @@ class IrScalarClosures {
 			case Function(arguments, result): {arguments: arguments, result: result};
 			default: throw "Scalar closure erasure requires a function";
 		};
-		var body = new IrBuilder(), receiver = body.argument("receiver", Obj(environment)),
-			arguments = [for (index in 0...logical.arguments.length) body.argument('argument$index', Dyn)], adapted = [
-				for (index in 0...logical.arguments.length)
-					(switch (logical.arguments[index]) {
-						case Dyn: true;
-						default: false;
-					})
-				?arguments[index]:fromDynamic
-				(body, arguments[index], logical.arguments[index])
-			], closure = body.fieldGet(receiver, "closure", type), call = body.callClosure(closure, adapted, logical.result);
+		var body = new IrBuilder(),
+			receiver = body.argument("receiver", Obj(environment)),
+			arguments = [for (index in 0...logical.arguments.length) body.argument('argument$index', Dyn)],
+			adapted = [for (index in 0...logical.arguments.length)
+				(switch (logical.arguments[index]) {
+					case Dyn: true;
+					default: false;
+				})
+					? arguments[index] : fromDynamic(body, arguments[index], logical.arguments[index])],
+					closure = body.fieldGet(receiver, "closure", type),
+					call = body.callClosure(closure, adapted, logical.result);
 		body.returnValue((switch (logical.result) {
 			case Void: true;
 			default: false;
@@ -556,10 +577,13 @@ class IrScalarClosures {
 				case Function(args, result): Function([Obj(restoredEnvironment)].concat(args), result);
 				default: throw "Expected scalar closure";
 			},
-			probe = make.staticClosure(restoredWrapper, probeType),
-			found = make.call(receiverQuery("$scalar-closure:receiver:typed:" + suffix, mapType(type), probeType), [source, probe], Dyn),
-			allocate = make.createBlock(),
-			unwrap = make.createBlock();
+				probe = make.staticClosure(restoredWrapper, probeType),
+				found = make.call(receiverQuery("$scalar-closure:receiver:typed:" + suffix, mapType(type), probeType), [
+					source,
+					probe
+				], Dyn),
+					allocate = make.createBlock(),
+					unwrap = make.createBlock();
 		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
 		make.select(unwrap);
 		make.returnValue(make.fieldGet(make.safeCast(found, Obj(restoredEnvironment)), "closure", erasedType(type)));
@@ -672,27 +696,26 @@ class IrScalarClosures {
 		for (slot in resultSlots)
 			references.push(call.argument("result." + slot.path.join("."), IrHlScalarRef.type(mapType(slot.type))));
 		var closure = call.fieldGet(receiver, "closure", erasedType(type)),
-			erasedArguments = [
-				for (index in 0...arguments.length) {
-					var argument = arguments[index], logicalType = logical.arguments[index];
-					if (needsBoundaryAdapter(logicalType)) {
-						var erased = call.call(ensureErasure(logicalType).maker, [argument], erasedType(logicalType));
-						call.toDyn(erased);
-					} else (switch (argument.type) {
-						case Dyn: true;
-						default: false;
-					}) ? argument : toDynamic(call, argument, logicalType);
-				}
-			],
-			erasedResult = call.callClosure(closure, erasedArguments, Dyn),
-			result = (switch (logical.result) {
-				case Void: true;
-				default: false;
-			}) ? call.constVoid() : (switch (logical.result) {
-				case Dyn: true;
-				default: false;
-			}) ? erasedResult : needsBoundaryAdapter(logical.result) ? call.call(ensureRestoration(logical.result), [erasedResult],
-				mapType(logical.result)) : fromDynamic(call, erasedResult, logical.result);
+			erasedArguments = [for (index in 0...arguments.length) {
+				var argument = arguments[index], logicalType = logical.arguments[index];
+				if (needsBoundaryAdapter(logicalType)) {
+					var erased = call.call(ensureErasure(logicalType).maker, [argument], erasedType(logicalType));
+					call.toDyn(erased);
+				} else (switch (argument.type) {
+					case Dyn: true;
+					default: false;
+				}) ? argument : toDynamic(call, argument, logicalType);
+			}],
+				erasedResult = call.callClosure(closure, erasedArguments, Dyn),
+				result = (switch (logical.result) {
+			case Void: true;
+			default: false;
+		}) ? call.constVoid() : (switch (logical.result) {
+			case Dyn: true;
+			default: false;
+		}) ? erasedResult : needsBoundaryAdapter(logical.result) ? call.call(ensureRestoration(logical.result),
+			[erasedResult],
+			mapType(logical.result)) : fromDynamic(call, erasedResult, logical.result);
 		if (resultSlots.length == 0)
 			call.returnValue(result);
 		else {
@@ -709,7 +732,8 @@ class IrScalarClosures {
 			}
 			call.returnValue(call.constVoid());
 		}
-		generatedMakers.push(new IrFunction(wrapper, call.arguments, resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks, ScalarArguments));
+		generatedMakers.push(new IrFunction(wrapper, call.arguments,
+			resultSlots.length == 0 ? mapType(logical.result) : Void, call.blocks, ScalarArguments));
 		var make = new IrBuilder(),
 			boxed = make.argument("closure", Dyn),
 			missing = make.createBlock(),
@@ -725,10 +749,13 @@ class IrScalarClosures {
 				case Function(args, result): Function([Obj(erasedEnvironment)].concat(args), result);
 				default: throw "Expected erased closure";
 			},
-			probe = make.staticClosure(erasedWrapper, probeType),
-			found = make.call(receiverQuery("$scalar-closure:receiver:erased:" + suffix, Dyn, probeType), [boxed, probe], Dyn),
-			allocate = make.createBlock(),
-			unwrap = make.createBlock();
+				probe = make.staticClosure(erasedWrapper, probeType),
+				found = make.call(receiverQuery("$scalar-closure:receiver:erased:" + suffix, Dyn, probeType), [
+					boxed,
+					probe
+				], Dyn),
+					allocate = make.createBlock(),
+					unwrap = make.createBlock();
 		make.branch(make.equal(found, make.constNull(Dyn)), allocate, unwrap);
 		make.select(unwrap);
 		make.returnValue(make.fieldGet(make.safeCast(found, Obj(erasedEnvironment)), "closure", physical));

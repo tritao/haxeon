@@ -8,21 +8,21 @@ package haxeon;
   Every function returns false, and does nothing, when no profiling session is open.
 **/
 class ProfileRecording {
-  /** Starts (or resumes) recording. */
-  public static function start():Bool
-    return nativeSetRecording(true);
+	/** Starts (or resumes) recording. */
+	public static function start():Bool
+		return nativeSetRecording(true);
 
-  /** Pauses recording; the session stays open. */
-  public static function pause():Bool
-    return nativeSetRecording(false);
+	/** Pauses recording; the session stays open. */
+	public static function pause():Bool
+		return nativeSetRecording(false);
 
-  /** Starts recording when it is paused and pauses it when it records. */
-  public static function toggle():Bool
-    return nativeSetRecording(!nativeRecording());
+	/** Starts recording when it is paused and pauses it when it records. */
+	public static function toggle():Bool
+		return nativeSetRecording(!nativeRecording());
 
-  /** Whether the session records now. */
-  public static function recording():Bool
-    return nativeRecording();
+	/** Whether the session records now. */
+	public static function recording():Bool
+		return nativeRecording();
 }
 
 #if wasm

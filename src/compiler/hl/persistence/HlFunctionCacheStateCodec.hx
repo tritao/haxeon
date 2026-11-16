@@ -44,10 +44,12 @@ class HlFunctionCacheStateCodec {
 		try {
 			if (input.readString(3) != "HFC" || input.readByte() != 1)
 				throw "Invalid function cache state";
-			var next = input.readInt32(), slots = [
-				for (_ in 0...readCount(input))
-					IrTypeCodec.readString(input, bytes.length)
-			], ids = [];
+			var next = input.readInt32(),
+				slots = [
+					for (_ in 0...readCount(input))
+						IrTypeCodec.readString(input, bytes.length)
+				],
+				ids = [];
 			for (_ in 0...readCount(input))
 				ids.push({name: IrTypeCodec.readString(input, bytes.length), id: input.readInt32()});
 			var signatures = [];
@@ -58,7 +60,10 @@ class HlFunctionCacheStateCodec {
 				});
 			var functions = [];
 			for (_ in 0...readCount(input))
-				functions.push({name: IrTypeCodec.readString(input, bytes.length), bytes: readBytes(input, bytes.length)});
+				functions.push({
+					name: IrTypeCodec.readString(input, bytes.length),
+					bytes: readBytes(input, bytes.length)
+				});
 			if (input.position != bytes.length)
 				throw "Trailing function cache state data";
 			return {

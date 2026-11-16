@@ -11,6 +11,7 @@ class ExternalToolMain {
 		var bytes = HlWriter.encode(result.module).flatten();
 		if (bytes.length == 0)
 			throw "empty module";
-		Sys.println("PASS: an external tool builds against the compiler sources through common.hxml (" + bytes.length + " bytes)");
+		Sys.println("PASS: an external tool builds against the compiler sources through common.hxml (" + bytes.length
+			+ " bytes)");
 	}
 }

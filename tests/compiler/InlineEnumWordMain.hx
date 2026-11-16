@@ -97,7 +97,8 @@ class InlineEnumWordMain {
 			if (!Math.isNaN(number))
 				checks.push(builder.equal(originalBits, builder.constInt(haxe.io.FPHelper.floatToI32(number))));
 			words.write(builder, owner, f32, input);
-			checks.push(builder.equal(builder.call("__f32_to_i32_bits", [words.read(builder, owner, f32)], I32), originalBits));
+			checks.push(builder.equal(builder.call("__f32_to_i32_bits", [words.read(builder, owner, f32)], I32),
+				originalBits));
 		}
 		if (bits == 64) {
 			var wide:IrValueLaneSlot = {
@@ -113,7 +114,8 @@ class InlineEnumWordMain {
 			};
 			builder.fieldSet(owner, "scalar3", builder.constInt(0, I64));
 			builder.fieldSet(owner, "scalar4", builder.constInt(0, I64));
-			var expected = builder.add(builder.shiftLeft(builder.constInt(1, I64), builder.constInt(50)), builder.constInt(0x123456, I64));
+			var expected = builder.add(builder.shiftLeft(builder.constInt(1, I64), builder.constInt(50)),
+				builder.constInt(0x123456, I64));
 			words.write(builder, owner, wide, expected);
 			checks.push(builder.equal(words.read(builder, owner, wide), expected));
 			var floating:IrValueLaneSlot = {
@@ -131,7 +133,8 @@ class InlineEnumWordMain {
 				var value = builder.constFloat(number),
 					expectedBits = builder.call("__f64_to_i64_bits", [value], I64);
 				words.write(builder, owner, floating, value);
-				checks.push(builder.equal(builder.call("__f64_to_i64_bits", [words.read(builder, owner, floating)], I64), expectedBits));
+				checks.push(builder.equal(builder.call("__f64_to_i64_bits", [words.read(builder, owner, floating)],
+					I64), expectedBits));
 			}
 		}
 		var no = builder.createBlock();
@@ -144,16 +147,14 @@ class InlineEnumWordMain {
 		builder.select(no);
 		builder.returnValue(builder.constInt(1));
 		var program = new IrProgram("main");
-		program.objects = [
-			{
-				name: "PayloadWords",
-				isValue: true,
-				base: null,
-				interfaces: [],
-				methods: [],
-				fields: [for (index in 0...6) {name: 'scalar$index', type: wordType}]
-			}
-		];
+		program.objects = [{name: "PayloadWords",
+			isValue: true,
+			base: null,
+			interfaces: [],
+			methods: [],
+			fields: [for (index in 0...6) {
+				name:'scalar$index', type:wordType
+			}]}];
 		program.functions = [new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary)];
 		var entry = new IrBuilder(),
 			warm = entry.call("main", [], I32),
@@ -213,7 +214,8 @@ class InlineEnumWordMain {
 			for (fn in program.functions)
 				compiler.ir.IrScalarReplacement.rewrite(fn, table, false)
 		];
-		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
+		compiler.ir.IrInliner.run(program, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm,
+			inlineEnabled);
 		compiler.ir.IrVerifier.verify(program);
 		if (new IrInterpreter(program).run() != 42)
 			throw "packed enum payload changed its bits";
@@ -221,7 +223,10 @@ class InlineEnumWordMain {
 			var path = stem + '-$target' + (target == HashLink ? ".hl" : ".wasm");
 			try {
 				program.entryPoint = target == HashLink ? "entry" : "main";
-				var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(program, {target: target, debugNames: true})
+				var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(program, {
+					target: target,
+					debugNames: true
+				})
 					.bytes : new compiler.backend.wasm.WasmBackend().compile(program, {
 						target: target,
 						debugNames: true,
@@ -231,7 +236,8 @@ class InlineEnumWordMain {
 				sys.io.File.saveBytes(path, bytes);
 				var vm = Sys.getEnv("HAXEON_HASHLINK_DIR");
 				var command = target == HashLink ? (vm == null ? "scripts/hl" : vm + "/hl") : "node";
-				var script = 'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("wrong enum payload bits");if(c()!==before)throw Error("F32 payload allocated");}';
+				var script =
+					'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;const c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("wrong enum payload bits");if(c()!==before)throw Error("F32 payload allocated");}';
 				var process = new sys.io.Process(command, target == HashLink ? [path] : ["-e", script, path]);
 				var output = process.stdout.readAll().toString(),
 					error = process.stderr.readAll().toString(),

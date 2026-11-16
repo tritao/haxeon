@@ -1,7 +1,8 @@
 import haxe.Json;
 
 function main():Int {
-	var parsed:Dynamic = Json.parse(' {"é水":"🙂", "escaped":"a\\nb\\t\\\"c", "unicode":"\\u00e9\\u6c34", "pair":"\\ud83d\\ude42", "n":-1.25e-3} ');
+	var parsed:Dynamic =
+		Json.parse(' {"é水":"🙂", "escaped":"a\\nb\\t\\\"c", "unicode":"\\u00e9\\u6c34", "pair":"\\ud83d\\ude42", "n":-1.25e-3} ');
 	if (Reflect.field(parsed, "é水") != "🙂")
 		return 1;
 	if (Reflect.field(parsed, "escaped") != "a\nb\t\"c")

@@ -2,124 +2,159 @@ import haxeon.editor.TextDocument;
 import haxeon.editor.TextOffsetMap;
 
 class DocCheck {
- static function check(ok:Bool, label:String):Void if (!ok) throw label;
- static function validate(doc:TextDocument, expected:String, step:Int):Void {
-  var map=new TextOffsetMap(expected);
-  check(doc.text==expected,"text at "+step);
-  check(doc.codepointCount==map.codepointCount,"code points at "+step);
-  check(doc.utf8ByteLength==map.utf8ByteLength,"UTF-8 length at "+step);
-  check(doc.utf16Length==map.utf16Length,"UTF-16 length at "+step);
-  check(doc.paragraphCount()==map.paragraphCount(),"paragraph count at "+step);
-  for (i in 0...doc.paragraphCount()) {
-   var a=doc.paragraphRangeAtIndex(i); var b=map.paragraphRangeAtIndex(i);
-   check(a.start==b.start&&a.end==b.end,"paragraph "+i+" at "+step);
-  }
-  var position=0;
-  while (position<=doc.codepointCount) {
-   var u8=doc.utf8OffsetForCodepoint(position);
-   var u16=doc.utf16OffsetForCodepoint(position);
-   check(u8==map.utf8OffsetForCodepoint(position)&&u16==map.utf16OffsetForCodepoint(position),"forward coordinate at "+step+":"+position);
-   check(doc.codepointOffsetForUtf8(u8)==position&&doc.codepointOffsetForUtf16(u16)==position,"inverse coordinate at "+step+":"+position);
-   check(doc.paragraphIndexAtOffset(position)==map.paragraphIndexAtOffset(position),"paragraph lookup at "+step+":"+position);
-   position+=137;
-  }
-  check(doc.sliceCodepoints(0,doc.codepointCount)==expected,"full slice at "+step);
- }
- static function asciiGraphemes():Void {
-  // HashLink text strings exclude NUL; exercise every representable ASCII pair.
-  for (previous in 1...128) for (current in 1...128) {
-   var map=new TextOffsetMap(String.fromCharCode(previous)+String.fromCharCode(current));
-   check(map.isGraphemeBoundary(1)==(previous!=13||current!=10), "ASCII grapheme pair "+previous+":"+current);
-  }
-  var map=new TextOffsetMap("a\u0301b");
-  check(!map.isGraphemeBoundary(1)&&map.isGraphemeBoundary(2),"ASCII next to combining mark");
-  map=new TextOffsetMap("a\rX");
-  map.replaceCodepointsIncremental(2,3,"\n");
-  check(!map.isGraphemeBoundary(2),"edited CR/LF grapheme");
- }
- static function viewportLook():Void {
-  for (preset in 0...haxeon.editor.ViewportLook.PresetNames.length) {
-   var look=haxeon.editor.ViewportLook.preset(preset);
-   check(look.lights.length==3,"key, fill and rim lights");
-   for (light in look.lights) {
-    var d=light.direction,length=Math.sqrt(d[0]*d[0]+d[1]*d[1]+d[2]*d[2]);
-    check(Math.abs(length-1)<0.000001,"viewport light directions are unit vectors");
-    check(light.color.length==3&&light.intensity>=0&&light.radius>=0,"lights have an RGB tint, an intensity and a panel size");
-   }
-   check(look.sky.length==3&&look.ground.length==3,"ambient colors are RGB");
-   check(look.reflection>=0&&look.reflection<=1&&look.roughnessFloor>=0&&look.roughnessFloor<=1&&look.exposure>=0,"display parameters are in range");
-  }
-  var onLight=haxeon.editor.ViewportLook.edgeColor([0.62,0.64,0.67]),onDark=haxeon.editor.ViewportLook.edgeColor([0.18,0.19,0.20]);
-  check(onLight[0]<0.1&&onDark[0]>0.5,"edges contrast with their surface");
-  var rejected=false;
-  try haxeon.editor.ViewportLook.preset(haxeon.editor.ViewportLook.PresetNames.length) catch (_:Dynamic) rejected=true;
-  check(rejected,"unknown viewport lighting preset is rejected");
-  rejected=false;
-  try new haxeon.editor.ViewportLook.ViewportLight([0,0,0],1,[1,1,1],0) catch (_:Dynamic) rejected=true;
-  check(rejected,"a light needs a direction");
- }
- static function editRecords():Void {
-  var doc=new TextDocument("one\ntwo 🙂\nthree");
-  check(doc.editSince(-1)==null&&doc.editSince(0)==null,"a new document has no edit");
-  doc.replace(4,7,"2🧑‍💻");
-  var edit=doc.editSince(0);
-  check(edit!=null&&edit.revision==1&&edit.start==4&&edit.oldEnd==7&&edit.newEnd==8&&edit.previousCodepointCount==15,"an edit records its range and the length before it");
-  check(doc.editSince(1)==null,"no edit since the current revision");
-  doc.replace(0,0,"");
-  check(doc.revision==1&&doc.editSince(0)!=null,"a no-op replacement keeps the last edit");
-  doc.replace(0,0,"x");
-  check(doc.editSince(0)==null&&doc.editSince(1)!=null,"two edits since a revision are not one");
- }
- /** Boundaries are computed on first use; edits made before then, or after, end where a fresh map of the text does,
+	static function check(ok:Bool, label:String):Void if (!ok) throw label;
+	static function validate(doc:TextDocument, expected:String, step:Int):Void {
+		var map = new TextOffsetMap(expected);
+		check(doc.text == expected, "text at " + step);
+		check(doc.codepointCount == map.codepointCount, "code points at " + step);
+		check(doc.utf8ByteLength == map.utf8ByteLength, "UTF-8 length at " + step);
+		check(doc.utf16Length == map.utf16Length, "UTF-16 length at " + step);
+		check(doc.paragraphCount() == map.paragraphCount(), "paragraph count at " + step);
+		for (i in 0...doc.paragraphCount()) {
+			var a = doc.paragraphRangeAtIndex(i);
+			var b = map.paragraphRangeAtIndex(i);
+			check(a.start == b.start && a.end == b.end, "paragraph " + i + " at " + step);
+		}
+		var position = 0;
+		while (position <= doc.codepointCount) {
+			var u8 = doc.utf8OffsetForCodepoint(position);
+			var u16 = doc.utf16OffsetForCodepoint(position);
+			check(u8 == map.utf8OffsetForCodepoint(position) && u16 == map.utf16OffsetForCodepoint(position),
+				"forward coordinate at " + step + ":" + position);
+			check(doc.codepointOffsetForUtf8(u8) == position && doc.codepointOffsetForUtf16(u16) == position,
+				"inverse coordinate at " + step + ":" + position);
+			check(doc.paragraphIndexAtOffset(position) == map.paragraphIndexAtOffset(position),
+				"paragraph lookup at " + step + ":" + position);
+			position += 137;
+		}
+		check(doc.sliceCodepoints(0, doc.codepointCount) == expected, "full slice at " + step);
+	}
+	static function asciiGraphemes():Void {
+		// HashLink text strings exclude NUL; exercise every representable ASCII pair.
+		for (previous in 1...128) for (current in 1...128) {
+			var map = new TextOffsetMap(String.fromCharCode(previous) + String.fromCharCode(current));
+			check(map.isGraphemeBoundary(1) == (previous != 13 || current != 10),
+				"ASCII grapheme pair " + previous + ":" + current);
+		}
+		var map = new TextOffsetMap("a\u0301b");
+		check(!map.isGraphemeBoundary(1) && map.isGraphemeBoundary(2), "ASCII next to combining mark");
+		map = new TextOffsetMap("a\rX");
+		map.replaceCodepointsIncremental(2, 3, "\n");
+		check(!map.isGraphemeBoundary(2), "edited CR/LF grapheme");
+	}
+	static function viewportLook():Void {
+		for (preset in 0...haxeon.editor.ViewportLook.PresetNames.length) {
+			var look = haxeon.editor.ViewportLook.preset(preset);
+			check(look.lights.length == 3, "key, fill and rim lights");
+			for (light in look.lights) {
+				var d = light.direction, length = Math.sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
+				check(Math.abs(length - 1) < 0.000001, "viewport light directions are unit vectors");
+				check(light.color.length == 3 && light.intensity >= 0 && light.radius >= 0,
+					"lights have an RGB tint, an intensity and a panel size");
+			}
+			check(look.sky.length == 3 && look.ground.length == 3, "ambient colors are RGB");
+			check(look.reflection >= 0 && look.reflection <= 1 && look.roughnessFloor >= 0 && look.roughnessFloor <= 1
+				&& look.exposure >= 0, "display parameters are in range");
+		}
+		var onLight = haxeon.editor.ViewportLook.edgeColor([0.62, 0.64, 0.67]),
+			onDark = haxeon.editor.ViewportLook.edgeColor([
+				0.18,
+				0.19,
+				0.20
+			]);
+		check(onLight[0] < 0.1 && onDark[0] > 0.5, "edges contrast with their surface");
+		var rejected = false;
+		try haxeon.editor.ViewportLook.preset(haxeon.editor.ViewportLook.PresetNames.length) catch (_:Dynamic)
+			rejected = true;
+		check(rejected, "unknown viewport lighting preset is rejected");
+		rejected = false;
+		try new haxeon.editor.ViewportLook.ViewportLight([0, 0, 0], 1, [1, 1, 1], 0) catch (_:Dynamic) rejected = true;
+		check(rejected, "a light needs a direction");
+	}
+	static function editRecords():Void {
+		var doc = new TextDocument("one\ntwo 🙂\nthree");
+		check(doc.editSince(-1) == null && doc.editSince(0) == null, "a new document has no edit");
+		doc.replace(4, 7, "2🧑‍💻");
+		var edit = doc.editSince(0);
+		check(edit != null && edit.revision == 1 && edit.start == 4 && edit.oldEnd == 7 && edit.newEnd == 8
+			&& edit.previousCodepointCount == 15, "an edit records its range and the length before it");
+		check(doc.editSince(1) == null, "no edit since the current revision");
+		doc.replace(0, 0, "");
+		check(doc.revision == 1 && doc.editSince(0) != null, "a no-op replacement keeps the last edit");
+		doc.replace(0, 0, "x");
+		check(doc.editSince(0) == null && doc.editSince(1) != null, "two edits since a revision are not one");
+	}
+	/** Boundaries are computed on first use; edits made before then, or after, end where a fresh map of the text does,
      across flags (regional indicator pairs), combining marks and ZWJ sequences the edits split and join. */
- static function lazyGraphemes():Void {
-  var source="🇵🇹🇧🇷 a\u0301 🧑‍💻 x\ny";
-  for (computedFirst in [false,true]) {
-   var map=new TextOffsetMap(source);
-   if (computedFirst) map.graphemeCount();
-   var text=source;
-   for (edit in [{start:2,end:2,insert:"🇫🇷"},{start:0,end:1,insert:""},{start:5,end:5,insert:"\u0301"},
-     {start:1,end:3,insert:"🇩"},{start:9,end:10,insert:"‍"},{start:0,end:0,insert:"q"}])
-    text=map.replaceCodepointsIncremental(edit.start,edit.end,edit.insert);
-   var fresh=new TextOffsetMap(text);
-   check(map.graphemeCount()==fresh.graphemeCount(),"graphemes after edits "+(computedFirst?"with":"without")+" boundaries computed first: "+map.graphemeCount()+", fresh "+fresh.graphemeCount());
-   for (index in 0...fresh.graphemeBoundaryCount())
-    check(map.graphemeBoundaryAt(index)==fresh.graphemeBoundaryAt(index),"grapheme boundary "+index+" after edits differs from a fresh map");
-  }
- }
- static function main():Void {
-  lazyGraphemes();
-  viewportLook();
-  asciiGraphemes();
-  editRecords();
-  var content=new StringBuf();
-  for (i in 0...260) content.add(StringTools.lpad(Std.string(i),"0",4)+" Café e\u0301 🙂 🧑‍💻 漢字 שלום\n");
-  var expected=content.toString(); var doc=new TextDocument(expected);
-  validate(doc,expected,0);
-  for (step in 1...81) {
-   var map=new TextOffsetMap(expected);
-   var start=(step*7919)%(doc.codepointCount+1);
-   var end=Std.int(Math.min(doc.codepointCount,start+step%5));
-   var insert=switch(step%5) {case 0:"\n";case 1:"🧑‍💻";case 2:"e\u0301";case 3:"";case _:"漢🙂";};
-   var next=map.replaceCodepoints(start,end,insert);
-   doc.replace(start,end,insert);
-   expected=next;
-   validate(doc,expected,step);
-  }
-  var longParagraph=new StringBuf();
-  for (_ in 0...1800) longParagraph.add("Cafe\u0301 🧑‍💻 漢字 שלום ");
-  expected=longParagraph.toString();
-  doc=new TextDocument(expected);
-  validate(doc,expected,100);
-  for (step in 1...41) {
-   var map=new TextOffsetMap(expected);
-   var start=(step*2053)%doc.codepointCount;
-   var end=Std.int(Math.min(doc.codepointCount,start+step%4));
-   var insert=switch(step%4) {case 0:"\n";case 1:"🧑‍💻";case 2:"e\u0301";case _:"漢🙂";};
-   expected=map.replaceCodepoints(start,end,insert);
-   doc.replace(start,end,insert);
-   validate(doc,expected,100+step);
-  }
-  Sys.println("PASS Unicode document coordinates, 120 edits, and long-paragraph segment seams");
- }
+	static function lazyGraphemes():Void {
+		var source = "🇵🇹🇧🇷 a\u0301 🧑‍💻 x\ny";
+		for (computedFirst in [false, true]) {
+			var map = new TextOffsetMap(source);
+			if (computedFirst) map.graphemeCount();
+			var text = source;
+			for (edit in [
+				{start: 2, end: 2, insert: "🇫🇷"},
+				{start: 0, end: 1, insert: ""},
+				{start: 5, end: 5, insert: "\u0301"},
+				{start: 1, end: 3, insert: "🇩"},
+				{start: 9, end: 10, insert: "‍"},
+				{start: 0, end: 0, insert: "q"}
+			])
+				text = map.replaceCodepointsIncremental(edit.start, edit.end, edit.insert);
+			var fresh = new TextOffsetMap(text);
+			check(map.graphemeCount() == fresh.graphemeCount(),
+				"graphemes after edits " + (computedFirst ? "with" : "without") + " boundaries computed first: "
+				+ map.graphemeCount() + ", fresh " + fresh.graphemeCount());
+			for (index in 0...fresh.graphemeBoundaryCount())
+				check(map.graphemeBoundaryAt(index) == fresh.graphemeBoundaryAt(index),
+					"grapheme boundary " + index + " after edits differs from a fresh map");
+		}
+	}
+	static function main():Void {
+		lazyGraphemes();
+		viewportLook();
+		asciiGraphemes();
+		editRecords();
+		var content = new StringBuf();
+		for (i in 0...260) content.add(StringTools.lpad(Std.string(i), "0", 4) + " Café e\u0301 🙂 🧑‍💻 漢字 שלום\n");
+		var expected = content.toString();
+		var doc = new TextDocument(expected);
+		validate(doc, expected, 0);
+		for (step in 1...81) {
+			var map = new TextOffsetMap(expected);
+			var start = (step * 7919) % (doc.codepointCount + 1);
+			var end = Std.int(Math.min(doc.codepointCount, start + step % 5));
+			var insert = switch (step % 5) {
+				case 0: "\n";
+				case 1: "🧑‍💻";
+				case 2: "e\u0301";
+				case 3: "";
+				case _: "漢🙂";
+			};
+			var next = map.replaceCodepoints(start, end, insert);
+			doc.replace(start, end, insert);
+			expected = next;
+			validate(doc, expected, step);
+		}
+		var longParagraph = new StringBuf();
+		for (_ in 0...1800) longParagraph.add("Cafe\u0301 🧑‍💻 漢字 שלום ");
+		expected = longParagraph.toString();
+		doc = new TextDocument(expected);
+		validate(doc, expected, 100);
+		for (step in 1...41) {
+			var map = new TextOffsetMap(expected);
+			var start = (step * 2053) % doc.codepointCount;
+			var end = Std.int(Math.min(doc.codepointCount, start + step % 4));
+			var insert = switch (step % 4) {
+				case 0: "\n";
+				case 1: "🧑‍💻";
+				case 2: "e\u0301";
+				case _: "漢🙂";
+			};
+			expected = map.replaceCodepoints(start, end, insert);
+			doc.replace(start, end, insert);
+			validate(doc, expected, 100 + step);
+		}
+		Sys.println("PASS Unicode document coordinates, 120 edits, and long-paragraph segment seams");
+	}
 }

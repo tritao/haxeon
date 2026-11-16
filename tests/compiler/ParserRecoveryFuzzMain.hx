@@ -7,7 +7,8 @@ class ParserRecoveryFuzzMain {
 	static inline final MAX_CASE_MS = 500.0;
 
 	static function main():Void {
-		var source = "class Box { public var value:Int; public function read(scale:Int):Int { if (scale > 0) return value * scale; return 0; } } function helper(value:Int):Int return value; function main():Int { var box:Box = new Box(); var values = [1, 2]; var callback = (item:Int) -> item + 1; box.value; return switch (values[0]) { case 1: callback(helper(41)); default: box.read(1); }; }",
+		var source =
+			"class Box { public var value:Int; public function read(scale:Int):Int { if (scale > 0) return value * scale; return 0; } } function helper(value:Int):Int return value; function main():Int { var box:Box = new Box(); var values = [1, 2]; var callback = (item:Int) -> item + 1; box.value; return switch (values[0]) { case 1: callback(helper(41)); default: box.read(1); }; }",
 			service = new LanguageService();
 		service.update("Main.hx", source);
 		service.analyze("Main");
@@ -18,10 +19,12 @@ class ParserRecoveryFuzzMain {
 				end = Std.int(Math.min(source.length, position + width)),
 				mutated = switch caseIndex % 3 {
 					case 0: source.substring(0, position) + source.substring(end);
-					case 1: source.substring(0, position) + fragments[caseIndex % fragments.length] + source.substring(position);
-					default: source.substring(0, position) + fragments[caseIndex % fragments.length] + source.substring(end);
+					case 1: source.substring(0,
+						position) + fragments[caseIndex % fragments.length] + source.substring(position);
+					default: source.substring(0,
+						position) + fragments[caseIndex % fragments.length] + source.substring(end);
 				},
-				started = Sys.time();
+					started = Sys.time();
 			service.update("Main.hx", mutated);
 			try
 				service.analyze("Main")
@@ -57,7 +60,8 @@ class ParserRecoveryFuzzMain {
 			assertSpan(token.span, length, "semantic token", caseIndex);
 		for (fold in service.foldingRanges("Main.hx"))
 			assertSpan(fold.span, length, "fold", caseIndex);
-		for (ranges in service.selectionRanges("Main.hx", [Std.int(Math.min(length, length == 0 ? 0 : (caseIndex * 13) % length))]))
+		for (ranges in service.selectionRanges("Main.hx",
+			[Std.int(Math.min(length, length == 0 ? 0 : (caseIndex * 13) % length))]))
 			for (range in ranges)
 				assertSpan(range, length, "selection", caseIndex);
 		service.complete("Main.hx", length);

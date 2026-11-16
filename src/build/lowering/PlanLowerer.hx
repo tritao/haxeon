@@ -30,7 +30,8 @@ class PlanLowerer {
 				if (artifact.id.kind == ArtifactKind.FfiInterface) {
 					var resolvedPackage = project.packages.get(artifact.id.packageId),
 						name = artifact.details.get("name"),
-						imports = resolvedPackage == null ? [] : [for (ffi in resolvedPackage.ffiImports) if (ffi.config.name == name) ffi];
+						imports = resolvedPackage == null
+							? [] : [for (ffi in resolvedPackage.ffiImports) if (ffi.config.name == name) ffi];
 					if (resolvedPackage == null || imports.length != 1)
 						throw "No resolved FFI import " + name + " for package " + artifact.id.packageId;
 					var output = context.layout.ffiInterfacePath(resolvedPackage.name, name),
@@ -44,8 +45,10 @@ class PlanLowerer {
 					var packageArtifacts = [
 						for (artifact in plan.artifacts)
 							if (artifact.id.packageId == resolvedPackage.name) artifact
-					], lowered = resolvedPackage.nativeSources.length > 0 ? NativeSourcesProvider.lowerPackage(resolvedPackage, packageArtifacts,
-						context) : NativeCMakeProvider.lowerPackage(resolvedPackage, packageArtifacts, context);
+					],
+						lowered = resolvedPackage.nativeSources.length > 0
+							? NativeSourcesProvider.lowerPackage(resolvedPackage, packageArtifacts,
+							context) : NativeCMakeProvider.lowerPackage(resolvedPackage, packageArtifacts, context);
 					actions = actions.concat(lowered.actions);
 					for (key in lowered.artifactActions.keys())
 						artifactActions.set(key, lowered.artifactActions.get(key));
@@ -65,8 +68,11 @@ class PlanLowerer {
 							if (dependency.kind == ArtifactKind.FfiInterface)
 								dependencies = dependencies.concat(loweredDependency);
 						}
-						var destination = context.output == null ? (artifact.id.kind == ArtifactKind.WasmModule ? context.layout.wasmModulePath(artifact.id.packageId) : context.layout.hashLinkModulePath(artifact.id.packageId)) : context.output;
-						actions.push(CompilerProvider.action(project, context, new ActionId('compile-project:${artifact.id.key()}'), dependencies,
+						var destination = context.output == null ? (artifact.id.kind == ArtifactKind.WasmModule
+							? context.layout.wasmModulePath(artifact.id.packageId)
+							: context.layout.hashLinkModulePath(artifact.id.packageId)) : context.output;
+						actions.push(CompilerProvider.action(project, context,
+							new ActionId('compile-project:${artifact.id.key()}'), dependencies,
 							destination));
 					case FfiInterface:
 					default:

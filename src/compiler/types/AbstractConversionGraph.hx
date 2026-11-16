@@ -38,9 +38,15 @@ class AbstractConversionGraph {
 				owner = abstractNode(decl.name, [for (index in 0...decl.typeParameters.length) '$' + '$index']);
 			spans.set(owner, decl.span);
 			for (type in decl.fromTypes)
-				fromEdges.push({source: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters), target: owner});
+				fromEdges.push({
+					source: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters),
+					target: owner
+				});
 			for (type in decl.toTypes)
-				toEdges.push({source: owner, target: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters)});
+				toEdges.push({
+					source: owner,
+					target: node(declarations.resolve(type, decl.span, substitutions), decl.name, decl.typeParameters)
+				});
 			for (method in decl.methods) {
 				var metadata = method.metadata;
 				if (metadata == null)
@@ -49,13 +55,15 @@ class AbstractConversionGraph {
 					switch entry.name {
 						case "from" if (method.isStatic && method.arguments.length == 1):
 							fromEdges.push({
-								source: node(declarations.resolve(method.arguments[0].type, method.span, substitutions), decl.name, decl.typeParameters),
+								source: node(declarations.resolve(method.arguments[0].type, method.span, substitutions),
+									decl.name, decl.typeParameters),
 								target: owner
 							});
 						case "to" if (!method.isStatic && method.arguments.length == 0):
 							toEdges.push({
 								source: owner,
-								target: node(declarations.resolve(method.result, method.span, substitutions), decl.name, decl.typeParameters)
+								target: node(declarations.resolve(method.result, method.span, substitutions), decl.name,
+									decl.typeParameters)
 							});
 						default:
 					}
@@ -83,7 +91,8 @@ class AbstractConversionGraph {
 				if (decl == null) return false;
 				var substitutions = appliedSubstitutions(decl.typeParameters, arguments), found = false;
 				for (type in decl.toTypes)
-					if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions))) found = true;
+					if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions))) found =
+						true;
 				found;
 			default: false;
 		};
@@ -102,7 +111,8 @@ class AbstractConversionGraph {
 				continue;
 			for (entry in metadata)
 				if (entry.name == "from"
-					&& acceptsFromArgument(actual, declarations.resolve(method.arguments[0].type, method.span, substitutions)))
+					&& acceptsFromArgument(actual,
+					declarations.resolve(method.arguments[0].type, method.span, substitutions)))
 					return true;
 		}
 		return false;
@@ -128,7 +138,8 @@ class AbstractConversionGraph {
 			if (metadata == null || method.isStatic || method.arguments.length != 0)
 				continue;
 			for (entry in metadata)
-				if (entry.name == "to" && TypeRelations.equals(expected, declarations.resolve(method.result, method.span, substitutions)))
+				if (entry.name == "to"
+					&& TypeRelations.equals(expected, declarations.resolve(method.result, method.span, substitutions)))
 					return true;
 		}
 		return false;
@@ -156,11 +167,13 @@ class AbstractConversionGraph {
 			countPaths(source, adjacency, paths);
 			for (target => count in paths)
 				if (target != source && count > 1)
-					fail('Ambiguous $direction conversion paths from "${display(source)}" to "${display(target)}"', source);
+					fail('Ambiguous $direction conversion paths from "${display(source)}" to "${display(target)}"',
+						source);
 		}
 	}
 
-	function visit(direction:String, current:String, adjacency:Map<String, Array<String>>, visiting:Map<String, Bool>, visited:Map<String, Bool>):Void {
+	function visit(direction:String, current:String, adjacency:Map<String, Array<String>>, visiting:Map<String, Bool>,
+			visited:Map<String, Bool>):Void {
 		if (visiting.exists(current))
 			fail('Cyclic $direction conversion involving "${display(current)}"', current);
 		if (visited.exists(current))
@@ -190,7 +203,8 @@ class AbstractConversionGraph {
 	static function abstractSubstitutions(owner:String, parameters:Array<String>):Map<String, CompilerType>
 		return [for (parameter in parameters) parameter => TTypeParameter(owner, parameter)];
 
-	static function appliedSubstitutions(parameters:Array<String>, arguments:Array<CompilerType>):Map<String, CompilerType> {
+	static function appliedSubstitutions(parameters:Array<String>,
+			arguments:Array<CompilerType>):Map<String, CompilerType> {
 		var result:Map<String, CompilerType> = [];
 		for (index in 0...parameters.length)
 			result.set(parameters[index], arguments[index]);
@@ -199,7 +213,8 @@ class AbstractConversionGraph {
 
 	static function node(type:CompilerType, owner:String, parameters:Array<String>):String
 		return switch type {
-			case TAbstract(name, arguments, _): abstractNode(name, [for (argument in arguments) normalizedType(argument, owner, parameters)]);
+			case TAbstract(name, arguments, _): abstractNode(name,
+				[for (argument in arguments) normalizedType(argument, owner, parameters)]);
 			default: "type:" + normalizedType(type, owner, parameters);
 		};
 

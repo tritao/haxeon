@@ -118,11 +118,13 @@ class PipelineSnapshot {
 				added = [for (fn in next) if (!before.exists(fn.name)) fn.name];
 			var repeated:Array<String> = [], seen:Map<String, Bool> = [];
 			for (fn in previous.concat(next)) {
-				if (seen.exists(fn.name) && repeated.indexOf(fn.name) < 0 && (count(previous, fn.name) > 1 || count(next, fn.name) > 1))
+				if (seen.exists(fn.name) && repeated.indexOf(fn.name) < 0
+					&& (count(previous, fn.name) > 1 || count(next, fn.name) > 1))
 					repeated.push(fn.name);
 				seen.set(fn.name, true);
 			}
-			return "count " + previous.length + " -> " + next.length + " (removed: " + removed.slice(0, 3).join(", ") + "; added: "
+			return "count " + previous.length + " -> " + next.length + " (removed: " + removed.slice(0,
+				3).join(", ") + "; added: "
 				+ added.slice(0, 3).join(", ") + "; listed twice: " + repeated.slice(0, 3).join(", ") + ")";
 		}
 		for (index in 0...previous.length)

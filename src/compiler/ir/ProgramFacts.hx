@@ -97,17 +97,23 @@ class ProgramFacts {
 		}
 		function text(value:Null<String>):String
 			return value == null ? "-" : value.length + ":" + value;
-		section("enumConstructorCounts", [for (key in enumConstructorCounts.keys()) key], key -> Std.string(enumConstructorCounts.get(key)));
-		section("enumEquatableTypes", [for (key in enumEquatableTypes.keys()) key], key -> flag(enumEquatableTypes.get(key)));
+		section("enumConstructorCounts", [for (key in enumConstructorCounts.keys()) key],
+			key -> Std.string(enumConstructorCounts.get(key)));
+		section("enumEquatableTypes", [for (key in enumEquatableTypes.keys()) key],
+			key -> flag(enumEquatableTypes.get(key)));
 		section("enumPayloadTypes", [for (key in enumPayloadTypes.keys()) key], key -> flag(enumPayloadTypes.get(key)));
 		section("valueClasses", [for (key in valueClasses.keys()) key], key -> flag(valueClasses.get(key)));
 		section("classBases", [for (key in classBases.keys()) key], key -> text(classBases.get(key)));
-		section("genericOwnerAliases", [for (key in genericOwnerAliases.keys()) key], key -> text(genericOwnerAliases.get(key)));
+		section("genericOwnerAliases", [for (key in genericOwnerAliases.keys()) key],
+			key -> text(genericOwnerAliases.get(key)));
 		section("genericClasses", [for (key in genericClasses.keys()) key], key -> flag(genericClasses.get(key)));
-		section("genericOwnerOrigins", [for (key in genericOwnerOrigins.keys()) key], key -> text(genericOwnerOrigins.get(key)));
+		section("genericOwnerOrigins", [for (key in genericOwnerOrigins.keys()) key],
+			key -> text(genericOwnerOrigins.get(key)));
 		section("equatableTypes", [for (key in equatableTypes.keys()) key], key -> flag(equatableTypes.get(key)));
-		section("observableClasses", [for (key in observableClasses.keys()) key], key -> flag(observableClasses.get(key)));
-		section("observableStateOwners", [for (key in observableStateOwners.keys()) key], key -> text(observableStateOwners.get(key)));
+		section("observableClasses", [for (key in observableClasses.keys()) key],
+			key -> flag(observableClasses.get(key)));
+		section("observableStateOwners", [for (key in observableStateOwners.keys()) key],
+			key -> text(observableStateOwners.get(key)));
 		section("observableFieldBits", [for (key in observableFieldBits.keys()) key], key -> {
 			var bits = observableFieldBits.get(key);
 			if (bits == null)
@@ -116,7 +122,8 @@ class ProgramFacts {
 			names.sort(Reflect.compare);
 			[for (name in names) name + ":" + bits.get(name)].join(";");
 		});
-		section("typedInterfaceContracts", [for (key in typedInterfaceContracts.keys()) key], key -> Std.string(typedInterfaceContracts.get(key)));
+		section("typedInterfaceContracts", [for (key in typedInterfaceContracts.keys()) key],
+			key -> Std.string(typedInterfaceContracts.get(key)));
 		out.add("target{" + profile.key() + "}");
 		return out.toString();
 	}
@@ -138,7 +145,8 @@ class ProgramFacts {
 
 	/** Native runtime dynamic objects for `{}` literals; otherwise they allocate `PlatformAbi.DYNAMIC_OBJECT_CLASS`. */
 	/** Supply the program's classes: which are value classes (see `isHeaderlessValueClass`) and what each extends (see `isUpcast`). */
-	function bindClasses(classes:Array<TypedClass>, ?interfaces:Array<TypedInterface>, ?ownerAliases:Map<String, String>):Void {
+	function bindClasses(classes:Array<TypedClass>, ?interfaces:Array<TypedInterface>,
+			?ownerAliases:Map<String, String>):Void {
 		valueClasses = [];
 		genericOwnerAliases = ownerAliases == null ? [] : ownerAliases;
 		genericClasses = [];
@@ -246,7 +254,8 @@ class ProgramFacts {
 			if (declaration.base != null)
 				result = orderedFields(declaration.base, visiting);
 			for (field in declaration.fields)
-				if (!field.isStatic && IrProgramAssembler.hasPhysicalStorage(field) && !hasUnobservableMetadata(field.metadata))
+				if (!field.isStatic && IrProgramAssembler.hasPhysicalStorage(field)
+					&& !hasUnobservableMetadata(field.metadata))
 					result.push(field);
 			return result;
 		}

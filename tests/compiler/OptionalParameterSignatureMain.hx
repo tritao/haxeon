@@ -35,11 +35,16 @@ class OptionalParameterSignatureMain {
 	}
 
 	static function main():Void {
-		var instanceBefore = "class Gate { public function new() {} public function go(id:String, point:Array<Float>):Int return point == null ? 0 : 1; }";
-		var instanceAfter = "class Gate { public function new() {} public function go(id:String, ?point:Array<Float>):Int return point == null ? 0 : 1; }";
-		var staticBefore = "class Gate { public static function go(id:String, point:Array<Float>):Int return point == null ? 0 : 1; }";
-		var staticAfter = "class Gate { public static function go(id:String, ?point:Array<Float>):Int return point == null ? 0 : 1; }";
-		var instanceCallBefore = "class Main { static function main():Int { var g = new Gate(); return g.go(\"a\", [1.0]); } }";
+		var instanceBefore =
+			"class Gate { public function new() {} public function go(id:String, point:Array<Float>):Int return point == null ? 0 : 1; }";
+		var instanceAfter =
+			"class Gate { public function new() {} public function go(id:String, ?point:Array<Float>):Int return point == null ? 0 : 1; }";
+		var staticBefore =
+			"class Gate { public static function go(id:String, point:Array<Float>):Int return point == null ? 0 : 1; }";
+		var staticAfter =
+			"class Gate { public static function go(id:String, ?point:Array<Float>):Int return point == null ? 0 : 1; }";
+		var instanceCallBefore =
+			"class Main { static function main():Int { var g = new Gate(); return g.go(\"a\", [1.0]); } }";
 		var instanceCallAfter = "class Main { static function main():Int { var g = new Gate(); return g.go(\"a\"); } }";
 		var staticCallBefore = "class Main { static function main():Int return Gate.go(\"a\", [1.0]); }";
 		var staticCallAfter = "class Main { static function main():Int return Gate.go(\"a\"); }";
@@ -47,12 +52,15 @@ class OptionalParameterSignatureMain {
 		check("static, caller edited", staticBefore, staticAfter, staticCallBefore, staticCallAfter);
 		check("instance, caller unchanged", instanceBefore, instanceAfter, instanceCallBefore, instanceCallBefore);
 		check("static, caller unchanged", staticBefore, staticAfter, staticCallBefore, staticCallBefore);
-		var defaultAfter = "class Gate { public function new() {} public function go(id:String, point:Array<Float> = null):Int return point == null ? 0 : 1; }";
+		var defaultAfter =
+			"class Gate { public function new() {} public function go(id:String, point:Array<Float> = null):Int return point == null ? 0 : 1; }";
 		check("instance, default value", instanceBefore, defaultAfter, instanceCallBefore, instanceCallAfter);
-		checkDefault("instance, default changes", "class Gate { public function new() {} public function scale(v:Float = 1.0):Float return v; }",
+		checkDefault("instance, default changes",
+			"class Gate { public function new() {} public function scale(v:Float = 1.0):Float return v; }",
 			"class Gate { public function new() {} public function scale(v:Float = 3.0):Float return v; }",
 			"class Main { static function main():Int { var g = new Gate(); return g.scale() > 0.5 ? 0 : 1; } }");
-		checkDefault("static, default changes", "class Gate { public static function scale(v:Float = 1.0):Float return v; }",
+		checkDefault("static, default changes",
+			"class Gate { public static function scale(v:Float = 1.0):Float return v; }",
 			"class Gate { public static function scale(v:Float = 3.0):Float return v; }",
 			"class Main { static function main():Int return Gate.scale() > 0.5 ? 0 : 1; }");
 		Sys.println("PASS: making a parameter optional, or changing its default, is a signature change for incremental builds");

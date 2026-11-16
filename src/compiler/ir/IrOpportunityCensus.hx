@@ -2,9 +2,23 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
-private typedef CensusAllocation = {final value:Int; final type:String; final local:Bool; final reason:String;}
-private typedef CensusOpcode = {final opcode:String; final count:Int;}
-private typedef CensusRow = {final name:String; final counts:Array<Int>; final weighted:Array<Float>; final allocations:Array<CensusAllocation>; final histogram:Array<CensusOpcode>;}
+private typedef CensusAllocation = {
+	final value:Int;
+	final type:String;
+	final local:Bool;
+	final reason:String;
+}
+private typedef CensusOpcode = {
+	final opcode:String;
+	final count:Int;
+}
+private typedef CensusRow = {
+	final name:String;
+	final counts:Array<Int>;
+	final weighted:Array<Float>;
+	final allocations:Array<CensusAllocation>;
+	final histogram:Array<CensusOpcode>;
+}
 
 /** Read-only post-pass census. Weights are static 8^natural-loop-depth, not measured execution counts. */
 class IrOpportunityCensus {
@@ -25,16 +39,16 @@ class IrOpportunityCensus {
 			var name = names.get(fn.functionIndex);
 			Sys.stderr()
 				.writeString("EMITTED_CENSUS {\"target\":\"hl\",\"name\":"
-					+ haxe.Json.stringify(name == null ? "#" + fn.functionIndex : name)
-					+ ",\"index\":"
-					+ fn.functionIndex
-					+ ",\"instructions\":"
-					+ fn.opcodes.length
-					+ ",\"bytes\":"
-					+ compiler.hl.HlWriter.encodeFunction(fn).length
-					+ ",\"histogram\":"
-					+ encodeHistogram(sortedHistogram(histogram))
-					+ "}\n");
+				+ haxe.Json.stringify(name == null ? "#" + fn.functionIndex : name)
+				+ ",\"index\":"
+				+ fn.functionIndex
+				+ ",\"instructions\":"
+				+ fn.opcodes.length
+				+ ",\"bytes\":"
+				+ compiler.hl.HlWriter.encodeFunction(fn).length
+				+ ",\"histogram\":"
+				+ encodeHistogram(sortedHistogram(histogram))
+				+ "}\n");
 		}
 	}
 
@@ -48,26 +62,28 @@ class IrOpportunityCensus {
 				+ haxe.Json.stringify(segment.censusCategory == null ? "unclassified data" : segment.censusCategory)
 				+ ',"bytes":'
 				+ compiler.backend.wasm.WasmEncoder.encodedDataSegmentLength(segment)
-				+ '}'];
-		Sys.stderr().writeString('SIZE_DATA_CENSUS {"target":' + haxe.Json.stringify(target) + ',"segments":[' + segments.join(",") + ']}\n');
+				+ '}'
+		];
+		Sys.stderr().writeString('SIZE_DATA_CENSUS {"target":' + haxe.Json.stringify(target) + ',"segments":['
+			+ segments.join(",") + ']}\n');
 		for (fn in module.functions) {
 			var histogram:Map<String, Int> = [];
 			for (op in fn.body)
 				addOpcode(histogram, constructorName(Std.string(op)));
 			Sys.stderr()
 				.writeString("EMITTED_CENSUS {\"target\":"
-					+ haxe.Json.stringify(target)
-					+ ",\"name\":"
-					+ haxe.Json.stringify(fn.name)
-					+ ",\"instructions\":"
-					+ fn.body.length
-					+ ",\"opaqueBytes\":"
-					+ (fn.encodedBody == null ? 0 : fn.encodedBody.length)
-					+ ",\"bytes\":"
-					+ compiler.backend.wasm.WasmEncoder.encodeFunctionBody(fn).length
-					+ ",\"histogram\":"
-					+ encodeHistogram(sortedHistogram(histogram))
-					+ "}\n");
+				+ haxe.Json.stringify(target)
+				+ ",\"name\":"
+				+ haxe.Json.stringify(fn.name)
+				+ ",\"instructions\":"
+				+ fn.body.length
+				+ ",\"opaqueBytes\":"
+				+ (fn.encodedBody == null ? 0 : fn.encodedBody.length)
+				+ ",\"bytes\":"
+				+ compiler.backend.wasm.WasmEncoder.encodeFunctionBody(fn).length
+				+ ",\"histogram\":"
+				+ encodeHistogram(sortedHistogram(histogram))
+				+ "}\n");
 		}
 	}
 
@@ -77,7 +93,9 @@ class IrOpportunityCensus {
 	static function sortedHistogram(histogram:Map<String, Int>):Array<CensusOpcode> {
 		var names = [for (name in histogram.keys()) name];
 		names.sort(Reflect.compare);
-		return [for (name in names) {opcode: name, count: histogram.get(name)}];
+		return [for (name in names) {
+			opcode:name, count:histogram.get(name)
+		}];
 	}
 
 	// Anonymous object fields can be enumerated in different orders on HashLink. Construct JSON in a fixed order so
@@ -99,9 +117,12 @@ class IrOpportunityCensus {
 				+ (entry.local ? "true" : "false")
 				+ ",\"reason\":"
 				+ haxe.Json.stringify(entry.reason)
-				+ "}"];
-		return "{\"name\":" + haxe.Json.stringify(row.name) + ",\"counts\":" + haxe.Json.stringify(row.counts) + ",\"weighted\":"
-			+ haxe.Json.stringify(row.weighted) + ",\"allocations\":[" + allocations.join(",") + "],\"histogram\":" + encodeHistogram(row.histogram) + "}";
+				+ "}"
+		];
+		return "{\"name\":" + haxe.Json.stringify(row.name) + ",\"counts\":" + haxe.Json.stringify(row.counts)
+			+ ",\"weighted\":"
+			+ haxe.Json.stringify(row.weighted) + ",\"allocations\":[" + allocations.join(",") + "],\"histogram\":"
+			+ encodeHistogram(row.histogram) + "}";
 	}
 
 	static final labels:Array<String> = [
@@ -168,8 +189,9 @@ class IrOpportunityCensus {
 		for (row in rows)
 			Sys.stderr().writeString("IR_CENSUS " + encodeRow(row) + "\n");
 		Sys.stderr()
-			.writeString("IR_CENSUS {\"name\":\"TOTAL\",\"labels\":" + haxe.Json.stringify(labels) + ",\"counts\":" + haxe.Json.stringify(totals)
-				+ ",\"weighted\":" + haxe.Json.stringify(weights) + "}\n");
+			.writeString("IR_CENSUS {\"name\":\"TOTAL\",\"labels\":" + haxe.Json.stringify(labels) + ",\"counts\":"
+			+ haxe.Json.stringify(totals)
+			+ ",\"weighted\":" + haxe.Json.stringify(weights) + "}\n");
 	}
 
 	static function inspect(fn:IrFunction, pureCalls:Map<String, Bool>, objects:Map<String, IrObject>, allowInline:Bool,
@@ -240,7 +262,8 @@ class IrOpportunityCensus {
 				switch instruction {
 					case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
 						switch bounds.definition(arguments[0].id) {
-							case NewObject(_, _), ValueInit(_), StaticClosure(_, _), InstanceClosure(_, _, _): count(14);
+							case NewObject(_, _), ValueInit(_), StaticClosure(_, _),
+								InstanceClosure(_, _, _): count(14);
 							default:
 						}
 					case SafeCast(out, source) if (Std.string(out.type) == Std.string(source.type)):
@@ -255,7 +278,8 @@ class IrOpportunityCensus {
 						});
 						if (bounds.proven(array, index, block.id))
 							count(2);
-					case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), IntToFloat(_, _), FloatToInt(_, _), FloatToFloat(_, _), IntToInt64(_, _):
+					case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), IntToFloat(_, _), FloatToInt(_, _),
+						FloatToFloat(_, _), IntToInt64(_, _):
 						if (depth > 0)
 							count(4);
 					case NewObject(out, _) | ValueInit(out):
@@ -296,8 +320,10 @@ class IrOpportunityCensus {
 					seen.set(key, true);
 				}
 				switch instruction {
-					case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _), FieldSet(_, _, _), ArraySet(_, _, _),
-						MemoryStore(_, _, _), GlobalSet(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_), SafeCast(_, _), ToDyn(_, _), ToVirtual(_, _):
+					case Call(_, _, _), CNativeCall(_, _, _), CallClosure(_, _, _), MethodCall(_, _, _, _, _),
+						FieldSet(_, _, _), ArraySet(_, _, _),
+						MemoryStore(_, _, _), GlobalSet(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_),
+						SafeCast(_, _), ToDyn(_, _), ToVirtual(_, _):
 						seen = [];
 					default:
 				}
@@ -311,7 +337,8 @@ class IrOpportunityCensus {
 						}
 					case Jump(target):
 						var next = blocks.get(target);
-						if (next != null && next.id != block.id && next.instructions.length == 0 && next.terminator != null)
+						if (next != null && next.id != block.id && next.instructions.length == 0
+							&& next.terminator != null)
 							switch next.terminator.value {
 								case Jump(_): count(12);
 								default:
@@ -330,8 +357,10 @@ class IrOpportunityCensus {
 
 	static function pureArithmetic(instruction:IrInstruction):Bool {
 		return switch instruction {
-			case Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _), ShiftLeft(_, _, _),
-				ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _), Equal(_, _, _): true;
+			case Add(_, _, _), Sub(_, _, _), Mul(_, _, _), Div(_, _, _), Mod(_, _, _), BitAnd(_, _, _), BitOr(_, _, _),
+				BitXor(_, _, _), ShiftLeft(_, _, _),
+				ShiftRight(_, _, _), UnsignedShiftRight(_, _, _), Less(_, _, _), LessEqual(_, _, _),
+				Equal(_, _, _): true;
 			default: false;
 		};
 	}
@@ -339,8 +368,10 @@ class IrOpportunityCensus {
 	/** Conservative diagnostic subset: no memory, allocation, calls, comparisons or division. */
 	static function pureUnusedResult(instruction:IrInstruction):Bool
 		return switch instruction {
-			case ValueInit(_), Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_), Add(_, _, _), Sub(_, _, _), Mul(_, _, _),
-				BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _), UnsignedShiftRight(_, _, _): true;
+			case ValueInit(_), Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstNull(_),
+				Add(_, _, _), Sub(_, _, _), Mul(_, _, _),
+				BitAnd(_, _, _), BitOr(_, _, _), BitXor(_, _, _), ShiftLeft(_, _, _), ShiftRight(_, _, _),
+				UnsignedShiftRight(_, _, _): true;
 			default: false;
 		};
 
@@ -358,7 +389,8 @@ class IrOpportunityCensus {
 	}
 
 	/** Count only a constant scalar field of a fresh, unpublished object, initialized outside every loop. */
-	static function constantField(fn:IrFunction, bounds:IrLoopBounds, instruction:IrInstruction, at:Int, pureCalls:Map<String, Bool>):Bool {
+	static function constantField(fn:IrFunction, bounds:IrLoopBounds, instruction:IrInstruction, at:Int,
+			pureCalls:Map<String, Bool>):Bool {
 		if (bounds.depth(at) == 0)
 			return false;
 		var receiver:IrValue, field:String;
@@ -387,26 +419,32 @@ class IrOpportunityCensus {
 					case FieldSet(object, name, value) if (object.id == receiver.id && name == field):
 						writes++;
 						switch bounds.definition(value.id) {
-							case ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _), ConstString(_, _): initialized = block.id;
+							case ConstInt(_, _), ConstFloat(_, _), ConstBool(_, _),
+								ConstString(_, _): initialized = block.id;
 							default: return false;
 						}
 					case Call(_, name, _) if (pureCalls.exists(name)):
-					case Call(_, _, _), CNativeCall(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _), MemoryStore(_, _, _), BeginTry(_, _, _),
+					case Call(_, _, _), CNativeCall(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _),
+						MemoryStore(_, _, _), BeginTry(_, _, _),
 						EndTry(_, _), Catch(_):
 						return false;
 					default:
 				}
-		return writes == 1 && initialized != null && bounds.depth(initialized) == 0 && bounds.dominates(initialized, at);
+		return writes == 1 && initialized != null && bounds.depth(initialized) == 0
+			&& bounds.dominates(initialized, at);
 	}
 
-	static function allocationInfo(fn:IrFunction, value:IrValue, objects:Map<String, IrObject>, allowInline:Bool):CensusAllocation {
+	static function allocationInfo(fn:IrFunction, value:IrValue, objects:Map<String, IrObject>,
+			allowInline:Bool):CensusAllocation {
 		var escape = localUseFailure(fn, value), local = escape == null;
 		var kind = switch value.type {
 			case Array(_): "arrays are not scalar-replacement candidates";
 			case Obj(name):
 				var object = objects.get(name);
-				if (object == null) "object layout unavailable"; else if (!object.isValue) "ordinary heap objects are not scalar-replacement candidates"; else
-					if (!allowInline) "scalar replacement does not run with inlining disabled"; else {
+				if (object == null) "object layout unavailable";
+				else if (!object.isValue) "ordinary heap objects are not scalar-replacement candidates";
+				else if (!allowInline) "scalar replacement does not run with inlining disabled";
+				else {
 					var nested = false, handlers = false;
 					for (field in object.fields)
 						switch field.type {
@@ -463,7 +501,8 @@ class IrOpportunityCensus {
 							case FieldGet(_, object, _) if (object.id == value.id):
 							case FieldSet(object, _, stored) if (object.id == value.id && stored.id != value.id):
 							case ArrayGet(_, array, index) if (array.id == value.id && index.id != value.id):
-							case ArraySet(array, index, stored) if (array.id == value.id && index.id != value.id && stored.id != value.id):
+							case ArraySet(array, index,
+								stored) if (array.id == value.id && index.id != value.id && stored.id != value.id):
 							case ArraySize(_, array) if (array.id == value.id):
 							default:
 								return constructorName(Std.string(located.value));

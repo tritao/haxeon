@@ -20,7 +20,8 @@ function main():Int {
 	if (!values.remove("answer") || values.exists("answer"))
 		return 0;
 	var keys = [
-		"key00", "key01", "key02", "key03", "key04", "key05", "key06", "key07", "key08", "key09", "key10", "key11", "key12", "key13", "key14", "key15"
+		"key00", "key01", "key02", "key03", "key04", "key05", "key06", "key07", "key08", "key09", "key10", "key11",
+		"key12", "key13", "key14", "key15"
 	];
 	var index = 0;
 	while (index < keys.length) {

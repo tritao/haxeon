@@ -14,7 +14,8 @@ class ModuleMain {
 		var output = Sys.args()[0], compiler = new Compiler();
 		compiler.registerNative("print", "haxeon_runtime", "__sys_print", [TString], TVoid);
 		compiler.update("Math.hx", "function add(a:Int, b:Int):Int { return a + b; }");
-		compiler.update("Main.hx", "function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
+		compiler.update("Main.hx",
+			"function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		compiler.update("Unused.hx", "function identity(x:Int):Int { return x; }");
 		compiler.update("BrokenUnused.hx", "function broken(:Int { }");
 		var first = compiler.compile("Main");
@@ -35,7 +36,8 @@ class ModuleMain {
 			throw "Semantic dependency graph did not record the imported body call";
 		if (mainDependencies.length != 1)
 			throw 'Typed dependency publication retained provisional edges: $mainDependencies';
-		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1 || first.metrics.elapsedMs < 0.0)
+		if (first.metrics.modules != 2 || first.metrics.retypedFunctions == 0 || first.metrics.moduleNatives <= 1
+			|| first.metrics.elapsedMs < 0.0)
 			throw 'Compile metrics did not describe the initial module build: modules=${first.metrics.modules}, retyped=${first.metrics.retypedFunctions}, natives=${first.metrics.moduleNatives}, elapsed=${first.metrics.elapsedMs}';
 		if (first.metrics.declarationMs < 0.0
 			|| first.metrics.shapeConnectionMs < 0.0
@@ -134,13 +136,15 @@ class ModuleMain {
 			|| compiler.modules.get("Math").irFunctions.get("Math.add") != mathIr)
 			throw "Unrelated edit replaced cached IR objects";
 		compiler.update("Temp.hx", "function oldValue():Int { return 3; }");
-		compiler.update("Main.hx", "import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
+		compiler.update("Main.hx",
+			"import Temp; function main():Int { print(\"native registration works\\n\"); return Math.add(20, 22); }");
 		var withOld = compiler.compile("Main"),
 			oldIndex = withOld.functionIndices.get("Temp.oldValue"),
 			oldId = withOld.functionIds.get("Temp.oldValue");
 		compiler.update("Temp.hx", "function freshValue():Int { return 4; }");
 		var removed = compiler.compile("Main");
-		if (removed.functionIndices.get("Temp.oldValue") != oldIndex || removed.functionIndices.get("Temp.freshValue") <= oldIndex)
+		if (removed.functionIndices.get("Temp.oldValue") != oldIndex
+			|| removed.functionIndices.get("Temp.freshValue") <= oldIndex)
 			throw "Removed function slot was not retained as a tombstone";
 		if (removed.functionIds.get("Temp.oldValue") != oldId || removed.functionIds.get("Temp.freshValue") == oldId)
 			throw "Function removal reused or changed a stable identity";
@@ -187,16 +191,20 @@ class ModuleMain {
 				throw "module did not retain its diagnostic";
 		}
 		var functionValueCompiler = new Compiler();
-		functionValueCompiler.update("Main.hx", "function twice(value:Int):Int { return value * 2; } function main():Int { var f = twice; return f(21); }");
+		functionValueCompiler.update("Main.hx",
+			"function twice(value:Int):Int { return value * 2; } function main():Int { var f = twice; return f(21); }");
 		var functionValueFirst = functionValueCompiler.compile("Main"),
 			functionValueMain = functionValueCompiler.modules.get("Main").irFunctions.get("main");
-		functionValueCompiler.update("Main.hx", "function twice(value:Int):Int { return value + value; } function main():Int { var f = twice; return f(21); }");
+		functionValueCompiler.update("Main.hx",
+			"function twice(value:Int):Int { return value + value; } function main():Int { var f = twice; return f(21); }");
 		var functionValueBody = functionValueCompiler.compile("Main");
 		if (functionValueBody.retyped.join(",") != "Main.twice")
 			throw 'Function-value body edit invalidated ${functionValueBody.retyped}';
-		functionValueCompiler.update("Main.hx", "function twice(value:Float):Int { return 42; } function main():Int { var f = twice; return f(21); }");
+		functionValueCompiler.update("Main.hx",
+			"function twice(value:Float):Int { return 42; } function main():Int { var f = twice; return f(21); }");
 		var functionValueSignature = functionValueCompiler.compile("Main");
-		if (functionValueSignature.retyped.indexOf("Main.twice") < 0 || functionValueSignature.retyped.indexOf("main") < 0)
+		if (functionValueSignature.retyped.indexOf("Main.twice") < 0
+			|| functionValueSignature.retyped.indexOf("main") < 0)
 			throw 'Function-value signature edit did not retype callee and caller: ${functionValueSignature.retyped}';
 		if (functionValueFirst.ir.functions.length == 0 || functionValueMain == null)
 			throw "Function-value incremental setup did not compile";
@@ -232,7 +240,8 @@ class ModuleMain {
 		if (lambdaIdIn(lambdaBody.functionIds) != lambdaId || lambdaBody.retyped.length != 2)
 			throw "Lambda body edit did not preserve or regenerate its generated function";
 		var capturedCompiler = new Compiler();
-		capturedCompiler.update("Main.hx", "function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
+		capturedCompiler.update("Main.hx",
+			"function main():Int { var offset = 21; var f = (value:Int) -> { return value + offset; }; return f(21); }");
 		var capturedFirst = capturedCompiler.compile("Main"),
 			capturedLambdaId:Null<Int> = null;
 		for (name => id in capturedFirst.functionIds)
@@ -258,9 +267,11 @@ class ModuleMain {
 		var inliningWas = IrInliner.enabled;
 		IrInliner.enabled = false;
 		var callManyCompiler = new Compiler();
-		callManyCompiler.update("Main.hx", "function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(10, 20, 12); }");
+		callManyCompiler.update("Main.hx",
+			"function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(10, 20, 12); }");
 		callManyCompiler.compile("Main");
-		callManyCompiler.update("Main.hx", "function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(11, 20, 12); }");
+		callManyCompiler.update("Main.hx",
+			"function sum(a:Int, b:Int, c:Int):Int { return a + b + c; } function main():Int { return sum(11, 20, 12); }");
 		var callManyBuild = callManyCompiler.compile("Main"),
 			callManyPatch = HlPatchReader.decode(callManyBuild.patchBytes),
 			callManyRelocations = 0;
@@ -330,12 +341,14 @@ class ModuleMain {
 			}
 		}
 
-		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
+		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16),
+			publicationInitial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
 				throw 'Live acknowledged compiler required reload: $reason';
 		}
-		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision + 1) {
+		switch publicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16),
+			publicationInitial.revision + 1) {
 			case ContinuePatching:
 				throw "Mismatched runtime revision was accepted";
 			case ReloadDomain(_):
@@ -344,7 +357,8 @@ class ModuleMain {
 		if (!resumedPublicationCompiler.publicationStatus().tracking
 			|| resumedPublicationCompiler.publicationStatus().acknowledgedRevision != publicationInitial.revision)
 			throw "Compiler restart lost the acknowledged publication baseline";
-		switch resumedPublicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16), publicationInitial.revision) {
+		switch resumedPublicationCompiler.reconcileRuntime(publicationInitial.runtimeIdentity.sub(4, 16),
+			publicationInitial.revision) {
 			case ContinuePatching:
 			case ReloadDomain(reason):
 				throw 'Restored backend baseline required reload: $reason';
@@ -379,7 +393,8 @@ class ModuleMain {
 		var structuralBuild = structuralCompiler.compile("Main");
 		// An added field patches the running class: its objects grow the field, initialized by the patch.
 		if (structuralBuild.requiresReload || structuralBuild.patchBytes == null)
-			throw 'Adding a field did not patch: ' + [for (reason in structuralBuild.reloadReasons) Std.string(reason)].join(", ");
+			throw 'Adding a field did not patch: '
+				+ [for (reason in structuralBuild.reloadReasons) Std.string(reason)].join(", ");
 		Sys.println("PASS: function fingerprints selectively retyped and regenerated cached artifacts");
 	}
 

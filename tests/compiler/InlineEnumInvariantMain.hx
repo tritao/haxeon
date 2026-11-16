@@ -24,7 +24,8 @@ class InlineEnumInvariantMain {
 				var c = new Compiler(null, compiler.runtime.CompilerIntrinsics.configuration());
 				c.addStandardLibrarySourceRoot("stdlib");
 				c.configure("enum-invariant-" + target + inlineEnabled, "enum-invariant",
-					compiler.tools.CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
+					compiler.tools.CompilerDriver.targetDefines(target)
+					.concat(["haxeon-inline=" + (inlineEnabled ? 1 : 0)]));
 				c.update("Main.hx",
 					'enum E { Code(value:Int); } function main():Int { var values:Array<E>=[Code(42)]; return switch values[0] { case Code(value): value; }; }');
 				var base = c.compile("Main").ir,
@@ -35,26 +36,39 @@ class InlineEnumInvariantMain {
 				if (declaration == null || declaration.inlineStorage == null)
 					throw "Expected selected source enum";
 				IrVerifier.verify(base);
-				var inlineEnum:IrType = Obj(declaration.inlineStorage), sourceClosure:IrType = Function([inlineEnum], I32),
-					targetClosure:IrType = Function([inlineEnum], Bool), adapter = copy(base), adapterBody = new IrBuilder(),
-					erasedClosure = adapterBody.argument("closure", Dyn), callbackValue = adapterBody.argument("value", inlineEnum),
-					typedClosure = adapterBody.safeCast(erasedClosure, sourceClosure), callbackResult = adapterBody.callClosure(typedClosure, [callbackValue], I32);
+				var inlineEnum:IrType = Obj(declaration.inlineStorage),
+					sourceClosure:IrType = Function([inlineEnum], I32),
+					targetClosure:IrType = Function([inlineEnum], Bool),
+					adapter = copy(base),
+					adapterBody = new IrBuilder(),
+					erasedClosure = adapterBody.argument("closure", Dyn),
+					callbackValue = adapterBody.argument("value", inlineEnum),
+					typedClosure = adapterBody.safeCast(erasedClosure, sourceClosure),
+					callbackResult = adapterBody.callClosure(typedClosure, [callbackValue], I32);
 				adapterBody.returnValue(adapterBody.equal(callbackResult, adapterBody.constInt(42)));
 				var castBody = new IrBuilder(), castInput = castBody.argument("closure", Dyn);
 				castBody.returnValue(castInput);
-				adapter.functions.push(new IrFunction("source-cast", castBody.arguments, Dyn, castBody.blocks, ClosureCast(sourceClosure), null, false, Reachable));
-				adapter.functions.push(new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, ClosureAdapter(sourceClosure, targetClosure), null, false, Reachable));
+				adapter.functions.push(new IrFunction("source-cast", castBody.arguments, Dyn, castBody.blocks,
+					ClosureCast(sourceClosure), null, false, Reachable));
+				adapter.functions.push(new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks,
+					ClosureAdapter(sourceClosure, targetClosure), null, false, Reachable));
 				var varargsName = "varargs-adapter", varargsBody = new IrBuilder();
-				varargsBody.argument("closure", Dyn); varargsBody.argument("value", inlineEnum); varargsBody.returnValue(varargsBody.constBool(true));
-				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks, ClosureVarargs(targetClosure)));
-				var castWrapper = new IrBuilder(), castReceiver = castWrapper.argument("closure", Dyn),
+				varargsBody.argument("closure", Dyn);
+				varargsBody.argument("value", inlineEnum);
+				varargsBody.returnValue(varargsBody.constBool(true));
+				adapter.functions.push(new IrFunction(varargsName, varargsBody.arguments, Bool, varargsBody.blocks,
+					ClosureVarargs(targetClosure)));
+				var castWrapper = new IrBuilder(),
+					castReceiver = castWrapper.argument("closure", Dyn),
 					varargsClosure = castWrapper.instanceClosure(varargsName, castReceiver, targetClosure);
 				castWrapper.returnValue(castWrapper.toDyn(varargsClosure));
-				adapter.functions.push(new IrFunction("target-cast", castWrapper.arguments, Dyn, castWrapper.blocks, ClosureCast(targetClosure), null, false, Reachable));
+				adapter.functions.push(new IrFunction("target-cast", castWrapper.arguments, Dyn, castWrapper.blocks,
+					ClosureCast(targetClosure), null, false, Reachable));
 				IrVerifier.verify(adapter);
 				var mismatched = copy(adapter);
 				for (index in 0...mismatched.functions.length) if (mismatched.functions[index].name == "adapter")
-					mismatched.functions[index] = new IrFunction("adapter", adapterBody.arguments, Bool, adapterBody.blocks, ClosureAdapter(targetClosure, targetClosure), null, false, Reachable);
+					mismatched.functions[index] = new IrFunction("adapter", adapterBody.arguments, Bool,
+					adapterBody.blocks, ClosureAdapter(targetClosure, targetClosure), null, false, Reachable);
 				var mismatchError = "";
 				try IrVerifier.verify(mismatched) catch (failure:Dynamic) mismatchError = Std.string(failure);
 				if (mismatchError.indexOf("Inline value storage requires a logical cast adapter") < 0)
@@ -62,7 +76,8 @@ class InlineEnumInvariantMain {
 				var unadapted = copy(base), badCast = new IrBuilder(), badClosure = badCast.argument("closure", Dyn);
 				badCast.safeCast(badClosure, sourceClosure);
 				badCast.returnValue(badCast.constInt(42));
-				unadapted.functions.push(new IrFunction("unadaptedClosureCast", badCast.arguments, I32, badCast.blocks, Ordinary));
+				unadapted.functions.push(new IrFunction("unadaptedClosureCast", badCast.arguments, I32, badCast.blocks,
+					Ordinary));
 				var badCastError = "";
 				try IrVerifier.verify(unadapted) catch (failure:Dynamic) badCastError = Std.string(failure);
 				if (badCastError.indexOf("Inline value storage requires a logical cast adapter") < 0)
@@ -71,7 +86,8 @@ class InlineEnumInvariantMain {
 				valid.argument("array", Nullable(Array(Enum("E"))));
 				valid.argument("iterator", Iterator(Enum("E")));
 				valid.returnValue(valid.constInt(42));
-				containers.functions.push(new IrFunction("logicalHandles", valid.arguments, I32, valid.blocks, Ordinary));
+				containers.functions.push(new IrFunction("logicalHandles", valid.arguments, I32, valid.blocks,
+					Ordinary));
 				containers.objects.push({
 					name: "LogicalHandles",
 					isValue: false,
@@ -92,7 +108,10 @@ class InlineEnumInvariantMain {
 						case 1:
 							b.equal(new IrValue(1000, "left", Enum("E")), new IrValue(1001, "right", Enum("E")));
 						case 2:
-							b.phi(Obj(declaration.inlineStorage), [{block: 0, value: new IrValue(1000, "incoming", Enum("E"))}]);
+							b.phi(Obj(declaration.inlineStorage), [{
+								block: 0,
+								value: new IrValue(1000, "incoming", Enum("E"))
+							}]);
 						case 3:
 							b.argument("callback", Function([Nullable(Enum("E"))], Array(Enum("E"))));
 						case 4:
@@ -109,7 +128,11 @@ class InlineEnumInvariantMain {
 						case 6:
 							bad.staticFields.push({name: "forgedGlobal", type: Function([], Enum("E"))});
 						case 7:
-							bad.interfaces.push({name: "ForgedContract", bases: [], methods: [{name: "accept", arguments: [Enum("E")], result: Void}]});
+							bad.interfaces.push({
+								name: "ForgedContract",
+								bases: [],
+								methods: [{name: "accept", arguments: [Enum("E")], result: Void}]
+							});
 						case 8:
 							bad.natives.push({
 								name: "__array_unhandled_ref",

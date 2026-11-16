@@ -13,16 +13,20 @@ class FieldInitializerEditMain {
 	static function main():Void {
 		var root = FileSystem.fullPath(".") + "/out/field-initializer-edit-test-" + Std.random(0x3fffffff);
 		FileSystem.createDirectory(root);
-		var tool = "class Tool { public final flute:Int; public final shank:Int; public function new(flute:Int, shank:Int) { this.flute = flute; this.shank = shank; } }";
+		var tool =
+			"class Tool { public final flute:Int; public final shank:Int; public function new(flute:Int, shank:Int) { this.flute = flute; this.shank = shank; } }";
 		var base = "class Base { public function new() {} }";
-		var main = "class Main { public static function main():Int { var router = new Router(); return router.tool.flute + router.tool.shank; } }";
+		var main =
+			"class Main { public static function main():Int { var router = new Router(); return router.tool.flute + router.tool.shank; } }";
 		var shapes = [
-			"explicit constructor with a base class" => (literal:String) ->
-				'class Router extends Base { public final tool = new Tool($literal); public function new() { super(); } }',
-			"explicit constructor without a base class" => (literal:String) ->
-				'class Router { public final tool = new Tool($literal); public function new() {} }',
-			"implicit constructor with a base class" => (literal:String) -> 'class Router extends Base { public final tool = new Tool($literal); }',
-			"implicit constructor without a base class" => (literal:String) -> 'class Router { public final tool = new Tool($literal); }'
+			"explicit constructor with a base class"
+				=> (literal:String) -> 'class Router extends Base { public final tool = new Tool($literal); public function new() { super(); } }',
+			"explicit constructor without a base class"
+				=> (literal:String) -> 'class Router { public final tool = new Tool($literal); public function new() {} }',
+			"implicit constructor with a base class"
+				=> (literal:String) -> 'class Router extends Base { public final tool = new Tool($literal); }',
+			"implicit constructor without a base class"
+				=> (literal:String) -> 'class Router { public final tool = new Tool($literal); }'
 		];
 		var args = ["--target=hl", "--entry=Main", "--root=" + root];
 		var paths = [for (name in ["Main", "Router", "Tool", "Base"]) root + "/" + name + ".hx"];
@@ -34,7 +38,8 @@ class FieldInitializerEditMain {
 		}
 		function build(session:CompilerSession, name:String):Int {
 			var output = root + "/" + name + ".hl";
-			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output]).concat(paths)), _ -> {}, session);
+			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output]).concat(paths)), _ -> {},
+				session);
 			return Sys.command(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [output]);
 		}
 		for (shape => router in shapes) {
@@ -45,7 +50,8 @@ class FieldInitializerEditMain {
 			for (literal => expected in ["6, 15" => 21, "61, 150" => 211, "6, 22" => 28]) {
 				write(router(literal));
 				var actual = build(session, "edited");
-				expect(actual == expected, '$shape: after editing the initializer to ($literal) the incremental build returned $actual, expected $expected');
+				expect(actual == expected,
+					'$shape: after editing the initializer to ($literal) the incremental build returned $actual, expected $expected');
 			}
 		}
 		for (path in FileSystem.readDirectory(root))

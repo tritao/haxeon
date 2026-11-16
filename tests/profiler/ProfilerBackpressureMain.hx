@@ -23,7 +23,8 @@ class ProfilerBackpressureMain {
 			}
 			var snapshot = session.snapshot();
 			require(snapshot.bufferCapacity > 0, "missing buffer capacity");
-			require(snapshot.bufferUsed >= 0 && snapshot.bufferUsed <= snapshot.bufferCapacity, "profiler buffer was not bounded");
+			require(snapshot.bufferUsed >= 0 && snapshot.bufferUsed <= snapshot.bufferCapacity,
+				"profiler buffer was not bounded");
 			require(snapshot.requestedSampleRate == 250, "requested sampling rate changed");
 			var sawRevision2 = false;
 			for (revision in snapshot.metadataRevisions)

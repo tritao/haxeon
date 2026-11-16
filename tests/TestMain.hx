@@ -1,67 +1,67 @@
-import compiler.hl.HlCode;
-import compiler.Frontend;
-import compiler.ir.IrInterpreter;
+import Type as HaxeType;
+import compiler.Compiler;
 import compiler.Diagnostic.CompileError;
+import compiler.Frontend;
 import compiler.Source.SourceFile;
+import compiler.abi.PatchPlanner.PatchDecision;
+import compiler.backend.wasm.WasmCfgAnalysis;
+import compiler.documentation.Documentation.DocumentationTools;
+import compiler.documentation.HaxeXmlWriter;
+import compiler.ffi.CHeaderEmitter;
+import compiler.hl.HlCode;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
+import compiler.hl.HlOpcode;
 import compiler.hl.HlType;
 import compiler.hl.HlWriter;
-import compiler.hl.patch.HlPatchWriter;
-import compiler.hl.patch.HlPatchReader;
-import compiler.hl.HlOpcode;
-import compiler.hl.incremental.HlSymbolTable;
-import compiler.hl.persistence.HlTypeDefStateCodec;
-import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.incremental.HlFunctionCache;
-import compiler.hl.persistence.HlFunctionCacheStateCodec;
 import compiler.hl.incremental.HlModuleAssembler;
+import compiler.hl.incremental.HlSymbolTable;
+import compiler.hl.patch.HlPatchReader;
+import compiler.hl.patch.HlPatchWriter;
 import compiler.hl.persistence.HlAssemblerStateCodec;
-import compiler.abi.PatchPlanner.PatchDecision;
-import compiler.semantic.SemanticSignature;
-import compiler.semantic.GenericSpecializationRegistry;
-import compiler.ir.hl.HlLower;
+import compiler.hl.persistence.HlFunctionCacheStateCodec;
+import compiler.hl.persistence.HlSymbolStateCodec;
+import compiler.hl.persistence.HlTypeDefStateCodec;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
-import compiler.ffi.CHeaderEmitter;
-import compiler.tools.CompilerArguments;
-import compiler.tools.CompilerDriver;
-import compiler.documentation.Documentation.DocumentationTools;
-import compiler.documentation.HaxeXmlWriter;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
-import compiler.ir.codec.IrTypeCodec;
-import compiler.ir.codec.IrValueTableCodec;
-import compiler.ir.codec.IrTerminatorCodec;
-import compiler.ir.codec.IrInstructionCodec;
-import compiler.ir.codec.IrFunctionStateCodec;
-import compiler.ir.cfg.SsaBuilder;
 import compiler.ir.IrGraph;
-import compiler.ir.cfg.Cfg.CfgInstruction;
-import compiler.ir.cfg.Cfg.CfgBlock;
-import compiler.ir.cfg.Cfg.CfgFunction;
-import compiler.ir.cfg.Cfg.CfgValue;
-import compiler.ir.cfg.CfgVerifier;
-import compiler.backend.wasm.WasmCfgAnalysis;
+import compiler.ir.IrInterpreter;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
+import compiler.ir.cfg.Cfg.CfgBlock;
+import compiler.ir.cfg.Cfg.CfgFunction;
+import compiler.ir.cfg.Cfg.CfgInstruction;
+import compiler.ir.cfg.Cfg.CfgValue;
+import compiler.ir.cfg.CfgVerifier;
+import compiler.ir.cfg.SsaBuilder;
+import compiler.ir.codec.IrFunctionStateCodec;
+import compiler.ir.codec.IrInstructionCodec;
+import compiler.ir.codec.IrTerminatorCodec;
+import compiler.ir.codec.IrTypeCodec;
+import compiler.ir.codec.IrValueTableCodec;
+import compiler.ir.hl.HlLower;
+import compiler.runtime.CompilerIntrinsics;
+import compiler.semantic.GenericSpecializationRegistry;
+import compiler.semantic.SemanticSignature;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.types.Typer;
+import compiler.tools.CompilerArguments;
+import compiler.tools.CompilerDriver;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.Typer;
 import compiler.types.typing.TypingSession;
-import compiler.Compiler;
-import compiler.runtime.CompilerIntrinsics;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesInput;
 import sys.io.File;
-import Type as HaxeType;
 
 class TestMain {
 	static function located<T>(value:T):Located<T>
@@ -75,7 +75,8 @@ class TestMain {
 			"public inline override",
 			"override public inline"
 		])
-			new Parser(new Lexer(new SourceFile("override-modifiers.hx", 'class Child { $modifiers function dispose():Void {} }')).tokenize()).parseProgram();
+			new Parser(new Lexer(new SourceFile("override-modifiers.hx",
+				'class Child { $modifiers function dispose():Void {} }')).tokenize()).parseProgram();
 		var lexicalForms = new Lexer(new SourceFile("lexical-forms.hx", "// line\n/* block */ 'text' ? @")).tokenize();
 		if (lexicalForms.length != 4
 			|| lexicalForms[0].kind != compiler.syntax.Token.TokenKind.StringLiteral
@@ -93,7 +94,8 @@ class TestMain {
 			"src/compiler/types/typing/TypeRepresentation.hx"
 		])
 			try
-				new Parser(new Lexer(new SourceFile(compilerSource, File.getContent(compilerSource))).tokenize()).parseProgram()
+				new Parser(new Lexer(new SourceFile(compilerSource, File.getContent(compilerSource))).tokenize())
+					.parseProgram()
 			catch (error:CompileError)
 				throw 'Could not parse $compilerSource at ${error.diagnostic.span.start}: ${error.diagnostic.message}';
 		var unicodeSource = new SourceFile("unicode.hx", "é\nx");
@@ -132,8 +134,10 @@ class TestMain {
 			|| scientificTokens[0].text != "1e3"
 			|| scientificTokens[1].text != "1.5E-2")
 			throw "Scientific-notation literals were not tokenized";
-		var separatedTokens = new Lexer(new SourceFile("numeric-separators.hx", "1_000 0x10_FF 1_5.2_5e+1_0")).tokenize();
-		if (separatedTokens[0].text != "1_000" || separatedTokens[1].text != "0x10_FF" || separatedTokens[2].text != "1_5.2_5e+1_0")
+		var separatedTokens = new Lexer(new SourceFile("numeric-separators.hx",
+			"1_000 0x10_FF 1_5.2_5e+1_0")).tokenize();
+		if (separatedTokens[0].text != "1_000" || separatedTokens[1].text != "0x10_FF"
+			|| separatedTokens[2].text != "1_5.2_5e+1_0")
 			throw "Numeric separators were not preserved in token spelling";
 		var invalidSeparator = false;
 		try {
@@ -147,14 +151,18 @@ class TestMain {
 			throw "Null-coalescing operator was not tokenized";
 		Frontend.compile('function main():Int return "=".code;');
 		Frontend.compile('function ordered(a:String, b:String):Bool return a < b || a <= b || a > b || a >= b; function main():Int return ordered("a", "z") ? 42 : 0;');
-		expectCompileError('function main():Int return "a" < 1 ? 42 : 0;', "Comparison requires matching numeric operands");
-		expectCompileError('function main():Int return true >= false ? 42 : 0;', "Comparison requires matching numeric operands");
+		expectCompileError('function main():Int return "a" < 1 ? 42 : 0;',
+			"Comparison requires matching numeric operands");
+		expectCompileError('function main():Int return true >= false ? 42 : 0;',
+			"Comparison requires matching numeric operands");
 		Sys.println("PASS: String ordering accepts matching strings without weakening mixed or boolean ordering");
 		Frontend.compile('function main():Int { return 0x2A; }');
-		var separatedInteger = new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
+		var separatedInteger =
+			new IrInterpreter(Frontend.compile('function main():Int return 1_000 + 0x10_FF;')).run("main");
 		if (separatedInteger != 5351)
 			throw "Numeric separators did not preserve integer literal values";
-		var separatedFloat = new IrInterpreter(Frontend.compile('function value():Float return 1_5.2_5e-1_0; function main():Int return value() == 1.525e-9 ? 42 : 0;'))
+		var separatedFloat =
+			new IrInterpreter(Frontend.compile('function value():Float return 1_5.2_5e-1_0; function main():Int return value() == 1.525e-9 ? 42 : 0;'))
 			.run("main");
 		if (separatedFloat != 42)
 			throw "Numeric separators did not preserve float literal values";
@@ -182,30 +190,38 @@ class TestMain {
 		if (new IrInterpreter(scientificLiteralProgram).run("main") != 42)
 			throw "Scientific-notation literals did not parse or type as Float values";
 		Frontend.compile('class NullableIntegerField { public var value:Null<Int>; public function new(value:Null<Int>) this.value = value; } function main():Int { var box = new NullableIntegerField(42); if (box.value != null) { var required:Int = box.value; return required; } return 0; }');
-		var nullableComprehension = Frontend.compile('function twice(values:Null<Array<Int>>):Int { var doubled = [for (value in values) value * 2]; return doubled[0]; } function main():Int return twice([21]);');
+		var nullableComprehension =
+			Frontend.compile('function twice(values:Null<Array<Int>>):Int { var doubled = [for (value in values) value * 2]; return doubled[0]; } function main():Int return twice([21]);');
 		if (new IrInterpreter(nullableComprehension).run("main") != 42)
 			throw "Nullable array comprehensions did not follow ordinary for-loop iteration";
-		var nullableIteratorComprehension = Frontend.compile('class NullableItems { public function new() {} public function iterator():Null<Iterator<Int>> return [21].iterator(); } function main():Int { var doubled = [for (value in new NullableItems()) value * 2]; return doubled[0]; }');
+		var nullableIteratorComprehension =
+			Frontend.compile('class NullableItems { public function new() {} public function iterator():Null<Iterator<Int>> return [21].iterator(); } function main():Int { var doubled = [for (value in new NullableItems()) value * 2]; return doubled[0]; }');
 		if (new IrInterpreter(nullableIteratorComprehension).run("main") != 42)
 			throw "Comprehensions did not unwrap nullable iterator results";
-		var grownArray = Frontend.compile('function main():Int { var values:Array<Int> = []; values[2] = 42; return values[0] + values[2]; }');
+		var grownArray =
+			Frontend.compile('function main():Int { var values:Array<Int> = []; values[2] = 42; return values[0] + values[2]; }');
 		if (new IrInterpreter(grownArray).run("main") != 42)
 			throw "IR array writes did not grow with zero-filled integer gaps";
-		var grownBoolArray = Frontend.compile('function main():Int { var values:Array<Bool> = []; values[2] = true; return values[0] ? 0 : 42; }');
+		var grownBoolArray =
+			Frontend.compile('function main():Int { var values:Array<Bool> = []; values[2] = true; return values[0] ? 0 : 42; }');
 		if (new IrInterpreter(grownBoolArray).run("main") != 42)
 			throw "IR array writes did not grow with false-filled boolean gaps";
-		var nullableFieldAssignmentProgram = Frontend.compile('class NullableFieldCache { public var value:Null<Int>; public function new() {} public function get():Int { if (value == null) value = 42; return value; } } function main():Int return new NullableFieldCache().get();');
+		var nullableFieldAssignmentProgram =
+			Frontend.compile('class NullableFieldCache { public var value:Null<Int>; public function new() {} public function get():Int { if (value == null) value = 42; return value; } } function main():Int return new NullableFieldCache().get();');
 		if (new IrInterpreter(nullableFieldAssignmentProgram).run("main") != 42)
 			throw "Nullable field assignment did not preserve its non-null flow refinement";
 		Frontend.compile('typedef NullableTagState = { tag:Int }; class NullableTagContext { public final exceptionTag:Null<Int>; public var state:Null<NullableTagState>; public function new(tag:Null<Int>) this.exceptionTag = tag; public function touch():Int return 1; } function main():Int { var context = new NullableTagContext(42); if (context.exceptionTag != null) { context.touch(); context.state = { tag: context.exceptionTag }; } return context.state == null ? 0 : context.state.tag; }');
 		Frontend.compile('typedef NestedTagState = { tag:Int }; class NestedTagContext { public final exceptionTag:Null<Int>; public var state:Null<NestedTagState>; public function new(tag:Null<Int>) this.exceptionTag = tag; public function touch():Int return 1; } class NestedTagOwner { public final context:NestedTagContext; public function new(tag:Null<Int>) this.context = new NestedTagContext(tag); public function populate():Void { if (context.exceptionTag != null) { context.touch(); context.state = { tag: context.exceptionTag }; } } } function main():Int { var owner = new NestedTagOwner(42); owner.populate(); return owner.context.state == null ? 0 : owner.context.state.tag; }');
-		var optionalMetadataProgram = Frontend.compile('typedef OptionalMetadata = { @:optional value:Int; } function read(item:OptionalMetadata):Int return item.value == null ? 42 : 0; function main():Int return read({});');
+		var optionalMetadataProgram =
+			Frontend.compile('typedef OptionalMetadata = { @:optional value:Int; } function read(item:OptionalMetadata):Int return item.value == null ? 42 : 0; function main():Int return read({});');
 		if (new IrInterpreter(optionalMetadataProgram).run("main") != 42)
 			throw "@:optional metadata did not make an omitted anonymous field nullable";
-		var nullableOptionalDefaultProgram = Frontend.compile('function read(?value:Int = null):Int return value == null ? 42 : value; function main():Int return read();');
+		var nullableOptionalDefaultProgram =
+			Frontend.compile('function read(?value:Int = null):Int return value == null ? 42 : value; function main():Int return read();');
 		if (new IrInterpreter(nullableOptionalDefaultProgram).run("main") != 42)
 			throw "Optional parameters with an explicit null default were not nullable";
-		var nullableArrayFieldProgram = Frontend.compile('typedef AssemblyPhysicalPart = { var id:String; @:optional var collisionHull:Array<Float>; } function hullLength(source:Array<AssemblyPhysicalPart>, definitionId:String):Int { var parts = [for (part in source) if (part.id == definitionId) part]; if (parts.length != 1 || parts[0].collisionHull == null || parts[0].collisionHull.length < 3 || parts[0].collisionHull.length % 3 != 0) throw "bad hull"; var vertices = parts[0].collisionHull; return vertices.length; } function main():Int return hullLength([{id: "part", collisionHull: [1.0, 2.0, 3.0]}], "part");');
+		var nullableArrayFieldProgram =
+			Frontend.compile('typedef AssemblyPhysicalPart = { var id:String; @:optional var collisionHull:Array<Float>; } function hullLength(source:Array<AssemblyPhysicalPart>, definitionId:String):Int { var parts = [for (part in source) if (part.id == definitionId) part]; if (parts.length != 1 || parts[0].collisionHull == null || parts[0].collisionHull.length < 3 || parts[0].collisionHull.length % 3 != 0) throw "bad hull"; var vertices = parts[0].collisionHull; return vertices.length; } function main():Int return hullLength([{id: "part", collisionHull: [1.0, 2.0, 3.0]}], "part");');
 		if (new IrInterpreter(nullableArrayFieldProgram).run("main") != 3)
 			throw "A null-checked optional field on a constant-indexed array element was not narrowed";
 		var nullableImportedArrayFieldCompiler = new Compiler();
@@ -217,54 +233,69 @@ class TestMain {
 		var packageScopedSourceCompiler = new Compiler();
 		packageScopedSourceCompiler.addPackageSourceRoot("app", "tests");
 		packageScopedSourceCompiler.update("app/RobotArm.hx", "class RobotArm { public function new() {} }");
-		packageScopedSourceCompiler.update("app/Main.hx", "package app; import app.RobotArm; function main():Int { new RobotArm(); return 42; }");
+		packageScopedSourceCompiler.update("app/Main.hx",
+			"package app; import app.RobotArm; function main():Int { new RobotArm(); return 42; }");
 		packageScopedSourceCompiler.compile("app.Main");
 		var enumDependencyCompiler = new Compiler();
 		enumDependencyCompiler.update("Equatable.hx", "interface Equatable {}");
-		enumDependencyCompiler.update("app/Item.hx", "package app; enum Item implements Equatable { Value(value:Int); }");
-		enumDependencyCompiler.update("app/Main.hx", "package app; import app.Item; function main():Int return Value(1) == Value(1) ? 42 : 0;");
+		enumDependencyCompiler.update("app/Item.hx",
+			"package app; enum Item implements Equatable { Value(value:Int); }");
+		enumDependencyCompiler.update("app/Main.hx",
+			"package app; import app.Item; function main():Int return Value(1) == Value(1) ? 42 : 0;");
 		if (new IrInterpreter(enumDependencyCompiler.compile("app.Main").ir).run("main") != 42)
 			throw "root enum conformance dependency did not load for a packaged declaration";
 		Sys.println("PASS: package-scoped roots assign their package to package-less source modules");
 		expectCompileError('typedef OptionalHull = { @:optional hull:Array<Float>; } function hullLength(parts:Array<OptionalHull>, alias:Array<OptionalHull>):Int { if (parts[0].hull == null) return 0; alias[0] = {}; return parts[0].hull.length; } function main():Int return 0;',
 			'Field "length" requires an object');
 		Sys.println("PASS: array-element field refinements work and expire after indexed stores");
-		var switchExpressionBlockProgram = Frontend.compile('function main():Int return switch (1) { case 1: { var prefix = 1; { var value = 1; prefix + value + 40; }; } default: 0; };');
+		var switchExpressionBlockProgram =
+			Frontend.compile('function main():Int return switch (1) { case 1: { var prefix = 1; { var value = 1; prefix + value + 40; }; } default: 0; };');
 		if (new IrInterpreter(switchExpressionBlockProgram).run("main") != 42)
 			throw "A switch expression block after preceding statements lost its result";
-		var expressionBodyLambdaProgram = Frontend.compile('function apply(callback:Int->Int):Int return callback(42); function main():Int return apply(function(value) value);');
+		var expressionBodyLambdaProgram =
+			Frontend.compile('function apply(callback:Int->Int):Int return callback(42); function main():Int return apply(function(value) value);');
 		if (new IrInterpreter(expressionBodyLambdaProgram).run("main") != 42)
 			throw "An expression-bodied anonymous function did not return its expression";
-		var voidSwitchLambdaProgram = Frontend.compile('function consume(callback:Int->Void):Void callback(1); function main():Int { var ready = false; consume(function(value) switch value { case 1: ready = true; case _: }); return ready ? 42 : 0; }');
+		var voidSwitchLambdaProgram =
+			Frontend.compile('function consume(callback:Int->Void):Void callback(1); function main():Int { var ready = false; consume(function(value) switch value { case 1: ready = true; case _: }); return ready ? 42 : 0; }');
 		if (new IrInterpreter(voidSwitchLambdaProgram).run("main") != 42)
 			throw "A void switch expression did not discard non-void arms while preserving side effects";
-		var nullCoalesceProgram = Frontend.compile('function fallback(value:Null<Int>):Int return value ?? 42; function main():Int return fallback(null) + fallback(17);');
+		var nullCoalesceProgram =
+			Frontend.compile('function fallback(value:Null<Int>):Int return value ?? 42; function main():Int return fallback(null) + fallback(17);');
 		if (new IrInterpreter(nullCoalesceProgram).run("main") != 59)
 			throw "Null-coalescing did not preserve its left value or evaluate the fallback for null";
-		var nullableSwitchProgram = Frontend.compile('function choose(value:Null<String>):Int return switch (value) { case null: 1; case "hl": 2; case target: 3; } function statement(value:Null<String>):Int { var result = 0; switch value { case null: result = 1; case "hl": result = 2; case target: result = 3; } return result; } function main():Int return choose(null) == 1 && choose("hl") == 2 && choose("other") == 3 && statement(null) == 1 && statement("hl") == 2 && statement("other") == 3 ? 42 : 0;');
+		var nullableSwitchProgram =
+			Frontend.compile('function choose(value:Null<String>):Int return switch (value) { case null: 1; case "hl": 2; case target: 3; } function statement(value:Null<String>):Int { var result = 0; switch value { case null: result = 1; case "hl": result = 2; case target: result = 3; } return result; } function main():Int return choose(null) == 1 && choose("hl") == 2 && choose("other") == 3 && statement(null) == 1 && statement("hl") == 2 && statement("other") == 3 ? 42 : 0;');
 		if (new IrInterpreter(nullableSwitchProgram).run("main") != 42)
 			throw "Nullable string switches did not match null, literal, and binding cases";
 		Frontend.compile('function main():Int return true ? 42 : { var fallback = 0; fallback; };');
-		var ternaryObjectProgram = Frontend.compile('function project(flag:Bool):Int return (flag ? { answer: 42 } : { answer: 0 }).answer; function main():Int return project(true);');
+		var ternaryObjectProgram =
+			Frontend.compile('function project(flag:Bool):Int return (flag ? { answer: 42 } : { answer: 0 }).answer; function main():Int return project(true);');
 		if (new IrInterpreter(ternaryObjectProgram).run("main") != 42)
 			throw "Ternary object literals were parsed as blocks or evaluated incorrectly";
-		var arrayPatternProgram = Frontend.compile('function classify(values:Array<Int>):Int return switch values { case [1, 2]: 42; case [left, right]: left + right; default: 0; } function classifyStatement(values:Array<Int>):Int { var result = 0; switch values { case [1, 2]: result = 42; case [left, right]: result = left + right; default: result = 0; } return result; } function main():Int return classify([1, 2]) == 42 && classify([20, 22]) == 42 && classifyStatement([1, 2]) == 42 && classifyStatement([20, 22]) == 42 ? 42 : 0;');
+		var arrayPatternProgram =
+			Frontend.compile('function classify(values:Array<Int>):Int return switch values { case [1, 2]: 42; case [left, right]: left + right; default: 0; } function classifyStatement(values:Array<Int>):Int { var result = 0; switch values { case [1, 2]: result = 42; case [left, right]: result = left + right; default: result = 0; } return result; } function main():Int return classify([1, 2]) == 42 && classify([20, 22]) == 42 && classifyStatement([1, 2]) == 42 && classifyStatement([20, 22]) == 42 ? 42 : 0;');
 		if (new IrInterpreter(arrayPatternProgram).run("main") != 42)
 			throw "Fixed-length array patterns did not match constants or bind elements";
-		var arrayPatternAlternativesProgram = Frontend.compile('enum PatternKind { I32; Bool; I64; F64; TypeRef; Dyn; } function classify(left:PatternKind, right:PatternKind):Int return switch [left, right] { case [I32 | Bool | I64 | F64 | TypeRef, Dyn]: 42; default: 0; } function main():Int return classify(I32, Dyn);');
+		var arrayPatternAlternativesProgram =
+			Frontend.compile('enum PatternKind { I32; Bool; I64; F64; TypeRef; Dyn; } function classify(left:PatternKind, right:PatternKind):Int return switch [left, right] { case [I32 | Bool | I64 | F64 | TypeRef, Dyn]: 42; default: 0; } function main():Int return classify(I32, Dyn);');
 		if (new IrInterpreter(arrayPatternAlternativesProgram).run("main") != 42)
 			throw "Array pattern alternatives were not expanded before typing";
-		var enumArrayPatternProgram = Frontend.compile('enum Kind { Single; Pair(value:Int); } function classify(values:Array<Kind>):Int return switch values { case [Kind.Pair(left), Kind.Pair(right)]: left + right; case [Kind.Single, Kind.Single]: 42; default: 0; } function main():Int return classify([Kind.Pair(20), Kind.Pair(22)]) == 42 && classify([Kind.Single, Kind.Single]) == 42 ? 42 : 0;');
+		var enumArrayPatternProgram =
+			Frontend.compile('enum Kind { Single; Pair(value:Int); } function classify(values:Array<Kind>):Int return switch values { case [Kind.Pair(left), Kind.Pair(right)]: left + right; case [Kind.Single, Kind.Single]: 42; default: 0; } function main():Int return classify([Kind.Pair(20), Kind.Pair(22)]) == 42 && classify([Kind.Single, Kind.Single]) == 42 ? 42 : 0;');
 		if (new IrInterpreter(enumArrayPatternProgram).run("main") != 42)
 			throw "Array patterns did not match enum constructors or bind constructor payloads";
-		var repeatedArrayPatternSwitches = Frontend.compile('enum FirstTag { First; } enum SecondTag { Second; } function classify(first:Array<FirstTag>, second:Array<SecondTag>):Int { var firstResult = switch first { case [First]: 1; default: 0; }; var secondResult = switch second { case [Second]: 2; default: 0; }; return firstResult + secondResult; } function main():Int return classify([First], [Second]);');
+		var repeatedArrayPatternSwitches =
+			Frontend.compile('enum FirstTag { First; } enum SecondTag { Second; } function classify(first:Array<FirstTag>, second:Array<SecondTag>):Int { var firstResult = switch first { case [First]: 1; default: 0; }; var secondResult = switch second { case [Second]: 2; default: 0; }; return firstResult + secondResult; } function main():Int return classify([First], [Second]);');
 		if (new IrInterpreter(repeatedArrayPatternSwitches).run("main") != 3)
 			throw "Array-pattern temporaries from separate switches aliased each other";
-		var nullableBlockSwitchProgram = Frontend.compile('function choose(flag:Int):Null<String> return switch flag { case 1: { null; } default: "value"; } function main():Int return choose(1) == null && choose(0) == "value" ? 42 : 0;');
+		var nullableBlockSwitchProgram =
+			Frontend.compile('function choose(flag:Int):Null<String> return switch flag { case 1: { null; } default: "value"; } function main():Int return choose(1) == null && choose(0) == "value" ? 42 : 0;');
 		if (new IrInterpreter(nullableBlockSwitchProgram).run("main") != 42)
 			throw "A nullable block-expression result was not coerced through its contextual type";
 		Frontend.compile('function zero():haxe.Int64 return 0; function negative():haxe.Int64 return -1; function main():Int return 0;');
-		var int64Widening = Frontend.compile('function widen(value:Int):haxe.Int64 return value; function main():Int return 0;'),
+		var int64Widening =
+			Frontend.compile('function widen(value:Int):haxe.Int64 return value; function main():Int return 0;'),
 			wideningLowered = false;
 		for (fn in int64Widening.functions)
 			if (fn.name == "widen")
@@ -281,26 +312,33 @@ class TestMain {
 		Frontend.compile('enum Kind { Void; Float; } function main():Int { var value:Kind = Kind.Float; return switch value { case Kind.Void: 0; case Kind.Float: 42; }; }');
 		Frontend.compile('enum Kind { First; Second; } function main():Int { var value:Kind = Second; return switch value { case First: 0; case Second: 42; }; }');
 		Frontend.compile('enum InferredLiteral { Zero; One; } function choose(flag:Int):InferredLiteral return switch flag { case 1: Zero; default: One; } function main():Int return choose(1) == Zero ? 42 : 0;');
-		var inferredEnumSwitchProgram = Frontend.compile('enum IrType { Iterator(element:Int); Abstract(name:String); } function main():Int { var type:IrType = Iterator(1); var identity = switch type { case Iterator(_): Abstract("realtime_iterator"); default: type; }; return switch identity { case Abstract(name): name.length; case Iterator(_): 0; }; }');
+		var inferredEnumSwitchProgram =
+			Frontend.compile('enum IrType { Iterator(element:Int); Abstract(name:String); } function main():Int { var type:IrType = Iterator(1); var identity = switch type { case Iterator(_): Abstract("realtime_iterator"); default: type; }; return switch identity { case Abstract(name): name.length; case Iterator(_): 0; }; }');
 		if (new IrInterpreter(inferredEnumSwitchProgram).run("main") != 17)
 			throw "An inferred switch result did not contextualize enum constructors in its earlier branches";
-		var abstractEnumSwitchProgram = Frontend.compile('enum LoweringKind { Handled(values:Array<Int>); UseDefault; } abstract LoweringResult(LoweringKind) from LoweringKind {} function handled(value:LoweringResult):Int return switch value { case Handled(items): items.length; case UseDefault: 42; } function main():Int return handled(UseDefault);');
+		var abstractEnumSwitchProgram =
+			Frontend.compile('enum LoweringKind { Handled(values:Array<Int>); UseDefault; } abstract LoweringResult(LoweringKind) from LoweringKind {} function handled(value:LoweringResult):Int return switch value { case Handled(items): items.length; case UseDefault: 42; } function main():Int return handled(UseDefault);');
 		if (new IrInterpreter(abstractEnumSwitchProgram).run("main") != 42)
 			throw "Switching on an enum-backed abstract did not match and bind its underlying constructors";
 		Frontend.compile('enum LoweringKind { Handled(values:Array<Int>); } abstract LoweringResult(LoweringKind) from LoweringKind { @:from static function fromInstructions(instructions:Array<Int>):LoweringResult return Handled(instructions); } function build():LoweringResult return [1, 2]; function main():Int return 42;');
-		var enumPayloadConstantProgram = Frontend.compile('enum NumberKind { I32; I64; F32; F64; } enum Storage { Value(kind:NumberKind); } function size(value:Storage):Int return switch value { case Value(I32): 4; case Value(I64): 8; case Value(F32): 4; case Value(F64): 8; default: 0; } function main():Int return size(Value(I32)) + size(Value(F64));');
+		var enumPayloadConstantProgram =
+			Frontend.compile('enum NumberKind { I32; I64; F32; F64; } enum Storage { Value(kind:NumberKind); } function size(value:Storage):Int return switch value { case Value(I32): 4; case Value(I64): 8; case Value(F32): 4; case Value(F64): 8; default: 0; } function main():Int return size(Value(I32)) + size(Value(F64));');
 		if (new IrInterpreter(enumPayloadConstantProgram).run("main") != 12)
 			throw "Bare enum constructors inside enum payload patterns were treated as bindings instead of constants";
-		var nestedEnumPayloadProgram = Frontend.compile('enum ReferenceKind { NullRef; TypeRef(index:Int); } enum Storage { Value(reference:ReferenceKind); } function index(value:Storage):Int return switch value { case Value(TypeRef(number)): number; default: 0; } function main():Int return index(Value(TypeRef(42)));');
+		var nestedEnumPayloadProgram =
+			Frontend.compile('enum ReferenceKind { NullRef; TypeRef(index:Int); } enum Storage { Value(reference:ReferenceKind); } function index(value:Storage):Int return switch value { case Value(TypeRef(number)): number; default: 0; } function main():Int return index(Value(TypeRef(42)));');
 		if (new IrInterpreter(nestedEnumPayloadProgram).run("main") != 42)
 			throw "Nested enum constructor patterns did not check the tag and bind the nested payload";
-		var partialAnonymousEnumPatternProgram = Frontend.compile('enum HeapKind { Any; Type(index:Int); } enum Reference { Ref(value:{nullable:Bool, heap:HeapKind}); } function classify(value:Reference):Int return switch value { case Ref({heap:Any}): 42; default: 0; } function main():Int return classify(Ref({nullable: false, heap: Any}));');
+		var partialAnonymousEnumPatternProgram =
+			Frontend.compile('enum HeapKind { Any; Type(index:Int); } enum Reference { Ref(value:{nullable:Bool, heap:HeapKind}); } function classify(value:Reference):Int return switch value { case Ref({heap:Any}): 42; default: 0; } function main():Int return classify(Ref({nullable: false, heap: Any}));');
 		if (new IrInterpreter(partialAnonymousEnumPatternProgram).run("main") != 42)
 			throw "Partial anonymous-object enum payload patterns did not type and lower their field path";
-		var exhaustiveNestedEnumSwitchProgram = Frontend.compile('enum NumberKind { I32; I64; F32; F64; Ref(index:Int); } enum Storage { Value(kind:NumberKind); I8; I16; } function classify(value:Storage):Int return switch value { case I8: 8; case I16: 16; case Value(I32): 1; case Value(I64): 2; case Value(F32): 3; case Value(F64): 4; case Value(Ref(_)): 5; } function main():Int return classify(Value(Ref(42)));');
+		var exhaustiveNestedEnumSwitchProgram =
+			Frontend.compile('enum NumberKind { I32; I64; F32; F64; Ref(index:Int); } enum Storage { Value(kind:NumberKind); I8; I16; } function classify(value:Storage):Int return switch value { case I8: 8; case I16: 16; case Value(I32): 1; case Value(I64): 2; case Value(F32): 3; case Value(F64): 4; case Value(Ref(_)): 5; } function main():Int return classify(Value(Ref(42)));');
 		if (new IrInterpreter(exhaustiveNestedEnumSwitchProgram).run("main") != 5)
 			throw "Exhaustive nested enum patterns were rejected or lowered incorrectly";
-		var guardedEnumSwitchProgram = Frontend.compile('enum Storage { Value(value:Int); I8; I16; } function unpack(value:Storage, mode:Int):Int return switch value { case Value(number) if (mode == 0): number; case I8 if (mode == 1): 1; case I16 if (mode == 2): 2; case I8: 3; case I16: 4; case Value(_): 42; } function main():Int return unpack(Value(0), 3);');
+		var guardedEnumSwitchProgram =
+			Frontend.compile('enum Storage { Value(value:Int); I8; I16; } function unpack(value:Storage, mode:Int):Int return switch value { case Value(number) if (mode == 0): number; case I8 if (mode == 1): 1; case I16 if (mode == 2): 2; case I8: 3; case I16: 4; case Value(_): 42; } function main():Int return unpack(Value(0), 3);');
 		if (new IrInterpreter(guardedEnumSwitchProgram).run("main") != 42)
 			throw "Guarded enum cases incorrectly hid an unguarded fallback constructor pattern";
 		Frontend.compile('enum Result { Value(value:Int, ?message:String); } function main():Int { var result:Result = Result.Value(42); switch result { case Result.Value(value): return value; } }');
@@ -322,7 +360,8 @@ class TestMain {
 		Frontend.compile('function main():Int { var values:Map<String, Bool> = []; values["answer"] = true; values.clear(); values["answer"] = true; return values.get("answer") ? 42 : 0; }');
 		Frontend.compile('function main():Int { var values:Map<String, Int> = ["answer" => 42]; var copied = values.copy(); copied.set("other", 17); return values.exists("answer") && copied.exists("answer") && !values.exists("other") && copied.exists("other") && values.size() == 1 && copied.size() == 2 ? 42 : 0; }');
 		Frontend.compile('function consume(values:Iterator<Int>):Int { var total = 0; while (values.hasNext()) total += values.next(); return total; } function main():Int { var values:Map<String, Int> = ["answer" => 42]; return consume(values.iterator()); }');
-		var enumEqProgram = Frontend.compile('enum Marker { One(value:Int); } function same(left:Marker, right:Marker):Bool return Type.enumEq(left, right); function main():Int return same(One(1), One(1)) ? 42 : 0;');
+		var enumEqProgram =
+			Frontend.compile('enum Marker { One(value:Int); } function same(left:Marker, right:Marker):Bool return Type.enumEq(left, right); function main():Int return same(One(1), One(1)) ? 42 : 0;');
 		if (new IrInterpreter(enumEqProgram).run("main") != 42)
 			throw "Type.enumEq did not lower through the dynamic equality intrinsic";
 		Frontend.compile('class GenericMap { public static function has<T>(values:Map<String, T>):Bool return values.keys().hasNext(); } function main():Int { var values:Map<String, Int> = ["answer" => 42]; return GenericMap.has(values) ? 42 : 0; }');
@@ -353,7 +392,8 @@ class TestMain {
 		Frontend.compile('function make():String return "value"; function main():Int { var value = null; if (true) value = make(); return value == null ? 0 : 42; }');
 		Frontend.compile('function make():String return "value"; function main():Int { var values = []; values.push(make()); return values.length; }');
 		Frontend.compile('function main():Int { var values = [3, 1, 2]; values.sort(function(left, right) return left - right); return values[0] + values[1] + values[2] + 36; }');
-		expectCompileError('function invalid():Void return 42; function main():Int return 0;', 'Type mismatch for return: expected Void, got Int');
+		expectCompileError('function invalid():Void return 42; function main():Int return 0;',
+			'Type mismatch for return: expected Void, got Int');
 		Frontend.compile('function main():Int { var values = ["a", "b"]; return values.join(",") == "a,b" ? 42 : 0; }');
 		Frontend.compile('function apply(callback:(Int, Int)->Int):Int return callback(1, 2); function main():Int return apply(function(_, _) return 42);');
 		Frontend.compile('function choose<T>(value:T, enabled:Bool = true):T return value; function main():Int return choose(42);');
@@ -370,11 +410,15 @@ class TestMain {
 			"function parse():Int { while (true) { continue; } }")).tokenize()).parseProgram());
 		var selectedMain:Map<String, Bool> = ["dynamicText" => true, "main" => true],
 			runtimeDependencyProgram = new Parser(new Lexer(new SourceFile("runtime-dependency.hx",
-				'function dynamicText(value:Dynamic):String return "value: " + value; function main():Int { dynamicText("typed"); return 0; }')).tokenize())
+				'function dynamicText(value:Dynamic):String return "value: " + value; function main():Int { dynamicText("typed"); return 0; }'))
+				.tokenize())
 				.parseProgram(),
-			runtimeDependencyResult = Typer.typeAnalyzedMeasured(compiler.semantic.SemanticProgram.analyze(runtimeDependencyProgram), selectedMain),
-			plainProgram = new Parser(new Lexer(new SourceFile("plain-session.hx", "function main():Int return 0;")).tokenize()).parseProgram(),
-			plainResult = Typer.typeAnalyzedMeasured(compiler.semantic.SemanticProgram.analyze(plainProgram), selectedMain);
+			runtimeDependencyResult = Typer.typeAnalyzedMeasured(compiler.semantic.SemanticProgram
+				.analyze(runtimeDependencyProgram), selectedMain),
+			plainProgram = new Parser(new Lexer(new SourceFile("plain-session.hx",
+				"function main():Int return 0;")).tokenize()).parseProgram(),
+			plainResult = Typer.typeAnalyzedMeasured(compiler.semantic.SemanticProgram.analyze(plainProgram),
+				selectedMain);
 		if (runtimeDependencyResult.runtimeDependencies.length != 1
 			|| runtimeDependencyResult.runtimeDependencies[0].functionName != "dynamicText"
 			|| runtimeDependencyResult.runtimeDependencies[0].target != "Std"
@@ -383,16 +427,20 @@ class TestMain {
 		Frontend.compile('function values():Array<Int> { var result = []; result.push(42); return result; } function main():Int { return values()[0]; }');
 		Frontend.compile('typedef Result = { values:Array<Int> }; function values():Result { var values = []; return { values: values }; } function main():Int return values().values.length;');
 		new Parser(new Lexer(new SourceFile("expression-block-statements.hx",
-			'function main():Int return if (true) { var value = 0; if (true) value = 21; else value = 0; value + 21; } else 0;')).tokenize()).parseProgram();
+			'function main():Int return if (true) { var value = 0; if (true) value = 21; else value = 0; value + 21; } else 0;'))
+			.tokenize()).parseProgram();
 		Frontend.compile('class PollingQueue { public function new() {} public function poll():Bool return false; } function main():Int { var events = new PollingQueue(); if (false) {} else {} while (events.poll()) {} for (value in [0]) {} return 42; }');
 		Frontend.compile('function main():Int return switch 0 { case 0: if (false) {} else return 1; 42; default: 42; };');
-		var privateAlias = new Parser(new Lexer(new SourceFile("private-alias.hx", "private typedef Internal = Int;")).tokenize()).parseProgram();
+		var privateAlias = new Parser(new Lexer(new SourceFile("private-alias.hx",
+			"private typedef Internal = Int;")).tokenize()).parseProgram();
 		if (!privateAlias.aliases[0].isPrivate)
 			throw "Private type alias visibility was not preserved";
 		new Parser(new Lexer(new SourceFile("terminating-switch-expression.hx",
-			'function main():Int { var value = switch 0 { case 0: return 42; default: 0; }; return value; }')).tokenize()).parseProgram();
+			'function main():Int { var value = switch 0 { case 0: return 42; default: 0; }; return value; }'))
+			.tokenize()).parseProgram();
 		Frontend.compile('function main():Int { switch 0 { case 0: return 42; default: return 0; }; }');
-		expectCompileError('function main():Int { var values = []; return 0; }', 'Empty array literal requires an expected element type');
+		expectCompileError('function main():Int { var values = []; return 0; }',
+			'Empty array literal requires an expected element type');
 		Frontend.compile('function main():Int { var value:Int; do { value = 42; } while (false); return value; }');
 		expectCompileError('function main():Int { do { return 1; } while (1); }', 'Do-while condition must be Bool');
 		Frontend.compile('function main():Int { do { break; } while (true); return 0; }');
@@ -484,7 +532,10 @@ class TestMain {
 			if (error != "Truncated HLP data")
 				throw error;
 		}
-		var extended = HlPatchWriter.encode(patchCode, testModuleId, [1], stableBySlot, 7, 8, 0, 0, 0, 0, [{tag: 99, bytes: haxe.io.Bytes.ofString("*")}]);
+		var extended = HlPatchWriter.encode(patchCode, testModuleId, [1], stableBySlot, 7, 8, 0, 0, 0, 0, [{
+			tag: 99,
+			bytes: haxe.io.Bytes.ofString("*")
+		}]);
 		if (HlPatchReader.decode(extended).functions.length != 1)
 			throw "unknown HLP section changed known data";
 		Sys.println("PASS: selective HLP functions and revisions round trip strictly");
@@ -510,16 +561,20 @@ class TestMain {
 		Frontend.compile('class Entry { public final value:String; public function new(value:String) this.value = value; } function invoke(callback:Null<Entry>->Void):Void callback(new Entry("ok")); function main():Int { invoke(function(entry) { if (entry != null) { var value = entry.value; } }); return 0; }');
 		expectCompileError('function add(a:Int, b:Int):Int { return a+b; } function main():Int { return add(1); }',
 			'Function "add" expects 2 arguments, got 1');
-		expectCompileError('function main():Int { if (1 < 2) return 1; }', 'Function main does not return on every path');
+		expectCompileError('function main():Int { if (1 < 2) return 1; }',
+			'Function main does not return on every path');
 		expectCompileError('function main():Int { if (1) return 1; else return 2; }', 'If condition must be Bool');
-		expectCompileError('function main():Int { return 1 ? 2 : 3; }', 'Conditional expression requires a Bool condition');
+		expectCompileError('function main():Int { return 1 ? 2 : 3; }',
+			'Conditional expression requires a Bool condition');
 		Frontend.compile('typedef Holder = { value:Null<String> }; function read(holder:Holder):Int return holder.value != null && holder.value.length > 0 ? 1 : 0; function main():Int return 0;');
 		Frontend.compile('typedef Location = { path:String, start:Null<Int> }; function contains(location:Location, path:String, minimum:Int):Bool return location.path == path && location.start != null && location.start >= minimum; function main():Int return 0;');
 		Frontend.compile('function nullablePrimitive(value:Int):Null<Int> return value; function main():Int return nullablePrimitive(42) == null ? 0 : 42;');
-		var nullablePrimitiveCaptureProgram = Frontend.compile('function capture(value:Null<Int>):Int { var callback = function() { return value == null ? 0 : value; }; return callback(); } function main():Int return capture(42);');
+		var nullablePrimitiveCaptureProgram =
+			Frontend.compile('function capture(value:Null<Int>):Int { var callback = function() { return value == null ? 0 : value; }; return callback(); } function main():Int return capture(42);');
 		if (new IrInterpreter(nullablePrimitiveCaptureProgram).run("main") != 42)
 			throw "A flow-narrowed nullable primitive capture used the wrong closure storage type";
-		var nullableMutableCaptureProgram = Frontend.compile('function main():Int { var value:Null<Int> = null; var set = function() { value = 42; }; set(); if (value == null) return 0; return value; }');
+		var nullableMutableCaptureProgram =
+			Frontend.compile('function main():Int { var value:Null<Int> = null; var set = function() { value = 42; }; set(); if (value == null) return 0; return value; }');
 		if (new IrInterpreter(nullableMutableCaptureProgram).run("main") != 42)
 			throw "A flow-narrowed nullable mutable capture used the wrong cell storage type";
 		Frontend.compile('function invoke(?done:Void->Void):Void { var outer = function() { var inner = function() { if (done != null) done(); }; inner(); }; outer(); } function main():Int { invoke(); return 0; }');
@@ -542,8 +597,10 @@ class TestMain {
 		Frontend.compile('typedef OptionalValues = { ?items:Array<Int> }; function choose(values:OptionalValues):Array<Int> { var result = values.items == null ? [] : values.items; return result; } function main():Int return 0;');
 		Frontend.compile('function choose(value:Null<String>):Int { switch 1 { case 1 if (value != null): return value.length; default: return 0; } } function main():Int return choose(null);');
 		Frontend.compile('function choose(value:Null<String>):Int return switch 1 { case 1 if (value != null): value.length; default: 0; }; function main():Int return choose(null);');
-		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }', 'Conditional branches must have matching types');
-		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }', 'Switch expression requires a default branch');
+		expectCompileError('function main():Int { var value = true ? 1 : "wrong"; return 0; }',
+			'Conditional branches must have matching types');
+		expectCompileError('function main():Int { return switch 1 { case 1: 42; }; }',
+			'Switch expression requires a default branch');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; var Triangle = 3; } function main():Int { var shape = Shape.Square; return switch shape { case Circle: 0; case Square: 42; }; }',
 			'Enum abstract switch is missing values: Triangle');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; } function main():Int { var shape = Shape.Square; switch shape { case Circle: return 0; } return 42; }',
@@ -557,27 +614,33 @@ class TestMain {
 			'Enum switch is missing cases: B');
 		expectCompileError('function main():Int { var x = 1; return switch x { case a = b = 1: 1; default: 0; }; }',
 			'A case value can be captured by only one name');
-		expectCompileError('enum E { A(value:Int); } function main():Int { var e = A(1); return e.match(A(x = 1)) ? x : 0; }', 'Unknown variable "x"');
+		expectCompileError('enum E { A(value:Int); } function main():Int { var e = A(1); return e.match(A(x = 1)) ? x : 0; }',
+			'Unknown variable "x"');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }',
 			'Type mismatch for switch branch: expected Int, got String');
-		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }', 'Duplicate switch case');
+		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }',
+			'Duplicate switch case');
 		Frontend.compile('function main():Int { var value = switch 2 { case 1, 2: 42; default: 0; }; switch (value) { case 41, 42: return value; default: return 0; } }');
 		Frontend.compile('function number(value:Int):Float return switch value { case 0: 0; default: 1.5; }; function main():Int return Std.int(number(0));');
 		Frontend.compile('function main():Int { switch 42 { case 42: return 42; default: return 0; } }');
 		expectCompileError('function text():String { return "hello"; } function main():Int { var value:Float = 1.25; var wrong:String = value; return 0; }',
 			'Type mismatch for local "wrong": expected String, got Float');
 		expectCompileError('function main():Int { missing = 1; return 0; }', 'Unknown variable "missing"');
-		expectCompileError('function main():Int { var value:Int; return value; }', 'Local "value" may be used before assignment');
+		expectCompileError('function main():Int { var value:Int; return value; }',
+			'Local "value" may be used before assignment');
 		// A literal-true condition always runs its body (as a bare block, which parses to `if (true)`, must), a literal-false one never does.
 		Frontend.compile('function main():Int { var value:Int; if (true) value = 42; return value; }');
-		expectCompileError('function main():Int { var value:Int; if (false) value = 42; return value; }', 'Local "value" may be used before assignment');
-		expectCompileError('function main():Int { var value:Int; value++; return value; }', 'Local "value" may be used before assignment');
+		expectCompileError('function main():Int { var value:Int; if (false) value = 42; return value; }',
+			'Local "value" may be used before assignment');
+		expectCompileError('function main():Int { var value:Int; value++; return value; }',
+			'Local "value" may be used before assignment');
 		Frontend.compile('class Box { public var value:Int; public function new() { this.value = 1; } } function main():Int { var box = new Box(); var old = box.value++; return old + box.value; }');
 		Frontend.compile('class Callbacks { public final callback:Int->Int; public function new(callback:Int->Int) this.callback = callback; } function invoke(value:Null<Callbacks>):Int { if (value != null) return value.callback(41); return 0; } function main():Int return invoke(new Callbacks(value -> value + 1));');
 		Frontend.compile('class Owner { public function value():Int return 42; public function callback():Void->Int { return function() { return value(); }; } public function empty():Void->Void { return function() {}; } } function main():Int return 0;');
 		expectCompileError('class Values { public final value:Int; public function new(value:Int) this.value = value; } function main():Int return new Values(1).value();',
 			'Cannot call non-function field "value"');
-		expectCompileError('function main():Int { var text = "x"; return text++; }', 'Postfix increment requires a numeric target');
+		expectCompileError('function main():Int { var text = "x"; return text++; }',
+			'Postfix increment requires a numeric target');
 		expectCompileError('function main():Int { var value; return 0; }',
 			'Cannot infer type of local "value"; add a type annotation or make its first assignment typeable at the declaration');
 		expectCompileError('function main():Int { var value; value = 1; value = "text"; return 0; }',
@@ -586,11 +649,14 @@ class TestMain {
 			'Field "v" requires an object');
 		expectCompileError('class S { public static var cur:Null<P>; public static function clear():Void { cur = null; } } class P { public var v = 1; public function new() {} } function f():Int { if (S.cur != null) { S.clear(); return S.cur.v; } return 0; } function main():Int return f();',
 			'Field "v" requires an object');
-		expectCompileError('function main():Int { var x:Int; var read = () -> x; x = 1; return read(); }', 'Local "x" may be used before assignment');
+		expectCompileError('function main():Int { var x:Int; var read = () -> x; x = 1; return read(); }',
+			'Local "x" may be used before assignment');
 		expectCompileError('class Shape { public function new() {} } function main():Int { var s = new Shape(); return Std.downcast(s, Int) == null ? 0 : 1; }',
 			'Std.downcast expects a class or interface as its second argument');
-		expectCompileError('function main():Int { var scores = new Map(); return 0; }', 'An empty map literal requires an expected key and value type');
-		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }', 'Field "value" requires a type or initializer');
+		expectCompileError('function main():Int { var scores = new Map(); return 0; }',
+			'An empty map literal requires an expected key and value type');
+		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }',
+			'Field "value" requires a type or initializer');
 		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
 		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
 		Frontend.compile('class InferredCallValue { public static function make():Int return 0; } class InferredCallField { static final count = InferredCallValue.make(); } function main():Int return InferredCallField.count;');
@@ -666,9 +732,11 @@ class TestMain {
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }',
 			'Type mismatch for local "value": expected Int, got String');
 		expectCompileError('function main():Int { throw; }', 'Expected expression');
-		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }', 'Cannot throw a Void value');
+		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }',
+			'Cannot throw a Void value');
 		expectCompileError('function main():Int { throw null; }', 'Cannot throw null');
-		expectCompileError('function main():Int { try { return 42; } catch (error:Array<Int>) { return 0; } }', 'Unsupported catch binding type');
+		expectCompileError('function main():Int { try { return 42; } catch (error:Array<Int>) { return 0; } }',
+			'Unsupported catch binding type');
 		expectCompileError('function main():Int { try { return 42; } catch (error:Dynamic) { return 0; } catch (text:String) { return 1; } }',
 			'Dynamic catch must be the final catch clause');
 		Frontend.compile('class Box { public function values():Array<Int> { return new Array<Int>(0); } public function add():Void { this.values().push(1); } } function main():Int { return 0; }');
@@ -679,7 +747,9 @@ class TestMain {
 			"Enum switch is missing cases: Blue");
 		expectCompileError('enum Color { Red; Blue; } function choose(color:Color):Int { switch (color) { case Color.Red: return 1; default: } } function main():Int { return choose(Color.Red); }',
 			'Function choose does not return on every path');
-		var ssa = Frontend.compile('function main():Int { var value = 0; while (value < 2) { value = value + 1; } return value; }'), hasPhi = false;
+		var ssa =
+			Frontend.compile('function main():Int { var value = 0; while (value < 2) { value = value + 1; } return value; }'),
+			hasPhi = false;
 		for (fn in ssa.functions)
 			for (block in fn.blocks)
 				for (instruction in block.instructions)
@@ -712,13 +782,17 @@ class TestMain {
 		new Parser(new Lexer(new SourceFile("contextual-expression-name.hx",
 			'function main():Int { return String.fromCharCode(42).length; }')).tokenize()).parseProgram();
 		var inferredSignatures = new Parser(new Lexer(new SourceFile("inferred-signatures.hx",
-			'class Value { public function new(value) {} public function read() { return 42; } }')).tokenize()).parseProgram();
+			'class Value { public function new(value) {} public function read() { return 42; } }')).tokenize())
+			.parseProgram();
 		if (inferredSignatures.classes[0].methods[0].arguments[0].type != compiler.syntax.Ast.AstType.InferredType
 			|| inferredSignatures.classes[0].methods[1].result != compiler.syntax.Ast.AstType.InferredType)
 			throw "Missing function annotations were not preserved for semantic inference";
-		var mutableSource = 'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
+		var mutableSource =
+			'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
-		var typed = Typer.type(ast), cfg = IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable).generateCfg(typed.functions[0]), loads = 0,
+		var typed = Typer.type(ast),
+			cfg = IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable).generateCfg(typed.functions[0]),
+			loads = 0,
 			stores = 0;
 		for (block in cfg.blocks)
 			for (instruction in block.instructions)
@@ -743,7 +817,8 @@ class TestMain {
 			throw 'Pruned SSA expected two live loop phis, got $phis';
 		Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
 
-		var nullableEnum = Frontend.compile('enum DropZone { Center; Left; } class Target { public function new() {} public function zoneAt():Null<DropZone> return Center; } function main():Int { var zone = new Target().zoneAt(); return zone != null ? 42 : 1; }'),
+		var nullableEnum =
+			Frontend.compile('enum DropZone { Center; Left; } class Target { public function new() {} public function zoneAt():Null<DropZone> return Center; } function main():Int { var zone = new Target().zoneAt(); return zone != null ? 42 : 1; }'),
 			nullableEnumHl = HlLower.lower(nullableEnum),
 			nullableEnumHasJump = false;
 		for (fn in nullableEnumHl.functions)
@@ -763,7 +838,8 @@ class TestMain {
 			var block = new CfgBlock(index), value = new CfgValue(index, I32);
 			block.instructions.push(located(ConstInt(value, 42)));
 			block.terminator = located(index
-				+ 1 == deepBlockCount ? compiler.ir.cfg.Cfg.CfgTerminator.Return(value) : compiler.ir.cfg.Cfg.CfgTerminator.Jump(index + 1));
+				+ 1 == deepBlockCount
+				? compiler.ir.cfg.Cfg.CfgTerminator.Return(value) : compiler.ir.cfg.Cfg.CfgTerminator.Jump(index + 1));
 			deepBlocks.push(block);
 		}
 		var deepSsa = SsaBuilder.build(new CfgFunction("deep-chain", [], I32, deepBlocks, [], deepBlockCount));
@@ -789,14 +865,16 @@ class TestMain {
 			else
 				postdomBuilder.jump(postdomBlocks[index + 1]);
 		}
-		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks, Ordinary));
+		var postdom = new WasmCfgAnalysis(new IrFunction("postdom-chain", [], IrType.I32, postdomBuilder.blocks,
+			Ordinary));
 		for (index in 0...postdomBlocks.length - 1)
 			if (postdom.postImmediate.get(index) != index + 1)
 				throw 'Post-dominator chain failed across bitset word boundary at block $index';
 		Sys.println("PASS: Wasm post-dominator bitsets preserve chains across word boundaries");
 
 		var unterminated = new CfgBlock(0);
-		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], [], 0), "Reachable CFG block 0 in bad has no terminator");
+		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], [], 0),
+			"Reachable CFG block 0 in bad has no terminator");
 		var badTarget = new CfgBlock(0);
 		badTarget.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(4));
 		expectCfgError(new CfgFunction("bad", [], I32, [badTarget], [], 0), "Unknown CFG block 4");
@@ -819,10 +897,12 @@ class TestMain {
 		var mismatchedIterator = new compiler.ir.Ir.IrValue(0, "iterator", Iterator(I32)),
 			wrongIteratorElement = new compiler.ir.Ir.IrValue(1, "wrongElement", Bytes),
 			mismatchedIteratorBlock = new compiler.ir.Ir.IrBlock(0);
-		mismatchedIteratorBlock.instructions.push(located(compiler.ir.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
+		mismatchedIteratorBlock.instructions
+			.push(located(compiler.ir.Ir.IrInstruction.IteratorNext(wrongIteratorElement, mismatchedIterator)));
 		mismatchedIteratorBlock.terminator = located(compiler.ir.Ir.IrTerminator.Return(wrongIteratorElement));
 		var mismatchedIteratorProgram = new IrProgram("main");
-		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes, [mismatchedIteratorBlock], Ordinary));
+		mismatchedIteratorProgram.functions.push(new IrFunction("main", [mismatchedIterator], Bytes,
+			[mismatchedIteratorBlock], Ordinary));
 		expectIrError(mismatchedIteratorProgram, "IR verification failed for main: IR value 1 has the wrong type");
 		Sys.println("PASS: IR verifier rejects iterator element type mismatches");
 		var persistedType = Function([
@@ -830,7 +910,8 @@ class TestMain {
 			Array(Obj("demo.Box")),
 			Function([Bytes, ManagedBytes], Bool),
 			Iterator(I32)
-		], Virtual("demo.Plugin")), persistedTypeBytes = IrTypeCodec.encode(persistedType);
+		], Virtual("demo.Plugin")),
+			persistedTypeBytes = IrTypeCodec.encode(persistedType);
 		if (Std.string(IrTypeCodec.decode(persistedTypeBytes)) != Std.string(persistedType)
 			|| persistedTypeBytes.compare(IrTypeCodec.encode(persistedType)) != 0)
 			throw "IR type state did not round trip deterministically";
@@ -838,7 +919,8 @@ class TestMain {
 			throw "64-bit IR type state did not round trip";
 		if (IrTypeCodec.decode(IrTypeCodec.encode(ManagedBytes)) != ManagedBytes)
 			throw "managed byte IR type state did not round trip";
-		if (Std.string(IrTypeCodec.decode(IrTypeCodec.encode(Iterator(Array(I32))))) != Std.string(Iterator(Array(I32))))
+		if (Std.string(IrTypeCodec.decode(IrTypeCodec.encode(Iterator(Array(I32)))))
+			!= Std.string(Iterator(Array(I32))))
 			throw "generic iterator IR type state did not round trip";
 		var legacyTypeState = new haxe.io.BytesOutput();
 		legacyTypeState.bigEndian = false;
@@ -858,21 +940,25 @@ class TestMain {
 			new compiler.ir.Ir.IrValue(9, "result", I32),
 			new compiler.ir.Ir.IrValue(2, "input", Array(Bytes)),
 			new compiler.ir.Ir.IrValue(12, "iterator", Iterator(I32))
-		], persistedValueBytes = IrValueTableCodec.encode(persistedValues), decodedValues = IrValueTableCodec.decode(persistedValueBytes);
-		if ((decodedValues[0].id : Int) != 2
-			|| (decodedValues[1].id : Int) != 9
-				|| (decodedValues[2].id : Int) != 12
-					|| Std.string(decodedValues[0].type) != Std.string(Array(Bytes))
-					|| Std.string(decodedValues[2].type) != Std.string(Iterator(I32))
-					|| persistedValueBytes.compare(IrValueTableCodec.encode(persistedValues)) != 0)
+		],
+			persistedValueBytes = IrValueTableCodec.encode(persistedValues),
+			decodedValues = IrValueTableCodec.decode(persistedValueBytes);
+		if ((decodedValues[0].id:Int) != 2
+			|| (decodedValues[1].id:Int) != 9
+			|| (decodedValues[2].id:Int) != 12
+			|| Std.string(decodedValues[0].type) != Std.string(Array(Bytes))
+			|| Std.string(decodedValues[2].type) != Std.string(Iterator(I32))
+			|| persistedValueBytes.compare(IrValueTableCodec.encode(persistedValues)) != 0)
 			throw "IR value table did not round trip canonically";
 		var badReference = IrValueTableCodec.byId(decodedValues);
 		var referenceBytes = new haxe.io.BytesOutput();
 		referenceBytes.bigEndian = false;
 		referenceBytes.writeInt32(99);
-		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()), badReference), "Unknown IR value reference");
+		expectStringError(function() IrValueTableCodec.readReference(new BytesInput(referenceBytes.getBytes()),
+			badReference), "Unknown IR value reference");
 		Sys.println("PASS: canonical IR value tables preserve identity and reject unknown references");
-		var instructionProgram = Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function widen(value:Int):haxe.Int64 return value; function iterate(values:Array<Int>):Int { var sum = 0; for (value in values.iterator()) sum += value; return sum; } function main():Int { return add(20, 22); }");
+		var instructionProgram =
+			Frontend.compile("function add(a:Int, b:Int):Int { var sum = a + b; return sum; } function widen(value:Int):haxe.Int64 return value; function iterate(values:Array<Int>):Int { var sum = 0; for (value in values.iterator()) sum += value; return sum; } function main():Int { return add(20, 22); }");
 		var decodedFunctions = [];
 		for (fn in instructionProgram.functions) {
 			var instructionValues:Map<Int, compiler.ir.Ir.IrValue> = [];
@@ -903,7 +989,8 @@ class TestMain {
 		IrFunctionStateCodec.verify(decodedFunctions, instructionProgram);
 		// A try whose every path returns or throws leaves its continuation block unreachable and open. It must encode, or the
 		// live compiler's comparison fails and the function counts as changed on every edit.
-		var guardedProgram = Frontend.compile("function read(value:Int):Int { try { return value; } catch (error:Dynamic) { throw error; } } function main():Int { return read(42); }"),
+		var guardedProgram =
+			Frontend.compile("function read(value:Int):Int { try { return value; } catch (error:Dynamic) { throw error; } } function main():Int { return read(42); }"),
 			openBlocks = 0;
 		for (fn in guardedProgram.functions) {
 			var open = [for (block in fn.blocks) if (block.terminator == null) block.id];
@@ -912,14 +999,16 @@ class TestMain {
 			openBlocks += open.length;
 			var encodedFunction = IrFunctionStateCodec.encode(fn),
 				decodedFunction = IrFunctionStateCodec.decode(encodedFunction);
-			if ([for (block in decodedFunction.blocks) if (block.terminator == null) block.id].join(",") != open.join(",")
+			if ([for (block in decodedFunction.blocks) if (block.terminator == null) block.id].join(",")
+				!= open.join(",")
 				|| encodedFunction.compare(IrFunctionStateCodec.encode(decodedFunction)) != 0)
 				throw "IR function state with an open block did not round trip";
 		}
 		if (openBlocks == 0)
 			throw "A try that always exits no longer leaves an open block; this test needs another source of one";
 		Sys.println("PASS: IR function state round trips unreachable open blocks");
-		var provenanceProgram = Frontend.compileFile(new SourceFile("debug-lines.hx", "function main():Int {\n  var value = 41;\n  return value + 1;\n}")),
+		var provenanceProgram = Frontend.compileFile(new SourceFile("debug-lines.hx",
+			"function main():Int {\n  var value = 41;\n  return value + 1;\n}")),
 			provenanceLines:Map<Int, Bool> = [];
 		for (fn in provenanceProgram.functions)
 			if (fn.name == "main")
@@ -971,17 +1060,20 @@ class TestMain {
 			|| restoredSymbols.internType(I32) != typeIndex)
 			throw "Restored HashLink symbol lookup changed persistent indices";
 		var encodedTypes = HlTypeDefStateCodec.encode(symbolTable.types),
-			decodedTypes = HlTypeDefStateCodec.decode(encodedTypes, symbolTable.strings.length, symbolTable.globals.length);
+			decodedTypes = HlTypeDefStateCodec.decode(encodedTypes, symbolTable.strings.length,
+				symbolTable.globals.length);
 		if (Std.string(decodedTypes) != Std.string(symbolTable.types)
 			|| encodedTypes.compare(HlTypeDefStateCodec.encode(decodedTypes)) != 0)
 			throw "HashLink type definitions did not round trip deterministically";
 		var parameterizedTypes = [Simple(HlType.I32), Parameterized(HlType.Ref, 0), Parameterized(HlType.Null, 1)],
 			parameterizedState = HlTypeDefStateCodec.encode(parameterizedTypes);
-		if (parameterizedState.compare(HlTypeDefStateCodec.encode(HlTypeDefStateCodec.decode(parameterizedState, 0, 0))) != 0)
+		if (parameterizedState.compare(HlTypeDefStateCodec.encode(HlTypeDefStateCodec.decode(parameterizedState, 0, 0)))
+			!= 0)
 			throw "Parameterized HashLink type state did not round trip deterministically";
 		var symbolBytes = HlSymbolStateCodec.encode(symbolTable.exportState()),
 			binarySymbols = HlSymbolStateCodec.restore(symbolBytes);
-		if (symbolBytes.compare(HlSymbolStateCodec.encode(binarySymbols.exportState())) != 0 || binarySymbols.internInt(42) != intIndex)
+		if (symbolBytes.compare(HlSymbolStateCodec.encode(binarySymbols.exportState())) != 0
+			|| binarySymbols.internInt(42) != intIndex)
 			throw "HashLink symbol binary state did not round trip deterministically";
 		Sys.println("PASS: HashLink symbol state restores canonical lookup indices");
 		var terminatorOutput = new haxe.io.BytesOutput(),
@@ -990,37 +1082,54 @@ class TestMain {
 		terminatorBlocks.set(4, true);
 		terminatorBlocks.set(7, true);
 		IrTerminatorCodec.write(terminatorOutput, Branch(decodedValues[1], 4, 7));
-		var decodedTerminator = IrTerminatorCodec.read(new BytesInput(terminatorOutput.getBytes()), IrValueTableCodec.byId(decodedValues), terminatorBlocks);
+		var decodedTerminator = IrTerminatorCodec.read(new BytesInput(terminatorOutput.getBytes()),
+			IrValueTableCodec.byId(decodedValues), terminatorBlocks);
 		switch decodedTerminator {
 			case Branch(condition, yes, no):
-				if ((condition.id : Int) != 9 || yes != 4 || no != 7)
+				if ((condition.id:Int) != 9 || yes != 4 || no != 7)
 					throw "IR branch terminator did not round trip";
 			default:
 				throw "IR branch terminator decoded as the wrong variant";
 		}
 		var types = new TypeRegistry();
-		var firstType = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
+		var firstType = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{
+			name: "get",
+			signature: "():Int"
+		}]);
 		if (firstType.compatibility != NewType || firstType.descriptor.fields[0].slot != 0)
 			throw "Initial type declaration was not classified or laid out correctly";
 		var stableTypeId = firstType.descriptor.id,
 			stableFieldId = firstType.descriptor.fields[0].id,
 			stableMethodId = firstType.descriptor.methods[0].id;
-		var compatible = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]);
+		var compatible = types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{
+			name: "get",
+			signature: "():Int"
+		}]);
 		if (compatible.compatibility != Compatible)
 			throw "Unchanged type was not classified as compatible";
-		if (types.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():String"}])
+		if (types.declareClass("demo.Box", null, [{name: "value", type: "Int"}],
+			[{name: "get", signature: "():String"}])
 			.compatibility != MethodSignatureChanged)
 			throw "Method signature change was not classified as reload-incompatible";
-		if (types.declareClass("demo.Box", null, [{name: "value", type: "String"}], [{name: "get", signature: "():Int"}]).compatibility != LayoutChanged)
+		if (types.declareClass("demo.Box", null, [{name: "value", type: "String"}],
+			[{name: "get", signature: "():Int"}]).compatibility != LayoutChanged)
 			throw "Field layout change was not classified as reload-incompatible";
 		var restored = new TypeRegistry(types.exportState()),
-			restoredType = restored.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{name: "get", signature: "():Int"}]).descriptor;
-		if (restoredType.id != stableTypeId || restoredType.fields[0].id != stableFieldId || restoredType.methods[0].id != stableMethodId)
+			restoredType = restored.declareClass("demo.Box", null, [{name: "value", type: "Int"}], [{
+				name: "get",
+				signature: "():Int"
+			}]).descriptor;
+		if (restoredType.id != stableTypeId || restoredType.fields[0].id != stableFieldId
+			|| restoredType.methods[0].id != stableMethodId)
 			throw "Type identities did not survive persistence and restart";
 		var identityCompiler = new Compiler();
-		var identityDeclaration = identityCompiler.types.declareClass("demo.Persistent", null, [{name: "value", type: "Int"}], []);
+		var identityDeclaration = identityCompiler.types.declareClass("demo.Persistent", null, [{
+			name: "value",
+			type: "Int"
+		}], []);
 		var resumedTypes = new Compiler(identityCompiler.exportIdentityState()).types;
-		if (resumedTypes.declareClass("demo.Persistent", null, [{name: "value", type: "Int"}], []).descriptor.id != identityDeclaration.descriptor.id)
+		if (resumedTypes.declareClass("demo.Persistent", null, [{name: "value", type: "Int"}], []).descriptor.id
+			!= identityDeclaration.descriptor.id)
 			throw "Compiler identity state did not preserve nominal type IDs";
 		var abiCompiler = new Compiler();
 		abiCompiler.update("Main.hx", "class Box { public var value:Int; } function main():Int { return 42; }");
@@ -1029,7 +1138,8 @@ class TestMain {
 		if (abiState.compare(abiCompiler.exportIdentityState()) != 0)
 			throw "Published ABI persistence was not deterministic";
 		var resumedAbiCompiler = new Compiler(abiState);
-		resumedAbiCompiler.update("Main.hx", "class Box { public var value:String; } function main():Int { return 42; }");
+		resumedAbiCompiler.update("Main.hx",
+			"class Box { public var value:String; } function main():Int { return 42; }");
 		if (!resumedAbiCompiler.compile("Main").requiresReload)
 			throw "Compiler restart lost the published ABI compatibility baseline";
 		var trailingAbiState = HaxeBytes.alloc(abiState.length + 1);
@@ -1041,7 +1151,8 @@ class TestMain {
 		expectIdentityError(unsupportedAbiState, "Invalid compiler identity state");
 		Sys.println("PASS: stable nominal identities and layout compatibility survive restart");
 		var packaged = new Parser(new Lexer(new SourceFile("pkg.hx",
-			"package editor.core; import editor.util; import haxe.io.Bytes as HaxeBytes; function main():Int { return 42; }")).tokenize()).parseProgram();
+			"package editor.core; import editor.util; import haxe.io.Bytes as HaxeBytes; function main():Int { return 42; }"))
+			.tokenize()).parseProgram();
 		if (packaged.packageName != "editor.core"
 			|| packaged.imports.length != 2
 			|| packaged.imports[0] != "editor.util"
@@ -1050,19 +1161,24 @@ class TestMain {
 		Sys.println("PASS: package and import declarations are represented in the frontend");
 		var nestedTypeCompiler = new Compiler();
 		nestedTypeCompiler.update("sample/Types.hx", "package sample; typedef Inner = Int;");
-		nestedTypeCompiler.update("Main.hx", "import sample.Types.Inner; function main():Int { var value:Inner = 42; return value; }");
+		nestedTypeCompiler.update("Main.hx",
+			"import sample.Types.Inner; function main():Int { var value:Inner = 42; return value; }");
 		nestedTypeCompiler.compile("Main");
 		var moduleImportCompiler = new Compiler();
-		moduleImportCompiler.update("sample/Types.hx", "package sample; class Types {} class Inner { public function new() {} }");
+		moduleImportCompiler.update("sample/Types.hx",
+			"package sample; class Types {} class Inner { public function new() {} }");
 		moduleImportCompiler.update("Main.hx", "import sample.Types; function main():Int { new Inner(); return 0; }");
 		moduleImportCompiler.compile("Main");
 		var methodDependencyCompiler = new Compiler();
-		methodDependencyCompiler.update("sample/Failure.hx", "package sample; class Failure { public function new() {} }");
+		methodDependencyCompiler.update("sample/Failure.hx",
+			"package sample; class Failure { public function new() {} }");
 		methodDependencyCompiler.update("sample/Service.hx",
 			"package sample; import sample.Failure as Problem; class Service { static final VALUES:Map<String, Bool> = [\"known\" => true]; public static function create():Failure return new Problem(); public static function known():Bool return VALUES.exists(\"known\"); public static function character():String return String.fromCharCode(65); }");
-		methodDependencyCompiler.update("Main.hx", "import sample.Service; function main():Int { Service.create(); return 0; }");
+		methodDependencyCompiler.update("Main.hx",
+			"import sample.Service; function main():Int { Service.create(); return 0; }");
 		methodDependencyCompiler.compile("Main");
-		var platformType = new Parser(new Lexer(new SourceFile("Platform.hx", "function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
+		var platformType = new Parser(new Lexer(new SourceFile("Platform.hx",
+			"function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
 		Typer.typeLibrary(platformType);
 		Sys.println("PASS: nested module and platform type names resolve canonically");
 		Frontend.compile("class InferredConstructor { final value:Int; public function new(value) { this.value = value; } } function main():Int return new InferredConstructor(42).value;");
@@ -1073,38 +1189,46 @@ class TestMain {
 		voidEntryCompiler.update("Main.hx", "class Main { public static function main():Void {} }");
 		voidEntryCompiler.compile("Main");
 		Sys.println("PASS: constructor parameters infer from declared field constraints");
-		expectDependentAnswerInvalidated([
-			{path: "Helper.hx", source: "class Helper { public static function check(v:Float):Bool return v > 0; }"},
+		expectDependentAnswerInvalidated([{
+			path: "Helper.hx",
+			source: "class Helper { public static function check(v:Float):Bool return v > 0; }"
+		},
+			{path: "Main.hx",
+		// A nullable reference keeps its null check only while nothing can change it, so the impure call ends it.
+		source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower.value) && l.lower.value < 10; function main():Int return ok({lower: new Bound(1.0)}) ? 42 : 0;"}],
 			{
-				path: "Main.hx",
-				// A nullable reference keeps its null check only while nothing can change it, so the impure call ends it.
-				source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; function ok(l:Limits):Bool return l.lower != null && Helper.check(l.lower.value) && l.lower.value < 10; function main():Int return ok({lower: new Bound(1.0)}) ? 42 : 0;"
-			}
-		],
-			{path: "Helper.hx", source: "class Helper { public static var count = 0; public static function check(v:Float):Bool { count++; return v > 0; } }"},
-			"requires an object", "a pure helper's body gaining a field write");
+				path: "Helper.hx",
+				source: "class Helper { public static var count = 0; public static function check(v:Float):Bool { count++; return v > 0; } }"
+			},
+				"requires an object", "a pure helper's body gaining a field write");
 		expectDependentAnswerInvalidated([
 			{
 				path: "Base.hx",
 				source: "class Bound { public final value:Float; public function new(value:Float) this.value = value; } typedef Limits = {var lower:Null<Bound>;}; class Base { public function new() {} public function m(v:Float):Bool return v > 0; public function ok(l:Limits):Bool return l.lower != null && this.m(l.lower.value) && l.lower.value < 10; }"
 			},
 			{path: "Sub.hx", source: "class Sub extends Base {}"},
-			{path: "Main.hx", source: "import Sub; import Base.Bound; function main():Int return new Sub().ok({lower: new Bound(1.0)}) ? 42 : 0;"}
+			{
+				path: "Main.hx",
+				source: "import Sub; import Base.Bound; function main():Int return new Sub().ok({lower: new Bound(1.0)}) ? 42 : 0;"
+			}
 		], {
 			path: "Sub.hx",
 			source: "class Sub extends Base { var c = 0; override public function m(v:Float):Bool { c++; return true; } }"
 		}, "requires an object",
 			"a subclass overriding a previously-pure base method with an impure one");
-		expectDependentAnswerInvalidated([
-			{path: "Guard.hx", source: "class Guard { @:noReturn public static function fail():Void throw \"no\"; }"},
+		expectDependentAnswerInvalidated([{
+			path: "Guard.hx",
+			source: "class Guard { @:noReturn public static function fail():Void throw \"no\"; }"
+		},
 			{
-				// A nullable reference keeps its null check only while the guard never returns.
-				path: "Main.hx",
-				source: "import Guard; class Bound { public final value:Float; public function new(value:Float) this.value = value; } function get(v:Null<Bound>):Float { if (v == null) Guard.fail(); return v.value + 1; } function main():Int return Std.int(get(new Bound(41.0)));"
-			}
-		],
-			{path: "Guard.hx", source: "class Guard { public static function fail():Void {} }"}, "requires an object",
-			"a static helper no longer declared @:noReturn");
+		// A nullable reference keeps its null check only while the guard never returns.
+		path: "Main.hx",
+			source: "import Guard; class Bound { public final value:Float; public function new(value:Float) this.value = value; } function get(v:Null<Bound>):Float { if (v == null) Guard.fail(); return v.value + 1; } function main():Int return Std.int(get(new Bound(41.0)));"}],
+			{
+				path: "Guard.hx",
+				source: "class Guard { public static function fail():Void {} }"
+			}, "requires an object",
+				"a static helper no longer declared @:noReturn");
 		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
 		// A call never returns only when its target is declared @:noReturn, whatever its body: whether a caller type-checks
 		// depends on signatures, not on another function's body or on which subclasses a program contains.
@@ -1173,7 +1297,8 @@ class TestMain {
 			'MessagePack.decode requires an expected result type');
 		expectCompileError('interface Equatable {} struct Thing { public var value:Int; public function new(value:Int) this.value = value; } function main():Int { var a = new Thing(1); var b = new Thing(1); return a == b ? 1 : 0; }',
 			'Struct "Thing" does not conform to Equatable');
-		var temporaryStruct = 'interface Diffable {} struct Value implements Diffable { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
+		var temporaryStruct =
+			'interface Diffable {} struct Value implements Diffable { public var x:Int; public function new(x:Int) this.x = x; public function bump():Void { x++; } public function read():Int return x; } '
 			+ 'struct Nested { public var value:Value; public function new() value = new Value(1); } '
 			+ 'class Holder { public var value(get, never):Value; public var nested(get, never):Nested; public function new() {} '
 			+ 'function get_value():Value return new Value(1); function get_nested():Nested return new Nested(); } '
@@ -1191,7 +1316,8 @@ class TestMain {
 			{write: 'holder.value.bump()', origin: 'holder.value'},
 			{write: 'new Value(1).bump()', origin: 'new Value(1)'}
 		]) {
-			expectCompileError(temporaryStruct + 'function main():Int { var holder = new Holder(); ${test.write}; return 0; }',
+			expectCompileError(temporaryStruct
+				+ 'function main():Int { var holder = new Holder(); ${test.write}; return 0; }',
 				'Cannot mutate temporary struct copy produced by "${test.origin}"; bind it to a local first');
 		}
 		expectCompileError('class Global { public static var calls:Int = 0; } struct V { public var x:Int; public function new() x = 0; public function update():Void { Global.calls++; x++; } } function make():V return new V(); function main():Int { make().update(); return 0; }',
@@ -1205,7 +1331,8 @@ class TestMain {
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
 		expectCompileError('struct Fixed { public final x:Int; public function new(x:Int) this.x = x; } class Holder { public var value:Null<Fixed>; public function new() value = new Fixed(1); } function main():Int { var h = new Holder(); if (h.value != null) h.value.x = 2; return 0; }',
 			'Final field "Fixed.x" can only be assigned through this in the constructor of "Fixed"');
-		var observablePlace = 'interface Observable {} struct Point { public var x:Int; public function new(x:Int) this.x = x; public function move():Void x++; } class Model implements Observable { public var pos:Point; public function new() pos = new Point(1); } ';
+		var observablePlace =
+			'interface Observable {} struct Point { public var x:Int; public function new(x:Int) this.x = x; public function move():Void x++; } class Model implements Observable { public var pos:Point; public function new() pos = new Point(1); } ';
 		for (operation in [
 			'm.pos.x = 2;',
 			'm.pos.x += 1;',
@@ -1228,7 +1355,8 @@ class TestMain {
 			'haxeon.Diff.apply cannot assign immutable field "x" of "Fixed"');
 		expectCompileError('struct Inner { public var x:Int; public function new(x:Int) this.x = x; } struct Fixed { public final child:Inner; public function new() this.child = new Inner(1); } function main():Int { var a = new Fixed(); a.child.x = 2; return 0; }',
 			'Final field "Fixed.child" can only be assigned through this in the constructor of "Fixed"');
-		expectCompileError(temporaryStruct + 'function main():Int { haxeon.Diff.apply(make(), new Value(1), new Value(2)); return 0; }',
+		expectCompileError(temporaryStruct
+			+ 'function main():Int { haxeon.Diff.apply(make(), new Value(1), new Value(2)); return 0; }',
 			'Cannot mutate temporary struct copy produced by "make()"; bind it to a local first');
 		expectCompileError('class Thing { public function new() {} } function main():Int return haxeon.Hashing.hash(new Thing());',
 			'Type "Thing" does not conform to Hashable');
@@ -1273,7 +1401,8 @@ class TestMain {
 		expectCompileError('enum PayloadMapKey { Left(value:Int); Right; } function main():Int { var values:Map<PayloadMapKey, Int> = new Map<PayloadMapKey, Int>(); return values.size(); }',
 			'Type "PayloadMapKey" does not conform to Hashable');
 		Sys.println("PASS: declaration and expression metadata parse explicitly");
-		var externProgram = Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
+		var externProgram =
+			Frontend.compile('@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		var nativeTime = null;
 		for (native in externProgram.natives)
 			if (native.name == "nativeTime")
@@ -1372,7 +1501,11 @@ class TestMain {
 		var defaultGcAllocationCount = CompilerArguments.parse(["--target=wasm-gc", "source/Main.hx"]);
 		if (defaultGcAllocationCount.wasmGcAllocationCount)
 			throw "Wasm GC allocation counting must be disabled by default";
-		var gcAllocationCountRequest = CompilerArguments.parse(["--target=wasm-gc", "--wasm-gc-allocation-count", "source/Main.hx"]);
+		var gcAllocationCountRequest = CompilerArguments.parse([
+			"--target=wasm-gc",
+			"--wasm-gc-allocation-count",
+			"source/Main.hx"
+		]);
 		if (!gcAllocationCountRequest.wasmGcAllocationCount)
 			throw "Compiler CLI did not enable Wasm GC allocation counting";
 		var gcAllocationCountRejectedForWasm32 = false;
@@ -1416,7 +1549,11 @@ class TestMain {
 			throw "Wasm GC stress mode was accepted for HashLink";
 		if (!memoryStatsRejectedForHashLink)
 			throw "Compiler CLI accepted Wasm allocator statistics for a non-Wasm target";
-		var gcExportRequest = CompilerArguments.parse(["--target=wasm-gc", "--export=wasm-ryu-benchmark.formatLength", "source/Main.hx"]);
+		var gcExportRequest = CompilerArguments.parse([
+			"--target=wasm-gc",
+			"--export=wasm-ryu-benchmark.formatLength",
+			"source/Main.hx"
+		]);
 		if (gcExportRequest.exports.join(",") != "wasm-ryu-benchmark.formatLength")
 			throw "Compiler CLI rejected a Wasm GC function export";
 		var exportsRejectedForHashLink = false;
@@ -1443,7 +1580,8 @@ class TestMain {
 		}
 		if (!missingXmlOutput)
 			throw "Compiler CLI accepted --xml without an output path";
-		var normalizedDocumentation = DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");
+		var normalizedDocumentation =
+			DocumentationTools.normalize(" Adds values.\n * @param left First value.\n * @returns the sum.\n * @throws Overflow on failure.\n * @since 1.0");
 		if (normalizedDocumentation.parameters.get("left") != "First value."
 			|| normalizedDocumentation.markdown.indexOf("**Returns:** the sum.") < 0
 			|| normalizedDocumentation.markdown.indexOf("**Throws:** Overflow on failure.") < 0
@@ -1452,12 +1590,16 @@ class TestMain {
 		var documentationSource = new SourceFile("documentation-index.hx",
 			"var label = \"é /** not documentation */\";\n/* block */ /** Widget docs. */\npublic class Widget {}\n/** Main docs. */\nfunction main():Int return 0;");
 		var documentationComments = DocumentationTools.scan(documentationSource),
-			widgetStart = documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("class Widget")),
-			mainStart = documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("function main")),
+			widgetStart =
+				documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("class Widget")),
+			mainStart =
+				documentationSource.byteOffsetForStringOffset(documentationSource.text.indexOf("function main")),
 			widgetDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments,
 				documentationSource.span(widgetStart, widgetStart + 5)),
-			mainDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments, documentationSource.span(mainStart, mainStart + 8));
-		if (documentationComments.length != 2 || widgetDocumentation.raw != "Widget docs." || mainDocumentation.raw != "Main docs.")
+			mainDocumentation = DocumentationTools.forSpan(documentationSource, documentationComments,
+				documentationSource.span(mainStart, mainStart + 8));
+		if (documentationComments.length != 2 || widgetDocumentation.raw != "Widget docs."
+			|| mainDocumentation.raw != "Main docs.")
 			throw "Haxe documentation scanning or indexed association lost comments";
 		var documentationCompiler = new Compiler();
 		documentationCompiler.update("sample/Widget.hx",
@@ -1484,7 +1626,8 @@ class TestMain {
 		}
 		if (!rejectedFfiPair)
 			throw "Compiler CLI accepted an incomplete FFI output request";
-		var nativeStubProgram = Frontend.compile('@:hlNative("sample") private class Native { public static function read():Int return 0; } function main():Int { Native.read(); return 42; }');
+		var nativeStubProgram =
+			Frontend.compile('@:hlNative("sample") private class Native { public static function read():Int return 0; } function main():Int { Native.read(); return 42; }');
 		var nativeStub = false, emittedStub = false;
 		for (native in nativeStubProgram.natives)
 			if (native.name == "Native.read" && native.library == "sample" && native.symbol == "read")
@@ -1494,7 +1637,8 @@ class TestMain {
 				emittedStub = true;
 		if (!nativeStub || emittedStub)
 			throw "Class-level native metadata did not replace Haxe stub bodies";
-		expectCompileError('extern function missing():Int; function main():Int return 42;', 'Extern function "missing" requires @:hlNative(library, symbol)');
+		expectCompileError('extern function missing():Int; function main():Int return 42;',
+			'Extern function "missing" requires @:hlNative(library, symbol)');
 		expectCompileError('@:hlNative("std") extern function malformed():Int; function main():Int return 42;',
 			"@:hlNative requires a library and symbol string");
 		expectCompileError('@:hlNative("one", "two") extern class Native { public static function read():Int; } function main():Int return 42;',
@@ -1502,27 +1646,33 @@ class TestMain {
 		expectCompileError('@:hlNative(42) extern class Native { public static function read():Int; } function main():Int return 42;',
 			"Declaration @:hlNative library must be a string literal");
 		var modularExtern = new Compiler();
-		modularExtern.update("Main.hx", '@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
+		modularExtern.update("Main.hx",
+			'@:hlNative("std", "sys_time") extern function nativeTime():Float; function main():Int { nativeTime(); return 42; }');
 		modularExtern.compile("Main");
 		var externClass = new Compiler();
-		externClass.update("Clock.hx", 'extern class Clock { @:hlNative("std", "sys_time") public static function now():Float; }');
+		externClass.update("Clock.hx",
+			'extern class Clock { @:hlNative("std", "sys_time") public static function now():Float; }');
 		externClass.update("Main.hx", 'import Clock; function main():Int { Clock.now(); return 42; }');
 		externClass.compile("Main");
 		var externAbstract = new Compiler();
-		externAbstract.update("Clock.hx", 'extern abstract Clock(Float) { @:hlNative("std", "sys_time") public static function now():Float; }');
+		externAbstract.update("Clock.hx",
+			'extern abstract Clock(Float) { @:hlNative("std", "sys_time") public static function now():Float; }');
 		externAbstract.update("Main.hx", 'import Clock; function main():Int { Clock.now(); return 42; }');
 		externAbstract.compile("Main");
 		Sys.println("PASS: extern functions lower through validated HashLink native bindings");
 		var nativeHandleProgram = new Parser(new Lexer(new SourceFile("NativeHandle.hx",
-			'function identity(value:hl.Abstract<"module">):hl.Abstract<"module"> { return value; }')).tokenize()).parseProgram(),
+			'function identity(value:hl.Abstract<"module">):hl.Abstract<"module"> { return value; }')).tokenize())
+			.parseProgram(),
 			nativeHandleTyped = Typer.typeLibrary(nativeHandleProgram),
 			nativeHandleType = compiler.types.Type.CompilerType.TNativeAbstract("module");
 		if (!compiler.types.TypeRelations.equals(nativeHandleTyped.functions[0].arguments[0].type, nativeHandleType)
 			|| !compiler.types.TypeRelations.equals(nativeHandleTyped.functions[0].result, nativeHandleType))
 			throw "Tagged native abstract type was not preserved semantically";
-		expectCompileError('function invalid(value:UserHandle<"module">):Int return 0;', 'Type "UserHandle" does not accept a native ABI tag');
+		expectCompileError('function invalid(value:UserHandle<"module">):Int return 0;',
+			'Type "UserHandle" does not accept a native ABI tag');
 		var aliasProgram = new Parser(new Lexer(new SourceFile("aliases.hx",
-			"typedef Number = Int; function add(value:Number):Number { return value; } function main():Int { return add(42); }")).tokenize()).parseProgram();
+			"typedef Number = Int; function add(value:Number):Number { return value; } function main():Int { return add(42); }"))
+			.tokenize()).parseProgram();
 		if (aliasProgram.aliases.length != 1
 			|| Typer.type(aliasProgram).functions[0].arguments[0].type != compiler.types.Type.CompilerType.TInt)
 			throw "Type aliases were not resolved by the typer";
@@ -1552,7 +1702,8 @@ class TestMain {
 		var boundedProgram = new Parser(new Lexer(new SourceFile("bounded-generics.hx",
 			"interface Readable { function read():Int; } class Value implements Readable { public function new() {} public function read():Int return 42; } function consume<T:Readable>(value:T):Int return value.read(); function main():Int return consume(new Value());"))
 			.tokenize()).parseProgram();
-		if (boundedProgram.functions[0].typeConstraints == null || boundedProgram.functions[0].typeConstraints.length != 1)
+		if (boundedProgram.functions[0].typeConstraints == null
+			|| boundedProgram.functions[0].typeConstraints.length != 1)
 			throw "Bounded generic constraint was not preserved by the parser";
 		var boundedTyped = Typer.type(boundedProgram),
 			boundedPolicyFound = false;
@@ -1574,7 +1725,8 @@ class TestMain {
 			throw "Generic abstract type parameters were not preserved";
 		var genericAbstractTyped = Typer.type(genericAbstractProgram);
 		switch genericAbstractTyped.functions[0].arguments[0].type {
-			case compiler.types.Type.CompilerType.TAbstract("Identity", [compiler.types.Type.CompilerType.TInt], compiler.types.Type.CompilerType.TInt):
+			case compiler.types.Type.CompilerType.TAbstract("Identity", [compiler.types.Type.CompilerType.TInt],
+				compiler.types.Type.CompilerType.TInt):
 			default:
 				throw "Applied generic abstract did not preserve its identity and instantiated representation";
 		}
@@ -1588,8 +1740,10 @@ class TestMain {
 			'Type mismatch for return: expected Int, got Wrapped<Int>');
 		expectCompileError("abstract Wrapped<T>(T) from T from T {} function main():Int return 0;",
 			'Duplicate from conversion "type-parameter:Wrapped:T" on abstract "Wrapped"');
-		expectCompileError("abstract A(Int) from B {} abstract B(Int) from A {} function main():Int return 0;", 'Cyclic from conversion involving "A"');
-		expectCompileError("abstract A(Int) to B {} abstract B(Int) to A {} function main():Int return 0;", 'Cyclic to conversion involving "A"');
+		expectCompileError("abstract A(Int) from B {} abstract B(Int) from A {} function main():Int return 0;",
+			'Cyclic from conversion involving "A"');
+		expectCompileError("abstract A(Int) to B {} abstract B(Int) to A {} function main():Int return 0;",
+			'Cyclic to conversion involving "A"');
 		expectCompileError("abstract A(Int) to B to C {} abstract B(Int) to D {} abstract C(Int) to D {} abstract D(Int) {} function main():Int return 0;",
 			'Ambiguous to conversion paths from "A" to "D"');
 		expectCompileError("abstract A(Int) from B from C {} abstract B(Int) from D {} abstract C(Int) from D {} abstract D(Int) {} function main():Int return 0;",
@@ -1617,10 +1771,13 @@ class TestMain {
 			'Abstract constructor "Bad.new" does not initialize this on every path');
 		expectCompileError("abstract Bad(Int) { public function new(value:Int) { return value; } } function main():Int { new Bad(1); return 0; }",
 			"Abstract constructors cannot return a value");
-		expectCompileError("abstract Loop<T>(Loop<T>) {} function main():Int return 0;", 'Cyclic abstract representation involving "Loop"');
+		expectCompileError("abstract Loop<T>(Loop<T>) {} function main():Int return 0;",
+			'Cyclic abstract representation involving "Loop"');
 		var modularAbstract = new Compiler();
-		var modularAbstractDeclaration = "abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; }",
-			modularAbstractMain = "import Identity; function main():Int return Identity.wrap(new Identity<Int>(42).unwrap()).unwrap();";
+		var modularAbstractDeclaration =
+			"abstract Identity<T>(T) from T to T { public function new(value:T) { this = value; } public static function wrap(value:T):Identity<T> return value; public function unwrap():T return this; }",
+			modularAbstractMain =
+				"import Identity; function main():Int return Identity.wrap(new Identity<Int>(42).unwrap()).unwrap();";
 		modularAbstract.update("Identity.hx", modularAbstractDeclaration);
 		modularAbstract.update("Main.hx", modularAbstractMain);
 		var modularAbstractBuild = modularAbstract.compile("Main"),
@@ -1684,7 +1841,8 @@ class TestMain {
 		initializerLambdaCompiler.compile("Main");
 		Sys.println("PASS: closure-valued field initializers retain source-module ownership");
 		var invalidTypeTestCompiler = new Compiler();
-		invalidTypeTestCompiler.update("Main.hx", 'function main():Int { var name = "String"; return Std.isOfType("value", name) ? 1 : 0; }');
+		invalidTypeTestCompiler.update("Main.hx",
+			'function main():Int { var name = "String"; return Std.isOfType("value", name) ? 1 : 0; }');
 		var invalidTypeTestRejected = false;
 		try
 			invalidTypeTestCompiler.compile("Main")
@@ -1696,12 +1854,14 @@ class TestMain {
 		Frontend.compile('function read(value:Dynamic):Int { if (Std.isOfType(value, String)) return value.length; return 0; } function convert(value:Dynamic):Int return Std.int(value); function main():Int return read("haxeon") + convert(42.5);');
 		Sys.println("PASS: Dynamic type tests refine locals and Std.int accepts numeric Dynamic values");
 		var nullObjectCompiler = new Compiler();
-		nullObjectCompiler.update("Main.hx", 'function main():Int { var value = { optional: null }; value.optional; return 42; }');
+		nullObjectCompiler.update("Main.hx",
+			'function main():Int { var value = { optional: null }; value.optional; return 42; }');
 		nullObjectCompiler.compile("Main");
 		Sys.println("PASS: unconstrained null object fields retain a storable runtime representation");
 		var conversionCompiler = new Compiler();
 		conversionCompiler.update("Value.hx", "abstract Value(Int) from Int to Int {}");
-		conversionCompiler.update("Main.hx", "import Value; function read(value:Value):Int return value; function main():Int return read(42);");
+		conversionCompiler.update("Main.hx",
+			"import Value; function read(value:Value):Int return value; function main():Int return read(42);");
 		conversionCompiler.compile("Main");
 		conversionCompiler.update("Value.hx", "abstract Value(Int) from Int {}");
 		try {
@@ -1716,7 +1876,8 @@ class TestMain {
 			"interface Source<T> { function get():T; } class Box<T> { var value:T; public function new(value:T) { this.value = value; } public function get():T return value; } function consume(value:Box<Int>):Int return 42; function main():Int return 42;"))
 			.tokenize()).parseProgram();
 		var genericNominalModel = compiler.semantic.SemanticProgram.analyze(genericNominalProgram);
-		var genericNominalType = genericNominalModel.declarations.resolve(genericNominalProgram.functions[0].arguments[0].type);
+		var genericNominalType =
+			genericNominalModel.declarations.resolve(genericNominalProgram.functions[0].arguments[0].type);
 		switch genericNominalType {
 			case compiler.types.Type.CompilerType.TInstance(Class, "Box", [compiler.types.Type.CompilerType.TInt]):
 			default:
@@ -1736,10 +1897,14 @@ class TestMain {
 		if (genericReloadCompiler.compile("Main").requiresReload)
 			throw "Semantic-only generic argument change required runtime reload";
 		Sys.println("PASS: erased generic argument edits remain hot-patch compatible");
-		expectCompileError("function consume(value:Missing):Int { return 0; } function main():Int { return 0; }", 'Unknown type "Missing"');
-		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }", 'Cyclic type alias involving "Loop"');
-		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
-		expectCompileError("class Loop<T> extends Loop<Array<T>> { } function main():Int { return 0; }", 'Cyclic class inheritance involving "Loop"');
+		expectCompileError("function consume(value:Missing):Int { return 0; } function main():Int { return 0; }",
+			'Unknown type "Missing"');
+		expectCompileError("typedef Loop = Loop; function main():Int { return 0; }",
+			'Cyclic type alias involving "Loop"');
+		expectCompileError("class Loop extends Loop { } function main():Int { return 0; }",
+			'Cyclic class inheritance involving "Loop"');
+		expectCompileError("class Loop<T> extends Loop<Array<T>> { } function main():Int { return 0; }",
+			'Cyclic class inheritance involving "Loop"');
 		expectCompileError("interface Root<T> {} interface Left extends Root<Int> {} interface Right extends Root<String> {} interface Diamond extends Left, Right {} function main():Int return 0;",
 			'Conflicting inherited interface instantiations for "Root": Root<Int> and Root<String>');
 		Frontend.compile("interface Root<T> {} interface Left<T> extends Root<T> {} interface Right<T> extends Root<T> {} interface Diamond<T> extends Left<T>, Right<T> {} function main():Int return 42;");
@@ -1776,9 +1941,11 @@ class TestMain {
 		if (semanticSignatureCompiler.compile("Main").requiresReload)
 			throw "Alias-equivalent function spelling changed the semantic ABI";
 		var semanticFieldCompiler = new Compiler();
-		semanticFieldCompiler.update("Main.hx", "typedef Score = Int; class Item { public var score:Score; } function main():Int { return 42; }");
+		semanticFieldCompiler.update("Main.hx",
+			"typedef Score = Int; class Item { public var score:Score; } function main():Int { return 42; }");
 		semanticFieldCompiler.compile("Main");
-		semanticFieldCompiler.update("Main.hx", "typedef Score = Int; class Item { public var score:Int; } function main():Int { return 42; }");
+		semanticFieldCompiler.update("Main.hx",
+			"typedef Score = Int; class Item { public var score:Int; } function main():Int { return 42; }");
 		if (semanticFieldCompiler.compile("Main").requiresReload)
 			throw "Alias-equivalent field spelling changed the semantic layout";
 		Frontend.compile("function main():Int { var value = 40; var read = () -> { var value = 2; return value; }; return read() + value; }");
@@ -1798,7 +1965,8 @@ class TestMain {
 		Frontend.compile('class Constants { public static inline final ANSWER = 42; static inline final LABEL = "answer"; static final VALUES = new Array<Int>(0); } function main():Int return Constants.ANSWER;');
 		Frontend.compile('typedef Pair = { final left:Int; final right:Int; }; function sum(pair:Pair):Int return pair.left + pair.right; function main():Int return sum({left: 20, right: 22});');
 		Frontend.compile('typedef Entry = {name:String, ?count:Int}; function read(entry:Entry):String return entry.name; function main():Int return 0;');
-		var genericAst = new Parser(new Lexer(new SourceFile("generic.hx", "function identity<T>(value:T):T return value;")).tokenize()).parseProgram();
+		var genericAst = new Parser(new Lexer(new SourceFile("generic.hx",
+			"function identity<T>(value:T):T return value;")).tokenize()).parseProgram();
 		if (genericAst.functions[0].typeParameters == null || genericAst.functions[0].typeParameters.join(",") != "T")
 			throw "Generic function type parameters were not preserved";
 		expectParserError("function invalid<T,T>(value:T):T return value;", 'Duplicate type parameter "T"');
@@ -1826,24 +1994,33 @@ class TestMain {
 			nullableMethod = representationModel.signatures.get("RepresentationProbe.get_nullable"),
 			constructor = representationModel.signatures.get("RepresentationProbe.new"),
 			readerMethod = representationModel.signatures.get("RepresentationProbeReader.read");
-		if (genericMethod == null || readyMethod == null || propertyMethod == null || nullableMethod == null || constructor == null || readerMethod == null)
+		if (genericMethod == null || readyMethod == null || propertyMethod == null || nullableMethod == null
+			|| constructor == null || readerMethod == null)
 			throw "Representation service fixture methods were not indexed";
-		var genericResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", genericMethod),
-			readyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", readyMethod),
-			propertyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", propertyMethod),
-			nullableResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe", nullableMethod),
-			readerResult = representationSession.representation.resolveMethodResult(readerType, "RepresentationProbeReader", readerMethod),
-			constructorArgument = representationSession.representation.resolveMethodArgument(probeType, "RepresentationProbe", constructor.arguments[0]),
-			fieldResult = representationSession.representation.resolveField(probeType, "value", representationProgram.classes[0].span);
+		var genericResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe",
+			genericMethod),
+			readyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe",
+				readyMethod),
+			propertyResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe",
+				propertyMethod),
+			nullableResult = representationSession.representation.resolveMethodResult(probeType, "RepresentationProbe",
+				nullableMethod),
+			readerResult = representationSession.representation.resolveMethodResult(readerType,
+				"RepresentationProbeReader", readerMethod),
+			constructorArgument = representationSession.representation.resolveMethodArgument(probeType,
+				"RepresentationProbe", constructor.arguments[0]),
+			fieldResult = representationSession.representation.resolveField(probeType, "value",
+				representationProgram.classes[0].span);
 		if (genericResult.semantic != compiler.types.Type.CompilerType.TInt
 			|| genericResult.physical != compiler.types.Type.CompilerType.TDynamic
 			|| readyResult.semantic != compiler.types.Type.CompilerType.TBool
 			|| readyResult.physical != compiler.types.Type.CompilerType.TBool
 			|| propertyResult.semantic != compiler.types.Type.CompilerType.TInt
 			|| propertyResult.physical != compiler.types.Type.CompilerType.TDynamic
-			|| !compiler.types.TypeRelations.equals(nullableResult.semantic, compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TInt))
+			|| !compiler.types.TypeRelations.equals(nullableResult.semantic,
+			compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TInt))
 			|| !compiler.types.TypeRelations.equals(nullableResult.physical,
-				compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TDynamic))
+			compiler.types.Type.CompilerType.TNullable(compiler.types.Type.CompilerType.TDynamic))
 			|| readerResult.semantic != compiler.types.Type.CompilerType.TInt
 			|| readerResult.physical != compiler.types.Type.CompilerType.TInt
 			|| constructorArgument.semantic != compiler.types.Type.CompilerType.TInt
@@ -1852,8 +2029,10 @@ class TestMain {
 			|| fieldResult.physical != compiler.types.Type.CompilerType.TDynamic)
 			throw "Representation service did not preserve semantic and physical type pairs";
 		Sys.println("PASS: semantic and physical generic representation matrix");
-		var genericAbiSource = 'function identity<T>(value:T):T return value; function main():Int { var text:String = identity("text"); return identity(42); }',
-			genericAbiProgram = new Parser(new Lexer(new SourceFile("generic-abi.hx", genericAbiSource)).tokenize()).parseProgram(),
+		var genericAbiSource =
+			'function identity<T>(value:T):T return value; function main():Int { var text:String = identity("text"); return identity(42); }',
+			genericAbiProgram =
+				new Parser(new Lexer(new SourceFile("generic-abi.hx", genericAbiSource)).tokenize()).parseProgram(),
 			genericAbiTyped = Typer.type(genericAbiProgram),
 			genericAbiMains = [for (fn in genericAbiTyped.functions) if (fn.name == "main") fn];
 		if (genericAbiMains.length != 1)
@@ -1876,14 +2055,16 @@ class TestMain {
 			|| textPhysical.type != compiler.types.Type.CompilerType.TDynamic)
 			throw "Typed AST did not preserve the generic call semantic/physical result boundary";
 		switch textPhysical.expression {
-			case TCall(_, arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TDynamic):
+			case TCall(_,
+				arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TDynamic):
 			default:
 				throw "Typed AST did not adapt the generic call argument to its physical representation";
 		}
 		if (genericAbiExpressions[1].type != compiler.types.Type.CompilerType.TInt)
 			throw "Typed AST changed the concrete generic call result representation";
 		switch genericAbiExpressions[1].expression {
-			case TCall(_, arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TInt):
+			case TCall(_,
+				arguments) if (arguments.length == 1 && arguments[0].type == compiler.types.Type.CompilerType.TInt):
 			default:
 				throw "Typed AST did not preserve the concrete generic call argument representation";
 		}
@@ -1914,7 +2095,8 @@ class TestMain {
 		for (block in genericAbiMain.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
-					case compiler.ir.Ir.IrInstruction.Call(output, name, arguments) if (name.indexOf("$generic:Main.identity") == 0):
+					case compiler.ir.Ir.IrInstruction.Call(output, name,
+						arguments) if (name.indexOf("$generic:Main.identity") == 0):
 						if (output.type == IrType.Dyn && arguments.length == 1 && arguments[0].type == IrType.Dyn)
 							dynamicCallFound = true;
 						if (output.type == IrType.I32 && arguments.length == 1 && arguments[0].type == IrType.I32)
@@ -1931,7 +2113,8 @@ class TestMain {
 			shapedGeneric = Typer.type(shapedGenericProgram),
 			identityBodies = [
 				for (fn in shapedGeneric.functions)
-					if (fn.origin == "identity" && fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization) fn
+					if (fn.origin == "identity"
+					&& fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Specialization) fn
 			];
 		if (identityBodies.length != 2)
 			throw "Generic reference instantiations did not share one representation body";
@@ -1946,7 +2129,8 @@ class TestMain {
 		if ([for (fn in layoutGeneric.functions) if (fn.name.indexOf("[layout]") >= 0) fn].length == 0)
 			throw "Nested generic representation did not select the layout policy";
 		var incrementalGeneric = new Compiler();
-		incrementalGeneric.update("Main.hx", 'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); return 42; }');
+		incrementalGeneric.update("Main.hx",
+			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity("text"); return 42; }');
 		var firstGenericBuild = incrementalGeneric.compile("Main"),
 			firstGenericBodies = [
 				for (fn in firstGenericBuild.ir.functions)
@@ -1964,10 +2148,12 @@ class TestMain {
 		if (sharedShapeBuild.requiresReload || firstGenericBodies.join(",") != sharedGenericBodies.join(","))
 			throw "Equivalent generic reference shapes did not preserve incremental identity";
 		var specializationRegistry = new GenericSpecializationRegistry(),
-			initialSpecialization = specializationRegistry.request("identity", [compiler.types.Type.CompilerType.TDynamic]),
+			initialSpecialization = specializationRegistry.request("identity",
+				[compiler.types.Type.CompilerType.TDynamic]),
 			restoredRegistry = new GenericSpecializationRegistry(specializationRegistry.exportState()),
 			restoredSpecialization = restoredRegistry.request("identity", [compiler.types.Type.CompilerType.TDynamic]);
-		if (!initialSpecialization.isNew || restoredSpecialization.isNew || restoredSpecialization.name != initialSpecialization.name)
+		if (!initialSpecialization.isNew || restoredSpecialization.isNew
+			|| restoredSpecialization.name != initialSpecialization.name)
 			throw "Generic specialization identity did not survive registry persistence";
 		if (initialSpecialization.name.indexOf("[legacy]") < 0 || firstGenericBodies[0].indexOf("[shape]") < 0)
 			throw "Generic specialization policy was not encoded in stable identity";
@@ -1992,7 +2178,8 @@ class TestMain {
 				throw error;
 		}
 		var resumedGeneric = new Compiler(incrementalGeneric.exportIdentityState());
-		resumedGeneric.update("Main.hx", 'class Box {} function identity<T>(value:T):T return value; function main():Int { identity(new Box()); return 42; }');
+		resumedGeneric.update("Main.hx",
+			'class Box {} function identity<T>(value:T):T return value; function main():Int { identity(new Box()); return 42; }');
 		var resumedGenericBuild = resumedGeneric.compile("Main"),
 			resumedGenericBodies = [
 				for (fn in resumedGenericBuild.ir.functions)
@@ -2002,7 +2189,8 @@ class TestMain {
 		if (resumedGenericBuild.requiresReload || resumedGenericBodies.join(",") != sharedGenericBodies.join(","))
 			throw "Generic specialization identity did not survive compiler restart";
 		var pruningCompiler = new Compiler();
-		pruningCompiler.update("Library.hx", "class Library { public static function identity<T>(value:T):T return value; }");
+		pruningCompiler.update("Library.hx",
+			"class Library { public static function identity<T>(value:T):T return value; }");
 		pruningCompiler.update("Main.hx", "import Library; function main():Int return Library.identity(42);");
 		pruningCompiler.compile("Main");
 		pruningCompiler.update("Main.hx", "function main():Int return 42;");
@@ -2014,7 +2202,8 @@ class TestMain {
 		Frontend.compile('enum Value<T> { Value(value:T); } function intValue(value:Value<Int>):Int return switch value { case Value(item): item; }; function stringValue(value:Value<String>):String return switch value { case Value(item): item; }; function main():Int return intValue(Value(40)) + stringValue(Value("ok")).length;');
 		expectCompileError('function choose<T>(left:T, right:T):T return left; function main():Int return choose(42, "wrong");',
 			'Conflicting types inferred for generic parameter "T"');
-		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;', 'Duplicate anonymous field "value"');
+		expectCompileError('typedef Invalid = { value:Int; value:String; }; function main():Int return 0;',
+			'Duplicate anonymous field "value"');
 		expectCompileError('typedef Pair = {left:Int, right:Int}; function consume(pair:Pair):Int return pair.left; function main():Int return consume({left: 42});',
 			'Missing object field "right"');
 		Frontend.compile("function main():Int { var convert:(Int) -> Dynamic = (value:Int) -> { return value; }; convert(42); return 42; }");
@@ -2024,15 +2213,18 @@ class TestMain {
 		expectCompileError("class Box { public var value:Int; } function main():Int { var box:Null<Box> = new Box(); if (box != null) { box = null; return box.value; } return 0; }",
 			'Field "value" requires an object');
 		var captureProgram = new Parser(new Lexer(new SourceFile("capture.hx",
-			"function main():Int { var value = 40; var read = () -> { return value + 2; }; return read(); }")).tokenize()).parseProgram(),
+			"function main():Int { var value = 40; var read = () -> { return value + 2; }; return read(); }"))
+			.tokenize()).parseProgram(),
 			captureTyped = Typer.type(captureProgram),
-			captureObjects = compiler.ir.IrProgramAssembler.objectsFrom(IrGenerator.forProgram(captureTyped, compiler.ir.TargetProfile.portable), captureTyped);
+			captureObjects = compiler.ir.IrProgramAssembler.objectsFrom(IrGenerator.forProgram(captureTyped,
+				compiler.ir.TargetProfile.portable), captureTyped);
 		if (captureTyped.classes.length != 0 || captureTyped.closurePlan.environments.length != 1)
 			throw "Semantic typing manufactured a runtime helper class";
 		if ([for (object in captureObjects) object.name].indexOf(captureTyped.closurePlan.environments[0].name) < 0)
 			throw "Lowering did not materialize the capture environment";
 		var exceptionStorage = Typer.type(new Parser(new Lexer(new SourceFile("exception-storage.hx",
-			"function main():Int { var value = 1; try { value = 42; throw \"stop\"; } catch (error:String) { return value; } }")).tokenize()).parseProgram());
+			"function main():Int { var value = 1; try { value = 42; throw \"stop\"; } catch (error:String) { return value; } }"))
+			.tokenize()).parseProgram());
 		if (exceptionStorage.closurePlan.storage.length != 1
 			|| exceptionStorage.closurePlan.storage[0].kind != compiler.types.TypedAst.CellStorageKind.ExceptionEdge)
 			throw "Exception-edge storage was confused with mutable capture storage";
@@ -2054,7 +2246,8 @@ class TestMain {
 			|| typedClass.classes[0].methods[1].result != compiler.types.Type.CompilerType.TInt)
 			throw "Minimal class declarations were not type checked";
 		var libraryProgram = new Parser(new Lexer(new SourceFile("Library.hx",
-			"class LibraryBox { public function get():Int { return 42; } } function helper(value:Int):Int { return value; }")).tokenize()).parseProgram();
+			"class LibraryBox { public function get():Int { return 42; } } function helper(value:Int):Int { return value; }"))
+			.tokenize()).parseProgram();
 		var typedLibrary = Typer.typeLibrary(libraryProgram),
 			hasHelper = false;
 		for (fn in typedLibrary.functions)
@@ -2062,8 +2255,10 @@ class TestMain {
 				hasHelper = true;
 		if (typedLibrary.classes.length != 1 || !hasHelper)
 			throw "Library modules were not type checked without an executable main";
-		var interfaceSource = "interface Plugin { function activate():Void; function score(value:Int):Int; } class SearchPlugin implements Plugin { public function activate():Void { } public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { plugin.activate(); return plugin.score(42); } function main():Int { var plugin:Plugin = new SearchPlugin(); return consume(plugin); }",
-			interfaceProgram = new Parser(new Lexer(new SourceFile("Plugin.hx", interfaceSource)).tokenize()).parseProgram();
+		var interfaceSource =
+			"interface Plugin { function activate():Void; function score(value:Int):Int; } class SearchPlugin implements Plugin { public function activate():Void { } public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { plugin.activate(); return plugin.score(42); } function main():Int { var plugin:Plugin = new SearchPlugin(); return consume(plugin); }",
+			interfaceProgram =
+				new Parser(new Lexer(new SourceFile("Plugin.hx", interfaceSource)).tokenize()).parseProgram();
 		if (interfaceProgram.interfaces.length != 1
 			|| compiler.semantic.ModuleCanonicalizer.astTypeName(interfaceProgram.classes[0].interfaces[0]) != "Plugin")
 			throw "Interface declarations were not preserved in the AST";
@@ -2073,7 +2268,8 @@ class TestMain {
 		expectCompileError("interface Plugin { function activate():Void; } class Missing implements Plugin { } function main():Int { return 0; }",
 			'Class "Missing" does not implement "Plugin.activate"');
 		var interfaceCompiler = new Compiler(),
-			interfaceV1 = "interface Plugin { function score(value:Int):Int; } class SearchPlugin implements Plugin { public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { return plugin.score(42); } function main():Int { return consume(new SearchPlugin()); }";
+			interfaceV1 =
+				"interface Plugin { function score(value:Int):Int; } class SearchPlugin implements Plugin { public function score(value:Int):Int { return value; } } function consume(plugin:Plugin):Int { return plugin.score(42); } function main():Int { return consume(new SearchPlugin()); }";
 		interfaceCompiler.update("Main.hx", interfaceV1);
 		interfaceCompiler.compile("Main");
 		interfaceCompiler.update("Main.hx",
@@ -2100,7 +2296,8 @@ class TestMain {
 		ambiguousConstructorCompiler.update("Main.hx",
 			"import First.FirstChoice; import Second.SecondChoice; function main():Int { var first:FirstChoice = Same(42); var second:SecondChoice = Same(\"value\"); return switch first { case Same(value): value; }; }");
 		ambiguousConstructorCompiler.compile("Main");
-		var staticClass = Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
+		var staticClass =
+			Frontend.compile("class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var foundStatic = false;
 		for (fn in staticClass.functions)
 			if (fn.name == "Math.add")
@@ -2113,8 +2310,11 @@ class TestMain {
 		objectCode.ints = [42];
 		objectCode.strings = ["Box", "value"];
 		objectCode.types = [
-			                                                        Simple(HlType.Void), Simple(HlType.I32),
-			compiler.hl.HlCode.HlTypeDef.Object(0, -1, 0, [{name: 1, type: 1}], [], []),    Function([], 1)
+			Simple(HlType.Void), Simple(HlType.I32),
+			compiler.hl.HlCode.HlTypeDef.Object(0, -1, 0, [{
+				name: 1,
+				type: 1
+			}], [], []), Function([], 1)
 		];
 		objectCode.functions = [new HlFunction(3, 0, [1], [LoadInt(0, 0), Return(0)])];
 		objectCode.entryPoint = 0;
@@ -2124,7 +2324,8 @@ class TestMain {
 		incrementalClass.update("Main.hx",
 			"class Math { public static function add(a:Int, b:Int):Int { return a + b; } } function main():Int { return Math.add(20, 22); }");
 		var incrementalResult = incrementalClass.compile("Main");
-		if (!incrementalResult.functionIndices.exists("Math.add") || incrementalResult.retyped.join(",") != "Math.add,main")
+		if (!incrementalResult.functionIndices.exists("Math.add")
+			|| incrementalResult.retyped.join(",") != "Math.add,main")
 			throw "Incremental compiler did not retain the static class method as a function";
 		Sys.println("PASS: class fields, methods, and constructors parse as nominal declarations");
 		Sys.println("PASS: typer rejects invalid names, calls, conditions, and return paths");
@@ -2133,7 +2334,8 @@ class TestMain {
 			Frontend.compileFile(new SourceFile("broken.hx", "function main():Int { return #; }"));
 			throw "compiler accepted invalid character";
 		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E0001" || error.diagnostic.span.file.path != "broken.hx" || error.diagnostic.span.start != 29)
+			if (error.diagnostic.code != "E0001" || error.diagnostic.span.file.path != "broken.hx"
+				|| error.diagnostic.span.start != 29)
 				throw "structured source diagnostic has the wrong code or span";
 		}
 		Sys.println("PASS: syntax diagnostics retain file-aware source spans");
@@ -2172,7 +2374,10 @@ class TestMain {
 	 * answer (not its own caller's source) must still retype every caller that relied on the
 	 * old answer, on the very next `compile` call.
 	 */
-	static function expectDependentAnswerInvalidated(initial:Array<{path:String, source:String}>, edit:{path:String, source:String}, expectedSubstring:String,
+	static function expectDependentAnswerInvalidated(initial:Array<{path:String, source:String}>, edit: {
+		path: String,
+		source: String
+	}, expectedSubstring:String,
 			label:String):Void {
 		var compiler = new Compiler(null, CompilerIntrinsics.configuration());
 		for (module in initial)
@@ -2243,7 +2448,7 @@ class TestMain {
 			var irValue:compiler.ir.Ir.IrValue = cast value;
 			values.set(irValue.id, irValue);
 		} else if (Std.isOfType(value, std.Array)) // `Array` alone is IrType.Array here
-			for (item in (cast value : Array<Dynamic>))
+			for (item in (cast value:Array<Dynamic>))
 				collectInstructionValues(Reflect.hasField(item, "value") ? Reflect.field(item, "value") : item, values);
 	}
 

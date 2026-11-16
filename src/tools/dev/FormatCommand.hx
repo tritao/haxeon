@@ -33,7 +33,8 @@ class FormatCommand {
 			return 0;
 		var haxeon = Path.join([home, "scripts", "haxeon"]);
 		if (check) {
-			var ordered = batched(files, batch -> Sys.command(haxeon, ["lint", "--only", "import-order"].concat(batch))),
+			var ordered = batched(files,
+				batch -> Sys.command(haxeon, ["lint", "--only", "import-order"].concat(batch))),
 				formatted = batched(files, batch -> Sys.command(haxeon, ["fmt", "--check"].concat(batch)));
 			return formatted > ordered ? formatted : ordered;
 		}
@@ -61,20 +62,37 @@ class FormatCommand {
 
 	/** Every `.hx` file git tracks or would add, outside vendored code. */
 	static function trackedSources(home:String):Array<String>
-		return haxeSources(home, lines(capture("git", ["-C", home, "ls-files", "--cached", "--others", "--exclude-standard"])));
+		return haxeSources(home, lines(capture("git", [
+			"-C",
+			home,
+			"ls-files",
+			"--cached",
+			"--others",
+			"--exclude-standard"
+		])));
 
 	/** The `.hx` files that differ from the merge base with origin/main, untracked ones included. */
 	static function changedSources(home:String):Array<String> {
 		var base = StringTools.trim(capture("git", ["-C", home, "merge-base", "HEAD", "origin/main"]));
 		return haxeSources(home,
 			lines(capture("git", ["-C", home, "diff", "--name-only", "--diff-filter=d", base]))
-				.concat(lines(capture("git", ["-C", home, "ls-files", "--others", "--exclude-standard"]))));
+			.concat(lines(capture("git", [
+				"-C",
+				home,
+				"ls-files",
+				"--others",
+				"--exclude-standard"
+			]))));
 	}
 
 	static function haxeSources(home:String, names:Array<String>):Array<String> {
 		var seen:Map<String, Bool> = [], result = [];
 		for (name in names)
-			if (StringTools.endsWith(name, ".hx") && !isVendored(name) && !seen.exists(name) && FileSystem.exists(Path.join([home, name]))) {
+			if (StringTools.endsWith(name, ".hx") && !isVendored(name) && !seen.exists(name)
+				&& FileSystem.exists(Path.join([
+					home,
+					name
+				]))) {
 				seen.set(name, true);
 				result.push(name);
 			}

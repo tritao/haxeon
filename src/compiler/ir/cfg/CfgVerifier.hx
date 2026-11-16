@@ -61,7 +61,8 @@ class CfgVerifier {
 		}
 	}
 
-	static function verifyBlock(fn:CfgFunction, block:CfgBlock, blocks:Map<Int, CfgBlock>, defined:Array<Int>, available:Array<Int>):Void {
+	static function verifyBlock(fn:CfgFunction, block:CfgBlock, blocks:Map<Int, CfgBlock>, defined:Array<Int>,
+			available:Array<Int>):Void {
 		for (located in block.instructions)
 			switch located.value {
 				case ConstVoid(out):
@@ -128,7 +129,8 @@ class CfgVerifier {
 					if ((switch (out.type) {
 						case Dyn: false;
 						default: true;
-					}) && !(IrTypeTools.nullableElement(out.type) != null && sameType(IrTypeTools.nullableElement(out.type), value.type)))
+					}) && !(IrTypeTools.nullableElement(out.type) != null
+						&& sameType(IrTypeTools.nullableElement(out.type), value.type)))
 						throw 'CFG dynamic conversion ${out.id} must produce Dyn or the nullable of its input';
 					define(out, defined, available, block.id);
 				case IntToFloat(out, value):
@@ -194,7 +196,8 @@ class CfgVerifier {
 					require(b, available, block.id);
 					if (!sameType(out.type, a.type)
 						|| !sameType(a.type, b.type)
-						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64)))
+						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32)
+						&& !sameType(a.type, F64)))
 						throw "CFG arithmetic requires matching numeric values";
 					define(out, defined, available, block.id);
 				case Mod(out, a, b):
@@ -260,8 +263,9 @@ class CfgVerifier {
 					require(b, available, block.id);
 					expect(out, Bool);
 					if (!sameType(a.type, b.type)
-						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32) && !sameType(a.type, F64) && !sameType(a.type, Bool)
-							&& !isReference(a.type)))
+						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32)
+						&& !sameType(a.type, F64) && !sameType(a.type, Bool)
+						&& !isReference(a.type)))
 						throw 'CFG equality requires matching primitive or reference values';
 					define(out, defined, available, block.id);
 				case Call(out, _, arguments), CNativeCall(out, _, arguments):
@@ -278,7 +282,8 @@ class CfgVerifier {
 								case Enum(_):
 								default: throw "CFG enum Dynamic box requires an enum type";
 							}
-							if (!sameType(arguments[0].type, type) || !sameType(out.type, Dyn)) throw "Invalid CFG enum Dynamic box signature";
+							if (!sameType(arguments[0].type, type)
+								|| !sameType(out.type, Dyn)) throw "Invalid CFG enum Dynamic box signature";
 						case EnumDynamicView(type):
 							switch type {
 								case Enum(_):
@@ -286,8 +291,10 @@ class CfgVerifier {
 							}
 							if (!sameType(arguments[0].type, Array(Dyn))
 								|| !sameType(out.type, Array(Dyn))) throw "Invalid CFG enum Dynamic view signature";
-						case EnumTagBox(_), EnumTagUnbox(_): throw "Enum tag adapters are introduced after CFG lowering";
-						case InlineEnumBox(_), InlineEnumUnbox(_): throw "Inline enum adapters are introduced after CFG lowering";
+						case EnumTagBox(_),
+							EnumTagUnbox(_): throw "Enum tag adapters are introduced after CFG lowering";
+						case InlineEnumBox(_),
+							InlineEnumUnbox(_): throw "Inline enum adapters are introduced after CFG lowering";
 					}
 					define(out, defined, available, block.id);
 				case StaticClosure(out, _):
@@ -374,7 +381,8 @@ class CfgVerifier {
 					expect(index, I32);
 					switch array.type {
 						case Array(element):
-							if (!sameType(value.type, element)) throw 'CFG array write value ${value.id} has type ${value.type}, expected $element';
+							if (!sameType(value.type, element))
+								throw 'CFG array write value ${value.id} has type ${value.type}, expected $element';
 						default: throw 'CFG array write requires an Array value';
 					}
 				case ArraySize(out, array):
@@ -520,7 +528,8 @@ class CfgVerifier {
 				};
 			case Function(aArgs, aResult): switch right {
 					case Function(bArgs, bResult):
-						if (aArgs.length != bArgs.length) false; else {
+						if (aArgs.length != bArgs.length) false;
+						else {
 							var equal = sameType(aResult, bResult);
 							for (i in 0...aArgs.length)
 								if (!sameType(aArgs[i], bArgs[i]))
@@ -534,7 +543,8 @@ class CfgVerifier {
 
 	static function isReference(type:IrType):Bool
 		return switch type {
-			case Bytes, RawPtr, ManagedBytes, Dyn, Nullable(_), Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_), Iterator(_), Function(_, _): true;
+			case Bytes, RawPtr, ManagedBytes, Dyn, Nullable(_), Obj(_), Enum(_), Abstract(_), Virtual(_), Array(_),
+				Iterator(_), Function(_, _): true;
 			default: false;
 		};
 }

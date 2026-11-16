@@ -1,3 +1,3 @@
 function main():Void {
-    trace("Haxeon Android JIT works\n");
+	trace("Haxeon Android JIT works\n");
 }

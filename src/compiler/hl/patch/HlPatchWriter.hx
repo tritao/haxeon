@@ -26,13 +26,20 @@ class HlPatchWriter {
 	 * slots after the module's last, in order. `baseGlobals` is how many globals the running module has: the module's
 	 * globals past it, which must all be constants, travel in the patch. Without it the patch adds none.
 	 */
-	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>, stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
+	public static function encode(code:HlCode, moduleId:HaxeBytes, changedSlots:Array<Int>,
+			stableIdsBySlot:Map<Int, Int>, baseRevision:Int, revision:Int,
 			baseInts:Int = 0, baseFloats:Int = 0, baseStrings:Int = 0, baseTypes:Int = 0, ?extensionSections:Array<{
-			tag:Int,
-			bytes:HaxeBytes
-		}>,
-			?addedFunctions:Array<{slot:Int, name:String}>, baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{stableId:Int, description:String}>,
-			?globalNames:Map<String, Int>):HaxeBytes {
+				tag:Int,
+				bytes:HaxeBytes
+			}>,
+					?addedFunctions:Array<{
+						slot:Int,
+						name:String
+					}>, baseGlobals:Int = -1, ?layout:HlObjectLayout, ?guards:Array<{
+						stableId:Int,
+						description:String
+					}>,
+							?globalNames:Map<String, Int>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
 			throw "Invalid patch revision range";
 		var selected:Array<HlFunction> = [];
@@ -106,7 +113,8 @@ class HlPatchWriter {
 				|| addedFunctions.length == 0 ? null : encodeAddedFunctions(selected, addedFunctions, stableIdsBySlot),
 			globals = baseGlobals < 0 || baseGlobals == code.globals.length ? null : encodeGlobals(code, baseGlobals),
 			objectFields = layout == null || layout.fields.length == 0 ? null : encodeObjectFields(layout),
-			migrations = layout == null || layout.migrations.length == 0 ? null : encodeMigrations(layout, stableIdsBySlot),
+			migrations = layout == null
+				|| layout.migrations.length == 0 ? null : encodeMigrations(layout, stableIdsBySlot),
 			guarded = guards == null || guards.length == 0 ? null : encodeGuards(guards, globalNames);
 		out.bigEndian = false;
 		out.writeString(HlPatchFormat.MAGIC);
@@ -116,8 +124,10 @@ class HlPatchWriter {
 		writeIndex(out, revision);
 		var extensions = extensionSections == null ? [] : extensionSections;
 		for (section in extensions)
-			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG || section.tag == SOURCE_SNAPSHOTS
-				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS || section.tag == MIGRATIONS
+			if (section.tag == SYMBOLS || section.tag == FUNCTIONS || section.tag == DEBUG
+				|| section.tag == SOURCE_SNAPSHOTS
+				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS
+				|| section.tag == MIGRATIONS
 				|| section.tag == GUARDS)
 				throw 'Extension section uses reserved HLP tag ${section.tag}';
 		writeIndex(out,
@@ -152,7 +162,8 @@ class HlPatchWriter {
 	}
 
 	/** The running module's view of the first `count` types: the definitions it has for the ones the patch rewrites. */
-	static function baseTypeDefinitions(types:Array<HlTypeDef>, count:Int, layout:Null<HlObjectLayout>):Array<HlTypeDef> {
+	static function baseTypeDefinitions(types:Array<HlTypeDef>, count:Int,
+			layout:Null<HlObjectLayout>):Array<HlTypeDef> {
 		if (layout == null || !layout.previousTypes.keys().hasNext())
 			return types;
 		var result = types.slice(0, count);
@@ -182,7 +193,8 @@ class HlPatchWriter {
 	 * happened to it. The module refuses the patch while a live closure refers to one. Then the names of the globals, which
 	 * the module has no names for, so a refusal can say which static field holds a closure.
 	 */
-	static function encodeGuards(guards:Array<{stableId:Int, description:String}>, globalNames:Null<Map<String, Int>>):HaxeBytes {
+	static function encodeGuards(guards:Array<{stableId:Int, description:String}>,
+			globalNames:Null<Map<String, Int>>):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		writeIndex(out, guards.length);
@@ -268,7 +280,8 @@ class HlPatchWriter {
 			default: false;
 		};
 
-	static function encodeAddedFunctions(selected:Array<HlFunction>, added:Array<{slot:Int, name:String}>, stableIdsBySlot:Map<Int, Int>):HaxeBytes {
+	static function encodeAddedFunctions(selected:Array<HlFunction>, added:Array<{slot:Int, name:String}>,
+			stableIdsBySlot:Map<Int, Int>):HaxeBytes {
 		var out = new BytesOutput();
 		out.bigEndian = false;
 		writeIndex(out, added.length);
@@ -354,13 +367,15 @@ class HlPatchWriter {
 		out.write(bytes);
 	}
 
-	static function callRelocations(fn:HlFunction, stableIdsBySlot:Map<Int, Int>):Array<{instruction:Int, stableId:Int}> {
+	static function callRelocations(fn:HlFunction, stableIdsBySlot:Map<Int, Int>):Array<{instruction:Int,
+		stableId:Int}> {
 		var result = [], instruction = 0;
 		for (op in fn.opcodes)
 			switch op {
 				case Label(_):
 					instruction++;
-				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), CallN(_, target, _), StaticClosure(_, target),
+				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), CallN(_, target, _),
+					StaticClosure(_, target),
 					InstanceClosure(_, target, _):
 					if (stableIdsBySlot.exists(target))
 						result.push({instruction: instruction, stableId: stableIdsBySlot.get(target)});
@@ -518,9 +533,11 @@ class HlPatchWriter {
 	static function writeType(out:BytesOutput, type:HlTypeDef):Void
 		switch type {
 			case Simple(kind):
-				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed || kind == HashLinkType.EnumTag)
+				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed
+					|| kind == HashLinkType.EnumTag)
 					throw 'HashLink type $kind requires a parameter';
-				if (kind == HashLinkType.Obj || kind == HashLinkType.Struct || kind == HashLinkType.Virtual || kind == HashLinkType.Enum)
+				if (kind == HashLinkType.Obj || kind == HashLinkType.Struct || kind == HashLinkType.Virtual
+					|| kind == HashLinkType.Enum)
 					throw 'HashLink type $kind requires its layout';
 				out.writeByte(kind);
 			case Parameterized(kind, parameter):
@@ -556,7 +573,8 @@ class HlPatchWriter {
 				throw "Enum type patches require a structural reload";
 		}
 
-	static function writeObjectType(out:BytesOutput, name:Int, base:Int, global:Int, fields:Array<compiler.hl.HlCode.HlObjectField>,
+	static function writeObjectType(out:BytesOutput, name:Int, base:Int, global:Int,
+			fields:Array<compiler.hl.HlCode.HlObjectField>,
 			methods:Array<compiler.hl.HlCode.HlObjectMethod>, bindings:Array<Int>):Void {
 		if (bindings.length % 2 != 0)
 			throw "Object bindings come in field and function pairs";

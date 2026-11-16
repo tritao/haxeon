@@ -17,7 +17,13 @@ private typedef FlattenedPlace = {
 	final typeName:String;
 }
 
-private typedef PlaceMethod = {final name:String; final original:String; final owner:String; final path:Array<String>; final typeName:String;}
+private typedef PlaceMethod = {
+	final name:String;
+	final original:String;
+	final owner:String;
+	final path:Array<String>;
+	final typeName:String;
+}
 
 /** Rewrites value field places to physical leaf accesses before Wasm type planning. */
 class WasmFlattenValueFields {
@@ -58,7 +64,8 @@ class WasmFlattenValueFields {
 			var next = nextId(original),
 				owner = new IrValue(next, "$wasm-gc-place-owner", Obj(method.owner)),
 				args = [owner].concat(original.arguments.slice(1)),
-				clone = new IrFunction(method.name, args, original.result, original.blocks, GeneratedHelper, [], original.inlineHint),
+				clone = new IrFunction(method.name, args, original.result, original.blocks, GeneratedHelper, [],
+					original.inlineHint),
 				place:FlattenedPlace = {
 					owner: owner,
 					path: method.path,
@@ -117,7 +124,9 @@ class WasmFlattenValueFields {
 								default: throw "Invalid value projection";
 							};
 							var parent = aliases.get(owner.id);
-							aliases.set(out.id, parent == null ? {owner: owner, path: [field], typeName: name} : {
+							aliases.set(out.id, parent == null ? {
+								owner:owner, path:[field], typeName:name
+							} : {
 								owner: parent.owner,
 								path: parent.path.concat([field]),
 								typeName: name
@@ -152,11 +161,13 @@ class WasmFlattenValueFields {
 						// Preserve the original null access point even when the field projection itself has no scalar load.
 						if (!fresh.exists(object.id) && !aliases.exists(object.id)) {
 							var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
-							replacement.instructions.push(new Located(FieldGet(check, object, CHECK_FIELD), located.provenance));
+							replacement.instructions.push(new Located(FieldGet(check, object, CHECK_FIELD),
+								located.provenance));
 						}
 					case FieldGet(out, object, field) if (aliases.exists(object.id)):
 						var place = aliases.get(object.id);
-						replacement.instructions.push(new Located(FieldGet(out, place.owner, physical(place.owner.type, place.path.concat([field]))),
+						replacement.instructions.push(new Located(FieldGet(out, place.owner,
+							physical(place.owner.type, place.path.concat([field]))),
 							located.provenance));
 					case FieldSet(object, field, value):
 						var target = aliases.get(object.id),
@@ -167,23 +178,27 @@ class WasmFlattenValueFields {
 						if (declared != null && values.isValue(declared.type)) {
 							if (!fresh.exists(owner.id)) {
 								var check = new IrValue(next++, "$wasm-gc-holder-check", I32);
-								replacement.instructions.push(new Located(FieldGet(check, owner, CHECK_FIELD), located.provenance));
+								replacement.instructions.push(new Located(FieldGet(check, owner, CHECK_FIELD),
+									located.provenance));
 							}
 							var snapshot:Array<{field:String, value:IrValue}> = [];
 							for (slot in values.leaves(declared.type)) {
 								var loaded = new IrValue(next++, "$wasm-gc-copy-field", slot.type),
 									sourceOwner = source == null ? value : source.owner,
 									sourcePath = source == null ? slot.path : source.path.concat(slot.path);
-								replacement.instructions.push(new Located(FieldGet(loaded, sourceOwner, physical(sourceOwner.type, sourcePath)),
+								replacement.instructions.push(new Located(FieldGet(loaded, sourceOwner,
+									physical(sourceOwner.type, sourcePath)),
 									located.provenance));
 								snapshot.push({field: physical(owner.type, path.concat(slot.path)), value: loaded});
 							}
 							for (entry in snapshot)
-								replacement.instructions.push(new Located(FieldSet(owner, entry.field, entry.value), located.provenance));
+								replacement.instructions.push(new Located(FieldSet(owner, entry.field, entry.value),
+									located.provenance));
 						} else {
 							var actual = materialize(value, aliases, replacement, located, next);
 							next = actual.next;
-							replacement.instructions.push(new Located(FieldSet(owner, target == null ? field : physical(owner.type, path), actual.value),
+							replacement.instructions.push(new Located(FieldSet(owner,
+								target == null ? field : physical(owner.type, path), actual.value),
 								located.provenance));
 						}
 					case MethodCall(out, receiver, method, arguments, _) if (aliases.exists(receiver.id)):
@@ -197,11 +212,12 @@ class WasmFlattenValueFields {
 							next = actual.next;
 							args.push(actual.value);
 						}
-						replacement.instructions.push(new Located(Call(out, requestMethod(place, target), args), located.provenance));
+						replacement.instructions.push(new Located(Call(out, requestMethod(place, target), args),
+							located.provenance));
 					case Call(out, name, arguments)
 						if (arguments.length > 0
-							&& aliases.exists(arguments[0].id)
-							&& isPlaceMethod(aliases.get(arguments[0].id).typeName, name)):
+						&& aliases.exists(arguments[0].id)
+						&& isPlaceMethod(aliases.get(arguments[0].id).typeName, name)):
 						var place:FlattenedPlace = cast aliases.get(arguments[0].id);
 						var args:Array<IrValue> = [place.owner];
 						for (argument in arguments.slice(1)) {
@@ -209,15 +225,18 @@ class WasmFlattenValueFields {
 							next = actual.next;
 							args.push(actual.value);
 						}
-						replacement.instructions.push(new Located(Call(out, requestMethod(place, name), args), located.provenance));
+						replacement.instructions.push(new Located(Call(out, requestMethod(place, name), args),
+							located.provenance));
 					case InstanceClosure(out, name, receiver) if (aliases.exists(receiver.id)):
 						var place = aliases.get(receiver.id);
 						if (isPlaceMethod(place.typeName, name))
-							replacement.instructions.push(new Located(InstanceClosure(out, requestMethod(place, name), place.owner), located.provenance));
+							replacement.instructions.push(new Located(InstanceClosure(out, requestMethod(place, name),
+								place.owner), located.provenance));
 						else {
 							var actual = materialize(receiver, aliases, replacement, located, next);
 							next = actual.next;
-							replacement.instructions.push(new Located(InstanceClosure(out, name, actual.value), located.provenance));
+							replacement.instructions.push(new Located(InstanceClosure(out, name, actual.value),
+								located.provenance));
 						}
 					default:
 						var substitutions:Map<Int, IrValue> = [];
@@ -228,8 +247,9 @@ class WasmFlattenValueFields {
 								substitutions.set(input.id, actual.value);
 							}
 						var instruction = substitutions.keys()
-							.hasNext() ? IrInliner.remap(located.value, value -> substitutions.exists(value.id) ? substitutions.get(value.id) : value,
-								id -> id) : located.value;
+							.hasNext() ? IrInliner.remap(located.value,
+							value -> substitutions.exists(value.id) ? substitutions.get(value.id) : value,
+							id -> id) : located.value;
 						replacement.instructions.push(new Located(instruction, located.provenance));
 				}
 			}
@@ -266,7 +286,11 @@ class WasmFlattenValueFields {
 
 	/** Fold a holder check into an immediately following scalar access, without moving it across evaluation. */
 	/** Materialize only at a reference-based boundary, after taking a snapshot of every field. */
-	function materialize(value:IrValue, aliases:Map<Int, FlattenedPlace>, block:IrBlock, origin:Located<IrInstruction>, next:Int):{value:IrValue, next:Int} {
+	function materialize(value:IrValue, aliases:Map<Int, FlattenedPlace>, block:IrBlock, origin:Located<IrInstruction>,
+			next:Int): {
+				value: IrValue,
+				next: Int
+			} {
 		var place = aliases.get(value.id);
 		if (place == null)
 			return {value: value, next: next};
@@ -274,8 +298,10 @@ class WasmFlattenValueFields {
 		block.instructions.push(new Located(ValueInit(copy), origin.provenance));
 		for (slot in values.leaves(value.type)) {
 			var leaf = new IrValue(next++, "$wasm-gc-place-leaf", slot.type);
-			block.instructions.push(new Located(FieldGet(leaf, place.owner, physical(place.owner.type, place.path.concat(slot.path))), origin.provenance));
-			block.instructions.push(new Located(FieldSet(copy, physical(copy.type, slot.path), leaf), origin.provenance));
+			block.instructions.push(new Located(FieldGet(leaf, place.owner,
+				physical(place.owner.type, place.path.concat(slot.path))), origin.provenance));
+			block.instructions.push(new Located(FieldSet(copy, physical(copy.type, slot.path), leaf),
+				origin.provenance));
 		}
 		return {value: copy, next: next};
 	}

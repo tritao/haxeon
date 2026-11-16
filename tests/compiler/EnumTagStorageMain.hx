@@ -60,7 +60,9 @@ class EnumTagStorageMain {
 	}
 
 	static function arrayProgram(target:compiler.ir.IrValueLaneLayout.IrValueLaneTarget):IrProgram {
-		var p = program(), b = new IrBuilder(), array = b.call("__array_alloc_ref", [b.constInt(2)], Array(EnumTag("Mode"))),
+		var p = program(),
+			b = new IrBuilder(),
+			array = b.call("__array_alloc_ref", [b.constInt(2)], Array(EnumTag("Mode"))),
 			value = b.temporary(EnumTag("Mode"));
 		// The bridge must request its own adapters even when no earlier escape did.
 		p.functions = [p.functions[0]];
@@ -76,9 +78,16 @@ class EnumTagStorageMain {
 		b.fieldSet(owner, "number", b.constInt(42));
 		var inField = b.fieldGet(owner, "mode", EnumTag("Mode"));
 		if (target == HashLink) {
-			p.natives.push({name: "nativeObjectSize", library: "std", symbol: "type_data_size", arguments: [TypeRef], result: I32});
+			p.natives.push({
+				name: "nativeObjectSize",
+				library: "std",
+				symbol: "type_data_size",
+				arguments: [TypeRef],
+				result: I32
+			});
 			var sized = b.createBlock(), wrongSize = b.createBlock();
-			b.branch(b.equal(b.call("nativeObjectSize", [b.typeValue(Obj("Holder"))], I32), b.constInt(16)), sized, wrongSize);
+			b.branch(b.equal(b.call("nativeObjectSize", [b.typeValue(Obj("Holder"))], I32), b.constInt(16)), sized,
+				wrongSize);
 			b.select(wrongSize);
 			b.returnValue(b.constInt(3));
 			b.select(sized);
@@ -94,7 +103,10 @@ class EnumTagStorageMain {
 			base: null,
 			interfaces: [],
 			methods: [],
-			fields: [{name: "mode", type: EnumTag("Mode"), scalarStorage: {size: 4, signed: true}}, {name: "number", type: I32}]
+			fields: [
+				{name: "mode", type: EnumTag("Mode"), scalarStorage: {size: 4, signed: true}},
+				{name: "number", type: I32}
+			]
 		});
 		var bad = b.createBlock(), next = b.createBlock();
 		b.branch(b.equal(loaded, value), next, bad);
@@ -179,8 +191,10 @@ class EnumTagStorageMain {
 		expanded.enums.push({name: "Earlier", cases: [{name: "Only", params: []}]});
 		var occupied = IrEnumTagStorage.adapterNames(expanded).get("Earlier").box, main = expanded.functions[0];
 		expanded.functions.push(new IrFunction(occupied, main.arguments, main.result, main.blocks, Ordinary));
-		var additional = IrEnumTagStorage.request(expanded, "Earlier"), preserved = IrEnumTagStorage.adapterNames(expanded).get("Mode");
-		if (preserved.box != original.box || preserved.unbox != original.unbox || additional.box == original.box || additional.unbox == original.unbox
+		var additional = IrEnumTagStorage.request(expanded, "Earlier"),
+			preserved = IrEnumTagStorage.adapterNames(expanded).get("Mode");
+		if (preserved.box != original.box || preserved.unbox != original.unbox || additional.box == original.box
+			|| additional.unbox == original.unbox
 			|| additional.box == occupied)
 			throw "Adding an enum must preserve existing tag adapter linkage";
 		IrEnumTagLowering.escapes(expanded);
@@ -206,7 +220,8 @@ class EnumTagStorageMain {
 		if (IrVerifier.sameType(EnumTag("Mode"), I32) || IrVerifier.sameType(EnumTag("Mode"), EnumTag("Other")))
 			throw "Tag identity erased";
 		var encoded = compiler.ir.codec.IrTypeCodec.encode(Function([Array(EnumTag("Mode"))], EnumTag("Mode")));
-		if (!IrVerifier.sameType(compiler.ir.codec.IrTypeCodec.decode(encoded), Function([Array(EnumTag("Mode"))], EnumTag("Mode"))))
+		if (!IrVerifier.sameType(compiler.ir.codec.IrTypeCodec.decode(encoded),
+			Function([Array(EnumTag("Mode"))], EnumTag("Mode"))))
 			throw "Tag codec lost identity";
 		var nullCheck = program(), checkBody = new IrBuilder();
 		checkBody.call(compiler.ir.IrReceiverCheck.NAME, [checkBody.constNull(EnumTag("Mode"))], Void);
@@ -221,17 +236,31 @@ class EnumTagStorageMain {
 		if (nullMessage.indexOf("Null access") < 0)
 			throw "Interpreter accepted a tag-zero receiver";
 		var referenceCheck = program(), referenceBody = new IrBuilder();
-		referenceCheck.objects.push({name: "Reference", isValue: false, base: null, interfaces: [], methods: [], fields: []});
+		referenceCheck.objects.push({
+			name: "Reference",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			methods: [],
+			fields: []
+		});
 		referenceBody.call(compiler.ir.IrReceiverCheck.NAME, [referenceBody.newObject("Reference")], Void);
 		referenceBody.returnValue(referenceBody.constInt(42));
-		referenceCheck.functions.push(new IrFunction("referenceCheck", referenceBody.arguments, I32, referenceBody.blocks, Ordinary));
+		referenceCheck.functions.push(new IrFunction("referenceCheck", referenceBody.arguments, I32,
+			referenceBody.blocks, Ordinary));
 		IrVerifier.verify(referenceCheck);
 		if (new compiler.ir.IrInterpreter(referenceCheck).run("referenceCheck") != 42)
 			throw "Interpreter reinterpreted a reference receiver as a numeric tag";
 		for (size in [0, 1, 2, 8]) {
 			var malformed = program();
-			malformed.objects.push({name: "WrongTagWidth", isValue: false, base: null, interfaces: [], methods: [],
-				fields: [{name: "mode", type: EnumTag("Mode"), scalarStorage: {size: size, signed: true}}]});
+			malformed.objects.push({
+				name: "WrongTagWidth",
+				isValue: false,
+				base: null,
+				interfaces: [],
+				methods: [],
+				fields: [{name: "mode", type: EnumTag("Mode"), scalarStorage: {size: size, signed: true}}]
+			});
 			rejected(malformed, "Invalid scalar storage");
 		}
 		reject(EnumTag("Missing"), "requires a payload-free enum");
@@ -272,7 +301,8 @@ class EnumTagStorageMain {
 			caster = new IrBuilder(),
 			input = caster.argument("value", Dyn);
 		caster.returnValue(caster.safeCast(input, EnumTag("Mode")));
-		castProgram.functions.push(new IrFunction("badCast", caster.arguments, EnumTag("Mode"), caster.blocks, Ordinary));
+		castProgram.functions.push(new IrFunction("badCast", caster.arguments, EnumTag("Mode"), caster.blocks,
+			Ordinary));
 		rejected(castProgram, "requires an unbox adapter");
 		for (target in [HashLink, Wasm32, WasmGc])
 			for (inlineEnabled in [false, true])
@@ -287,7 +317,8 @@ class EnumTagStorageMain {
 					var p = arrays ? arrayProgram(laneTarget) : variant == 2 ? nativeProgram() : program();
 					p = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(p));
 					compiler.ir.IrInliner.run(p, new compiler.ir.IrInliner.IrInlineCache(),
-						target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm, inlineEnabled);
+						target == HashLink ? compiler.ir.TargetProfile.hashLink : compiler.ir.TargetProfile.wasm,
+						inlineEnabled);
 					IrVerifier.verify(p);
 					if (!arrays && new compiler.ir.IrInterpreter(p).run() != 42)
 						throw "Interpreter tag roundtrip failed";
@@ -297,14 +328,17 @@ class EnumTagStorageMain {
 						case WasmGc: WasmGc;
 						case Wasm64: throw "Unsupported target";
 					};
-					var shape = new compiler.ir.IrValueLaneLayout(compiler.ir.IrObjectTable.of([]), target == HashLink ? 64 : 32,
+					var shape = new compiler.ir.IrValueLaneLayout(compiler.ir.IrObjectTable.of([]),
+						target == HashLink ? 64 : 32,
 						laneTarget).shape(EnumTag("Mode"));
-					if (shape.scalarStrideBits != 32 || shape.references != 0 || shape.slots.length != 1 || shape.slots[0].isReference)
+					if (shape.scalarStrideBits != 32 || shape.references != 0 || shape.slots.length != 1
+						|| shape.slots[0].isReference)
 						throw "Tag is not a four-byte scalar lane";
 					var root = Sys.getEnv("TMPDIR");
 					if (root == null)
 						root = "/tmp";
-					var path = root + '/enum-tag-$target-$inlineEnabled-' + Std.random(0x7fffffff) + (target == HashLink ? ".hl" : ".wasm");
+					var path = root + '/enum-tag-$target-$inlineEnabled-' + Std.random(0x7fffffff)
+						+ (target == HashLink ? ".hl" : ".wasm");
 					try {
 						if (target == HashLink) {
 							var entry = new IrBuilder();
@@ -320,7 +354,10 @@ class EnumTagStorageMain {
 								result: Void
 							});
 						}
-						var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true})
+						var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+							target: target,
+							debugNames: true
+						})
 							.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 								target: target,
 								debugNames: true,
@@ -330,9 +367,11 @@ class EnumTagStorageMain {
 						sys.io.File.saveBytes(path, bytes);
 						var vm = Sys.getEnv("HAXEON_HASHLINK_DIR"),
 							command = target == HashLink ? (vm == null ? "scripts/hl" : vm + "/hl") : "node";
-						var script = 'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("tag roundtrip failed");';
+						var script =
+							'const fs=require("fs");const e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports;if(e.main()!==42)throw Error("tag roundtrip failed");';
 						if (!arrays)
-							script += 'const count=e.__allocation_count||e["haxeon.memory.allocation_count"];const before=count();for(let i=0;i<1024;i++)if(e.main()!==42)throw Error("tag roundtrip changed");if(count()!==before)throw Error("tag or cached escape allocated");';
+							script +=
+								'const count=e.__allocation_count||e["haxeon.memory.allocation_count"];const before=count();for(let i=0;i<1024;i++)if(e.main()!==42)throw Error("tag roundtrip changed");if(count()!==before)throw Error("tag or cached escape allocated");';
 						var child = new sys.io.Process(command, target == HashLink ? [path] : ["-e", script, path]);
 						var output = child.stdout.readAll().toString(),
 							error = child.stderr.readAll().toString(),

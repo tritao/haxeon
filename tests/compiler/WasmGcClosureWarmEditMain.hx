@@ -6,8 +6,10 @@ import compiler.tools.CompilerDriver;
 
 /** An edit introducing another closure signature must match a fresh Wasm GC build. */
 class WasmGcClosureWarmEditMain {
-	static final initial = 'function main():Int { var a:Dynamic = function(x:Int):Int return x + 1; var f:Int->Int = cast a; return f(41); }';
-	static final edited = 'function main():Int { var a:Dynamic = function(x:Int):Int return x + 1; var f:Int->Int = cast a; '
+	static final initial =
+		'function main():Int { var a:Dynamic = function(x:Int):Int return x + 1; var f:Int->Int = cast a; return f(41); }';
+	static final edited =
+		'function main():Int { var a:Dynamic = function(x:Int):Int return x + 1; var f:Int->Int = cast a; '
 		+ 'var c:Dynamic = function(x:Bool):Int return x ? 1 : 0; var g:Bool->Int = cast c; return f(40) + g(true); }';
 
 	static function compiler(inlining:Bool):Compiler {

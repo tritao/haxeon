@@ -20,7 +20,8 @@ class ProfilerHotReloadTarget {
 		compiler.update("Work.hx",
 			"function work():Int { var result = 43; if (true) { var scoped = result + 100; result = scoped - 99; scoped = scoped + 0; } result = result - 1; try { throw \"profile\"; } catch (error:Int) { result = 0; } catch (error:String) { result = result + 0; } return result; }");
 		var changed = compiler.compile("Main");
-		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(loaded,
+			new PatchSet(initial.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		Sys.println("PATCHED");
 		runFor(loaded, workId, afterPatch);
 		Runtime.dispose(loaded);

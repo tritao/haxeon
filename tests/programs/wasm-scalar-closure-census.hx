@@ -6,7 +6,10 @@ class ClosureOwner {
 struct ClosureValue {
 	public var number:Int;
 	public var owner:ClosureOwner;
-	public function new(number:Int, owner:ClosureOwner) { this.number = number; this.owner = owner; }
+	public function new(number:Int, owner:ClosureOwner) {
+		this.number = number;
+		this.owner = owner;
+	}
 }
 
 class ClosureBox<T> {
@@ -55,4 +58,7 @@ class ClosureCensus {
 		return total;
 	}
 }
-function main():Int { ClosureCensus.prepare(); return ClosureCensus.perform(4) == 44 ? 42 : 1; }
+function main():Int {
+	ClosureCensus.prepare();
+	return ClosureCensus.perform(4) == 44 ? 42 : 1;
+}

@@ -150,7 +150,10 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").state(StyleState.Selected),
 			[StyleValue.background(buttonSelected)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Focused),
-			[StyleValue.borderColor(tokens.textOnAccent), StyleValue.borderWidth(1.0)]);
+			[
+				StyleValue.borderColor(tokens.textOnAccent),
+				StyleValue.borderWidth(1.0)
+			]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Hovered),
 			[StyleValue.background(buttonHover)]);
 		styles.rule(StyleSelector.widget("button").state(StyleState.Pressed),
@@ -164,7 +167,10 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Pressed),
 			[StyleValue.background(tokens.navigationPressed)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Focused),
-			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
+			[
+				StyleValue.borderColor(tokens.focusRing),
+				StyleValue.borderWidth(1.0)
+			]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Selected),
 			[StyleValue.background(tokens.navigationSelected)]);
 		styles.rule(StyleSelector.widget("button").className("navigation").state(StyleState.Disabled),
@@ -198,7 +204,10 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("tab-header").state(StyleState.Selected),
 			[StyleValue.background(tokens.surfaceRaised)]);
 		styles.rule(StyleSelector.widget("button").className("tab-header").state(StyleState.Focused),
-			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
+			[
+				StyleValue.borderColor(tokens.focusRing),
+				StyleValue.borderWidth(1.0)
+			]);
 		styles.rule(StyleSelector.widget("button").className("tab-close"),
 			[StyleValue.background(Color.rgba(0, 0, 0, 0))]);
 		for (state in [StyleState.Focused, StyleState.Pressed])
@@ -225,8 +234,11 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Selected),
 			[StyleValue.background(tokens.selectionHighlight)]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool").state(StyleState.Focused),
-			[StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
-				StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
+			[
+				StyleValue.background(Color.rgba(0.0, 0.0, 0.0, 0.0)),
+				StyleValue.borderColor(tokens.focusRing),
+				StyleValue.borderWidth(1.0)
+			]);
 		styles.rule(StyleSelector.widget("button").className("viewport-tool")
 			.state(StyleState.Selected).state(StyleState.Focused),
 			[StyleValue.background(tokens.selectionHighlight)]);
@@ -239,7 +251,10 @@ class Theme {
 		styles.rule(StyleSelector.widget("button").className("inspector-section-header").state(StyleState.Hovered),
 			[StyleValue.background(tokens.surfaceHover)]);
 		styles.rule(StyleSelector.widget("button").className("inspector-section-header").state(StyleState.Focused),
-			[StyleValue.borderColor(tokens.focusRing), StyleValue.borderWidth(1.0)]);
+			[
+				StyleValue.borderColor(tokens.focusRing),
+				StyleValue.borderWidth(1.0)
+			]);
 		styles.rule(StyleSelector.widget("button").className("menu-item"), [
 			StyleValue.width(LayoutAxis.grow()),
 			StyleValue.height(LayoutAxis.fit(30.0)),
@@ -332,9 +347,11 @@ class Theme {
 			[StyleValue.background(controlDisabled)]);
 
 		styles.rule(StyleSelector.widget("toggle-indicator"), [
-			StyleValue.background(controlUnselected), StyleValue.alignX(LayoutAlignmentX.Start)]);
+			StyleValue.background(controlUnselected), StyleValue.alignX(LayoutAlignmentX.Start)
+		]);
 		styles.rule(StyleSelector.widget("toggle-indicator").state(StyleState.Checked), [
-			StyleValue.background(controlSelected), StyleValue.alignX(LayoutAlignmentX.End)]);
+			StyleValue.background(controlSelected), StyleValue.alignX(LayoutAlignmentX.End)
+		]);
 		styles.rule(StyleSelector.widget("toggle-indicator").state(StyleState.Disabled),
 			[StyleValue.background(controlDisabled)]);
 		styles.rule(StyleSelector.widget("toggle-thumb"),
@@ -365,7 +382,8 @@ class Theme {
 			StyleValue.sliderThumbColor(disabledText)
 		]);
 		styles.rule(StyleSelector.widget("split-divider"),
-			[StyleValue.background(Color.rgba(tokens.textPrimary.red, tokens.textPrimary.green, tokens.textPrimary.blue, 0.14))]);
+			[StyleValue.background(Color.rgba(tokens.textPrimary.red, tokens.textPrimary.green, tokens.textPrimary.blue,
+			0.14))]);
 		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Focused),
 			[StyleValue.background(tokens.accent)]);
 		styles.rule(StyleSelector.widget("split-divider").state(StyleState.Hovered),
@@ -408,20 +426,18 @@ class Theme {
 		]);
 		styles.rule(StyleSelector.widget("dialog-heading"),
 			[StyleValue.textColor(text)]);
-		styles.rule(StyleSelector.widget("tooltip"), [
-			StyleValue.fontSize(tokens.tooltipFontSize),
+		styles.rule(StyleSelector.widget("tooltip"), [StyleValue.fontSize(tokens.tooltipFontSize),
 			StyleValue.padding(new Insets(10.0, 7.0, 10.0, 7.0)),
 			StyleValue.background(tokens.surfaceRaised),
 			StyleValue.textColor(tokens.textPrimary),
 			StyleValue.decorations(DecorationChain.of([new BackgroundDecoration()])),
-			// Compositor effects include their ink overflow; shadow parameters alone
-			// do not paint a shadow, and node-local decorations are clipped.
-			StyleValue.effects(EffectChain.of([new DropShadowEffect(0.0, 2.0, 3.0, tokens.selectionPopupShadow)])),
+		// Compositor effects include their ink overflow; shadow parameters alone
+		// do not paint a shadow, and node-local decorations are clipped.
+		StyleValue.effects(EffectChain.of([new DropShadowEffect(0.0, 2.0, 3.0, tokens.selectionPopupShadow)])),
 			StyleValue.radius(StyleProperty.RadiusTopLeft, tokens.radiusSmall),
 			StyleValue.radius(StyleProperty.RadiusTopRight, tokens.radiusSmall),
 			StyleValue.radius(StyleProperty.RadiusBottomRight, tokens.radiusSmall),
-			StyleValue.radius(StyleProperty.RadiusBottomLeft, tokens.radiusSmall)
-		]);
+			StyleValue.radius(StyleProperty.RadiusBottomLeft, tokens.radiusSmall)]);
 	}
 
 	public function textColor(enabled:Bool):Color
@@ -434,8 +450,8 @@ class Theme {
 	/** Resolve the foreground against the actual state background, including custom fills. */
 	public function buttonLabelColor(enabled:Bool, background:Null<Color>, ?preferred:Color):Color {
 		if (!enabled) return disabledButtonText;
-		var fill = background == null ? tokens.surface : Color.rgba(
-			background.red * background.alpha + tokens.surface.red * (1 - background.alpha),
+		var fill = background == null ? tokens.surface
+			: Color.rgba(background.red * background.alpha + tokens.surface.red * (1 - background.alpha),
 			background.green * background.alpha + tokens.surface.green * (1 - background.alpha),
 			background.blue * background.alpha + tokens.surface.blue * (1 - background.alpha), 1);
 		var foreground = preferred == null ? button.color : preferred;
@@ -455,8 +471,8 @@ class Theme {
 		if (ratio >= 2 && ratio <= 2.5) return ink;
 		var white = Color.rgba(1, 1, 1), black = Color.rgba(0, 0, 0);
 		var backgroundGray = (background.red + background.green + background.blue) / 3;
-		var target = ratio > 2.5 ? Color.rgba(backgroundGray, backgroundGray, backgroundGray) :
-			contrastRatio(white, background) >= contrastRatio(black, background) ? white : black;
+		var target = ratio > 2.5 ? Color.rgba(backgroundGray, backgroundGray, backgroundGray) : contrastRatio(white,
+			background) >= contrastRatio(black, background) ? white : black;
 		var low = 0.0, high = 1.0;
 		for (_ in 0...12) {
 			var amount = (low + high) / 2;
@@ -477,7 +493,8 @@ class Theme {
 	}
 
 	static function luminance(color:Color):Float
-		return channelLuminance(color.red) * 0.2126 + channelLuminance(color.green) * 0.7152 + channelLuminance(color.blue) * 0.0722;
+		return channelLuminance(color.red) * 0.2126 + channelLuminance(color.green) * 0.7152
+			+ channelLuminance(color.blue) * 0.0722;
 
 	/** Returns the complete concrete style associated with a semantic role. */
 	public function textRole(role:TextRole):TextRoleStyle {
@@ -500,7 +517,10 @@ class Theme {
 	}
 
 	function get_accent():Color return tokens.accent;
-	function set_accent(value:Color):Color { tokens.accent = value; return value; }
+	function set_accent(value:Color):Color {
+		tokens.accent = value;
+		return value;
+	}
 	function get_text():Color return body == null ? tokens.text : body.color;
 	function set_text(value:Color):Color {
 		tokens.text = value;
@@ -518,7 +538,11 @@ class Theme {
 		return value;
 	}
 	function get_disabledText():Color return tokens.disabledText;
-	function set_disabledText(value:Color):Color { tokens.disabledText = value; tokens.textDisabled = value; return value; }
+	function set_disabledText(value:Color):Color {
+		tokens.disabledText = value;
+		tokens.textDisabled = value;
+		return value;
+	}
 	function get_buttonText():Color return button == null ? tokens.buttonText : button.color;
 	function set_buttonText(value:Color):Color {
 		tokens.buttonText = value;
@@ -528,29 +552,69 @@ class Theme {
 		return value;
 	}
 	function get_disabledButtonText():Color return tokens.disabledButtonText;
-	function set_disabledButtonText(value:Color):Color { tokens.disabledButtonText = value; return value; }
+	function set_disabledButtonText(value:Color):Color {
+		tokens.disabledButtonText = value;
+		return value;
+	}
 	function get_buttonBackground():Color return tokens.buttonBackground;
-	function set_buttonBackground(value:Color):Color { tokens.buttonBackground = value; return value; }
+	function set_buttonBackground(value:Color):Color {
+		tokens.buttonBackground = value;
+		return value;
+	}
 	function get_buttonHover():Color return tokens.buttonHover;
-	function set_buttonHover(value:Color):Color { tokens.buttonHover = value; return value; }
+	function set_buttonHover(value:Color):Color {
+		tokens.buttonHover = value;
+		return value;
+	}
 	function get_buttonPressed():Color return tokens.buttonPressed;
-	function set_buttonPressed(value:Color):Color { tokens.buttonPressed = value; return value; }
+	function set_buttonPressed(value:Color):Color {
+		tokens.buttonPressed = value;
+		return value;
+	}
 	function get_buttonFocused():Color return tokens.buttonFocused;
-	function set_buttonFocused(value:Color):Color { tokens.buttonFocused = value; return value; }
+	function set_buttonFocused(value:Color):Color {
+		tokens.buttonFocused = value;
+		return value;
+	}
 	function get_buttonSelected():Color return tokens.buttonSelected;
-	function set_buttonSelected(value:Color):Color { tokens.buttonSelected = value; return value; }
+	function set_buttonSelected(value:Color):Color {
+		tokens.buttonSelected = value;
+		return value;
+	}
 	function get_buttonDisabled():Color return tokens.buttonDisabled;
-	function set_buttonDisabled(value:Color):Color { tokens.buttonDisabled = value; return value; }
+	function set_buttonDisabled(value:Color):Color {
+		tokens.buttonDisabled = value;
+		return value;
+	}
 	function get_controlSelected():Color return tokens.controlSelected;
-	function set_controlSelected(value:Color):Color { tokens.controlSelected = value; return value; }
+	function set_controlSelected(value:Color):Color {
+		tokens.controlSelected = value;
+		return value;
+	}
 	function get_controlUnselected():Color return tokens.controlUnselected;
-	function set_controlUnselected(value:Color):Color { tokens.controlUnselected = value; return value; }
+	function set_controlUnselected(value:Color):Color {
+		tokens.controlUnselected = value;
+		return value;
+	}
 	function get_controlDisabled():Color return tokens.controlDisabled;
-	function set_controlDisabled(value:Color):Color { tokens.controlDisabled = value; return value; }
+	function set_controlDisabled(value:Color):Color {
+		tokens.controlDisabled = value;
+		return value;
+	}
 	function get_panelBackground():Color return tokens.panelBackground;
-	function set_panelBackground(value:Color):Color { tokens.panelBackground = value; tokens.surface = value; return value; }
+	function set_panelBackground(value:Color):Color {
+		tokens.panelBackground = value;
+		tokens.surface = value;
+		return value;
+	}
 	function get_overlayBackdrop():Color return tokens.overlayBackdrop;
-	function set_overlayBackdrop(value:Color):Color { tokens.overlayBackdrop = value; return value; }
+	function set_overlayBackdrop(value:Color):Color {
+		tokens.overlayBackdrop = value;
+		return value;
+	}
 	function get_tooltipBackground():Color return tokens.tooltipBackground;
-	function set_tooltipBackground(value:Color):Color { tokens.tooltipBackground = value; return value; }
+	function set_tooltipBackground(value:Color):Color {
+		tokens.tooltipBackground = value;
+		return value;
+	}
 }

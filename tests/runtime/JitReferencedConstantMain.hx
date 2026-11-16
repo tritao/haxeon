@@ -19,7 +19,8 @@ class JitReferencedConstantMain {
 
 	static function main():Void {
 		var pattern = ~/(\w+)=(\d+)/;
-		check(pattern.match("key=42") && pattern.matched(1) == "key" && pattern.matched(2) == "42", "EReg.matched lost its length");
+		check(pattern.match("key=42") && pattern.matched(1) == "key" && pattern.matched(2) == "42",
+			"EReg.matched lost its length");
 		var len = 0;
 		setInt(len, 24);
 		var boxed:Dynamic = len, optional:Null<Int> = len;

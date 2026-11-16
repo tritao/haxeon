@@ -26,7 +26,7 @@ class IrVerifyRead {
  */
 class IrVerifyMemo {
 	final accepted:Map<String, {fn:IrFunction, reads:Array<IrVerifyRead>}> = [];
-	final tables:Map<String, String->Dynamic> = [];
+	final tables:Map<String, String -> Dynamic> = [];
 	var printed:haxe.ds.ObjectMap<Dynamic, String> = new haxe.ds.ObjectMap();
 
 	/** What the function being checked has read, one map per table, in the order the tables were first used. */
@@ -50,7 +50,7 @@ class IrVerifyMemo {
 	public function new() {}
 
 	/** Starts a build: the tables the reads are answered from. */
-	public function attach(named:Map<String, String->Dynamic>):Void {
+	public function attach(named:Map<String, String -> Dynamic>):Void {
 		tables.clear();
 		checkedFunctions = 0;
 		skippedFunctions = 0;

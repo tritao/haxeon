@@ -5,16 +5,24 @@ import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.ir.Ir.IrType;
 
-private typedef LinearEnumStringCase = {final name:Int; final descriptor:Int; final offsets:Array<Int>;}
-private typedef LinearEnumStringGroup = {final type:Int; final cases:Array<LinearEnumStringCase>;}
+private typedef LinearEnumStringCase = {
+	final name:Int;
+	final descriptor:Int;
+	final offsets:Array<Int>;
+}
+private typedef LinearEnumStringGroup = {
+	final type:Int;
+	final cases:Array<LinearEnumStringCase>;
+}
 
 /** Encode shared enum string descriptors in linear memory. */
 class WasmLinearEnumStringTable {
-	public static function place(module:WasmModule, model:EnumStringDescriptors, layout:WasmLayout, strings:Map<String, Int>, start:Int):{
-		address:Int,
-		count:Int,
-		end:Int
-	} {
+	public static function place(module:WasmModule, model:EnumStringDescriptors, layout:WasmLayout,
+			strings:Map<String, Int>, start:Int): {
+				address: Int,
+				count: Int,
+				end: Int
+			} {
 		var groups:Array<LinearEnumStringGroup> = [];
 		for (group in model.groups) {
 			var cases:Array<LinearEnumStringCase> = [];
@@ -41,7 +49,8 @@ class WasmLinearEnumStringTable {
 					seen.set(key, true);
 					size += 4;
 					for (field in model.descriptors[item.descriptor])
-						size += 12 + (EnumStringDescriptors.code(field.kind) == EnumStringDescriptors.TAG ? 4 + field.tagNames.length * 4 : 0);
+						size += 12 + (EnumStringDescriptors.code(field.kind) == EnumStringDescriptors.TAG
+							? 4 + field.tagNames.length * 4 : 0);
 				}
 		}
 		var bytes = haxe.io.Bytes.alloc(size),

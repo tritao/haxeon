@@ -34,17 +34,21 @@ class AbstractConstructorNormalizer {
 	static function rewriteStatement(statement:AstStatement, resultName:String):AstStatement
 		return switch statement {
 			case Assignment("this", expression, span): Assignment(resultName, expression, span);
-			case Return(_, span): throw new CompileError(new Diagnostic("E1003", "Abstract constructors cannot return a value", span));
+			case Return(_, span): throw new CompileError(new Diagnostic("E1003",
+				"Abstract constructors cannot return a value", span));
 			case ReturnVoid(span): Return(Variable(resultName, span), span);
 			case If(predicate, yes, no, span):
 				If(predicate, rewriteStatements(yes, resultName), rewriteStatements(no, resultName), span);
 			case While(predicate, body, span): While(predicate, rewriteStatements(body, resultName), span);
 			case DoWhile(body, predicate, span): DoWhile(rewriteStatements(body, resultName), predicate, span);
-			case ForIn(key, value, iterable, body, span): ForIn(key, value, iterable, rewriteStatements(body, resultName), span);
+			case ForIn(key, value, iterable, body, span): ForIn(key, value, iterable,
+				rewriteStatements(body, resultName), span);
 			case Try(body, catches, span):
-				Try(rewriteStatements(body, resultName), [for (entry in catches) rewriteCatch(entry, resultName)], span);
+				Try(rewriteStatements(body, resultName), [for (entry in catches) rewriteCatch(entry, resultName)],
+					span);
 			case Switch(expression, cases, fallback, hasDefault, span):
-				Switch(expression, [for (entry in cases) rewriteCase(entry, resultName)], rewriteStatements(fallback, resultName), hasDefault, span);
+				Switch(expression, [for (entry in cases) rewriteCase(entry, resultName)],
+					rewriteStatements(fallback, resultName), hasDefault, span);
 			default: statement;
 		};
 

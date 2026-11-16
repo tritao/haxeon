@@ -25,7 +25,8 @@ class EnumTagRewriteMain {
 			b.add(number, b.constInt(1));
 			b.returnValue(mode);
 			var mixed = new IrFunction("mixed",
-				b.arguments, Enum("Mode"), b.blocks, Ordinary), scalar = b.blocks[0].instructions[0];
+				b.arguments, Enum("Mode"), b.blocks, Ordinary),
+				scalar = b.blocks[0].instructions[0];
 			p.functions.push(mixed);
 			var descriptor = new IrBuilder();
 			descriptor.returnValue(descriptor.typeValue(Function([Enum("Mode")], Array(Enum("Mode")))));
@@ -42,10 +43,9 @@ class EnumTagRewriteMain {
 				!= originals[i]) throw "An unrelated numeric function was copied by tag lowering";
 			var changed = p.functions[size];
 			if (changed == mixed || changed.arguments[1] != number
-				|| changed.blocks[0].instructions[0] != scalar || !IrVerifier.sameType(
-					changed.arguments[0].type,
-					EnumTag("Mode")
-				)) throw "Tag lowering copied unaffected values or failed to rewrite the changed argument";
+				|| changed.blocks[0].instructions[0] != scalar || !IrVerifier.sameType(changed.arguments[0].type,
+				EnumTag("Mode")))
+				throw "Tag lowering copied unaffected values or failed to rewrite the changed argument";
 			switch p.functions[size + 1].blocks[0].instructions[0].value {
 				case TypeValue(_, type):
 					if (!IrVerifier.sameType(type, Function([EnumTag("Mode")],
@@ -56,7 +56,8 @@ class EnumTagRewriteMain {
 			IrEnumTagLowering.escapes(p);
 			IrVerifier.verify(p);
 			var escaped = p.functions[size + 2],
-				count = p.functions.length, before = escaped.blocks[0].instructions.copy();
+				count = p.functions.length,
+				before = escaped.blocks[0].instructions.copy();
 			IrEnumTagLowering.escapes(p);
 			if (p.functions.length != count) throw "Repeated escape lowering duplicated helpers";
 			for (i in 0...before.length) if (escaped.blocks[0].instructions[i]
@@ -68,7 +69,9 @@ class EnumTagRewriteMain {
 		var tagProgram = new IrProgram("main");
 		tagProgram.functions = [plain("main", 0)];
 		tagProgram.enums = [for (index in 0...4096)
-			{name: "Tag" + index, cases: [{name: "Only", params: []}]}];
+			{
+				name:"Tag" + index, cases:[{name: "Only", params: []}]
+			}];
 		tagProgram.enums.push({name: "Payload", cases: [{name: "Some", params: [I32]}]});
 		var planner = new compiler.ir.IrInlineEnumLayout(tagProgram.enums, [], 64,
 			compiler.ir.IrValueLaneLayout.IrValueLaneTarget.HashLink);
@@ -85,8 +88,7 @@ class EnumTagRewriteMain {
 		IrOperands.anyValue(instruction, function(value) {
 			seen++;
 			return false;
-		}
-		);
+		});
 		if (seen != 2) throw "Value visitor skipped the phi output or its edge use";
 		var bad = new IrBuilder();
 		bad.emit(instruction);

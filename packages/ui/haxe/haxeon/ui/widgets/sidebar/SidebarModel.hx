@@ -22,8 +22,8 @@ class SidebarModel {
 	public function new() {}
 
 	public function register(id:String, provider:Void->View, options:SidebarModeOptions):Void {
-		if (!validId(id) || provider == null || options == null || options.label.length == 0 ||
-			find(id) != null) throw "Invalid or duplicate sidebar mode";
+		if (!validId(id) || provider == null || options == null || options.label.length == 0
+			|| find(id) != null) throw "Invalid or duplicate sidebar mode";
 		var mode = new SidebarMode(id, provider, options, sequence++);
 		if (savedVisible.exists(id)) mode.visible = savedVisible.get(id);
 		modes.push(mode);
@@ -37,8 +37,11 @@ class SidebarModel {
 		if (mode == null) return false;
 		savedVisible.set(id, mode.visible);
 		modes.remove(mode);
-		var active = selected(); activeId = active == null ? "" : active.id; savedActive = activeId;
-		onChange(); return true;
+		var active = selected();
+		activeId = active == null ? "" : active.id;
+		savedActive = activeId;
+		onChange();
+		return true;
 	}
 	public function find(id:String):Null<SidebarMode> {
 		for (mode in modes) if (mode.id == id) return mode;
@@ -53,11 +56,16 @@ class SidebarModel {
 	public function select(id:String):Bool {
 		var mode = find(id);
 		if (mode == null || !mode.visible) return false;
-		activeId = id; savedActive = id; visible = true; onChange(); return true;
+		activeId = id;
+		savedActive = id;
+		visible = true;
+		onChange();
+		return true;
 	}
 	public function setVisible(value:Bool):Void {
 		if (visible == value) return;
-		visible = value; onChange();
+		visible = value;
+		onChange();
 	}
 	/** Container width is shared by every destination. Resolution records it without a rebuild. */
 	public function rememberWidth(width:Float):Void {
@@ -66,9 +74,13 @@ class SidebarModel {
 	public function setModeVisible(id:String, value:Bool):Bool {
 		var mode = find(id);
 		if (mode == null) return false;
-		mode.visible = value; savedVisible.set(id, value);
-		var selected = selected(); activeId = selected == null ? "" : selected.id; savedActive = activeId;
-		onChange(); return true;
+		mode.visible = value;
+		savedVisible.set(id, value);
+		var selected = selected();
+		activeId = selected == null ? "" : selected.id;
+		savedActive = activeId;
+		onChange();
+		return true;
 	}
 	/** Move a destination before another one, or to the end when `before` is null. Returns false when nothing moved. */
 	public function moveMode(id:String, before:Null<String>):Bool {
@@ -84,7 +96,8 @@ class SidebarModel {
 		var order = [for (each in modes) each.id];
 		for (saved in savedOrder) if (find(saved) == null) order.push(saved);
 		savedOrder = order;
-		onChange(); return true;
+		onChange();
+		return true;
 	}
 	/** Replace the default order, such as a layout preset's; a user's saved order still wins. Does not notify. */
 	public function setDefaultOrder(compare:SidebarMode->SidebarMode->Int):Void {
@@ -94,7 +107,10 @@ class SidebarModel {
 	/** Forget the user's order and return to the default one. */
 	public function resetOrder():Bool {
 		if (savedOrder.length == 0) return false;
-		savedOrder = []; arrange(); onChange(); return true;
+		savedOrder = [];
+		arrange();
+		onChange();
+		return true;
 	}
 	static function registrationOrder(a:SidebarMode, b:SidebarMode):Int
 		return a.order == b.order ? a.sequence - b.sequence : a.order - b.order;
@@ -104,13 +120,16 @@ class SidebarModel {
 		modes.sort(defaultOrder);
 		if (savedOrder.length == 0) return;
 		var slots:Array<Int> = [], placed:Array<SidebarMode> = [];
-		for (i in 0...modes.length) if (savedOrder.indexOf(modes[i].id) >= 0) { slots.push(i); placed.push(modes[i]); }
+		for (i in 0...modes.length) if (savedOrder.indexOf(modes[i].id) >= 0) {
+			slots.push(i);
+			placed.push(modes[i]);
+		}
 		placed.sort(function(a, b) return savedOrder.indexOf(a.id) - savedOrder.indexOf(b.id));
 		for (i in 0...slots.length) modes[slots[i]] = placed[i];
 	}
 	public function encode():String {
-		return "3|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|" + encodeShown() +
-			"|" + savedOrder.join(",");
+		return "3|" + (savedActive == "" ? activeId : savedActive) + "|" + (visible ? "1" : "0") + "|" + width + "|"
+			+ encodeShown() + "|" + savedOrder.join(",");
 	}
 	/** True when the user hid a destination or moved one, including destinations not registered now. */
 	public var customDestinations(get, never):Bool;
@@ -130,11 +149,14 @@ class SidebarModel {
 		if (parts.length != 3 || parts[0] != "1") return false;
 		var shown = parseShown(parts[1], false), order = parseOrder(parts[2]);
 		if (shown == null || order == null) return false;
-		savedVisible = shown; savedOrder = order;
+		savedVisible = shown;
+		savedOrder = order;
 		for (mode in modes) if (shown.exists(mode.id)) mode.visible = shown.get(mode.id);
 		arrange();
-		var active = selected(); activeId = active == null ? "" : active.id;
-		onChange(); return true;
+		var active = selected();
+		activeId = active == null ? "" : active.id;
+		onChange();
+		return true;
 	}
 	function encodeShown():String {
 		var shown:Map<String, Bool> = [];
@@ -161,7 +183,8 @@ class SidebarModel {
 		var order:Array<String> = [], seen:Map<String, Bool> = [];
 		if (value != "") for (id in value.split(",")) {
 			if (!validId(id) || seen.exists(id)) return null;
-			seen.set(id, true); order.push(id);
+			seen.set(id, true);
+			order.push(id);
 		}
 		return order;
 	}
@@ -172,8 +195,8 @@ class SidebarModel {
 		var parts = value.split("|");
 		var legacy = parts[0] == "1";
 		var expected = legacy ? 4 : parts[0] == "2" ? 5 : parts[0] == "3" ? 6 : -1;
-		if (parts.length != expected ||
-			(parts[1] != "" && !validId(parts[1])) || (parts[2] != "0" && parts[2] != "1")) return false;
+		if (parts.length != expected || (parts[1] != "" && !validId(parts[1]))
+			|| (parts[2] != "0" && parts[2] != "1")) return false;
 		var nextWidth = width;
 		if (!legacy) {
 			if (!widthPattern.match(parts[3])) return false;
@@ -192,15 +215,21 @@ class SidebarModel {
 		}
 		var order = parts.length == 6 ? parseOrder(parts[5]) : [];
 		if (order == null) return false;
-		savedActive = parts[1]; savedVisible = shown; width = nextWidth; savedOrder = order;
+		savedActive = parts[1];
+		savedVisible = shown;
+		width = nextWidth;
+		savedOrder = order;
 		visible = parts[2] == "1";
 		for (mode in modes) if (shown.exists(mode.id)) mode.visible = shown.get(mode.id);
 		arrange();
 		activeId = savedActive;
-		var active = selected(); activeId = active == null ? "" : active.id;
-		onChange(); return true;
+		var active = selected();
+		activeId = active == null ? "" : active.id;
+		onChange();
+		return true;
 	}
-	static function validWidth(width:Float):Bool return (width == width && width - width == 0.0) && width >= 80.0 && width <= 4096.0;
+	static function validWidth(width:Float):Bool return (width == width && width - width == 0.0) && width >= 80.0
+		&& width <= 4096.0;
 	static function validId(id:String):Bool {
 		if (id.length == 0 || id.length > 128) return false;
 		for (i in 0...id.length) {

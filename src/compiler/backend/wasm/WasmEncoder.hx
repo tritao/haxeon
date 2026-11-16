@@ -768,15 +768,31 @@ class WasmEncoder {
 	static function sameValueType(left:WasmValueType, right:WasmValueType):Bool {
 		return switch [left, right] {
 			case [I32, I32], [I64, I64], [F32, F32], [F64, F64]: true;
-			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable && sameHeapType(leftType.heap, rightType.heap);
+			case [Ref(leftType), Ref(rightType)]: leftType.nullable == rightType.nullable
+				&& sameHeapType(leftType.heap, rightType.heap);
 			default: false;
 		};
 	}
 
 	static function sameHeapType(left:WasmHeapType, right:WasmHeapType):Bool {
 		return switch [left, right] {
-			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [None, None], [NoExtern, NoExtern],
-				[NoFunc, NoFunc], [Exn, Exn], [NoExn, NoExn]: true;
+			case [Any, Any], [Eq, Eq], [I31, I31], [Struct, Struct], [Array, Array], [Func, Func], [Extern, Extern], [
+				None,
+				None
+			], [
+				NoExtern,
+				NoExtern
+			],
+				[
+					NoFunc,
+					NoFunc
+				], [
+					Exn,
+					Exn
+				], [
+					NoExn,
+					NoExn
+				]: true;
 			case [Type(leftIndex), Type(rightIndex)]: leftIndex == rightIndex;
 			default: false;
 		};

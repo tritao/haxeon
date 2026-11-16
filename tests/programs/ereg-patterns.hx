@@ -3,13 +3,15 @@
 function anchoredClasses():Int {
 	var hash = ~/^[0-9a-f]{64}$/;
 	var digest = "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08";
-	if (!hash.match(digest) || hash.match(digest + "0") || hash.match(digest.substr(1)) || hash.match("Z" + digest.substr(1)))
+	if (!hash.match(digest) || hash.match(digest + "0") || hash.match(digest.substr(1))
+		|| hash.match("Z" + digest.substr(1)))
 		return 1;
 	var ifc = ~/^Ifc[A-Za-z0-9]+$/;
 	if (!ifc.match("IfcWallStandardCase") || ifc.match("IfcWall_Case") || ifc.match("Ifc") || ifc.match("xIfcWall"))
 		return 1;
 	var guid = ~/^[0-3][0-9A-Za-z_$]{21}$/;
-	if (!guid.match("2O2Fr$t4X7Zf8NOew3FLOH") || guid.match("4O2Fr$t4X7Zf8NOew3FLOH") || guid.match("2O2Fr$t4X7Zf8NOew3FLO"))
+	if (!guid.match("2O2Fr$t4X7Zf8NOew3FLOH") || guid.match("4O2Fr$t4X7Zf8NOew3FLOH")
+		|| guid.match("2O2Fr$t4X7Zf8NOew3FLO"))
 		return 1;
 	var drive = ~/^[A-Za-z]:/;
 	if (!drive.match("C:\\models") || drive.match("/home/c:") || drive.match("1:"))
@@ -22,16 +24,19 @@ function anchoredClasses():Int {
 
 function captures():Int {
 	var stamp = ~/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})$/;
-	if (!stamp.match("2026-09-30T14:05:59") || stamp.matched(1) != "2026" || stamp.matched(2) != "09" || stamp.matched(3) != "30"
+	if (!stamp.match("2026-09-30T14:05:59") || stamp.matched(1) != "2026" || stamp.matched(2) != "09"
+		|| stamp.matched(3) != "30"
 		|| stamp.matched(4) != "14" || stamp.matched(5) != "05" || stamp.matched(6) != "59")
 		return 2;
 	if (stamp.match("2026-09-30T14:05:5") || stamp.match("2026-9-30T14:05:59"))
 		return 2;
 	var optional = ~/(a)|(b)/;
-	if (!optional.match("xb") || optional.matched(2) != "b" || optional.matchedPos().pos != 1 || optional.matchedLeft() != "x")
+	if (!optional.match("xb") || optional.matched(2) != "b" || optional.matchedPos().pos != 1
+		|| optional.matchedLeft() != "x")
 		return 2;
 	var nonCapturing = ~/(?:ab)+(c)/;
-	if (!nonCapturing.match("zababcd") || nonCapturing.matched(0) != "ababc" || nonCapturing.matched(1) != "c" || nonCapturing.matchedRight() != "d")
+	if (!nonCapturing.match("zababcd") || nonCapturing.matched(0) != "ababc" || nonCapturing.matched(1) != "c"
+		|| nonCapturing.matchedRight() != "d")
 		return 2;
 	var position = nonCapturing.matchedPos();
 	return position.pos == 1 && position.len == 5 ? 0 : 2;

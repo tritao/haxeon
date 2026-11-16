@@ -28,15 +28,19 @@ class EnumAbstractValueShadowedByClassMain {
 	 */
 	static function packaged(member:String):Compiler {
 		var compiler = new Compiler();
-		compiler.update("pk/Carry.hx", "package pk; class Carry { public static final SPEED = 3; public function new() {} }");
-		compiler.update("pk/Mode.hx", "package pk; enum abstract Mode(Int) { var Free = 0; var Carry = 1; var Hang = 2; }");
-		compiler.update("pk/Control.hx", "package pk; class Control { public var mode(default, null):Mode = Mode.Free; public function new() {} }");
+		compiler.update("pk/Carry.hx",
+			"package pk; class Carry { public static final SPEED = 3; public function new() {} }");
+		compiler.update("pk/Mode.hx",
+			"package pk; enum abstract Mode(Int) { var Free = 0; var Carry = 1; var Hang = 2; }");
+		compiler.update("pk/Control.hx",
+			"package pk; class Control { public var mode(default, null):Mode = Mode.Free; public function new() {} }");
 		compiler.update("pk/Body.hx",
 			"package pk; class Body { final control = new Control(); public function new() {} "
 			+ "public function speed():Int return Carry.SPEED; "
 			+ member
 			+ " }");
-		compiler.update("Main.hx", "class Main { static function main():Int { var body = new pk.Body(); return body.check() && body.speed() == 3 ? 0 : 1; } }");
+		compiler.update("Main.hx",
+			"class Main { static function main():Int { var body = new pk.Body(); return body.check() && body.speed() == 3 ? 0 : 1; } }");
 		return compiler;
 	}
 
@@ -44,13 +48,17 @@ class EnumAbstractValueShadowedByClassMain {
 		var forms = [
 			"equality" => "public function check():Bool return mode == Carry;",
 			"inequality" => "public function check():Bool return mode != Carry;",
-			"switch case" => "public function check():Bool { return switch mode { case Free: true; case Carry: false; default: false; } }",
-			"switch over a derived value" => "public function check():Bool { var wanted = mode == Free && true ? Mode.Hang : mode; " +
-			"return switch wanted { case Free: true; case Carry: false; default: false; }; }",
-			"comparison with a derived value" => "public function check():Bool { var wanted = mode == Free && true ? Mode.Hang : mode; " +
-			"if (wanted == Carry) return false; return true; }",
+			"switch case"
+				=> "public function check():Bool { return switch mode { case Free: true; case Carry: false; default: false; } }",
+			"switch over a derived value"
+				=> "public function check():Bool { var wanted = mode == Free && true ? Mode.Hang : mode; "
+				+ "return switch wanted { case Free: true; case Carry: false; default: false; }; }",
+			"comparison with a derived value"
+				=> "public function check():Bool { var wanted = mode == Free && true ? Mode.Hang : mode; "
+				+ "if (wanted == Carry) return false; return true; }",
 			"typed local" => "public function check():Bool { var m:Mode = Carry; return m != mode; }",
-			"argument" => "public function take(m:Mode):Bool return m == Mode.Free; public function check():Bool return take(Carry);"
+			"argument"
+				=> "public function take(m:Mode):Bool return m == Mode.Free; public function check():Bool return take(Carry);"
 		];
 		var failures:Array<String> = [];
 		for (name => member in forms)
@@ -60,8 +68,10 @@ class EnumAbstractValueShadowedByClassMain {
 				failures.push('$name: ${Std.string(error)}');
 		var packagedForms = [
 			"packaged equality" => "public function check():Bool return control.mode == Carry;",
-			"packaged condition" => "public function check():Bool { if (control.mode == Carry || control.mode != Free) return true; return false; }",
-			"packaged switch" => "public function check():Bool { return switch control.mode { case Free: true; case Carry: false; default: false; } }"
+			"packaged condition"
+				=> "public function check():Bool { if (control.mode == Carry || control.mode != Free) return true; return false; }",
+			"packaged switch"
+				=> "public function check():Bool { return switch control.mode { case Free: true; case Carry: false; default: false; } }"
 		];
 		for (name => member in packagedForms)
 			try

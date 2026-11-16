@@ -49,7 +49,8 @@ class StructProperties {
 		return constraintName == FLAT_TYPE_NAME ? facts.flat : constraintName == PORTABLE_TYPE_NAME && facts.portable;
 	}
 
-	public static function failurePath(declarations:DeclarationIndex, type:CompilerType, constraintName:String):Null<String> {
+	public static function failurePath(declarations:DeclarationIndex, type:CompilerType,
+			constraintName:String):Null<String> {
 		var facts = evaluate(declarations, type);
 		return constraintName == FLAT_TYPE_NAME ? facts.flatPath : facts.portablePath;
 	}
@@ -65,7 +66,8 @@ class StructProperties {
 		};
 	}
 
-	static function evaluateAt(declarations:DeclarationIndex, type:CompilerType, path:String, visiting:Array<String>):StructPropertyFacts
+	static function evaluateAt(declarations:DeclarationIndex, type:CompilerType, path:String,
+			visiting:Array<String>):StructPropertyFacts
 		return switch type {
 			case TInstance(NominalKind.Enum, _, _) | TNullable(_) if (isTagEnum(declarations, type)):
 				{flat: true, portable: true, flatPath: null, portablePath: null};
@@ -87,31 +89,39 @@ class StructProperties {
 				evaluateAt(declarations, representation, path, visiting);
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = declarations.classes.get(name);
-				if (declaration == null || !isValueDeclaration(declaration)) invalid(path) else evaluateDeclaration(declarations, declaration, path, visiting);
+				if (declaration == null || !isValueDeclaration(declaration)) invalid(path)
+				else evaluateDeclaration(declarations, declaration, path, visiting);
 			case TInstance(NominalKind.NativeValue, name, _):
 				var declaration = declarations.classes.get(name);
-				if (declaration == null) invalid(path) else evaluateDeclaration(declarations, declaration, path, visiting);
+				if (declaration == null) invalid(path) else evaluateDeclaration(declarations, declaration, path,
+					visiting);
 			case TNativeScalar(name):
 				var portable = !isTargetDependentScalarName(name);
 				{
-					flat: true,
-					portable: portable,
-					flatPath: null,
-					portablePath: portable ? null : path
+					flat:true,
+						portable:portable,
+						flatPath:null,
+						portablePath:portable ? null : path
 				};
 			case _:
 				invalid(path);
 		};
 
-	static function evaluateDeclaration(declarations:DeclarationIndex, declaration:AstClass, path:String, visiting:Array<String>):StructPropertyFacts {
+	static function evaluateDeclaration(declarations:DeclarationIndex, declaration:AstClass, path:String,
+			visiting:Array<String>):StructPropertyFacts {
 		if (visiting.indexOf(declaration.name) >= 0)
 			return invalid(path.length == 0 ? declaration.name : path);
-		var nextPath = path.length == 0 ? declaration.name : path, flat = true, portable = true, flatPath:Null<String> = null,
-			portablePath:Null<String> = null, nextVisiting = visiting.concat([declaration.name]);
+		var nextPath = path.length == 0 ? declaration.name : path,
+			flat = true,
+			portable = true,
+			flatPath:Null<String> = null,
+			portablePath:Null<String> = null,
+			nextVisiting = visiting.concat([declaration.name]);
 		for (field in declaration.fields)
 			if (!field.isStatic && hasStorage(field)) {
 				var fieldPath = nextPath.length == 0 ? field.name : nextPath + "." + field.name,
-					fieldType = declarations.resolve(declarations.resolvedFieldType(declaration.name, field), field.span),
+					fieldType = declarations.resolve(declarations.resolvedFieldType(declaration.name, field),
+						field.span),
 					facts = evaluateAt(declarations, fieldType, fieldPath, nextVisiting);
 				if (!facts.flat) {
 					flat = false;

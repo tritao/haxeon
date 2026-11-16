@@ -1,12 +1,18 @@
 class InlinedNullProbe {
 	public static var entered:Int = 0;
 	public static var arguments:Int = 0;
-	public static function argument():Int { arguments++; return 3; }
+	public static function argument():Int {
+		arguments++;
+		return 3;
+	}
 }
 
 class InlinedNullBox {
 	public function new() {}
-	public function straight(value:Int):Int { InlinedNullProbe.entered++; return value; }
+	public function straight(value:Int):Int {
+		InlinedNullProbe.entered++;
+		return value;
+	}
 	public inline function branch(value:Int):Int {
 		InlinedNullProbe.entered++;
 		if (value > 0) return value;

@@ -4,23 +4,29 @@ import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
 
-private typedef ValuePhiPlan = {final output:IrValue; final inputs:Array<IrPhiInput>;}
+private typedef ValuePhiPlan = {
+	final output:IrValue;
+	final inputs:Array<IrPhiInput>;
+}
 
 /** Split a value phi into scalar snapshots when every incoming value is known to exist. */
 class IrValuePhiScalarization {
 	public static function rewrite(program:IrProgram):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
-		var table = IrObjectTable.of(objects), layouts = new IrInlineValueLayout(table), packets = [
-			for (declaration in program.enums)
-				if (declaration.inlineStorage != null) declaration.inlineStorage => true
-		];
+		var table = IrObjectTable.of(objects),
+			layouts = new IrInlineValueLayout(table),
+			packets = [
+				for (declaration in program.enums)
+					if (declaration.inlineStorage != null) declaration.inlineStorage => true
+			];
 		program.functions = [
 			for (fn in program.functions)
 				rewriteFunction(fn, objects, table, layouts, packets)
 		];
 	}
 
-	public static function rewriteFunction(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable, layouts:IrInlineValueLayout,
+	public static function rewriteFunction(fn:IrFunction, objects:Map<String, IrObject>, table:IrObjectTable,
+			layouts:IrInlineValueLayout,
 			?alwaysPresent:Map<String, Bool>):IrFunction {
 		function valueName(type:IrType):Null<String>
 			return switch type {
@@ -120,7 +126,8 @@ class IrValuePhiScalarization {
 				}
 				if (block.terminator != null)
 					switch block.terminator.value {
-						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (value.id == input.value.id):
+						case Return(value), Throw(value), Rethrow(value),
+							Branch(value, _, _) if (value.id == input.value.id):
 							return false;
 						default:
 					}
@@ -184,7 +191,7 @@ class IrValuePhiScalarization {
 					case Phi(out, _) if (plans.exists(out.id)):
 						var plan:ValuePhiPlan = cast plans.get(out.id),
 							shape = layouts.slots(out.type),
-							phis:Array<Array<IrPhiInput>> = [for (_ in shape) []];
+							phis:Array<Array<IrPhiInput>> = [for (_ in shape)[]];
 						for (input in plan.inputs) {
 							var predecessor:IrBlock = cast copies.get(input.block);
 							for (index in 0...shape.length) {
@@ -204,13 +211,15 @@ class IrValuePhiScalarization {
 											nativeLayout: slot.nativeLayout
 										};
 										var read = new IrValue(next++, "$value-phi-read", slot.type);
-										predecessor.instructions.push(new Located(FieldGet(read, current, IrInlineValueLayout.slotName(part, sub)),
+										predecessor.instructions.push(new Located(FieldGet(read, current,
+											IrInlineValueLayout.slotName(part, sub)),
 											located.provenance));
 										current = read;
 										break;
 									}
 									var read = new IrValue(next++, "$value-phi-read", field.type);
-									predecessor.instructions.push(new Located(FieldGet(read, current, part), located.provenance));
+									predecessor.instructions.push(new Located(FieldGet(read, current, part),
+										located.provenance));
 									current = read;
 								}
 								phis[index].push({block: input.block, value: current});
@@ -238,7 +247,8 @@ class IrValuePhiScalarization {
 											isPresence: slot.isPresence,
 											nativeLayout: slot.nativeLayout
 										};
-									setup.push(new Located(FieldSet(current, IrInlineValueLayout.slotName(part, sub), scalar[index]), located.provenance));
+									setup.push(new Located(FieldSet(current, IrInlineValueLayout.slotName(part, sub),
+										scalar[index]), located.provenance));
 									break;
 								}
 								if (partIndex == path.length - 1)

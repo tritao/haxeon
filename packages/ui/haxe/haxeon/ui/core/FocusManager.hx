@@ -29,8 +29,7 @@ class FocusManager {
 				var current = focusedId == null || root == null ? null : root.find(focusedId);
 				// Replacing an unmounted trap must retain its original return target,
 				// rather than saving an item that disappeared with the old popup.
-				if ((current == null && activeTrapId == null) ||
-					(current != null && trap.find(current.id) == null))
+				if ((current == null && activeTrapId == null) || (current != null && trap.find(current.id) == null))
 					focusBeforeTrap = focusedId;
 				activeTrapId = nextTrapId;
 			}
@@ -49,8 +48,7 @@ class FocusManager {
 				focusBeforeTrap = null;
 			}
 		}
-		if (trap != null && (focusedId == null || !eligible.exists(focusedId.value) ||
-			trap.find(focusedId) == null))
+		if (trap != null && (focusedId == null || !eligible.exists(focusedId.value) || trap.find(focusedId) == null))
 			focusedId = order.length == 0 ? null : order[0].id;
 		else if (focusedId != null && !eligible.exists(focusedId.value))
 			focusedId = null;

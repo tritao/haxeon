@@ -261,7 +261,8 @@ class Regex {
 	}
 
 	static function isWordByte(code:Int):Bool
-		return code >= "a".code && code <= "z".code || code >= "A".code && code <= "Z".code || code >= "0".code && code <= "9".code || code == "_".code;
+		return code >= "a".code && code <= "z".code || code >= "A".code && code <= "Z".code || code >= "0".code
+			&& code <= "9".code || code == "_".code;
 
 	public static function fold(code:Int):Int
 		return code >= "A".code && code <= "Z".code ? code + 32 : code;
@@ -347,7 +348,8 @@ private class RegexClass {
 		return switch shorthand {
 			case "d".code: code >= "0".code && code <= "9".code;
 			case "D".code: !(code >= "0".code && code <= "9".code);
-			case "w".code: code >= "a".code && code <= "z".code || code >= "A".code && code <= "Z".code || code >= "0".code && code <= "9".code
+			case "w".code: code >= "a".code && code <= "z".code || code >= "A".code && code <= "Z".code
+				|| code >= "0".code && code <= "9".code
 				|| code == "_".code;
 			case "W".code: !inShorthand("w".code, code);
 			case "s".code: code == 32 || code >= 9 && code <= 13;
@@ -577,7 +579,8 @@ private class RegexParser {
 			if (position >= pattern.length)
 				fail("incomplete hexadecimal escape");
 			var code = pattern.charCodeAt(position++);
-			var digit = isDigit(code) ? code - "0".code : code >= "a".code && code <= "f".code ? code - "a".code + 10 : code >= "A".code
+			var digit = isDigit(code) ? code - "0".code : code >= "a".code
+				&& code <= "f".code ? code - "a".code + 10 : code >= "A".code
 				&& code <= "F".code ? code - "A".code + 10 : -1;
 			if (digit < 0)
 				fail("invalid hexadecimal escape");
@@ -611,7 +614,8 @@ private class RegexParser {
 				if (position >= pattern.length)
 					fail("pattern ends with a backslash");
 				var escaped = pattern.charCodeAt(position);
-				if (escaped == "d".code || escaped == "D".code || escaped == "w".code || escaped == "W".code || escaped == "s".code || escaped == "S".code) {
+				if (escaped == "d".code || escaped == "D".code || escaped == "w".code || escaped == "W".code
+					|| escaped == "s".code || escaped == "S".code) {
 					position++;
 					set.shorthands.push(escaped);
 					continue;
@@ -622,7 +626,8 @@ private class RegexParser {
 					low = 8;
 				} else
 					low = escapedCode();
-			} else if (code == "[".code && position + 1 < pattern.length && pattern.charCodeAt(position + 1) == ":".code)
+			} else if (code == "[".code && position + 1 < pattern.length
+				&& pattern.charCodeAt(position + 1) == ":".code)
 				return fail("POSIX character classes are not supported");
 			else
 				low = readCodePoint();
@@ -718,7 +723,8 @@ private class RegexCompiler {
 					program.patch(jump, program.programLength(), 0);
 			case RegexNode.LOOKAHEAD, RegexNode.NEGATIVE_LOOKAHEAD:
 				// The assertion's body follows it and ends in MATCH; success resumes after that.
-				var assertion = program.emit(node.kind == RegexNode.LOOKAHEAD ? Regex.LOOKAHEAD : Regex.NEGATIVE_LOOKAHEAD, 0, 0);
+				var assertion = program.emit(node.kind == RegexNode.LOOKAHEAD
+					? Regex.LOOKAHEAD : Regex.NEGATIVE_LOOKAHEAD, 0, 0);
 				compile(node.children[0]);
 				program.emit(Regex.MATCH, 0, 0);
 				program.patch(assertion, program.programLength(), 0);

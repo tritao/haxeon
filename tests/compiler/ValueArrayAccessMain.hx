@@ -3,18 +3,18 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrObjectTable;
-import compiler.ir.IrValueArraySlotHelpers;
-import compiler.ir.IrValueArrayPlaceMethods;
-import compiler.ir.IrValueArrayBridge;
-import compiler.ir.IrValueArrayFactory;
-import compiler.ir.IrValueArrayElements;
 import compiler.ir.IrScalarReplacement;
+import compiler.ir.IrValueArrayBridge;
+import compiler.ir.IrValueArrayElements;
+import compiler.ir.IrValueArrayFactory;
+import compiler.ir.IrValueArrayPlaceMethods;
+import compiler.ir.IrValueArraySlotHelpers;
 import compiler.ir.IrValueLaneLayout;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.IrVerifier;
-import compiler.ir.hl.HlLower;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
+import compiler.ir.hl.HlLower;
 
 /** Execute compiler-generated lane operations through the production HashLink native ABI. */
 class ValueArrayAccessMain {
@@ -34,13 +34,13 @@ class ValueArrayAccessMain {
 			+ 'return b[0].leaf.x==1 && c[0].leaf.x==1 && d[0].leaf.x==1 && b[0].owner==o ? 42 : 1; }';
 		if (new compiler.ir.IrInterpreter(compiler.Frontend.compile(nestedRangeSource)).run("main") != 42)
 			throw "Portable array ranges must copy nested values and retain reference identity";
-		var frontendSource = 'struct PlaceLeaf { public var x:Int; public function new(x:Int) this.x = x; public function bump(n:Int):Void x += n; } '
+		var frontendSource =
+			'struct PlaceLeaf { public var x:Int; public function new(x:Int) this.x = x; public function bump(n:Int):Void x += n; } '
 			+ 'struct PlaceRoot { public var leaf:PlaceLeaf; public function new(x:Int) leaf = new PlaceLeaf(x); } '
 			+ 'function missingValue(a:Array<PlaceRoot>):Bool { try { var v = a[15].leaf.x; return false; } catch (error:Dynamic) { return true; } } '
 			+ 'function main():Int { var a:Array<PlaceRoot> = [new PlaceRoot(1)]; a[0].leaf.x = 4; a[0].leaf.bump(2); '
 			+ 'var copy = a[0]; a.push(copy); a[0].leaf.x = 8; for (i in 0...10) a.push(new PlaceRoot(i)); '
-			+
-			'var popped = a.pop(); var shifted = a.shift(); if (popped == null || shifted == null) return 0; if (popped.leaf.x != 9 || shifted.leaf.x != 8) return 0; '
+			+ 'var popped = a.pop(); var shifted = a.shift(); if (popped == null || shifted == null) return 0; if (popped.leaf.x != 9 || shifted.leaf.x != 8) return 0; '
 			+ 'a.unshift(shifted); a.push(popped); '
 			+ 'a.unshift(new PlaceRoot(22)); a.insert(2, new PlaceRoot(33)); a.reverse(); a.reverse(); '
 			+ 'var removed = a.splice(2, 1); a.resize(16); var snapshot = a.copy(); a.resize(13); '
@@ -82,8 +82,10 @@ class ValueArrayAccessMain {
 			+ '&& concatenated.owner == owner ? 42 : 0; }';
 		var nullableElementFrontend = compiler.Frontend.compile(nullableElementSource);
 		var nullableElementFile = new compiler.Source.SourceFile("<nullable-element-array>", nullableElementSource),
-			nullableElementAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableElementFile).tokenize()).parseProgram();
-		var nullableElementChecked = compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(nullableElementAst),
+			nullableElementAst =
+				new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableElementFile).tokenize()).parseProgram();
+		var nullableElementChecked =
+			compiler.ir.IrProgramAssembler.generate(compiler.types.Typer.type(nullableElementAst),
 			compiler.ir.TargetProfile.portable.withNativeArrayChecks(true));
 		var nullableFile = new compiler.Source.SourceFile("<nullable-array>", nullableSource),
 			nullableAst = new compiler.syntax.Parser(new compiler.syntax.Lexer(nullableFile).tokenize()).parseProgram();
@@ -114,7 +116,8 @@ class ValueArrayAccessMain {
 		for (block in frontendMain.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case ArrayGet(out, array, _) if (Type.enumEq(array.type, Array(Obj("PlaceRoot"))) && !frontendRoots.exists(out.id)):
+					case ArrayGet(out, array,
+						_) if (Type.enumEq(array.type, Array(Obj("PlaceRoot"))) && !frontendRoots.exists(out.id)):
 						ordinaryReads++;
 					default:
 				}
@@ -123,7 +126,8 @@ class ValueArrayAccessMain {
 		var frontendObjects = IrObjectTable.of([for (object in frontend.objects) object.name => object]);
 		var frontendFactory = new IrValueArrayFactory(frontendObjects, Obj("PlaceRoot"), 64, HashLink, 0);
 		var frontendMethods = new IrValueArrayPlaceMethods(frontendObjects, Obj("PlaceRoot"), frontendFactory.helpers);
-		var loweredFrontendPlace = compiler.ir.IrValueArrayPlaceRewrite.rewrite(frontendMain, Obj("PlaceRoot"), frontendObjects, frontendFactory.helpers,
+		var loweredFrontendPlace = compiler.ir.IrValueArrayPlaceRewrite.rewrite(frontendMain, Obj("PlaceRoot"),
+			frontendObjects, frontendFactory.helpers,
 			frontendMethods, frontendRoots);
 		if (loweredFrontendPlace == frontendMain)
 			throw "Frontend array place was not rewritten";
@@ -225,8 +229,8 @@ class ValueArrayAccessMain {
 			otherOwner = builder.newObject("LaneOwner"),
 			index = builder.constInt(0);
 		var array = builder.call("__value_array_alloc", [
-			               builder.constInt(1),             builder.typeValue(element), builder.constInt(shape.scalarStrideBits),
-			builder.constInt(shape.references), builder.constInt(shape.scalarWordBits),                  builder.constBool(true)
+			builder.constInt(1), builder.typeValue(element), builder.constInt(shape.scalarStrideBits),
+			builder.constInt(shape.references), builder.constInt(shape.scalarWordBits), builder.constBool(true)
 		], arrayType);
 		var helpers = new IrValueArraySlotHelpers(1, element, shape);
 		var pairType:IrType = Obj("LanePair"),
@@ -242,8 +246,10 @@ class ValueArrayAccessMain {
 			optionalPairArrayType:IrType = Array(optionalPairType);
 		var optionalPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(optionalPairType);
 		var optionalPairHelpers = new IrValueArraySlotHelpers(2, optionalPairType, optionalPairShape);
-		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, optionalPairType, IrObjectTable.of(objects), optionalPairHelpers);
-		var optionalPairComponents = new compiler.ir.IrValueArrayOptionalComponents(IrObjectTable.of(objects), optionalPairType, optionalPairHelpers);
+		var optionalPairBridge = new IrValueArrayBridge(optionalPairType, optionalPairType, IrObjectTable.of(objects),
+			optionalPairHelpers);
+		var optionalPairComponents = new compiler.ir.IrValueArrayOptionalComponents(IrObjectTable.of(objects),
+			optionalPairType, optionalPairHelpers);
 		var optionalPairBridgeFunctions = optionalPairBridge.functions().concat(optionalPairComponents.functions()),
 			optionalPairHelperFunctions = optionalPairHelpers.functions();
 		var optionalSnapshotCallbackType:IrType = Function([optionalPairArrayType], Void),
@@ -254,18 +260,21 @@ class ValueArrayAccessMain {
 			optionalSnapshotRaw = new IrValue(900010, "$optional-snapshot", optionalPairType);
 		optionalSnapshot.currentBlock()
 			.instructions.push(new Located(ArrayGet(optionalSnapshotRaw, optionalSnapshotArray, optionalSnapshotIndex),
-				SourceProvenance.generated("optional-array-snapshot")));
+			SourceProvenance.generated("optional-array-snapshot")));
 		optionalSnapshot.callClosure(optionalSnapshotCallback, [optionalSnapshotArray], Void);
-		var optionalSnapshotParts = optionalSnapshot.call(compiler.ir.IrOptionalValueFlow.unboxName("LanePair"), [optionalSnapshotRaw], Obj(pairWrapperName));
+		var optionalSnapshotParts = optionalSnapshot.call(compiler.ir.IrOptionalValueFlow.unboxName("LanePair"),
+			[optionalSnapshotRaw], Obj(pairWrapperName));
 		optionalSnapshot.returnValue(optionalSnapshot.fieldGet(optionalSnapshotParts, "$slot1", I32));
-		var rewrittenOptionalSnapshot = compiler.ir.IrValueArrayOptionalRewrite.rewrite(new IrFunction("array_optional_snapshot", optionalSnapshot.arguments,
+		var rewrittenOptionalSnapshot = compiler.ir.IrValueArrayOptionalRewrite
+			.rewrite(new IrFunction("array_optional_snapshot", optionalSnapshot.arguments,
 			I32, optionalSnapshot.blocks, Ordinary), optionalPairType,
 			optionalPairComponents);
 		var nestedPairType:IrType = Obj("LaneNestedPair"),
 			nestedPairArrayType:IrType = Array(nestedPairType);
 		var nestedPairShape = new IrValueLaneLayout(IrObjectTable.of(objects), 64, HashLink).shape(nestedPairType);
 		var nestedPairHelpers = new IrValueArraySlotHelpers(3, nestedPairType, nestedPairShape);
-		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, nestedPairType, IrObjectTable.of(objects), nestedPairHelpers);
+		var nestedPairBridge = new IrValueArrayBridge(nestedPairType, nestedPairType, IrObjectTable.of(objects),
+			nestedPairHelpers);
 		var nestedPairBridgeFunctions = nestedPairBridge.functions(),
 			nestedPairHelperFunctions = nestedPairHelpers.functions();
 		var outerType:IrType = Obj("LaneOuter"),
@@ -294,29 +303,48 @@ class ValueArrayAccessMain {
 		var escapedPairValue = builder.fieldGet(escapedPair, "value", I32),
 			escapedPairLabel = builder.fieldGet(escapedPair, "label", Obj("LaneOwner"));
 		var optionalBridgeArray = builder.call("__value_array_alloc_optional_pair", [
-			                                 builder.constInt(1),                    builder.typeValue(pairType),
+			builder.constInt(1), builder.typeValue(pairType),
 			builder.constInt(optionalPairShape.scalarStrideBits), builder.constInt(optionalPairShape.references),
-			  builder.constInt(optionalPairShape.scalarWordBits),                       builder.constBool(false)
+			builder.constInt(optionalPairShape.scalarWordBits), builder.constBool(false)
 		], optionalPairArrayType);
 		var optionalBridgeNullAccepted = builder.call(optionalPairBridge.acceptsName(), [builder.constNull(Dyn)], Bool);
 		var optionalBridgeAccepted = builder.call(optionalPairBridge.acceptsName(), [dynamicPair], Bool);
-		builder.call(optionalPairBridge.writeName(), [optionalBridgeArray, index, dynamicPair, builder.constBool(false)], Void);
-		var optionalBridgeResult = builder.safeCast(builder.call(optionalPairBridge.readName(), [optionalBridgeArray, index], Dyn), pairType);
+		builder.call(optionalPairBridge.writeName(),
+			[optionalBridgeArray, index, dynamicPair, builder.constBool(false)], Void);
+		var optionalBridgeResult = builder.safeCast(builder.call(optionalPairBridge.readName(), [
+			optionalBridgeArray,
+			index
+		], Dyn), pairType);
 		var optionalBridgeValue = builder.fieldGet(optionalBridgeResult, "value", I32);
 		var optionalBridgeLabel = builder.fieldGet(optionalBridgeResult, "label", Obj("LaneOwner"));
-		var optionalSnapshotClosure = builder.staticClosure("array_optional_snapshot_callback", optionalSnapshotCallbackType);
+		var optionalSnapshotClosure = builder.staticClosure("array_optional_snapshot_callback",
+			optionalSnapshotCallbackType);
 		var beforeOptionalSnapshot = builder.call("std.gc_total_allocated", [], F64);
-		var optionalSnapshotValue = builder.call(rewrittenOptionalSnapshot.name, [optionalBridgeArray, optionalSnapshotClosure], I32);
+		var optionalSnapshotValue = builder.call(rewrittenOptionalSnapshot.name, [
+			optionalBridgeArray,
+			optionalSnapshotClosure
+		], I32);
 		var afterOptionalSnapshot = builder.call("std.gc_total_allocated", [], F64);
-		var optionalSnapshotCurrent = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [optionalBridgeArray, index], I32);
-		builder.call(optionalPairBridge.writeName(), [optionalBridgeArray, index, builder.constNull(Dyn), builder.constBool(false)], Void);
+		var optionalSnapshotCurrent = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [
+			optionalBridgeArray,
+			index
+		], I32);
+		builder.call(optionalPairBridge.writeName(), [
+			optionalBridgeArray,
+			index,
+			builder.constNull(Dyn),
+			builder.constBool(false)
+		], Void);
 		var optionalBridgeNull = builder.call(optionalPairBridge.readName(), [optionalBridgeArray, index], Dyn);
-		var optionalBridgeCleared = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])), [optionalBridgeArray, index],
+		var optionalBridgeCleared = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])), [
+			optionalBridgeArray,
+			index
+		],
 			Obj("LaneOwner"));
 		var optionalPushArray = builder.call("__value_array_alloc_optional_pair", [
-			                              builder.constInt(1000),                    builder.typeValue(pairType),
+			builder.constInt(1000), builder.typeValue(pairType),
 			builder.constInt(optionalPairShape.scalarStrideBits), builder.constInt(optionalPairShape.references),
-			  builder.constInt(optionalPairShape.scalarWordBits),                       builder.constBool(false)
+			builder.constInt(optionalPairShape.scalarWordBits), builder.constBool(false)
 		], optionalPairArrayType);
 		builder.call("__value_array_resize", [optionalPushArray, builder.constInt(0)], Void);
 		var beforeOptionalPush = builder.call("std.gc_total_allocated", [], F64);
@@ -325,53 +353,77 @@ class ValueArrayAccessMain {
 			builder.fieldSet(components, "$slot0", builder.constBool(i % 2 == 1));
 			builder.fieldSet(components, "$slot1", builder.constInt(i));
 			builder.fieldSet(components, "$slot2", owner);
-			var value = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [components], optionalPairType);
+			var value = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [components],
+				optionalPairType);
 			builder.call("__array_push_ref", [optionalPushArray, value], I32);
 		}
 		var absentComponents = builder.valueInit(pairWrapperName);
 		builder.fieldSet(absentComponents, "$slot0", builder.constBool(false));
 		builder.fieldSet(absentComponents, "$slot1", builder.constInt(777));
 		builder.fieldSet(absentComponents, "$slot2", owner);
-		var absentValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [absentComponents], optionalPairType);
+		var absentValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [absentComponents],
+			optionalPairType);
 		builder.call("__array_unshift_any", [optionalPushArray, absentValue], I32);
 		var insertedComponents = builder.valueInit(pairWrapperName);
 		builder.fieldSet(insertedComponents, "$slot0", builder.constBool(true));
 		builder.fieldSet(insertedComponents, "$slot1", builder.constInt(42));
 		builder.fieldSet(insertedComponents, "$slot2", otherOwner);
-		var insertedValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [insertedComponents], optionalPairType);
+		var insertedValue = builder.call(compiler.ir.IrOptionalValueFlow.boxName("LanePair"), [insertedComponents],
+			optionalPairType);
 		builder.call("__array_insert_ref", [optionalPushArray, builder.constInt(1), insertedValue], Void);
 		var afterOptionalPush = builder.call("std.gc_total_allocated", [], F64);
-		var optionalFrontPresent = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot([], true)), [optionalPushArray, index], Bool);
-		var optionalFrontRef = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])), [optionalPushArray, index], Obj("LaneOwner"));
-		var optionalInsertedValue = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [optionalPushArray, builder.constInt(1)],
+		var optionalFrontPresent = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot([], true)), [
+			optionalPushArray,
+			index
+		], Bool);
+		var optionalFrontRef = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])), [
+			optionalPushArray,
+			index
+		], Obj("LaneOwner"));
+		var optionalInsertedValue = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [
+			optionalPushArray,
+			builder.constInt(1)
+		],
 			I32);
-		var optionalInsertedRef = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])), [optionalPushArray, builder.constInt(1)],
+		var optionalInsertedRef = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["label"])), [
+			optionalPushArray,
+			builder.constInt(1)
+		],
 			Obj("LaneOwner"));
-		var optionalLastValue = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [optionalPushArray, builder.constInt(21)], I32);
+		var optionalLastValue = builder.call(optionalPairHelpers.getter(optionalPairHelpers.slot(["value"])), [
+			optionalPushArray,
+			builder.constInt(21)
+		], I32);
 		var nestedBridgeArray = builder.call("__value_array_alloc_nested_pair", [
-			                               builder.constInt(1),            builder.typeValue(nestedPairType),
+			builder.constInt(1), builder.typeValue(nestedPairType),
 			builder.constInt(nestedPairShape.scalarStrideBits), builder.constInt(nestedPairShape.references),
-			  builder.constInt(nestedPairShape.scalarWordBits),                      builder.constBool(true)
+			builder.constInt(nestedPairShape.scalarWordBits), builder.constBool(true)
 		], nestedPairArrayType);
 		var nestedBridgeSource = builder.valueInit("LaneNestedPair");
 		builder.fieldSet(nestedBridgeSource, "nested", bridgeSource);
 		builder.fieldSet(nestedBridgeSource, "optional", builder.toDyn(builder.constInt(93), Nullable(I32)));
 		var dynamicNested = builder.toDyn(nestedBridgeSource);
-		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested, builder.constBool(false)], Void);
-		var nestedBridgeResult = builder.safeCast(builder.call(nestedPairBridge.readName(), [nestedBridgeArray, index], Dyn), nestedPairType);
+		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested, builder.constBool(false)],
+			Void);
+		var nestedBridgeResult = builder.safeCast(builder.call(nestedPairBridge.readName(), [nestedBridgeArray, index],
+			Dyn), nestedPairType);
 		var nestedBridgePair = builder.fieldGet(nestedBridgeResult, "nested", pairType);
 		var nestedBridgeValue = builder.fieldGet(nestedBridgePair, "value", I32),
 			nestedBridgeLabel = builder.fieldGet(nestedBridgePair, "label", Obj("LaneOwner"));
 		var nestedBridgeOptional = builder.fieldGet(nestedBridgeResult, "optional", Nullable(I32));
 		var nestedBridgePayload = builder.safeCast(nestedBridgeOptional, I32);
 		builder.fieldSet(nestedBridgeSource, "optional", builder.constNull(Nullable(I32)));
-		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested, builder.constBool(false)], Void);
-		var nestedBridgeNullResult = builder.safeCast(builder.call(nestedPairBridge.readName(), [nestedBridgeArray, index], Dyn), nestedPairType);
+		builder.call(nestedPairBridge.writeName(), [nestedBridgeArray, index, dynamicNested, builder.constBool(false)],
+			Void);
+		var nestedBridgeNullResult = builder.safeCast(builder.call(nestedPairBridge.readName(), [
+			nestedBridgeArray,
+			index
+		], Dyn), nestedPairType);
 		var nestedBridgeNull = builder.fieldGet(nestedBridgeNullResult, "optional", Nullable(I32));
 		var outerBridgeArray = builder.call("__value_array_alloc_outer", [
-			                          builder.constInt(1),            builder.typeValue(outerType),
+			builder.constInt(1), builder.typeValue(outerType),
 			builder.constInt(outerShape.scalarStrideBits), builder.constInt(outerShape.references),
-			  builder.constInt(outerShape.scalarWordBits),                 builder.constBool(true)
+			builder.constInt(outerShape.scalarWordBits), builder.constBool(true)
 		], outerArrayType);
 		var outerSource = builder.valueInit("LaneOuter"),
 			outerInner = builder.valueInit("LaneInner");
@@ -384,8 +436,9 @@ class ValueArrayAccessMain {
 		var outerReadType:IrType = Function([outerArrayType, I32], Dyn),
 			outerWriteType:IrType = Function([outerArrayType, I32, Dyn, Bool], Void);
 		builder.call("__value_array_set_bridge_outer", [
-			                                              outerBridgeArray,    builder.staticClosure(outerBridge.readName(), outerReadType),
-			builder.staticClosure(outerBridge.writeName(), outerWriteType), builder.staticClosure(outerBridge.acceptsName(), pairAcceptsType)
+			outerBridgeArray, builder.staticClosure(outerBridge.readName(), outerReadType),
+			builder.staticClosure(outerBridge.writeName(), outerWriteType),
+			builder.staticClosure(outerBridge.acceptsName(), pairAcceptsType)
 		], Void);
 		builder.call("__array_set_any", [outerBridgeArray, index, dynamicOuter], Void);
 		var outerResult = builder.safeCast(builder.call("__array_get_any", [outerBridgeArray, index], Dyn), outerType);
@@ -396,19 +449,25 @@ class ValueArrayAccessMain {
 		var bridgeOuterFlag = builder.safeCast(builder.fieldGet(outerMaybeValue, "flag", Nullable(I32)), I32);
 		builder.fieldSet(outerSource, "maybe", builder.constNull(Nullable(Obj("LaneInner"))));
 		builder.call("__array_set_any", [outerBridgeArray, index, dynamicOuter], Void);
-		var outerNullResult = builder.safeCast(builder.call("__array_get_any", [outerBridgeArray, index], Dyn), outerType);
+		var outerNullResult = builder.safeCast(builder.call("__array_get_any", [outerBridgeArray, index], Dyn),
+			outerType);
 		var outerNull = builder.fieldGet(outerNullResult, "maybe", Nullable(Obj("LaneInner")));
-		var outerCleared = builder.call(outerHelpers.getter(outerHelpers.slot(["maybe", "label"])), [outerBridgeArray, index], Obj("LaneOwner"));
+		var outerCleared = builder.call(outerHelpers.getter(outerHelpers.slot(["maybe", "label"])), [
+			outerBridgeArray,
+			index
+		], Obj("LaneOwner"));
 		var dynamicArray = builder.call("__array_alloc_ref", [builder.constInt(1)], Array(Dyn));
 		builder.call("__array_set_any", [dynamicArray, index, dynamicPair], Void);
 		var retypedArray = builder.call(pairFactory.retypeName(), [dynamicArray], pairArrayType);
 		var retypedInitial = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [retypedArray, index], I32);
 		builder.fieldSet(bridgeSource, "value", builder.constInt(512));
 		builder.call("__array_set_any", [dynamicArray, index, dynamicPair], Void);
-		var retypedAfterAliasWrite = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [retypedArray, index], I32);
+		var retypedAfterAliasWrite = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])),
+			[retypedArray, index], I32);
 		builder.call("__array_push_any", [dynamicArray, dynamicPair], I32);
 		var retypedSize = new IrValue(999999, "$retyped-size", I32);
-		builder.currentBlock().instructions.push(new Located(ArraySize(retypedSize, retypedArray), SourceProvenance.generated("array-factory-test")));
+		builder.currentBlock().instructions.push(new Located(ArraySize(retypedSize, retypedArray),
+			SourceProvenance.generated("array-factory-test")));
 		var beforeTypedElements = builder.call("std.gc_total_allocated", [], F64),
 			typedElementValue:IrValue = null,
 			typedElementLabel:IrValue = null;
@@ -416,9 +475,11 @@ class ValueArrayAccessMain {
 			var pair = builder.valueInit("LanePair");
 			builder.fieldSet(pair, "value", builder.constInt(753));
 			builder.fieldSet(pair, "label", otherOwner);
-			builder.currentBlock().instructions.push(new Located(ArraySet(bridgeArray, index, pair), SourceProvenance.generated("array-element-test")));
+			builder.currentBlock().instructions.push(new Located(ArraySet(bridgeArray, index, pair),
+				SourceProvenance.generated("array-element-test")));
 			var loaded = new IrValue(900000 + _, "$typed-element", pairType);
-			builder.currentBlock().instructions.push(new Located(ArrayGet(loaded, bridgeArray, index), SourceProvenance.generated("array-element-test")));
+			builder.currentBlock().instructions.push(new Located(ArrayGet(loaded, bridgeArray, index),
+				SourceProvenance.generated("array-element-test")));
 			typedElementValue = builder.fieldGet(loaded, "value", I32);
 			typedElementLabel = builder.fieldGet(loaded, "label", Obj("LaneOwner"));
 		}
@@ -434,22 +495,41 @@ class ValueArrayAccessMain {
 			typedPushLength = builder.call("__array_push_ref", [pushArray, pair], I32);
 		}
 		var afterTypedPush = builder.call("std.gc_total_allocated", [], F64);
-		var typedPushValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [pushArray, builder.constInt(19)], I32);
-		var typedPushLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [pushArray, builder.constInt(19)], Obj("LaneOwner"));
+		var typedPushValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [
+			pushArray,
+			builder.constInt(19)
+		], I32);
+		var typedPushLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [
+			pushArray,
+			builder.constInt(19)
+		], Obj("LaneOwner"));
 		var beforeTypedInsert = builder.call("std.gc_total_allocated", [], F64),
 			selectedPair = new IrValue(900100, "$insert-source", pairType);
 		builder.currentBlock()
-			.instructions.push(new Located(ArrayGet(selectedPair, pushArray, builder.constInt(1)), SourceProvenance.generated("array-insert-test")));
+			.instructions.push(new Located(ArrayGet(selectedPair, pushArray, builder.constInt(1)),
+			SourceProvenance.generated("array-insert-test")));
 		builder.call("__array_insert_ref", [pushArray, builder.constInt(5), selectedPair], Void);
 		var frontPair = builder.valueInit("LanePair");
 		builder.fieldSet(frontPair, "value", builder.constInt(31));
 		builder.fieldSet(frontPair, "label", owner);
 		var typedUnshiftLength = builder.call("__array_unshift_ref", [pushArray, frontPair], I32);
 		var afterTypedInsert = builder.call("std.gc_total_allocated", [], F64);
-		var typedInsertValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [pushArray, builder.constInt(6)], I32);
-		var typedInsertLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [pushArray, builder.constInt(6)], Obj("LaneOwner"));
-		var typedFrontValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [pushArray, builder.constInt(0)], I32);
-		var typedFrontLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [pushArray, builder.constInt(0)], Obj("LaneOwner"));
+		var typedInsertValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [
+			pushArray,
+			builder.constInt(6)
+		], I32);
+		var typedInsertLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [
+			pushArray,
+			builder.constInt(6)
+		], Obj("LaneOwner"));
+		var typedFrontValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [
+			pushArray,
+			builder.constInt(0)
+		], I32);
+		var typedFrontLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [
+			pushArray,
+			builder.constInt(0)
+		], Obj("LaneOwner"));
 		var beforeTypedRanges = builder.call("std.gc_total_allocated", [], F64);
 		builder.call("__array_reverse_ref", [pushArray], Void);
 		builder.call("__array_reverse_ref", [pushArray], Void);
@@ -457,10 +537,16 @@ class ValueArrayAccessMain {
 		var grownInitialized = builder.call("__value_array_is_initialized", [pushArray, builder.constInt(24)], Bool);
 		builder.call("__array_resize_ref", [pushArray, builder.constInt(22)], Void);
 		var afterTypedRanges = builder.call("std.gc_total_allocated", [], F64);
-		var removedPair = builder.call("__array_splice_ref", [pushArray, builder.constInt(6), builder.constInt(1)], pairArrayType);
-		builder.call(pairHelpers.setter(pairHelpers.slot(["value"])), [pushArray, builder.constInt(2), builder.constInt(99)], Void);
+		var removedPair = builder.call("__array_splice_ref", [pushArray, builder.constInt(6), builder.constInt(1)],
+			pairArrayType);
+		builder.call(pairHelpers.setter(pairHelpers.slot(["value"])), [
+			pushArray,
+			builder.constInt(2),
+			builder.constInt(99)
+		], Void);
 		var removedPairValue = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])), [removedPair, index], I32);
-		var removedPairLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [removedPair, index], Obj("LaneOwner"));
+		var removedPairLabel = builder.call(pairHelpers.getter(pairHelpers.slot(["label"])), [removedPair, index],
+			Obj("LaneOwner"));
 		var checkOptional = helpers.checker(["optional"], true);
 		var callbackType:IrType = Function([arrayType], Void),
 			method = new IrBuilder();
@@ -482,7 +568,8 @@ class ValueArrayAccessMain {
 		throwingMethod.fieldSet(throwingReceiver, "signed", throwingMethod.add(previous, throwingMethod.constInt(3)));
 		throwingMethod.terminate(Throw(throwingMethod.toDyn(throwingMethod.constString("changed"))));
 		var rewrittenThrow = methodRewriter.specialize(Ordinary, "array_place_throw",
-			new IrFunction("LaneElement.changeThenThrow", throwingMethod.arguments, Void, throwingMethod.blocks, Ordinary), []);
+			new IrFunction("LaneElement.changeThenThrow", throwingMethod.arguments, Void, throwingMethod.blocks,
+			Ordinary), []);
 		var nestedMethod = new IrBuilder(),
 			nestedReceiver = nestedMethod.argument("this", element),
 			nestedCallback = nestedMethod.argument("callback", callbackType),
@@ -495,7 +582,8 @@ class ValueArrayAccessMain {
 		nestedMethod.fieldSet(child, "value", nestedMethod.add(nestedLater, nestedMethod.constInt(2)));
 		nestedMethod.returnValue(nestedMethod.constVoid());
 		var rewrittenNested = methodRewriter.specialize(Ordinary, "array_place_nested",
-			new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks, Ordinary), []);
+			new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks, Ordinary),
+			[]);
 		var snapshotMethod = new IrBuilder(),
 			snapshotReceiver = snapshotMethod.argument("this", element),
 			snapshotCallback = snapshotMethod.argument("callback", callbackType),
@@ -521,7 +609,8 @@ class ValueArrayAccessMain {
 		var optionalValue = optionalMethod.fieldGet(optionalReceiver, "maybe", Nullable(Obj("LaneInner")));
 		var absent = optionalMethod.createBlock(),
 			present = optionalMethod.createBlock();
-		optionalMethod.branch(optionalMethod.equal(optionalValue, optionalMethod.constNull(Nullable(Obj("LaneInner")))), absent, present);
+		optionalMethod.branch(optionalMethod.equal(optionalValue, optionalMethod.constNull(Nullable(Obj("LaneInner")))),
+			absent, present);
 		optionalMethod.select(absent);
 		optionalMethod.returnValue(optionalMethod.constInt(0));
 		optionalMethod.select(present);
@@ -530,7 +619,8 @@ class ValueArrayAccessMain {
 		optionalMethod.fieldSet(unwrapped, "value", optionalMethod.add(optionalInitial, optionalMethod.constInt(2)));
 		optionalMethod.returnValue(optionalMethod.fieldGet(unwrapped, "value", I32));
 		var rewrittenOptional = methodRewriter.specialize(Ordinary, "array_place_optional",
-			new IrFunction("LaneElement.optionalValue", optionalMethod.arguments, I32, optionalMethod.blocks, Ordinary), []);
+			new IrFunction("LaneElement.optionalValue", optionalMethod.arguments, I32, optionalMethod.blocks, Ordinary),
+			[]);
 		var scalarSnapshot = new IrBuilder(),
 			scalarReceiver = scalarSnapshot.argument("this", element),
 			scalarCallback = scalarSnapshot.argument("callback", callbackType),
@@ -539,14 +629,16 @@ class ValueArrayAccessMain {
 		scalarSnapshot.callClosure(scalarCallback, [scalarArray], Void);
 		scalarSnapshot.returnValue(scalarSnapshot.safeCast(savedScalar, I32));
 		var rewrittenScalarSnapshot = methodRewriter.specialize(Ordinary, "array_place_scalar_snapshot",
-			new IrFunction("LaneElement.scalarSnapshot", scalarSnapshot.arguments, I32, scalarSnapshot.blocks, Ordinary), []);
+			new IrFunction("LaneElement.scalarSnapshot", scalarSnapshot.arguments, I32, scalarSnapshot.blocks,
+			Ordinary), []);
 		var scalarWrite = new IrBuilder(),
 			writeReceiver = scalarWrite.argument("this", element);
 		scalarWrite.fieldSet(writeReceiver, "optional", scalarWrite.constNull(Nullable(I32)));
 		var emptyScalar = scalarWrite.fieldGet(writeReceiver, "optional", Nullable(I32));
 		var wasNull = scalarWrite.createBlock(),
 			unexpectedlyPresent = scalarWrite.createBlock();
-		scalarWrite.branch(scalarWrite.equal(emptyScalar, scalarWrite.constNull(Nullable(I32))), wasNull, unexpectedlyPresent);
+		scalarWrite.branch(scalarWrite.equal(emptyScalar, scalarWrite.constNull(Nullable(I32))), wasNull,
+			unexpectedlyPresent);
 		scalarWrite.select(unexpectedlyPresent);
 		scalarWrite.returnValue(scalarWrite.constInt(0));
 		scalarWrite.select(wasNull);
@@ -586,7 +678,10 @@ class ValueArrayAccessMain {
 		var phiNull = phiRead.constNull(Nullable(I32));
 		phiRead.jump(phiJoin);
 		phiRead.select(phiJoin);
-		var selected = phiRead.phi(Nullable(I32), [{block: phiYes.id, value: phiSnapshot}, {block: phiNo.id, value: phiNull}]);
+		var selected = phiRead.phi(Nullable(I32), [
+			{block: phiYes.id, value: phiSnapshot},
+			{block: phiNo.id, value: phiNull}
+		]);
 		phiRead.callClosure(phiCallback, [phiArray], Void);
 		var phiAbsent = phiRead.createBlock(),
 			phiPresent = phiRead.createBlock();
@@ -643,7 +738,8 @@ class ValueArrayAccessMain {
 		optionalCopy.fieldSet(optionalCopyReceiver, "maybe", optionalSource);
 		optionalCopy.returnValue(optionalCopy.constVoid());
 		var rewrittenOptionalCopy = methodRewriter.specialize(Ordinary, "array_place_optional_copy",
-			new IrFunction("LaneElement.copyOptional", optionalCopy.arguments, Void, optionalCopy.blocks, Ordinary), []);
+			new IrFunction("LaneElement.copyOptional", optionalCopy.arguments, Void, optionalCopy.blocks, Ordinary),
+			[]);
 		var construct = new IrBuilder(),
 			constructReceiver = construct.argument("this", element),
 			constructValue = construct.argument("value", I32),
@@ -669,7 +765,8 @@ class ValueArrayAccessMain {
 		copyArgument.fieldSet(argumentReceiver, "pair", pairArgument);
 		copyArgument.returnValue(copyArgument.constVoid());
 		var rewrittenArgument = methodRewriter.specialize(Ordinary, "array_place_copy_argument",
-			new IrFunction("LaneElement.copyArgument", copyArgument.arguments, Void, copyArgument.blocks, Ordinary), []);
+			new IrFunction("LaneElement.copyArgument", copyArgument.arguments, Void, copyArgument.blocks, Ordinary),
+			[]);
 		var composite = new IrBuilder(),
 			compositeReceiver = composite.argument("this", element),
 			compositeCallback = composite.argument("callback", callbackType),
@@ -704,7 +801,8 @@ class ValueArrayAccessMain {
 		nestedDefaults.fieldSet(nestedDefaultsReceiver, "outer", defaultOuter);
 		nestedDefaults.returnValue(nestedDefaults.constVoid());
 		var rewrittenNestedDefaults = methodRewriter.specialize(Ordinary, "array_place_nested_defaults",
-			new IrFunction("LaneElement.nestedDefaults", nestedDefaults.arguments, Void, nestedDefaults.blocks, Ordinary), []);
+			new IrFunction("LaneElement.nestedDefaults", nestedDefaults.arguments, Void, nestedDefaults.blocks,
+			Ordinary), []);
 		var nestedConstruct = new IrBuilder(),
 			nestedConstructReceiver = nestedConstruct.argument("this", element),
 			nestedConstructLabel = nestedConstruct.argument("label", Obj("LaneOwner"));
@@ -712,7 +810,8 @@ class ValueArrayAccessMain {
 			constructedInner = nestedConstruct.valueInit("LaneInner");
 		nestedConstruct.fieldSet(constructedInner, "value", nestedConstruct.constInt(23));
 		nestedConstruct.fieldSet(constructedInner, "label", nestedConstructLabel);
-		nestedConstruct.fieldSet(constructedInner, "flag", nestedConstruct.toDyn(nestedConstruct.constInt(5), Nullable(I32)));
+		nestedConstruct.fieldSet(constructedInner, "flag",
+			nestedConstruct.toDyn(nestedConstruct.constInt(5), Nullable(I32)));
 		nestedConstruct.fieldSet(constructedOuter, "nested", constructedInner);
 		var optionalConstructedInner = nestedConstruct.toDyn(constructedInner, Nullable(Obj("LaneInner")));
 		nestedConstruct.fieldSet(constructedInner, "value", nestedConstruct.constInt(32));
@@ -722,11 +821,13 @@ class ValueArrayAccessMain {
 		nestedConstruct.fieldSet(nestedConstructReceiver, "outer", constructedOuter);
 		nestedConstruct.returnValue(nestedConstruct.constVoid());
 		var rewrittenNestedConstruct = methodRewriter.specialize(Ordinary, "array_place_nested_construct",
-			new IrFunction("LaneElement.nestedConstruct", nestedConstruct.arguments, Void, nestedConstruct.blocks, Ordinary), []);
+			new IrFunction("LaneElement.nestedConstruct", nestedConstruct.arguments, Void, nestedConstruct.blocks,
+			Ordinary), []);
 		for (block in rewrittenNestedConstruct.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case ValueInit(out) if (Type.enumEq(out.type, Obj("LaneInner")) || Type.enumEq(out.type, Obj("LaneOuter"))):
+					case ValueInit(out) if (Type.enumEq(out.type, Obj("LaneInner"))
+						|| Type.enumEq(out.type, Obj("LaneOuter"))):
 						throw "A nested constructed snapshot must stay scalar";
 					case ToDyn(out, _) if (Type.enumEq(out.type, Nullable(Obj("LaneInner")))):
 						throw "An optional nested snapshot must stay scalar";
@@ -739,7 +840,8 @@ class ValueArrayAccessMain {
 		nullConstruct.fieldSet(nullConstructReceiver, "outer", nullOuter);
 		nullConstruct.returnValue(nullConstruct.constVoid());
 		var rewrittenNullConstruct = methodRewriter.specialize(Ordinary, "array_place_null_construct",
-			new IrFunction("LaneElement.nullConstruct", nullConstruct.arguments, Void, nullConstruct.blocks, Ordinary), []);
+			new IrFunction("LaneElement.nullConstruct", nullConstruct.arguments, Void, nullConstruct.blocks, Ordinary),
+			[]);
 		if (methodRewriter.requests.length != 0)
 			throw "Unexpected nested array-place method request";
 		var adjustment = new IrBuilder(),
@@ -748,14 +850,16 @@ class ValueArrayAccessMain {
 		var oldInner = adjustment.fieldGet(adjustmentReceiver, "value", I32);
 		adjustment.fieldSet(adjustmentReceiver, "value", adjustment.add(oldInner, delta));
 		adjustment.returnValue(adjustment.constVoid());
-		var adjustmentFunction = new IrFunction("LaneInner.adjust", adjustment.arguments, Void, adjustment.blocks, Ordinary);
+		var adjustmentFunction = new IrFunction("LaneInner.adjust", adjustment.arguments, Void, adjustment.blocks,
+			Ordinary);
 		var caller = new IrBuilder(),
 			callerReceiver = caller.argument("this", element),
 			callerDelta = caller.argument("delta", I32),
 			callerChild = caller.fieldGet(callerReceiver, "inner", Obj("LaneInner"));
 		caller.currentBlock()
-			.instructions.push(new Located(MethodCall(new IrValue(900000, "$nested-call", Void), callerChild, "adjust", [callerDelta], false),
-				SourceProvenance.generated("array-place-test")));
+			.instructions.push(new Located(MethodCall(new IrValue(900000, "$nested-call", Void), callerChild, "adjust",
+			[callerDelta], false),
+			SourceProvenance.generated("array-place-test")));
 		caller.returnValue(caller.constVoid());
 		var callerFunction = new IrFunction("LaneElement.nestedCall", caller.arguments, Void, caller.blocks, Ordinary);
 		var callerName = methodRewriter.method(element, callerFunction.name, []);
@@ -765,13 +869,17 @@ class ValueArrayAccessMain {
 			placeDelta = placeCaller.argument("delta", I32),
 			placeRoot = new IrValue(900000, "$element-place", element),
 			placeProvenance = SourceProvenance.generated("array-place-caller-test");
-		placeCaller.currentBlock().instructions.push(new Located(ArrayGet(placeRoot, placeArray, placeIndex), placeProvenance));
+		placeCaller.currentBlock().instructions.push(new Located(ArrayGet(placeRoot, placeArray, placeIndex),
+			placeProvenance));
 		var placeChild = placeCaller.fieldGet(placeRoot, "inner", Obj("LaneInner"));
 		placeCaller.currentBlock()
-			.instructions.push(new Located(MethodCall(new IrValue(900001, "$place-adjust", Void), placeChild, "adjust", [placeDelta], false), placeProvenance));
-		placeCaller.currentBlock().instructions.push(new Located(ArraySet(placeArray, placeIndex, placeRoot), placeProvenance));
+			.instructions.push(new Located(MethodCall(new IrValue(900001, "$place-adjust", Void), placeChild, "adjust",
+			[placeDelta], false), placeProvenance));
+		placeCaller.currentBlock().instructions.push(new Located(ArraySet(placeArray, placeIndex, placeRoot),
+			placeProvenance));
 		placeCaller.returnValue(placeCaller.fieldGet(placeChild, "value", I32));
-		var rewrittenPlaceCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("array_place_caller", placeCaller.arguments, I32,
+		var rewrittenPlaceCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("array_place_caller",
+			placeCaller.arguments, I32,
 			placeCaller.blocks, Ordinary), element, IrObjectTable.of(objects), helpers,
 			methodRewriter, [placeRoot.id => true]);
 		var growthCaller = new IrBuilder(),
@@ -779,14 +887,21 @@ class ValueArrayAccessMain {
 			growthIndex = growthCaller.argument("index", I32),
 			growthCallback = growthCaller.argument("callback", callbackType),
 			growthRoot = new IrValue(900002, "$growth-place", element);
-		growthCaller.currentBlock().instructions.push(new Located(ArrayGet(growthRoot, growthArray, growthIndex), placeProvenance));
+		growthCaller.currentBlock().instructions.push(new Located(ArrayGet(growthRoot, growthArray, growthIndex),
+			placeProvenance));
 		growthCaller.currentBlock()
-			.instructions.push(new Located(MethodCall(new IrValue(900003, "$growth-method", Void), growthRoot, "LaneElement.nestedAround",
-				[growthCallback, growthArray], false),
+			.instructions.push(new Located(MethodCall(new IrValue(900003, "$growth-method", Void), growthRoot,
+			"LaneElement.nestedAround",
+			[
+				growthCallback,
+				growthArray
+			], false),
 				placeProvenance));
-		growthCaller.currentBlock().instructions.push(new Located(ArraySet(growthArray, growthIndex, growthRoot), placeProvenance));
+		growthCaller.currentBlock().instructions.push(new Located(ArraySet(growthArray, growthIndex, growthRoot),
+			placeProvenance));
 		growthCaller.returnValue(growthCaller.constVoid());
-		var rewrittenGrowthCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("array_place_growth_caller", growthCaller.arguments, Void,
+		var rewrittenGrowthCaller = compiler.ir.IrValueArrayPlaceRewrite
+			.rewrite(new IrFunction("array_place_growth_caller", growthCaller.arguments, Void,
 			growthCaller.blocks, Ordinary), element, IrObjectTable.of(objects),
 			helpers, methodRewriter, [growthRoot.id => true]);
 		var valueCaller = new IrBuilder(),
@@ -794,28 +909,34 @@ class ValueArrayAccessMain {
 			valueIndex = valueCaller.argument("index", I32),
 			valuePair = valueCaller.argument("value", pairType),
 			valueRoot = new IrValue(900005, "$value-place", element);
-		valueCaller.currentBlock().instructions.push(new Located(ArrayGet(valueRoot, valueArray, valueIndex), placeProvenance));
+		valueCaller.currentBlock().instructions.push(new Located(ArrayGet(valueRoot, valueArray, valueIndex),
+			placeProvenance));
 		valueCaller.fieldSet(valueRoot, "pair", valuePair);
-		valueCaller.currentBlock().instructions.push(new Located(ArraySet(valueArray, valueIndex, valueRoot), placeProvenance));
+		valueCaller.currentBlock().instructions.push(new Located(ArraySet(valueArray, valueIndex, valueRoot),
+			placeProvenance));
 		valueCaller.returnValue(valueCaller.constVoid());
-		var rewrittenValueCaller = compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("array_place_value_caller", valueCaller.arguments, Void,
+		var rewrittenValueCaller = compiler.ir.IrValueArrayPlaceRewrite
+			.rewrite(new IrFunction("array_place_value_caller", valueCaller.arguments, Void,
 			valueCaller.blocks, Ordinary), element, IrObjectTable.of(objects),
 			helpers, methodRewriter, [valueRoot.id => true]);
 		var escapingPlace = new IrBuilder(),
 			escapingArray = escapingPlace.argument("array", arrayType),
 			escapingIndex = escapingPlace.argument("index", I32),
 			escapingRoot = new IrValue(900004, "$escaping-place", element);
-		escapingPlace.currentBlock().instructions.push(new Located(ArrayGet(escapingRoot, escapingArray, escapingIndex), placeProvenance));
+		escapingPlace.currentBlock().instructions.push(new Located(ArrayGet(escapingRoot, escapingArray, escapingIndex),
+			placeProvenance));
 		escapingPlace.returnValue(escapingRoot);
 		var rejectedEscape = false;
 		try {
-			compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("escaping_place", escapingPlace.arguments, element, escapingPlace.blocks, Ordinary),
+			compiler.ir.IrValueArrayPlaceRewrite.rewrite(new IrFunction("escaping_place", escapingPlace.arguments,
+				element, escapingPlace.blocks, Ordinary),
 				element, IrObjectTable.of(objects), helpers, methodRewriter, [escapingRoot.id => true]);
 		} catch (_:Dynamic)
 			rejectedEscape = true;
 		if (!rejectedEscape)
 			throw "An escaping array place must not be silently treated as a live alias";
-		var nestedOriginal = new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void, nestedMethod.blocks, Ordinary);
+		var nestedOriginal = new IrFunction("LaneElement.nestedAround", nestedMethod.arguments, Void,
+			nestedMethod.blocks, Ordinary);
 		var generatedMethods = methodRewriter.generate([
 			callerFunction.name => callerFunction,
 			adjustmentFunction.name => adjustmentFunction,
@@ -927,8 +1048,15 @@ class ValueArrayAccessMain {
 		builder.call(helpers.setter(5), [array, index, builder.constInt(7)], Void);
 		builder.call(helpers.setter(4), [array, index, builder.constBool(true)], Void);
 		var beforePhi = builder.call("std.gc_total_allocated", [], F64);
-		var phiSaved = builder.call(rewrittenPhiRead.name, [array, index, builder.constBool(true), scalarClosure, array], I32);
-		var phiMissing = builder.call(rewrittenPhiRead.name, [array, index, builder.constBool(false), scalarClosure, array], I32);
+		var phiSaved = builder.call(rewrittenPhiRead.name,
+			[array, index, builder.constBool(true), scalarClosure, array], I32);
+		var phiMissing = builder.call(rewrittenPhiRead.name, [
+			array,
+			index,
+			builder.constBool(false),
+			scalarClosure,
+			array
+		], I32);
 		var phiWritten = builder.call(rewrittenPhiWrite.name, [array, index, builder.constBool(true)], I32);
 		var phiCleared = builder.call(rewrittenPhiWrite.name, [array, index, builder.constBool(false)], I32);
 		var afterPhi = builder.call("std.gc_total_allocated", [], F64);
@@ -1246,7 +1374,8 @@ class ValueArrayAccessMain {
 		builder.select(checkCopiedAbsent);
 		builder.branch(copiedAbsent, failure, checkCopiedCleared);
 		builder.select(checkCopiedCleared);
-		builder.branch(builder.equal(copiedCleared, builder.constNull(Obj("LaneOwner"))), checkClearedOptionalFlag, failure);
+		builder.branch(builder.equal(copiedCleared, builder.constNull(Obj("LaneOwner"))), checkClearedOptionalFlag,
+			failure);
 		builder.select(checkClearedOptionalFlag);
 		builder.branch(clearedOptionalFlag, failure, checkConstructedValue);
 		builder.select(checkConstructedValue);
@@ -1294,7 +1423,8 @@ class ValueArrayAccessMain {
 		builder.select(checkNestedDefaultValue);
 		builder.branch(builder.equal(nestedDefaultValue, builder.constInt(0)), checkNestedDefaultLabel, failure);
 		builder.select(checkNestedDefaultLabel);
-		builder.branch(builder.equal(nestedDefaultLabel, builder.constNull(Obj("LaneOwner"))), checkNestedDefaultFlag, failure);
+		builder.branch(builder.equal(nestedDefaultLabel, builder.constNull(Obj("LaneOwner"))), checkNestedDefaultFlag,
+			failure);
 		builder.select(checkNestedDefaultFlag);
 		builder.branch(nestedDefaultFlag, failure, checkNestedDefaultPayload);
 		builder.select(checkNestedDefaultPayload);
@@ -1302,7 +1432,8 @@ class ValueArrayAccessMain {
 		builder.select(checkNestedDefaultMaybe);
 		builder.branch(nestedDefaultMaybe, failure, checkNestedDefaultMaybeLabel);
 		builder.select(checkNestedDefaultMaybeLabel);
-		builder.branch(builder.equal(nestedDefaultMaybeLabel, builder.constNull(Obj("LaneOwner"))), checkNestedConstructAlloc, failure);
+		builder.branch(builder.equal(nestedDefaultMaybeLabel, builder.constNull(Obj("LaneOwner"))),
+			checkNestedConstructAlloc, failure);
 		builder.select(checkNestedConstructAlloc);
 		builder.branch(builder.equal(beforeNestedConstruct, afterNestedConstruct), checkNestedConstructValue, failure);
 		builder.select(checkNestedConstructValue);
@@ -1312,11 +1443,13 @@ class ValueArrayAccessMain {
 		builder.select(checkNestedConstructFlag);
 		builder.branch(nestedConstructFlag, checkNestedConstructPayload, failure);
 		builder.select(checkNestedConstructPayload);
-		builder.branch(builder.equal(nestedConstructPayload, builder.constInt(5)), checkOptionalConstructPresent, failure);
+		builder.branch(builder.equal(nestedConstructPayload, builder.constInt(5)), checkOptionalConstructPresent,
+			failure);
 		builder.select(checkOptionalConstructPresent);
 		builder.branch(optionalConstructPresent, checkOptionalConstructValue, failure);
 		builder.select(checkOptionalConstructValue);
-		builder.branch(builder.equal(optionalConstructValue, builder.constInt(23)), checkOptionalConstructLabel, failure);
+		builder.branch(builder.equal(optionalConstructValue, builder.constInt(23)), checkOptionalConstructLabel,
+			failure);
 		builder.select(checkOptionalConstructLabel);
 		builder.branch(builder.equal(optionalConstructLabel, owner), checkOptionalConstructFlag, failure);
 		builder.select(checkOptionalConstructFlag);
@@ -1328,7 +1461,8 @@ class ValueArrayAccessMain {
 		builder.select(checkNullConstructPresent);
 		builder.branch(nullConstructPresent, failure, checkNullConstructLabel);
 		builder.select(checkNullConstructLabel);
-		builder.branch(builder.equal(nullConstructLabel, builder.constNull(Obj("LaneOwner"))), checkBridgeAccepted, failure);
+		builder.branch(builder.equal(nullConstructLabel, builder.constNull(Obj("LaneOwner"))), checkBridgeAccepted,
+			failure);
 		builder.select(checkBridgeAccepted);
 		builder.branch(bridgeAccepted, checkBridgeRejected, failure);
 		builder.select(checkBridgeRejected);
@@ -1352,21 +1486,25 @@ class ValueArrayAccessMain {
 		builder.select(checkOptionalBridgeLabel);
 		builder.branch(builder.equal(optionalBridgeLabel, owner), checkOptionalSnapshotAlloc, failure);
 		builder.select(checkOptionalSnapshotAlloc);
-		builder.branch(builder.equal(beforeOptionalSnapshot, afterOptionalSnapshot), checkOptionalSnapshotValue, failure);
+		builder.branch(builder.equal(beforeOptionalSnapshot, afterOptionalSnapshot), checkOptionalSnapshotValue,
+			failure);
 		builder.select(checkOptionalSnapshotValue);
-		builder.branch(builder.equal(optionalSnapshotValue, builder.constInt(271)), checkOptionalSnapshotCurrent, failure);
+		builder.branch(builder.equal(optionalSnapshotValue, builder.constInt(271)), checkOptionalSnapshotCurrent,
+			failure);
 		builder.select(checkOptionalSnapshotCurrent);
 		builder.branch(builder.equal(optionalSnapshotCurrent, builder.constInt(999)), checkOptionalBridgeNull, failure);
 		builder.select(checkOptionalBridgeNull);
 		builder.branch(builder.equal(optionalBridgeNull, builder.constNull(Dyn)), checkOptionalBridgeCleared, failure);
 		builder.select(checkOptionalBridgeCleared);
-		builder.branch(builder.equal(optionalBridgeCleared, builder.constNull(Obj("LaneOwner"))), checkOptionalPushAlloc, failure);
+		builder.branch(builder.equal(optionalBridgeCleared, builder.constNull(Obj("LaneOwner"))),
+			checkOptionalPushAlloc, failure);
 		builder.select(checkOptionalPushAlloc);
 		builder.branch(builder.equal(beforeOptionalPush, afterOptionalPush), checkOptionalFrontPresent, failure);
 		builder.select(checkOptionalFrontPresent);
 		builder.branch(optionalFrontPresent, failure, checkOptionalFrontRef);
 		builder.select(checkOptionalFrontRef);
-		builder.branch(builder.equal(optionalFrontRef, builder.constNull(Obj("LaneOwner"))), checkOptionalInsertedValue, failure);
+		builder.branch(builder.equal(optionalFrontRef, builder.constNull(Obj("LaneOwner"))), checkOptionalInsertedValue,
+			failure);
 		builder.select(checkOptionalInsertedValue);
 		builder.branch(builder.equal(optionalInsertedValue, builder.constInt(42)), checkOptionalInsertedRef, failure);
 		builder.select(checkOptionalInsertedRef);
@@ -1380,7 +1518,8 @@ class ValueArrayAccessMain {
 		builder.select(checkNestedBridgePayload);
 		builder.branch(builder.equal(nestedBridgePayload, builder.constInt(93)), checkNestedBridgeNull, failure);
 		builder.select(checkNestedBridgeNull);
-		builder.branch(builder.equal(nestedBridgeNull, builder.constNull(Nullable(I32))), checkOuterBridgeValue, failure);
+		builder.branch(builder.equal(nestedBridgeNull, builder.constNull(Nullable(I32))), checkOuterBridgeValue,
+			failure);
 		builder.select(checkOuterBridgeValue);
 		builder.branch(builder.equal(bridgeOuterValue, builder.constInt(45)), checkOuterBridgeOwner, failure);
 		builder.select(checkOuterBridgeOwner);
@@ -1388,7 +1527,8 @@ class ValueArrayAccessMain {
 		builder.select(checkOuterBridgeFlag);
 		builder.branch(builder.equal(bridgeOuterFlag, builder.constInt(-7)), checkOuterBridgeNull, failure);
 		builder.select(checkOuterBridgeNull);
-		builder.branch(builder.equal(outerNull, builder.constNull(Nullable(Obj("LaneInner")))), checkOuterBridgeCleared, failure);
+		builder.branch(builder.equal(outerNull, builder.constNull(Nullable(Obj("LaneInner")))), checkOuterBridgeCleared,
+			failure);
 		builder.select(checkOuterBridgeCleared);
 		builder.branch(builder.equal(outerCleared, builder.constNull(Obj("LaneOwner"))), checkRetypedInitial, failure);
 		builder.select(checkRetypedInitial);
@@ -1432,7 +1572,8 @@ class ValueArrayAccessMain {
 		builder.select(checkRemovedPairLabel);
 		builder.branch(builder.equal(removedPairLabel, otherOwner), checkType, failure);
 		builder.select(checkType);
-		builder.branch(builder.call("__std_is_exact_type", [builder.toDyn(owner), restoredType], Bool), success, failure);
+		builder.branch(builder.call("__std_is_exact_type", [builder.toDyn(owner), restoredType], Bool), success,
+			failure);
 		builder.select(success);
 		builder.call("std.sys_exit", [builder.constInt(42)], Void);
 		builder.returnValue(builder.constVoid());
@@ -1480,7 +1621,11 @@ class ValueArrayAccessMain {
 		nestedBody.returnValue(nestedBody.constVoid());
 		var snapshotBody = new IrBuilder(),
 			snapshotInput = snapshotBody.argument("array", arrayType);
-		snapshotBody.call(helpers.setter(nestedSlot), [snapshotInput, snapshotBody.constInt(0), snapshotBody.constInt(50)], Void);
+		snapshotBody.call(helpers.setter(nestedSlot), [
+			snapshotInput,
+			snapshotBody.constInt(0),
+			snapshotBody.constInt(50)
+		], Void);
 		snapshotBody.returnValue(snapshotBody.constVoid());
 		var scalarBody = new IrBuilder(),
 			scalarInput = scalarBody.argument("array", arrayType),
@@ -1491,9 +1636,15 @@ class ValueArrayAccessMain {
 		var compositeBody = new IrBuilder(),
 			compositeInput = compositeBody.argument("array", arrayType),
 			compositeIndex = compositeBody.constInt(0);
-		compositeBody.call(helpers.setter(secondValue), [compositeInput, compositeIndex, compositeBody.constInt(120)], Void);
-		compositeBody.call(helpers.setter(secondLabel), [compositeInput, compositeIndex, compositeBody.constNull(Obj("LaneOwner"))], Void);
-		compositeBody.call(helpers.setter(secondFlag), [compositeInput, compositeIndex, compositeBody.constBool(false)], Void);
+		compositeBody.call(helpers.setter(secondValue), [compositeInput, compositeIndex, compositeBody.constInt(120)],
+			Void);
+		compositeBody.call(helpers.setter(secondLabel), [
+			compositeInput,
+			compositeIndex,
+			compositeBody.constNull(Obj("LaneOwner"))
+		], Void);
+		compositeBody.call(helpers.setter(secondFlag), [compositeInput, compositeIndex, compositeBody.constBool(false)],
+			Void);
 		compositeBody.returnValue(compositeBody.constVoid());
 		var optionalSnapshotBody = new IrBuilder(),
 			optionalSnapshotInput = optionalSnapshotBody.argument("array", optionalPairArrayType);
@@ -1532,10 +1683,13 @@ class ValueArrayAccessMain {
 			adjustmentFunction,
 			new IrFunction("array_place_callback", callbackBody.arguments, Void, callbackBody.blocks, Ordinary),
 			new IrFunction("array_place_nested_callback", nestedBody.arguments, Void, nestedBody.blocks, Ordinary),
-			new IrFunction("array_place_snapshot_callback", snapshotBody.arguments, Void, snapshotBody.blocks, Ordinary),
+			new IrFunction("array_place_snapshot_callback", snapshotBody.arguments, Void, snapshotBody.blocks,
+				Ordinary),
 			new IrFunction("array_place_scalar_callback", scalarBody.arguments, Void, scalarBody.blocks, Ordinary),
-			new IrFunction("array_place_composite_callback", compositeBody.arguments, Void, compositeBody.blocks, Ordinary),
-			new IrFunction("array_optional_snapshot_callback", optionalSnapshotBody.arguments, Void, optionalSnapshotBody.blocks, Ordinary)
+			new IrFunction("array_place_composite_callback", compositeBody.arguments, Void, compositeBody.blocks,
+				Ordinary),
+			new IrFunction("array_optional_snapshot_callback", optionalSnapshotBody.arguments, Void,
+				optionalSnapshotBody.blocks, Ordinary)
 		].concat(generatedMethods)
 			.concat(helperFunctions)
 			.concat(pairBridgeFunctions)
@@ -1666,31 +1820,34 @@ class ValueArrayAccessMain {
 		for (initialized in [false, true]) {
 			var missing = new IrBuilder(), missingIndex = missing.constInt(0);
 			var missingArray = missing.call("__value_array_alloc", [
-				               missing.constInt(1),             missing.typeValue(element), missing.constInt(shape.scalarStrideBits),
-				missing.constInt(shape.references), missing.constInt(shape.scalarWordBits),                  missing.constBool(true)
+				missing.constInt(1), missing.typeValue(element), missing.constInt(shape.scalarStrideBits),
+				missing.constInt(shape.references), missing.constInt(shape.scalarWordBits), missing.constBool(true)
 			], arrayType);
 			if (initialized)
 				missing.call("__value_array_mark", [missingArray, missingIndex], Void);
 			missing.call(checkOptional, [missingArray, missingIndex], Void);
 			missing.call("std.sys_exit", [missing.constInt(0)], Void);
 			missing.returnValue(missing.constVoid());
-			program.functions.push(new IrFunction(initialized ? "missing_optional" : "uninitialized", [], Void, missing.blocks, Ordinary));
+			program.functions.push(new IrFunction(initialized ? "missing_optional" : "uninitialized", [], Void,
+				missing.blocks, Ordinary));
 		}
 		for (outOfBounds in [false, true]) {
 			var badRead = new IrBuilder(),
 				values = badRead.call(pairFactory.allocateName(), [badRead.constInt(1)], pairArrayType);
 			var invalid = badRead.constInt(outOfBounds ? 1 : 0),
 				ignored = new IrValue(800000, "$invalid-element", pairType);
-			badRead.currentBlock().instructions.push(new Located(ArrayGet(ignored, values, invalid), SourceProvenance.generated("array-element-test")));
+			badRead.currentBlock().instructions.push(new Located(ArrayGet(ignored, values, invalid),
+				SourceProvenance.generated("array-element-test")));
 			badRead.call("std.sys_exit", [badRead.constInt(0)], Void);
 			badRead.returnValue(badRead.constVoid());
-			program.functions.push(new IrFunction(outOfBounds ? "element_out_of_bounds" : "element_uninitialized", [], Void, badRead.blocks, Ordinary));
+			program.functions.push(new IrFunction(outOfBounds ? "element_out_of_bounds" : "element_uninitialized", [],
+				Void, badRead.blocks, Ordinary));
 		}
 		var exception = new IrBuilder(),
 			exceptionIndex = exception.constInt(0);
 		var exceptionArray = exception.call("__value_array_alloc", [
-			               exception.constInt(1),             exception.typeValue(element), exception.constInt(shape.scalarStrideBits),
-			exception.constInt(shape.references), exception.constInt(shape.scalarWordBits),                  exception.constBool(true)
+			exception.constInt(1), exception.typeValue(element), exception.constInt(shape.scalarStrideBits),
+			exception.constInt(shape.references), exception.constInt(shape.scalarWordBits), exception.constBool(true)
 		], arrayType);
 		exception.call(helpers.setter(1), [exceptionArray, exceptionIndex, exception.constInt(20)], Void);
 		exception.call("__value_array_mark", [exceptionArray, exceptionIndex], Void);
@@ -1729,8 +1886,10 @@ class ValueArrayAccessMain {
 		var scalarException = new IrBuilder(),
 			scalarExceptionIndex = scalarException.constInt(0);
 		var scalarExceptionArray = scalarException.call("__value_array_alloc", [
-			               scalarException.constInt(1),             scalarException.typeValue(element), scalarException.constInt(shape.scalarStrideBits),
-			scalarException.constInt(shape.references), scalarException.constInt(shape.scalarWordBits),                  scalarException.constBool(true)
+			scalarException.constInt(1), scalarException.typeValue(element),
+			scalarException.constInt(shape.scalarStrideBits),
+			scalarException.constInt(shape.references), scalarException.constInt(shape.scalarWordBits),
+			scalarException.constBool(true)
 		], arrayType);
 		scalarException.call("__value_array_mark", [scalarExceptionArray, scalarExceptionIndex], Void);
 		var scalarExceptionCallback = scalarException.staticClosure("array_place_scalar_callback", callbackType);
@@ -1739,7 +1898,8 @@ class ValueArrayAccessMain {
 			scalarAfter = scalarException.createBlock(),
 			scalarPass = scalarException.createBlock(),
 			scalarFail = scalarException.createBlock();
-		scalarException.currentBlock().instructions.push(new Located(BeginTry(scalarHandler.id, scalarAfter.id, false), provenance));
+		scalarException.currentBlock().instructions.push(new Located(BeginTry(scalarHandler.id, scalarAfter.id, false),
+			provenance));
 		scalarException.jump(scalarBodyBlock);
 		scalarException.select(scalarBodyBlock);
 		scalarException.call(rewrittenScalarSnapshot.name, [
@@ -1764,7 +1924,8 @@ class ValueArrayAccessMain {
 			scalarCheck = scalarException.createBlock();
 		scalarException.branch(scalarDidCatch, scalarCheck, scalarFail);
 		scalarException.select(scalarCheck);
-		scalarException.branch(scalarException.equal(scalarCurrent, scalarException.constInt(20)), scalarPass, scalarFail);
+		scalarException.branch(scalarException.equal(scalarCurrent, scalarException.constInt(20)), scalarPass,
+			scalarFail);
 		scalarException.select(scalarPass);
 		scalarException.call("std.sys_exit", [scalarException.constInt(42)], Void);
 		scalarException.returnValue(scalarException.constVoid());
@@ -1806,17 +1967,23 @@ class ValueArrayAccessMain {
 								escapedPairs++;
 							case ValueInit(out) if (Type.enumEq(out.type, Obj(pairWrapperName))):
 								throw "Nullable array mutations must not allocate component wrappers";
-							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + rewrittenArgument.name):
+							case Call(_, name,
+								_) if (name == compiler.ir.IrScalarArguments.PREFIX + rewrittenArgument.name):
 								scalarArgumentCall = true;
-							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.getName()):
+							case Call(_, name,
+								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.getName()):
 								scalarElementGet = true;
-							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.setName()):
+							case Call(_, name,
+								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.setName()):
 								scalarElementSet = true;
-							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.pushName()):
+							case Call(_, name,
+								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.pushName()):
 								scalarElementPush = true;
-							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.insertName()):
+							case Call(_, name,
+								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.insertName()):
 								scalarElementInsert = true;
-							case Call(_, name, _) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.unshiftName()):
+							case Call(_, name,
+								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.unshiftName()):
 								scalarElementUnshift = true;
 							default:
 						}
@@ -1824,7 +1991,8 @@ class ValueArrayAccessMain {
 			throw "Only the explicit dynamic escape may allocate a pair";
 		if (!scalarArgumentCall)
 			throw "Array value arguments must use the scalar call ABI";
-		if (!scalarElementGet || !scalarElementSet || !scalarElementPush || !scalarElementInsert || !scalarElementUnshift)
+		if (!scalarElementGet || !scalarElementSet || !scalarElementPush || !scalarElementInsert
+			|| !scalarElementUnshift)
 			throw "Typed array element calls must use the scalar call ABI";
 		IrVerifier.verify(program);
 
@@ -1847,11 +2015,16 @@ class ValueArrayAccessMain {
 				for (fn in linearFrontend.functions)
 					IrScalarReplacement.rewrite(fn, linearTable, false, true)
 			];
-			var linearBytes = new compiler.backend.wasm.WasmBackend().compile(linearFrontend, {target: Wasm32, wasmGcStress: true, debugNames: true}).bytes;
+			var linearBytes = new compiler.backend.wasm.WasmBackend().compile(linearFrontend, {
+				target: Wasm32,
+				wasmGcStress: true,
+				debugNames: true
+			}).bytes;
 			var linearPath = path + ".linear.wasm";
 			try {
 				sys.io.File.saveBytes(linearPath, linearBytes);
-				var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+				var script =
+					'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 					+ 'const result=i.exports.main(); if(result!==15) throw Error("result="+result);';
 				var process = new sys.io.Process("node", ["-e", script, linearPath]),
 					error = process.stderr.readAll().toString(),
@@ -1871,7 +2044,8 @@ class ValueArrayAccessMain {
 				+ 'function main():Int { var a:Array<MultiA>=[new MultiA(10)]; var b:Array<MultiB>=[new MultiB(20)]; '
 				+ 'var c:Array<Null<MultiA>>=[null,new MultiA(12)]; var value=c[1]; '
 				+ 'return value != null ? a[0].x+b[0].y+value.x : 0; }';
-			var nestedScalarSource = 'struct OptionalScalarElement { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
+			var nestedScalarSource =
+				'struct OptionalScalarElement { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
 				+ 'function main():Int { var values:Array<Null<OptionalScalarElement>>=[new OptionalScalarElement(42),null]; '
 				+ 'var saved=values[0]; return saved != null && saved.x != null ? saved.x : 0; }';
 			for (test in [
@@ -1889,10 +2063,15 @@ class ValueArrayAccessMain {
 					for (fn in linearNullable.functions)
 						IrScalarReplacement.rewrite(fn, table, false, true)
 				];
-				var bytes = new compiler.backend.wasm.WasmBackend().compile(linearNullable, {target: Wasm32, wasmGcStress: true, debugNames: true}).bytes;
+				var bytes = new compiler.backend.wasm.WasmBackend().compile(linearNullable, {
+					target: Wasm32,
+					wasmGcStress: true,
+					debugNames: true
+				}).bytes;
 				try {
 					sys.io.File.saveBytes(linearPath, bytes);
-					var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+					var script =
+						'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 						+ 'const result=i.exports.main(); if(result!==42) throw Error("result="+result);';
 					var process = new sys.io.Process("node", ["-e", script, linearPath]),
 						error = process.stderr.readAll().toString(),
@@ -1916,11 +2095,15 @@ class ValueArrayAccessMain {
 				for (fn in wasmFrontend.functions)
 					IrScalarReplacement.rewrite(fn, wasmTable, false, true)
 			];
-			var wasmBytes = new compiler.backend.wasm.WasmBackend().compile(wasmFrontend, {target: WasmGc, debugNames: true}).bytes;
+			var wasmBytes = new compiler.backend.wasm.WasmBackend().compile(wasmFrontend, {
+				target: WasmGc,
+				debugNames: true
+			}).bytes;
 			var wasmPath = path + ".wasm";
 			try {
 				sys.io.File.saveBytes(wasmPath, wasmBytes);
-				var script = 'const fs=require("fs"); const m=new WebAssembly.Module(fs.readFileSync(process.argv[1])); '
+				var script =
+					'const fs=require("fs"); const m=new WebAssembly.Module(fs.readFileSync(process.argv[1])); '
 					+ 'const i=new WebAssembly.Instance(m); const result=i.exports.main(); if(result!==15) throw Error("result="+result);';
 				var process = new sys.io.Process("node", ["-e", script, wasmPath]),
 					error = process.stderr.readAll().toString(),
@@ -1945,8 +2128,7 @@ class ValueArrayAccessMain {
 				+ 'view.reverse(); view.reverse(); var snapshot=view.copy(); var removed=view.splice(1,1); '
 				+ 'view.resize(5); var nullIndex=view.indexOf(null); var nullRemoved=view.remove(null); view.resize(3); '
 				+ 'var joined=view.concat(snapshot); var tail:Array<Dynamic>=["tail"]; var mixed=view.concat(tail); '
-				+
-				'var fromJoin:EscapeValue=cast joined[4]; var copy=view.copy(); var last:EscapeValue=cast copy.pop(); var firstRemoved:EscapeValue=cast copy.shift(); '
+				+ 'var fromJoin:EscapeValue=cast joined[4]; var copy=view.copy(); var last:EscapeValue=cast copy.pop(); var firstRemoved:EscapeValue=cast copy.shift(); '
 				+ 'var saved:EscapeValue=cast snapshot[1]; var gone:EscapeValue=cast removed[0]; '
 				+ 'return first.x == 5 && rejected && rejectedInsert && intact && values.length == 3 && values[0].x == 4 '
 				+ '&& values[1].x == 9 && values[2].x == 11 && saved.x == 6 && gone.x == 6 '
@@ -1966,7 +2148,8 @@ class ValueArrayAccessMain {
 				+ 'var snapshot=typed.copy(); alias.reverse(); alias.resize(2); var viaAlias:RetypedValue=cast alias[0]; '
 				+ 'return typed[0].x == 12 && typed[1].x == 7 && viaAlias.x == 12 && alias.length == 2 '
 				+ '&& sum == 28 && snapshot[0].x == 9 && snapshot[2].x == 12 ? 42 : 0; }';
-			var rejectedRetypeSource = 'struct RejectedValue { public var x:Int; public function new(x:Int) this.x=x; } '
+			var rejectedRetypeSource =
+				'struct RejectedValue { public var x:Int; public function new(x:Int) this.x=x; } '
 				+ 'function main():Int { var original:Array<Dynamic>=[new RejectedValue(5),"bad"]; var alias=original; var rejected=false; '
 				+ 'try { var typed:Array<RejectedValue>=cast original; } catch (error:Dynamic) { rejected=true; } '
 				+ 'alias[1]="kept"; var first:RejectedValue=cast original[0]; '
@@ -1995,10 +2178,15 @@ class ValueArrayAccessMain {
 					for (fn in linearDynamic.functions)
 						IrScalarReplacement.rewrite(fn, table, false, true)
 				];
-				var bytes = new compiler.backend.wasm.WasmBackend().compile(linearDynamic, {target: Wasm32, wasmGcStress: true, debugNames: true}).bytes;
+				var bytes = new compiler.backend.wasm.WasmBackend().compile(linearDynamic, {
+					target: Wasm32,
+					wasmGcStress: true,
+					debugNames: true
+				}).bytes;
 				try {
 					sys.io.File.saveBytes(linearPath, bytes);
-					var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+					var script =
+						'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 						+ 'const result=i.exports.main(); if(result!==42) throw Error("result="+result);';
 					var process = new sys.io.Process("node", ["-e", script, linearPath]),
 						error = process.stderr.readAll().toString(),
@@ -2042,10 +2230,14 @@ class ValueArrayAccessMain {
 					for (fn in nullableWasm.functions)
 						IrScalarReplacement.rewrite(fn, table, false, true)
 				];
-				var bytes = new compiler.backend.wasm.WasmBackend().compile(nullableWasm, {target: WasmGc, debugNames: true}).bytes;
+				var bytes = new compiler.backend.wasm.WasmBackend().compile(nullableWasm, {
+					target: WasmGc,
+					debugNames: true
+				}).bytes;
 				try {
 					sys.io.File.saveBytes(wasmPath, bytes);
-					var script = 'const fs=require("fs"); const m=new WebAssembly.Module(fs.readFileSync(process.argv[1])); '
+					var script =
+						'const fs=require("fs"); const m=new WebAssembly.Module(fs.readFileSync(process.argv[1])); '
 						+ 'const i=new WebAssembly.Instance(m); const result=i.exports.main(); if(result!==42) throw Error("result="+result);';
 					var process = new sys.io.Process("node", ["-e", script, wasmPath]),
 						error = process.stderr.readAll().toString(),
@@ -2093,7 +2285,8 @@ class ValueArrayAccessMain {
 							IrScalarReplacement.rewrite(fn, table, false, true)
 					];
 					compiler.ir.IrNullableScalarFlow.rewrite(rangeProgram);
-					compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(), compiler.ir.TargetProfile.wasm, inlineEnabled);
+					compiler.ir.IrInliner.run(rangeProgram, new compiler.ir.IrInliner.IrInlineCache(),
+						compiler.ir.TargetProfile.wasm, inlineEnabled);
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(rangeProgram, {
 						target: backendTarget,
@@ -2104,13 +2297,13 @@ class ValueArrayAccessMain {
 					}).bytes;
 					try {
 						sys.io.File.saveBytes(wasmPath, bytes);
-						var counter = target == Wasm32 ? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
-						var script = 'const fs=require("fs"), i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+						var counter = target == Wasm32
+							? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
+						var script =
+							'const fs=require("fs"), i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 							+ 'i.exports.main(); function sample(n) { i.exports["RangeCensus.prepare"](n); const before=$counter; '
-							+
-							'const value=i.exports["RangeCensus.perform"](), count=$counter-before; if(value!==198) throw Error("result="+value); return count; } '
-							+
-							'const small=sample(8), large=sample(1024); if(small!==large || large>30) throw Error("small="+small+", large="+large); console.log(large);';
+							+ 'const value=i.exports["RangeCensus.perform"](), count=$counter-before; if(value!==198) throw Error("result="+value); return count; } '
+							+ 'const small=sample(8), large=sample(1024); if(small!==large || large>30) throw Error("small="+small+", large="+large); console.log(large);';
 						var process = new sys.io.Process("node", ["-e", script, wasmPath]),
 							allocations = process.stdout.readAll().toString(),
 							error = process.stderr.readAll().toString(),
@@ -2139,13 +2332,17 @@ class ValueArrayAccessMain {
 				for (fn in linearCensus.functions)
 					IrScalarReplacement.rewrite(fn, linearCensusTable, false, true)
 			];
-			var linearCensusBytes = new compiler.backend.wasm.WasmBackend().compile(linearCensus, {target: Wasm32, debugNames: true, wasmMemoryStats: true})
+			var linearCensusBytes = new compiler.backend.wasm.WasmBackend().compile(linearCensus, {
+				target: Wasm32,
+				debugNames: true,
+				wasmMemoryStats: true
+			})
 				.bytes;
 			try {
 				sys.io.File.saveBytes(wasmPath, linearCensusBytes);
-				var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
-					+
-					'const before=i.exports["haxeon.memory.allocation_count"](), result=i.exports.main(), allocations=i.exports["haxeon.memory.allocation_count"]()-before; '
+				var script =
+					'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+					+ 'const before=i.exports["haxeon.memory.allocation_count"](), result=i.exports.main(), allocations=i.exports["haxeon.memory.allocation_count"]()-before; '
 					+ 'if(result!==4950 || allocations>40) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 				var process = new sys.io.Process("node", ["-e", script, wasmPath]),
 					allocations = process.stdout.readAll().toString(),
@@ -2171,10 +2368,15 @@ class ValueArrayAccessMain {
 				for (fn in census.functions)
 					IrScalarReplacement.rewrite(fn, censusTable, false, true)
 			];
-			var censusBytes = new compiler.backend.wasm.WasmBackend().compile(census, {target: WasmGc, debugNames: true, wasmGcAllocationCount: true}).bytes;
+			var censusBytes = new compiler.backend.wasm.WasmBackend().compile(census, {
+				target: WasmGc,
+				debugNames: true,
+				wasmGcAllocationCount: true
+			}).bytes;
 			try {
 				sys.io.File.saveBytes(wasmPath, censusBytes);
-				var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+				var script =
+					'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 					+ 'const result=i.exports.main(), allocations=i.exports.__allocation_count(); '
 					+ 'if(result!==4950 || allocations>32) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 				var process = new sys.io.Process("node", ["-e", script, wasmPath]),
@@ -2193,28 +2395,33 @@ class ValueArrayAccessMain {
 			if (sys.FileSystem.exists(wasmPath))
 				sys.FileSystem.deleteFile(wasmPath);
 			var optionalCensusSource = 'class CensusOwner { public function new() {} } '
-				+
-				'struct CensusOptional { public var x:Int; public var owner:CensusOwner; public function new(x:Int, owner:CensusOwner) { this.x=x; this.owner=owner; } } '
+				+ 'struct CensusOptional { public var x:Int; public var owner:CensusOwner; public function new(x:Int, owner:CensusOwner) { this.x=x; this.owner=owner; } } '
 				+ 'function main():Int { var owner = new CensusOwner(); var points:Array<Null<CensusOptional>> = []; '
 				+ 'for (i in 0...100) points.push(new CensusOptional(i, owner)); var sum=0; '
 				+ 'for (point in points) if (point != null && point.owner == owner) sum += point.x; return sum; }';
 			var linearOptionalCensus = compiler.Frontend.compile(optionalCensusSource);
-			compiler.ir.IrValueArrayProgramRewrite.rewrite(linearOptionalCensus, Nullable(Obj("CensusOptional")), 32, Wasm32);
+			compiler.ir.IrValueArrayProgramRewrite.rewrite(linearOptionalCensus, Nullable(Obj("CensusOptional")), 32,
+				Wasm32);
 			compiler.ir.IrValueConstructors.rewrite(linearOptionalCensus);
 			compiler.ir.IrValuePhiScalarization.rewrite(linearOptionalCensus);
-			var linearOptionalTable = IrObjectTable.of([for (object in linearOptionalCensus.objects) object.name => object]);
+			var linearOptionalTable =
+				IrObjectTable.of([for (object in linearOptionalCensus.objects) object.name => object]);
 			linearOptionalCensus.functions = [
 				for (fn in linearOptionalCensus.functions)
 					IrScalarReplacement.rewrite(fn, linearOptionalTable, false, true)
 			];
 			var linearOptionalBytes = new compiler.backend.wasm.WasmBackend().compile(linearOptionalCensus,
-				{target: Wasm32, debugNames: true, wasmMemoryStats: true})
-				.bytes;
+				{
+					target: Wasm32,
+					debugNames: true,
+					wasmMemoryStats: true
+				})
+					.bytes;
 			try {
 				sys.io.File.saveBytes(wasmPath, linearOptionalBytes);
-				var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
-					+
-					'const before=i.exports["haxeon.memory.allocation_count"](), result=i.exports.main(), allocations=i.exports["haxeon.memory.allocation_count"]()-before; '
+				var script =
+					'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+					+ 'const before=i.exports["haxeon.memory.allocation_count"](), result=i.exports.main(), allocations=i.exports["haxeon.memory.allocation_count"]()-before; '
 					+ 'if(result!==4950 || allocations>40) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 				var process = new sys.io.Process("node", ["-e", script, wasmPath]),
 					allocations = process.stdout.readAll().toString(),
@@ -2241,11 +2448,16 @@ class ValueArrayAccessMain {
 					IrScalarReplacement.rewrite(fn, optionalCensusTable, false, true)
 			];
 			var optionalCensusBytes = new compiler.backend.wasm.WasmBackend().compile(optionalCensus,
-				{target: WasmGc, debugNames: true, wasmGcAllocationCount: true})
-				.bytes;
+				{
+					target: WasmGc,
+					debugNames: true,
+					wasmGcAllocationCount: true
+				})
+					.bytes;
 			try {
 				sys.io.File.saveBytes(wasmPath, optionalCensusBytes);
-				var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+				var script =
+					'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 					+ 'const result=i.exports.main(), allocations=i.exports.__allocation_count(); '
 					+ 'if(result!==4950 || allocations>40) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 				var process = new sys.io.Process("node", ["-e", script, wasmPath]),
@@ -2263,20 +2475,24 @@ class ValueArrayAccessMain {
 			}
 			if (sys.FileSystem.exists(wasmPath))
 				sys.FileSystem.deleteFile(wasmPath);
-			var nestedCensusSource = 'struct NestedCensus { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
+			var nestedCensusSource =
+				'struct NestedCensus { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
 				+ 'function main():Int { var values:Array<Null<NestedCensus>>=[]; for(i in 0...100) values.push(new NestedCensus(i)); '
 				+ 'var total=0; for(value in values) if(value != null && value.x != null) total += value.x; return total; }';
-			var nonoptionalCensusSource = 'struct NestedCensus { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
+			var nonoptionalCensusSource =
+				'struct NestedCensus { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
 				+ 'function main():Int { var values:Array<NestedCensus>=[]; for(i in 0...100) values.push(new NestedCensus(i)); '
 				+ 'var total=0; for(value in values) if(value.x != null) total += value.x; return total; }';
-			var removalCensusSource = 'struct NestedCensus { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
+			var removalCensusSource =
+				'struct NestedCensus { public var x:Null<Int>; public function new(x:Null<Int>) this.x=x; } '
 				+ 'function main():Int { var values:Array<Null<NestedCensus>>=[]; for(i in 0...100) values.push(new NestedCensus(i)); '
 				+ 'var total=0; for(i in 0...100) { var value = i % 2 == 0 ? values.pop() : values.shift(); '
 				+ 'if(value != null && value.x != null) total += value.x; } return total; }';
 			for (source in [nestedCensusSource, nonoptionalCensusSource, removalCensusSource])
 				for (target in [Wasm32, WasmGc]) {
 					var nestedCensus = compiler.Frontend.compile(source),
-						label = source == nestedCensusSource ? "nullable element" : source == nonoptionalCensusSource ? "struct element" : "nullable removals";
+						label = source == nestedCensusSource ? "nullable element" : source == nonoptionalCensusSource
+							? "struct element" : "nullable removals";
 					compiler.ir.IrValueArrayProgramRewrite.rewriteAll(nestedCensus, 32, target);
 					compiler.ir.IrValueConstructors.rewrite(nestedCensus);
 					compiler.ir.IrValuePhiScalarization.rewrite(nestedCensus);
@@ -2295,8 +2511,10 @@ class ValueArrayAccessMain {
 					}).bytes;
 					try {
 						sys.io.File.saveBytes(wasmPath, bytes);
-						var counter = target == Wasm32 ? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
-						var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+						var counter = target == Wasm32
+							? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
+						var script =
+							'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 							+ 'const before=$counter, result=i.exports.main(), allocations=$counter-before; '
 							+ 'if(result!==4950 || allocations>40) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 						var process = new sys.io.Process("node", ["-e", script, wasmPath]),
@@ -2316,7 +2534,8 @@ class ValueArrayAccessMain {
 						sys.FileSystem.deleteFile(wasmPath);
 				}
 			for (source in [nestedCensusSource, nonoptionalCensusSource, removalCensusSource]) {
-				var hlCensus = compiler.Frontend.compile(StringTools.replace(source, "return total;", "return total == 4950 ? 42 : 0;"));
+				var hlCensus = compiler.Frontend.compile(StringTools.replace(source, "return total;",
+					"return total == 4950 ? 42 : 0;"));
 				compiler.ir.IrValueArrayProgramRewrite.rewriteAll(hlCensus, 64, HashLink);
 				compiler.ir.IrValueConstructors.rewrite(hlCensus);
 				compiler.ir.IrValuePhiScalarization.rewrite(hlCensus);
@@ -2335,9 +2554,10 @@ class ValueArrayAccessMain {
 								switch located.value {
 									case ValueInit(out)
 										if (Type.enumEq(out.type, Obj("NestedCensus"))
-											|| Type.enumEq(out.type, Obj("$optional-components:NestedCensus"))):
+										|| Type.enumEq(out.type, Obj("$optional-components:NestedCensus"))):
 										throw "HashLink array census retains a value box";
-									case ToDyn(out, value) if (Type.enumEq(out.type, Nullable(I32)) && value.type == I32):
+									case ToDyn(out,
+										value) if (Type.enumEq(out.type, Nullable(I32)) && value.type == I32):
 										throw "HashLink array census retains a nullable scalar box";
 									default:
 								}
@@ -2368,8 +2588,10 @@ class ValueArrayAccessMain {
 				}).bytes;
 				try {
 					sys.io.File.saveBytes(wasmPath, bytes);
-					var counter = target == Wasm32 ? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
-					var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+					var counter = target == Wasm32
+						? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
+					var script =
+						'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 						+ 'const before=$counter, result=i.exports.main(), allocations=$counter-before; '
 						+ 'if(result!==100 || allocations>20) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 					var process = new sys.io.Process("node", ["-e", script, wasmPath]),
@@ -2388,11 +2610,13 @@ class ValueArrayAccessMain {
 				if (sys.FileSystem.exists(wasmPath))
 					sys.FileSystem.deleteFile(wasmPath);
 			}
-			var equalityCensusSource = 'interface Equatable {} struct CensusKey implements Equatable { public var x:Int; public function new(x:Int) this.x=x; '
+			var equalityCensusSource =
+				'interface Equatable {} struct CensusKey implements Equatable { public var x:Int; public function new(x:Int) this.x=x; '
 				+ 'public function equals(other:CensusKey):Bool return x == other.x; } '
 				+ 'function main():Int { var values:Array<CensusKey>=[]; for(i in 0...100) values.push(new CensusKey(i)); '
 				+ 'var total=0; for(i in 0...100) total += values.indexOf(new CensusKey(i)); return total; }';
-			var nullableEqualityCensusSource = StringTools.replace(equalityCensusSource, 'public var x:Int; public function new(x:Int)',
+			var nullableEqualityCensusSource = StringTools.replace(equalityCensusSource,
+				'public var x:Int; public function new(x:Int)',
 				'public var x:Null<Int>; public function new(x:Null<Int>)');
 			for (source in [equalityCensusSource, nullableEqualityCensusSource])
 				for (target in [Wasm32, WasmGc]) {
@@ -2404,7 +2628,8 @@ class ValueArrayAccessMain {
 					compiler.ir.IrScalarArguments.rewrite(census, true);
 					compiler.ir.IrValuePhiScalarization.rewrite(census);
 					var table = IrObjectTable.of([for (object in census.objects) object.name => object]);
-					census.functions = [for (fn in census.functions) IrScalarReplacement.rewrite(fn, table, false, true)];
+					census.functions = [for (fn in census.functions) IrScalarReplacement.rewrite(fn, table, false,
+						true)];
 					compiler.ir.IrNullableScalarFlow.rewrite(census);
 					var backendTarget:compiler.backend.Backend.BackendTarget = target == Wasm32 ? Wasm32 : WasmGc;
 					var bytes = new compiler.backend.wasm.WasmBackend().compile(census, {
@@ -2415,8 +2640,10 @@ class ValueArrayAccessMain {
 					}).bytes;
 					try {
 						sys.io.File.saveBytes(wasmPath, bytes);
-						var counter = target == Wasm32 ? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
-						var script = 'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
+						var counter = target == Wasm32
+							? 'i.exports["haxeon.memory.allocation_count"]()' : 'i.exports.__allocation_count()';
+						var script =
+							'const fs=require("fs"); const i=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))); '
 							+ 'const before=$counter, result=i.exports.main(), allocations=$counter-before; '
 							+ 'if(result!==4950 || allocations>40) throw Error("result="+result+", allocations="+allocations); console.log(allocations);';
 						var process = new sys.io.Process("node", ["-e", script, wasmPath]),
@@ -2457,7 +2684,8 @@ class ValueArrayAccessMain {
 									case ValueInit(out) if (Type.enumEq(out.type, Obj("PlaceRoot"))
 										|| Type.enumEq(out.type, Obj("PlaceLeaf"))):
 										throw "Frontend array operations must not allocate a struct box";
-									case ArrayGet(_, array, _), ArraySet(array, _, _) if (Type.enumEq(array.type, Array(Obj("PlaceRoot")))):
+									case ArrayGet(_, array, _),
+										ArraySet(array, _, _) if (Type.enumEq(array.type, Array(Obj("PlaceRoot")))):
 										throw "Frontend array operations must use the inline lanes";
 									default:
 								}
@@ -2494,12 +2722,14 @@ class ValueArrayAccessMain {
 			}
 			var nullableElementType:IrType = Nullable(Obj("OptionalElement"));
 			for (nullableElementProgram in [nullableElementFrontend, nullableElementChecked]) {
-				compiler.ir.IrValueArrayProgramRewrite.rewrite(nullableElementProgram, nullableElementType, 64, HashLink);
+				compiler.ir.IrValueArrayProgramRewrite.rewrite(nullableElementProgram, nullableElementType, 64,
+					HashLink);
 				compiler.ir.IrValueConstructors.rewrite(nullableElementProgram);
 				compiler.ir.IrValuePhiScalarization.rewrite(nullableElementProgram);
 				compiler.ir.IrScalarArguments.rewrite(nullableElementProgram);
 				compiler.ir.IrValuePhiScalarization.rewrite(nullableElementProgram);
-				var nullableElementTable = IrObjectTable.of([for (object in nullableElementProgram.objects) object.name => object]);
+				var nullableElementTable =
+					IrObjectTable.of([for (object in nullableElementProgram.objects) object.name => object]);
 				nullableElementProgram.functions = [
 					for (fn in nullableElementProgram.functions)
 						IrScalarReplacement.rewrite(fn, nullableElementTable, false, true)
@@ -2511,18 +2741,24 @@ class ValueArrayAccessMain {
 								switch located.value {
 									case ValueInit(out)
 										if (Type.enumEq(out.type, Obj("OptionalElement"))
-											|| Type.enumEq(out.type, Obj("$optional-components:OptionalElement"))):
+										|| Type.enumEq(out.type, Obj("$optional-components:OptionalElement"))):
 										throw "Nullable array elements must stay scalar";
 									case Call(_, name, _)
 										if (name == compiler.ir.IrOptionalValueFlow.boxName("OptionalElement")
-											|| name == compiler.ir.IrOptionalValueFlow.unboxName("OptionalElement")):
+										|| name == compiler.ir.IrOptionalValueFlow.unboxName("OptionalElement")):
 										throw "Nullable array elements must not cross a boxed boundary";
 									case Call(_,
-										"__array_get_any" | "__array_set_any" | "__array_copy_any" | "__array_slice_any" | "__array_concat_any" | "__array_splice_any" | "__array_resize_any" | "__array_reverse_any" | "__array_splice_ref" | "__array_resize_ref" | "__array_reverse_ref" | "__array_push_any" | "__array_unshift_any" | "__array_insert_any" | "__array_push_ref" | "__array_unshift_ref" | "__array_insert_ref",
+										"__array_get_any" | "__array_set_any" | "__array_copy_any" | "__array_slice_any"
+										| "__array_concat_any" | "__array_splice_any" | "__array_resize_any"
+										| "__array_reverse_any" | "__array_splice_ref" | "__array_resize_ref"
+										| "__array_reverse_ref" | "__array_push_any" | "__array_unshift_any"
+										| "__array_insert_any" | "__array_push_ref" | "__array_unshift_ref"
+										| "__array_insert_ref",
 										args)
 										if (args.length > 0 && Type.enumEq(args[0].type, Array(nullableElementType))):
 										throw "Typed nullable arrays must not use dynamic access";
-									case ArrayGet(_, array, _), ArraySet(array, _, _) if (Type.enumEq(array.type, Array(nullableElementType))):
+									case ArrayGet(_, array, _),
+										ArraySet(array, _, _) if (Type.enumEq(array.type, Array(nullableElementType))):
 										throw "Nullable array elements must use component lanes";
 									default:
 								}
@@ -2561,7 +2797,7 @@ class ValueArrayAccessMain {
 		Sys.println("PASS: array places preserve writes, snapshots, growth and exceptions without allocating value boxes");
 	}
 
-	static function run(program:IrProgram, path:String):{status:Int, error:String} {
+	static function run(program:IrProgram, path:String): {status: Int, error: String} {
 		HlWriter.writeFile(HlLower.lower(program), path);
 		var process = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var error = process.stderr.readAll().toString();

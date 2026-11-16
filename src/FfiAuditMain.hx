@@ -56,7 +56,8 @@ class FfiAuditMain {
 			HxiValidator.validateComposition(model, dependencyInterfaces);
 			dependencyInterfaces.push(model);
 		}
-		var report = HxiAudit.audit(paths[0], targets, includes, profile, library, interfaceName, dependencies, excludedHeaders, dependencyInterfaces);
+		var report = HxiAudit.audit(paths[0], targets, includes, profile, library, interfaceName, dependencies,
+			excludedHeaders, dependencyInterfaces);
 		if (format == "json")
 			Sys.println(Json.stringify(report, null, "  "));
 		else {
@@ -69,8 +70,9 @@ class FfiAuditMain {
 		if (output != null) {
 			var temporary = output + ".tmp." + Std.int(Sys.time() * 1000000);
 			File.saveContent(temporary,
-				HxiAudit.canonical(paths[0], targets[0], includes, library, interfaceName, sourceLabel, excludedHeaders, dependencies,
-					profile == null ? "portable-abi64" : profile));
+				HxiAudit.canonical(paths[0], targets[0], includes, library, interfaceName, sourceLabel, excludedHeaders,
+				dependencies,
+				profile == null ? "portable-abi64" : profile));
 			FileSystem.rename(temporary, output);
 			Sys.println('wrote canonical ABI -> $output');
 		}

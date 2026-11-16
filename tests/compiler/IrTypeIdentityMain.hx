@@ -12,10 +12,14 @@ class IrTypeIdentityMain {
 			{type: Iterator(EnumTag("pkg.Color")), text: "Iterator(EnumTag(pkg.Color))"},
 			{type: Function([], Void), text: "Function([],Void)"},
 			{
-				type: Function([I32, Obj("pkg.Name"), Function([Dyn, Virtual("pkg.Shape")], Abstract("hl_x"))], Nullable(Function([F32], Bytes))),
+				type: Function([I32, Obj("pkg.Name"), Function([Dyn, Virtual("pkg.Shape")], Abstract("hl_x"))],
+					Nullable(Function([F32], Bytes))),
 				text: "Function([I32,Obj(pkg.Name),Function([Dyn,Virtual(pkg.Shape)],Abstract(hl_x))],Nullable(Function([F32],Bytes)))"
 			},
-			{type: Array(Function([RawPtr, ManagedBytes, TypeRef, I64], Enum("pkg.E"))), text: "Array(Function([RawPtr,ManagedBytes,TypeRef,I64],Enum(pkg.E)))"}
+			{
+				type: Array(Function([RawPtr, ManagedBytes, TypeRef, I64], Enum("pkg.E"))),
+				text: "Array(Function([RawPtr,ManagedBytes,TypeRef,I64],Enum(pkg.E)))"
+			}
 		];
 		for (entry in cases) {
 			var text = IrTypeIdentity.text(entry.type);

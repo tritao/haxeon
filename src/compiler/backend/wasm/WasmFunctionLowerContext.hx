@@ -58,8 +58,10 @@ class WasmFunctionLowerContext {
 	public var gcRootState:Null<WasmFunctionGcRootState>;
 	public var exceptionDispatchIndex:Int = 0;
 
-	public function new(module:WasmModule, fn:IrFunction, program:IrProgram, moduleRepresentation:WasmRepresentationSet, tableSlots:Map<String, Int>,
-			staticDataAddresses:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>, ?runtimeNeutral:Bool = false,
+	public function new(module:WasmModule, fn:IrFunction, program:IrProgram, moduleRepresentation:WasmRepresentationSet,
+			tableSlots:Map<String, Int>,
+			staticDataAddresses:Map<String, Int>, exceptionTag:Null<Int>, rootPoints:Array<WasmSafepoint>,
+			?runtimeNeutral:Bool = false,
 			?hasHaxeExceptions:Bool = false, ?pendingExceptionFlag:Null<Int>, ?pendingExceptionValue:Null<Int>) {
 		this.module = module;
 		this.irFunction = fn;
@@ -77,7 +79,7 @@ class WasmFunctionLowerContext {
 		valueLocals = placement.values;
 		locals = placement.locals;
 		var functionContext:WasmFunctionRepresentationContext = {
-			allocateLocal: function(type:WasmValueType) return placement.allocate(type),
+			allocateLocal: function(type: WasmValueType) return placement.allocate(type),
 			exceptionTag: exceptionTag,
 			irFunction: fn
 		};

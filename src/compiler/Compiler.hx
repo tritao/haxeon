@@ -73,21 +73,26 @@ class FfiConfiguration {
 	final projections:Array<FfiProjectionSource>;
 
 	public function new(?interfaces:Array<FfiInterfaceSource>, ?projections:Array<FfiProjectionSource>) {
-		this.interfaces = interfaces == null ? [] : compiler.ffi.HxiInterfaceOrder.dependenciesFirst([
-			for (source in interfaces)
-				{
-					path: source.path,
-					text: source.text
-				}
-		]);
-		this.projections = projections == null ? [] : [for (source in projections) {path: source.path, text: source.text}];
+		this.interfaces = interfaces == null
+			? [] : compiler.ffi.HxiInterfaceOrder.dependenciesFirst([for (source in interfaces)
+			{
+				path:source.path,
+					text:source.text
+			}]);
+		this.projections = projections == null ? [] : [for (source in projections) {
+			path:source.path, text:source.text
+		}];
 	}
 
 	public function interfaceSources():Array<FfiInterfaceSource>
-		return [for (source in interfaces) {path: source.path, text: source.text}];
+		return [for (source in interfaces) {
+			path:source.path, text:source.text
+		}];
 
 	public function projectionSources():Array<FfiProjectionSource>
-		return [for (source in projections) {path: source.path, text: source.text}];
+		return [for (source in projections) {
+			path:source.path, text:source.text
+		}];
 }
 
 typedef FfiComposition = {
@@ -309,7 +314,8 @@ class Compiler {
 	var reachabilityCache:Map<String, ReachabilityCache> = [];
 	var declarationOwners = new compiler.semantic.DeclarationOwners();
 
-	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>, ?ffiConfiguration:FfiConfiguration, ?cloneFrom:Compiler) {
+	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>,
+			?ffiConfiguration:FfiConfiguration, ?cloneFrom:Compiler) {
 		semanticWorkspace = new SemanticWorkspace(modules);
 		natives = cloneFrom == null ? new NativeRegistry(nativeConfiguration) : cloneFrom.natives.clone();
 		if (cloneFrom != null) {
@@ -335,7 +341,8 @@ class Compiler {
 			genericSpecializations = new GenericSpecializationRegistry(identity.specializationState);
 			moduleId = identity.moduleId;
 			var assemblerState = identity.assemblerState;
-			assembler = assemblerState == null ? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
+			assembler = assemblerState == null
+				? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
 			for (name => id in identity.stableIds)
 				if (assembler.cache.stableIds.get(name) != id)
 					throw "Assembler stable identities do not match compiler state";
@@ -345,7 +352,8 @@ class Compiler {
 			types = new TypeRegistry(identity.typeState);
 			publishedAbi = identity.publishedAbi;
 			if (identity.publicationTracking)
-				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi, identity.assemblerState != null);
+				publication.enable(identity.acknowledgedRevision, identity.acknowledgedAbi,
+					identity.assemblerState != null);
 			if (identity.assemblerState != null) {
 				compiledOnce = true;
 				beginRehydration(assembler);
@@ -379,7 +387,8 @@ class Compiler {
 	public function exportIdentityState():Bytes {
 		var state = publication.persistence();
 		var backend = state.tracking && state.revision > 0 ? HlAssemblerStateCodec.encode(assembler) : null;
-		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(), publishedAbi, state.tracking, state.revision,
+		return HlRuntimeIdentity.encodePersistent(moduleId, assembler.cache.stableIds, types.exportState(),
+			publishedAbi, state.tracking, state.revision,
 			state.abi, backend, genericSpecializations.exportState());
 	}
 
@@ -429,7 +438,8 @@ class Compiler {
 		return true;
 	}
 
-	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>, result:CompilerType,
+	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>,
+			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):Void {
 		if (compiledOnce)
 			throw "Native registrations are frozen after the first compilation";
@@ -489,7 +499,8 @@ class Compiler {
 		var composition = buildFfiComposition(model),
 			profile = ffiProjectionProfiles.get(model.name);
 		if (profile != null)
-			HxiProjection.validateProfile(ffiProjectionPaths.get(model.name), model, composition.omitted, composition.declarations, profile);
+			HxiProjection.validateProfile(ffiProjectionPaths.get(model.name), model, composition.omitted,
+				composition.declarations, profile);
 		ffiInterfaceModels.set(model.name, model);
 		ffiInterfaceSources.push({path: path, text: source});
 		ffiCompositionCache.set(model.name, composition);
@@ -510,7 +521,8 @@ class Compiler {
 		var result:Array<IrCNative> = [];
 		for (model in ffiInterfaces()) {
 			var composition = ffiComposition(model);
-			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations, ffiAbi(model, composition),
+			for (native in HxiProjection.cNatives(model, composition.omitted, composition.declarations,
+				ffiAbi(model, composition),
 				ffiProjectionProfiles.get(model.name)))
 				result.push(native);
 		}
@@ -521,7 +533,8 @@ class Compiler {
 		var projections = ffiProjectionCache.get(model.name);
 		if (projections == null) {
 			var composition = ffiComposition(model);
-			projections = HxiProjection.modules(model, composition.omitted, composition.declarations, ffiAbi(model, composition),
+			projections = HxiProjection.modules(model, composition.omitted, composition.declarations,
+				ffiAbi(model, composition),
 				ffiProjectionProfiles.get(model.name));
 			ffiProjectionCache.set(model.name, projections);
 		}
@@ -591,7 +604,8 @@ class Compiler {
 		return names;
 	}
 
-	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>, declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,
+	function collectFfiDependency(owner:String, name:String, omitted:Map<String, Bool>,
+			declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,
 			active:Map<String, Bool>):Void {
 		if (active.get(name) == true)
 			throw 'Cyclic HXI dependency involving "$owner" and "$name"';
@@ -615,8 +629,9 @@ class Compiler {
 
 	static function ffiDeclarationName(declaration:HxiDeclaration):String
 		return switch declaration {
-			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _, _, _, _) |
-				Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _, _): name;
+			case Opaque(name, _) | Alias(name, _, _) | Handle(name, _, _, _) | Constant(name, _, _) | Structure(name, _,
+				_, _, _) | Enumeration(name, _, _, _, _) | Callback(name, _, _, _, _) | Function(name, _, _, _, _, _, _,
+				_): name;
 		};
 
 	function ffiConfigurationSnapshot():FfiConfiguration
@@ -675,7 +690,8 @@ class Compiler {
 	}
 
 	public function compact(entryModule:String):CompileResult {
-		var result = new CompilationTransaction(this, entryModule, null, new HlModuleAssembler(assembler.cache.stableIds)).run();
+		var result = new CompilationTransaction(this, entryModule, null,
+			new HlModuleAssembler(assembler.cache.stableIds)).run();
 		rememberCompile(entryModule, result);
 		return result;
 	}
@@ -764,7 +780,8 @@ class Compiler {
 						break;
 					}
 			if (affected)
-				state.render(new SourceFile(state.source.path, state.source.text, state.source.isStandardLibrarySource));
+				state.render(new SourceFile(state.source.path, state.source.text,
+					state.source.isStandardLibrarySource));
 		}
 		sourceGeneration++;
 	}
@@ -781,7 +798,8 @@ class Compiler {
 		The candidate is rebuilt from the persistent identity state and current
 		sources; callers can then decide whether to commit the edit normally.
 	 */
-	public function validate(path:String, source:String, entryModule:String, ?token:CancellationToken):ValidationResult {
+	public function validate(path:String, source:String, entryModule:String,
+			?token:CancellationToken):ValidationResult {
 		var candidate = fork(), moduleName = ModulePath.fromFile(path);
 		for (name in [for (name in candidate.modules.keys()) name])
 			if (name == moduleName)
@@ -797,7 +815,8 @@ class Compiler {
 	/** Compile a temporary Int-returning expression without changing this compiler. */
 	public function compileExpressionInt(expression:String):CompileResult {
 		var candidate = fork();
-		candidate.update("__repl__.hx", 'function __repl_value():Int { return $expression; } function main():Int { return __repl_value(); }');
+		candidate.update("__repl__.hx",
+			'function __repl_value():Int { return $expression; } function main():Int { return __repl_value(); }');
 		return candidate.compile("__repl__");
 	}
 

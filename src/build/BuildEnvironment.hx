@@ -26,8 +26,10 @@ class ToolchainInfo {
 	/** Whether the C compiler is Clang rather than GCC; they take different flags to instrument functions. */
 	public final clang:Bool;
 
-	public function new(cCompiler:String, cxxCompiler:String, archiver:String, objectSuffix:String, staticLibrarySuffix:String, sharedLibrarySuffix:String,
-			?linker:String, ?targetTriple:String, ?sysroot:String, ?compileFlags:Array<String>, ?linkFlags:Array<String>, clang:Bool = false) {
+	public function new(cCompiler:String, cxxCompiler:String, archiver:String, objectSuffix:String,
+			staticLibrarySuffix:String, sharedLibrarySuffix:String,
+			?linker:String, ?targetTriple:String, ?sysroot:String, ?compileFlags:Array<String>,
+			?linkFlags:Array<String>, clang:Bool = false) {
 		this.clang = clang;
 		this.cCompiler = cCompiler;
 		this.cxxCompiler = cxxCompiler;
@@ -45,19 +47,28 @@ class ToolchainInfo {
 	public static function detect(target:Target):ToolchainInfo {
 		return switch target.os {
 			case Windows:
-				if (target.abi == TargetAbi.Gnu) new ToolchainInfo("x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32-ar", ".o", ".a",
-					".dll", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32"); else new ToolchainInfo("cl", "cl", "lib", ".obj", ".lib", ".dll", "cl");
+				if (target.abi == TargetAbi.Gnu) new ToolchainInfo("x86_64-w64-mingw32-gcc", "x86_64-w64-mingw32-g++",
+					"x86_64-w64-mingw32-ar", ".o", ".a",
+					".dll", "x86_64-w64-mingw32-g++", "x86_64-w64-mingw32");
+				else new ToolchainInfo("cl", "cl", "lib", ".obj", ".lib", ".dll", "cl");
 			case MacOS:
-				var flags = target.arch == TargetArch.Arm64 ? ["-arch", "arm64"] : target.arch == TargetArch.X86 ? ["-arch", "i386"] : [];
-				new ToolchainInfo("clang", "clang++", "ar", ".o", ".a", ".dylib", "clang++", null, null, flags, flags, true);
+				var flags = target.arch == TargetArch.Arm64 ? ["-arch", "arm64"] : target.arch == TargetArch.X86 ? [
+					"-arch",
+					"i386"
+				] : [];
+				new ToolchainInfo("clang", "clang++", "ar", ".o", ".a", ".dylib", "clang++", null, null, flags, flags,
+					true);
 			case Linux:
-				if (target.arch == TargetArch.Arm64) new ToolchainInfo("aarch64-linux-gnu-gcc", "aarch64-linux-gnu-g++", "aarch64-linux-gnu-ar", ".o", ".a",
-					".so", "aarch64-linux-gnu-g++", "aarch64-linux-gnu"); else new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null,
+				if (target.arch == TargetArch.Arm64) new ToolchainInfo("aarch64-linux-gnu-gcc", "aarch64-linux-gnu-g++",
+					"aarch64-linux-gnu-ar", ".o", ".a",
+					".so", "aarch64-linux-gnu-g++", "aarch64-linux-gnu");
+				else new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so", null, null, null, null,
 					null, isClang("cc"));
 			case Android:
 				androidToolchain(target);
 			case Wasm:
-				new ToolchainInfo("clang", "clang++", "llvm-ar", ".o", ".a", ".wasm", "wasm-ld", "wasm32-wasi", null, ["--target=wasm32-wasi"],
+				new ToolchainInfo("clang", "clang++", "llvm-ar", ".o", ".a", ".wasm", "wasm-ld", "wasm32-wasi", null,
+					["--target=wasm32-wasi"],
 					["--target=wasm32-wasi"]);
 			case Other(_):
 				new ToolchainInfo("cc", "c++", "ar", ".o", ".a", ".so");
@@ -113,7 +124,8 @@ class BuildEnvironment {
 	/** Set for the instrumented build flavor: what its native code is compiled to probe. */
 	public final instrument:Null<project.PackageManifest.InstrumentManifest>;
 
-	public function new(projectRoot:String, buildRoot:String, profile:BuildProfile = BuildProfile.Debug, ?target:Target, ?toolchain:ToolchainInfo,
+	public function new(projectRoot:String, buildRoot:String, profile:BuildProfile = BuildProfile.Debug, ?target:Target,
+			?toolchain:ToolchainInfo,
 			?instrument:project.PackageManifest.InstrumentManifest) {
 		var canonicalRoot = FileSystem.fullPath(projectRoot);
 		this.projectRoot = Path.normalize(canonicalRoot);
@@ -124,7 +136,8 @@ class BuildEnvironment {
 		this.instrument = instrument;
 	}
 
-	public static function fromCurrentDirectory(?buildDirectory:String = "out", profile:BuildProfile = BuildProfile.Debug):BuildEnvironment {
+	public static function fromCurrentDirectory(?buildDirectory:String = "out",
+			profile:BuildProfile = BuildProfile.Debug):BuildEnvironment {
 		var root = FileSystem.fullPath(Sys.getCwd());
 		return new BuildEnvironment(root, Path.join([root, buildDirectory]), profile);
 	}

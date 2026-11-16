@@ -4,10 +4,19 @@ import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
 
-private typedef KnownField = {final object:Int; final field:String; final value:IrValue;}
+private typedef KnownField = {
+	final object:Int;
+	final field:String;
+	final value:IrValue;
+}
 
 /** An array element whose value is known: `index` is a constant when `constant`, else the id of the index value. */
-private typedef KnownElement = {final array:IrValue; final constant:Bool; final index:Int; final value:IrValue;}
+private typedef KnownElement = {
+	final array:IrValue;
+	final constant:Bool;
+	final index:Int;
+	final value:IrValue;
+}
 
 /** Cross-block field and block-local array reload elimination. Stores and the input function are never changed.
  * Runtime array-cast checks enforce concrete storage types; differently typed arrays cannot alias
@@ -41,7 +50,9 @@ class IrLoadStoreForwarding {
 			var fields:Array<KnownField> = incoming.exists(block.id) ? incoming.get(block.id) : [];
 			elements.resize(0);
 			for (located in block.instructions) {
-				var instruction = substituted == 0 ? located.value : IrInliner.remap(located.value, use, function(id:Int):Int return id), drop = false;
+				var instruction = substituted == 0 ? located.value : IrInliner.remap(located.value, use,
+					function(id:Int):Int return id),
+					drop = false;
 				switch instruction {
 					case FieldSet(object, field, value):
 						if (excludedField(value.type, objects) || !plainObject(object.type)) {
@@ -141,7 +152,8 @@ class IrLoadStoreForwarding {
 		for (block in blocks) {
 			for (index in 0...block.instructions.length) {
 				var located = block.instructions[index];
-				block.instructions[index] = new Located(IrInliner.remap(located.value, use, function(id:Int):Int return id), located.provenance);
+				block.instructions[index] = new Located(IrInliner.remap(located.value, use,
+					function(id:Int):Int return id), located.provenance);
 			}
 			var term = block.terminator;
 			if (term != null)
@@ -154,17 +166,15 @@ class IrLoadStoreForwarding {
 					case Jump(target): Jump(target);
 				}, term.provenance);
 		}
-		var bindings:Array<IrDebugBinding> = [
-			for (binding in fn.debugBindings)
-				{
-					identity: binding.identity,
-					name: binding.name,
-					value: use(binding.value),
-					path: binding.path,
-					scopeStart: binding.scopeStart,
-					scopeEnd: binding.scopeEnd
-				}
-		];
+		var bindings:Array<IrDebugBinding> = [for (binding in fn.debugBindings)
+			{
+				identity:binding.identity,
+					name:binding.name,
+					value:use(binding.value),
+					path:binding.path,
+					scopeStart:binding.scopeStart,
+					scopeEnd:binding.scopeEnd
+			}];
 		return fn.withBlocks(blocks, bindings);
 	}
 
@@ -248,7 +258,7 @@ class IrLoadStoreForwarding {
 								// Every field access of a plain object was given a key above.
 								var fields = byObject.get(object.id),
 									found = fields == null ? null : fields.get(field),
-									key = found == null ?throw 'No field key for $field':found;
+									key = found == null ? throw 'No field key for $field' : found;
 								if (!after.present[key]) {
 									after.present[key] = true;
 									after.values[key] = out;
@@ -335,7 +345,8 @@ class IrLoadStoreForwarding {
 
 	static function excludedField(type:IrType, objects:Null<IrObjectTable>):Bool
 		return switch type {
-			case Obj(name): var descriptor = objects == null ? null : objects.get(name); descriptor == null || descriptor.isValue;
+			case Obj(name): var descriptor = objects == null ? null : objects.get(name);
+				descriptor == null || descriptor.isValue;
 			default: false;
 		};
 
@@ -361,7 +372,8 @@ class IrLoadStoreForwarding {
 	static function dropAliasedElements(elements:Array<KnownElement>, array:IrValue, constant:Bool, key:Int):Void {
 		var kept = 0;
 		for (entry in elements)
-			if (entry.array.id == array.id ? constant && entry.constant && entry.index != key : !sameType(entry.array.type, array.type))
+			if (entry.array.id == array.id ? constant && entry.constant
+				&& entry.index != key : !sameType(entry.array.type, array.type))
 				elements[kept++] = entry;
 		elements.resize(kept);
 	}
@@ -378,11 +390,15 @@ class IrLoadStoreForwarding {
 	public static function mayWriteMemory(instruction:IrInstruction):Bool
 		return switch instruction {
 			case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME): false;
-			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _), ConstNull(_), TypeValue(_, _),
-				StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), NewObject(_, _), ValueInit(_), IntToFloat(_, _), IntToInt64(_, _),
+			case Phi(_, _), ConstVoid(_), ConstInt(_, _), ConstFloat(_, _), ConstString(_, _), ConstBool(_, _),
+				ConstNull(_), TypeValue(_, _),
+				StaticDataAddress(_, _), PointerOffset(_, _, _), MemoryLoad(_, _, _, _), NewObject(_, _), ValueInit(_),
+				IntToFloat(_, _), IntToInt64(_, _),
 				FloatToInt(_, _), FloatToFloat(_, _), ArraySize(_, _), EnumIndex(_, _), EnumField(_, _, _, _): false;
-			case Add(_, a, b), Sub(_, a, b), Mul(_, a, b), Div(_, a, b), Mod(_, a, b), BitAnd(_, a, b), BitOr(_, a, b), BitXor(_, a, b), ShiftLeft(_, a, b),
-				ShiftRight(_, a, b), UnsignedShiftRight(_, a, b), Less(_, a, b), LessEqual(_, a, b), Equal(_, a, b): !primitive(a.type) || !primitive(b.type);
+			case Add(_, a, b), Sub(_, a, b), Mul(_, a, b), Div(_, a, b), Mod(_, a, b), BitAnd(_, a, b), BitOr(_, a, b),
+				BitXor(_, a, b), ShiftLeft(_, a, b),
+				ShiftRight(_, a, b), UnsignedShiftRight(_, a, b), Less(_, a, b), LessEqual(_, a, b),
+				Equal(_, a, b): !primitive(a.type) || !primitive(b.type);
 			default: true;
 		};
 

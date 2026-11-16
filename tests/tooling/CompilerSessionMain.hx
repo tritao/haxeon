@@ -16,21 +16,36 @@ class CompilerSessionMain {
 			fresh = root + "/fresh.hl";
 		File.saveContent(main, "class Main { public static function main():Int { return Value.get(); } }");
 		File.saveContent(value, "class Value { public static function get():Int { return 7; } }");
-		var modeSession = new CompilerSession(), modeArgs = ["--target=hl", "--entry=Main", "--root=" + root, "--output=" + output, main, value];
-		expect(CompilerArguments.parse(modeArgs.concat(["--live"])).buildMode == "development", "live builds must select development metadata");
+		var modeSession = new CompilerSession(),
+			modeArgs = [
+				"--target=hl",
+				"--entry=Main",
+				"--root=" + root,
+				"--output=" + output,
+				main,
+				value
+			];
+		expect(CompilerArguments.parse(modeArgs.concat(["--live"])).buildMode == "development",
+			"live builds must select development metadata");
 		var rejectedReleaseLive = false;
-		try CompilerArguments.parse(modeArgs.concat(["--live", "--build-mode=release"])) catch (_:Dynamic) rejectedReleaseLive = true;
+		try CompilerArguments.parse(modeArgs.concat(["--live", "--build-mode=release"])) catch (_:Dynamic)
+			rejectedReleaseLive = true;
 		expect(rejectedReleaseLive, "live builds must reject an explicit release mode");
-		expect(CompilerArguments.parse(modeArgs).buildMode == "development", "default builds must select development metadata");
-		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])), _ -> {}, modeSession);
-		expect(release.module.debugSections.length == 1 && release.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+		expect(CompilerArguments.parse(modeArgs).buildMode == "development",
+			"default builds must select development metadata");
+		var release = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])),
+			_ -> {}, modeSession);
+		expect(release.module.debugSections.length == 1
+			&& release.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
 			&& release.module.sourceSnapshots.length == 0,
 			"release artifacts must retain names but omit development spans and snapshots");
 		var development = CompilerDriver.compile(CompilerArguments.parse(modeArgs), _ -> {}, modeSession);
 		expect(development.module.debugSections.length == 3 && development.module.sourceSnapshots.length > 0,
 			"development artifacts must retain debug identities, spans and source snapshots");
-		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])), _ -> {}, modeSession);
-		expect(releaseAgain.module.debugSections.length == 1 && releaseAgain.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
+		var releaseAgain = CompilerDriver.compile(CompilerArguments.parse(modeArgs.concat(["--build-mode=release"])),
+			_ -> {}, modeSession);
+		expect(releaseAgain.module.debugSections.length == 1
+			&& releaseAgain.module.debugSections[0].kind == HlWriter.FUNCTION_IDENTITIES
 			&& releaseAgain.module.sourceSnapshots.length == 0,
 			"a persistent session must honor changes to build mode");
 
@@ -39,13 +54,16 @@ class CompilerSessionMain {
 		var args = ["--target=hl", "--entry=Main", "--root=" + root, "--live", main, value],
 			session = new CompilerSession();
 		function compile()
-			return CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output])), _ -> {}, session);
+			return CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output])), _ -> {},
+				session);
 		function compareFresh(expected:Int):Void {
 			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + fresh])), _ -> {});
-			var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
+			var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac"
+				? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 				separator = Sys.systemName() == "Windows" ? ";" : ":",
 				previousPath = Sys.getEnv(variable),
-				runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
+				runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl"
+					+ (Sys.systemName() == "Windows" ? ".exe" : ""));
 			Sys.putEnv(variable,
 				FileSystem.fullPath("out")
 				+ separator
@@ -55,25 +73,31 @@ class CompilerSessionMain {
 			expect(Sys.command(runtime, [fresh]) == expected, "fresh bytecode must execute the same program");
 			Sys.putEnv(variable, previousPath);
 			expect(Sys.getEnv(variable) == previousPath, "runtime library path must be restored exactly");
-			expect(File.getContent(output + ".functions").indexOf("\tMain.main\n") >= 0, "incremental bytecode must publish its stable function map");
-			expect(File.getContent(fresh + ".functions").indexOf("\tMain.main\n") >= 0, "fresh bytecode must publish its function map");
+			expect(File.getContent(output + ".functions").indexOf("\tMain.main\n") >= 0,
+				"incremental bytecode must publish its stable function map");
+			expect(File.getContent(fresh + ".functions").indexOf("\tMain.main\n") >= 0,
+				"fresh bytecode must publish its function map");
 		}
 		var initial = compile();
 		var initialManifest = File.getContent(output + ".live.json"),
 			initialStamp = File.getContent(output + ".live.stamp");
 		var unchanged = compile();
 		expect(unchanged.retyped.length == 0, "unchanged compilation reuses semantic state");
-		expect(unchanged.unchanged && unchanged.revision == initial.revision, "unchanged live compilation must not advance the runtime revision");
-		expect(File.getContent(output + ".live.json") == initialManifest && File.getContent(output + ".live.stamp") == initialStamp,
+		expect(unchanged.unchanged && unchanged.revision == initial.revision,
+			"unchanged live compilation must not advance the runtime revision");
+		expect(File.getContent(output + ".live.json") == initialManifest
+			&& File.getContent(output + ".live.stamp") == initialStamp,
 			"an unchanged build must preserve the last runtime publication");
 		var modified = false;
-		var snapshotBuild = CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output])), message -> {
-			if (message == "reusing compiler session" && !modified) {
-				modified = true;
-				File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
-			}
-		}, session);
-		expect(modified && snapshotBuild.unchanged, "shape checks and compilation must use one source snapshot despite a mid-request write");
+		var snapshotBuild = CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + output])),
+			message -> {
+				if (message == "reusing compiler session" && !modified) {
+					modified = true;
+					File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
+				}
+			}, session);
+		expect(modified && snapshotBuild.unchanged,
+			"shape checks and compilation must use one source snapshot despite a mid-request write");
 		var afterSnapshotWrite = compile();
 		expect(!afterSnapshotWrite.unchanged
 			&& afterSnapshotWrite.baseRevision == initial.revision, "the next request must see the mid-request write");
@@ -90,7 +114,8 @@ class CompilerSessionMain {
 			compile()
 		catch (error:compiler.Diagnostic.CompileError) {
 			invalidSnapshot = true;
-			expect(error.diagnostic.span.file.path == value, "shape-lexer diagnostics must name the real source, not <session-shapes>");
+			expect(error.diagnostic.span.file.path == value,
+				"shape-lexer diagnostics must name the real source, not <session-shapes>");
 		}
 		expect(invalidSnapshot, "a malformed source snapshot must be reported");
 		File.saveContent(value, "class Value { public static function get():Int { return 8; } }");
@@ -98,7 +123,8 @@ class CompilerSessionMain {
 		File.saveContent(value, "class Value { public static function get():Int { return 6; } }");
 		var writeFailed = false;
 		try
-			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + root + "/missing/result.hl"])), _ -> {}, session)
+			CompilerDriver.compile(CompilerArguments.parse(args.concat(["--output=" + root + "/missing/result.hl"])),
+				_ -> {}, session)
 		catch (_:Dynamic)
 			writeFailed = true;
 		expect(writeFailed, "artifact-write errors must be reported");
@@ -112,9 +138,11 @@ class CompilerSessionMain {
 		File.saveContent(value, "class Value { public static function get():Int { return 9; } }");
 		var edited = compile();
 		expect(edited.retyped.length > 0, "a source edit must retype affected modules");
-		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0 && edited.metrics.signatureTypingMs == 0.0,
+		expect(edited.metrics.declarationMs == 0.0 && edited.metrics.shapeConnectionMs == 0.0
+			&& edited.metrics.signatureTypingMs == 0.0,
 			"an explicitly typed class-method body edit must reuse validated declarations");
-		expect(File.getBytes(output).compare(HlWriter.encode(edited.module).flatten()) == 0, "cached HashLink function encoding must match canonical serialization");
+		expect(File.getBytes(output).compare(HlWriter.encode(edited.module).flatten()) == 0,
+			"cached HashLink function encoding must match canonical serialization");
 		// With inlining, Main.main contains Value.get, so it must be rebuilt when Value.get changes.
 		var mainReused = functionByName(initial, "Main.main") == functionByName(edited, "Main.main");
 		expect(compiler.ir.IrInliner.enabled ? !mainReused : mainReused,
@@ -127,10 +155,12 @@ class CompilerSessionMain {
 		var beforeLazy = File.getBytes(output);
 		File.saveContent(lazy, "class Lazy { public static function value():Int { return 29; } }");
 		compile();
-		expect(beforeLazy.compare(File.getBytes(output)) != 0, "lazily loaded imports must be refreshed by module identity");
+		expect(beforeLazy.compare(File.getBytes(output)) != 0,
+			"lazily loaded imports must be refreshed by module identity");
 		compareFresh(29);
 		File.saveContent(main, "class Main { public static function main():Int { return Value.get(); } }");
-		File.saveContent(value, "class Value { public static function extra():Int { return 3; } public static function get():Int { return extra(); } }");
+		File.saveContent(value,
+			"class Value { public static function extra():Int { return 3; } public static function get():Int { return extra(); } }");
 		compile();
 		compareFresh(3);
 		File.saveContent(value, "class Value { public static function get():Int { return missing; } }");
@@ -155,7 +185,8 @@ class CompilerSessionMain {
 			session.reset();
 		}
 		expect(failed, "removed sources must not survive in the session");
-		File.saveContent(main, "class Main { public static function main():Int { #if feature return 13; #else return 0; #end } }");
+		File.saveContent(main,
+			"class Main { public static function main():Int { #if feature return 13; #else return 0; #end } }");
 		args.push("--define=feature");
 		compile();
 		compareFresh(13);
@@ -188,7 +219,8 @@ class CompilerSessionMain {
 		File.saveContent(shape, "typedef Shape = { var x:Int; }");
 		File.saveContent(holder,
 			"class Holder { public var values:Array<Shape> = []; public function new() {} public function size():Int return values.length; }");
-		File.saveContent(shapeMain, "class ShapeMain { public static function main():Int return new Holder().size(); }");
+		File.saveContent(shapeMain,
+			"class ShapeMain { public static function main():Int return new Holder().size(); }");
 		var shapeArgs = [
 			"--target=hl",
 			"--entry=ShapeMain",
@@ -197,10 +229,14 @@ class CompilerSessionMain {
 			holder,
 			shape,
 			"--output=" + root + "/shape.hl"
-		], shapeSession = new CompilerSession(), shapeMessages:Array<String> = [];
+		],
+			shapeSession = new CompilerSession(),
+			shapeMessages:Array<String> = [];
 		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
-		var runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
-		var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
+		var runtime = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl"
+			+ (Sys.systemName() == "Windows" ? ".exe" : ""));
+		var variable = Sys.systemName() == "Windows" ? "PATH" : Sys.systemName() == "Mac"
+			? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH";
 		var previousPath = Sys.getEnv(variable);
 		Sys.putEnv(variable, FileSystem.fullPath("out")
 			+ ":"
@@ -210,12 +246,14 @@ class CompilerSessionMain {
 		shapeMessages = [];
 		File.saveContent(shape, "typedef Shape = { var x:Int; ?y:Int; }");
 		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
-		expect(shapeMessages.indexOf("reusing compiler session") < 0, "a typedef shape edit must reset cached field ABI");
+		expect(shapeMessages.indexOf("reusing compiler session") < 0,
+			"a typedef shape edit must reset cached field ABI");
 		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "edited typedef program must execute");
 		shapeMessages = [];
 		File.saveContent(shape, "// enum in a comment\ntypedef Shape = { var x:Int; ?y:Int; }");
 		CompilerDriver.compile(CompilerArguments.parse(shapeArgs), shapeMessages.push, shapeSession);
-		expect(shapeMessages.indexOf("reusing compiler session") >= 0, "a comment edit must retain the compiler session");
+		expect(shapeMessages.indexOf("reusing compiler session") >= 0,
+			"a comment edit must retain the compiler session");
 		expect(Sys.command(runtime, [root + "/shape.hl"]) == 0, "comment-edited program must execute");
 		Sys.putEnv(variable, previousPath);
 		for (path in FileSystem.readDirectory(root))

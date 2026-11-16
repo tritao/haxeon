@@ -49,7 +49,10 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		if (source == null) throw "Reactive dependencies require a source";
 		source.checkFieldBit(fieldBit);
 		if (captureOnly) {
-			if (captureSources == null) { var initial:Array<ReactiveSource> = []; captureSources = initial; }
+			if (captureSources == null) {
+				var initial:Array<ReactiveSource> = [];
+				captureSources = initial;
+			}
 			if (captureFieldBits == null) captureFieldBits = [];
 			var sources = captureArray(), identityIndex = getIdentityIndex();
 			if (identityIndex != null) {
@@ -82,14 +85,20 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 				var candidate = readerHead;
 				while (candidate != null) {
 					if (captureSliceStart < IndexThreshold) captureSliceStart++;
-					if ((candidate.source == source) && candidate.fieldBit == fieldBit) { edge = candidate; break; }
+					if ((candidate.source == source) && candidate.fieldBit == fieldBit) {
+						edge = candidate;
+						break;
+					}
 					candidate = candidate.readerNext;
 				}
 				if (edgeCount > IndexThreshold && captureSliceStart >= IndexThreshold) {
 					identityIndex = new ReactiveIdentityIndex(false);
 					setIdentityIndex(identityIndex);
 					candidate = readerHead;
-					while (candidate != null) { identityIndex.put(candidate.source, candidate.fieldBit, candidate); candidate = candidate.readerNext; }
+					while (candidate != null) {
+						identityIndex.put(candidate.source, candidate.fieldBit, candidate);
+						candidate = candidate.readerNext;
+					}
 				}
 			}
 		}
@@ -127,8 +136,10 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 	function unlinkReader(edge:ReactiveEdge):Void {
 		var identityIndex = getIdentityIndex();
 		if (identityIndex != null) identityIndex.remove(edge.source, edge.fieldBit);
-		if (edge.readerPrevious == null) readerHead = edge.readerNext else edge.readerPrevious.readerNext = edge.readerNext;
-		if (edge.readerNext == null) readerTail = edge.readerPrevious else edge.readerNext.readerPrevious = edge.readerPrevious;
+		if (edge.readerPrevious == null) readerHead = edge.readerNext else edge.readerPrevious.readerNext =
+			edge.readerNext;
+		if (edge.readerNext == null) readerTail = edge.readerPrevious else edge.readerNext.readerPrevious =
+			edge.readerPrevious;
 		edge.readerPrevious = null;
 		edge.readerNext = null;
 		edgeCount--;
@@ -138,7 +149,10 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 		captureSliceStart = 0;
 		if (runStamp == MaxStamp) {
 			var edge = readerHead;
-			while (edge != null) { edge.stamp = 0; edge = edge.readerNext; }
+			while (edge != null) {
+				edge.stamp = 0;
+				edge = edge.readerNext;
+			}
 			runStamp = 1;
 		} else
 			runStamp++;
@@ -286,13 +300,19 @@ class ReactiveDependencySet extends ReactiveSource implements ReactiveCollector 
 			return;
 		}
 		var edge = readerHead;
-		while (edge != null) { target.trackField(edge.source, edge.fieldBit); edge = edge.readerNext; }
+		while (edge != null) {
+			target.trackField(edge.source, edge.fieldBit);
+			edge = edge.readerNext;
+		}
 	}
 
 	/** Unsubscribe retained readers when their owning cache or context is released. */
 	public function clearDependencies():Void {
 		// A capture log has no subscriptions; its pending slice remains intact.
-		if (captureOnly) { status = Dirty; return; }
+		if (captureOnly) {
+			status = Dirty;
+			return;
+		}
 		var identityIndex = getIdentityIndex();
 		if (identityIndex != null) identityIndex.clear();
 		var edge = readerHead;

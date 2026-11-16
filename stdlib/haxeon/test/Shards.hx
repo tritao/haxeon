@@ -77,7 +77,8 @@ class Shards {
 	}
 
 	/** The groups of `running`, in order, that some pattern names. Every pattern must name at least one of `groups`. */
-	public static function select(groups:Array<TestGroup>, running:Array<TestGroup>, patterns:Array<String>):Array<TestGroup> {
+	public static function select(groups:Array<TestGroup>, running:Array<TestGroup>,
+			patterns:Array<String>):Array<TestGroup> {
 		for (pattern in patterns) {
 			if (pattern == "")
 				throw "An empty --only pattern";
@@ -142,8 +143,10 @@ class Shards {
 	static function weightOf(group:TestGroup):Float
 		return group.weight == null ? 1.0 : group.weight;
 
-	static function parse(text:String):{shard:Int, count:Int} {
-		var parts = text.split("/"), shard = parts.length == 2 ? Std.parseInt(parts[0]) : null, count = parts.length == 2 ? Std.parseInt(parts[1]) : null;
+	static function parse(text:String): {shard: Int, count: Int} {
+		var parts = text.split("/"),
+			shard = parts.length == 2 ? Std.parseInt(parts[0]) : null,
+			count = parts.length == 2 ? Std.parseInt(parts[1]) : null;
 		if (shard == null || count == null || count < 1 || shard < 1 || shard > count)
 			throw 'Expected "--shard I/N" with 1 <= I <= N, got "$text"';
 		return {shard: shard, count: count};

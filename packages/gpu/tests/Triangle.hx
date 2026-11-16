@@ -47,13 +47,15 @@ class Triangle {
 
 	static function verifyStructuredErrors():Void {
 		var caught = false;
-		try haxeon.gpu.GpuResult.check(GpuStatus.ErrorInvalidHandle, "test.invalidHandle") catch (error:haxeon.platform.PlatformError) {
+		try haxeon.gpu.GpuResult.check(GpuStatus.ErrorInvalidHandle,
+			"test.invalidHandle") catch (error:haxeon.platform.PlatformError) {
 			caught = error.domain == "nativekit-gpu" && error.code == -3 && error.operation == "test.invalidHandle";
 		}
 		if (!caught) throw "GPU errors must expose their domain, status, and operation";
 		var argument = false;
 		try Surface.create(null, 0, 0) catch (error:haxeon.platform.BindingError) {
-			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument && error.operation == "Surface.create";
+			argument = error.kind == haxeon.platform.BindingErrorKind.InvalidArgument
+				&& error.operation == "Surface.create";
 		}
 		if (!argument) throw "GPU argument errors must use BindingError";
 	}
@@ -107,7 +109,7 @@ class Triangle {
 			.build();
 
 	static function applyFrameBindings(pipeline:Pipeline, buffer:Buffer, indexBuffer:Buffer,
-		image:Image, sampler:Sampler):Void {
+			image:Image, sampler:Sampler):Void {
 		pipeline.apply();
 		buffer.applyVertex(0);
 		indexBuffer.applyIndex();
@@ -128,7 +130,7 @@ class Triangle {
 	}
 
 	static function encodeBatched(commandBuffer:CommandBuffer, pipeline:Pipeline, buffer:Buffer,
-		indexBuffer:Buffer, image:Image, sampler:Sampler):Void {
+			indexBuffer:Buffer, image:Image, sampler:Sampler):Void {
 		commandBuffer.reset();
 		commandBuffer.applyPipeline(pipeline);
 		commandBuffer.applyVertexBuffer(0, buffer, 0);
@@ -247,9 +249,9 @@ class Triangle {
 					computePolls += 1;
 				}
 				var computeBytes = Bytes.alloc(computeInfo.size > 0 ? computeInfo.size : 4);
-				if (computeInfo.state != ReadbackState.Ready || computeInfo.size != 4 ||
-					computeReadback.read(computeBytes) != 4 || computeBytes.get(0) != 1 ||
-					computeBytes.get(1) != 0 || computeBytes.get(2) != 0 || computeBytes.get(3) != 0)
+				if (computeInfo.state != ReadbackState.Ready || computeInfo.size != 4
+					|| computeReadback.read(computeBytes) != 4 || computeBytes.get(0) != 1 || computeBytes.get(1) != 0
+					|| computeBytes.get(2) != 0 || computeBytes.get(3) != 0)
 					throw "GPU compute buffer readback returned the wrong value";
 				computeReadback.dispose();
 			}
@@ -351,9 +353,9 @@ class Triangle {
 				retainedImage = targetColor.graphicsImage();
 				if (retainedImage.width != 32 || retainedImage.height != 32
 					|| (retainedImage.api != GraphicsApi.Opengl
-						&& retainedImage.api != GraphicsApi.OpenglEs
-						&& retainedImage.api != GraphicsApi.D3d11
-						&& retainedImage.api != GraphicsApi.Metal))
+					&& retainedImage.api != GraphicsApi.OpenglEs
+					&& retainedImage.api != GraphicsApi.D3d11
+					&& retainedImage.api != GraphicsApi.Metal))
 					throw "offscreen target image metadata mismatch";
 				var copyDesc = new ImageDesc(32, 32, ImageFormat.Rgba8,
 					ImageUsage.Sampled | ImageUsage.RenderTarget);
@@ -405,7 +407,8 @@ class Triangle {
 
 			if (ready && running) {
 				renderer.beginFrame();
-				if (frames == 0 && NativeKitGpu.nkgpu_submit_commands(renderer.nativeHandle(), Bytes.alloc(4), 4) != GpuStatus.ErrorInvalidArgument)
+				if (frames == 0 && NativeKitGpu.nkgpu_submit_commands(renderer.nativeHandle(), Bytes.alloc(4), 4)
+					!= GpuStatus.ErrorInvalidArgument)
 					throw "truncated command stream was accepted";
 				var started = Date.now().getTime();
 				if (frames < 12) {

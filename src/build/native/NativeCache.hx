@@ -37,7 +37,8 @@ class NativeCache {
 		if (environment.instrument != null || configured == "off" || configured == "0" || !cmakeAtLeast())
 			return null;
 		scriptHome = home;
-		return canonical(configured != null && configured != "" ? configured : Path.join([home, "out", "native-cache"]));
+		return canonical(configured != null
+			&& configured != "" ? configured : Path.join([home, "out", "native-cache"]));
 	}
 
 	/**
@@ -52,7 +53,11 @@ class NativeCache {
 			return known;
 		var real = normalized;
 		if (exists && scriptHome != null) {
-			var output = HostCommand.text("cmake", ["-DP=" + normalized, "-P", Path.join([scriptHome, "cmake", "haxeon-real-path.cmake"])]);
+			var output = HostCommand.text("cmake", [
+				"-DP=" + normalized,
+				"-P",
+				Path.join([scriptHome, "cmake", "haxeon-real-path.cmake"])
+			]);
 			if (output != null && output != "")
 				real = Path.normalize(output);
 		}
@@ -63,15 +68,25 @@ class NativeCache {
 	}
 
 	/** The tree of a package's CMake project: `cmake*` holds the build and `out` the libraries it produces. */
-	public static function treeRoot(root:String, layout:TargetLayout, environment:BuildEnvironment, resolvedPackage:ResolvedPackage, source:String,
+	public static function treeRoot(root:String, layout:TargetLayout, environment:BuildEnvironment,
+			resolvedPackage:ResolvedPackage, source:String,
 			target:String):String {
 		// What decides a tree's configuration: the source, the target and profile, the haxeon home (CMAKE_PROJECT_INCLUDE and
 		// the pinned tools come from it) and the compilers. The configure arguments are the same for every project that
 		// reaches a package (NativeKit modules are chosen by the packages' own CMakeLists, not by arguments), so nothing else
 		// of a project belongs here.
-		var fullSource = canonical(source), home = scriptHome == null ? "" : canonical(scriptHome),
-			compilers = [for (name in ["CC", "CXX", "VCToolsVersion", "VisualStudioVersion"]) name + "=" + Std.string(Sys.getEnv(name))].join(",");
-		var identity = [fullSource, target, environment.target.toString(), Std.string(environment.profile), home, compilers].join("\n");
+		var fullSource = canonical(source),
+			home = scriptHome == null ? "" : canonical(scriptHome),
+			compilers = [for (name in ["CC", "CXX", "VCToolsVersion", "VisualStudioVersion"]) name + "="
+				+ Std.string(Sys.getEnv(name))].join(",");
+		var identity = [
+			fullSource,
+			target,
+			environment.target.toString(),
+			Std.string(environment.profile),
+			home,
+			compilers
+		].join("\n");
 		// Case-insensitive file systems (Windows, macOS) reach one directory by several spellings.
 		if (Sys.systemName() == "Windows" || Sys.systemName() == "Mac")
 			identity = identity.toLowerCase();

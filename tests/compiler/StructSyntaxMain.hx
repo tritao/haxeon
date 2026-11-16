@@ -28,11 +28,14 @@ class StructSyntaxMain {
 		if (source.substring(declaration.fields[0].span.start, declaration.fields[0].span.end).indexOf("x:Int") < 0)
 			throw "struct field source span did not cover its declaration";
 		var enumSource = "enum Message<T> implements Equatable implements Hashable { Text(value:T); Empty; }",
-			enumProgram = new Parser(new Lexer(new SourceFile("EnumConformance.hx", enumSource)).tokenize()).parseProgram();
-		if (enumProgram.enums.length != 1 || enumProgram.enums[0].conformances == null || enumProgram.enums[0].conformances.length != 2)
+			enumProgram =
+				new Parser(new Lexer(new SourceFile("EnumConformance.hx", enumSource)).tokenize()).parseProgram();
+		if (enumProgram.enums.length != 1 || enumProgram.enums[0].conformances == null
+			|| enumProgram.enums[0].conformances.length != 2)
 			throw "enum conformances must survive parsing";
 		var annotationSource = "@:annotation enum abstract Replicate(Int) { var all; var owner; }",
-			annotationProgram = new Parser(new Lexer(new SourceFile("Annotation.hx", annotationSource)).tokenize()).parseProgram();
+			annotationProgram =
+				new Parser(new Lexer(new SourceFile("Annotation.hx", annotationSource)).tokenize()).parseProgram();
 		if (annotationProgram.enumAbstracts.length != 1
 			|| annotationProgram.enumAbstracts[0].metadata.length != 1
 			|| annotationProgram.enumAbstracts[0].metadata[0].name != "annotation")
@@ -47,16 +50,20 @@ class StructSyntaxMain {
 		expectError("extern struct Point {}", "cannot be declared extern", "struct");
 		expectError("struct Point { public var x; }", "requires a type or initializer", ";");
 		expectError("struct { public var x:Int; }", "Expected Identifier", "{");
-		expectTypingError("struct Generic<T> { public var value:T; } function main():Int return 0;", 'Generic struct "Generic" is not supported yet');
-		expectTypingError('@:repr("C") struct Point { public var x:Int; } function main():Int return 0;', 'does not use @:repr');
+		expectTypingError("struct Generic<T> { public var value:T; } function main():Int return 0;",
+			'Generic struct "Generic" is not supported yet');
+		expectTypingError('@:repr("C") struct Point { public var x:Int; } function main():Int return 0;',
+			'does not use @:repr');
 		expectTypingError("interface HasX { function xValue():Int; } struct Missing implements HasX { public var value:Int; } function main():Int return 0;",
 			'does not implement "HasX.xValue"');
 		expectTypingError("interface HasX { function xValue():Int; } struct Missing { public function xValue():Int return 42; } "
 			+ "function read<T:HasX>(value:T):Int return value.xValue(); function main():Int return read(new Missing());",
 			'does not satisfy constraint "interface:HasX');
-		var boxed = compiler.Frontend.compile("interface HasX { function xValue():Int; } struct Point implements HasX { public function xValue():Int return 42; } "
+		var boxed = compiler.Frontend
+			.compile("interface HasX { function xValue():Int; } struct Point implements HasX { public function xValue():Int return 42; } "
 			+ "function take(value:HasX):Int return value.xValue(); function main():Int return take(new Point());");
-		if (new compiler.ir.IrInterpreter(boxed).run("main") != 42) throw "struct interface conversion did not dispatch";
+		if (new compiler.ir.IrInterpreter(boxed).run("main") != 42)
+			throw "struct interface conversion did not dispatch";
 		for (operation in ["indexOf", "contains", "remove"])
 			expectTypingError('struct Point { public var x:Int; public function new(x:Int) this.x=x; } '
 				+ 'function main():Int { var points = [new Point(1)]; points.$operation(new Point(1)); return 0; }',
@@ -79,7 +86,8 @@ class StructSyntaxMain {
 
 	static function expectTypingError(source:String, fragment:String):Void {
 		try {
-			Typer.typeLibrary(new Parser(new Lexer(new SourceFile("InvalidStruct.hx", source)).tokenize()).parseProgram());
+			Typer.typeLibrary(new Parser(new Lexer(new SourceFile("InvalidStruct.hx", source)).tokenize())
+				.parseProgram());
 			throw 'expected a type diagnostic containing "$fragment"';
 		} catch (error:CompileError) {
 			if (error.diagnostic.message.indexOf(fragment) < 0)

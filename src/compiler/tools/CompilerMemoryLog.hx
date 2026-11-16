@@ -20,7 +20,8 @@ class CompilerMemoryLog {
 		hl.Gc.major();
 		var collectedMs = (Sys.time() - startedAt) * 1000.0,
 			after = hl.Gc.stats();
-		var line = '$label heap-before=${gb(before.currentMemory)} live-after-major=${gb(after.currentMemory)} resident-before=$residentBefore resident-after=${residentGb()} '
+		var line =
+			'$label heap-before=${gb(before.currentMemory)} live-after-major=${gb(after.currentMemory)} resident-before=$residentBefore resident-after=${residentGb()} '
 			+ 'allocated-total=${gb(after.totalAllocated)} major-ms=${Std.int(collectedMs)}';
 		if (session != null)
 			line += ' modules=' + moduleIdentities(session) + '\n';
@@ -47,7 +48,8 @@ class CompilerMemoryLog {
 			if (compiler == null)
 				return "no-compiler";
 			var result = compiler.cachedCompileResult == null ? null : compiler.cachedCompileResult.module,
-				snapshot = compiler.pipelineSnapshot == null || compiler.pipelineSnapshot.backend == null ? null : compiler.pipelineSnapshot.backend.assembly.module,
+				snapshot = compiler.pipelineSnapshot == null || compiler.pipelineSnapshot.backend == null
+					? null : compiler.pipelineSnapshot.backend.assembly.module,
 				encoded = session.encodedModule == null ? null : session.encodedModule.code;
 			return 'result==snapshot:${result == snapshot} result==encoded:${result == encoded} snapshot==encoded:${snapshot == encoded} result:${result != null} snapshot:${snapshot != null} encoded:${encoded != null}';
 		}

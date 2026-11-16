@@ -36,8 +36,8 @@ struct CustomEffectDefinition implements Equatable {
 		this.name = name;
 		this.parameterTypes = parameterTypes.copy();
 		this.overflow = overflow == null ? InkOverflow.zero() : overflow;
-		if (!Math.isFinite(this.overflow.left) || !Math.isFinite(this.overflow.top) ||
-			!Math.isFinite(this.overflow.right) || !Math.isFinite(this.overflow.bottom))
+		if (!Math.isFinite(this.overflow.left) || !Math.isFinite(this.overflow.top)
+			|| !Math.isFinite(this.overflow.right) || !Math.isFinite(this.overflow.bottom))
 			throw "Custom effect ink overflow must be finite and non-negative";
 		this.componentCount = components;
 	}

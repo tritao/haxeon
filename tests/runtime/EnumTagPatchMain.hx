@@ -1,11 +1,11 @@
 import compiler.Compiler;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrEnum;
-import compiler.hl.incremental.HlSymbolTable;
+import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlWriter;
+import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.persistence.HlSymbolStateCodec;
 import compiler.hl.persistence.HlTypeDefStateCodec;
-import compiler.hl.HlCode.HlTypeDef;
+import compiler.ir.Ir.IrEnum;
+import compiler.ir.Ir.IrType;
 import runtime.PatchSet;
 import runtime.Runtime;
 
@@ -34,7 +34,11 @@ class EnumTagPatchMain {
 		symbols.reserveEnum(mode);
 		symbols.internEnum(mode);
 		// Completed boxed descriptors suffice even when no scalar descriptor has been interned yet.
-		for (view in [symbols.copy(), symbols.fork(), HlSymbolStateCodec.restore(HlSymbolStateCodec.encode(symbols.exportState()))])
+		for (view in [
+			symbols.copy(),
+			symbols.fork(),
+			HlSymbolStateCodec.restore(HlSymbolStateCodec.encode(symbols.exportState()))
+		])
 			view.internType(IrType.EnumTag("Mode"));
 		var tagType = symbols.internType(IrType.EnumTag("Mode"));
 		if (tagType == symbols.internType(IrType.I32))
@@ -44,13 +48,17 @@ class EnumTagPatchMain {
 		if (HlSymbolStateCodec.encode(restored.exportState()).compare(persisted) != 0)
 			throw "Nominal enum type metadata lost during persistence";
 		var boxedType = symbols.internType(IrType.Enum("Mode"));
-		for (malformed in [HlTypeDef.EnumTag(symbols.internType(IrType.I32), [0, 1]),
-			HlTypeDef.EnumTag(boxedType, []), HlTypeDef.EnumTag(boxedType, [0, symbols.globals.length])]) {
+		for (malformed in [
+			HlTypeDef.EnumTag(symbols.internType(IrType.I32), [0, 1]),
+			HlTypeDef.EnumTag(boxedType, []),
+			HlTypeDef.EnumTag(boxedType, [0, symbols.globals.length])
+		]) {
 			var definitions = symbols.types.copy();
 			definitions[tagType] = malformed;
 			var rejected = false;
 			try
-				HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(definitions), symbols.strings.length, symbols.globals.length)
+				HlTypeDefStateCodec.decode(HlTypeDefStateCodec.encode(definitions), symbols.strings.length,
+					symbols.globals.length)
 			catch (_:Dynamic)
 				rejected = true;
 			if (!rejected)
@@ -80,7 +88,9 @@ class EnumTagPatchMain {
 		var invalidPath = directory + "/invalid-enum-cache-" + Std.random(0x7fffffff) + ".hl";
 		sys.io.File.saveBytes(invalidPath, uncheckedWriter.bytes());
 		var child = new sys.io.Process("scripts/hl", [invalidPath]);
-		var output = child.stdout.readAll().toString(), error = child.stderr.readAll().toString(), status = child.exitCode();
+		var output = child.stdout.readAll().toString(),
+			error = child.stderr.readAll().toString(),
+			status = child.exitCode();
 		child.close();
 		sys.FileSystem.deleteFile(invalidPath);
 		if (status == 0 || (output + error).indexOf("Invalid scalar enum cache global") < 0)
@@ -93,7 +103,8 @@ class EnumTagPatchMain {
 		var changed = compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw "A body patch changed scalar enum layout";
-		Runtime.patchSet(live, new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		hl.Gc.major();
 		if (Runtime.callIntObject(live, changed.functionIds.get("Main.probe"), retained) != 42)
 			throw "A retained object lost scalar enum metadata after patching";

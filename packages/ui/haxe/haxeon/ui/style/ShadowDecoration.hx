@@ -36,7 +36,12 @@ class ShadowDecoration extends Decoration {
 		var bottomLeft = style.getNumber(StyleProperty.RadiusBottomLeft);
 		var resolvedSpread = spread == null ? style.getNumber(StyleProperty.ShadowSpread) : spread;
 		canvas.drawBoxShadow(new Rect(0.0, 0.0, geometry.width, geometry.height), x, y, radius,
-			resolvedSpread, [topLeft, topRight, bottomRight, bottomLeft], shadowColor);
+			resolvedSpread, [
+				topLeft,
+				topRight,
+				bottomRight,
+				bottomLeft
+			], shadowColor);
 	}
 
 	override public function copy():Decoration
@@ -46,17 +51,17 @@ class ShadowDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:ShadowDecoration = cast other;
-		return VisualEffect.equalColor(color, value.color) && offsetX == value.offsetX &&
-			offsetY == value.offsetY && blurRadius == value.blurRadius && spread == value.spread;
+		return VisualEffect.equalColor(color, value.color) && offsetX == value.offsetX && offsetY == value.offsetY
+			&& blurRadius == value.blurRadius && spread == value.spread;
 	}
 
 	override public function interpolate(other:Decoration, amount:Float):Decoration {
 		if (other == null || other.kind != kind)
 			return Decoration.discrete(this, other, amount);
 		var value:ShadowDecoration = cast other;
-		if (color == null || value.color == null || offsetX == null || value.offsetX == null ||
-			offsetY == null || value.offsetY == null || blurRadius == null ||
-			value.blurRadius == null || spread == null || value.spread == null)
+		if (color == null || value.color == null || offsetX == null || value.offsetX == null || offsetY == null
+			|| value.offsetY == null || blurRadius == null || value.blurRadius == null || spread == null
+			|| value.spread == null)
 			return amount < 0.5 ? copy() : value.copy();
 		return new ShadowDecoration(VisualEffect.interpolateColor(color, value.color, amount),
 			offsetX + (value.offsetX - offsetX) * amount,
@@ -67,7 +72,7 @@ class ShadowDecoration extends Decoration {
 
 	override public function describe():String
 		return 'shadow(${color == null ? "style" : color.red + "," + color.green + "," +
-			color.blue + "," + color.alpha},${offsetX == null ? "style" : offsetX},' +
-			'${offsetY == null ? "style" : offsetY},${blurRadius == null ? "style" : blurRadius},' +
-			'${spread == null ? "style" : spread})';
+			color.blue + "," + color.alpha},${offsetX == null ? "style" : offsetX},'
+			+ '${offsetY == null ? "style" : offsetY},${blurRadius == null ? "style" : blurRadius},'
+			+ '${spread == null ? "style" : spread})';
 }

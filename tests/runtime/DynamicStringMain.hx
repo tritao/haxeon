@@ -35,7 +35,7 @@ class DynamicStringMain {
 		return compiler;
 	}
 
-	static function run(path:String):{status:Int, output:String} {
+	static function run(path:String): {status: Int, output: String} {
 		var child = new sys.io.Process(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl", [path]);
 		var output = child.stdout.readAll().toString() + child.stderr.readAll().toString();
 		var status = child.exitCode();

@@ -55,7 +55,8 @@ class LivePatchFirstMain {
 		var first = build(1);
 		expect(File.getContent(output + ".live.full") == first.moduleIdentity + ":" + Std.string(first.revision),
 			"a finished build must leave the marker at its key");
-		expect(File.getContent(output + ".live.stamp") == File.getContent(output + ".live.full"), "the marker must equal the stamp once the build is whole");
+		expect(File.getContent(output + ".live.stamp") == File.getContent(output + ".live.full"),
+			"the marker must equal the stamp once the build is whole");
 		var second = build(2);
 		expect(second.patchAvailable == true && second.requiresReload == false, "a body edit must patch");
 		expect(snapshots.length == 1, "the publication callback must fire once");
@@ -65,7 +66,8 @@ class LivePatchFirstMain {
 		expect(seen.moduleStale, "the full module must be written after the patch is published");
 		expect(File.getContent(output + ".live.full") == second.moduleIdentity + ":" + Std.string(second.revision),
 			"the marker must name the new revision once the module is written");
-		expect(File.getContent(output + ".live.full") == File.getContent(output + ".live.stamp"), "marker and stamp must agree after the build");
+		expect(File.getContent(output + ".live.full") == File.getContent(output + ".live.stamp"),
+			"marker and stamp must agree after the build");
 		expect(File.getBytes(output + ".hli").length > 0
 			&& File.getContent(output + ".build-id").length > 0, "side files must follow the module");
 		for (path in FileSystem.readDirectory(root))

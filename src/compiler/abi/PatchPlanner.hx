@@ -66,7 +66,8 @@ class PatchPlanner {
 	 * other objects hold value objects inline, and closures already made hold their environments. A compiler resumed from
 	 * saved identity state has the running module's ABI but not its layout, and passes false.
 	 */
-	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor, addsFunctions:Bool = false,
+	public static function plan(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor,
+			addsFunctions:Bool = false,
 			checksObjectMembers:Bool = false):PatchDecision {
 		if (previous == null)
 			return Patch;
@@ -84,15 +85,18 @@ class PatchPlanner {
 				return ObjectAdded(name);
 			if (newValue == null)
 				return ObjectRemoved(name);
-			return StringTools.startsWith(name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX) ? ClosureLayoutChanged(name) : ObjectLayoutChanged(name);
+			return StringTools.startsWith(name, compiler.semantic.LambdaName.ENVIRONMENT_PREFIX)
+				? ClosureLayoutChanged(name) : ObjectLayoutChanged(name);
 		}, objectReasons);
 		for (reason in objectReasons)
 			switch reason {
-				case ObjectLayoutChanged(name) if (checksObjectMembers && keepsFrame(previous.objects.get(name), next.objects.get(name))):
+				case ObjectLayoutChanged(name) if (checksObjectMembers
+					&& keepsFrame(previous.objects.get(name), next.objects.get(name))):
 				default:
 					reasons.push(reason);
 			}
-		compare(previous.interfaces, next.interfaces, function(name, oldValue, _) return oldValue == null ? InterfaceAdded(name) : InterfaceChanged(name),
+		compare(previous.interfaces, next.interfaces,
+			function(name, oldValue, _) return oldValue == null ? InterfaceAdded(name) : InterfaceChanged(name),
 			reasons);
 		compare(previous.enums, next.enums, function(name, _, _) return EnumChanged(name), reasons);
 		compare(previous.globals, next.globals, function(name, _, _) return GlobalLayoutChanged(name), reasons);
@@ -137,7 +141,8 @@ class PatchPlanner {
 	 * (`movesOnSignatureChange`). The one place that decides it: the planner and the assembler (`HlModuleAssembler.assemble`)
 	 * both use it.
 	 */
-	public static function dispatchedFunctions(previous:Null<RuntimeAbiDescriptor>, next:RuntimeAbiDescriptor):Map<String, Bool> {
+	public static function dispatchedFunctions(previous:Null<RuntimeAbiDescriptor>,
+			next:RuntimeAbiDescriptor):Map<String, Bool> {
 		var result:Map<String, Bool> = [];
 		if (previous != null)
 			addMethodFunctions(previous.objects, result);
@@ -182,17 +187,15 @@ class PatchPlanner {
 	public static function requiresFreshLayout(decision:PatchDecision):Bool
 		return switch decision {
 			case Patch, Reject(_): false;
-			case ReloadDomain(reasons): [
-					for (reason in reasons)
-						switch reason {
-							case FunctionAdded(_), FunctionSignatureChanged(_), GeneratedFunctionsRenumbered(_):
-								false;
-							case FunctionRemoved(name):
-								StringTools.endsWith(name, ".new");
-							default:
-								true;
-						}
-				].indexOf(true) >= 0;
+			case ReloadDomain(reasons): [for (reason in reasons)
+				switch reason {
+						case FunctionAdded(_), FunctionSignatureChanged(_), GeneratedFunctionsRenumbered(_):
+							false;
+						case FunctionRemoved(name):
+							StringTools.endsWith(name, ".new");
+						default:
+							true;
+					}].indexOf(true) >= 0;
 		};
 
 	/**
@@ -219,7 +222,8 @@ class PatchPlanner {
 		return result;
 	}
 
-	static function compare(previous:Map<String, String>, next:Map<String, String>, change:(String, Null<String>, Null<String>) -> AbiChange,
+	static function compare(previous:Map<String, String>, next:Map<String, String>,
+			change:(String, Null<String>, Null<String>) -> AbiChange,
 			reasons:Array<AbiChange>):Void {
 		var names:Map<String, Bool> = [];
 		for (name in previous.keys())

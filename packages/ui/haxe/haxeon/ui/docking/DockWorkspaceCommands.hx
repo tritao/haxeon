@@ -14,8 +14,8 @@ class DockWorkspaceCommands {
 			var panelId = context.parameters.getString("panel");
 			if (panelId == null)
 				panelId = model.activePanelId;
-			return panelId != null && model.close(panelId) ? CommandResult.executed() :
-				CommandResult.rejected("The active panel cannot be closed");
+			return panelId != null && model.close(panelId)
+				? CommandResult.executed() : CommandResult.rejected("The active panel cannot be closed");
 		}, null, function(context) {
 			var panelId = context.parameters.getString("panel");
 			if (panelId == null)

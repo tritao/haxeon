@@ -59,8 +59,10 @@ class InlineEnumPointerWordMain {
 		words.write(b, payload, pointerSlot, raw);
 		words.write(b, payload, typeSlot, type);
 		var checks = [
-			b.equal(b.call(IrScalarWordBits.PACK, [words.read(b, payload, pointerSlot)], I64), b.call(IrScalarWordBits.PACK, [raw], I64)),
-			b.equal(b.call(IrScalarWordBits.PACK, [words.read(b, payload, typeSlot)], I64), b.call(IrScalarWordBits.PACK, [type], I64))
+			b.equal(b.call(IrScalarWordBits.PACK, [words.read(b, payload, pointerSlot)], I64),
+				b.call(IrScalarWordBits.PACK, [raw], I64)),
+			b.equal(b.call(IrScalarWordBits.PACK, [words.read(b, payload, typeSlot)], I64),
+				b.call(IrScalarWordBits.PACK, [type], I64))
 		];
 		if (target != HashLink) {
 			var callbackType:IrType = Abstract("native_callback"),
@@ -77,7 +79,8 @@ class InlineEnumPointerWordMain {
 				signed: false
 			};
 			words.write(b, payload, callbackSlot, callback);
-			checks.push(b.equal(b.call(IrScalarWordBits.PACK, [words.read(b, payload, callbackSlot)], I64), b.call(IrScalarWordBits.PACK, [callback], I64)));
+			checks.push(b.equal(b.call(IrScalarWordBits.PACK, [words.read(b, payload, callbackSlot)], I64),
+				b.call(IrScalarWordBits.PACK, [callback], I64)));
 		}
 		var bad = b.createBlock();
 		for (value in checks) {
@@ -89,24 +92,22 @@ class InlineEnumPointerWordMain {
 		b.select(bad);
 		b.returnValue(b.constInt(1));
 		var p = new IrProgram("main");
-		p.objects = [
-			{
-				name: "Owner",
-				isValue: false,
-				base: null,
-				interfaces: [],
-				methods: [],
-				fields: []
-			},
-			{
-				name: "Words",
-				isValue: true,
-				base: null,
-				interfaces: [],
-				methods: [],
-				fields: [for (i in 0...4) {name: "scalar" + i, type: word}]
-			}
-		];
+		p.objects = [{
+			name: "Owner",
+			isValue: false,
+			base: null,
+			interfaces: [],
+			methods: [],
+			fields: []
+		},
+			{name: "Words",
+			isValue: true,
+			base: null,
+			interfaces: [],
+			methods: [],
+			fields: [for (i in 0...4) {
+				name:"scalar" + i, type:word
+			}]}];
 		p.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
 		p.natives = IrInlineEnumWordAccess.natives();
 		var table = compiler.ir.IrObjectTable.of([for (o in p.objects) o.name => o]);
@@ -171,17 +172,26 @@ class InlineEnumPointerWordMain {
 		p.functions.push(new IrFunction("entry", entry.arguments, Void, entry.blocks, Ordinary));
 		p.entryPoint = target == HashLink ? "entry" : "main";
 		compiler.ir.IrVerifier.verify(p);
-		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {target: target, debugNames: true})
+		var bytes = target == HashLink ? new compiler.backend.hl.HlBackend().compile(p, {
+			target: target,
+			debugNames: true
+		})
 			.bytes : new compiler.backend.wasm.WasmBackend().compile(p, {
 				target: target,
 				debugNames: true,
 				wasmGcAllocationCount: target == WasmGc,
 				wasmMemoryStats: target == Wasm32
 			}).bytes;
-		var path = tempRoot() + "/" + uniqueStem + "pointer-words-" + Std.string(target) + (target == HashLink ? ".hl" : ".wasm");
+		var path = tempRoot() + "/" + uniqueStem + "pointer-words-" + Std.string(target)
+			+ (target == HashLink ? ".hl" : ".wasm");
 		sys.io.File.saveBytes(path, bytes);
-		var js = 'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports,c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("pointer/type bits");if(c()!==before)throw Error("pointer/type boxing");}';
-		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : ["-e", js, path]);
+		var js =
+			'const fs=require("fs"),e=new WebAssembly.Instance(new WebAssembly.Module(fs.readFileSync(process.argv[1]))).exports,c=e.__allocation_count||e["haxeon.memory.allocation_count"];e.main();for(const n of [8,1024]){const before=c();for(let i=0;i<n;i++)if(e.main()!==42)throw Error("pointer/type bits");if(c()!==before)throw Error("pointer/type boxing");}';
+		var child = new sys.io.Process(target == HashLink ? "scripts/hl" : "node", target == HashLink ? [path] : [
+			"-e",
+			js,
+			path
+		]);
 		var output = child.stdout.readAll().toString(),
 			error = child.stderr.readAll().toString(),
 			code = child.exitCode();
@@ -195,6 +205,7 @@ class InlineEnumPointerWordMain {
 			if (census.allocations != 0)
 				throw "Pointer/type boxes: " + census.allocations;
 		}
-		Sys.println("PASS: " + Std.string(target) + " words=" + bits + " pointer/type crossings; zero allocations at8/1024 calls");
+		Sys.println("PASS: " + Std.string(target) + " words=" + bits
+			+ " pointer/type crossings; zero allocations at8/1024 calls");
 	}
 }

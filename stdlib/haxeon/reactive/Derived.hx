@@ -61,6 +61,6 @@ class Derived<T> extends ReactiveDependencySet {
 
 /** A distinct failure lets readers avoid subscribing only to cyclic pulls. */
 private class DerivedCycleError {
- public function new() {}
- public function toString():String return "Cyclic Derived computation";
+	public function new() {}
+	public function toString():String return "Cyclic Derived computation";
 }

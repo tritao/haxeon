@@ -42,12 +42,18 @@ class DspSmoke {
 			builder.addOscillator(detuned);
 			builder.gain = 0.75;
 			builder.lfo.rateHz = 5.0;
-			builder.modulate(DspModulationSource.Lfo, DspModulationDestination.PitchSemitones, 2.0, DspModulationPolarity.Bipolar);
-			builder.modulate(DspModulationSource.Lfo, DspModulationDestination.OscillatorLevel, 0.25, DspModulationPolarity.Unipolar, 2);
-			builder.modulate(DspModulationSource.Envelope, DspModulationDestination.OscillatorPhase, 0.05, DspModulationPolarity.Bipolar, 1);
-			builder.operatorModulate(1, DspModulationDestination.OscillatorFrequencyHz, 2, 100.0, DspModulationPolarity.Bipolar);
-			builder.operatorModulate(1, DspModulationDestination.OscillatorPhase, 2, 0.05, DspModulationPolarity.Bipolar);
-			builder.modulate(DspModulationSource.Envelope, DspModulationDestination.FilterCutoffHz, 400.0, DspModulationPolarity.Unipolar);
+			builder.modulate(DspModulationSource.Lfo, DspModulationDestination.PitchSemitones, 2.0,
+				DspModulationPolarity.Bipolar);
+			builder.modulate(DspModulationSource.Lfo, DspModulationDestination.OscillatorLevel, 0.25,
+				DspModulationPolarity.Unipolar, 2);
+			builder.modulate(DspModulationSource.Envelope, DspModulationDestination.OscillatorPhase, 0.05,
+				DspModulationPolarity.Bipolar, 1);
+			builder.operatorModulate(1, DspModulationDestination.OscillatorFrequencyHz, 2, 100.0,
+				DspModulationPolarity.Bipolar);
+			builder.operatorModulate(1, DspModulationDestination.OscillatorPhase, 2, 0.05,
+				DspModulationPolarity.Bipolar);
+			builder.modulate(DspModulationSource.Envelope, DspModulationDestination.FilterCutoffHz, 400.0,
+				DspModulationPolarity.Unipolar);
 			patch = builder.build();
 			instrument = patch.createInstrument(engine);
 			wavetable.dispose();
@@ -80,7 +86,7 @@ class DspSmoke {
 			var capabilities = engine.capabilities();
 			if (!capabilities.contains(DspCapabilities.Wavetable)
 				|| !capabilities.contains(DspCapabilities.Lfo)
-					|| !capabilities.contains(DspCapabilities.Modulation))
+				|| !capabilities.contains(DspCapabilities.Modulation))
 				throw "Haxe DSP capabilities omitted modulation support";
 		} catch (error:Dynamic) {
 			if (instrument != null)

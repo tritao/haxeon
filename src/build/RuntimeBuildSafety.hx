@@ -80,7 +80,8 @@ class RuntimeBuildSafety {
 
 	static function isLibrary(path:String):Bool {
 		var name = Path.withoutDirectory(path).toLowerCase();
-		return StringTools.endsWith(name, ".hdll") || StringTools.endsWith(name, ".dll") || StringTools.endsWith(name, ".dylib")
+		return StringTools.endsWith(name, ".hdll") || StringTools.endsWith(name, ".dll")
+			|| StringTools.endsWith(name, ".dylib")
 			|| StringTools.endsWith(name, ".so") || name.indexOf(".so.") >= 0;
 	}
 	#end

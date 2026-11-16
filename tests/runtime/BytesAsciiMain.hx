@@ -26,7 +26,8 @@ class BytesAsciiMain {
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.registerNative("armSnapshot", "bytes_decode_guards", "arm", [CompilerType.TBytes], CompilerType.TVoid);
 		compiler.registerNative("disarmSnapshot", "bytes_decode_guards", "disarm", [], CompilerType.TInt);
-		compiler.update("Main.hx", '
+		compiler.update("Main.hx",
+			'
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 function main():Int {

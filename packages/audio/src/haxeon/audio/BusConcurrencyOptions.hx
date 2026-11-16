@@ -20,7 +20,8 @@ class BusConcurrencyOptions {
 	@:allow(haxeon.audio.Bus)
 	private function nativeValue():NativeBusConcurrencyOptions {
 		if (maxVoices < 0)
-			throw BindingError.invalidArgument("BusConcurrencyOptions.nativeValue", "Audio bus maxVoices must be non-negative");
+			throw BindingError.invalidArgument("BusConcurrencyOptions.nativeValue",
+				"Audio bus maxVoices must be non-negative");
 		var result = new NativeBusConcurrencyOptions();
 		result.set_struct_size(NativeBusConcurrencyOptions.size());
 		result.set_max_voices(maxVoices);

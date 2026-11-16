@@ -45,14 +45,16 @@ class NullArrayContextMain {
 
 	static function main():Void {
 		for (initializer in ['[null]', '[for (_ in 0...2) null]']) {
-			var result = compiler('var values = ' + initializer + '; var alias = values; return new Holder(alias);').compile("Main");
+			var result = compiler('var values = ' + initializer
+				+ '; var alias = values; return new Holder(alias);').compile("Main");
 			if (GeneratedProgramRunner.exitCode(result) != 7)
 				throw "nullable array storage failed";
 		}
 		try {
 			compiler('var values = [null]; values.push(1); return new Holder(values);').compile("Main");
 		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E1009" && error.diagnostic.code != "E1003" && error.diagnostic.code != "E1002")
+			if (error.diagnostic.code != "E1009" && error.diagnostic.code != "E1003"
+				&& error.diagnostic.code != "E1002")
 				throw error;
 			incremental();
 			Sys.println("PASS: null array constructor context, aliasing, runtime, rejection, and incremental edits");

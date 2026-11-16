@@ -29,7 +29,8 @@ class FieldPair {
 	public final left:Array<compiler.types.Type.AnonymousField>;
 	public final right:Array<compiler.types.Type.AnonymousField>;
 
-	public function new(left:Array<compiler.types.Type.AnonymousField>, right:Array<compiler.types.Type.AnonymousField>) {
+	public function new(left:Array<compiler.types.Type.AnonymousField>,
+			right:Array<compiler.types.Type.AnonymousField>) {
 		this.left = left;
 		this.right = right;
 	}
@@ -68,9 +69,9 @@ class TypeRelations {
 			default: false;
 		}))
 			return switch expected {
-				case TNull, TVoid, TNever: Incompatible;
-				default: FromDynamic;
-			};
+			case TNull, TVoid, TNever: Incompatible;
+			default: FromDynamic;
+		};
 		if ((switch (actual) {
 			case TNull: true;
 			default: false;
@@ -128,7 +129,8 @@ class TypeRelations {
 			return (switch (actual) {
 				case TNull: true;
 				default: false;
-			}) || TypeRelations.equals(actual, expected) || IterationProtocol.conforms(declarations, this, actual, expected);
+			}) || TypeRelations.equals(actual, expected)
+				|| IterationProtocol.conforms(declarations, this, actual, expected);
 		if (isNativeValue(actual) || isNativeValue(expected))
 			return equals(actual, expected);
 		if (StructProperties.isConstraintType(expected))
@@ -150,9 +152,9 @@ class TypeRelations {
 			default: false;
 		}))
 			return switch expected {
-				case TNull, TVoid, TNever: false;
-				default: true;
-			};
+			case TNull, TVoid, TNever: false;
+			default: true;
+		};
 		if ((switch (actual) {
 			case TNull: true;
 			default: false;
@@ -197,7 +199,8 @@ class TypeRelations {
 				}
 			case TArray(expectedElement):
 				switch actual {
-					case TArray(actualElement): equals(actualElement, expectedElement) || anonymousReadOnlyWidening(actualElement, expectedElement);
+					case TArray(actualElement): equals(actualElement, expectedElement)
+						|| anonymousReadOnlyWidening(actualElement, expectedElement);
 					default: false;
 				}
 			case TIterator(expectedElement):
@@ -209,7 +212,8 @@ class TypeRelations {
 				switch actual {
 					case TFunction(actualArguments, actualResult):
 						if (actualArguments.length != expectedArguments.length
-							|| !isAssignable(actualResult, expectedResult)) false; else {
+							|| !isAssignable(actualResult, expectedResult)) false;
+						else {
 							var compatible = true;
 							for (index in 0...actualArguments.length)
 								if (!isAssignable(expectedArguments[index], actualArguments[index]))
@@ -226,13 +230,15 @@ class TypeRelations {
 	static function anonymousReadOnlyWidening(actual:CompilerType, expected:CompilerType):Bool {
 		return switch [actual, expected] {
 			case [TAnonymous(_, actualFields), TAnonymous(_, expectedFields)]:
-				if (actualFields.length != expectedFields.length) false; else {
+				if (actualFields.length != expectedFields.length) false;
+				else {
 					var matches = true;
 					for (target in expectedFields) {
 						var found = false;
 						for (source in actualFields)
 							if (source.name == target.name) {
-								found = source.optional == target.optional && (!source.isFinal || target.isFinal) && equals(source.type, target.type);
+								found = source.optional == target.optional && (!source.isFinal || target.isFinal)
+									&& equals(source.type, target.type);
 								break;
 							}
 						if (!found) {
@@ -285,19 +291,23 @@ class TypeRelations {
 	}
 
 	/** Find the field closing a recursion through an anonymous structure. */
-	public function recursiveAnonymousField(type:CompilerType, visiting:Map<String, Int>, field:Null<String>, anonymousDepth:Int = 0,
+	public function recursiveAnonymousField(type:CompilerType, visiting:Map<String, Int>, field:Null<String>,
+			anonymousDepth:Int = 0,
 			nominalTypes:Null<Map<String, CompilerType>> = null):Null<String> {
 		if (nominalTypes == null)
 			nominalTypes = [];
 		return switch type {
-			case TNullable(element) | TArray(element): recursiveAnonymousField(element, visiting, field, anonymousDepth, nominalTypes);
+			case TNullable(element) | TArray(element): recursiveAnonymousField(element, visiting, field, anonymousDepth,
+				nominalTypes);
 			case TAnonymous(name, fields):
 				var key = "anonymous:" + name;
-				if (visiting.exists(key)) field; else {
+				if (visiting.exists(key)) field;
+				else {
 					visiting.set(key, anonymousDepth);
 					var found:Null<String> = null;
 					for (entry in fields) {
-						found = recursiveAnonymousField(entry.type, visiting, entry.name, anonymousDepth + 1, nominalTypes);
+						found = recursiveAnonymousField(entry.type, visiting, entry.name, anonymousDepth + 1,
+							nominalTypes);
 						if (found != null)
 							break;
 					}
@@ -308,9 +318,13 @@ class TypeRelations {
 				var declaration = declarations.classes.get(name);
 				var key = "struct:" + name,
 					exactKey = key + ":" + compiler.semantic.SemanticSignature.type(type);
-				if (declaration == null) null; else if (visiting.exists(exactKey)) anonymousDepth > requiredDepth(visiting,
-					exactKey) ? field : null; else if (nominalTypes.exists(key)
-					&& typeArgumentsExpand(nominalTypes.get(key), type)) anonymousDepth > requiredDepth(visiting, key) ? field : null; else {
+				if (declaration == null) null;
+				else if (visiting.exists(exactKey)) anonymousDepth > requiredDepth(visiting,
+					exactKey) ? field : null;
+				else if (nominalTypes.exists(key)
+					&& typeArgumentsExpand(nominalTypes.get(key), type)) anonymousDepth > requiredDepth(visiting, key)
+					? field : null;
+				else {
 					var priorDepth = visiting.get(key),
 						priorType = nominalTypes.get(key);
 					visiting.set(key, anonymousDepth);
@@ -323,13 +337,16 @@ class TypeRelations {
 						substitutions.set(parameter, argument);
 						substitutions.set(name + "." + parameter, argument);
 					}
-					var found:Null<String> = declaration.base == null ? null : recursiveAnonymousField(declarations.resolve(declaration.base,
+					var found:Null<String> = declaration.base == null
+						? null : recursiveAnonymousField(declarations.resolve(declaration.base,
 						declaration.span, substitutions), visiting, field, anonymousDepth, nominalTypes);
 					if (found == null)
 						for (entry in declaration.fields)
 							if (!entry.isStatic && StructProperties.hasStorage(entry)) {
-								var fieldType = declarations.resolve(declarations.resolvedFieldType(name, entry), entry.span, substitutions);
-								found = recursiveAnonymousField(fieldType, visiting, entry.name, anonymousDepth, nominalTypes);
+								var fieldType = declarations.resolve(declarations.resolvedFieldType(name, entry),
+									entry.span, substitutions);
+								found = recursiveAnonymousField(fieldType, visiting, entry.name, anonymousDepth,
+									nominalTypes);
 								if (found != null)
 									break;
 							}
@@ -347,9 +364,13 @@ class TypeRelations {
 				var declaration = declarations.enums.get(name);
 				var key = "enum:" + name,
 					exactKey = key + ":" + compiler.semantic.SemanticSignature.type(type);
-				if (declaration == null) null; else if (visiting.exists(exactKey)) anonymousDepth > requiredDepth(visiting,
-					exactKey) ? field : null; else if (nominalTypes.exists(key)
-					&& typeArgumentsExpand(nominalTypes.get(key), type)) anonymousDepth > requiredDepth(visiting, key) ? field : null; else {
+				if (declaration == null) null;
+				else if (visiting.exists(exactKey)) anonymousDepth > requiredDepth(visiting,
+					exactKey) ? field : null;
+				else if (nominalTypes.exists(key)
+					&& typeArgumentsExpand(nominalTypes.get(key), type)) anonymousDepth > requiredDepth(visiting, key)
+					? field : null;
+				else {
 					var priorDepth = visiting.get(key),
 						priorType = nominalTypes.get(key);
 					visiting.set(key, anonymousDepth);
@@ -365,7 +386,8 @@ class TypeRelations {
 					var found:Null<String> = null;
 					for (constructor in declaration.cases) {
 						for (parameter in constructor.params) {
-							found = recursiveAnonymousField(declarations.resolve(parameter.type, parameter.span, substitutions), visiting,
+							found = recursiveAnonymousField(declarations.resolve(parameter.type, parameter.span,
+								substitutions), visiting,
 								parameter.name == null ? "payload" : parameter.name, anonymousDepth, nominalTypes);
 							if (found != null)
 								break;
@@ -491,20 +513,20 @@ class TypeRelations {
 			case TInstance(NominalKind.Enum, name, arguments) if ((switch expected {
 				case TInstance(NominalKind.Interface, _, _): true;
 				default: false;
-			})):
-				var declaration = declarations.enums.get(name);
-				if (declaration == null || declaration.conformances == null)
-					return false;
-				var substitutions:Map<String, CompilerType> = [];
-				for (index in 0...declaration.typeParameters.length)
-					substitutions.set(declaration.typeParameters[index],
-						index < arguments.length ? arguments[index] : TTypeParameter(name, declaration.typeParameters[index]));
-				for (conformance in declaration.conformances) {
-					var resolved = declarations.resolve(conformance, declaration.span, substitutions);
-					if (equals(resolved, expected) || nominalReaches(resolved, expected))
-						return true;
-				}
+			})): var declaration = declarations.enums.get(name);
+			if (declaration == null || declaration.conformances == null)
 				return false;
+			var substitutions:Map<String, CompilerType> = [];
+			for (index in 0...declaration.typeParameters.length)
+				substitutions.set(declaration.typeParameters[index],
+					index < arguments.length ? arguments[index] : TTypeParameter(name,
+					declaration.typeParameters[index]));
+			for (conformance in declaration.conformances) {
+				var resolved = declarations.resolve(conformance, declaration.span, substitutions);
+				if (equals(resolved, expected) || nominalReaches(resolved, expected))
+					return true;
+			}
+			return false;
 			default:
 		}
 		if (isStructType(actual))
@@ -527,7 +549,8 @@ class TypeRelations {
 		var constraintName = representationConstraintName(expected),
 			property = constraintName == StructProperties.FLAT_TYPE_NAME ? "Flat" : "Portable",
 			fieldPath = StructProperties.failurePath(declarations, actual, constraintName);
-		return fieldPath == null ? 'type ${compiler.semantic.SemanticSignature.type(actual)} is not $property' : 'field "$fieldPath" is not $property';
+		return fieldPath == null ? 'type ${compiler.semantic.SemanticSignature.type(actual)} is not $property'
+			: 'field "$fieldPath" is not $property';
 	}
 
 	public function recursiveCapabilityFailure(actual:CompilerType, expected:CompilerType):Bool {
@@ -558,7 +581,7 @@ class TypeRelations {
 				switch expected {
 					case TInstance(expectedKind, expectedName, expectedArguments):
 						if (kind != expectedKind
-							|| (name : String) != (expectedName : String) || arguments.length != expectedArguments.length)
+							|| (name:String) != (expectedName:String) || arguments.length != expectedArguments.length)
 							return false;
 						var sawDynamic = false;
 						for (index in 0...arguments.length) {
@@ -589,12 +612,13 @@ class TypeRelations {
 		return switch left {
 			case TAbstract(name, arguments, _):
 				switch right {
-					case TAbstract(other, otherArguments, _): (name : String) == (other : String)
-							&& sameTypes(arguments, otherArguments, visiting);
+					case TAbstract(other, otherArguments, _): (name:String) == (other:String)
+						&& sameTypes(arguments, otherArguments, visiting);
 					default: false;
 				}
 			case TTypeParameter(owner, name): switch right {
-					case TTypeParameter(otherOwner, otherName): (owner : String) == (otherOwner : String) && name == otherName;
+					case TTypeParameter(otherOwner, otherName): (owner:String) == (otherOwner:String)
+						&& name == otherName;
 					default: false;
 				};
 			case TNativeScalar(name):
@@ -612,13 +636,15 @@ class TypeRelations {
 				};
 			case TMap(key, value):
 				switch right {
-					case TMap(otherKey, otherValue): equalsWithin(key, otherKey, visiting) && equalsWithin(value, otherValue, visiting);
+					case TMap(otherKey, otherValue): equalsWithin(key, otherKey, visiting)
+						&& equalsWithin(value, otherValue, visiting);
 					default: false;
 				}
 			case TFunction(arguments, result): sameFunction(right, arguments, result, visiting);
 			case TKeyPath(root, value, writable): switch right {
-					case TKeyPath(otherRoot, otherValue, otherWritable): writable == otherWritable && equalsWithin(root, otherRoot,
-							visiting) && equalsWithin(value, otherValue, visiting);
+					case TKeyPath(otherRoot, otherValue, otherWritable): writable == otherWritable
+						&& equalsWithin(root, otherRoot,
+						visiting) && equalsWithin(value, otherValue, visiting);
 					default: false;
 				};
 			case TAnonymous(_, fields):
@@ -629,14 +655,17 @@ class TypeRelations {
 			default: Type.enumEq(left, right);
 		};
 
-	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String, arguments:Array<CompilerType>,
+	static function sameNominal(type:CompilerType, kind:compiler.types.Type.NominalKind, name:String,
+			arguments:Array<CompilerType>,
 			visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
-			case TInstance(otherKind, other, otherArguments): kind == otherKind && name == (other : String) && sameTypes(arguments, otherArguments, visiting);
+			case TInstance(otherKind, other, otherArguments): kind == otherKind && name == (other:String)
+				&& sameTypes(arguments, otherArguments, visiting);
 			default: false;
 		};
 
-	static function sameTypes(left:Array<CompilerType>, right:Array<CompilerType>, visiting:Null<Array<FieldPair>>):Bool {
+	static function sameTypes(left:Array<CompilerType>, right:Array<CompilerType>,
+			visiting:Null<Array<FieldPair>>):Bool {
 		if (left.length != right.length)
 			return false;
 		for (index in 0...left.length)
@@ -645,7 +674,8 @@ class TypeRelations {
 		return true;
 	}
 
-	static function sameAnonymousFields(left:Array<compiler.types.Type.AnonymousField>, right:Array<compiler.types.Type.AnonymousField>,
+	static function sameAnonymousFields(left:Array<compiler.types.Type.AnonymousField>,
+			right:Array<compiler.types.Type.AnonymousField>,
 			visiting:Null<Array<FieldPair>>):Bool {
 		// Types resolved from one declaration share their field array, which settles most comparisons at once.
 		if (left == right)
@@ -687,23 +717,25 @@ class TypeRelations {
 			default: false;
 		};
 
-	static function sameUnary(type:CompilerType, element:CompilerType, nullable:Bool, visiting:Null<Array<FieldPair>>):Bool
+	static function sameUnary(type:CompilerType, element:CompilerType, nullable:Bool,
+			visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
 			case TNullable(other) if (nullable): equalsWithin(element, other, visiting);
 			case TArray(other) if (!nullable): equalsWithin(element, other, visiting);
 			default: false;
 		};
 
-	static function sameFunction(type:CompilerType, arguments:Array<CompilerType>, result:CompilerType, visiting:Null<Array<FieldPair>>):Bool
+	static function sameFunction(type:CompilerType, arguments:Array<CompilerType>, result:CompilerType,
+			visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
 			case TFunction(otherArguments, otherResult):
-				if (arguments.length != otherArguments.length) false; else {
+				if (arguments.length != otherArguments.length) false;
+				else {
 					var same = true;
 					for (index in 0...arguments.length)
 						if (!equalsWithin(arguments[index], otherArguments[index], visiting))
 							same = false;
-					same && equalsWithin(result, otherResult, visiting)
-					;
+					same && equalsWithin(result, otherResult, visiting);
 				}
 			default: false;
 		};
@@ -711,7 +743,8 @@ class TypeRelations {
 	public static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
-			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TFunction(_, _), TMap(_, _),
+			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_),
+				TFunction(_, _), TMap(_, _),
 				TKeyPath(_, _, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			default: false;
@@ -736,7 +769,8 @@ class TypeRelations {
 		return switch type {
 			case TInstance(NominalKind.Class, name, _):
 				var declaration = declarations.classes.get(name);
-				if (declaration == null) false; else {
+				if (declaration == null) false;
+				else {
 					var found = declaration.isStruct == true;
 					for (entry in declaration.metadata)
 						if (entry.name == "value")
@@ -748,7 +782,8 @@ class TypeRelations {
 
 	function isStructType(type:CompilerType):Bool
 		return switch type {
-			case TInstance(NominalKind.Class, name, _): var declaration = declarations.classes.get(name); declaration != null && declaration.isStruct == true;
+			case TInstance(NominalKind.Class, name, _): var declaration = declarations.classes.get(name);
+				declaration != null && declaration.isStruct == true;
 			default: false;
 		};
 

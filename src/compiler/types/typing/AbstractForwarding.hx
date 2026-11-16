@@ -11,7 +11,8 @@ class AbstractForwarding {
 		return switch type {
 			case TAbstract(name, _, underlying):
 				var declaration = session.declarations.abstracts.get(name);
-				if (declaration == null || !allowed(declaration, member)) null; else switch underlying {
+				if (declaration == null || !allowed(declaration, member)) null;
+				else switch underlying {
 					case TInstance(Class, _, _): underlying;
 					default: null;
 				}
@@ -19,11 +20,13 @@ class AbstractForwarding {
 		};
 	}
 
-	public static function arrayStorage(session:TypingSession, type:CompilerType, member:Null<String>):Null<CompilerType> {
+	public static function arrayStorage(session:TypingSession, type:CompilerType,
+			member:Null<String>):Null<CompilerType> {
 		return switch type {
 			case TAbstract(name, _, underlying):
 				var declaration = session.declarations.abstracts.get(name);
-				if (declaration == null || !allowed(declaration, member)) null; else switch underlying {
+				if (declaration == null || !allowed(declaration, member)) null;
+				else switch underlying {
 					case TArray(_): underlying;
 					default: null;
 				}

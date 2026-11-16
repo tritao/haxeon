@@ -8,10 +8,10 @@ class ExplorerPage {
 	public final group:String;
 	public final description:String;
 	public final keywords:Array<String>;
-	public final builder:UiExplorer -> Array<KeyedView> -> Void;
+	public final builder:UiExplorer->Array<KeyedView>->Void;
 
 	public function new(id:String, title:String, group:String, description:String,
-			keywords:Array<String>, builder:UiExplorer -> Array<KeyedView> -> Void,
+			keywords:Array<String>, builder:UiExplorer->Array<KeyedView>->Void,
 			?compactTitle:String) {
 		this.id = id;
 		this.title = title;

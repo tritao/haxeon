@@ -74,7 +74,8 @@ function main():Int {
 	}
 	// Dynamic indexOf and remove compare nullary enum constructors by value.
 	var shapeView:Array<Dynamic> = cast shapes;
-	if (shapeView.indexOf(Square) != 1 || !shapeView.remove(Square) || shapes.length != 2 || shapeView.indexOf(Square) != 1)
+	if (shapeView.indexOf(Square) != 1 || !shapeView.remove(Square) || shapes.length != 2
+		|| shapeView.indexOf(Square) != 1)
 		return 16;
 	var actions:Array<() -> Int> = [() -> 1];
 	var actionKeep = new Keep(actions);

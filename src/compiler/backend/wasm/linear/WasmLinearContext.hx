@@ -67,7 +67,8 @@ class WasmLinearContext {
 	public var pendingExceptionValue:Null<Int>;
 	public var fuelChargeFunction:Null<Int>;
 
-	public function new(module:WasmModule, program:IrProgram, layout:WasmLayout, options:BackendOptions, state:WasmLinearContextState) {
+	public function new(module:WasmModule, program:IrProgram, layout:WasmLayout, options:BackendOptions,
+			state:WasmLinearContextState) {
 		this.module = module;
 		this.program = program;
 		this.layout = layout;

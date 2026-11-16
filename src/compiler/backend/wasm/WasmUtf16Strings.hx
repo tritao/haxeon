@@ -4,7 +4,8 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 
 /** UTF-16 coordinates over the UTF-8 storage shared by the Wasm string ABIs. */
 class WasmUtf16Strings {
-	public static function length(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>, allocate:Void->Int,
+	public static function length(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>,
+			allocate:Void->Int,
 			destination:Int):Array<WasmInstruction> {
 		var size = allocate(),
 			offset = allocate(),
@@ -62,7 +63,8 @@ class WasmUtf16Strings {
 	}
 
 	/** Finds a UTF-8 boundary; half marks the low-surrogate position within a scalar. */
-	public static function byteOffset(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>, allocate:Void->Int, index:Int, destination:Int,
+	public static function byteOffset(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>,
+			allocate:Void->Int, index:Int, destination:Int,
 			half:Int):Array<WasmInstruction> {
 		var size = allocate(),
 			offset = allocate(),
@@ -150,8 +152,10 @@ class WasmUtf16Strings {
 	}
 
 	/** Copies complete UTF-8 scalars and encodes any selected surrogate half as WTF-8. */
-	public static function substring(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>, allocateLocal:Void->Int, startArgument:Int,
-			endArgument:Int, allocateBuffer:Int->Array<WasmInstruction>, copyBytes:(Int, Int, Int) -> Array<WasmInstruction>,
+	public static function substring(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>,
+			allocateLocal:Void->Int, startArgument:Int,
+			endArgument:Int, allocateBuffer:Int->Array<WasmInstruction>,
+			copyBytes:(Int, Int, Int) -> Array<WasmInstruction>,
 			storeByte:(Int, Int) -> Array<WasmInstruction>, finish:Int->Array<WasmInstruction>):Array<WasmInstruction> {
 		var size = allocateLocal(),
 			start = allocateLocal(),
@@ -167,13 +171,12 @@ class WasmUtf16Strings {
 			offset = allocateLocal(),
 			code = allocateLocal(),
 			byte = allocateLocal();
-		var body = length(byteLength, byteAt, allocateLocal, size).concat([
-			LocalGet(startArgument),
+		var body = length(byteLength, byteAt, allocateLocal, size).concat([LocalGet(startArgument),
 			LocalSet(start),
 			LocalGet(endArgument),
 			LocalSet(end),
-			// Clamp both indexes into the string, then swap a reversed pair, as Haxe's substring does.
-			LocalGet(start),
+		// Clamp both indexes into the string, then swap a reversed pair, as Haxe's substring does.
+		LocalGet(start),
 			I32Const(0),
 			I32LtS,
 			If(null),
@@ -211,8 +214,7 @@ class WasmUtf16Strings {
 			LocalSet(start),
 			LocalGet(total),
 			LocalSet(end),
-			End
-		]);
+			End]);
 		body = body.concat(byteOffset(byteLength, byteAt, allocateLocal, start, first, firstHalf));
 		body = body.concat(byteOffset(byteLength, byteAt, allocateLocal, end, last, lastHalf));
 		body = body.concat([
@@ -272,7 +274,8 @@ class WasmUtf16Strings {
 		return body.concat(finish(total));
 	}
 
-	static function writeSurrogate(code:Int, offset:Int, byte:Int, storeByte:(Int, Int) -> Array<WasmInstruction>):Array<WasmInstruction> {
+	static function writeSurrogate(code:Int, offset:Int, byte:Int,
+			storeByte:(Int, Int) -> Array<WasmInstruction>):Array<WasmInstruction> {
 		var body:Array<WasmInstruction> = [];
 		for (shift in [12, 6, 0]) {
 			body = body.concat([
@@ -292,8 +295,10 @@ class WasmUtf16Strings {
 	}
 
 	/** Search in UTF-16 units, streaming the UTF-8 storage without allocating converted strings. */
-	public static function indexOf(valueLength:Array<WasmInstruction>, valueAt:Int->Array<WasmInstruction>, needleLength:Array<WasmInstruction>,
-			needleAt:Int->Array<WasmInstruction>, allocate:Void->Int, startArgument:Null<Int>, reverse:Bool, destination:Int):Array<WasmInstruction> {
+	public static function indexOf(valueLength:Array<WasmInstruction>, valueAt:Int->Array<WasmInstruction>,
+			needleLength:Array<WasmInstruction>,
+			needleAt:Int->Array<WasmInstruction>, allocate:Void->Int, startArgument:Null<Int>, reverse:Bool,
+			destination:Int):Array<WasmInstruction> {
 		var size = allocate(),
 			needleSize = allocate(),
 			start = allocate(),
@@ -308,9 +313,11 @@ class WasmUtf16Strings {
 			inner = allocate(),
 			left = allocate(),
 			right = allocate();
-		var body = length(valueLength, valueAt, allocate, size).concat(length(needleLength, needleAt, allocate, needleSize));
+		var body = length(valueLength, valueAt, allocate,
+			size).concat(length(needleLength, needleAt, allocate, needleSize));
 		body = body.concat([I32Const(-1), LocalSet(destination)]);
-		body = body.concat(startArgument == null ? (reverse ? [LocalGet(size)] : [I32Const(0)]) : [LocalGet(startArgument)]);
+		body = body.concat(startArgument == null
+			? (reverse ? [LocalGet(size)] : [I32Const(0)]) : [LocalGet(startArgument)]);
 		body = body.concat([LocalSet(start), Block(null), LocalGet(start), I32Const(0), I32LtS]);
 		if (reverse)
 			body = body.concat([BrIf(0)]);
@@ -404,7 +411,8 @@ class WasmUtf16Strings {
 	}
 
 	/** Consume one UTF-16 code unit; the low surrogate shares its scalar's byte offset. */
-	static function readUnit(byteAt:Int->Array<WasmInstruction>, allocate:Void->Int, offset:Int, half:Int, destination:Int):Array<WasmInstruction> {
+	static function readUnit(byteAt:Int->Array<WasmInstruction>, allocate:Void->Int, offset:Int, half:Int,
+			destination:Int):Array<WasmInstruction> {
 		var scalar = allocate(),
 			width = allocate(),
 			next = allocate(),
@@ -524,7 +532,8 @@ class WasmUtf16Strings {
 		return body;
 	}
 
-	public static function charCodeAt(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>, allocate:Void->Int, index:Int,
+	public static function charCodeAt(byteLength:Array<WasmInstruction>, byteAt:Int->Array<WasmInstruction>,
+			allocate:Void->Int, index:Int,
 			destination:Int):Array<WasmInstruction> {
 		var size = allocate(),
 			offset = allocate(),

@@ -9,12 +9,15 @@ import compiler.ir.SourceProvenance.Located;
 
 /** Select one program-wide representation, then lower eligible enum values to their lane packets. */
 class IrInlineEnumLowering {
-	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>, ?reflectableObjects:Array<String>):IrProgram {
-		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, canonicalObjects);
+	public static function run(program:IrProgram, target:IrValueLaneTarget, canonicalObjects:Array<IrObject>,
+			?reflectableObjects:Array<String>):IrProgram {
+		var planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
+			canonicalObjects);
 		var eligibility = new IrInlineEnumEligibility(program, planner, reflectableObjects);
 		if (!eligibility.allowed.keys().hasNext())
 			return program;
-		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target, canonicalObjects, false, eligibility.allowed);
+		planner = new IrInlineEnumLayout(program.enums, program.objects, target == HashLink ? 64 : 32, target,
+			canonicalObjects, false, eligibility.allowed);
 		function storage(name:String):compiler.ir.IrInlineEnumLayout.IrInlineEnumShape {
 			var shape = planner.shape(name);
 			if (shape == null)
@@ -43,41 +46,36 @@ class IrInlineEnumLowering {
 					var shape = planner.shape(name);
 					shape == null ? type : Obj(shape.valueObject.name);
 				case Array(_), Iterator(_): type;
-				case Function(arguments, result): Function([for (argument in arguments) mapped(argument)], mapped(result));
+				case Function(arguments, result): Function([for (argument in arguments) mapped(argument)],
+					mapped(result));
 				case Nullable(inner): Nullable(mapped(inner));
 				default: type;
 			};
 		var result = new IrProgram(program.entryPoint);
-		result.enums = [
-			for (entry in program.enums)
-				{
-					name: entry.name,
-					cases: entry.cases,
-					isRecursive: entry.isRecursive,
-					inlineStorage: selectedStorage.get(entry.name)
-				}
-		];
+		result.enums = [for (entry in program.enums)
+			{
+				name:entry.name,
+					cases:entry.cases,
+					isRecursive:entry.isRecursive,
+					inlineStorage:selectedStorage.get(entry.name)
+			}];
 		result.natives = program.natives.copy();
 		result.cNatives = program.cNatives;
 		result.positionalFingerprints = program.positionalFingerprints;
 		result.positionalPlaces = program.positionalPlaces;
 		result.positionalSources = program.positionalSources;
 		result.parameterDefaults = program.parameterDefaults;
-		result.interfaces = [
-			for (entry in program.interfaces)
-				{
-					name: entry.name,
-					bases: entry.bases,
-					methods: [
-						for (method in entry.methods)
-							{
-								name: method.name,
-								arguments: [for (argument in method.arguments) mapped(argument)],
-								result: mapped(method.result)
-							}
-					]
-				}
-		];
+		result.interfaces = [for (entry in program.interfaces)
+			{
+				name:entry.name,
+					bases:entry.bases,
+					methods:[for (method in entry.methods)
+					{
+						name:method.name,
+							arguments:[for (argument in method.arguments) mapped(argument)],
+							result:mapped(method.result)
+					}]
+			}];
 		result.staticFields = [];
 		function globalLeaf(name:String, field:String):String
 			return "$inline-enum-global:" + name.length + ":" + name + ":" + field;
@@ -85,31 +83,30 @@ class IrInlineEnumLowering {
 			switch field.type {
 				case Enum(name) if (planner.shape(name) != null):
 					for (leaf in storage(name).valueObject.fields)
-						result.staticFields.push({name: globalLeaf(field.name, leaf.name), type: IrValueLaneReference.isCarrier(leaf.type) ? Dyn : leaf.type});
+						result.staticFields.push({
+							name: globalLeaf(field.name, leaf.name),
+							type: IrValueLaneReference.isCarrier(leaf.type) ? Dyn : leaf.type
+						});
 				default:
 					result.staticFields.push({name: field.name, type: mapped(field.type)});
 			}
-		var rewrittenObjects:Array<IrObject> = [
-			for (object in program.objects)
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					methods: object.methods,
-					fields: [
-						for (field in object.fields)
-							{
-								name: field.name,
-								type: mapped(field.type),
-								nativeLayout: field.nativeLayout,
-								scalarStorage: field.scalarStorage,
-								nullableScalarStorage: field.nullableScalarStorage
-							}
-					]
-				}
-		];
+		var rewrittenObjects:Array<IrObject> = [for (object in program.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					methods:object.methods,
+					fields:[for (field in object.fields)
+					{
+						name:field.name,
+							type:mapped(field.type),
+							nativeLayout:field.nativeLayout,
+							scalarStorage:field.scalarStorage,
+							nullableScalarStorage:field.nullableScalarStorage
+					}]
+			}];
 		result.objects = rewrittenObjects.concat(planner.generatedObjects());
 		var table = IrObjectTable.of([for (object in result.objects) object.name => object]);
 		var helpers:Map<String, IrFunction> = [];
@@ -146,7 +143,8 @@ class IrInlineEnumLowering {
 			b.returnValue(value);
 			helpers.set(name,
 				new IrFunction(name, b.arguments, value.type, b.blocks,
-					Provider(TypeKey.of(Enum(enumName)), ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, name))));
+				Provider(TypeKey.of(Enum(enumName)),
+				ProviderOperations.detailed(ProviderOperation.InlineEnumHelper, name))));
 			return name;
 		}
 		// Every rewrite below starts from a value whose type is, or contains, an inline enum; so does every check that throws.
@@ -183,7 +181,8 @@ class IrInlineEnumLowering {
 				}
 			function fresh(type:IrType):IrValue
 				return new IrValue(nextValue++, "$enum-value-load", type);
-			function copyLoad(block:IrBlock, output:IrValue, raw:IrValue, enumName:String, provenance:SourceProvenance):Void {
+			function copyLoad(block:IrBlock, output:IrValue, raw:IrValue, enumName:String,
+					provenance:SourceProvenance):Void {
 				var shape = storage(enumName),
 					origin = new SourceProvenance(provenance.location, CompilerGenerated(IrGenerator.ValueCopyReason));
 				block.instructions.push(new Located(ValueInit(use(output)), origin));
@@ -201,7 +200,8 @@ class IrInlineEnumLowering {
 					case Enum(name) if (planner.shape(name) != null):
 						var copied = fresh(mapped(fn.arguments[index].type));
 						values.set(fn.arguments[index].id, copied);
-						copyLoad(parameterCopies, copied, arguments[index], name, SourceProvenance.generated(IrGenerator.ValueCopyReason));
+						copyLoad(parameterCopies, copied, arguments[index], name,
+							SourceProvenance.generated(IrGenerator.ValueCopyReason));
 					default:
 				}
 			var blocks:Array<IrBlock> = [];
@@ -217,7 +217,8 @@ class IrInlineEnumLowering {
 							switch output.type {
 								case Enum(name) if (planner.shape(name) != null):
 									var raw = fresh(mapped(output.type));
-									copy.instructions.push(new Located(FieldGet(raw, use(owner), field), located.provenance));
+									copy.instructions.push(new Located(FieldGet(raw, use(owner), field),
+										located.provenance));
 									copyLoad(copy, output, raw, name, located.provenance);
 									continue;
 								default:
@@ -226,17 +227,22 @@ class IrInlineEnumLowering {
 							switch output.type {
 								case Enum(enumName) if (planner.shape(enumName) != null):
 									var shape = storage(enumName),
-										origin = new SourceProvenance(located.provenance.location, CompilerGenerated(IrGenerator.ValueCopyReason));
+										origin = new SourceProvenance(located.provenance.location,
+											CompilerGenerated(IrGenerator.ValueCopyReason));
 									copy.instructions.push(new Located(ValueInit(use(output)), origin));
 									for (field in shape.valueObject.fields) {
 										var leaf = fresh(field.type);
 										if (IrValueLaneReference.isCarrier(field.type)) {
 											var raw = fresh(Dyn);
-											copy.instructions.push(new Located(GlobalGet(raw, globalLeaf(name, field.name)), origin));
-											copy.instructions.push(new Located(Call(leaf, IrValueLaneReference.PACK, [raw]), origin));
+											copy.instructions.push(new Located(GlobalGet(raw,
+												globalLeaf(name, field.name)), origin));
+											copy.instructions.push(new Located(Call(leaf, IrValueLaneReference.PACK,
+												[raw]), origin));
 										} else
-											copy.instructions.push(new Located(GlobalGet(leaf, globalLeaf(name, field.name)), origin));
-										copy.instructions.push(new Located(FieldSet(use(output), field.name, leaf), origin));
+											copy.instructions.push(new Located(GlobalGet(leaf,
+												globalLeaf(name, field.name)), origin));
+										copy.instructions.push(new Located(FieldSet(use(output), field.name, leaf),
+											origin));
 									}
 									continue;
 								default:
@@ -247,47 +253,54 @@ class IrInlineEnumLowering {
 									var leaves:Array<{name:String, value:IrValue}> = [];
 									for (field in storage(enumName).valueObject.fields) {
 										var leaf = fresh(field.type);
-										copy.instructions.push(new Located(FieldGet(leaf, use(value), field.name), located.provenance));
+										copy.instructions.push(new Located(FieldGet(leaf, use(value), field.name),
+											located.provenance));
 										if (IrValueLaneReference.isCarrier(field.type)) {
 											var raw = fresh(Dyn);
-											copy.instructions.push(new Located(Call(raw, IrValueLaneReference.UNPACK, [leaf]), located.provenance));
+											copy.instructions.push(new Located(Call(raw, IrValueLaneReference.UNPACK,
+												[leaf]), located.provenance));
 											leaf = raw;
 										}
 										leaves.push({name: globalLeaf(name, field.name), value: leaf});
 									}
 									// Snapshot every leaf before publishing any part of the assignment.
 									for (leaf in leaves)
-										copy.instructions.push(new Located(GlobalSet(leaf.name, leaf.value), located.provenance));
+										copy.instructions.push(new Located(GlobalSet(leaf.name, leaf.value),
+											located.provenance));
 									continue;
 								default:
 							}
 						case MakeEnum(output, name, constructor, args) if (planner.shape(name) != null):
-							var name = helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'construct:$name:$constructor', name, constructor, -1);
+							var name = helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'construct:$name:$constructor',
+								name, constructor, -1);
 							instruction = Call(use(output), name, [for (argument in args) use(argument)]);
 						case ConstNull(output):
 							switch output.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-										helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'null:$name', name, -2, -1), []);
+									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'null:$name', name, -2, -1), []);
 								default:
 							}
 						case EnumField(output, value, constructor, field):
 							switch value.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-										helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'field:$name:$constructor:$field', name, constructor,
-											field), [use(value)]);
+									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'field:$name:$constructor:$field',
+									name, constructor,
+									field), [use(value)]);
 								default:
 							}
 						case EnumIndex(output, value):
 							switch value.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-										helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'index:$name', name, -1, -2), [use(value)]);
+									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'index:$name', name, -1, -2),
+									[use(value)]);
 								default:
 							}
 						case Equal(output, left, right) if (nulls.exists(left.id) || nulls.exists(right.id)):
 							var operand = nulls.exists(left.id) ? right : left;
 							switch operand.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-										helper(IrInlineEnumCaseAccess.HELPER_PREFIX + "is-null:" + name, name, -1, -3), [use(operand)]);
+									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + "is-null:" + name, name, -1, -3),
+									[use(operand)]);
 								default:
 							}
 						case ToDyn(_, value) if (inlineEnum(value.type)):
@@ -295,26 +308,26 @@ class IrInlineEnumLowering {
 						case SafeCast(output, _) if (inlineEnum(output.type)):
 							throw "Eligible enum unexpectedly enters from Dynamic";
 						case SafeCast(output, _) if (switch output.type {
-								case Array(_), Iterator(_): true;
-								default: false;
-							}):
-							// Container casts keep their logical descriptor; the shared array pass installs lane storage.
+							case Array(_), Iterator(_): true;
+							default: false;
+						}):
+						// Container casts keep their logical descriptor; the shared array pass installs lane storage.
 						case ToDyn(_, value) if (switch value.type {
-								case Array(_), Iterator(_): true;
-								default: false;
-							}):
-							// The container header is the reference escape; do not box its elements.
+							case Array(_), Iterator(_): true;
+							default: false;
+						}):
+						// The container header is the reference escape; do not box its elements.
 						case Equal(_, left, right) if (switch left.type {
-								case Function(_, _): true;
-								default: false;
-							}):
+							case Function(_, _): true;
+							default: false;
+						}):
 						case ToDyn(_, value) if (eligibility.supportsCallableEscape(value.type)):
-							// Scalar closure lowering boxes enum arguments only in this Dynamic boundary adapter.
+						// Scalar closure lowering boxes enum arguments only in this Dynamic boundary adapter.
 						case SafeCast(output, value) if ((switch value.type {
 							case Dyn: true;
 							default: false;
 						}) && eligibility.supportsCallableEscape(output.type)):
-							// The paired closure adapter restores the physical enum packet after its logical signature check.
+						// The paired closure adapter restores the physical enum packet after its logical signature check.
 						case ToDyn(_, value), SafeCast(_, value), Equal(_, value, _):
 							var output = IrOperands.output(located.value);
 							var supported = switch located.value {
@@ -325,11 +338,13 @@ class IrInlineEnumLowering {
 									}) && eligibility.supportsCallableEscape(out.type);
 								default: false;
 							};
-							if (!supported && (containsMapped(value.type) || (output != null && containsMapped(output.type))))
+							if (!supported
+								&& (containsMapped(value.type) || (output != null && containsMapped(output.type))))
 								throw 'Unsupported inline enum escape passed eligibility: ' + Std.string(located.value);
 						case TypeValue(out, type):
 							var callable = eligibility.callableDescriptors.get(fn.name);
-							instruction = TypeValue(use(out), callable != null && callable.exists(out.id) ? mapped(type) : type);
+							instruction = TypeValue(use(out),
+								callable != null && callable.exists(out.id) ? mapped(type) : type);
 						default:
 					}
 					copy.instructions.push(new Located(instruction, located.provenance));
@@ -348,23 +363,23 @@ class IrInlineEnumLowering {
 					}, block.terminator.provenance);
 				blocks.push(copy);
 			}
-			result.functions.push(new IrFunction(fn.name, arguments, mapped(fn.result), blocks, fn.kind, [
-				for (binding in fn.debugBindings)
-					{
-						identity: binding.identity,
-						name: binding.name,
-						value: use(binding.value),
-						path: binding.path,
-						scopeStart: binding.scopeStart,
-						scopeEnd: binding.scopeEnd
-					}
-			], fn.inlineHint, fn.retention));
+			result.functions.push(new IrFunction(fn.name, arguments, mapped(fn.result), blocks, fn.kind,
+				[for (binding in fn.debugBindings)
+				{
+					identity:binding.identity,
+						name:binding.name,
+						value:use(binding.value),
+						path:binding.path,
+						scopeStart:binding.scopeStart,
+						scopeEnd:binding.scopeEnd
+				}], fn.inlineHint, fn.retention));
 		}
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names)
 			result.functions.push(helpers.get(name));
-		result.functions = IrTypedInterfaceDispatch.rewriteValueCalls(result.functions, result.objects, result.interfaces);
+		result.functions = IrTypedInterfaceDispatch.rewriteValueCalls(result.functions, result.objects,
+			result.interfaces);
 		IrTypedInterfaceDispatch.generate(result.functions, result.objects, result.interfaces);
 		// Lane-array reflection bridges use the logical enum adapter even when this source has no escape.
 		result.functions = result.functions.concat(IrInlineEnumEscapes.functions(result.enums, table, planner));

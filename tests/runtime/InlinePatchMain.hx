@@ -10,7 +10,8 @@ class InlinePatchMain {
 	static function main():Void {
 		IrInliner.enabled = true;
 		var compiler = new Compiler();
-		var program = (body:String, extra:String) -> "class Counter { public static var value:Int = 40; public static function bump():Int { "
+		var program = (body:String,
+			extra:String) -> "class Counter { public static var value:Int = 40; public static function bump():Int { "
 			+ body
 			+ " return value; } } function other():Int { return 5; } "
 			+ extra
@@ -34,7 +35,8 @@ class InlinePatchMain {
 			throw "The caller that inlined the edited callee was not patched";
 		if (patched.indexOf(otherId) >= 0)
 			throw "A function that did not inline the callee was patched";
-		Runtime.patchSet(live, new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(first.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		// bump ran once before the edit (41); now twice per call: 41 -> 43, plus other().
 		if (Runtime.callInt(live, mainId) != 48)
 			throw "The inlined caller kept the old callee body after the patch";

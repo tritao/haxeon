@@ -68,9 +68,12 @@ class StatementTyper {
 	final switchRules:SwitchTypingRules;
 	final assignmentRules:AssignmentTypingRules;
 
-	public function new(session:TypingSession, typeExpression:StatementExpressionCallback, coerce:StatementCoerceCallback,
-			expectedInitializerType:ExpectedInitializerCallback, bindCell:BindCellCallback, typeStatements:TypeStatementsCallback,
-			exhaustiveEnum:ExhaustiveEnumCallback, lowerType:LowerTypeCallback, unwrapNullable:NullableUnwrapper, mapKeyIteratorSource:MapKeyIteratorSource,
+	public function new(session:TypingSession, typeExpression:StatementExpressionCallback,
+			coerce:StatementCoerceCallback,
+			expectedInitializerType:ExpectedInitializerCallback, bindCell:BindCellCallback,
+			typeStatements:TypeStatementsCallback,
+			exhaustiveEnum:ExhaustiveEnumCallback, lowerType:LowerTypeCallback, unwrapNullable:NullableUnwrapper,
+			mapKeyIteratorSource:MapKeyIteratorSource,
 			switchRules:SwitchTypingRules, assignmentRules:AssignmentTypingRules) {
 		this.session = session;
 		this.typeExpression = typeExpression;
@@ -91,7 +94,8 @@ class StatementTyper {
 	 * through it may omit the optional arguments and take the defaults, as calls to the function itself do. The
 	 * function type alone cannot say which arguments are optional.
 	 */
-	function aliasedFunction(name:String, span:SourceSpan, value:TypedExpression, statements:Array<AstStatement>, statementIndex:Int,
+	function aliasedFunction(name:String, span:SourceSpan, value:TypedExpression, statements:Array<AstStatement>,
+			statementIndex:Int,
 			scope:Scope):Null<LocalFunction> {
 		var referenced = switch value.expression {
 			case TFunctionRef(target): target;
@@ -119,7 +123,8 @@ class StatementTyper {
 
 	/** Returns null for statements handled by the compound-statement dispatcher. */
 	/** The type of `var name;` is that of its first assignment in source order, which must be typeable where it is declared. */
-	function inferUninitializedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope, span:SourceSpan):CompilerType {
+	function inferUninitializedType(name:String, statements:Array<AstStatement>, start:Int, scope:Scope,
+			span:SourceSpan):CompilerType {
 		var assigned = firstAssignment(name, statements, start);
 		if (assigned != null) {
 			var type:Null<CompilerType> = null;
@@ -128,11 +133,21 @@ class StatementTyper {
 			try {
 				type = typeExpression(assigned, speculative, null, false).type;
 			} catch (_:CompileError) {}
-			if (type != null && (switch (type) { case TNull: false; default: true; }) && (switch (type) { case TVoid: false; default: true; }) && (switch (type) { case TNever: false; default: true; }))
+			if (type != null && (switch (type) {
+				case TNull: false;
+				default: true;
+			}) && (switch (type) {
+				case TVoid: false;
+				default: true;
+			}) && (switch (type) {
+				case TNever: false;
+				default: true;
+			}))
 				return type;
 		}
 		throw new CompileError(new Diagnostic("E1002",
-			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration', span));
+			'Cannot infer type of local "$name"; add a type annotation or make its first assignment typeable at the declaration',
+			span));
 	}
 
 	static function firstAssignment(name:String, statements:Array<AstStatement>, start:Int):Null<AstExpression> {
@@ -160,7 +175,8 @@ class StatementTyper {
 							break;
 					}
 					inCase != null ? inCase : firstAssignment(name, defaultBranch, 0);
-				case VarDeclaration(shadowed, _, _, _), UninitializedDeclaration(shadowed, _, _) if (shadowed == name): return null;
+				case VarDeclaration(shadowed, _, _, _),
+					UninitializedDeclaration(shadowed, _, _) if (shadowed == name): return null;
 				default: null;
 			};
 			if (found != null)
@@ -169,13 +185,17 @@ class StatementTyper {
 		return null;
 	}
 
-	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>, statements:Array<AstStatement>,
+	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>,
+			statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
 		var context = session.currentContext;
 		return switch statement {
 			case ErrorStatement(_): [];
 			case UninitializedDeclaration(name, declared, span):
-				var declaredType = (switch (declared) { case InferredType: true; default: false; }) ? inferUninitializedType(name, statements, statementIndex + 1, scope,
+				var declaredType = (switch (declared) {
+					case InferredType: true;
+					default: false;
+				}) ? inferUninitializedType(name, statements, statementIndex + 1, scope,
 					span) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bindCell(name, span, scope, declaredType);
@@ -195,15 +215,17 @@ class StatementTyper {
 				switch lambda {
 					case Lambda(arguments, body, _, _):
 						// Its writes, in its own body or after it, are in the body's assigned declarations.
-						if (!context.assignedDeclarations.exists(LexicalStorageAnalysis.key(name, span))) localFunction = {
-							arguments: arguments,
-							body: body,
-							outerLocals: scope.visibleLocalNames(),
-							declaredIn: scope
-						};
+						if (!context.assignedDeclarations.exists(LexicalStorageAnalysis.key(name, span)))
+							localFunction = {
+								arguments: arguments,
+								body: body,
+								outerLocals: scope.visibleLocalNames(),
+								declaredIn: scope
+							};
 					default:
 				}
-				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer, statements, statementIndex + 1,
+				var declaredType:Null<CompilerType> = declared == null ? expectedInitializerType(name, initializer,
+					statements, statementIndex + 1,
 					scope) : session.declarations.resolve(declared, null, context.typeSubstitutions);
 				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
@@ -233,7 +255,8 @@ class StatementTyper {
 				if (!predeclared)
 					scope.define(name, value.type, span, true, null, false, localFunction);
 				var pathConstant = KeyPathTyping.known(session, value);
-				if (pathConstant != null && !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span))) {
+				if (pathConstant != null
+					&& !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span))) {
 					scope.setKeyPathConstant(name, pathConstant.name);
 					return [];
 				}
@@ -244,7 +267,8 @@ class StatementTyper {
 					case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
 					default: -1;
 				};
-				if (constructor >= 0 && !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span)))
+				if (constructor >= 0
+					&& !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span)))
 					scope.setKnownConstructor(name, constructor);
 				bindCell(name, span, scope, value.type);
 				[TVar(scope.requireId(name), value, span)];
@@ -261,10 +285,16 @@ class StatementTyper {
 					// never produce a value: a throw statement, which leaves the function's
 					// result to its other returns (or Void) instead of inferring Never.
 					output.push(TThrow(thrown, span));
-				} else if (expected == null && (switch (value.type) { case TNever: true; default: false; })) {
+				} else if (expected == null && (switch (value.type) {
+					case TNever: true;
+					default: false;
+				})) {
 					// Likewise a call that never returns, such as the body of `try fail() catch (e:String) 40`.
 					output.push(TExpression(value, span));
-				} else if (expected != null && (switch (expected) { case TVoid: true; default: false; }) && context.contextualVoidLambda) {
+				} else if (expected != null && (switch (expected) {
+					case TVoid: true;
+					default: false;
+				}) && context.contextualVoidLambda) {
 					output.push(TExpression(value, span));
 					output.push(TReturnVoid(span));
 				} else {
@@ -279,7 +309,10 @@ class StatementTyper {
 				var expected = result == null ? context.inferredResult : result;
 				if (expected == null)
 					context.inferredResult = TVoid;
-				else if ((switch (expected) { case TVoid: false; default: true; }))
+				else if ((switch (expected) {
+					case TVoid: false;
+					default: true;
+				}))
 					fail("E1003", "Return type mismatch", span);
 				[TReturnVoid(span)];
 			case Throw(expression, span):
@@ -298,10 +331,11 @@ class StatementTyper {
 					fail("E1017", "continue is only valid inside a loop", span);
 				[TContinue(span)];
 			case Expression(expression, span):
-				[
-					TExpression(typeExpression(expression, scope, (switch (result) { case TVoid: true; default: false; })
-						|| context.contextualVoidLambda ? TVoid : null, false), span)
-				];
+				[TExpression(typeExpression(expression, scope, (switch (result) {
+					case TVoid: true;
+					default: false;
+				})
+					|| context.contextualVoidLambda ? TVoid : null, false), span)];
 			default: null;
 		};
 	}
@@ -315,7 +349,8 @@ class StatementTyper {
 		var dot = name.indexOf("."),
 			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
 		// The stored type decides, not a narrowed one: a `Null<Int>` incremented once reads as an Int but still holds a Null<Int>.
-		if ((current != null && (sameType(current, TDynamic) || ExpressionTyper.isNullableNumber(scope.resolveDeclared(name))))
+		if ((current != null
+			&& (sameType(current, TDynamic) || ExpressionTyper.isNullableNumber(scope.resolveDeclared(name))))
 			|| (current == null && root != null && sameType(root, TDynamic))) {
 			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
 			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
@@ -340,7 +375,8 @@ class StatementTyper {
 			FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 			var oldValue = new TypedExpression(TStaticField(staticField.owner, fieldName), staticField.type, span),
 				one:TypedExpression = sameType(staticField.type,
-					TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1.0), TFloat, span),
+					TInt) ? new TypedExpression(TIntLiteral(1), TInt, span) : new TypedExpression(TFloatLiteral(1.0),
+					TFloat, span),
 				updated = delta > 0 ? new TypedExpression(TAdd(oldValue, one), staticField.type,
 					span) : new TypedExpression(TSub(oldValue, one), staticField.type, span);
 			scope.invalidateExpression('static:${staticField.owner}.$fieldName');
@@ -355,7 +391,8 @@ class StatementTyper {
 			return TCellCapturedIncrement(name, scope.requireCellClass(name), current, delta, span);
 		}
 		var cell = assignmentRules.boundCell(name, scope);
-		return cell != null ? TCellIncrement(scope.requireId(name), cell, current, delta, span) : TIncrement(scope.requireId(name), delta, span);
+		return cell != null ? TCellIncrement(scope.requireId(name), cell, current, delta,
+			span) : TIncrement(scope.requireId(name), delta, span);
 	}
 
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
@@ -376,7 +413,8 @@ class StatementTyper {
 						propertySetter = assignmentRules.instancePropertyAccessor(thisType, name, false);
 					if (propertySetter != null) {
 						session.invalidateCallEffects(propertySetter, scope);
-						return TExpression(assignmentRules.propertySetterCall(receiver, propertySetter, value, span), span);
+						return TExpression(assignmentRules.propertySetterCall(receiver, propertySetter, value, span),
+							span);
 					}
 					var receiverPath = FlowAnalysis.accessPath(receiver);
 					scope.invalidateField(name);
@@ -385,7 +423,8 @@ class StatementTyper {
 						scope.invalidateExpression(fieldPath);
 						scope.refineExpression(fieldPath, assignmentFlowType(assignedValue.type, instanceField));
 					}
-					return TFieldAssign(receiver, name, assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(thisType, name, span)),
+					return TFieldAssign(receiver, name, assignmentRules.abiBoundaryCast(value,
+						assignmentRules.fieldRepresentationType(thisType, name, span)),
 						span);
 				}
 				var owner = session.currentContext.lexicalOwner,
@@ -409,7 +448,8 @@ class StatementTyper {
 				statement = TCellCapturedAssign(name, scope.requireCellClass(name), value, span);
 			} else {
 				var cell = assignmentRules.boundCell(name, scope);
-				statement = cell != null ? TCellAssign(scope.requireId(name), cell, value, span) : TAssign(scope.requireId(name), value, span);
+				statement = cell != null ? TCellAssign(scope.requireId(name), cell, value,
+					span) : TAssign(scope.requireId(name), value, span);
 			}
 			scope.markAssigned(name);
 			scope.setMapKeySource(name, value.mapKeySource);
@@ -443,13 +483,16 @@ class StatementTyper {
 					assignedValue = typeExpression(expression, scope, expected, false),
 					value = coerce(assignedValue, expected, 'field "$name"', "E1002"),
 					setter:Null<String> = platformField == null ? null : platformField.set,
-					propertySetter = setter == null ? assignmentRules.instancePropertyAccessor(object.type, fieldName, false) : null,
-					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
-						propertySetter != null ? TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span) : {
-							value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
+					propertySetter = setter == null ? assignmentRules.instancePropertyAccessor(object.type, fieldName,
+						false) : null,
+					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]),
+						TVoid, span), span) else {
+							propertySetter != null ? TExpression(assignmentRules.propertySetterCall(object,
+								propertySetter, value, span), span) : {value = assignmentRules.abiBoundaryCast(value,
+								assignmentRules.fieldRepresentationType(object.type, fieldName, span));
 							TFieldAssign(object, fieldName, value, span);
+							};
 						};
-					};
 				if (setter != null) session.invalidateUnknownCall(scope);
 				else if (propertySetter != null) session.invalidateCallEffects(propertySetter, scope);
 				scope.invalidateField(fieldName);
@@ -463,7 +506,8 @@ class StatementTyper {
 		};
 	}
 
-	public function typeIndexAssignment(array:AstExpression, offset:AstExpression, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
+	public function typeIndexAssignment(array:AstExpression, offset:AstExpression, expression:AstExpression,
+			span:SourceSpan, scope:Scope):TypedStatement {
 		var typedArray = unwrapNullable(typeExpression(array, scope, null, false)),
 			typedIndex = typeExpression(offset, scope, null, false);
 		return switch typedArray.type {
@@ -484,10 +528,14 @@ class StatementTyper {
 					default: false;
 				}))
 					typedIndex = coerce(typedIndex, TInt, "array index", "E1014");
-				if ((switch (typedIndex.type) { case TInt: false; default: true; }))
+				if ((switch (typedIndex.type) {
+					case TInt: false;
+					default: true;
+				}))
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = assignmentRules.arrayElementType(typedArray.type, span),
-					value = coerce(typeExpression(expression, scope, element, false), element, "array element", "E1002");
+					value = coerce(typeExpression(expression, scope, element, false), element, "array element",
+						"E1002");
 				// A stored value can replace any literal-index element reached through an alias.
 				// Drop these transient refinements globally rather than retaining an unsound path fact.
 				scope.invalidateExpressionNamespace("array-entry:");
@@ -496,20 +544,27 @@ class StatementTyper {
 	}
 
 	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
-	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
+	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
+			scope:Scope):TypedStatement {
 		var value = typeExpression(expression, scope, null, false);
 		scope.invalidateField(fieldName);
 		return dynamicFieldStore(object, fieldName, value, span);
 	}
 
-	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression, span:SourceSpan):TypedStatement {
+	function dynamicFieldStore(object:TypedExpression, fieldName:String, value:TypedExpression,
+			span:SourceSpan):TypedStatement {
 		session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");
 		var boxed = coerce(value, TDynamic, 'field "$fieldName"', "E1002"),
-			call = new TypedExpression(TCall("Reflect.setField", [object, new TypedExpression(TStringLiteral(fieldName), TString, span), boxed]), TVoid, span);
+			call = new TypedExpression(TCall("Reflect.setField", [
+				object,
+				new TypedExpression(TStringLiteral(fieldName), TString, span),
+				boxed
+			]), TVoid, span);
 		return TExpression(call, span);
 	}
 
-	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
+	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression,
+			span:SourceSpan,
 			scope:Scope):TypedStatement {
 		var object = unwrapNullable(typeExpression(receiverExpression, scope, null, false));
 		if (sameType(object.type, TDynamic))
@@ -532,15 +587,18 @@ class StatementTyper {
 					assignedValue = typeExpression(expression, scope, expected, false),
 					value = coerce(assignedValue, expected, 'field "$fieldName"', "E1002");
 				var setter:Null<String> = platformField == null ? null : platformField.set,
-					propertySetter = setter == null ? assignmentRules.instancePropertyAccessor(object.type, fieldName, false) : null;
-				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]), TVoid, span), span) else {
-					if (propertySetter != null)
-						TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span)
-					else {
-						value = assignmentRules.abiBoundaryCast(value, assignmentRules.fieldRepresentationType(object.type, fieldName, span));
-						TFieldAssign(object, fieldName, value, span);
-					}
-				};
+					propertySetter = setter == null ? assignmentRules.instancePropertyAccessor(object.type, fieldName,
+						false) : null;
+				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]),
+					TVoid, span), span) else {
+						if (propertySetter != null)
+							TExpression(assignmentRules.propertySetterCall(object, propertySetter, value, span), span)
+								else {
+								value = assignmentRules.abiBoundaryCast(value,
+									assignmentRules.fieldRepresentationType(object.type, fieldName, span));
+								TFieldAssign(object, fieldName, value, span);
+							}
+					};
 				if (setter != null) session.invalidateUnknownCall(scope);
 				else if (propertySetter != null) session.invalidateCallEffects(propertySetter, scope);
 				scope.invalidateField(fieldName);
@@ -555,7 +613,8 @@ class StatementTyper {
 	}
 
 	/** A store to a static field replaces what earlier null checks said about it, and about anything reached through it. */
-	static function refineStaticStore(scope:Scope, owner:String, name:String, assigned:CompilerType, stored:CompilerType):Void {
+	static function refineStaticStore(scope:Scope, owner:String, name:String, assigned:CompilerType,
+			stored:CompilerType):Void {
 		var path = 'static:$owner.$name';
 		scope.invalidateExpression(path);
 		scope.refineExpression(path, assignmentFlowType(assigned, stored));
@@ -573,7 +632,8 @@ class StatementTyper {
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return TypeRelations.equals(left, right);
 
-	public function typeTry(tryBranch:Array<AstStatement>, catches:Array<AstCatch>, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+	public function typeTry(tryBranch:Array<AstStatement>, catches:Array<AstCatch>, span:SourceSpan, scope:Scope,
+			result:Null<CompilerType>):TypedStatement {
 		var typedCatches:Array<TypedCatch> = [],
 			catchScopes:Array<Scope> = [],
 			tryScope = new Scope(scope),
@@ -619,7 +679,8 @@ class StatementTyper {
 		return TTry(typedTry, typedCatches, span);
 	}
 
-	public function typeIf(predicate:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>, span:SourceSpan, scope:Scope,
+	public function typeIf(predicate:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>,
+			span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
 		var typedCondition = ConversionResolver.plainValue(typeExpression(predicate, scope, null, false), coerce);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
@@ -631,16 +692,19 @@ class StatementTyper {
 			continuing:Array<Scope> = [];
 		if (!ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 			continuing.push(thenScope);
-		if (ControlFlow.elseCanRun(typedCondition) && (elseBranch.length == 0 || !ControlFlow.alwaysExits(typedElse, exhaustiveEnum)))
+		if (ControlFlow.elseCanRun(typedCondition)
+			&& (elseBranch.length == 0 || !ControlFlow.alwaysExits(typedElse, exhaustiveEnum)))
 			continuing.push(elseScope);
 		scope.mergeAssignmentsFrom(continuing);
 		scope.mergeRefinementsFrom(continuing);
-		if (elseBranch.length == 0 && ControlFlow.elseCanRun(typedCondition) && ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
+		if (elseBranch.length == 0 && ControlFlow.elseCanRun(typedCondition)
+			&& ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TIf(typedCondition, typedThen, typedElse, span);
 	}
 
-	public function typeWhile(predicate:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+	public function typeWhile(predicate:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope,
+			result:Null<CompilerType>):TypedStatement {
 		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
 		var typedCondition = ConversionResolver.plainValue(typeExpression(predicate, scope, null, false), coerce);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
@@ -648,7 +712,8 @@ class StatementTyper {
 		var context = session.currentContext;
 		context.loopDepth++;
 		// The condition is evaluated right before every iteration, so what it proves holds where the body starts.
-		var typedBody = typeStatements(body, FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall), result);
+		var typedBody = typeStatements(body,
+			FlowAnalysis.narrowedScope(scope, typedCondition, true, session.isPureCall), result);
 		context.loopDepth--;
 		// The loop ends when the condition is false, unless a break leaves it first.
 		if (!AstScan.breaksOut(body))
@@ -656,7 +721,8 @@ class StatementTyper {
 		return TWhile(typedCondition, typedBody, span);
 	}
 
-	public function typeDoWhile(body:Array<AstStatement>, predicate:AstExpression, span:SourceSpan, scope:Scope, result:Null<CompilerType>):TypedStatement {
+	public function typeDoWhile(body:Array<AstStatement>, predicate:AstExpression, span:SourceSpan, scope:Scope,
+			result:Null<CompilerType>):TypedStatement {
 		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
 		var bodyScope = new Scope(scope), context = session.currentContext;
 		context.loopDepth++;
@@ -673,7 +739,8 @@ class StatementTyper {
 		return TDoWhile(typedBody, typedCondition, span);
 	}
 
-	public function typeForIn(name:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope,
+	public function typeForIn(name:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>,
+			span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
 		var typedIterable = unwrapNullable(typeExpression(iterable, scope, null, false));
 		if (IterationProtocol.structuralIterator(typedIterable.type))
@@ -692,13 +759,15 @@ class StatementTyper {
 				case TArray(_):
 					var array = "__haxeon_array" + span.start,
 						loopBody:Array<AstStatement> = [
-							VarDeclaration(valueName, null, Index(Variable(array, span), Variable(name, span), span), span)
+							VarDeclaration(valueName, null, Index(Variable(array, span), Variable(name, span), span),
+								span)
 						];
 					for (statement in body)
 						loopBody.push(statement);
 					return typeIf(BoolLiteral(true, span), [
 						VarDeclaration(array, null, iterable, span),
-						ForIn(name, null, Range(IntegerLiteral(0, span), Member(Variable(array, span), "length", span), span), loopBody, span)
+						ForIn(name, null, Range(IntegerLiteral(0, span), Member(Variable(array, span), "length", span),
+							span), loopBody, span)
 					], [], span, scope, result);
 				default:
 			}
@@ -713,11 +782,13 @@ class StatementTyper {
 				if (mapName == null)
 					fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);
 				if (valueName == null) {
-					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(value), span);
+					typedIterable = new TypedExpression(TCollectionCall(typedIterable, "values", []), TArray(value),
+						span);
 					value;
 				} else key;
 			default:
-				var item = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type, false) : null;
+				var item = valueName == null ? IterationProtocol.element(session.declarations, typedIterable.type,
+					false) : null;
 				if (item == null)
 					fail("E1014", "For-in requires an iterable or an iterator with hasNext():Bool and next()", span);
 				item;
@@ -736,7 +807,8 @@ class StatementTyper {
 				if (entryPath != null)
 					switch map.type {
 						case TMap(_, value):
-							loopScope.refineExpression(entryPath, value, FlowAnalysis.entryFactsSurviveCalls(scope, map));
+							loopScope.refineExpression(entryPath, value,
+								FlowAnalysis.entryFactsSurviveCalls(scope, map));
 						default:
 					}
 			}
@@ -764,14 +836,17 @@ class StatementTyper {
 				TWhile(hasNext, [TVar(loopScope.requireId(name), next, span)].concat(typedBody), span)
 			], [], span);
 		}
-		return TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable, typedBody, span);
+		return TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable,
+			typedBody, span);
 	}
 
-	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan,
+	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>,
+			hasDefault:Bool, span:SourceSpan,
 			scope:Scope, result:Null<CompilerType>):TypedStatement {
 		var typedExpression = typeExpression(expression, scope, null, false),
 			constantType = switchRules.constantType(typedExpression.type);
-		if (constantType == null && !isArraySwitchable(typedExpression.type) && !switchRules.isEnum(typedExpression.type))
+		if (constantType == null && !isArraySwitchable(typedExpression.type)
+			&& !switchRules.isEnum(typedExpression.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
@@ -784,10 +859,12 @@ class StatementTyper {
 				arrayPattern = classified.arrayPattern,
 				pattern = classified.enumPattern,
 				typedValue = isCatchAll
-					|| arrayPattern != null ? typedExpression : pattern == null ? typeCaseConstant(classified.value, typedExpression.type, constantType,
-						scope) : pattern.value;
+					|| arrayPattern != null ? typedExpression : pattern == null ? typeCaseConstant(classified.value,
+					typedExpression.type, constantType,
+					scope) : pattern.value;
 			var parsedGuard = switchCase.guard,
-				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false), TBool, "switch guard", "E1003");
+				typedGuard = parsedGuard == null ? null : coerce(typeExpression(parsedGuard, caseScope, null, false),
+					TBool, "switch guard", "E1003");
 			if (typedGuard != null)
 				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
 			var typedBody = typeStatements(switchCase.statements, caseScope, result),
@@ -803,7 +880,8 @@ class StatementTyper {
 					constructorIndex = literal.index;
 				}
 			}
-			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue, predicates) : switchRules.arrayPatternKey(arrayPattern);
+			var caseKey = arrayPattern == null ? switchRules.caseKey(typedValue,
+				predicates) : switchRules.arrayPatternKey(arrayPattern);
 			if (isCatchAll)
 				seenCases.set("$catchall", true);
 			if (caseKey != null && typedGuard == null) {
@@ -828,16 +906,14 @@ class StatementTyper {
 		if (switchRules.isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 			var enumName = Std.string(switchRules.enumName(typedExpression.type));
 			var missing:Array<String> = [],
-				coverageCases:Array<TypedSwitchCoverageCase> = [
-					for (switchCase in typedCases)
-						{
-							constructorIndex: switchCase.constructorIndex,
-							subjectBinding: switchCase.subjectBinding,
-							isCatchAll: switchCase.isCatchAll,
-							guard: switchCase.guard,
-							predicates: switchCase.predicates
-						}
-				];
+				coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in typedCases)
+					{
+						constructorIndex:switchCase.constructorIndex,
+							subjectBinding:switchCase.subjectBinding,
+							isCatchAll:switchCase.isCatchAll,
+							guard:switchCase.guard,
+							predicates:switchCase.predicates
+					}];
 			if (session.enumDecls.exists(enumName)) {
 				var enumDecl = session.enumDecls.get(enumName);
 				for (index in 0...enumDecl.cases.length)
@@ -859,7 +935,8 @@ class StatementTyper {
 				var missing = [for (value in values) if (!seenCases.exists(value.key)) value.name];
 				if (missing.length > 0)
 					fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
-				unmatchedEnumAbstract = 'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
+				unmatchedEnumAbstract =
+					'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
 			}
 		}
 		var defaultScope = new Scope(scope),
@@ -882,8 +959,10 @@ class StatementTyper {
 	}
 
 	/** A constant case, typed as the subject's value: `case null` alone is typed as the (nullable) subject. */
-	function typeCaseConstant(value:AstExpression, subjectType:CompilerType, constantType:Null<CompilerType>, scope:Scope):TypedExpression {
-		var type = constantType == null || compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
+	function typeCaseConstant(value:AstExpression, subjectType:CompilerType, constantType:Null<CompilerType>,
+			scope:Scope):TypedExpression {
+		var type = constantType == null
+			|| compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
 		return coerce(typeExpression(value, scope, type, false), type, "switch case", "E1019");
 	}
 

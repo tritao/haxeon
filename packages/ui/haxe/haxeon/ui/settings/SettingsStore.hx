@@ -120,7 +120,8 @@ class SettingsStore implements Observable {
 		adopt(definition);
 		var normalized = definition.normalize(value);
 		var previous = get(path);
-		if (PropertyValueTools.same(previous, normalized) && (!definition.preserveExplicitDefault || overrides.exists(path)))
+		if (PropertyValueTools.same(previous, normalized)
+			&& (!definition.preserveExplicitDefault || overrides.exists(path)))
 			return null;
 		if (!definition.preserveExplicitDefault && PropertyValueTools.same(definition.defaultValue, normalized))
 			overrides.remove(path);
@@ -217,7 +218,8 @@ class SettingsStore implements Observable {
 		var temporary = file + ".tmp";
 		try {
 			createDirectories(Path.directory(file));
-			File.saveContent(temporary, Json.stringify({version: FORMAT_VERSION, values: values, state: saved}, null, "\t"));
+			File.saveContent(temporary,
+				Json.stringify({version: FORMAT_VERSION, values: values, state: saved}, null, "\t"));
 			FileSystem.rename(temporary, file);
 			lastError = null;
 			return true;
@@ -258,7 +260,8 @@ class SettingsStore implements Observable {
 		var decoded = decode(definition, unknown.get(definition.path));
 		unknown.remove(definition.path);
 		if (decoded != null && definition.validate(decoded) == null
-			&& (definition.preserveExplicitDefault || !PropertyValueTools.same(definition.defaultValue, definition.normalize(decoded))))
+			&& (definition.preserveExplicitDefault
+			|| !PropertyValueTools.same(definition.defaultValue, definition.normalize(decoded))))
 			overrides.set(definition.path, definition.normalize(decoded));
 	}
 

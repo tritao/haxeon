@@ -89,7 +89,8 @@ class WasmLinearModuleBuilder {
 	var scalarAbi:compiler.backend.wasm.WasmScalarAbi;
 	var fieldLowering:compiler.backend.wasm.WasmFlattenValueFields;
 
-	public function new(program:IrProgram, logicalProgram:IrProgram, enumDeclarations:Array<IrEnum>, options:BackendOptions, patchChanged:Null<Array<String>>,
+	public function new(program:IrProgram, logicalProgram:IrProgram, enumDeclarations:Array<IrEnum>,
+			options:BackendOptions, patchChanged:Null<Array<String>>,
 			target:WasmTargetConfig) {
 		this.program = program;
 		this.logicalProgram = logicalProgram;
@@ -115,10 +116,12 @@ class WasmLinearModuleBuilder {
 		logical.parameterDefaults = program.parameterDefaults;
 		logical.positionalPlaces = program.positionalPlaces;
 		logical.positionalSources = program.positionalSources;
-		var boundaryExports = WasmModuleSupport.exportedFunctions(logical, options.exports == null ? [] : options.exports),
+		var boundaryExports = WasmModuleSupport.exportedFunctions(logical,
+			options.exports == null ? [] : options.exports),
 			boundaryPlan = new compiler.backend.wasm.WasmScalarAbi(logical, boundaryExports, true),
 			exportAdapters:Map<String, String> = [];
-		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures, boundaryExports, exportAdapters);
+		logical = compiler.backend.wasm.WasmScalarClosureEscapes.rewrite(logical, boundaryPlan.scalarClosures,
+			boundaryExports, exportAdapters);
 		// Keep the inline-value Dynamic-boundary invariant while verifying the
 		// explicit closure adapters generated for this target.
 		IrVerifier.verify(logical);
@@ -158,47 +161,44 @@ class WasmLinearModuleBuilder {
 		IrVerifier.verify(logical);
 		var values = new WasmValueLayout(logical),
 			verified = new WasmFlattenValueFields(logical).rewrite();
-		verified.objects = [
-			for (object in logical.objects)
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					fields: values.fields(object.fields),
-					methods: object.methods
-				}
-		];
+		verified.objects = [for (object in logical.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					fields:values.fields(object.fields),
+					methods:object.methods
+			}];
 		IrVerifier.verify(verified);
 		var exports = [
 			for (name in boundaryExports)
 				exportAdapters.exists(name) ? exportAdapters.get(name) : name
-		], abi = new compiler.backend.wasm.WasmScalarAbi(logical, exports, false,
-			true), scalar = abi.rewrite(), fields = new WasmFlattenValueFields(scalar, name -> {
+		],
+			abi = new compiler.backend.wasm.WasmScalarAbi(logical, exports, false,
+				true),
+			scalar = abi.rewrite(),
+			fields = new WasmFlattenValueFields(scalar, name -> {
 				var signature = abi.signatures.get(name);
 				return signature != null && signature.throwsReceiver;
 			}), flattened = fields.rewrite();
-		flattened.objects = [
-			for (object in logical.objects)
-				{
-					name: object.name,
-					isValue: object.isValue,
-					nativeLayout: object.nativeLayout,
-					base: object.base,
-					interfaces: object.interfaces,
-					fields: values.fields(object.fields),
-					methods: object.methods
-				}
-		];
+		flattened.objects = [for (object in logical.objects)
+			{
+				name:object.name,
+					isValue:object.isValue,
+					nativeLayout:object.nativeLayout,
+					base:object.base,
+					interfaces:object.interfaces,
+					fields:values.fields(object.fields),
+					methods:object.methods
+			}];
 		var physicalObjects = compiler.ir.IrObjectTable.of([for (object in flattened.objects) object.name => object]);
-		flattened.functions = [
-			for (fn in flattened.functions) {
-				var signature = abi.signatures.get(fn.name);
-				signature != null
-			&& signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
-			}
-		];
+		flattened.functions = [for (fn in flattened.functions) {
+			var signature = abi.signatures.get(fn.name);
+			signature != null
+				&& signature.throwsReceiver ? fn : compiler.ir.IrScalarReplacement.rewrite(fn, physicalObjects, true);
+		}];
 		abi.validate(flattened);
 		var enumDeclarations = logical.enums;
 		if (options.developmentMetadata == false) {
@@ -224,7 +224,10 @@ class WasmLinearModuleBuilder {
 		if (runtimeNeutral)
 			WasmFuelMetering.instrument(module, requiredFuelFunction());
 		compiler.ir.IrOpportunityCensus.reportWasm(module, "wasm32");
-		return {artifact: {target: options.target, bytes: WasmEncoder.encode(module)}, runtimeTypeIds: module.runtimeTypeIds};
+		return {
+			artifact: {target: options.target, bytes: WasmEncoder.encode(module)},
+			runtimeTypeIds: module.runtimeTypeIds
+		};
 	}
 
 	function prepareModule():Void {
@@ -294,7 +297,8 @@ class WasmLinearModuleBuilder {
 		usedCNatives = WasmModuleSupport.reachableCNatives(program, reachable);
 		usedNatives = IrReachability.natives(program, reachable);
 		compiler.backend.wasm.WasmValueLaneRuntime.attach(program, reachable, usedNatives);
-		stringifiableEnums = usedNatives.exists("__std_string") ? WasmModuleSupport.stringifiableEnums(program, reachable) : [];
+		stringifiableEnums = usedNatives.exists("__std_string") ? WasmModuleSupport.stringifiableEnums(program,
+			reachable) : [];
 		var enumStringDescriptors = new EnumStringDescriptors(program, stringifiableEnums, enumDeclarations);
 		layout = new WasmLayout(program, logicalProgram, module.runtimeTypeIds);
 		strings = [];
@@ -313,7 +317,8 @@ class WasmLinearModuleBuilder {
 							}
 						default:
 					}
-		for (value in ["null", "true", "false", "Object"].concat(WasmLinearRuntime.dynamicStringConstants(program, enumStringDescriptors))
+		for (value in ["null", "true", "false",
+			"Object"].concat(WasmLinearRuntime.dynamicStringConstants(program, enumStringDescriptors))
 			.concat(WasmLinearDynamicArrays.runtimeStrings(program)))
 			if (!strings.exists(value)) {
 				var bytes = WasmModuleSupport.stringBytes(value, module.runtimeTypeIds),
@@ -339,8 +344,13 @@ class WasmLinearModuleBuilder {
 								if (!staticClosureDescriptors.exists(key)) {
 									var offset = WasmModuleSupport.align(nextData, 8),
 										bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
-									bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET, closureAdapters.signatureId(output.type));
-									module.data.push({offset: offset, bytes: bytes, censusCategory: "closure descriptors"});
+									bytes.setInt32(WasmLayout.STATIC_CLOSURE_SIGNATURE_OFFSET,
+										closureAdapters.signatureId(output.type));
+									module.data.push({
+										offset: offset,
+										bytes: bytes,
+										censusCategory: "closure descriptors"
+									});
 									staticClosureDescriptors.set(key, offset);
 									staticClosureRecords.set(key, {name: name, bytes: bytes});
 									nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
@@ -368,7 +378,8 @@ class WasmLinearModuleBuilder {
 		heapStart = rootLimit;
 		if (contract != null && heapStart > contract.guestLimit)
 			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
-		module.memoryMin = contract == null ? WasmModuleSupport.memoryPages(heapStart) : WasmModuleSupport.memoryPages(contract.memorySize);
+		module.memoryMin = contract == null
+			? WasmModuleSupport.memoryPages(heapStart) : WasmModuleSupport.memoryPages(contract.memorySize);
 		rootTop = module.globals.length;
 		module.globals.push({type: I32, mutable: true, init: [I32Const(rootBase)]});
 		rootFrameTop = module.globals.length;
@@ -381,13 +392,18 @@ class WasmLinearModuleBuilder {
 		state.setInt32(WasmLayout.HEAP_STATE_HEAP_TOP, heapStart);
 		state.setInt32(WasmLayout.HEAP_STATE_BUDGET, WasmLayout.GC_MIN_ALLOCATION_BUDGET);
 		state.setInt32(WasmLayout.HEAP_STATE_FLAGS,
-			(options.wasmGcStress == true ? WasmLayout.HEAP_FLAG_STRESS : 0) | (options.wasmMemoryStats == true ? WasmLayout.HEAP_FLAG_STATS : 0));
+			(options.wasmGcStress == true ? WasmLayout.HEAP_FLAG_STRESS : 0)
+			| (options.wasmMemoryStats == true ? WasmLayout.HEAP_FLAG_STATS : 0));
 		module.data.push({offset: heapState, bytes: state, censusCategory: "runtime state"});
 		globals = [];
 		rootGlobals = [];
 		for (field in program.staticFields) {
 			globals.set(field.name, module.globals.length);
-			module.globals.push({type: WasmModuleSupport.requireValueType(field.type), mutable: true, init: WasmModuleSupport.zeroValue(field.type)});
+			module.globals.push({
+				type: WasmModuleSupport.requireValueType(field.type),
+				mutable: true,
+				init: WasmModuleSupport.zeroValue(field.type)
+			});
 			if (WasmTarget.isReference(field.type))
 				rootGlobals.push(WasmModuleSupport.requiredGlobal(globals, field.name));
 		}
@@ -437,13 +453,17 @@ class WasmLinearModuleBuilder {
 			linear.fuelChargeFunction = fuelChargeFunction;
 		}
 		linkRuntime();
-		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives, runtimeNeutral ? requiredFuelFunction() : null);
+		compiler.backend.wasm.WasmCryptoRuntime.link(module, functions, program, usedCNatives,
+			runtimeNeutral ? requiredFuelFunction() : null);
 		WasmLinearGc.build(linear);
 		allocator = WasmLinearAllocator.build(linear);
 		functions.set("__haxeon_alloc", allocator);
 		WasmLinearRuntime.register(linear);
 		compiler.backend.wasm.WasmValueLaneRuntime.declare(module, functions, program, fn -> {
-			return {parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)], results: WasmModuleSupport.resultTypes(fn.result)};
+			return {
+				parameters: [for (a in fn.arguments) WasmModuleSupport.requireValueType(a.type)],
+				results: WasmModuleSupport.resultTypes(fn.result)
+			};
 		});
 		WasmLinearValueArrays.register(linear, usedNatives);
 		functions.set("__haxeon_cstring_copy", WasmLinearRuntime.addCStringCopy(module, allocator));
@@ -459,8 +479,12 @@ class WasmLinearModuleBuilder {
 	function linkRuntime():Void {
 		if (runtimeNeutral && options.wasmLinearRuntime != null)
 			throw "--wasm-runtime-neutral does not accept a custom wasm32 runtime without fuel instrumentation";
-		var runtime = options.wasmLinearRuntime != null ? options.wasmLinearRuntime : (runtimeNeutral ? runtimeNeutralRuntime() : defaultRuntime());
-		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {parameters: [], results: []}));
+		var runtime = options.wasmLinearRuntime != null
+			? options.wasmLinearRuntime : (runtimeNeutral ? runtimeNeutralRuntime() : defaultRuntime());
+		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {
+			parameters: [],
+			results: []
+		}));
 		var exports = WasmRuntimeLinker.link(module, runtime, name -> switch name {
 			case "collect": linear.collectorFunction;
 			case "fuel_charge" if (runtimeNeutral): requiredFuelFunction();
@@ -538,13 +562,16 @@ class WasmLinearModuleBuilder {
 		var cstringCopy = functions.get("__haxeon_cstring_copy");
 		if (cstringCopy == null)
 			throw "Linear Wasm C string copy helper is missing";
-		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions, null, null,
+		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
+			scalarAbi, functions, null, null,
 			staticClosureDescriptors, closureAdapters);
-		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null, linearRepresentation, context -> {
-			var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy, scalarAbi, functions, context.irFunction,
-				context.allocateLocal, staticClosureDescriptors, closureAdapters);
-			return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
-		});
+		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null,
+			linearRepresentation, context -> {
+				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
+					scalarAbi, functions, context.irFunction,
+					context.allocateLocal, staticClosureDescriptors, closureAdapters);
+				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
+			});
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 		for (record in staticClosureRecords) {
 			var slot = tableSlots.get(record.name);
@@ -554,10 +581,11 @@ class WasmLinearModuleBuilder {
 		}
 		closureAdapters.defineSignatureQuery(module, functions);
 		WasmLinearReflection.finalize(linear, tableSlots);
-		var exceptionTagType:Null<Int> = !runtimeNeutral && WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
-			parameters: [I32],
-			results: []
-		}) : null; // The module declares one tag; instruction immediates use its tag index, not this type index.
+		var exceptionTagType:Null<Int> = !runtimeNeutral
+			&& WasmModuleSupport.hasExceptions(program) ? module.typeIndex({
+				parameters: [I32],
+				results: []
+			}) : null; // The module declares one tag; instruction immediates use its tag index, not this type index.
 		exceptionTag = exceptionTagType == null ? null : 0;
 		module.exceptionTagType = exceptionTagType;
 		linear.exceptionTag = exceptionTag;
@@ -574,9 +602,11 @@ class WasmLinearModuleBuilder {
 				return;
 			var functionIndex = WasmModuleSupport.requiredFunctionIndex(functions, fn.name);
 			module.setFunction(functionIndex,
-				WasmFunctionLower.lower(module, fn, functions, module.functionType(functionIndex), layout, allocator, rootTop, rootFrameTop, rootLimit,
-					globals, strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation, staticDataAddresses,
-					runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue));
+				WasmFunctionLower.lower(module, fn, functions, module.functionType(functionIndex), layout, allocator,
+				rootTop, rootFrameTop, rootLimit,
+				globals, strings, methods, closureTypes, tableSlots, exceptionTag, rootPoints, program, representation,
+				staticDataAddresses,
+				runtimeNeutral, hasHaxeExceptions, pendingExceptionFlag, pendingExceptionValue));
 		});
 		compiler.backend.wasm.WasmTypedInterfaceTables.lower(module, functions, tableSlots);
 		return metadata;
@@ -586,13 +616,19 @@ class WasmLinearModuleBuilder {
 		if (runtimeNeutral || options.developmentMetadata != false)
 			module.customSections.push({name: "haxeon.gc.roots", bytes: gcRootMetadata});
 		if (runtimeNeutral)
-			module.customSections.push({name: WasmRuntimeNeutralProfile.SECTION_NAME, bytes: WasmRuntimeNeutralProfile.sectionBytes()});
+			module.customSections.push({
+				name: WasmRuntimeNeutralProfile.SECTION_NAME,
+				bytes: WasmRuntimeNeutralProfile.sectionBytes()
+			});
 		if (options.developmentMetadata != false) {
 			module.customSections.push({name: "haxeon.patch", bytes: WasmPatch.manifest(program, patchChanged)});
 			module.customSections.push({name: "haxeon.patch.slots", bytes: WasmPatch.tableManifest(tableSlots)});
 		}
 		if (contract != null)
-			module.customSections.push({name: MemoryContractCodec.SECTION_NAME, bytes: MemoryContractCodec.encode(contract)});
+			module.customSections.push({
+				name: MemoryContractCodec.SECTION_NAME,
+				bytes: MemoryContractCodec.encode(contract)
+			});
 	}
 
 	function requiredFuelFunction():Int {
@@ -611,16 +647,25 @@ class WasmLinearModuleBuilder {
 		var initializer = WasmModuleSupport.hasFunction(program, "__init") ? functions.get("__init") : null;
 		if (initializer != null)
 			module.start = runtimeNeutral ? addNeutralStart(initializer) : initializer;
-		module.exports.push({name: "main", functionIndex: runtimeNeutral ? addNeutralBoundary("__haxeon_export_main", entry) : entry});
+		module.exports.push({
+			name: "main",
+			functionIndex: runtimeNeutral ? addNeutralBoundary("__haxeon_export_main", entry) : entry
+		});
 		for (exported in exportedFunctions) {
-			var exportIndex = functions.get(boundaryExportAdapters.exists(exported) ? boundaryExportAdapters.get(exported) : exported);
+			var exportIndex = functions.get(boundaryExportAdapters.exists(exported)
+				? boundaryExportAdapters.get(exported) : exported);
 			if (exportIndex == null)
 				throw 'Wasm export "$exported" is not a reachable function';
-			module.exports.push({name: exported, functionIndex: runtimeNeutral ? addNeutralBoundary('__haxeon_export_$exported', exportIndex) : exportIndex});
+			module.exports.push({
+				name: exported,
+				functionIndex: runtimeNeutral ? addNeutralBoundary('__haxeon_export_$exported',
+					exportIndex) : exportIndex
+			});
 		}
 		if (options.wasmMemoryStats == true) {
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_base", [I32Const(heapStart)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_top", heapStateWord(WasmLayout.HEAP_STATE_HEAP_TOP));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.heap_top",
+				heapStateWord(WasmLayout.HEAP_STATE_HEAP_TOP));
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_base", [I32Const(rootBase)]);
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_top", [GlobalGet(rootTop)]);
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.root_limit", [I32Const(rootLimit)]);
@@ -628,10 +673,14 @@ class WasmLinearModuleBuilder {
 			// In-block headers make out-of-line GC metadata a zero-sized region.
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.metadata_base", [I32Const(heapStart)]);
 			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.metadata_top", [I32Const(heapStart)]);
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocation_count", heapStateWord(WasmLayout.HEAP_STATE_ALLOCATION_COUNT));
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocated_bytes", heapStateWord(WasmLayout.HEAP_STATE_ALLOCATION_BYTES));
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes", heapStateWord(WasmLayout.HEAP_STATE_LARGEST_ALLOCATION));
-			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.collection_count", heapStateWord(WasmLayout.HEAP_STATE_COLLECTION_COUNT));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocation_count",
+				heapStateWord(WasmLayout.HEAP_STATE_ALLOCATION_COUNT));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.allocated_bytes",
+				heapStateWord(WasmLayout.HEAP_STATE_ALLOCATION_BYTES));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.largest_allocation_bytes",
+				heapStateWord(WasmLayout.HEAP_STATE_LARGEST_ALLOCATION));
+			WasmModuleSupport.addMemoryStatExport(module, "haxeon.memory.collection_count",
+				heapStateWord(WasmLayout.HEAP_STATE_COLLECTION_COUNT));
 		}
 	}
 

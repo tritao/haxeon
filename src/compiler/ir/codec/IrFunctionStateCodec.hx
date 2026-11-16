@@ -53,7 +53,8 @@ class IrFunctionStateCodec {
 				if (!samePlace(a.instructions[index].provenance, b.instructions[index].provenance))
 					return false;
 			var leftTerminator = a.terminator, rightTerminator = b.terminator;
-			if (leftTerminator != null && rightTerminator != null && !samePlace(leftTerminator.provenance, rightTerminator.provenance))
+			if (leftTerminator != null && rightTerminator != null
+				&& !samePlace(leftTerminator.provenance, rightTerminator.provenance))
 				return false;
 		}
 		return true;
@@ -227,7 +228,8 @@ class IrFunctionStateCodec {
 				retention:compiler.ir.IrFunction.IrRetention = version >= 10 ? input.readByte() : Reachable;
 			var kind:compiler.ir.IrFunction.IrFunctionKind = switch input.readByte() {
 				case 0: Ordinary;
-				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0), IrTypeCodec.readType(input, bytes.length, 0));
+				case 1: ClosureAdapter(IrTypeCodec.readType(input, bytes.length, 0),
+					IrTypeCodec.readType(input, bytes.length, 0));
 				case 2: ClosureCast(IrTypeCodec.readType(input, bytes.length, 0));
 				case 3: ClosureVarargs(IrTypeCodec.readType(input, bytes.length, 0));
 				case 4: GenericSpecialization;
@@ -246,7 +248,8 @@ class IrFunctionStateCodec {
 					var namespace = input.readInt32();
 					if (namespace < 0)
 						throw "Invalid value-array slot namespace";
-					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0), readSlotOperation(input, bytes.length));
+					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0),
+						readSlotOperation(input, bytes.length));
 				case 23:
 					var flag = input.readByte();
 					if (flag != 0 && flag != 1)
@@ -272,12 +275,12 @@ class IrFunctionStateCodec {
 						name = IrTypeCodec.readString(input, bytes.length),
 						value = IrValueTableCodec.readReference(input, values);
 					debugBindings.push(version >= 4 ? {
-						identity: identity,
-						name: name,
-						value: value,
-						path: IrTypeCodec.readString(input, bytes.length),
-						scopeStart: input.readInt32(),
-						scopeEnd: input.readInt32()
+						identity:identity,
+							name:name,
+							value:value,
+							path:IrTypeCodec.readString(input, bytes.length),
+							scopeStart:input.readInt32(),
+							scopeEnd:input.readInt32()
 					} : {
 						identity: name,
 						name: name,
@@ -285,7 +288,7 @@ class IrFunctionStateCodec {
 						path: "",
 						scopeStart: -1,
 						scopeEnd: -1
-						});
+					});
 				}
 			}
 			var blockCount = input.readInt32();
@@ -305,7 +308,8 @@ class IrFunctionStateCodec {
 					throw "Invalid IR instruction count";
 				for (_ in 0...instructionCount) {
 					var instruction = IrInstructionCodec.decode(readBytes(input, bytes.length), values),
-						provenance = version >= 2 ? readProvenance(input, bytes.length, version) : SourceProvenance.generated("legacy-ir-cache");
+						provenance = version >= 2 ? readProvenance(input, bytes.length,
+							version) : SourceProvenance.generated("legacy-ir-cache");
 					block.instructions.push(new Located(instruction, provenance));
 				}
 				var terminatorLength = input.readInt32();
@@ -316,7 +320,8 @@ class IrFunctionStateCodec {
 				terminatorInput.bigEndian = false;
 				var decodedTerminator = IrTerminatorCodec.read(terminatorInput, values, blockIds);
 				block.terminator = new Located(decodedTerminator,
-					version >= 2 ? readProvenance(input, bytes.length, version) : SourceProvenance.generated("legacy-ir-cache"));
+					version >= 2 ? readProvenance(input, bytes.length,
+					version) : SourceProvenance.generated("legacy-ir-cache"));
 				if (terminatorInput.position != terminatorBytes.length)
 					throw "Trailing IR terminator data";
 			}
@@ -370,7 +375,8 @@ class IrFunctionStateCodec {
 			start = input.readInt32(),
 			end = input.readInt32(),
 			line = input.readInt32();
-		return version >= 5 ? new SourceLocation(path, start, end, line, input.readInt32(), input.readInt32(), input.readInt32(),
+		return version >= 5 ? new SourceLocation(path, start, end, line, input.readInt32(), input.readInt32(),
+			input.readInt32(),
 			input.readInt32()) : new SourceLocation(path, start, end, line);
 	}
 
@@ -392,8 +398,10 @@ class IrFunctionStateCodec {
 				collectValue(output, values);
 				for (input in inputs)
 					collectValue(input.value, values);
-			case ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _), StaticDataAddress(output, _), ConstBool(output, _),
-				ConstNull(output), TypeValue(output, _), Catch(output), GlobalGet(output, _), StaticClosure(output, _), NewObject(output, _),
+			case ConstVoid(output), ConstInt(output, _), ConstFloat(output, _), ConstString(output, _),
+				StaticDataAddress(output, _), ConstBool(output, _),
+				ConstNull(output), TypeValue(output, _), Catch(output), GlobalGet(output, _), StaticClosure(output, _),
+				NewObject(output, _),
 				ValueInit(output):
 				collectValue(output, values);
 			case PointerOffset(output, pointer, byteOffset):
@@ -403,20 +411,27 @@ class IrFunctionStateCodec {
 			case MemoryLoad(output, pointer, _, _):
 				collectValue(output, values);
 				collectValue(pointer, values);
-			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value), FloatToFloat(output, value),
-				SafeCast(output, value), InstanceClosure(output, _, value), ToVirtual(output, value), Upcast(output, value), ClassId(output, value),
-				ArraySize(output, value), IteratorNew(output, value), IteratorHasNext(output, value), IteratorNext(output, value), EnumIndex(output, value),
+			case ToDyn(output, value), IntToFloat(output, value), IntToInt64(output, value), FloatToInt(output, value),
+				FloatToFloat(output, value),
+				SafeCast(output, value), InstanceClosure(output, _, value), ToVirtual(output, value),
+				Upcast(output, value), ClassId(output, value),
+				ArraySize(output, value), IteratorNew(output, value), IteratorHasNext(output, value),
+				IteratorNext(output, value), EnumIndex(output, value),
 				EnumField(output, value, _, _):
 				collectValue(output, values);
 				collectValue(value, values);
-			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right), Mod(output, left, right),
-				BitAnd(output, left, right), BitXor(output, left, right), BitOr(output, left, right), ShiftLeft(output, left, right),
-				ShiftRight(output, left, right), UnsignedShiftRight(output, left, right), Less(output, left, right), LessEqual(output, left, right),
+			case Add(output, left, right), Sub(output, left, right), Mul(output, left, right), Div(output, left, right),
+				Mod(output, left, right),
+				BitAnd(output, left, right), BitXor(output, left, right), BitOr(output, left, right),
+				ShiftLeft(output, left, right),
+				ShiftRight(output, left, right), UnsignedShiftRight(output, left, right), Less(output, left, right),
+				LessEqual(output, left, right),
 				Equal(output, left, right), ArrayGet(output, left, right):
 				collectValue(output, values);
 				collectValue(left, values);
 				collectValue(right, values);
-			case Call(output, _, arguments), CNativeCall(output, _, arguments), Intrinsic(output, _, arguments), CallClosure(output, _, arguments),
+			case Call(output, _, arguments), CNativeCall(output, _, arguments), Intrinsic(output, _, arguments),
+				CallClosure(output, _, arguments),
 				MethodCall(output, _, _, arguments, _), MakeEnum(output, _, _, arguments):
 				collectValue(output, values);
 				for (argument in arguments)

@@ -83,7 +83,8 @@ class HxiParser {
 		var target = metadataValue(metadata, "target", true),
 			library = metadataValue(metadata, "library", false),
 			dependencies = metadataStrings(metadata, "depends"),
-			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end), documentation);
+			result = new HxiInterface(name, target, library, dependencies, declarations, start.merge(end),
+				documentation);
 		return result;
 	}
 
@@ -151,35 +152,47 @@ class HxiParser {
 			do {
 				var start = current().span, name = identifier();
 				expect(":");
-				var type = parseType(), metadata = parseMetadata([
-					"out",
-					"inout",
-					"out_buffer",
-					"in_array",
-					"out_array",
-					"initial_capacity",
-					"borrowed",
-					"owned",
-					"retained"
-				]), out = metadataFlag(metadata,
-					"out"), inout = metadataFlag(metadata,
-						"inout"), borrowed = metadataFlag(metadata,
-						"borrowed"), retained = metadataFlag(metadata,
-						"retained"), ownership = metadataOwnership(metadata,
-						"owned"), bufferSize = metadataValue(metadata, "out_buffer",
-						false), arrayCount = metadataValue(metadata, "in_array",
-						false), outputArrayCount = metadataValue(metadata, "out_array",
-						false), direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount != null ? InArray(arrayCount) : outputArrayCount != null ? OutArray(outputArrayCount) : In;
-				parameters.push({
-					name: name,
+				var type = parseType(),
+					metadata = parseMetadata([
+						"out",
+						"inout",
+						"out_buffer",
+						"in_array",
+						"out_array",
+						"initial_capacity",
+						"borrowed",
+						"owned",
+						"retained"
+					]),
+					out = metadataFlag(metadata,
+						"out"),
+					inout = metadataFlag(metadata,
+						"inout"),
+					borrowed = metadataFlag(metadata,
+						"borrowed"),
+					retained = metadataFlag(metadata,
+						"retained"),
+					ownership = metadataOwnership(metadata,
+						"owned"),
+					bufferSize = metadataValue(metadata, "out_buffer",
+						false),
+					arrayCount = metadataValue(metadata, "in_array",
+						false),
+					outputArrayCount = metadataValue(metadata, "out_array",
+						false),
+					direction = out ? Out : inout ? InOut : bufferSize != null ? OutBuffer(bufferSize) : arrayCount
+						!= null ? InArray(arrayCount) : outputArrayCount != null ? OutArray(outputArrayCount) : In;
+				parameters.push({name: name,
 					type: type,
 					direction: direction,
-					ownership: (switch (ownership) { case Unspecified: false; default: true; }) ? ownership : borrowed ? Borrowed : Unspecified,
-					handleDisposition: metadataHandleDisposition(metadata, "owned"),
-					retained: retained,
-					metadata: metadata,
-					span: start.merge(previous().span)
-				});
+					ownership: (switch (ownership) {
+						case Unspecified: false;
+						default: true;
+					}) ? ownership : borrowed ? Borrowed : Unspecified,
+						handleDisposition: metadataHandleDisposition(metadata, "owned"),
+						retained: retained,
+						metadata: metadata,
+						span: start.merge(previous().span)});
 			} while (match(","));
 		expect(")");
 		return parameters;
@@ -261,7 +274,7 @@ class HxiParser {
 			var code = text.charCodeAt(index),
 				digit = code >= "0".code
 					&& code <= "9".code ? code - "0".code : code >= "A".code
-						&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+					&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
 			value = Int64.or(Int64.shl(value, 4), Int64.ofInt(digit));
 		}
 		return value;
@@ -310,7 +323,7 @@ class HxiParser {
 			var code = text.charCodeAt(index),
 				digit = code >= "0".code
 					&& code <= "9".code ? code - "0".code : code >= "A".code
-						&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
+					&& code <= "F".code ? code - "A".code + 10 : code - "a".code + 10;
 			value = (value << 4) | digit;
 		}
 		return value;
@@ -337,17 +350,18 @@ class HxiParser {
 				structSize = metadataFlag(fieldMetadata, "struct_size"),
 				end = expect(";").span;
 			var fieldSpan = fieldStart.merge(end);
-			fields.push({
-				name: fieldName,
+			fields.push({name: fieldName,
 				type: type,
 				offset: offset,
-				ownership: (switch (ownership) { case Unspecified: false; default: true; }) ? ownership : borrowed ? Borrowed : Unspecified,
-				handleDisposition: metadataHandleDisposition(fieldMetadata, "owned"),
-				lengthField: lengthField,
-				structSize: structSize,
-				metadata: fieldMetadata,
-				span: fieldSpan
-			});
+				ownership: (switch (ownership) {
+					case Unspecified: false;
+					default: true;
+				}) ? ownership : borrowed ? Borrowed : Unspecified,
+					handleDisposition: metadataHandleDisposition(fieldMetadata, "owned"),
+					lengthField: lengthField,
+					structSize: structSize,
+					metadata: fieldMetadata,
+					span: fieldSpan});
 			rememberDocumentation('$name.$fieldName', fieldSpan);
 		}
 		var end = expect("}").span;
@@ -370,13 +384,15 @@ class HxiParser {
 			span = metadataValue(metadata, "span", false),
 			callConvention = metadataValue(metadata, "callconv", false),
 			end = expect(";").span;
-		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention, {
-			ownership: (switch (ownership) { case Unspecified: false; default: true; }) ? ownership : borrowed || span != null ? Borrowed : Unspecified,
-			handleDisposition: metadataHandleDisposition(metadata, "owned"),
-			length: length,
-			span: span,
-			metadata: metadata
-		}, start.merge(end));
+		return Function(name, parameters, result, symbol, leaf, callConvention == null ? "cdecl" : callConvention,
+			{ownership: (switch (ownership) {
+				case Unspecified: false;
+				default: true;
+			}) ? ownership : borrowed || span != null ? Borrowed : Unspecified,
+				handleDisposition: metadataHandleDisposition(metadata, "owned"),
+				length: length,
+				span: span,
+				metadata: metadata}, start.merge(end));
 	}
 
 	function parseType():HxiType {
@@ -402,12 +418,12 @@ class HxiParser {
 		return primitives.indexOf(name) >= 0 ? Primitive(name) : Named(name);
 	}
 
-	static function declarationName(value:HxiDeclaration):{name:String, span:SourceSpan}
-		return switch value {
-			case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _, span) | Structure(name, _, _, _, span) |
-				Enumeration(name, _, _, _, span) | Callback(name, _, _, _, span) | Function(name, _, _, _, _, _, _, span):
-				{name: name, span: span};
-		};
+	static function declarationName(value:HxiDeclaration): {name: String, span: SourceSpan} return switch value {
+		case Opaque(name, span) | Alias(name, _, span) | Handle(name, _, _, span) | Constant(name, _,
+			span) | Structure(name, _, _, _, span) | Enumeration(name, _, _, _, span) | Callback(name, _, _, _,
+			span) | Function(name, _, _, _, _, _, _, span):
+			{name: name, span: span};
+	};
 
 	function rememberDocumentation(name:String, span:SourceSpan):Void {
 		var value = DocumentationTools.forSpan(source, comments, span);
@@ -575,7 +591,8 @@ class HxiParser {
 	}
 
 	static function isHexInteger(value:String):Bool {
-		if (value.length < 3 || value.charCodeAt(0) != "0".code || (value.charCodeAt(1) != "x".code && value.charCodeAt(1) != "X".code))
+		if (value.length < 3 || value.charCodeAt(0) != "0".code
+			|| (value.charCodeAt(1) != "x".code && value.charCodeAt(1) != "X".code))
 			return false;
 		for (index in 2...value.length) {
 			var code = value.charCodeAt(index);
@@ -615,7 +632,10 @@ class HxiParser {
 		return tokens[position++];
 
 	function current():HxiToken
-		return position < tokens.length ? tokens[position] : {text: "<eof>", span: source.span(source.bytes.length, source.bytes.length)};
+		return position < tokens.length ? tokens[position] : {
+			text: "<eof>",
+			span: source.span(source.bytes.length, source.bytes.length)
+		};
 
 	function previous():HxiToken
 		return tokens[position - 1];

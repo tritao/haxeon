@@ -34,7 +34,8 @@ class EnumEscapeReachMain {
 			closure = builder.temporary(Function([], Void)),
 			map = builder.argument("map", Abstract("probe-map"));
 		builder.emit(InstanceClosure(closure, "capture", receiver));
-		builder.call("__map_string_ref_set", [map, builder.constString("key"), builder.constNull(EnumTag("Tag"))], Void);
+		builder.call("__map_string_ref_set", [map, builder.constString("key"), builder.constNull(EnumTag("Tag"))],
+			Void);
 		builder.returnValue(builder.constVoid());
 		program.functions = [new IrFunction("capture", builder.arguments, Void, builder.blocks, Ordinary)];
 		program.staticFields = [{name: "Branch.staticPayload", type: Enum("StaticPayload")}];
@@ -61,11 +62,13 @@ class EnumEscapeReachMain {
 		escaped.toDyn(owner);
 		escaped.returnValue(escaped.constInt(42));
 		program.functions.push(new IrFunction("escape", escaped.arguments, I32, escaped.blocks, Ordinary));
-		var eligibility = new compiler.ir.IrInlineEnumEligibility(program, new compiler.ir.IrInlineEnumLayout(program.enums, program.objects, 64, HashLink));
+		var eligibility = new compiler.ir.IrInlineEnumEligibility(program,
+			new compiler.ir.IrInlineEnumLayout(program.enums, program.objects, 64, HashLink));
 		if (eligibility.allowed.exists("Payload"))
 			throw "Inline eligibility ignored transitive escape";
 		var projected = compiler.ir.IrClosedEnumTagAbi.run(program);
-		if (!compiler.ir.IrVerifier.sameType(Lambda.find(projected.objects, entry -> entry.name == "Leaf").fields[0].type, EnumTag("Tag")))
+		if (!compiler.ir.IrVerifier.sameType(Lambda.find(projected.objects,
+			entry -> entry.name == "Leaf").fields[0].type, EnumTag("Tag")))
 			throw "Closed-tag ABI ignored the same transitive escape";
 		var nativeRoots:Array<IrType> = [];
 		IrEnumEscapeReach.addNativeRoot(nativeRoots, Abstract("probe-map"));

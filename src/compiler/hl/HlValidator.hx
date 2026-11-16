@@ -143,7 +143,8 @@ class HlValidator {
 		if (code.sourceSnapshots.length > 0) {
 			// Both sides come from the same model in the same process, so comparing the encodings repeats the encoding of every source
 			// snapshot twice per build for nothing; it is a consistency check, kept for HAXEON_CHECK_REUSE=1.
-			var checking = Sys.getEnv("HAXEON_CHECK_REUSE") == "1", encoded = checking ? HlWriter.encodeSourceSnapshots(code.sourceSnapshots) : null,
+			var checking = Sys.getEnv("HAXEON_CHECK_REUSE") == "1",
+				encoded = checking ? HlWriter.encodeSourceSnapshots(code.sourceSnapshots) : null,
 				found = false;
 			for (section in code.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS && section.version == 1) {
@@ -205,7 +206,8 @@ class HlValidator {
 				case ToInt(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
-				case SafeCast(destination, source), UnsafeCast(destination, source), Ref(destination, source), Unref(destination, source),
+				case SafeCast(destination, source), UnsafeCast(destination, source), Ref(destination, source),
+					Unref(destination, source),
 					Setref(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
@@ -237,8 +239,10 @@ class HlValidator {
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
 					requireRegister(fn, right);
-				case Mod(destination, left, right), BitAnd(destination, left, right), BitXor(destination, left, right), BitOr(destination, left, right),
-					ShiftLeft(destination, left, right), ShiftRight(destination, left, right), UnsignedShiftRight(destination, left, right):
+				case Mod(destination, left, right), BitAnd(destination, left, right), BitXor(destination, left, right),
+					BitOr(destination, left, right),
+					ShiftLeft(destination, left, right), ShiftRight(destination, left, right),
+					UnsignedShiftRight(destination, left, right):
 					requireRegister(fn, destination);
 					requireRegister(fn, left);
 					requireRegister(fn, right);
@@ -301,7 +305,8 @@ class HlValidator {
 					requireRegister(fn, array);
 					requireRegister(fn, index);
 					requireRegister(fn, source);
-				case GetI8(destination, pointer, offset), GetI16(destination, pointer, offset), GetMem(destination, pointer, offset):
+				case GetI8(destination, pointer, offset), GetI16(destination, pointer, offset),
+					GetMem(destination, pointer, offset):
 					requireRegister(fn, destination);
 					requireRegister(fn, pointer);
 					requireRegister(fn, offset);
@@ -331,7 +336,8 @@ class HlValidator {
 					requireRegister(fn, right);
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
-				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target), JumpEqual(left, right, target):
+				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target),
+					JumpEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))

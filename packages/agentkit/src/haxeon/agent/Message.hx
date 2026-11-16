@@ -73,7 +73,8 @@ class Message {
 					blocks.push(Text(item.string("text")));
 				case "tool_use":
 					var input = item.object("input");
-					blocks.push(ToolUse(item.string("id"), item.string("name"), input == null ? "{}" : input.toString()));
+					blocks.push(ToolUse(item.string("id"), item.string("name"),
+						input == null ? "{}" : input.toString()));
 				case "tool_result":
 					blocks.push(ToolOutput(item.string("tool_use_id"), item.string("content"), item.bool("is_error")));
 				default:

@@ -30,7 +30,8 @@ class HaxeXmlWriter {
 	static function emitModule(output:StringBuf, state:ModuleState, program:AstProgram):Void {
 		var comments = DocumentationTools.scan(state.source);
 		for (alias in program.aliases) {
-			openType(output, "typedef", qualified(program, alias.name), alias.typeParameters, state, alias.span, alias.isPrivate);
+			openType(output, "typedef", qualified(program, alias.name), alias.typeParameters, state, alias.span,
+				alias.isPrivate);
 			emitType(output, alias.type);
 			emitDocumentation(output, state, comments, alias.span);
 			output.add('</typedef>\n');
@@ -44,7 +45,8 @@ class HaxeXmlWriter {
 				output.add(' public="1">');
 				if (enumCase.params.length > 0) {
 					output.add('<f a="');
-					output.add(escape([for (parameter in enumCase.params) parameter.name == null ? "" : parameter.name].join(":")));
+					output.add(escape([for (parameter in enumCase.params) parameter.name == null
+						? "" : parameter.name].join(":")));
 					output.add('">');
 					for (parameter in enumCase.params)
 						emitType(output, parameter.type);
@@ -60,7 +62,8 @@ class HaxeXmlWriter {
 			output.add('</enum>\n');
 		}
 		for (decl in program.interfaces) {
-			openType(output, "class", qualified(program, decl.name), decl.typeParameters, state, decl.span, false, ' interface="1"');
+			openType(output, "class", qualified(program, decl.name), decl.typeParameters, state, decl.span, false,
+				' interface="1"');
 			for (base in decl.bases) {
 				output.add('<implements>');
 				emitType(output, base);
@@ -72,7 +75,8 @@ class HaxeXmlWriter {
 			output.add('</class>\n');
 		}
 		for (decl in program.classes) {
-			openType(output, "class", qualified(program, decl.name), decl.typeParameters, state, decl.span, decl.isPrivate,
+			openType(output, "class", qualified(program, decl.name), decl.typeParameters, state, decl.span,
+				decl.isPrivate,
 				decl.isExtern == true ? ' extern="1"' : "");
 			if (decl.base != null) {
 				output.add('<extends>');
@@ -144,7 +148,8 @@ class HaxeXmlWriter {
 		}
 	}
 
-	static function openType(output:StringBuf, tag:String, path:String, parameters:Array<String>, state:ModuleState, span:compiler.Source.SourceSpan,
+	static function openType(output:StringBuf, tag:String, path:String, parameters:Array<String>, state:ModuleState,
+			span:compiler.Source.SourceSpan,
 			isPrivate:Bool, extra:String = ""):Void {
 		output.add('<');
 		output.add(tag);
@@ -161,7 +166,8 @@ class HaxeXmlWriter {
 		output.add('>');
 	}
 
-	static function emitFunction(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>, fn:AstFunction):Void {
+	static function emitFunction(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>,
+			fn:AstFunction):Void {
 		output.add('<');
 		output.add(escape(fn.name));
 		output.add(' public="1" set="method"');
@@ -180,7 +186,8 @@ class HaxeXmlWriter {
 		output.add('>\n');
 	}
 
-	static function emitDocumentation(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>, span:compiler.Source.SourceSpan):Void {
+	static function emitDocumentation(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>,
+			span:compiler.Source.SourceSpan):Void {
 		var documentation = DocumentationTools.forSpan(state.source, comments, span);
 		if (documentation.raw.length > 0) {
 			output.add('<haxe_doc>');
@@ -255,7 +262,8 @@ class HaxeXmlWriter {
 		return program.packageName == null || program.packageName.length == 0 ? name : program.packageName + "." + name;
 
 	static function escape(value:String):String
-		return StringTools.replace(StringTools.replace(StringTools.replace(StringTools.replace(StringTools.replace(value, "&", "&amp;"), "<", "&lt;"), ">",
+		return StringTools.replace(StringTools.replace(StringTools.replace(StringTools.replace(StringTools.replace(value,
+			"&", "&amp;"), "<", "&lt;"), ">",
 			"&gt;"), "\"", "&quot;"),
 			"'", "&apos;");
 }

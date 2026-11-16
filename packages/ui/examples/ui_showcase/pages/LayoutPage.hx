@@ -30,10 +30,12 @@ class LayoutPage {
 				explorer.keyed("heading", explorer.heading("Weighted grow")),
 				explorer.keyed("copy", explorer.caption("Relative space with min/max-ready grow policies")),
 				explorer.keyed("row", new Row("sample-row", [
-					explorer.keyed("one", explorer.colorTile("Navigation · 1", UiExplorer.color(0.24, 0.48, 0.77), 1.0)),
+					explorer.keyed("one",
+						explorer.colorTile("Navigation · 1", UiExplorer.color(0.24, 0.48, 0.77), 1.0)),
 					explorer.keyed("two", explorer.colorTile("Editor · 3", UiExplorer.color(0.39, 0.34, 0.72), 3.0)),
-					explorer.keyed("three", explorer.colorTile("Inspector · 1", UiExplorer.color(0.20, 0.58, 0.52), 1.0))
-			], explorer.rowStyle(8.0)))
+					explorer.keyed("three",
+						explorer.colorTile("Inspector · 1", UiExplorer.color(0.20, 0.58, 0.52), 1.0))
+				], explorer.rowStyle(8.0)))
 			])),
 			explorer.keyed("padding-align", explorer.panel("padding-align", [
 				explorer.keyed("heading", explorer.heading("Padding + Align")),
@@ -55,7 +57,8 @@ class LayoutPage {
 		items.push(explorer.keyed("application-patterns", applicationPatterns(explorer)));
 		items.push(explorer.keyed("layout-stack", explorer.panel("stack-demo", [
 			explorer.keyed("heading", explorer.heading("Stack + clipping")),
-			explorer.keyed("copy", explorer.caption("Positioned children paint by z-index and inherit their parent's clip.")),
+			explorer.keyed("copy",
+				explorer.caption("Positioned children paint by z-index and inherit their parent's clip.")),
 			explorer.keyed("stack", explorer.stackDemo())
 		])));
 	}
@@ -96,8 +99,8 @@ class LayoutPage {
 
 		return explorer.panel("application-patterns", [
 			explorer.keyed("heading", explorer.heading("Application shell patterns")),
-			explorer.keyed("copy", explorer.caption(
-				"Distribution, baseline alignment, wrapped flow, and bounded aspect-ratio content compose without spacer nodes.")),
+			explorer.keyed("copy",
+				explorer.caption("Distribution, baseline alignment, wrapped flow, and bounded aspect-ratio content compose without spacer nodes.")),
 			explorer.keyed("distributed-toolbar", new Row("distributed-toolbar", [
 				explorer.keyed("back", explorer.button("Back", "layout-back", function() {})),
 				explorer.keyed("toolbar-label", explorer.label("SpaceBetween toolbar")),

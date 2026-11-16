@@ -1,6 +1,9 @@
 package tools;
 
-typedef LiveFunction = {final name:String; final id:Int;}
+typedef LiveFunction = {
+	final name:String;
+	final id:Int;
+}
 
 typedef LiveDescription = {
 	final revision:Int;

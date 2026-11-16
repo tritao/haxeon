@@ -1,14 +1,21 @@
 struct Inner {
 	public var tag:UInt8;
 	public var delta:Int16;
-	public function new(tag:Int, delta:Int) { this.tag = cast tag; this.delta = cast delta; }
+	public function new(tag:Int, delta:Int) {
+		this.tag = cast tag;
+		this.delta = cast delta;
+	}
 }
 
 struct Outer {
 	public var prefix:UInt8;
 	public var child:Inner;
 	public var tail:Int;
-	public function new() { prefix = 1; child = new Inner(250, -1234); tail = 42; }
+	public function new() {
+		prefix = 1;
+		child = new Inner(250, -1234);
+		tail = 42;
+	}
 }
 
 class Holder {
@@ -26,7 +33,12 @@ struct Mixed {
 	public var owner:Owner;
 	public var flat:Outer;
 	public var last:UInt8;
-	public function new(owner:Owner) { marker = 9; this.owner = owner; flat = new Outer(); last = 7; }
+	public function new(owner:Owner) {
+		marker = 9;
+		this.owner = owner;
+		flat = new Outer();
+		last = 7;
+	}
 }
 
 class MixedHolder {
@@ -82,7 +94,10 @@ function main():Int {
 	var erasedNull:Dynamic = null;
 	var missing:Holder = cast erasedNull;
 	var caught = false;
-	try { var unused = missing.value; if (unused.tail == 42) return 5; } catch (_:Dynamic) caught = true;
+	try {
+		var unused = missing.value;
+		if (unused.tail == 42) return 5;
+	} catch (_:Dynamic) caught = true;
 	if (!caught) return 6;
 	caught = false;
 	try missing.value.tail = 1 catch (_:Dynamic) caught = true;

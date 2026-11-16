@@ -25,7 +25,14 @@ enum AstType {
 }
 
 /** One field declared by an anonymous structural type. */
-typedef AstAnonymousField = {final name:String; final type:AstType; final optional:Bool; final isFinal:Bool; final metadata:Array<AstMetadata>; final span:SourceSpan;}
+typedef AstAnonymousField = {
+	final name:String;
+	final type:AstType;
+	final optional:Bool;
+	final isFinal:Bool;
+	final metadata:Array<AstMetadata>;
+	final span:SourceSpan;
+}
 
 /** Function parameter syntax, including its optional default expression. */
 typedef AstArgument = {
@@ -82,7 +89,11 @@ typedef AstClass = {
 }
 
 /** Metadata annotation attached to a source declaration. */
-typedef AstMetadata = {final name:String; final arguments:Array<AstExpression>; final span:SourceSpan;}
+typedef AstMetadata = {
+	final name:String;
+	final arguments:Array<AstExpression>;
+	final span:SourceSpan;
+}
 
 /** Parsed interface declaration before inherited methods are resolved. */
 typedef AstInterface = {
@@ -106,7 +117,12 @@ typedef AstTypeAlias = {
 }
 
 /** One parameter in an enum constructor declaration. */
-typedef AstEnumParameter = {final name:Null<String>; final type:AstType; final optional:Bool; final span:SourceSpan;}
+typedef AstEnumParameter = {
+	final name:Null<String>;
+	final type:AstType;
+	final optional:Bool;
+	final span:SourceSpan;
+}
 
 /** Parsed enum constructor and its ordered payload parameters. */
 typedef AstEnumCase = {
@@ -129,7 +145,11 @@ typedef AstEnum = {
 }
 
 /** One named constant declared by an enum abstract. */
-typedef AstEnumAbstractValue = {final name:String; final value:AstExpression; final span:SourceSpan;}
+typedef AstEnumAbstractValue = {
+	final name:String;
+	final value:AstExpression;
+	final span:SourceSpan;
+}
 
 /** Parsed enum abstract, including explicit conversion relationships. */
 typedef AstEnumAbstract = {
@@ -158,7 +178,12 @@ typedef AstAbstract = {
 }
 
 /** One typed catch arm in a parsed try statement. */
-typedef AstCatch = {final name:String; final type:AstType; final statements:Array<AstStatement>; final span:SourceSpan;}
+typedef AstCatch = {
+	final name:String;
+	final type:AstType;
+	final statements:Array<AstStatement>;
+	final span:SourceSpan;
+}
 
 /** Parsed expression tree; each constructor retains its complete source span. */
 enum AstExpression {
@@ -204,13 +229,16 @@ enum AstExpression {
 
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 	Cast(expression:AstExpression, target:Null<AstType>, span:SourceSpan);
-	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>, defaultExpression:Null<AstExpression>, span:SourceSpan);
+	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
+		defaultExpression:Null<AstExpression>, span:SourceSpan);
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
 	ArrayLiteral(values:Array<AstExpression>, span:SourceSpan);
 	MapLiteral(entries:Array<AstMapEntry>, span:SourceSpan);
-	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, value:AstExpression, flattened:Bool,
+	ArrayComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>,
+		value:AstExpression, flattened:Bool,
 		span:SourceSpan);
-	MapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>, key:AstExpression, value:AstExpression,
+	MapComprehension(keyName:String, valueName:Null<String>, iterable:AstExpression, condition:Null<AstExpression>,
+		key:AstExpression, value:AstExpression,
 		span:SourceSpan);
 	Range(start:AstExpression, end:AstExpression, span:SourceSpan);
 	Call(name:String, arguments:Array<AstExpression>, span:SourceSpan);
@@ -239,10 +267,18 @@ enum NativeLayoutQueryKind {
 }
 
 /** Named value supplied by an object-literal expression. */
-typedef AstObjectField = {final name:String; final value:AstExpression; final span:SourceSpan;}
+typedef AstObjectField = {
+	final name:String;
+	final value:AstExpression;
+	final span:SourceSpan;
+}
 
 /** Key/value pair supplied by a map-literal expression. */
-typedef AstMapEntry = {final key:AstExpression; final value:AstExpression; final span:SourceSpan;}
+typedef AstMapEntry = {
+	final key:AstExpression;
+	final value:AstExpression;
+	final span:SourceSpan;
+}
 
 /** One guarded arm of a switch used as an expression. */
 typedef AstSwitchExpressionCase = {
@@ -275,7 +311,8 @@ enum AstStatement {
 	ForIn(keyName:String, valueName:Null<String>, iterable:AstExpression, body:Array<AstStatement>, span:SourceSpan);
 	Break(span:SourceSpan);
 	Continue(span:SourceSpan);
-	Switch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan);
+	Switch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>, hasDefault:Bool,
+		span:SourceSpan);
 	Increment(name:String, delta:Int, span:SourceSpan);
 	Expression(expression:AstExpression, span:SourceSpan);
 }
@@ -313,7 +350,11 @@ typedef AstFunction = {
 }
 
 /** Upper bound attached to a generic function or method parameter. */
-typedef AstTypeConstraint = {final parameter:String; final type:AstType; final span:SourceSpan;}
+typedef AstTypeConstraint = {
+	final parameter:String;
+	final type:AstType;
+	final span:SourceSpan;
+}
 
 /** Complete parsed module, grouped by declaration kind for semantic indexing. */
 typedef AstProgram = {

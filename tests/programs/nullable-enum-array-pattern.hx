@@ -59,8 +59,14 @@ function main():Int {
 			if (storage(read, write) != expected)
 				return 1;
 		}
-	if (statement([null, null]) != 3 || statement([null, Set]) != 2 || statement([Get, null]) != 1 || statement([Default, null]) != 4
-		|| statement([Default, Default]) != 5)
+	if (statement([null, null]) != 3 || statement([null, Set]) != 2 || statement([Get, null]) != 1 || statement([
+		Default,
+		null
+	]) != 4
+		|| statement([
+			Default,
+			Default
+		]) != 5)
 		return 2;
 	if (payload(Wrap(null)) != 3
 		|| payload(Wrap(Leaf(2))) != 1
@@ -72,8 +78,14 @@ function main():Int {
 	if (tuplePayload([null, null]) != 30
 		|| tuplePayload([null, Leaf(2)]) != 12
 		|| tuplePayload([Wrap(null), Leaf(3)]) != 13
-		|| tuplePayload([Wrap(Leaf(4)), null]) != 4
-		|| tuplePayload([Wrap(Leaf(0)), null]) != 32)
+		|| tuplePayload([
+			Wrap(Leaf(4)),
+			null
+		]) != 4
+			|| tuplePayload([
+				Wrap(Leaf(0)),
+				null
+			]) != 32)
 		return 5;
 	return 42;
 }

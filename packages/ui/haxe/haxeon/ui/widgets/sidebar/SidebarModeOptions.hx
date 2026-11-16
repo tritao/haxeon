@@ -6,6 +6,8 @@ class SidebarModeOptions {
 	public final order:Int;
 	public final visible:Bool;
 	public function new(label:String, order:Int = 0, visible:Bool = true) {
-		this.label = label; this.order = order; this.visible = visible;
+		this.label = label;
+		this.order = order;
+		this.visible = visible;
 	}
 }

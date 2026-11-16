@@ -147,7 +147,8 @@ class CompilerServer {
 	}
 
 	/** A disconnected requester cancels only its own transaction, before the next request is accepted. */
-	static function compileConnected(client:Null<Socket>, arguments:Array<String>, session:CompilerSession):compiler.Compiler.CompileResult {
+	static function compileConnected(client:Null<Socket>, arguments:Array<String>,
+			session:CompilerSession):compiler.Compiler.CompileResult {
 		var cancellation = new CancellationToken(), done = new Lock();
 		var result:compiler.Compiler.CompileResult = null;
 		var failure:Dynamic = null;
@@ -209,8 +210,8 @@ class CompilerServer {
 					if (requester != null)
 						send(requester, {message: message});
 				}, session, cancellation, publishEarly)
-			catch (error:Dynamic)
-				failure = error;
+					catch (error:Dynamic)
+					failure = error;
 			if (counting)
 				AllocationCensus.end();
 			done.release();

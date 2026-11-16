@@ -16,7 +16,8 @@ class EnumRuntimeType {
 		return switch type {
 			case TNullable(inner), TAbstract(_, _, inner): name(inner);
 			case TInstance(NominalKind.Enum, name, arguments):
-				arguments.length == 0 ? name : name + SEPARATOR + Sha256.encode(SemanticSignature.type(type)).substr(0, HASH_LENGTH);
+				arguments.length == 0 ? name : name + SEPARATOR + Sha256.encode(SemanticSignature.type(type)).substr(0,
+					HASH_LENGTH);
 			default: null;
 		};
 

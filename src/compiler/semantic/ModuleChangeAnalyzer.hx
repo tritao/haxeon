@@ -23,7 +23,8 @@ typedef ModuleChangeAnalysis = {
 
 /** Classifies source changes without publishing candidate fingerprints to a module. */
 class ModuleChangeAnalyzer {
-	public static function analyze(state:ModuleState, entry:String, typeAliases:AliasTable, types:TypeRegistry, compiledOnce:Bool):ModuleChangeAnalysis {
+	public static function analyze(state:ModuleState, entry:String, typeAliases:AliasTable, types:TypeRegistry,
+			compiledOnce:Bool):ModuleChangeAnalysis {
 		var ast = state.parsedAst(),
 			bodyChanged:Map<String, Bool> = [],
 			signatureChanged:Map<String, Bool> = [],
@@ -52,8 +53,8 @@ class ModuleChangeAnalyzer {
 		for (alias in ast.aliases) {
 			var aliasName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, alias.name),
 				signature = aliasName
-					+
-					(alias.typeParameters.length == 0 ? "" : '<${SemanticSignature.parsedParameters(alias.typeParameters, alias.typeConstraints, ast.aliases)}>')
+					+ (alias.typeParameters.length == 0 ? ""
+					: '<${SemanticSignature.parsedParameters(alias.typeParameters, alias.typeConstraints, ast.aliases)}>')
 					+ "="
 					+ SemanticSignature.parsed(alias.type, ast.aliases);
 			aliases.set(aliasName, signature);
@@ -67,20 +68,23 @@ class ModuleChangeAnalyzer {
 		var enums:Map<String, String> = [];
 		for (enumDecl in ast.enums) {
 			var enumName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, enumDecl.name),
-				signature = enumName + "[" + fieldMetadataFingerprint(state, enumDecl.metadata) + "]:" +
-					(enumDecl.conformances == null ? "" : [for (type in enumDecl.conformances) SemanticSignature.parsed(type, ast.aliases)].join(",")) + "{" + [
-					for (caseDecl in enumDecl.cases)
-						caseDecl.name
-						+ "["
-						+ fieldMetadataFingerprint(state, caseDecl.metadata)
-						+ "]("
-						+ [
-							for (param in caseDecl.params)
-								(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
-						].join(",") + ")"].join(";") + "}";
+				signature = enumName + "[" + fieldMetadataFingerprint(state,
+					enumDecl.metadata) + "]:" + (enumDecl.conformances == null
+					? "" : [for (type in enumDecl.conformances) SemanticSignature.parsed(type, ast.aliases)].join(","))
+					+ "{" + [
+						for (caseDecl in enumDecl.cases)
+							caseDecl.name
+							+ "["
+							+ fieldMetadataFingerprint(state, caseDecl.metadata)
+							+ "]("
+							+ [
+								for (param in caseDecl.params)
+									(param.optional ? "?" : "") + SemanticSignature.parsed(param.type, ast.aliases)
+							].join(",") + ")"
+						].join(";") + "}";
 			if (enumDecl.methods != null) for (method in enumDecl.methods)
 				signature += ";method:" + method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
-					+ ":" + sourceFingerprint(state, method.span);
+				+ ":" + sourceFingerprint(state, method.span);
 			enums.set(enumName, signature);
 			if (state.enumFingerprints.get(enumName) != signature)
 				structuralChanged.set('enum:$enumName', true);
@@ -93,8 +97,8 @@ class ModuleChangeAnalyzer {
 		for (abstractDecl in ast.abstracts) {
 			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
 				signature = abstractName
-					+
-					(abstractDecl.typeParameters.length == 0 ? "" : '<${SemanticSignature.parsedParameters(abstractDecl.typeParameters, abstractDecl.typeConstraints, ast.aliases)}>')
+					+ (abstractDecl.typeParameters.length == 0 ? ""
+					: '<${SemanticSignature.parsedParameters(abstractDecl.typeParameters, abstractDecl.typeConstraints, ast.aliases)}>')
 					+ "("
 					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
 					+ ")"
@@ -102,7 +106,8 @@ class ModuleChangeAnalyzer {
 					+ [
 						for (type in abstractDecl.fromTypes)
 							SemanticSignature.parsed(type, ast.aliases)
-					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
+					].join(",") + " to "
+						+ [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
 			abstracts.set(abstractName, signature);
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);
@@ -118,11 +123,13 @@ class ModuleChangeAnalyzer {
 					+ [
 						for (type in abstractDecl.fromTypes)
 							SemanticSignature.parsed(type, ast.aliases)
-					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",") + " {" + [
-						for (value in abstractDecl.values)
-							value.name + "=" + state.source.slice(value.span.start, value.span.end)
-					].join(";") + "} implements " + (abstractDecl.conformances == null ? "" :
-					[for (type in abstractDecl.conformances) SemanticSignature.parsed(type, ast.aliases)].join(","));
+					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type,
+						ast.aliases)].join(",") + " {" + [
+							for (value in abstractDecl.values)
+								value.name + "=" + state.source.slice(value.span.start, value.span.end)
+						].join(";") + "} implements " + (abstractDecl.conformances == null
+							? "" : [for (type in abstractDecl.conformances) SemanticSignature.parsed(type,
+							ast.aliases)].join(","));
 			abstracts.set(abstractName, signature);
 			if (state.abstractFingerprints.get(abstractName) != signature)
 				structuralChanged.set('abstract:$abstractName', true);
@@ -134,7 +141,8 @@ class ModuleChangeAnalyzer {
 		var ownerConstraints:Map<String, String> = [];
 		for (classDecl in ast.classes) {
 			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name),
-				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints, ast.aliases),
+				signature = SemanticSignature.parsedParameters(classDecl.typeParameters, classDecl.typeConstraints,
+					ast.aliases),
 				isValue = classDecl.isStruct == true,
 				isNativeValue = false;
 			for (metadata in classDecl.metadata)
@@ -146,7 +154,8 @@ class ModuleChangeAnalyzer {
 							isNativeValue = true;
 						case _:
 					}
-			signature += classDecl.isStruct == true ? ":struct" : isNativeValue ? ":native-value" : isValue ? ":value" : ":object";
+			signature += classDecl.isStruct == true ? ":struct" : isNativeValue ? ":native-value" : isValue
+				? ":value" : ":object";
 			signature += ":metadata:" + fieldMetadataFingerprint(state, classDecl.metadata);
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
@@ -154,7 +163,8 @@ class ModuleChangeAnalyzer {
 		}
 		for (interfaceDecl in ast.interfaces) {
 			var name = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, interfaceDecl.name),
-				signature = SemanticSignature.parsedParameters(interfaceDecl.typeParameters, interfaceDecl.typeConstraints, ast.aliases);
+				signature = SemanticSignature.parsedParameters(interfaceDecl.typeParameters,
+					interfaceDecl.typeConstraints, ast.aliases);
 			ownerConstraints.set(name, signature);
 			if (state.ownerConstraintFingerprints.get(name) != signature)
 				structuralChanged.set('constraint:$name', true);
@@ -232,14 +242,14 @@ class ModuleChangeAnalyzer {
 				baseName:Null<String> = null;
 			if (base != null)
 				baseName = SemanticSignature.parsed(base, ast.aliases);
-			var classFields:Array<compiler.types.TypeRegistry.DeclaredField> = [
-				for (field in classDecl.fields)
-					{name: field.name, type: SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)}
-			],
-				classMethods:Array<compiler.types.TypeRegistry.DeclaredMethod> = [
-					for (method in classDecl.methods)
-						{name: method.name, signature: SemanticSignature.parsedFunction(method, ast.aliases)}
-				];
+			var classFields:Array<compiler.types.TypeRegistry.DeclaredField> = [for (field in classDecl.fields)
+				{
+					name:field.name, type:SemanticSignature.parsed(FieldInference.parsedType(field), ast.aliases)
+				}],
+					classMethods:Array<compiler.types.TypeRegistry.DeclaredMethod> = [for (method in classDecl.methods)
+					{
+				name:method.name, signature:SemanticSignature.parsedFunction(method, ast.aliases)
+			}];
 			var isValue = classDecl.isStruct == true, isNativeValue = false;
 			for (metadata in classDecl.metadata)
 				if (metadata.name == "value")
@@ -252,11 +262,13 @@ class ModuleChangeAnalyzer {
 					}
 			var wireFieldFingerprint = [
 				for (field in classDecl.fields)
-					field.name + "=" + (field.isPublic == true ? "public:" : "private:") + fieldMetadataFingerprint(state, field.metadata)
+					field.name + "=" + (field.isPublic == true ? "public:" : "private:")
+					+ fieldMetadataFingerprint(state, field.metadata)
 			].join(";");
 			wireFieldFingerprint += ":field-defaults:" + [
 				for (field in classDecl.fields)
-					if (!field.isStatic) field.name + "=" + (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
+					if (!field.isStatic) field.name + "="
+					+ (field.initializer == null ? "-" : sourceFingerprint(state, field.span))
 			].join(";");
 			var sourceKind = classDecl.isStruct == true ? "struct" : isNativeValue ? "native-value" : "class",
 				declaredInterfaces = [
@@ -268,7 +280,8 @@ class ModuleChangeAnalyzer {
 			wireFields.set(className, wireFieldFingerprint);
 			if (state.wireFieldFingerprints.get(className) != wireFieldFingerprint)
 				structuralChanged.set(className, true);
-			var typeResult = types.declareClass(className, baseName, classFields, classMethods, isValue && !isNativeValue);
+			var typeResult = types.declareClass(className, baseName, classFields, classMethods,
+				isValue && !isNativeValue);
 			if (compiledOnce && typeResult.compatibility != Compatible)
 				structuralChanged.set(className, true);
 			for (method in classDecl.methods) {
@@ -276,7 +289,8 @@ class ModuleChangeAnalyzer {
 					canonical = localName,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases),
 					body = sourceFingerprint(state,
-						method.span, classDecl.typeParameters.length > 0 || method.typeParameters != null && method.typeParameters.length > 0);
+						method.span, classDecl.typeParameters.length > 0 || method.typeParameters != null
+						&& method.typeParameters.length > 0);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
@@ -291,7 +305,8 @@ class ModuleChangeAnalyzer {
 				var localName = abstractName + "." + method.name,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases),
 					body = sourceFingerprint(state,
-						method.span, abstractDecl.typeParameters.length > 0 || method.typeParameters != null && method.typeParameters.length > 0);
+						method.span, abstractDecl.typeParameters.length > 0 || method.typeParameters != null
+						&& method.typeParameters.length > 0);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
@@ -325,7 +340,8 @@ class ModuleChangeAnalyzer {
 		};
 	}
 
-	static function fieldMetadataFingerprint(state:compiler.modules.ModuleState, metadata:Array<compiler.syntax.Ast.AstMetadata>):String
+	static function fieldMetadataFingerprint(state:compiler.modules.ModuleState,
+			metadata:Array<compiler.syntax.Ast.AstMetadata>):String
 		return [for (entry in metadata) state.source.slice(entry.span.start, entry.span.end)].join("|");
 
 	/**
@@ -333,7 +349,9 @@ class ModuleChangeAnalyzer {
 	 * its specializations are kept from one build to the next while the function is unchanged, and they carry offsets in
 	 * their debug mappings and in the names of their lambdas, so a function that only moved along its line must not keep them.
 	 */
-	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan, generic:Bool = false):String
-		return state.source.path + ":" + Std.string(state.source.lineAt(span.start)) + (generic ? "@" + Std.string(span.start) : "") + ":"
+	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.Source.SourceSpan,
+			generic:Bool = false):String
+		return state.source.path + ":" + Std.string(state.source.lineAt(span.start))
+			+ (generic ? "@" + Std.string(span.start) : "") + ":"
 			+ state.source.slice(span.start, span.end);
 }

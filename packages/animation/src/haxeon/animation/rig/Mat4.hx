@@ -16,7 +16,24 @@ class Mat4 {
 	/** A rigid frame from an origin and unit x and y axes; z completes a right-handed basis. */
 	public static function frame(origin:Array<Float>, x:Array<Float>, y:Array<Float>):Array<Float> {
 		var z = cross(x, y);
-		return [x[0], x[1], x[2], 0.0, y[0], y[1], y[2], 0.0, z[0], z[1], z[2], 0.0, origin[0], origin[1], origin[2], 1.0];
+		return [
+			x[0],
+			x[1],
+			x[2],
+			0.0,
+			y[0],
+			y[1],
+			y[2],
+			0.0,
+			z[0],
+			z[1],
+			z[2],
+			0.0,
+			origin[0],
+			origin[1],
+			origin[2],
+			1.0
+		];
 	}
 
 	public static function multiply(a:Array<Float>, b:Array<Float>):Array<Float> {

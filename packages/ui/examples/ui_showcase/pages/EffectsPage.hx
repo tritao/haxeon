@@ -56,10 +56,10 @@ class EffectsPage {
 			"Compose blur, color, shadow, mask, and backdrop passes through the Haxe stylesheet.");
 		items.push(explorer.keyed("effects-intro", explorer.panel("effects-intro-panel", [
 			explorer.keyed("heading", explorer.heading("Effects are part of the visual contract")),
-			explorer.keyed("copy", explorer.caption(
-			"Each preview is a normal CanvasView. The application stylesheet resolves its effect chain, the compositor allocates only the required intermediate targets, and Inspect exposes the chain, ink overflow, and estimated pass count.")),
-			explorer.keyed("hint", explorer.caption(
-			"Resize the window or inspect a preview to see the effect bounds follow the resolved geometry."))
+			explorer.keyed("copy",
+				explorer.caption("Each preview is a normal CanvasView. The application stylesheet resolves its effect chain, the compositor allocates only the required intermediate targets, and Inspect exposes the chain, ink overflow, and estimated pass count.")),
+			explorer.keyed("hint",
+				explorer.caption("Resize the window or inspect a preview to see the effect bounds follow the resolved geometry."))
 		])));
 
 		items.push(explorer.keyed("effects-basic", explorer.panel("effects-basic-panel", [
@@ -68,21 +68,23 @@ class EffectsPage {
 			explorer.keyed("samples", new Row("effects-basic-row", [
 				explorer.keyed("blur", sample(explorer, "effects-blur", "Blur", "blur(5)",
 					"Softens the entire rendered source.")),
-				explorer.keyed("color", sample(explorer, "effects-color", "Color matrix", "brightness · contrast · saturate · hue",
+				explorer.keyed("color",
+					sample(explorer, "effects-color", "Color matrix", "brightness · contrast · saturate · hue",
 					"Color adjustments collapse into one compositor matrix.")),
 				explorer.keyed("shadow", sample(explorer, "effects-shadow", "Drop shadow", "drop-shadow(0, 8, 7)",
 					"Preserves the source while expanding its ink overflow."))
-		], explorer.rowStyle(12.0)))
+			], explorer.rowStyle(12.0)))
 		])));
 
 		items.push(explorer.keyed("effects-composition", explorer.panel("effects-composition-panel", [
 			explorer.keyed("heading", explorer.heading("Masks and composition input")),
-			explorer.keyed("copy", explorer.caption("Masks constrain source alpha. Backdrop effects remain registered in the style model while their live preview is temporarily disabled.")),
+			explorer.keyed("copy",
+				explorer.caption("Masks constrain source alpha. Backdrop effects remain registered in the style model while their live preview is temporarily disabled.")),
 			explorer.keyed("samples", new Row("effects-composition-row", [
 				explorer.keyed("mask", sample(explorer, "effects-mask", "Gradient mask", "mask(linear-gradient)",
 					"The source fades toward one edge while retaining its shadow.")),
-			explorer.keyed("backdrop-disabled", disabledSample(explorer))
-		], explorer.rowStyle(12.0)))
+				explorer.keyed("backdrop-disabled", disabledSample(explorer))
+			], explorer.rowStyle(12.0)))
 		])));
 	}
 
@@ -94,13 +96,13 @@ class EffectsPage {
 		return new Column("effects-backdrop-disabled-card", [
 			explorer.keyed("title", explorer.label("Backdrop blur")),
 			explorer.keyed("state", explorer.caption("Temporarily disabled in the live preview")),
-			explorer.keyed("description", explorer.caption(
-				"The Haxe style rule remains registered for inspection while the native custom-paint pass dependency is finalized."))
+			explorer.keyed("description",
+				explorer.caption("The Haxe style rule remains registered for inspection while the native custom-paint pass dependency is finalized."))
 		], style);
 	}
 
 	static function sample(explorer:UiExplorer, key:String, title:String,
-		description:String, caption:String):Column {
+			description:String, caption:String):Column {
 		var style = explorer.panelStyle();
 		style.width = LayoutAxis.grow();
 		style.padding = new Insets(12.0, 12.0, 12.0, 12.0);

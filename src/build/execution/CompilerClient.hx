@@ -9,7 +9,10 @@ import sys.io.File;
 import sys.net.Host;
 import sys.net.Socket;
 
-private typedef Connection = {final socket:Socket; final token:String;}
+private typedef Connection = {
+	final socket:Socket;
+	final token:String;
+}
 
 /**
  * Starts/reuses a private project worker. Unsupported hosts retain the one-shot compiler. Workers of every
@@ -26,12 +29,17 @@ class CompilerClient {
 	 * The version that names a worker. Without a session it is fingerprinted on every call; with one it is computed once, and
 	 * logged then, so a worker left stale by edits to the compiler sources can be told apart from a fresh one.
 	 */
-	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String, profilePort:Null<String>,
+	public static function workerVersion(command:String, compilerSource:String, home:String, buildRoot:String,
+			profilePort:Null<String>,
 			?session:build.BuildSession):String {
-		var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption() + (profilePort == null ? "" : ":profile:" +
-			profilePort)), [],
-			build.CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]), [], "",
-			ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home, new Map()));
+		var identity = new ExecutionAction(new ActionId("compiler-session-v8:inline=" + inlineOption()
+			+ (profilePort == null ? "" : ":profile:" + profilePort)), [],
+			build.CompilerSources.roots(compilerSource).concat([Path.join([
+				home,
+				"stdlib"
+			])]), [], "",
+				ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
+				new Map()));
 		if (session == null)
 			return ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []);
 		var memoKey = [identity.id.key(), command, compilerSource, home, buildRoot, Sys.systemName()].join("\n");
@@ -42,18 +50,21 @@ class CompilerClient {
 		});
 	}
 
-	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String, projectRoot:String,
+	public static function run(command:String, compilerSource:String, arguments:Array<String>, home:String,
+			buildRoot:String, projectRoot:String,
 			fallback:Void->Int, ?session:build.BuildSession, background:Bool = false):Int {
 		// On Windows the interpreted CLI (scripts/haxeon.cmd) starts a worker but never connects to it, so only the
 		// compiled CLI uses one there.
 		if (ProcessRunner.environmentValue("HAXEON_COMPILER_SERVER") == "0"
-			|| (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows") #if eval || Sys.systemName() == "Windows" #end)
+			|| (Sys.systemName() != "Linux" && Sys.systemName() != "Mac"
+			&& Sys.systemName() != "Windows") #if eval || Sys.systemName() == "Windows" #end)
 			return fallback();
 		var connection:Null<Connection> = null;
 		try {
 			var profilePort = ProcessRunner.environmentValue("HAXEON_COMPILER_PROFILE_PORT");
 			if (profilePort != null
-				&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1 || Std.parseInt(profilePort) > 65535))
+				&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1
+				|| Std.parseInt(profilePort) > 65535))
 				throw "HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535";
 			var directory = preparedSessionDirectory();
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
@@ -95,17 +106,16 @@ class CompilerClient {
 							+ " && export "
 							+ libraryVariable
 							+ "="
-							+
-							SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
-								// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
-								// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
-							+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
-							+ detach
-							+ "nohup "
-							+ launch
-							+ " > "
-							+ SysTools.quoteUnixArg(logPath)
-							+ " 2>&1 < /dev/null &"]);
+							+ SysTools.quoteUnixArg(libraryPath) // A resident compiler allocates about 90 GB while compiling an app and keeps ~1.5 GB live. Collecting
+					// once the heap has grown by 40% of itself, not HashLink's 20%, runs a third as many major collections
+					// (cold app compile: 12 s of GC to 5 s) for about 0.5 GB more resident memory. An explicit setting wins.
+					+ " && export HL_GC_MARK_THRESHOLD=\"${HL_GC_MARK_THRESHOLD:-0.4}\" && "
+						+ detach
+						+ "nohup "
+						+ launch
+						+ " > "
+						+ SysTools.quoteUnixArg(logPath)
+						+ " 2>&1 < /dev/null &"]);
 					if (status != 0)
 						throw "Could not start compiler worker";
 				}
@@ -123,7 +133,9 @@ class CompilerClient {
 				session.workerPings.set(statePath, Sys.time());
 			var socket = connection.socket;
 			socket.setTimeout(600);
-			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {token: connection.token, arguments: arguments, background: true} : {
+			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {
+				token:connection.token, arguments:arguments, background:true
+			} : {
 				token: connection.token,
 				arguments: arguments
 			}));
@@ -206,7 +218,8 @@ class CompilerClient {
 		var socket:Null<Socket> = null;
 		try {
 			var state:Dynamic = Json.parse(File.getContent(statePath));
-			if (!Std.isOfType(state.port, Int) || state.port <= 0 || state.port > 65535 || !Std.isOfType(state.token, String) || state.token.length != 64)
+			if (!Std.isOfType(state.port, Int) || state.port <= 0 || state.port > 65535
+				|| !Std.isOfType(state.token, String) || state.token.length != 64)
 				return null;
 			socket = new Socket();
 			socket.setTimeout(0.2);
@@ -231,7 +244,8 @@ class CompilerClient {
 	 * runs. Windows has no touch, so there an unused program is removed by age; the current version's program and any a
 	 * running worker uses are always kept.
 	 */
-	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String, mainClass:String):Void {
+	static function ensureArtifact(command:String, compilerSource:String, artifact:String, home:String,
+			mainClass:String):Void {
 		#if (target.threaded && !eval)
 		artifactMutex.acquire();
 		#end
@@ -242,7 +256,12 @@ class CompilerClient {
 			} else {
 				// Build beside the target and rename, so another Haxeon process never sees a partial file.
 				var temporary = artifact + ".tmp." + Std.string(Std.random(1000000)),
-					compileStatus = ProcessRunner.run(command, build.CompilerSources.classPath(compilerSource).concat(["-hl", temporary, "-main", mainClass]), home,
+					compileStatus = ProcessRunner.run(command, build.CompilerSources.classPath(compilerSource).concat([
+						"-hl",
+						temporary,
+						"-main",
+						mainClass
+					]), home,
 						new Map());
 				if (compileStatus != 0)
 					throw "Could not compile " + mainClass;
@@ -263,7 +282,8 @@ class CompilerClient {
 	 * Compiles once without a resident worker by running the compiler as a HashLink program, which is several
 	 * times faster than interpreting it. `fallback` (the interpreter) remains for hosts without that path.
 	 */
-	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String, buildRoot:String,
+	public static function runOneShot(command:String, compilerSource:String, arguments:Array<String>, home:String,
+			buildRoot:String,
 			environment:Map<String, String>, fallback:Void->Int):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac")
 			return fallback();
@@ -274,8 +294,12 @@ class CompilerClient {
 				throw "missing " + hashlink;
 			var directory = preparedSessionDirectory(),
 				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [],
-					build.CompilerSources.roots(compilerSource).concat([Path.join([home, "stdlib"])]), [], "",
-					ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home, new Map()));
+					build.CompilerSources.roots(compilerSource).concat([Path.join([
+						home,
+						"stdlib"
+					])]), [], "",
+						ExecutionAction.ActionKind.Process(command, build.CompilerSources.roots(compilerSource), home,
+						new Map()));
 			artifact = Path.join([
 				directory,
 				ActionFingerprint.compute(identity, buildRoot, Sys.systemName(), []) + ".hl"
@@ -292,7 +316,8 @@ class CompilerClient {
 		Windows has no setsid or nohup. `start /b` returns at once, and redirecting all three streams
 		keeps the worker from holding the build's pipes open.
 	**/
-	static function startWindowsWorker(home:String, hashlink:String, workerArtifact:String, statePath:String, logPath:String, profilePort:Null<String>):Int {
+	static function startWindowsWorker(home:String, hashlink:String, workerArtifact:String, statePath:String,
+			logPath:String, profilePort:Null<String>):Int {
 		var quote = (value:String) -> '"' + value + '"';
 		var path = [
 			Path.join([home, "out"]),
@@ -323,11 +348,18 @@ class CompilerClient {
 		if (Sys.systemName() != "Windows") {
 			if (Sys.command("chmod", ["700", directory]) != 0)
 				throw "Could not make the compiler session directory private";
-		} else if (ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR") != null && ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR").length > 0) {
+		} else if (ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR") != null
+			&& ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR").length > 0) {
 			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
 			// this user's access, as chmod 700 does.
 			var user = ProcessRunner.environmentValue("USERNAME");
-			if (user == null || Sys.command("icacls", [directory, "/inheritance:r", "/grant:r", user + ":(OI)(CI)F", "/q"]) != 0)
+			if (user == null || Sys.command("icacls", [
+				directory,
+				"/inheritance:r",
+				"/grant:r",
+				user + ":(OI)(CI)F",
+				"/q"
+			]) != 0)
 				throw "Could not make the compiler session directory private";
 		}
 		return directory;
@@ -343,7 +375,10 @@ class CompilerClient {
 			return Path.join([local, "haxeon", "compiler"]);
 		var cache = ProcessRunner.environmentValue("XDG_CACHE_HOME");
 		if (cache == null || cache.length == 0)
-			cache = Path.join([ProcessRunner.environmentValue(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME"), ".cache"]);
+			cache = Path.join([
+				ProcessRunner.environmentValue(Sys.systemName() == "Windows" ? "USERPROFILE" : "HOME"),
+				".cache"
+			]);
 		return Path.join([cache, "haxeon", "compiler"]);
 	}
 
@@ -386,7 +421,11 @@ class CompilerClient {
 				continue;
 			}
 			try
-				resident.push({statePath: statePath, modified: FileSystem.stat(statePath).mtime.getTime(), memory: memory})
+				resident.push({
+					statePath: statePath,
+					modified: FileSystem.stat(statePath).mtime.getTime(),
+					memory: memory
+				})
 			catch (_:Dynamic) {}
 		}
 		resident.sort((left, right) -> left.modified < right.modified ? -1 : (left.modified > right.modified ? 1 : 0));

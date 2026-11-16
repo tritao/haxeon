@@ -12,7 +12,8 @@ class EnumVisibilityMain {
 
 		var samePackage = new Compiler();
 		samePackage.addSourceRoot("tests/compiler");
-		samePackage.update("samepackage/SamePackageLookupMain.hx", sys.io.File.getContent("tests/compiler/samepackage/SamePackageLookupMain.hx"));
+		samePackage.update("samepackage/SamePackageLookupMain.hx",
+			sys.io.File.getContent("tests/compiler/samepackage/SamePackageLookupMain.hx"));
 		samePackage.analyze("samepackage.SamePackageLookupMain");
 		Sys.println("PASS: same-package constructor loads without an import");
 		var compiler = new Compiler();
@@ -69,7 +70,8 @@ class EnumVisibilityMain {
 		Sys.println("PASS: importing a module exposes the constructors of enums declared in it");
 
 		var typeTest = new Compiler();
-		typeTest.update("foreign/Value.hx", "package foreign; enum Value { Bool(value:Bool); Int(value:Int); String(value:String); }");
+		typeTest.update("foreign/Value.hx",
+			"package foreign; enum Value { Bool(value:Bool); Int(value:Int); String(value:String); }");
 		typeTest.update("Main.hx",
 			'import foreign.Value; class Main { static function main():Int { var value:Dynamic = 1; return Std.isOfType(value, Int) && !Std.isOfType(value, Bool) && !Std.isOfType(value, String) ? 42 : 0; } }');
 		typeTest.analyze("Main");

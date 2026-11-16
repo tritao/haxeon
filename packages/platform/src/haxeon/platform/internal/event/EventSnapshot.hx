@@ -16,7 +16,7 @@ class EventSnapshot {
 	public final data:haxe.io.Bytes;
 
 	public function new(kind:EventKind, source:Handle, request:haxe.Int64, result:Result,
-		flags:Int, dataCount:Int, data:haxe.io.Bytes) {
+			flags:Int, dataCount:Int, data:haxe.io.Bytes) {
 		this.kind = kind;
 		this.source = source;
 		this.request = request;

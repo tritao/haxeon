@@ -204,7 +204,8 @@ class IrInitializationCalls {
 					case MethodCall(_, receiver, method, arguments, _):
 						for (callee in methodTargets(receiver, method))
 							for (argument in 0...arguments.length)
-								if (aliases.exists(arguments[argument].id) && invokesArgument(callee, argument + 1, seen))
+								if (aliases.exists(arguments[argument].id)
+									&& invokesArgument(callee, argument + 1, seen))
 									found = true;
 					case _:
 				}

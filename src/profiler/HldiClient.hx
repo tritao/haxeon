@@ -157,7 +157,8 @@ class HldiClient {
 				pushed.push(new HldiFrame(frame.type, frame.flags, frame.payload));
 				continue;
 			}
-			if (frame.service != service || frame.type != type || frame.requestId != id || frame.flags & FLAG_RESPONSE == 0)
+			if (frame.service != service || frame.type != type || frame.requestId != id
+				|| frame.flags & FLAG_RESPONSE == 0)
 				throw 'Mismatched HLDI response for request $id';
 			if (frame.flags & FLAG_ERROR != 0)
 				throw 'HLDI request $id failed';
@@ -165,12 +166,12 @@ class HldiClient {
 		}
 	}
 
-	function readFrame():{
-		service:Int,
-		type:Int,
-		flags:Int,
-		requestId:Int,
-		payload:Bytes
+	function readFrame(): {
+		service: Int,
+		type: Int,
+		flags: Int,
+		requestId: Int,
+		payload: Bytes
 	} {
 		var reply = new HldiReader(readExact(16)),
 			service = reply.u8(),

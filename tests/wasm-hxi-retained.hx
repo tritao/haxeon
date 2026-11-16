@@ -58,7 +58,10 @@ function main():Int {
 			|| Retained.check_label(holder.label) != 42
 			|| Retained.check_options(holder.options) != 42
 			|| Retained.check_container(holder.container, holder.container.get_value()) != 42
-			|| Retained.check_paths(["alpha", "βeta"]) != 42)
+			|| Retained.check_paths([
+				"alpha",
+				"βeta"
+			]) != 42)
 			return 1;
 		index = index + 1;
 	}

@@ -95,7 +95,8 @@ function main():Int {
 		return 11;
 	var halves = [1.5, 2.5];
 	var halvesView:Array<Dynamic> = cast halves;
-	if (halvesView.indexOf(2.5) != 1 || halvesView.indexOf("2.5") != -1 || !halvesView.remove(1.5) || halves.length != 1 || halves[0] != 2.5)
+	if (halvesView.indexOf(2.5) != 1 || halvesView.indexOf("2.5") != -1 || !halvesView.remove(1.5) || halves.length != 1
+		|| halves[0] != 2.5)
 		return 12;
 	var other:Array<Dynamic> = ["x"];
 	var mixed = grownView.concat(other);

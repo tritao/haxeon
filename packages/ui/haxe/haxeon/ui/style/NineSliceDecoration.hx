@@ -15,8 +15,7 @@ class NineSliceDecoration extends Decoration {
 
 	public function new(image:Image, left:Float, top:Float, right:Float, bottom:Float) {
 		super(DecorationKind.NineSlice);
-		if (image == null || image.isDisposed() || left < 0.0 || top < 0.0 ||
-			right < 0.0 || bottom < 0.0)
+		if (image == null || image.isDisposed() || left < 0.0 || top < 0.0 || right < 0.0 || bottom < 0.0)
 			throw "Nine-slice decorations require a live image and non-negative insets";
 		this.image = image;
 		this.left = left;
@@ -44,18 +43,24 @@ class NineSliceDecoration extends Decoration {
 			image.height - sourceTop - sourceBottom, sourceBottom];
 		var destinationX:Array<Float> = [0.0, destinationLeft, geometry.width - destinationRight];
 		var destinationY:Array<Float> = [0.0, destinationTop, geometry.height - destinationBottom];
-		var destinationWidth:Array<Float> = [destinationLeft,
-			geometry.width - destinationLeft - destinationRight, destinationRight];
-		var destinationHeight:Array<Float> = [destinationTop,
-			geometry.height - destinationTop - destinationBottom, destinationBottom];
+		var destinationWidth:Array<Float> = [
+			destinationLeft,
+			geometry.width - destinationLeft - destinationRight,
+			destinationRight
+		];
+		var destinationHeight:Array<Float> = [
+			destinationTop,
+			geometry.height - destinationTop - destinationBottom,
+			destinationBottom
+		];
 		for (column in 0...3)
 			for (row in 0...3) {
 				var sourceWidthValue = sourceWidth[column];
 				var sourceHeightValue = sourceHeight[row];
 				var destinationWidthValue = destinationWidth[column];
 				var destinationHeightValue = destinationHeight[row];
-				if (sourceWidthValue <= 0.0 || sourceHeightValue <= 0.0 ||
-					destinationWidthValue <= 0.0 || destinationHeightValue <= 0.0)
+				if (sourceWidthValue <= 0.0 || sourceHeightValue <= 0.0 || destinationWidthValue <= 0.0
+					|| destinationHeightValue <= 0.0)
 					continue;
 				var sourceOriginX = sourceX[column];
 				var sourceOriginY = sourceY[row];
@@ -63,14 +68,12 @@ class NineSliceDecoration extends Decoration {
 				var destinationOriginY = destinationY[row];
 				canvas.withClip(new Rect(destinationOriginX, destinationOriginY,
 					destinationWidthValue, destinationHeightValue), function(target) {
-					target.translate(destinationOriginX - sourceOriginX *
-						destinationWidthValue / sourceWidthValue,
-						destinationOriginY - sourceOriginY *
-						destinationHeightValue / sourceHeightValue);
-					target.scale(destinationWidthValue / sourceWidthValue,
-						destinationHeightValue / sourceHeightValue);
-					target.drawImage(image, new Rect(0.0, 0.0, image.width, image.height));
-				});
+						target.translate(destinationOriginX - sourceOriginX * destinationWidthValue / sourceWidthValue,
+							destinationOriginY - sourceOriginY * destinationHeightValue / sourceHeightValue);
+						target.scale(destinationWidthValue / sourceWidthValue,
+							destinationHeightValue / sourceHeightValue);
+						target.drawImage(image, new Rect(0.0, 0.0, image.width, image.height));
+					});
 			}
 	}
 
@@ -81,8 +84,8 @@ class NineSliceDecoration extends Decoration {
 		if (other == null || other.kind != kind)
 			return false;
 		var value:NineSliceDecoration = cast other;
-		return image == value.image && left == value.left && top == value.top &&
-			right == value.right && bottom == value.bottom;
+		return image == value.image && left == value.left && top == value.top && right == value.right
+			&& bottom == value.bottom;
 	}
 
 	override public function interpolate(other:Decoration, amount:Float):Decoration {

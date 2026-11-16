@@ -28,13 +28,15 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 				else if (!FileSystem.isDirectory(destination))
 					throw 'Registry cache entry for "$packageId" is not a directory: $destination';
 				validateChecksum(destination, release.checksum, packageId);
-				new AcquiredSource(FileSystem.fullPath(destination), PackageSource.Registry(registry, name, release.version), release.version,
+				new AcquiredSource(FileSystem.fullPath(destination),
+					PackageSource.Registry(registry, name, release.version), release.version,
 					release.checksum, release.compatibility);
 			case _:
 				throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the registry acquirer';
 		};
 
-	function publishArchive(registryDirectory:String, name:String, version:String, checksum:String, destination:String, packageId:PackageId):Void {
+	function publishArchive(registryDirectory:String, name:String, version:String, checksum:String, destination:String,
+			packageId:PackageId):Void {
 		var archiveRoot = Path.join([registryDirectory, "downloads"]),
 			archive = Path.join([archiveRoot, '$name-$version.zip']);
 		if (!FileSystem.exists(archive))

@@ -31,7 +31,8 @@ class IrEntryPrune {
 		return Sys.getEnv("HAXEON_CHECK_REUSE") == "1";
 
 	/** The walk `run` prunes by, without removing anything: what `roots` (and `@:keep`) reach in `program`. */
-	public static function walk(program:IrProgram, roots:Array<String>, ?classDependencies:IrClassDependencies):IrWalkResult {
+	public static function walk(program:IrProgram, roots:Array<String>,
+			?classDependencies:IrClassDependencies):IrWalkResult {
 		var entries = roots.copy();
 		for (fn in program.functions)
 			if (fn.retention != Reachable)
@@ -40,7 +41,8 @@ class IrEntryPrune {
 	}
 
 	/** Prunes `program` to what `roots` (the entry's function, the static initializers, the exported functions) and `@:keep` reach. */
-	public static function run(program:IrProgram, roots:Array<String>, ?classDependencies:IrClassDependencies):IrPruneResult {
+	public static function run(program:IrProgram, roots:Array<String>,
+			?classDependencies:IrClassDependencies):IrPruneResult {
 		var removedMethods:Map<String, Bool> = [];
 		// The type-aware walk alone: a class that is only mentioned, never created, keeps none of its methods. Its reach beyond what the old walk
 		// keeps are the provider rows a dynamic site reaches over the created types (the equality helper of a struct that only `__dynamic_equal`

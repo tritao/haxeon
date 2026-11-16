@@ -132,7 +132,8 @@ class HlWriter {
 				+ entry.bytes
 				+ ',"type":'
 				+ haxe.Json.stringify(typeDescription(code.types[entry.index], code.strings))
-				+ '}'];
+				+ '}'
+		];
 		var topStrings = [
 			for (entry in stringSizes.slice(0, 30))
 				'{"index":'
@@ -141,7 +142,8 @@ class HlWriter {
 				+ entry.bytes
 				+ ',"value":'
 				+ haxe.Json.stringify(code.strings[entry.index])
-				+ '}'];
+				+ '}'
+		];
 		var uses:Map<Int, Int> = [];
 		for (fn in code.functions)
 			for (opcode in fn.opcodes)
@@ -150,7 +152,9 @@ class HlWriter {
 						uses.set(index, (uses.exists(index) ? uses.get(index) : 0) + 1);
 					default:
 				}
-		var stringUses = [for (index => count in uses) {index: index, count: count}];
+		var stringUses = [for (index => count in uses) {
+			index:index, count:count
+		}];
 		stringUses.sort((a, b) -> a.count != b.count ? b.count - a.count : a.index - b.index);
 		var topStringUses = [
 			for (entry in stringUses.slice(0, 30))
@@ -160,7 +164,8 @@ class HlWriter {
 				+ entry.count
 				+ ',"value":'
 				+ haxe.Json.stringify(code.strings[entry.index])
-				+ '}'];
+				+ '}'
+		];
 		part = new HlWriter();
 		for (global in code.globals)
 			part.writeIndex(global);
@@ -204,15 +209,21 @@ class HlWriter {
 				+ section.version
 				+ ',"payload":'
 				+ section.payload.length
-				+ '}'];
+				+ '}'
+		];
 		var scalarConstants = code.ints.length * 4 + code.floats.length * 8;
 		var header = prefix - strings - debugFiles - types - globals - natives - scalarConstants;
 		Sys.stderr()
-			.writeString('SIZE_CENSUS {"target":"hl","header":' + header + ',"scalarConstants":' + scalarConstants + ',"strings":' + strings
-				+ ',"debugFiles":' + debugFiles + ',"types":' + (types - reflection) + ',"reflectionMembers":' + reflection + ',"globals":' + globals
-				+ ',"natives":' + natives + ',"functions":' + functions + ',"functionDebug":' + functionDebug + ',"constants":' + constants
-				+ ',"debugSections":' + debugSections + ',"sections":[' + sections.join(",") + '],"topTypes":[' + topTypes.join(",") + '],"topStrings":['
-				+ topStrings.join(",") + '],"topStringUses":[' + topStringUses.join(",") + '],"topFunctionDebug":[' + topFunctionDebug.join(",") + ']}\n');
+			.writeString('SIZE_CENSUS {"target":"hl","header":' + header + ',"scalarConstants":' + scalarConstants
+			+ ',"strings":' + strings
+			+ ',"debugFiles":' + debugFiles + ',"types":' + (types - reflection) + ',"reflectionMembers":' + reflection
+			+ ',"globals":' + globals
+			+ ',"natives":' + natives + ',"functions":' + functions + ',"functionDebug":' + functionDebug
+			+ ',"constants":' + constants
+			+ ',"debugSections":' + debugSections + ',"sections":[' + sections.join(",") + '],"topTypes":['
+			+ topTypes.join(",") + '],"topStrings":['
+			+ topStrings.join(",") + '],"topStringUses":[' + topStringUses.join(",") + '],"topFunctionDebug":['
+			+ topFunctionDebug.join(",") + ']}\n');
 	}
 
 	function writePrefixWithDebug(code:HlCode, prepared:HlWriter):Void {
@@ -367,7 +378,8 @@ class HlWriter {
 	 * With a cache, a group whose `locations` array is the very one encoded last time (an unchanged function) reuses those bytes as long
 	 * as every file it names has the same index; only the changed functions are encoded.
 	 */
-	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>, ?cache:HlWriterCache):SegmentedBytes {
+	public static function encodeOpcodeSourceSpanGroups(groups:Array<HlOpcodeSourceSpanGroup>,
+			?cache:HlWriterCache):SegmentedBytes {
 		var writer = new HlWriter(),
 			files:Array<String> = [],
 			fileIndices:Map<String, Int> = [],
@@ -378,7 +390,8 @@ class HlWriter {
 				throw "Invalid HLB opcode source-span function";
 			seenFunctions.set(group.stableId, true);
 			for (location in group.locations) {
-				var validRange = location.start == -1 && location.end == -1 || location.start >= 0 && location.end >= location.start;
+				var validRange = location.start == -1 && location.end == -1 || location.start >= 0
+					&& location.end >= location.start;
 				if (location.path == ""
 					|| location.line < 1
 					|| location.column < 1
@@ -452,7 +465,8 @@ class HlWriter {
 		var writer = new HlWriter(),
 			ordered = snapshots.copy(),
 			seen:Map<Int, HaxeBytes> = [];
-		ordered.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash ? 1 : 0);
+		ordered.sort((left, right) -> left.sourceHash < right.sourceHash ? -1 : left.sourceHash > right.sourceHash
+			? 1 : 0);
 		writer.writeUnsignedIndex(ordered.length);
 		for (snapshot in ordered) {
 			if (snapshot.sourceHash == 0 || seen.exists(snapshot.sourceHash))
@@ -538,7 +552,8 @@ class HlWriter {
 		}
 	}
 
-	function writeObjectType(name:Int, base:Int, global:Int, fields:Array<compiler.hl.HlCode.HlObjectField>, methods:Array<compiler.hl.HlCode.HlObjectMethod>,
+	function writeObjectType(name:Int, base:Int, global:Int, fields:Array<compiler.hl.HlCode.HlObjectField>,
+			methods:Array<compiler.hl.HlCode.HlObjectMethod>,
 			bindings:Array<Int>):Void {
 		writeIndex(name);
 		writeIndex(base);
@@ -565,7 +580,8 @@ class HlWriter {
 		}
 	}
 
-	function writeObjectMembers(fields:Array<compiler.hl.HlCode.HlObjectField>, methods:Array<compiler.hl.HlCode.HlObjectMethod>, bindings:Array<Int>):Void {
+	function writeObjectMembers(fields:Array<compiler.hl.HlCode.HlObjectField>,
+			methods:Array<compiler.hl.HlCode.HlObjectMethod>, bindings:Array<Int>):Void {
 		writeFields(fields);
 		for (method in methods) {
 			writeIndex(method.name);
@@ -733,141 +749,345 @@ class HlWriter {
 	/** Lowers the instruction at `position` into `opcode` and the operands left in `operands`; nothing is allocated per instruction. */
 	function lowerInstruction(instruction:HlInstruction, position:Int, labels:Map<String, Int>):HlOpcode {
 		return switch instruction {
-			case Move(destination, source): {put2(destination, source); HlOpcode.Mov;}
+			case Move(destination, source): {
+				put2(destination, source);
+				HlOpcode.Mov;
+			}
 			case LoadInt(destination, constant):
-				{put2(destination, constant); HlOpcode.Int;}
+				{
+					put2(destination, constant);
+					HlOpcode.Int;
+				}
 			case LoadFloat(destination, constant):
-				{put2(destination, constant); HlOpcode.Float;}
+				{
+					put2(destination, constant);
+					HlOpcode.Float;
+				}
 			case LoadString(destination, constant):
-				{put2(destination, constant); HlOpcode.String;}
+				{
+					put2(destination, constant);
+					HlOpcode.String;
+				}
 			case LoadBool(destination, value):
-				{put2(destination, value ? 1 : 0); HlOpcode.Bool;}
+				{
+					put2(destination, value ? 1 : 0);
+					HlOpcode.Bool;
+				}
 			case LoadNull(destination):
-				{put1(destination); HlOpcode.Null;}
+				{
+					put1(destination);
+					HlOpcode.Null;
+				}
 			case LoadType(destination, type):
-				{put2(destination, type); HlOpcode.Type;}
+				{
+					put2(destination, type);
+					HlOpcode.Type;
+				}
 			case ToDyn(destination, source):
-				{put2(destination, source); HlOpcode.ToDyn;}
+				{
+					put2(destination, source);
+					HlOpcode.ToDyn;
+				}
 			case ToSFloat(destination, source):
-				{put2(destination, source); HlOpcode.ToSFloat;}
+				{
+					put2(destination, source);
+					HlOpcode.ToSFloat;
+				}
 			case ToInt(destination, source):
-				{put2(destination, source); HlOpcode.ToInt;}
+				{
+					put2(destination, source);
+					HlOpcode.ToInt;
+				}
 			case UnsafeCast(destination, source):
-				{put2(destination, source); HlOpcode.UnsafeCast;}
+				{
+					put2(destination, source);
+					HlOpcode.UnsafeCast;
+				}
 			case Ref(destination, source):
-				{put2(destination, source); HlOpcode.Ref;}
+				{
+					put2(destination, source);
+					HlOpcode.Ref;
+				}
 			case Unref(destination, source):
-				{put2(destination, source); HlOpcode.Unref;}
+				{
+					put2(destination, source);
+					HlOpcode.Unref;
+				}
 			case Setref(destination, source):
-				{put2(destination, source); HlOpcode.Setref;}
+				{
+					put2(destination, source);
+					HlOpcode.Setref;
+				}
 			case RefOffset(destination, source, index):
-				{put3(destination, source, index); HlOpcode.RefOffset;}
+				{
+					put3(destination, source, index);
+					HlOpcode.RefOffset;
+				}
 			case SafeCast(destination, source):
-				{put2(destination, source); HlOpcode.SafeCast;}
+				{
+					put2(destination, source);
+					HlOpcode.SafeCast;
+				}
 			case GlobalGet(destination, global):
-				{put2(destination, global); HlOpcode.GetGlobal;}
+				{
+					put2(destination, global);
+					HlOpcode.GetGlobal;
+				}
 			case GlobalSet(global, source):
-				{put2(global, source); HlOpcode.SetGlobal;}
+				{
+					put2(global, source);
+					HlOpcode.SetGlobal;
+				}
 			case Add(destination, left, right):
-				{put3(destination, left, right); HlOpcode.Add;}
+				{
+					put3(destination, left, right);
+					HlOpcode.Add;
+				}
 			case Sub(destination, left, right):
-				{put3(destination, left, right); HlOpcode.Sub;}
-			case Mul(destination, left, right): {put3(destination, left, right); HlOpcode.Mul;}
-			case Div(destination, left, right): {put3(destination, left, right); HlOpcode.SDiv;}
-			case Mod(destination, left, right): {put3(destination, left, right); HlOpcode.SMod;}
-			case BitAnd(destination, left, right): {put3(destination, left, right); HlOpcode.And;}
-			case BitXor(destination, left, right): {put3(destination, left, right); HlOpcode.Xor;}
-			case BitOr(destination, left, right): {put3(destination, left, right); HlOpcode.Or;}
-			case ShiftLeft(destination, left, right): {put3(destination, left, right); HlOpcode.Shl;}
-			case ShiftRight(destination, left, right): {put3(destination, left, right); HlOpcode.SShr;}
-			case UnsignedShiftRight(destination, left, right): {put3(destination, left, right); HlOpcode.UShr;}
+				{
+					put3(destination, left, right);
+					HlOpcode.Sub;
+				}
+			case Mul(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.Mul;
+			}
+			case Div(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.SDiv;
+			}
+			case Mod(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.SMod;
+			}
+			case BitAnd(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.And;
+			}
+			case BitXor(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.Xor;
+			}
+			case BitOr(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.Or;
+			}
+			case ShiftLeft(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.Shl;
+			}
+			case ShiftRight(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.SShr;
+			}
+			case UnsignedShiftRight(destination, left, right): {
+				put3(destination, left, right);
+				HlOpcode.UShr;
+			}
 			case Call0(destination, functionIndex):
-				{put2(destination, functionIndex); HlOpcode.Call0;}
+				{
+					put2(destination, functionIndex);
+					HlOpcode.Call0;
+				}
 			case Call1(destination, functionIndex, argument):
-				{put3(destination, functionIndex, argument); HlOpcode.Call1;}
+				{
+					put3(destination, functionIndex, argument);
+					HlOpcode.Call1;
+				}
 			case Call2(destination, functionIndex, argument1, argument2):
-				{put4(destination, functionIndex, argument1, argument2); HlOpcode.Call2;}
+				{
+					put4(destination, functionIndex, argument1, argument2);
+					HlOpcode.Call2;
+				}
 			case CallN(destination, functionIndex, arguments):
-				{putCall(destination, functionIndex, arguments); HlOpcode.CallN;}
+				{
+					putCall(destination, functionIndex, arguments);
+					HlOpcode.CallN;
+				}
 			case StaticClosure(destination, functionIndex):
-				{put2(destination, functionIndex); HlOpcode.StaticClosure;}
+				{
+					put2(destination, functionIndex);
+					HlOpcode.StaticClosure;
+				}
 			case InstanceClosure(destination, functionIndex, receiver):
-				{put3(destination, functionIndex, receiver); HlOpcode.InstanceClosure;}
+				{
+					put3(destination, functionIndex, receiver);
+					HlOpcode.InstanceClosure;
+				}
 			case NullCheck(register):
-				{put1(register); HlOpcode.NullCheck;}
+				{
+					put1(register);
+					HlOpcode.NullCheck;
+				}
 			case CallClosure(destination, closure, arguments):
-				{putCall(destination, closure, arguments); HlOpcode.CallClosure;}
+				{
+					putCall(destination, closure, arguments);
+					HlOpcode.CallClosure;
+				}
 			case ToVirtual(destination, source):
-				{put2(destination, source); HlOpcode.ToVirtual;}
+				{
+					put2(destination, source);
+					HlOpcode.ToVirtual;
+				}
 			case CallMethod(destination, method, arguments):
-				{putCall(destination, method, arguments); HlOpcode.CallMethod;}
+				{
+					putCall(destination, method, arguments);
+					HlOpcode.CallMethod;
+				}
 			case New(destination, _, _):
 				// ONew has no encoded type operand. HashLink derives the
 				// allocation type from the destination register's type.
-				{put1(destination); HlOpcode.New;}
+				{
+					put1(destination);
+					HlOpcode.New;
+				}
 			case FieldGet(destination, object, field):
-				{put3(destination, object, field); HlOpcode.Field;}
+				{
+					put3(destination, object, field);
+					HlOpcode.Field;
+				}
 			case FieldSet(object, field, source):
-				{put3(object, field, source); HlOpcode.SetField;}
+				{
+					put3(object, field, source);
+					HlOpcode.SetField;
+				}
 			case ArrayGet(destination, array, index):
-				{put3(destination, array, index); HlOpcode.GetArray;}
+				{
+					put3(destination, array, index);
+					HlOpcode.GetArray;
+				}
 			case ArraySet(array, index, source):
-				{put3(array, index, source); HlOpcode.SetArray;}
+				{
+					put3(array, index, source);
+					HlOpcode.SetArray;
+				}
 			case GetI8(destination, pointer, offset):
-				{put3(destination, pointer, offset); HlOpcode.GetI8;}
+				{
+					put3(destination, pointer, offset);
+					HlOpcode.GetI8;
+				}
 			case GetI16(destination, pointer, offset):
-				{put3(destination, pointer, offset); HlOpcode.GetI16;}
+				{
+					put3(destination, pointer, offset);
+					HlOpcode.GetI16;
+				}
 			case GetMem(destination, pointer, offset):
-				{put3(destination, pointer, offset); HlOpcode.GetMem;}
+				{
+					put3(destination, pointer, offset);
+					HlOpcode.GetMem;
+				}
 			case SetI8(pointer, offset, source):
-				{put3(pointer, offset, source); HlOpcode.SetI8;}
+				{
+					put3(pointer, offset, source);
+					HlOpcode.SetI8;
+				}
 			case SetI16(pointer, offset, source):
-				{put3(pointer, offset, source); HlOpcode.SetI16;}
+				{
+					put3(pointer, offset, source);
+					HlOpcode.SetI16;
+				}
 			case SetMem(pointer, offset, source):
-				{put3(pointer, offset, source); HlOpcode.SetMem;}
+				{
+					put3(pointer, offset, source);
+					HlOpcode.SetMem;
+				}
 			case ArraySize(destination, array):
-				{put2(destination, array); HlOpcode.ArraySize;}
+				{
+					put2(destination, array);
+					HlOpcode.ArraySize;
+				}
 			case RefData(destination, array):
-				{put2(destination, array); HlOpcode.RefData;}
+				{
+					put2(destination, array);
+					HlOpcode.RefData;
+				}
 			case MakeEnum(destination, constructor, arguments):
-				{putCall(destination, constructor, arguments); HlOpcode.MakeEnum;}
+				{
+					putCall(destination, constructor, arguments);
+					HlOpcode.MakeEnum;
+				}
 			case EnumIndex(destination, value):
-				{put2(destination, value); HlOpcode.EnumIndex;}
+				{
+					put2(destination, value);
+					HlOpcode.EnumIndex;
+				}
 			case EnumField(destination, value, constructor, field):
-				{put4(destination, value, constructor, field); HlOpcode.EnumField;}
+				{
+					put4(destination, value, constructor, field);
+					HlOpcode.EnumField;
+				}
 			case JumpSignedLessOrEqual(left, right, target):
 				var targetPosition = requireLabel(labels, target);
-				{put3(left, right, targetPosition - (position + 1)); HlOpcode.JSLte;}
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JSLte;
+				}
 			case JumpSignedLess(left, right, target):
 				var targetPosition = requireLabel(labels, target);
-				{put3(left, right, targetPosition - (position + 1)); HlOpcode.JSLt;}
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JSLt;
+				}
 			case JumpUnsignedLess(left, right, target):
 				var targetPosition = requireLabel(labels, target);
-				{put3(left, right, targetPosition - (position + 1)); HlOpcode.JULt;}
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JULt;
+				}
 			case JumpNull(value, target):
 				var targetPosition = requireLabel(labels, target);
-				{put2(value, targetPosition - (position + 1)); HlOpcode.JNull;}
+				{
+					put2(value, targetPosition - (position + 1));
+					HlOpcode.JNull;
+				}
 			case JumpEqual(left, right, target):
 				var targetPosition = requireLabel(labels, target);
-				{put3(left, right, targetPosition - (position + 1)); HlOpcode.JEq;}
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JEq;
+				}
 			case JumpTrue(condition, target):
 				var targetPosition = requireLabel(labels, target);
-				{put2(condition, targetPosition - (position + 1)); HlOpcode.JTrue;}
+				{
+					put2(condition, targetPosition - (position + 1));
+					HlOpcode.JTrue;
+				}
 			case Jump(target):
 				var targetPosition = requireLabel(labels, target);
-				{put1(targetPosition - (position + 1)); HlOpcode.JAlways;}
+				{
+					put1(targetPosition - (position + 1));
+					HlOpcode.JAlways;
+				}
 			case Trap(destination, target, preserveExceptionStack):
 				var targetPosition = requireLabel(labels, target);
-				{put2(destination, targetPosition - (position + 1)); preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap;}
+				{
+					put2(destination, targetPosition - (position + 1));
+					preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap;
+				}
 			case EndTrap(destination, preserveExceptionStack):
-				{put1(destination); preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap;}
-			case Label(_): {put0(); HlOpcode.Label;}
+				{
+					put1(destination);
+					preserveExceptionStack == true ? HlOpcode.EndCleanupTrap : HlOpcode.EndTrap;
+				}
+			case Label(_): {
+				put0();
+				HlOpcode.Label;
+			}
 			case Return(register):
-				{put1(register); HlOpcode.Ret;}
+				{
+					put1(register);
+					HlOpcode.Ret;
+				}
 			case Throw(register):
-				{put1(register); HlOpcode.Throw;}
+				{
+					put1(register);
+					HlOpcode.Throw;
+				}
 			case Rethrow(register):
-				{put1(register); HlOpcode.Rethrow;}
+				{
+					put1(register);
+					HlOpcode.Rethrow;
+				}
 		};
 	}
 

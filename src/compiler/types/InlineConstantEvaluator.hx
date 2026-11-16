@@ -72,7 +72,8 @@ class InlineConstantEvaluator {
 		};
 	}
 
-	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan, type:CompilerType):TypedExpression {
+	static function literal(value:InlineConstantValue, span:compiler.Source.SourceSpan,
+			type:CompilerType):TypedExpression {
 		// Folding changes the expression, not its checked type. Rebuild representation boundaries rather than
 		// asking assignability to convert a raw literal back into a closed abstract.
 		switch type {
@@ -87,7 +88,10 @@ class InlineConstantEvaluator {
 			default:
 		}
 		return switch value {
-			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), (switch (type) { case TInt64: true; default: false; }) ? TInt64 : TInt, span);
+			case InlineConstantValue.Integer(number): new TypedExpression(TIntLiteral(number), (switch (type) {
+					case TInt64: true;
+					default: false;
+				}) ? TInt64 : TInt, span);
 			case InlineConstantValue.Floating(number): new TypedExpression(TFloatLiteral(number), TFloat, span);
 			case InlineConstantValue.Text(text): new TypedExpression(TStringLiteral(text), TString, span);
 			case InlineConstantValue.Boolean(flag): new TypedExpression(TBoolLiteral(flag), TBool, span);
@@ -109,7 +113,8 @@ class InlineConstantEvaluator {
 			default: null;
 		};
 
-	static function numericBinary(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>, operation:Int):Null<InlineConstantValue> {
+	static function numericBinary(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>,
+			operation:Int):Null<InlineConstantValue> {
 		var leftInteger = integerValue(left),
 			rightInteger = integerValue(right);
 		if (operation != 3 && leftInteger != null && rightInteger != null)
@@ -135,7 +140,8 @@ class InlineConstantEvaluator {
 		};
 	}
 
-	static function integerBinary(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>, operation:Int):Null<InlineConstantValue> {
+	static function integerBinary(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>,
+			operation:Int):Null<InlineConstantValue> {
 		var leftInteger = integerValue(left),
 			rightInteger = integerValue(right);
 		if (leftInteger == null || rightInteger == null)
@@ -151,11 +157,12 @@ class InlineConstantEvaluator {
 		};
 	}
 
-	static function compare(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>, operation:Int):Null<InlineConstantValue> {
+	static function compare(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>,
+			operation:Int):Null<InlineConstantValue> {
 		var leftNumber = numberValue(left), rightNumber = numberValue(right);
 		if (leftNumber != null && rightNumber != null)
-			return
-				InlineConstantValue.Boolean(operation == 0 ? leftNumber < rightNumber : operation == 1 ? leftNumber <= rightNumber : leftNumber == rightNumber);
+			return InlineConstantValue.Boolean(operation == 0 ? leftNumber < rightNumber : operation == 1 ? leftNumber
+				<= rightNumber : leftNumber == rightNumber);
 		var leftText = textValue(left), rightText = textValue(right);
 		if (leftText != null && rightText != null) {
 			var order = Reflect.compare(leftText, rightText);
@@ -177,7 +184,8 @@ class InlineConstantEvaluator {
 		};
 	}
 
-	static function booleanBinary(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>, and:Bool):Null<InlineConstantValue>
+	static function booleanBinary(left:Null<InlineConstantValue>, right:Null<InlineConstantValue>,
+			and:Bool):Null<InlineConstantValue>
 		return switch left {
 			case InlineConstantValue.Boolean(leftFlag):
 				switch right {

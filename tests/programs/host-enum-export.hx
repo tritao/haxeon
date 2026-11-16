@@ -1,10 +1,14 @@
-enum HostChoice { Number(value:Int); }
+enum HostChoice {
+	Number(value:Int);
+}
 class HostEnumExports {
 	static final value:HostChoice = Number(42);
 	public static function cached():HostChoice return value;
 	@:expose public static function perform(count:Int):Int {
 		var sum = 0;
-		for (_ in 0...count) sum += switch cached() { case Number(value): value; };
+		for (_ in 0...count) sum += switch cached() {
+			case Number(value): value;
+		};
 		return sum;
 	}
 }

@@ -27,8 +27,7 @@ class Machine {
 			return 0;
 		if (flag)
 			counter++
-		else
-			counter += 2;
+				else counter += 2;
 		touch();
 		var value = part.value;
 		switch mode {
@@ -42,8 +41,7 @@ class Machine {
 		for (i in 0...2)
 			if (flag)
 				counter++
-			else
-				counter += 2;
+					else counter += 2;
 		touch();
 		return value + part.value;
 	}

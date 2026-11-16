@@ -1,4 +1,4 @@
-class ReadView<V> {
+class ReadView<V> { // @formatter:off: GenericScalarMapOwnerMain edits this file's text
  final values:Map<String,V>;
  public function new(values:Map<String,V>) this.values=values;
  public function read(key:String):Null<V> return values.get(key);

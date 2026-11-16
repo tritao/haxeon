@@ -40,8 +40,8 @@ class OverviewPage {
 
 		items.push(explorer.keyed("overview-explore", explorer.panel("overview-explore-panel", [
 			explorer.keyed("explore-title", explorer.heading("Explore Haxeon UI")),
-			explorer.keyed("explore-copy", explorer.caption(
-				"Start with a capability, then use Inspect to examine its layout, style and accessibility semantics.")),
+			explorer.keyed("explore-copy",
+				explorer.caption("Start with a capability, then use Inspect to examine its layout, style and accessibility semantics.")),
 			explorer.keyed("explore-row-one", new Row("explore-row-one", [
 				explorer.keyed("controls", destination(explorer, "Controls & state",
 					"Buttons, selection, ranges and progress.", "controls")),
@@ -66,8 +66,8 @@ class OverviewPage {
 
 		items.push(explorer.keyed("overview-pipeline", explorer.panel("overview-pipeline-panel", [
 			explorer.keyed("pipeline-title", explorer.heading("From Haxe to pixels")),
-			explorer.keyed("pipeline-copy", explorer.caption(
-				"Haxeon keeps application behavior and UI policy together while its NativeKit dependency handles platform integration and presentation.")),
+			explorer.keyed("pipeline-copy",
+				explorer.caption("Haxeon keeps application behavior and UI policy together while its NativeKit dependency handles platform integration and presentation.")),
 			explorer.keyed("pipeline-stages", DemoGrid.build("pipeline-stages", [
 				explorer.keyed("tree", stage(explorer, "1 · COMPOSE", "Widget tree",
 					"Stable keys preserve state and focus.")),
@@ -77,19 +77,17 @@ class OverviewPage {
 					"Unchanged work is reused across frames.")),
 				explorer.keyed("present", stage(explorer, "4 · PRESENT", "NativeKit",
 					"The native dependency composites and presents."))
-		], explorer.rowStyle(10.0)))
+			], explorer.rowStyle(10.0)))
 		])));
 	}
 
 	static function destination(explorer:UiExplorer, title:String, description:String,
 			page:String):Column {
-		return new Column("destination-" + page, [
-			explorer.keyed("title", explorer.label(title)),
+		return new Column("destination-" + page, [explorer.keyed("title", explorer.label(title)),
 			explorer.keyed("description", explorer.caption(description)),
 			explorer.keyed("open", explorer.button("Open", "open-" + page, function() {
 				explorer.state.selectedPage = page;
-			}))
-		], destinationStyle(explorer));
+			}))], destinationStyle(explorer));
 	}
 
 	static function destinationStyle(explorer:UiExplorer):LayoutStyle {

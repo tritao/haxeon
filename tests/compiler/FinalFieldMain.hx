@@ -6,7 +6,8 @@ import compiler.Frontend;
  * final never: a write through another object, from a method, from a subclass, or by compound assignment or increment is E1026.
  */
 class FinalFieldMain {
-	static final classes = "class Pair { public final left:Float; public var right:Float; public static final LIMIT:Int = 4; public static var count:Int = 0; "
+	static final classes =
+		"class Pair { public final left:Float; public var right:Float; public static final LIMIT:Int = 4; public static var count:Int = 0; "
 		+ "public function new(left:Float, right:Float) { this.left = left; this.right = right; } "
 		+ "public function mutate():Void { this.right = 1.0; } } "
 		+ "class Generic<T> { public final value:T; public function new(value:T) { this.value = value; } } "
@@ -31,7 +32,8 @@ class FinalFieldMain {
 			"class C { public function new() {} public function touch(other:Pair):Void { other.left = 2.0; } }",
 			"new C().touch(new Pair(1.0, 2.0)); return 0;");
 		expectError("an inherited final field from a subclass constructor",
-			"class D extends Pair { public function new() { super(1.0, 2.0); this.left = 9.0; } }", "var d = new D(); return 0;");
+			"class D extends Pair { public function new() { super(1.0, 2.0); this.left = 9.0; } }",
+			"var d = new D(); return 0;");
 		expectError("an increment of a final field", "", "var p = new Pair(1.0, 2.0); p.left++; return 0;");
 		expectError("a static final", "", "Pair.LIMIT = 9; return 0;");
 		expectError("a static final increment", "", "Pair.LIMIT++; return 0;");

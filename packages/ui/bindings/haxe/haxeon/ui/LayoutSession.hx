@@ -72,7 +72,8 @@ class LayoutSession {
 	}
 
 	/** Submits one render tree and returns geometry for the complete resolved frame. */
-	public function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges, forceFull:Bool = false):Array<ResolvedLayoutItem> {
+	public function submit(root:LayoutNode, frame:LayoutFrame, ?changes:LayoutChanges,
+			forceFull:Bool = false):Array<ResolvedLayoutItem> {
 		ensureLive();
 		if (frame == null)
 			throw "Layout session frame cannot be null";
@@ -88,7 +89,8 @@ class LayoutSession {
 		if (verifyTransactions) verifyTree(root);
 		var decodeStarted = measureCost ? Sys.time() : 0.0;
 		var result = NativeKitUI.nkui_layout_session_get_resolved_updates_into(value, resolvedUpdateBytes);
-		while (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument && result.out_bytes > resolvedUpdateBytes.length) {
+		while (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument
+			&& result.out_bytes > resolvedUpdateBytes.length) {
 			if (result.out_bytes > 268435456) throw "Native layout geometry exceeds the output buffer limit";
 			var capacity = resolvedUpdateBytes.length;
 			while (capacity < result.out_bytes) capacity *= 2;
@@ -131,9 +133,11 @@ class LayoutSession {
 		transaction.commit();
 		var commitSeconds = measureCost ? Sys.time() - commitStarted : 0.0;
 		if (measureCost) {
-			Sys.stderr().writeString("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted + " encode=" + (encodeFinished - encodeStarted + commitSeconds)
+			Sys.stderr().writeString("layout-cost haxe nodes=" + resolved.length + " started=" + encodeStarted
+				+ " encode=" + (encodeFinished - encodeStarted + commitSeconds)
 				+ " decode=" + (decodeFinished - decodeStarted) + "\n");
-			Sys.stderr().writeString("layout-delta updated=" + transaction.updatedCount() + " removed=" + transaction.removedCount()
+			Sys.stderr().writeString("layout-delta updated=" + transaction.updatedCount() + " removed="
+				+ transaction.removedCount()
 				+ " parents=" + transaction.parentCount() + " resolved=" + count + "\n");
 		}
 		return resolved;
@@ -162,8 +166,7 @@ class LayoutSession {
 		while (true) {
 			var result = NativeKitUI.nkui_layout_session_hit_test_into(value, x, y, hitPathBytes);
 			var requiredBytes = result.out_count * 4;
-			if (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument &&
-				requiredBytes > hitPathBytes.length) {
+			if (result.status == NativeKitUI.UiStatus.ErrorInvalidArgument && requiredBytes > hitPathBytes.length) {
 				var capacity = hitPathBytes.length;
 				while (capacity < requiredBytes)
 					capacity *= 2;
@@ -321,14 +324,14 @@ class LayoutSession {
 		}
 		if (measureCallback != null)
 			return;
-		var nativeCallback = new nkui_layout_measure_callbackCallback(
-			function(nodeId:Int, constraints:nkui_layout_measure_constraints,
+		var nativeCallback = new nkui_layout_measure_callbackCallback(function(nodeId:Int,
+				constraints:nkui_layout_measure_constraints,
 				_userData:Null<hl.Abstract<"native_pointer">>) {
-				var measured = measureNode(nodeId, LayoutMeasureConstraints.fromNative(constraints));
-				if (measured == null)
-					throw "Layout measurement callback returned null";
-				return measured.nativeValue();
-			});
+					var measured = measureNode(nodeId, LayoutMeasureConstraints.fromNative(constraints));
+					if (measured == null)
+						throw "Layout measurement callback returned null";
+					return measured.nativeValue();
+				});
 		try {
 			UiResult.check(NativeKitUI.nkui_layout_session_set_measure_callback(value, nativeCallback,
 				null), "layoutSession.setMeasureCallback");
@@ -378,9 +381,8 @@ class LayoutSession {
 					geometry = item;
 					break;
 				}
-			if (geometry == null || !geometry.visible || geometry.width <= 0.0 ||
-				geometry.height <= 0.0 || geometry.clipBounds.width <= 0.0 ||
-				geometry.clipBounds.height <= 0.0)
+			if (geometry == null || !geometry.visible || geometry.width <= 0.0 || geometry.height <= 0.0
+				|| geometry.clipBounds.width <= 0.0 || geometry.clipBounds.height <= 0.0)
 				continue;
 			var started = RenderCost.time(), encodedBefore = RenderCost.encode;
 			var displayList = content.paint(geometry);

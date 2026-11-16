@@ -16,7 +16,8 @@ class FlagsGenerator {
 	public static inline final PREFIX = "$flags:";
 
 	public static function conforms(session:TypingSession, declaration:AstEnumAbstract):Bool
-		return DeclaredConformance.has(session, TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
+		return DeclaredConformance.has(session,
+			TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
 			"Flags");
 
 	public static function isMember(method:String, isStatic:Bool):Bool
@@ -25,7 +26,10 @@ class FlagsGenerator {
 			default: false;
 		};
 
-	public static function signature(owner:String, method:String):{arguments:Array<CompilerType>, result:CompilerType} {
+	public static function signature(owner:String, method:String): {
+		arguments: Array<CompilerType>,
+		result: CompilerType
+	} {
 		var value:CompilerType = TAbstract(owner, [], TInt);
 		return switch method {
 			case "empty": {arguments: [], result: value};
@@ -39,7 +43,8 @@ class FlagsGenerator {
 		};
 	}
 
-	static function code(typer:BodyTyper, declaration:AstEnumAbstract, value:compiler.syntax.Ast.AstEnumAbstractValue):Int {
+	static function code(typer:BodyTyper, declaration:AstEnumAbstract,
+			value:compiler.syntax.Ast.AstEnumAbstractValue):Int {
 		var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
 		if (constant != null)
 			switch constant.expression {
@@ -47,7 +52,8 @@ class FlagsGenerator {
 					return code;
 				default:
 			}
-		throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E1002", "Flags requires compile-time Int constants", value.span));
+		throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic("E1002",
+			"Flags requires compile-time Int constants", value.span));
 	}
 
 	static function single(value:Int):Bool
@@ -59,20 +65,26 @@ class FlagsGenerator {
 		if (!compiler.types.TypeRelations.equals(typer.lowerType(declaration.underlying, declaration.span), TInt))
 			BodyTyper.fail("E1025", "Flags requires an Int enum abstract", declaration.span);
 		if (declaration.fromTypes.length != 0 || declaration.toTypes.length != 0)
-			BodyTyper.fail("E1025", "Flags enum abstracts cannot declare implicit from/to conversions", declaration.span);
+			BodyTyper.fail("E1025", "Flags enum abstracts cannot declare implicit from/to conversions",
+				declaration.span);
 		if (RawRepresentableGenerator.conforms(session, declaration))
-			BodyTyper.fail("E1025", "Flags already defines raw conversion; declare Flags without RawRepresentable", declaration.span);
+			BodyTyper.fail("E1025", "Flags already defines raw conversion; declare Flags without RawRepresentable",
+				declaration.span);
 		var mask = 0;
 		for (value in declaration.values) {
 			if (isMember(value.name, true) || isMember(value.name, false))
-				BodyTyper.fail("E1000", 'Constant "${declaration.name}.${value.name}" conflicts with a synthesized Flags member', value.span);
+				BodyTyper.fail("E1000",
+					'Constant "${declaration.name}.${value.name}" conflicts with a synthesized Flags member',
+					value.span);
 			var bits = code(typer, declaration, value);
 			if (single(bits))
 				mask |= bits;
 		}
 		for (value in declaration.values)
 			if ((code(typer, declaration, value) & ~mask) != 0)
-				BodyTyper.fail("E1025", 'Flags constant "${declaration.name}.${value.name}" contains bits without a declared single-bit constant', value.span);
+				BodyTyper.fail("E1025",
+					'Flags constant "${declaration.name}.${value.name}" contains bits without a declared single-bit constant',
+					value.span);
 		session.flagsMasks.set(declaration.name, mask);
 	}
 
@@ -88,7 +100,8 @@ class FlagsGenerator {
 		return name;
 	}
 
-	public static function generate(session:TypingSession, typer:BodyTyper, generated:Map<String, TypedFunction>):Array<TypedFunction> {
+	public static function generate(session:TypingSession, typer:BodyTyper,
+			generated:Map<String, TypedFunction>):Array<TypedFunction> {
 		var pending = [for (name in session.flagsRequests.keys()) if (!generated.exists(name)) name];
 		pending.sort(Reflect.compare);
 		var functions:Array<TypedFunction> = [];
@@ -97,9 +110,12 @@ class FlagsGenerator {
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
 				throw 'Missing Flags declaration "${request.owner}"';
-			var span = declaration.span, method = request.method, info = signature(request.owner, method), arguments = [
-				for (i in 0...info.arguments.length) {name: i == 0 ? "value" : "flag", type: info.arguments[i]}
-			], statements:Array<TypedStatement> = [];
+			var span = declaration.span,
+				method = request.method,
+				info = signature(request.owner, method),
+				arguments = [for (i in 0...info.arguments.length) {
+					name:i == 0 ? "value" : "flag", type:info.arguments[i]
+				}], statements:Array<TypedStatement> = [];
 			function expression(kind:TypedExpressionKind, type:CompilerType):TypedExpression
 				return new TypedExpression(kind, type, span);
 			function integer(value:Int):TypedExpression
@@ -128,7 +144,8 @@ class FlagsGenerator {
 				case "isEmpty":
 					result = equal(bits, integer(0));
 				case "isSingle":
-					result = boolean(TAnd(not(equal(bits, integer(0))), equal(binary(TBitAnd(bits, binary(TSub(bits, integer(1))))), integer(0))));
+					result = boolean(TAnd(not(equal(bits, integer(0))),
+						equal(binary(TBitAnd(bits, binary(TSub(bits, integer(1))))), integer(0))));
 				case "contains":
 					result = equal(binary(TBitAnd(bits, flag)), flag);
 				case "insert", "$or":
@@ -146,9 +163,11 @@ class FlagsGenerator {
 					result = wrap(bits);
 				case "toString":
 					for (value in declaration.values)
-						statements.push(TIf(equal(bits, integer(code(typer, declaration, value))), [TReturn(text(request.owner + "." + value.name), span)],
+						statements.push(TIf(equal(bits, integer(code(typer, declaration, value))),
+							[TReturn(text(request.owner + "." + value.name), span)],
 							[], span));
-					statements.push(TIf(equal(bits, integer(0)), [TReturn(text(request.owner + "[]"), span)], [], span));
+					statements.push(TIf(equal(bits, integer(0)), [TReturn(text(request.owner + "[]"), span)], [],
+						span));
 					statements.push(TVar("text", text(request.owner + "["), span));
 					statements.push(TVar("first", expression(TBoolLiteral(true), TBool), span));
 					var seen:Map<Int, Bool> = [];
@@ -157,8 +176,10 @@ class FlagsGenerator {
 						if (!single(bit) || seen.exists(bit))
 							continue;
 						seen.set(bit, true);
-						var separator = expression(TConditional(expression(TLocal("first"), TBool), text(""), text(" | ")), TString),
-							combined = expression(TAdd(expression(TLocal("text"), TString), expression(TAdd(separator, text(value.name)), TString)), TString);
+						var separator = expression(TConditional(expression(TLocal("first"), TBool), text(""),
+							text(" | ")), TString),
+							combined = expression(TAdd(expression(TLocal("text"), TString),
+								expression(TAdd(separator, text(value.name)), TString)), TString);
 						statements.push(TIf(not(equal(binary(TBitAnd(bits, integer(bit))), integer(0))), [
 							TAssign("text", combined, span),
 							TAssign("first", expression(TBoolLiteral(false), TBool), span)
@@ -172,7 +193,8 @@ class FlagsGenerator {
 				throw "Missing Flags helper result";
 			statements.push(TReturn(result, span));
 			var fn:TypedFunction = {
-				name: name, role: ProviderFunction(TAbstract(request.owner, [], TInt), compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.Flags, method)),
+				name: name, role: ProviderFunction(TAbstract(request.owner, [], TInt),
+					compiler.Provides.ProviderOperations.detailed(compiler.Provides.ProviderOperation.Flags, method)),
 				origin: request.origin,
 				originKind: Helper,
 				owner: null,

@@ -12,23 +12,24 @@ function main():Int {
 		missing = shifted.get(0);
 	var checks = [
 		lengths.length == 3
-		&& lengths[0] == 1
-		&& lengths[1] == 12
-		&& lengths[2] == 23,
+			&& lengths[0] == 1
+			&& lengths[1] == 12
+			&& lengths[2] == 23,
 		evens.length == 2
-		&& evens[0] == 1
-		&& evens[1] == 3,
+			&& evens[0] == 1
+			&& evens[1] == 3,
 		middle != null
-		&& middle == 1,
+			&& middle == 1,
 		last != null
-		&& last == 2,
+			&& last == 2,
 		second != null
-		&& second == "bb!",
+			&& second == "bb!",
 		missing == null,
 		nested.length == 3
-		&& nested[0] == 1
-		&& nested[1] == 2
-		&& nested[2] == 4];
+			&& nested[0] == 1
+			&& nested[1] == 2
+			&& nested[2] == 4
+	];
 	for (index in 0...checks.length)
 		if (!checks[index])
 			return index + 1;

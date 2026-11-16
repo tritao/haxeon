@@ -41,13 +41,31 @@ class AudioLabPreset {
 
 	public static function routeSummary(id:AudioLabPresetId):Array<String> {
 		return switch (id) {
-			case "subtractive": ["Envelope 1  ->  Filter Cutoff       +0.75", "Velocity   ->  Amp Level            +1.00"];
-			case "fm-bell": ["Oscillator 1  ->  Oscillator 2 Freq  +220 Hz", "Envelope 1   ->  Amp Level            +1.00"];
-			case "drum-kit": ["Envelope 1  ->  Filter Cutoff       +2400 Hz", "Velocity     ->  Amp Level            +1.00"];
-			case "bass": ["Envelope 1  ->  Filter Cutoff       +900 Hz", "LFO 1        ->  Oscillator 1 Pitch   +0.15 st"];
+			case "subtractive": [
+				"Envelope 1  ->  Filter Cutoff       +0.75",
+				"Velocity   ->  Amp Level            +1.00"
+			];
+			case "fm-bell": [
+				"Oscillator 1  ->  Oscillator 2 Freq  +220 Hz",
+				"Envelope 1   ->  Amp Level            +1.00"
+			];
+			case "drum-kit": [
+				"Envelope 1  ->  Filter Cutoff       +2400 Hz",
+				"Velocity     ->  Amp Level            +1.00"
+			];
+			case "bass": [
+				"Envelope 1  ->  Filter Cutoff       +900 Hz",
+				"LFO 1        ->  Oscillator 1 Pitch   +0.15 st"
+			];
 			case "pad": ["LFO 1        ->  Filter Cutoff       +900 Hz", "LFO 1        ->  Amp Level            +0.20"];
-			case "noise": ["Envelope 1  ->  Filter Cutoff       +1800 Hz", "LFO 1        ->  Amp Level            +0.35"];
-			case "layered": ["LFO 1        ->  Oscillator 1 Pitch   +0.35 st", "Envelope 1  ->  Filter Cutoff       +1200 Hz"];
+			case "noise": [
+				"Envelope 1  ->  Filter Cutoff       +1800 Hz",
+				"LFO 1        ->  Amp Level            +0.35"
+			];
+			case "layered": [
+				"LFO 1        ->  Oscillator 1 Pitch   +0.35 st",
+				"Envelope 1  ->  Filter Cutoff       +1200 Hz"
+			];
 			case _: [];
 		};
 	}
@@ -157,7 +175,7 @@ class AudioLabPreset {
 	}
 
 	static function add(builder:DspPatchBuilder, waveform:DspWaveform, level:Float,
-		detune:Float):Void {
+			detune:Float):Void {
 		var oscillator = new DspOscillatorOptions();
 		oscillator.waveform = waveform;
 		oscillator.level = level;

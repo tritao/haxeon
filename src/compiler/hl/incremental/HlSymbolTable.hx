@@ -14,10 +14,16 @@ import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 
 /** Persisted association between a semantic name and an append-only index. */
-typedef HlNamedIndex = {final name:String; final index:Int;}
+typedef HlNamedIndex = {
+	final name:String;
+	final index:Int;
+}
 
 /** Persisted ordered member indices owned by one named type. */
-typedef HlNamedSlots = {final name:String; final slots:Array<HlNamedIndex>;}
+typedef HlNamedSlots = {
+	final name:String;
+	final slots:Array<HlNamedIndex>;
+}
 
 /** Complete persistable state of the HashLink symbol tables. */
 typedef HlSymbolState = {
@@ -185,13 +191,17 @@ class HlSymbolTable {
 	}
 
 	static function orderedMap(values:Map<String, Int>):Array<HlNamedIndex> {
-		var result:Array<HlNamedIndex> = [for (name => index in values) {name: name, index: index}];
+		var result:Array<HlNamedIndex> = [for (name => index in values) {
+			name:name, index:index
+		}];
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
 	}
 
 	static function orderedNestedMap(values:Map<String, Map<String, Int>>):Array<HlNamedSlots> {
-		var result:Array<HlNamedSlots> = [for (name => slots in values) {name: name, slots: orderedMap(slots)}];
+		var result:Array<HlNamedSlots> = [for (name => slots in values) {
+			name:name, slots:orderedMap(slots)
+		}];
 		result.sort(function(a, b) return Reflect.compare(a.name, b.name));
 		return result;
 	}
@@ -387,7 +397,8 @@ class HlSymbolTable {
 		var fields:Array<HlObjectField> = [
 			{name: internString("bytes"), type: internType(RawPtr)},
 			{name: internString("length"), type: internType(I32)}
-		], index = types.length;
+		],
+			index = types.length;
 		types.push(HlTypeDef.Object(internString("String"), -1, 0, fields, [], []));
 		typeIndices.set(key, index);
 		return index;
@@ -411,10 +422,10 @@ class HlSymbolTable {
 			return typeIndices.get(key);
 		}
 		ensureWritable();
-		var constructors:Array<HlEnumConstructor> = [
-			for (constructor in enumDecl.cases)
-				{name: internString(constructor.name), params: [for (param in constructor.params) internType(param)]}
-		];
+		var constructors:Array<HlEnumConstructor> = [for (constructor in enumDecl.cases)
+			{
+				name:internString(constructor.name), params:[for (param in constructor.params) internType(param)]
+			}];
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {
 			types[index] = Enum(internString(enumDecl.name), 0, constructors);
@@ -478,7 +489,8 @@ class HlSymbolTable {
 			}
 		}
 		for (method in interfaceDecl.methods)
-			contract.push(method.name + ":" + IrTypeIdentity.listText(method.arguments) + "->" + IrTypeIdentity.text(method.result));
+			contract.push(method.name + ":" + IrTypeIdentity.listText(method.arguments) + "->"
+				+ IrTypeIdentity.text(method.result));
 		var identity = internString(name + "#" + haxe.crypto.Sha256.encode(contract.join("\n")));
 		var index = typeIndices.exists(key) ? typeIndices.get(key) : types.length;
 		if (pendingTypes.exists(key)) {
@@ -496,15 +508,17 @@ class HlSymbolTable {
 	 * `reserve` unnamed Dynamic fields go after the object's own fields and interface caches: room a live patch can give
 	 * fields added later, in instances that already exist (see `assignReservedField`).
 	 */
-	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>, ?interfaceSlots:Array<String>,
+	public function internObject(object:IrObject, functionIndices:Map<String, Int>, ?valueObjects:Map<String, Bool>,
+			?interfaceSlots:Array<String>,
 			reserve:Int = 0, ?typedEntries:Array<compiler.ir.Ir.IrObjectMethod>):Int {
 		if (objectIndices.exists(object.name))
 			return objectIndices.get(object.name);
 		ensureWritable();
-		var fields:Array<HlObjectField> = [
-			for (field in object.fields)
-				{name: internString(field.name), type: internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field))}
-		];
+		var fields:Array<HlObjectField> = [for (field in object.fields)
+			{
+				name:internString(field.name),
+					type:internObjectFieldType(field.type, valueObjects, compiler.ir.IrFieldStorage.scalar(field))
+			}];
 		if (interfaceSlots != null)
 			for (slot in interfaceSlots) {
 				var virtualKey = 'virt:$slot';
@@ -554,7 +568,11 @@ class HlSymbolTable {
 		if (typedEntries != null) for (entry in typedEntries) {
 			var typedIndex = functionIndices.get(entry.functionName);
 			if (typedIndex == null) throw 'Unknown typed interface entry "${entry.functionName}"';
-			methods.push({name: internString(entry.name), functionIndex: typedIndex, prototype: compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE});
+			methods.push({
+				name: internString(entry.name),
+				functionIndex: typedIndex,
+				prototype: compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE
+			});
 		}
 
 		var definition:HlTypeDef = object.isValue ? Structure(internString(object.name), global, fields, methods,
@@ -678,11 +696,13 @@ class HlSymbolTable {
 			default: 0;
 		};
 
-	public function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>, nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Int {
+	public function internObjectFieldType(type:IrType, valueObjects:Null<Map<String, Bool>>,
+			nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Int {
 		return switch type {
 			case Obj(name) if (valueObjects != null && valueObjects.exists(name)):
 				var parameter = internType(type), key = 'packed:obj:$name';
-				if (typeIndices.exists(key)) typeIndices.get(key); else {
+				if (typeIndices.exists(key)) typeIndices.get(key);
+				else {
 					var index = types.length;
 					types.push(Parameterized(HlType.Packed, parameter));
 					typeIndices.set(key, index);
@@ -695,7 +715,8 @@ class HlSymbolTable {
 	}
 
 	/** Returns the HashLink type used for native field storage when it is narrower than the IR value type. */
-	public function internNativeFieldStorageType(type:IrType, nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
+	public function internNativeFieldStorageType(type:IrType,
+			nativeLayout:Null<compiler.ir.Ir.IrScalarStorage>):Null<Int> {
 		if (nativeLayout == null)
 			return null;
 		return switch type {
@@ -853,6 +874,7 @@ class HlSymbolTable {
 			case Enum(name): 'enum:$name';
 			case EnumTag(name): 'enum-tag:$name';
 			case Virtual(name): 'virt:$name';
-			case Function(arguments, result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
+			case Function(arguments,
+				result): 'fun(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 		};
 }

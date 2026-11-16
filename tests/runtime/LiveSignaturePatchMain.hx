@@ -11,7 +11,8 @@ import runtime.Runtime;
  */
 class LiveSignaturePatchMain {
 	static function program(version:Int):String {
-		var base = version == 1 ? "  public function new(a:Int) { this.a = a; }\n" : "  public function new(a:Int, b:Int) { this.a = a + b; }\n";
+		var base = version == 1 ? "  public function new(a:Int) { this.a = a; }\n"
+			: "  public function new(a:Int, b:Int) { this.a = a + b; }\n";
 		var point = switch version {
 			case 1: "  public function new(x:Int) { super(x); this.y = 0; }\n";
 			case 2: "  public function new(x:Int, y:Int) { super(x, 1); this.y = y; }\n";
@@ -90,15 +91,17 @@ class LiveSignaturePatchMain {
 		Runtime.dispose(live);
 
 		// A reload lays the module out afresh, and the functions the moves above retired go with the old module.
-		compiler.update("Main.hx", StringTools.replace(program(3), "class Holder {", "enum Shape { Dot; }\nclass Holder {"));
+		compiler.update("Main.hx",
+			StringTools.replace(program(3), "class Holder {", "enum Shape { Dot; }\nclass Holder {"));
 		var reloaded = compiler.compile("Main");
 		if (!reloaded.requiresReload)
 			throw 'Adding an enum must reload';
-		var retired = [for (name in (reloaded.functionIds : Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
+		var retired =
+			[for (name in (reloaded.functionIds:Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
 		if (retired.length > 0)
 			throw 'A reload kept the retired functions ${retired.join(", ")}';
 		var again = compiler.compile("Main");
-		var kept = [for (name in (again.functionIds : Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
+		var kept = [for (name in (again.functionIds:Map<String, Int>).keys()) if (name.indexOf("~retired") >= 0) name];
 		if (kept.length > 0)
 			throw 'The build after a reload still names the retired functions ${kept.join(", ")}';
 
@@ -106,7 +109,8 @@ class LiveSignaturePatchMain {
 		var methods = new Compiler();
 		methods.update("Main.hx", program(1));
 		methods.compile("Main");
-		methods.update("Main.hx", StringTools.replace(StringTools.replace(program(1), "sum():Int return a + y;", "sum(extra:Int):Int return a + y + extra;"),
+		methods.update("Main.hx", StringTools.replace(StringTools.replace(program(1), "sum():Int return a + y;",
+			"sum(extra:Int):Int return a + y + extra;"),
 			"kept.sum()", "kept.sum(0)").split(".sum() * 1000").join(".sum(0) * 1000"));
 		var refused = methods.compile("Main");
 		var reasons = [for (reason in refused.reloadReasons) Std.string(reason)];
@@ -118,7 +122,8 @@ class LiveSignaturePatchMain {
 	static function apply(live:runtime.LoadedModule, build:Dynamic, changed:Dynamic, label:String):Dynamic {
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw '$label: required a reload: ${[for (reason in (changed.reloadReasons : Array<Dynamic>)) Std.string(reason)].join(", ")}';
-		Runtime.patchSet(live, new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(live,
+			new PatchSet(build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		return changed;
 	}
 

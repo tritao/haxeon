@@ -10,11 +10,13 @@ class NativeCallApi {
 	public static function native_close(library:hl.Abstract<"native_library">):Bool
 		return false;
 
-	public static function native_resolve(library:hl.Abstract<"native_library">, symbol:hl.Bytes, symbolLength:Int, arguments:hl.Bytes, argumentCount:Int,
+	public static function native_resolve(library:hl.Abstract<"native_library">, symbol:hl.Bytes, symbolLength:Int,
+			arguments:hl.Bytes, argumentCount:Int,
 			result:Int):hl.Abstract<"native_function">
 		return null;
 
-	public static function native_call(fn:hl.Abstract<"native_function">, arguments:hl.Bytes, argumentLength:Int, output:hl.Bytes, outputLength:Int):Int
+	public static function native_call(fn:hl.Abstract<"native_function">, arguments:hl.Bytes, argumentLength:Int,
+			output:hl.Bytes, outputLength:Int):Int
 		return -1;
 
 	public static function native_last_error(output:hl.Bytes, capacity:Int):Int

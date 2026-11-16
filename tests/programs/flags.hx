@@ -1,4 +1,4 @@
-enum abstract Access(Int) implements Flags {
+enum abstract Access(Int) implements Flags { // @formatter:off: FlagsMain edits this file's text
     var None=0;
     var Read=1;
     var Write=2;

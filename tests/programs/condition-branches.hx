@@ -38,7 +38,8 @@ function pick(a:Bool, b:Bool, c:Bool):Int {
 
 function main():Int {
 	// All combinations of && || ! agree with their truth table.
-	if (pick(true, true, false) != 1 || pick(false, false, true) != 1 || pick(false, false, false) != 2 || pick(true, false, false) != 3
+	if (pick(true, true, false) != 1 || pick(false, false, true) != 1 || pick(false, false, false) != 2
+		|| pick(true, false, false) != 3
 		|| pick(false, true, false) != 4)
 		return 1;
 

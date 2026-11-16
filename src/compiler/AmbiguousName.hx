@@ -24,8 +24,7 @@ class AmbiguousName {
 		var parts = text.substring(start + MARKER.length, end).split(SEPARATOR);
 		if (parts.length != 3)
 			return null;
-		return
-			'Type name "${parts[0]}" is ambiguous: this package declares ${decode(parts[1])}, and an import of a whole module or package also brings in ${decode(parts[2])}; import the one you mean by name';
+		return 'Type name "${parts[0]}" is ambiguous: this package declares ${decode(parts[1])}, and an import of a whole module or package also brings in ${decode(parts[2])}; import the one you mean by name';
 	}
 
 	static inline function isMarkerCharacter(code:Int):Bool

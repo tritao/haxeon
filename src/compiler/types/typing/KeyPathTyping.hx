@@ -49,18 +49,24 @@ class KeyPathTyping {
 			default: null;
 		};
 
-	public static function literal(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan):TypedExpression {
+	public static function literal(session:TypingSession, parsedRoot:AstType, suffix:Array<String>,
+			span:SourceSpan):TypedExpression {
 		var path = resolveLiteral(session, parsedRoot, suffix, span, false);
 		return define(session, path.root, path.value, path.fields, true, span);
 	}
 
 	/** Resolve a field identity for Diff.bit without creating a property-bypassing key path value. */
-	public static function diffField(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan):{
-		final root:CompilerType; final value:CompilerType; final fields:Array<KeyPathField>;
+	public static function diffField(session:TypingSession, parsedRoot:AstType, suffix:Array<String>,
+			span:SourceSpan): {final root: CompilerType;
+	final value:CompilerType;
+	final fields:Array<KeyPathField>;
 	} return resolveLiteral(session, parsedRoot, suffix, span, true);
 
 	static function resolveLiteral(session:TypingSession, parsedRoot:AstType, suffix:Array<String>, span:SourceSpan,
-			allowStoredProperty:Bool):{final root:CompilerType; final value:CompilerType; final fields:Array<KeyPathField>;} {
+			allowStoredProperty:Bool): {final root: CompilerType;
+	final value:CompilerType;
+	final fields:Array<KeyPathField>;
+	} {
 		var rootSyntax = parsedRoot, names = suffix.copy();
 		switch parsedRoot {
 			case NamedType(name):
@@ -96,7 +102,8 @@ class KeyPathTyping {
 				|| entry.field.readAccess == DynamicAccess || entry.field.writeAccess == DynamicAccess)
 				&& !(allowStoredProperty && DiffIntrinsics.hasStoredField(entry.field)))
 				fail('Cannot form a key path to computed property "$name"', span);
-			if (entry.field.readAccess == NeverAccess || entry.field.readAccess == NullAccess && !accessible(session, entry.declaration.name))
+			if (entry.field.readAccess == NeverAccess || entry.field.readAccess == NullAccess
+				&& !accessible(session, entry.declaration.name))
 				fail('Cannot read field "$name" through a key path', span);
 			fields.push(entry);
 			value = entry.type;
@@ -104,45 +111,50 @@ class KeyPathTyping {
 		return {root: root, value: value, fields: fields};
 	}
 
-	public static function define(session:TypingSession, root:CompilerType, value:CompilerType, fields:Array<KeyPathField>,
+	public static function define(session:TypingSession, root:CompilerType, value:CompilerType,
+			fields:Array<KeyPathField>,
 			grantWrite:Bool, span:SourceSpan, checkWriteAccess:Bool = true):TypedExpression {
 		var writable = grantWrite, writeError:Null<String> = null, rootWriteback = true, index = fields.length;
 		while (index > 0) {
 			var entry = fields[--index];
 			if (!DiffIntrinsics.isWritable(entry.field)
-				|| checkWriteAccess && entry.field.writeAccess == NullAccess && !accessible(session, entry.declaration.name)) {
+				|| checkWriteAccess && entry.field.writeAccess == NullAccess
+				&& !accessible(session, entry.declaration.name)) {
 				writable = false;
 				writeError = 'Cannot write through key path: field "${entry.field.name}" is not writable';
 			}
 			if (!session.relations.isValueClass(entry.owner)) {
 				rootWriteback = false;
-				if (index < fields.length - 1 && ValuePlaceRules.isObservableField(session, entry.owner, entry.field.name)) {
+				if (index < fields.length - 1
+					&& ValuePlaceRules.isObservableField(session, entry.owner, entry.field.name)) {
 					writable = false;
-					writeError = 'Cannot mutate a struct inside Observable field "${entry.field.name}"; copy the value, mutate it, and assign it back';
+					writeError =
+						'Cannot mutate a struct inside Observable field "${entry.field.name}"; copy the value, mutate it, and assign it back';
 				}
 				break;
 			}
 		}
-		var identity = SemanticSignature.type(root) + ":" + [for (entry in fields) entry.declaration.name + "." + entry.field.name].join("/")
-			+ (writable ? ":write" : ":read"), name = LITERAL_PREFIX + identity;
+		var identity = SemanticSignature.type(root) + ":"
+			+ [for (entry in fields) entry.declaration.name + "." + entry.field.name].join("/")
+			+ (writable ? ":write" : ":read"),
+			name = LITERAL_PREFIX + identity;
 		var origin = switch root {
 			case TInstance(NominalKind.Class, owner, _) if (session.signatures.exists(owner + ".new")): owner + ".new";
 			default: session.currentContext.functionName;
 		};
-		session.keyPathDefinitions.set(name, {
-			name: name,
+		session.keyPathDefinitions.set(name, {name: name,
 			root: root,
 			value: value,
 			fields: fields,
 			writable: writable,
 			rootWriteback: rootWriteback,
 			writeError: writeError,
-			// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
-			// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
-			// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
-			span: fields.length > 0 ? new compiler.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null, "key-path") : span,
-			origin: origin
-		});
+		// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
+		// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
+		// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
+		span: fields.length > 0 ? new compiler.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null,
+			"key-path") : span,
+			origin: origin});
 		session.recordKeyPathUse(session.currentContext.name, name);
 		return new TypedExpression(TCall(name, []), TKeyPath(root, value, writable), span);
 	}
@@ -154,12 +166,14 @@ class KeyPathTyping {
 		}
 
 	/** Unknown writable composition cannot grant a deferred tracked-struct projection. */
-	public static function mayProjectTrackedStruct(session:TypingSession, root:CompilerType, known:Null<KeyPathDefinition>):Bool {
+	public static function mayProjectTrackedStruct(session:TypingSession, root:CompilerType,
+			known:Null<KeyPathDefinition>):Bool {
 		if (known != null) {
 			var index = known.fields.length;
 			while (index > 0) {
 				var entry = known.fields[--index];
-				if (!session.relations.isValueClass(entry.owner)) return ValuePlaceRules.isObservableField(session, entry.owner, entry.field.name);
+				if (!session.relations.isValueClass(entry.owner)) return ValuePlaceRules.isObservableField(session,
+					entry.owner, entry.field.name);
 			}
 			return false;
 		}
@@ -169,7 +183,8 @@ class KeyPathTyping {
 				case TInstance(NominalKind.Class, name, _) if (session.classDecls.exists(name) && !seen.exists(name)):
 					seen.set(name, true);
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
-						if (session.relations.isValueClass(entry.type) && ValuePlaceRules.isObservableField(session, type, entry.field.name)) return true;
+						if (session.relations.isValueClass(entry.type)
+							&& ValuePlaceRules.isObservableField(session, type, entry.field.name)) return true;
 						if (visit(entry.type)) return true;
 					}
 					false;
@@ -188,12 +203,18 @@ class KeyPathTyping {
 				var substitutions = session.representation.nominalSubstitutions(owner);
 				for (field in declaration.fields)
 					if (field.name == name)
-						return {owner: owner, declaration: declaration, field: field,
-							type: session.declarations.resolve(session.declarations.resolvedFieldType(className, field), span, substitutions)};
+						return {
+							owner: owner,
+							declaration: declaration,
+							field: field,
+							type: session.declarations.resolve(session.declarations.resolvedFieldType(className, field),
+								span, substitutions)
+						};
 				for (method in declaration.methods)
 					if (method.name == name) fail('Cannot form a key path to method "$name"', span);
 				if (declaration.base != null)
-					return resolveField(session, session.declarations.resolve(declaration.base, span, substitutions), name, span);
+					return resolveField(session, session.declarations.resolve(declaration.base, span, substitutions),
+						name, span);
 				fail('Type "${SemanticSignature.display(owner)}" has no stored field "$name"', span);
 				null;
 			default: throw "Expected nominal key path owner";

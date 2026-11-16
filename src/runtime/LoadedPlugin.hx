@@ -15,7 +15,8 @@ class LoadedPlugin implements ReloadablePlugin {
 	public final restoreStateIndex:Int;
 	public var restoredState(default, null):Null<String>;
 
-	public function new(module:LoadedModule, activateIndex:Int, deactivateIndex:Int, saveStateIndex:Int, restoreStateIndex:Int) {
+	public function new(module:LoadedModule, activateIndex:Int, deactivateIndex:Int, saveStateIndex:Int,
+			restoreStateIndex:Int) {
 		if (module == null)
 			throw new RuntimeError(RuntimeStatus.BadArgument, "Loaded plugin module cannot be null");
 		this.module = module;

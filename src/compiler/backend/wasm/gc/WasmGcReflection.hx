@@ -25,7 +25,10 @@ class WasmGcReflection {
 	 * are known, and the instructions that load them into the global before any Haxe code runs; null without reflection.
 	 */
 	public static function addTable(module:WasmModule, globals:Map<String, Int>, plan:WasmGcTypePlan,
-			program:IrProgram):Null<{bytes:haxe.io.Bytes, init:Array<WasmInstruction>}> {
+			program:IrProgram):Null<{
+				bytes:haxe.io.Bytes,
+				init:Array<WasmInstruction>
+			}> {
 		var size = WasmReflectionTable.tableSize(program, plan.runtimeTypeIds);
 		if (size == 0)
 			return null;
@@ -52,7 +55,8 @@ class WasmGcReflection {
 	}
 
 	/** The function implementing `native` if it is one of the reflection operations, else null. */
-	public static function define(module:WasmModule, functions:Map<String, Int>, globals:Map<String, Int>, plan:WasmGcTypePlan,
+	public static function define(module:WasmModule, functions:Map<String, Int>, globals:Map<String, Int>,
+			plan:WasmGcTypePlan,
 			representation:WasmGcRepresentation, program:IrProgram, native:IrNative):Null<Int> {
 		var column = WasmReflectionTable.operationIndex(native.symbol);
 		if (column < 0)
@@ -62,11 +66,15 @@ class WasmGcReflection {
 			throw "Wasm GC reflection has no table global";
 		var entry = functions.get(ENTRY_FUNCTION);
 		if (entry == null) {
-			entry = addEntryLookup(module, plan, table, Std.int(WasmReflectionTable.tableSize(program, plan.runtimeTypeIds) / WasmReflectionTable.ROW_SIZE));
+			entry = addEntryLookup(module, plan, table,
+				Std.int(WasmReflectionTable.tableSize(program, plan.runtimeTypeIds) / WasmReflectionTable.ROW_SIZE));
 			functions.set(ENTRY_FUNCTION, entry);
 		}
-		var type = plan.wasmFunctionType(native.arguments, native.result), array = plan.staticDataTypeIndex, callType = module.typeIndex(type),
-			row = native.arguments.length, slot = row + 1;
+		var type = plan.wasmFunctionType(native.arguments, native.result),
+			array = plan.staticDataTypeIndex,
+			callType = module.typeIndex(type),
+			row = native.arguments.length,
+			slot = row + 1;
 		var fallback = representation.zeroValue(native.result);
 		var body:Array<WasmInstruction> = [LocalGet(0), Call(entry), LocalTee(row), I32Const(0), I32LtS, If(null)];
 		body = body.concat(fallback).concat([Return, End]);
@@ -94,8 +102,16 @@ class WasmGcReflection {
 
 	/** Index of the row for a value's class, or -1 for null and for a value that is not an instance of a class with a row. */
 	static function addEntryLookup(module:WasmModule, plan:WasmGcTypePlan, table:Int, count:Int):Int {
-		var root = plan.objectRootTypeIndex, array = plan.staticDataTypeIndex, id = 1, low = 2, high = 3, middle = 4, key = 5;
-		var locals:Array<WasmLocal> = [for (_ in 0...5) {type: I32}];
+		var root = plan.objectRootTypeIndex,
+			array = plan.staticDataTypeIndex,
+			id = 1,
+			low = 2,
+			high = 3,
+			middle = 4,
+			key = 5;
+		var locals:Array<WasmLocal> = [for (_ in 0...5) {
+			type:I32
+		}];
 		return module.addFunction(new WasmFunction(ENTRY_FUNCTION, plan.wasmFunctionType([Dyn], I32), locals, [
 			LocalGet(0),
 			RefTest({nullable: false, heap: Type(root)}),

@@ -63,9 +63,9 @@ class IrEnumEscapeReach {
 							environments.push(receiver.type);
 						case Call(_, name, arguments)
 							if (StringTools.startsWith(name, "__map_")
-								&& StringTools.contains(name, "_ref_")
-								&& StringTools.endsWith(name, "_set")
-								&& arguments.length >= 3):
+							&& StringTools.contains(name, "_ref_")
+							&& StringTools.endsWith(name, "_set")
+							&& arguments.length >= 3):
 							var key = Std.string(arguments[0].type),
 								contents = mapContents.get(key);
 							if (contents == null) {
@@ -118,10 +118,9 @@ class IrEnumEscapeReach {
 	public function collect(roots:Array<IrType>, supportsCallableEscape:IrType->Bool):Map<String, Bool> {
 		var unsupported:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [],
-			inspectedMaps:Map<String,
-				Bool> = [], // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
+			inspectedMaps:Map<String, Bool> = [], // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
 		// back to themselves, by identity text. Wrappers and primitives are not recorded: walking them again is cheap and finite.
-			referenceTypes:Map<String, Bool> = [],
+		referenceTypes:Map<String, Bool> = [],
 			referenceObjects:Map<String, Bool> = [],
 			referenceVirtuals:Map<String, Bool> = [],
 			valueTypes:Map<String, Bool> = [];
@@ -224,8 +223,8 @@ class IrEnumEscapeReach {
 						if (child.isValue)
 							for (field in child.fields)
 								walkReferences(field.type);
-						else
-							walk(child);
+							else
+								walk(child);
 					}
 				case Nullable(inner), Array(inner), Iterator(inner):
 					walkReferences(inner);

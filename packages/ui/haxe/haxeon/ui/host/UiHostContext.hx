@@ -18,7 +18,7 @@ class UiHostContext {
 	var onZoomChanged:Null<Float->Void>;
 	public final events:EventPump;
 	/** An application may defer closing while it asks to save or confirm. */
-	public var onCloseRequested:Null<(Void->Void)->Void> = null;
+	public var onCloseRequested:Null<(Void -> Void) -> Void> = null;
 	final close:Void->Void;
 	final scheduleFrame:Void->Void;
 	/** Runs background work during host iterations, independently of rendering. */

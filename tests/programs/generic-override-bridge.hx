@@ -85,7 +85,7 @@ function main():Int {
 		return 4;
 	base.record(40);
 	base.record(2);
-	if ((cast base : Child).recorded != 42)
+	if ((cast base:Child).recorded != 42)
 		return 5;
 	var wrapped = base.wrap(21);
 	if (wrapped.length != 2 || wrapped[0] + wrapped[1] != 42)

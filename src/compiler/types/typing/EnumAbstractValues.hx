@@ -20,7 +20,8 @@ class EnumAbstractValues {
 			default: false;
 		};
 
-	public static function raw(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue):TypedExpression {
+	public static function raw(typer:BodyTyper, declaration:AstEnumAbstract,
+			value:AstEnumAbstractValue):TypedExpression {
 		var session = typer.session,
 			key = declaration.name + "." + value.name,
 			known = session.enumAbstractConstants.get(key);
@@ -33,7 +34,8 @@ class EnumAbstractValues {
 		session.enumAbstractConstantOwner = declaration.name;
 		try {
 			var storage = typer.lowerType(declaration.underlying, declaration.span);
-			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage), storage, 'enum abstract value "$key"', "E1002");
+			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage), storage,
+				'enum abstract value "$key"', "E1002");
 			session.enumAbstractConstantOwner = previous;
 			session.enumAbstractConstantsInProgress.remove(key);
 			session.enumAbstractConstants.set(key, expression);
@@ -58,17 +60,21 @@ class EnumAbstractValues {
 		if (declaration == null)
 			return null;
 		if (FlagsGenerator.conforms(session, declaration))
-			return new TypedExpression(TCall(FlagsGenerator.request(session, owner, "toString", span), [value]), TString, span);
+			return new TypedExpression(TCall(FlagsGenerator.request(session, owner, "toString", span), [value]),
+				TString, span);
 		if (RawRepresentableGenerator.conforms(session, declaration))
-			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, owner, "toString", span), [value]), TString, span);
+			return new TypedExpression(TCall(RawRepresentableGenerator.request(session, owner, "toString", span),
+				[value]), TString, span);
 		return null;
 	}
 
 	/** The value at a use site: the cached constant, typed as the abstract and located at `span`, where it is used. */
-	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue, span:SourceSpan):TypedExpression {
+	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue,
+			span:SourceSpan):TypedExpression {
 		typer.recordInlineConstantDependency(declaration.name);
 		var expression = raw(typer, declaration, value);
-		return typer.session.enumAbstractConstantOwner == declaration.name ? new TypedExpression(expression.expression, expression.type,
+		return typer.session.enumAbstractConstantOwner == declaration.name ? new TypedExpression(expression.expression,
+			expression.type,
 			span) : new TypedExpression(TAbiCast(expression), TAbstract(declaration.name, [], expression.type), span);
 	}
 }

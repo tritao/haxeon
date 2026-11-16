@@ -17,22 +17,39 @@ class GeneratedFunctionRenumberingMain {
 	static function main():Void {
 		// Each handler is stored as a lambda, or as an adapter that turns a typed function into a Dynamic one.
 		var lambdas = (handlers:Array<String>) -> program("Array<Int->Int>", handlers);
-		var adapters = (handlers:Array<String>) -> program("Array<Dynamic->Dynamic>", [for (handler in handlers) "Ui." + handler]);
+		var adapters = (handlers:Array<String>) -> program("Array<Dynamic->Dynamic>",
+			[for (handler in handlers) "Ui." + handler]);
 		// Stored handlers run their own functions: 2 * 100 + 10.
 		for (kind in [{name: "lambda", source: lambdas}, {name: "adapter", source: adapters}]) {
 			var source = kind.source, original = ["plusOne", "timesTen"];
-			expectStoredBehaviour('${kind.name}: one inserted above the stored ones while a later one is deleted', source(original),
-				source(["minusFive", "plusOne"]), 210);
+			expectStoredBehaviour('${kind.name}: one inserted above the stored ones while a later one is deleted',
+				source(original),
+				source([
+					"minusFive",
+					"plusOne"
+				]), 210);
 			expectStoredBehaviour('${kind.name}s swapped', source(original), source(["timesTen", "plusOne"]), 210);
 			// Only the last one changed, but it now matches the ones above it: it was either edited, or a copy was inserted above
 			// and the last one deleted. Nothing tells which function its name stands for.
-			expectStoredBehaviour('${kind.name}: the last one turned into a copy of the ones above it', source(["plusOne", "plusOne", "timesTen"]),
-				source(["plusOne", "plusOne", "plusOne"]), 202);
+			expectStoredBehaviour('${kind.name}: the last one turned into a copy of the ones above it', source([
+				"plusOne",
+				"plusOne",
+				"timesTen"
+			]),
+				source([
+					"plusOne",
+					"plusOne",
+					"plusOne"
+				]), 202);
 		}
 		// Editing a lambda in place reaches the closures already stored. An adapter's stored closure keeps the function it was
 		// made from; the edit changes which function later registrations wrap.
-		expectPatch("lambda: one edited in place", lambdas(["plusOne", "timesTen"]), lambdas(["plusOne", "timesTwenty"]), 220);
-		expectPatch("adapter: one edited in place", adapters(["plusOne", "timesTen"]), adapters(["plusOne", "timesTwenty"]), 210);
+		expectPatch("lambda: one edited in place", lambdas(["plusOne", "timesTen"]),
+			lambdas(["plusOne", "timesTwenty"]), 220);
+		expectPatch("adapter: one edited in place", adapters(["plusOne", "timesTen"]), adapters([
+			"plusOne",
+			"timesTwenty"
+		]), 210);
 		Sys.println("PASS: edits that renumber lambdas or function adapters never reroute stored closures");
 	}
 
@@ -65,11 +82,11 @@ class GeneratedFunctionRenumberingMain {
 			+ "}\n";
 	}
 
-	static function start(source:String):{
-		compiler:Compiler,
-		build:Dynamic,
-		live:runtime.LoadedModule,
-		mainId:Int
+	static function start(source:String): {
+		compiler: Compiler,
+		build: Dynamic,
+		live: runtime.LoadedModule,
+		mainId: Int
 	} {
 		var compiler = new Compiler();
 		compiler.update("Main.hx", source);
@@ -95,7 +112,8 @@ class GeneratedFunctionRenumberingMain {
 		if (!changed.requiresReload && changed.patchBytes != null) {
 			var refusal:Null<String> = null;
 			try
-				Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions))
+				Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision,
+					changed.patchBytes, changed.changedFunctions))
 			catch (error:runtime.RuntimeError) {
 				if (error.status != runtime.RuntimeStatus.ClosuresHeld)
 					throw error;
@@ -104,7 +122,8 @@ class GeneratedFunctionRenumberingMain {
 			var now = Runtime.callInt(session.live, session.mainId);
 			if (now != stored)
 				throw '$label: the edit was offered as a patch, and stored handlers now return $now instead of $stored';
-			Sys.println(refusal == null ? '$label: patched; stored handlers kept their behaviour' : '$label: refused; $refusal');
+			Sys.println(refusal == null
+				? '$label: patched; stored handlers kept their behaviour' : '$label: refused; $refusal');
 		} else {
 			var reasons = [for (reason in changed.reloadReasons) Std.string(reason)];
 			if (reasons.filter(reason -> StringTools.startsWith(reason, "GeneratedFunctionsRenumbered(")).length == 0)
@@ -121,7 +140,8 @@ class GeneratedFunctionRenumberingMain {
 		var changed = session.compiler.compile("Main");
 		if (changed.requiresReload || changed.patchBytes == null)
 			throw '$label: required a reload: ${[for (reason in changed.reloadReasons) Std.string(reason)].join(", ")}';
-		Runtime.patchSet(session.live, new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
+		Runtime.patchSet(session.live,
+			new PatchSet(session.build.revision, changed.revision, changed.patchBytes, changed.changedFunctions));
 		if (Runtime.callInt(session.live, session.mainId) != expected)
 			throw '$label: stored handlers did not run the edited code';
 		Runtime.dispose(session.live);

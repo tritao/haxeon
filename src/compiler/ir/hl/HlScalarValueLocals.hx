@@ -4,7 +4,10 @@ import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
 
-typedef HlScalarValueLocal = {final fields:Map<String, Int>; final declarations:Array<IrObjectField>;}
+typedef HlScalarValueLocal = {
+	final fields:Map<String, Int>;
+	final declarations:Array<IrObjectField>;
+}
 
 /** Frame-owned scalar slots for nonescaping value places, including across exception handlers. */
 class HlScalarValueLocals {
@@ -17,7 +20,7 @@ class HlScalarValueLocals {
 				switch located.value {
 					case ValueInit(out)
 						if (objects.hasObject(compiler.ir.IrTypeTools.valueObjectName(out.type))
-							&& scalarFields(objects.object(compiler.ir.IrTypeTools.valueObjectName(out.type)), objects)):
+						&& scalarFields(objects.object(compiler.ir.IrTypeTools.valueObjectName(out.type)), objects)):
 						var name = compiler.ir.IrTypeTools.valueObjectName(out.type);
 						roots.set(out.id, name);
 						valid.set(out.id, true);
@@ -36,9 +39,11 @@ class HlScalarValueLocals {
 					var input = IrOperands.at(located.value, inputIndex);
 					if (roots.exists(input.id)) {
 						var allowed = switch located.value {
-							case FieldGet(_, owner, field) if (owner.id == input.id): hasField(objects.object(roots.get(input.id)), field);
+							case FieldGet(_, owner,
+								field) if (owner.id == input.id): hasField(objects.object(roots.get(input.id)), field);
 							case FieldSet(owner, field,
-								value) if (owner.id == input.id && value.id != input.id): hasField(objects.object(roots.get(input.id)), field);
+								value) if (owner.id == input.id
+								&& value.id != input.id): hasField(objects.object(roots.get(input.id)), field);
 							default: false;
 						};
 						if (!allowed)

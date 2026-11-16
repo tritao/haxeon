@@ -15,7 +15,8 @@ class FinalLocalChecker extends BindingWalker {
 		this.finals = finals;
 	}
 
-	public static function check(arguments:Array<AstArgument>, statements:Array<AstStatement>, finals:Map<String, Bool>):Void {
+	public static function check(arguments:Array<AstArgument>, statements:Array<AstStatement>,
+			finals:Map<String, Bool>):Void {
 		new FinalLocalChecker(finals).walkFunction(arguments, statements);
 	}
 

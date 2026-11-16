@@ -23,7 +23,7 @@ class SourceFile {
 		for (index in 0...bytes.length) {
 			var code = bytes.get(index);
 			contentHash = (contentHash ^ code) * 16777619;
-			second = (((second << 5) | (second >>> 27)) ^ code) * (cast 0x85EBCA6B : Int);
+			second = (((second << 5) | (second >>> 27)) ^ code) * (cast 0x85EBCA6B:Int);
 			if (code == "\n".code)
 				lineStarts.push(index + 1);
 		}
@@ -94,7 +94,7 @@ class SourceFile {
 		return offset - lineStarts[line - 1] + 1;
 
 	/** One-based line and column containing an offset, using a single line lookup. */
-	public function lineColumnAt(offset:Int):{line:Int, column:Int} {
+	public function lineColumnAt(offset:Int): {line: Int, column: Int} {
 		var line = lineAt(offset);
 		return {line: line, column: offset - lineStarts[line - 1] + 1};
 	}
@@ -119,7 +119,7 @@ class SourceFile {
 	}
 
 	/** Convert a compiler UTF-8 byte offset to a zero-based LSP UTF-16 position. */
-	public function lspPosition(offset:Int):{line:Int, character:Int} {
+	public function lspPosition(offset:Int): {line: Int, character: Int} {
 		var line = lineAt(offset) - 1, cursor = lineStarts[line], units = 0;
 		while (cursor < offset) {
 			var width = utf8Width(bytes.get(cursor));
@@ -147,7 +147,7 @@ class SourceFile {
 		for (index in 0...bytes.length) {
 			var code = bytes.get(index);
 			first = (first ^ code) * 16777619;
-			second = (((second << 5) | (second >>> 27)) ^ code) * (cast 0x85EBCA6B : Int);
+			second = (((second << 5) | (second >>> 27)) ^ code) * (cast 0x85EBCA6B:Int);
 		}
 		return StringTools.hex(first, 8) + StringTools.hex(second, 8) + "-" + bytes.length;
 	}
@@ -179,7 +179,8 @@ class SourceSpan {
 	/** Compiler-owned syntax has no user source snapshot. */
 	public final generatedReason:Null<String>;
 
-	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String, ?generatedReason:String) {
+	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String,
+			?generatedReason:String) {
 		this.generatedReason = generatedReason;
 		this.file = file;
 		this.start = start;
@@ -192,6 +193,7 @@ class SourceSpan {
 		return new SourceSpan(new SourceFile("<generated:" + reason + ">", ""), 0, 0, false, null, reason);
 
 	public function merge(other:SourceSpan):SourceSpan
-		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end, false, null,
+		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end, false,
+			null,
 			generatedReason == other.generatedReason ? generatedReason : null);
 }

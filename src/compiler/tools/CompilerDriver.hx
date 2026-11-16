@@ -24,7 +24,8 @@ import compiler.types.NativeTypeDescriptorCodec;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
-	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession, ?cancellation:CancellationToken,
+	public static function compile(request:CompilerRequest, ?progress:String->Void, ?session:CompilerSession,
+			?cancellation:CancellationToken,
 			?published:() -> Void):CompileResult {
 		if (cancellation != null)
 			cancellation.check();
@@ -58,8 +59,8 @@ class CompilerDriver {
 					case "wasmgc", "wasm-gc": WasmGc;
 					default: HashLink;
 				},
-				outputBytes:Null<Bytes> = null,
-				outputIndices:Null<Map<String, Int>> = null;
+					outputBytes:Null<Bytes> = null,
+					outputIndices:Null<Map<String, Int>> = null;
 			// A live edit that patches publishes the patch and its stamp before the 40 MB module and the side files are written:
 			// the host applies the patch from its own memory, and a reload waits for the `.live.full` marker that vouches for them.
 			var deferFullModule = !isWasm && request.live && result.patchBytes != null && !result.requiresReload;
@@ -85,7 +86,8 @@ class CompilerDriver {
 				var backend:Backend = new WasmBackend(),
 					encode = () -> backend.compile(result.ir, options).bytes;
 				// The same program compiled with the same options is the same module (a build that reused its IR gets the earlier bytes).
-				outputBytes = session == null ? encode() : session.wasmModule(result.ir, Json.stringify(options), encode);
+				outputBytes = session == null ? encode() : session.wasmModule(result.ir, Json.stringify(options),
+					encode);
 			} else {
 				outputIndices = result.functionIndices;
 				if (!deferFullModule)
@@ -97,7 +99,9 @@ class CompilerDriver {
 			var allocationAfterEncode = AllocationMeter.sample();
 			var stampedAt = -1.0;
 			var publishPatch = function() {
-				var identities = [for (name => id in result.functionIds) {name: name, id: id}];
+				var identities = [for (name => id in result.functionIds) {
+					name:name, id:id
+				}];
 				identities.sort(function(a, b) return Reflect.compare(a.name, b.name));
 				if (result.patchBytes != null)
 					File.saveBytes(request.output + ".hlp", result.patchBytes);
@@ -113,7 +117,7 @@ class CompilerDriver {
 					reloadReasons: [for (reason in result.reloadReasons) AbiChangeSchema.encode(reason)],
 					patchAvailable: result.patchBytes != null,
 					changedFunctions: result.changedFunctions,
-					identities: ([] : Array<Dynamic>)
+					identities: ([]: Array<Dynamic>)
 				}));
 				replaceFile(summary + ".tmp", summary);
 				var manifest = request.output + ".live.json";
@@ -132,7 +136,8 @@ class CompilerDriver {
 				replaceFile(temporary, manifest);
 				// The live host reads this small stamp every tick, and the description only when the stamp changes.
 				var stamp = request.output + ".live.stamp";
-				File.saveContent(stamp + ".tmp", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+				File.saveContent(stamp + ".tmp",
+					Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
 				replaceFile(stamp + ".tmp", stamp);
 				stampedAt = Sys.time() * 1000.0;
 				if (published != null)
@@ -156,7 +161,8 @@ class CompilerDriver {
 				if (!deferFullModule)
 					publishPatch();
 			}
-			File.saveContent(request.output + ".build-id", build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
+			File.saveContent(request.output + ".build-id",
+				build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
 			if (request.xmlOutput != null)
 				File.saveContent(request.xmlOutput, HaxeXmlWriter.emit(compiler.modules));
 			if (request.irOutput != null)
@@ -168,15 +174,19 @@ class CompilerDriver {
 			var typedProgram = compiler.lastTypedProgram;
 			if (typedProgram == null)
 				throw "Compiler completed without a typed program for descriptor emission";
-			File.saveBytes(request.output + ".descriptors", NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
-			File.saveContent(request.output + ".descriptors.json", NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
+			File.saveBytes(request.output + ".descriptors",
+				NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
+			File.saveContent(request.output + ".descriptors.json",
+				NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
 			// Every file a reload reads now belongs to the published revision; the marker is the host's licence to load them.
 			if (!isWasm)
-				File.saveContent(request.output + ".live.full", Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
+				File.saveContent(request.output + ".live.full",
+					Base64.encode(result.runtimeIdentity.sub(4, 16)) + ":" + result.revision);
 			// The history this revision was assembled from is recorded beside it once the session is idle, so a session that
 			// starts after this one patches the module it published.
 			if (!isWasm && request.live && session != null)
-				session.recordLivePublication(request.publishedOutput == null ? request.output : request.publishedOutput,
+				session.recordLivePublication(request.publishedOutput == null
+					? request.output : request.publishedOutput,
 					File.getContent(request.output + ".live.full"));
 			var artifactsWrittenAt = Sys.time() * 1000.0;
 			var allocationAfterWrite = AllocationMeter.sample();
@@ -188,12 +198,14 @@ class CompilerDriver {
 				+ milliseconds(backendDoneAt - backendStartedAt)
 				+ " write="
 				+ milliseconds(artifactsWrittenAt - backendDoneAt)
-				+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt) + (deferFullModule ? " (patch first)" : "")));
+				+ (stampedAt < 0 ? "" : " stamp=" + milliseconds(stampedAt - requestStartedAt)
+				+ (deferFullModule ? " (patch first)" : "")));
 			report(phaseReport(result, backendDoneAt - backendStartedAt));
 			for (line in result.metrics.frontendPassReports)
 				report("frontend " + line);
 			report("ir pass allocation (MB/k objects): "
-				+ [for (entry in IrPassMeter.entries()) entry.name + "=" + Math.round(entry.bytes / 1048576.0) + "/" + Math.round(entry.count / 1000.0)].join(" "));
+				+ [for (entry in IrPassMeter.entries()) entry.name + "=" + Math.round(entry.bytes / 1048576.0) + "/"
+				+ Math.round(entry.count / 1000.0)].join(" "));
 			report(allocationReport("compiler allocation phases:", result.metrics.allocationPhases));
 			report(allocationReport("driver allocation phases:", [
 				AllocationMeter.delta("prepare", allocationAtStart, allocationAfterPrepare),
@@ -217,7 +229,8 @@ class CompilerDriver {
 		// Explicit manifests use root-relative diagnostic paths; reports must name the physical input files.
 		var physicalPaths:Map<String, String> = [];
 		for (path in request.paths)
-			physicalPaths.set(SourceManifestLoader.projectPath(path, request.roots, request.packageRoots), FileSystem.fullPath(path));
+			physicalPaths.set(SourceManifestLoader.projectPath(path, request.roots, request.packageRoots),
+				FileSystem.fullPath(path));
 		var sorted = names.copy();
 		sorted.sort(Reflect.compare);
 		var rows:Array<Array<String>> = [];
@@ -265,28 +278,49 @@ class CompilerDriver {
 
 	static function phaseReport(result:CompileResult, outputBackendMs:Float):String {
 		var metrics = result.metrics;
-		return "compiler phases (reused: " + metrics.reuse + ", linked functions: " + metrics.linkedFunctions + ", of which re-indexed: " + metrics.movedFunctions + ") (ms): snapshot=" + milliseconds(metrics.transactionSnapshotMs) + " candidate="
-			+ milliseconds(metrics.candidateSetupMs) + " frontend=" + milliseconds(metrics.frontendMs) + frontendRestarts(metrics.frontendRestarts)
-			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs) + " dependencies="
-			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs) + " semantic="
-			+ milliseconds(metrics.semanticAssemblyMs) + " (alias-setup=" + milliseconds(metrics.semanticAliasMs) + " canonicalization="
-			+ milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse=" + milliseconds(metrics.semanticContributionReuseMs)
+		return "compiler phases (reused: " + metrics.reuse + ", linked functions: " + metrics.linkedFunctions
+			+ ", of which re-indexed: " + metrics.movedFunctions + ") (ms): snapshot="
+			+ milliseconds(metrics.transactionSnapshotMs) + " candidate="
+			+ milliseconds(metrics.candidateSetupMs) + " frontend=" + milliseconds(metrics.frontendMs)
+			+ frontendRestarts(metrics.frontendRestarts)
+			+ " (graph=" + milliseconds(metrics.frontendGraphMs) + " parse=" + milliseconds(metrics.graphParseMs)
+			+ " dependencies="
+			+ milliseconds(metrics.graphDependencyMs) + " initialization=" + milliseconds(metrics.graphInitializationMs)
+			+ " semantic="
+			+ milliseconds(metrics.semanticAssemblyMs) + " (alias-setup=" + milliseconds(metrics.semanticAliasMs)
+			+ " canonicalization="
+			+ milliseconds(metrics.semanticCanonicalizationMs) + " contribution-reuse="
+			+ milliseconds(metrics.semanticContributionReuseMs)
 			+ " contribution-rebuild=" + milliseconds(metrics.semanticContributionRebuildMs) + " invalidation="
-			+ milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes=" + Std.string(metrics.semanticAllocatedBytes) + "))" + " typing/lowering="
-			+ milliseconds(metrics.typingLoweringMs) + " (analysis=" + milliseconds(metrics.analysisMs) + " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
-			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs) + ") setup="
+			+ milliseconds(metrics.semanticInvalidationMs) + " semantic-bytes="
+			+ Std.string(metrics.semanticAllocatedBytes) + "))" + " typing/lowering="
+			+ milliseconds(metrics.typingLoweringMs) + " (analysis=" + milliseconds(metrics.analysisMs)
+			+ " (declarations=" + milliseconds(metrics.declarationMs) + " shapes="
+			+ milliseconds(metrics.shapeConnectionMs) + " signatures=" + milliseconds(metrics.signatureTypingMs)
+			+ ") setup="
 			+ milliseconds(metrics.typerSetupMs) + " no-return=" + milliseconds(metrics.typerNoReturnMs) + " metadata="
-			+ milliseconds(metrics.typerMetadataMs) + " class-bodies=" + milliseconds(metrics.typerClassBodiesMs) + " function-bodies="
-			+ milliseconds(metrics.typerFunctionBodiesMs) + " generated=" + milliseconds(metrics.typerGeneratedMs) + " body-transition="
-			+ milliseconds(metrics.bodyTransitionMs) + " assembly=" + milliseconds(metrics.typerAssemblyMs) + " finalization="
-			+ milliseconds(metrics.finalizationTransitionMs) + " ir-generation=" + milliseconds(metrics.irGenerationMs) + ")" + " ir-assembly=" + milliseconds(metrics.irAssemblyMs) + " abi="
-			+ milliseconds(metrics.abiPlanningMs) + " incremental-backend=" + milliseconds(metrics.backendAssemblyMs) + " (assembler-copy="
-			+ milliseconds(metrics.backendAssemblerCopyMs) + " cache-preparation=" + milliseconds(metrics.backendCachePreparationMs) + " backend-lowering="
-			+ milliseconds(metrics.backendLoweringMs) + " publication=" + milliseconds(metrics.backendPublicationMs) + " snapshots="
-			+ milliseconds(metrics.backendSnapshotMs) + " verify=" + milliseconds(metrics.backendVerificationMs) + " lower-metadata="
-			+ milliseconds(metrics.backendMetadataMs) + " lower-functions=" + milliseconds(metrics.backendFunctionLoweringMs) + " lower-debug="
-			+ milliseconds(metrics.backendDebugAssemblyMs) + " lower-finalize=" + milliseconds(metrics.backendFinalizationMs) + ") patch="
-			+ milliseconds(metrics.patchEncodingMs) + " finalize=" + milliseconds(metrics.finalizeMs) + " output-backend=" + milliseconds(outputBackendMs);
+			+ milliseconds(metrics.typerMetadataMs) + " class-bodies=" + milliseconds(metrics.typerClassBodiesMs)
+			+ " function-bodies="
+			+ milliseconds(metrics.typerFunctionBodiesMs) + " generated=" + milliseconds(metrics.typerGeneratedMs)
+			+ " body-transition="
+			+ milliseconds(metrics.bodyTransitionMs) + " assembly=" + milliseconds(metrics.typerAssemblyMs)
+			+ " finalization="
+			+ milliseconds(metrics.finalizationTransitionMs) + " ir-generation=" + milliseconds(metrics.irGenerationMs)
+			+ ")" + " ir-assembly=" + milliseconds(metrics.irAssemblyMs) + " abi="
+			+ milliseconds(metrics.abiPlanningMs) + " incremental-backend=" + milliseconds(metrics.backendAssemblyMs)
+			+ " (assembler-copy="
+			+ milliseconds(metrics.backendAssemblerCopyMs) + " cache-preparation="
+			+ milliseconds(metrics.backendCachePreparationMs) + " backend-lowering="
+			+ milliseconds(metrics.backendLoweringMs) + " publication=" + milliseconds(metrics.backendPublicationMs)
+			+ " snapshots="
+			+ milliseconds(metrics.backendSnapshotMs) + " verify=" + milliseconds(metrics.backendVerificationMs)
+			+ " lower-metadata="
+			+ milliseconds(metrics.backendMetadataMs) + " lower-functions="
+			+ milliseconds(metrics.backendFunctionLoweringMs) + " lower-debug="
+			+ milliseconds(metrics.backendDebugAssemblyMs) + " lower-finalize="
+			+ milliseconds(metrics.backendFinalizationMs) + ") patch="
+			+ milliseconds(metrics.patchEncodingMs) + " finalize=" + milliseconds(metrics.finalizeMs)
+			+ " output-backend=" + milliseconds(outputBackendMs);
 	}
 
 	static inline function milliseconds(value:Float):String

@@ -29,8 +29,10 @@ class WasmLinearRuntime {
 		for (native in program.natives)
 			if (used.exists(native.name))
 				switch native.symbol {
-					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_exp", "__math_log",
-						"__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory",
+					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
+						"__math_exp", "__math_log",
+						"__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time",
+						"sys_thread_cpu_time", "sys_process_memory",
 						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free":
 						runtimeImport(module, native);
 					default:
@@ -83,7 +85,10 @@ class WasmLinearRuntime {
 		var importModule = native.library == null || native.library == "" ? "env" : native.library,
 			importName = native.symbol == null || native.symbol == "" ? native.name : native.symbol;
 		return module.addImport(importModule, importName,
-			{parameters: [for (argument in native.arguments) WasmModuleSupport.requireValueType(argument)], results: resultTypes(native.result)});
+			{
+				parameters: [for (argument in native.arguments) WasmModuleSupport.requireValueType(argument)],
+				results: resultTypes(native.result)
+			});
 	}
 
 	static function runtimeImportIndex(module:WasmModule, native:compiler.ir.Ir.IrNative):Null<Int> {
@@ -126,14 +131,19 @@ class WasmLinearRuntime {
 			else {
 				var mapParts = WasmModuleSupport.mapNativeParts(native.name);
 				if (mapParts != null)
-					functions.set(native.name, addMapRuntimeFunction(module, functions, native.name, mapParts.mapName, mapParts.operation, allocator));
+					functions.set(native.name, addMapRuntimeFunction(module, functions, native.name, mapParts.mapName,
+						mapParts.operation, allocator));
 				else
 					switch native.name {
 						case "__string_length":
 							var builder = new WasmFunctionBuilder(native.name, {parameters: [I32], results: [I32]});
 							var result = builder.local("length", I32);
-							builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.length([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
-								index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), result));
+							builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.length([
+								LocalGet(0),
+								I32Load(WasmLayout.STRING_LENGTH_OFFSET)
+							],
+								index -> stringByteAt(0, index),
+								() -> builder.local("utf16-" + builder.locals.length, I32), result));
 							builder.localGet(result);
 							builder.return_();
 							functions.set(native.name, module.addFunction(builder.finish()));
@@ -141,7 +151,8 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringCharCodeAt(module, native.name));
 						case "__string_concat":
 							if (!functions.exists(native.name))
-								functions.set(native.name, addStringConcat(module, native.name, allocator, requiredStringOffset(strings, "null")));
+								functions.set(native.name, addStringConcat(module, native.name, allocator,
+									requiredStringOffset(strings, "null")));
 						case "__string_to_lower_case":
 							functions.set(native.name, addStringCase(module, native.name, allocator, true));
 						case "__string_to_upper_case":
@@ -170,8 +181,15 @@ class WasmLinearRuntime {
 							functions.set(native.name, addStringSplit(module, native.name, allocator, substring));
 						case "__std_int_f64":
 							functions.set(native.name,
-								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64], results: [I32]}, [],
-									[LocalGet(0), I32TruncF64S, Return])));
+								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+									parameters: [F64],
+									results: [I32]
+								}, [],
+									[
+										LocalGet(0),
+										I32TruncF64S,
+										Return
+									])));
 						case "__std_int_dynamic":
 							functions.set(native.name, addDynamicInt(module, native.name));
 						case "__reflect_is_object":
@@ -179,14 +197,16 @@ class WasmLinearRuntime {
 						case "__std_string":
 							if ((context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)
 								&& !functions.exists("__string_concat"))
-								functions.set("__string_concat", addStringConcat(module, "__string_concat", allocator, requiredStringOffset(strings, "null")));
+								functions.set("__string_concat", addStringConcat(module, "__string_concat", allocator,
+									requiredStringOffset(strings, "null")));
 							var integerString = addIntToString(module, "__haxeon_i32_to_string", allocator),
 								int64String = addInt64ToString(module, "__haxeon_i64_to_string", allocator);
 							functions.set("__haxeon_i32_to_string", integerString);
 							functions.set("__haxeon_i64_to_string", int64String);
-							functions.set(native.name, module.addFunction(dynamicString(module, native.name, strings, program, integerString, int64String)));
+							functions.set(native.name, module.addFunction(dynamicString(module, native.name, strings,
+								program, integerString, int64String)));
 						case "__dynamic_equal":
-							// Emitted after the native scan so the string helper has an index.
+						// Emitted after the native scan so the string helper has an index.
 						case "__dynamic_object_type_id":
 							var body:Array<WasmInstruction> = [
 								LocalGet(0),
@@ -216,90 +236,123 @@ class WasmLinearRuntime {
 								]);
 							body = body.concat([LocalGet(0), I32Load(0), Return]);
 							functions.set(native.name,
-								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], body)));
+								module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+									parameters: [I32],
+									results: [I32]
+								}, [], body)));
 						case "__std_is_of_type", "__std_is_exact_type", "__exception_matches":
 							functions.set(native.name, addTypeTest(module, native.name, program));
 						case "__array_copy_i32", "__array_copy_bool", "__array_copy_ref", "__array_copy_bytes":
-							functions.set(native.name, WasmLinearArrays.addArrayCopy(module, native.name, 4, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayCopy(module, native.name, 4, allocator));
 						case "__array_copy_f64", "__array_copy_i64":
-							functions.set(native.name, WasmLinearArrays.addArrayCopy(module, native.name, 8, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayCopy(module, native.name, 8, allocator));
 						case "__array_index_of_i32", "__array_index_of_bool", "__array_index_of_ref":
-							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 4, I32, null));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayIndexOf(module, native.name, 4, I32, null));
 						case "__array_index_of_bytes":
 							var stringEqual = functions.get("__string_equal");
 							if (stringEqual == null) {
 								stringEqual = addStringEqual(module, "__string_equal");
 								functions.set("__string_equal", stringEqual);
 							}
-							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 4, I32, stringEqual));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayIndexOf(module, native.name, 4, I32, stringEqual));
 						case "__array_index_of_f64":
-							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 8, F64, null));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayIndexOf(module, native.name, 8, F64, null));
 						case "__array_index_of_i64":
-							functions.set(native.name, WasmLinearArrays.addArrayIndexOf(module, native.name, 8, I64, null));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayIndexOf(module, native.name, 8, I64, null));
 						case "__array_slice_i32", "__array_slice_bool", "__array_slice_ref", "__array_slice_bytes":
-							functions.set(native.name, WasmLinearArrays.addArraySlice(module, native.name, 4, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArraySlice(module, native.name, 4, allocator));
 						case "__array_slice_f64", "__array_slice_i64":
-							functions.set(native.name, WasmLinearArrays.addArraySlice(module, native.name, 8, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArraySlice(module, native.name, 8, allocator));
 						case "__array_join_bytes":
 							var stringConcat = functions.get("__string_concat");
 							if (stringConcat == null) {
-								stringConcat = addStringConcat(module, "__string_concat", allocator, requiredStringOffset(strings, "null"));
+								stringConcat = addStringConcat(module, "__string_concat", allocator,
+									requiredStringOffset(strings, "null"));
 								functions.set("__string_concat", stringConcat);
 							}
-							functions.set(native.name, WasmLinearArrays.addArrayJoinBytes(module, native.name, allocator, stringConcat));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayJoinBytes(module, native.name, allocator, stringConcat));
 						case "__array_concat_i32", "__array_concat_bool", "__array_concat_ref", "__array_concat_bytes":
-							functions.set(native.name, WasmLinearArrays.addArrayConcat(module, native.name, 4, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayConcat(module, native.name, 4, allocator));
 						case "__array_concat_f64", "__array_concat_i64":
-							functions.set(native.name, WasmLinearArrays.addArrayConcat(module, native.name, 8, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayConcat(module, native.name, 8, allocator));
 						case "__array_push_i32", "__array_push_bool", "__array_push_ref", "__array_push_bytes":
-							functions.set(native.name, WasmLinearArrays.addArrayPush(module, native.name, 4, I32, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayPush(module, native.name, 4, I32, allocator));
 						case "__array_push_f64", "__array_push_i64":
 							functions.set(native.name,
-								WasmLinearArrays.addArrayPush(module, native.name, 8, native.name == "__array_push_i64" ? I64 : F64, allocator));
+								WasmLinearArrays.addArrayPush(module, native.name, 8,
+								native.name == "__array_push_i64" ? I64 : F64, allocator));
 						case "__array_pop_i32", "__array_pop_bool", "__array_pop_ref", "__array_pop_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayPop(module, native.name, 4, I32));
 						case "__array_pop_f64", "__array_pop_i64":
-							functions.set(native.name, WasmLinearArrays.addArrayPop(module, native.name, 8, native.name == "__array_pop_i64" ? I64 : F64));
-						case "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_ref", "__array_unshift_bytes":
-							functions.set(native.name, WasmLinearArrays.addArrayUnshift(module, native.name, 4, I32, allocator));
+							functions.set(native.name, WasmLinearArrays.addArrayPop(module, native.name, 8,
+								native.name == "__array_pop_i64" ? I64 : F64));
+						case "__array_unshift_i32", "__array_unshift_bool", "__array_unshift_ref",
+							"__array_unshift_bytes":
+							functions.set(native.name,
+								WasmLinearArrays.addArrayUnshift(module, native.name, 4, I32, allocator));
 						case "__array_unshift_f64", "__array_unshift_i64":
 							functions.set(native.name,
-								WasmLinearArrays.addArrayUnshift(module, native.name, 8, native.name == "__array_unshift_i64" ? I64 : F64, allocator));
+								WasmLinearArrays.addArrayUnshift(module, native.name, 8,
+								native.name == "__array_unshift_i64" ? I64 : F64, allocator));
 						case "__array_insert_i32", "__array_insert_bool", "__array_insert_ref", "__array_insert_bytes":
-							functions.set(native.name, WasmLinearArrays.addArrayInsert(module, native.name, 4, I32, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayInsert(module, native.name, 4, I32, allocator));
 						case "__array_insert_f64", "__array_insert_i64":
 							functions.set(native.name,
-								WasmLinearArrays.addArrayInsert(module, native.name, 8, native.name == "__array_insert_i64" ? I64 : F64, allocator));
+								WasmLinearArrays.addArrayInsert(module, native.name, 8,
+								native.name == "__array_insert_i64" ? I64 : F64, allocator));
 						case "__array_shift_i32", "__array_shift_bool", "__array_shift_ref", "__array_shift_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayShift(module, native.name, 4, I32));
 						case "__array_shift_f64", "__array_shift_i64":
-							functions.set(native.name, WasmLinearArrays.addArrayShift(module, native.name, 8, native.name == "__array_shift_i64" ? I64 : F64));
+							functions.set(native.name, WasmLinearArrays.addArrayShift(module, native.name, 8,
+								native.name == "__array_shift_i64" ? I64 : F64));
 						case "__array_resize_i32", "__array_resize_bool", "__array_resize_ref", "__array_resize_bytes":
-							functions.set(native.name, WasmLinearArrays.addArrayResize(module, native.name, 4, I32, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayResize(module, native.name, 4, I32, allocator));
 						case "__array_resize_f64", "__array_resize_i64":
 							functions.set(native.name,
-								WasmLinearArrays.addArrayResize(module, native.name, 8, native.name == "__array_resize_i64" ? I64 : F64, allocator));
+								WasmLinearArrays.addArrayResize(module, native.name, 8,
+								native.name == "__array_resize_i64" ? I64 : F64, allocator));
 						case "__array_remove_i32", "__array_remove_bool", "__array_remove_ref":
-							functions.set(native.name, WasmLinearArrays.addArrayRemove(module, native.name, 4, I32, null));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayRemove(module, native.name, 4, I32, null));
 						case "__array_remove_bytes":
 							var stringEqual = functions.get("__string_equal");
 							if (stringEqual == null) {
 								stringEqual = addStringEqual(module, "__string_equal");
 								functions.set("__string_equal", stringEqual);
 							}
-							functions.set(native.name, WasmLinearArrays.addArrayRemove(module, native.name, 4, I32, stringEqual));
+							functions.set(native.name,
+								WasmLinearArrays.addArrayRemove(module, native.name, 4, I32, stringEqual));
 						case "__array_remove_f64", "__array_remove_i64":
 							functions.set(native.name,
-								WasmLinearArrays.addArrayRemove(module, native.name, 8, native.name == "__array_remove_i64" ? I64 : F64, null));
-						case "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_ref", "__array_reverse_bytes":
+								WasmLinearArrays.addArrayRemove(module, native.name, 8,
+								native.name == "__array_remove_i64" ? I64 : F64, null));
+						case "__array_reverse_i32", "__array_reverse_bool", "__array_reverse_ref",
+							"__array_reverse_bytes":
 							functions.set(native.name, WasmLinearArrays.addArrayReverse(module, native.name, 4, I32));
 						case "__array_reverse_f64", "__array_reverse_i64":
 							functions.set(native.name,
-								WasmLinearArrays.addArrayReverse(module, native.name, 8, native.name == "__array_reverse_i64" ? I64 : F64));
+								WasmLinearArrays.addArrayReverse(module, native.name, 8,
+								native.name == "__array_reverse_i64" ? I64 : F64));
 						case "__array_splice_i32", "__array_splice_bool", "__array_splice_ref", "__array_splice_bytes":
-							functions.set(native.name, WasmLinearArrays.addArraySplice(module, native.name, 4, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArraySplice(module, native.name, 4, allocator));
 						case "__array_splice_f64", "__array_splice_i64":
-							functions.set(native.name, WasmLinearArrays.addArraySplice(module, native.name, 8, allocator));
+							functions.set(native.name,
+								WasmLinearArrays.addArraySplice(module, native.name, 8, allocator));
 						default:
 					}
 			}
@@ -416,7 +469,8 @@ class WasmLinearRuntime {
 	}
 
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
-	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int, bytesDataPointer:Int,
+	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int,
+			bytesDataPointer:Int,
 			program:IrProgram):Null<Int> {
 		return switch native.symbol {
 			case "__reflect_is_enum":
@@ -443,96 +497,119 @@ class WasmLinearRuntime {
 				];
 				appendEnumKindCheck(body, ids, 0, ids.length);
 				body.push(Return);
-				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, ids.length == 0 ? [] : [{type: I32}], body));
-			case "__reflect_is_function": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [
-					LocalGet(0),
-					I32Eqz,
-					If(null),
-					I32Const(0),
-					Return,
-					End,
-					LocalGet(0),
-					I32Const(1),
-					I32And,
-					If(null),
-					I32Const(1),
-					Return,
-					End,
-					LocalGet(0),
-					I32Load(0),
-					I32Const(WasmLayout.CLOSURE_TYPE_ID),
-					I32Eq,
-					Return
-				]));
-			case "__haxeon_varargs_call": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32, I32], results: [I32]}, [], [
-					LocalGet(0),
-					I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
-					LocalGet(1),
-					LocalGet(0),
-					I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
-					CallIndirect(module.typeIndex({
-						parameters: [I32, I32],
-						results: [I32]
-					})),
-					Return
-				]));
-			case "__closure_receiver_if_match": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32, I32], results: [I32]}, [], [
-					LocalGet(0),
-					I32Eqz,
-					If(null),
-					I32Const(0),
-					Return,
-					End,
-					LocalGet(0),
-					I32Const(1),
-					I32And,
-					If(null),
-					I32Const(0),
-					Return,
-					End,
-					LocalGet(0),
-					I32Load(0),
-					I32Const(WasmLayout.CLOSURE_TYPE_ID),
-					I32Eq,
-					I32Eqz,
-					If(null),
-					I32Const(0),
-					Return,
-					End,
-					LocalGet(0),
-					I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
-					LocalGet(1),
-					I32Const(-2),
-					I32And,
-					I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
-					I32Eq,
-					I32Eqz,
-					If(null),
-					I32Const(0),
-					Return,
-					End,
-					LocalGet(0),
-					I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
-					Return
-				]));
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]},
+					ids.length == 0 ? [] : [{type: I32}], body));
+			case "__reflect_is_function": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+				parameters: [I32],
+				results: [I32]
+			}, [], [
+				LocalGet(0),
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				Return,
+				End,
+				LocalGet(0),
+				I32Const(1),
+				I32And,
+				If(null),
+				I32Const(1),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(0),
+				I32Const(WasmLayout.CLOSURE_TYPE_ID),
+				I32Eq,
+				Return
+			]));
+			case "__haxeon_varargs_call": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+				parameters: [I32, I32],
+				results: [I32]
+			}, [], [
+				LocalGet(0),
+				I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
+				LocalGet(1),
+				LocalGet(0),
+				I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
+				CallIndirect(module.typeIndex({
+					parameters: [I32, I32],
+					results: [I32]
+				})),
+				Return
+			]));
+			case "__closure_receiver_if_match": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+				parameters: [I32, I32],
+				results: [I32]
+			}, [], [
+				LocalGet(0),
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				Return,
+				End,
+				LocalGet(0),
+				I32Const(1),
+				I32And,
+				If(null),
+				I32Const(0),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(0),
+				I32Const(WasmLayout.CLOSURE_TYPE_ID),
+				I32Eq,
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(WasmLayout.CLOSURE_FUNCTION_OFFSET),
+				LocalGet(1),
+				I32Const(-2),
+				I32And,
+				I32Load(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET),
+				I32Eq,
+				I32Eqz,
+				If(null),
+				I32Const(0),
+				Return,
+				End,
+				LocalGet(0),
+				I32Load(WasmLayout.CLOSURE_RECEIVER_OFFSET),
+				Return
+			]));
 			case "fun_compare": addCompareMethods(module, native.name);
-			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp", "__math_log",
+			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
+				"__math_round", "__math_exp", "__math_log",
 				"__math_ceil", "__math_floor", "__sys_args":
 				runtimeImportIndex(module, native);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "__math_sqrt": addMathSqrt(module, native.name);
-			case "__math_abs": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64], results: [F64]}, [],
-					[LocalGet(0), F64Abs, Return]));
-			case "__math_min", "__math_max":
-				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]}, [], [
+			case "__math_abs": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+				parameters: [F64],
+				results: [F64]
+			}, [],
+				[
 					LocalGet(0),
-					LocalGet(1),
-					native.symbol == "__math_min" ? F64Min : F64Max,
+					F64Abs,
 					Return
 				]));
-			case "__math_fmod": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]}, WasmFmod.locals(),
-					WasmFmod.body()));
-			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit",
+			case "__math_min", "__math_max":
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [F64, F64], results: [F64]},
+					[], [
+						LocalGet(0),
+						LocalGet(1),
+						native.symbol == "__math_min" ? F64Min : F64Max,
+						Return
+					]));
+			case "__math_fmod": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
+				parameters: [F64, F64],
+				results: [F64]
+			}, WasmFmod.locals(),
+				WasmFmod.body()));
+			case "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep",
+				"sys_get_char", "sys_exit",
 				"native_alloc", "native_free":
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
@@ -558,7 +635,8 @@ class WasmLinearRuntime {
 			case "getI64": addBytesLoad(module, native.name, I64, I64Load(0), bytesDataPointer);
 			case "getF32": addBytesLoad(module, native.name, F64, F32Load(0), bytesDataPointer, [F64PromoteF32]);
 			case "getF64": addBytesLoad(module, native.name, F64, F64Load(0), bytesDataPointer);
-			case "__bytes_set", "setI8", "setU8": addBytesStore(module, native.name, I32, I32Store8(0), bytesDataPointer);
+			case "__bytes_set", "setI8",
+				"setU8": addBytesStore(module, native.name, I32, I32Store8(0), bytesDataPointer);
 			case "__bytes_set_i32", "setI32": addBytesStore(module, native.name, I32, I32Store(0), bytesDataPointer);
 			case "setI16", "setU16": addBytesStore(module, native.name, I32, I32Store16(0), bytesDataPointer);
 			case "setI64": addBytesStore(module, native.name, I64, I64Store(0), bytesDataPointer);
@@ -579,7 +657,10 @@ class WasmLinearRuntime {
 			case "structToLinear": addStructToLinear(module, native.name, bytesDataPointer);
 			// A borrowed native pointer is its address on Wasm32, and a callback handle its table index.
 			case "nativePointerFromAddress", "nativeCallbackFromIndex", "nativeCallbackIndex":
-				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [LocalGet(0), Return]));
+				module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {parameters: [I32], results: [I32]}, [], [
+					LocalGet(0),
+					Return
+				]));
 			case "structSetPointer": addStructSetPointer(module, native.name, bytesDataPointer);
 			case "structGetUtf8": addStructGetUtf8(module, native.name, allocator, bytesDataPointer);
 			case "structSetUtf8": addStructSetUtf8(module, native.name, allocator, bytesDataPointer);
@@ -588,24 +669,25 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesAlloc(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			Call(allocator),
-			LocalSet(1),
-			LocalGet(1),
-			I32Const(module.runtimeTypeId(ManagedBytes)),
-			I32Store(0),
-			LocalGet(1),
-			LocalGet(0),
-			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalGet(1),
-			LocalGet(0),
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(1),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}],
+			[
+				LocalGet(0),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				Call(allocator),
+				LocalSet(1),
+				LocalGet(1),
+				I32Const(module.runtimeTypeId(ManagedBytes)),
+				I32Store(0),
+				LocalGet(1),
+				LocalGet(0),
+				I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalGet(1),
+				LocalGet(0),
+				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+				LocalGet(1),
+				Return
+			]));
 	}
 
 	static function addStringFromAscii(module:WasmModule, name:String, allocator:Int):Int {
@@ -685,41 +767,46 @@ class WasmLinearRuntime {
 	}
 
 	static function addBytesFromString(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}], [
-			LocalGet(0),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			Call(allocator),
-			LocalSet(1),
-			LocalGet(1),
-			I32Const(module.runtimeTypeId(ManagedBytes)),
-			I32Store(0),
-			LocalGet(1),
-			LocalGet(0),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalGet(1),
-			LocalGet(0),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(1),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(0),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(0),
-			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
-			MemoryCopy,
-			LocalGet(1),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}],
+			[
+				LocalGet(0),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				Call(allocator),
+				LocalSet(1),
+				LocalGet(1),
+				I32Const(module.runtimeTypeId(ManagedBytes)),
+				I32Store(0),
+				LocalGet(1),
+				LocalGet(0),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalGet(1),
+				LocalGet(0),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+				LocalGet(1),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(0),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(0),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				MemoryCopy,
+				LocalGet(1),
+				Return
+			]));
 	}
 
 	static function addBytesLength(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
-			[LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET), Return]));
+			[
+				LocalGet(0),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET),
+				Return
+			]));
 
 	static function addBytesCompare(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
@@ -890,7 +977,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addBytesLoad(module:WasmModule, name:String, result:WasmValueType, instruction:WasmInstruction, bytesDataPointer:Int,
+	static function addBytesLoad(module:WasmModule, name:String, result:WasmValueType, instruction:WasmInstruction,
+			bytesDataPointer:Int,
 			?after:Array<WasmInstruction>):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [result]}),
 			bytes = builder.parameter("bytes", 0),
@@ -906,7 +994,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addBytesStore(module:WasmModule, name:String, valueType:WasmValueType, instruction:WasmInstruction, bytesDataPointer:Int,
+	static function addBytesStore(module:WasmModule, name:String, valueType:WasmValueType, instruction:WasmInstruction,
+			bytesDataPointer:Int,
 			?before:Array<WasmInstruction>):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, valueType], results: []}),
 			bytes = builder.parameter("bytes", 0),
@@ -971,7 +1060,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addBytesSlice(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int, stringResult:Bool):Int {
+	static function addBytesSlice(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int,
+			stringResult:Bool):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]}),
 			bytes = builder.parameter("bytes", 0),
 			offset = builder.parameter("offset", 1),
@@ -1067,7 +1157,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function bytesRangeCheck(builder:WasmFunctionBuilder, bytes:WasmLocalRef, offset:WasmLocalRef, length:WasmLocalRef):Void {
+	static function bytesRangeCheck(builder:WasmFunctionBuilder, bytes:WasmLocalRef, offset:WasmLocalRef,
+			length:WasmLocalRef):Void {
 		builder.localGet(offset);
 		builder.i32Const(0);
 		builder.emit(I32LtS);
@@ -1122,7 +1213,10 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructCopy(module:WasmModule, name:String, bytesDataPointer:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [{type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [
+			{type: I32},
+			{type: I32}
+		], [
 			LocalGet(0),
 			Call(bytesDataPointer),
 			LocalGet(1),
@@ -1147,7 +1241,10 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructWithRoots(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
-		var builder = WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}], [
+		var builder = WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [
+			{type: I32},
+			{type: I32}
+		], [
 			LocalGet(0),
 			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
 			LocalSet(2),
@@ -1183,11 +1280,19 @@ class WasmLinearRuntime {
 
 	static function addStructGetRoots(module:WasmModule, name:String):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
-			[LocalGet(0), I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET), Return]));
+			[
+				LocalGet(0),
+				I32Load(WasmLayout.BYTES_VIEW_ROOTS_OFFSET),
+				Return
+			]));
 	}
 
 	static function addStructUtf8Copy(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
-		var builder = WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+		var builder = WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [
+			{type: I32},
+			{type: I32},
+			{type: I32}
+		], [
 			LocalGet(0),
 			I32Load(WasmLayout.STRING_LENGTH_OFFSET),
 			LocalSet(1),
@@ -1231,35 +1336,43 @@ class WasmLinearRuntime {
 
 	static function addStructGetPointer(module:WasmModule, name:String, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32], results: [I32]}, [],
-			[LocalGet(0), Call(bytesDataPointer), LocalGet(1), I32Add, I32Load(0), Return]));
+			[
+				LocalGet(0),
+				Call(bytesDataPointer),
+				LocalGet(1),
+				I32Add,
+				I32Load(0),
+				Return
+			]));
 	}
 
 	/** Copies `size` bytes at a linear address into new Bytes, for HXI callback entries receiving records. */
 	static function addStructFromLinear(module:WasmModule, name:String, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}], [
-			LocalGet(1),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			Call(allocator),
-			LocalSet(2),
-			LocalGet(2),
-			I32Const(module.runtimeTypeId(ManagedBytes)),
-			I32Store(0),
-			LocalGet(2),
-			LocalGet(1),
-			I32Store(WasmLayout.STRING_LENGTH_OFFSET),
-			LocalGet(2),
-			LocalGet(1),
-			I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
-			LocalGet(2),
-			I32Const(WasmLayout.STRING_DATA_OFFSET),
-			I32Add,
-			LocalGet(0),
-			LocalGet(1),
-			MemoryCopy,
-			LocalGet(2),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]},
+			[{type: I32}], [
+				LocalGet(1),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				Call(allocator),
+				LocalSet(2),
+				LocalGet(2),
+				I32Const(module.runtimeTypeId(ManagedBytes)),
+				I32Store(0),
+				LocalGet(2),
+				LocalGet(1),
+				I32Store(WasmLayout.STRING_LENGTH_OFFSET),
+				LocalGet(2),
+				LocalGet(1),
+				I32Store(WasmLayout.ARRAY_CAPACITY_OFFSET),
+				LocalGet(2),
+				I32Const(WasmLayout.STRING_DATA_OFFSET),
+				I32Add,
+				LocalGet(0),
+				LocalGet(1),
+				MemoryCopy,
+				LocalGet(2),
+				Return
+			]));
 	}
 
 	/** Copies the first `size` bytes of a record to a linear address, for HXI callback entries returning records. */
@@ -1275,15 +1388,16 @@ class WasmLinearRuntime {
 	}
 
 	static function addStructSetPointer(module:WasmModule, name:String, bytesDataPointer:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [], [
-			LocalGet(0),
-			Call(bytesDataPointer),
-			LocalGet(1),
-			I32Add,
-			LocalGet(2),
-			I32Store(0),
-			Return
-		]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: []}, [],
+			[
+				LocalGet(0),
+				Call(bytesDataPointer),
+				LocalGet(1),
+				I32Add,
+				LocalGet(2),
+				I32Store(0),
+				Return
+			]));
 	}
 
 	static function addStructSetUtf8(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
@@ -1453,7 +1567,11 @@ class WasmLinearRuntime {
 
 	static function addStructCopyPointer(module:WasmModule, name:String, allocator:Int, bytesDataPointer:Int):Int {
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32, I32, I32], results: [I32]},
-			[{type: I32}, {type: I32}, {type: I32}], [
+			[
+				{type: I32},
+				{type: I32},
+				{type: I32}
+			], [
 				LocalGet(0),
 				Call(bytesDataPointer),
 				LocalGet(1),
@@ -1496,11 +1614,17 @@ class WasmLinearRuntime {
 
 	public static function mapValueType(mapName:String):IrType
 		return if (StringTools.endsWith(mapName,
-			"_i32")) I32; else if (StringTools.endsWith(mapName,
-			"_i64")) I64; else if (StringTools.endsWith(mapName,
-			"_bool")) Bool; else if (StringTools.endsWith(mapName,
-			"_f64")) F64; else if (StringTools.endsWith(mapName,
-			"_bytes")) Bytes; else if (StringTools.endsWith(mapName, "_ref")) Dyn; else throw 'Unknown Wasm map value ABI "$mapName"';
+			"_i32")) I32;
+	else if (StringTools.endsWith(mapName,
+		"_i64")) I64;
+	else if (StringTools.endsWith(mapName,
+		"_bool")) Bool;
+	else if (StringTools.endsWith(mapName,
+		"_f64")) F64;
+	else if (StringTools.endsWith(mapName,
+		"_bytes")) Bytes;
+	else if (StringTools.endsWith(mapName, "_ref")) Dyn;
+	else throw 'Unknown Wasm map value ABI "$mapName"';
 
 	public static function mapEntrySize(valueType:IrType):Int
 		return (switch (valueType) {
@@ -1529,7 +1653,8 @@ class WasmLinearRuntime {
 		return result;
 	}
 
-	static function ensureMapFind(module:WasmModule, functions:Map<String, Int>, mapName:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
+	static function ensureMapFind(module:WasmModule, functions:Map<String, Int>, mapName:String, keyType:IrType,
+			valueType:IrType, stringEqual:Int):Int {
 		var name = "__haxeon_map_find_" + mapName,
 			result = functions.get(name);
 		if (result == null) {
@@ -1539,7 +1664,8 @@ class WasmLinearRuntime {
 		return result;
 	}
 
-	static function ensureMapArrayAllocator(module:WasmModule, functions:Map<String, Int>, allocator:Int, valueType:IrType):Int {
+	static function ensureMapArrayAllocator(module:WasmModule, functions:Map<String, Int>, allocator:Int,
+			valueType:IrType):Int {
 		var suffix = (switch (valueType) {
 			case F64: true;
 			default: false;
@@ -1560,7 +1686,8 @@ class WasmLinearRuntime {
 		return result;
 	}
 
-	static function addMapRuntimeFunction(module:WasmModule, functions:Map<String, Int>, name:String, mapName:String, operation:String, allocator:Int):Int {
+	static function addMapRuntimeFunction(module:WasmModule, functions:Map<String, Int>, name:String, mapName:String,
+			operation:String, allocator:Int):Int {
 		var keyType = mapKeyType(mapName),
 			valueType = mapValueType(mapName),
 			stringEqual = (switch (keyType) {
@@ -1573,14 +1700,15 @@ class WasmLinearRuntime {
 			case "alloc": addMapAlloc(module, name, mapName, entrySize, allocator);
 			case "set": addMapSet(module, name, keyType, valueType, entrySize, valueOffset, allocator, stringEqual);
 			case "exists": addMapExists(module, name, keyType, valueType, stringEqual,
-					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+				ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
 			case "get": addMapGet(module, name, keyType, valueType, entrySize, valueOffset, allocator, stringEqual,
-					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
-			case "keys": addMapProjection(module, name, keyType, entrySize, 0, allocator, ensureMapArrayAllocator(module, functions, allocator, keyType));
+				ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+			case "keys": addMapProjection(module, name, keyType, entrySize, 0, allocator,
+				ensureMapArrayAllocator(module, functions, allocator, keyType));
 			case "values": addMapProjection(module, name, valueType, entrySize, valueOffset, allocator,
-					ensureMapArrayAllocator(module, functions, allocator, valueType));
+				ensureMapArrayAllocator(module, functions, allocator, valueType));
 			case "remove": addMapRemove(module, name, keyType, valueType, entrySize, stringEqual,
-					ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
+				ensureMapFind(module, functions, mapName, keyType, valueType, stringEqual));
 			case "clear": addMapClear(module, name);
 			case "copy": addMapCopy(module, name, mapName, entrySize, allocator);
 			case "size": addMapSize(module, name);
@@ -1589,7 +1717,10 @@ class WasmLinearRuntime {
 	}
 
 	static function addMapAlloc(module:WasmModule, name:String, mapName:String, entrySize:Int, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [], results: [I32]}, [{type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [], results: [I32]}, [
+			{type: I32},
+			{type: I32}
+		], [
 			I32Const(WasmLayout.MAP_HEADER_SIZE),
 			Call(allocator),
 			LocalTee(0),
@@ -1658,7 +1789,10 @@ class WasmLinearRuntime {
 
 	static function addMapFind(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int):Int {
 		var entrySize = mapEntrySize(valueType),
-			builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]}),
+			builder = new WasmFunctionBuilder(name, {
+				parameters: [I32, WasmModuleSupport.requireValueType(keyType)],
+				results: [I32]
+			}),
 			map = builder.parameter("map", 0),
 			key = builder.parameter("key", 1),
 			index = builder.local("index", I32),
@@ -1706,7 +1840,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addMapSet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
+	static function addMapSet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int,
+			valueOffset:Int, allocator:Int,
 			stringEqual:Int):Int {
 		var type:WasmFunctionType = {
 			parameters: [
@@ -1842,11 +1977,24 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addMapExists(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int, find:Int):Int
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]}, [],
-			[LocalGet(0), LocalGet(1), Call(find), I32Const(-1), I32Eq, I32Eqz, Return]));
+	static function addMapExists(module:WasmModule, name:String, keyType:IrType, valueType:IrType, stringEqual:Int,
+			find:Int):Int
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {
+			parameters: [I32, WasmModuleSupport.requireValueType(keyType)],
+			results: [I32]
+		}, [],
+			[
+				LocalGet(0),
+				LocalGet(1),
+				Call(find),
+				I32Const(-1),
+				I32Eq,
+				I32Eqz,
+				Return
+			]));
 
-	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
+	static function addMapGet(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int,
+			valueOffset:Int, allocator:Int,
 			stringEqual:Int, find:Int):Int {
 		var type:WasmFunctionType = {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]},
 			builder = new WasmFunctionBuilder(name, type),
@@ -1941,7 +2089,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addMapProjection(module:WasmModule, name:String, elementType:IrType, entrySize:Int, valueOffset:Int, allocator:Int,
+	static function addMapProjection(module:WasmModule, name:String, elementType:IrType, entrySize:Int, valueOffset:Int,
+			allocator:Int,
 			arrayAllocator:Int):Int {
 		var stride = WasmLayout.arrayStride(elementType),
 			builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
@@ -1995,8 +2144,12 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function addMapRemove(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int, stringEqual:Int, find:Int):Int {
-		var builder = new WasmFunctionBuilder(name, {parameters: [I32, WasmModuleSupport.requireValueType(keyType)], results: [I32]}),
+	static function addMapRemove(module:WasmModule, name:String, keyType:IrType, valueType:IrType, entrySize:Int,
+			stringEqual:Int, find:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {
+			parameters: [I32, WasmModuleSupport.requireValueType(keyType)],
+			results: [I32]
+		}),
 			map = builder.parameter("map", 0),
 			key = builder.parameter("key", 1),
 			index = builder.local("index", I32),
@@ -2058,12 +2211,19 @@ class WasmLinearRuntime {
 
 	static function addMapClear(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: []}, [],
-			[LocalGet(0), I32Const(0), I32Store(WasmLayout.MAP_COUNT_OFFSET)]));
+			[
+				LocalGet(0),
+				I32Const(0),
+				I32Store(WasmLayout.MAP_COUNT_OFFSET)
+			]));
 
 	/** A new map with the same entries: header and entries block allocated like addMapAlloc, then the used entries copied. */
 	static function addMapCopy(module:WasmModule, name:String, mapName:String, entrySize:Int, allocator:Int):Int {
 		// Locals: 0 = source, 1 = new map, 2 = new entries block.
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [
+			{type: I32},
+			{type: I32}
+		], [
 			I32Const(WasmLayout.MAP_HEADER_SIZE),
 			Call(allocator),
 			LocalSet(1),
@@ -2109,7 +2269,11 @@ class WasmLinearRuntime {
 
 	static function addMapSize(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32], results: [I32]}, [],
-			[LocalGet(0), I32Load(WasmLayout.MAP_COUNT_OFFSET), Return]));
+			[
+				LocalGet(0),
+				I32Load(WasmLayout.MAP_COUNT_OFFSET),
+				Return
+			]));
 
 	static function addDynamicInt(module:WasmModule, name:String):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I32]}),
@@ -2322,7 +2486,10 @@ class WasmLinearRuntime {
 	static function addStringCharCodeAt(module:WasmModule, name:String):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]});
 		var result = builder.local("code", I32);
-		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.charCodeAt([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.charCodeAt([
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET)
+		],
 			index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), 1, result));
 		builder.localGet(result);
 		builder.return_();
@@ -2341,7 +2508,13 @@ class WasmLinearRuntime {
 
 	/** Copies a borrowed, NUL-terminated native UTF-8 value into a managed string. */
 	public static function addCStringCopy(module:WasmModule, allocator:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw("__haxeon_cstring_copy", {parameters: [I32], results: [I32]}, [{type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw("__haxeon_cstring_copy", {
+			parameters: [I32],
+			results: [I32]
+		}, [
+			{type: I32},
+			{type: I32}
+		], [
 			LocalGet(0),
 			I32Eqz,
 			If(null),
@@ -2392,7 +2565,11 @@ class WasmLinearRuntime {
 
 	/** Concatenates two strings; a null operand is written as "null" (`nullString`, its static data), as Haxe does. */
 	public static function addStringConcat(module:WasmModule, name:String, allocator:Int, nullString:Int):Int {
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [{type: I32}, {type: I32}, {type: I32}], [
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [I32, I32], results: [I32]}, [
+			{type: I32},
+			{type: I32},
+			{type: I32}
+		], [
 			LocalGet(0),
 			I32Eqz,
 			If(null),
@@ -2555,9 +2732,13 @@ class WasmLinearRuntime {
 			Return,
 			End
 		]);
-		b.emitAll(compiler.backend.wasm.WasmUtf16Strings.indexOf([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)], i -> stringByteAt(0, i),
-			[LocalGet(1), I32Load(WasmLayout.STRING_LENGTH_OFFSET)], i -> stringByteAt(1, i), () -> b.local("search-" + b.locals.length, I32),
-			fromStart ? 2 : null, reverse, result));
+		b.emitAll(compiler.backend.wasm.WasmUtf16Strings.indexOf([LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET)], i -> stringByteAt(0, i),
+			[
+				LocalGet(1),
+				I32Load(WasmLayout.STRING_LENGTH_OFFSET)
+			], i -> stringByteAt(1, i), () -> b.local("search-" + b.locals.length, I32),
+				fromStart ? 2 : null, reverse, result));
 		b.emitAll([LocalGet(result), Return]);
 		return module.addFunction(b.finish());
 	}
@@ -2565,7 +2746,10 @@ class WasmLinearRuntime {
 	static function addStringSubstring(module:WasmModule, name:String, allocator:Int):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: [I32]});
 		var result = builder.local("result", I32);
-		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.substring([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.substring([
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET)
+		],
 			index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), 1, 2, size -> [
 				LocalGet(size),
 				I32Const(WasmLayout.STRING_DATA_OFFSET),
@@ -2870,7 +3054,8 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function appendLinearSplitPart(builder:WasmFunctionBuilder, source:WasmLocalRef, result:WasmLocalRef, data:WasmLocalRef, count:WasmLocalRef,
+	static function appendLinearSplitPart(builder:WasmFunctionBuilder, source:WasmLocalRef, result:WasmLocalRef,
+			data:WasmLocalRef, count:WasmLocalRef,
 			start:WasmLocalRef, end:WasmLocalRef, part:WasmLocalRef, substring:Int):Void {
 		builder.localGet(source);
 		builder.localGet(start);
@@ -2899,7 +3084,10 @@ class WasmLinearRuntime {
 		var size = builder.local("size", I32),
 			start = builder.local("start", I32),
 			end = builder.local("end", I32);
-		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.length([LocalGet(0), I32Load(WasmLayout.STRING_LENGTH_OFFSET)],
+		builder.emitAll(compiler.backend.wasm.WasmUtf16Strings.length([
+			LocalGet(0),
+			I32Load(WasmLayout.STRING_LENGTH_OFFSET)
+		],
 			index -> stringByteAt(0, index), () -> builder.local("utf16-" + builder.locals.length, I32), size));
 		builder.emitAll([
 			I32Const(0),
@@ -3416,8 +3604,10 @@ class WasmLinearRuntime {
 		return module.addFunction(builder.finish());
 	}
 
-	static function dynamicString(module:WasmModule, name:String, strings:Map<String, Int>, program:IrProgram, integerString:Int, int64String:Int,
-			?floatString:Int, ?functions:Map<String, Int>, ?enumTable:Int = 0, ?enumRows:Int = 0, ?enumPayloads:Bool = false):WasmFunction {
+	static function dynamicString(module:WasmModule, name:String, strings:Map<String, Int>, program:IrProgram,
+			integerString:Int, int64String:Int,
+			?floatString:Int, ?functions:Map<String, Int>, ?enumTable:Int = 0, ?enumRows:Int = 0,
+			?enumPayloads:Bool = false):WasmFunction {
 		var nullString = requiredStringOffset(strings, "null"),
 			objectString = requiredStringOffset(strings, "Object"),
 			trueString = requiredStringOffset(strings, "true"),
@@ -3503,7 +3693,8 @@ class WasmLinearRuntime {
 			builder.return_();
 		});
 		if (enumRows > 0 && functions != null)
-			emitEnumString(builder, value, enumTable, enumRows, strings, integerString, int64String, floatString, functions, enumPayloads);
+			emitEnumString(builder, value, enumTable, enumRows, strings, integerString, int64String, floatString,
+				functions, enumPayloads);
 		// Keep dynamic object stringification total. Some objects can arrive
 		// through generated/native boundaries without appearing in the program's
 		// concrete object table; they still follow the standard "Object" fallback.
@@ -3517,7 +3708,8 @@ class WasmLinearRuntime {
 	 * Wasm indices, allowing the runtime helper to call the shared Ryu formatter.
 	 */
 	/** Scan static constructor and field descriptors using one formatter for every enum. */
-	static function emitEnumString(builder:WasmFunctionBuilder, value:WasmLocalRef, table:Int, rows:Int, strings:Map<String, Int>, integerString:Int,
+	static function emitEnumString(builder:WasmFunctionBuilder, value:WasmLocalRef, table:Int, rows:Int,
+			strings:Map<String, Int>, integerString:Int,
 			int64String:Int, floatString:Null<Int>, functions:Map<String, Int>, hasPayloads:Bool):Void {
 		var concat = functions.get("__string_concat"),
 			recursive = functions.get("__std_string");
@@ -3634,7 +3826,8 @@ class WasmLinearRuntime {
 					b.if_(b -> {
 						b.localGet(address);
 						b.emit(I32Load(0));
-						b.ifElse(b -> b.i32Const(requiredStringOffset(strings, "true")), b -> b.i32Const(requiredStringOffset(strings, "false")), I32);
+						b.ifElse(b -> b.i32Const(requiredStringOffset(strings, "true")),
+							b -> b.i32Const(requiredStringOffset(strings, "false")), I32);
 						b.localSet(part);
 					});
 					b.localGet(kind);
@@ -3740,9 +3933,10 @@ class WasmLinearRuntime {
 		if (integerString == null || int64String == null)
 			throw "Dynamic string numeric formatters were not registered";
 		context.module.setFunction(dynamicString,
-			WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program, integerString, int64String, floatString,
-				context.functions, context.enumStringTable, context.enumStringRows,
-				(context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)));
+			WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program,
+			integerString, int64String, floatString,
+			context.functions, context.enumStringTable, context.enumStringRows,
+			(context.enumStringDescriptors != null && context.enumStringDescriptors.hasPayload)));
 	}
 
 	public static function addStringEqual(module:WasmModule, name:String):Int {
@@ -3923,11 +4117,21 @@ class WasmLinearRuntime {
 
 	/** `Math.sqrt` is the f64.sqrt instruction, not a call out to the host. */
 	static function addMathSqrt(module:WasmModule, name:String):Int
-		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [F64]}, [], [LocalGet(0), F64Sqrt, Return]));
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [F64]}, [], [
+			LocalGet(0),
+			F64Sqrt,
+			Return
+		]));
 
 	static function addMathIsNaN(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
-			[LocalGet(0), LocalGet(0), F64Eq, I32Eqz, Return]));
+			[
+				LocalGet(0),
+				LocalGet(0),
+				F64Eq,
+				I32Eqz,
+				Return
+			]));
 
 	public static function addDynamicEqual(module:WasmModule, name:String, stringEqual:Int, program:IrProgram):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
@@ -4078,7 +4282,8 @@ class WasmLinearRuntime {
 											builder.emit(I64Eq);
 											builder.localSet(result);
 										}, function(builder) {
-											appendNullaryEnumEqual(module, builder, program, left, right, leftType, result);
+											appendNullaryEnumEqual(module, builder, program, left, right, leftType,
+												result);
 										});
 									});
 								});
@@ -4097,7 +4302,8 @@ class WasmLinearRuntime {
 	}
 
 	/** Two values of the same enum are equal when they are the same constructor and it takes no arguments. */
-	static function appendNullaryEnumEqual(module:WasmModule, builder:WasmFunctionBuilder, program:IrProgram, left:WasmLocalRef, right:WasmLocalRef,
+	static function appendNullaryEnumEqual(module:WasmModule, builder:WasmFunctionBuilder, program:IrProgram,
+			left:WasmLocalRef, right:WasmLocalRef,
 			leftType:WasmLocalRef, result:WasmLocalRef):Void {
 		for (enumDecl in program.enums) {
 			var nullary = [
@@ -4130,7 +4336,8 @@ class WasmLinearRuntime {
 		}
 	}
 
-	static function appendMixedNumberEqual(module:WasmModule, builder:WasmFunctionBuilder, left:WasmLocalRef, right:WasmLocalRef, leftType:WasmLocalRef,
+	static function appendMixedNumberEqual(module:WasmModule, builder:WasmFunctionBuilder, left:WasmLocalRef,
+			right:WasmLocalRef, leftType:WasmLocalRef,
 			rightType:WasmLocalRef, result:WasmLocalRef):Void {
 		for (intOnLeft in [true, false]) {
 			builder.localGet(leftType);

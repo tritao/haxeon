@@ -65,7 +65,8 @@ class CompilationPipeline {
 	 * retypes far more than it should shows up here as one kind of invalidation with a large count. Enabled by
 	 * `HAXEON_EXPLAIN_INVALIDATION`; see docs/PROFILING.md.
 	 */
-	static function explainInvalidation(invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>, retyped:Array<String>,
+	static function explainInvalidation(invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>,
+			retyped:Array<String>,
 			regenerated:Array<String>):Void {
 		var counts:Map<String, Int> = [];
 		for (artifact in invalidations) {
@@ -73,18 +74,22 @@ class CompilationPipeline {
 				key = Std.string(reason.kind) + (reason.via == null ? "" : " via " + reason.via);
 			counts.set(key, (counts.exists(key) ? counts.get(key) : 0) + 1);
 		}
-		Sys.stderr().writeString("invalidation: " + invalidations.length + " artifacts, retyped " + retyped.length + "\n");
+		Sys.stderr().writeString("invalidation: " + invalidations.length + " artifacts, retyped " + retyped.length
+			+ "\n");
 		Sys.stderr().writeString("  regenerated " + regenerated.length + ": " + regenerated.slice(0, 6) + "\n");
 		for (key => count in counts)
 			Sys.stderr().writeString("  " + count + " " + key + "\n");
 		for (artifact in invalidations.slice(0, 12))
-			Sys.stderr().writeString("  e.g. " + artifact.artifact + " <- " + artifact.reasons[0].kind + " " + artifact.reasons[0].cause + "\n");
+			Sys.stderr().writeString("  e.g. " + artifact.artifact + " <- " + artifact.reasons[0].kind + " "
+				+ artifact.reasons[0].cause + "\n");
 	}
 
-	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>, rollbackModules:Map<String, ModuleState>,
+	public static function compile(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
+			rollbackModules:Map<String, ModuleState>,
 			transactionStartedAt:Float, snapshotDoneAt:Float, frontendStartedAt:Float, ?indexSemantics = true,
 			?publicationBaseline:compiler.compilation.CompilerPublication.PublishedBaseline):CompileResult {
-		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, frontendStartedAt, true, indexSemantics);
+		var frontend = FrontendCompilation.run(context, entryModule, token, rollbackModules, frontendStartedAt, true,
+			indexSemantics);
 		var modules = context.modules, moduleId = context.moduleId;
 		var ir = frontend.ir,
 			names = frontend.moduleNames,
@@ -167,9 +172,10 @@ class CompilationPipeline {
 			functionIndices: CompilationContext.copyIndices(assembly.functionIndices),
 			functionIds: CompilationContext.copyIndices(candidateAssembler.cache.stableIds),
 			moduleNames: names,
-			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices, candidateAssembler.cache.stableIds),
+			runtimeIdentity: HlRuntimeIdentity.encode(moduleId, assembly.revision, assembly.functionIndices,
+				candidateAssembler.cache.stableIds),
 			unchanged: assembly.unchanged
-			&& (publicationBaseline == null
+				&& (publicationBaseline == null
 				|| (publicationBaseline.backendAvailable && publicationBaseline.revision == assembly.revision)),
 			baseRevision: publicationBaseline == null ? assembly.baseRevision : publicationBaseline.revision,
 			revision: assembly.revision,

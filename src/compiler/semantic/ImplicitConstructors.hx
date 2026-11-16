@@ -58,8 +58,8 @@ class ImplicitConstructors {
 						added.push({owner: className, base: baseName, method: method});
 						result = {arguments: method.arguments, typeParameters: declaration.typeParameters};
 					} else if (hasInstanceInitializers(declaration))
-						// Typing supplies a constructor that runs the initializers.
-						result = {arguments: [], typeParameters: declaration.typeParameters};
+					// Typing supplies a constructor that runs the initializers.
+					result = {arguments: [], typeParameters: declaration.typeParameters};
 				}
 			}
 			visiting.remove(className);
@@ -150,24 +150,24 @@ class ImplicitConstructors {
 			case NamedType(name):
 				var replacement = substitutions.get(name);
 				replacement == null ? type : replacement;
-			case AppliedType(name, arguments): AppliedType(name, [for (argument in arguments) substitute(argument, substitutions)]);
+			case AppliedType(name, arguments): AppliedType(name,
+				[for (argument in arguments) substitute(argument, substitutions)]);
 			case ArrayType(element): ArrayType(substitute(element, substitutions));
 			case MapType(key, value): MapType(substitute(key, substitutions), substitute(value, substitutions));
 			case NullableType(element): NullableType(substitute(element, substitutions));
 			case FunctionType(arguments, result):
-				FunctionType([for (argument in arguments) substitute(argument, substitutions)], substitute(result, substitutions));
+				FunctionType([for (argument in arguments) substitute(argument, substitutions)],
+					substitute(result, substitutions));
 			case AnonymousType(fields):
-				AnonymousType([
-					for (field in fields)
-						{
-							name: field.name,
-							type: substitute(field.type, substitutions),
-							optional: field.optional,
-							isFinal: field.isFinal,
-							metadata: field.metadata,
-							span: field.span
-						}
-				]);
+				AnonymousType([for (field in fields)
+					{
+						name:field.name,
+							type:substitute(field.type, substitutions),
+							optional:field.optional,
+							isFinal:field.isFinal,
+							metadata:field.metadata,
+							span:field.span
+					}]);
 			default: type;
 		};
 	}

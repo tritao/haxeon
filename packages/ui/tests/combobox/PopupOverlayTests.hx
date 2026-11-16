@@ -71,7 +71,8 @@ class PopupOverlayTests {
 		tree = ui.submit(view, frame);
 		var option:RenderNode = null;
 		tree.walk(function(node) {
-			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem && node.semantics.label == "Two")
+			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem
+				&& node.semantics.label == "Two")
 				option = node;
 		});
 		if (option == null)
@@ -86,7 +87,8 @@ class PopupOverlayTests {
 			throw "Haxe hit testing disagrees with native overlay hit testing";
 		var hidden:RenderNode = null;
 		tree.walk(function(node) {
-			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem && node.semantics.label == "Item 39")
+			if (node.semantics != null && node.semantics.role == AccessibilityRole.ListItem
+				&& node.semantics.label == "Item 39")
 				hidden = node;
 		});
 		if (hidden == null)
@@ -112,7 +114,8 @@ class PopupOverlayTests {
 		if (selected != "two" || changes != 1)
 			throw "Overlay click did not select exactly once";
 		ui.dispose();
-		Sys.println("PASS: " + (useSelect ? "Select" : "ComboBox") + " overlays clipped dock panels, preserves modal order and selects exactly once");
+		Sys.println("PASS: " + (useSelect ? "Select" : "ComboBox")
+			+ " overlays clipped dock panels, preserves modal order and selects exactly once");
 	}
 }
 

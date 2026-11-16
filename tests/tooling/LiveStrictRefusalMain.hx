@@ -27,10 +27,11 @@ class LiveStrictRefusalMain {
 				+ (extraGlobal ? "  static var counted:Int = 0;\n" : "")
 				+ "  static function value():Int return " + value + ";\n"
 				+ "  @:keep public static function start(arguments:String):Void {}\n"
-				// The app stops once it runs revision 3 and the test is done; a host that never applies the edit stops after about
-				// 30 s, so the test fails instead of hanging.
-				+ "  @:keep public static function tick():Int { Sys.sleep(0.01); " + (extraGlobal ? "counted++; " : "")
-				+ "return value() == 3 && sys.FileSystem.exists(\"" + StringTools.replace(stop, "\\", "/") + "\") || ++ticks > 3000 ? 0 : 1; }\n"
+			// The app stops once it runs revision 3 and the test is done; a host that never applies the edit stops after about
+			// 30 s, so the test fails instead of hanging.
+			+ "  @:keep public static function tick():Int { Sys.sleep(0.01); " + (extraGlobal ? "counted++; " : "")
+				+ "return value() == 3 && sys.FileSystem.exists(\"" + StringTools.replace(stop, "\\",
+				"/") + "\") || ++ticks > 3000 ? 0 : 1; }\n"
 				+ "  @:keep public static function close():Int return 0;\n"
 				+ "  @:keep public static function saveState():String return \"\";\n"
 				+ "  @:keep public static function restoreState(state:String):Void {}\n"
@@ -38,8 +39,13 @@ class LiveStrictRefusalMain {
 				+ "}\n");
 		var session = new CompilerSession();
 		function build(path:String, entry:String, rootDirectory:String, sources:Array<String>, live:Bool):Void
-			CompilerDriver.compile(CompilerArguments.parse(["--target=hl", "--entry=" + entry, "--root=" + rootDirectory, "--output="
-				+ path].concat(live ? ["--live"] : []).concat(sources)),
+			CompilerDriver.compile(CompilerArguments.parse([
+				"--target=hl",
+				"--entry=" + entry,
+				"--root=" + rootDirectory,
+				"--output="
+					+ path
+			].concat(live ? ["--live"] : []).concat(sources)),
 				_ -> {}, live ? session : new CompilerSession());
 		function revision():Int {
 			var description:Dynamic = Json.parse(File.getContent(output + ".live.json"));
@@ -51,7 +57,8 @@ class LiveStrictRefusalMain {
 			for (name in FileSystem.readDirectory("src/runtime"))
 				if (StringTools.endsWith(name, ".hx")) "src/runtime/" + name
 		]), false);
-		var hl = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl" + (Sys.systemName() == "Windows" ? ".exe" : ""));
+		var hl = FileSystem.fullPath(Sys.getEnv("HAXEON_HASHLINK_DIR") + "/hl"
+			+ (Sys.systemName() == "Windows" ? ".exe" : ""));
 		Sys.putEnv("HAXEON_LIVE_STRICT", "1");
 		var process = new Process(hl, [host, output, "Main", "[]"]);
 		Sys.sleep(1.5);
@@ -75,7 +82,14 @@ class LiveStrictRefusalMain {
 		write(4, false);
 		if (FileSystem.exists(output + ".live.state"))
 			FileSystem.deleteFile(output + ".live.state");
-		CompilerDriver.compile(CompilerArguments.parse(["--target=hl", "--entry=Main", "--root=" + root, "--output=" + output, "--live", main]), _ -> {},
+		CompilerDriver.compile(CompilerArguments.parse([
+			"--target=hl",
+			"--entry=Main",
+			"--root=" + root,
+			"--output=" + output,
+			"--live",
+			main
+		]), _ -> {},
 			new CompilerSession());
 		Sys.sleep(1.5);
 		File.saveContent(stop, "");
@@ -83,15 +97,21 @@ class LiveStrictRefusalMain {
 		var status = process.exitCode();
 		process.close();
 		Sys.print(log);
-		expect(refusedRevision == 2, 'a build that needs a fresh layout must keep numbering revisions; it was revision $refusedRevision');
-		expect(StringTools.endsWith(record, ":1:2"), 'the refusal record must name the running and the refused revision: $record');
+		expect(refusedRevision == 2,
+			'a build that needs a fresh layout must keep numbering revisions; it was revision $refusedRevision');
+		expect(StringTools.endsWith(record, ":1:2"),
+			'the refusal record must name the running and the refused revision: $record');
 		expect(consumed, "the compiler must consume the refusal record");
-		expect(patchedRevision == 3, 'the build after the refusal must take a new revision; it was revision $patchedRevision');
-		expect(summary.baseRevision == 1, 'the build after the refusal must patch the running revision 1, not ${summary.baseRevision}');
-		expect(log.split("LIVE PATCH REFUSED").length == 3, "the host must refuse the edit that cannot patch and the new session's build, and nothing else");
+		expect(patchedRevision == 3,
+			'the build after the refusal must take a new revision; it was revision $patchedRevision');
+		expect(summary.baseRevision == 1,
+			'the build after the refusal must patch the running revision 1, not ${summary.baseRevision}');
+		expect(log.split("LIVE PATCH REFUSED").length == 3,
+			"the host must refuse the edit that cannot patch and the new session's build, and nothing else");
 		expect(log.indexOf("the compiler no longer has the history of the running module") >= 0,
 			"the host must say why it refuses the new session's build");
-		expect(!FileSystem.exists(output + ".live.refused"), "a build the compiler cannot fix must not leave a refusal record");
+		expect(!FileSystem.exists(output + ".live.refused"),
+			"a build the compiler cannot fix must not leave a refusal record");
 		expect(log.indexOf("patched live module to revision 3") >= 0, "the host must patch the edit after the refusal");
 		expect(log.indexOf("reloading") < 0, "strict mode must not reload the module");
 		expect(status == 0, 'the host must exit cleanly after applying the edit; it exited with $status');

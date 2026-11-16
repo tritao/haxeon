@@ -1,4 +1,7 @@
-typedef Row = {var name:String; var size:Float;};
+typedef Row = {
+	var name:String;
+	var size:Float;
+};
 
 class Holder<T> {
 	public final values:Array<T>;
@@ -55,7 +58,8 @@ function main():Int {
 	var intHolder = new Holder(ints);
 	intHolder.add(5);
 	intHolder.replace(0, 30);
-	if (ints.length != 3 || ints[0] != 30 || ints[2] != 5 || intHolder.find(4) != 1 || intHolder.last() != 5 || ints.length != 2)
+	if (ints.length != 3 || ints[0] != 30 || ints[2] != 5 || intHolder.find(4) != 1 || intHolder.last() != 5
+		|| ints.length != 2)
 		return 4;
 	var floats = [0.5];
 	new Holder(floats).add(1.5);
@@ -64,7 +68,8 @@ function main():Int {
 	var strings = ["x", "y"];
 	var stringHolder = new Holder(strings);
 	stringHolder.add("z");
-	if (strings.join(",") != "x,y,z" || stringHolder.find("y") != 1 || !stringHolder.drop("x") || strings.join(",") != "y,z")
+	if (strings.join(",") != "x,y,z" || stringHolder.find("y") != 1 || !stringHolder.drop("x")
+		|| strings.join(",") != "y,z")
 		return 6;
 	var flags = [true];
 	new Holder(flags).add(false);

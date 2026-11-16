@@ -22,8 +22,8 @@ class DropShadowEffect extends VisualEffect {
 		if (other == null || other.kind != EffectKind.DropShadow)
 			return false;
 		var value:DropShadowEffect = cast other;
-		return value != null && offsetX == value.offsetX && offsetY == value.offsetY &&
-			sigma == value.sigma && VisualEffect.equalColor(color, value.color);
+		return value != null && offsetX == value.offsetX && offsetY == value.offsetY && sigma == value.sigma
+			&& VisualEffect.equalColor(color, value.color);
 	}
 
 	override public function interpolate(other:VisualEffect, amount:Float):VisualEffect {
@@ -47,6 +47,6 @@ class DropShadowEffect extends VisualEffect {
 	}
 
 	override public function describe():String
-		return 'drop-shadow($offsetX,$offsetY,$sigma,' + color.red + ',' + color.green + ',' +
-			color.blue + ',' + color.alpha + ')';
+		return 'drop-shadow($offsetX,$offsetY,$sigma,' + color.red + ',' + color.green + ',' + color.blue + ','
+			+ color.alpha + ')';
 }

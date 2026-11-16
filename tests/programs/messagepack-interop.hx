@@ -92,7 +92,8 @@ class MessagePackInterop {
 				case "map-ordered":
 					if (reader.readMapHeader() != 2)
 						fail(vector.name, "decoded map length differs");
-					if (reader.readString() != "a" || reader.readInt() != 1 || reader.readString() != "b" || !reader.readBool())
+					if (reader.readString() != "a" || reader.readInt() != 1 || reader.readString() != "b"
+						|| !reader.readBool())
 						fail(vector.name, "decoded map differs");
 					writer.writeMapHeader(2);
 					writer.writeString("a");
@@ -100,7 +101,8 @@ class MessagePackInterop {
 					writer.writeString("b");
 					writer.writeBool(true);
 				case "string-key-utf8":
-					if (reader.readMapHeader() != 3 || reader.readString() != "é" || reader.readInt() != 1 || reader.readString() != "é"
+					if (reader.readMapHeader() != 3 || reader.readString() != "é" || reader.readInt() != 1
+						|| reader.readString() != "é"
 						|| reader.readInt() != 2 || reader.readString() != "😀" || reader.readInt() != 3)
 						fail(vector.name, "decoded UTF-8 map ordering differs");
 					writer.writeMapHeader(3);
@@ -111,7 +113,8 @@ class MessagePackInterop {
 					writer.writeString("😀");
 					writer.writeInt(3);
 				case "nested":
-					if (reader.readArrayHeader() != 2 || reader.readMapHeader() != 1 || reader.readString() != "a" || reader.readInt() != 1
+					if (reader.readArrayHeader() != 2 || reader.readMapHeader() != 1 || reader.readString() != "a"
+						|| reader.readInt() != 1
 						|| reader.readArrayHeader() != 2 || reader.readBool() || !reader.readBool())
 						fail(vector.name, "decoded nested value differs");
 					writer.writeArrayHeader(2);

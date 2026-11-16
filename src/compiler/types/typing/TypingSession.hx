@@ -132,7 +132,8 @@ class TypingSession {
 	public final hashRequests:Map<String, EqualityRequest> = [];
 	public final flagsMasks:Map<String, Int> = [];
 	public final flagsRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
-	public final rawRepresentableRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
+	public final rawRepresentableRequests:Map<String, {owner:String, method:String, origin:String,
+		span:SourceSpan}> = [];
 
 	public final cNativeFunctions:Map<String, Bool> = [];
 	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
@@ -267,7 +268,8 @@ class TypingSession {
 	}
 
 	/** Whether writes through a binding may update the binding itself rather than a referenced object. */
-	public function mayHoldValue(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
+	public function mayHoldValue(type:Null<compiler.syntax.Ast.AstType>,
+			initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
 		if (type != null && (switch (type) {
 			case InferredType: false;
 			default: true;
@@ -284,7 +286,8 @@ class TypingSession {
 			return valueStorageType(resolved);
 		}
 		return switch initializer {
-			case New(name, _, _) if (classDecls.exists(name)): relations.isValueClass(TInstance(NominalKind.Class, name, []));
+			case New(name, _,
+				_) if (classDecls.exists(name)): relations.isValueClass(TInstance(NominalKind.Class, name, []));
 			case ArrayLiteral(_, _), ObjectLiteral(_, _), Lambda(_, _, _, _): false;
 			default: true;
 		};
@@ -299,7 +302,8 @@ class TypingSession {
 		};
 
 	/** Storage analysis runs before expression typing; unknown receivers conservatively retain place writes. */
-	public function mayBeKeyPath(type:Null<compiler.syntax.Ast.AstType>, initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
+	public function mayBeKeyPath(type:Null<compiler.syntax.Ast.AstType>,
+			initializer:Null<compiler.syntax.Ast.AstExpression>):Bool {
 		if (type != null && (switch type {
 			case InferredType: false;
 			default: true;
@@ -321,7 +325,10 @@ class TypingSession {
 	/** Only closure-written declarations can change during a call; respect local shadowing. */
 	public function closureWritableNames(scope:Scope):Array<String> {
 		// The innermost declaration of each name decides, so walk from the innermost scope out and take each name once.
-		var values = scope.visibleValues(), seen:Map<String, Bool> = [], result:Array<String> = [], index = values.length;
+		var values = scope.visibleValues(),
+			seen:Map<String, Bool> = [],
+			result:Array<String> = [],
+			index = values.length;
 		while (index > 0) {
 			var value = values[--index];
 			if (seen.exists(value.source))
@@ -362,9 +369,11 @@ class TypingSession {
 		return bodyIsPure(local.arguments, local.body, local.outerLocals, owner);
 
 	/** Whether running these statements can change state flow facts describe; `outerLocals` are locals it may freely write. */
-	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>, body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
+	public function bodyIsPure(arguments:Array<compiler.syntax.Ast.AstArgument>,
+			body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
 			owner:Null<String>, ?privateMaps:Array<String>):Bool {
-		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(localPurityInference(), arguments, body,
+		var dependencies = compiler.types.analysis.PurityInference.localBodyDependencies(localPurityInference(),
+			arguments, body,
 			owner == null ? "$local" : owner + ".$local", outerLocals, privateMaps);
 		return dependencies != null && dependenciesArePure(dependencies);
 	}
@@ -373,22 +382,25 @@ class TypingSession {
 		For a loop body: the fields it stores to and whether it stores to an element (array or map), when that is all
 		it does to state anyone else can see; null when it may have any other effect.
 	 */
-	public function bodyStores(body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>, owner:Null<String>, ?privateMaps:Array<String>,
+	public function bodyStores(body:Array<compiler.syntax.Ast.AstStatement>, outerLocals:Array<String>,
+			owner:Null<String>, ?privateMaps:Array<String>,
 			?outerArrays:Array<String>, ?outerMaps:Array<String>):Null<{
-			fields:Array<String>,
-			indexed:Bool
-		}> {
-		var found = compiler.types.analysis.PurityInference.localBodyStores(localPurityInference(), body, owner == null ? "$local" : owner + ".$local",
+				fields:Array<String>,
+				indexed:Bool
+			}> {
+		var found = compiler.types.analysis.PurityInference.localBodyStores(localPurityInference(), body,
+			owner == null ? "$local" : owner + ".$local",
 			outerLocals, privateMaps, outerArrays, outerMaps);
 		if (found == null || !dependenciesArePure(found.dependencies))
 			return null;
 		return {fields: found.fields, indexed: found.indexed};
-		}
+	}
 
 	function localPurityInference():compiler.types.analysis.PurityInference {
 		var inference = localPurity;
 		if (inference == null) {
-			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls, isDeclaredPure, isTypeName);
+			inference = compiler.types.analysis.PurityInference.create(signatures, classDecls, enumDecls,
+				isDeclaredPure, isTypeName);
 			localPurity = inference;
 		}
 		return inference;
@@ -396,11 +408,11 @@ class TypingSession {
 
 	function dependenciesArePure(dependencies:Array<String>):Bool {
 		for (key in dependencies)
-			// Typing a string conversion clears no facts either, so neither does depending on one.
-			if (key != compiler.types.analysis.PurityInference.TO_STRING
-				&& key != "Std.string"
-				&& !(isPureCall(key) || isNoReturnCall(key)))
-				return false;
+		// Typing a string conversion clears no facts either, so neither does depending on one.
+		if (key != compiler.types.analysis.PurityInference.TO_STRING
+			&& key != "Std.string"
+			&& !(isPureCall(key) || isNoReturnCall(key)))
+			return false;
 		return true;
 	}
 
@@ -412,12 +424,14 @@ class TypingSession {
 
 	public function inferPureFunctions():Void {
 		localPurity = null;
-		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures, classDecls, declarations.abstracts, enumDecls, isDeclaredPure,
+		inferredPureFunctions = compiler.types.analysis.PurityInference.infer(signatures, classDecls,
+			declarations.abstracts, enumDecls, isDeclaredPure,
 			isTypeName);
 	}
 
 	function isTypeName(name:String):Bool
-		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls, enumAbstractDecls, declarations.abstracts)
+		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls,
+			enumAbstractDecls, declarations.abstracts)
 			|| enumAbstractName(name) != null;
 
 	public function hasPureAnnotation(name:String):Bool
@@ -502,7 +516,8 @@ class TypingSession {
 
 	public function requiresSpecializedMap(key:CompilerType, value:CompilerType):Bool
 		return isPayloadEnumKey(key)
-			|| RuntimeType.usesSpecializedMap(key, value, mapValueType, type -> DeclaredConformance.has(this, type, "Hashable"));
+			|| RuntimeType.usesSpecializedMap(key, value, mapValueType,
+			type -> DeclaredConformance.has(this, type, "Hashable"));
 
 	function mapValueType(type:CompilerType):Bool
 		return switch type {
@@ -519,8 +534,10 @@ class TypingSession {
 		};
 	}
 
-	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String, ?sourceFunctionName:String):TypingContext {
-		var owner = ownerOverride != null ? ownerOverride : compiler.semantic.LambdaName.is(name) ? currentContext.lexicalOwner : parentPath(name),
+	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String,
+			?sourceFunctionName:String):TypingContext {
+		var owner = ownerOverride != null ? ownerOverride : compiler.semantic.LambdaName.is(name)
+			? currentContext.lexicalOwner : parentPath(name),
 			body = new TypingContext(name, typeSubstitutions, owner, sourceFunctionName);
 		if (bodyContexts.length == 1)
 			typedUnits.set(name, true);

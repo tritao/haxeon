@@ -10,7 +10,7 @@ enum Plain {
 	Green;
 }
 
-enum Maybe<T:Equatable> implements Equatable {
+enum Maybe < T:Equatable > implements Equatable {
 	Nothing;
 	Just(value:T);
 }
