@@ -29,7 +29,7 @@ without a record of who asked.
 **1. Ownership.** `FrontendCompilation` resolves a function's module from the `owners` map, from the initializer naming
 (`Class.__init`), or from its `origin` chain (`resolveFunctionModule`). A type has no function name in `owners`:
 - class or struct `T`: `T.new` is in `owners` whenever a constructor exists, explicit or implicit (the sweep showed implicit ones are);
-  otherwise the declaration module from `CompilationContext.declarationOwner`.
+  otherwise the declaration module from `SessionState.declarationOwners`.
 - enum `T`: no function at all; `declarationOwner(T)`.
 - generic instance `Box<A>`: the module of the generic declaration, but its body also depends on `A`'s module.
 - `Nullable<T>`, `Array<T>`, `Map<K,V>`, key paths: the subject is the element or root, recursively; the outermost nominal type decides.

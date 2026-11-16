@@ -26,13 +26,6 @@ class NativeRegistry {
 					native.generatedFunctionDependencies);
 	}
 
-	public function clone():NativeRegistry {
-		var result = new NativeRegistry();
-		for (name => definition in definitions)
-			result.definitions.set(name, definition);
-		return result;
-	}
-
 	public function registerNative(name:String, library:String, symbol:String, arguments:Array<CompilerType>,
 			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):Void {

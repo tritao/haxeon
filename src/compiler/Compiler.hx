@@ -1,7 +1,6 @@
 package compiler;
 
 import compiler.syntax.Ast;
-import compiler.syntax.Ast.AstFunction;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceFile;
@@ -14,7 +13,6 @@ import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.semantic.GenericSpecializationRegistry;
-import compiler.semantic.SemanticProgram;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.hl.HlCode;
 import compiler.hl.incremental.HlModuleAssembler;
@@ -23,14 +21,10 @@ import compiler.hl.persistence.HlRuntimeIdentity;
 import compiler.hl.persistence.HlAssemblerStateCodec;
 import haxe.io.Bytes;
 import compiler.types.Type.CompilerType;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrObject;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 import compiler.core.CancellationToken;
 import compiler.abi.RuntimeAbi;
-import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
@@ -41,7 +35,10 @@ import compiler.compilation.BackendArtifact;
 import compiler.compilation.BackendSession;
 import compiler.compilation.HashLinkBackendSession;
 import compiler.compilation.WasmBackendSession;
+import compiler.compilation.CompilationContext;
+import compiler.compilation.CompilationPipeline;
 import compiler.compilation.CompilationTransaction;
+import compiler.compilation.FrontendCompilation;
 import compiler.compilation.CompilerPublication;
 import compiler.compilation.SessionState;
 import compiler.compilation.CompilerPublication.PublicationStatus;
@@ -51,7 +48,6 @@ import compiler.modules.ModuleGraph;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
 import compiler.modules.ModuleSourceLoader;
-import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.LambdaCollector;
 import compiler.semantic.SemanticWorkspace;
 import compiler.ffi.FfiRegistry;
@@ -250,22 +246,9 @@ class Compiler {
 	var cachedCompileResult:Null<CompileResult>;
 
 	public function new(?identityState:Bytes, ?nativeConfiguration:Array<NativeFunction>,
-			?ffiConfiguration:FfiConfiguration, ?cloneFrom:Compiler) {
-		natives = cloneFrom == null ? new NativeRegistry(nativeConfiguration) : cloneFrom.natives.clone();
-		if (cloneFrom != null) {
-			moduleId = cloneFrom.moduleId;
-			state = new SessionState(cloneFrom.types.copy(), cloneFrom.state.genericSpecializations.copy(),
-				cloneFrom.backend);
-			state.publishedAbi = cloneFrom.state.publishedAbi;
-			state.compiledOnce = cloneFrom.state.compiledOnce;
-			// A clone is what actually compiles, so it must assemble the way its source was asked to.
-			livePatching = cloneFrom.livePatching;
-			developmentMetadata = cloneFrom.developmentMetadata;
-			backendOptions = cloneFrom.backendOptions;
-			exportedFunctions = cloneFrom.exportedFunctions.copy();
-			for (name in cloneFrom.rootModules)
-				rootModules.push(name);
-		} else if (identityState == null) {
+			?ffiConfiguration:FfiConfiguration) {
+		natives = new NativeRegistry(nativeConfiguration);
+		if (identityState == null) {
 			moduleId = HlRuntimeIdentity.createModuleId();
 			state = new SessionState(new TypeRegistry(), new GenericSpecializationRegistry(),
 				new HashLinkBackendSession(new HlModuleAssembler()));
@@ -292,8 +275,8 @@ class Compiler {
 				beginRehydration(assembler);
 			}
 		}
-		ffi = cloneFrom == null ? new FfiRegistry(projectedFfiModule) : cloneFrom.ffi.clone(projectedFfiModule);
-		if (cloneFrom == null && ffiConfiguration != null) {
+		ffi = new FfiRegistry(projectedFfiModule);
+		if (ffiConfiguration != null) {
 			for (source in ffiConfiguration.interfaceSources())
 				ffi.registerInterface(source.path, source.text);
 			for (source in ffiConfiguration.projectionSources())
@@ -562,19 +545,15 @@ class Compiler {
 		return graph.dependents(module);
 
 	/**
-		Validate an unsaved edit without mutating this compiler's live snapshot.
-		The candidate is rebuilt from the persistent identity state and current
-		sources; callers can then decide whether to commit the edit normally.
+	 * Whether an unsaved edit types: the frontend runs on a copy of the state with the edit, and the copy is dropped, so this
+	 * compiler is left as it was. The edited file keeps the module name it has.
 	 */
 	public function validate(path:String, source:String, entryModule:String,
 			?token:CancellationToken):ValidationResult {
-		var candidate = fork(), moduleName = ModulePath.fromFile(path);
-		for (name in [for (name in candidate.modules.keys()) name])
-			if (name == moduleName)
-				candidate.modules.remove(name);
-		candidate.update(path, source);
+		var candidate = candidateWithSource(path, source, moduleNameOf(path));
 		try {
-			candidate.compile(entryModule, token);
+			FrontendCompilation.run(new CompilationContext(this, candidate), entryModule, token, state.modules,
+				Sys.time() * 1000.0, false);
 			return {valid: true, diagnostic: null};
 		} catch (error:CompileError)
 			return {valid: false, diagnostic: error.diagnostic};
@@ -582,24 +561,35 @@ class Compiler {
 
 	/** Compile a temporary Int-returning expression without changing this compiler. */
 	public function compileExpressionInt(expression:String):CompileResult {
-		var candidate = fork();
-		candidate.update("__repl__.hx",
-			'function __repl_value():Int { return $expression; } function main():Int { return __repl_value(); }');
-		return candidate.compile("__repl__");
+		var candidate = candidateWithSource("__repl__.hx",
+			'function __repl_value():Int { return $expression; } function main():Int { return __repl_value(); }',
+			"__repl__"),
+			startedAt = Sys.time() * 1000.0;
+		return CompilationPipeline.compile(new CompilationContext(this, candidate), "__repl__", null, state.modules,
+			startedAt, startedAt, startedAt);
 	}
 
-	function fork():Compiler {
-		var candidate = new Compiler(null, null, null, this);
-		candidate.sourceLoader = sourceLoader.copy();
-		candidate.configurationIdentity = configurationIdentity;
-		candidate.configurationScopeIdentity = configurationScopeIdentity;
-		candidate.defines = [for (name => value in defines) name => value];
-		candidate.backendTarget = backendTarget;
-		var moduleNames = [for (name in modules.keys()) name];
-		moduleNames.sort(Reflect.compare);
-		for (name in moduleNames) {
-			var state:ModuleState = modules.get(name);
-			candidate.update(state.source.path, state.source.text);
+	/** The module a source file holds: the one loaded from it, under whatever name it was given, or the name its path gives. */
+	function moduleNameOf(path:String):String {
+		for (name => module in modules)
+			if (module.source.path == path)
+				return name;
+		return ModulePath.fromFile(path);
+	}
+
+	/** A copy of the state (`SessionState.copyForCandidate`) in which module `name` is `source`, as `update` would make it. */
+	function candidateWithSource(path:String, source:String, name:String):SessionState {
+		var candidate = state.copyForCandidate(), current = candidate.modules.get(name);
+		if (current != null && current.source.path == path && current.loadedText == source)
+			return candidate;
+		var file = new SourceFile(path, source,
+			current != null && current.source.path == path && current.source.isStandardLibrarySource);
+		if (current == null)
+			candidate.modules.set(name, new ModuleState(name, file));
+		else {
+			var module = current.copy();
+			module.update(file);
+			candidate.modules.set(name, module);
 		}
 		return candidate;
 	}

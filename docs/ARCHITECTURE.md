@@ -83,7 +83,7 @@ answered in `ir` (`IrScalarValuePlaces`): `IrScalarArguments` and HashLink lower
 no longer imports HashLink lowering. The exceptions that remain: `ir` imports
 `runtime` and `ffi` and is imported by `runtime`, `ffi`, `modules.ModuleState` and `semantic.SemanticAssembly`;
 `semantic.SemanticAssembly` and `modules.CodeIdentityTable` import `compilation.CompilationContext`, which refers back to the root
-`Compiler`; `ffi.HxiInterfaceOrder` and `runtime.CompilerIntrinsics` also name types declared beside the root `Compiler`; and
+`Compiler`; `runtime.CompilerIntrinsics` also names types declared beside the root `Compiler`; and
 `syntax.Parser` calls `types.analysis.FinalLocalChecker` and `BindingWalker`.
 
 `compiler.formatter` and `compiler.documentation` sit beside this chain. The formatter imports only `core` and `syntax`, and
@@ -224,10 +224,12 @@ verification, then HashLink lowering (`HlLower`), then the writer. Each stage ke
 
 ### Session caches and the commit point
 
-The inline cache, the pipeline snapshot, the lowered cache, the reachability cache, the declaration owners and the modules belong to
-the last successful build. A build works on copies (`createCandidate`) and `adoptCandidate` replaces them together; a failed or rejected
-build (including a failed artifact write) restores all of them with the modules (`CompilerSnapshot`). The verify memo is shared because an
-acceptance holds only while its reads do.
+Everything a build owns is one `SessionState`: the modules, the types, the generic specializations, the inline cache, the pipeline
+snapshot, the backend with its lowered cache, the reachability cache and the declaration owners. A build works on
+`state.copyForCandidate()` and `adoptCandidate` makes that copy the compiler's state; the state it was copied from is the snapshot a
+pending publication keeps, so a rejected or retracted build puts it back with one assignment. A failed build leaves the state alone.
+`validate` and the REPL run on such a copy and drop it. The verify memo is shared between copies because an acceptance holds only
+while its reads do.
 
 ### Check mode
 

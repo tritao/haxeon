@@ -425,9 +425,10 @@ Numbers at the end of M1 (app, same machine): cold 785.6M, no-op 25.3M, edit 236
 
 ## Commit point of a build (2026-11-09)
 
-A failed or rejected build leaves every cache as the last successful build left it. `CompilerSnapshot` holds the
+A failed or rejected build leaves every cache as the last successful build left it. The snapshot holds the
 inline cache, the pipeline snapshot, the lowered cache, the reachability cache and the declaration owners next to the modules and
-types, and `restore` puts them back together; the candidate of a build only ever works on copies. Before this, a rejected
+types, and `restore` puts them back together; the candidate of a build only ever works on copies. (Since 2026-11-16 all of these are one
+`SessionState`, and the snapshot is the state the build was copied from.) Before this, a rejected
 publication (the artifact write failed) restored the modules and the assembler but kept the caches of the rejected build, so the next
 build compared against the rejected sources and kept a stale `main` in the live module (found by `HAXEON_CHECK_REUSE=1`).
 Test: `CompilerSessionMain` (build, failed write, rebuild runs the new value and still writes the output).

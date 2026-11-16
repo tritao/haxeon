@@ -69,30 +69,6 @@ class FfiRegistry {
 	public function new(projected:(path:String, source:String) -> Void)
 		this.projected = projected;
 
-	/** A registry with the same interfaces and projections, which hands projected modules to `projected`. */
-	public function clone(projected:(path:String, source:String) -> Void):FfiRegistry {
-		var result = new FfiRegistry(projected);
-		for (source in interfaceSources)
-			result.interfaceSources.push(source);
-		for (name => model in interfaceModels)
-			result.interfaceModels.set(name, model);
-		for (source in projectionSources)
-			result.projectionSources.push(source);
-		for (name => profile in projectionProfiles)
-			result.projectionProfiles.set(name, profile);
-		for (name => path in projectionPaths)
-			result.projectionPaths.set(name, path);
-		for (name => projections in projectionCache)
-			result.projectionCache.set(name, projections);
-		for (path => origins in sourceOrigins)
-			result.sourceOrigins.set(path, origins);
-		for (name => composition in compositionCache)
-			result.compositionCache.set(name, composition);
-		for (name => abi in abiCache)
-			result.abiCache.set(name, abi);
-		return result;
-	}
-
 	/** Parse, validate and register one ABI interface, projecting it when its profile is already registered. */
 	public function registerInterface(path:String, source:String):Void {
 		var model = HxiParser.parse(path, source);

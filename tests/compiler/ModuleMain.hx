@@ -304,6 +304,14 @@ class ModuleMain {
 		validationCompiler.acknowledgePublication(trackedValidation.revision);
 		if (!validationCompiler.validate("Main.hx", previousSource, "Main").valid)
 			throw "Validation lost native configuration after publication";
+		// A file loaded under an explicit module name is validated under that name, not the one its path gives.
+		var namedValidation = new Compiler();
+		namedValidation.update("tools/Run.hx", "function main():Int { return 1; }", "Run");
+		namedValidation.compile("Run");
+		if (!namedValidation.validate("tools/Run.hx", "function main():Int { return 2; }", "Run").valid
+			|| namedValidation.validate("tools/Run.hx", "function main():Int { return \"bad\"; }", "Run").valid
+			|| namedValidation.modules.get("Run").source.text != "function main():Int { return 1; }")
+			throw "Validation lost the explicit module name of the edited file, or changed its live source";
 		var failedCompact = new Compiler();
 		failedCompact.update("Main.hx", "function main():Int { return 40; }");
 		var beforeCompactFailure = failedCompact.compile("Main");
