@@ -31,7 +31,7 @@ class WasmLinearRuntime {
 				switch native.symbol {
 					case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
 						"__math_exp", "__math_log",
-						"__math_round", "__math_ceil", "__math_floor", "__sys_args", "sys_time", "sys_cpu_time",
+						"__sys_args", "sys_time", "sys_cpu_time",
 						"sys_thread_cpu_time", "sys_process_memory",
 						"sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free":
 						runtimeImport(module, native);
@@ -581,9 +581,9 @@ class WasmLinearRuntime {
 			]));
 			case "fun_compare": addCompareMethods(module, native.name);
 			case "__math_is_finite", "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2",
-				"__math_round", "__math_exp", "__math_log",
-				"__math_ceil", "__math_floor", "__sys_args":
+				"__math_exp", "__math_log", "__sys_args":
 				runtimeImportIndex(module, native);
+			case "__math_floor", "__math_ceil", "__math_round": addMathRoundToInt(module, native.name, native.symbol);
 			case "__math_is_nan": addMathIsNaN(module, native.name);
 			case "__math_sqrt": addMathSqrt(module, native.name);
 			case "__math_abs": module.addFunction(WasmFunctionBuilder.fromRaw(native.name, {
@@ -4122,6 +4122,24 @@ class WasmLinearRuntime {
 			F64Sqrt,
 			Return
 		]));
+
+	/**
+		`Math.floor`, `Math.ceil` and `Math.round` round in f64 and truncate to Int, as HashLink's `(int)floor(x)` and
+		`(int)floor(x + 0.5)` and the Wasm GC backend do; the truncation is `Std.int`'s.
+	**/
+	static function addMathRoundToInt(module:WasmModule, name:String, symbol:String):Int {
+		var rounding:Array<WasmInstruction> = switch symbol {
+			case "__math_floor": [F64Floor];
+			case "__math_ceil": [F64Ceil];
+			case "__math_round": [F64Const(0.5), F64Add, F64Floor];
+			default: throw 'Unknown rounding native $symbol';
+		};
+		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
+			[LocalGet(0)].concat(rounding).concat([
+				I32TruncF64S,
+				Return
+			])));
+	}
 
 	static function addMathIsNaN(module:WasmModule, name:String):Int
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],

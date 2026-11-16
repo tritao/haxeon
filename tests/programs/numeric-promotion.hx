@@ -14,5 +14,8 @@ function main():Int {
 		return 3;
 	if (Math.floor(2.5) != 2 || Math.floor(-2.5) != -3)
 		return 4;
+	// Halves round up, as HashLink's (int)floor(x + 0.5) does.
+	if (Math.round(2.5) != 3 || Math.round(-2.5) != -2 || Math.round(-2.6) != -3 || Math.round(2.4) != 2)
+		return 5;
 	return 42;
 }

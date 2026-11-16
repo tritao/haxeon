@@ -73,6 +73,9 @@ haxeon_compile_async \
 	--target=wasm32 --output="$out_dir/wasm-cli-numeric-promotion.wasm" --entry=numeric-promotion \
 	--root=tests/programs tests/programs/numeric-promotion.hx
 haxeon_compile_async \
+	--target=wasm-gc --output="$out_dir/wasm-gc-cli-numeric-promotion.wasm" --entry=numeric-promotion \
+	--root=tests/programs tests/programs/numeric-promotion.hx
+haxeon_compile_async \
 	--target=wasm32 --output="$out_dir/wasm-cli-array-slice.wasm" --entry=array-slice-index \
 	--root=tests/programs tests/programs/array-slice-index.hx
 haxeon_compile_async \
@@ -258,6 +261,7 @@ const cases = [
   ["wasm-cli-function-wrapper.wasm", 42],
   ["wasm-cli-type-test.wasm", 42],
   ["wasm-cli-numeric-promotion.wasm", 42],
+  ["wasm-gc-cli-numeric-promotion.wasm", 42],
   ["wasm-cli-array-slice.wasm", 42],
   ["wasm-cli-array-mutation.wasm", 42],
   ["wasm-cli-array-growth.wasm", 42],
@@ -482,8 +486,12 @@ const cases = [
         }
       };
 
-    if (relative.endsWith("numeric-promotion.wasm"))
-      imports.haxeon_runtime = {__math_ceil: Math.ceil, __math_floor: Math.floor};
+    // Math.floor, Math.ceil and Math.round are Wasm instructions on both backends, not host imports.
+    if (relative.endsWith("numeric-promotion.wasm")) {
+      const imported = WebAssembly.Module.imports(new WebAssembly.Module(bytes));
+      if (imported.length !== 0)
+        throw new Error(`${relative}: unexpected imports ${imported.map(entry => entry.module + "." + entry.name).join(", ")}`);
+    }
     if (relative.endsWith("wasm-cli-gc-ffi-bytes.wasm"))
       imports.gc_bytes = {
         inspect_bytes: (pointer, length) => {

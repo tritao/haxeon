@@ -803,6 +803,7 @@ class WasmGcModuleBuilder {
 				|| native.name == "__string_compare_full"
 				|| native.name == "__math_ceil"
 				|| native.name == "__math_floor"
+				|| native.name == "__math_round"
 				|| native.name == "__math_sqrt"
 				|| native.name == "__math_abs"
 				|| native.name == "__math_min"
@@ -849,7 +850,7 @@ class WasmGcModuleBuilder {
 
 	static function isGcRuntimeMathImport(symbol:Null<String>):Bool {
 		return switch symbol {
-			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_round", "__math_exp",
+			case "__math_pow", "__math_cos", "__math_sin", "__math_tan", "__math_atan2", "__math_exp",
 				"__math_log": true;
 			default: false;
 		};

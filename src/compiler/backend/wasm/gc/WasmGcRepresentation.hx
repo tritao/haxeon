@@ -2487,6 +2487,25 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Math.floor signature";
 			return [LocalGet(argumentLocals[0]), F64Floor, I32TruncF64S, LocalSet(outputLocal)];
 		}
+		if (name == "__math_round") {
+			if ((switch (output.type) {
+				case I32: false;
+				default: true;
+			}) || arguments.length != 1 || (switch (arguments[0].type) {
+				case F64: false;
+				default: true;
+			}) || argumentLocals.length != 1)
+				throw "Invalid Wasm GC Math.round signature";
+			// HashLink's (int)floor(x + 0.5).
+			return [
+				LocalGet(argumentLocals[0]),
+				F64Const(0.5),
+				F64Add,
+				F64Floor,
+				I32TruncF64S,
+				LocalSet(outputLocal)
+			];
+		}
 		if (name == "__std_int_f64") {
 			if ((switch (output.type) {
 				case I32: false;
