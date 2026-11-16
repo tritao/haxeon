@@ -1,0 +1,8 @@
+# Commits that only reformat code; `git blame` skips them with:
+#   git config blame.ignoreRevsFile .git-blame-ignore-revs
+# (GitHub's blame view reads this file on its own.)
+
+# Sort imports across the tree
+68148ba7ab7b6466eafcf8e53ace73da3355ceac
+# Format the tree with haxeon fmt
+952bdcdcf000ea2f4dbbfef2c79e4bda6a90b671
