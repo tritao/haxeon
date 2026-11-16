@@ -1,7 +1,11 @@
 /* Records NativeKit's trace points (nativekit_trace.h) in the profiler. NativeKit depends on nothing here: it calls
    whatever sink its host installs, and this file is the sink Haxeon installs, through the library the FFI loaded. Zones
    become profiler spans and dequeued inputs become PROFILE_EVENT_INPUT events. While no session is recording, the
-   sink's switch (hl_prof_on) is off and NativeKit calls nothing. */
+   sink's switch (hl_prof_on) is off and NativeKit calls nothing.
+
+   The core runtime must build without the vendor/nativekit submodule, so the sink is compiled only when CMake finds
+   nativekit_trace.h and defines HAXEON_WITH_NATIVEKIT. Without it, native_trace_install reports that no sink exists. */
+#ifdef HAXEON_WITH_NATIVEKIT
 #include <nativekit_trace.h>
 #include <hlprof.h>
 #include <profile_events.h>
@@ -73,3 +77,9 @@ HL_PRIM bool HL_NAME(native_trace_install)( vstring *library ) {
 	set_sink(&native_trace_sink);
 	return true;
 }
+#else
+HL_PRIM bool HL_NAME(native_trace_install)( vstring *library ) {
+	(void)library;
+	return false;
+}
+#endif

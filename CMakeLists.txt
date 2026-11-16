@@ -70,7 +70,12 @@ set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 # Native builds consume the checked-in lane policy; ValueLaneRuntimeMain verifies it against the SSA generator.
 
 add_library(haxeon_runtime SHARED native/runtime.c)
-target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src vendor/nativekit/include)
+target_include_directories(haxeon_runtime PRIVATE vendor/hashlink/src)
+# NativeKit is an optional submodule that bootstrap does not fetch. Only the trace sink in native_trace.c uses it.
+if(EXISTS "${CMAKE_SOURCE_DIR}/vendor/nativekit/include/nativekit_trace.h")
+  target_include_directories(haxeon_runtime PRIVATE vendor/nativekit/include)
+  target_compile_definitions(haxeon_runtime PRIVATE HAXEON_WITH_NATIVEKIT)
+endif()
 target_link_libraries(haxeon_runtime PRIVATE libhl hl)
 if(CMAKE_C_COMPILER_ID STREQUAL "MSVC")
   # MSVC gates its C11 <stdatomic.h> implementation behind this opt-in.
