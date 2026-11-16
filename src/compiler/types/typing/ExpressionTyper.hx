@@ -1644,6 +1644,7 @@ class ExpressionTyper {
 			else
 				typedDefault = typeExpressionCallback(defaultExpression, defaultScope, expectedType, false);
 		}
+		var caseScopes:Array<Scope> = [];
 		// A switch arm can need the inferred result type to resolve an enum constructor
 		// (for example, `case A: SomeConstructor(...); default: value;`). Seed that
 		// context from the fallback before typing the arms; the normal branch join below
@@ -1671,6 +1672,7 @@ class ExpressionTyper {
 				typedResult:TypedExpression;
 			if (typedGuard != null)
 				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
+			caseScopes.push(caseScope);
 			if (expectedType == null && resultType == null && isEmptyArrayLiteral(switchCase.result)) {
 				deferredCaseResults.set(caseIndex, {expression: switchCase.result, scope: caseScope});
 				typedResult = new TypedExpression(TUnreachable, TNever, switchCase.span);
@@ -1781,8 +1783,23 @@ class ExpressionTyper {
 			if (missing.length > 0)
 				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 		}
+		var paths = caseScopes.copy(),
+			pathTypes = [for (switchCase in typedCases) switchCase.result.type];
+		if (typedDefault != null) {
+			paths.push(defaultScope);
+			pathTypes.push(typedDefault.type);
+		}
+		scope.join(continuingPaths(paths, pathTypes));
 		return new TypedExpression(TSwitchExpression(typedSubject, typedCases, typedDefault), resultType, span);
 	}
+
+	/** The branch scopes control can leave normally: those whose value is not Never (a throw, a return, a break). */
+	static function continuingPaths(scopes:Array<Scope>, types:Array<CompilerType>):Array<Scope>
+		return [for (index in 0...scopes.length)
+			if (!(switch (types[index]) {
+				case TNever: true;
+				default: false;
+			})) scopes[index]];
 
 	static function isEmptyArrayLiteral(expression:AstExpression):Bool
 		return switch expression {
@@ -1855,6 +1872,7 @@ class ExpressionTyper {
 			fail("E1003", "Conditional branches must have matching types", span);
 		typedTrue = branchResult(typedTrue, resultType, "conditional branch");
 		typedFalse = branchResult(typedFalse, resultType, "conditional branch");
+		scope.join(continuingPaths([trueScope, falseScope], [typedTrue.type, typedFalse.type]));
 		return new TypedExpression(TConditional(typedCondition, typedTrue, typedFalse), resultType, span);
 	}
 
@@ -2215,6 +2233,8 @@ class ExpressionTyper {
 			right = plain(typeExpressionCallback(b, rightScope, null, false));
 		if (!sameType(left.type, TBool) || !sameType(right.type, TBool))
 			fail("E1011", "Logical operators require Bool operands", span);
+		// Control continues either without the right operand (the scope after the left) or after it.
+		scope.join([scope, rightScope]);
 		return new TypedExpression(and ? TAnd(left, right) : TOr(left, right), TBool, span);
 	}
 

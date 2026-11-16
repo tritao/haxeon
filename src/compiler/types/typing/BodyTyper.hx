@@ -2251,8 +2251,7 @@ class BodyTyper {
 			case TNever: false;
 			default: true;
 		})) {
-			scope.mergeAssignmentsFrom([blockScope]);
-			scope.mergeRefinementsFrom([blockScope]);
+			scope.join([blockScope]);
 		}
 		return new TypedExpression(TBlockExpression(typedStatements, typedResult), typedResult.type, span);
 	}

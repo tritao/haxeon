@@ -223,7 +223,105 @@ class Scope {
 		}
 	}
 
-	public function mergeRefinementsFrom(scopes:Array<Scope>):Void {
+	/**
+	 * Where control flow from `paths` rejoins this scope (after an if, a switch, a try, a conditional or a logical operator):
+	 * a local is assigned when every path assigned it, and keeps a narrowing only where every path agrees on it, so what one
+	 * branch assigned is no longer known to hold its earlier value. With no path, the code after is unreachable.
+	 *
+	 * Each path is this scope or a scope below it, and differs from this scope only in what the scopes between them recorded,
+	 * so only the locals and expression facts those name are merged; a join whose branches recorded nothing changes nothing.
+	 */
+	public function join(paths:Array<Scope>):Void {
+		if (paths.length == 0) {
+			assumeAllAssigned();
+			return;
+		}
+		var assignedIds:Null<Map<String, Bool>> = null,
+			factKeys:Null<Map<String, Bool>> = null,
+			forgotWholesale = false;
+		for (path in paths) {
+			var current:Null<Scope> = path;
+			while (current != this) {
+				if (current == null) {
+					// Not below this scope: nothing bounds what it differs in, so merge everything visible.
+					mergeAssignmentsFrom(paths);
+					mergeRefinementsFrom(paths);
+					return;
+				}
+				var ownAssignments = current.assigned;
+				if (ownAssignments != null)
+					for (id in ownAssignments.keys()) {
+						if (assignedIds == null)
+							assignedIds = [];
+						assignedIds.set(id, true);
+					}
+				if (!current.facts.recordsNothing()) {
+					if (factKeys == null)
+						factKeys = [];
+					if (current.facts.collectOwnKeys(factKeys))
+						forgotWholesale = true;
+				}
+				current = current.parent;
+			}
+		}
+		if (assignedIds != null)
+			for (id in assignedIds.keys()) {
+				if (isAssignedId(id) || resolveById(id) == null)
+					continue;
+				var allAssigned = true;
+				for (path in paths)
+					if (!path.isAssignedId(id)) {
+						allAssigned = false;
+						break;
+					}
+				if (allAssigned)
+					ownAssigned().set(id, true);
+			}
+		if (factKeys == null)
+			return;
+		var expressionPrefix = '$' + 'expression:';
+		if (forgotWholesale)
+			for (key in facts.keys())
+				if (StringTools.startsWith(key, expressionPrefix))
+					factKeys.set(key, true);
+		for (key in factKeys.keys()) {
+			if (StringTools.startsWith(key, expressionPrefix)) {
+				joinExpressionFact(key, paths);
+				continue;
+			}
+			var value = resolveById(key);
+			if (value == null)
+				continue;
+			var merged = paths[0].refinedType(value);
+			for (index in 1...paths.length)
+				if (!TypeRelations.equals(merged, paths[index].refinedType(value))) {
+					merged = value.declared;
+					break;
+				}
+			facts.refine(value.id, merged);
+		}
+	}
+
+	/** An expression fact holds after a join when every path holds the same one; otherwise it is forgotten. */
+	function joinExpressionFact(key:String, paths:Array<Scope>):Void {
+		var merged = paths[0].facts.resolve(key),
+			consistent = merged != null,
+			stable = paths[0].facts.isStable(key);
+		for (index in 1...paths.length) {
+			var candidate = paths[index].facts.resolve(key);
+			if (candidate == null || merged == null || !TypeRelations.equals(merged, candidate)) {
+				consistent = false;
+				break;
+			}
+			stable = stable && paths[index].facts.isStable(key);
+		}
+		if (consistent)
+			facts.refine(key, merged, stable);
+		else
+			facts.invalidate(key);
+	}
+
+	function mergeRefinementsFrom(scopes:Array<Scope>):Void {
 		if (scopes.length == 0)
 			return;
 		for (value in visibleValues()) {
@@ -241,23 +339,8 @@ class Scope {
 			for (key in scope.facts.keys())
 				if (StringTools.startsWith(key, expressionPrefix))
 					expressionKeys.set(key, true);
-		for (key in expressionKeys.keys()) {
-			var merged = scopes[0].facts.resolve(key),
-				consistent = merged != null,
-				stable = scopes[0].facts.isStable(key);
-			for (index in 1...scopes.length) {
-				var candidate = scopes[index].facts.resolve(key);
-				if (candidate == null || merged == null || !TypeRelations.equals(merged, candidate)) {
-					consistent = false;
-					break;
-				}
-				stable = stable && scopes[index].facts.isStable(key);
-			}
-			if (consistent)
-				facts.refine(key, merged, stable);
-			else
-				facts.invalidate(key);
-		}
+		for (key in expressionKeys.keys())
+			joinExpressionFact(key, scopes);
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String,

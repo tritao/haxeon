@@ -162,6 +162,32 @@ class FlowFacts {
 		return outer == null ? null : outer.resolve(bindingId);
 	}
 
+	/**
+	 * Adds to `into` each key this branch's own tables name (refined, or forgotten one by one), and returns whether it also
+	 * forgot facts wholesale, by path prefix, namespace, field or mention: those name no key, and can hide any expression
+	 * fact it inherits. A branch that recorded nothing adds nothing.
+	 */
+	public function collectOwnKeys(into:Map<String, Bool>):Bool {
+		var facts = tables;
+		if (facts == null)
+			return false;
+		for (key in facts.refinedTypes.keys())
+			into.set(key, true);
+		for (key in facts.stableRefinedTypes.keys())
+			into.set(key, true);
+		for (key in facts.invalidated.keys())
+			into.set(key, true);
+		return facts.invalidatedPrefixes.length > 0
+			|| facts.invalidatedNamespaces.length > 0
+			|| facts.erasedNamespaces.length > 0
+			|| facts.erasedMentions.length > 0
+			|| facts.invalidatedFields.length > 0;
+	}
+
+	/** Whether this branch recorded no fact of its own. */
+	public function recordsNothing():Bool
+		return tables == null;
+
 	/** All fact keys visible from this branch, including facts inherited from its parent. */
 	public function keys():Array<String> {
 		var result:Array<String> = [], seen:Map<String, Bool> = [];

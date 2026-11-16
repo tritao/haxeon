@@ -608,3 +608,4 @@ local-inference-reach	42
 try-expression-control-flow	42
 std-parse-int	42
 switch-assignment-refinement	42
+flow-join-expressions	42

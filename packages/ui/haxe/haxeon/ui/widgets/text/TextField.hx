@@ -630,7 +630,9 @@ class TextField implements View {
 			#else
 			event.modifiers.contains(UiModifier.Control);
 			#end
-			if (additionalSelections.length > 0 && onNavigationIntent != null) {
+			// The handler is read once: the calls below (pageStep, the modifier checks) may replace it.
+			var navigationIntent = onNavigationIntent;
+			if (additionalSelections.length > 0 && navigationIntent != null) {
 				var navigation:Null<TextNavigationIntent> = switch (event.key) {
 					case UiKey.Left:
 						#if (mac || ios)
@@ -670,7 +672,7 @@ class TextField implements View {
 				if (command && (event.key == UiKey.Home || event.key == UiKey.End)) navigation =
 					DocumentBoundary(event.key == UiKey.End,
 					extend);
-				if (navigation != null && onNavigationIntent(navigation, editor.layout)) {
+				if (navigation != null && navigationIntent(navigation, editor.layout)) {
 					refreshState();
 					editor.resetCaretBlink(Sys.time());
 					event.preventDefault();
@@ -937,12 +939,14 @@ class TextField implements View {
 	}
 
 	function publishDiagnostics(editor:TextEditorState, context:BuildContext, caretRect:Null<Rect>):Void {
-		if (onDiagnostics == null) return;
+		// The handler is read once: building the report calls into the editor, which may replace it.
+		var diagnostics = onDiagnostics;
+		if (diagnostics == null) return;
 		var compositionText = editor.compositionStart >= 0
 			&& editor.compositionEnd >= editor.compositionStart
 			? editor.documentOffsets().sliceCodepoints(editor.compositionStart,
 			editor.compositionEnd) : "";
-		onDiagnostics(new TextEditorDiagnostics(key,
+		diagnostics(new TextEditorDiagnostics(key,
 			label == null ? key : label,
 			editor.focused,
 			editor.selectionStart,

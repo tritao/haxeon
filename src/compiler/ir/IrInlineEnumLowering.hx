@@ -349,8 +349,9 @@ class IrInlineEnumLowering {
 					}
 					copy.instructions.push(new Located(instruction, located.provenance));
 				}
-				if (block.terminator != null)
-					copy.terminator = new Located(switch block.terminator.value {
+				var terminator = block.terminator;
+				if (terminator != null)
+					copy.terminator = new Located(switch terminator.value {
 						case Unreachable: Unreachable;
 						case Return(value): Return(use(value));
 						case Throw(value):
@@ -360,7 +361,7 @@ class IrInlineEnumLowering {
 						case Rethrow(value): Rethrow(use(value));
 						case Jump(id): Jump(id);
 						case Branch(condition, yes, no): Branch(use(condition), yes, no);
-					}, block.terminator.provenance);
+					}, terminator.provenance);
 				blocks.push(copy);
 			}
 			result.functions.push(new IrFunction(fn.name, arguments, mapped(fn.result), blocks, fn.kind,

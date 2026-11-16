@@ -256,14 +256,15 @@ class IrEnumTagLowering {
 						}
 						result.instructions.push(new Located(instruction, located.provenance));
 					}
-					if (block.terminator != null) result.terminator = new Located(switch block.terminator.value {
+					var terminator = block.terminator;
+					if (terminator != null) result.terminator = new Located(switch terminator.value {
 						case Unreachable: Unreachable;
 						case Return(value): Return(use(value));
 						case Throw(value): Throw(use(value));
 						case Rethrow(value): Rethrow(use(value));
 						case Jump(id): Jump(id);
 						case Branch(condition, yes, no): Branch(use(condition), yes, no);
-					}, block.terminator.provenance);
+					}, terminator.provenance);
 					result;
 				}];
 				if (replacedIndices.keys().hasNext()) {

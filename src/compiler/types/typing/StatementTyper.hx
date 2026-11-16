@@ -685,8 +685,7 @@ class StatementTyper {
 		for (i in 0...typedCatches.length)
 			if (!ControlFlow.alwaysExits(typedCatches[i].statements, exhaustiveEnum))
 				continuing.push(catchScopes[i]);
-		scope.mergeAssignmentsFrom(continuing);
-		scope.mergeRefinementsFrom(continuing);
+		scope.join(continuing);
 		return TTry(typedTry, typedCatches, span);
 	}
 
@@ -706,8 +705,7 @@ class StatementTyper {
 		if (ControlFlow.elseCanRun(typedCondition)
 			&& (elseBranch.length == 0 || !ControlFlow.alwaysExits(typedElse, exhaustiveEnum)))
 			continuing.push(elseScope);
-		scope.mergeAssignmentsFrom(continuing);
-		scope.mergeRefinementsFrom(continuing);
+		scope.join(continuing);
 		if (elseBranch.length == 0 && ControlFlow.elseCanRun(typedCondition)
 			&& ControlFlow.alwaysExits(typedThen, exhaustiveEnum))
 			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
@@ -965,10 +963,7 @@ class StatementTyper {
 				continuing.push(defaultScope);
 		} else if (!exhaustiveEnum(typedExpression.type, typedCases))
 			continuing.push(scope);
-		// As after an if: what the continuing branches assigned and refined is what holds after the switch, so a local narrowed
-		// before it (`if (found != null) return found;`) and assigned in a case is no longer known to be null.
-		scope.mergeAssignmentsFrom(continuing);
-		scope.mergeRefinementsFrom(continuing);
+		scope.join(continuing);
 		return TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span);
 	}
 
