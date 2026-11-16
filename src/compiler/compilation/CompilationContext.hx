@@ -40,6 +40,9 @@ class CompilationContext {
 	/** The passes and self-checks this compile runs (`CompileOptions`). */
 	public final options:compiler.CompileOptions;
 
+	/** The reserved field slots of a live build's objects (`Compiler.liveFieldReserve`). */
+	public final liveFieldReserve:Int;
+
 	/** Why the frontend started over, one entry per module typing found it needed: each restart redoes the whole frontend. */
 	public final frontendRestarts:Array<String> = [];
 
@@ -47,6 +50,9 @@ class CompilationContext {
 
 	/** One line per frontend pass: where its time and allocation went (see `FrontendCompilation.passReport`). */
 	public final frontendPassReports:Array<String> = [];
+
+	/** What each IR pass allocated in this compile, in the order the passes first ran (`IrPassMeter`). */
+	public final irPassAllocations:Array<compiler.core.IrPassMeter.IrPassAllocation> = [];
 
 	/** Time and allocation of every `parse` so far; a pass reports the difference, since parsing happens in the graph and in semantic assembly. */
 	public var parseMs = 0.0;
@@ -69,6 +75,7 @@ class CompilationContext {
 		developmentMetadata = owner.developmentMetadata;
 		backendOptions = owner.backendOptions;
 		options = owner.options;
+		liveFieldReserve = owner.liveFieldReserve;
 		// A copy: the loader remembers the names no root holds, and each build probes again for those.
 		moduleAnalyzer = new ModuleAnalyzer(state.modules, state.types, natives, state.compiledOnce, defines,
 			owner.sourceLoader.copy(), buildSemanticModels,

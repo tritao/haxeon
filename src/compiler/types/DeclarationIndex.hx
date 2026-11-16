@@ -260,6 +260,7 @@ class DeclarationIndex {
 	}
 
 	/** No substitutions: resolution only reads them. */
+	@:processWide("a shared empty value, never added to")
 	static final noSubstitutions:Map<String, CompilerType> = [];
 
 	/**

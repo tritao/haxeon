@@ -22,7 +22,11 @@ typedef CLayout = ClangRecordLayouts.RecordLayout;
 
 /** Imports the ABI-visible subset of a C header into a raw typed HXI model. */
 class CHeaderImporter {
+	/** The headers of the import in progress, by path, as bytes (for doc comments) and as source files (for spans). */
+	@:processWide("the headers of one import, cleared when the next begins, so an edited header is read again; a concurrent import only re-reads")
 	static final sourceCache:Map<String, haxe.io.Bytes> = [];
+
+	@:processWide("the headers of one import, cleared when the next begins, so an edited header is read again; a concurrent import only re-reads")
 	static final sourceFiles:Map<String, SourceFile> = [];
 
 	public static function importHeader(header:String, target:String, includes:Array<String>, clang:String = "clang",
@@ -45,6 +49,9 @@ class CHeaderImporter {
 			?library:String, ?interfaceName:String,
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>, ?defines:Array<String>,
 			?compileCommands:String):HxiInterface {
+		sourceCache.clear();
+		sourceFiles.clear();
+		ClangAstTools.beginImport();
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
 			throw 'Invalid HXI interface name "$interfaceName"';
 		if (dependencies != null)

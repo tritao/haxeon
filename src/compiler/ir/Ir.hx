@@ -387,6 +387,17 @@ class IrProgram {
 	public var prunedFunctions:Map<String, Bool> = [];
 
 	/**
+	 * Lookups the passes share over this program (`IrProgramIndex.of`, `IrMethodResolution.of`), each rebuilt when the declaration
+	 * arrays it was made from change. They are the program's own, so they go with it, and a copy starts without them.
+	 */
+	public var index:Null<compiler.ir.IrProgramIndex> = null;
+
+	public var methodResolution:Null<compiler.ir.IrMethodResolution> = null;
+
+	/** The HaxeonHost C function each runtime native calls on Wasm, by native name (`WasmModuleSupport.hostCNative`). */
+	public var hostCNatives:Null<Map<String, IrCNative>> = null;
+
+	/**
 	 * Names of the natives that reached code calls, once the early prune ran (`IrEntryPrune`); null when it did not, and every declared native then
 	 * counts. A decision about what the program does at run time (does it reflect?) reads this, not the declared natives of every loaded module.
 	 */

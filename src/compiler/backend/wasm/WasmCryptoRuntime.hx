@@ -6,7 +6,9 @@ import compiler.ir.Ir.IrProgram;
 /** Object-model-neutral C kernels linked through the existing C ABI, on both browser backends. */
 class WasmCryptoRuntime {
 	public static inline var LIBRARY = "haxeon_crypto";
+	@:processWide("the bytes of a runtime shipped with the compiler, read once")
 	static var runtime:Null<haxe.io.Bytes>;
+	@:processWide("the bytes of a runtime shipped with the compiler, read once")
 	static var runtimeNeutral:Null<haxe.io.Bytes>;
 
 	public static function link(module:WasmModule, functions:Map<String, Int>, program:IrProgram,

@@ -7,7 +7,13 @@ import sys.io.File;
 
 /** Small AST and source-location helpers shared by language importers. */
 class ClangAstTools {
+	/** The source files of the import in progress, by path: cleared when an import begins (`beginImport`). */
+	@:processWide("the headers of one import, cleared when the next begins, so an edited header is read again; a concurrent import only re-reads")
 	static final sourceFiles:Map<String, SourceFile> = [];
+
+	/** Starts an import: what earlier imports read of their headers is forgotten, as a header may have been edited since. */
+	public static function beginImport():Void
+		sourceFiles.clear();
 
 	public static function field(value:Dynamic, name:String):Dynamic
 		return value == null ? null : Reflect.field(value, name);

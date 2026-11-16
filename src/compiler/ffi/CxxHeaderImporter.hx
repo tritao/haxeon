@@ -44,6 +44,7 @@ class CxxHeaderImporter {
 			?compileCommands:String, trivialValues:Bool = false, lifetimes:Bool = false, virtualDispatch:Bool = false,
 			cxxThunks:Bool = false,
 			?selectedDeclarations:Array<String>, ?cxxOwnership:Map<String, String>):CxxImportResult {
+		ClangAstTools.beginImport();
 		var frontend = ClangFrontend.run({
 			header: header,
 			target: target,

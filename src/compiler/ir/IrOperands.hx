@@ -28,8 +28,10 @@ class IrOperands {
 		};
 
 	/** Borrowed empty view and private predicate result; neither array is mutated. */
+	@:processWide("an identity marker, compared by reference and never added to")
 	static final noInputs:Array<IrValue> = [];
 
+	@:processWide("an identity marker, compared by reference and never added to")
 	static final matchedInputs:Array<IrValue> = [];
 
 	/** Phi inputs are edge uses and are verified separately. */

@@ -51,6 +51,12 @@ class IrPipelineContext {
 	/** What the prune removed; empty without it. */
 	public var pruned:Map<String, Bool> = [];
 
+	/** Where the metered stages record their allocation, when the compile reports it; null for pipelines that do not. */
+	public var meter:Null<compiler.core.IrPassMeter> = null;
+
+	/** The (class, method) table entries the early prune removed, as `class\u0001method`. */
+	public var prunedMethods:Map<String, Bool> = [];
+
 	/** Set at the prune point: the stages after it check that nothing calls what it removed. */
 	public var checkPrune:Bool = false;
 

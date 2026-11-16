@@ -189,7 +189,8 @@ class WireCodecGenerator {
 		return result;
 	}
 
-	static var syntheticSpan:Null<SourceSpan> = null;
+	/** The span of a codec for a type with no declaration of its own. */
+	static final syntheticSpan = new SourceSpan(new SourceFile("<generated>", ""), 0, 0);
 
 	/** The span of what the codec is for: a wire typedef, class or enum declaration, or a fixed one for types without. */
 	function canonicalSpan(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>,
@@ -197,8 +198,6 @@ class WireCodecGenerator {
 		var declared:Null<SourceSpan> = declarationSpan(session, type, classes, enums);
 		if (declared != null)
 			return declared;
-		if (syntheticSpan == null)
-			syntheticSpan = new SourceSpan(new SourceFile("<generated>", ""), 0, 0);
 		return syntheticSpan;
 	}
 

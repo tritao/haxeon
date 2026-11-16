@@ -31,7 +31,7 @@ class IrOptionalScalarFlow {
 
 	public function new(declarations:Array<IrObject>) {
 		objects = [for (object in declarations) object.name => object];
-		resolution = IrMethodResolution.of(declarations);
+		resolution = IrMethodResolution.over(declarations);
 		layouts = new IrInlineValueLayout(IrObjectTable.of(objects));
 	}
 

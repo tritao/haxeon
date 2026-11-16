@@ -211,6 +211,7 @@ class CodeIdentityTable {
 		return source.get(name);
 	}
 
+	@:processWide("the compiler's own version, which does not change while the process runs")
 	static var cachedVersion:Null<String>;
 
 	/**

@@ -28,6 +28,7 @@ class HlRuntimeIdentity {
 	public static inline final VERSION = 9;
 
 	public static inline final RUNTIME_VERSION = 3;
+	@:processWide("makes each identity this process mints distinct; a process-wide counter by design")
 	static var sequence = 1;
 
 	public static function createModuleId():Bytes {

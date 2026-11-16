@@ -11,7 +11,7 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 /** Physical storage primitives used by the portable lane policy on Wasm32. */
 class WasmLinearLaneStorage {
 	public static function register(context:WasmLinearContext):Void {
-		var allocator = -1;
+		var allocator = -1, failure = WasmLinearFailure.of(context);
 		for (native in context.program.natives) if (StringTools.startsWith(native.name, IrValueLaneRuntime.PRIMITIVE)) {
 			if (allocator < 0) {
 				var alloc:IrNative = {
@@ -22,16 +22,18 @@ class WasmLinearLaneStorage {
 					result: Array(Dyn)
 				};
 				allocator = context.module.addFunction(WasmLinearValueArrays.allocate(context.module, alloc,
-					context.allocatorFunction));
+					context.allocatorFunction, failure));
 			}
 			var operation = native.name.substr(IrValueLaneRuntime.PRIMITIVE.length), fn = switch operation {
-				case "replace-capacity": WasmLinearValueArrays.replaceCapacity(native, context.allocatorFunction);
+				case "replace-capacity": WasmLinearValueArrays.replaceCapacity(native, context.allocatorFunction,
+					failure);
 				case "new-like": WasmLinearValueArrays.newLike(allocator, native.name);
-				default: build(native, operation);
+				default: build(native, operation, failure);
 			};
 			var prefix:Array<WasmInstruction> = [];
 			for (i in 0...native.arguments.length) switch native.arguments[i] {
-				case Array(_): prefix = prefix.concat(WasmLinearValueArrays.resolveForward(i)).concat(requireArray(i));
+				case Array(_): prefix = prefix.concat(WasmLinearValueArrays.resolveForward(i)).concat(requireArray(i,
+					failure));
 				default:
 			}
 			for (i in 0...prefix.length) fn.body.insert(i, prefix[i]);
@@ -39,10 +41,10 @@ class WasmLinearLaneStorage {
 		}
 	}
 
-	static function requireArray(index:Int):Array<WasmInstruction> {
+	static function requireArray(index:Int, failure:WasmLinearFailure):Array<WasmInstruction> {
 		var b = new WasmFunctionBuilder("require-lane", {parameters: [], results: []});
 		b.emitAll([LocalGet(index), I32Eqz, If(null)]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(index),
@@ -52,12 +54,12 @@ class WasmLinearLaneStorage {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emit(End);
 		return b.body;
 	}
 
-	static function build(native:IrNative, operation:String):WasmFunction {
+	static function build(native:IrNative, operation:String, failure:WasmLinearFailure):WasmFunction {
 		var b = new WasmFunctionBuilder(native.name, {
 			parameters: [for (a in native.arguments) WasmModuleSupport.requireValueType(a)],
 			results: WasmModuleSupport.resultTypes(native.result)
@@ -81,7 +83,7 @@ class WasmLinearLaneStorage {
 					WasmLayout.VALUE_ARRAY_VALIDITY_OFFSET
 				])
 					b.emitAll([LocalGet(0), I32Load(offset), LocalGet(1), I32Load(offset), I32Eq, I32And]);
-			case "fail": WasmLinearRuntime.runtimeFailure(b);
+			case "fail": failure.emit(b);
 			case "clear-scalars", "clear-references", "copy-scalars", "copy-references":
 				var scalar = StringTools.endsWith(operation, "scalars"),
 					copy = StringTools.startsWith(operation, "copy"),

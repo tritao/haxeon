@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir.IrProgram;
+import compiler.ir.IrEntryPrune.IrPruneWatch;
 
 /**
  * One named step of an `IrPipeline` stage list: an existing pass (or a group of calls that ran back to back) wrapped as it is, from
@@ -66,7 +67,7 @@ class IrStageHooks {
 			IrEntryPrune.checkRemoved(label, functions, context.pruned);
 		if (stage.prunePoint) {
 			context.checkPrune = context.pruneFromEntry && context.options.checkReuse;
-			IrEntryPrune.watch(context.checkPrune ? context.pruned : null);
+			IrEntryPrune.watching(context.checkPrune ? new IrPruneWatch(context.pruned, context.prunedMethods) : null);
 		}
 	}
 }
@@ -119,10 +120,10 @@ class IrStageList {
 		for (stage in stages) {
 			var enabled = stage.enabled;
 			if (enabled == null || enabled(program, context)) {
-				if (stage.metered) {
-					var before = compiler.core.IrPassMeter.start();
+				if (stage.metered && context.meter != null) {
+					var meter:compiler.core.IrPassMeter = context.meter, before = meter.start();
 					program = stage.run(program, context);
-					compiler.core.IrPassMeter.stop(stage.name, before);
+					meter.stop(stage.name, before);
 				} else
 					program = stage.run(program, context);
 			}
@@ -147,22 +148,29 @@ class IrAssemblyStageList {
 
 	public function run(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var watches = false;
-		for (stage in stages) {
-			var enabled = stage.enabled;
-			if (enabled == null || enabled(assembly, context)) {
-				if (stage.metered) {
-					var before = compiler.core.IrPassMeter.start();
-					assembly = stage.run(assembly, context);
-					compiler.core.IrPassMeter.stop(stage.name, before);
-				} else
-					assembly = stage.run(assembly, context);
+		try {
+			for (stage in stages) {
+				var enabled = stage.enabled;
+				if (enabled == null || enabled(assembly, context)) {
+					if (stage.metered && context.meter != null) {
+						var meter:compiler.core.IrPassMeter = context.meter, before = meter.start();
+						assembly = stage.run(assembly, context);
+						meter.stop(stage.name, before);
+					} else
+						assembly = stage.run(assembly, context);
+				}
+				IrStageHooks.after(stage, assembly.functions, context);
+				watches = watches || stage.prunePoint;
 			}
-			IrStageHooks.after(stage, assembly.functions, context);
-			watches = watches || stage.prunePoint;
+		} catch (error:Dynamic) {
+			// A pass that throws ends the run, and the watch with it: the next compile on this thread must not inherit it.
+			if (watches)
+				IrEntryPrune.watching(null);
+			throw error;
 		}
 		// The watch ends with the list, as the prune's check mode covers only the passes after it.
 		if (watches)
-			IrEntryPrune.watch(null);
+			IrEntryPrune.watching(null);
 		return assembly;
 	}
 

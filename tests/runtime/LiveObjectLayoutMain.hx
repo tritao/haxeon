@@ -1,7 +1,6 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.Compiler;
 import compiler.abi.PatchPlanner.AbiChange;
-import compiler.compilation.HashLinkBackendSession;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
 import runtime.LoadedModule;
@@ -37,11 +36,9 @@ class LiveObjectLayoutMain {
 		refuses("an override is removed", original(),
 			edited().split("  override public function shrink():Int return 5;\n").join(""),
 			ObjectMethodDispatchChanged("Widget.shrink"));
-		HashLinkBackendSession.liveFieldReserve = 1;
 		refuses("more fields are added than the class reserves", original(),
 			added("Model", "var first:Int = 1;\n  var second:Int = 2;"),
-			ObjectFieldReserveExhausted("Model"));
-		HashLinkBackendSession.liveFieldReserve = 4;
+			ObjectFieldReserveExhausted("Model"), 1);
 		Sys.println("PASS: added and removed fields patch running objects, and the edits a patch cannot make reload with their reasons");
 	}
 
@@ -344,8 +341,10 @@ class LiveObjectLayoutMain {
 	}
 
 	/** Compiles `base`, then `source`, which must reload for `expected` among its reasons. */
-	static function refuses(label:String, base:String, source:String, expected:AbiChange):Void {
+	static function refuses(label:String, base:String, source:String, expected:AbiChange, ?fieldReserve:Int):Void {
 		var compiler = compiler();
+		if (fieldReserve != null)
+			compiler.liveFieldReserve = fieldReserve;
 		compiler.update("Main.hx", base);
 		compiler.compile("Main");
 		compiler.update("Main.hx", source);

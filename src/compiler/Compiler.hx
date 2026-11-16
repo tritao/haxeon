@@ -107,6 +107,9 @@ typedef CompileMetrics = {
 	/** Where each frontend pass spent its time and allocation, one line per pass. */
 	final frontendPassReports:Array<String>;
 
+	/** What each IR pass allocated, for the timings line; empty when the build reused its pipeline and ran none. */
+	final irPassAllocations:Array<compiler.core.IrPassMeter.IrPassAllocation>;
+
 	final semanticAssemblyMs:Float;
 	final semanticAliasMs:Float;
 	final semanticCanonicalizationMs:Float;
@@ -223,6 +226,12 @@ class Compiler {
 
 	/** Emit metadata used by development tooling in addition to runtime data. */
 	public var developmentMetadata = true;
+
+	/**
+	 * Reserved slots a live HashLink build gives each object (see `HlLower.reservedSlots`): how many fields a session can
+	 * add to one class before the edit needs a reload, which lays the slots out afresh. Each costs a pointer per instance.
+	 */
+	public var liveFieldReserve = 4;
 
 	/**
 	 * What the request asks of the backend besides the program (Wasm memory, exports, allocator options), set per request like
@@ -663,6 +672,7 @@ class Compiler {
 						frontendRestarts: [],
 						frontendPassFunctions: [],
 						frontendPassReports: [],
+						irPassAllocations: [],
 						semanticAssemblyMs: 0.0,
 						semanticAliasMs: 0.0,
 						semanticCanonicalizationMs: 0.0,

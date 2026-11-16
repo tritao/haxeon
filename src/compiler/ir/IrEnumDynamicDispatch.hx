@@ -7,6 +7,7 @@ import compiler.types.typing.EnumRuntimeType;
 /** Dispatch Dynamic enum operations by the concrete runtime enum descriptor. */
 class IrEnumDynamicDispatch {
 	/** Read-only: no type values in a function. */
+	@:processWide("a shared empty map, only ever read")
 	static final noTypeValues:Map<Int, IrType> = [];
 
 	public static inline final EQUAL = "$enum-dynamic-equal";

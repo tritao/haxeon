@@ -330,6 +330,7 @@ class Lexer {
 		return source.getString(start, end - start);
 
 	/** Operator and punctuation texts, by their bytes packed into an Int: they are few and repeat in every file. */
+	@:processWide("interned operator texts: the text of a lexeme never changes")
 	static final operators:Map<Int, String> = [];
 
 	/** The text of an operator token, shared by every token with the same bytes; longer texts are read as usual. */

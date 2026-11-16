@@ -1,30 +1,33 @@
 package compiler.core;
 
+/** One IR pass's allocation in one compile. */
+typedef IrPassAllocation = {
+	final name:String;
+	final bytes:Float;
+	final count:Float;
+}
+
 /**
  * Allocation of each IR pass in one compile, in the order the passes first ran, for the driver's timings line. A pass that runs more
  * than once (value phi scalarization runs between other passes) is summed under one name. A pass costs two meter samples: `start` and
- * `stop`, called by the stages `compiler.ir.IrPipeline` meters.
+ * `stop`, called by the stages `compiler.ir.IrPipeline` meters. Each compile's pipeline has its own (`IrPipelineContext.meter`).
  */
 class IrPassMeter {
-	static var order:Array<String> = [];
-	static var bytes:Map<String, Float> = [];
-	static var counts:Map<String, Float> = [];
+	final order:Array<String> = [];
+	final bytes:Map<String, Float> = [];
+	final counts:Map<String, Float> = [];
 
-	public static function reset():Void {
-		order = [];
-		bytes = [];
-		counts = [];
-	}
+	public function new() {}
 
 	/** The sample `stop` measures from. */
-	public static function start():AllocationMeter.AllocationSnapshot
+	public function start():AllocationMeter.AllocationSnapshot
 		return AllocationMeter.sample();
 
 	/** Records what was allocated since `before` under `name`. */
-	public static function stop(name:String, before:AllocationMeter.AllocationSnapshot):Void
+	public function stop(name:String, before:AllocationMeter.AllocationSnapshot):Void
 		record(name, before, AllocationMeter.sample());
 
-	static function record(name:String, before:AllocationMeter.AllocationSnapshot,
+	function record(name:String, before:AllocationMeter.AllocationSnapshot,
 			after:AllocationMeter.AllocationSnapshot):Void {
 		if (!bytes.exists(name))
 			order.push(name);
@@ -33,8 +36,8 @@ class IrPassMeter {
 	}
 
 	/** One entry per pass: name, bytes, objects. */
-	public static function entries():Array<{name:String, bytes:Float, count:Float}> {
-		var result:Array<{name:String, bytes:Float, count:Float}> = [];
+	public function entries():Array<IrPassAllocation> {
+		var result:Array<IrPassAllocation> = [];
 		for (name in order) {
 			var passBytes = bytes.get(name), passCount = counts.get(name);
 			result.push({

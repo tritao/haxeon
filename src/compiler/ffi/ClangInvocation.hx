@@ -21,6 +21,7 @@ typedef ClangInvocationOptions = {
 class ClangInvocation {
 	final options:ClangInvocationOptions;
 
+	@:processWide("each clang executable's own target triple, which does not change while the process runs")
 	static final hostTargets:Map<String, String> = [];
 
 	/** Returns the target triple selected by the compiler executable itself. */

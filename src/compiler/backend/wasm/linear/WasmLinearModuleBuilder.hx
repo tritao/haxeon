@@ -501,7 +501,9 @@ class WasmLinearModuleBuilder {
 		linear.heapSweepFunction = required("haxeon_heap_sweep");
 	}
 
+	@:processWide("the bytes of a runtime shipped with the compiler, read once")
 	static var cachedRuntime:Null<haxe.io.Bytes> = null;
+	@:processWide("the bytes of a runtime shipped with the compiler, read once")
 	static var cachedRuntimeNeutral:Null<haxe.io.Bytes> = null;
 
 	/** The committed runtime, found like the stdlib host interfaces: relative to the Haxeon root. */

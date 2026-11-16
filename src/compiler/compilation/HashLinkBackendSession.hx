@@ -29,12 +29,6 @@ import compiler.hl.persistence.HlRuntimeIdentity;
  * of the last plain build. A build assembles on the candidate's copy (`forCandidate`), so a failed build leaves both as they were.
  */
 class HashLinkBackendSession implements BackendSession {
-	/**
-	 * Reserved slots a live HashLink build gives each object (see `HlLower.reservedSlots`): how many fields a session can
-	 * add to one class before the edit needs a reload, which lays the slots out afresh. Each costs a pointer per instance.
-	 */
-	public static var liveFieldReserve:Int = 4;
-
 	/** The assembler of the last successful build. */
 	public var assembler:HlModuleAssembler;
 
@@ -69,7 +63,7 @@ class HashLinkBackendSession implements BackendSession {
 			"live:" + context.livePatching,
 			"development:" + context.developmentMetadata,
 			"options:" + context.options.key(),
-			"fieldReserve:" + liveFieldReserve
+			"fieldReserve:" + context.liveFieldReserve
 		].join(",");
 
 	/** An earlier result for this build: the module and everything derived from it stay, the timings are this build's (none). */
@@ -193,7 +187,7 @@ class HashLinkBackendSession implements BackendSession {
 		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.state.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
-		candidateAssembler.fieldReserve = context.livePatching ? liveFieldReserve : 0;
+		candidateAssembler.fieldReserve = context.livePatching ? context.liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;

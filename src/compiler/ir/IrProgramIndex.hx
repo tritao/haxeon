@@ -13,8 +13,6 @@ import compiler.ir.Ir.IrProgram;
  * each lookup by name and remembers the subtype sets it has computed.
  */
 class IrProgramIndex {
-	static var cached:Null<IrProgramIndex>;
-
 	final program:IrProgram;
 	final functionCount:Int;
 	final objectCount:Int;
@@ -25,12 +23,12 @@ class IrProgramIndex {
 	final subtypes:Map<String, Array<IrObject>> = [];
 	final implementors:Map<String, Array<IrObject>> = [];
 
-	/** The index for `program`, rebuilt when its declaration arrays change. */
+	/** The index for `program`, kept on it and rebuilt when its declaration arrays change. */
 	public static function of(program:IrProgram):IrProgramIndex {
-		var index = cached;
+		var index = program.index;
 		if (index == null || !index.matches(program)) {
 			index = new IrProgramIndex(program);
-			cached = index;
+			program.index = index;
 		}
 		return index;
 	}

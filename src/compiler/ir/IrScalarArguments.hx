@@ -22,7 +22,7 @@ class IrScalarArguments {
 
 	public static function rewrite(program:IrProgram, argumentsOnly:Bool = false):Void {
 		var objects:Map<String, IrObject> = [for (object in program.objects) object.name => object];
-		var resolution = IrMethodResolution.of(program.objects);
+		var resolution = IrMethodResolution.of(program);
 		// Typed closure signatures are an ABI decision, including forwarding closures.
 		// Keep their scalar entry points available before IrScalarClosures rewrites
 		// indirect calls; judging those calls against the boxed ABI here creates a

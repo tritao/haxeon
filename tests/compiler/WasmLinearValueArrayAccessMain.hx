@@ -182,7 +182,8 @@ class WasmLinearValueArrayAccessMain {
 		module.exportMemory = true;
 		for (native in natives) module.exports.push({
 			name: native.name,
-			functionIndex: module.addFunction(WasmLinearValueArrays.build(module, native))
+			functionIndex: module.addFunction(WasmLinearValueArrays.build(module, native,
+				compiler.backend.wasm.linear.WasmLinearFailure.trapping()))
 		});
 		var bytes = WasmEncoder.encode(module), directory = Sys.getEnv("TMPDIR");
 		if (directory == null || directory.length == 0) directory = ".";

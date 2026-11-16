@@ -22,17 +22,20 @@ class CfgBuilder {
 	var current:CfgBlock;
 	var nextValue:Int = 0;
 
-	/** The locals that hold evaluated operands are named by number within a function; the names are shared by all functions. */
-	static final operandNames:Array<String> = [];
+	/**
+	 * The locals that hold evaluated operands are named by number within a function; the first names are made once and shared by all
+	 * functions, and a function with more operands makes the rest. The table is never changed, so any thread may read it.
+	 */
+	static final operandNames:Array<String> = [for (index in 0...OPERAND_NAMES) "$operand:" + index];
+
+	static inline final OPERAND_NAMES = 256;
 
 	var nextOperand:Int = 0;
 
 	/** A local name no other operand of this function uses. */
 	public function operandName():String {
 		var index = nextOperand++;
-		while (operandNames.length <= index)
-			operandNames.push("$operand:" + operandNames.length);
-		return operandNames[index];
+		return index < OPERAND_NAMES ? operandNames[index] : "$operand:" + index;
 	}
 
 	var activeTraps:Array<{id:Int, preserveExceptionStack:Bool}> = [];

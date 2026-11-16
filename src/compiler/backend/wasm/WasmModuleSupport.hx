@@ -141,9 +141,11 @@ class WasmModuleSupport {
 	 * never reads how a backend lays out Haxe values: `trace` prints through HaxeonHost.print.
 	 */
 	public static function hostCNative(program:IrProgram, nativeName:String):Null<IrCNative> {
-		if (hostCNativeProgram != program) {
-			hostCNativeProgram = program;
+		// Worked out once per program and kept on it.
+		var hostCNatives = program.hostCNatives;
+		if (hostCNatives == null) {
 			hostCNatives = [];
+			program.hostCNatives = hostCNatives;
 			var hosted:Map<String, IrCNative> = [];
 			for (native in program.cNatives)
 				if (native.library == "haxeon_host")
@@ -159,9 +161,6 @@ class WasmModuleSupport {
 		}
 		return hostCNatives.get(nativeName);
 	}
-
-	static var hostCNativeProgram:Null<IrProgram> = null;
-	static var hostCNatives:Map<String, IrCNative> = [];
 
 	/** The requested exports followed by every function declared `@:expose`, which the host calls by name. */
 	public static function exportedFunctions(program:IrProgram, requested:Array<String>):Array<String> {

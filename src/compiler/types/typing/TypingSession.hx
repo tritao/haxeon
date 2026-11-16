@@ -241,7 +241,11 @@ class TypingSession {
 		return found == null ? noEnums : found;
 	}
 
-	static final noEnums:Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}> = [];
+	@:processWide("a shared empty value, never added to")
+	static final noEnums:Array<{
+		name:String,
+		declaration:compiler.syntax.Ast.AstEnum
+	}> = [];
 
 	public function bindNominalDeclarations():Void {
 		interfaceDecls = declarations.interfaces;

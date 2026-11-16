@@ -17,13 +17,6 @@ import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.EnumStringDescriptors;
 
 class WasmLinearRuntime {
-	/** Whether runtime errors throw a catchable Haxe exception; set per module by `register`. */
-	static var runtimeErrorsThrow = false;
-
-	static var runtimeNeutral = false;
-	static var pendingExceptionFlag:Null<Int>;
-	static var pendingExceptionValue:Null<Int>;
-
 	public static function addImports(context:WasmLinearContext, used:Map<String, Bool>):Void {
 		var module = context.module, program = context.program;
 		for (native in program.natives)
@@ -40,37 +33,10 @@ class WasmLinearRuntime {
 	}
 
 	public static function register(context:WasmLinearContext):Void {
-		runtimeErrorsThrow = WasmModuleSupport.hasExceptions(context.program);
-		runtimeNeutral = context.options.wasmRuntimeNeutral == true;
-		pendingExceptionFlag = context.pendingExceptionFlag;
-		pendingExceptionValue = context.pendingExceptionValue;
 		addRuntimeFunctions(context);
 	}
 
-	/** Fail a runtime check: throw a null Haxe exception when the program can catch one, else trap. */
-	public static function runtimeFailure(builder:WasmFunctionBuilder):Void {
-		if (runtimeErrorsThrow) {
-			if (runtimeNeutral) {
-				var pendingFlag = pendingExceptionFlag,
-					pendingValue = pendingExceptionValue;
-				if (pendingFlag == null || pendingValue == null)
-					throw "Runtime-neutral exception globals were not initialized";
-				builder.i32Const(0);
-				builder.emit(GlobalSet(pendingValue));
-				builder.i32Const(1);
-				builder.emit(GlobalSet(pendingFlag));
-				for (result in builder.type.results)
-					builder.emitAll(zeroWasmResult(result));
-				builder.return_();
-			} else {
-				builder.i32Const(0);
-				builder.emit(Throw(0));
-			}
-		} else
-			builder.emit(Unreachable);
-	}
-
-	static function zeroWasmResult(type:WasmValueType):Array<WasmInstruction>
+	public static function zeroWasmResult(type:WasmValueType):Array<WasmInstruction>
 		return switch type {
 			case I32 | Ref(_): [I32Const(0)];
 			case I64: [I64Const(0)];
@@ -103,6 +69,7 @@ class WasmLinearRuntime {
 	}
 
 	static function addRuntimeFunctions(context:WasmLinearContext):Void {
+		var failure = WasmLinearFailure.of(context);
 		var module = context.module,
 			functions = context.functions,
 			program = context.program,
@@ -121,10 +88,11 @@ class WasmLinearRuntime {
 			var runtimeFunction = switch native.symbol {
 				case "__closure_receiver_if_match":
 					if (receiverQuery == null)
-						receiverQuery = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, program);
+						receiverQuery = addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, program,
+							failure);
 					receiverQuery;
 				default:
-					addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, program);
+					addRuntimeNativeFunction(module, native, allocator, bytesDataPointer, program, failure);
 			};
 			if (runtimeFunction != null)
 				functions.set(native.name, runtimeFunction);
@@ -471,7 +439,7 @@ class WasmLinearRuntime {
 	/** Lower the stable haxeon_runtime symbol names used by generated HXI and stdlib code. */
 	static function addRuntimeNativeFunction(module:WasmModule, native:compiler.ir.Ir.IrNative, allocator:Int,
 			bytesDataPointer:Int,
-			program:IrProgram):Null<Int> {
+			program:IrProgram, failure:WasmLinearFailure):Null<Int> {
 		return switch native.symbol {
 			case "__reflect_is_enum":
 				if (native.arguments.length != 1
@@ -614,9 +582,9 @@ class WasmLinearRuntime {
 				runtimeImportIndex(module, native);
 			case "__bytes_alloc": addBytesAlloc(module, native.name, allocator);
 			case "__int64_to_string": addInt64ToString(module, native.name, allocator);
-			case "__int64_parse": addInt64Parse(module, native.name);
-			case "__string_starts_with": addStringAffix(module, native.name, false);
-			case "__string_ends_with": addStringAffix(module, native.name, true);
+			case "__int64_parse": addInt64Parse(module, native.name, failure);
+			case "__string_starts_with": addStringAffix(module, native.name, false, failure);
+			case "__string_ends_with": addStringAffix(module, native.name, true, failure);
 			case "__runtime_string_from_ascii": addStringFromAscii(module, native.name, allocator);
 			case "__bytes_of_string": addBytesFromString(module, native.name, allocator);
 			case "__bytes_view": addBytesView(module, native.name, allocator);
@@ -3268,7 +3236,7 @@ class WasmLinearRuntime {
 	 * sign, then decimal digits to the end. Digits accumulate negatively so the minimum value parses;
 	 * null, empty, malformed and out-of-range input fail.
 	 */
-	static function addInt64Parse(module:WasmModule, name:String):Int {
+	static function addInt64Parse(module:WasmModule, name:String, failure:WasmLinearFailure):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32], results: [I64]}),
 			text = builder.parameter("text", 0),
 			length = builder.local("length", I32),
@@ -3301,7 +3269,7 @@ class WasmLinearRuntime {
 		}
 		builder.localGet(text);
 		builder.i32Eqz();
-		builder.if_(runtimeFailure);
+		builder.if_(failure.emit);
 		builder.localGet(text);
 		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
 		builder.localSet(length);
@@ -3357,7 +3325,7 @@ class WasmLinearRuntime {
 		// At least one digit is required.
 		whenIndexBelowLength(builder);
 		builder.i32Eqz();
-		builder.if_(runtimeFailure);
+		builder.if_(failure.emit);
 		builder.block(function(builder) {
 			builder.loop(function(builder) {
 				whenIndexBelowLength(builder);
@@ -3376,7 +3344,7 @@ class WasmLinearRuntime {
 				builder.i32Eqz();
 				builder.emit(I32And);
 				builder.i32Eqz();
-				builder.if_(runtimeFailure);
+				builder.if_(failure.emit);
 				builder.localGet(character);
 				builder.emit(I64ExtendI32S);
 				builder.localSet(digit);
@@ -3384,7 +3352,7 @@ class WasmLinearRuntime {
 				builder.localGet(value);
 				builder.localGet(limit);
 				builder.emit(I64LtS);
-				builder.if_(runtimeFailure);
+				builder.if_(failure.emit);
 				builder.localGet(value);
 				builder.emit(I64Const(10));
 				builder.emit(I64Mul);
@@ -3393,7 +3361,7 @@ class WasmLinearRuntime {
 				builder.localGet(digit);
 				builder.emit(I64Add);
 				builder.emit(I64LtS);
-				builder.if_(runtimeFailure);
+				builder.if_(failure.emit);
 				builder.localGet(value);
 				builder.localGet(digit);
 				builder.emit(I64Sub);
@@ -3410,7 +3378,7 @@ class WasmLinearRuntime {
 			builder.localGet(value);
 			builder.localGet(minimum);
 			builder.emit(I64Eq);
-			builder.if_(runtimeFailure);
+			builder.if_(failure.emit);
 			builder.emit(I64Const(0));
 			builder.localGet(value);
 			builder.emit(I64Sub);
@@ -3420,7 +3388,7 @@ class WasmLinearRuntime {
 	}
 
 	/** String.startsWith / endsWith: a null string counts as empty, as in `native/runtime/strings.c`. */
-	static function addStringAffix(module:WasmModule, name:String, suffix:Bool):Int {
+	static function addStringAffix(module:WasmModule, name:String, suffix:Bool, failure:WasmLinearFailure):Int {
 		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32], results: [I32]}),
 			value = builder.parameter("value", 0),
 			affix = builder.parameter("affix", 1),

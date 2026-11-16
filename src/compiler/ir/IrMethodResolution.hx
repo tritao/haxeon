@@ -12,8 +12,6 @@ import compiler.ir.Ir.IrObject;
  * objects are the same instances in the same order, and builds a new one when a pass has replaced or added a class.
  */
 class IrMethodResolution {
-	static var cached:Null<IrMethodResolution>;
-
 	final source:Array<IrObject>;
 	final objects:Map<String, IrObject> = [];
 	final children:Map<String, Array<String>> = [];
@@ -24,14 +22,19 @@ class IrMethodResolution {
 	/** Marks an answer of "no single function" in a memo, since a map cannot hold null for a missing key apart from absence. */
 	static inline final NONE = "";
 
-	public static function of(declarations:Array<IrObject>):IrMethodResolution {
-		var table = cached;
-		if (table == null || !table.sameObjects(declarations)) {
-			table = new IrMethodResolution(declarations);
-			cached = table;
+	/** The table for `program`'s objects, kept on it and rebuilt when a pass has replaced or added a class. */
+	public static function of(program:compiler.ir.Ir.IrProgram):IrMethodResolution {
+		var table = program.methodResolution;
+		if (table == null || !table.sameObjects(program.objects)) {
+			table = new IrMethodResolution(program.objects);
+			program.methodResolution = table;
 		}
 		return table;
 	}
+
+	/** A table for `declarations`, for a pass over declarations that are not yet a program's. */
+	public static function over(declarations:Array<IrObject>):IrMethodResolution
+		return new IrMethodResolution(declarations);
 
 	function new(declarations:Array<IrObject>) {
 		source = declarations.copy();

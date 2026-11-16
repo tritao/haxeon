@@ -284,6 +284,7 @@ class TestCatalog {
 		"FormatterGoldenMain",
 		"UnusedImportsMain",
 		"ImportOrderMain",
+		"CompilerStaticsMain",
 		"LintProjectRootsMain",
 		"LanguageServiceMain",
 		"ImplicitConstructorServiceMain",

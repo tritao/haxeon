@@ -16,7 +16,33 @@ import compiler.ir.IrTypeAwareWalk.IrWalkResult;
 /** What the prune removed, and the natives reached code calls. */
 typedef IrPruneResult = {
 	final removed:Map<String, Bool>;
+
+	/** The (class, method) table entries removed, as `class\u0001method`. */
+	final removedMethods:Map<String, Bool>;
+
 	final calledNatives:Map<String, Bool>;
+}
+
+/**
+ * What the early prune removed, which check mode (`--check-reuse`) watches the passes after it for: a lookup of a removed function, or
+ * a method lookup that visits a removed table entry, is a decision made on something that is gone.
+ */
+class IrPruneWatch {
+	final functions:Map<String, Bool>;
+	final methods:Map<String, Bool>;
+
+	public function new(functions:Map<String, Bool>, methods:Map<String, Bool>) {
+		this.functions = functions;
+		this.methods = methods;
+	}
+
+	public function noteLookup(pass:String, name:String):Void
+		if (functions.exists(name))
+			throw 'early prune: pass "$pass" looked up function "$name", which the prune removed';
+
+	public function noteMethodLookup(className:String, method:String):Void
+		if (methods.exists(className + "\u0001" + method))
+			throw 'early prune: a lookup of method "$method" visited class "$className", whose entry the prune removed';
 }
 
 class IrEntryPrune {
@@ -60,8 +86,7 @@ class IrEntryPrune {
 				if (!reachable.exists(method.functionName))
 					removedMethods.set(object.name + "\u0001" + method.name, true);
 		IrReachability.prune(program, reachable);
-		prunedMethods = removedMethods;
-		return {removed: removed, calledNatives: walked.calledNatives};
+		return {removed: removed, removedMethods: removedMethods, calledNatives: walked.calledNatives};
 	}
 
 	/** The function with the same name and signature and a body that throws: the declaration of a method nothing can call. */
@@ -73,27 +98,28 @@ class IrEntryPrune {
 		return new IrFunction(fn.name, builder.arguments, fn.result, builder.blocks, fn.kind);
 	}
 
-	static var watched:Null<Map<String, Bool>> = null;
+	/**
+	 * The watch of the pipeline run on this thread, between the prune and the end of the stage list (`watching`): thread-scoped, so a
+	 * compile only ever sees its own, and cleared when the list ends, also when a pass throws.
+	 */
+	@:threadScoped("the check-mode watch of the pipeline run on this thread, cleared when its stage list ends")
+	static final current = new sys.thread.Tls<Null<IrPruneWatch>>();
 
-	/** The (class, method) table entries the last `run` removed, as `class\u0001method`: a lookup that visits one of them is a decision made on a method that is gone. */
-	static var prunedMethods:Map<String, Bool> = [];
-
-	/** Check mode: the names `run` removed, until `unwatch`; a lookup of one through `IrFunctionIndex` throws. */
-	public static function watch(removed:Null<Map<String, Bool>>):Void
-		watched = removed;
-
-	public static function unwatch():Void
-		watched = null;
+	/** Watches the passes on this thread for lookups of what the prune removed, until `watching(null)`. */
+	public static function watching(watch:Null<IrPruneWatch>):Void
+		current.value = watch;
 
 	/** A method-table lookup of `method` is visiting `className`: in check mode it must not be an entry the prune removed. */
-	public static function noteMethodLookup(className:String, method:String):Void
-		if (watched != null && prunedMethods.exists(className + "\u0001" + method))
-			throw 'early prune: a lookup of method "$method" visited class "$className", whose entry the prune removed';
+	public static function noteMethodLookup(className:String, method:String):Void {
+		var watch = current.value;
+		if (watch != null)
+			watch.noteMethodLookup(className, method);
+	}
 
 	public static function noteLookup(pass:String, name:String):Void {
-		var removed = watched;
-		if (removed != null && removed.exists(name))
-			throw 'early prune: pass "$pass" looked up function "$name", which the prune removed';
+		var watch = current.value;
+		if (watch != null)
+			watch.noteLookup(pass, name);
 	}
 
 	/** After `pass`: no function calls or closes over a function that `run` removed and no pass created again. */

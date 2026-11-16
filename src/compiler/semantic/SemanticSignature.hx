@@ -32,6 +32,7 @@ class SemanticSignature {
 	 * How many anonymous shapes have been spelled out. Spelling costs time proportional to the shape's size,
 	 * so tests use this to check that a shape is spelled once per declaration, not once per mention.
 	 */
+	@:processWide("a diagnostic count that tests read as a difference; never part of an output")
 	public static var anonymousSpellings = 0;
 
 	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>):String {

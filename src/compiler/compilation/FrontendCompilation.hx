@@ -65,6 +65,7 @@ typedef FrontendResult = {
 	final frontendRestarts:Array<String>;
 	final frontendPassFunctions:Array<Int>;
 	final frontendPassReports:Array<String>;
+	final irPassAllocations:Array<compiler.core.IrPassMeter.IrPassAllocation>;
 	final frontendDoneAt:Float;
 
 	/** Semantic analysis of the final frontend pass, which `typingLoweringDoneAt - frontendDoneAt` includes. */
@@ -1068,7 +1069,7 @@ class FrontendCompilation {
 			inlinerChanged = [];
 		} else {
 			var canonicalObjectCache = context.state.canonicalObjectCache;
-			compiler.core.IrPassMeter.reset();
+			var meter = new compiler.core.IrPassMeter();
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, objects, build.interfaces,
 				build.enums, build.staticFields,
 				build.initializers, entryPoint, irCNatives, build.reflectable,
@@ -1081,7 +1082,7 @@ class FrontendCompilation {
 							throw 'Missing canonical layout for "${object.name}"';
 						canonical;
 					} else object;
-				}], context.options);
+				}], context.options, meter);
 			var cNativeNames = [for (native in irCNatives) native.name].join(","),
 				ownPrints:Map<String, String> = [];
 			for (fn in cached)
@@ -1112,9 +1113,12 @@ class FrontendCompilation {
 			passes.reflectable = build.reflectable;
 			passes.inlineCache = context.state.inlineCache;
 			passes.options = context.options;
+			passes.meter = meter;
 			passes.instrumentScope = build.instrumentScope;
 			passes.verifyMemo = context.state.verifyMemo;
 			ir = compiler.ir.IrPipeline.target.run(ir, passes);
+			for (entry in meter.entries())
+				context.irPassAllocations.push(entry);
 			inlinerChanged = passes.inlinerChanged;
 			if (reusedPipeline != null) {
 				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
@@ -1183,6 +1187,7 @@ class FrontendCompilation {
 			frontendRestarts: context.frontendRestarts,
 			frontendPassFunctions: context.frontendPassFunctions,
 			frontendPassReports: context.frontendPassReports,
+			irPassAllocations: context.irPassAllocations,
 			frontendDoneAt: build.frontendDoneAt,
 			analysisMs: build.analysisDoneAt - build.frontendDoneAt,
 			irGenerationMs: build.irGenerationDoneAt - build.typingDoneAt,

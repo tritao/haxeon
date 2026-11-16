@@ -16,7 +16,9 @@ import sys.io.File;
  * a diagnostic run is one build followed by the census, and the worker is then discarded.
  */
 class CompilerMemoryCensus {
+	@:processWide("a diagnostic run is one build and one census per process")
 	static var done = false;
+	@:processWide("a diagnostic run is one build and one census per process")
 	static var builds = 0;
 
 	public static function run(session:CompilerSession):Void {

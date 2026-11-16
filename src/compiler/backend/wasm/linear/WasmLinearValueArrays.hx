@@ -12,7 +12,7 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 class WasmLinearValueArrays {
 	public static function register(context:WasmLinearContext, used:Map<String, Bool>):Void {
 		WasmLinearLaneStorage.register(context);
-		var retypeAllocator = -1;
+		var retypeAllocator = -1, failure = WasmLinearFailure.of(context);
 		for (native in context.program.natives) if (used.exists(native.name)
 			&& native.symbol == "__value_array_retype") {
 			var alloc:IrNative = {
@@ -22,13 +22,14 @@ class WasmLinearValueArrays {
 				arguments: [I32, TypeRef, I32, I32, I32, Bool],
 				result: Array(Dyn)
 			};
-			retypeAllocator = context.module.addFunction(allocate(context.module, alloc, context.allocatorFunction));
+			retypeAllocator = context.module.addFunction(allocate(context.module, alloc, context.allocatorFunction,
+				failure));
 			break;
 		}
 		for (native in context.program.natives) if (used.exists(native.name) && supports(native.symbol)) {
 			if (compiler.backend.wasm.WasmValueLaneRuntime.bind(context.functions, native)) continue;
-			var fn = native.symbol == "__value_array_retype" ? retype(context.module, native,
-				retypeAllocator) : build(context.module, native, context.allocatorFunction);
+			var fn = native.symbol == "__value_array_retype" ? retype(context.module, native, retypeAllocator,
+				failure) : build(context.module, native, failure, context.allocatorFunction);
 			if (native.symbol != "__value_array_alloc" && native.symbol != "__value_array_retype") {
 				var prefix = resolveForward(0);
 				for (index in 0...prefix.length) fn.body.insert(index, prefix[index]);
@@ -86,7 +87,7 @@ class WasmLinearValueArrays {
 	];
 
 	static function retype(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative,
-			allocator:Int):compiler.backend.wasm.WasmModule.WasmFunction {
+			allocator:Int, failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 9 || allocator < 0) throw "Invalid Wasm32 value-array retype";
 		var b = new WasmFunctionBuilder(native.name, {parameters: [for (_ in native.arguments) I32], results: [I32]}),
 			resolved = b.local("resolved", I32),
@@ -115,11 +116,11 @@ class WasmLinearValueArrays {
 			{offset: WasmLayout.VALUE_ARRAY_VALIDITY_OFFSET, arg: 5}
 		]) {
 			b.emitAll([LocalGet(resolved), I32Load(pair.offset), LocalGet(pair.arg), I32Eq, I32Eqz, If(null)]);
-			WasmLinearRuntime.runtimeFailure(b);
+			failure.emit(b);
 			b.emit(End);
 		}
 		b.emitAll([LocalGet(4), I32Const(32), I32Eq, LocalGet(4), I32Const(64), I32Eq, I32Or, I32Eqz, If(null)]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(0),
@@ -137,11 +138,11 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emit(End);
 		for (arg in [6, 7, 8]) {
 			b.emitAll([LocalGet(arg), I32Eqz, If(null)]);
-			WasmLinearRuntime.runtimeFailure(b);
+			failure.emit(b);
 			b.emit(End);
 		}
 		b.emitAll([
@@ -171,7 +172,7 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(index),
@@ -249,12 +250,12 @@ class WasmLinearValueArrays {
 	}
 
 	public static function build(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative,
-			allocator:Int = -1):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.symbol == "__value_array_alloc") return allocate(module, native, allocator);
-		if (native.symbol == "__value_array_set_bridge") return setBridge(native);
+			failure:WasmLinearFailure, allocator:Int = -1):compiler.backend.wasm.WasmModule.WasmFunction {
+		if (native.symbol == "__value_array_alloc") return allocate(module, native, allocator, failure);
+		if (native.symbol == "__value_array_set_bridge") return setBridge(native, failure);
 		if (native.symbol == "__value_array_validate" || native.symbol == "__value_array_is_initialized"
 			|| native.symbol == "__value_array_mark")
-			return buildValidity(native);
+			return buildValidity(native, failure);
 		var symbol = native.symbol,
 			reference = StringTools.endsWith(symbol, "_ref"),
 			clear = StringTools.startsWith(symbol, "__value_array_clear_"),
@@ -277,7 +278,7 @@ class WasmLinearValueArrays {
 			bits = builder.local("bits", I64);
 		// Validate the array and logical element index before dereferencing the header.
 		builder.emitAll([LocalGet(0), I32Eqz, If(null)]);
-		WasmLinearRuntime.runtimeFailure(builder);
+		failure.emit(builder);
 		builder.emit(End);
 		builder.emitAll([
 			LocalGet(0),
@@ -296,9 +297,9 @@ class WasmLinearValueArrays {
 			I32Or,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(builder);
+		failure.emit(builder);
 		builder.emit(End);
-		if (!write) appendValidityCheck(builder);
+		if (!write) appendValidityCheck(builder, failure);
 		if (reference) {
 			builder.emitAll([
 				LocalGet(2),
@@ -311,7 +312,7 @@ class WasmLinearValueArrays {
 				I32Or,
 				If(null)
 			]);
-			WasmLinearRuntime.runtimeFailure(builder);
+			failure.emit(builder);
 			builder.emit(End);
 			builder.emitAll([
 				LocalGet(0),
@@ -374,7 +375,7 @@ class WasmLinearValueArrays {
 		if (suffix == "i32") builder.emitAll([LocalGet(width), I32Const(32), I32LeS, I32Eqz, I32Or]);
 		if (suffix == "ptr" || suffix == "type") builder.emitAll([LocalGet(width), I32Const(32), I32Eq, I32Eqz, I32Or]);
 		builder.emit(If(null));
-		WasmLinearRuntime.runtimeFailure(builder);
+		failure.emit(builder);
 		builder.emit(End);
 		builder.emitAll([
 			LocalGet(0),
@@ -487,7 +488,7 @@ class WasmLinearValueArrays {
 
 
 	public static function replaceCapacity(native:IrNative,
-			allocator:Int):compiler.backend.wasm.WasmModule.WasmFunction {
+			allocator:Int, failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 3 || allocator < 0) throw "Invalid Wasm32 value-array growth";
 		var b = new WasmFunctionBuilder(native.name, {parameters: [I32, I32, I32], results: []}),
 			oldCapacity = b.local("old-capacity", I32),
@@ -532,7 +533,7 @@ class WasmLinearValueArrays {
 				I32Eqz,
 				If(null)
 			]);
-			WasmLinearRuntime.runtimeFailure(b);
+			failure.emit(b);
 			b.emitAll([End, LocalGet(total), I32WrapI64, LocalSet(pair.dest)]);
 		}
 		b.emitAll([
@@ -560,7 +561,7 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(total),
@@ -580,7 +581,7 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(total),
@@ -670,7 +671,7 @@ class WasmLinearValueArrays {
 	}
 
 	public static function allocate(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative,
-			allocator:Int):compiler.backend.wasm.WasmModule.WasmFunction {
+			allocator:Int, failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 6 || allocator < 0) throw "Invalid Wasm32 value-array allocator";
 		var b = new WasmFunctionBuilder(native.name, {parameters: [I32, I32, I32, I32, I32, I32], results: [I32]}),
 			capacity = b.local("capacity", I32),
@@ -707,7 +708,7 @@ class WasmLinearValueArrays {
 			I32Or,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emit(End);
 		b.emitAll([
 			LocalGet(0),
@@ -751,7 +752,7 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(total),
@@ -771,7 +772,7 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emitAll([
 			End,
 			LocalGet(total),
@@ -844,7 +845,8 @@ class WasmLinearValueArrays {
 		return b.finish();
 	}
 
-	static function setBridge(native:IrNative):compiler.backend.wasm.WasmModule.WasmFunction {
+	static function setBridge(native:IrNative,
+			failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 4) throw "Invalid Wasm32 value-array bridge";
 		var b = new WasmFunctionBuilder(native.name, {parameters: [I32, I32, I32, I32], results: []});
 		b.emitAll([
@@ -861,7 +863,7 @@ class WasmLinearValueArrays {
 			I32Or,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emit(End);
 		b.emitAll([
 			LocalGet(0),
@@ -871,7 +873,7 @@ class WasmLinearValueArrays {
 			I32Eqz,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(b);
+		failure.emit(b);
 		b.emit(End);
 		for (pair in [
 			{offset: WasmLayout.VALUE_ARRAY_READ_BRIDGE_OFFSET, arg: 1},
@@ -886,7 +888,8 @@ class WasmLinearValueArrays {
 		return b.finish();
 	}
 
-	static function buildValidity(native:IrNative):compiler.backend.wasm.WasmModule.WasmFunction {
+	static function buildValidity(native:IrNative,
+			failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
 		if (native.arguments.length != 2) throw 'Invalid Wasm32 value-array validity operation ${native.symbol}';
 		var builder = new WasmFunctionBuilder(native.name, {parameters: [I32, I32], results: (switch (native.result) {
 			case Void: true;
@@ -894,7 +897,7 @@ class WasmLinearValueArrays {
 		}) ? [] : [I32]}),
 			address = builder.local("validity-address", I32), mask = builder.local("validity-mask", I32);
 		builder.emitAll([LocalGet(0), I32Eqz, If(null)]);
-		WasmLinearRuntime.runtimeFailure(builder);
+		failure.emit(builder);
 		builder.emit(End);
 		builder.emitAll([
 			LocalGet(0),
@@ -913,7 +916,7 @@ class WasmLinearValueArrays {
 			I32Or,
 			If(null)
 		]);
-		WasmLinearRuntime.runtimeFailure(builder);
+		failure.emit(builder);
 		builder.emit(End);
 		builder.emitAll([LocalGet(0), I32Load(WasmLayout.VALUE_ARRAY_VALIDITY_OFFSET), I32Eqz, If(null)]);
 		if (native.symbol == "__value_array_is_initialized") builder.emit(I32Const(1));
@@ -933,7 +936,7 @@ class WasmLinearValueArrays {
 			builder.emitAll([LocalGet(address), I32Load8U(0), LocalGet(mask), I32And, I32Eqz]);
 			if (native.symbol == "__value_array_validate") {
 				builder.emit(If(null));
-				WasmLinearRuntime.runtimeFailure(builder);
+				failure.emit(builder);
 				builder.emit(End);
 			}
 				else builder.emit(I32Eqz);
@@ -969,12 +972,12 @@ class WasmLinearValueArrays {
 	}
 
 	/** Validity bits follow the capacity-sized, 32-bit-aligned payload. */
-	static function appendValidityCheck(builder:WasmFunctionBuilder):Void {
+	static function appendValidityCheck(builder:WasmFunctionBuilder, failure:WasmLinearFailure):Void {
 		builder.emitAll([LocalGet(0), I32Load(WasmLayout.VALUE_ARRAY_VALIDITY_OFFSET), If(null)]);
 		appendValidityAddress(builder);
 		builder.emitAll([I32Load8U(0), LocalGet(1), I32Const(7), I32And, I32ShrU, I32Const(1), I32And, I32Eqz,
 			If(null)]);
-		WasmLinearRuntime.runtimeFailure(builder);
+		failure.emit(builder);
 		builder.emitAll([End, End]);
 	}
 }

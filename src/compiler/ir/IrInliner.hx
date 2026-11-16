@@ -322,7 +322,7 @@ class IrInliner {
 			objectPrints.set(name, cache.objectPrintId(name, text));
 		}
 		table = new IrObjectTable(objects, subclasses);
-		resolution = IrMethodResolution.of(program.objects);
+		resolution = IrMethodResolution.of(program);
 		computeComponents();
 	}
 

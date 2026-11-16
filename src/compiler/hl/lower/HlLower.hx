@@ -91,9 +91,11 @@ class HlLower {
 	/** Kept functions check mode could not lower again, with the missing object or field. */
 	final skippedKept:Array<String> = [];
 
-	/** Kept functions check mode skipped in this process, and whether it said so yet. */
+	/** Kept functions check mode skipped in this process, and whether it said so yet: a check-mode report, given once a process. */
+	@:processWide("a check-mode diagnostic, reported once per process; never part of a module")
 	public static var skippedKeptTotal = 0;
 
+	@:processWide("a check-mode diagnostic, reported once per process; never part of a module")
 	static var reportedSkips = false;
 
 	/** Each lowered function with what it leans on, by name (see `HlLoweredFunction`). */
@@ -1493,17 +1495,17 @@ class HlLower {
 			instructions, debugLocations, scopedAssignments);
 	}
 
-	static function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void
+	function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void
 		for (_ in 0...count)
 			output.push(debugLocation(provenance));
 
 	static final generatedDebugLocation:HlDebugLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
 	/** The latest provenance and its location, replaced as one value: neighbouring opcodes nearly always share it. */
-	static var lastDebugLocation:{provenance:SourceProvenance, location:HlDebugLocation} = null;
+	var lastDebugLocation:Null<{provenance:SourceProvenance, location:HlDebugLocation}> = null;
 
 	/** Locations are immutable, so opcodes from one provenance share a single one. */
-	static function debugLocation(provenance:SourceProvenance):HlDebugLocation {
+	function debugLocation(provenance:SourceProvenance):HlDebugLocation {
 		var last = lastDebugLocation;
 		if (last != null && last.provenance == provenance)
 			return last.location;

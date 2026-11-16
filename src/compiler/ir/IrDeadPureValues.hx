@@ -12,6 +12,7 @@ class IrDeadPureValues {
 	};
 
 	/** What replaces a removed instruction: nothing. Shared, since the rewrite only reads it. */
+	@:processWide("a shared empty value, never added to")
 	static final none:Array<compiler.ir.SourceProvenance.Located<IrInstruction>> = [];
 
 	public static function run(fn:IrFunction):IrFunction {

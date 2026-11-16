@@ -267,6 +267,7 @@ class IrPipeline {
 		var pruneInput = pruneInputOf(assembly, context, functions);
 		var pruned = IrEntryPrune.run(pruneInput, context.pruneRoots, pruneDependencies(assembly, functions));
 		context.pruned = pruned.removed;
+		context.prunedMethods = pruned.removedMethods;
 		assembly.reachedNatives = pruned.calledNatives;
 		assembly.functions = pruneInput.functions;
 		assembly.objects = pruneInput.objects;
