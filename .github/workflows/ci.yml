@@ -105,7 +105,7 @@ jobs:
         if: matrix.platform == 'windows'
         shell: bash
         continue-on-error: true
-        timeout-minutes: 20
+        timeout-minutes: 25
         run: |
           for test in gc-allocation-paths gc-empty-pages gc-owner-pages jit-inline-allocation jit-boxed-allocation; do
             echo "::group::$test"
@@ -115,6 +115,11 @@ jobs:
             echo "$test: exit $status after $((SECONDS - start)) s (124: timed out)"
             echo "::endgroup::"
           done
+          # The driver prints a batch's results when the batch ends: the runtime suite alone says whether the stall is there.
+          start=$SECONDS
+          status=0
+          timeout -k 10 900 ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8 --suite runtime || status=$?
+          echo "runtime suite: exit $status after $((SECONDS - start)) s (124: timed out)"
 
       - name: Run cross-platform core tests
         if: matrix.platform == 'windows'

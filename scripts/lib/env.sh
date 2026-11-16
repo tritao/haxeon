@@ -114,8 +114,12 @@ haxeon_cc_libhl() {
 			flags=(-LD)
 			libraries=(hl.lib)
 		else
-			# LIBHL_STATIC: the program defines the VM's functions itself rather than importing them from a DLL.
-			flags=(-DLIBHL_STATIC)
+			# LIBHL_STATIC: the program defines the VM's functions itself rather than importing them from a DLL. It links the static
+			# core's objects, so it takes their C runtime: the DLL one (-MD), or its debug variant in a Debug build (-MDd).
+			flags=(-DLIBHL_STATIC -MD)
+			if grep -qs '^CMAKE_BUILD_TYPE:STRING=Debug$' "$library/../CMakeCache.txt"; then
+				flags=(-DLIBHL_STATIC -MDd)
+			fi
 			libraries=(libhl.lib ws2_32.lib user32.lib winmm.lib dbghelp.lib advapi32.lib bcrypt.lib)
 		fi
 		# cl writes its diagnostics to standard output, with a line per file: show them only when the build fails.
