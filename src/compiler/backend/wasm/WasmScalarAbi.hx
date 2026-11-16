@@ -327,9 +327,9 @@ class WasmScalarAbi {
 			if (fn.name == entry || (!planningBoundaries && (roots.indexOf(fn.name) >= 0 || fn.retention == Expose))) {
 				for (argument in fn.arguments)
 					if (closureArity(argument.type) >= 0)
-						excluded.set(IrTypeIdentity.text(argument.type), true);
+						excluded.set(closureKey(argument.type), true);
 				if (closureArity(fn.result) >= 0)
-					excluded.set(IrTypeIdentity.text(fn.result), true);
+					excluded.set(closureKey(fn.result), true);
 			}
 		for (native in program.natives) {
 			// The receiver query only inspects the closure target and cannot call or retain its argument.
@@ -337,9 +337,9 @@ class WasmScalarAbi {
 				continue;
 			for (argument in native.arguments)
 				if (closureArity(argument) >= 0)
-					excluded.set(IrTypeIdentity.text(argument), true);
+					excluded.set(closureKey(argument), true);
 			if (closureArity(native.result) >= 0)
-				excluded.set(IrTypeIdentity.text(native.result), true);
+				excluded.set(closureKey(native.result), true);
 		}
 		for (fn in program.functions)
 			if (reachable.exists(fn.name))
@@ -348,11 +348,11 @@ class WasmScalarAbi {
 						switch located.value {
 							case StaticClosure(out, name):
 								if (noteClosure(out.type, candidates) && !directClones.exists(name))
-									excluded.set(IrTypeIdentity.text(out.type), true);
+									excluded.set(closureKey(out.type), true);
 							case InstanceClosure(out, name, receiver):
 								if (noteClosure(out.type, candidates)
 									&& (values.isValue(receiver.type) || !directClones.exists(name)))
-									excluded.set(IrTypeIdentity.text(out.type), true);
+									excluded.set(closureKey(out.type), true);
 							case CallClosure(_, closure, arguments):
 								if ((switch (closure.type) {
 									case Dyn: true;
@@ -373,10 +373,10 @@ class WasmScalarAbi {
 										}))
 											noteClosure(out.type, candidates);
 										else
-											excluded.set(IrTypeIdentity.text(out.type), true);
+											excluded.set(closureKey(out.type), true);
 									}
 									if (sourceArity >= 0)
-										excluded.set(IrTypeIdentity.text(input.type), true);
+										excluded.set(closureKey(input.type), true);
 								} else {
 									if (targetArity >= 0)
 										castArities.set(targetArity, true);
@@ -385,7 +385,7 @@ class WasmScalarAbi {
 								}
 							case ToDyn(_, input):
 								if (!planningBoundaries && closureArity(input.type) >= 0)
-									excluded.set(IrTypeIdentity.text(input.type), true);
+									excluded.set(closureKey(input.type), true);
 							default:
 						}
 		for (fn in program.functions)
@@ -394,13 +394,13 @@ class WasmScalarAbi {
 					for (located in block.instructions) {
 						for (input in IrOperands.inputs(located.value))
 							if (closureArity(input.type) >= 0 && !safeClosureUse(located.value, input))
-								excluded.set(IrTypeIdentity.text(input.type), true);
+								excluded.set(closureKey(input.type), true);
 						switch located.value {
 							case Phi(out, inputs):
 								for (input in inputs)
 									if (closureArity(input.value.type) >= 0
 										&& !IrVerifier.sameType(input.value.type, out.type))
-										excluded.set(IrTypeIdentity.text(input.value.type), true);
+										excluded.set(closureKey(input.value.type), true);
 							default:
 						}
 					}
@@ -408,9 +408,9 @@ class WasmScalarAbi {
 						switch block.terminator.value {
 							case Return(value) if (closureArity(value.type) >= 0
 								&& !IrVerifier.sameType(value.type, fn.result)):
-								excluded.set(IrTypeIdentity.text(value.type), true);
+								excluded.set(closureKey(value.type), true);
 							case Throw(value), Rethrow(value) if (closureArity(value.type) >= 0):
-								excluded.set(IrTypeIdentity.text(value.type), true);
+								excluded.set(closureKey(value.type), true);
 							default:
 						}
 				}
@@ -427,10 +427,10 @@ class WasmScalarAbi {
 							switch located.value {
 								case StaticClosure(out, _), InstanceClosure(out, _, _):
 									if (castArities.exists(closureArity(out.type)))
-										remove.push(IrTypeIdentity.text(out.type));
+										remove.push(closureKey(out.type));
 								case CallClosure(_, closure, _):
 									if (castArities.exists(closureArity(closure.type)))
-										remove.push(IrTypeIdentity.text(closure.type));
+										remove.push(closureKey(closure.type));
 								default:
 							}
 			for (key in remove)
@@ -543,6 +543,12 @@ class WasmScalarAbi {
 				hasValue && safe;
 			default: false;
 		};
+	}
+
+	/** Exclusions and candidates identify the same signature even when a boundary is nullable. */
+	static function closureKey(type:IrType):String {
+		var signature = closureFunction(type);
+		return IrTypeIdentity.text(signature == null ? type : signature);
 	}
 
 	static function closureArity(type:IrType):Int
