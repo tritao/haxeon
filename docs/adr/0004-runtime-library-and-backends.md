@@ -4,7 +4,7 @@ Date: 2026-11-09
 
 ## Status
 
-Proposed. Nothing here is implemented. It builds on ADR 0003 (layers, the target profile, declared runtime modules) and
+Proposed. Nothing here is implemented (checked 2026-11-16). It builds on ADR 0003 (layers, the target profile, declared runtime modules) and
 covers what that record leaves open: where runtime behaviour is defined and how much of it a backend owns.
 
 Decided with the user on 2026-11-09:

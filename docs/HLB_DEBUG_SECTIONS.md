@@ -1,7 +1,7 @@
 # HLB debug sections
 
-HLB version 7 appends a versioned debug-section stream after the constant
-table. The stream starts with an unsigned section count. Each section contains
+Since HLB version 7 (the current version is 8, `HlCode.VERSION`) a module carries
+a versioned debug-section stream after the constant table. The stream starts with an unsigned section count. Each section contains
 an unsigned kind, version, flags, payload length, and exactly that many payload
 bytes. Readers must reject malformed known sections and skip unknown kinds or
 versions by payload length.

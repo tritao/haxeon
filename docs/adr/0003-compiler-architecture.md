@@ -4,8 +4,9 @@ Date: 2026-11-08
 
 ## Status
 
-Proposed. Nothing here is implemented yet. The work under way, `docs/WARM_REBUILD_REUSE.md` (branch `warm-rebuild-reuse`),
-is the first step of the migration (M0 below) and is designed to fit this record.
+Accepted. Migration steps M0 and M1 have landed; M2 onward is pending. What landed is described in
+`docs/ARCHITECTURE.md` ("Warm builds: what landed"), which is where the current state lives; this record keeps the
+decisions.
 
 The decisions do not carry the same confidence, and the migration treats them differently:
 
@@ -318,14 +319,14 @@ Each step is its own series of commits. Every commit keeps the full driver suite
 passing. Unported code keeps running whole-program, so the pipeline is correct at every step. Old forms are deleted when
 their last user is ported; there are no compatibility aliases.
 
-- **M0 (in progress, `WARM_REBUILD_REUSE.md`):**
+- **M0 (landed, `WARM_REBUILD_REUSE.md`):**
   - merged passes return unchanged functions;
   - the program-level no-op shortcut;
   - relocatable HashLink lowering with a link step, `LoweringView` as the only way lowering sees other entities, and the
     check mode;
   - per-function verification;
   - live patching ported onto the same relocatables.
-- **M1 Target profile and generation context (3):** replace the target branches and every static that holds program or
+- **M1 Target profile and generation context (3), landed 2026-11-09:** replace the target branches and every static that holds program or
   target state (`IrGenerator`'s maps and flags, `IrInliner.packedValueFields`) with `TargetProfile` and an explicit
   generation context. It unblocks M2: until then, any memoized pass result can silently depend on unrecorded state.
   The M0 program-level shortcut must include this state in its input digest until M1 lands.
