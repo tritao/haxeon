@@ -69,7 +69,7 @@ class ProjectFormat {
 	}
 
 	public static function parse(section:Dynamic, origin:String):FormatConfig {
-		if (Type.typeof(section) != TObject)
+		if (section == null || !Reflect.isObject(section) || Std.isOfType(section, String) || Std.isOfType(section, Array))
 			throw '$origin: "format" must be an object';
 		var spaces = false, indentWidth = 4, lineWidth = 120;
 		for (key in Reflect.fields(section)) {

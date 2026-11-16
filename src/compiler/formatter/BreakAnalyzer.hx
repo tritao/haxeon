@@ -480,7 +480,8 @@ class BreakAnalyzer {
 						stack[stack.length - 1].commas.push(index);
 				case TokenKind.Greater, TokenKind.RightParen, TokenKind.RightBracket, TokenKind.RightBrace:
 					if (stack.length > 0 && stack[stack.length - 1].closeKind == kind) {
-						var group = stack.pop();
+						var group = stack[stack.length - 1];
+						stack.pop();
 						result.push({
 							open: group.open,
 							close: index,

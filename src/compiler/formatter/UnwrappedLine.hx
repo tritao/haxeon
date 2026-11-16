@@ -262,9 +262,10 @@ class UnwrappedLineBuilder {
 					} else {
 						begin(token);
 					}
-					if (isBlock && closesNext(tokens, index, syntax)) {
+					var emptyClose = isBlock && closesNext(tokens, index, syntax) ? syntax.matching.get(index) : null;
+					if (emptyClose != null) {
 						// `{}`: an empty block stays whole on its line; its `}` still ends the block's statement below.
-						emptyBlockCloses.set(syntax.matching.get(index), true);
+						emptyBlockCloses.set(emptyClose, true);
 					} else if (isBlock) {
 						flush();
 						if (isSwitchBlock)

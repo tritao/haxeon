@@ -57,8 +57,8 @@ class TypeArguments {
 					var combined = kind == TokenKind.GreaterEqual;
 					if (open.length == 0 || (combined && open.length > 1))
 						return;
-					var opener = open.pop();
-					if (!hasContent.pop())
+					var opener = open.pop(), content = hasContent.pop();
+					if (opener == null || content != true)
 						return;
 					found.push({open: syntax[opener], close: syntax[position]});
 					if (open.length > 0)
