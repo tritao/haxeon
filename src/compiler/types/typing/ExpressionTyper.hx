@@ -2167,7 +2167,7 @@ class ExpressionTyper {
 		var overloaded = callResolver.typeAbstractOperator(symbol, [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
-		return compareTyped(left, right, operation, span, reversed);
+		return compareTyped(left, right, operation, span, reversed, scope);
 	}
 
 	/**
@@ -2186,9 +2186,9 @@ class ExpressionTyper {
 		return new TypedExpression(TThrowExpression(message), TNever, span);
 	}
 
-	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool):TypedExpression {
+	function compareTyped(left:TypedExpression, right:TypedExpression, operation:Int, span:SourceSpan, reversed:Bool, ?scope:Scope):TypedExpression {
 		if (operation == 2) {
-			var test = constructorComparison(left, right, span);
+			var test = constructorComparison(left, right, span, scope);
 			if (test != null)
 				return test;
 		} else {
@@ -2232,14 +2232,15 @@ class ExpressionTyper {
 	}
 
 	/**
-	 * `value == Constructor` for a constructor without arguments of an enum whose other constructors have some asks which
-	 * constructor the value is, as in Haxe: it compares constructor indices and needs no Equatable conformance. Null for any other
-	 * comparison. Enums without arguments anywhere already compare that way.
+	 * `value == Constructor`, for a constructor without arguments of an enum whose other constructors have some, asks which
+	 * constructor the value is, as in Haxe: it compares constructor indices and needs no Equatable conformance. The operand
+	 * counts by what it is known to hold, not how it is written: a constructor, or a local never reassigned after being
+	 * initialized with one. Null for any other comparison; enums without arguments anywhere already compare that way.
 	 */
-	function constructorComparison(left:TypedExpression, right:TypedExpression, span:SourceSpan):Null<TypedExpression> {
-		var literal = constructorWithoutArguments(right), other = left;
+	function constructorComparison(left:TypedExpression, right:TypedExpression, span:SourceSpan, scope:Null<Scope>):Null<TypedExpression> {
+		var literal = knownConstructor(right, scope), other = left;
 		if (literal < 0) {
-			literal = constructorWithoutArguments(left);
+			literal = knownConstructor(left, scope);
 			other = right;
 		}
 		var name = enumNameOf(other.type);
@@ -2275,11 +2276,12 @@ class ExpressionTyper {
 		return statements.length == 0 ? test : new TypedExpression(TBlockExpression(statements, test), TBool, span);
 	}
 
-	/** The index of the constructor `expression` names when it is one without arguments, or -1. */
-	static function constructorWithoutArguments(expression:TypedExpression):Int
+	/** The index of the constructor without arguments `expression` is known to be, or -1. */
+	static function knownConstructor(expression:TypedExpression, scope:Null<Scope>):Int
 		return switch expression.expression {
 			case TEnumLiteral(_, index): index;
 			case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
+			case TLocal(id) if (scope != null): scope.knownConstructor(id);
 			default: -1;
 		};
 
@@ -2503,7 +2505,7 @@ class ExpressionTyper {
 			overloaded = callResolver.typeAbstractOperator("!=", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
-		return new TypedExpression(TNot(compareTyped(left, right, 2, span, false)), TBool, span);
+		return new TypedExpression(TNot(compareTyped(left, right, 2, span, false, scope)), TBool, span);
 	}
 
 	function numericRepresentation(type:CompilerType):Null<CompilerType>

@@ -1122,6 +1122,10 @@ class TestMain {
 		expectCompileError('@:noReturn function fail(flag:Bool):Void { if (flag) return; throw "no"; } function main():Int { fail(true); return 0; }',
 			"Function fail is declared @:noReturn but returns");
 		Sys.println("PASS: only @:noReturn declarations make calls never return, checked against their bodies and overrides");
+		// Comparing with a constructor without arguments needs no Equatable, by what an operand holds: a local that is reassigned
+		// may hold anything, so comparing with it is comparing two values.
+		expectCompileError('enum Shape { Dot; Circle(r:Int); } function main():Int { var k = Dot; k = Circle(1); var v = Circle(2); return v == k ? 1 : 42; }',
+			'Enum "Shape" does not conform to Equatable');
 		// A base method is pure only once every concrete override is also pure - never merely
 		// because none happens to exist yet. A single impure override is enough to reject it, in
 		// one fresh compile, with no incremental edit involved.

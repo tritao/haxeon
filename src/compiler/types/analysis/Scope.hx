@@ -34,6 +34,9 @@ private typedef ScopeValue = {
 	final localFunction:Null<LocalFunction>;
 	var scoped:Bool;
 	var keyPathConstant:Null<String>;
+
+	/** The index of the constructor without arguments a never-reassigned local holds, or null. */
+	var knownConstructor:Null<Int>;
 }
 
 /** The locals a scope defines: by name, in definition order, and by binding id. */
@@ -125,7 +128,8 @@ class Scope {
 			receiver: receiver,
 			localFunction: localFunction,
 			scoped: false,
-			keyPathConstant: null
+			keyPathConstant: null,
+			knownConstructor: null
 		};
 		var own = ownDefinitions();
 		own.values.set(name, value);
@@ -142,6 +146,18 @@ class Scope {
 	public function setKeyPathConstant(name:String, descriptor:String):Void {
 		var value = resolveLocal(name);
 		if (value != null) value.keyPathConstant = descriptor;
+	}
+
+	/** Records that `name`, never reassigned, holds the constructor without arguments at `index`. */
+	public function setKnownConstructor(name:String, index:Int):Void {
+		var value = resolveLocal(name);
+		if (value != null) value.knownConstructor = index;
+	}
+
+	/** The constructor without arguments the local with binding `id` is known to hold, or -1. */
+	public function knownConstructor(id:String):Int {
+		var value = resolveById(id);
+		return value == null || value.knownConstructor == null ? -1 : value.knownConstructor;
 	}
 
 	public function keyPathConstant(name:String):Null<String> {

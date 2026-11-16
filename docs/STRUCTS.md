@@ -318,7 +318,9 @@ An enum value has no identity. Recursive enums, enums with a disproportionately 
 reflection or native boundaries retain exactly the same value semantics as inline values. A payload enum declares
 `enum E implements Equatable` or `enum E implements Hashable` to use `==` and `!=`; comparing a payload enum without that conformance is
 an error, as for structs. Comparing a value with a constructor without fields (`value == Blocked`) asks which constructor
-the value is, as in Haxe: it compares case tags, is false for a null value, and needs no conformance. App and library code use declared equality or case
+the value is, as in Haxe: it compares case tags, is false for a null value, and needs no conformance. What counts is what an
+operand holds, not how it is written: a local initialized with such a constructor and never reassigned (`final` or not) is
+that constructor. App and library code use declared equality or case
 patterns rather than reflective `Type.enumEq`. Synthesized equality compares the case tag and then its payload fields
 according to their own declared equality. Synthesized hashing uses the same tag and payload distinctions. Handwritten
 implementations are allowed under the same equality/hash contract as structs. Enums without payloads have tag equality and are trivially

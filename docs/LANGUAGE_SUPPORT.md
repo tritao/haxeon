@@ -51,7 +51,8 @@ The current subset includes:
   built values and `Circle(1) == Circle(2)` is false. `Array<Enum>.indexOf` and `remove` use the same rule. For declared value equality, a type must conform to `Equatable`; `==` and `haxeon.Equality.equals` then use the same
   implementation. An enum with no constructor that has fields compares by
   constructor, and so does an abstract over an enum. A value compared with a constructor without fields
-  (`error == Overflow`) is compared by constructor too, needing no conformance even when other constructors have fields.
+  (`error == Overflow`) is compared by constructor too, needing no conformance even when other constructors have fields;
+  so is a local initialized with one and never reassigned.
   A null operand equals only another null.
   A cycle that does not pass through a structure (`A = B, B = A`, `A = Array<A>`) is still an error.
 - Imports as in Haxe, with two stricter rules. A type that an import of a whole module or package brings in only as a side

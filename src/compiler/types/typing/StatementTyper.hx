@@ -238,6 +238,14 @@ class StatementTyper {
 					return [];
 				}
 				scope.setMapKeySource(name, value.mapKeySource);
+				// A local never reassigned holds its initializer: a constructor without arguments is then known by value.
+				var constructor = switch value.expression {
+					case TEnumLiteral(_, index): index;
+					case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
+					default: -1;
+				};
+				if (constructor >= 0 && !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span)))
+					scope.setKnownConstructor(name, constructor);
 				bindCell(name, span, scope, value.type);
 				[TVar(scope.requireId(name), value, span)];
 			case Return(expression, span):

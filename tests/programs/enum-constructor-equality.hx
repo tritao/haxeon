@@ -40,6 +40,11 @@ function main():Int {
 	}
 	if (counted() == InOut || calls != 1)
 		return 6;
+	// A local holding a constructor without arguments counts as that constructor, whether `final` or never reassigned.
+	final wanted = InOut;
+	var unwanted = Out;
+	if (!(pick(1) == wanted) || pick(1) == unwanted || wanted != inOut || pick(2) == wanted)
+		return 8;
 	// EnumValue.getIndex() is the constructor's position in the declaration.
 	if (In.getIndex() != 0 || pick(1).getIndex() != 2 || array.getIndex() != 3)
 		return 7;
