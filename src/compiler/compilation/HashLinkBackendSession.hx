@@ -10,6 +10,7 @@ import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlLoweredCache;
+import compiler.hl.incremental.HlPlainBuild;
 import compiler.hl.patch.HlPatchWriter;
 import compiler.ir.Ir.IrProgram;
 import compiler.core.CancellationToken;
@@ -152,13 +153,8 @@ class HashLinkBackendSession implements BackendSession {
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
 			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
 			// them by id and a reachability change must not move its layout.
-			assemblyIr = ir.copy();
-			var walk = compiler.ir.IrReachability.walkWithGeneratedRuntimeRoots(ir, ir.entryPoint, null, true),
-				reachable = walk.reachable;
-			compiler.ir.IrReachability.prune(assemblyIr, reachable);
-			compiler.ir.IrReachability.trimTables(assemblyIr, walk);
-			if (compiler.ir.IrEntryPrune.checking())
-				compiler.ir.IrReachability.checkTables(assemblyIr);
+			var plain = HlPlainBuild.reachable(ir), reachable = plain.reachable;
+			assemblyIr = plain.program;
 			regenerated = [for (name in regenerated) if (reachable.exists(name)) name];
 			relocated = [for (name in relocated) if (reachable.exists(name)) name];
 		}

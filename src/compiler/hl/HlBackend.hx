@@ -5,22 +5,27 @@ import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.Backend.BackendTarget;
 import compiler.hl.HlWriter;
+import compiler.hl.incremental.HlPlainBuild;
 import compiler.ir.Ir.IrProgram;
-import compiler.hl.lower.HlLower;
 
-/** Stateless HashLink backend adapter behind the same semantic backend seam. */
+/**
+ * The HashLink backend behind the stateless `Backend` seam. It assembles the way a plain build of a compilation session does
+ * (`HlPlainBuild`: reachable from the entry, a fresh `HlModuleAssembler`), so what it returns is what the compiler ships for the
+ * program; only the source snapshots a session attaches from its modules are missing, as there are none.
+ */
 class HlBackend implements Backend {
 	public function new() {}
 
 	public function compile(program:IrProgram, options:BackendOptions):BackendResult {
 		if (options.target != HashLink)
 			throw 'HashLink backend received target ${options.target}';
+		// A standalone backend can receive semantic IR, without the frontend's lowering of array allocation.
 		program = compiler.ir.IrArrayFactory.physical(program);
-		var indices = new Map<String, Int>(),
-			module = options.developmentMetadata == false
-				? HlLower.lowerStableMeasured(program, new compiler.hl.incremental.HlSymbolTable(), indices, null, null,
-				null, null, 0, false).code
-				: HlLower.lower(program, indices);
-		return {target: HashLink, bytes: HlWriter.encode(module).flatten(), functionIndices: indices};
+		var assembly = HlPlainBuild.assemble(program, options.developmentMetadata != false);
+		return {
+			target: HashLink,
+			bytes: HlWriter.encode(assembly.module).flatten(),
+			functionIndices: assembly.functionIndices
+		};
 	}
 }

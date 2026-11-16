@@ -164,14 +164,15 @@ function indices, stable function ids, runtime identity (HLI) and patch (HLP), o
 read it with `BackendArtifacts.hashLink` or `BackendArtifacts.wasm`.
 
 - `HashLinkBackendSession` owns the assembler of the last successful build (layout, stable ids, revisions) and the lowered-function
-  cache. It plans and assembles the module and encodes the patch.
+  cache. It plans and assembles the module and encodes the patch; a plain build writes what the entry reaches (`HlPlainBuild`).
 - `WasmBackendSession` runs the Wasm backend on the final IR during the build; a Wasm build runs no HashLink assembly. It owns the
   module it built last (a build whose IR and options are the ones that module was built from gets the same bytes) and the Wasm patch
   state (`patchBase`, `patch`), which keeps its own identities for now. The request's Wasm options reach it through
   `Compiler.backendOptions`. A Wasm build is revision 1 of a fresh module; the driver acknowledges it when it writes it.
 
 The session follows the candidate like the other caches: a build works on `forCandidate()`, the compiler adopts it with the candidate,
-and a failed or rejected build (the snapshot, a refused publication) puts the previous one back.
+and a failed or rejected build (the snapshot, a refused publication) puts the previous one back. `HlBackend`, the stateless HashLink
+`Backend` the tests use, is a plain build with no session (`HlPlainBuild.assemble`), so those tests run the shipped assembler.
 
 ## Where the IR pass order lives
 
