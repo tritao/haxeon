@@ -1,28 +1,25 @@
 package compiler.tools;
 
-import compiler.core.IrPassMeter;
 import compiler.Compiler.CompileResult;
-import compiler.compilation.BackendArtifact.BackendArtifacts;
-import compiler.core.CancellationToken;
-import compiler.ffi.CHeaderEmitter;
-import compiler.backend.Backend;
-import compiler.backend.Backend.BackendTarget;
+import compiler.abi.AbiChangeSchema;
 import compiler.backend.BackendTargets;
 import compiler.backend.MemoryContract.MemoryContractCodec;
-import compiler.backend.wasm.WasmBackend;
-import compiler.hl.HlWriter;
-import compiler.ir.Ir.IrProgram;
-import haxe.io.Bytes;
-import haxe.Json;
-import haxe.crypto.Base64;
-import sys.FileSystem;
-import sys.io.File;
-import compiler.documentation.HaxeXmlWriter;
-import compiler.ir.codec.CanonicalIrCodec;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
-import compiler.abi.AbiChangeSchema;
+import compiler.core.CancellationToken;
+import compiler.core.IrPassMeter;
+import compiler.documentation.HaxeXmlWriter;
+import compiler.ffi.CHeaderEmitter;
+import compiler.hl.HlWriter;
+import compiler.ir.Ir.IrProgram;
+import compiler.ir.codec.CanonicalIrCodec;
 import compiler.types.NativeTypeDescriptorCodec;
+import haxe.Json;
+import haxe.crypto.Base64;
+import haxe.io.Bytes;
+import sys.FileSystem;
+import sys.io.File;
 
 /** Executes one compiler request and writes its deterministic artifacts. */
 class CompilerDriver {
@@ -40,6 +37,22 @@ class CompilerDriver {
 		// A persistent session serves interactive and batch requests alike, so the mode is set per request.
 		compiler.livePatching = request.live;
 		compiler.developmentMetadata = request.buildMode == "development";
+		var target = compiler.backendTarget, isWasm = BackendTargets.isWasm(target);
+		// The Wasm backend builds the module during the compile (`WasmBackendSession`), with what the request asks of it.
+		compiler.backendOptions = isWasm ? {
+			target: target,
+			debugNames: true,
+			developmentMetadata: request.buildMode == "development",
+			importMemory: request.importMemory,
+			sharedMemory: request.sharedMemory == true,
+			memoryBase: request.memoryBase,
+			memoryContract: memoryContract,
+			wasmMemoryStats: request.wasmMemoryStats,
+			wasmGcAllocationCount: request.wasmGcAllocationCount,
+			wasmGcStress: request.wasmGcStress,
+			wasmRuntimeNeutral: request.wasmRuntimeNeutral,
+			exports: request.exports
+		} : null;
 		var preparedAt = Sys.time() * 1000.0;
 		var allocationAfterPrepare = AllocationMeter.sample();
 		report("compiling entry " + request.entry);
@@ -52,11 +65,9 @@ class CompilerDriver {
 			if (cancellation != null)
 				cancellation.check();
 			var backendStartedAt = Sys.time() * 1000.0;
-			if (request.dumpFunction >= 0)
+			if (request.dumpFunction >= 0 && !isWasm)
 				dumpFunction(result, request.dumpFunction, report);
-			var wasmTarget = compiler.backendTarget,
-				isWasm = BackendTargets.isWasm(wasmTarget),
-				outputBytes:Null<Bytes> = null,
+			var outputBytes:Null<Bytes> = null,
 				outputIndices:Null<Map<String, Int>> = null;
 			// A live edit that patches publishes the patch and its stamp before the 40 MB module and the side files are written:
 			// the host applies the patch from its own memory, and a reload waits for the `.live.full` marker that vouches for them.
@@ -66,27 +77,9 @@ class CompilerDriver {
 			var publishes = !isWasm && (!result.unchanged || !hasPublication(request.output, result));
 			if (!isWasm)
 				deleteIfExists(request.output + ".live.full");
-			if (isWasm) {
-				var options:compiler.backend.Backend.BackendOptions = {
-					target: wasmTarget,
-					debugNames: true,
-					developmentMetadata: request.buildMode == "development",
-					importMemory: request.importMemory,
-					sharedMemory: request.sharedMemory == true,
-					memoryBase: request.memoryBase,
-					memoryContract: memoryContract,
-					wasmMemoryStats: request.wasmMemoryStats,
-					wasmGcAllocationCount: request.wasmGcAllocationCount,
-					wasmGcStress: request.wasmGcStress,
-					wasmRuntimeNeutral: request.wasmRuntimeNeutral,
-					exports: request.exports
-				}
-				var backend:Backend = new WasmBackend(),
-					encode = () -> backend.compile(result.ir, options).bytes;
-				// The same program compiled with the same options is the same module (a build that reused its IR gets the earlier bytes).
-				outputBytes = session == null ? encode() : session.wasmModule(result.ir, Json.stringify(options),
-					encode);
-			} else {
+			if (isWasm)
+				outputBytes = BackendArtifacts.wasm(result.artifact).bytes;
+			else {
 				outputIndices = BackendArtifacts.hashLink(result.artifact).functionIndices;
 				if (!deferFullModule)
 					writeModule(result, request.output, session);
@@ -150,10 +143,14 @@ class CompilerDriver {
 				publishPatch();
 				writeModule(result, request.output, session);
 			}
-			if (isWasm)
+			if (isWasm) {
 				File.saveBytes(request.output, outputBytes);
-			if (isWasm)
 				File.saveContent(request.output + ".functions", wasmFunctionMap(result.ir));
+				// A Wasm module has no live host to acknowledge it: writing it publishes it.
+				var status = compiler.publicationStatus();
+				if (status.hasPendingRevision && status.pendingRevision == result.revision)
+					compiler.acknowledgePublication(result.revision);
+			}
 			if (!isWasm)
 				File.saveBytes(request.output + ".functions", Bytes.ofString(functionMap(outputIndices)));
 			if (publishes) {

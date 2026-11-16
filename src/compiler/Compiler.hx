@@ -40,6 +40,7 @@ import compiler.compilation.AnalysisTransaction;
 import compiler.compilation.BackendArtifact;
 import compiler.compilation.BackendSession;
 import compiler.compilation.HashLinkBackendSession;
+import compiler.compilation.WasmBackendSession;
 import compiler.compilation.CompilationTransaction;
 import compiler.compilation.CompilerPublication;
 import compiler.compilation.CompilerPublication.CompilerSnapshot;
@@ -292,6 +293,12 @@ class Compiler {
 	/** Emit metadata used by development tooling in addition to runtime data. */
 	public var developmentMetadata = true;
 
+	/**
+	 * What the request asks of the backend besides the program (Wasm memory, exports, allocator options), set per request like
+	 * `livePatching`; null for the target's defaults. The HashLink backend reads its options from the fields above.
+	 */
+	public var backendOptions:Null<compiler.backend.Backend.BackendOptions> = null;
+
 	final graph = new ModuleGraph();
 	var sourceLoader = new ModuleSourceLoader();
 	final moduleId:Bytes;
@@ -336,6 +343,7 @@ class Compiler {
 			// A clone is what actually compiles, so it must assemble the way its source was asked to.
 			livePatching = cloneFrom.livePatching;
 			developmentMetadata = cloneFrom.developmentMetadata;
+			backendOptions = cloneFrom.backendOptions;
 			exportedFunctions = cloneFrom.exportedFunctions.copy();
 			for (name in cloneFrom.rootModules)
 				rootModules.push(name);
@@ -795,6 +803,10 @@ class Compiler {
 		defines = nextDefines;
 		var target = BackendTargets.parse(nextDefines.get("target"));
 		backendTarget = target == null ? HashLink : target;
+		// The session's backend builds for the target; one that builds for another starts over.
+		if (backend.backendTarget() != backendTarget)
+			backend = BackendTargets.isWasm(backendTarget)
+				? new WasmBackendSession(backendTarget) : new HashLinkBackendSession(new HlModuleAssembler());
 		for (state in modules) {
 			var affected = scopeChanged;
 			if (!affected)

@@ -40,7 +40,6 @@ class CompilerSession {
 		configuration = null;
 		writerCache = new HlWriterCache();
 		encodedModule = null;
-		encodedWasm = null;
 		sourceTexts = [];
 	}
 
@@ -49,8 +48,6 @@ class CompilerSession {
 	 * that reuses the module (see `PipelineSnapshot`) writes the same bytes without validating and encoding it again.
 	 */
 	var encodedModule:Null<{code:HlCode, bytes:haxeon.io.SegmentedBytes}>;
-
-	var encodedWasm:Null<{ir:compiler.ir.Ir.IrProgram, options:String, bytes:haxe.io.Bytes}>;
 
 	public function encodeHashLink(code:HlCode):haxeon.io.SegmentedBytes {
 		var known = encodedModule;
@@ -63,16 +60,6 @@ class CompilerSession {
 
 	public function writeHashLink(code:HlCode, path:String):Void
 		HlWriter.saveSegments(encodeHashLink(code), path);
-
-	/** The Wasm module for `ir` and `options`; the previous one when this is the program and the options it was made from. */
-	public function wasmModule(ir:compiler.ir.Ir.IrProgram, options:String, encode:() -> haxe.io.Bytes):haxe.io.Bytes {
-		var known = encodedWasm;
-		if (known == null || known.ir != ir || known.options != options) {
-			known = {ir: ir, options: options, bytes: encode()};
-			encodedWasm = known;
-		}
-		return known.bytes;
-	}
 
 	/** Wasm guests import their host services through this stdlib interface. */
 	static function hostInterfaces(target:Null<BackendTarget>):{interfaces:Array<String>,

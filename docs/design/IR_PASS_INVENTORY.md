@@ -214,7 +214,7 @@ By edit cost, with what must come first:
 0. **The 3.4M floor.** Profile one of the five passes in finding 2 and remove the shared cause. No interface needed; up to 17M (14%).
 1. **The framework commit**: the interface, the view, the opaque step, check mode. No pass moves in it.
    Landed in part: `compiler.ir.IrPipeline` runs every frontend pass as an opaque, named stage in one ordered list per phase
-   (`assembly`, `target`, `retainedHashLink`), with the target differences as stage predicates and the pass meter and the early prune's
+   (`assembly`, `target`), with the target differences as stage predicates and the pass meter and the early prune's
    check hooks as stage properties. The interface, the view and the reuse check mode of rule 5 are still to come; the Wasm builders'
    passes are outside the lists.
 2. **IrScalarReplacement and IrValuePhiScalarization** (a): 7.6M + 3.3M. They are the cheapest to port (no summary) and they follow

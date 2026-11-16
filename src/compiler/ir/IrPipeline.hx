@@ -10,10 +10,10 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 /**
  * The order of the whole-program IR passes, for every target, in one place.
  *
- * A build runs three lists. `assembly` runs inside `IrProgramAssembler.assemble`, from the generated functions and the declaration
+ * A build runs two lists. `assembly` runs inside `IrProgramAssembler.assemble`, from the generated functions and the declaration
  * tables to the finished program. The frontend then records its positional and live metadata on that program
- * (`FrontendCompilation.run`) and runs `target`, which ends with the inliner and the frontend verifier. `retainedHashLink` runs on the
- * copy of the program that a Wasm build keeps for its HashLink assembly (`HashLinkBackendSession`).
+ * (`FrontendCompilation.run`) and runs `target`, which ends with the inliner and the frontend verifier. The backend session then
+ * builds the artifact from that program (`BackendSession`).
  *
  * Target differences are which stages a target enables (the predicates below, read from `IrPipelineContext`); each stage wraps an
  * existing pass as it is. The Wasm module builders still run their own passes, interleaved with the module they build
@@ -81,15 +81,6 @@ class IrPipeline {
 		new IrStage("inliner", inliner).measured(),
 		new IrStage("verifier", verifier).when(verifiesHere).measured(),
 		new IrStage("verifier-check", verifierCheck).when(checksVerification)
-	]);
-
-	/**
-	 * The copy of the program a Wasm build keeps for its HashLink assembly (`HashLinkBackendSession`): its closure ABI adaptation stays local
-	 * to that copy, and the Wasm backend builds its own adapters from the logical program.
-	 */
-	public static final retainedHashLink:IrStageList = new IrStageList("retained-hashlink", [
-		new IrStage("scalar-closures", scalarClosures),
-		new IrStage("enum-tag-escapes", enumTagEscapes)
 	]);
 
 	/** The names the prune check of a stage reports when it covers more than the stage. */

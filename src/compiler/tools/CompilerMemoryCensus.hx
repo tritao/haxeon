@@ -48,7 +48,6 @@ class CompilerMemoryCensus {
 				{name: "encoded module bytes and writer cache",
 				release: () -> {
 					session.encodedModule = null;
-					session.encodedWasm = null;
 					session.writerCache = new HlWriterCache();
 				}
 			},

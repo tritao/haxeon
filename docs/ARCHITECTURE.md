@@ -152,13 +152,33 @@ The rest of the repository:
 | `tests/`, `benchmarks/` | Test suites, listed in `tests/suites.txt`, and benchmarks. |
 | `scripts/`, `cmake/` | Launchers and wrappers; the native build and the pinned tool bootstrap. |
 
+## The backend session
+
+The target name is parsed once into a `BackendTarget` (`compiler.backend.BackendTargets.parse`): by `Compiler.configure` from the
+`target` define, which keeps it as `Compiler.backendTarget`, and at the command line's edge (`CompilerArguments`, `CompilerSession`).
+Everything after that switches on the enum; nothing compares target strings.
+
+A compilation session has one backend, `Compiler.backend` (`compiler.compilation.BackendSession`), chosen by the target. The pipeline
+gives the final IR to `backend.assemble`, and the result's `BackendArtifact` is `CompileResult.artifact`: a HashLink build's module,
+function indices, stable function ids, runtime identity (HLI) and patch (HLP), or a Wasm build's module. Callers that know the backend
+read it with `BackendArtifacts.hashLink` or `BackendArtifacts.wasm`.
+
+- `HashLinkBackendSession` owns the assembler of the last successful build (layout, stable ids, revisions) and the lowered-function
+  cache. It plans and assembles the module and encodes the patch.
+- `WasmBackendSession` runs the Wasm backend on the final IR during the build; a Wasm build runs no HashLink assembly. It owns the
+  module it built last (a build whose IR and options are the ones that module was built from gets the same bytes) and the Wasm patch
+  state (`patchBase`, `patch`), which keeps its own identities for now. The request's Wasm options reach it through
+  `Compiler.backendOptions`. A Wasm build is revision 1 of a fresh module; the driver acknowledges it when it writes it.
+
+The session follows the candidate like the other caches: a build works on `forCandidate()`, the compiler adopts it with the candidate,
+and a failed or rejected build (the snapshot, a refused publication) puts the previous one back.
+
 ## Where the IR pass order lives
 
-`compiler.ir.IrPipeline` holds the order of the whole-program IR passes as three named stage lists. `assembly` runs inside
+`compiler.ir.IrPipeline` holds the order of the whole-program IR passes as two named stage lists. `assembly` runs inside
 `IrProgramAssembler.assemble`, from the generated functions and the declaration tables to the finished program (the runtime surface and
 the entry function are its `runtime-surface` stage). `target` runs from `FrontendCompilation.run` after the frontend has recorded its
-positional and live metadata, from the closed enum tag ABI to the inliner and the frontend verifier. `retainedHashLink` runs in
-`HashLinkBackendSession` on the copy of the program a Wasm build keeps for its HashLink assembly. A stage wraps an existing pass as it is;
+positional and live metadata, from the closed enum tag ABI to the inliner and the frontend verifier. A stage wraps an existing pass as it is;
 target differences are the stages a target enables, read from `IrPipelineContext` (the `TargetProfile`, the value-array lane target,
 live patching and development metadata), not branches at the call sites. The Wasm module builders still run their own passes,
 interleaved with the module they build.

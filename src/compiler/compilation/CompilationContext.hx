@@ -55,6 +55,7 @@ class CompilationContext {
 	public var compiledOnce(get, set):Bool;
 	public var livePatching(get, never):Bool;
 	public var developmentMetadata(get, never):Bool;
+	public var backendOptions(get, never):Null<compiler.backend.Backend.BackendOptions>;
 	public var cachedSemanticProgram(get, set):Null<SemanticProgram>;
 	public var lastTypedProgram(get, never):Null<TypedProgram>;
 	public var pipelineSnapshot(get, set):Null<PipelineSnapshot>;
@@ -253,6 +254,9 @@ class CompilationContext {
 
 	function get_developmentMetadata():Bool
 		return owner.developmentMetadata;
+
+	function get_backendOptions():Null<compiler.backend.Backend.BackendOptions>
+		return owner.backendOptions;
 
 	function set_compiledOnce(value:Bool):Bool {
 		owner.compiledOnce = value;

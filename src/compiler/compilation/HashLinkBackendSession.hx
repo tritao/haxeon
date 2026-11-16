@@ -16,6 +16,7 @@ import compiler.core.CancellationToken;
 import haxe.io.Bytes;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
+import compiler.backend.Backend.BackendTarget;
 import compiler.compilation.BackendArtifact;
 import compiler.compilation.BackendSession.BackendAssemblyResult;
 import compiler.compilation.BackendSession.BackendTimings;
@@ -44,8 +45,14 @@ class HashLinkBackendSession implements BackendSession {
 		this.loweredCache = loweredCache == null ? new HlLoweredCache() : loweredCache;
 	}
 
+	public function backendTarget():BackendTarget
+		return HashLink;
+
 	public function hashLink():Null<HashLinkBackendSession>
 		return this;
+
+	public function wasm():Null<WasmBackendSession>
+		return null;
 
 	/** The same assembler, with a copy of the lowered cache the candidate build can fill. */
 	public function forCandidate():BackendSession
@@ -59,7 +66,6 @@ class HashLinkBackendSession implements BackendSession {
 	public function environmentKey(context:CompilationContext):String
 		return [
 			"live:" + context.livePatching,
-			"wasm:" + context.isWasmTarget(),
 			"development:" + context.developmentMetadata,
 			"fieldReserve:" + liveFieldReserve
 		].join(",");
@@ -115,9 +121,7 @@ class HashLinkBackendSession implements BackendSession {
 		return "fieldReserve:"
 			+ assembler.fieldReserve
 			+ ",development:"
-			+ assembler.developmentMetadata
-			+ ",wasm:"
-			+ context.isWasmTarget();
+			+ assembler.developmentMetadata;
 
 	/** Why two modules differ, or null when they encode to the same bytes. */
 	public static function moduleDifference(previous:HlCode, fresh:HlCode):Null<String> {
@@ -142,15 +146,8 @@ class HashLinkBackendSession implements BackendSession {
 		var nextAbi = RuntimeAbi.describe(ir),
 			previousAbi = context.publishedAbi,
 			baseAssembler = assembler;
-		// Compilation sessions retain a HashLink assembly even when the requested
-		// artifact is Wasm. Keep its closure ABI adaptation local to that assembly;
-		// the Wasm backend receives the original logical program and builds its own
-		// target-specific adapters.
 		var assemblyIr = ir;
-		if (context.isWasmTarget()) {
-			assemblyIr = compiler.ir.IrPipeline.retainedHashLink.run(ir.copy(),
-				new compiler.ir.IrPipelineContext(context.targetProfile(), context.valueArrayTarget()));
-		} else if (!context.livePatching) {
+		if (!context.livePatching) {
 			// A plain HashLink build writes only what is reachable from the entry: a function nothing reaches is not lowered or
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything
 			// (other backends and tools read it), and a live module keeps every function too, because its host can call any of
@@ -168,7 +165,7 @@ class HashLinkBackendSession implements BackendSession {
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
 		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
-		if (context.livePatching && !context.isWasmTarget() && baseAssembler.isPublished() && previousAbi != null) {
+		if (context.livePatching && baseAssembler.isPublished() && previousAbi != null) {
 			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional,
 				Std.string(baseAssembler.lastRevision() + 1),
 				LambdaAlignment.placesOf(previousAbi, nextAbi));
@@ -180,8 +177,8 @@ class HashLinkBackendSession implements BackendSession {
 		}
 		// Patch planning describes what a running module must do to adopt this build. Without live patching there is no
 		// running module, and the plan would only mix session history into the build.
-		var decision = context.livePatching ? PatchPlanner.plan(previousAbi, nextAbi,
-			!context.isWasmTarget(), !context.isWasmTarget() && baseAssembler.isPublished()) : PatchDecision.Patch,
+		var decision = context.livePatching ? PatchPlanner.plan(previousAbi, nextAbi, true,
+			baseAssembler.isPublished()) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
@@ -199,10 +196,9 @@ class HashLinkBackendSession implements BackendSession {
 		var candidateAssembler = loweredCache != null ? new HlModuleAssembler(null,
 			loweredCache.debug) : context.compiledOnce
 			&& PatchPlanner.requiresFreshLayout(decision) ? freshLayout(baseAssembler) : baseAssembler.copy();
-		candidateAssembler.fieldReserve = context.livePatching && !context.isWasmTarget() ? liveFieldReserve : 0;
+		candidateAssembler.fieldReserve = context.livePatching ? liveFieldReserve : 0;
 		candidateAssembler.developmentMetadata = context.developmentMetadata || context.livePatching;
-		// The Wasm session's auxiliary HashLink copy acquired its own closure adapters above; verify that copy too.
-		candidateAssembler.irVerified = !context.livePatching && !context.isWasmTarget();
+		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
@@ -237,8 +233,7 @@ class HashLinkBackendSession implements BackendSession {
 			if (difference != null)
 				throw 'HAXEON_CHECK_REUSE: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
 		}
-		if (!context.isWasmTarget())
-			compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices);
+		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSnapshots = AllocationMeter.sample();
 		if (token != null)

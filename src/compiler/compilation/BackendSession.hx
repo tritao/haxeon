@@ -2,6 +2,7 @@ package compiler.compilation;
 
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.backend.Backend.BackendTarget;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
 import compiler.hl.incremental.HlModuleAssembler;
@@ -61,8 +62,14 @@ typedef BackendTimings = {
  * the compiler adopts it with the rest of the candidate, so a failed or rejected build leaves the session's backend as it was.
  */
 interface BackendSession {
+	/** The target this session builds for. */
+	function backendTarget():BackendTarget;
+
 	/** This session when it is the HashLink one (live patching and its persisted identity are HashLink's), or null. */
 	function hashLink():Null<HashLinkBackendSession>;
+
+	/** This session when it is the Wasm one (its patch state and module cache), or null. */
+	function wasm():Null<WasmBackendSession>;
 
 	/** The session a candidate build works on. */
 	function forCandidate():BackendSession;
