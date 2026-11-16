@@ -24,5 +24,19 @@ elif [[ -z ${HAXEON_MAIN_HL:-} ]]; then
 	export HAXEON_MAIN_HL
 	HAXEON_MAIN_HL=$("$root_dir/scripts/haxeon" dev tool-path Main)
 fi
-(cd "$root_dir" && LD_LIBRARY_PATH="$work${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" \
-	DYLD_LIBRARY_PATH="$work${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" "$work/hl" "$build_hl" test "${1:-4}")
+# The driver rebuilds out/ and the HashLink directory, so it loads the copies in $work and neither directory may stay on its search path:
+# macOS shows no loaded mappings, so the driver refuses any search path that names a directory it builds into.
+without_build_directories() {
+	local entry kept="" IFS=:
+	for entry in $1; do
+		case "$entry" in
+		"" | "$root_dir/out" | "$root_dir/out/" | "$hashlink_dir" | "$hashlink_dir/") ;;
+		*) kept="$kept${kept:+:}$entry" ;;
+		esac
+	done
+	printf '%s' "$kept"
+}
+library_path=$(without_build_directories "${LD_LIBRARY_PATH:-}")
+dyld_library_path=$(without_build_directories "${DYLD_LIBRARY_PATH:-}")
+(cd "$root_dir" && LD_LIBRARY_PATH="$work${library_path:+:$library_path}" \
+	DYLD_LIBRARY_PATH="$work${dyld_library_path:+:$dyld_library_path}" "$work/hl" "$build_hl" test "${1:-4}")
