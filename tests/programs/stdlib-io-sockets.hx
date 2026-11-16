@@ -73,6 +73,9 @@ function sockets():Int {
 		return 11;
 	var client = new Socket();
 	client.connect(loopback, port);
+	// A pending connection makes the listener ready to read; an idle client is not.
+	if (Socket.select([server], [], [], 5.0).read.length != 1 || Socket.select([client], [], [], 0.0).read.length != 0)
+		return 16;
 	var accepted = server.accept();
 	client.output.writeString("hello\n");
 	client.output.flush();

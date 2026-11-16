@@ -269,6 +269,9 @@ class CallResolver {
 		var platformMethod = PlatformAbi.method(receiver.type, name);
 		if (platformFirst && platformMethod != null) {
 			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
+			var module = PlatformAbi.sourceModule(platformMethod.nativeName);
+			if (module != null)
+				session.runtimeDependencyTracker.record(session.currentContext.name, module);
 			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)),
 				platformMethod.result, span);
 		}
@@ -283,6 +286,9 @@ class CallResolver {
 			return typeIteratorMethod(receiver, name, arguments, span);
 		if (!platformFirst && platformMethod != null) {
 			var typed = typeCallArguments(arguments, platformMethod.arguments, scope, name);
+			var module = PlatformAbi.sourceModule(platformMethod.nativeName);
+			if (module != null)
+				session.runtimeDependencyTracker.record(session.currentContext.name, module);
 			return new TypedExpression(TCall(platformMethod.nativeName, [receiver].concat(typed)),
 				platformMethod.result, span);
 		}

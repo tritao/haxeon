@@ -2375,8 +2375,12 @@ class BodyTyper {
 				default:
 			}
 		var platformField = PlatformAbi.field(typedObject.type, name);
-		if (platformField != null)
+		if (platformField != null) {
+			var module = PlatformAbi.sourceModule(platformField.get);
+			if (module != null)
+				session.runtimeDependencyTracker.record(session.currentContext.name, module);
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
+		}
 		var getter = instancePropertyAccessor(typedObject.type, name, true);
 		if (getter != null) {
 			var method = requiredMapValue(session.signatures, getter);

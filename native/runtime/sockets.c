@@ -103,3 +103,21 @@ HL_PRIM vstring *HL_NAME(__host_local)( void ) {
 	realtime_sockets_init();
 	return realtime_socket_text(hl_host_local());
 }
+
+extern int hl_socket_fd_size( int count );
+extern bool hl_socket_select( varray *ra, varray *wa, varray *ea, char *tmp, int tmp_size, double timeout );
+
+/*
+ * select() for sys.net.Socket.select: each array of sockets is compacted in place to the ready ones, followed by a null when
+ * fewer are ready. A negative timeout waits indefinitely. False when select fails.
+ */
+HL_PRIM bool HL_NAME(__socket_select)( varray *ra, varray *wa, varray *ea, double timeout ) {
+	realtime_sockets_init();
+	int size = hl_socket_fd_size(ra == NULL ? 0 : ra->size) + hl_socket_fd_size(wa == NULL ? 0 : wa->size)
+		+ hl_socket_fd_size(ea == NULL ? 0 : ea->size);
+	char *tmp = (char *)malloc((size_t)size);
+	if( tmp == NULL ) hl_error("Out of memory in select");
+	bool ok = hl_socket_select(ra, wa, ea, tmp, size, timeout);
+	free(tmp);
+	return ok;
+}

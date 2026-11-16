@@ -620,6 +620,7 @@ DEFINE_PRIM(_SOCKET,__socket_accept,_SOCKET);
 DEFINE_PRIM(_BOOL,__socket_set_timeout,_SOCKET _F64);
 DEFINE_PRIM(_BOOL,__socket_shutdown,_SOCKET _BOOL _BOOL);
 DEFINE_PRIM(_BOOL,__socket_set_blocking,_SOCKET _BOOL);
+DEFINE_PRIM(_BOOL,__socket_select,_ARR _ARR _ARR _F64);
 DEFINE_PRIM(_BOOL,__socket_set_fast_send,_SOCKET _BOOL);
 DEFINE_PRIM(_I32,__socket_host_ip,_SOCKET);
 DEFINE_PRIM(_I32,__socket_host_port,_SOCKET);

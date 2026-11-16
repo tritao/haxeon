@@ -15,6 +15,17 @@ class PlatformAbi {
 		"Type.ValueType" => true
 	];
 
+	/**
+	 * The stdlib module a platform method or field getter is written in, or null for a runtime native (named `__...`): a
+	 * use must load that module, which its callers may not otherwise name.
+	 */
+	public static function sourceModule(target:String):Null<String> {
+		if (StringTools.startsWith(target, "__"))
+			return null;
+		var dot = target.lastIndexOf(".");
+		return dot <= 0 ? null : target.substr(0, dot);
+	}
+
 	public static function isType(name:String):Bool
 		return types.exists(name);
 
@@ -47,6 +58,12 @@ class PlatformAbi {
 				} : null;
 			case CompilerType.TBytes: name == "length" ? {
 					type:CompilerType.TInt, get:"__bytes_length", set:null
+				} : null;
+			// Haxe source in the stdlib (haxe/Int64.hx), the same on every target.
+			case CompilerType.TInt64: name == "low" ? {
+					type:CompilerType.TInt, get:"haxe.Int64.int64Low", set:null
+				} : name == "high" ? {
+					type:CompilerType.TInt, get:"haxe.Int64.int64High", set:null
 				} : null;
 			case CompilerType.TAbstract(_, _, underlying): field(underlying, name);
 			default: null;

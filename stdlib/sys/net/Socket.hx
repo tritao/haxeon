@@ -46,6 +46,11 @@ extern function socketShutdown(s:SocketHandle, read:Bool, write:Bool):Bool;
 @:hlNative("haxeon_runtime", "__socket_set_blocking")
 extern function socketSetBlocking(s:SocketHandle, blocking:Bool):Bool;
 
+@:hlNative("haxeon_runtime", "__socket_select")
+extern function socketSelect(read:Array<Null<SocketHandle>>, write:Array<Null<SocketHandle>>,
+		others:Array<Null<SocketHandle>>,
+		timeout:Float):Bool;
+
 @:hlNative("haxeon_runtime", "__socket_set_fast_send")
 extern function socketSetFastSend(s:SocketHandle, fast:Bool):Bool;
 
@@ -123,7 +128,7 @@ private class SocketOutput extends haxe.io.Output {
 }
 #end
 
-/** A TCP socket, as in Haxe's sys.net.Socket (without `select` and `waitForRead`). */
+/** A TCP socket, as in Haxe's sys.net.Socket (without `waitForRead`). */
 class Socket {
 	#if !wasm
 	final handle:SocketHandle;
@@ -233,6 +238,53 @@ class Socket {
 			throw "setBlocking() failure";
 		#end
 	}
+
+	/**
+	 * The sockets of each list that are ready to read, to write, or have an exceptional condition, as Haxe's: waits up to
+	 * `timeout` seconds, or until one is ready without a timeout.
+	 */
+	public static function select(read:Array<Socket>, write:Array<Socket>, others:Array<Socket>,
+			?timeout:Float): {
+				read: Array<Socket>,
+				write: Array<Socket>,
+				others: Array<Socket>
+			} {
+		#if wasm
+		throw "Sockets are not available on Wasm";
+		#else
+		var readHandles = handlesOf(read), writeHandles = handlesOf(write), otherHandles = handlesOf(others);
+		if (!socketSelect(readHandles, writeHandles, otherHandles, timeout == null ? -1.0 : timeout))
+			throw "select() failure";
+		return {read: ready(read, readHandles), write: ready(write, writeHandles), others: ready(others, otherHandles)};
+		#end
+	}
+
+	#if !wasm
+	static function handlesOf(sockets:Null<Array<Socket>>):Array<Null<SocketHandle>> {
+		var handles:Array<Null<SocketHandle>> = [];
+		if (sockets != null)
+			for (socket in sockets)
+				handles.push(socket.handle);
+		return handles;
+	}
+
+	/** The sockets whose handles select kept, in the order it left them (ready ones first, then a null). */
+	static function ready(sockets:Null<Array<Socket>>, handles:Array<Null<SocketHandle>>):Array<Socket> {
+		var result:Array<Socket> = [];
+		if (sockets == null)
+			return result;
+		for (handle in handles) {
+			if (handle == null)
+				break;
+			for (socket in sockets)
+				if (socket.handle == handle) {
+					result.push(socket);
+					break;
+				}
+		}
+		return result;
+	}
+	#end
 
 	public function setFastSend(fast:Bool):Void {
 		#if !wasm

@@ -1,5 +1,13 @@
 package haxe;
 
+/** `value.low`: the low 32 bits, as Haxe's Int64.low. The compiler maps the field to this function (`PlatformAbi`). */
+function int64Low(value:haxe.Int64):Int
+	return Int64.toInt(value);
+
+/** `value.high`: the high 32 bits, as Haxe's Int64.high. */
+function int64High(value:haxe.Int64):Int
+	return Int64.toInt(Int64.shr(value, 32));
+
 /** Native signed 64-bit integer operations for Haxeon targets. */
 extern class Int64 {
 	@:hlNative("haxeon_runtime", "__int64_parse")
