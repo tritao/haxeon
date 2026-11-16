@@ -1,4 +1,5 @@
 import compiler.Compiler;
+import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.wasm.WasmBackend;
 import compiler.ir.Ir;
@@ -8,7 +9,10 @@ import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerDriver;
 import sys.io.File;
 
-/** Verify each closure ABI after its adapters, including the session's auxiliary HashLink assembly. */
+/**
+ * Verify each closure ABI after its adapters, cold and warm. A warm HashLink build links the functions it did not lower again; a
+ * warm Wasm build builds its whole module from the edited IR, which must be the module a fresh compiler builds.
+ */
 class WasmClosureVerificationOrderMain {
 	static function main():Void {
 		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
@@ -21,12 +25,26 @@ class WasmClosureVerificationOrderMain {
 				compiler.configure("closure-verification-" + target + inlining, "closure-verification",
 					CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
 				compiler.update("Main.hx", source);
-				compiler.compile("Main");
-				compiler.update("Main.hx",
-					StringTools.replace(source, "Census.run(128) == 128", "Census.run(64) == 64"));
+				var initial = compiler.compile("Main"),
+					edited = StringTools.replace(source, "Census.run(128) == 128", "Census.run(64) == 64");
+				compiler.update("Main.hx", edited);
 				var changed = compiler.compile("Main");
-				if (changed.metrics.linkedFunctions == 0)
-					throw "Closure ordering test did not exercise fresh recomputation of linked functions";
+				if (target == "hl") {
+					if (changed.metrics.linkedFunctions == 0)
+						throw "Closure ordering test did not exercise fresh recomputation of linked functions";
+				} else {
+					var fresh = new Compiler(null, CompilerIntrinsics.configuration());
+					fresh.livePatching = false;
+					fresh.addStandardLibrarySourceRoot("stdlib");
+					fresh.configure("closure-verification-" + target + inlining, "closure-verification",
+						CompilerDriver.targetDefines(target).concat(["haxeon-inline=" + (inlining ? 1 : 0)]));
+					fresh.update("Main.hx", edited);
+					var warmBytes = BackendArtifacts.wasm(changed.artifact).bytes;
+					if (warmBytes.compare(BackendArtifacts.wasm(initial.artifact).bytes) == 0)
+						throw 'The warm $target build after an edit returned the earlier module';
+					if (warmBytes.compare(BackendArtifacts.wasm(fresh.compile("Main").artifact).bytes) != 0)
+						throw 'The warm $target build after an edit differs from a fresh build of the edited source';
+				}
 				compiler.update("Main.hx", source);
 				compiler.compile("Main");
 				Sys.println('PASS: cold/warm closure verification and fresh recomputation on $target, inline=$inlining');
