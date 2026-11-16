@@ -21,9 +21,11 @@ import compiler.backend.wasm.WasmRepresentation.WasmInteropRepresentation;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
+import compiler.backend.wasm.WasmRepresentation.WasmModelRepresentation;
+import compiler.backend.wasm.WasmModule.WasmLocal;
 
 /** Linear32 representation: managed references remain i32 pointers into the custom heap. */
-class WasmLinearRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmInteropRepresentation {
+class WasmLinearRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmInteropRepresentation implements WasmModelRepresentation {
 	final layout:WasmLayout;
 	final allocator:Int;
 	final bytesDataPointer:Int;
@@ -348,6 +350,67 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		body.push(End);
 		return body;
 	}
+
+	public function nullTest(type:IrType):WasmInstruction
+		return I32Eqz;
+
+	/** A reference is an address: identity is equality of addresses. */
+	public function referenceIdentity(argumentLocals:Array<Int>, outputLocal:Int):Array<WasmInstruction> {
+		var result:Array<WasmInstruction> = [for (local in argumentLocals) LocalGet(local)];
+		result.push(I32Eq);
+		result.push(LocalSet(outputLocal));
+		return result;
+	}
+
+	public function nullEquality(otherLocal:Int, outputLocal:Int):Null<Array<WasmInstruction>>
+		return null;
+
+	/** An address occupies a lane as it is. */
+	public function referenceLane(type:IrType, unpack:Bool):Array<WasmInstruction>
+		return [];
+
+	public function assignsSinglePhi():Bool
+		return false;
+
+	/** A scalar-ABI method that leaves with a pending exception hands back its receiver state; other scalar functions return zeros. */
+	public function pendingExceptionReturn(fn:IrFunction, locals:Map<Int, Int>, exception:Int,
+			takeException:Array<WasmInstruction>):Null<Array<WasmInstruction>> {
+		var signature = scalarSignature(fn.name);
+		if (signature == null)
+			return null;
+		if (signature.throwsReceiver)
+			return takeException.concat(scalarExceptionResult(fn, locals, exception));
+		var result:Array<WasmInstruction> = [];
+		for (type in scalarReturnTypes(signature))
+			for (instruction in zeroValue(type))
+				result.push(instruction);
+		return result;
+	}
+
+	public function staticClosureDescriptor(name:String, type:IrType):Null<Int>
+		return staticClosureDescriptors.get(WasmLinearClosureAdapters.staticDescriptorKey(name, type));
+
+	public function closureCastName(type:IrType):Null<String>
+		return closureAdapters == null ? null : closureAdapters.castName(type);
+
+	public function closureSignatureId(type:IrType):Null<Int>
+		return closureAdapters == null ? null : closureAdapters.signatureId(type);
+
+	/** Shared lowering reads and advances an iterator in linear memory itself. */
+	public function valueIterator(advance:Bool, iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult
+		return UseDefault;
+
+	/** This representation is its own interop representation, which already had the call. */
+	public function runtimeCallFallback(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):WasmLoweringResult
+		return UseDefault;
+
+	public function compactLocals(body:Array<WasmInstruction>, locals:Array<WasmLocal>,
+			parameters:Int):Null<{
+				body:Array<WasmInstruction>,
+				locals:Array<WasmLocal>
+			}>
+		return null;
 
 	public function scalarSignature(name:String):Null<compiler.backend.wasm.WasmScalarAbi.WasmScalarSignature>
 		return scalarAbi == null ? null : scalarAbi.signatures.get(name);

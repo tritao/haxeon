@@ -567,11 +567,11 @@ class WasmLinearModuleBuilder {
 			scalarAbi, functions, null, null,
 			staticClosureDescriptors, closureAdapters);
 		representation = new WasmRepresentationSet(linearRepresentation, linearRepresentation, null,
-			linearRepresentation, context -> {
+			linearRepresentation, linearRepresentation, context -> {
 				var perFunction = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
 					scalarAbi, functions, context.irFunction,
 					context.allocateLocal, staticClosureDescriptors, closureAdapters);
-				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, null);
+				return new WasmRepresentationSet(perFunction, perFunction, null, perFunction, perFunction, null);
 			});
 		tableSlots = WasmModuleSupport.buildTableSlots(module, functions);
 		for (record in staticClosureRecords) {

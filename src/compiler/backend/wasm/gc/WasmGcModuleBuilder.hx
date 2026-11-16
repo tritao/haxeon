@@ -222,14 +222,14 @@ class WasmGcModuleBuilder {
 			&& Lambda.exists(plan.arrayElementTypes(), element -> Type.enumEq(element, ManagedBytes)))
 			gcInterop.addRootRelocator(module);
 		var representation:WasmRepresentationSet = new WasmRepresentationSet(gcRepresentation, gcRepresentation,
-			gcRepresentation, gcInterop,
+			gcRepresentation, gcInterop, gcRepresentation,
 			function(context) {
 				var functionContext = new WasmGcFunctionContext(gcContext, context.irFunction, context.exceptionTag,
 					context.allocateLocal),
 					functionRepresentation = gcRepresentation.forFunctionContext(functionContext),
 					functionInterop = gcInterop.forFunctionContext(functionContext);
 				return new WasmRepresentationSet(functionRepresentation, functionRepresentation, functionRepresentation,
-					functionInterop, null);
+					functionInterop, functionRepresentation, null);
 			});
 		var receiverExceptions = false;
 		for (name => signature in scalarAbi.signatures)

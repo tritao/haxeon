@@ -24,8 +24,6 @@ import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionGcRootState;
 import compiler.backend.wasm.WasmFunctionLowerContext.WasmFunctionExceptionState;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
-import compiler.backend.wasm.gc.WasmGcRepresentation;
-import compiler.backend.wasm.linear.WasmLinearRepresentation;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
@@ -195,17 +193,14 @@ class WasmFunctionLower {
 			live:Map<Int, Map<Int, Array<Int>>> = [],
 			scalarRoots:Map<Int, Array<Int>> = [],
 			synthetic = -1;
-		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
-			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values;
-			for (owner => locals in linear.scalarReferenceLocals()) {
-				var ids:Array<Int> = [];
-				for (local in locals) {
-					var id = synthetic--;
-					valueLocals.set(id, local);
-					ids.push(id);
-				}
-				scalarRoots.set(owner, ids);
+		for (owner => locals in context.representation.model.scalarReferenceLocals()) {
+			var ids:Array<Int> = [];
+			for (local in locals) {
+				var id = synthetic--;
+				valueLocals.set(id, local);
+				ids.push(id);
 			}
+			scalarRoots.set(owner, ids);
 		}
 		for (point in context.rootPoints) {
 			var blockLive = live.get(point.block);
@@ -311,24 +306,14 @@ class WasmFunctionLower {
 			}
 			body = rooted;
 		}
-		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
-			var gc:WasmGcRepresentation = cast context.representation.values,
-				wrapped = gc.scalarExceptionWrapper(fn,
-					body,
-					valueLocals,
-					context.exceptionTag);
-			if (wrapped != null) body = wrapped;
-		}
-		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
-			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values,
-				cleanup:Array<WasmInstruction> = [];
-			restoreRoots(cleanup);
-			var wrapped = linear.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag, cleanup);
-			if (wrapped != null) body = wrapped;
-		}
+		var cleanup:Array<WasmInstruction> = [];
+		restoreRoots(cleanup);
+		var wrapped = context.representation.model.scalarExceptionWrapper(fn, body, valueLocals, context.exceptionTag,
+			cleanup);
+		if (wrapped != null) body = wrapped;
 		body = WasmOptimizer.optimize(body);
-		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
-			var compacted = compiler.backend.wasm.gc.WasmGcLocalCompaction.run(body, locals, type.parameters.length);
+		var compacted = context.representation.model.compactLocals(body, locals, type.parameters.length);
+		if (compacted != null) {
 			body = compacted.body;
 			locals = compacted.locals;
 		}
@@ -577,11 +562,11 @@ class WasmFunctionLower {
 		// A single destination cannot overwrite another phi's input. Multiple
 		// phis still require staging, independently of WasmValuePlacement's
 		// current choice to leave blockful functions uncoalesced.
-		if (count == 1 && Std.isOfType(context.representation.values, WasmGcRepresentation) && emitConstantDiamond(body,
+		if (count == 1 && context.representation.model.assignsSinglePhi() && emitConstantDiamond(body,
 			block,
 			values,
 			single)) return;
-		if (count == 1 && Std.isOfType(context.representation.values, WasmGcRepresentation)) switch single {
+		if (count == 1 && context.representation.model.assignsSinglePhi()) switch single {
 			case Phi(output, inputs):
 				WasmPhiLower.capture(body, inputs, values, predecessor, requiredLocal(values, output.id));
 				return;
@@ -695,24 +680,16 @@ class WasmFunctionLower {
 		body.push(If(null));
 		emit(body, [LocalGet(exceptionState.handler), I32Const(-1), I32Eq, If(null)]);
 		restoreRoots(body);
-		var linear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
-			Std.isOfType(context.representation.values,
-			compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null,
-			signature = linear == null ? null : linear.scalarSignature(fn.name);
-		if (signature != null && signature.throwsReceiver) {
-			emit(body,
-				[
-					GlobalGet(requiredPendingExceptionValue()),
-					LocalSet(exceptionState.exception),
-					I32Const(0),
-					GlobalSet(requiredPendingExceptionFlag()),
-					I32Const(0),
-					GlobalSet(requiredPendingExceptionValue())
-				]);
-			emit(body, linear.scalarExceptionResult(fn, context.valueLocals, exceptionState.exception));
-		} else if (signature != null) {
-			for (type in linear.scalarReturnTypes(signature)) emit(body, context.representation.values.zeroValue(type));
-		} else emit(body, context.representation.values.zeroValue(fn.result));
+		var returned = context.representation.model.pendingExceptionReturn(fn, context.valueLocals,
+			exceptionState.exception, [
+				GlobalGet(requiredPendingExceptionValue()),
+				LocalSet(exceptionState.exception),
+				I32Const(0),
+				GlobalSet(requiredPendingExceptionFlag()),
+				I32Const(0),
+				GlobalSet(requiredPendingExceptionValue())
+			]);
+		emit(body, returned == null ? context.representation.values.zeroValue(fn.result) : returned);
 		body.push(Return);
 		body.push(Else);
 		emit(body,
@@ -917,22 +894,10 @@ class WasmFunctionLower {
 			methods:Map<String, String>,
 			closureTypes:Map<String, WasmClosureTypes>,
 			?knownNonNull:Bool = false):Void {
-		if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
-			var gc:WasmGcRepresentation = cast context.representation.values,
-				scalar = gc.scalarLocal(instruction, values);
-			if (scalar != null) {
-				emit(body, scalar);
-				return;
-			}
-		}
-		if (Std.isOfType(context.representation.values, compiler.backend.wasm.linear.WasmLinearRepresentation)) {
-			var linear:compiler.backend.wasm.linear.WasmLinearRepresentation = cast context.representation.values,
-				scalar = linear.scalarLocal(instruction,
-					values);
-			if (scalar != null) {
-				emit(body, scalar);
-				return;
-			}
+		var scalar = context.representation.model.scalarLocal(instruction, values);
+		if (scalar != null) {
+			emit(body, scalar);
+			return;
 		}
 		var exceptionState = context.exceptionState;
 		switch instruction {
@@ -1028,19 +993,17 @@ class WasmFunctionLower {
 					requiredLocal(values, output.id),
 					requiredLocal(values, value.id));
 				if (emitIfHandled(body, represented)) {} else switch output.type {
-					case Function(_, _) if (Std.isOfType(context.representation.values,
-						WasmLinearRepresentation) && functions.exists((cast context.representation.values:
-						WasmLinearRepresentation).closureAdapters.castName(output.type))):
+					case Function(_, _) if (context.representation.model.closureCastName(output.type) != null
+						&& functions.exists(context.representation.model.closureCastName(output.type))):
 						// A closure created with another representation is adapted (WasmLinearClosureAdapters).
 						emit(body,
 							[
 								LocalGet(requiredLocal(values, value.id)),
 								Call(WasmModuleSupport.requiredFunctionIndex(functions,
-									(cast context.representation.values:WasmLinearRepresentation).closureAdapters
-									.castName(output.type))),
+									context.representation.model.closureCastName(output.type))),
 								LocalSet(requiredLocal(values, output.id))
 							]);
-					case Function(_, _) if (Std.isOfType(context.representation.values, WasmLinearRepresentation)):
+					case Function(_, _) if (context.representation.model.closureCastName(output.type) != null):
 						throw 'Missing reachable Wasm32 closure cast helper for ${Std.string(output.type)}';
 					case I32, F64 if ((switch (value.type) {
 						case Dyn:
@@ -1147,39 +1110,18 @@ class WasmFunctionLower {
 						context.tableSlots,
 						requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
-					var linear:WasmLinearRepresentation = cast context.representation.values;
-					var descriptor = linear.staticClosureDescriptors
-						.get(compiler.backend.wasm.linear.WasmLinearClosureAdapters.staticDescriptorKey(name,
-						output.type));
+					var descriptor = context.representation.model.staticClosureDescriptor(name, output.type);
 					if (descriptor == null) throw 'Missing static closure descriptor for $name';
 					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
 				if (typeInfo == null) throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
-				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values,
-					WasmGcRepresentation) ? cast(context.representation.values,
-					WasmGcRepresentation) : null;
-				if (scalarGc != null && scalarGc.hasScalarClosure(closure.type)) {
-					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
-					emit(body, scalarGc.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
-						requiredLocal(values,
-						closure.id), output, (switch (output.type) {
-							case Void:
-								true;
-							default:
-								false;
-						}) ? -1 : requiredLocal(values, output.id),
-							[for (argument in arguments) requiredLocal(values, argument.id)]));
-					return;
-				}
-				var scalarLinear:Null<WasmLinearRepresentation> = Std.isOfType(context.representation.values,
-					WasmLinearRepresentation) ? cast(context.representation.values,
-					WasmLinearRepresentation) : null;
-				if (scalarLinear != null && scalarLinear.hasScalarClosure(closure.type)) {
+				var model = context.representation.model;
+				if (model.hasScalarClosure(closure.type)) {
 					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
 					emit(body,
-						scalarLinear.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
+						model.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
 						requiredLocal(values,
 						closure.id), output, (switch (output.type) {
 							case Void:
@@ -1261,8 +1203,10 @@ class WasmFunctionLower {
 						requiredLocal(values, receiver.id),
 						requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
-					var linear:WasmLinearRepresentation = cast context.representation.values;
-					if (linear.closureAdapters == null) throw "Missing Wasm32 closure signatures";
+					var signature:Null<Int> = name == WasmDynamicCalls.VARARGS_TARGET
+						? -1 : context.representation.model.closureSignatureId(output.type);
+					if (signature == null)
+						throw "Missing Wasm32 closure signatures";
 					emit(body,
 						[
 							I32Const(WasmLayout.CLOSURE_SIZE),
@@ -1271,8 +1215,7 @@ class WasmFunctionLower {
 							I32Const(WasmLayout.CLOSURE_TYPE_ID),
 							I32Store(0),
 							LocalGet(requiredLocal(values, output.id)),
-							I32Const(name == WasmDynamicCalls.VARARGS_TARGET
-								? -1 : linear.closureAdapters.signatureId(output.type)),
+							I32Const(signature),
 							I32Store(WasmLayout.CLOSURE_SIGNATURE_OFFSET),
 							LocalGet(requiredLocal(values, output.id)),
 							I32Const(tableSlot),
@@ -1297,30 +1240,13 @@ class WasmFunctionLower {
 				// Dispatch must fail as a Haxe exception before reading the receiver's type or calling its method.
 				var receiverCheck:Array<WasmInstruction> = [
 					LocalGet(requiredLocal(values, object.id)),
-					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz,
+					context.representation.model.nullTest(object.type),
 					If(null)
 				];
 				if (!knownNonNull) emit(body, receiverCheck.concat(trapOrThrow(1)).concat([End]));
-				var scalarGc:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values,
-					WasmGcRepresentation) ? cast(context.representation.values,
-					WasmGcRepresentation) : null;
-				if (scalarGc != null && scalarGc.hasScalarVirtual(object.type, methodName)) {
-					emit(body, scalarGc.scalarVirtualCall(object,
-						methodName, requiredLocal(values, object.id), output, (switch (output.type) {
-							case Void:
-								true;
-							default:
-								false;
-						}) ? -1 : requiredLocal(values, output.id), arguments,
-							[for (argument in arguments) requiredLocal(values,
-							argument.id)]));
-					return;
-				}
-				var scalarLinear:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
-					Std.isOfType(context.representation.values,
-					compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
-				if (scalarLinear != null && scalarLinear.hasScalarVirtual(object.type, methodName)) {
-					emit(body, scalarLinear.scalarVirtualCall(object,
+				var model = context.representation.model;
+				if (model.hasScalarVirtual(object.type, methodName)) {
+					emit(body, model.scalarVirtualCall(object,
 						methodName, requiredLocal(values, object.id), output, (switch (output.type) {
 							case Void:
 								true;
@@ -1592,7 +1518,7 @@ class WasmFunctionLower {
 				object, fieldName) if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD):
 				var check:Array<WasmInstruction> = [
 					LocalGet(requiredLocal(values, object.id)),
-					Std.isOfType(context.representation.values, WasmGcRepresentation) ? RefIsNull : I32Eqz,
+					context.representation.model.nullTest(object.type),
 					If(null)
 				];
 				check = check.concat(trapOrThrow(1)).concat([
@@ -1893,21 +1819,16 @@ class WasmFunctionLower {
 			case LessEqual(output, left, right):
 				binary(body, output, left, right, values, comparisonInstruction(left.type, F64Le, I64LeS, I32LeS));
 			case Equal(output, left, right):
-				if (Std.isOfType(context.representation.values, WasmGcRepresentation) && (switch left.type {
+				var nullEquality = (switch left.type {
 					case Dyn:
 						true;
 					default:
 						false;
-				}) && (nullValues.exists(left.id) || nullValues.exists(right.id))) {
-					var other = nullValues.exists(left.id) ? right : left;
-					emit(body,
-						[
-							LocalGet(requiredLocal(values, other.id)),
-							RefCast({nullable: true, heap: Eq}),
-							RefIsNull,
-							LocalSet(requiredLocal(values, output.id))
-						]);
-				} else emit(body,
+				}) && (nullValues.exists(left.id) || nullValues.exists(right.id))
+					? context.representation.model.nullEquality(requiredLocal(values,
+					(nullValues.exists(left.id) ? right : left).id), requiredLocal(values, output.id)) : null;
+				if (nullEquality != null) emit(body, nullEquality);
+				else emit(body,
 					context.representation.values.equal(requiredLocal(values, output.id),
 					left,
 					right,
@@ -1916,37 +1837,29 @@ class WasmFunctionLower {
 			case Intrinsic(_, _, _):
 				throw "Unlowered IR intrinsic reached Wasm";
 			case Call(output, name, arguments):
-				var gcRepresentation:Null<WasmGcRepresentation> = Std.isOfType(context.representation.values,
-					WasmGcRepresentation) ? cast(context.representation.values,
-					WasmGcRepresentation) : null;
-				if (gcRepresentation != null && name == "__dynamic_equal"
+				var model = context.representation.model;
+				if (name == "__dynamic_equal"
 					&& arguments.length == 2
 					&& (nullValues.exists(arguments[0].id) || nullValues.exists(arguments[1].id))) {
-					var other = nullValues.exists(arguments[0].id) ? arguments[1] : arguments[0];
-					body.push(LocalGet(requiredLocal(values, other.id)));
-					// Dynamic equality requires eqref, including its trap for unsupported host values.
-					body.push(RefCast({nullable: true, heap: Eq}));
-					body.push(RefIsNull);
-					body.push(LocalSet(requiredLocal(values, output.id)));
-					return;
+					var other = nullValues.exists(arguments[0].id) ? arguments[1] : arguments[0],
+						nullEquality = model.nullEquality(requiredLocal(values, other.id),
+							requiredLocal(values, output.id));
+					if (nullEquality != null) {
+						emit(body, nullEquality);
+						return;
+					}
 				}
 				if (name == compiler.ir.IrReferenceIdentity.NAME) {
-					for (argument in arguments) {
-						body.push(LocalGet(requiredLocal(values, argument.id)));
-						if (gcRepresentation != null) body.push(RefCast({nullable: true, heap: Eq}));
-					}
-					body.push(gcRepresentation == null ? I32Eq : RefEq);
-					body.push(LocalSet(requiredLocal(values, output.id)));
+					emit(body, model.referenceIdentity([for (argument in arguments) requiredLocal(values, argument.id)],
+						requiredLocal(values, output.id)));
 					return;
 				}
 				if (name == compiler.ir.IrReceiverCheck.NAME) {
-					var check:Array<WasmInstruction> = [LocalGet(requiredLocal(values,
-						arguments[0].id)), gcRepresentation == null || (switch arguments[0].type {
-							case EnumTag(_):
-								true;
-							default:
-								false;
-						}) ? I32Eqz : RefIsNull, If(null)];
+					var check:Array<WasmInstruction> = [
+						LocalGet(requiredLocal(values, arguments[0].id)),
+						model.nullTest(arguments[0].type),
+						If(null)
+					];
 					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
@@ -1970,19 +1883,9 @@ class WasmFunctionLower {
 				}
 				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
-					if (gcRepresentation != null) {
-						var carried = name == compiler.ir.IrValueLaneReference.PACK ? arguments[0].type : output.type;
-						switch gcRepresentation.valueType(carried) {
-							case Ref(reference):
-								if (name == compiler.ir.IrValueLaneReference.UNPACK) switch reference.heap {
-									case Any:
-									default:
-										body.push(RefCast(reference));
-								}
-							default:
-								throw 'A scalar value cannot occupy a Wasm GC reference lane: $carried';
-						}
-					}
+					emit(body, model.referenceLane(name == compiler.ir.IrValueLaneReference.PACK
+						? arguments[0].type : output.type,
+						name == compiler.ir.IrValueLaneReference.UNPACK));
 					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
@@ -2004,25 +1907,10 @@ class WasmFunctionLower {
 					body.push(End);
 					return;
 				}
-				if (gcRepresentation != null && gcRepresentation.hasScalarCall(name)) {
-					var index = functions.get(name);
-					if (index == null) throw 'Missing scalar Wasm GC function "$name"';
-					emit(body, gcRepresentation.scalarCall(name, output, arguments, (switch (output.type) {
-						case Void:
-							true;
-						default:
-							false;
-					}) ? -1 : requiredLocal(values,
-						output.id), [for (argument in arguments) requiredLocal(values, argument.id)], index));
-					return;
-				}
-				var linearScalar:Null<compiler.backend.wasm.linear.WasmLinearRepresentation> =
-					Std.isOfType(context.representation.values,
-					compiler.backend.wasm.linear.WasmLinearRepresentation) ? cast context.representation.values : null;
-				if (linearScalar != null && linearScalar.hasScalarCall(name)) {
+				if (model.hasScalarCall(name)) {
 					var index = functions.get(name);
 					if (index == null) throw 'Missing scalar Wasm function "$name"';
-					emit(body, linearScalar.scalarCall(name, output, arguments, (switch (output.type) {
+					emit(body, model.scalarCall(name, output, arguments, (switch (output.type) {
 						case Void:
 							true;
 						default:
@@ -2063,14 +1951,10 @@ class WasmFunctionLower {
 							iteratorLocal = requiredLocal(values, iterator.id),
 							destination = requiredLocal(values,
 								output.id);
-						if (Std.isOfType(context.representation.values, WasmGcRepresentation)) {
-							var gc:WasmGcRepresentation = cast context.representation.values;
-							emit(body,
-								runtimeName == "__value_iterator_array" ? gc.valueIteratorArray(iterator,
-								destination, iteratorLocal) : gc.valueIteratorAdvance(iterator,
-								destination,
-								iteratorLocal));
-						} else if (runtimeName == "__value_iterator_array") {
+						var represented = context.representation.model.valueIterator(runtimeName
+							== "__value_iterator_advance",
+							iterator, destination, iteratorLocal);
+						if (emitIfHandled(body, represented)) {} else if (runtimeName == "__value_iterator_array") {
 							emit(body, [
 								LocalGet(iteratorLocal),
 								I32Load(WasmLayout.ITERATOR_ARRAY_OFFSET),
@@ -2113,15 +1997,13 @@ class WasmFunctionLower {
 						outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)]);
 					if (emitIfHandled(body, represented)) {} else {
-						var gcRuntime:WasmLoweringResult = Std.isOfType(context.representation.values,
-							WasmGcRepresentation) ? cast(context.representation.values,
-							WasmGcRepresentation).lowerRuntimeCall(StringTools.startsWith(name,
+						var fallback = context.representation.model.runtimeCallFallback(StringTools.startsWith(name,
 							"$wasm:closure-receiver:") ? name : runtimeName,
 							output,
 							arguments,
 							outputLocal,
-							[for (argument in arguments) requiredLocal(values, argument.id)]) : UseDefault;
-						if (!emitIfHandled(body, gcRuntime)
+							[for (argument in arguments) requiredLocal(values, argument.id)]);
+						if (!emitIfHandled(body, fallback)
 							&& !lowerInt64Native(body, output, name, arguments, values)) {
 							for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
 							var functionIndex = functions.get(name);

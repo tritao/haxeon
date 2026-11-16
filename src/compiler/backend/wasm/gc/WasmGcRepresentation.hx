@@ -20,12 +20,14 @@ import compiler.backend.wasm.WasmRepresentation.WasmFunctionRepresentationContex
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringKind;
 import compiler.backend.wasm.WasmRepresentation.WasmLoweringResult;
 import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
+import compiler.backend.wasm.WasmRepresentation.WasmModelRepresentation;
+import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.gc.WasmGcContext;
 import compiler.backend.wasm.gc.WasmGcFunctionContext;
 import compiler.backend.wasm.gc.WasmGcTypePlan;
 
 /** Native Wasm GC representation: engine references and declared struct/array fields. */
-class WasmGcRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmCallRepresentation {
+class WasmGcRepresentation implements WasmValueRepresentation implements WasmAggregateRepresentation implements WasmCallRepresentation implements WasmModelRepresentation {
 	/** Global holding the module's static data array (see WasmGcModuleBuilder.addGcStaticData). */
 	public static inline final STATIC_DATA_GLOBAL = "__haxeon_static_data";
 
@@ -175,6 +177,80 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 		return [LocalGet(objectLocal), StructGet(typeIndex, fieldIndex), LocalSet(destination)];
 	}
 
+	public function nullTest(type:IrType):WasmInstruction
+		return switch type {
+			case EnumTag(_): I32Eqz;
+			default: RefIsNull;
+		};
+
+	/** Identity compares `eqref`s, which also traps on host values that have no identity. */
+	public function referenceIdentity(argumentLocals:Array<Int>, outputLocal:Int):Array<WasmInstruction> {
+		var result:Array<WasmInstruction> = [];
+		for (local in argumentLocals) {
+			result.push(LocalGet(local));
+			result.push(RefCast({nullable: true, heap: Eq}));
+		}
+		result.push(RefEq);
+		result.push(LocalSet(outputLocal));
+		return result;
+	}
+
+	/** Dynamic equality requires eqref, including its trap for unsupported host values. */
+	public function nullEquality(otherLocal:Int, outputLocal:Int):Null<Array<WasmInstruction>>
+		return [
+			LocalGet(otherLocal),
+			RefCast({nullable: true, heap: Eq}),
+			RefIsNull,
+			LocalSet(outputLocal)
+		];
+
+	public function referenceLane(type:IrType, unpack:Bool):Array<WasmInstruction>
+		return switch valueType(type) {
+			case Ref(reference):
+				if (unpack) switch reference.heap {
+					case Any: [];
+					default: [RefCast(reference)];
+				} else [];
+			default:
+				throw 'A scalar value cannot occupy a Wasm GC reference lane: $type';
+		};
+
+	public function assignsSinglePhi():Bool
+		return true;
+
+	/** The engine traces references; scalar places need no root locals. */
+	public function scalarReferenceLocals():Map<Int, Array<Int>>
+		return [];
+
+	public function pendingExceptionReturn(fn:IrFunction, locals:Map<Int, Int>, exception:Int,
+			takeException:Array<WasmInstruction>):Null<Array<WasmInstruction>>
+		return null;
+
+	public function staticClosureDescriptor(name:String, type:IrType):Null<Int>
+		return null;
+
+	public function closureCastName(type:IrType):Null<String>
+		return null;
+
+	public function closureSignatureId(type:IrType):Null<Int>
+		return null;
+
+	public function valueIterator(advance:Bool, iterator:IrValue, destination:Int, iteratorLocal:Int):WasmLoweringResult
+		return advance ? valueIteratorAdvance(iterator, destination, iteratorLocal) : valueIteratorArray(iterator,
+			destination, iteratorLocal);
+
+	/** The runtime calls the interop representation leaves to shared lowering go through this representation's own. */
+	public function runtimeCallFallback(name:String, output:IrValue, arguments:Array<IrValue>, outputLocal:Int,
+			argumentLocals:Array<Int>):WasmLoweringResult
+		return lowerRuntimeCall(name, output, arguments, outputLocal, argumentLocals);
+
+	public function compactLocals(body:Array<WasmInstruction>, locals:Array<WasmLocal>,
+			parameters:Int):Null<{
+				body:Array<WasmInstruction>,
+				locals:Array<WasmLocal>
+			}>
+		return WasmGcLocalCompaction.run(body, locals, parameters);
+
 	public function hasScalarCall(name:String):Bool
 		return plan.scalarSignatures.exists(name);
 
@@ -186,7 +262,7 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 
 	/** Turn an uncaught method exception into receiver state plus the original exception. */
 	public function scalarExceptionWrapper(fn:IrFunction, body:Array<WasmInstruction>, locals:Map<Int, Int>,
-			tag:Null<Int>):Null<Array<WasmInstruction>> {
+			tag:Null<Int>, cleanup:Array<WasmInstruction>):Null<Array<WasmInstruction>> {
 		var signature = plan.scalarSignatures.get(fn.name);
 		if (signature == null || !signature.throwsReceiver)
 			return null;
