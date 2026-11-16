@@ -1905,7 +1905,8 @@ class LspProtocolMain {
 
 	static function haxeonManifestWorkspace():Void {
 		// The `+` checks that workspace URIs are percent-decoded, not form-decoded (which reads it as a space).
-		var base = sys.FileSystem.fullPath("out")
+		// Normalized: the server reports paths with forward slashes, and Windows gives fullPath with back ones.
+		var base = haxe.io.Path.normalize(sys.FileSystem.fullPath("out"))
 			+ "/lsp-haxeon-workspace+"
 			+ Std.int(Date.now().getTime() / 1000)
 			+ "-"
