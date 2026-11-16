@@ -1,7 +1,7 @@
 #!/usr/bin/env haxeon
 /**
  * Checks that the compiler in this tree can build itself, to a fixed point, in about a minute and a half:
- * `haxeon scripts/check_self_hosting.hx`.
+ * `haxeon scripts/check-self-hosting.hx`.
  *
  * The seed is built by running the compiler sources under the pinned Haxe interpreter; stage 1 is built by the seed and stage
  * 2 by stage 1. Stages 1 and 2 must be identical. Unlike `haxeon dev bootstrap --self` this does not use the checked-in

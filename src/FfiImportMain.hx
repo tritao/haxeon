@@ -9,10 +9,13 @@ import project.FfiManifest.ResolvedFfiImport;
 import sys.FileSystem;
 import sys.io.File;
 
-/** Standalone C/C++ header to raw-HXI importer. */
+/** C/C++ header to raw-HXI importer: `haxeon ffi import`. */
 class FfiImportMain {
-	static function main():Void {
-		var args = Sys.args(), manifestPath:Null<String> = null;
+	static function main():Void
+		Sys.exit(run(Sys.args()));
+
+	public static function run(args:Array<String>):Int {
+		var manifestPath:Null<String> = null;
 		for (arg in args)
 			if (StringTools.startsWith(arg, "--manifest="))
 				manifestPath = arg.substring(arg.indexOf("=") + 1);
@@ -132,7 +135,7 @@ class FfiImportMain {
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon-ffi-import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library,
 			interfaceName, dependencies,
 			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual,
@@ -173,6 +176,7 @@ class FfiImportMain {
 			}
 		}
 		Sys.println("imported " + paths[0] + " -> " + output);
+		return 0;
 	}
 
 	static function ensureDirectory(path:String):Void {

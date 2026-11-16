@@ -1,20 +1,4 @@
 #!/usr/bin/env bash
+# The language server, `haxeon lsp`; this name stays for editors configured with it.
 set -euo pipefail
-
-root_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
-haxe="$root_dir/.tools/haxe/haxe"
-hashlink_dir=$("$root_dir/scripts/hashlink-path.sh")
-hashlink="$hashlink_dir/hl"
-
-if [[ ! -x "$haxe" || ! -x "$hashlink" ]]; then
-	echo "missing local Haxeon toolchain; run $root_dir/scripts/bootstrap-tools.sh" >&2
-	exit 1
-fi
-
-# The server's HashLink build from the content-hashed tool cache; stdout is the protocol channel, so only the path is captured.
-server=$("$root_dir/scripts/haxeon" dev tool-path LspMain)
-
-cd "$root_dir"
-export LD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-export DYLD_LIBRARY_PATH="$root_dir/out:$hashlink_dir${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
-exec "$hashlink" "$server"
+exec "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/haxeon" lsp "$@"

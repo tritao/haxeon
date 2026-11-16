@@ -142,6 +142,7 @@ class Script {
 					var read = process.readStdout(buffer, 0, buffer.length);
 					if (read > 0) {
 						out.writeBytes(buffer, 0, read);
+						out.flush();
 						moved = true;
 					} else if (read == -1)
 						outOpen = false;
@@ -150,6 +151,7 @@ class Script {
 					var read = process.readStderr(buffer, 0, buffer.length);
 					if (read > 0) {
 						err.writeBytes(buffer, 0, read);
+						err.flush();
 						moved = true;
 					} else if (read == -1)
 						errOpen = false;

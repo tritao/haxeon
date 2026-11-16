@@ -6,7 +6,10 @@ let client: LanguageClient | undefined;
 
 export async function activate(context: vscode.ExtensionContext): Promise<void> {
   const config = vscode.workspace.getConfiguration("haxeon");
-  const serverOptions: ServerOptions = {command: config.get<string>("server.path", "haxeon-lsp")};
+  const serverOptions: ServerOptions = {
+    command: config.get<string>("server.path", "haxeon"),
+    args: config.get<string[]>("server.args", ["lsp"])
+  };
   const clientOptions: LanguageClientOptions = {documentSelector: [{scheme: "file", language: "haxe"}]};
   client = new LanguageClient("haxeon", "Haxeon", serverOptions, clientOptions);
   context.subscriptions.push(client, vscode.commands.registerCommand("haxeon.profiler.open", async () => {

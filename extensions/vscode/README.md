@@ -3,8 +3,10 @@
 This extension starts the Haxeon language server and provides a realtime
 profiler panel backed by the HashLink Diagnostics Interface.
 
-1. Run `npm install && npm run compile` in this directory.
-2. Make `haxeon-lsp` available on `PATH`, or set `haxeon.server.path`.
+1. Run `npm install && npm run compile` in this directory, or open it in VS Code and press F5 to run the extension
+   from source on this checkout.
+2. Make `haxeon` available on `PATH` (the directory `scripts/hashlink-path.sh` prints), or set `haxeon.server.path`.
+   The server is `haxeon lsp`; `haxeon.server.args` changes the arguments.
 3. Start the target with `hl --diagnostics PORT application.hl`.
 4. Set `haxeon.profiler.port`, then run **Haxeon: Open Realtime Profiler**.
 

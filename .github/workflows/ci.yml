@@ -155,7 +155,7 @@ jobs:
       # it (bootstrap-compiler.sh) is a step of its own.
       - name: Self-hosting fixed point
         if: matrix.platform != 'windows'
-        run: ./scripts/haxeon scripts/check_self_hosting.hx
+        run: ./scripts/haxeon scripts/check-self-hosting.hx
 
       - name: Hot reload and GDB metadata gate
         if: matrix.platform == 'test' || matrix.platform == 'linux-arm64'

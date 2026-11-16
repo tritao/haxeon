@@ -4,7 +4,7 @@ Status: the inliner and non-escaping scalar replacement are implemented and on b
 turn off inlining. HashLink also constructs eligible values directly in inline fields. Later optimization stages remain
 design. The inliner's incremental and hot-patch rules below are implemented and tested (`ModuleMain`,
 `CompilerSessionMain`, `InlinePatchMain`), and the build tool keys its compiler worker and artifact cache on the setting.
-The suite, the Wasm parity run, the differential tests and the self-hosting fixed point (`scripts/check_self_hosting.hx`)
+The suite, the Wasm parity run, the differential tests and the self-hosting fixed point (`scripts/check-self-hosting.hx`)
 pass in both modes. Inlined code keeps its callee's provenance, so stack traces and profiles attribute it to the caller;
 use `HAXEON_INLINE=0` when you need exact frames.
 

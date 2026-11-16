@@ -148,6 +148,8 @@ class HaxeonCli {
 				case "run": build(arguments, true);
 				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
+				case "lsp": runTool("LspMain", arguments);
+				case "ffi": ffi(arguments);
 				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
 				case "help", "--help", "-h": usage();
 				case _ if (ScriptRun.isScript(command)): runScript(command, arguments);
@@ -604,12 +606,36 @@ class HaxeonCli {
 		return 4;
 	}
 
+	/** `haxeon ffi import|audit ...`: the C and C++ header importer and the cross-target C ABI auditor. */
+	static function ffi(arguments:Array<String>):Int {
+		var command = arguments.length == 0 ? "" : arguments.shift();
+		return switch command {
+			case "import": runTool("FfiImportMain", arguments);
+			case "audit": runTool("FfiAuditMain", arguments);
+			case _: throw 'Usage: haxeon ffi import|audit ... (unknown ffi command "$command")';
+		};
+	}
+
+	/**
+	 * Runs the entry point `main` of this checkout, with the command's standard streams and directory, and returns its status.
+	 * The language server and the FFI tools carry the compiler with them, which would make every command's start several
+	 * times slower if this CLI contained them: each is its own HashLink build, from the tool cache (`haxeon dev tool-path`).
+	 */
+	static function runTool(main:String, arguments:Array<String>):Int {
+		var home = haxeonHome(),
+			tool = new tools.dev.ToolArtifacts(home).resolve({main: main, classPaths: [], defines: []});
+		return Sys.command(HashLinkPath.executable(home), [tool].concat(arguments));
+	}
+
 	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
 	static function runScript(script:String, arguments:Array<String>):Int {
 		scriptRun = true;
 		var runArguments = ScriptRun.runArguments(script, arguments);
 		// The program finds its own file through haxeon.Script.path().
 		Sys.putEnv("HAXEON_SCRIPT", Path.normalize(FileSystem.fullPath(script)));
+		// Each line out as it is printed, as a shell script's, also into a pipe or a CI log (unless the caller chose).
+		if (Sys.getEnv("HL_STDOUT_FLUSH") == null)
+			Sys.putEnv("HL_STDOUT_FLUSH", "1");
 		return build(["--quiet"].concat(runArguments), true);
 	}
 
@@ -1660,6 +1686,9 @@ class HaxeonCli {
 		Sys.println("                                    Merge the workspace's projects into one build graph;");
 		Sys.println("                                    build or test run it with shared native builds");
 		Sys.println("  heap inspect BYTECODE DUMP      Inspect a HashLink heap snapshot with matching bytecode");
+		Sys.println("  lsp                            The language server, over standard input and output");
+		Sys.println("  ffi import ...                 Import C or C++ headers as HXI (docs/reference/C_HEADER_FFI.md)");
+		Sys.println("  ffi audit ...                  Import one header for several targets and compare their C ABIs");
 		Sys.println("       [--capture DIR] [--report PATH]  Read a capture manifest or choose a report path");
 		Sys.println("  dev tool-path MAIN             (checkout) Print a cached HashLink build of a Haxe entry point; see `dev help`");
 		Sys.println("  --device SERIAL                Select Android device for run");

@@ -16,7 +16,7 @@ Int and Float abstracts, unary negation, comparisons, and invalid declarations.
 Import `ffi-struct-array.h` with:
 
 ```sh
-scripts/haxeon-ffi-import \
+scripts/haxeon ffi import \
   --target=x86_64-linux-gnu \
   --library=probe --interface=Probe \
   --output=/tmp/hxi-struct-array-probe.hxi \

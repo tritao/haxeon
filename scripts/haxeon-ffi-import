@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
+# The C and C++ header importer, `haxeon ffi import`; this name stays for the scripts that use it. It runs in the checkout's
+# root, as it always has, so relative paths are relative to it.
 set -euo pipefail
 root_dir=$(cd "$(dirname "$0")/.." && pwd)
-haxe_bin=${HAXEON_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
-exec "$haxe_bin" --cwd "$root_dir" common.hxml --run FfiImportMain "$@"
+cd "$root_dir"
+exec "$root_dir/scripts/haxeon" ffi import "$@"

@@ -6,9 +6,12 @@ import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
 
-/** Standalone cross-target C ABI auditor. */
+/** Cross-target C ABI auditor: `haxeon ffi audit`. */
 class FfiAuditMain {
-	static function main():Void {
+	static function main():Void
+		Sys.exit(run(Sys.args()));
+
+	public static function run(arguments:Array<String>):Int {
 		var targets:Array<String> = [],
 			includes:Array<String> = [],
 			paths:Array<String> = [],
@@ -21,7 +24,7 @@ class FfiAuditMain {
 			dependencies:Array<String> = [],
 			excludedHeaders:Array<String> = [],
 			dependencyPaths:Array<String> = [];
-		for (argument in Sys.args())
+		for (argument in arguments)
 			if (StringTools.startsWith(argument, "--target="))
 				targets.push(argument.substring(9));
 			else if (StringTools.startsWith(argument, "--include="))
@@ -49,7 +52,7 @@ class FfiAuditMain {
 			else
 				paths.push(argument);
 		if (paths.length != 1 || targets.length < 2 || (format != "text" && format != "json"))
-			throw "Usage: haxeon-ffi-audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw "Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
 		var dependencyInterfaces:Array<HxiInterface> = [];
 		for (path in dependencyPaths) {
 			var model = HxiParser.parse(path, File.getContent(path));
@@ -66,7 +69,7 @@ class FfiAuditMain {
 				Sys.println('  ${issue.target} [${issue.kind}]: ${issue.message}');
 		}
 		if (!report.identical)
-			Sys.exit(1);
+			return 1;
 		if (output != null) {
 			var temporary = output + ".tmp." + Std.int(Sys.time() * 1000000);
 			File.saveContent(temporary,
@@ -76,5 +79,6 @@ class FfiAuditMain {
 			FileSystem.rename(temporary, output);
 			Sys.println('wrote canonical ABI -> $output');
 		}
+		return 0;
 	}
 }

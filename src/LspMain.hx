@@ -5,9 +5,15 @@ import haxe.io.Eof;
 import haxe.io.Path;
 import sys.FileSystem;
 
-/** Standard Language Server Protocol entry point over stdio. */
+/** Standard Language Server Protocol entry point over stdio: `haxeon lsp`. */
 class LspMain {
-	static function main():Void {
+	static function main():Void
+		run([]);
+
+	/** Serves one client on standard input and output until it exits. */
+	public static function run(arguments:Array<String>):Int {
+		if (arguments.length != 0)
+			throw 'Unexpected lsp argument "${arguments[0]}"';
 		useCompilerRoot();
 		if (Sys.systemName() == "Windows")
 			binaryStdio();
@@ -43,6 +49,7 @@ class LspMain {
 				break;
 		}
 		dispatcher.finish();
+		return 0;
 	}
 
 	/** Compiler services resolve `stdlib` from the Haxeon root, which launchers need not select. */
@@ -50,6 +57,9 @@ class LspMain {
 		if (FileSystem.exists("stdlib"))
 			return;
 		var root = Sys.getEnv("HAXEON_ROOT");
+		// The haxeon command names the checkout it belongs to.
+		if (root == null || root.length == 0)
+			root = Sys.getEnv("HAXEON_HOME");
 		if (root == null || root.length == 0)
 			root = Path.directory(Path.directory(FileSystem.absolutePath(Sys.programPath())));
 		if (FileSystem.exists(Path.join([root, "stdlib"])))

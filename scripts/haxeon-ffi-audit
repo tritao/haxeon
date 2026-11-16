@@ -1,7 +1,5 @@
 #!/usr/bin/env bash
+# The cross-target C ABI auditor, `haxeon ffi audit`; this name stays for the package scripts that use it. Paths are
+# relative to the caller's directory.
 set -euo pipefail
-root_dir=$(cd "$(dirname "$0")/.." && pwd)
-haxe_bin=${NATIVEKIT_HAXE_BIN:-"$root_dir/.tools/haxe/haxe"}
-# The class paths common.hxml lists, as absolute paths: callers pass paths relative to their own directory, so no --cwd.
-mapfile -t class_paths < <("$root_dir/scripts/compiler-class-paths.sh" --cp-args)
-exec "$haxe_bin" "${class_paths[@]}" --run FfiAuditMain "$@"
+exec "$(cd "$(dirname "$0")" && pwd)/haxeon" ffi audit "$@"

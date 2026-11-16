@@ -350,6 +350,18 @@ SDK tools. `platforms` lists CLI targets, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the
 current machine.
 
+## Language server and FFI tools
+
+- `haxeon lsp` is the Language Server Protocol server, over standard input and output; the VS Code extension starts it
+  (`haxeon.server.path` and `haxeon.server.args`).
+- `haxeon ffi import ...` imports C and C++ headers as HXI ([C_HEADER_FFI.md](C_HEADER_FFI.md)); a project's `ffi`
+  recipes run it during the build.
+- `haxeon ffi audit ...` imports one public header for several targets and compares their C ABIs.
+
+`scripts/haxeon-lsp`, `scripts/haxeon-ffi-import` and `scripts/haxeon-ffi-audit` remain as names for the same commands.
+The import one runs in the checkout's root, as it always has; `haxeon ffi import` resolves relative paths against the
+directory it is run from, like every other command.
+
 ## Scripts
 
 `haxeon script.hx [arguments]` (or `haxeon run script.hx ...`) builds one Haxe file and runs it, with no project to set
@@ -364,7 +376,8 @@ up, as `dotnet run app.cs` does:
   another directory), and the incremental build makes an unchanged script's next run cost a launch.
 - A first line `#!/usr/bin/env haxeon` makes the file executable where the shell reads such lines; Haxe accepts that
   line at the start of a file, and so do Haxeon's compiler and formatter.
-- The file's name is its module name, so it is an identifier (`check_self_hosting.hx`, not `check-self-hosting.hx`).
+- The file's name is its module's, dashes included (`check-self-hosting.hx`); a script is never imported by name, so it
+  need not be an identifier. Only a further dot (`a.b.hx`) is refused, since it would read as a package.
 
 `haxeon.Script` (in the standard library) covers what shell scripts make short. It starts programs directly, never
 through a shell, so arguments need no quoting and a script runs the same on every platform:

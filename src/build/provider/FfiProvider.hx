@@ -17,16 +17,16 @@ class FfiProvider {
 	public static function action(resolvedPackage:ResolvedPackage, ffi:ResolvedFfiImport, context:LoweringContext,
 			actionId:ActionId,
 			output:String):ExecutionAction {
-		var useWrapper = Sys.systemName() != "Windows",
-			compiler = useWrapper ? Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]) : Path.join([
-				context.compilerHome,
-				".tools",
-				"haxe",
-				"haxe.exe"
-			]),
+		// `haxeon ffi import`, from the compiler's own checkout, on every host.
+		var compiler = Path.join([
+			build.HashLinkPath.directory(context.compilerHome),
+			Sys.systemName() == "Windows" ? "haxeon.exe" : "haxeon"
+		]),
 			projectionDirectory = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
 			projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name, ffi.config.name),
 			arguments = [
+				"ffi",
+				"import",
 				"--manifest=" + ffi.manifestPath,
 				"--target=" + clangTarget(context.environment.target),
 				"--output=" + output
@@ -34,16 +34,6 @@ class FfiProvider {
 			inputs = ffi.inputs(),
 			outputs = [output],
 			thunkSource = context.layout.ffiThunkSourcePath(resolvedPackage.name, ffi.config.name);
-		if (!useWrapper) {
-			arguments.unshift("FfiImportMain");
-			arguments.unshift("--run");
-			var roots = build.CompilerSources.classPath(Path.join([context.compilerHome, "src"]));
-			roots.reverse();
-			for (root in roots)
-				arguments.unshift(root);
-		}
-		if (useWrapper)
-			inputs.push(Path.join([context.compilerHome, "scripts", "haxeon-ffi-import"]));
 		for (root in build.CompilerSources.roots(Path.join([context.compilerHome, "src"])))
 			inputs.push(root);
 		if (ffi.config.cxxThunks) {

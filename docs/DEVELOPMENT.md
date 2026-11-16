@@ -77,8 +77,8 @@ to run the CLI on; its `doctor` checks for git, cmake, ninja and the pinned Haxe
 
 ## Scripts
 
-New scripts for this tree are Haxe, run by `haxeon` ([CLI.md](reference/CLI.md#scripts)): `scripts/check_self_hosting.hx`
-and `tests/integration/test_haxeon_script.hx` are examples. They run the same on every platform, which the Bash scripts
+New scripts for this tree are Haxe, run by `haxeon` ([CLI.md](reference/CLI.md#scripts)): `scripts/check-self-hosting.hx`
+and `tests/integration/test-haxeon-script.hx` are examples. They run the same on every platform, which the Bash scripts
 in `scripts/` and `tests/integration/` do not; those are ported as they are touched. What runs before `haxeon` exists
 stays as shell: `bootstrap-tools.sh`/`setup.ps1`, `build-native.sh`/`.ps1` and the `haxeon` launchers.
 
@@ -99,7 +99,7 @@ scripts/haxeon fmt --check FILE...         # exactly these files
 
 The compiler builds itself. Three scripts cover that:
 
-- `haxeon scripts/check_self_hosting.hx` is the check to run after a compiler change, and CI runs it. It builds a seed by running the
+- `haxeon scripts/check-self-hosting.hx` is the check to run after a compiler change, and CI runs it. It builds a seed by running the
   sources under the pinned Haxe interpreter, builds stage 1 with the seed and stage 2 with stage 1, and requires stages 1 and 2
   to be identical. It does not use the checked-in compiler.
 - `scripts/bootstrap-compiler.sh` refreshes the checked-in compiler, `bootstrap/compiler.hl`. It builds the native runtime,

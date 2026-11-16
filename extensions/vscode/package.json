@@ -37,7 +37,8 @@
     "configuration": {
       "title": "Haxeon",
       "properties": {
-        "haxeon.server.path": {"type": "string", "default": "haxeon-lsp", "description": "Path to the Haxeon language server launcher."},
+        "haxeon.server.path": {"type": "string", "default": "haxeon", "description": "The haxeon command, which runs the language server."},
+        "haxeon.server.args": {"type": "array", "items": {"type": "string"}, "default": ["lsp"], "description": "Arguments that start the language server."},
         "haxeon.profiler.host": {"type": "string", "default": "127.0.0.1"},
         "haxeon.profiler.port": {"type": "number", "default": 6113, "minimum": 1, "maximum": 65535},
         "haxeon.profiler.sampleRate": {"type": "number", "default": 250, "minimum": 1, "maximum": 100000}

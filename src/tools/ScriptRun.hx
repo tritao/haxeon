@@ -30,8 +30,9 @@ class ScriptRun {
 		var path = Path.normalize(FileSystem.fullPath(script)),
 			directory = Path.directory(path),
 			module = Path.withoutExtension(Path.withoutDirectory(path));
-		if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(module))
-			throw 'A script\'s file name is its module name, so it must be an identifier: $module (use underscores, not dashes)';
+		// The file's name is its module's, dashes and all (as the program cases' are): an entry module is never imported by name.
+		if (module == "" || module.indexOf(".") >= 0)
+			throw 'A script needs a name before ".hx" with no other dots: ${Path.withoutDirectory(path)}';
 		var projectDirectory = Path.join([cacheRoot(), ContentDigest.makeHex(Bytes.ofString(path)).substr(0, 16)]),
 			manifest:Dynamic = {
 				version: 1,

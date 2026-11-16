@@ -7,7 +7,7 @@ the generated artifact is still ordinary HXI, so the existing native ABI
 classifier and runtime handle the call:
 
 ```sh
-scripts/haxeon-ffi-import \
+scripts/haxeon ffi import \
   --language=c++ \
   --std=c++20 \
   --target=x86_64-linux-gnu \
@@ -47,7 +47,7 @@ Throwing scalar and pointer functions or methods can be bound through a
 generated C++ catch thunk:
 
 ```sh
-scripts/haxeon-ffi-import \
+scripts/haxeon ffi import \
   --language=c++ \
   --target=x86_64-linux-gnu \
   --library=/path/to/library-with-thunks.so \
@@ -85,7 +85,7 @@ pointer, exposes `fromNative()` and `nativeHandle()`, and projects supported
 instance and static methods while retaining the HXI module as the ABI source:
 
 ```sh
-scripts/haxeon-ffi-import \
+scripts/haxeon ffi import \
   --language=c++ \
   --target=x86_64-linux-gnu \
   --library=nativekit \
@@ -190,7 +190,7 @@ the package target supplies the Clang target triple. Haxeon generates HXI and
 optional C++ object projections below the target build directory, fingerprints
 the recipe and its header inputs, and makes Haxe compilation depend on the
 generated interface. Standalone generation also accepts
-haxeon-ffi-import --manifest=<file>.
+haxeon ffi import --manifest=<file>.
 
 For project-owned C++ implementations, `"cxxThunks": true` makes the build
 generate the thunk `.cpp`, compile it, and link a separate ordinary shared
@@ -244,7 +244,7 @@ Haxeon can use Clang to turn the ABI-visible subset of a C header into a
 deterministic raw HXI description:
 
 ```sh
-scripts/haxeon-ffi-import \
+scripts/haxeon ffi import \
   --target=x86_64-linux-gnu \
   --library=nativekit \
   --include=/path/to/library/include \
@@ -312,7 +312,7 @@ An interface may compose declarations from an already registered interface with
 repeatable `--depends` options:
 
 ```sh
-scripts/haxeon-ffi-import \
+scripts/haxeon ffi import \
   --target=x86_64-linux-gnu \
   --library=nativekit_ui \
   --interface=NativeKitUI \
@@ -337,7 +337,7 @@ artifact with `--dependency-hxi` so the standalone audit can validate external
 type references:
 
 ```sh
-scripts/haxeon-ffi-audit \
+scripts/haxeon ffi audit \
   --target=x86_64-linux-gnu \
   --target=x86_64-w64-windows-gnu \
   --depends=NativeKit \
@@ -611,7 +611,7 @@ argument is its array's length, arrays sharing a count must have equal
 lengths, and a span whose owner is closed is refused. This passes memory one
 native library owns to another without marshalling it through Haxe.
 
-Use `scripts/haxeon-ffi-audit` to import one public header for multiple targets
+Use `scripts/haxeon ffi audit` to import one public header for multiple targets
 and compare its normalized declarations and layouts. The `portable-abi64`
 profile additionally rejects ABI-dependent public scalars such as `long`,
 `size_t`, `wchar_t`, and C `bool`. Audits run Clang in freestanding mode, so
@@ -619,7 +619,7 @@ headers limited to the portable C ABI can be checked for Apple and Windows
 targets without installing their platform SDKs:
 
 ```bash
-scripts/haxeon-ffi-audit header.h \
+scripts/haxeon ffi audit header.h \
   --target=x86_64-linux-gnu \
   --target=x86_64-w64-windows-gnu \
   --target=arm64-apple-darwin \
