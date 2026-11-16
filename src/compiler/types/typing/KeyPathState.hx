@@ -8,7 +8,5 @@ class KeyPathState {
 	/** The key path constants each generic specialization was made for, by specialization name. */
 	public final parameters:Map<String, Map<String, String>> = [];
 
-	public final compositions:Map<String, Bool> = [];
-
 	public function new() {}
 }

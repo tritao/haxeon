@@ -37,9 +37,23 @@ typedef MemberHelperRequest = {
 	final span:SourceSpan;
 }
 
+/** One request, as a unit's output records it in order. */
+enum HelperRequest {
+	WireCodecHelper(name:String, request:WireCodecRequest);
+	JsonCodecHelper(name:String, request:WireCodecRequest);
+	ValueEqualityHelper(name:String, request:EqualityRequest);
+	EnumEqualityHelper(name:String, request:EqualityRequest);
+	EnumMethodHelper(name:String, request:EnumMethodRequest);
+	EnumInterfaceAdapterHelper(name:String, request:EnumInterfaceAdapterRequest);
+	HashHelper(name:String, request:EqualityRequest);
+	FlagsHelper(name:String, request:MemberHelperRequest);
+	RawRepresentableHelper(name:String, request:MemberHelperRequest);
+}
+
 /**
  * The generated helpers typed code asks for, by helper name. The first request of a name decides its origin: the function
- * the helper is typed in the context of and emitted beside. `ProgramTyper` generates them once the bodies are typed.
+ * the helper is typed in the context of and emitted beside. A unit's output keeps the requests its unit made, in order; the
+ * program's keeps them merged in unit order (see `TypingOutput`), and `ProgramTyper` generates them once the bodies are typed.
  */
 class HelperRequests {
 	public final wireCodecs:Map<String, WireCodecRequest> = [];
@@ -63,11 +77,42 @@ class HelperRequests {
 	public final flags:Map<String, MemberHelperRequest> = [];
 	public final rawRepresentables:Map<String, MemberHelperRequest> = [];
 
+	/** The first request of each name, in the order they were made. */
+	final entries:Array<HelperRequest> = [];
+
 	public function new() {}
 
 	/** How many helpers have been requested; the generation loop runs until this stops growing. */
 	public function count():Int
-		return Lambda.count(flags) + Lambda.count(rawRepresentables) + Lambda.count(valueEqualities)
-			+ Lambda.count(enumEqualities) + Lambda.count(hashes) + Lambda.count(enumMethods)
-			+ Lambda.count(enumInterfaceAdapters) + Lambda.count(wireCodecs) + Lambda.count(jsonCodecs);
+		return entries.length;
+
+	/** Records `request` unless a helper of its kind and name was requested before; returns whether it was new. */
+	public function add(request:HelperRequest):Bool {
+		var added = switch request {
+			case WireCodecHelper(name, value): addTo(wireCodecs, name, value);
+			case JsonCodecHelper(name, value): addTo(jsonCodecs, name, value);
+			case ValueEqualityHelper(name, value): addTo(valueEqualities, name, value);
+			case EnumEqualityHelper(name, value): addTo(enumEqualities, name, value);
+			case EnumMethodHelper(name, value): addTo(enumMethods, name, value);
+			case EnumInterfaceAdapterHelper(name, value): addTo(enumInterfaceAdapters, name, value);
+			case HashHelper(name, value): addTo(hashes, name, value);
+			case FlagsHelper(name, value): addTo(flags, name, value);
+			case RawRepresentableHelper(name, value): addTo(rawRepresentables, name, value);
+		};
+		if (added)
+			entries.push(request);
+		return added;
+	}
+
+	/** Adds to `target` the requests from position `from` to `to` of this record, the first of each name winning. */
+	public function appendTo(target:HelperRequests, from:Int, to:Int):Void
+		for (index in from...to)
+			target.add(entries[index]);
+
+	static function addTo<T>(requests:Map<String, T>, name:String, request:T):Bool {
+		if (requests.exists(name))
+			return false;
+		requests.set(name, request);
+		return true;
+	}
 }

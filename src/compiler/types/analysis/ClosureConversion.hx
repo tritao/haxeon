@@ -23,10 +23,21 @@ class ClosureConversion {
 	final cellNames:Map<String, Bool> = [];
 	final environmentNames:Map<String, Bool> = [];
 
+	/** The functions added with `addFunctionOnce`, by name. */
+	final onceNames:Map<String, Bool> = [];
+
 	public function new() {}
 
 	public function addFunction(fn:TypedFunction):Void
 		functions.push(fn);
+
+	/** Adds `fn` unless a function of its name was added this way before: a helper every user would make the same way. */
+	public function addFunctionOnce(fn:TypedFunction):Void {
+		if (onceNames.exists(fn.name))
+			return;
+		onceNames.set(fn.name, true);
+		functions.push(fn);
+	}
 
 	public function addCell(name:String, valueType:CompilerType, kind:CellStorageKind):Void {
 		if (cellNames.exists(name))
@@ -69,6 +80,25 @@ class ClosureConversion {
 				name: requirement.name,
 				captures: [for (item in requirement.captures) map.capture(item)]
 			};
+		}
+	}
+
+	/** Adds to `target` what was added here between `from` and `to`, keeping `target`'s first cell, environment and helper of a name. */
+	public function appendTo(target:ClosureConversion, from:ClosureConversionMark, to:ClosureConversionMark):Void {
+		for (index in from.functions...to.functions) {
+			var fn = functions[index];
+			if (onceNames.exists(fn.name))
+				target.addFunctionOnce(fn);
+			else
+				target.addFunction(fn);
+		}
+		for (index in from.storage...to.storage) {
+			var requirement = storage[index];
+			target.addCell(requirement.name, requirement.valueType, requirement.kind);
+		}
+		for (index in from.environments...to.environments) {
+			var requirement = environments[index];
+			target.addEnvironment(requirement.name, requirement.captures);
 		}
 	}
 

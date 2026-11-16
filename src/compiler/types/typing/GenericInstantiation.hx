@@ -159,11 +159,14 @@ class GenericInstantiation {
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))
 				? abstractReceiverType(requiredString(owner),
 				representationSubstitutions) : receiver.type;
+		// Each specialization's body is typed once, as a shared unit of its own.
+		session.useSharedUnit(specialization.name);
 		if (!session.emittedGenericBodies.exists(specialization.name)) {
 			session.emittedGenericBodies.set(specialization.name, true);
-			session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, receiver == null ? isStatic : true,
-				representationSubstitutions,
-				specialization.name, representationReceiver));
+			var bodyStatic = receiver == null ? isStatic : true, bodyReceiver = representationReceiver;
+			session.typeSharedUnit(specialization.name,
+				() -> session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, bodyStatic,
+				representationSubstitutions, specialization.name, bodyReceiver)));
 		}
 		if (receiver != null) {
 			var receiverType = representationReceiver;

@@ -46,7 +46,10 @@ class InlineConstantResolver {
 		if (staticField == null)
 			return null;
 		var key = staticField.owner + "." + name,
-			cached = session.constants.inlineConstants.get(key);
+			cached = session.constants.inlineConstants.get(key),
+			unit = "$inline:" + key;
+		// The constant is typed once, as a shared unit of its own: what typing it produces belongs to its first user.
+		session.useSharedUnit(unit);
 		if (cached != null) {
 			recordResolved(key, cached);
 			return cached;
@@ -56,22 +59,28 @@ class InlineConstantResolver {
 		session.constants.inlineConstantsInProgress.set(key, true);
 		var dependencies:Map<String, Bool> = [];
 		dependencyCollectors.push(dependencies);
-		var resolved:ResolvedInlineConstant;
+		var typed:Array<ResolvedInlineConstant> = [],
+			syntax = field.initializer,
+			fieldSpan = field.span,
+			constantOwner = staticField.owner,
+			constantType = staticField.type,
+			typeParameters = classDecl.typeParameters;
 		try {
-			var initializer = bodyTyper.typeInlineInitializer(field.initializer, staticField.owner, name,
-				staticField.type,
-				classDecl.typeParameters),
-				literal = InlineConstantEvaluator.evaluate(initializer);
-			if (literal == null)
-				fail("E1002", 'Inline field "${staticField.owner}.$name" requires a compile-time constant initializer',
-					field.span);
-			var targets = [for (target in dependencies.keys()) target];
-			targets.sort(Reflect.compare);
-			resolved = {
-				dependencies: targets,
-				initializer: initializer,
-				value: bodyTyper.coerce(literal, staticField.type, 'inline field "${staticField.owner}.$name"', "E1002")
-			};
+			session.typeSharedUnit(unit, function() {
+				var initializer = bodyTyper.typeInlineInitializer(syntax, constantOwner, name, constantType,
+					typeParameters),
+					literal = InlineConstantEvaluator.evaluate(initializer);
+				if (literal == null)
+					fail("E1002", 'Inline field "$constantOwner.$name" requires a compile-time constant initializer',
+						fieldSpan);
+				var targets = [for (target in dependencies.keys()) target];
+				targets.sort(Reflect.compare);
+				typed.push({
+					dependencies: targets,
+					initializer: initializer,
+					value: bodyTyper.coerce(literal, constantType, 'inline field "$constantOwner.$name"', "E1002")
+				});
+			});
 		} catch (error:Dynamic) {
 			dependencyCollectors.pop();
 			session.constants.inlineConstantsInProgress.remove(key);
@@ -79,6 +88,7 @@ class InlineConstantResolver {
 		}
 		dependencyCollectors.pop();
 		session.constants.inlineConstantsInProgress.remove(key);
+		var resolved = typed[0];
 		session.constants.inlineConstants.set(key, resolved);
 		recordResolved(key, resolved);
 		return resolved;

@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -21,8 +22,7 @@ class ValueEqualityGenerator {
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = equalsName(type);
-		if (!session.requests.valueEqualities.exists(name))
-			session.requests.valueEqualities.set(name, {type: type, origin: origin, span: span});
+		session.output.requests.add(ValueEqualityHelper(name, {type: type, origin: origin, span: span}));
 	}
 
 	/** Field comparisons may request nested value helpers. Process new requests until no more are needed. */
@@ -32,23 +32,23 @@ class ValueEqualityGenerator {
 		// Discover the full helper graph from source requests before typing any generated helper. This gives nested
 		// helpers the origin of a real caller, so they are emitted into that caller's module and remain traceable when
 		// incremental compilation prunes the generated module graph.
-		var roots = [for (name in session.requests.valueEqualities.keys()) name];
+		var roots = [for (name in session.programOutput.requests.valueEqualities.keys()) name];
 		roots.sort(Reflect.compare);
 		for (name in roots) {
-			var root = session.requests.valueEqualities.get(name);
+			var root = session.programOutput.requests.valueEqualities.get(name);
 			if (root != null)
-				collect(session, root.type, root, session.requests.valueEqualities, new Map());
+				collect(session, root.type, root, session.programOutput.requests, new Map());
 		}
 		while (true) {
 			var pending = [
-				for (name in session.requests.valueEqualities.keys())
+				for (name in session.programOutput.requests.valueEqualities.keys())
 					if (!generated.exists(name)) name
 			];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
 			for (name in pending) {
-				var requested = session.requests.valueEqualities.get(name);
+				var requested = session.programOutput.requests.valueEqualities.get(name);
 				if (requested == null)
 					throw 'Missing value equality request "$name"';
 				// Helpers can originate in a lambda after its typing context has already been popped.
@@ -69,7 +69,7 @@ class ValueEqualityGenerator {
 	}
 
 	static function collect(session:TypingSession, type:CompilerType, root:EqualityRequest,
-			requests:Map<String, EqualityRequest>,
+			requests:HelperRequests,
 			seen:Map<String, Bool>):Void {
 		var name = equalsName(type);
 		if (seen.exists(name))
@@ -77,21 +77,18 @@ class ValueEqualityGenerator {
 		seen.set(name, true);
 		switch type {
 			case TAbstract(_, _, representation) if (DeclaredConformance.usesEquality(session, representation)):
-				if (!requests.exists(name)) requests.set(name, {type: type, origin: root.origin, span: root.span});
+				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				collect(session, representation, root, requests, seen);
 			case TNullable(element) if (DeclaredConformance.has(session, element, "Equatable")
 				|| DeclaredConformance.usesEquality(session, element)):
-				if (!requests.exists(name))
-					requests.set(name, {type: type, origin: root.origin, span: root.span});
+				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				collect(session, element, root, requests, seen);
 			case TArray(element) if (DeclaredConformance.supportsEquality(session, element)):
-				if (!requests.exists(name))
-					requests.set(name, {type: type, origin: root.origin, span: root.span});
+				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				if (needsHelper(session, element))
 					collect(session, element, root, requests, seen);
 			case TAnonymous(_, fields) if (DeclaredConformance.supportsEquality(session, type)):
-				if (!requests.exists(name))
-					requests.set(name, {type: type, origin: root.origin, span: root.span});
+				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				for (field in fields)
 					if (needsHelper(session, field.type))
 						collect(session, field.type, root, requests, seen);
@@ -100,8 +97,7 @@ class ValueEqualityGenerator {
 				var declaration = session.classDecls.get(className);
 				if (declaration == null)
 					throw 'Missing value type declaration "$className"';
-				if (!requests.exists(name))
-					requests.set(name, {type: type, origin: root.origin, span: root.span});
+				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				if (DiffIntrinsics.conformanceMethod(session, type, "equals") == null) {
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
 						var fieldType = entry.type;

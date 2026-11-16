@@ -258,20 +258,26 @@ class ProgramTyper {
 			bindCachedNativeLayouts(typedClasses);
 		var metadataDoneAt = Sys.time() * 1000.0;
 		var allocationAfterMetadata = AllocationMeter.sample();
+		// Each body is a unit typed into its own output; the outputs are merged in declaration order once all are typed.
 		// Reversed, the three groups of bodies are typed last first as well as each group's bodies.
-		var moduleFunctions:Array<TypedFunction> = [], abstractFunctions:Array<TypedFunction> = [];
+		var moduleFunctions:Array<TypedFunction> = [],
+			abstractFunctions:Array<TypedFunction> = [],
+			classUnits:Array<TypingOutput> = [],
+			functionUnits:Array<TypingOutput> = [],
+			abstractUnits:Array<TypingOutput> = [];
 		if (reverseTypingOrder) {
-			abstractFunctions = typeAbstractFunctions(program.abstracts, selected);
-			moduleFunctions = typeModuleFunctions(program.functions, selected);
+			abstractFunctions = typeAbstractFunctions(program.abstracts, selected, abstractUnits);
+			moduleFunctions = typeModuleFunctions(program.functions, selected, functionUnits);
 		}
 		if (cachedMetadata == null)
-			typedClasses = typeClassBodies(program.classes, typedClasses, selected);
+			typedClasses = typeClassBodies(program.classes, typedClasses, selected, classUnits);
 		var classBodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterClassBodies = AllocationMeter.sample();
 		if (!reverseTypingOrder) {
-			moduleFunctions = typeModuleFunctions(program.functions, selected);
-			abstractFunctions = typeAbstractFunctions(program.abstracts, selected);
+			moduleFunctions = typeModuleFunctions(program.functions, selected, functionUnits);
+			abstractFunctions = typeAbstractFunctions(program.abstracts, selected, abstractUnits);
 		}
+		session.mergeUnits(classUnits.concat(functionUnits).concat(abstractUnits));
 		for (fn in moduleFunctions)
 			typedFunctions.push(fn);
 		for (classDecl in typedClasses)
@@ -308,8 +314,8 @@ class ProgramTyper {
 					typedClasses.push(cache);
 					assembler.registerProgramTypes([], [cache], [], [], []);
 				}
-				while (generatedIndex < session.closureConversion.generatedFunctionCount()) {
-					var fn = session.closureConversion.generatedFunction(generatedIndex++);
+				while (generatedIndex < session.programOutput.closureConversion.generatedFunctionCount()) {
+					var fn = session.programOutput.closureConversion.generatedFunction(generatedIndex++);
 					typedFunctions.push(fn);
 					assembler.registerProgramTypes([fn], [], [], [], []);
 				}
@@ -360,9 +366,10 @@ class ProgramTyper {
 			rawMethods:Map<String, TypedFunction> = [],
 			flagMethods:Map<String, TypedFunction> = [];
 		function requestCount():Int
-			return session.requests.count() + Lambda.count(session.keyPaths.definitions)
+			return session.programOutput.requests.count() + Lambda.count(session.keyPaths.definitions)
 				+ session.representation.genericOwnerRequestCount()
-				+ session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
+				+ session.programOutput.closureConversion.generatedFunctionCount()
+				+ session.enumRepresentations.count();
 		while (true) {
 			drainRuntimeTypes();
 			reflectNewClasses();
@@ -453,11 +460,11 @@ class ProgramTyper {
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
-			purityQueries: session.records.purityQueries,
-			inlineConstantDependencies: session.records.inlineConstantDependencies,
-			defaultArgumentSources: session.records.defaultArgumentSources,
-			noReturnQueries: session.records.noReturnQueries,
-			keyPathUses: session.records.keyPathUses,
+			purityQueries: session.programOutput.records.purityQueries,
+			inlineConstantDependencies: session.programOutput.records.inlineConstantDependencies,
+			defaultArgumentSources: session.programOutput.records.defaultArgumentSources,
+			noReturnQueries: session.programOutput.records.noReturnQueries,
+			keyPathUses: session.programOutput.records.keyPathUses,
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),
@@ -503,7 +510,8 @@ class ProgramTyper {
 			suffix = ".__init",
 			registry = new AnonymousTypeRegistry(session);
 		for (unit => types in previous.anonymousUnits) {
-			if (session.records.typedUnits.exists(unit) || session.records.anonymousUnits.exists(unit))
+			if (session.programOutput.records.typedUnits.exists(unit)
+				|| session.programOutput.records.anonymousUnits.exists(unit))
 				continue;
 			var exists = session.signatures.exists(unit)
 				|| StringTools.endsWith(unit, suffix)
@@ -515,7 +523,7 @@ class ProgramTyper {
 				uses.set(entry.name, entry.fields);
 				registry.register(TAnonymous(entry.name, entry.fields));
 			}
-			session.records.anonymousUnits.set(unit, uses);
+			session.programOutput.records.anonymousUnits.set(unit, uses);
 		}
 	}
 
@@ -1040,29 +1048,47 @@ class ProgramTyper {
 		return order;
 	}
 
-	/** The declared classes with their fields and initializers typed and their method bodies deferred, in declaration order. */
+	/**
+	 * The declared classes with their fields and initializers typed and their method bodies deferred, in declaration order.
+	 * Each class is a unit; its output is merged into the program's once all are typed.
+	 */
 	function typeDeclaredClasses(declarations:Array<AstClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
-		var typed:Array<Null<TypedClass>> = [for (_ in declarations) null];
+		var typed:Array<Null<TypedClass>> = [for (_ in declarations) null],
+			units:Array<Null<TypingOutput>> = [for (_ in declarations) null];
 		for (index in typingOrder(declarations.length)) {
 			var classDecl = declarations[index];
-			if (classDecl.isExtern != true && externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null)
+			if (classDecl.isExtern != true && externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) {
+				var unit = session.beginUnit();
+				units[index] = unit;
 				typed[index] = typeClass(classDecl, selected, true);
+				session.endUnit(unit);
+			}
 		}
+		session.mergeUnits([for (unit in units) if (unit != null) unit]);
 		return [for (typedClass in typed) if (typedClass != null) typedClass];
 	}
 
-	function typeModuleFunctions(functions:Array<AstFunction>, selected:Null<Map<String, Bool>>):Array<TypedFunction> {
-		var typed:Array<Null<TypedFunction>> = [for (_ in functions) null];
+	function typeModuleFunctions(functions:Array<AstFunction>, selected:Null<Map<String, Bool>>,
+			units:Array<TypingOutput>):Array<TypedFunction> {
+		var typed:Array<Null<TypedFunction>> = [for (_ in functions) null],
+			outputs:Array<Null<TypingOutput>> = [for (_ in functions) null];
 		for (index in typingOrder(functions.length)) {
 			var fn = functions[index];
-			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name)))
+			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
+				var unit = session.beginUnit();
+				outputs[index] = unit;
 				typed[index] = bodyTyper.typeFunction(fn);
+				session.endUnit(unit);
+			}
 		}
+		for (unit in outputs)
+			if (unit != null)
+				units.push(unit);
 		return [for (fn in typed) if (fn != null) fn];
 	}
 
-	function typeAbstractFunctions(abstracts:Array<compiler.syntax.Ast.AstAbstract>,
-			selected:Null<Map<String, Bool>>):Array<TypedFunction> {
+	function typeAbstractFunctions(abstracts:Array<compiler.syntax.Ast.AstAbstract>, selected:Null<Map<String, Bool>>,
+			units:Array<TypingOutput>):Array<TypedFunction> {
 		var methods:Array<{owner:String, signature:AstFunction}> = [];
 		for (abstractDecl in abstracts)
 			for (method in abstractDecl.methods) {
@@ -1076,22 +1102,34 @@ class ProgramTyper {
 						signature: BodyTyper.requiredMapValue(session.signatures, name)
 					});
 			}
-		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null];
-		for (index in typingOrder(methods.length))
+		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null],
+			outputs:Array<Null<TypingOutput>> = [for (_ in methods) null];
+		for (index in typingOrder(methods.length)) {
+			var unit = session.beginUnit();
+			outputs[index] = unit;
 			typed[index] = bodyTyper.typeFunction(methods[index].signature, methods[index].owner, true);
+			session.endUnit(unit);
+		}
+		for (unit in outputs)
+			if (unit != null)
+				units.push(unit);
 		return [for (fn in typed) if (fn != null) fn];
 	}
 
-	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>,
-			selected:Null<Map<String, Bool>>):Array<TypedClass> {
+	function typeClassBodies(declarations:Array<AstClass>, classes:Array<TypedClass>, selected:Null<Map<String, Bool>>,
+			units:Array<TypingOutput>):Array<TypedClass> {
 		var byName:Map<String, AstClass> = [for (declaration in declarations) declaration.name => declaration],
-			methods:Array<Null<Array<TypedFunction>>> = [for (_ in classes) null];
+			methods:Array<Null<Array<TypedFunction>>> = [for (_ in classes) null],
+			outputs:Array<Array<TypingOutput>> = [for (_ in classes)[]];
 		for (index in typingOrder(classes.length)) {
 			var declaration = byName.get(classes[index].name);
 			if (declaration != null)
 				methods[index] = typeClassMethods(declaration, classes[index].fields, selected, false,
-					session.representation.erasedNominalSubstitutions(declaration.name));
+					session.representation.erasedNominalSubstitutions(declaration.name), null, outputs[index]);
 		}
+		for (classUnits in outputs)
+			for (unit in classUnits)
+				units.push(unit);
 		return [for (index in 0...classes.length) {
 			var typed = classes[index], typedMethods = methods[index];
 			if (typedMethods == null) typed else {
@@ -1116,15 +1154,21 @@ class ProgramTyper {
 	function typeClassMethods(classDecl:AstClass, fields:Array<TypedField>, selected:Null<Map<String, Bool>>,
 			deferBodies:Bool,
 			substitutions:Map<String, CompilerType>,
-			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation):Array<TypedFunction> {
+			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation,
+			?units:Array<TypingOutput>):Array<TypedFunction> {
 		var typedMethods:Array<TypedFunction> = [],
 			instanceInitializers:Array<TypedField> = [],
 			hasConstructor = false;
 		for (field in fields)
 			if (!field.isStatic && field.initializer != null)
 				instanceInitializers.push(field);
-		var methodsTyped:Array<Null<TypedFunction>> = [for (_ in classDecl.methods) null];
-		for (methodIndex in typingOrder(classDecl.methods.length)) {
+		// With `units`, each method is a unit, typed into an output kept in declaration order.
+		var methodsTyped:Array<Null<TypedFunction>> = [for (_ in classDecl.methods) null],
+			methodUnits:Array<Null<TypingOutput>> = [for (_ in classDecl.methods) null];
+		// A generic owner's methods are typed outside any unit, as its requests are drained, so always in declaration order.
+		var methodOrder = units == null
+			? [for (index in 0...classDecl.methods.length) index] : typingOrder(classDecl.methods.length);
+		for (methodIndex in methodOrder) {
 			var method = classDecl.methods[methodIndex];
 			if (specialization != null && method.isStatic)
 				continue;
@@ -1132,6 +1176,8 @@ class ProgramTyper {
 				continue;
 			if (BodyTyper.isGeneric(method))
 				continue;
+			var unit = units == null ? null : session.beginUnit();
+			methodUnits[methodIndex] = unit;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified)),
 				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic, substitutions,
@@ -1147,10 +1193,16 @@ class ProgramTyper {
 						substitutions));
 			}
 			methodsTyped[methodIndex] = typedMethod;
+			if (unit != null)
+				session.endUnit(unit);
 		}
 		for (typedMethod in methodsTyped)
 			if (typedMethod != null)
 				typedMethods.push(typedMethod);
+		if (units != null)
+			for (unit in methodUnits)
+				if (unit != null)
+					units.push(unit);
 		if (!hasConstructor
 			&& (specialization != null || !isConstrainedOwnerTemplate(classDecl.name))
 			&& instanceInitializers.length > 0

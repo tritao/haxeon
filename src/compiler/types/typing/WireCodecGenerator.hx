@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
@@ -67,26 +68,26 @@ class WireCodecGenerator {
 		if (!isRequestType(session, type))
 			BodyTyper.fail("E1024", 'MessagePack does not support type "$type" in the current wire profile', span);
 		var key = typeKey(type);
-		if (!session.requests.wireCodecs.exists(key))
-			session.requests.wireCodecs.set(key, {type: type, origin: origin, span: span});
+		session.output.requests.add(WireCodecHelper(key, {type: type, origin: origin, span: span}));
 	}
 
 	public static function requestJson(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		if (!isRequestType(session, type))
 			BodyTyper.fail("E1024", 'JSON does not support type "$type" in the current wire profile', span);
 		var key = typeKey(type);
-		if (!session.requests.jsonCodecs.exists(key))
-			session.requests.jsonCodecs.set(key, {type: type, origin: origin, span: span});
+		session.output.requests.add(JsonCodecHelper(key, {type: type, origin: origin, span: span}));
 	}
 
 	/** Generate wrappers and value codecs requested while typing source bodies. */
 	public static function generate(session:TypingSession, classes:Array<TypedClass>,
 			enums:Array<TypedEnum>):Array<TypedFunction>
-		return new WireCodecGenerator(false).generateRequested(session, classes, enums, session.requests.wireCodecs);
+		return new WireCodecGenerator(false).generateRequested(session, classes, enums,
+			session.programOutput.requests.wireCodecs);
 
 	public static function generateJson(session:TypingSession, classes:Array<TypedClass>,
 			enums:Array<TypedEnum>):Array<TypedFunction>
-		return new WireCodecGenerator(true).generateRequested(session, classes, enums, session.requests.jsonCodecs);
+		return new WireCodecGenerator(true).generateRequested(session, classes, enums,
+			session.programOutput.requests.jsonCodecs);
 
 	function generateRequested(session:TypingSession, classes:Array<TypedClass>, enums:Array<TypedEnum>,
 			requested:Map<String, WireCodecRequest>):Array<TypedFunction> {

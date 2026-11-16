@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
@@ -90,23 +91,22 @@ class FlagsGenerator {
 
 	public static function request(session:TypingSession, owner:String, method:String, span:SourceSpan):String {
 		var name = PREFIX + owner + ":" + method;
-		if (!session.requests.flags.exists(name))
-			session.requests.flags.set(name, {
-				owner: owner,
-				method: method,
-				origin: session.generatedFunctionOrigin(),
-				span: span
-			});
+		session.output.requests.add(FlagsHelper(name, {
+			owner: owner,
+			method: method,
+			origin: session.generatedFunctionOrigin(),
+			span: span
+		}));
 		return name;
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper,
 			generated:Map<String, TypedFunction>):Array<TypedFunction> {
-		var pending = [for (name in session.requests.flags.keys()) if (!generated.exists(name)) name];
+		var pending = [for (name in session.programOutput.requests.flags.keys()) if (!generated.exists(name)) name];
 		pending.sort(Reflect.compare);
 		var functions:Array<TypedFunction> = [];
 		for (name in pending) {
-			var request = session.requests.flags.get(name),
+			var request = session.programOutput.requests.flags.get(name),
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
 				throw 'Missing Flags declaration "${request.owner}"';

@@ -1947,7 +1947,7 @@ class BodyTyper implements BodyTyping {
 	/** Substitution must retain the dependencies erased by constant folding, including inside default arguments. */
 	function recordInlineConstantDependency(target:String):Void {
 		inlineConstantResolver.recordDependency(target);
-		session.records.recordInlineConstantDependency(defaultArgumentCaller == null
+		session.output.records.recordInlineConstantDependency(defaultArgumentCaller == null
 			? context.name : defaultArgumentCaller,
 			target);
 	}
@@ -2213,7 +2213,7 @@ class BodyTyper implements BodyTyping {
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
-			session.records.recordDefaultArgumentSource(defaultArgumentCaller,
+			session.output.records.recordDefaultArgumentSource(defaultArgumentCaller,
 				typed.span.generatedReason == null ? typed.span.file : null);
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;

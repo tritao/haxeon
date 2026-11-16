@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -33,22 +34,21 @@ class EnumEqualityGenerator {
 
 	static function requestNamed(session:TypingSession, name:String, type:CompilerType, origin:String,
 			span:SourceSpan):Void {
-		if (!session.requests.enumEqualities.exists(name))
-			session.requests.enumEqualities.set(name, {type: type, origin: origin, span: span});
+		session.output.requests.add(EnumEqualityHelper(name, {type: type, origin: origin, span: span}));
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		while (true) {
 			var pending = [
-				for (name in session.requests.enumEqualities.keys())
+				for (name in session.programOutput.requests.enumEqualities.keys())
 					if (!generated.exists(name)) name
 			];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
 			for (name in pending) {
-				var request = session.requests.enumEqualities.get(name);
+				var request = session.programOutput.requests.enumEqualities.get(name);
 				if (request == null)
 					throw 'Missing enum equality request "$name"';
 				var owner = compiler.core.QualifiedName.parent(request.origin),

@@ -8,8 +8,6 @@ import compiler.types.TypedAst.TypedEnum;
 /** Concrete enum declarations are retained before erasure, including cases which do not mention T. */
 class EnumRuntimeRepresentations {
 	final session:TypingSession;
-	final requested:Map<String, CompilerType> = [];
-	final queue:Array<CompilerType> = [];
 	final recursion:EnumRecursion;
 	final descriptorRecursion:EnumRecursion;
 
@@ -19,17 +17,13 @@ class EnumRuntimeRepresentations {
 		descriptorRecursion = new EnumRecursion(session, BoxedDescriptor);
 	}
 
-	public function count():Int return queue.length;
+	public function count():Int return session.programOutput.enumCount();
 
 	public function discover(type:CompilerType, ?seen:Array<Array<compiler.types.Type.AnonymousField>>):Void {
 		switch type {
 			case TInstance(NominalKind.Enum, _, arguments):
 				if (arguments.length > 0 && !session.representation.containsTypeParameter(type, [])) {
-					var name = EnumRuntimeType.name(type);
-					if (!requested.exists(name)) {
-						requested.set(name, type);
-						queue.push(type);
-					}
+					session.output.discoverEnum(EnumRuntimeType.name(type), type);
 				}
 			// Arguments contribute to identity, not necessarily storage. The instantiated
 			// payloads are discovered when this declaration is drained below.
@@ -63,7 +57,7 @@ class EnumRuntimeRepresentations {
 					declaration.specializationArguments));
 
 	public function declaration(index:Int):TypedEnum {
-		var type = queue[index], origin = switch type {
+		var type = session.programOutput.enumType(index), origin = switch type {
 			case TInstance(_, name, _): name;
 			default: throw "Invalid enum request";
 		};

@@ -67,6 +67,33 @@ class UnitRecords {
 	public function recordNoReturn(caller:String, name:String, answer:Bool):Void
 		answerQuery(noReturnQueries, caller, name, answer);
 
+	/** Adds these records to `target`. */
+	public function mergeInto(target:UnitRecords):Void {
+		for (unit => uses in anonymousUnits)
+			for (name => fields in uses)
+				target.recordAnonymousUse(unit, name, fields);
+		for (unit in typedUnits.keys())
+			target.typedUnits.set(unit, true);
+		mergeQueries(purityQueries, target.purityQueries);
+		mergeQueries(noReturnQueries, target.noReturnQueries);
+		mergeQueries(keyPathUses, target.keyPathUses);
+		mergeQueries(inlineConstantDependencies, target.inlineConstantDependencies);
+		for (caller => sources in defaultArgumentSources) {
+			var merged = target.defaultArgumentSources.get(caller);
+			if (merged == null) {
+				merged = [];
+				target.defaultArgumentSources.set(caller, merged);
+			}
+			for (path => file in sources)
+				merged.set(path, file);
+		}
+	}
+
+	static function mergeQueries(records:Map<String, Map<String, Bool>>, target:Map<String, Map<String, Bool>>):Void
+		for (caller => answers in records)
+			for (name => answer in answers)
+				answerQuery(target, caller, name, answer);
+
 	static function mark(target:Map<String, Map<String, Bool>>, owner:String, name:String):Void
 		answerQuery(target, owner, name, true);
 

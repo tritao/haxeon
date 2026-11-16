@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -20,19 +21,19 @@ class HashGenerator {
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = hashName(type);
-		if (!session.requests.hashes.exists(name))
-			session.requests.hashes.set(name, {type: type, origin: origin, span: span});
+		session.output.requests.add(HashHelper(name, {type: type, origin: origin, span: span}));
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		while (true) {
-			var pending = [for (name in session.requests.hashes.keys()) if (!generated.exists(name)) name];
+			var pending =
+				[for (name in session.programOutput.requests.hashes.keys()) if (!generated.exists(name)) name];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
 			for (name in pending) {
-				var requested = session.requests.hashes.get(name);
+				var requested = session.programOutput.requests.hashes.get(name);
 				if (requested == null)
 					throw 'Missing hash-generation request "$name"';
 				var owner = compiler.core.QualifiedName.parent(requested.origin),

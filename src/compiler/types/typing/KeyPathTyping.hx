@@ -157,7 +157,7 @@ class KeyPathTyping {
 				"key-path") : span,
 			origin: origin
 		});
-		session.records.recordKeyPathUse(session.currentContext.name, name);
+		session.output.records.recordKeyPathUse(session.currentContext.name, name);
 		return new TypedExpression(TCall(name, []), TKeyPath(root, value, writable), span);
 	}
 

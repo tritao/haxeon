@@ -75,7 +75,6 @@ class TypeRepresentation {
 	final enumBodyUses:Map<String, Bool> = [];
 	final conversions:ConversionResolver;
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
-	final requestedOwners:Array<GenericOwnerRepresentation> = [];
 	final ownerAliases:Map<String, String> = [];
 
 	public function new(session:TypingSession) {
@@ -249,8 +248,10 @@ class TypeRepresentation {
 		var specialization = session.genericSpecializations.request('$' + 'owner:' + name, representations, policies),
 			existing = ownerRequests.get(specialization.name);
 		ownerAliases.set(SemanticSignature.type(type), specialization.name);
-		if (existing != null)
+		if (existing != null) {
+			session.output.requestOwner(existing);
 			return existing;
+		}
 		var result:GenericOwnerRepresentation = {
 			origin: name,
 			name: specialization.name,
@@ -259,7 +260,7 @@ class TypeRepresentation {
 			policies: policies
 		};
 		ownerRequests.set(result.name, result);
-		requestedOwners.push(result);
+		session.output.requestOwner(result);
 		return result;
 	}
 
@@ -314,10 +315,10 @@ class TypeRepresentation {
 
 	/** Requests can grow as specialized member bodies are typed; callers drain to a fixed point. */
 	public function genericOwnerRequestCount():Int
-		return requestedOwners.length;
+		return session.programOutput.ownerCount();
 
 	public function genericOwnerRequest(index:Int):GenericOwnerRepresentation
-		return requestedOwners[index];
+		return session.programOutput.owner(index);
 
 	public function genericOwnerAliases():Map<String, String> {
 		var result:Map<String, String> = [];

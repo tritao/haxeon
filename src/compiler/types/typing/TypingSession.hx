@@ -14,7 +14,11 @@ import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.core.Source.SourceSpan;
 import compiler.types.analysis.Scope;
 
-/** Mutable semantic state shared by all typing phases for one compilation. */
+/**
+ * The typing state of one compilation: the program view bodies are typed against (declarations, relations, signatures,
+ * representations, the facts about purity and no-return functions) and the body context stack, plus where typing writes:
+ * the output of the unit being typed (`output`), merged into the program's (`programOutput`) in declaration order.
+ */
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
 
@@ -39,7 +43,78 @@ class TypingSession {
 	}
 	public var declarations:DeclarationIndex;
 	public var relations:TypeRelations;
-	public final closureConversion = new ClosureConversion();
+
+	/**
+	 * The program's output: the bodies' outputs merged in declaration order, and what typing outside any unit produces. See
+	 * `TypingOutput`.
+	 */
+	public final programOutput = new TypingOutput(false, 1);
+
+	/** Where typing writes now: the output of the unit being typed, or the program's. */
+	public var output(default, null):TypingOutput;
+
+	final outputs:Array<TypingOutput> = [];
+
+	/** The outputs of the shared units typed in a unit, by name, until they are merged. */
+	final sharedOutputs:Map<String, TypingOutput> = [];
+
+	final mergedUnits:Map<String, Bool> = [];
+
+	/** Closure conversion for the unit being typed. */
+	public var closureConversion(get, never):ClosureConversion;
+
+	inline function get_closureConversion():ClosureConversion
+		return output.closureConversion;
+
+	/** Starts typing a unit (a function body, or a class's fields and initializers) into its own output. */
+	public function beginUnit():TypingOutput {
+		var unit = new TypingOutput(false, bodyContexts.length);
+		outputs.push(output);
+		output = unit;
+		return unit;
+	}
+
+	public function endUnit(unit:TypingOutput):Void {
+		if (output != unit)
+			throw "Typing outputs must be left in stack order";
+		output = outputs.pop();
+	}
+
+	/** Records that the code being typed uses the shared unit `name`: a generic function specialization, an inline constant. */
+	public function useSharedUnit(name:String):Void
+		if (output != programOutput)
+			output.recordUse(name, bodyContexts.length < 2 ? null : anonymousUnit());
+
+	/**
+	 * Types the shared unit `name` with `type`, into an output of its own when a unit is being typed. Call `useSharedUnit` first:
+	 * the shared unit's output is merged where its first user in declaration order used it, whichever body typed it.
+	 */
+	public function typeSharedUnit(name:String, type:() -> Void):Void {
+		if (output == programOutput) {
+			type();
+			return;
+		}
+		var unit = new TypingOutput(true, bodyContexts.length);
+		sharedOutputs.set(name, unit);
+		outputs.push(output);
+		output = unit;
+		try {
+			type();
+		} catch (error:Dynamic) {
+			endUnit(unit);
+			throw error;
+		}
+		endUnit(unit);
+	}
+
+	/** Merges the outputs of units typed in any order into the program's, in the order of `units` (declaration order). */
+	public function mergeUnits(units:Array<TypingOutput>):Void
+		for (unit in units)
+			unit.mergeInto(programOutput, sharedOutputs, mergedUnits, null);
+
+	/** The unit the anonymous types used here belong to: the outermost body, or null for the user of the shared unit being typed. */
+	function anonymousUnit():Null<String>
+		return output.shared && output.baseDepth >= 2 ? null : bodyContexts[1].name;
 
 	/** The type variables of the bodies being typed; see `Monomorphs`. */
 	public final monomorphs = new MonomorphFrames();
@@ -52,13 +127,10 @@ class TypingSession {
 
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
 
-	/** What each typed unit relied on, for the next incremental build. */
-	public final records = new UnitRecords();
-
 	/** Attributes an anonymous type to the unit being typed: the outermost body, which a lambda is part of. */
 	public function recordAnonymousUse(name:String, fields:Array<compiler.types.Type.AnonymousField>):Void {
 		if (bodyContexts.length >= 2)
-			records.recordAnonymousUse(bodyContexts[1].name, name, fields);
+			output.recordAnonymousUse(anonymousUnit(), name, fields);
 	}
 
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
@@ -68,8 +140,6 @@ class TypingSession {
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
-	/** The generated helpers typed code asks for. */
-	public final requests = new HelperRequests();
 
 	public final flagsMasks:Map<String, Int> = [];
 
@@ -95,6 +165,7 @@ class TypingSession {
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
+		output = programOutput;
 		this.externals = externals == null ? [] : externals;
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
 		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
@@ -184,7 +255,7 @@ class TypingSession {
 		var answer = inferredPureFunctions.exists(name) || isDeclaredPure(name);
 		var caller = currentContext.name;
 		if (caller != "")
-			records.recordPurity(caller, name, answer);
+			output.records.recordPurity(caller, name, answer);
 		return answer;
 	}
 
@@ -194,7 +265,7 @@ class TypingSession {
 			answer = inferredPureFunctions.exists(key);
 		var caller = currentContext.name;
 		if (caller != "")
-			records.recordPurity(caller, key, answer);
+			output.records.recordPurity(caller, key, answer);
 		return answer;
 	}
 
@@ -373,7 +444,7 @@ class TypingSession {
 		var answer = noReturnFunctions.exists(name);
 		var caller = currentContext.name;
 		if (caller != "")
-			records.recordNoReturn(caller, name, answer);
+			output.records.recordNoReturn(caller, name, answer);
 		return answer;
 	}
 
@@ -440,7 +511,7 @@ class TypingSession {
 		if (isLambda)
 			body.privateAccessDepth = currentContext.privateAccessDepth;
 		if (bodyContexts.length == 1)
-			records.typedUnits.set(name, true);
+			programOutput.records.typedUnits.set(name, true);
 		bodyContexts.push(body);
 		return body;
 	}

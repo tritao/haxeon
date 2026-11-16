@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.InlineConstantEvaluator;
@@ -48,13 +49,12 @@ class RawRepresentableGenerator {
 		if (method != "rawValue" && method != "fromRaw" && method != "toString")
 			throw 'Unknown synthesized raw member "$method"';
 		var helper = name(owner, method);
-		if (!session.requests.rawRepresentables.exists(helper))
-			session.requests.rawRepresentables.set(helper, {
-				owner: owner,
-				method: method,
-				origin: session.generatedFunctionOrigin(),
-				span: span
-			});
+		session.output.requests.add(RawRepresentableHelper(helper, {
+			owner: owner,
+			method: method,
+			origin: session.generatedFunctionOrigin(),
+			span: span
+		}));
 		return helper;
 	}
 
@@ -95,13 +95,13 @@ class RawRepresentableGenerator {
 	public static function generate(session:TypingSession, typer:BodyTyper,
 			generated:Map<String, TypedFunction>):Array<TypedFunction> {
 		var pending = [
-			for (name in session.requests.rawRepresentables.keys())
+			for (name in session.programOutput.requests.rawRepresentables.keys())
 				if (!generated.exists(name)) name
 		];
 		pending.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
 		for (helper in pending) {
-			var request = session.requests.rawRepresentables.get(helper),
+			var request = session.programOutput.requests.rawRepresentables.get(helper),
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
 				throw 'Missing RawRepresentable declaration "${request.owner}"';
