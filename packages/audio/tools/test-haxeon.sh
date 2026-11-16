@@ -31,4 +31,6 @@ for fixture in AudioSmoke; do
     if [[ $status == 77 ]]; then echo "SKIP: $fixture has no audio device";
     elif [[ $status != 0 ]]; then exit "$status"; fi
 done
-echo "PASS: managed audio and DSP smoke"
+# The Audio Lab example's presets, automation and tracker, through the package as an app uses it.
+HAXEON_DIR="$haxeon_dir" "$package_dir/examples/audio-lab/tools/test-audio-lab.sh" --test
+echo "PASS: managed audio and DSP smoke, and the Audio Lab example"

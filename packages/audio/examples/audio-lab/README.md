@@ -20,7 +20,7 @@ The current app includes:
 Run the Haxeon app from the Haxeon root with:
 
 ```sh
-./examples/audio-lab/tools/test-audio-lab.sh --run
+./packages/audio/examples/audio-lab/tools/test-audio-lab.sh --run
 ```
 
 The graphics surface follows window resizing and display scale. Synth controls
@@ -47,13 +47,13 @@ runtime with audio and GPU enabled, together with UI.
 Build without launching the application:
 
 ```sh
-./examples/audio-lab/tools/test-audio-lab.sh --build
+./packages/audio/examples/audio-lab/tools/test-audio-lab.sh --build
 ```
 
 Run the existing preset, automation, and tracker smoke check explicitly:
 
 ```sh
-./examples/audio-lab/tools/test-audio-lab.sh --test
+./packages/audio/examples/audio-lab/tools/test-audio-lab.sh --test
 ```
 
 The previous NativeKit `tools/test-audio-lab.sh` is now this example-owned tool.

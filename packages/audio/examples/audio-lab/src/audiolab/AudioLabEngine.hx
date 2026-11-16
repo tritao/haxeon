@@ -14,7 +14,7 @@ import haxeon.audio.DspPatch;
 import haxeon.audio.DspPatchBuilder;
 import haxeon.audio.DspRenderTarget;
 import haxeon.audio.Mixer;
-import nativekit.ffi.NativeKitAudioTypes.EffectParameter;
+import haxeon.audio.EffectParameter;
 
 private class PendingNote {
 	public final voiceId:Int;

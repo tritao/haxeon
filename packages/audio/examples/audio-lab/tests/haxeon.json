@@ -11,10 +11,10 @@
   "scopeSourceRoots": false,
   "dependencies": {
     "haxeon-audio": {
-      "path": "../../../packages/audio"
+      "path": "../../.."
     },
     "haxeon-audio-native": {
-      "path": "../../../packages/audio/native"
+      "path": "../../../native"
     }
   },
   "target": "host",

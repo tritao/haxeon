@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.21)
 project(haxeon_audio_lab LANGUAGES C CXX)
-get_filename_component(HAXEON_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../.." ABSOLUTE)
+get_filename_component(HAXEON_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../.." ABSOLUTE)
 set(NATIVEKIT_DIR "${HAXEON_ROOT}/vendor/nativekit" CACHE PATH "NativeKit source directory")
 set(NK_BUILD_SHARED ON CACHE BOOL "Build shared runtimes" FORCE)
 set(NK_BUILD_AUDIO ON CACHE BOOL "Enable audio" FORCE)

@@ -14,7 +14,7 @@
 Animation is renderer-independent; its optional `animation/native` provider builds glTF/ozz support.
 Audio and GPU depend on platform. Headless audio applications can add the
 optional `audio/native` provider (`haxeon-audio-native`). UI/audio applications
-can share a native provider, as shown in `examples/audio-lab`. UI depends on platform, GPU, and editor. The editor
+can share a native provider, as shown in `packages/audio/examples/audio-lab`. UI depends on platform, GPU, and editor. The editor
 package is independent of UI and native services. SceneKit remains in Materia,
 including the orbit camera (`nativekit.scene.PerspectiveCamera`).
 
