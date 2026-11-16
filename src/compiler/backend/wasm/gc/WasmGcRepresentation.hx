@@ -2684,6 +2684,45 @@ class WasmGcRepresentation implements WasmValueRepresentation implements WasmAgg
 				throw "Invalid Wasm GC Bytes.ofString signature";
 			return bytesFromString(argumentLocals[0], outputLocal);
 		}
+		// Wasm strings are UTF-8 already: their length is the UTF-8 size, and writing one into bytes is a copy.
+		if (name == "__string_utf8_length") {
+			if (!compiler.ir.IrVerifier.sameType(output.type, I32)
+				|| arguments.length != 1
+				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, Bytes)
+				|| argumentLocals.length != 1)
+				throw "Invalid Wasm GC String UTF-8 length signature";
+			return [
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.bytesTypeIndex, 2),
+				LocalSet(outputLocal)
+			];
+		}
+		if (name == "__bytes_set_utf8") {
+			if (!compiler.ir.IrVerifier.sameType(output.type, Void)
+				|| arguments.length != 3
+				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, ManagedBytes)
+				|| !compiler.ir.IrVerifier.sameType(arguments[1].type, I32)
+				|| !compiler.ir.IrVerifier.sameType(arguments[2].type, Bytes)
+				|| argumentLocals.length != 3)
+				throw "Invalid Wasm GC Bytes UTF-8 write signature";
+			var length = allocateLocal(I32);
+			var body:Array<WasmInstruction> = [LocalGet(argumentLocals[2]), StructGet(plan.bytesTypeIndex, 2), LocalSet(length)];
+			body = body.concat(checkedByteRange(plan.managedBytesTypeIndex, argumentLocals[0], argumentLocals[1], length));
+			return body.concat([
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 0),
+				LocalGet(argumentLocals[0]),
+				StructGet(plan.managedBytesTypeIndex, 1),
+				LocalGet(argumentLocals[1]),
+				I32Add,
+				LocalGet(argumentLocals[2]),
+				StructGet(plan.bytesTypeIndex, 0),
+				LocalGet(argumentLocals[2]),
+				StructGet(plan.bytesTypeIndex, 1),
+				LocalGet(length),
+				ArrayCopy(plan.byteArrayTypeIndex, plan.byteArrayTypeIndex)
+			]);
+		}
 		if (name == "__bytes_length") {
 			if ((switch (output.type) {
 				case I32: false;

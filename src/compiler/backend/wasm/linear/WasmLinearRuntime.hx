@@ -545,6 +545,9 @@ class WasmLinearRuntime {
 			case "__bytes_view": addBytesView(module, native.name, allocator);
 			case "__bytes_sub", "structSlice": addBytesSlice(module, native.name, allocator, bytesDataPointer, false);
 			case "__bytes_length": addBytesLength(module, native.name);
+			// Strings are laid out as bytes are, and are UTF-8 already.
+			case "__string_utf8_length": addBytesLength(module, native.name);
+			case "__bytes_set_utf8": addBytesSetUtf8(module, native.name, bytesDataPointer);
 			case "__bytes_compare": addBytesCompare(module, native.name, bytesDataPointer);
 			case "__bytes_get", "getU8": addBytesLoad(module, native.name, I32, I32Load8U(0), bytesDataPointer);
 			case "__bytes_blit": addBytesBlit(module, native.name, bytesDataPointer);
@@ -937,6 +940,30 @@ class WasmLinearRuntime {
 		builder.localGet(source);
 		builder.call(builder.functionRef(bytesDataPointer));
 		builder.localGet(sourcePosition);
+		builder.i32Add();
+		builder.localGet(length);
+		builder.emit(MemoryCopy);
+		builder.return_();
+		return module.addFunction(builder.finish());
+	}
+
+	/** Copies the UTF-8 of a string into `bytes` at `position`. */
+	static function addBytesSetUtf8(module:WasmModule, name:String, bytesDataPointer:Int):Int {
+		var builder = new WasmFunctionBuilder(name, {parameters: [I32, I32, I32], results: []}),
+			bytes = builder.parameter("bytes", 0),
+			position = builder.parameter("position", 1),
+			text = builder.parameter("text", 2),
+			length = builder.local("length", I32);
+		builder.localGet(text);
+		builder.emit(I32Load(WasmLayout.STRING_LENGTH_OFFSET));
+		builder.localSet(length);
+		bytesRangeCheck(builder, bytes, position, length);
+		builder.localGet(bytes);
+		builder.call(builder.functionRef(bytesDataPointer));
+		builder.localGet(position);
+		builder.i32Add();
+		builder.localGet(text);
+		builder.i32Const(WasmLayout.STRING_DATA_OFFSET);
 		builder.i32Add();
 		builder.localGet(length);
 		builder.emit(MemoryCopy);

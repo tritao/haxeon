@@ -822,18 +822,18 @@ class WasmGcModuleBuilder {
 				"__i32_to_f32_bits", "__float_to_f32_bits", "__f32_bits_to_float", "runtime.FloatBits.toInt32", "runtime.FloatBits.fromInt32",
 				"haxe.Int64.ushr", "haxe.Int64.add", "haxe.Int64.sub", "haxe.Int64.neg", "haxe.Int64.and", "haxe.Int64.or", "haxe.Int64.xor",
 				"haxe.Int64.shl", "haxe.Int64.shr", "haxe.Int64.compare", "haxe.Int64.make", "haxe.Int64.ofInt", "haxe.Int64.fromFloat", "haxe.Int64.toInt",
-				"__bytes_alloc", "__bytes_of_string", "__bytes_length", "__bytes_get", "__bytes_set", "__bytes_blit", "__bytes_get_i32", "__bytes_get_float",
-				"__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI8", "setI8", "getU8", "setU8", "getI16", "setI16", "getU16", "setU16",
-				"getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64", "__bytes_view", "__bytes_sub", "__bytes_compare",
-				"__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer", "structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8",
-				"structSlice", "structWithRoots", "structGetRoots", "structFromLinear", "structToLinear", "nativePointerFromAddress",
-				"nativeCallbackFromIndex", "nativeCallbackIndex", "structGetPointer", "structGetUtf8", "native_pointer_close", "native_pointer_is_closed",
-				"native_pointer_owned_from_slot", "__string_length", "__string_char_at", "__string_char_code_at", "__string_concat", "__string_equal",
-				"__string_compare_full", "__string_starts_with", "__string_ends_with", "__int64_parse", "__int64_to_string", "__int64_to_float",
-				"__string_index_of", "__string_index_of_from", "__string_last_index_of", "__string_last_index_of_from", "__string_to_lower_case",
-				"__string_to_upper_case", "__string_split", "__string_substring", "__string_from_char_code", "__wasm_memory_load_i32",
-				"__runtime_string_from_ascii", "sys_time", "sys_cpu_time", "sys_thread_cpu_time", "sys_process_memory", "sys_getpid", "sys_sleep",
-				"sys_get_char", "sys_exit", "native_alloc", "native_free": true;
+				"__bytes_alloc", "__bytes_of_string", "__string_utf8_length", "__bytes_set_utf8", "__bytes_length", "__bytes_get", "__bytes_set",
+				"__bytes_blit", "__bytes_get_i32", "__bytes_get_float", "__bytes_get_double", "__bytes_set_i32", "__bytes_set_float", "getI8", "setI8",
+				"getU8", "setU8", "getI16", "setI16", "getU16", "setU16", "getI32", "setI32", "getI64", "setI64", "getF32", "setF32", "getF64", "setF64",
+				"__bytes_view", "__bytes_sub", "__bytes_compare", "__bytes_to_string", "__bytes_get_string", "structCopy", "structCopyPointer",
+				"structSetBorrowedBytes", "structUtf8Copy", "structSetUtf8", "structSlice", "structWithRoots", "structGetRoots", "structFromLinear",
+				"structToLinear", "nativePointerFromAddress", "nativeCallbackFromIndex", "nativeCallbackIndex", "structGetPointer", "structGetUtf8",
+				"native_pointer_close", "native_pointer_is_closed", "native_pointer_owned_from_slot", "__string_length", "__string_char_at",
+				"__string_char_code_at", "__string_concat", "__string_equal", "__string_compare_full", "__string_starts_with", "__string_ends_with",
+				"__int64_parse", "__int64_to_string", "__int64_to_float", "__string_index_of", "__string_index_of_from", "__string_last_index_of",
+				"__string_last_index_of_from", "__string_to_lower_case", "__string_to_upper_case", "__string_split", "__string_substring",
+				"__string_from_char_code", "__wasm_memory_load_i32", "__runtime_string_from_ascii", "sys_time", "sys_cpu_time", "sys_thread_cpu_time",
+				"sys_process_memory", "sys_getpid", "sys_sleep", "sys_get_char", "sys_exit", "native_alloc", "native_free": true;
 			default: false;
 		};
 	}

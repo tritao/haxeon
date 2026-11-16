@@ -2,13 +2,11 @@
 
 package haxe.io;
 
-#if !wasm
 @:hlNative("haxeon_runtime", "__string_utf8_length")
 extern function stringUtf8Length(value:String):Int;
 
 @:hlNative("haxeon_runtime", "__bytes_set_utf8")
 extern function bytesSetUtf8(bytes:Bytes, pos:Int, value:String):Void;
-#end
 
 /**
  * An append-only buffer of bytes, as in Haxe: build a `Bytes` from pieces, then take it with `getBytes`. Numbers are added
@@ -55,13 +53,9 @@ class BytesBuffer {
 
 	/** Adds `v` as UTF-8, the encoding of Haxeon strings. */
 	public function addString(v:String, ?encoding:Encoding):Void {
-		#if wasm
-		add(Bytes.ofString(v));
-		#else
 		var size = stringUtf8Length(v);
 		bytesSetUtf8(room(size), pos, v);
 		pos += size;
-		#end
 	}
 
 	public inline function addInt32(v:Int):Void {
