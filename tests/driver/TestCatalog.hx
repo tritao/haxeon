@@ -409,6 +409,8 @@ class TestCatalog {
 					hxmlCase("tooling", "plugin", "tests/hxml/plugin-test.hxml", "plugin-test.hl", 0,
 						"stateful plugin workload executed",
 						["{root}/out/plugin-runtime.hl"]),
+					hxmlCase("tooling", "profiler-view-model", "tests/hxml/profiler-view-model-test.hxml",
+						"profiler-view-model-test.hl", 0, "profiler view model incrementally merges revisions"),
 					hxmlCase("runtime", "nullable-enum-pattern", "tests/hxml/nullable-enum-pattern-test.hxml",
 						"nullable-enum-pattern-test.hl", 0,
 						"nullable enum tuple and payload patterns fall through without dereferencing null"),

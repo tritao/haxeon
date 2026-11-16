@@ -41,6 +41,10 @@ hxi-value-records                ci          -- bash tests/integration/test-hxi-
 messagepack-interop              ci          -- bash tests/integration/test-messagepack-interop.sh
 run-output                       ci          -- bash tests/integration/test-run-output.sh
 wire-incremental-helpers         ci          -- bash tests/integration/test-wire-incremental-helpers.sh
+json-parser                      ci          -- bash tests/integration/test-json-parser.sh
+sha256-runtime                   ci          -- bash tests/integration/test-sha256-runtime.sh
+wasm-runtime-boundaries          ci          -- bash tests/integration/test-wasm-runtime-boundaries.sh
+build-executor                   ci          -- bash tests/integration/test-build-executor.sh
 differential-tests               ci          -- tests/differential/run.sh
 
 # Both Wasm backends: backend-specific checks, then every manifest program against HL's exit codes. The lane starts before the driver
@@ -66,6 +70,8 @@ driver-checked                   wave        -- env HAXEON_CHECK_REUSE=1 scripts
 
 formatter-integration            ci          -- tests/integration/test-haxeon-formatter.sh
 native-publish-integration       ci          -- bash tests/integration/test-native-publish.sh
+native-cmake-library             ci          -- bash tests/integration/test-native-cmake-library.sh
+native-cmake-libraries           ci          -- bash tests/integration/test-native-cmake-libraries.sh
 native-call-integration          ci          -- tests/integration/test-native-call.sh
 hxi-call-integration             ci          -- tests/integration/test-hxi-call.sh
 world-native-record-layout-integration ci    -- tests/integration/test-world-native-record-layout.sh
@@ -76,6 +82,7 @@ world-native-nested-int16-store-integration ci -- tests/integration/test-world-n
 # These project tests build below their own mktemp project roots and use separate source caches, so they share a pool without racing on
 # the repository's out/ tree. Longest first.
 cmake-native-package             ci          pool=projects cli-launcher -- bash tests/integration/test-cmake-native-package.sh
+native-package-build             ci          pool=projects cli-launcher -- bash tests/integration/test-native-package-build.sh
 cxx-project-ffi-cmake            ci          pool=projects cli-launcher -- bash tests/integration/test-cxx-project-ffi-cmake.sh
 cxx-project-ffi-thunks           ci          pool=projects cli-launcher -- bash tests/integration/test-cxx-project-ffi-thunks.sh
 cxx-project-ffi                  ci          pool=projects cli-launcher -- bash tests/integration/test-cxx-project-ffi.sh
@@ -111,12 +118,15 @@ profiler-native-instrument-integration ci    -- tests/integration/test-profiler-
 profiler-boundary-thunk-integration ci       -- tests/integration/test-profiler-boundary-thunk.sh
 profiler-boundary-integration    ci          -- tests/integration/test-profiler-boundary.sh
 profiler-mixed-stack-integration ci          -- tests/integration/test-profiler-mixed-stack.sh
+profiler-census-sampling-integration ci      -- bash tests/integration/test-profiler-census-sampling.sh
 process-pipes-integration        ci          -- tests/integration/test-process-pipes.sh
 profiler-span-ids-integration    ci          -- python3 tests/integration/test-profiler-span-ids.py
 profiler-report-integration      ci          -- python3 tests/integration/test-profiler-report.py
 profiler-spans-integration       ci          -- python3 tests/integration/test-profiler-spans.py
 hldump-integration               ci          -- python3 tests/integration/test-hldump.py
 debug-line-encoding              ci          -- python3 tests/integration/test-debug-line-encoding.py
+debug-metadata                   ci          -- bash tests/integration/test-debug-metadata.sh
+condition-integration            ci          -- python3 tests/integration/test-condition.py
 build-mode-metadata              ci          -- python3 tests/integration/test-build-mode-metadata.py
 binary-size-report               ci          -- python3 tests/integration/test-binary-size-report.py
 fatal-stack-integration          ci          -- python3 tests/integration/test-fatal-stack.py
