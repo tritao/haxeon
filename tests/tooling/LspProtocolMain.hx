@@ -191,7 +191,7 @@ class LspProtocolMain {
 			throw "LSP sent refresh requests without client support";
 		var fixtureRoot = sys.FileSystem.absolutePath("tests/fixtures/pragtical"),
 			fixtureMainPath = Path.join([fixtureRoot, "pragtical/app/LspFixture.hx"]),
-			fixtureMainUri = "file://" + fixtureMainPath,
+			fixtureMainUri = FileUri.fromPath(fixtureMainPath),
 			fixtureSource = sys.io.File.getContent(fixtureMainPath),
 			fixtureDocument = new LspDocument(fixtureMainUri, fixtureMainPath, 1, fixtureSource),
 			projectProtocol = new LspProtocol();
@@ -199,7 +199,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 40,
 			method: "initialize",
-			params: {rootUri: "file://" + fixtureRoot}
+			params: {rootUri: FileUri.fromPath(fixtureRoot)}
 		}));
 		if (projectProtocol.project.configurations.length != 1
 			|| !projectProtocol.project.hasDiskSource(Path.join([
@@ -316,14 +316,14 @@ class LspProtocolMain {
 		sys.io.File.saveContent(watchHelperPath,
 			"package lib; class Helper { public function new() {} public function answer():Int return 1; }");
 		var watchProtocol = new LspProtocol(),
-			watchMainUri = "file://" + watchMainPath,
-			watchHelperUri = "file://" + watchHelperPath,
+			watchMainUri = FileUri.fromPath(watchMainPath),
+			watchHelperUri = FileUri.fromPath(watchHelperPath),
 			watchDocument = new LspDocument(watchMainUri, watchMainPath, 1, watchMainSource);
 		request(watchProtocol, Json.stringify({
 			jsonrpc: "2.0",
 			id: 43,
 			method: "initialize",
-			params: {rootUri: "file://" + watchRoot}
+			params: {rootUri: FileUri.fromPath(watchRoot)}
 		}));
 		watchProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -455,7 +455,7 @@ class LspProtocolMain {
 		sys.FileSystem.createDirectory(alternateRoot);
 		sys.io.File.saveContent(Path.join([alternateRoot, "Alternate.hx"]), "class Alternate {}");
 		sys.io.File.saveContent(watchConfigPath, '{"classPath":["alternate"]}');
-		watchProtocol.handle(watchedFileMessage("file://" + watchConfigPath, 2));
+		watchProtocol.handle(watchedFileMessage(FileUri.fromPath(watchConfigPath), 2));
 		if (!watchProtocol.project.hasDiskSource(Path.join([alternateRoot, "Alternate.hx"])))
 			throw "Haxe configuration change did not refresh source roots";
 		var secondRoot = Path.join([watchRoot, "second"]),
@@ -463,7 +463,7 @@ class LspProtocolMain {
 		sys.FileSystem.createDirectory(secondRoot);
 		sys.io.File.saveContent(Path.join([secondRoot, "Second.hx"]), "class Second {}");
 		sys.io.File.saveContent(secondConfigPath, "-cp second\n-main Second\n");
-		watchProtocol.handle(watchedFileMessage("file://" + secondConfigPath, 1));
+		watchProtocol.handle(watchedFileMessage(FileUri.fromPath(secondConfigPath), 1));
 		if (watchProtocol.project.configurations.length != 2
 			|| watchProtocol.project.configurations[0].id == watchProtocol.project.configurations[1].id)
 			throw "discovered Haxe builds did not receive stable distinct identities";
@@ -482,8 +482,8 @@ class LspProtocolMain {
 			folderBSource = Path.join([folderB, "src"]),
 			folderAPath = Path.join([folderASource, "FolderA.hx"]),
 			folderBPath = Path.join([folderBSource, "FolderB.hx"]),
-			folderAUri = "file://" + folderAPath,
-			folderBUri = "file://" + folderBPath;
+			folderAUri = FileUri.fromPath(folderAPath),
+			folderBUri = FileUri.fromPath(folderBPath);
 		for (path in [folderRoot, folderA, folderB, folderASource, folderBSource])
 			sys.FileSystem.createDirectory(path);
 		sys.io.File.saveContent(Path.join([folderA, "build.hxml"]), "-cp src\n-main FolderA\n");
@@ -495,7 +495,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 434,
 			method: "initialize",
-			params: {workspaceFolders: [{uri: "file://" + folderA, name: "folder-a"}]}
+			params: {workspaceFolders: [{uri: FileUri.fromPath(folderA), name: "folder-a"}]}
 		}));
 		if (!folderProtocol.project.hasDiskSource(folderAPath) || folderProtocol.project.hasDiskSource(folderBPath))
 			throw "initial workspace folders were not indexed independently";
@@ -517,8 +517,8 @@ class LspProtocolMain {
 			method: "textDocument/semanticTokens/full",
 			params: {textDocument: {uri: folderAUri}}
 		}));
-		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderB, name: "folder-b"}], [{
-			uri: "file://" + folderA,
+		folderProtocol.handle(workspaceFolderChange([{uri: FileUri.fromPath(folderB), name: "folder-b"}], [{
+			uri: FileUri.fromPath(folderA),
 			name: "folder-a"
 		}]));
 		if (folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
@@ -560,8 +560,8 @@ class LspProtocolMain {
 		}
 		if (foundRemovedFolder || !foundRetainedFolder)
 			throw "workspace diagnostics retained a closed removed folder or omitted the active root";
-		folderProtocol.handle(workspaceFolderChange([{uri: "file://" + folderRoot, name: "parent"}], []));
-		folderProtocol.handle(workspaceFolderChange([], [{uri: "file://" + folderB, name: "folder-b"}]));
+		folderProtocol.handle(workspaceFolderChange([{uri: FileUri.fromPath(folderRoot), name: "parent"}], []));
+		folderProtocol.handle(workspaceFolderChange([], [{uri: FileUri.fromPath(folderB), name: "folder-b"}]));
 		if (!folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
 			throw "removing an overlapping child folder discarded files still owned by its parent";
 		deleteTree(folderRoot);
@@ -840,7 +840,7 @@ class LspProtocolMain {
 		var importService = new LanguageService(),
 			importProtocol = new LspProtocol(importService),
 			helperPath = "/workspace/tools/Helper.hx",
-			helperUri = "file://" + helperPath,
+			helperUri = FileUri.fromPath(helperPath),
 			importUri = "file:///workspace/ImportMain.hx",
 			importSource = "function main():Int return 0; // Hel";
 		importService.update(helperPath,
@@ -1893,7 +1893,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 851,
 			method: "initialize",
-			params: {rootUri: "file://" + base + "/app"}
+			params: {rootUri: FileUri.fromPath(base) + "/app"}
 		}));
 		if (protocol.project.configurations.length != 1
 			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
@@ -1944,7 +1944,7 @@ class LspProtocolMain {
 		sys.io.File.saveContent(base + "/app/src/build/BuildDiagnostic.hx", "package build; class BuildDiagnostic {} ");
 		sys.io.File.saveContent(base + "/app/src/generated/Artifact.hx", "invalid generated output");
 		var mainPath = base + "/app/src/app/Main.hx",
-			uri = "file://" + mainPath,
+			uri = FileUri.fromPath(mainPath),
 			source =
 				"package app; import dep.Value; class Main { public static function main():Int { var answer = Value.answer(); return answer; } }",
 			protocol = new LspProtocol();
@@ -1953,7 +1953,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 801,
 			method: "initialize",
-			params: {rootUri: "file://" + base + "/app"}
+			params: {rootUri: FileUri.fromPath(base) + "/app"}
 		}));
 		if (protocol.project.configurations.length != 1
 			|| protocol.project.compilerPath(mainPath) != "app/Main.hx"
@@ -2013,7 +2013,7 @@ class LspProtocolMain {
 				id: 803,
 				method: "initialize",
 				params: {workspaceFolders: [for (root in roots) {
-					uri:"file://" + root, name:root
+					uri:FileUri.fromPath(root), name:root
 				}]}}));
 			var published = nested.handle(Json.stringify({
 				jsonrpc: "2.0",
@@ -2055,7 +2055,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 809,
 			method: "initialize",
-			params: {rootUri: "file://" + base}
+			params: {rootUri: FileUri.fromPath(base)}
 		}));
 		deferred.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -2075,7 +2075,7 @@ class LspProtocolMain {
 			method: "textDocument/didOpen",
 			params: {
 				textDocument: {
-					uri: "file://" + dependencyPath,
+					uri: FileUri.fromPath(dependencyPath),
 					version: 1,
 					languageId: "haxe",
 					text: sys.io.File.getContent(dependencyPath)
@@ -2111,7 +2111,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 811,
 			method: "textDocument/documentSymbol",
-			params: {textDocument: {uri: "file://" + dependencyPath}}
+			params: {textDocument: {uri: FileUri.fromPath(dependencyPath)}}
 		}));
 		var editedDefinition = request(deferred, Json.stringify({
 			jsonrpc: "2.0",
@@ -2142,7 +2142,7 @@ class LspProtocolMain {
 			jsonrpc: "2.0",
 			id: 804,
 			method: "initialize",
-			params: {rootUri: "file://" + base + "/app/src"}
+			params: {rootUri: FileUri.fromPath(base) + "/app/src"}
 		}));
 		var ffiMessages = ffiProtocol.handle(Json.stringify({
 			jsonrpc: "2.0",
@@ -2188,7 +2188,7 @@ class LspProtocolMain {
 		var oldConfiguration = ffiProtocol.project.configurations[0].id;
 		sys.io.File.saveContent(base + "/app/fixture.hxi",
 			'// Updated ABI\ninterface fixture @target("portable-abi64") @library("fixture") { const VALUE = 19; }');
-		ffiProtocol.handle(watchedFileMessage("file://" + base + "/app/fixture.hxi", 2));
+		ffiProtocol.handle(watchedFileMessage(FileUri.fromPath(base) + "/app/fixture.hxi", 2));
 		if (ffiProtocol.project.configurations[0].id == oldConfiguration)
 			throw "FFI edits did not invalidate project configuration";
 		var afterFfiEdit = request(ffiProtocol, Json.stringify({
