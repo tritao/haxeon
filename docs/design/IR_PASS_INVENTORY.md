@@ -112,6 +112,30 @@ under `/media/joao/DATA1/haxeon-a1-gates/q3-outer-60d-logs/`.
 
 ## Measurement
 
+### Typer stabilization worklist (2026-11-16)
+
+On compiler `17a459977`, a temporary probe timed the initial runtime-type drain and the first and subsequent passes of
+`ProgramTyper`'s request-stabilization loop. Three cold compiler self-build pairs used Haxeon-built control and probe compilers,
+the measurement and heavy-build locks, and the a1 heavy marker. Pair-start loads were 2.86, 2.43 and 2.81; process snapshots
+showed no other active build at those starts (other processes were not monitored continuously). Outputs were byte-identical.
+Control/probe median wall times were 12.07/12.08 s, peak RSS 1,411,512/1,412,344 KiB, and typing time 2,087/2,102 ms.
+The probe reported three passes in each run: first passes took 14.08–14.18 ms, and subsequent passes 9.97–10.49 ms
+(median 10.39 ms, 0.49% of median probe typing time). Subsequent-pass time includes useful newly requested generation, so it
+is an upper bound on the work a worklist might avoid. The paired results show no measurable probe perturbation at this resolution.
+
+An editor measurement could not be completed on the available outer revisions. In a disposable outer checkout, the existing
+one-line `HttpHeader` to `NativeHttpHeader` port was applied solely for this measurement; no outer branch was changed. Outer
+main `e1766d192` then failed with `app/BimModelEditor.hx:150:5: E1026` on `Button.selected`. The Button-port revision
+`5f40717a4` instead failed with `app/EditorPerspectiveViewport.hx:2040:22: E1005`: the null check on `sensor.reading` no longer
+holds after a possible mutation. The newer outer revision `d428464e3` requires the unpublished `haxeon.ui.core.RootInputs`
+API and failed with `E2001`. No editor timing is claimed. Raw timings and diagnostics are in
+`/home/joao/dev/materia-cache/haxeon-a1-gates/typer-final/results/`.
+
+**Decision:** skip the typer worklist for now: the measured subsequent-pass upper bound is well below the approximately 10%
+threshold. This decision is based on the self-build alone under the approved editor-build fallback; revisit if a compatible
+editor measurement or later profiling shows a material cost. The measurements do not isolate the cost of any temporary
+structure, so they do not justify removing scaffolding.
+
 App edit build (one-line edit in `src/Main.hx` of the app, after a cold build and two no-op builds in the same worker), pre-merge
 tree `0405feb5` (the merge changed the app's API, so the app does not build on it). A temporary probe sampled the allocation counter
 between pass boundaries (object counts, not time; the probe was removed). Raw rows: `/media/joao/DATA1/warm-prof/passalloc-keep.txt`.
