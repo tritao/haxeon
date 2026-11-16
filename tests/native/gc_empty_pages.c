@@ -1,5 +1,9 @@
 #include <hl.h>
-#include <pthread.h>
+#ifdef _WIN32
+#	include <windows.h>
+#else
+#	include <pthread.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -41,10 +45,25 @@ static void *allocate(void *argument) {
 	hl_unregister_thread();
 	return NULL;
 }
+#ifdef _WIN32
+static DWORD WINAPI allocate_thread(LPVOID phase) {
+	allocate(phase);
+	return 0;
+}
+#endif
+/* Allocates on a thread of its own and waits for it. */
 static int run(int phase) {
+#ifdef _WIN32
+	HANDLE thread = CreateThread(NULL,0,allocate_thread,&phase,0,NULL);
+	if( thread == NULL ) return 0;
+	int joined = WaitForSingleObject(thread,INFINITE) == WAIT_OBJECT_0;
+	CloseHandle(thread);
+	return joined;
+#else
 	pthread_t thread;
 	if(pthread_create(&thread,NULL,allocate,&phase)) return 0;
 	return pthread_join(thread,NULL)==0;
+#endif
 }
 int main(int argc, char **argv) {
 	int marker=0, mode;
