@@ -25,37 +25,10 @@ import runtime.Ryu;
 #end
 
 #if !wasm
-@:hlNative("haxeon_runtime", "__std_parse_int")
-extern function stdParseInt(value:String):Int;
-
 @:hlNative("haxeon_runtime", "__std_parse_float")
 extern function stdParseFloat(value:String):Float;
 #else
-// Wasm parses in Haxe with the HashLink runtime's C semantics: strtol(value, NULL, 0) and strtod.
-function stdParseInt(value:String):Int {
-	if (value == null)
-		return 0;
-	var position = skipSpace(value, 0), negative = false, base = 10, result = 0;
-	if (position < value.length && (value.charCodeAt(position) == "+".code || value.charCodeAt(position) == "-".code))
-		negative = value.charCodeAt(position++) == "-".code;
-	if (position < value.length && value.charCodeAt(position) == "0".code) {
-		base = 8;
-		if (position + 2 < value.length
-			&& (value.charCodeAt(position + 1) == "x".code || value.charCodeAt(position + 1) == "X".code)
-			&& digitValue(value.charCodeAt(position + 2)) < 16) {
-			base = 16;
-			position += 2;
-		}
-	}
-	while (position < value.length) {
-		var digit = digitValue(value.charCodeAt(position++));
-		if (digit >= base)
-			break;
-		result = result * base + digit;
-	}
-	return negative ? -result : result;
-}
-
+// Wasm parses floats in Haxe with the HashLink runtime's C semantics (strtod).
 function stdParseFloat(value:String):Float {
 	if (value == null)
 		return Math.NaN;
@@ -132,6 +105,38 @@ function scaleByPowerOfTen(mantissa:Float, exponent:Int):Float {
 	return exponent < 0 ? mantissa / power : mantissa * power;
 }
 
+#end
+
+/**
+ * Haxe's Std.parseInt on every target: leading whitespace, an optional sign, then "0x" and hexadecimal digits or decimal
+ * digits, up to the first character that is not one; null when there are no digits. A leading 0 does not make it octal.
+ */
+function stdParseInt(value:Null<String>):Null<Int> {
+	if (value == null)
+		return null;
+	var position = skipSpace(value, 0), negative = false;
+	if (position < value.length && (value.charCodeAt(position) == "+".code || value.charCodeAt(position) == "-".code))
+		negative = value.charCodeAt(position++) == "-".code;
+	var base = 10;
+	if (position + 2 < value.length && value.charCodeAt(position) == "0".code
+		&& (value.charCodeAt(position + 1) == "x".code || value.charCodeAt(position + 1) == "X".code)
+		&& digitValue(value.charCodeAt(position + 2)) < 16) {
+		base = 16;
+		position += 2;
+	}
+	var start = position, result = 0;
+	while (position < value.length) {
+		var digit = digitValue(value.charCodeAt(position));
+		if (digit >= base)
+			break;
+		result = result * base + digit;
+		position++;
+	}
+	if (position == start)
+		return null;
+	return negative ? -result : result;
+}
+
 function skipSpace(value:String, position:Int):Int {
 	while (position < value.length) {
 		var code = value.charCodeAt(position);
@@ -146,7 +151,7 @@ function digitValue(code:Int):Int
 	return code >= "0".code && code <= "9".code ? code - "0".code : code >= "a".code
 		&& code <= "z".code ? code - "a".code + 10 : code >= "A".code
 		&& code <= "Z".code ? code - "A".code + 10 : 99;
-#end
+
 
 @:hlNative("haxeon_runtime", "__std_int_f64")
 extern function stdIntFloat(value:Float):Int;
@@ -210,7 +215,8 @@ class Std {
 		return stdIntFloat(value);
 	}
 
-	public static inline function parseInt(value:String):Int {
+	/** The integer `value` starts with, as Haxe's: null when it does not start with one. */
+	public static inline function parseInt(value:String):Null<Int> {
 		return stdParseInt(value);
 	}
 

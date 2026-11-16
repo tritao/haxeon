@@ -604,3 +604,4 @@ int32-ucompare	42
 int64-low-high	42
 int64-mul-div	42
 date-tools	42
+std-parse-int	42

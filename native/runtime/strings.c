@@ -335,10 +335,6 @@ HL_PRIM vbyte *HL_NAME(__string_bytes)( vstring *value ) {
 	return (vbyte *)realtime_string_data(value);
 }
 
-HL_PRIM int HL_NAME(__std_parse_int)( vstring *value ) {
-	return value == NULL ? 0 : (int)strtol(realtime_string_utf8(value), NULL, 0);
-}
-
 HL_PRIM double HL_NAME(__std_parse_float)( vstring *value ) {
 	if( value == NULL ) return NAN;
 	const char *text = realtime_string_utf8(value);

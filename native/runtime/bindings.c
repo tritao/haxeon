@@ -533,7 +533,6 @@ DEFINE_PRIM(_STRING,__string_char_at,_STRING _I32);
 DEFINE_PRIM(_STRING,__string_from_char_code,_I32);
 DEFINE_PRIM(_STRING,__string_from_bytes,_BYTES _I32);
 DEFINE_PRIM(_BYTES,__string_bytes,_STRING);
-DEFINE_PRIM(_I32,__std_parse_int,_STRING);
 DEFINE_PRIM(_F64,__std_parse_float,_STRING);
 DEFINE_PRIM(_I32,__std_int_f64,_F64);
 DEFINE_PRIM(_I32,__std_int_dynamic,_DYN);
