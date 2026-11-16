@@ -133,7 +133,7 @@ class HaxeonCli {
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
 				case "fmt": fmt(arguments);
-				case "lint": LintCommand.run(arguments);
+				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]));
 				case "build": build(arguments, false);
 				case "run": build(arguments, true);
 				case "workspace": workspaceCommand(arguments);

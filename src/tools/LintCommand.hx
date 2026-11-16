@@ -19,18 +19,25 @@ import sys.io.File;
  * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`) and runs of
  * imports out of order (rule `import-order`, see ImportOrder); `--only` checks one rule.
  *
- * Imports resolve against the source roots of the given manifests and of the directory each file's package declaration implies. An
- * import that resolves nowhere is assumed used, so a missing manifest makes the check quieter, never wrong. `--fix` deletes the
+ * Each file's imports resolve against its own project: the source roots of the nearest haxeon.json and of its path dependencies, the
+ * directory its package declaration implies, Haxeon's standard library, and any manifest given with `--manifest`. Never against the
+ * other files of the run, so a file gets the same answer alone or with the whole tree. An import that resolves nowhere is assumed
+ * used, so a missing manifest makes the check quieter, never wrong. `--fix` deletes the
  * statements, sorts the runs that can be sorted without changing what a name means, and reformats a file that was formatted before.
  * A run whose order matters (two imports of one name) is left as written and not reported.
  */
 class LintCommand {
-	final roots:Array<String> = [];
+	/** Roots every file resolves against: Haxeon's standard library and the `--manifest` source roots. */
+	final sharedRoots:Array<String> = [];
+
+	/** Source roots of a project by its manifest, its path dependencies' included. */
+	final projectRoots:Map<String, Array<String>> = [];
+
 	final programs:Map<String, Null<AstProgram>> = [];
 
 	function new() {}
 
-	public static function run(arguments:Array<String>):Int {
+	public static function run(arguments:Array<String>, ?standardLibrary:String):Int {
 		var fix = false,
 			manifests:Array<String> = [],
 			paths:Array<String> = [],
@@ -62,8 +69,11 @@ class LintCommand {
 		if (paths.length == 0)
 			throw "haxeon lint requires at least one file";
 		var command = new LintCommand();
+		if (standardLibrary != null)
+			command.sharedRoots.push(standardLibrary);
 		for (manifest in manifests)
-			command.addManifest(manifest);
+			for (root in command.manifestRoots(SourceFiles.requireFile(manifest), []))
+				addTo(command.sharedRoots, root);
 		var projects = new ProjectFormat(), found = 0;
 		for (path in SourceFiles.expand(paths)) {
 			var source = File.getContent(path), file = new SourceFile(path, source);
@@ -75,12 +85,11 @@ class LintCommand {
 			var rootTokens = tokens ?? orderTokens;
 			if (rootTokens == null)
 				continue;
-			var root = packageRoot(path, rootTokens);
-			if (root != null)
-				command.addRoot(root);
-			var unused = checkUnused && tokens != null ? UnusedImports.find(tokens, command.resolve) : [];
+			var roots = command.rootsFor(path, rootTokens),
+				resolve = (importPath:String) -> command.resolve(roots, importPath);
+			var unused = checkUnused && tokens != null ? UnusedImports.find(tokens, resolve) : [];
 			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens,
-				command.resolve).filter(block -> block.sorted != null) : [];
+				resolve).filter(block -> block.sorted != null) : [];
 			if (unused.length == 0 && unordered.length == 0)
 				continue;
 			found += unused.length + unordered.length;
@@ -94,7 +103,7 @@ class LintCommand {
 					edited = remove(source, unused);
 				// Sorted after the removal, which can join two runs or empty one.
 				if (orderTokens != null)
-					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), command.resolve);
+					edited = ImportOrder.sort(edited, ImportOrder.tokens(path, edited), resolve);
 				if (wasFormatted) {
 					var formatted = Formatter.format(edited, config);
 					if (formatted != null)
@@ -106,14 +115,70 @@ class LintCommand {
 		return found > 0 && !fix ? 1 : 0;
 	}
 
-	function addManifest(path:String):Void {
-		var raw:Dynamic = Json.parse(File.getContent(SourceFiles.requireFile(path))), directory = Path.directory(path);
-		var sourceRoots:Array<String> = raw.sourceRoots == null ? ["src"] : raw.sourceRoots;
-		for (sourceRoot in sourceRoots)
-			addRoot(Path.join([directory == "" ? "." : directory, sourceRoot]));
+	/** The roots `path` resolves against: its package root, its project's source roots, then the shared ones. */
+	function rootsFor(path:String, tokens:Array<compiler.syntax.Token>):Array<String> {
+		var roots:Array<String> = [], root = packageRoot(path, tokens), manifest = nearestManifest(path);
+		if (root != null)
+			roots.push(root);
+		if (manifest != null)
+			for (projectRoot in manifestRoots(manifest, []))
+				addTo(roots, projectRoot);
+		for (shared in sharedRoots)
+			addTo(roots, shared);
+		return roots;
 	}
 
-	function addRoot(root:String):Void {
+	/** The haxeon.json in the file's directory or the nearest one above it. */
+	static function nearestManifest(path:String):Null<String> {
+		var directory = Path.directory(FileSystem.absolutePath(path));
+		while (true) {
+			var manifest = Path.join([directory, "haxeon.json"]);
+			if (FileSystem.exists(manifest))
+				return manifest;
+			var parent = Path.directory(directory);
+			if (parent == directory || parent == "")
+				return null;
+			directory = parent;
+		}
+	}
+
+	/** A manifest's source roots and, through its path dependencies, theirs. `visiting` stops a dependency cycle. */
+	function manifestRoots(manifest:String, visiting:Array<String>):Array<String> {
+		var key = FileSystem.absolutePath(manifest), cached = projectRoots.get(key);
+		if (cached != null)
+			return cached;
+		if (visiting.indexOf(key) >= 0)
+			return [];
+		visiting.push(key);
+		var roots:Array<String> = [], directory = Path.directory(key), raw:Dynamic = null;
+		try
+			raw = Json.parse(File.getContent(key))
+		catch (_:Dynamic) {}
+		if (raw != null) {
+			var sourceRoots:Array<String> = raw.sourceRoots == null ? ["src"] : raw.sourceRoots;
+			for (sourceRoot in sourceRoots)
+				addTo(roots, Path.join([directory, sourceRoot]));
+			var dependencies:Dynamic = raw.dependencies;
+			if (dependencies != null)
+				for (name in Reflect.fields(dependencies)) {
+					var dependency:Dynamic = Reflect.field(dependencies, name);
+					var location:Null<String> = dependency == null ? null : dependency.path;
+					if (location != null) {
+						var dependencyManifest = Path.join([
+							Path.isAbsolute(location) ? location : Path.join([directory, location]),
+							"haxeon.json"
+						]);
+						if (FileSystem.exists(dependencyManifest))
+							for (root in manifestRoots(dependencyManifest, visiting))
+								addTo(roots, root);
+					}
+				}
+		}
+		projectRoots.set(key, roots);
+		return roots;
+	}
+
+	static function addTo(roots:Array<String>, root:String):Void {
 		if (roots.indexOf(root) < 0)
 			roots.push(root);
 	}
@@ -137,7 +202,7 @@ class LintCommand {
 	}
 
 	/** The module an import names: the longest prefix of the path that is a source file, and the type after it. */
-	function resolve(importPath:String):Null<ImportTarget> {
+	function resolve(roots:Array<String>, importPath:String):Null<ImportTarget> {
 		var parts = importPath.split("."), count = parts.length;
 		while (count > 0) {
 			var module = parts.slice(0, count).join("/") + ".hx";
