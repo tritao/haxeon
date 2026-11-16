@@ -1240,7 +1240,10 @@ class TestMain {
 				'Field "value" requires an object');
 		Frontend.compile('class Bound { public final value:Float; public function new(value:Float) this.value = value; } class Base { public function new() {} @:noReturn public function fail():Void throw "no"; public function get(v:Null<Bound>):Float { if (v == null) this.fail(); return v.value + 1; } } class Sub extends Base { @:noReturn override public function fail():Void throw "sub"; } function main():Int return Std.int(new Sub().get(new Bound(41.0)));');
 		expectCompileError('class Base { public function new() {} @:noReturn public function fail():Void throw "no"; } class Sub extends Base { override public function fail():Void {} } function main():Int { new Sub().fail(); return 0; }',
-			"Method fail overrides @:noReturn Base.fail and must be declared @:noReturn too");
+			"Method fail overrides or implements @:noReturn Base.fail and must be declared @:noReturn too");
+		expectCompileError('interface Guard { @:noReturn function fail():Void; } class Lenient implements Guard { public function new() {} public function fail():Void {} } function main():Int { var guard:Guard = new Lenient(); guard.fail(); return 0; }',
+			"Method fail overrides or implements @:noReturn Guard.fail and must be declared @:noReturn too");
+		Frontend.compile('class Bound { public final value:Float; public function new(value:Float) this.value = value; } interface Guard { @:noReturn function fail():Void; } class Strict implements Guard { public function new() {} @:noReturn public function fail():Void throw "no"; } function get(guard:Guard, v:Null<Bound>):Float { if (v == null) guard.fail(); return v.value; } function main():Int return Std.int(get(new Strict(), new Bound(42.0)));');
 		expectCompileError('@:noReturn function fail(flag:Bool):Void { if (flag) throw "no"; } function main():Int { fail(true); return 0; }',
 			"Function fail is declared @:noReturn but can finish without throwing");
 		expectCompileError('@:noReturn function fail(flag:Bool):Void { if (flag) return; throw "no"; } function main():Int { fail(true); return 0; }',

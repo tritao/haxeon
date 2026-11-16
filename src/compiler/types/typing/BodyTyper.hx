@@ -213,10 +213,10 @@ class BodyTyper {
 
 	/** Every override of a `@:noReturn` method is declared too: a call through the base method must still never return. */
 	function checkNoReturnOverrides():Void {
-		var violation = compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls);
+		var violation = compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls, session.interfaceDecls);
 		if (violation != null)
 			fail("E1006",
-				'Method ${violation.method.name} overrides @:noReturn ${violation.base} and must be declared @:noReturn too',
+				'Method ${violation.method.name} overrides or implements @:noReturn ${violation.base} and must be declared @:noReturn too',
 				violation.method.span);
 	}
 
