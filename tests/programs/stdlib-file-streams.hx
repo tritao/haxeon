@@ -3,7 +3,7 @@ import haxe.io.Eof;
 import sys.io.File;
 import sys.io.FileSeek;
 
-// File.write, append and read stream a file as Haxe's do, on HashLink files and Wasm's in-memory file system alike.
+// File.write, append, update and read stream a file as Haxe's do, on HashLink files and Wasm's in-memory file system alike.
 function main():Int {
 	sys.FileSystem.createDirectory("out");
 	var path = "out/stdlib-file-streams.txt";
@@ -42,6 +42,33 @@ function main():Int {
 	try {
 		File.read("out/stdlib-file-streams-missing.txt");
 		return 8;
+	} catch (_:Dynamic) {}
+	// update writes over the file from a position and keeps the rest; an output knows where it is.
+	var written = File.write(path);
+	written.writeString("hello world");
+	if (written.tell() != 11)
+		return 9;
+	written.close();
+	var updated = File.update(path);
+	updated.seek(6, SeekBegin);
+	updated.writeString("WORLD");
+	if (updated.tell() != 11)
+		return 10;
+	updated.seek(0, SeekBegin);
+	updated.writeByte("H".code);
+	updated.close();
+	if (File.getContent(path) != "Hello WORLD")
+		return 11;
+	// Appending writes at the end wherever the position was moved.
+	var appending = File.append(path);
+	appending.seek(0, SeekBegin);
+	appending.writeString("!");
+	appending.close();
+	if (File.getContent(path) != "Hello WORLD!")
+		return 12;
+	try {
+		File.update("out/stdlib-file-streams-missing.txt");
+		return 13;
 	} catch (_:Dynamic) {}
 	return 42;
 }

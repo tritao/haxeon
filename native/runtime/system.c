@@ -165,8 +165,10 @@ HL_PRIM realtime_file_input *HL_NAME(__file_input_open)( vstring *path, bool bin
 	return realtime_stream_open(path, binary ? "rb" : "r");
 }
 
-HL_PRIM realtime_file_output *HL_NAME(__file_output_open)( vstring *path, bool append, bool binary ) {
-	return realtime_stream_open(path, append ? (binary ? "ab" : "a") : (binary ? "wb" : "w"));
+/* Opens `path` to write: mode 0 creates or truncates it, 1 appends, 2 updates an existing file from its start. */
+HL_PRIM realtime_file_output *HL_NAME(__file_output_open)( vstring *path, int mode, bool binary ) {
+	const char *flags = mode == 1 ? (binary ? "ab" : "a") : mode == 2 ? (binary ? "r+b" : "r+") : (binary ? "wb" : "w");
+	return realtime_stream_open(path, flags);
 }
 
 /* The next byte of `input`, or -1 at the end of the input. */

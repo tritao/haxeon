@@ -592,7 +592,7 @@ DEFINE_PRIM(_ABSTRACT(realtime_file_output),__sys_stderr,_NO_ARG);
 DEFINE_PRIM(_ABSTRACT(realtime_file_input),__sys_stdin,_NO_ARG);
 DEFINE_PRIM(_STRING,__file_input_read_line,_ABSTRACT(realtime_file_input));
 DEFINE_PRIM(_ABSTRACT(realtime_file_input),__file_input_open,_STRING _BOOL);
-DEFINE_PRIM(_ABSTRACT(realtime_file_output),__file_output_open,_STRING _BOOL _BOOL);
+DEFINE_PRIM(_ABSTRACT(realtime_file_output),__file_output_open,_STRING _I32 _BOOL);
 DEFINE_PRIM(_BOOL,__file_input_eof,_ABSTRACT(realtime_file_input));
 DEFINE_PRIM(_I32,__file_input_tell,_ABSTRACT(realtime_file_input));
 DEFINE_PRIM(_BOOL,__file_input_seek,_ABSTRACT(realtime_file_input) _I32 _I32);

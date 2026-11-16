@@ -44,7 +44,7 @@ extern function fileSaveBytes(path:String, bytes:Bytes):Void;
 extern function fileInputOpen(path:String, binary:Bool):hl.Abstract<"realtime_file_input">;
 
 @:hlNative("haxeon_runtime", "__file_output_open")
-extern function fileOutputOpen(path:String, append:Bool, binary:Bool):hl.Abstract<"realtime_file_output">;
+extern function fileOutputOpen(path:String, mode:Int, binary:Bool):hl.Abstract<"realtime_file_output">;
 #else
 // Wasm keeps files in the session's in-memory filesystem (runtime.MemoryFileSystem).
 function fileGetContent(path:String):String
@@ -128,9 +128,9 @@ class File {
 		haxeon.build.InputFiles.wrote(path);
 		#if wasm
 		fileSaveBytes(path, Bytes.alloc(0));
-		return new FileOutput(path);
+		return new FileOutput(path, Bytes.alloc(0), 0, false);
 		#else
-		return new FileOutput(fileOutputOpen(path, false, binary));
+		return new FileOutput(fileOutputOpen(path, 0, binary));
 		#end
 	}
 
@@ -138,11 +138,23 @@ class File {
 	public static function append(path:String, binary:Bool = true):FileOutput {
 		haxeon.build.InputFiles.wrote(path);
 		#if wasm
-		if (!runtime.MemoryFileSystem.exists(path))
-			fileSaveBytes(path, Bytes.alloc(0));
-		return new FileOutput(path);
+		var existing = runtime.MemoryFileSystem.exists(path) ? fileGetBytes(path) : Bytes.alloc(0);
+		if (existing.length == 0)
+			fileSaveBytes(path, existing);
+		return new FileOutput(path, existing, existing.length, true);
 		#else
-		return new FileOutput(fileOutputOpen(path, true, binary));
+		return new FileOutput(fileOutputOpen(path, 1, binary));
+		#end
+	}
+
+	/** Opens the existing file at `path` to write over it from its start, keeping what is not overwritten, as Haxe's. */
+	public static function update(path:String, binary:Bool = true):FileOutput {
+		haxeon.build.InputFiles.wrote(path);
+		#if wasm
+		var existing = fileGetBytes(path);
+		return new FileOutput(path, existing, 0, false);
+		#else
+		return new FileOutput(fileOutputOpen(path, 2, binary));
 		#end
 	}
 

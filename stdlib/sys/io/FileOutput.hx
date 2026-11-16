@@ -4,80 +4,127 @@ import haxe.io.Bytes;
 
 #if wasm
 /**
- * A file of the session's in-memory file system, opened through `File.write` or `File.append`; standard output and error
- * (`Sys.stdout()`, `Sys.stderr()`) are a subclass routed to the host. Bytes are held until `flush` or `close`, so a
- * character written byte by byte arrives whole.
+ * A file of the session's in-memory file system, opened through `File.write`, `File.append` or `File.update`, as a
+ * position in its bytes; `flush` and `close` store them. Standard output and error (`Sys.stdout()`, `Sys.stderr()`) are a
+ * subclass routed to the host.
  */
 class FileOutput extends haxe.io.Output {
 	final path:String;
-	var pending = new haxe.io.BytesBuffer();
 
-	/** The file at `path`, which `File` has already created or truncated. */
-	public function new(path:String)
+	/** Every write goes to the end, as a file opened to append does whatever `seek` says. */
+	final appending:Bool;
+
+	var content:Bytes;
+	var length:Int;
+	var position:Int;
+
+	/** The file at `path` holding `content`, written from `position`. */
+	public function new(path:String, content:Bytes, position:Int, appending:Bool) {
 		this.path = path;
+		this.content = content;
+		this.length = content.length;
+		this.position = position;
+		this.appending = appending;
+	}
 
 	/** Standard output, or standard error when `error` is set. Only programs that use them link the host's output imports. */
 	public static function host(error:Bool):FileOutput
 		return new HostOutput(error);
 
-	override public function writeByte(c:Int):Void
-		pending.addByte(c);
+	override public function writeByte(c:Int):Void {
+		reserve(1);
+		content.set(position++, c);
+		if (position > length)
+			length = position;
+	}
 
 	override public function writeBytes(s:Bytes, pos:Int, len:Int):Int {
 		if (pos < 0 || len < 0 || pos + len > s.length)
 			throw haxe.io.Error.OutsideBounds;
-		pending.addBytes(s, pos, len);
+		reserve(len);
+		content.blit(position, s, pos, len);
+		position += len;
+		if (position > length)
+			length = position;
 		return len;
 	}
 
 	override public function flush():Void
-		release(taken());
+		runtime.MemoryFileSystem.saveBytes(path, content.sub(0, length));
 
 	override public function close():Void
 		flush();
 
-	/** The pending bytes, leaving none. */
-	function taken():Bytes {
-		var bytes = pending.getBytes();
-		pending = new haxe.io.BytesBuffer();
-		return bytes;
+	public function tell():Int
+		return position;
+
+	/** Moves the write position; past the end, the gap reads as zero bytes once something is written there. */
+	public function seek(p:Int, pos:FileSeek):Void {
+		var target = switch pos {
+			case SeekBegin: p;
+			case SeekCur: position + p;
+			case SeekEnd: length + p;
+		};
+		if (target < 0)
+			throw "Cannot seek before the start of the file";
+		position = target;
 	}
 
-	/** Appends `bytes` to the file. */
-	function release(bytes:Bytes):Void {
-		if (bytes.length == 0)
+	/** Room for `count` more bytes at the write position, which an appending file moves to the end first. */
+	function reserve(count:Int):Void {
+		if (appending)
+			position = length;
+		if (position + count <= content.length)
 			return;
-		var existing = runtime.MemoryFileSystem.exists(path) ? runtime.MemoryFileSystem.getBytes(path) : Bytes.alloc(0),
-			combined = Bytes.alloc(existing.length + bytes.length);
-		combined.blit(0, existing, 0, existing.length);
-		combined.blit(existing.length, bytes, 0, bytes.length);
-		runtime.MemoryFileSystem.saveBytes(path, combined);
+		var capacity = content.length < 64 ? 64 : content.length * 2;
+		while (capacity < position + count)
+			capacity *= 2;
+		var grown = Bytes.alloc(capacity);
+		grown.blit(0, content, 0, length);
+		content = grown;
 	}
 }
 
-/** Standard output or error, written through the host. */
+/** Standard output or error, written through the host; bytes are held until a string or `flush`, so a character arrives whole. */
 private class HostOutput extends FileOutput {
 	final error:Bool;
+	var pending = new haxe.io.BytesBuffer();
 
 	public function new(error:Bool) {
-		super("");
+		super("", Bytes.alloc(0), 0, true);
 		this.error = error;
 	}
 
-	/** Strings go to the host directly, after any bytes still held. */
+	override public function writeByte(c:Int):Void
+		pending.addByte(c);
+
+	override public function writeBytes(s:Bytes, pos:Int, len:Int):Int {
+		pending.addBytes(s, pos, len);
+		return len;
+	}
+
 	override public function writeString(s:String, ?encoding:haxe.io.Encoding):Void {
-		release(taken());
+		release();
 		haxeon.wasm.HaxeonHost.write_output(s, error ? 1 : 0);
 	}
 
 	override public function flush():Void {
-		release(taken());
+		release();
 		haxeon.wasm.HaxeonHost.flush_output(error ? 1 : 0);
 	}
 
-	override function release(bytes:Bytes):Void
+	override public function tell():Int
+		throw "Standard streams have no position";
+
+	override public function seek(p:Int, pos:FileSeek):Void
+		throw "Standard streams have no position";
+
+	function release():Void {
+		var bytes = pending.getBytes();
+		pending = new haxe.io.BytesBuffer();
 		if (bytes.length > 0)
 			haxeon.wasm.HaxeonHost.write_output(bytes.toString(), error ? 1 : 0);
+	}
 }
 #else
 private typedef OutputHandle = hl.Abstract<"realtime_file_output">;
