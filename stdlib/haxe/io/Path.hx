@@ -69,6 +69,37 @@ class Path {
 		return result == "" ? (absolute ? "/" : ".") : result;
 	}
 
+	/** `path` ending in a separator: the one it already uses last, or "/"; "" becomes "/". */
+	public static function addTrailingSlash(path:String):String {
+		if (path.length == 0)
+			return "/";
+		var slash = path.lastIndexOf("/"), backslash = path.lastIndexOf("\\");
+		if (slash < backslash)
+			return backslash != path.length - 1 ? path + "\\" : path;
+		return slash != path.length - 1 ? path + "/" : path;
+	}
+
+	/** `path` without the separators it ends in. */
+	public static function removeTrailingSlashes(path:String):String {
+		var end = path.length;
+		while (end > 0 && (path.charCodeAt(end - 1) == "/".code || path.charCodeAt(end - 1) == "\\".code))
+			end--;
+		return path.substr(0, end);
+	}
+
+	/** The extension of the last segment, after its last ".", or "" when it has none. "." and ".." have none. */
+	public static function extension(path:String):String {
+		var file = withoutDirectory(path);
+		if (file == "." || file == "..")
+			return "";
+		var dot = file.lastIndexOf(".");
+		return dot < 0 ? "" : file.substr(dot + 1);
+	}
+
+	/** `path` with the extension of its last segment replaced by `ext`, or given one. */
+	public static function withExtension(path:String, ext:String):String
+		return withoutExtension(path) + "." + ext;
+
 	public static function isAbsolute(path:String):Bool
 		return path.length > 0
 			&& (path.charCodeAt(0) == "/".code || path.charCodeAt(0) == "\\".code || path.length > 2

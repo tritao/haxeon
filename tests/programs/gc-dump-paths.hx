@@ -30,7 +30,7 @@ function main():Int {
 	var kept = [for (i in 0...100) new Box(i)];
 	hl.Gc.censusStop();
 	hl.Gc.censusDump(directory + "/census.json");
-	hl.Gc.dump(directory + "/heap-é.dump");
+	hl.Gc.dumpMemory(directory + "/heap-é.dump");
 	var names = FileSystem.readDirectory(directory);
 	names.sort(function(left, right) return left < right ? -1 : left > right ? 1 : 0);
 	var exact = names.length == 2 && names[0] == "census.json" && names[1] == "heap-é.dump";

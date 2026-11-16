@@ -263,6 +263,20 @@ HL_PRIM void HL_NAME(__gc_dump_memory)( vstring *path ) {
 	free(native_path);
 }
 
+extern void hl_gc_stats( double *total_allocated, double *allocation_count, double *current_memory );
+
+/* HashLink's GC counters, as hl.Gc.stats reads them: bytes allocated in total, allocations made, and current heap bytes. */
+HL_PRIM varray *HL_NAME(__gc_stats)( void ) {
+	double total = 0, count = 0, memory = 0;
+	hl_gc_stats(&total, &count, &memory);
+	varray *result = hl_alloc_array(&hlt_f64, 3);
+	double *values = hl_aptr(result, double);
+	values[0] = total;
+	values[1] = count;
+	values[2] = memory;
+	return result;
+}
+
 HL_PRIM void HL_NAME(__gc_census_dump)( vstring *path ) {
 	char *native_path = realtime_utf8_copy(path);
 	hl_gc_census_dump(native_path);

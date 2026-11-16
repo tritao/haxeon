@@ -17,5 +17,15 @@ function main():Int {
 		return 5;
 	if (SysTools.quoteWinArg('a"b', false) != 'a\\"b' || SysTools.quoteWinArg("a&b", true) != "a^&b")
 		return 6;
+	if (Path.addTrailingSlash("a/b") != "a/b/" || Path.addTrailingSlash("a\\b") != "a\\b\\"
+		|| Path.addTrailingSlash("") != "/"
+		|| Path.addTrailingSlash("c/") != "c/")
+		return 7;
+	if (Path.removeTrailingSlashes("a/b//") != "a/b" || Path.removeTrailingSlashes("/") != "")
+		return 8;
+	if (Path.extension("dir.d/file.tar.gz") != "gz" || Path.extension("dir.d/file") != "" || Path.extension("..") != "")
+		return 9;
+	if (Path.withExtension("a/b.txt", "md") != "a/b.md" || Path.withExtension("a/b", "md") != "a/b.md")
+		return 10;
 	return 42;
 }

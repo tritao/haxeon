@@ -1,6 +1,18 @@
 package hl;
 
 #if !wasm
+@:hlNative("haxeon_runtime", "__gc_stats")
+extern function gcStats():Array<Float>;
+
+/**
+ * HashLink's counters, as Haxe's hl.Gc.stats: bytes allocated in total, allocations made, and current heap bytes. A module
+ * function of hl.Gc, so it is called as `hl.Gc.stats()`, beside the natives the extern class binds.
+ */
+function stats(): {totalAllocated: Float, allocationCount: Float, currentMemory: Float} {
+	var values = gcStats();
+	return {totalAllocated: values[0], allocationCount: values[1], currentMemory: values[2]};
+}
+
 /** Cumulative HashLink GC counters for lightweight interval measurements. */
 extern class Gc {
 	@:hlNative("std", "gc_total_allocated") public static function totalAllocated():Float;
@@ -30,8 +42,9 @@ extern class Gc {
 	/** Fraction of the heap that may be allocated between collections (default 0.2, clamped to 0.05...4). */
 	@:hlNative("std", "gc_set_mark_threshold") public static function setMarkThreshold(fraction:Float):Void;
 	@:hlNative("std", "gc_get_mark_threshold") public static function markThreshold():Float;
-	/** Writes a heap dump to the file at `path`. */
-	@:hlNative("haxeon_runtime", "__gc_dump_memory") public static function dump(path:String):Void;
+	/** Writes a heap dump to `fileName`, as Haxe's hl.Gc.dumpMemory. */
+	@:hlNative("haxeon_runtime",
+		"__gc_dump_memory") public static function dumpMemory(fileName:String = "hlmemory.dump"):Void;
 	/** Counts every allocation by type from now on; `stackEveryBytes` > 0 also samples call stacks once per that many allocated bytes. */
 	@:hlNative("std", "gc_census_start") public static function censusStart(stackEveryBytes:Int):Void;
 	@:hlNative("std", "gc_census_stop") public static function censusStop():Void;
@@ -90,7 +103,13 @@ class Gc {
 	public static function markThreshold():Float
 		return threshold;
 
-	public static function dump(path:String):Void {}
+	public static function dumpMemory(fileName:String = "hlmemory.dump"):Void {}
+
+	public static function stats(): {totalAllocated: Float, allocationCount: Float, currentMemory: Float} return {
+		totalAllocated: 0.0,
+		allocationCount: 0.0,
+		currentMemory: 0.0
+	};
 
 	public static function censusStart(stackEveryBytes:Int):Void {}
 

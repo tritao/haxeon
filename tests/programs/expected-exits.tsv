@@ -596,3 +596,4 @@ catch-enum	42
 stdlib-file-streams	42
 stdlib-process	42
 enum-constants	42
+gc-stats	42

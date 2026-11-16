@@ -560,6 +560,7 @@ DEFINE_PRIM(_STRING,__string_replace,_STRING _STRING _STRING);
 DEFINE_PRIM(_STRING,__file_get_content,_STRING);
 DEFINE_PRIM(_VOID,__file_save_content,_STRING _STRING);
 DEFINE_PRIM(_VOID,__gc_dump_memory,_STRING);
+DEFINE_PRIM(_ARR,__gc_stats,_NO_ARG);
 DEFINE_PRIM(_VOID,__gc_census_dump,_STRING);
 DEFINE_PRIM(_VOID,__file_append_content,_STRING _STRING);
 DEFINE_PRIM(_STRING,__file_write_atomic,_STRING _ABSTRACT(realtime_bytes) _BOOL);
