@@ -110,6 +110,16 @@ function main() {
 					Script.fail('FAIL: equality guard $which');
 			}
 	Sys.println("PASS: Haxe-built and self-hosted compilers agree on equality across all targets");
+	// Exercise the scalar closure planner with the self-hosted compiler.
+	var closureFixture = Path.join([root, "tests", "programs", "scalar-closure-boundaries.hx"]),
+		closureOutput = '$work/scalar-closure-boundaries.wasm';
+	step(hl, ['$work/stage-1.hl', "--target=wasm-gc", "--entry=scalar-closure-boundaries",
+		"--root=tests/programs", '--output=$closureOutput', closureFixture], root,
+		'$work/scalar-closure-boundaries.log', "self-hosted compiler could not build the scalar closure boundary fixture");
+	var closureCheck = 'const e=new WebAssembly.Instance(new WebAssembly.Module(require("fs").readFileSync(process.argv[1]))).exports;const n=e.main();if(n!==42)throw Error("scalar closure boundary returned "+n)';
+	if (Script.run("node", ["-e", closureCheck, closureOutput]) != 0)
+		Script.fail("FAIL: scalar closure boundary fixture failed under the self-hosted compiler");
+	Sys.println("PASS: self-hosted compiler preserves the Wasm scalar closure boundary");
 	if (Script.run("bash", [Path.join([root, "tests", "integration", "test-compiler-embedding.sh"])], {cwd: root}) != 0)
 		Script.fail("FAIL: the embedded compiler check failed");
 }
