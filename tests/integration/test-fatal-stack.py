@@ -15,6 +15,9 @@ HASHLINK_DIR = Path(subprocess.check_output([str(ROOT / "scripts/hashlink-path.s
 # A native library's hl_* symbols resolve against the VM that loads it; macOS's linker needs to be told so, as CMakeLists.txt
 # does for the runtime library.
 HOST_SYMBOLS = ["-Wl,-undefined,dynamic_lookup"] if sys.platform == "darwin" else []
+# Overflowing a thread's stack faults in its guard, a protection fault: macOS reports it as SIGBUS, Linux as SIGSEGV. The
+# other faults write to an unmapped address, a SIGSEGV everywhere.
+GUARD_SIGNAL = signal.SIGBUS if sys.platform == "darwin" else signal.SIGSEGV
 
 
 def main():
@@ -40,8 +43,9 @@ def main():
         for mode in ["main", "worker", "overflow"]:
             result = subprocess.run(command + [mode], env=environment,
                                     capture_output=True, text=True, timeout=10)
-            assert result.returncode == -signal.SIGSEGV, result
-            assert "HashLink fatal error: SIGSEGV" in result.stderr, result
+            expected = GUARD_SIGNAL if mode == "overflow" else signal.SIGSEGV
+            assert result.returncode == -expected, result
+            assert f"HashLink fatal error: {expected.name}" in result.stderr, result
             if mode != "overflow":
                 assert re.search(r"resolveTarget\(FatalStack.hx:\d+\)", result.stderr), result
                 assert re.search(r"runPlanner\(FatalStack.hx:\d+\)", result.stderr), result

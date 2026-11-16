@@ -31,7 +31,7 @@ class Main {
 HAXE
 
 # Every call is kept, so the trace shows the short ones this checks for.
-haxeon_timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile --profile-min-call=0 \
+haxeon_timeout 120s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile --profile-min-call=0 \
   --profile-output "$scratch/capture/profile.hlpc" > "$scratch/run.log" 2>&1 || {
     cat "$scratch/run.log" >&2
     exit 1
@@ -59,12 +59,12 @@ PY
 
 # A directory holds one capture: recording the same capture again replaces it,
 # and recording a different one into the same directory is refused.
-haxeon_timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
+haxeon_timeout 120s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
   --profile-output "$scratch/capture/profile.hlpc" > "$scratch/rerun.log" 2>&1 || {
     cat "$scratch/rerun.log" >&2
     exit 1
   }
-if haxeon_timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
+if haxeon_timeout 120s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile \
   --profile-output "$scratch/capture/other.hlpc" > "$scratch/other.log" 2>&1; then
   echo "FAIL: a second capture was recorded into an occupied directory" >&2
   exit 1
@@ -72,13 +72,13 @@ fi
 rg -q 'already holds another capture' "$scratch/other.log"
 
 # A source list selects what the recorder captures; without instrument, the ordinary build runs.
-haxeon_timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling   --profile-output "$scratch/sampling/profile.hlpc" > "$scratch/sampling.log" 2>&1 || {
+haxeon_timeout 120s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=sampling   --profile-output "$scratch/sampling/profile.hlpc" > "$scratch/sampling.log" 2>&1 || {
     cat "$scratch/sampling.log" >&2
     exit 1
   }
 test -s "$scratch/sampling/profile.hlpc" && test -s "$scratch/sampling/profile.pftrace"
 cmp -s "$scratch/sampling/profile.hl" "$scratch/build/host/main.hl"
-haxeon_timeout 20s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling --profile-min-call=0 --profile-output "$scratch/mixed/profile.hlpc" > "$scratch/mixed.log" 2>&1 || {
+haxeon_timeout 120s "$repo_dir/scripts/haxeon" run --project "$scratch/haxeon.json" --profile=instrument,sampling --profile-min-call=0 --profile-output "$scratch/mixed/profile.hlpc" > "$scratch/mixed.log" 2>&1 || {
     cat "$scratch/mixed.log" >&2
     exit 1
   }

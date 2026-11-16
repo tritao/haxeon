@@ -11,12 +11,20 @@ static size_t guard_size;
 // Records the lowest usable address of the calling thread's stack and the size of the guard below it.
 HL_PRIM bool HL_NAME(measure)( void ) {
 	pthread_attr_t attr;
+#ifdef __APPLE__
+	// macOS has no pthread_getattr_np: it gives the stack's top and size, and HashLink's threads take the default guard.
+	uintptr_t top = (uintptr_t)pthread_get_stackaddr_np(pthread_self());
+	usable_low = top - pthread_get_stacksize_np(pthread_self());
+	if( pthread_attr_init(&attr) != 0 ) return false;
+	bool ok = pthread_attr_getguardsize(&attr, &guard_size) == 0;
+#else
 	void *address;
 	size_t size;
 	if( pthread_getattr_np(pthread_self(), &attr) != 0 ) return false;
 	bool ok = pthread_attr_getstack(&attr, &address, &size) == 0 && pthread_attr_getguardsize(&attr, &guard_size) == 0;
-	pthread_attr_destroy(&attr);
 	usable_low = (uintptr_t)address;
+#endif
+	pthread_attr_destroy(&attr);
 	return ok && guard_size > 0;
 }
 

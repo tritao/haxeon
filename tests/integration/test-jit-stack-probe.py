@@ -74,6 +74,8 @@ class Main {{
 # A native library's hl_* symbols resolve against the VM that loads it; macOS's linker needs to be told so, as CMakeLists.txt
 # does for the runtime library.
 HOST_SYMBOLS = ["-Wl,-undefined,dynamic_lookup"] if sys.platform == "darwin" else []
+# A thread's stack guard is a protection fault: macOS reports it as SIGBUS, Linux as SIGSEGV.
+GUARD_SIGNAL = signal.SIGBUS if sys.platform == "darwin" else signal.SIGSEGV
 
 
 def main():
@@ -93,9 +95,10 @@ def main():
         for padding in range(STARTS):
             result = subprocess.run([VM, str(work / "probe.hl"), str(padding)], env=environment, capture_output=True,
                                     text=True, timeout=120)
-            assert result.returncode == -signal.SIGSEGV, result
+            assert result.returncode == -GUARD_SIGNAL, result
             guard = re.search(r"^guard (-?\d+) (-?\d+) (\d+)$", result.stdout, re.M)
-            fault = re.search(r"HashLink fatal error: SIGSEGV \(signal 11\) at (0x[0-9a-f]+)", result.stderr)
+            fault = re.search(rf"HashLink fatal error: {GUARD_SIGNAL.name} \(signal {int(GUARD_SIGNAL)}\) at (0x[0-9a-f]+)",
+                              result.stderr)
             assert guard and fault, result
             low = ((int(guard.group(1)) & 0xFFFFFFFF) << 32) | (int(guard.group(2)) & 0xFFFFFFFF)
             size, address = int(guard.group(3)), int(fault.group(1), 16)
