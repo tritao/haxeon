@@ -3,10 +3,17 @@ name: compiler-and-runtime
 on:
   push:
   pull_request:
+  # A complete run on main every night, and on demand: pushes cancel the run they supersede, which on a busy main can mean
+  # no run finishes on every platform for a whole day.
+  schedule:
+    - cron: '17 3 * * *'
+  workflow_dispatch:
 
 concurrency:
-  group: compiler-and-runtime-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Pushes and pull requests share one group per ref and cancel what they supersede. Nightly and manual runs each get a group
+  # of their own (the run id) and are never cancelled, by a push or anything else.
+  group: compiler-and-runtime-${{ github.workflow }}-${{ github.ref }}-${{ (github.event_name == 'schedule' || github.event_name == 'workflow_dispatch') && github.run_id || 'push' }}
+  cancel-in-progress: ${{ github.event_name != 'schedule' && github.event_name != 'workflow_dispatch' }}
 
 jobs:
   platform:
