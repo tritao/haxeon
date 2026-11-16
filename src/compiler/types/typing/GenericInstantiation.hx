@@ -153,7 +153,7 @@ class GenericInstantiation {
 				for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index))
 					genericCall.arguments[index]
 			];
-		session.keyPathParameters.set(specialization.name, constants);
+		session.keyPaths.parameters.set(specialization.name, constants);
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))

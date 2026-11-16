@@ -9,7 +9,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.types.typing.TypingSession.EqualityRequest;
+import compiler.types.typing.HelperRequests.EqualityRequest;
 
 /** Emits the single compiler-selected hash implementation for each Hashable type. */
 class HashGenerator {
@@ -20,19 +20,19 @@ class HashGenerator {
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = hashName(type);
-		if (!session.hashRequests.exists(name))
-			session.hashRequests.set(name, {type: type, origin: origin, span: span});
+		if (!session.requests.hashes.exists(name))
+			session.requests.hashes.set(name, {type: type, origin: origin, span: span});
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		while (true) {
-			var pending = [for (name in session.hashRequests.keys()) if (!generated.exists(name)) name];
+			var pending = [for (name in session.requests.hashes.keys()) if (!generated.exists(name)) name];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
 			for (name in pending) {
-				var requested = session.hashRequests.get(name);
+				var requested = session.requests.hashes.get(name);
 				if (requested == null)
 					throw 'Missing hash-generation request "$name"';
 				var owner = compiler.core.QualifiedName.parent(requested.origin),

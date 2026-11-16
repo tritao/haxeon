@@ -153,10 +153,9 @@ class ClosureTyper {
 			[for (name in freeNames) if (pathConstants.exists(name)) name + "=" + pathConstants.get(name)].join(",");
 		var variantKey = lambdaKey + "|" + [for (capture in captures) capture.field + "=" + capture.bindingId].join(",")
 			+ "|" + constantIdentity;
-		if (session.lambdaCache.exists(variantKey))
-			return session.lambdaCache.get(variantKey);
-		var variant:Int = session.lambdaVariants.exists(lambdaKey) ? session.lambdaVariants.get(lambdaKey) : 0;
-		session.lambdaVariants.set(lambdaKey, variant + 1);
+		if (session.counters.lambdaCache.exists(variantKey))
+			return session.counters.lambdaCache.get(variantKey);
+		var variant = session.counters.nextLambdaVariant(lambdaKey);
 		if (variant > 0)
 			identity = compiler.semantic.LambdaName.variant(identity, variant);
 		var typedBodyScope = new Scope();
@@ -259,7 +258,7 @@ class ClosureTyper {
 					requiredMapValue(lambdaCellKinds, name));
 		var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
 			TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
-		session.lambdaCache.set(variantKey, lambdaResult);
+		session.counters.lambdaCache.set(variantKey, lambdaResult);
 		session.monomorphs.recordLambda(variantKey);
 		return lambdaResult;
 	}

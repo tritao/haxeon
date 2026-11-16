@@ -33,18 +33,18 @@ class EnumConformanceMethods {
 	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String,
 			span:SourceSpan):Void {
 		var key = name(type, method);
-		if (!session.enumMethodRequests.exists(key))
-			session.enumMethodRequests.set(key, {type: type, method: method, origin: origin, span: span});
+		if (!session.requests.enumMethods.exists(key))
+			session.requests.enumMethods.set(key, {type: type, method: method, origin: origin, span: span});
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		while (true) {
-			var pending = [for (key in session.enumMethodRequests.keys()) if (!generated.exists(key)) key];
+			var pending = [for (key in session.requests.enumMethods.keys()) if (!generated.exists(key)) key];
 			if (pending.length == 0) break;
 			pending.sort(Reflect.compare);
 			for (key in pending) {
-				var requested = session.enumMethodRequests.get(key);
+				var requested = session.requests.enumMethods.get(key);
 				if (requested == null) throw 'Missing enum method request "$key"';
 				var implementation = method(session, requested.type, requested.method);
 				if (implementation == null) throw 'Missing enum method implementation "$key"';

@@ -27,12 +27,12 @@ class KeyPathRuntime {
 	}
 
 	public function drain():Array<TypedFunction> {
-		var pending = [for (name in session.keyPathDefinitions.keys()) if (!emitted.exists(name)) name],
+		var pending = [for (name in session.keyPaths.definitions.keys()) if (!emitted.exists(name)) name],
 			result:Array<TypedFunction> = [];
 		pending.sort(Reflect.compare);
 		for (name in pending) {
 			emitted.set(name, true);
-			var definition = session.keyPathDefinitions.get(name);
+			var definition = session.keyPaths.definitions.get(name);
 			if (definition == null) throw 'Missing key path definition "$name"';
 			var span = definition.span,
 				pathType = TKeyPath(definition.root, definition.value, definition.writable),

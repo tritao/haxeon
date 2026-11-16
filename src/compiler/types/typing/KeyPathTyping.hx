@@ -37,7 +37,8 @@ class KeyPathTyping {
 
 	public static function known(session:TypingSession, value:TypedExpression):Null<KeyPathDefinition>
 		return switch value.expression {
-			case TCall(name, _) if (StringTools.startsWith(name, LITERAL_PREFIX)): session.keyPathDefinitions.get(name);
+			case TCall(name,
+				_) if (StringTools.startsWith(name, LITERAL_PREFIX)): session.keyPaths.definitions.get(name);
 			case TCast(inner), TAbiCast(inner):
 				var definition = known(session, inner);
 				switch value.type {
@@ -141,7 +142,7 @@ class KeyPathTyping {
 			case TInstance(NominalKind.Class, owner, _) if (session.signatures.exists(owner + ".new")): owner + ".new";
 			default: session.currentContext.functionName;
 		};
-		session.keyPathDefinitions.set(name, {
+		session.keyPaths.definitions.set(name, {
 			name: name,
 			root: root,
 			value: value,
@@ -156,7 +157,7 @@ class KeyPathTyping {
 				"key-path") : span,
 			origin: origin
 		});
-		session.recordKeyPathUse(session.currentContext.name, name);
+		session.records.recordKeyPathUse(session.currentContext.name, name);
 		return new TypedExpression(TCall(name, []), TKeyPath(root, value, writable), span);
 	}
 

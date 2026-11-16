@@ -48,8 +48,8 @@ class RawRepresentableGenerator {
 		if (method != "rawValue" && method != "fromRaw" && method != "toString")
 			throw 'Unknown synthesized raw member "$method"';
 		var helper = name(owner, method);
-		if (!session.rawRepresentableRequests.exists(helper))
-			session.rawRepresentableRequests.set(helper, {
+		if (!session.requests.rawRepresentables.exists(helper))
+			session.requests.rawRepresentables.set(helper, {
 				owner: owner,
 				method: method,
 				origin: session.generatedFunctionOrigin(),
@@ -95,13 +95,13 @@ class RawRepresentableGenerator {
 	public static function generate(session:TypingSession, typer:BodyTyper,
 			generated:Map<String, TypedFunction>):Array<TypedFunction> {
 		var pending = [
-			for (name in session.rawRepresentableRequests.keys())
+			for (name in session.requests.rawRepresentables.keys())
 				if (!generated.exists(name)) name
 		];
 		pending.sort(Reflect.compare);
 		var result:Array<TypedFunction> = [];
 		for (helper in pending) {
-			var request = session.rawRepresentableRequests.get(helper),
+			var request = session.requests.rawRepresentables.get(helper),
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
 				throw 'Missing RawRepresentable declaration "${request.owner}"';

@@ -48,8 +48,8 @@ class KeyPathComposition {
 		session.closureConversion.addEnvironment(environment, captures);
 		function add(suffix:String, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType,
 				body:Array<TypedStatement>):Void {
-			if (session.keyPathCompositions.exists(name + suffix)) return;
-			session.keyPathCompositions.set(name + suffix, true);
+			if (session.keyPaths.compositions.exists(name + suffix)) return;
+			session.keyPaths.compositions.set(name + suffix, true);
 			session.closureConversion.addFunction({
 				name: name + suffix,
 				role: ProviderFunction(root, compiler.core.Provides.ProviderOperations

@@ -14,39 +14,6 @@ import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.core.Source.SourceSpan;
 import compiler.types.analysis.Scope;
 
-typedef ResolvedInlineConstant = {
-	/** Constants and enum abstract types read while resolving this value, including cached aliases. */
-	final dependencies:Array<String>;
-	final initializer:TypedExpression;
-	final value:TypedExpression;
-}
-
-typedef WireCodecRequest = {
-	final type:CompilerType;
-	final origin:String;
-	final span:SourceSpan;
-}
-
-typedef EqualityRequest = {
-	final type:CompilerType;
-	final origin:String;
-	final span:SourceSpan;
-}
-
-typedef EnumMethodRequest = {
-	final type:CompilerType;
-	final method:String;
-	final origin:String;
-	final span:SourceSpan;
-}
-
-typedef EnumInterfaceAdapterRequest = {
-	final type:CompilerType;
-	final interfaceType:CompilerType;
-	final origin:String;
-	final span:SourceSpan;
-}
-
 /** Mutable semantic state shared by all typing phases for one compilation. */
 class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
@@ -77,36 +44,21 @@ class TypingSession {
 	/** The type variables of the bodies being typed; see `Monomorphs`. */
 	public final monomorphs = new MonomorphFrames();
 
-	/** Typed lambdas by position and captured bindings: the copies of a switch arm with several patterns capture different locals. */
-	public final lambdaCache:Map<String, TypedExpression> = [];
-
-	/** How many variants (see `lambdaCache`) each lambda position has been typed as. */
-	public final lambdaVariants:Map<String, Int> = [];
+	/** Numbering of the names each body generates, and the lambdas typed so far. */
+	public final counters = new BodyCounters();
 
 	/** Structural conversion helpers already emitted for each origin and target shape. */
 	public final dynamicStructureConversions:Map<String, Bool> = [];
 
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
 
-	/**
-	 * The anonymous types registered while each unit was typed: a function, or the field initializers of a class (`Class.__init`).
-	 * A nested body (a lambda) belongs to the unit it is written in. A build that types a unit again records it afresh; one that does
-	 * not keeps the earlier record in the program (see `ProgramTyper.keepAnonymousUnits`), so a type only unchanged code uses stays.
-	 */
-	public final anonymousUnits:Map<String, Map<String, Array<compiler.types.Type.AnonymousField>>> = [];
+	/** What each typed unit relied on, for the next incremental build. */
+	public final records = new UnitRecords();
 
-	/** The units whose bodies this session typed. */
-	public final typedUnits:Map<String, Bool> = [];
-
+	/** Attributes an anonymous type to the unit being typed: the outermost body, which a lambda is part of. */
 	public function recordAnonymousUse(name:String, fields:Array<compiler.types.Type.AnonymousField>):Void {
-		if (bodyContexts.length < 2)
-			return;
-		var unit = bodyContexts[1].name, uses = anonymousUnits.get(unit);
-		if (uses == null) {
-			uses = [];
-			anonymousUnits.set(unit, uses);
-		}
-		uses.set(name, fields);
+		if (bodyContexts.length >= 2)
+			records.recordAnonymousUse(bodyContexts[1].name, name, fields);
 	}
 
 	public final anonymousTypes:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
@@ -116,49 +68,17 @@ class TypingSession {
 	public final emittedGenericBodies:Map<String, Bool> = [];
 	public final noReturnFunctions:Map<String, Bool> = [];
 	public final runtimeDependencyTracker = new RuntimeDependencyTracker();
-	public final wireCodecRequests:Map<String, WireCodecRequest> = [];
-	public final jsonCodecRequests:Map<String, WireCodecRequest> = [];
+	/** The generated helpers typed code asks for. */
+	public final requests = new HelperRequests();
 
-	/** Language `==` on declared values follows their one conformance equality. */
-	public final valueEqualityRequests:Map<String, EqualityRequest> = [];
-
-	/** Static Type.enumEq comparisons use enum tags and payloads without declaring enum value conformance. */
-	public final enumEqualityRequests:Map<String, EqualityRequest> = [];
-
-	/** Concrete enum interface methods requested by statically dispatched calls. */
-	public final enumMethodRequests:Map<String, EnumMethodRequest> = [];
-
-	/** Real enum-to-interface conversions need an interface-dispatch object. */
-	public final enumInterfaceAdapters:Map<String, EnumInterfaceAdapterRequest> = [];
-
-	/** Hash implementations generated from declared `Hashable` conformance. */
-	public final hashRequests:Map<String, EqualityRequest> = [];
 	public final flagsMasks:Map<String, Int> = [];
-	public final flagsRequests:Map<String, {owner:String, method:String, origin:String, span:SourceSpan}> = [];
-	public final rawRepresentableRequests:Map<String, {owner:String, method:String, origin:String,
-		span:SourceSpan}> = [];
 
 	public final cNativeFunctions:Map<String, Bool> = [];
-	public final inlineConstants:Map<String, ResolvedInlineConstant> = [];
-	public final inlineConstantsInProgress:Map<String, Bool> = [];
-	public final enumAbstractConstants:Map<String, compiler.types.TypedAst.TypedExpression> = [];
-	public final enumAbstractConstantsInProgress:Map<String, Bool> = [];
-	public var enumAbstractConstantOwner:Null<String> = null;
 
-	/** Resolved field sequences used by path operations and descriptor generation. */
-	public final keyPathDefinitions:Map<String, KeyPathTyping.KeyPathDefinition> = [];
+	/** Inline constants and enum abstract values resolved so far. */
+	public final constants = new InlineConstantState();
 
-	public final keyPathParameters:Map<String, Map<String, String>> = [];
-	public final keyPathCompositions:Map<String, Bool> = [];
-
-	/**
-	 * Function adapters already made in each body, so an adapter's name depends on its position in its own function. A
-	 * counter shared by the whole typing run made the name depend on how many adapters other functions had made before it,
-	 * which differs between a build that types everything and one that retypes only what changed.
-	 */
-	public final functionAdapterCounts:Map<String, Int> = [];
-
-	public final substrCounts:Map<String, Int> = [];
+	public final keyPaths = new KeyPathState();
 
 	public final representation:TypeRepresentation;
 
@@ -199,9 +119,8 @@ class TypingSession {
 	}
 
 	public function bindSemantic(semantic:SemanticProgram):Void {
-		enumAbstractConstants.clear();
+		constants.clearEnumAbstractValues();
 		flagsMasks.clear();
-		enumAbstractConstantsInProgress.clear();
 		for (declaration in semantic.program.enums)
 			helperSpans.set(declaration.name, declaration.span);
 		for (declaration in semantic.program.classes)
@@ -263,7 +182,9 @@ class TypingSession {
 	 */
 	public function isPureCall(name:String):Bool {
 		var answer = inferredPureFunctions.exists(name) || isDeclaredPure(name);
-		recordQuery(purityQueries, name, answer);
+		var caller = currentContext.name;
+		if (caller != "")
+			records.recordPurity(caller, name, answer);
 		return answer;
 	}
 
@@ -271,7 +192,9 @@ class TypingSession {
 	public function isReadOnlyReceiver(name:String):Bool {
 		var key = compiler.types.analysis.ReceiverMutationInference.PREFIX + name,
 			answer = inferredPureFunctions.exists(key);
-		recordQuery(purityQueries, key, answer);
+		var caller = currentContext.name;
+		if (caller != "")
+			records.recordPurity(caller, key, answer);
 		return answer;
 	}
 
@@ -448,45 +371,10 @@ class TypingSession {
 	/** Whether a call to `name` was typed as never returning; recorded the same way as `isPureCall`. */
 	public function isNoReturnCall(name:String):Bool {
 		var answer = noReturnFunctions.exists(name);
-		recordQuery(noReturnQueries, name, answer);
-		return answer;
-	}
-
-	/** Purity/no-return answers the function currently being typed asked about, keyed by that
-	 * function's own name (or a lambda's synthetic name, itself tied back to its origin).
-	 */
-	public final purityQueries:Map<String, Map<String, Bool>> = [];
-
-	public final noReturnQueries:Map<String, Map<String, Bool>> = [];
-
-	/** The key path literals (`$keypath.literal:...`) each function being typed uses, by that function's name. */
-	public final keyPathUses:Map<String, Map<String, Bool>> = [];
-
-	public function recordKeyPathUse(user:String, literal:String):Void {
-		var literals = keyPathUses.get(user);
-		if (literals == null) {
-			literals = [];
-			keyPathUses.set(user, literals);
-		}
-		literals.set(literal, true);
-	}
-
-	/** Constants substituted into each typed body, including its omitted call arguments. */
-	public final inlineConstantDependencies:Map<String, Map<String, Bool>> = [];
-
-	/** Source snapshots copied into callers when omitted arguments use declaration syntax. */
-	public final defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>> = [];
-
-	function recordQuery(target:Map<String, Map<String, Bool>>, name:String, answer:Bool):Void {
 		var caller = currentContext.name;
-		if (caller == "")
-			return;
-		var record = target.get(caller);
-		if (record == null) {
-			record = [];
-			target.set(caller, record);
-		}
-		record.set(name, answer);
+		if (caller != "")
+			records.recordNoReturn(caller, name, answer);
+		return answer;
 	}
 
 	/** Payload enum keys use their declared hash and equality in the ordinary specialized map. */
@@ -552,7 +440,7 @@ class TypingSession {
 		if (isLambda)
 			body.privateAccessDepth = currentContext.privateAccessDepth;
 		if (bodyContexts.length == 1)
-			typedUnits.set(name, true);
+			records.typedUnits.set(name, true);
 		bodyContexts.push(body);
 		return body;
 	}

@@ -360,13 +360,8 @@ class ProgramTyper {
 			rawMethods:Map<String, TypedFunction> = [],
 			flagMethods:Map<String, TypedFunction> = [];
 		function requestCount():Int
-			return Lambda.count(session.flagsRequests) + Lambda.count(session.rawRepresentableRequests)
-				+ Lambda.count(session.valueEqualityRequests)
-				+ Lambda.count(session.enumEqualityRequests) + Lambda.count(session.hashRequests)
-				+ Lambda.count(session.enumMethodRequests)
-				+ Lambda.count(session.enumInterfaceAdapters) + Lambda.count(session.wireCodecRequests)
-				+ Lambda.count(session.jsonCodecRequests)
-				+ Lambda.count(session.keyPathDefinitions) + session.representation.genericOwnerRequestCount()
+			return session.requests.count() + Lambda.count(session.keyPaths.definitions)
+				+ session.representation.genericOwnerRequestCount()
 				+ session.closureConversion.generatedFunctionCount() + session.enumRepresentations.count();
 		while (true) {
 			drainRuntimeTypes();
@@ -458,11 +453,11 @@ class ProgramTyper {
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
-			purityQueries: session.purityQueries,
-			inlineConstantDependencies: session.inlineConstantDependencies,
-			defaultArgumentSources: session.defaultArgumentSources,
-			noReturnQueries: session.noReturnQueries,
-			keyPathUses: session.keyPathUses,
+			purityQueries: session.records.purityQueries,
+			inlineConstantDependencies: session.records.inlineConstantDependencies,
+			defaultArgumentSources: session.records.defaultArgumentSources,
+			noReturnQueries: session.records.noReturnQueries,
+			keyPathUses: session.records.keyPathUses,
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),
@@ -508,7 +503,7 @@ class ProgramTyper {
 			suffix = ".__init",
 			registry = new AnonymousTypeRegistry(session);
 		for (unit => types in previous.anonymousUnits) {
-			if (session.typedUnits.exists(unit) || session.anonymousUnits.exists(unit))
+			if (session.records.typedUnits.exists(unit) || session.records.anonymousUnits.exists(unit))
 				continue;
 			var exists = session.signatures.exists(unit)
 				|| StringTools.endsWith(unit, suffix)
@@ -520,7 +515,7 @@ class ProgramTyper {
 				uses.set(entry.name, entry.fields);
 				registry.register(TAnonymous(entry.name, entry.fields));
 			}
-			session.anonymousUnits.set(unit, uses);
+			session.records.anonymousUnits.set(unit, uses);
 		}
 	}
 

@@ -21,8 +21,8 @@ class EnumInterfaceAdapter {
 	public static function request(session:TypingSession, type:CompilerType, interfaceType:CompilerType,
 			span:SourceSpan):String {
 		var key = name(type, interfaceType);
-		if (!session.enumInterfaceAdapters.exists(key))
-			session.enumInterfaceAdapters.set(key, {
+		if (!session.requests.enumInterfaceAdapters.exists(key))
+			session.requests.enumInterfaceAdapters.set(key, {
 				type: type,
 				interfaceType: interfaceType,
 				origin: session.currentContext.name,
@@ -32,13 +32,13 @@ class EnumInterfaceAdapter {
 	}
 
 	public static function generate(session:TypingSession):Array<TypedClass> {
-		var names = [for (key in session.enumInterfaceAdapters.keys()) key];
+		var names = [for (key in session.requests.enumInterfaceAdapters.keys()) key];
 		names.sort(Reflect.compare);
 		return [for (key in names) build(session, key)];
 	}
 
 	static function build(session:TypingSession, key:String):TypedClass {
-		var request = session.enumInterfaceAdapters.get(key);
+		var request = session.requests.enumInterfaceAdapters.get(key);
 		if (request == null) throw 'Missing enum interface adapter "$key"';
 		var interfaceName = switch request.interfaceType {
 			case TInstance(NominalKind.Interface, name, _): name;

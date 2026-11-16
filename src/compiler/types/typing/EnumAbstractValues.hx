@@ -24,25 +24,25 @@ class EnumAbstractValues {
 			value:AstEnumAbstractValue):TypedExpression {
 		var session = typer.session,
 			key = declaration.name + "." + value.name,
-			known = session.enumAbstractConstants.get(key);
+			known = session.constants.enumAbstractConstants.get(key);
 		if (known != null)
 			return known;
-		if (session.enumAbstractConstantsInProgress.exists(key))
+		if (session.constants.enumAbstractConstantsInProgress.exists(key))
 			BodyTyper.fail("E1002", 'Cyclic enum abstract constant "$key"', value.span);
-		session.enumAbstractConstantsInProgress.set(key, true);
-		var previous = session.enumAbstractConstantOwner;
-		session.enumAbstractConstantOwner = declaration.name;
+		session.constants.enumAbstractConstantsInProgress.set(key, true);
+		var previous = session.constants.enumAbstractConstantOwner;
+		session.constants.enumAbstractConstantOwner = declaration.name;
 		try {
 			var storage = typer.lowerType(declaration.underlying, declaration.span);
 			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage), storage,
 				'enum abstract value "$key"', "E1002");
-			session.enumAbstractConstantOwner = previous;
-			session.enumAbstractConstantsInProgress.remove(key);
-			session.enumAbstractConstants.set(key, expression);
+			session.constants.enumAbstractConstantOwner = previous;
+			session.constants.enumAbstractConstantsInProgress.remove(key);
+			session.constants.enumAbstractConstants.set(key, expression);
 			return expression;
 		} catch (error:Dynamic) {
-			session.enumAbstractConstantOwner = previous;
-			session.enumAbstractConstantsInProgress.remove(key);
+			session.constants.enumAbstractConstantOwner = previous;
+			session.constants.enumAbstractConstantsInProgress.remove(key);
 			throw error;
 		}
 	}
@@ -73,7 +73,8 @@ class EnumAbstractValues {
 			span:SourceSpan):TypedExpression {
 		typer.recordInlineConstantDependency(declaration.name);
 		var expression = raw(typer, declaration, value);
-		return typer.session.enumAbstractConstantOwner == declaration.name ? new TypedExpression(expression.expression,
+		return typer.session.constants.enumAbstractConstantOwner == declaration.name
+			? new TypedExpression(expression.expression,
 			expression.type,
 			span) : new TypedExpression(TAbiCast(expression), TAbstract(declaration.name, [], expression.type), span);
 	}

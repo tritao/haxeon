@@ -98,7 +98,7 @@ class TypedProgramAssembler {
 
 	function anonymousUnits():Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> {
 		var result:Map<String, Array<compiler.types.TypedAst.TypedAnonymous>> = [];
-		for (unit => uses in session.anonymousUnits) {
+		for (unit => uses in session.records.anonymousUnits) {
 			var names = [for (name in uses.keys()) name];
 			names.sort(Reflect.compare);
 			result.set(unit, [for (name in names) {

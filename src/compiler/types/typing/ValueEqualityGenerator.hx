@@ -9,7 +9,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.types.typing.TypingSession.EqualityRequest;
+import compiler.types.typing.HelperRequests.EqualityRequest;
 import haxe.crypto.Sha256;
 
 /** Fieldwise declared equality, including nested value helpers. */
@@ -21,8 +21,8 @@ class ValueEqualityGenerator {
 
 	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
 		var name = equalsName(type);
-		if (!session.valueEqualityRequests.exists(name))
-			session.valueEqualityRequests.set(name, {type: type, origin: origin, span: span});
+		if (!session.requests.valueEqualities.exists(name))
+			session.requests.valueEqualities.set(name, {type: type, origin: origin, span: span});
 	}
 
 	/** Field comparisons may request nested value helpers. Process new requests until no more are needed. */
@@ -32,23 +32,23 @@ class ValueEqualityGenerator {
 		// Discover the full helper graph from source requests before typing any generated helper. This gives nested
 		// helpers the origin of a real caller, so they are emitted into that caller's module and remain traceable when
 		// incremental compilation prunes the generated module graph.
-		var roots = [for (name in session.valueEqualityRequests.keys()) name];
+		var roots = [for (name in session.requests.valueEqualities.keys()) name];
 		roots.sort(Reflect.compare);
 		for (name in roots) {
-			var root = session.valueEqualityRequests.get(name);
+			var root = session.requests.valueEqualities.get(name);
 			if (root != null)
-				collect(session, root.type, root, session.valueEqualityRequests, new Map());
+				collect(session, root.type, root, session.requests.valueEqualities, new Map());
 		}
 		while (true) {
 			var pending = [
-				for (name in session.valueEqualityRequests.keys())
+				for (name in session.requests.valueEqualities.keys())
 					if (!generated.exists(name)) name
 			];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
 			for (name in pending) {
-				var requested = session.valueEqualityRequests.get(name);
+				var requested = session.requests.valueEqualities.get(name);
 				if (requested == null)
 					throw 'Missing value equality request "$name"';
 				// Helpers can originate in a lambda after its typing context has already been popped.

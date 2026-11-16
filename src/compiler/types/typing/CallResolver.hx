@@ -1972,8 +1972,7 @@ class CallResolver {
 			return new TypedExpression(TStringSubstring(receiver, position, end), TString, span);
 		}
 		var contextName = session.currentContext.name,
-			id = session.substrCounts.exists(contextName) ? session.substrCounts.get(contextName) : 0;
-		session.substrCounts.set(contextName, id + 1);
+			id = session.counters.nextSubstring(contextName);
 		var receiverName = '$' + 'substr-receiver:$contextName:$id',
 			positionName = '$' + 'substr-position:$contextName:$id',
 			lengthName = '$' + 'substr-length:$contextName:$id',
@@ -2092,9 +2091,7 @@ class CallResolver {
 			invalidateClosureWrites(arguments[0], null, scope);
 			scope.invalidateAllExpressions();
 			var context = session.currentContext.name;
-			var previous = session.functionAdapterCounts.get(context),
-				id = previous == null ? 0 : previous;
-			session.functionAdapterCounts.set(context, id + 1);
+			var id = session.counters.nextFunctionAdapter(context);
 			var prefix = "$array-exists:" + context + ":" + id;
 			var arrayName = prefix + ":array",
 				predicateName = prefix + ":predicate",

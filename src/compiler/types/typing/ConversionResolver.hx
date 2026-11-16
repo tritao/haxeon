@@ -433,8 +433,7 @@ class ConversionResolver {
 			default: throw "Expected iteration contract";
 		};
 		var span = value.span, context = session.currentContext.name;
-		var id = session.functionAdapterCounts.exists(context) ? session.functionAdapterCounts.get(context) : 0;
-		session.functionAdapterCounts.set(context, id + 1);
+		var id = session.counters.nextFunctionAdapter(context);
 		var localName = "$iteration-source:" + context + ":" + id;
 		var local = new TypedExpression(TLocal(localName), value.type, span);
 		var output:Array<compiler.types.TypedAst.TypedObjectField> = [];
@@ -552,8 +551,7 @@ class ConversionResolver {
 			// Evaluate the callable once and retain null as null rather than creating
 			// a non-null wrapper which would call a missing function later.
 			var contextName = session.currentContext.name,
-				adapterId = session.functionAdapterCounts.exists(contextName)
-					? session.functionAdapterCounts.get(contextName) : 0,
+				adapterId = session.counters.peekFunctionAdapter(contextName),
 				localName = '$' + 'nullable-function-adapter:$contextName:$adapterId',
 				local = new TypedExpression(TLocal(localName), value.type, span),
 				sourceType = TFunction(sourceSignature.arguments, sourceSignature.result),
@@ -575,9 +573,7 @@ class ConversionResolver {
 		if (sourceArguments.length != targetArguments.length || TypeRelations.equals(value.type, expected))
 			return new TypedExpression(TCast(value), expected, span);
 		var contextName = session.currentContext.name,
-			adapterId = session.functionAdapterCounts.exists(contextName)
-				? session.functionAdapterCounts.get(contextName) : 0;
-		session.functionAdapterCounts.set(contextName, adapterId + 1);
+			adapterId = session.counters.nextFunctionAdapter(contextName);
 		var adapterName = '$' + 'function-adapter:$contextName:$adapterId',
 			environmentName = '$' + 'function-adapter-env:$contextName:$adapterId',
 			captureName = '__adapted_callable',

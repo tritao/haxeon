@@ -9,7 +9,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
-import compiler.types.typing.TypingSession.EqualityRequest;
+import compiler.types.typing.HelperRequests.EqualityRequest;
 import haxe.crypto.Sha256;
 
 /** Generates declared enum equality and the separate structural Type.enumEq operation. */
@@ -33,22 +33,22 @@ class EnumEqualityGenerator {
 
 	static function requestNamed(session:TypingSession, name:String, type:CompilerType, origin:String,
 			span:SourceSpan):Void {
-		if (!session.enumEqualityRequests.exists(name))
-			session.enumEqualityRequests.set(name, {type: type, origin: origin, span: span});
+		if (!session.requests.enumEqualities.exists(name))
+			session.requests.enumEqualities.set(name, {type: type, origin: origin, span: span});
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
 		var generated:Map<String, TypedFunction> = [];
 		while (true) {
 			var pending = [
-				for (name in session.enumEqualityRequests.keys())
+				for (name in session.requests.enumEqualities.keys())
 					if (!generated.exists(name)) name
 			];
 			if (pending.length == 0)
 				break;
 			pending.sort(Reflect.compare);
 			for (name in pending) {
-				var request = session.enumEqualityRequests.get(name);
+				var request = session.requests.enumEqualities.get(name);
 				if (request == null)
 					throw 'Missing enum equality request "$name"';
 				var owner = compiler.core.QualifiedName.parent(request.origin),

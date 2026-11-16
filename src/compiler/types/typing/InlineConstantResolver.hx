@@ -5,7 +5,7 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstField;
 import compiler.types.InlineConstantEvaluator;
-import compiler.types.typing.TypingSession.ResolvedInlineConstant;
+import compiler.types.typing.InlineConstantState.ResolvedInlineConstant;
 
 /** Resolves inline fields, detects cycles, and memoizes their typed constant values. */
 class InlineConstantResolver {
@@ -46,14 +46,14 @@ class InlineConstantResolver {
 		if (staticField == null)
 			return null;
 		var key = staticField.owner + "." + name,
-			cached = session.inlineConstants.get(key);
+			cached = session.constants.inlineConstants.get(key);
 		if (cached != null) {
 			recordResolved(key, cached);
 			return cached;
 		}
-		if (session.inlineConstantsInProgress.exists(key))
+		if (session.constants.inlineConstantsInProgress.exists(key))
 			fail("E1002", 'Cyclic inline constant reference through "$key"', span);
-		session.inlineConstantsInProgress.set(key, true);
+		session.constants.inlineConstantsInProgress.set(key, true);
 		var dependencies:Map<String, Bool> = [];
 		dependencyCollectors.push(dependencies);
 		var resolved:ResolvedInlineConstant;
@@ -74,12 +74,12 @@ class InlineConstantResolver {
 			};
 		} catch (error:Dynamic) {
 			dependencyCollectors.pop();
-			session.inlineConstantsInProgress.remove(key);
+			session.constants.inlineConstantsInProgress.remove(key);
 			throw error;
 		}
 		dependencyCollectors.pop();
-		session.inlineConstantsInProgress.remove(key);
-		session.inlineConstants.set(key, resolved);
+		session.constants.inlineConstantsInProgress.remove(key);
+		session.constants.inlineConstants.set(key, resolved);
 		recordResolved(key, resolved);
 		return resolved;
 	}

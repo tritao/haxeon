@@ -90,8 +90,8 @@ class FlagsGenerator {
 
 	public static function request(session:TypingSession, owner:String, method:String, span:SourceSpan):String {
 		var name = PREFIX + owner + ":" + method;
-		if (!session.flagsRequests.exists(name))
-			session.flagsRequests.set(name, {
+		if (!session.requests.flags.exists(name))
+			session.requests.flags.set(name, {
 				owner: owner,
 				method: method,
 				origin: session.generatedFunctionOrigin(),
@@ -102,11 +102,11 @@ class FlagsGenerator {
 
 	public static function generate(session:TypingSession, typer:BodyTyper,
 			generated:Map<String, TypedFunction>):Array<TypedFunction> {
-		var pending = [for (name in session.flagsRequests.keys()) if (!generated.exists(name)) name];
+		var pending = [for (name in session.requests.flags.keys()) if (!generated.exists(name)) name];
 		pending.sort(Reflect.compare);
 		var functions:Array<TypedFunction> = [];
 		for (name in pending) {
-			var request = session.flagsRequests.get(name),
+			var request = session.requests.flags.get(name),
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
 				throw 'Missing Flags declaration "${request.owner}"';

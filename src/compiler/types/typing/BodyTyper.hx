@@ -15,7 +15,7 @@ import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
 import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
-import compiler.types.typing.TypingSession.ResolvedInlineConstant;
+import compiler.types.typing.InlineConstantState.ResolvedInlineConstant;
 import compiler.types.typing.CallResolver.EnumConstructorInfo;
 import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
@@ -251,7 +251,7 @@ class BodyTyper implements BodyTyping {
 		for (argument in fn.arguments) {
 			var type = argumentType(argument, substitutions);
 			scope.define(argument.name, type, argument.span);
-			var constants = session.keyPathParameters.get(functionName);
+			var constants = session.keyPaths.parameters.get(functionName);
 			if (constants != null && constants.exists(argument.name)) {
 				scope.setKeyPathConstant(argument.name, constants.get(argument.name));
 				continue;
@@ -338,9 +338,9 @@ class BodyTyper implements BodyTyping {
 		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);
 		session.closureConversion.mapTypesSince(frame.conversionMark, map);
 		for (key in frame.lambdaKeys) {
-			var cached = session.lambdaCache.get(key);
+			var cached = session.counters.lambdaCache.get(key);
 			if (cached != null)
-				session.lambdaCache.set(key, map.expression(cached));
+				session.counters.lambdaCache.set(key, map.expression(cached));
 		}
 		return map.statements(statements);
 	}
@@ -1947,13 +1947,9 @@ class BodyTyper implements BodyTyping {
 	/** Substitution must retain the dependencies erased by constant folding, including inside default arguments. */
 	function recordInlineConstantDependency(target:String):Void {
 		inlineConstantResolver.recordDependency(target);
-		var caller = defaultArgumentCaller == null ? context.name : defaultArgumentCaller,
-			dependencies = session.inlineConstantDependencies.get(caller);
-		if (dependencies == null) {
-			dependencies = [];
-			session.inlineConstantDependencies.set(caller, dependencies);
-		}
-		dependencies.set(target, true);
+		session.records.recordInlineConstantDependency(defaultArgumentCaller == null
+			? context.name : defaultArgumentCaller,
+			target);
 	}
 
 	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
@@ -2217,13 +2213,8 @@ class BodyTyper implements BodyTyping {
 		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
-			var sources = session.defaultArgumentSources.get(defaultArgumentCaller);
-			if (sources == null) {
-				sources = [];
-				session.defaultArgumentSources.set(defaultArgumentCaller, sources);
-			}
-			if (typed.span.generatedReason == null)
-				sources.set(typed.span.file.path, typed.span.file);
+			session.records.recordDefaultArgumentSource(defaultArgumentCaller,
+				typed.span.generatedReason == null ? typed.span.file : null);
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;
 			return typed;
@@ -2356,9 +2347,9 @@ class BodyTyper implements BodyTyping {
 					expected = inner;
 				default:
 			}
-		var owner = expected == null ? session.enumAbstractConstantOwner : switch expected {
+		var owner = expected == null ? session.constants.enumAbstractConstantOwner : switch expected {
 			case TAbstract(name, _, _) if (session.enumAbstractDecls.exists(name)): name;
-			default: session.enumAbstractConstantOwner;
+			default: session.constants.enumAbstractConstantOwner;
 		};
 		var declaration = owner == null ? null : session.enumAbstractDecls.get(owner);
 		if (declaration != null)
