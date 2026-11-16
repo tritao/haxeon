@@ -93,7 +93,8 @@ run_expected 44
 grep -q 'compile-project:tiny-app.*clean (fingerprint match)' "$fixture/run.log"
 
 # A target that succeeds without producing a promised library is a failed build.
-sed -i 's/"tiny_alpha", "tiny_beta"/"tiny_alpha", "tiny_beta", "never_built"/' "$fixture/tiny/haxeon.json"
+# perl, not sed -i: macOS's sed takes the next argument as a backup suffix.
+perl -pi -e 's/"tiny_alpha", "tiny_beta"/"tiny_alpha", "tiny_beta", "never_built"/' "$fixture/tiny/haxeon.json"
 if "$repo_dir/scripts/haxeon" build --project="$fixture/app/haxeon.json" >"$fixture/missing.log" 2>&1; then
   echo "expected a missing declared library to fail the build" >&2
   exit 1
