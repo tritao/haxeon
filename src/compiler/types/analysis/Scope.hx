@@ -205,26 +205,9 @@ class Scope {
 		return outer == null ? null : outer.mapKeySource(name);
 	}
 
-	/** What every continuing path assigned is assigned after them. With no continuing path the code after is unreachable, so every local counts as assigned. */
-	public function mergeAssignmentsFrom(scopes:Array<Scope>):Void {
-		if (scopes.length == 0) {
-			assumeAllAssigned();
-			return;
-		}
-		for (value in visibleValues()) {
-			var allAssigned = true;
-			for (scope in scopes)
-				if (!scope.isAssignedId(value.id)) {
-					allAssigned = false;
-					break;
-				}
-			if (allAssigned)
-				ownAssigned().set(value.id, true);
-		}
-	}
-
 	/**
-	 * Where control flow from `paths` rejoins this scope (after an if, a switch, a try, a conditional or a logical operator):
+	 * Where control flow from `paths` rejoins this scope (after an if, a switch, a try, a do-while body, a conditional or a
+	 * logical operator):
 	 * a local is assigned when every path assigned it, and keeps a narrowing only where every path agrees on it, so what one
 	 * branch assigned is no longer known to hold its earlier value. With no path, the code after is unreachable.
 	 *
@@ -242,12 +225,8 @@ class Scope {
 		for (path in paths) {
 			var current:Null<Scope> = path;
 			while (current != this) {
-				if (current == null) {
-					// Not below this scope: nothing bounds what it differs in, so merge everything visible.
-					mergeAssignmentsFrom(paths);
-					mergeRefinementsFrom(paths);
-					return;
-				}
+				if (current == null)
+					throw 'Scope.join: a path is not this scope or below it';
 				var ownAssignments = current.assigned;
 				if (ownAssignments != null)
 					for (id in ownAssignments.keys()) {
@@ -319,28 +298,6 @@ class Scope {
 			facts.refine(key, merged, stable);
 		else
 			facts.invalidate(key);
-	}
-
-	function mergeRefinementsFrom(scopes:Array<Scope>):Void {
-		if (scopes.length == 0)
-			return;
-		for (value in visibleValues()) {
-			var merged = scopes[0].refinedType(value);
-			for (index in 1...scopes.length)
-				if (!TypeRelations.equals(merged, scopes[index].refinedType(value))) {
-					merged = value.declared;
-					break;
-				}
-			facts.refine(value.id, merged);
-		}
-		var expressionKeys:Map<String, Bool> = [],
-			expressionPrefix = '$' + 'expression:';
-		for (scope in scopes)
-			for (key in scope.facts.keys())
-				if (StringTools.startsWith(key, expressionPrefix))
-					expressionKeys.set(key, true);
-		for (key in expressionKeys.keys())
-			joinExpressionFact(key, scopes);
 	}
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String,

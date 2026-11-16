@@ -740,9 +740,10 @@ class StatementTyper {
 		var typedCondition = ConversionResolver.plainValue(typeExpression(predicate, bodyScope, null, false), coerce);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
 			fail("E1004", "Do-while condition must be Bool", span);
-		// The body runs at least once, so what it assigns holds afterwards, unless a break or continue can skip the rest of it.
+		// The body runs at least once, so what it assigns and narrows holds afterwards, unless a break or continue can skip the
+		// rest of it.
 		if (!AstScan.breaksOut(body) && !AstScan.continuesOut(body))
-			scope.mergeAssignmentsFrom([bodyScope]);
+			scope.join([bodyScope]);
 		if (!AstScan.breaksOut(body))
 			FlowAnalysis.refineAfterGuard(scope, typedCondition, session.isPureCall);
 		return TDoWhile(typedBody, typedCondition, span);
