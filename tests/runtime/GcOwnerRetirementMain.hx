@@ -47,7 +47,7 @@ function make():() -> Int { var values = [40, 2]; return function() return value
 			box.release();
 			collect();
 			if (Runtime.retryRetirements() != 0)
-				throw 'module retirement blocked after its object was dropped, generation $generation';
+				throw 'module retirement blocked after its object was dropped, generation $generation: ${Runtime.describeBlockedRetirements()}';
 		}
 
 		// One after the other: the module is blocked while its closure is held, and retires once it is dropped.
@@ -63,7 +63,7 @@ function make():() -> Int { var values = [40, 2]; return function() return value
 			retained[0].release();
 			collect();
 			if (Runtime.retryRetirements() != 0)
-				throw 'module retirement blocked after its closure was dropped, generation $generation';
+				throw 'module retirement blocked after its closure was dropped, generation $generation: ${Runtime.describeBlockedRetirements()}';
 		}
 
 		// More at once than there are slots: no module retires while anything of its own is held.

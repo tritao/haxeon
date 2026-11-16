@@ -45,6 +45,9 @@ private class RuntimeNative {
 	public static function patch_message(module:hl.Abstract<"realtime_module">):hl.Bytes
 		return null;
 
+	public static function describe_borrowers(module:hl.Abstract<"realtime_module">):hl.Bytes
+		return null;
+
 	public static function allocation_count(module:hl.Abstract<"realtime_module">):Int
 		return 0;
 
@@ -266,7 +269,26 @@ class Runtime {
 		var pending = retryRetirements();
 		if (pending != 0)
 			throw new RuntimeError(RuntimeStatus.RetirementBlocked,
-				'$pending runtime module retirement(s) remain blocked');
+				'$pending runtime module retirement(s) remain blocked: ${describeBlockedRetirements()}');
+	}
+
+	/** What keeps each module waiting to retire from retiring: its live blocks, their types and what holds them. */
+	public static function describeBlockedRetirements():String {
+		retirementMutex.acquire();
+		try {
+			var descriptions = [for (module in retirementBacklog) {
+				var description = module.describeBorrowers(function(handle) {
+					var bytes = RuntimeNative.describe_borrowers(handle);
+					return bytes == null ? null : copiedMessage(bytes);
+				});
+				description == null ? "a module with nothing of its own live" : description;
+			}];
+			retirementMutex.release();
+			return descriptions.length == 0 ? "no module in the backlog" : descriptions.join("; ");
+		} catch (error:Dynamic) {
+			retirementMutex.release();
+			throw error;
+		}
 	}
 
 	static function tryDispose(module:LoadedModule):Bool

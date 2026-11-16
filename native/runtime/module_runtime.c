@@ -102,6 +102,19 @@ HL_PRIM vbyte *HL_NAME(patch_message)( hl_runtime_module *runtime ) {
 	return bytes;
 }
 
+/* What keeps the module from retiring, as a managed copy, or NULL when nothing it allocated is live. */
+HL_PRIM vbyte *HL_NAME(describe_borrowers)( hl_runtime_module *runtime ) {
+	uchar *message = hl_runtime_module_describe_borrowers(runtime);
+	int length;
+	vbyte *bytes;
+	if( message == NULL ) return NULL;
+	length = ustrlen(message);
+	bytes = (vbyte*)hl_gc_alloc_noptr((length + 1) * sizeof(uchar));
+	memcpy(bytes,message,(length + 1) * sizeof(uchar));
+	free(message);
+	return bytes;
+}
+
 HL_PRIM int HL_NAME(allocation_count)( hl_runtime_module *runtime ) {
 	return hl_runtime_module_allocation_count(runtime);
 }

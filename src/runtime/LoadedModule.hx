@@ -100,6 +100,20 @@ class LoadedModule {
 		mutex.release();
 	}
 
+	/** `describe` of the handle, also while the module waits to retire; null once the handle is gone. */
+	@:allow(runtime.Runtime)
+	function describeBorrowers(describe:hl.Abstract<"realtime_module">->Null<String>):Null<String> {
+		mutex.acquire();
+		try {
+			var current = handle, description = current == null ? null : describe(current);
+			mutex.release();
+			return description;
+		} catch (error:Dynamic) {
+			mutex.release();
+			throw error;
+		}
+	}
+
 	@:allow(runtime.Runtime)
 	function close(dispose:hl.Abstract<"realtime_module">->Void):Bool {
 		mutex.acquire();
