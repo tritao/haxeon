@@ -106,8 +106,9 @@ class AccessibilityAudit {
 		if (focusable && !effectiveEnabled)
 			issues.push(new AccessibilityIssue(node.id.value, "focusable-disabled",
 				"Disabled nodes cannot remain focusable"));
-		if (node.focusable && node.resolved != null && node.resolved.visible
-			&& (node.resolved.width <= 0.0 || node.resolved.height <= 0.0))
+		var resolved = node.resolved;
+		if (node.focusable && resolved != null && resolved.visible
+			&& (resolved.width <= 0.0 || resolved.height <= 0.0))
 			issues.push(new AccessibilityIssue(node.id.value, "empty-focus-bounds",
 				"Visible focusable nodes need positive resolved bounds"));
 		for (child in node.children)
