@@ -956,28 +956,39 @@ class CallResolver {
 			result = external.result;
 		} else
 			fail("E1007", 'Unknown function "$name"', span);
-		if (!hasSignature && arguments.length != expectedArguments.length)
+		// trace takes any value and any further values, as Haxe's `trace(v:Dynamic, ...rest)` does (the rest become the position's
+		// customParams), and prints a line in haxe.Log's form: "path/File.hx:12: v, p1, p2", each value as Std.string gives it and
+		// the path relative to its source root. The newline matters beyond looks: hosts that print by line (a browser console)
+		// would otherwise hold it back.
+		var traced = name == "trace" && !hasSignature;
+		if (traced && arguments.length == 0)
+			fail("E1008", 'Function "trace" expects at least 1 argument, got 0', span);
+		if (!traced && !hasSignature && arguments.length != expectedArguments.length)
 			fail("E1008", 'Function "$name" expects ${expectedArguments.length} arguments, got ${arguments.length}',
 				span);
-		var typed = hasSignature ? typeDeclaredCallArguments(arguments,
+		var typed = traced ? [traceLine(arguments, scope, span)] : hasSignature ? typeDeclaredCallArguments(arguments,
 			requiredMapValue(session.signatures, name).arguments, scope, name,
 			span) : typeCallArguments(arguments, expectedArguments, scope, name);
-		// trace prints a line in Haxe's form, "path/File.hx:12: message", with the path relative to its source root.
-		// The newline matters beyond looks: hosts that print by line (a browser console) would otherwise hold it back.
-		if (name == "trace" && typed.length == 1) {
-			var message = typed[0],
-				location = span.file.path + ":" + span.file.lineAt(span.start) + ": ";
-			typed = [
-				new TypedExpression(TAdd(new TypedExpression(TStringLiteral(location), TString, message.span),
-					new TypedExpression(TAdd(message, new TypedExpression(TStringLiteral("\n"), TString, message.span)),
-					TString, message.span)),
-					TString, message.span)
-			];
-		}
 		var call = new TypedExpression(session.cNativeFunctions.exists(name) ? TCNativeCall(name, typed) : TCall(name,
 			typed), result, span);
 		session.invalidateCallEffects(name, scope);
 		return session.isNoReturnCall(name) ? new TypedExpression(TNoReturn(call), TNever, call.span) : call;
+	}
+
+	/** The line `trace(v, p1, ...)` prints: its location, then each value converted as Std.string converts it, joined by ", ". */
+	function traceLine(arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):TypedExpression {
+		function text(value:String):TypedExpression
+			return new TypedExpression(TStringLiteral(value), TString, span);
+		function join(left:TypedExpression, right:TypedExpression):TypedExpression
+			return new TypedExpression(TAdd(left, right), TString, span);
+		var line = text(span.file.path + ":" + span.file.lineAt(span.start) + ": ");
+		for (index in 0...arguments.length) {
+			if (index > 0)
+				line = join(line, text(", "));
+			line = join(line, StringConversion.convert(session,
+				bodyTyper.typeExpression(arguments[index], scope, TDynamic, false), bodyTyper));
+		}
+		return join(line, text("\n"));
 	}
 
 	public function resolveImplicitMethodCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
