@@ -181,8 +181,10 @@ and a failed or rejected build (the snapshot, a refused publication) puts the pr
 the entry function are its `runtime-surface` stage). `target` runs from `FrontendCompilation.run` after the frontend has recorded its
 positional and live metadata, from the closed enum tag ABI to the inliner and the frontend verifier. A stage wraps an existing pass as it is;
 target differences are the stages a target enables, read from `IrPipelineContext` (the `TargetProfile`, the value-array lane target,
-live patching and development metadata), not branches at the call sites. The Wasm module builders still run their own passes,
-interleaved with the module they build.
+live patching and development metadata), not branches at the call sites. The Wasm backend runs its passes before the module builder
+as two stage lists, `WasmBackend.logical` and `WasmBackend.erased`, around the GC model's capture of value-array lane shapes. The
+module builders still run the rest interleaved with the module they build: the boundary scalar ABI, closure escapes and adapters,
+field flattening and the scalar ABI rewrite hand their state to the builder, so they are not separable stages yet.
 
 To add a pass, add a stage at its place in the list: `when` names the targets or inputs it runs for, `measured` gives it a line in the
 pass allocation report under the stage name, and `checksPrune` makes the early prune's check mode (`HAXEON_CHECK_REUSE=1`) hold after

@@ -5,6 +5,11 @@ import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrNullableErasure;
+import compiler.ir.IrPipelineContext;
+import compiler.ir.IrStage;
+import compiler.ir.IrStage.IrStageList;
+import compiler.ir.TargetProfile;
+import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.backend.wasm.WasmPatch.WasmPatchArtifact;
 import compiler.backend.wasm.WasmPatch.WasmPatchState;
 import compiler.backend.wasm.WasmPatch;
@@ -13,6 +18,36 @@ import compiler.backend.wasm.linear.WasmLinearModuleBuilder;
 
 /** First self-hosted Wasm backend: scalar lowering with explicit CFG fallback. */
 class WasmBackend implements Backend {
+	/**
+	 * The whole-program passes a Wasm build runs before its module builder, in order. `logical` runs on the program the session
+	 * gives the backend; the GC model then records its value-array lane shapes (`WasmGcValueArrayAccessors`), which need the
+	 * logical nullable types, and `erased` runs after it. The module builders run the rest of the Wasm passes interleaved with
+	 * the module they build, since those passes hand state (scalar ABI, adapters, field lowering) to the builder.
+	 */
+	public static final logical:IrStageList = new IrStageList("wasm-logical", [
+		new IrStage("array-factory", arrayFactory),
+		new IrStage("strip-instrumentation", stripInstrumentation)
+	]);
+
+	/** After the lane shapes are recorded: Wasm boxes every nullable, and dynamic calls get their adapters. */
+	public static final erased:IrStageList = new IrStageList("wasm-erased", [
+		new IrStage("nullable-erasure", nullableErasure),
+		new IrStage("dynamic-calls", dynamicCalls)
+	]);
+
+	static function arrayFactory(program:IrProgram, context:IrPipelineContext):IrProgram
+		return compiler.ir.IrArrayFactory.physical(program);
+
+	/** Profiler probes record nothing on Wasm yet. */
+	static function stripInstrumentation(program:IrProgram, context:IrPipelineContext):IrProgram
+		return compiler.ir.IrInstrumentation.strip(program);
+
+	static function nullableErasure(program:IrProgram, context:IrPipelineContext):IrProgram
+		return IrNullableErasure.run(program);
+
+	static function dynamicCalls(program:IrProgram, context:IrPipelineContext):IrProgram
+		return WasmDynamicCalls.run(program);
+
 	public function new() {}
 
 	public function compile(program:IrProgram, options:BackendOptions):BackendResult {
@@ -81,14 +116,15 @@ class WasmBackend implements Backend {
 			patchChanged:Null<Array<String>>):WasmCompilation {
 		// Wasm currently uses dynamic boxes for all nullables; inline struct optionals must run before this erasure.
 		// Profiler probes record nothing on wasm yet.
-		var target = WasmTarget.forBackend(options.target, options.debugNames);
-		program = compiler.ir.IrArrayFactory.physical(program);
-		program = compiler.ir.IrInstrumentation.strip(program);
+		var target = WasmTarget.forBackend(options.target, options.debugNames),
+			passes = new IrPipelineContext(TargetProfile.wasm,
+				target.referenceModel == Gc ? IrValueLaneTarget.WasmGc : IrValueLaneTarget.Wasm32);
+		program = logical.run(program, passes);
 		// Capture lane shapes while nullable element/field types still retain their logical layout.
 		var scalarAccessors = target.referenceModel == Gc
 			? new compiler.backend.wasm.gc.WasmGcValueArrayAccessors(program) : null;
 		if (scalarAccessors != null) program = scalarAccessors.program;
-		program = WasmDynamicCalls.run(IrNullableErasure.run(program));
+		program = erased.run(program, passes);
 		if (scalarAccessors != null)
 			return WasmGcModuleBuilder.compile(program, options, patchChanged, scalarAccessors.accesses);
 		if (target.referenceModel == Linear32)

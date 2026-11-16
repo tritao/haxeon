@@ -16,8 +16,9 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
  * builds the artifact from that program (`BackendSession`).
  *
  * Target differences are which stages a target enables (the predicates below, read from `IrPipelineContext`); each stage wraps an
- * existing pass as it is. The Wasm module builders still run their own passes, interleaved with the module they build
- * (`WasmBackend`, `WasmScalarClosureEscapes`, `WasmLinearModuleBuilder`, `WasmGcModuleBuilder`).
+ * existing pass as it is. The Wasm backend's own passes before its module builder are its stage lists (`WasmBackend.logical`,
+ * `WasmBackend.erased`); the module builders still run the rest interleaved with the module they build
+ * (`WasmScalarClosureEscapes`, `WasmLinearModuleBuilder`, `WasmGcModuleBuilder`).
  *
  * To add a pass: write it as a function of the program (and the context, for what it reads besides the program), wrap it in a stage
  * at its place in the list, with `when` for the targets that run it, `measured` for its line in the pass allocation report and
