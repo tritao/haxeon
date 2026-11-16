@@ -83,6 +83,15 @@ class AbstractConversionGraph {
 				}
 		};
 
+	/** The representation is an expected source only when a type-level `from` explicitly accepts it. */
+	public function expectedRepresentation(expected:CompilerType):Null<CompilerType> {
+		return switch expected {
+			case TAbstract(name, arguments, representation):
+				declaredTypeFrom(representation, name, arguments) ? representation : null;
+			default: null;
+		};
+	}
+
 	/** A representation conversion declared with `to`, excluding conversion methods. */
 	public function allowsDirectTo(actual:CompilerType, expected:CompilerType):Bool
 		return switch actual {
@@ -98,13 +107,11 @@ class AbstractConversionGraph {
 		};
 
 	function declaredFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Bool {
+		if (declaredTypeFrom(actual, name, arguments)) return true;
 		var decl = declarations.abstractDeclaration(name);
 		if (decl == null)
 			return false;
 		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
-		for (type in decl.fromTypes)
-			if (TypeRelations.equals(actual, declarations.resolve(type, decl.span, substitutions)))
-				return true;
 		for (method in decl.methods) {
 			var metadata = method.metadata;
 			if (metadata == null || !method.isStatic || method.arguments.length != 1)
@@ -115,6 +122,15 @@ class AbstractConversionGraph {
 					declarations.resolve(method.arguments[0].type, method.span, substitutions)))
 					return true;
 		}
+		return false;
+	}
+
+	function declaredTypeFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Bool {
+		var decl = declarations.abstractDeclaration(name);
+		if (decl == null) return false;
+		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
+		for (type in decl.fromTypes)
+			if (TypeRelations.equals(actual, declarations.resolve(type, decl.span, substitutions))) return true;
 		return false;
 	}
 

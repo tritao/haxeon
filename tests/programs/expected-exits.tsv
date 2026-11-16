@@ -619,3 +619,4 @@ nullable-abstract-value	42
 nullable-abstract-cast	42
 nullable-abstract-places	42
 nullable-generic-abstract	42
+readonly-array-context	42

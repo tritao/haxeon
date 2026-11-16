@@ -11,6 +11,9 @@ class ReadOnlyArrayMain {
 		reject('values.push(3)');
 		reject('values[0] = 3');
 		reject('values.splice(0, 1)');
+		rejectSource('import haxe.ds.ReadOnlyArray; function main():Int { var values:ReadOnlyArray<{x:Float}> = [{x: "bad"}]; return 42; }');
+		rejectSource('abstract Hidden(Array<{x:Float}>) {} function main():Int { var values:Hidden = [{x: 1}]; return 42; }');
+		rejectSource('abstract MethodOnly(Array<{x:Float}>) { @:from public static function convert(value:Array<{x:Float}>):MethodOnly return cast value; } function main():Int { var values:MethodOnly = [{x: 1}]; return 42; }');
 		var compiler = new Compiler();
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
@@ -26,6 +29,19 @@ function main():Int {
   return 42;
 }');
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());
+	}
+
+	static function rejectSource(source:String):Void {
+		var compiler = new Compiler();
+		CompilerIntrinsics.register(compiler);
+		compiler.addStandardLibrarySourceRoot("stdlib");
+		compiler.update("Main.hx", source);
+		try {
+			compiler.compile("Main");
+			throw "Invalid abstract array conversion was accepted";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1002" && error.diagnostic.code != "E1003") throw error;
+		}
 	}
 
 	static function reject(statement:String):Void {

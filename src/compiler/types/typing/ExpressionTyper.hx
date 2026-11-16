@@ -2802,12 +2802,19 @@ class ExpressionTyper {
 		};
 	}
 
-	public static function arrayElementExpectation(type:Null<CompilerType>):Null<CompilerType> {
+	function arrayElementExpectation(type:Null<CompilerType>, ?visited:Array<String>):Null<CompilerType> {
 		if (type == null)
 			return null;
+		if (visited == null) visited = [];
 		return switch type {
 			case TArray(element): element;
-			case TNullable(element): arrayElementExpectation(element);
+			case TNullable(element): arrayElementExpectation(element, visited);
+			case TAbstract(_, _, _):
+				var key = SemanticSignature.type(type);
+				if (visited.indexOf(key) >= 0) return null;
+				visited.push(key);
+				var representation = session.declarations.conversions.expectedRepresentation(type);
+				representation == null ? null : arrayElementExpectation(representation, visited);
 			default: null;
 		};
 	}
