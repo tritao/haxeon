@@ -45,15 +45,25 @@ driver has loaded, and compiles program cases with the prebuilt compiler. `HAXEO
 with `haxe --run Main` instead, for debugging the compiler's sources under the Haxe interpreter. Running
 `haxe --run driver.TestDriver` by hand skips that setup: it needs the checkout's `hl` on `PATH` and the runtime on the library path.
 
-Without Bash, the same workflow runs through the build entry point with the pinned Haxe. `scripts/test-driver.sh` and
-`scripts/bootstrap-compiler.sh` are wrappers around it, and this is what Windows CI runs (`.tools\haxe\haxe.exe` there):
+### The build entry point
+
+`build.HaxeonBuild` is the cross-platform entry point behind the scripts. Run it with the pinned Haxe in two cases. Before
+HashLink is built, nothing else can run it:
 
 ```sh
-.tools/haxe/haxe common.hxml --run build.HaxeonBuild doctor       # check git, cmake, ninja and the pinned Haxe
-.tools/haxe/haxe common.hxml --run build.HaxeonBuild native       # the CMake build; the release preset, or windows-msvc on Windows
-.tools/haxe/haxe common.hxml --run build.HaxeonBuild bootstrap    # scripts/bootstrap-compiler.sh
-.tools/haxe/haxe common.hxml --run build.HaxeonBuild test 16      # the test driver; 4 jobs by default, same options
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild doctor    # are git, cmake, ninja and the pinned Haxe there?
+.tools/haxe/haxe common.hxml --run build.HaxeonBuild native    # the CMake build: the release preset, or windows-msvc on Windows
 ```
+
+On Windows, where the Bash scripts do not run, it is also how the bootstrap and the test driver start, and what CI runs:
+
+```powershell
+.tools\haxe\haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
+.tools\haxe\haxe.exe --cwd . common.hxml --run build.HaxeonBuild test 8    # 4 jobs by default; takes the driver options above
+```
+
+Everywhere else use `scripts/build-native.sh`, `scripts/bootstrap-compiler.sh` and `scripts/test-driver.sh`. After the native
+build, `scripts/haxeon doctor` reports the whole toolchain: the pinned Haxe, HashLink, the runtime library and the Android tools.
 
 ## Formatting
 
