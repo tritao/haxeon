@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -18,6 +19,8 @@ class WireFinalWarmMain {
 	static function make(record:String):Compiler {
 		var compiler = new Compiler();
 		compiler.livePatching = false;
+		// Every build checks what it reuses against what a fresh build makes.
+		compiler.options = new CompileOptions({checkReuse: true});
 		CompilerIntrinsics.register(compiler);
 		compiler.addStandardLibrarySourceRoot("stdlib");
 		compiler.update("Main.hx", mainSource);
@@ -31,8 +34,6 @@ class WireFinalWarmMain {
 			throw "TMPDIR is required";
 		var prefix = Path.join([temp, "wire-final-warm-" + Std.random(1000000000)]);
 		var warmPath = prefix + ".warm.hl", coldPath = prefix + ".cold.hl";
-		var previousCheck = Sys.getEnv("HAXEON_CHECK_REUSE");
-		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
 		try {
 			var warm = make(initial);
 			warm.compile("Main");
@@ -54,11 +55,9 @@ class WireFinalWarmMain {
 				throw 'Warm returned $warmStatus, cold returned $coldStatus; expected 42';
 		} catch (error:Dynamic) {
 			cleanup(warmPath, coldPath);
-			Sys.putEnv("HAXEON_CHECK_REUSE", previousCheck == null ? "0" : previousCheck);
 			throw error;
 		}
 		cleanup(warmPath, coldPath);
-		Sys.putEnv("HAXEON_CHECK_REUSE", previousCheck == null ? "0" : previousCheck);
 		Sys.println("PASS: final wire field type edits agree in warm and cold builds");
 	}
 

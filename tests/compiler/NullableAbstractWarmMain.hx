@@ -1,4 +1,5 @@
 using compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
@@ -16,6 +17,8 @@ class NullableAbstractWarmMain {
 	static function make(source:String):Compiler {
 		var c = new Compiler();
 		c.livePatching = false;
+		// Every build checks what it reuses against what a fresh build makes.
+		c.options = new CompileOptions({checkReuse: true});
 		CompilerIntrinsics.register(c);
 		c.addStandardLibrarySourceRoot("stdlib");
 		c.update("Main.hx", entry);
@@ -30,15 +33,7 @@ class NullableAbstractWarmMain {
 		var dir = Sys.getEnv("HAXEON_HASHLINK_DIR");
 		if (dir == null || dir == "")
 			throw "HAXEON_HASHLINK_DIR is required";
-		var previous = Sys.getEnv("HAXEON_CHECK_REUSE");
-		Sys.putEnv("HAXEON_CHECK_REUSE", "1");
-		try {
-			run(temp, dir);
-		} catch (error:Dynamic) {
-			Sys.putEnv("HAXEON_CHECK_REUSE", previous == null ? "0" : previous);
-			throw error;
-		}
-		Sys.putEnv("HAXEON_CHECK_REUSE", previous == null ? "0" : previous);
+		run(temp, dir);
 	}
 
 	static function run(temp:String, dir:String):Void {
