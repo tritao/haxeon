@@ -85,7 +85,7 @@ world-native-nested-int16-store-integration ci -- tests/integration/test-world-n
 # These project tests build below their own mktemp project roots and use separate source caches, so they share a pool without racing on
 # the repository's out/ tree. Longest first.
 cmake-native-package             ci          pool=projects cli-launcher -- bash tests/integration/test-cmake-native-package.sh
-native-package-build             ci          pool=projects cli-launcher -- bash tests/integration/test-native-package-build.sh
+native-package-build             wave        pool=projects cli-launcher -- bash tests/integration/test-native-package-build.sh
 cxx-project-ffi-cmake            ci          pool=projects cli-launcher -- bash tests/integration/test-cxx-project-ffi-cmake.sh
 cxx-project-ffi-thunks           ci          pool=projects cli-launcher -- bash tests/integration/test-cxx-project-ffi-thunks.sh
 cxx-project-ffi                  ci          pool=projects cli-launcher -- bash tests/integration/test-cxx-project-ffi.sh
