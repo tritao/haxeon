@@ -82,6 +82,21 @@ HashLink lowering (`HlScalarValueLocals`, `HlLoweringView`) which value places s
 `semantic.SemanticAssembly` and `modules.CodeIdentityTable` import `compilation.CompilationContext`, which refers back to the root
 `Compiler`; and `syntax.Parser` calls `types.analysis.FinalLocalChecker`.
 
+## Where the IR pass order lives
+
+`compiler.ir.IrPipeline` holds the order of the whole-program IR passes as three named stage lists. `assembly` runs inside
+`IrProgramAssembler.assemble`, from the generated functions and the declaration tables to the finished program (the runtime surface and
+the entry function are its `runtime-surface` stage). `target` runs from `FrontendCompilation.run` after the frontend has recorded its
+positional and live metadata, from the closed enum tag ABI to the inliner and the frontend verifier. `retainedHashLink` runs in
+`BackendAssembly` on the copy of the program a Wasm build keeps for its HashLink assembly. A stage wraps an existing pass as it is;
+target differences are the stages a target enables, read from `IrPipelineContext` (the `TargetProfile`, the value-array lane target,
+live patching and development metadata), not branches at the call sites. The Wasm module builders still run their own passes,
+interleaved with the module they build.
+
+To add a pass, add a stage at its place in the list: `when` names the targets or inputs it runs for, `measured` gives it a line in the
+pass allocation report under the stage name, and `checksPrune` makes the early prune's check mode (`HAXEON_CHECK_REUSE=1`) hold after
+it. The lists are built once; running one costs a predicate and a call per stage.
+
 ## Warm builds: what landed (M0 and M1 of ADR 0003)
 
 The current plan and the measurements are in [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) and

@@ -1,6 +1,5 @@
 package compiler.ir;
 
-import compiler.ir.IrTypeAwareWalk.IrWalkResult;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.runtime.RuntimeType;
@@ -27,7 +26,6 @@ import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrStaticField;
 import compiler.ir.SourceProvenance.Located;
-import compiler.semantic.SemanticSignature;
 
 /** Builds complete IR programs and selects their required runtime surface. */
 class IrProgramAssembler {
@@ -593,7 +591,6 @@ class IrProgramAssembler {
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>,
 			pruneFromEntry = false,
 			?canonicalObjects:Array<IrObject>):IrProgram {
-		var program = new IrProgram("__entry");
 		var allFunctions:Array<IrFunction> = [];
 		if (staticInitializers != null)
 			for (initializer in staticInitializers)
@@ -611,12 +608,15 @@ class IrProgramAssembler {
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32,
 					builder.blocks, Ordinary));
 			}
-		// Before anything walks the program, so a branch that cannot be taken links nothing it calls.
-		IrConstantBranches.run(allFunctions);
-		var removedByPrune:Map<String, Bool> = [];
-		var reachedNativesAfterPrune:Null<Map<String, Bool>> = null;
+		var context = new IrPipelineContext(generator.profile, valueTarget);
+		context.entryPoint = entryPoint;
+		context.staticInitializers = staticInitializers;
+		context.staticChecks = staticChecks;
+		context.exportedFunctions = exportedFunctions;
+		context.canonicalObjects = canonicalObjects;
+		context.pruneFromEntry = pruneFromEntry;
 		// What a plain build's prune keeps (docs/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the
-		// exported functions; the reflection helpers are generated after the walk, so what they will call is reached through `pruneDependencies`.
+		// exported functions.
 		var pruneRoots = entryPoint == null ? ["main", "Main.main"] : [entryPoint];
 		if (staticInitializers != null && staticInitializers.length > 0) {
 			pruneRoots.push("__init");
@@ -626,188 +626,35 @@ class IrProgramAssembler {
 		if (exportedFunctions != null)
 			for (name in exportedFunctions)
 				pruneRoots.push(name);
-		function pruneInputOf(functions:Array<IrFunction>):IrProgram {
-			var input = new IrProgram(entryPoint == null ? "main" : entryPoint);
-			input.objects = objects;
-			input.interfaces = interfaces == null ? [] : interfaces;
-			input.enums = enums == null ? [] : enums;
-			input.staticFields = staticFields == null ? [] : staticFields;
-			input.functions = functions;
-			input.natives = natives == null ? [] : natives;
-			input.cNatives = cNatives == null ? [] : cNatives;
-			return input;
-		}
-		function pruneDependencies(functions:Array<IrFunction>):compiler.ir.IrTypeAwareWalk.IrClassDependencies {
-			var objectTable:Map<String, IrObject> = [for (object in objects) object.name => object],
-				present:Map<String, Bool> = [for (fn in functions) fn.name => true];
-			return {
-				symbols: ObjectReflection.helperSymbols(),
-				of: (className, symbol) -> ObjectReflection.dependencies(objectTable,
-					generator.facts.observableFieldBits, className, symbol,
-					name -> present.exists(name))
-			};
-		}
-		// A plain build decides the Dynamic dispatch of enums and structs from what is reached: an enum or struct that no reached code can have, and
-		// a helper that only unreached code asked for, change nothing (the dispatches rewrite every `__dynamic_equal` site once any type registers).
-		var dispatchWalk:Null<IrWalkResult> = pruneFromEntry && objects != null
-			? IrEntryPrune.walk(pruneInputOf(allFunctions), pruneRoots, pruneDependencies(allFunctions)) : null;
-		var unreached:Null<Map<String, Bool>> = dispatchWalk == null
-			? null : [for (fn in allFunctions) if (!dispatchWalk.reached.exists(fn.name)) fn.name => true];
-		if (objects != null) {
-			var reflectionInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
-			reflectionInput.objects = objects;
-			reflectionInput.interfaces = interfaces == null ? [] : interfaces;
-			reflectionInput.enums = enums == null ? [] : enums;
-			reflectionInput.staticFields = staticFields == null ? [] : staticFields;
-			reflectionInput.functions = allFunctions;
-			reflectionInput.natives = natives == null ? [] : natives;
-			reflectionInput.cNatives = cNatives == null ? [] : cNatives;
-			// The reflection decisions of the enum dispatch read what reached code does, not what every loaded module declares.
-			if (dispatchWalk != null) {
-				reflectionInput.functions = [for (fn in allFunctions) if (dispatchWalk.reached.exists(fn.name)) fn];
-				reflectionInput.natives = [for (native in reflectionInput.natives)
-					if (dispatchWalk.calledNatives.exists(native.name)) native];
-				reflectionInput.cNatives = [for (native in reflectionInput.cNatives)
-					if (dispatchWalk.calledNatives.exists(native.name)) native];
-			}
-			allFunctions = compiler.core.IrPassMeter.measure("enum-dynamic-dispatch",
-				() -> IrEnumDynamicDispatch.rewrite(allFunctions, reflectionInput, reflectableObjects, unreached));
-			if (IrReachabilityReport.enabled()) {
-				reflectionInput.functions = allFunctions;
-				IrReachabilityReport.report("after enum dispatch (the 3a prune point)", reflectionInput);
-			}
-		}
-		if (objects != null)
-			allFunctions = compiler.core.IrPassMeter.measure("value-dynamic-dispatch",
-				() -> IrValueDynamicDispatch.rewrite(allFunctions, objects, unreached,
-				dispatchWalk == null ? null : dispatchWalk.createdClasses));
-		if (objects != null)
-			compiler.core.IrPassMeter.measureVoid("generic-owner-erasure",
-				() -> GenericOwnerErasure.generate(generator.facts, allFunctions, objects));
-		// Every method slot keeps its topmost declaration's signature; overrides that lower to another get a bridge in the slot.
-		if (objects != null) {
-			var slotObjects:Array<IrObject> = objects;
-			var bridged = compiler.core.IrPassMeter.measure("override-bridges",
-				() -> IrOverrideBridges.apply(allFunctions, slotObjects));
-			allFunctions = bridged.functions;
-			objects = bridged.objects;
-		}
-		// The prune point (docs/REACHABILITY_WALK.md): after the enum providers and generic owner erasure, which settle the class names and
-		// the helpers, and before every later pass. The entry function is created last, so the roots are what it calls: main, and the
-		// initializers `__init` runs.
-		if (pruneFromEntry && objects != null) {
-			var pruneInput = pruneInputOf(allFunctions);
-			var pruned = IrEntryPrune.run(pruneInput, pruneRoots, pruneDependencies(allFunctions));
-			removedByPrune = pruned.removed;
-			reachedNativesAfterPrune = pruned.calledNatives;
-			allFunctions = pruneInput.functions;
-			objects = pruneInput.objects;
-		}
-		// HAXEON_CHECK_REUSE=1: after each later pass, nothing may call a function the prune removed (the failure of 2026-11-10).
-		var checkPrune = pruneFromEntry && IrEntryPrune.checking();
-		IrEntryPrune.watch(checkPrune ? removedByPrune : null);
-		function verify(pass:String):Void
-			if (checkPrune)
-				IrEntryPrune.checkRemoved(pass, allFunctions, removedByPrune);
-		if (objects != null && interfaces != null)
-			allFunctions = compiler.core.IrPassMeter.measure("value-interface-boxes",
-				() -> IrValueInterfaceBoxes.rewrite(allFunctions, objects, interfaces));
-		verify("value-interface-boxes");
-		if (objects != null && interfaces != null) {
-			allFunctions = compiler.core.IrPassMeter.measure("typed-interface-calls",
-				() -> IrTypedInterfaceDispatch.rewriteValueCalls(allFunctions, objects, interfaces));
-			var beforeTypedInterfaces = allFunctions.length;
-			compiler.core.IrPassMeter.measureVoid("typed-interface-generate",
-				() -> IrTypedInterfaceDispatch.generate(allFunctions, objects, interfaces));
-			if (allFunctions.length > beforeTypedInterfaces) {
-				var existing = allFunctions.slice(0, beforeTypedInterfaces);
-				allFunctions = existing.concat(IrValueInterfaceBoxes.rewrite(allFunctions.slice(beforeTypedInterfaces),
-					objects, interfaces, existing));
-			}
-		}
-		// HashLink checks object casts itself, but interface casts need checks on every target.
-		if (objects != null)
-			allFunctions = compiler.core.IrPassMeter.measure("checked-dynamic-casts",
-				() -> IrCheckedDynamicCasts.rewrite(allFunctions, objects, generator.profile.nativeReflectionDispatch));
-		verify("checked-dynamic-casts");
-		if (exportedFunctions != null && exportedFunctions.length > 0) {
-			var exported = [for (name in exportedFunctions) name => true];
-			allFunctions = [
-				for (fn in allFunctions)
-					exported.exists(fn.name) ? new IrFunction(fn.name, fn.arguments, fn.result, fn.blocks, fn.kind,
-					fn.debugBindings, fn.inlineHint,
-					Expose) : fn
-			];
-		}
-		if (valueTarget != null) {
-			if (canonicalObjects == null)
-				throw "Inline enum lowering requires canonical objects";
-			// Choose source enum storage before optional-flow and reflection helpers choose their ABI.
-			var enumInput = new IrProgram(entryPoint == null ? "main" : entryPoint);
-			enumInput.functions = allFunctions;
-			enumInput.reachedNatives = reachedNativesAfterPrune;
-			enumInput.objects = objects == null ? [] : objects;
-			enumInput.interfaces = interfaces == null ? [] : interfaces;
-			enumInput.staticFields = staticFields == null ? [] : staticFields;
-			enumInput.natives = natives == null ? [] : natives;
-			enumInput.cNatives = cNatives == null ? [] : cNatives;
-			enumInput.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
-				enumInput.objects, enumInput.staticFields,
-				enumInput.natives, enumInput.interfaces, enumInput.cNatives);
-			IrEnumTagLowering.run(enumInput);
-			var enumOutput = compiler.core.IrPassMeter.measure("inline-enum-lowering",
-				() -> IrInlineEnumLowering.run(enumInput, valueTarget, canonicalObjects, reflectableObjects));
-			allFunctions = enumOutput.functions;
-			objects = enumOutput.objects;
-			interfaces = enumOutput.interfaces;
-			staticFields = enumOutput.staticFields;
-			natives = enumOutput.natives;
-			enums = enumOutput.enums;
-		}
-		verify("inline-enum-lowering");
-		if (objects != null) {
-			allFunctions = compiler.core.IrPassMeter.measure("optional-scalar-flow",
-				() -> new IrOptionalScalarFlow(objects).rewrite(objects, allFunctions));
-			allFunctions = IrOptionalValueFlow.addHelpers(allFunctions, objects);
-		}
-		verify("optional-scalar-flow");
-		allFunctions = compiler.core.IrPassMeter.measure("static-null-checks",
-			() -> IrStaticNullChecks.run(allFunctions, objects, staticChecks));
-		verify("static-null-checks");
-		if (objects != null && reflectableObjects != null) {
-			reflectableObjects = reflectableObjects.copy();
-			var known:Map<String, Bool> = [for (name in reflectableObjects) name => true];
-			for (object in objects)
-				if ((object.isValue
-					|| StringTools.startsWith(object.name, IrValueInterfaceBoxes.BOX_PREFIX)
-					|| SemanticSignature.isAnonymousName(object.name))
-					&& !StringTools.startsWith(object.name, IrInlineEnumLayout.VALUE_PREFIX)
-					&& !known.exists(object.name)) {
-					reflectableObjects.push(object.name);
-					known.set(object.name, true);
-				}
-		}
-		var beforeReflection = allFunctions.length;
-		natives = ObjectReflection.generate(generator.facts, natives, objects, reflectableObjects, allFunctions,
-			generator.profile.nativeReflectionDispatch,
-			reachedNativesAfterPrune);
-		// Reflection helpers are generated after the ordinary cast pass. Check their dynamic
-		// stores too, so a bad reflected value throws instead of trapping or corrupting a field.
-		if (objects != null && allFunctions.length > beforeReflection) {
-			var existing = allFunctions.slice(0, beforeReflection);
-			allFunctions = existing.concat(IrCheckedDynamicCasts.rewrite(allFunctions.slice(beforeReflection), objects,
-				generator.profile.nativeReflectionDispatch, existing, true, true));
-		}
-		if (objects != null) {
-			var optionalStorage = new IrOptionalFieldStorage(objects);
-			if (optionalStorage.hasFields()) {
-				allFunctions = optionalStorage.rewrite(allFunctions);
-				objects = optionalStorage.physicalObjects(objects);
-			}
-			allFunctions = compiler.core.IrPassMeter.measure("nullable-scalar-fields",
-				() -> new IrNullableScalarFields(objects).rewrite(allFunctions));
-		}
-		verify("object-reflection and nullable-scalar-fields");
+		context.pruneRoots = pruneRoots;
+		// The passes and their order are `IrPipeline.assembly`; its `runtime-surface` stage is `finish`.
+		var assembled = IrPipeline.assembly.run(new IrAssembly(generator, allFunctions, natives, objects, interfaces,
+			enums,
+			staticFields, cNatives, reflectableObjects), context).program;
+		if (assembled == null)
+			throw "IR assembly did not finish the program";
+		return assembled;
+	}
+
+	/**
+	 * The runtime surface of an assembled program: the runtime natives its calls need, the C native calls, the concrete enums, the
+	 * entry function that runs the static initializers and main, and the program itself (the `runtime-surface` stage of
+	 * `IrPipeline.assembly`).
+	 */
+	public static function finish(assembly:IrAssembly, context:IrPipelineContext):IrProgram {
+		var generator = assembly.generator,
+			allFunctions = assembly.functions,
+			natives = assembly.natives,
+			objects = assembly.objects,
+			interfaces = assembly.interfaces,
+			enums = assembly.enums,
+			staticFields = assembly.staticFields,
+			cNatives = assembly.cNatives,
+			entryPoint = context.entryPoint,
+			staticInitializers = context.staticInitializers,
+			removedByPrune = context.pruned,
+			reachedNativesAfterPrune = assembly.reachedNatives;
+		var program = new IrProgram("__entry");
 		var needsArrayRuntime = false,
 			needsTypedRefArrayRuntime = false,
 			needsArrayCastRuntime = false,
@@ -1198,8 +1045,6 @@ class IrProgramAssembler {
 			result = entry.call("__exit", [result], Void);
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks, Ordinary));
-		IrEnumTagLowering.escapes(program);
-		IrEntryPrune.watch(null);
 		return program;
 	}
 

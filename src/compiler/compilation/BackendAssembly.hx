@@ -106,10 +106,8 @@ class BackendAssembly {
 		// target-specific adapters.
 		var assemblyIr = ir;
 		if (context.isWasmTarget()) {
-			assemblyIr = ir.copy();
-			compiler.ir.IrScalarClosures.rewrite(assemblyIr);
-			// The retained assembly adapters can introduce fresh nominal-tag escapes.
-			compiler.ir.IrEnumTagLowering.escapes(assemblyIr);
+			assemblyIr = compiler.ir.IrPipeline.retainedHashLink.run(ir.copy(),
+				new compiler.ir.IrPipelineContext(context.targetProfile(), context.valueArrayTarget()));
 		} else if (!context.livePatching) {
 			// A plain HashLink build writes only what is reachable from the entry: a function nothing reaches is not lowered or
 			// encoded, and a class no reachable function mentions loses its methods. The program in the result keeps everything

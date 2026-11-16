@@ -2,7 +2,8 @@ package compiler.core;
 
 /**
  * Allocation of each IR pass in one compile, in the order the passes first ran, for the driver's timings line. A pass that runs more
- * than once (value phi scalarization runs between other passes) is summed under one name. `measure` costs two meter samples per call.
+ * than once (value phi scalarization runs between other passes) is summed under one name. A pass costs two meter samples: `start` and
+ * `stop`, called by the stages `compiler.ir.IrPipeline` meters.
  */
 class IrPassMeter {
 	static var order:Array<String> = [];
@@ -15,18 +16,13 @@ class IrPassMeter {
 		counts = [];
 	}
 
-	public static function measure<T>(name:String, run:Void->T):T {
-		var before = AllocationMeter.sample();
-		var result = run();
-		record(name, before, AllocationMeter.sample());
-		return result;
-	}
+	/** The sample `stop` measures from. */
+	public static function start():AllocationMeter.AllocationSnapshot
+		return AllocationMeter.sample();
 
-	public static function measureVoid(name:String, run:Void->Void):Void {
-		var before = AllocationMeter.sample();
-		run();
+	/** Records what was allocated since `before` under `name`. */
+	public static function stop(name:String, before:AllocationMeter.AllocationSnapshot):Void
 		record(name, before, AllocationMeter.sample());
-	}
 
 	static function record(name:String, before:AllocationMeter.AllocationSnapshot,
 			after:AllocationMeter.AllocationSnapshot):Void {

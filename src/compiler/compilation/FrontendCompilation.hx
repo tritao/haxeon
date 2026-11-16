@@ -10,9 +10,7 @@ import compiler.abi.PositionalName;
 import compiler.ir.IrFunction;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.IrGenerator;
-import compiler.ir.IrInliner;
 import compiler.ir.IrProgramAssembler;
-import compiler.ir.IrVerifier;
 import compiler.modules.ModuleReachability;
 import compiler.modules.ModuleState;
 import compiler.semantic.LambdaName;
@@ -836,60 +834,18 @@ class FrontendCompilation {
 			var semantic = context.cachedSemanticProgram;
 			if (context.livePatching && !context.isWasmTarget() && semantic != null)
 				ir.parameterDefaults = parameterDefaults(ir, semantic.signatures);
-			var valueArrayTarget = context.valueArrayTarget();
-			if (!context.developmentMetadata && !context.livePatching)
-				ir = compiler.ir.IrClosedEnumTagAbi.run(ir, generated.reflectable);
-			compiler.core.IrPassMeter.measureVoid("value-array-rewrite",
-				() -> compiler.ir.IrValueArrayProgramRewrite.rewriteAll(ir, valueArrayTarget == HashLink ? 64 : 32,
-				valueArrayTarget));
-			// Scalarize value joins before choosing the scalar call ABI. The HashLink call rewrite can introduce
-			// further value joins, so it needs a second pass after that rewrite.
-			if (context.isWasmTarget()) {
-				compiler.ir.IrValueConstructors.rewrite(ir);
-				compiler.ir.IrValuePhiScalarization.rewrite(ir);
-				if (valueArrayTarget == Wasm32 || valueArrayTarget == WasmGc) {
-					compiler.ir.IrScalarArguments.rewrite(ir, true);
-					compiler.ir.IrValuePhiScalarization.rewrite(ir);
-				}
-			}
-			if (!context.isWasmTarget()) {
-				compiler.core.IrPassMeter.measureVoid("value-constructors",
-					() -> compiler.ir.IrValueConstructors.rewrite(ir));
-				compiler.core.IrPassMeter.measureVoid("value-phi-scalarization",
-					() -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
-				compiler.core.IrPassMeter.measureVoid("scalar-arguments",
-					() -> compiler.ir.IrScalarArguments.rewrite(ir));
-				compiler.core.IrPassMeter.measureVoid("scalar-closures",
-					() -> compiler.ir.IrScalarClosures.rewrite(ir));
-				compiler.core.IrPassMeter.measureVoid("value-phi-scalarization",
-					() -> compiler.ir.IrValuePhiScalarization.rewrite(ir));
-			}
-			var scalarObjects = compiler.ir.IrObjectTable.of([for (object in ir.objects) object.name => object]);
-			ir.functions = compiler.core.IrPassMeter.measure("scalar-replacement", () -> [
-				for (fn in ir.functions)
-					compiler.ir.IrScalarReplacement.rewrite(fn, scalarObjects, false, !context.isWasmTarget())
-			]);
-			compiler.core.IrPassMeter.measureVoid("nullable-scalar-flow",
-				() -> compiler.ir.IrNullableScalarFlow.rewrite(ir));
-			compiler.ir.IrEnumTagLowering.escapes(ir);
-			// Compare and publish the final IR even when only load/store forwarding is enabled.
-			inlinerChanged = compiler.core.IrPassMeter.measure("inliner",
-				() -> IrInliner.run(ir, context.inlineCache(), context.targetProfile(), context.inlineEnabled(),
-				instrumentScope));
-			// HashLink has its scalar closure ABI here. Wasm verifies after its target-specific closure escape adapters exist.
-			if (!context.livePatching && !context.isWasmTarget()) {
-				compiler.core.IrPassMeter.measureVoid("verifier",
-					() -> IrVerifier.verifyReusing(ir, context.verifyMemo));
-				if (checkingReuse) {
-					try
-						IrVerifier.verify(ir)
-					catch (error:String)
-						throw 'HAXEON_CHECK_REUSE: verification skipped a function that fails in full: $error';
-					var providerProblem = compiler.ir.IrProviders.check(ir.functions);
-					if (providerProblem != null)
-						throw 'HAXEON_CHECK_REUSE: $providerProblem';
-				}
-			}
+			// The passes and their order are `IrPipeline.target`, from the closed enum tag ABI to the frontend verifier.
+			var passes = new compiler.ir.IrPipelineContext(context.targetProfile(), context.valueArrayTarget());
+			passes.livePatching = context.livePatching;
+			passes.developmentMetadata = context.developmentMetadata;
+			passes.reflectable = generated.reflectable;
+			passes.inlineCache = context.inlineCache();
+			passes.inlineEnabled = context.inlineEnabled();
+			passes.instrumentScope = instrumentScope;
+			passes.verifyMemo = context.verifyMemo;
+			passes.checkingReuse = checkingReuse;
+			ir = compiler.ir.IrPipeline.target.run(ir, passes);
+			inlinerChanged = passes.inlinerChanged;
 			if (reusedPipeline != null) {
 				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
 				if (difference != null)
