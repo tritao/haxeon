@@ -1,9 +1,10 @@
-#include <hl.h>
+/* windows.h before hl.h: its SDK headers do not build after hl.h's definitions. */
 #ifdef _WIN32
 #	include <windows.h>
 #else
 #	include <pthread.h>
 #endif
+#include <hl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

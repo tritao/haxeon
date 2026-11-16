@@ -599,7 +599,9 @@ private class LinkSpelling {
 
 	public function new(anchor:String) {
 		var directory = anchor;
-		while (directory.length > 0) {
+		// A Windows drive ends the walk: "D:" names the current directory on drive D, not the drive's root, so resolving it
+		// would map the drive to wherever the process happens to run.
+		while (directory.length > 0 && !~/^[A-Za-z]:\/?$/.match(directory)) {
 			if (FileSystem.exists(directory)) {
 				var resolved = StringTools.replace(FileSystem.fullPath(directory), "\\", "/");
 				if (resolved != directory)
