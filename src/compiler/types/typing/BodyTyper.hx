@@ -337,11 +337,8 @@ class BodyTyper implements BodyTyping {
 			check();
 		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);
 		session.closureConversion.mapTypesSince(frame.conversionMark, map);
-		for (key in frame.lambdaKeys) {
-			var cached = session.counters.lambdaCache.get(key);
-			if (cached != null)
-				session.counters.lambdaCache.set(key, map.expression(cached));
-		}
+		for (key in frame.lambdaKeys)
+			session.mapCachedLambda(key, map);
 		return map.statements(statements);
 	}
 
@@ -2210,7 +2207,8 @@ class BodyTyper implements BodyTyping {
 		var previousCaller = defaultArgumentCaller;
 		if (defaultArgumentCaller == null)
 			defaultArgumentCaller = context.name;
-		var body = enterBody("$default:" + declarationName, null, parentPath(declarationName));
+		var body = enterBody(TypingSession.DEFAULT_ARGUMENT_PREFIX + declarationName, null,
+			parentPath(declarationName));
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
 			session.output.records.recordDefaultArgumentSource(defaultArgumentCaller,

@@ -21,6 +21,32 @@ class BodyCounters {
 
 	public function new() {}
 
+	/** Passes the lambda cached at `key`, if any, through `map`. */
+	public function mapLambda(key:String, map:compiler.types.TypedTypeMap):Void {
+		var cached = lambdaCache.get(key);
+		if (cached != null)
+			lambdaCache.set(key, map.expression(cached));
+	}
+
+	/**
+	 * Adds these counts and lambdas to `target`'s. Each body's names are numbered in one unit, so the keys of two units' counters
+	 * do not meet; code typed later outside any unit (a generated helper typed in its origin's context) continues the numbering.
+	 */
+	public function mergeInto(target:BodyCounters):Void {
+		for (key => lambda in lambdaCache)
+			target.lambdaCache.set(key, lambda);
+		raise(lambdaVariants, target.lambdaVariants);
+		raise(functionAdapters, target.functionAdapters);
+		raise(substrings, target.substrings);
+	}
+
+	static function raise(counts:Map<String, Int>, target:Map<String, Int>):Void
+		for (key => count in counts) {
+			var known = target.get(key);
+			if (known == null || known < count)
+				target.set(key, count);
+		}
+
 	/** The next variant number of the lambda at `lambdaKey`: 0 for its first typing. */
 	public function nextLambdaVariant(lambdaKey:String):Int
 		return next(lambdaVariants, lambdaKey);

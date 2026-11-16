@@ -119,8 +119,24 @@ class TypingSession {
 	/** The type variables of the bodies being typed; see `Monomorphs`. */
 	public final monomorphs = new MonomorphFrames();
 
-	/** Numbering of the names each body generates, and the lambdas typed so far. */
-	public final counters = new BodyCounters();
+	/**
+	 * Numbering of the names each body generates, and the lambdas typed so far: the unit's. A default argument is typed inside
+	 * each caller, possibly in several units, so what its pseudo-body generates is numbered and cached program-wide, as one body.
+	 */
+	public var counters(get, never):BodyCounters;
+
+	function get_counters():BodyCounters
+		return defaultArgumentDepth > 0 ? programOutput.counters : output.counters;
+
+	/** How many default argument pseudo-bodies (`$default:`) are open. */
+	var defaultArgumentDepth = 0;
+
+	/** Passes the cached lambda typed at `key` through `map`, wherever it is cached. */
+	public function mapCachedLambda(key:String, map:compiler.types.TypedTypeMap):Void {
+		output.counters.mapLambda(key, map);
+		if (output != programOutput)
+			programOutput.counters.mapLambda(key, map);
+	}
 
 	/** Structural conversion helpers already emitted for each origin and target shape. */
 	public final dynamicStructureConversions:Map<String, Bool> = [];
@@ -160,8 +176,12 @@ class TypingSession {
 	/** Helpers requested while checking defaults belong to the callee's real function, not its pseudo-body. */
 	public function generatedFunctionOrigin():String {
 		var name = currentContext.name;
-		return StringTools.startsWith(name, "$default:") ? name.substr("$default:".length) : name;
+		return StringTools.startsWith(name, DEFAULT_ARGUMENT_PREFIX)
+			? name.substr(DEFAULT_ARGUMENT_PREFIX.length) : name;
 	}
+
+	/** The name prefix of the pseudo-body a default argument value is typed in. */
+	public static inline final DEFAULT_ARGUMENT_PREFIX = "$default:";
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
@@ -512,6 +532,8 @@ class TypingSession {
 			body.privateAccessDepth = currentContext.privateAccessDepth;
 		if (bodyContexts.length == 1)
 			programOutput.records.typedUnits.set(name, true);
+		if (StringTools.startsWith(name, DEFAULT_ARGUMENT_PREFIX))
+			defaultArgumentDepth++;
 		bodyContexts.push(body);
 		return body;
 	}
@@ -528,6 +550,8 @@ class TypingSession {
 		if (currentContext != body)
 			throw "Body typing contexts must be left in stack order";
 		bodyContexts.pop();
+		if (StringTools.startsWith(body.name, DEFAULT_ARGUMENT_PREFIX))
+			defaultArgumentDepth--;
 	}
 
 	static inline function parentPath(path:String):Null<String>

@@ -38,6 +38,9 @@ class TypingOutput {
 	public final closureConversion = new ClosureConversion();
 	public final records = new UnitRecords();
 
+	/** The numbering of the names the unit's bodies generate, and the lambdas typed in them. */
+	public final counters = new BodyCounters();
+
 	final owners:Array<GenericOwnerRepresentation> = [];
 	final ownerNames:Map<String, Bool> = [];
 	final enums:Array<CompilerType> = [];
@@ -129,6 +132,7 @@ class TypingOutput {
 		appendRange(program, requestsFrom, requests.count(), conversionFrom, closureConversion.mark(), ownersFrom,
 			owners.length, enumsFrom, enums.length);
 		records.mergeInto(program.records);
+		counters.mergeInto(program.counters);
 		if (user != null)
 			for (name => fields in userAnonymousUses)
 				program.records.recordAnonymousUse(user, name, fields);
