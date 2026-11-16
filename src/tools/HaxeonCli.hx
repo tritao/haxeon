@@ -677,9 +677,10 @@ class HaxeonCli {
 		if (options.strictLive && !options.live)
 			throw 'Option "--strict-live" requires "haxeon run --watch --live"';
 		if (options.watch
+			&& !targetInfo.isAndroid()
 			&& !(targetInfo.equals(Target.detectHost())
 			&& Target.parse(project.manifest.target).equals(Target.detectHost())))
-			throw 'Option "--watch" currently requires a host project';
+			throw 'Option "--watch" currently requires a host or Android project';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (!targetInfo.isAndroid() && options.device != null)
@@ -856,7 +857,12 @@ class HaxeonCli {
 				HaxeonNativePackageBuild.nativeRoot(project, targetInfo));
 			if (status != 0 || !launch)
 				return status;
-			return installAndLaunchAndroid(home, androidOutput, config.androidApplicationId, options.device);
+			var launched = installAndLaunchAndroid(home, androidOutput, config.androidApplicationId, options.device);
+			if (launched != 0 || !options.watch)
+				return launched;
+			// Each saved edit is compiled and sent to the running app (AndroidWatch).
+			var adb = androidExecutable(home, "adb");
+			return AndroidWatch.run(home, projectConfigPath, project, adb, selectAndroidDevice(adb, options.device));
 		}
 
 		var output = options.output == null ? defaultOutput(config, projectDirectory,
@@ -1044,22 +1050,7 @@ class HaxeonCli {
 		var adb = androidExecutable(home, "adb");
 		if (!FileSystem.exists(adb))
 			throw 'Android adb is missing at $adb';
-		var connected = onlineAndroidDevices(adb),
-			device:Null<String> = requestedDevice;
-		if (device == null) {
-			if (connected.length == 0)
-				throw 'No online Android device. Start an emulator or connect a device, then run "haxeon devices".';
-			if (connected.length > 1)
-				throw 'More than one Android device is connected; choose one with "--device SERIAL".';
-			device = connected[0].serial;
-		} else {
-			var selected = false;
-			for (connectedDevice in connected)
-				if (connectedDevice.serial == device)
-					selected = true;
-			if (!selected)
-				throw 'Android device "$device" is not online; run "haxeon devices" to inspect connected devices.';
-		}
+		var device = selectAndroidDevice(adb, requestedDevice);
 
 		var status = ProcessRunner.run(adb, ["-s", device, "install", "-r", apk], Sys.getCwd(), new Map());
 		if (status != 0)
@@ -1068,6 +1059,22 @@ class HaxeonCli {
 		Sys.println('Launching $applicationId on $device');
 		return ProcessRunner.run(adb, ["-s", device, "shell", "monkey", "-p", applicationId, "1"], Sys.getCwd(),
 			new Map());
+	}
+
+	/** The device to run on: the one asked for, which must be online, or the only one online. */
+	static function selectAndroidDevice(adb:String, requestedDevice:Null<String>):String {
+		var connected = onlineAndroidDevices(adb);
+		if (requestedDevice == null) {
+			if (connected.length == 0)
+				throw 'No online Android device. Start an emulator or connect a device, then run "haxeon devices".';
+			if (connected.length > 1)
+				throw 'More than one Android device is connected; choose one with "--device SERIAL".';
+			return connected[0].serial;
+		}
+		for (connectedDevice in connected)
+			if (connectedDevice.serial == requestedDevice)
+				return requestedDevice;
+		throw 'Android device "$requestedDevice" is not online; run "haxeon devices" to inspect connected devices.';
 	}
 
 	static function onlineAndroidDevices(adb:String):Array<{serial:String, state:String}> {

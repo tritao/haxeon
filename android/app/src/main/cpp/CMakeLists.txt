@@ -86,11 +86,16 @@ file(GLOB HASHLINK_PCRE_SOURCES CONFIGURE_DEPENDS "${HASHLINK_ROOT}/include/pcre
 list(FILTER HASHLINK_PCRE_SOURCES EXCLUDE REGEX "pcre2_jit_(match|misc)\\.c$")
 file(GLOB HASHLINK_STD_SOURCES CONFIGURE_DEPENDS "${HASHLINK_ROOT}/src/std/*.c")
 
+# These lists follow vendor/hashlink/CMakeLists.txt (libhl, and the hl executable's sources less main.c): a file added
+# there must be added here.
 # The upstream HashLink CMake file also declares its desktop tools and test
 # programs. Android only needs the embeddable runtime, so keep this target
 # deliberately small and link it into the app's shared library.
 add_library(libhl STATIC
     "${HASHLINK_ROOT}/src/gc.c"
+    "${HASHLINK_ROOT}/src/prof.c"
+    "${HASHLINK_ROOT}/src/ryu/d2s.c"
+    "${HASHLINK_ROOT}/src/ryu/f2s.c"
     ${HASHLINK_PCRE_SOURCES}
     ${HASHLINK_STD_SOURCES}
 )
@@ -118,6 +123,8 @@ set(HAXEON_VM_SOURCES
     "${HAXEON_ROOT}/vendor/hashlink/src/diagnostics.c"
     "${HAXEON_ROOT}/vendor/hashlink/src/diagnostics_transport.c"
     "${HAXEON_ROOT}/vendor/hashlink/src/profile.c"
+    "${HAXEON_ROOT}/vendor/hashlink/src/prof_boundary.c"
+    "${HAXEON_ROOT}/vendor/hashlink/include/lz4/lz4.c"
 )
 
 if(ANDROID_ABI STREQUAL "arm64-v8a")

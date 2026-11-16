@@ -25,28 +25,24 @@ source scripts/android-env.sh
 adb install -r android/app/build/outputs/apk/debug/app-debug.apk
 ```
 
-The host keeps one Haxeon runtime module alive and exposes a loopback patch
-port forwarded through `adb`. After changing `android/demo/Main.hx`, compile
-and send a compatible body patch without rebuilding the APK:
+The host keeps one Haxeon runtime module alive and serves a loopback patch
+port. `run --watch` installs and launches the app as `run` does, forwards that
+port through `adb`, then sends each saved edit to the running app without
+rebuilding the APK:
 
 ```sh
-./scripts/build-android-patch.sh
-./scripts/android-send-patch.sh
+./scripts/haxeon run --target android --watch [--device SERIAL]
 ```
 
-The patch compiler stages a new baseline beside `android/app/src/main/assets/app.hcs`;
-the send command promotes it only after the device acknowledges the patch.
-Structural edits are sent as a full domain reload, still without rebuilding the
-APK:
-
-```sh
-./scripts/build-android-reload.sh
-./scripts/android-send-reload.sh
-```
-
-The reload bundle replaces the loaded HLB module and HLI manifest only after
-the new module initializes and its `main` call succeeds. Its staged compiler
-baseline is promoted only after the device acknowledges the replacement.
+Each edit is compiled against the compiler baseline the device's module was
+built from (`android/app/src/main/assets/app.hcs`). A body edit becomes a patch
+the running module applies; a structural edit (a new function, a changed
+signature or layout) becomes a domain reload bundle, which replaces the loaded
+HLB module and HLI manifest only after the new module initializes and its
+`main` call succeeds. The host runs `main` again after either. The new baseline
+is kept only when the device acknowledges the edit, so after a compile error or
+a rejected edit the next one is still compiled against what the device runs.
+`tools.AndroidBuild edit` is the compile step on its own (see its header).
 
 The local Android SDK, NDK, CMake, Gradle, and emulator are kept under
 `.tools/`. The CLI configures these paths automatically. Source

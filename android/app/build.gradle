@@ -64,11 +64,12 @@ tasks.register('generateHaxeonAsset', Exec) {
             include 'app.hl', 'app.hli', 'app.entry', 'app.hcs', 'app.hlp', 'app.hxr', 'app.hcs.pending'
         }
         def projectManifest = providers.gradleProperty('haxeonProject').orNull
+        // common.hxml lists the compiler's class paths, as every stock-Haxe build of its sources takes them (docs/DEVELOPMENT.md).
         if (projectManifest != null) {
-            commandLine haxeExecutable.absolutePath, '-cp', new File(haxeonRoot, 'src').absolutePath,
+            commandLine haxeExecutable.absolutePath, 'common.hxml',
                 '--run', 'tools.AndroidBuild', '--project', projectManifest, appAsset.absolutePath
         } else {
-            commandLine haxeExecutable.absolutePath, '-cp', new File(haxeonRoot, 'src').absolutePath,
+            commandLine haxeExecutable.absolutePath, 'common.hxml',
                 '--run', 'tools.AndroidBuild', new File(haxeonRoot, 'android/demo/Main.hx').absolutePath, appAsset.absolutePath
         }
     }

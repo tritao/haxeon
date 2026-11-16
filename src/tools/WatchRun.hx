@@ -139,7 +139,7 @@ class WatchRun {
 	}
 
 	/** Polling interval, which is also the longest an unwatched change waits to be noticed. */
-	static inline final POLL_SECONDS = 0.35;
+	public static inline final POLL_SECONDS = 0.35;
 
 	/** A save counts as finished once no notification has arrived for this long. */
 	static inline final COALESCE_SECONDS = 0.03;
@@ -149,7 +149,7 @@ class WatchRun {
 	static inline final NOTIFIED_IDLE_SECONDS = 0.1;
 
 	/** Returns once no notification has arrived for a moment. Bounded, so a tree that never goes quiet (an app logging under the root) still compiles. */
-	static function coalesce(watcher:DirectoryWatcher):Void {
+	public static function coalesce(watcher:DirectoryWatcher):Void {
 		var quiet = Sys.time() + MAX_COALESCE_SECONDS;
 		while (watcher.wait(COALESCE_SECONDS) && Sys.time() < quiet) {}
 	}
@@ -161,7 +161,7 @@ class WatchRun {
 	}
 
 	/** Package roots are watched recursively; watched files outside every root (native sources elsewhere) by their directory. */
-	static function openWatcher(project:ResolvedProject, files:Map<String, String>):Null<DirectoryWatcher> {
+	public static function openWatcher(project:ResolvedProject, files:Map<String, String>):Null<DirectoryWatcher> {
 		var directories:Array<{path:String, recursive:Bool}> = [],
 			roots:Array<String> = [];
 		for (item in project.packages.packages) {
@@ -313,7 +313,7 @@ class WatchRun {
 		Each watched file's modification time and size. One stat per file: the same scan with `exists` and `isDirectory`
 		before each stat made four calls per file and took ~105 ms for the editor's 1,224 files, twice per save.
 	**/
-	static function snapshot(project:ResolvedProject):Map<String, String> {
+	public static function snapshot(project:ResolvedProject):Map<String, String> {
 		var result:Map<String, String> = [];
 		for (item in project.packages.packages) {
 			record(Path.join([item.root, "haxeon.json"]), result);
@@ -373,7 +373,7 @@ class WatchRun {
 	static inline function signature(stat:sys.FileStat):String
 		return '${stat.mtime.getTime()}:${stat.size}';
 
-	static function same(a:Map<String, String>, b:Map<String, String>):Bool {
+	public static function same(a:Map<String, String>, b:Map<String, String>):Bool {
 		for (path in a.keys())
 			if (a.get(path) != b.get(path))
 				return false;

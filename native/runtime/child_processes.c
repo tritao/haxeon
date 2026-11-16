@@ -497,7 +497,9 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 	for (int i = 0; i < 3 && error == 0; i++)
 		for (int j = 0; j < 2 && error == 0; j++) error = posix_spawn_file_actions_addclose(&actions, pipes[i][j]);
 	if (error == 0 && directory != NULL && directory[0] != 0) {
-#if defined(__linux__) || defined(__APPLE__)
+		/* Android's C library declares it from API 34; below that a working directory is not supported, as on other platforms
+		   without it. */
+#if (defined(__linux__) && (!defined(__ANDROID__) || __ANDROID_API__ >= 34)) || defined(__APPLE__)
 		error = posix_spawn_file_actions_addchdir_np(&actions, directory);
 #else
 		error = ENOTSUP;
