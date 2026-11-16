@@ -283,6 +283,7 @@ class ClosureTyper {
 		return source.get(name);
 	}
 
+	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

@@ -110,6 +110,7 @@ class ExternTyper {
 		return values;
 	}
 
+	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 }

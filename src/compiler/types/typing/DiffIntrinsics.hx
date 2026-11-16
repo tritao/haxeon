@@ -258,6 +258,7 @@ class DiffIntrinsics {
 	static function hold(session:TypingSession, purpose:String, span:SourceSpan):String
 		return '$' + 'diff:$purpose:${span.start}:${session.currentContext.diffTemporary++}';
 
+	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		BodyTyper.fail(code, message, span);
 }

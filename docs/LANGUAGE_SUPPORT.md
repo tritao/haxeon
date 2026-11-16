@@ -14,6 +14,11 @@ The current subset includes:
   `Flags` combine their values, so their switches still need a default.
 - A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values; a switch over a
   nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
+- `@:noReturn` on a function or method declares that a call to it never returns: after `if (value == null) fail();`
+  the value is known not to be null, and a function may end in such a call where a `return` would otherwise be due. The
+  body must throw (or call another `@:noReturn` function) on every path and contain no `return`, and every override of a
+  declared method must be declared too. It is a declaration, never inferred from a body; Haxe ignores the metadata, so
+  the same source builds there with a `return` placeholder after the call (which Haxeon accepts).
 - `try`/`catch` binding `Dynamic`, `Int`, `Float`, `Bool`, `String`, a class, an interface or an enum
   (`catch (e:haxe.io.Error)`); a clause catches the values of its type and lets the others reach the next clause.
 - A nullable `Int`, `Float`, `Bool` or `Int64` reads as the plain type wherever one is needed, null giving its default (0,

@@ -174,9 +174,16 @@ class BodyTyper {
 			session.noReturnFunctions.set(name, true);
 	}
 
-	function inferNoReturnFunctions():Void {
-		for (name in compiler.types.analysis.NoReturnInference.infer(session.signatures, session.classDecls).keys())
+	function declareNoReturnFunctions():Void {
+		for (name in compiler.types.analysis.NoReturnDeclarations.declared(session.signatures).keys())
 			session.noReturnFunctions.set(name, true);
+	}
+
+	/** Every override of a `@:noReturn` method is declared too: a call through the base method must still never return. */
+	function checkNoReturnOverrides():Void {
+		var violation = compiler.types.analysis.NoReturnDeclarations.undeclaredOverride(session.classDecls);
+		if (violation != null)
+			fail("E1006", 'Method ${violation.method.name} overrides @:noReturn ${violation.base} and must be declared @:noReturn too', violation.method.span);
 	}
 
 	static function hasFunctionMetadata(fn:compiler.syntax.Ast.AstFunction, name:String):Bool {
@@ -310,6 +317,12 @@ class BodyTyper {
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
 		var statements = typeStatements(fn.statements, scope, result);
+		if (compiler.types.analysis.NoReturnDeclarations.has(fn)) {
+			if (compiler.types.analysis.AstScan.returns(fn.statements))
+				fail("E1006", 'Function ${fn.name} is declared @:noReturn but returns', fn.span);
+			if (!ControlFlow.alwaysExits(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+				fail("E1006", 'Function ${fn.name} is declared @:noReturn but can finish without throwing', fn.span);
+		}
 		if ((switch (result) {
 			case TVoid: false;
 			default: true;
@@ -2851,6 +2864,7 @@ class BodyTyper {
 				Switch(_, _, _, _, span), Increment(_, _, span), Expression(_, span): span;
 		}
 
+	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic(code, message, span));
 

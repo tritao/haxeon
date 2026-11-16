@@ -155,6 +155,7 @@ class KeyPathOperations {
 		return statements;
 	}
 
+	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		throw new compiler.Diagnostic.CompileError(new compiler.Diagnostic(code, message, span));
 }

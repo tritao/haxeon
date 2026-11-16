@@ -345,7 +345,7 @@ class TestMain {
 		Frontend.compile('function main():Int { return "A".charAt(0) == "A" ? 42 : 0; }');
 		Frontend.compile('function main():Int { return String.fromCharCode(65) == "A" ? 42 : 0; }');
 		Frontend.compile('class Value { public function new() { } } function main():Int { var value = true ? new Value() : null; return value == null ? 0 : 42; }');
-		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function fail():Void throw "missing"; function main():Int { var value:Null<Value> = new Value(); if (value == null) fail(); return value.number; }');
+		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } @:noReturn function fail():Void throw "missing"; function main():Int { var value:Null<Value> = new Value(); if (value == null) fail(); return value.number; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } function main():Int { var value:Null<Value> = new Value(); if (value != null && value.number == 42) return value.number; return 0; }');
 		Frontend.compile('class Value { public final number:Int = 42; public function new() { } } class Holder { public var value:Null<Value> = null; public function new(value:Null<Value>) { this.value = value; } } function main():Int { var holder = new Holder(new Value()); if (holder.value != null) return holder.value.number; return 0; }');
 		expectCompileError('class Value { public final number:Int = 42; public function new() { } } class Holder { public var value:Null<Value> = null; public function new(value:Null<Value>) { this.value = value; } } function main():Int { var holder = new Holder(new Value()); if (holder.value != null) { holder.value = null; return holder.value.number; } return 0; }',
@@ -364,8 +364,8 @@ class TestMain {
 		Frontend.compile('function main():Int { var remainder = 5.5 % 2.0; return remainder == 1.5 ? 42 : 0; }');
 		expectCompileError('function choose<T>(value:T, enabled:Bool = true):T return value; function main():Int return choose();',
 			'Function "choose" expects 1 to 2 arguments, got 0');
-		Frontend.compile('function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');
-		Frontend.compile('function fail():Void throw "failure"; function value():String return if (true) "value" else { fail(); null; }; function main():Int return 42;');
+		Frontend.compile('@:noReturn function fail():Void throw "failure"; function value():String { fail(); return null; } function main():Int return 42;');
+		Frontend.compile('@:noReturn function fail():Void throw "failure"; function value():String return if (true) "value" else { fail(); null; }; function main():Int return 42;');
 		Typer.typeLibrary(new Parser(new Lexer(new SourceFile("infinite-loop.hx",
 			"function parse():Int { while (true) { continue; } }")).tokenize()).parseProgram());
 		var selectedMain:Map<String, Bool> = ["dynamicText" => true, "main" => true],
@@ -1096,7 +1096,7 @@ class TestMain {
 		}, "requires an object",
 			"a subclass overriding a previously-pure base method with an impure one");
 		expectDependentAnswerInvalidated([
-			{path: "Guard.hx", source: "class Guard { public static function fail():Void throw \"no\"; }"},
+			{path: "Guard.hx", source: "class Guard { @:noReturn public static function fail():Void throw \"no\"; }"},
 			{
 				// A nullable reference keeps its null check only while the guard never returns.
 				path: "Main.hx",
@@ -1104,16 +1104,24 @@ class TestMain {
 			}
 		],
 			{path: "Guard.hx", source: "class Guard { public static function fail():Void {} }"}, "requires an object",
-			"a static helper that stopped never returning");
+			"a static helper no longer declared @:noReturn");
 		Sys.println("PASS: incremental recompiles retype callers whose purity or no-return dependency changed");
-		// An instance method can be overridden, so its call is typed by its declaration even when every body in the program
-		// throws: whether a library method type-checks must not depend on which subclasses a program contains.
+		// A call never returns only when its target is declared @:noReturn, whatever its body: whether a caller type-checks
+		// depends on signatures, not on another function's body or on which subclasses a program contains.
 		for (subclass in [
 			"",
 			"class Sub extends Base { override public function fail():Void throw \"sub\"; }"
 		])
 			expectCompileError('class Bound { public final value:Float; public function new(value:Float) this.value = value; } class Base { public function new() {} public function fail():Void throw "no"; public function get(v:Null<Bound>):Float { if (v == null) this.fail(); return v.value + 1; } } $subclass function main():Int return Std.int(new Base().get(new Bound(41.0)));',
 				'Field "value" requires an object');
+		Frontend.compile('class Bound { public final value:Float; public function new(value:Float) this.value = value; } class Base { public function new() {} @:noReturn public function fail():Void throw "no"; public function get(v:Null<Bound>):Float { if (v == null) this.fail(); return v.value + 1; } } class Sub extends Base { @:noReturn override public function fail():Void throw "sub"; } function main():Int return Std.int(new Sub().get(new Bound(41.0)));');
+		expectCompileError('class Base { public function new() {} @:noReturn public function fail():Void throw "no"; } class Sub extends Base { override public function fail():Void {} } function main():Int { new Sub().fail(); return 0; }',
+			"Method fail overrides @:noReturn Base.fail and must be declared @:noReturn too");
+		expectCompileError('@:noReturn function fail(flag:Bool):Void { if (flag) throw "no"; } function main():Int { fail(true); return 0; }',
+			"Function fail is declared @:noReturn but can finish without throwing");
+		expectCompileError('@:noReturn function fail(flag:Bool):Void { if (flag) return; throw "no"; } function main():Int { fail(true); return 0; }',
+			"Function fail is declared @:noReturn but returns");
+		Sys.println("PASS: only @:noReturn declarations make calls never return, checked against their bodies and overrides");
 		// A base method is pure only once every concrete override is also pure - never merely
 		// because none happens to exist yet. A single impure override is enough to reject it, in
 		// one fresh compile, with no incremental edit involved.

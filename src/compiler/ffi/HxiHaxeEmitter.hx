@@ -168,6 +168,7 @@ class HxiHaxeEmitter {
 		names.set(projected, origin);
 	}
 
+	@:noReturn
 	public static function profileError(path:String, message:String):Void
 		throw 'Invalid Haxe projection profile "$path": $message';
 

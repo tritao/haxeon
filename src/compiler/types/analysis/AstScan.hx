@@ -52,6 +52,53 @@ class AstScan {
 		return false;
 	}
 
+	/** Whether a `return` in these statements returns from the function they belong to; a lambda's returns are its own. */
+	public static function returns(statements:Array<AstStatement>):Bool {
+		for (statement in statements) {
+			switch statement {
+				case Return(_, _), ReturnVoid(_):
+					return true;
+				case If(_, yes, no, _):
+					if (returns(yes) || returns(no))
+						return true;
+				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _), Defer(body, _):
+					if (returns(body))
+						return true;
+				case Try(tryBranch, catches, _):
+					if (returns(tryBranch))
+						return true;
+					for (caught in catches)
+						if (returns(caught.statements))
+							return true;
+				case Switch(_, cases, defaultBranch, _, _):
+					for (entry in cases)
+						if (returns(entry.statements))
+							return true;
+					if (returns(defaultBranch))
+						return true;
+				default:
+			}
+			for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
+				if (expressionReturns(expression))
+					return true;
+		}
+		return false;
+	}
+
+	static function expressionReturns(expression:AstExpression):Bool {
+		switch expression {
+			case BlockExpression(statements, value, _):
+				return returns(statements) || expressionReturns(value);
+			case Lambda(_, _, _, _):
+				return false;
+			default:
+		}
+		for (child in compiler.syntax.AstChildren.expressions(expression))
+			if (expressionReturns(child))
+				return true;
+		return false;
+	}
+
 	/** Whether a `break` in these statements leaves the loop they are the body of; breaks of nested loops are theirs. */
 	public static function breaksOut(statements:Array<AstStatement>):Bool
 		return jumpsOut(statements, statement -> switch statement {

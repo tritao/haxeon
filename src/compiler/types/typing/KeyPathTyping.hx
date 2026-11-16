@@ -214,6 +214,7 @@ class KeyPathTyping {
 		return false;
 	}
 
+	@:noReturn
 	static function fail(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E1009", message, span));
 }

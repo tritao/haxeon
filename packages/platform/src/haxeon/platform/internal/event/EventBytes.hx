@@ -80,6 +80,7 @@ class EventBytes {
 	static function continuation(data:haxe.io.Bytes, offset:Int, end:Int):Void
 		if (offset >= end || data.get(offset) < 0x80 || data.get(offset) > 0xbf) invalidUtf8();
 
+	@:noReturn
 	static function invalidUtf8():Void
 		throw BindingError.invalidData("EventBytes.invalidUtf8", "NativeKit event payload contains invalid UTF-8");
 

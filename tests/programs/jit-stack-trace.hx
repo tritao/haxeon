@@ -6,6 +6,8 @@
 // reports exactly the live frames both times; a scanner is liable to report more
 // of them on the second probe only, having picked up some of `deepen`'s leftover
 // return addresses.
+
+@:noReturn
 function fail():Void
 	throw "boom";
 

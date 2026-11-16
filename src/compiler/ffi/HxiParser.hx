@@ -623,6 +623,7 @@ class HxiParser {
 	function atEnd():Bool
 		return position >= tokens.length;
 
+	@:noReturn
 	static function fail(message:String, span:SourceSpan):Dynamic
 		throw new CompileError(new Diagnostic("E3001", message, span));
 }

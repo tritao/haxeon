@@ -357,6 +357,7 @@ class MessagePackReader {
 			unexpected(marker, kind);
 	}
 
+	@:noReturn
 	static function unexpected(marker:Int, expected:String):Void
 		throw new MessagePackError('Expected MessagePack $expected, got marker 0x${StringTools.hex(marker, 2)}');
 }

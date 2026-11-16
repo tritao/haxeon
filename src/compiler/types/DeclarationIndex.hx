@@ -1159,6 +1159,7 @@ class DeclarationIndex {
 		return emptySpan;
 	}
 
+	@:noReturn
 	static function fail(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E1020", message, span));
 }

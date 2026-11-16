@@ -200,6 +200,7 @@ class ConditionalCompilation {
 		return result.toString();
 	}
 
+	@:noReturn
 	static function fail(file:SourceFile, offset:Int, message:String):Dynamic
 		throw new CompileError(new Diagnostic("E0002", message, file.span(offset, offset)));
 }

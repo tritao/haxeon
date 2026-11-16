@@ -1,3 +1,4 @@
+@:noReturn
 function fail():Void {
 	throw "failure";
 }

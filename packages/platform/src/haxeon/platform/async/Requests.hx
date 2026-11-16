@@ -244,6 +244,7 @@ class Requests {
 		return cancellationRequested || button == MessageResult.None ? Cancelled : Success(button);
 	}
 
+	@:noReturn
 	static function wrongEvent<T>(name:String):Outcome<T>
 		throw BindingError.invalidData("Requests.decode", 'NativeKit $name completed with the wrong event');
 }

@@ -3027,6 +3027,7 @@ class Parser {
 		return bytes.getBytes().toString();
 	}
 
+	@:noReturn
 	static function invalidEscape(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E0001", 'Invalid escape sequence: $message', span));
 

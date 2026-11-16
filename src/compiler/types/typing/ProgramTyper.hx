@@ -125,12 +125,13 @@ class ProgramTyper {
 		var allocationAfterSetup = AllocationMeter.sample();
 		// With the facts of `SemanticAssembly` there is nothing to infer: they are about this same program.
 		if (facts == null) {
-			bodyTyper.inferNoReturnFunctions();
+			bodyTyper.declareNoReturnFunctions();
 			session.inferPureFunctions();
 		} else {
 			bodyTyper.useNoReturnFunctions(facts.noReturn);
 			session.usePureFunctions(facts.pure);
 		}
+		bodyTyper.checkNoReturnOverrides();
 		var noReturnDoneAt = Sys.time() * 1000.0;
 		var allocationAfterNoReturn = AllocationMeter.sample();
 		if (requireMain) {

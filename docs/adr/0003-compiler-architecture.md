@@ -32,7 +32,8 @@ twenty retained caches. Some record precise dependencies:
 
 - kinded semantic edges per declaration (`ModuleState.semanticDependencies`: Signature, Body, Layout, Initializer,
   InlineConstant);
-- the purity and no-return answers each typed function relied on, compared against fresh inference;
+- the purity and no-return answers each typed function relied on, compared against fresh inference (purity) and the
+  current `@:noReturn` declarations;
 - default-argument source snapshots and key-path uses;
 - the inliner's memo, which records the callee bodies and objects each result consulted (`IrInliner.hx` `IrInlineCache`).
 

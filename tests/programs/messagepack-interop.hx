@@ -213,6 +213,7 @@ class MessagePackInterop {
 		throw 'MessagePack interop failure for hex: invalid digit ${String.fromCharCode(code)}';
 	}
 
+	@:noReturn
 	static function fail(vector:String, message:String):Void
 		throw 'MessagePack interop failure for $vector: $message';
 }

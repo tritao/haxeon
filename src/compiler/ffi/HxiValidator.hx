@@ -915,6 +915,7 @@ class HxiValidator {
 				{name: name, span: span};
 		}
 
+	@:noReturn
 	static function fail(message:String, span:SourceSpan):Dynamic
 		throw new CompileError(new Diagnostic("E3001", message, span));
 }
