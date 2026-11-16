@@ -100,14 +100,22 @@ class LoadedModule {
 		mutex.release();
 	}
 
-	/** `describe` of the handle, also while the module waits to retire; null once the handle is gone. */
+	/**
+	 * What keeps the module from retiring: retained values not yet released, then `describe` of the handle (what the
+	 * runtime says holds it), or null when neither holds it.
+	 */
 	@:allow(runtime.Runtime)
 	function describeBorrowers(describe:hl.Abstract<"realtime_module">->Null<String>):Null<String> {
 		mutex.acquire();
 		try {
-			var current = handle, description = current == null ? null : describe(current);
+			var current = handle, parts = [];
+			if (borrowers > 0)
+				parts.push('$borrowers retained value${borrowers == 1 ? "" : "s"} not released');
+			var native = current == null ? "its handle is gone" : describe(current);
+			if (native != null)
+				parts.push(native);
 			mutex.release();
-			return description;
+			return parts.length == 0 ? null : parts.join(", ");
 		} catch (error:Dynamic) {
 			mutex.release();
 			throw error;
