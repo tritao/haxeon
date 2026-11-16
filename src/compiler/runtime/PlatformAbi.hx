@@ -128,6 +128,12 @@ class PlatformAbi {
 			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt,
 				nativeName: "__bytes_compare"};
 			case "toString": {arguments: noArguments(), result: CompilerType.TString, nativeName: "__bytes_to_string"};
+			// Haxe source in the stdlib (haxe/io/BytesHex.hx), the same on every target.
+			case "toHex": {
+				arguments: noArguments(),
+				result: CompilerType.TString,
+				nativeName: "haxe.io.BytesHex.toHex"
+			};
 			default: null;
 		};
 
