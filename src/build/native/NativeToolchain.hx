@@ -48,7 +48,8 @@ class NativeToolchain {
 
 	/** Whether source (absolute, or relative to root) is in the native scope; patterns match it relative to root or absolute. */
 	public function instruments(source:String, root:String):Bool {
-		if (!instrumenting())
+		var instrument = environment.instrument;
+		if (instrument == null || !instrumenting())
 			return false;
 		var absolute = haxe.io.Path.normalize(haxe.io.Path.isAbsolute(source) ? source : haxe.io.Path.join([
 			root,
@@ -65,7 +66,7 @@ class NativeToolchain {
 				}
 			return found;
 		}
-		return matches(environment.instrument.nativeInclude) && !matches(environment.instrument.nativeExclude);
+		return matches(instrument.nativeInclude) && !matches(instrument.nativeExclude);
 	}
 
 	public function instrumentHooks():String

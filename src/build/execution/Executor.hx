@@ -154,6 +154,8 @@ class Executor implements ExecutionBackend {
 			}
 			for (action in wave) {
 				var result = waveResults.get(action.id.key());
+				if (result == null)
+					throw 'Action ${action.id} finished its wave without a result';
 				completed.set(action.id.key(), result);
 				results.push(result);
 				pending.remove(action.id.key());
@@ -353,7 +355,8 @@ class Executor implements ExecutionBackend {
 		return true;
 	}
 
-	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<String>, ?preparedFingerprint:String,
+	function executeAction(action:ExecutionAction, dependencyFingerprints:Array<Null<String>>,
+			?preparedFingerprint:String,
 			freshnessChecked:Bool = false):ActionResult {
 		var fingerprint = preparedFingerprint == null ? fingerprintFor(action,
 			dependencyFingerprints) : preparedFingerprint;
@@ -398,14 +401,14 @@ class Executor implements ExecutionBackend {
 	 * hash under the Haxe interpreter). Only cacheable actions and actions others depend on use one;
 	 * every other action always runs, so it gets none.
 	 */
-	function fingerprintFor(action:ExecutionAction, dependencyFingerprints:Array<String>):Null<String> {
+	function fingerprintFor(action:ExecutionAction, dependencyFingerprints:Array<Null<String>>):Null<String> {
 		if (!isCacheable(action) && !dependedOn.exists(action.id.key()))
 			return null;
 		return ActionFingerprint.compute(action, environment.buildRoot, environment.target.toString(),
 			dependencyFingerprints, digests);
 	}
 
-	function isUpToDate(action:ExecutionAction, fingerprint:String, dependencyFingerprints:Array<String>):Bool {
+	function isUpToDate(action:ExecutionAction, fingerprint:String, dependencyFingerprints:Array<Null<String>>):Bool {
 		if (!isCacheable(action))
 			return false;
 		if (ActionFingerprint.load(environment.buildRoot, action) == fingerprint

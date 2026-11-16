@@ -466,9 +466,9 @@ class ProjectWorkspace {
 		appendStrings(value, "classPath", item -> classPaths.push(resolve(base, item)));
 		appendStrings(value, "classPaths", item -> classPaths.push(resolve(base, item)));
 		appendStrings(value, "sourcePaths", item -> classPaths.push(resolve(base, item)));
-		appendStrings(value, "main", entries.push);
-		appendStrings(value, "defines", defines.push);
-		appendStrings(value, "libraries", libraries.push);
+		appendStrings(value, "main", item -> entries.push(item));
+		appendStrings(value, "defines", item -> defines.push(item));
+		appendStrings(value, "libraries", item -> libraries.push(item));
 		if (classPaths.length == 0)
 			classPaths.push(base);
 		return new HaxeProjectConfiguration(file, classPaths, entries, defines, libraries);

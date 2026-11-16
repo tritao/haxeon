@@ -69,7 +69,7 @@ class NativeSourcesProvider {
 				&& (artifact.id.kind == ArtifactKind.NativeStaticLibrary
 				|| artifact.id.kind == ArtifactKind.NativeSharedLibrary
 				|| artifact.id.kind == ArtifactKind.FfiNativeSharedLibrary)) {
-				var objects = [for (dependency in artifact.dependencies) objectPaths.get(dependency.key())],
+				var objects = [for (dependency in artifact.dependencies) objectPathOf(objectPaths, dependency.key())],
 					dependencies = [
 						for (dependency in artifact.dependencies)
 							new ActionId('native-compile:${dependency.key()}')
@@ -97,5 +97,13 @@ class NativeSourcesProvider {
 				artifactActions.set(artifact.id.key(), [id]);
 			}
 		return {actions: actions, artifactActions: artifactActions};
+	}
+
+	/** The object file the compile action for `key` writes; every dependency of a native library has one. */
+	static function objectPathOf(objectPaths:Map<String, String>, key:String):String {
+		var path = objectPaths.get(key);
+		if (path == null)
+			throw 'Native library dependency $key has no object file';
+		return path;
 	}
 }

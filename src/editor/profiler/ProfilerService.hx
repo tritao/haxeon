@@ -181,12 +181,14 @@ class ProfilerService {
 				mutex.release();
 				break;
 			}
-			if (session != null && session.state == Running)
+			// The session this pass polls, held under the lock, so a disconnect does not change it halfway.
+			var current = session;
+			if (current != null && current.state == Running)
 				try {
-					session.poll();
-					message = snapshot(session.snapshot(), true);
-					while (emittedMetadataChanges < session.metadataChanges.length) {
-						var change = session.metadataChanges[emittedMetadataChanges++];
+					current.poll();
+					message = snapshot(current.snapshot(), true);
+					while (emittedMetadataChanges < current.metadataChanges.length) {
+						var change = current.metadataChanges[emittedMetadataChanges++];
 						changes.push({
 							timestamp: change.timestamp,
 							moduleId: change.moduleId,
@@ -195,7 +197,7 @@ class ProfilerService {
 						});
 					}
 				} catch (error:Dynamic) {
-					message = snapshot(session.snapshot(), true);
+					message = snapshot(current.snapshot(), true);
 					Reflect.setField(message, "error", Std.string(error));
 				}
 			mutex.release();

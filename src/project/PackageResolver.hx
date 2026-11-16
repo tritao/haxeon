@@ -135,11 +135,11 @@ class PackageResolver {
 				if (workspaceMember != null) {
 					resolvedSource = PackageSource.Workspace(workspaceMember.path);
 					requestedSource = resolvedSource;
-					if (locked && !PackageSourceCodec.equal(lockEntry.source, resolvedSource))
+					if (locked && lockEntry != null && !PackageSourceCodec.equal(lockEntry.source, resolvedSource))
 						throw 'haxeon.lock workspace source for "${dependency.id.name}" does not match the workspace';
 					acquiredDependency = new AcquiredSource(workspaceMember.root, resolvedSource);
 				} else {
-					if (locked && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
+					if (locked && lockEntry != null && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
 						throw 'haxeon.lock source for "${dependency.id.name}" disagrees with the manifest';
 					resolvedSource = lockEntry == null ? dependency.source : lockEntry.resolvedSource();
 					requestedSource = dependency.source;

@@ -877,7 +877,7 @@ class LspProtocol {
 					{
 						textDocument: {
 							uri: uri,
-							version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version
+							version: versionOf(targets.get(uri))
 						},
 							edits:edits
 					}]}
@@ -1245,8 +1245,11 @@ class LspProtocol {
 		var document = document(request);
 		ensureAnalyzed(document, token);
 		requireCurrent(document);
-		var offset = positionOffset(document, position(request));
-		for (token in service.compiler.modules.get(ModulePath.fromFile(compilerPath(document))).tokens)
+		var offset = positionOffset(document, position(request)),
+			module = service.compiler.modules.get(ModulePath.fromFile(compilerPath(document)));
+		if (module == null)
+			return null;
+		for (token in module.tokens)
 			if (offset >= token.span.start && offset <= token.span.end && Std.string(token.kind) == "Identifier")
 				return {range: document.range(token.span.start, token.span.end), placeholder: token.text};
 		return null;
@@ -1276,7 +1279,7 @@ class LspProtocol {
 			{
 				textDocument: {
 					uri: uri,
-					version: documents.forPath(targets.get(uri).path) == null ? null : targets.get(uri).version
+					version: versionOf(targets.get(uri))
 				},
 					edits:textEdits
 			}]};
@@ -1567,6 +1570,10 @@ class LspProtocol {
 
 	static function response(id:Dynamic, result:Dynamic):String
 		return Json.stringify({jsonrpc: "2.0", id: id, result: result});
+
+	/** The version of the document an edit applies to, or null when that document is not open. */
+	function versionOf(target:Null<LspDocument>):Null<Int>
+		return target == null || documents.forPath(target.path) == null ? null : target.version;
 
 	static function notification(method:String, params:Dynamic):String
 		return Json.stringify({jsonrpc: "2.0", method: method, params: params});

@@ -31,7 +31,8 @@ private class FingerprintFields {
 
 /** Conservative project-local fingerprints for process actions. */
 class ActionFingerprint {
-	public static function compute(action:ExecutionAction, buildRoot:String, target:String, dependencies:Array<String>,
+	public static function compute(action:ExecutionAction, buildRoot:String, target:String,
+			dependencies:Array<Null<String>>,
 			?digests:ContentDigestCache, compiledInputs:Bool = false):String {
 		if (digests == null)
 			digests = new ContentDigestCache();
@@ -104,7 +105,7 @@ class ActionFingerprint {
 	}
 
 	/** Portable identity for the global artifact cache; project-local paths are excluded. */
-	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<String>,
+	public static function globalKey(action:ExecutionAction, target:String, dependencies:Array<Null<String>>,
 			?digests:ContentDigestCache):String {
 		if (digests == null)
 			digests = new ContentDigestCache();

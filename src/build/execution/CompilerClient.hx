@@ -343,13 +343,12 @@ class CompilerClient {
 
 	/** The session directory, created private to this user. */
 	static function preparedSessionDirectory():String {
-		var directory = sessionDirectory();
+		var directory = sessionDirectory(), configured = ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR");
 		FileSystem.createDirectory(directory);
 		if (Sys.systemName() != "Windows") {
 			if (Sys.command("chmod", ["700", directory]) != 0)
 				throw "Could not make the compiler session directory private";
-		} else if (ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR") != null
-			&& ProcessRunner.environmentValue("HAXEON_COMPILER_SESSION_DIR").length > 0) {
+		} else if (configured != null && configured.length > 0) {
 			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
 			// this user's access, as chmod 700 does.
 			var user = ProcessRunner.environmentValue("USERNAME");

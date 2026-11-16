@@ -83,10 +83,13 @@ class ProfilerViewModel {
 				if (node == null) {
 					node = new ProfilerViewNode(path, parent, stableKey, name, depth);
 					nodes.set(path, node);
+					var parentNode = parent == null ? null : nodes.get(parent);
 					if (parent == null)
 						roots.push(path);
+					else if (parentNode == null)
+						throw 'Profiler frame "$path" arrived before its parent';
 					else
-						nodes.get(parent).children.push(path);
+						parentNode.children.push(path);
 				}
 				node.totalSamples += increment;
 				node.revisions.set(revision, true);
@@ -103,8 +106,10 @@ class ProfilerViewModel {
 				parent = path;
 				depth++;
 			}
-			if (parent != null)
-				nodes.get(parent).selfSamples += increment;
+			// The frame's own node: the last one the walk above created or found.
+			var leaf = parent == null ? null : nodes.get(parent);
+			if (leaf != null)
+				leaf.selfSamples += increment;
 		}
 		var flame = sortedNodes(),
 			changedValues = [for (id in changed.keys()) nodeValue(nodes.get(id))];

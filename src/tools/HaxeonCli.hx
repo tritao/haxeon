@@ -557,7 +557,7 @@ class HaxeonCli {
 		}
 		var shared = [
 			for (action in lowered.plan.actions)
-				if (lowered.requestedBy.get(action.id.key()).length > 1) action
+				if ((lowered.requestedBy.get(action.id.key()) ?? []).length > 1) action
 		],
 			cmake = [
 				for (action in lowered.plan.actions)
@@ -571,7 +571,7 @@ class HaxeonCli {
 		if (shared.length > 0) {
 			Sys.println("Shared actions:");
 			for (action in shared) {
-				var users = lowered.requestedBy.get(action.id.key());
+				var users = lowered.requestedBy.get(action.id.key()) ?? [];
 				Sys.println('  ${action.id}  x${users.length}: ${users.join(", ")}');
 			}
 		}
@@ -1436,7 +1436,7 @@ class HaxeonCli {
 			androidApplicationId = "org.haxeon.android",
 			androidAppLabel = "Haxeon";
 		if (android != null) {
-			if (!Reflect.isObject(android) || Type.getClassName(Type.getClass(android)) == "Array")
+			if (!Reflect.isObject(android) || Std.isOfType(android, Array))
 				throw '$path "android" must be an object';
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId);
 			androidAppLabel = optionalString(android, "label", androidAppLabel);
