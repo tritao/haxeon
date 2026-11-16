@@ -40,6 +40,8 @@ no-nul-literals                  quick,ci    -- bash tests/integration/test-no-n
 # reason in tests/unregistered.txt (src/tools/dev/TestRegistration.hx).
 test-registration                quick,ci    -- scripts/haxeon dev check-tests
 hashlink-replace                 ci          -- bash tests/integration/test-hashlink-replace.sh
+# haxeon script.hx: a script runs with its arguments, status and neighbours; a compile error fails it quietly.
+haxeon-script                    ci          -- scripts/haxeon tests/integration/test_haxeon_script.hx
 hxi-value-records                ci          -- bash tests/integration/test-hxi-value-records.sh
 messagepack-interop              ci          -- bash tests/integration/test-messagepack-interop.sh
 run-output                       ci          -- bash tests/integration/test-run-output.sh

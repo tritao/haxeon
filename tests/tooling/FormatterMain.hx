@@ -121,6 +121,18 @@ class FormatterMain {
 		}
 	}
 
+	/** A script's `#!` first line is kept as it is, and the code after it is formatted as usual. */
+	static function assertShebang():Void {
+		var source = "#!/usr/bin/env haxeon\nfunction main() {\n\tSys.println(\"script\");\n}\n",
+			once = Formatter.format(source, FormatConfigTools.make(4, false));
+		if (once != source)
+			throw 'A leading #! line changed:\n$source\nbecame\n$once';
+		var spaced = Formatter.format("#!/usr/bin/env haxeon\nfunction main(){Sys.println(1);}\n",
+			FormatConfigTools.make(4, false));
+		if (!StringTools.startsWith(spaced, "#!/usr/bin/env haxeon\nfunction main() {"))
+			throw 'Code after a #! line was not formatted:\n$spaced';
+	}
+
 	/** Valid Haxe that Haxeon's parser does not accept yet is formatted; unbalanced brackets are still refused. */
 	static function assertBeyondParser():Void {
 		for (source in [
@@ -163,6 +175,7 @@ class FormatterMain {
 		assertHouseLayout();
 		assertOpenFormatterOff();
 		assertTrailingComments();
+		assertShebang();
 		assertBeyondParser();
 		assertGenericAssignmentBoundaries();
 		assertUpdateOperatorBoundaries();

@@ -58,7 +58,8 @@ class ConditionalCompilation {
 				scan++;
 				continue;
 			}
-			if (code == "/".code && next == "/".code) {
+			// A `#!` line at the very start of the file is skipped as Haxe skips it, so a script can name its interpreter.
+			if ((code == "/".code && next == "/".code) || (scan == 0 && code == "#".code && next == "!".code)) {
 				lineComment = true;
 				scan += 2;
 				continue;

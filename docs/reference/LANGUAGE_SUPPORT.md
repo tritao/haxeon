@@ -107,6 +107,8 @@ HashLink):
 - Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
 - Structure patterns (`case {x: 0, y: y}:`) and extractor patterns (`case parse(_) => value:`).
 - Rest parameters (`function sum(...values:Int)`).
+- Module-level `var` and `final` (`var counter = 1;` beside a module-level `function main`): `E0002`. Module-level
+  functions work; a script keeps such values as locals of `main` or in a class.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
   class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.

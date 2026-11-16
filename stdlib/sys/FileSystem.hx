@@ -170,8 +170,22 @@ class FileSystem {
 		return values == null ? null : new FileMetadata(values[5], values[3], values[4]);
 	}
 
-	public static inline function createDirectory(path:String):Void
-		fileSystemCreateDirectory(path, 493);
+	/** Creates `path` and any of its parents that do not exist, as Haxe does; throws when a directory cannot be created. */
+	public static function createDirectory(path:String):Void {
+		var current = haxe.io.Path.removeTrailingSlashes(path), parts = [];
+		while (current != "") {
+			parts.unshift(current);
+			var parent = haxe.io.Path.directory(current);
+			if (parent == current)
+				break;
+			current = parent;
+		}
+		for (part in parts)
+		// A drive ("C:") and a directory that exists, or that another process creates meanwhile, need nothing.
+		if (!StringTools.endsWith(part, ":") && !exists(part) && !fileSystemCreateDirectory(part, 493)
+			&& !isDirectory(part))
+			throw 'Failed to create directory $part';
+	}
 
 	public static inline function deleteFile(path:String):Void
 		fileSystemDeleteFile(path);

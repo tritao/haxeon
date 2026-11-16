@@ -41,7 +41,13 @@ class ConditionalCompilationMain {
 		expectError("#unknown value", "Unknown conditional directive #unknown");
 		expectError("#if enabled\n#error \"selected branch failed\"\n#end", "selected branch failed",
 			["enabled" => "1"]);
-		Sys.println("PASS: inline conditional compilation, #error, and version conditions");
+		// A script's interpreter line, at the first byte only, as Haxe accepts it.
+		var script = new SourceFile("Script.hx", "#!/usr/bin/env haxeon\nfunction main():Int return 42;\n");
+		new Parser(new Lexer(script, ConditionalCompilation.process(script, []).text).tokenize()).parseProgram();
+		expectError("// first\n#!/usr/bin/env haxeon\nfunction main():Int return 42;",
+			"Unknown conditional directive #");
+		expectError("  #!/usr/bin/env haxeon\nfunction main():Int return 42;", "Unknown conditional directive #");
+		Sys.println("PASS: inline conditional compilation, #error, version conditions and a leading #! line");
 	}
 
 	static function expectError(source:String, message:String, ?defines:Map<String, String>):Void {

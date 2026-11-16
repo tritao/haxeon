@@ -60,6 +60,15 @@ class FormatScanner {
 				position = whitespaceEnd;
 				continue;
 			}
+			// A `#!` line at the very start of the file (a script's interpreter, as Haxe allows) is kept as it is.
+			if (position == 0 && code == "#".code && source.length > 1 && source.get(1) == "!".code) {
+				var lineEnd = 2;
+				while (lineEnd < source.length && source.get(lineEnd) != "\r".code && source.get(lineEnd) != "\n".code)
+					lineEnd++;
+				push(result, FormatTokenKind.Directive, 0, lineEnd);
+				position = lineEnd;
+				continue;
+			}
 			var directiveEnd = code == "#".code ? ConditionalCompilation.directiveEnd(file, position) : position;
 			if (directiveEnd > position) {
 				push(result, FormatTokenKind.Directive, position, directiveEnd);

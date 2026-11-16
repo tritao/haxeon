@@ -1,0 +1,28 @@
+package build;
+
+/**
+ * Where a build's progress goes: the executor's action lines and the compiler worker's messages. Standard output by
+ * default; while `capture` is in effect the lines are kept instead, so a quiet run (`haxeon run --quiet`, a script) prints
+ * them only if the build fails.
+ */
+class BuildOutput {
+	static var captured:Null<Array<String>> = null;
+
+	public static function line(text:String):Void {
+		if (captured != null)
+			captured.push(text);
+		else
+			Sys.println(text);
+	}
+
+	/** Keeps the lines from now on instead of printing them. */
+	public static function capture():Void
+		captured = [];
+
+	/** Stops keeping lines and returns those kept. */
+	public static function release():Array<String> {
+		var lines = captured == null ? [] : captured;
+		captured = null;
+		return lines;
+	}
+}

@@ -50,7 +50,7 @@ All 18 suite/mode combinations passed with defaults and with `HAXEON_INLINE=0`:
 | `tests/wasm/test-wasm-backend.sh` | passed | passed |
 | `tests/wasm/test-wasm-parity.sh` | 317 passed, 14 existing skips | 317 passed, 14 existing skips |
 | `tests/differential/run.sh` | passed (10 cases) | passed (10 cases) |
-| `scripts/check-self-hosting.sh` | byte-identical stages 1/2 | byte-identical stages 1/2 |
+| `scripts/check_self_hosting.hx` | byte-identical stages 1/2 | byte-identical stages 1/2 |
 | `tests/integration/test-workspace.sh` | passed | passed |
 | `tests/integration/test-compiler-embedding.sh` | passed | passed |
 | `tests/integration/test-git-package-lock.sh` | passed | passed |

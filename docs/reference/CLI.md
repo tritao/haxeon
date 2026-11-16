@@ -33,6 +33,8 @@ after rebuilding it and the CLI's bytecode if their sources changed.
 ./scripts/haxeon build --jobs 8
 ./scripts/haxeon build --build-mode release
 ./scripts/haxeon run
+./scripts/haxeon run --quiet -- arguments
+./scripts/haxeon tool.hx arguments
 ./scripts/haxeon build --target wasm32
 ./scripts/haxeon init --target android
 ./scripts/haxeon build --target android
@@ -347,6 +349,48 @@ The `doctor` command checks the local compiler, HashLink runtime, and Android
 SDK tools. `platforms` lists CLI targets, and `devices` reports connected
 Android devices. Wasm32 is build-only; host output runs through HashLink on the
 current machine.
+
+## Scripts
+
+`haxeon script.hx [arguments]` (or `haxeon run script.hx ...`) builds one Haxe file and runs it, with no project to set
+up, as `dotnet run app.cs` does:
+
+- The file is the project's one source. Its directory is the source root its imports resolve in, so modules beside it
+  can be imported, but other files there are not compiled.
+- A `haxeon.json` beside the script makes that project a path dependency, with its source roots and dependencies.
+- The build is quiet: its output appears, on standard error, only if it fails. The program runs in the directory the
+  command was invoked from, with the given arguments, and its exit status is the command's.
+- The project is written to `~/.haxeon/cache/scripts/<digest of the script's path>` (`HAXEON_SCRIPT_CACHE` names
+  another directory), and the incremental build makes an unchanged script's next run cost a launch.
+- A first line `#!/usr/bin/env haxeon` makes the file executable where the shell reads such lines; Haxe accepts that
+  line at the start of a file, and so do Haxeon's compiler and formatter.
+- The file's name is its module name, so it is an identifier (`check_self_hosting.hx`, not `check-self-hosting.hx`).
+
+`haxeon.Script` (in the standard library) covers what shell scripts make short. It starts programs directly, never
+through a shell, so arguments need no quoting and a script runs the same on every platform:
+
+| Function | Does |
+|---|---|
+| `run(command, ?arguments, ?options)` | Runs a program and returns its status; its output passes through, or goes to `options.log` |
+| `check(...)` | As `run`, and stops the script when the status is not 0 |
+| `output(...)` | Returns the program's standard output; stops the script when the status is not 0 |
+| `fail(message, status = 1)` | Prints to standard error and ends the script |
+| `path()`, `directory()` | The script's file and directory (`HAXEON_SCRIPT`) |
+| `vm()`, `haxeon()` | The `hl` VM and the `haxeon` command that run the script |
+| `tail(file, count)`, `files(directory, suffix)`, `sameContent(left, right)` | Small file chores |
+
+The options are `cwd` (the program's working directory), `env` (variables over those it inherits) and `log`.
+
+```haxe
+#!/usr/bin/env haxeon
+import haxeon.Script;
+
+function main() {
+	var revision = Script.output("git", ["rev-parse", "--short", "HEAD"]);
+	Script.check("cmake", ["--build", "out/cmake/release"], {log: "out/build.log"});
+	Sys.println('built $revision');
+}
+```
 
 ## Workspace builds
 

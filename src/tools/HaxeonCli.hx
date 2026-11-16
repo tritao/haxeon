@@ -1,5 +1,6 @@
 package tools;
 
+import build.BuildOutput;
 import build.BuildSession;
 import build.CompilerSources;
 import build.HashLinkPath;
@@ -53,6 +54,10 @@ private typedef BuildOptions = {
 	final plan:Bool;
 	final explain:Bool;
 	final timings:Bool;
+
+	/** `--quiet`: keep the build's progress, and print it (to standard error) only if the build fails. */
+	final quiet:Bool;
+
 	final compilerOnly:Bool;
 	final watch:Bool;
 	final live:Bool;
@@ -98,6 +103,9 @@ class HaxeonCli {
 	/** The directory the user started the CLI from: a launched program runs in its project's directory and learns this one from `HAXEON_INVOKED_FROM`. */
 	static var invokedFrom = "";
 
+	/** Set by `haxeon script.hx`: the program runs in the directory the command was invoked from. */
+	static var scriptRun = false;
+
 	/** Environment for a launched program: where the user started it from, unless the caller already said. */
 	static function launchEnvironment():Map<String, String> {
 		var environment = new Map<String, String>(),
@@ -135,11 +143,14 @@ class HaxeonCli {
 				case "fmt": fmt(arguments);
 				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]));
 				case "build": build(arguments, false);
+				case "run" if (arguments.length > 0 && ScriptRun.isScript(arguments[0])):
+					runScript(arguments[0], arguments.slice(1));
 				case "run": build(arguments, true);
 				case "workspace": workspaceCommand(arguments);
 				case "heap": HeapInspector.run(arguments);
 				case "dev": tools.dev.DevCommand.run(arguments, haxeonHome());
 				case "help", "--help", "-h": usage();
+				case _ if (ScriptRun.isScript(command)): runScript(command, arguments);
 				case _:
 					Sys.stderr().writeString('Unknown command: $command\n');
 					usage(2);
@@ -593,6 +604,25 @@ class HaxeonCli {
 		return 4;
 	}
 
+	/** `haxeon script.hx [arguments]`: build quietly, then run in the invoking directory (ScriptRun). */
+	static function runScript(script:String, arguments:Array<String>):Int {
+		scriptRun = true;
+		var runArguments = ScriptRun.runArguments(script, arguments);
+		// The program finds its own file through haxeon.Script.path().
+		Sys.putEnv("HAXEON_SCRIPT", Path.normalize(FileSystem.fullPath(script)));
+		return build(["--quiet"].concat(runArguments), true);
+	}
+
+	/** Ends a `--quiet` build's capture, printing what it kept to standard error when the build failed. */
+	static function releaseQuietOutput(options:BuildOptions, failed:Bool):Void {
+		if (!options.quiet)
+			return;
+		var lines = BuildOutput.release();
+		if (failed)
+			for (line in lines)
+				Sys.stderr().writeString(line + "\n");
+	}
+
 	static function build(arguments:Array<String>, launch:Bool):Int {
 		var options = parseBuildOptions(arguments),
 			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
@@ -668,10 +698,16 @@ class HaxeonCli {
 			// A watching process keeps file hashes and its compiler worker choice between builds, starting with this one so the first
 			// edit is already warm.
 			var session = options.watch ? new BuildSession() : null;
-			var buildStatus = HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
+			if (options.quiet)
+				BuildOutput.capture();
+			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
 				options.plan, options.explain, options.timings,
 				resolutionMs, options.selfHosted, options.compilerOnly, options.live, instrument, session,
-				options.buildMode == "development");
+				options.buildMode == "development") catch (error:Dynamic) {
+					releaseQuietOutput(options, true);
+					throw error;
+				}
+			releaseQuietOutput(options, buildStatus != 0);
 			if (buildStatus != 0 || !launch)
 				return buildStatus;
 			// Under the build's PATH, which chooses the worker the rebuilds will reach.
@@ -771,9 +807,11 @@ class HaxeonCli {
 				return runProfiled(home, output, options.runtimeArguments, project.root, capture,
 					project.manifest.entry, options.profileSources);
 			}
-			Sys.println('Launching $output');
-			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), project.root,
-				launchEnvironment());
+			if (!options.quiet)
+				Sys.println('Launching $output');
+			// A script runs where it was invoked; a project in its root.
+			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments),
+				scriptRun ? invokedFrom : project.root, launchEnvironment());
 		}
 		if (options.plan)
 			throw 'Plan output is currently available for host builds only';
@@ -1086,6 +1124,7 @@ class HaxeonCli {
 			plan = false,
 			explain = false,
 			timings = false,
+			quiet = false,
 			compilerOnly = false,
 			watch = false,
 			live = false,
@@ -1113,6 +1152,8 @@ class HaxeonCli {
 				explain = true;
 			else if (argument == "--timings")
 				timings = true;
+			else if (argument == "--quiet")
+				quiet = true;
 			else if (argument == "--compiler-only")
 				compilerOnly = true;
 			else if (argument == "--watch")
@@ -1219,6 +1260,7 @@ class HaxeonCli {
 			plan: plan,
 			explain: explain,
 			timings: timings,
+			quiet: quiet,
 			compilerOnly: compilerOnly,
 			watch: watch,
 			live: live,
@@ -1596,7 +1638,8 @@ class HaxeonCli {
 		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("       [--build-mode release|development]  Select artifact build mode");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
-		Sys.println("  run [--target TARGET] [-- args] Build and launch (host or Android)");
+		Sys.println("  run [--target TARGET] [--quiet] [-- args] Build and launch (host or Android); --quiet prints the build only if it fails");
+		Sys.println("  SCRIPT.hx [args]               Build and run one Haxe file (also: run SCRIPT.hx [args])");
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");
 		Sys.println("       [--watch --live]             Patch a loaded host module between pump steps");
 		Sys.println("       [--strict-live]              With --live, report an edit that cannot patch instead of reloading");

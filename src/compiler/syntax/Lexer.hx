@@ -19,6 +19,10 @@ class Lexer {
 
 	public function tokenize():Array<Token> {
 		var tokens = [];
+		// A `#!` line at the very start of the file (only there, as in Haxe) names a script's interpreter.
+		if (position == 0 && source.length >= 2 && source.get(0) == "#".code && source.get(1) == "!".code)
+			while (position < source.length && source.get(position) != "\n".code)
+				position++;
 		while (position < source.length) {
 			var code = source.get(position);
 			if (isWhitespace(code)) {

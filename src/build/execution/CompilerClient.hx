@@ -145,7 +145,7 @@ class CompilerClient {
 			while (true) {
 				var response:Dynamic = Json.parse(socket.input.readLine());
 				if (response.message != null)
-					Sys.println(response.message);
+					build.BuildOutput.line(response.message);
 				if (response.status != null) {
 					socket.close();
 					markUsed(statePath);
@@ -157,7 +157,7 @@ class CompilerClient {
 				try
 					connection.socket.close()
 				catch (_:Dynamic) {}
-			Sys.println("Compiler session unavailable; using one-shot compilation: " + Std.string(error));
+			build.BuildOutput.line("Compiler session unavailable; using one-shot compilation: " + Std.string(error));
 			return fallback();
 		}
 	}
@@ -306,7 +306,8 @@ class CompilerClient {
 			]);
 			ensureArtifact(command, compilerSource, artifact, home, "compiler.tools.HaxeonCompiler");
 		} catch (error:Dynamic) {
-			Sys.println("Compiled one-shot compiler unavailable; interpreting the compiler: " + Std.string(error));
+			build.BuildOutput.line("Compiled one-shot compiler unavailable; interpreting the compiler: "
+				+ Std.string(error));
 			return fallback();
 		}
 		return ProcessRunner.run(hashlink, [artifact].concat(arguments), home, environment);
