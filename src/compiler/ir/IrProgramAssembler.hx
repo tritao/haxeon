@@ -608,6 +608,8 @@ class IrProgramAssembler {
 				allFunctions.push(new IrFunction(object.name + ".$haxeonObservableFieldCount", builder.arguments, I32,
 					builder.blocks, Ordinary));
 			}
+		// Before anything walks the program, so a branch that cannot be taken links nothing it calls.
+		IrConstantBranches.run(allFunctions);
 		var removedByPrune:Map<String, Bool> = [];
 		var reachedNativesAfterPrune:Null<Map<String, Bool>> = null;
 		// What a plain build's prune keeps (docs/REACHABILITY_WALK.md): the roots are the entry function, the initializers `__init` runs and the

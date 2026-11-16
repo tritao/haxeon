@@ -1,9 +1,7 @@
 package haxeon.build;
 
 import haxe.Json;
-#if !wasm
 import haxe.crypto.Sha256;
-#end
 import haxe.io.Bytes;
 import sys.FileSystem;
 import sys.io.File;
@@ -262,15 +260,9 @@ class InputFiles {
 	}
 
 	static function digest(bytes:Bytes):String {
-		#if wasm
-		// Never reached: a Wasm program does not record (isRecording). Sha256 runs as C native code on Wasm, which would
-		// give every program that touches sys.io.File linear memory it does not otherwise need.
-		throw "Wasm programs do not record their inputs";
-		#else
 		var raw = Sha256.make(bytes), hex = new StringBuf();
 		for (index in 0...raw.length)
 			hex.add(StringTools.hex(raw.get(index), 2).toLowerCase());
 		return hex.toString();
-		#end
 	}
 }
