@@ -965,7 +965,10 @@ class StatementTyper {
 				continuing.push(defaultScope);
 		} else if (!exhaustiveEnum(typedExpression.type, typedCases))
 			continuing.push(scope);
+		// As after an if: what the continuing branches assigned and refined is what holds after the switch, so a local narrowed
+		// before it (`if (found != null) return found;`) and assigned in a case is no longer known to be null.
 		scope.mergeAssignmentsFrom(continuing);
+		scope.mergeRefinementsFrom(continuing);
 		return TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span);
 	}
 
