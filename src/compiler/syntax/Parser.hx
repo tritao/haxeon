@@ -2083,13 +2083,14 @@ class Parser {
 					var optional = match(TokenKind.Question),
 						argumentStart = current().span,
 						argumentName = consume(TokenKind.Identifier).text;
-					var argumentType = match(TokenKind.Colon) ? parseType() : InferredType;
+					var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
+						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
 						name: argumentName,
 						type: argumentType,
 						span: argumentStart.merge(previous().span),
 						optional: optional,
-						defaultValue: null
+						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
 			}

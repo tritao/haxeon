@@ -74,6 +74,8 @@ class ClosureTyper {
 			lambdaScope.define(localName, argumentType, argument.span);
 			lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
 		}
+		body = DefaultArguments.withPrologue(arguments, [for (argument in lambdaArguments) argument.type], body,
+			session.relations);
 		var free = FreeVariables.of(arguments, body),
 			freeVariables = free.names,
 			lambdaAssignments:Map<String, Bool> = [];

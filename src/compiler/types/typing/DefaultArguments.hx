@@ -30,12 +30,24 @@ class DefaultArguments {
 			&& !AstPredicates.isNullExpression(argument.defaultValue)
 			&& holdsNull(type, relations);
 
-	/** `fn` with a prologue that replaces each null argument it fills itself with its default; `types` are its arguments'. */
-	public static function withPrologue(fn:AstFunction, types:Array<CompilerType>,
+	/** `fn` with the prologue of `withPrologue`; `types` are its arguments'. */
+	public static function withFunctionPrologue(fn:AstFunction, types:Array<CompilerType>,
 			relations:TypeRelations):AstFunction {
+		var statements = withPrologue(fn.arguments, types, fn.statements, relations);
+		return statements == fn.statements ? fn : AstFunctions.copy(fn, fn.name, fn.isStatic, fn.metadata,
+			fn.typeParameters, fn.typeConstraints, fn.arguments, fn.result, statements, fn.span);
+	}
+
+	/**
+	 * A body that first replaces each null argument the function fills itself with its default; `types` are the arguments'.
+	 * Every kind of function gets it, the same way: methods and module functions (`BodyTyper.typeFunction`), local functions
+	 * and lambdas (`ClosureTyper.typeLambda`).
+	 */
+	public static function withPrologue(arguments:Array<AstArgument>, types:Array<CompilerType>,
+			statements:Array<AstStatement>, relations:TypeRelations):Array<AstStatement> {
 		var prologue:Array<AstStatement> = [];
-		for (index in 0...fn.arguments.length) {
-			var argument = fn.arguments[index];
+		for (index in 0...arguments.length) {
+			var argument = arguments[index];
 			if (filledByCallee(argument, types[index], relations)) {
 				var span = argument.span;
 				prologue.push(If(Equal(Variable(argument.name, span), NullLiteral(span), span), [
@@ -43,8 +55,7 @@ class DefaultArguments {
 				], [], span));
 			}
 		}
-		return prologue.length == 0 ? fn : AstFunctions.copy(fn, fn.name, fn.isStatic, fn.metadata, fn.typeParameters,
-			fn.typeConstraints, fn.arguments, fn.result, prologue.concat(fn.statements), fn.span);
+		return prologue.length == 0 ? statements : prologue.concat(statements);
 	}
 
 	static function holdsNull(type:CompilerType, relations:TypeRelations):Bool
