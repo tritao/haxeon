@@ -82,6 +82,8 @@ example-builds                   quick       -- python3 tests/integration/check-
 bootstrap-loads                  quick       -- bash tests/integration/test-bootstrap-loads.sh
 # Adds the warm-edit rebuilds and the reuse comparisons.
 driver-checked                   wave        -- scripts/test-driver.sh {jobs} --check-reuse
+# Builds each program's plain builds in release mode, whose code generation (register sharing, the closed enum tag ABI) differs.
+driver-release                   wave        -- scripts/test-driver.sh {jobs} --suite programs --release
 # Compiles each program's live build again in a compile server of its own, which must write the same bytes.
 driver-isolated                  wave        -- scripts/test-driver.sh {jobs} --suite programs --check-isolation
 

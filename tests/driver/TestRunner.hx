@@ -86,6 +86,9 @@ class TestRunner {
 	 */
 	public var checkIsolation = false;
 
+	/** `--release`: the plain builds are release builds (`--build-mode=release`), whose code generation differs from development's. */
+	public var release = false;
+
 	/**
 	 * The command that starts a compile server (the rendezvous path is appended): the server prebuilt to HashLink bytecode
 	 * (`HAXEON_COMPILER_SERVER_HL`, which `haxeon dev test-driver` provides), else `haxe --run compiler.tools.CompilerServer`.
@@ -145,6 +148,8 @@ class TestRunner {
 			arguments.push("--root=" + root);
 		if (!run.plain)
 			arguments.push("--live");
+		else if (release)
+			arguments.push("--build-mode=release");
 		if (run.unpruned)
 			arguments.push("--no-early-prune");
 		if (checkReuse)

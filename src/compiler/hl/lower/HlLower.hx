@@ -1534,6 +1534,10 @@ class HlLower {
 			}
 		}
 		dropUnreferencedLabels(instructions, debugLocations, scopedAssignments);
+		// Release code shares registers between values that are not live at once; development code keeps one per value, which is
+		// what a debugger shows a variable from.
+		if (!developmentMetadata)
+			registerTypes = HlRegisterAllocation.run(instructions, registerTypes, fn.arguments.length);
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
 			requireFunction(fn.name), registerTypes,
 			instructions, debugLocations, scopedAssignments);

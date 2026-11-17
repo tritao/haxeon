@@ -14,6 +14,9 @@ private typedef DriverOptions = {
 
 	/** `--check-isolation`: every program must compile in the shared compile server exactly as in one of its own. */
 	var checkIsolation:Bool;
+
+	/** `--release`: plain builds are release builds. */
+	var release:Bool;
 }
 
 class TestDriver {
@@ -40,6 +43,7 @@ class TestDriver {
 		var runner = new TestRunner(options.root);
 		runner.checkReuse = options.checkReuse;
 		runner.checkIsolation = options.checkIsolation;
+		runner.release = options.release;
 		var failures = 0;
 		var selected = 0;
 		var phaseStarted = Sys.time();
@@ -155,7 +159,7 @@ class TestDriver {
 		var suites = ["all"];
 		var filter:Null<EReg> = null;
 		var listOnly = false;
-		var checkReuse = false, checkIsolation = false;
+		var checkReuse = false, checkIsolation = false, release = false;
 		var jobs = 1;
 		var index = 0;
 		while (index < args.length) {
@@ -178,6 +182,8 @@ class TestDriver {
 					checkReuse = true;
 				case "--check-isolation":
 					checkIsolation = true;
+				case "--release":
+					release = true;
 				case "--jobs":
 					if (index == args.length)
 						throw "--jobs requires a positive integer";
@@ -196,7 +202,8 @@ class TestDriver {
 			listOnly: listOnly,
 			jobs: jobs,
 			checkReuse: checkReuse,
-			checkIsolation: checkIsolation
+			checkIsolation: checkIsolation,
+			release: release
 		};
 	}
 }

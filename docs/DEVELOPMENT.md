@@ -50,7 +50,8 @@ Two options check that a server's history cannot change a build. `--check-reuse`
 compares it with a fresh build of the same text. `--check-isolation` also compiles each program's live build in a server started
 for it alone, which must write the same bytes as the shared server, whatever that compiled before; a difference is state a
 compile left in the process, which `CompilerStaticsMain` keeps out of compiler statics. The `driver-checked` and
-`driver-isolated` suites run them.
+`driver-isolated` suites run them. Program cases build in development mode unless `--release` is given, which makes their plain
+builds release builds (`driver-release`), the mode tools ship in.
 
 ### The same commands on every platform
 
