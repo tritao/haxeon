@@ -54,7 +54,7 @@ interface BodyTyping {
 			?substitutions:Map<String, CompilerType>,
 			?specializedName:String, ?abstractReceiver:CompilerType, ?physicalOwner:String,
 			?ownerTypeArguments:Array<CompilerType>):TypedFunction;
-	function argumentType(argument:AstArgument, ?substitutions:Map<String, CompilerType>):CompilerType;
+	function argumentTypesOf(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
 	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
 			declarationName:String):TypedExpression;
 	function posInfosExpression(span:SourceSpan):AstExpression;

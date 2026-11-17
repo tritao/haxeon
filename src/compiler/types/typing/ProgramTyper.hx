@@ -43,7 +43,7 @@ class ProgramTyper {
 		this.bodyTyper = bodyTyper;
 		this.reverseTypingOrder = reverseTypingOrder;
 		this.session = bodyTyper.session;
-		this.externTyper = new ExternTyper(argument -> bodyTyper.argumentType(argument),
+		this.externTyper = new ExternTyper(fn -> bodyTyper.argumentTypesOf(fn),
 			(type, span) -> bodyTyper.lowerType(type, span));
 		this.assembler = new TypedProgramAssembler(session, function(type) bodyTyper.registerAnonymousTypes(type));
 	}
@@ -75,7 +75,7 @@ class ProgramTyper {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
-		session.bindSemantic(semantic);
+		session.bindSemantic(semantic, bodyTyper.defaultValueType);
 		if (cachedMetadata != null)
 			bindCachedNativeLayouts(cachedMetadata.classes);
 		var program = semantic.program;
@@ -874,8 +874,8 @@ class ProgramTyper {
 						|| method.arguments.length != 1
 						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span,
 						classSemanticSubstitutions), declaredType)
-						|| !TypeRelations.equals(session.declarations.types.signature(method,
-						classSemanticSubstitutions).result, TBool))
+						|| !TypeRelations.equals(session.declarations.types.resultType(method,
+						classSemanticSubstitutions), TBool))
 						BodyTyper.fail("E1003",
 							'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool',
 							method.span);
@@ -883,8 +883,8 @@ class ProgramTyper {
 					hasHash = true;
 					if (method.isStatic
 						|| method.arguments.length != 0
-						|| !TypeRelations.equals(session.declarations.types.signature(method,
-						classSemanticSubstitutions).result, TInt))
+						|| !TypeRelations.equals(session.declarations.types.resultType(method,
+						classSemanticSubstitutions), TInt))
 						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int',
 							method.span);
 				}
@@ -995,7 +995,7 @@ class ProgramTyper {
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
 						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span,
 						substitutions), type)
-						|| !TypeRelations.equals(session.declarations.types.signature(method, substitutions).result,
+						|| !TypeRelations.equals(session.declarations.types.resultType(method, substitutions),
 						TBool))
 						BodyTyper.fail("E1003",
 							'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool',
@@ -1012,7 +1012,7 @@ class ProgramTyper {
 					if (method.isStatic
 						|| method.arguments.length != 0
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
-						|| !TypeRelations.equals(session.declarations.types.signature(method, substitutions).result,
+						|| !TypeRelations.equals(session.declarations.types.resultType(method, substitutions),
 						TInt))
 						BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int',
 							method.span);
@@ -1452,12 +1452,12 @@ class ProgramTyper {
 	}
 
 	function methodSignature(method:AstFunction, owner:String, ?substitutions:Map<String, CompilerType>):TypedFunction {
-		var arguments = [for (argument in method.arguments)
-			{
-				name:argument.name,
-					type:bodyTyper.argumentType(argument, substitutions)
-			}], result = substitutions == null ? bodyTyper.functionResultType(method,
-				method.span) : session.declarations.types.signature(method, substitutions).result;
+		var argumentTypes = bodyTyper.argumentTypesOf(method, substitutions),
+			arguments = [for (index in 0...method.arguments.length)
+				{
+					name:method.arguments[index].name, type:argumentTypes[index]
+				}], result = substitutions == null ? bodyTyper.functionResultType(method,
+					method.span) : session.declarations.types.resultType(method, substitutions);
 		for (argument in arguments)
 			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
 				BodyTyper.fail("E1022",
@@ -1574,8 +1574,8 @@ class ProgramTyper {
 	function sameSignature(left:AstFunction, right:AstFunction, ?leftSubstitutions:Map<String, CompilerType>,
 			?rightSubstitutions:Map<String, CompilerType>):Bool {
 		if (left.arguments.length != right.arguments.length
-			|| !TypeRelations.equals(session.declarations.types.signature(left, leftSubstitutions).result,
-			session.declarations.types.signature(right, rightSubstitutions).result))
+			|| !TypeRelations.equals(session.declarations.types.resultType(left, leftSubstitutions),
+			session.declarations.types.resultType(right, rightSubstitutions)))
 			return false;
 		// Haxe compares the optional flags too (`Not_matching_optional`), and `?x:Int` is `Null<Int>`.
 		for (i in 0...left.arguments.length)

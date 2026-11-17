@@ -51,7 +51,7 @@ typedef GenericCallRepresentationResult = {
 	final typeArguments:Array<CompilerType>;
 };
 
-typedef GenericArgumentTypeResolver = (AstArgument, Null<Map<String, CompilerType>>) -> CompilerType;
+typedef GenericArgumentTypesResolver = (AstFunction, Null<Map<String, CompilerType>>) -> Array<CompilerType>;
 
 typedef ScalarMapRecordPair = {
 	final semantic:Array<compiler.types.Type.AnonymousField>;
@@ -93,8 +93,8 @@ class TypeRepresentation {
 			method:AstFunction):TypeRepresentationResult {
 		var substitutions = methodSubstitutions(receiver, owner);
 		return {
-			semantic: session.declarations.types.signature(method, substitutions.semantic).result,
-			physical: session.declarations.types.signature(method, substitutions.physical).result
+			semantic: session.declarations.types.resultType(method, substitutions.semantic),
+			physical: session.declarations.types.resultType(method, substitutions.physical)
 		};
 	}
 
@@ -574,15 +574,12 @@ class TypeRepresentation {
 	/** Resolve and adapt one generic call across its shared-body ABI boundary. */
 	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>,
 			arguments:Array<TypedExpression>,
-			argumentType:GenericArgumentTypeResolver):GenericCallRepresentationResult {
+			argumentTypesOf:GenericArgumentTypesResolver):GenericCallRepresentationResult {
 		var representation = genericFunction(fn, semanticSubstitutions),
-			argumentTypes = [
-				for (argument in fn.arguments)
-					argumentType(argument, representation.substitutions)
-			],
+			argumentTypes = argumentTypesOf(fn, representation.substitutions),
 			result:TypeRepresentationResult = {
-				semantic: session.declarations.types.signature(fn, semanticSubstitutions).result,
-				physical: session.declarations.types.signature(fn, representation.substitutions).result
+				semantic: session.declarations.types.resultType(fn, semanticSubstitutions),
+				physical: session.declarations.types.resultType(fn, representation.substitutions)
 			};
 		return {
 			representation: representation,

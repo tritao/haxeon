@@ -54,7 +54,7 @@ class GenericInstantiation {
 						span);
 				}
 			}
-		var semanticExpected = [for (argument in fn.arguments) bodyTyper.argumentType(argument, substitutions)];
+		var semanticExpected = bodyTyper.argumentTypesOf(fn, substitutions);
 		for (index in arguments.length...fn.arguments.length) {
 			var parameter = fn.arguments[index],
 				defaultValue = parameter.defaultValue,
@@ -138,7 +138,7 @@ class GenericInstantiation {
 			}
 		}
 		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments,
-			function(argument, argumentSubstitutions) return bodyTyper.argumentType(argument, argumentSubstitutions)),
+			(callee, calleeSubstitutions) -> bodyTyper.argumentTypesOf(callee, calleeSubstitutions)),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
 			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),

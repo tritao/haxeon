@@ -288,7 +288,8 @@ class TypingSession {
 		};
 	}
 
-	public function bindSemantic(semantic:SemanticProgram):Void {
+	public function bindSemantic(semantic:SemanticProgram,
+			?defaultValueType:compiler.syntax.Ast.AstExpression->Null<CompilerType>):Void {
 		constants.clearEnumAbstractValues();
 		flagsMasks.clear();
 		for (declaration in semantic.program.enums)
@@ -300,7 +301,7 @@ class TypingSession {
 
 		declarations = semantic.declarations;
 		// Every reader of a declaration's type asks the program's table from here on.
-		declarations.bindTypes(new DeclarationTypeTable(declarations.declaredTypes));
+		declarations.bindTypes(new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType));
 		relations = semantic.relations;
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;

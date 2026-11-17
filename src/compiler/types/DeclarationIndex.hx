@@ -1121,8 +1121,8 @@ class DeclarationIndex {
 				!= compiler.syntax.AstPredicates.isOptionalArgument(argument))
 				return false;
 		}
-		var result = types.signature(method, left).result,
-			expected = types.signature(original, right).result;
+		var result = types.resultType(method, left),
+			expected = types.resultType(original, right);
 		if (TypeRelations.equals(result, expected))
 			return true;
 		// Covariant class results have the same pointer ABI; arbitrary function-type coercions require adapters.
@@ -1178,7 +1178,7 @@ class DeclarationIndex {
 				resolve(constraint.type, constraint.span, substitutions);
 		for (argument in fn.arguments)
 			resolve(argument.type, argument.span, substitutions);
-		types.signature(fn, substitutions).result;
+		types.resultType(fn, substitutions);
 	}
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {

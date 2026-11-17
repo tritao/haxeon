@@ -1,14 +1,9 @@
 package compiler.types;
 
+import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
-
-/** A function's argument and result types, resolved. */
-typedef ResolvedSignature = {
-	final arguments:Array<CompilerType>;
-	final result:CompilerType;
-}
 
 /**
  * The types of declarations, resolved: the one query every reader of a field's type or a function's signature goes through
@@ -20,8 +15,14 @@ interface DeclarationTypes {
 	/** The type of `owner`'s field `field`, in its class's own type parameters, then substituted. */
 	function fieldType(owner:String, field:AstField, ?substitutions:Map<String, CompilerType>):CompilerType;
 
-	/** The argument and result types of `fn`, in its own and its owner's type parameters, then substituted. */
-	function signature(fn:AstFunction, ?substitutions:Map<String, CompilerType>):ResolvedSignature;
+	/**
+	 * The argument types of `fn`, in its own and its owner's type parameters, then substituted, as callers and its function type
+	 * see them: an optional argument (`?x:T`, or `x:T = null`) is `Null<T>`, Haxe's rule.
+	 */
+	function argumentTypes(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
+
+	/** The result type of `fn`, in its own and its owner's type parameters, then substituted. */
+	function resultType(fn:AstFunction, ?substitutions:Map<String, CompilerType>):CompilerType;
 }
 
 /**
@@ -38,10 +39,34 @@ class DeclaredTypes implements DeclarationTypes {
 	public function fieldType(owner:String, field:AstField, ?substitutions:Map<String, CompilerType>):CompilerType
 		return declarations.resolve(declarations.declaredFieldType(owner, field), field.span, substitutions);
 
-	public function signature(fn:AstFunction, ?substitutions:Map<String, CompilerType>):ResolvedSignature
-		return {
-			arguments: [for (argument in fn.arguments) declarations.resolve(argument.type, argument.span,
-				substitutions)],
-			result: declarations.resolve(fn.result, fn.span, substitutions)
-		};
+	public function argumentTypes(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>
+		return [for (argument in fn.arguments) argumentType(argument, substitutions, null)];
+
+	public function resultType(fn:AstFunction, ?substitutions:Map<String, CompilerType>):CompilerType
+		return declarations.resolve(fn.result, fn.span, substitutions);
+
+	/**
+	 * `argument`'s type as callers see it: its annotation resolved, or, unannotated with a default value, `inferredDefault` (the
+	 * value's type, Dynamic when unknown); then `Null<T>` when the argument is optional by Haxe's rule.
+	 */
+	public function argumentType(argument:AstArgument, substitutions:Null<Map<String, CompilerType>>,
+			inferredDefault:Null<CompilerType>):CompilerType {
+		var type = (switch argument.type {
+			case InferredType: true;
+			default: false;
+		}) && argument.defaultValue != null
+			? (inferredDefault == null ? TDynamic : inferredDefault) : declarations.resolve(argument.type,
+			argument.span, substitutions);
+		return compiler.syntax.AstPredicates.isNullableArgument(argument) && !(switch type {
+			case TNullable(_): true;
+			default: false;
+		}) ? TNullable(type) : type;
+	}
+
+	/** Whether `argument` is unannotated with a default value, so its type is the value's. */
+	public static function typedByDefault(argument:AstArgument):Bool
+		return argument.defaultValue != null && (switch argument.type {
+			case InferredType: true;
+			default: false;
+		});
 }

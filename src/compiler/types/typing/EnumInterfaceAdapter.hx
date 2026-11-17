@@ -97,7 +97,7 @@ class EnumInterfaceAdapter {
 					name:argument.name,
 						type:session.declarations.resolve(argument.type, argument.span, enumSubstitutions)
 				}];
-				var result = session.declarations.types.signature(implementation, enumSubstitutions).result;
+				var result = session.declarations.types.resultType(implementation, enumSubstitutions);
 				EnumConformanceMethods.request(session, request.type, contract.name, request.origin, span);
 				var callArguments = [payload];
 				for (argument in args) callArguments.push(new TypedExpression(TLocal(argument.name), argument.type,

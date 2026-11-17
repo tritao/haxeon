@@ -11,16 +11,16 @@ import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.NativeConvention;
 import compiler.types.TypedAst.TypedNative;
 
-typedef ArgumentTypeResolver = AstArgument->CompilerType;
+typedef ArgumentTypesResolver = AstFunction->Array<CompilerType>;
 typedef TypeResolver = (type:AstType, span:SourceSpan) -> CompilerType;
 
 /** Projects extern and native declarations into the typed native boundary. */
 class ExternTyper {
-	final argumentType:ArgumentTypeResolver;
+	final argumentTypes:ArgumentTypesResolver;
 	final lowerType:TypeResolver;
 
-	public function new(argumentType:ArgumentTypeResolver, lowerType:TypeResolver) {
-		this.argumentType = argumentType;
+	public function new(argumentTypes:ArgumentTypesResolver, lowerType:TypeResolver) {
+		this.argumentTypes = argumentTypes;
 		this.lowerType = lowerType;
 	}
 
@@ -64,7 +64,7 @@ class ExternTyper {
 			symbol = values[1];
 			convention = NativeConvention.CNative(values[2]);
 		}
-		var arguments = [for (argument in fn.arguments) argumentType(argument)];
+		var arguments = argumentTypes(fn);
 		if (receiverType != null)
 			arguments.unshift(receiverType);
 		for (argument in arguments)

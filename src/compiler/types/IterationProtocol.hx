@@ -113,7 +113,7 @@ class IterationProtocol {
 							type: TFunction([
 								for (argument in method.arguments)
 									declarations.resolve(argument.type, argument.span, substitutions)
-							], declarations.types.signature(method, substitutions).result, []),
+							], declarations.types.resultType(method, substitutions), []),
 							owner: owner
 						};
 					}

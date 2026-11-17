@@ -207,18 +207,17 @@ class BodyTyper implements BodyTyping {
 		compiler.types.analysis.ScopedEscapeChecker.check(fn.arguments, fn.statements);
 		var functionName = specializedName == null
 			? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
-		for (argument in fn.arguments) {
-			var argumentValueType = argumentType(argument, substitutions);
+		var argumentTypes = argumentTypesOf(fn, substitutions);
+		for (index in 0...fn.arguments.length) {
+			var argumentValueType = argumentTypes[index];
 			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(argumentValueType))
 				fail("E1022",
 					'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet',
-					argument.span);
+					fn.arguments[index].span);
 		}
-		fn = DefaultArguments.withFunctionPrologue(fn,
-			[for (argument in fn.arguments) argumentType(argument, substitutions)],
-			session.relations);
-		var result = substitutions == null ? functionResultType(fn, fn.span) : session.declarations.types.signature(fn,
-			substitutions).result;
+		fn = DefaultArguments.withFunctionPrologue(fn, argumentTypes, session.relations);
+		var result = substitutions == null ? functionResultType(fn, fn.span) : session.declarations.types.resultType(fn,
+			substitutions);
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
@@ -250,8 +249,10 @@ class BodyTyper implements BodyTyping {
 		var arguments:Array<{name:String, type:CompilerType}> = [];
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
-		for (argument in fn.arguments) {
-			var type = argumentType(argument, substitutions);
+		// Resolved again inside the body: with no substitutions given, the body's own context supplies them.
+		var bodyArgumentTypes = argumentTypesOf(fn, substitutions);
+		for (index in 0...fn.arguments.length) {
+			var argument = fn.arguments[index], type = bodyArgumentTypes[index];
 			scope.define(argument.name, type, argument.span);
 			var constants = session.keyPaths.parameters.get(functionName);
 			if (constants != null && constants.exists(argument.name)) {
@@ -875,13 +876,14 @@ class BodyTyper implements BodyTyping {
 						var signatureName = resolvedCallName(name);
 						if (session.signatures.exists(signatureName)) {
 							var signature = requiredMapValue(session.signatures, signatureName);
-							if (!isGeneric(signature))
+							if (!isGeneric(signature)) {
+								var expected = argumentTypesOf(signature);
 								for (index in 0...arguments.length) {
-									if (index >= signature.arguments.length)
+									if (index >= expected.length)
 										break;
-									changed = constrainLocalExpression(arguments[index],
-										argumentType(signature.arguments[index])) || changed;
+									changed = constrainLocalExpression(arguments[index], expected[index]) || changed;
 								}
+							}
 						}
 					}
 				changed;
@@ -890,12 +892,11 @@ class BodyTyper implements BodyTyping {
 				if (session.signatures.exists(constructorName)
 					&& session.classDecls.exists(typeName)
 					&& requiredMapValue(session.classDecls, typeName).typeParameters.length == 0) {
-					var signature = requiredMapValue(session.signatures, constructorName);
+					var expected = argumentTypesOf(requiredMapValue(session.signatures, constructorName));
 					for (index in 0...arguments.length) {
-						if (index >= signature.arguments.length)
+						if (index >= expected.length)
 							break;
-						changed = constrainLocalExpression(arguments[index], argumentType(signature.arguments[index]))
-							|| changed;
+						changed = constrainLocalExpression(arguments[index], expected[index]) || changed;
 					}
 				}
 				changed;
@@ -1629,7 +1630,7 @@ class BodyTyper implements BodyTyping {
 					span);
 			else if (session.signatures.exists(functionName)) {
 				var fn = requiredMapValue(session.signatures, functionName),
-					types = [for (argument in fn.arguments) argumentType(argument)];
+					types = argumentTypesOf(fn);
 				// A function value is the dispatch entry when the function has one: a call through it may omit an argument.
 				new TypedExpression(TFunctionRef(DefaultArguments.hasDispatchEntry(fn.arguments, types,
 					session.relations) ? DefaultArguments.dispatchName(functionName) : functionName),
@@ -2183,8 +2184,8 @@ class BodyTyper implements BodyTyping {
 					fail("E1007", "Generic instance method values are not supported yet", span);
 				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type,
 					resolvedMethodInfo.owner)),
-					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
-					result = session.declarations.types.signature(method, substitutions).result;
+					arguments = session.declarations.types.argumentTypes(method, substitutions),
+					result = session.declarations.types.resultType(method, substitutions);
 				// A method value binds the dispatch entry when the method has one, as a virtual call reaches it.
 				if (DefaultArguments.hasDispatchEntry(method.arguments, arguments, session.relations))
 					return new TypedExpression(TMethodRef(typedObject, DefaultArguments.dispatchName(methodKey)),
@@ -2330,24 +2331,18 @@ class BodyTyper implements BodyTyping {
 		return callResolver.typeCallArguments(arguments, expected, scope, name);
 	}
 
-	function typeDeclaredCallArguments(arguments:Array<AstExpression>,
-			parameters:Array<compiler.syntax.Ast.AstArgument>, scope:Scope, name:String,
-			span:SourceSpan, ?substitutions:Map<String, CompilerType>):Array<TypedExpression> {
-		return callResolver.typeDeclaredCallArguments(arguments, parameters, scope, name, span, substitutions);
-	}
+	/**
+	 * `fn`'s argument types through the declaration query, in `substitutions` or, when none are given, the current body's: the
+	 * callee-facing view, where `?x:T` and `x:T = null` are `Null<T>`.
+	 */
+	public function argumentTypesOf(fn:compiler.syntax.Ast.AstFunction,
+			?substitutions:Map<String, CompilerType>):Array<CompilerType>
+		return session.declarations.types.argumentTypes(fn,
+			substitutions == null ? context.typeSubstitutions : substitutions);
 
-	public function argumentType(argument:compiler.syntax.Ast.AstArgument,
-			?substitutions:Map<String, CompilerType>):CompilerType {
-		var type = if ((switch (argument.type) {
-			case InferredType: true;
-			default: false;
-		}) && argument.defaultValue != null) {
-			var inferred = knownExpressionType(argument.defaultValue);
-			inferred == null ? TDynamic : inferred;
-		} else substitutions == null ? lowerType(argument.type,
-			argument.span) : session.declarations.resolve(argument.type, argument.span, substitutions);
-		return AstPredicates.isNullableArgument(argument) && !isNullable(type) ? CompilerType.TNullable(type) : type;
-	}
+	/** The type an unannotated argument's default value gives it, as the declaration query asks it (until slice 4 types it). */
+	public function defaultValueType(value:AstExpression):Null<CompilerType>
+		return knownExpressionType(value);
 
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
 		return CallResolver.isPosInfosParameter(argument);
@@ -2735,7 +2730,7 @@ class BodyTyper implements BodyTyping {
 	/** `span` is where `type` is written: a name that fails to resolve, or resolves ambiguously, is reported there. */
 	/** The declared result of `fn` (DeclarationIndex.resultType) with this body's type substitutions. */
 	public function functionResultType(fn:AstFunction, span:SourceSpan):CompilerType
-		return session.declarations.types.signature(fn, context.typeSubstitutions).result;
+		return session.declarations.types.resultType(fn, context.typeSubstitutions);
 
 	public function lowerType(type:AstType, span:SourceSpan):CompilerType
 		return session.representation.semanticType(type, span, context.typeSubstitutions);
