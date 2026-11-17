@@ -116,7 +116,7 @@ class NativeToolchain {
 		switch environment.target.os {
 			case Windows:
 				if (environment.target.abi == TargetAbi.Msvc) {
-					arguments = ["/nologo", "/c", source, "/Fo" + output];
+					arguments = ["/nologo", msvcRuntime(), "/c", source, "/Fo" + output];
 					if (instrumenting())
 						arguments.push("/Z7");
 					if (instrumentRoot != null && instruments(source, instrumentRoot))
@@ -151,6 +151,13 @@ class NativeToolchain {
 		return arguments;
 	}
 
+	/**
+	 * The MSVC C runtime: the DLL one, its debug variant in a Debug build, as CMake builds native packages and HashLink's
+	 * Debug preset, so code compiled here and the libraries it links share one runtime. cl's own default is the static one.
+	 */
+	function msvcRuntime():String
+		return environment.profile == BuildProfile.Debug ? "/MDd" : "/MD";
+
 	public function archiveCommand():String
 		return environment.toolchain.archiver;
 
@@ -170,7 +177,8 @@ class NativeToolchain {
 			searchPaths = runtimeSearchPaths == null ? [] : runtimeSearchPaths;
 		var arguments = switch environment.target.os {
 			case TargetOs.Windows:
-				environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/LD", "/Fe:" + output].concat(objects)
+				environment.target.abi == TargetAbi.Msvc ? ["/nologo", "/LD", msvcRuntime(),
+					"/Fe:" + output].concat(objects)
 					.concat(inputs)
 					.concat(instrumenting() ? [
 						instrumentHooks(),
