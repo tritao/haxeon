@@ -2073,6 +2073,88 @@ class IrGenerator {
 		return false;
 	}
 
+	/**
+	 * An arithmetic operator and the ones nested in its left operand (`a * b + c - d`), lowered left to right in a loop. Each
+	 * operator is lowered as `lowerOperands` would lower its two operands, under its own source span; recursing into each left
+	 * operand instead took a few large frames per operator, and a generated sum of a thousand terms overflowed the stack.
+	 */
+	function lowerArithmeticChain(expression:TypedExpression, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
+		var chain:Array<TypedExpression> = [], leftmost = expression;
+		while (true) {
+			var operands = arithmeticOperands(leftmost);
+			if (operands == null)
+				break;
+			chain.push(leftmost);
+			leftmost = operands[0];
+		}
+		var value = lowerExpression(leftmost, builder, localTypes);
+		var index = chain.length;
+		while (--index >= 0) {
+			var node = chain[index], previous = builder.enterSource(node.span);
+			try {
+				value = lowerArithmeticStep(node, value, arithmeticOperands(node)[1], builder, localTypes);
+			} catch (error:Dynamic) {
+				builder.restoreSource(previous);
+				throw error;
+			}
+			builder.restoreSource(previous);
+		}
+		return value;
+	}
+
+	/** The operands of an arithmetic operator `lowerArithmeticChain` lowers, or null for any other expression. */
+	function arithmeticOperands(expression:TypedExpression):Null<Array<TypedExpression>>
+		return switch expression.expression {
+			case TAdd(a, b): switch lowerType(expression.type) {
+					case Bytes: null; // string concatenation
+					default: [a, b];
+				}
+			case TSub(a, b): [a, b];
+			case TMul(a, b): [a, b];
+			case TDiv(a, b): [a, b];
+			case TMod(a, b): [a, b];
+			case TBitAnd(a, b): [a, b];
+			case TBitXor(a, b): [a, b];
+			case TBitOr(a, b): [a, b];
+			case TShiftLeft(a, b): [a, b];
+			case TShiftRight(a, b): [a, b];
+			case TUnsignedShiftRight(a, b): [a, b];
+			default: null;
+		};
+
+	/** `node`, an arithmetic operator, applied to its lowered left operand and `right`, with both kept in operand locals as `lowerOperands` does. */
+	function lowerArithmeticStep(node:TypedExpression, left:CfgValue, right:TypedExpression, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):CfgValue {
+		var values:Array<CfgValue> = [];
+		if (!builder.isTerminated()) {
+			var leftName = builder.operandName();
+			localTypes.set(leftName, left.type);
+			builder.store(leftName, left);
+			var rightValue = lowerExpression(right, builder, localTypes);
+			if (!builder.isTerminated()) {
+				var rightName = builder.operandName();
+				localTypes.set(rightName, rightValue.type);
+				builder.store(rightName, rightValue);
+				values = [builder.load(leftName, left.type), builder.load(rightName, rightValue.type)];
+			}
+		}
+		return switch node.expression {
+			case TAdd(_, _): builder.add(values[0], values[1]);
+			case TSub(_, _): builder.sub(values[0], values[1]);
+			case TMul(_, _): builder.mul(values[0], values[1]);
+			case TDiv(_, _): builder.div(values[0], values[1]);
+			case TMod(_, _): builder.mod(values[0], values[1]);
+			case TBitAnd(_, _): builder.bitAnd(values[0], values[1]);
+			case TBitXor(_, _): builder.bitXor(values[0], values[1]);
+			case TBitOr(_, _): builder.bitOr(values[0], values[1]);
+			case TShiftLeft(_, _): builder.shiftLeft(values[0], values[1]);
+			case TShiftRight(_, _): builder.shiftRight(values[0], values[1]);
+			case TUnsignedShiftRight(_, _): builder.unsignedShiftRight(values[0], values[1]);
+			default: throw 'Not an arithmetic operator: ${node.expression}';
+		};
+	}
+
 	function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
 			case TCopy(value, layout):
@@ -2227,39 +2309,9 @@ class IrGenerator {
 				case Bytes: true;
 				default: false;
 			})): lowerStringConcat(expression, builder, localTypes);
-			case TAdd(a, b):
-				var operands = lowerOperands([a, b], builder, localTypes);
-				builder.add(operands[0], operands[1]);
-			case TSub(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.sub(values[0], values[1]);
-			case TMul(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.mul(values[0], values[1]);
-			case TDiv(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.div(values[0], values[1]);
-			case TMod(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.mod(values[0], values[1]);
-			case TBitAnd(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.bitAnd(values[0], values[1]);
-			case TBitXor(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.bitXor(values[0], values[1]);
-			case TBitOr(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.bitOr(values[0], values[1]);
-			case TShiftLeft(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.shiftLeft(values[0], values[1]);
-			case TShiftRight(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.shiftRight(values[0], values[1]);
-			case TUnsignedShiftRight(a, b):
-				var values = lowerOperands([a, b], builder, localTypes);
-				builder.unsignedShiftRight(values[0], values[1]);
+			case TAdd(_, _) | TSub(_, _) | TMul(_, _) | TDiv(_, _) | TMod(_, _) | TBitAnd(_, _) | TBitXor(_,
+				_) | TBitOr(_, _) | TShiftLeft(_, _) | TShiftRight(_, _) | TUnsignedShiftRight(_, _):
+				lowerArithmeticChain(expression, builder, localTypes);
 			case TNegate(value):
 				var typed = lowerExpression(value, builder, localTypes);
 				switch value.type {
