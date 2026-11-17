@@ -14,8 +14,6 @@ import compiler.core.Source.SourceFile;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
-import compiler.types.FieldInference;
-import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.semantic.SemanticSignature;

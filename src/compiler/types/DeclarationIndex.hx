@@ -1049,10 +1049,13 @@ class DeclarationIndex {
 			var substitutions:Map<String, CompilerType> = [];
 			for (parameter in decl.typeParameters)
 				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
-			// An unannotated field's type is checked when its initializer is typed.
+			// An unannotated field's type is checked when its initializer is typed; without one, nothing in it can give the type.
 			for (field in decl.fields)
 				if (field.type != null)
 					types.fieldType(decl.name, field, substitutions);
+				else if (field.initializer == null)
+					throw new CompileError(new Diagnostic("E1002",
+						'Cannot infer type of field "${field.name}" without an initializer', field.span));
 			for (method in decl.methods)
 				resolveFunction(method, decl.name + "." + method.name, substitutions);
 		}

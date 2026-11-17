@@ -323,7 +323,8 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   inferred type is recorded, so an edit retypes the readers. This widens 2.3's scope, which kept signatures and field
   types syntactic. Six slices: the query, byte-identical; invalidation; fields; returns and arguments; deletion; early
   cutoff with ADR 0003 M4. Gate: differential tests against Haxe 4.3.7, warm-edit tests for inferred types, and
-  `--reverse-typing-order` byte-identical. Effort L, high risk.
+  `--reverse-typing-order` byte-identical. Effort L, high risk. Slices 1 to 5 landed on 2026-11-17 (`SignatureInference` and
+  `FieldInference` are deleted); slice 6 waits for M4.
 - **2.6 Open anonymous types and structure values** (added 2026-11-18, design in
   [STRUCTURE_VALUES.md](../design/STRUCTURE_VALUES.md)). An object literal's structure stays open while its unit is
   typed and gains the optional fields of the structures it meets, as in Haxe; it is closed and named when the unit's

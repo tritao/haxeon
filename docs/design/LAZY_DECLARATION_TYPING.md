@@ -1,6 +1,7 @@
 # Lazy declaration typing (design note)
 
-Status: proposed, no code yet (2026-11-17). Architecture plan step 2.5 (`../reports/2026-11-architecture-review.md`).
+Status: landed through slice 5 (2026-11-17); slice 6 (early cutoff) waits for ADR 0003 M4. Architecture plan step 2.5
+(`../reports/2026-11-architecture-review.md`). The sections "Problem" and "Invalidation today" describe the code before the step.
 Follows 2.2 (per-unit typing output), 2.3 (inference variables) and 2.4 (error recovery, `7baff2763`). Reported by
 haxeon-7b; the user rejected a fix for fields alone.
 
@@ -245,6 +246,26 @@ declaration on a difference.
   program of unannotated methods, a warm edit of one body typed in 346-407 ms instead of 526-634 ms (2.49 M allocations
   instead of 3.94 M); on the self-compile, whose functions are nearly all annotated, the typing pass allocates 5.5 M
   instead of 5.8 M.
+
+### As built (slice 5)
+
+- `SignatureInference` (732 lines) and `FieldInference` (637 lines) are deleted. Nothing guesses a declaration's type from its
+  syntax any more: an unannotated declaration's type is only ever the table's.
+- `FieldInference.parsedType` is not kept. The three places that read it no longer need a guess: the module graph finds what an
+  unannotated field's initializer names by scanning the initializer (`DependencyScanner`), as for any body; the class
+  fingerprint registers an unannotated field's type as `_`, since an edit of its initializer is already a signature change of
+  the field and, for an instance field, a structural change of its class; and only an annotated field publishes a `Layout`
+  edge, since an unannotated field's readers are found through its `Initializer` and `DeclarationType` edges. The one error
+  `parsedType` raised, an unannotated field without an initializer (`E1002`), is now `DeclarationIndex.validateSignatures`'.
+- `SemanticProgram.inferredSignatures` is gone: `DeclarationTypeTable` marks a function inferred from its own syntax
+  (`AstFunctions.leavesSignatureToInference`) when it keys the program's functions.
+- `FrontendCompilation.selectedSignaturesExplicit` is gone: the semantic program does not depend on any body, so it is reused
+  whenever no declaration changed, whether the selected bodies are annotated or not.
+- `ModuleChangeAnalyzer.inferredFrom` counts only the function's own text. An argument is no longer inferred from the calls
+  its class's other methods make, so an edit to them does not change its signature.
+- Narrowing that rule uncovered an invalidation gap the class-text rule had hidden: a static field's annotation edit, for a
+  field without an initializer, did not retype its readers in other modules. Every static field now has a declaration
+  fingerprint (`ModuleState.staticFieldFingerprints`, formerly only for initializers), whose edit is structural for the field.
 
 ## Error recovery and the language service
 

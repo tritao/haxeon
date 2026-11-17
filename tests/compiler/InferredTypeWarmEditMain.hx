@@ -23,10 +23,15 @@ class InferredTypeWarmEditMain {
 		public static function count() return 4;
 		public static function take(x) return x * 2;
 		public static function wrap<T>(x:T) return [x];
+		public static var prop(get, never):Int;
+		static function get_prop() return 1;
+		public static function twice() return take(5);
+		public static var plain:Int;
 	}";
 
 	static final otherSource = "class Other { public static var x = 1; }";
-	static final boxSource = "class Box { public var v = 1; public function new() {} }";
+	static final boxSource = "class Box { public var v = 1; public var pair = new Pair(2); public function new() {} }";
+	static final pairSource = "@:value class Pair { public final a:Int; public function new(seed:Int) a = seed; }";
 	static final middleSource =
 		"class Middle { public static var y = Other.x; public static var a = Lib.annotated(); public static var z = Lib.count(); public static var list = [for (i in 0...2) i * 2]; public static function viaLib() return Lib.count() * 2; }";
 
@@ -42,8 +47,15 @@ class InferredTypeWarmEditMain {
 			var scaleOf = Lib.scale;
 			var g = scaleOf();
 			var b = new Box().v;
+			var paired = new Box().pair.a;
+			Sys.println(Std.string(paired));
 			var via = Middle.viaLib();
 			var taken = Lib.take(3);
+			var prop = Lib.prop;
+			var twice = Lib.twice();
+			var plain = Lib.plain;
+			Sys.println(Std.string(plain));
+			Sys.println(Std.string(prop) + ' ' + Std.string(twice));
 			Sys.println(Std.string(v) + ' ' + Std.string(s) + ' ' + Std.string(y) + ' ' + Std.string(a) + ' ' + Std.string(g) + ' ' + Std.string(b) + ' ' + Std.string(z) + ' ' + Std.string(list) + ' ' + Std.string(0.5) + ' ' + Std.string(via) + ' ' + Std.string(taken));
 			return 0;
 		}
@@ -55,6 +67,7 @@ class InferredTypeWarmEditMain {
 			"Other.hx" => otherSource,
 			"Middle.hx" => middleSource,
 			"Box.hx" => boxSource,
+			"Pair.hx" => pairSource,
 			"Main.hx" => mainSource
 		];
 
@@ -94,6 +107,17 @@ class InferredTypeWarmEditMain {
 		edit(failures, "a reader of unannotated functions of another module changes",
 			files -> files.set("Main.hx", StringTools.replace(mainSource, "var taken = Lib.take(3);",
 			"var taken = Lib.take(4);")));
+		edit(failures, "an annotated static field without an initializer changes type, read from another module",
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "plain:Int;", "plain:Float;")));
+		edit(failures, "a value class held by an unannotated field gains a field",
+			files -> files.set("Pair.hx",
+			"@:value class Pair { public final a:Int; public final b:Float; public function new(seed:Int) { a = seed; b = 0.5; } }"));
+		edit(failures, "a property's type changes, its unannotated getter takes it",
+			files -> files.set("Lib.hx",
+			StringTools.replace(libSource, "prop(get, never):Int;", "prop(get, never):Float;")));
+		// An unannotated argument is typed from its own function's body: an edit to a caller in the same class leaves it alone.
+		edit(failures, "a method calling an unannotated argument's function in the same class changes",
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "return take(5);", "return take(6) + 1;")));
 		// Typed while a reader exists, then edited while none does, the function is selected but not typed: its earlier signature
 		// must not be given to it when a reader comes back.
 		final reading = StringTools.replace(mainSource, "var taken = Lib.take(3);",

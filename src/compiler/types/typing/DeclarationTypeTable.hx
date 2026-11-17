@@ -175,8 +175,8 @@ class DeclarationTypeTable implements DeclarationTypes {
 	final recordRead:Null<String->Void>;
 
 	/**
-	 * The keys of the functions whose signature the source leaves to their bodies (`SemanticProgram.inferredSignatures`), by
-	 * function: the only signatures typed here, and the only signature reads that are recorded. A map of its own keeps the lookup on
+	 * The keys of the functions whose signature the source leaves, in part, to their bodies (a result or an argument without a
+	 * type), by function: the only signatures typed here, and the only signature reads that are recorded. A map of its own keeps the lookup on
 	 * every signature read small.
 	 */
 	final inferredKeys = new ObjectMap<AstFunction, String>();
@@ -200,27 +200,39 @@ class DeclarationTypeTable implements DeclarationTypes {
 		this.typing = typing;
 		this.program = semantic.program;
 		this.classes = semantic.declarations.classes;
-		var inferred = semantic.inferredSignatures;
 		for (name => fn in semantic.signatures)
-			setKey(fn, name, inferred);
+			keys.set(fn, name);
 		// The signature table holds an abstract's methods with the owner's type parameters added, and no enum methods.
 		for (decl in semantic.program.abstracts)
 			for (method in decl.methods)
-				setKey(method, decl.name + "." + method.name, inferred);
+				keys.set(method, decl.name + "." + method.name);
 		for (decl in semantic.program.enums)
 			if (decl.methods != null)
 				for (method in decl.methods)
-					setKey(method, decl.name + "." + method.name, inferred);
+					keys.set(method, decl.name + "." + method.name);
+		// What the source leaves to a body: of a module function, a class's method or an abstract's (both as the signature table
+		// holds it and as declared).
+		for (fn in semantic.program.functions)
+			markInferred(fn, fn.name);
+		for (decl in semantic.program.classes)
+			for (method in decl.methods)
+				markInferred(method, decl.name + "." + method.name);
+		for (decl in semantic.program.abstracts)
+			for (method in decl.methods) {
+				var key = decl.name + "." + method.name, signature = semantic.signatures.get(key);
+				if (signature != null)
+					markInferred(signature, key);
+				markInferred(method, key);
+			}
 	}
 
-	function setKey(fn:AstFunction, key:String, inferred:Map<String, Bool>):Void {
-		keys.set(fn, key);
-		if (inferred.exists(key)) {
+	/** Marks `fn` inferred when its source leaves a part of its signature (its result or an argument's type) to its body. */
+	function markInferred(fn:AstFunction, key:String):Void
+		if (AstFunctions.leavesSignatureToInference(fn)) {
 			inferredKeys.set(fn, key);
 			if (!inferredFunctions.exists(key))
 				inferredFunctions.set(key, fn);
 		}
-	}
 
 	/** The stable key of the declaration `fn` is, or null for a function no declaration holds (a closure, a specialization). */
 	public function functionKey(fn:AstFunction):Null<String>

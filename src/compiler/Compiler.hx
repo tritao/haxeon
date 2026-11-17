@@ -10,7 +10,6 @@ import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrGenerator;
-import compiler.types.SignatureInference;
 import compiler.types.Typer;
 import compiler.types.Typer.TyperPhaseMetrics;
 import compiler.semantic.GenericSpecializationRegistry;

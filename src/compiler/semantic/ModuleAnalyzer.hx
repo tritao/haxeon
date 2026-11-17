@@ -11,7 +11,6 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.types.FieldInference;
 import compiler.types.TypeRegistry;
 
 /** Parses modules and derives their normalized source, type, and semantic dependencies. */
@@ -267,8 +266,12 @@ class ModuleAnalyzer {
 				addModuleTypeDependency(base, state, dependencies);
 			for (interfaceType in classDecl.interfaces)
 				addModuleTypeDependency(interfaceType, state, dependencies);
-			for (field in classDecl.fields)
-				addModuleTypeDependency(FieldInference.parsedType(field), state, dependencies);
+			// An unannotated field names only what its initializer names, which the module's expressions are scanned for.
+			for (field in classDecl.fields) {
+				var type = field.type;
+				if (type != null)
+					addModuleTypeDependency(type, state, dependencies);
+			}
 			for (method in classDecl.methods)
 				addFunctionTypeDependencies(method, state, dependencies, classDecl.typeParameters);
 		}

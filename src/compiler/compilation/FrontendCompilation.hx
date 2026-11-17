@@ -373,8 +373,8 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * Signature inference (or the previous build's, with the new bodies) and typing of the selected functions. A compile error is
-	 * recorded on the module it names before it propagates.
+	 * Semantic analysis (or the previous build's, with the new bodies, when no declaration changed) and typing of the selected
+	 * functions. A compile error is recorded on the module it names before it propagates.
 	 */
 	static function typeProgram(build:FrontendBuild):Void {
 		var context = build.context,
@@ -393,7 +393,6 @@ class FrontendCompilation {
 			var canReuseSemantic = previousSemantic != null
 				&& CompilationContext.mapIsEmpty(build.signatureChanged)
 				&& CompilationContext.mapIsEmpty(build.structuralChanged)
-				&& selectedSignaturesExplicit(canonicalProgram, selected)
 				&& sameDeclarations(previousSemantic.program, canonicalProgram);
 			var semantic:SemanticProgram;
 			if (canReuseSemantic && previousSemantic != null)
@@ -2038,36 +2037,6 @@ class FrontendCompilation {
 				result.set(fn.name, defaults);
 		}
 		return result;
-	}
-
-	static function selectedSignaturesExplicit(program:AstProgram, selected:Map<String, Bool>):Bool {
-		for (fn in program.functions)
-			if (selected.exists(fn.name) && !explicitSignature(fn))
-				return false;
-		for (decl in program.classes)
-			for (method in decl.methods)
-				if (selected.exists(decl.name + "." + method.name) && !explicitSignature(method))
-					return false;
-		for (decl in program.abstracts)
-			for (method in decl.methods)
-				if (selected.exists(decl.name + "." + method.name) && !explicitSignature(method))
-					return false;
-		return true;
-	}
-
-	static function explicitSignature(fn:compiler.syntax.Ast.AstFunction):Bool {
-		if ((switch (fn.result) {
-			case InferredType: true;
-			default: false;
-		}))
-			return false;
-		for (argument in fn.arguments)
-			if ((switch (argument.type) {
-				case InferredType: true;
-				default: false;
-			}))
-				return false;
-		return true;
 	}
 
 	/**

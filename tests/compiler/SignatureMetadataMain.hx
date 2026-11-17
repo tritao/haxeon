@@ -1,33 +1,34 @@
 import compiler.core.Source.SourceFile;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.types.SignatureInference;
+import compiler.types.AccessorSignatures;
 
-/** Inference must not erase annotations or modifiers from a callable declaration. */
+/** Giving an unannotated accessor its property's type must not erase annotations or modifiers from it. */
 class SignatureMetadataMain {
 	static function main():Void {
-		var source = new SourceFile('Main.hx',
-			'@:keep inline function top(value = 1) return value; '
-			+ 'class Subject { @:access(Subject) public static inline function method(value:Int) return value; }');
+		var source = new SourceFile('Main.hx', 'class Subject { public var value(get, set):Int; '
+			+ '@:keep inline function get_value() return 1; '
+			+ '@:access(Subject) inline function set_value(next) return next; }');
 		var parsed = new Parser(new Lexer(source).tokenize()).parseProgram(),
-			inferred = SignatureInference.inferProgram(parsed);
-		var top = inferred.functions[0],
-			method = inferred.classes[0].methods[0];
-		if (top.metadata == null || top.metadata.length != 1 || top.metadata[0].name != 'keep' || top.isInline != true)
-			throw 'Argument inference erased the top-level annotation or inline modifier';
-		if (method.metadata == null || method.metadata.length != 1 || method.metadata[0].name != 'access'
-			|| method.isInline != true)
-			throw 'Return inference erased the method annotation or inline modifier';
-		switch top.arguments[0].type {
+			typed = AccessorSignatures.withPropertyTypes(parsed);
+		var getter = typed.classes[0].methods[0],
+			setter = typed.classes[0].methods[1];
+		if (getter.metadata == null || getter.metadata.length != 1 || getter.metadata[0].name != 'keep'
+			|| getter.isInline != true)
+			throw 'The getter lost its annotation or inline modifier';
+		if (setter.metadata == null || setter.metadata.length != 1 || setter.metadata[0].name != 'access'
+			|| setter.isInline != true)
+			throw 'The setter lost its annotation or inline modifier';
+		switch getter.result {
 			case IntType:
 			default:
-				throw 'Default argument type was not inferred';
+				throw 'The getter does not return the property type';
 		}
-		switch method.result {
-			case IntType:
+		switch [setter.arguments[0].type, setter.result] {
+			case [IntType, IntType]:
 			default:
-				throw 'Return type was not inferred';
+				throw 'The setter does not take and return the property type';
 		}
-		Sys.println('PASS: signature inference preserves callable annotations');
+		Sys.println('PASS: an accessor given its property type keeps its annotations');
 	}
 }

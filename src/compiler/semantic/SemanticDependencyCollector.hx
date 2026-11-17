@@ -3,7 +3,6 @@ package compiler.semantic;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.modules.ModuleState;
-import compiler.types.FieldInference;
 import compiler.modules.ModuleState.SemanticDependency;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 
@@ -52,8 +51,9 @@ class SemanticDependencyCollector {
 				addTypeDependency(result, className, SemanticDependencyKind.Layout, interfaceType, typeAliases);
 			for (field in classDecl.fields) {
 				addAnnotationDependencies(result, className, field.metadata, typeAliases);
-				addTypeDependency(result, className, SemanticDependencyKind.Layout, FieldInference.parsedType(field),
-					typeAliases);
+				var type = field.type;
+				if (type != null)
+					addTypeDependency(result, className, SemanticDependencyKind.Layout, type, typeAliases);
 				var initializer = field.initializer;
 				if (initializer != null) {
 					addExpressionDependencies(result, className + "." + field.name, SemanticDependencyKind.Initializer,

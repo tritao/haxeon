@@ -34,13 +34,6 @@ class SemanticProgram {
 	public final lifecycle:DeclarationLifecycle;
 	public final lifecycleMetrics:SemanticLifecycleMetrics;
 
-	/**
-	 * The functions whose signature the source leaves, in part, to their bodies (a result or an argument without a type), by their
-	 * name in `signatures`. The typer types those bodies when their signature is first needed (`DeclarationTypeTable`), and a read
-	 * of one is recorded for invalidation.
-	 */
-	public final inferredSignatures:Map<String, Bool>;
-
 	public static function analyze(program:AstProgram):SemanticProgram {
 		return analyzeThrough(program, SignatureTyped);
 	}
@@ -52,7 +45,6 @@ class SemanticProgram {
 		var started = Sys.time() * 1000.0;
 		// An unannotated accessor of an annotated property has the property's type; what else a signature leaves out, its body gives.
 		var inferred = AccessorSignatures.withPropertyTypes(program);
-		var inferredSignatures = inferredSignaturesOf(inferred);
 		var declarations = DeclarationIndex.registered(inferred),
 			declaredAt = Sys.time() * 1000.0,
 			lifecycle = new DeclarationLifecycle(declarations),
@@ -69,14 +61,14 @@ class SemanticProgram {
 			lifecycle.advanceAll(SignatureTyped);
 			signaturesAt = Sys.time() * 1000.0;
 		}
-		return new SemanticProgram(inferred, inferredSignatures, declarations, null, null, null, lifecycle, {
+		return new SemanticProgram(inferred, declarations, null, null, null, lifecycle, {
 			declarationMs: declaredAt - started,
 			shapeConnectionMs: shapesAt - declaredAt,
 			signatureTypingMs: signaturesAt - shapesAt
 		});
 	}
 
-	/** Reuse validated declarations when only explicitly typed function bodies changed. */
+	/** Reuses the validated declarations when only function bodies and field initializers changed. */
 	public function replaceBodies(current:AstProgram, selected:Map<String, Bool>):SemanticProgram {
 		var currentByName:Map<String, AstFunction> = [];
 		for (fn in current.functions)
@@ -155,8 +147,7 @@ class SemanticProgram {
 				if (selected.exists(name))
 					nextSignatures.set(name, withOwnerTypeParameters(method, decl.typeParameters));
 			}
-		// Only explicitly typed bodies changed, so the functions left to inference are the same ones.
-		return new SemanticProgram(nextProgram, inferredSignatures, declarations, nextSignatures, methodInfo, relations,
+		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations,
 			new DeclarationLifecycle(declarations, SignatureTyped), {
 				declarationMs: 0.0,
 				shapeConnectionMs: 0.0,
@@ -185,22 +176,6 @@ class SemanticProgram {
 		}];
 	}
 
-	static function inferredSignaturesOf(program:AstProgram):Map<String, Bool> {
-		var result:Map<String, Bool> = [];
-		for (fn in program.functions)
-			if (AstFunctions.leavesSignatureToInference(fn))
-				result.set(fn.name, true);
-		for (decl in program.classes)
-			for (method in decl.methods)
-				if (AstFunctions.leavesSignatureToInference(method))
-					result.set(decl.name + "." + method.name, true);
-		for (decl in program.abstracts)
-			for (method in decl.methods)
-				if (AstFunctions.leavesSignatureToInference(method))
-					result.set(decl.name + "." + method.name, true);
-		return result;
-	}
-
 	static function copyWithMethods<T>(declaration:T, methods:Array<AstFunction>):T {
 		var result:Dynamic = Reflect.copy(declaration);
 		Reflect.setField(result, "methods", methods);
@@ -224,13 +199,12 @@ class SemanticProgram {
 			signature.result, body.statements, body.span);
 	}
 
-	function new(program:AstProgram, inferredSignatures:Map<String, Bool>, declarations:DeclarationIndex,
+	function new(program:AstProgram, declarations:DeclarationIndex,
 			?preparedSignatures:Map<String, AstFunction>,
 			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations,
 			?preparedLifecycle:DeclarationLifecycle,
 			?preparedLifecycleMetrics:SemanticLifecycleMetrics) {
 		this.program = program;
-		this.inferredSignatures = inferredSignatures;
 		this.declarations = declarations;
 		relations = preparedRelations == null ? new TypeRelations(declarations) : preparedRelations;
 		lifecycle = preparedLifecycle == null ? new DeclarationLifecycle(declarations,
