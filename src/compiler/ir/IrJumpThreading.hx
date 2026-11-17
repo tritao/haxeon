@@ -6,6 +6,9 @@ import compiler.ir.SourceProvenance.Located;
 private typedef JumpBridge = {
 	final predecessor:Int;
 	final target:Int;
+
+	/** The predecessor ends in a branch or switch, so the edge it gets may not reach a phi (it would give the phi a second input). */
+	final conditional:Bool;
 }
 
 /** Thread linear edges through empty jump blocks while preserving SSA phi edges. */
@@ -58,11 +61,23 @@ class IrJumpThreading {
 				|| predecessors[0] == target) continue;
 			var term = graph.block(predecessors[0]).terminator;
 			if (term == null) continue;
+			// A conditional predecessor jumps to the target itself when the target has no phis to give a new input to.
 			switch term.value {
-				case Jump(_): bridges.set(bridge.id, {predecessor: predecessors[0], target: target});
+				case Jump(_): bridges.set(bridge.id,
+					{predecessor: predecessors[0], target: target, conditional: false});
+				case Branch(_, _, _), Switch(_, _, _): bridges.set(bridge.id, {
+					predecessor: predecessors[0],
+					target: target,
+					conditional: true
+				});
 				default:
 			}
 		}
+		// A conditional predecessor is bridged only when the block its chain of bridges ends at has no phis: two of its edges
+		// could end there, and a phi has one input per predecessor.
+		for (id in [for (id in bridges.keys()) id])
+			if (bridges.get(id).conditional && hasPhis(graph.block(finalTarget(id, bridges))))
+				bridges.remove(id);
 		if (!bridges.keys().hasNext()) return fn;
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) if (!bridges.exists(block.id)) {
@@ -79,11 +94,175 @@ class IrJumpThreading {
 			var term = block.terminator;
 			if (term != null) switch term.value {
 				case Jump(target): copy.terminator = new Located(Jump(finalTarget(target, bridges)), term.provenance);
+				case Branch(condition, yes, no):
+					copy.terminator = new Located(Branch(condition, finalTarget(yes, bridges),
+						finalTarget(no, bridges)),
+						term.provenance);
+				case Switch(value, targets, otherwise):
+					copy.terminator = new Located(Switch(value,
+						IrSwitch.mapTargets(targets, target -> finalTarget(target, bridges)),
+						finalTarget(otherwise, bridges)), term.provenance);
 				default: copy.terminator = term;
 			}
 			blocks.push(copy);
 		}
 		return fn.withBlocks(blocks);
+	}
+
+	/** Whether `block` already transfers to `target`. */
+	static function reaches(block:Null<IrBlock>, target:Int):Bool {
+		if (block == null || block.terminator == null)
+			return false;
+		return switch block.terminator.value {
+			case Jump(to): to == target;
+			case Branch(_, yes, no): yes == target || no == target;
+			case Switch(_, targets, otherwise): otherwise == target || targets.indexOf(target) >= 0;
+			default: false;
+		};
+	}
+
+	static function hasPhis(block:IrBlock):Bool {
+		for (located in block.instructions)
+			switch located.value {
+				case Phi(_, _): return true;
+				default:
+			}
+		return false;
+	}
+
+	/**
+	 * `a || b` and `a && b` become a Bool through a phi, and an `if` then branches on it: a block whose only instruction is a phi of
+	 * Bools, used only by the block's own branch. A predecessor that feeds it a constant jumps straight to the side that constant
+	 * selects, so the Bool is never made on that path; a block every predecessor skips is dropped. Only targets without phis are
+	 * threaded to, so no phi gains an input.
+	 */
+	public static function threadConstantBranches(fn:IrFunction):IrFunction {
+		var constants:Map<Int, Bool> = [], uses:Map<Int, Int> = [];
+		function use(value:IrValue):Void
+			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
+		for (block in fn.blocks) {
+			for (located in block.instructions) {
+				switch located.value {
+					case ConstBool(output, value):
+						constants.set(output.id, value);
+					case Phi(_, inputs):
+						for (input in inputs)
+							use(input.value);
+					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
+						return fn;
+					default:
+				}
+				for (index in 0...IrOperands.count(located.value))
+					use(IrOperands.at(located.value, index));
+			}
+			if (block.terminator != null)
+				switch block.terminator.value {
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
+						use(value);
+					case Jump(_), Unreachable:
+				}
+		}
+		for (binding in fn.debugBindings)
+			use(binding.value);
+		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block],
+			redirects:Map<String, Int> = [],
+			skipped:Map<Int, Array<Int>> = [],
+			added:Map<Int, Array<IrPhiInput>> = [],
+			threaded:Map<String, Bool> = [];
+		for (block in fn.blocks) {
+			if (block == fn.blocks[0] || block.instructions.length != 1 || block.terminator == null)
+				continue;
+			var phi:Null<IrValue> = null, inputs:Array<IrPhiInput> = [];
+			switch block.instructions[0].value {
+				case Phi(output, phiInputs):
+					phi = output;
+					inputs = phiInputs;
+				default:
+			}
+			if (phi == null)
+				continue;
+			switch block.terminator.value {
+				case Branch(condition, yes, no) if (condition.id == phi.id && uses.get(phi.id) == 1 && yes != block.id
+					&& no != block.id && byId.exists(yes) && byId.exists(no)):
+					for (input in inputs) {
+						var target = constants.exists(input.value.id) ? (constants.get(input.value.id) ? yes : no) : -1;
+						// A target with phis gets an input for the new edge, so a predecessor that already reaches it (it would then
+						// have two edges in) is not threaded there.
+						var key = input.block + ">" + target, targetBlock = byId.get(target);
+						if (targetBlock == null || input.block == block.id || input.block == target
+							|| hasPhis(targetBlock) && (reaches(byId.get(input.block), target) || threaded.exists(key)))
+							continue;
+						threaded.set(key, true);
+						redirects.set(input.block + ":" + block.id, target);
+						if (!skipped.exists(block.id))
+							skipped.set(block.id, []);
+						skipped.get(block.id).push(input.block);
+						// What each of the target's phis took from this block, it now takes from the predecessor: the predecessor's
+						// constant for the block's own phi, or a value from a block that dominates this one, and so the predecessor.
+						for (located in targetBlock.instructions)
+							switch located.value {
+								case Phi(targetPhi, targetInputs):
+									for (targetInput in targetInputs)
+										if (targetInput.block == block.id) {
+											if (!added.exists(targetPhi.id))
+												added.set(targetPhi.id, []);
+											added.get(targetPhi.id).push({
+												block: input.block,
+												value: targetInput.value.id == phi.id ? input.value : targetInput.value
+											});
+										}
+								default:
+							}
+					}
+				default:
+			}
+
+		}
+		if (!skipped.keys().hasNext())
+			return fn;
+		function retarget(from:Int, to:Int):Int {
+			var key = from + ":" + to;
+			return redirects.exists(key) ? redirects.get(key) : to;
+		}
+		var blocks:Array<IrBlock> = [];
+		for (block in fn.blocks) {
+			var skippedBy = skipped.get(block.id), copy = new IrBlock(block.id);
+			if (skippedBy == null)
+				for (located in block.instructions)
+					switch located.value {
+						case Phi(output, inputs) if (added.exists(output.id)):
+							copy.instructions.push(new Located(Phi(output, inputs.concat(added.get(output.id))),
+								located.provenance));
+						default:
+							copy.instructions.push(located);
+					}
+						else {
+						var phi = block.instructions[0];
+						switch phi.value {
+							case Phi(output, inputs):
+								var kept = [for (input in inputs) if (skippedBy.indexOf(input.block) < 0) input];
+								// Every predecessor jumps past it: nothing reaches the block.
+								if (kept.length == 0)
+									continue;
+								copy.instructions.push(new Located(Phi(output, kept), phi.provenance));
+							default:
+						}
+					}
+			var term = block.terminator;
+			if (term != null)
+				copy.terminator = switch term.value {
+					case Jump(target): new Located(Jump(retarget(block.id, target)), term.provenance);
+					case Branch(condition, yes, no):
+						new Located(Branch(condition, retarget(block.id, yes), retarget(block.id, no)),
+							term.provenance);
+					case Switch(value, targets, otherwise):
+						new Located(Switch(value, IrSwitch.mapTargets(targets, target -> retarget(block.id, target)),
+							retarget(block.id, otherwise)), term.provenance);
+					default: term;
+				};
+			blocks.push(copy);
+		}
+		return IrUnreachableBlocks.remove(fn.withBlocks(blocks));
 	}
 
 	static function finalTarget(id:Int, bridges:Map<Int, JumpBridge>):Int {

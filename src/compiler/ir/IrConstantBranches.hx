@@ -78,78 +78,19 @@ class IrConstantBranches {
 				}
 		if (targets == null)
 			return fn;
-		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block];
-		// The blocks the entry still reaches; handlers count as reached where a reached block installs them.
-		var reached:Map<Int, Bool> = [fn.blocks[0].id => true],
-			work = [fn.blocks[0].id];
-		inline function visit(next:Int):Void
-			if (!reached.exists(next)) {
-				reached.set(next, true);
-				work.push(next);
-			}
-		while (work.length > 0) {
-			var id = work.pop(), block = byId.get(id);
-			if (block == null)
-				continue;
-			for (located in block.instructions)
-				switch located.value {
-					case BeginTry(catchBlock, afterBlock, _):
-						visit(catchBlock);
-						visit(afterBlock);
-					case EndTry(catchBlock, _):
-						visit(catchBlock);
-					default:
-				}
-			var folded = targets.get(id);
-			if (folded != null)
-				visit(folded);
-			else if (block.terminator != null)
-				switch block.terminator.value {
-					case Jump(target):
-						visit(target);
-					case Branch(_, whenTrue, whenFalse):
-						visit(whenTrue);
-						visit(whenFalse);
-					case Switch(_, cases, otherwise):
-						for (target in IrSwitch.successors(cases, otherwise))
-							visit(target);
-					default:
-				}
-		}
-		var blocks:Array<IrBlock> = [], removedValues:Map<Int, Bool> = [];
+		// A folded branch jumps to the side it takes; what that leaves unreachable goes (IrUnreachableBlocks).
+		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
-			if (!reached.exists(block.id)) {
-				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null)
-						removedValues.set(output.id, true);
-				}
+			var target = targets.get(block.id), terminator = block.terminator;
+			if (target == null || terminator == null) {
+				blocks.push(block);
 				continue;
 			}
-			var instructions = block.instructions.copy();
-			for (index in 0...instructions.length)
-				switch instructions[index].value {
-					case Phi(output, inputs):
-						var kept = [
-							for (input in inputs)
-								if (hasEdge(input.block, block.id, byId, reached, targets)) input
-						];
-						if (kept.length != inputs.length)
-							instructions[index] = new Located(Phi(output, kept), instructions[index].provenance);
-					default:
-				}
-			var copy = new IrBlock(block.id, instructions),
-				target = targets.get(block.id),
-				terminator = block.terminator;
-			copy.terminator = target == null
-				|| terminator == null ? terminator : new Located(Jump(target), terminator.provenance);
+			var copy = new IrBlock(block.id, block.instructions);
+			copy.terminator = new Located(Jump(target), terminator.provenance);
 			blocks.push(copy);
 		}
-		var bindings = [
-			for (binding in fn.debugBindings)
-				if (!removedValues.exists(binding.value.id)) binding
-		];
-		return fn.withBlocks(blocks, bindings);
+		return IrUnreachableBlocks.remove(fn.withBlocks(blocks));
 	}
 
 	/**
@@ -180,33 +121,4 @@ class IrConstantBranches {
 		return -1;
 	}
 
-	/** Whether control still flows from block `from` into block `to`: `from` is reached and one of its remaining edges leads there. */
-	static function hasEdge(from:Int, to:Int, byId:Map<Int, IrBlock>, reached:Map<Int, Bool>,
-			targets:Map<Int, Int>):Bool {
-		var block = byId.get(from);
-		if (block == null || !reached.exists(from))
-			return false;
-		for (located in block.instructions)
-			switch located.value {
-				case BeginTry(catchBlock, afterBlock, _) if (catchBlock == to || afterBlock == to):
-					return true;
-				case EndTry(catchBlock, _) if (catchBlock == to):
-					return true;
-				default:
-			}
-		var folded = targets.get(from);
-		if (folded != null)
-			return folded == to;
-		if (block.terminator != null)
-			switch block.terminator.value {
-				case Jump(target):
-					return target == to;
-				case Branch(_, whenTrue, whenFalse):
-					return whenTrue == to || whenFalse == to;
-				case Switch(_, cases, otherwise):
-					return otherwise == to || cases.indexOf(to) >= 0;
-				default:
-			}
-		return false;
-	}
 }
