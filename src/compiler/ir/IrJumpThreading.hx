@@ -172,17 +172,9 @@ class IrJumpThreading {
 		for (block in fn.blocks) {
 			if (block == fn.blocks[0] || block.instructions.length != 1 || block.terminator == null)
 				continue;
-			var phi:Null<IrValue> = null, inputs:Array<IrPhiInput> = [];
-			switch block.instructions[0].value {
-				case Phi(output, phiInputs):
-					phi = output;
-					inputs = phiInputs;
-				default:
-			}
-			if (phi == null)
-				continue;
-			switch block.terminator.value {
-				case Branch(condition, yes, no) if (condition.id == phi.id && uses.get(phi.id) == 1 && yes != block.id
+			switch [block.instructions[0].value, block.terminator.value] {
+				case [Phi(phi, inputs),
+					Branch(condition, yes, no)] if (condition.id == phi.id && uses.get(phi.id) == 1 && yes != block.id
 					&& no != block.id && byId.exists(yes) && byId.exists(no)):
 					for (input in inputs) {
 						var target = constants.exists(input.value.id) ? (constants.get(input.value.id) ? yes : no) : -1;
