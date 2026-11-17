@@ -1731,8 +1731,20 @@ class ExpressionTyper {
 		}];
 		if (deferredDefault != null)
 			typedDefault = bodyTyper.typeExpression(deferredDefault.expression, deferredDefault.scope, resultType);
-		if (typedDefault == null && !seenCases.exists("$catchall"))
+		if (typedDefault == null && !seenCases.exists("$catchall")) {
 			typedDefault = exhaustiveEnumAbstractDefault(typedSubject.type, seenCases, span);
+			// As over an enum, a nullable subject need not match null: a null its arms leave throws "Null access".
+			var nullArm = typedDefault == null ? null : SwitchNullCoverage.nullAccessArm(typedSubject, seenCases, span);
+			if (nullArm != null) {
+				typedCases.push({
+					arm: nullArm,
+					result: branchResult(new TypedExpression(TThrowExpression(SwitchNullCoverage.nullAccess(span)),
+						TNever,
+						span), resultType, "switch branch")
+				});
+				caseScopes.push(new Scope(scope));
+			}
+		}
 		if (typedDefault != null)
 			typedDefault = branchResult(typedDefault, resultType, "switch branch");
 		if (tupleTypes != null) {
@@ -2364,7 +2376,7 @@ class ExpressionTyper {
 		var values = bodyTyper.closedEnumAbstractValues(subject);
 		if (values == null)
 			return null;
-		var missing = [for (value in values) if (!seenCases.exists(value.key)) value.name];
+		var missing = [for (value in values) if (value.key != "null" && !seenCases.exists(value.key)) value.name];
 		if (missing.length > 0)
 			fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
 		var message =

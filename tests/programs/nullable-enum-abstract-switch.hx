@@ -1,5 +1,6 @@
 // A switch over a nullable Int, String or enum abstract matches `case null` apart from the values. Without a default, a
-// switch over a nullable enum abstract covers `null` as one more value; a catch-all or a capture still sees the nullable.
+// switch over a nullable enum abstract covers its values and need not match null, as one over a Null<Enum>: a null its
+// arms leave throws "Null access", and an undeclared value "Unmatched". A catch-all or a capture still sees the nullable.
 enum abstract Kind(Int) from Int {
 	var A = 1;
 	var B = 2;
@@ -26,6 +27,36 @@ function tag(t:Null<Tag>):Int {
 		case Y:
 			return 2;
 	}
+}
+
+function bare(k:Null<Kind>):Int
+	return switch k {
+		case A: 1;
+		case B: 2;
+	};
+
+function bareStatement(t:Null<Tag>):Int {
+	switch t {
+		case X:
+			return 1;
+		case Y:
+			return 2;
+	}
+}
+
+function guardedNull(k:Null<Kind>, allow:Bool):Int
+	return switch k {
+		case null if (allow): 0;
+		case A: 1;
+		case B: 2;
+	};
+
+function thrown(run:() -> Int):String {
+	try
+		run()
+	catch (error:Dynamic)
+		return Std.string(error);
+	return "none";
 }
 
 function count(n:Null<Int>):Int
@@ -63,6 +94,14 @@ function main():Int {
 		|| guarded(null, false) != 3
 		|| guarded(Y, true) != 3)
 		return 5;
+	if (bare(A) != 1 || bare(B) != 2 || bareStatement(X) != 1 || bareStatement(Y) != 2 || guardedNull(null, true) != 0
+		|| guardedNull(B, false) != 2)
+		return 7;
+	if (thrown(() -> bare(null)) != "Null access" || thrown(() -> bareStatement(null)) != "Null access"
+		|| thrown(() -> guardedNull(null, false)) != "Null access")
+		return 8;
+	if (thrown(() -> bare(9)) != "Unmatched Null<Kind> value")
+		return 9;
 	var unmatched = false;
 	try
 		kind(9)

@@ -1495,8 +1495,10 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
+	/** The enum abstract a payload of `type` holds, `Null<Kind>` included, whose value names a pattern matches as constants. */
 	function enumAbstractPatternName(type:AstType):Null<String>
 		return switch type {
+			case NullableType(inner): enumAbstractPatternName(inner);
 			case NamedType(name), AppliedType(name, _): session.enumAbstractName(name);
 			default: null;
 		};
@@ -2679,58 +2681,61 @@ class BodyTyper implements BodyTyping {
 				&& (switchCase.isCatchAll || switchCase.constructorIndex == constructorIndex
 				&& switchCase.predicates.length == 0))
 				return true;
-		// Arms that differ in one argument only, matched there by every constructor of its enum or by `true` and `false`.
-		var groups:Map<String, {count:Int, constructors:Map<Int, Bool>}> = [];
+		// Arms that differ in one argument only, matched there by every value of a finite type: each constructor of an enum,
+		// `true` and `false`, or each declared value of a closed enum abstract.
+		var groups:Map<String, {values:Array<String>, seen:Map<String, Bool>}> = [];
 		for (switchCase in cases) {
 			if (switchCase.constructorIndex != constructorIndex || switchCase.guard != null
 				|| switchCase.predicates.length != 1)
 				continue;
 			var predicate = switchCase.predicates[0],
-				innerIndex = predicate.nestedConstructorIndex,
 				value = predicate.value;
 			if (predicate.arrayLength >= 0 || predicate.arrayIndex >= 0)
 				continue;
-			var innerName = enumName(predicate.type),
-				bool = switch predicate.type {
-					case TBool | TNullable(TBool): true;
-					default: false;
-				};
-			if (innerIndex == null && value != null) {
-				var key = bool ? constantPatternKey(value) : null,
-					literal = enumLiteral(value);
-				if (key == "bool:true" || key == "bool:false")
-					innerIndex = key == "bool:true" ? 1 : 0;
-				else if (literal != null)
-					innerIndex = literal.index;
-			}
-			if (innerIndex == null)
-				continue;
-			var count = bool ? 2 : innerName != null
-				&& session.enumDecls.exists(innerName) ? requiredMapValue(session.enumDecls,
-				innerName).cases.length : 0;
-			if (count == 0)
+			var nested = predicate.nestedConstructorIndex,
+				literal = value == null ? null : enumLiteral(value),
+				matched = nested != null ? 'enum:$nested' : literal != null ? 'enum:${literal.index}' : value == null
+					? null : constantPatternKey(value),
+				values = finiteValueKeys(predicate.type);
+			if (matched == null || values == null)
 				continue;
 			var nestedPath = [
 				for (access in predicate.nestedPath ?? [])
 					'${access.constructorIndex}.${access.fieldIndex}'
 			].join("/"),
-				key = '${predicate.index}:$nestedPath:${bool ? "Bool" : innerName}',
+				key = '${predicate.index}:$nestedPath',
 				group = groups.get(key);
 			if (group == null) {
-				group = {count: count, constructors: []};
+				group = {values: values, seen: []};
 				groups.set(key, group);
 			}
-			group.constructors.set(innerIndex, true);
+			group.seen.set(matched, true);
 		}
-		for (group in groups) {
-			var complete = true;
-			for (index in 0...group.count)
-				if (!group.constructors.exists(index))
-					complete = false;
-			if (complete)
+		for (group in groups)
+			if ([for (value in group.values) if (!group.seen.exists(value)) value].length == 0)
 				return true;
-		}
 		return false;
+	}
+
+	/**
+	 * The keys of every value of a finite type, as `enumCaseCovered` matches an argument against them: `enum:N` for each
+	 * constructor of an enum, `bool:true` and `bool:false`, or a closed enum abstract's declared values. Null for any other
+	 * type. A null need not be among them: whether one must be matched is SwitchNullCoverage's question.
+	 */
+	function finiteValueKeys(type:CompilerType):Null<Array<String>> {
+		switch type {
+			case TBool | TNullable(TBool):
+				return ["bool:true", "bool:false"];
+			default:
+		}
+		var name = enumName(type);
+		if (name != null) {
+			var declaration = session.enumDecls.get(name);
+			return declaration == null
+				|| declaration.cases.length == 0 ? null : [for (index in 0...declaration.cases.length) 'enum:$index'];
+		}
+		var closed = closedEnumAbstractValues(type);
+		return closed == null || closed.length == 0 ? null : [for (value in closed) if (value.key != "null") value.key];
 	}
 
 	/**

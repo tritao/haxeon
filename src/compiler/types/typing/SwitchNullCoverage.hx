@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedSwitchArm;
@@ -37,6 +38,39 @@ private typedef NullRow = {
  * missing null.
  */
 class SwitchNullCoverage {
+	/**
+	 * The arm a switch without a default ends with when its subject may be null and no arm matches null: `case null` throwing
+	 * "Null access", what Haxe's root switch does with a null its arms leave (a closed enum abstract's implicit default throws
+	 * for an undeclared value instead). Null when the subject is not nullable or an unguarded `case null` is among `seenCases`.
+	 */
+	public static function nullAccessArm(subject:TypedExpression, seenCases:Map<String, Bool>,
+			span:SourceSpan):Null<TypedSwitchArm> {
+		if (seenCases.exists("null"))
+			return null;
+		switch subject.type {
+			case TNullable(_):
+			default:
+				return null;
+		}
+		return {
+			value: new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), subject.type,
+				span),
+			subjectBinding: null,
+			arrayPattern: null,
+			isCatchAll: false,
+			guard: null,
+			enumName: null,
+			constructorIndex: -1,
+			bindings: [],
+			predicates: [],
+			span: span
+		};
+	}
+
+	/** The `throw "Null access"` of `nullAccessArm`. */
+	public static function nullAccess(span:SourceSpan):TypedExpression
+		return new TypedExpression(TStringLiteral("Null access"), TString, span);
+
 	/** A tuple no arm matches because one of its positions is a null nothing matches (`[B(_), null]`), or null. */
 	public static function tupleWitness(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
 			arms:Array<TypedSwitchArm>):Null<String> {
@@ -89,7 +123,12 @@ class SwitchNullCoverage {
 			return Any;
 		if (key == "null")
 			return Null(type);
-		return Value(key, display(value, key), type, []);
+		// A closed enum abstract's value is shown by its name (`B`, not `2`).
+		var name:Null<String> = null;
+		for (declared in bodyTyper.closedEnumAbstractValues(type) ?? [])
+			if (declared.key == key)
+				name = declared.name;
+		return Value(key, name ?? display(value, key), type, []);
 	}
 
 	/**

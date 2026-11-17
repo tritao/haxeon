@@ -607,8 +607,8 @@ class TestMain {
 			'Enum abstract switch is missing values: Triangle');
 		expectCompileError('enum abstract Shape(Int) { var Circle = 1; var Square = 2; } function main():Int { var shape = Shape.Square; switch shape { case Circle: return 0; } return 42; }',
 			'Enum abstract switch is missing values: Square');
-		expectCompileError('enum abstract Kind(Int) { var A = 1; } function pick(k:Null<Kind>):Int return switch k { case A: 1; }; function main():Int return pick(null);',
-			'Enum abstract switch is missing values: null');
+		expectCompileError('enum abstract Kind(Int) { var A = 1; var B = 2; } function pick(k:Null<Kind>):Int return switch k { case A: 1; }; function main():Int return pick(null);',
+			'Enum abstract switch is missing values: B');
 		expectCompileError('function pick(n:Null<Float>):Int return switch n { case 1.5: 1; default: 0; }; function main():Int return pick(null);',
 			'Switch requires an Int, String, Bool, array, or enum value');
 		// A capture still matches its pattern, so it neither ends the switch nor binds outside it.

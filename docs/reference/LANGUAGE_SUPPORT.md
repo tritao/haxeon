@@ -12,14 +12,18 @@ The current subset includes:
   constructor: a missing value is `E1021`, naming it, and a switch that covers them all returns on every path when its
   arms do. A value outside the declared set (a native code newer than its binding, or a cast) throws at the switch.
   `Flags` combine their values, so their switches still need a default.
-- A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values; a switch over a
-  nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
+- A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values. A catch-all or
+  capture binds the nullable value. Without a default, a switch over a nullable enum abstract covers its values but need
+  not match `null`, as one over a `Null<Enum>` need not: a null its arms leave throws "Null access" (Haxe 4.3.7 on
+  HashLink leaves it unmatched and goes on past the switch). A value pattern matches a nullable enum abstract argument
+  by name (`case Maybe(A):`), and naming every value there covers the constructor, as naming every constructor does.
 - A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
   and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
   default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`
   does on HashLink.
-- `null` in a switch over enums follows Haxe's matcher: the value the switch decides on first need not match `null` (a
-  null there throws "Null access"), but a `Null<Enum>` or `Null<Bool>` decided on below it must, by `case null` or a
+- `null` in a switch follows Haxe's matcher: the value the switch decides on first need not match `null` (a null
+  there throws "Null access"), but a `Null<Enum>`, `Null<Bool>` or nullable closed enum abstract decided on below it
+  must (Haxe 4.3.7 fails with `Not_found` naming a missing one of the last kind; Haxeon reports it), by `case null` or a
   pattern that leaves it open: a constructor argument (`case Wait(null):` beside `Wait(Jump(_))` and `Wait(Return)`) or
   a tuple element matched under another element's constructor (`case [Move(_), null]:`). `E1021` names the missing case.
 - `@:noReturn` on a function or method declares that a call to it never returns: after `if (value == null) fail();`

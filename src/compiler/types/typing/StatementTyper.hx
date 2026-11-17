@@ -930,16 +930,23 @@ class StatementTyper {
 				fail("E1021", 'Bool switch is missing cases: ${missing.join(", ")}', span);
 		}
 		// A switch over a closed enum abstract covers every declared value, as one over an enum covers every constructor.
-		// Its implicit default throws, so a value outside the declared set fails at the switch rather than skipping it.
+		// Its implicit default throws, so a value outside the declared set fails at the switch rather than skipping it. As
+		// over an enum, a nullable subject need not match null: a null its arms leave throws "Null access".
 		var unmatchedEnumAbstract:Null<String> = null;
 		if (!hasDefault && !seenCases.exists("$catchall")) {
 			var values = bodyTyper.closedEnumAbstractValues(typedExpression.type);
 			if (values != null) {
-				var missing = [for (value in values) if (!seenCases.exists(value.key)) value.name];
+				var missing =
+					[for (value in values) if (value.key != "null" && !seenCases.exists(value.key)) value.name];
 				if (missing.length > 0)
 					fail("E1021", 'Enum abstract switch is missing values: ${missing.join(", ")}', span);
 				unmatchedEnumAbstract =
 					'Unmatched ${compiler.semantic.SemanticSignature.display(typedExpression.type)} value';
+				var nullArm = SwitchNullCoverage.nullAccessArm(typedExpression, seenCases, span);
+				if (nullArm != null) {
+					typedCases.push({arm: nullArm, statements: [TThrow(SwitchNullCoverage.nullAccess(span), span)]});
+					caseScopes.push(new Scope(scope));
+				}
 			}
 		}
 		var defaultScope = new Scope(scope),
