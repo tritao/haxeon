@@ -173,6 +173,7 @@ in_background run_case switch-shared-constructor-name 0
 in_background run_case tuple-switch-null-element 0
 in_background run_case recursive-generic-enum-nested-pattern 0
 in_background run_case exception-catch-wrapping 0
+in_background run_case switch-null-coverage 0
 in_background run_compile_failure type-error
 # Width subtyping between structures waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4):
 # a copy into the narrower record would break identity (`narrow == wide`). The three rejections below are Haxe's too.
@@ -182,6 +183,8 @@ in_background run_compile_failure anonymous-width-final-to-var
 in_background run_compile_failure anonymous-width-var-to-final
 in_background run_compile_failure generic-enum-constructor-mixed-arguments
 in_background run_compile_failure tuple-switch-missing-case
+in_background run_compile_failure tuple-switch-nested-null-missing
+in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure tuple-switch-pattern-length
 in_background run_compile_failure tuple-switch-binding
 in_background run_compile_failure switch-wrong-enum-pattern

@@ -14,6 +14,10 @@ The current subset includes:
   `Flags` combine their values, so their switches still need a default.
 - A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values; a switch over a
   nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
+- `null` in a switch over enums follows Haxe's matcher: the value the switch decides on first need not match `null` (a
+  null there throws "Null access"), but a `Null<Enum>` or `Null<Bool>` decided on below it must, by `case null` or a
+  pattern that leaves it open: a constructor argument (`case Wait(null):` beside `Wait(Jump(_))` and `Wait(Return)`) or
+  a tuple element matched under another element's constructor (`case [Move(_), null]:`). `E1021` names the missing case.
 - `@:noReturn` on a function or method declares that a call to it never returns: after `if (value == null) fail();`
   the value is known not to be null, and a function may end in such a call where a `return` would otherwise be due. The
   body must throw (or call another `@:noReturn` function) on every path and contain no `return`, and every override of a
@@ -131,8 +135,8 @@ Haxeon is stricter than Haxe only where Haxe's code would fail when it runs. Whe
 follows it, as with the scalar defaults of `Null<Int>` above (which follow Haxe's static targets; on JavaScript the
 value stays null), and a warning can point out a surprising case.
 
-- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`), and a
-  switch over a nullable enum handles `null`. Haxe reads through and throws "Null access" when the program runs.
+- References are null-safe: a field of a `Null<T>` is read only where a null check proves it present (`E1005`). Haxe
+  reads through and throws "Null access" when the program runs.
 - Map keys must be `Hashable` (above). The rule stays for structs, but Haxe's identity-keyed maps (`ObjectMap`, a class
   instance as key) have no Haxeon equivalent yet; one is planned.
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet

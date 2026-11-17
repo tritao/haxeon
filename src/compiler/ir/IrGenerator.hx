@@ -1100,7 +1100,9 @@ class IrGenerator {
 									exits.push(builder.currentBlock());
 							});
 						builder.select(defaultBlock);
-						if (!hasDefault && (isEnumType(expression.type) || tablePlan.catchAll >= 0))
+						if (!hasDefault && tablePlan.catchAll < 0 && isNullableEnumType(expression.type))
+							throwUnmatchedNull(builder);
+						else if (!hasDefault && (isEnumType(expression.type) || tablePlan.catchAll >= 0))
 							builder.markUnreachable();
 						else
 							lowerStatements(defaultBranch, builder, localTypes,
@@ -1216,8 +1218,8 @@ class IrGenerator {
 							checkBlock = nextBlock;
 						}
 						builder.select(checkBlock);
-						if (!hasDefault && tuple)
-							throwUnmatchedTupleElement(builder);
+						if (!hasDefault && (tuple || isNullableEnumType(expression.type) && !matchesEverything))
+							throwUnmatchedNull(builder);
 						else if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
 							builder.markUnreachable();
 						else
@@ -2778,7 +2780,9 @@ class IrGenerator {
 						});
 					var fallback = defaultExpression;
 					builder.select(fallbackBlock);
-					if (fallback == null)
+					if (fallback == null && tablePlan.catchAll < 0 && isNullableEnumType(subject.type))
+						throwUnmatchedNull(builder);
+					else if (fallback == null)
 						builder.markUnreachable();
 					else {
 						var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
@@ -2911,9 +2915,9 @@ class IrGenerator {
 						}
 					}
 					var fallback = defaultExpression;
-					if (fallback == null && tuple) {
+					if (fallback == null && (tuple || isNullableEnumType(subject.type))) {
 						builder.select(fallbackBlock);
-						throwUnmatchedTupleElement(builder);
+						throwUnmatchedNull(builder);
 					} else if (fallback != null) {
 						builder.select(fallbackBlock);
 						var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
@@ -3898,11 +3902,12 @@ class IrGenerator {
 	}
 
 	/**
-	 * Where a tuple switch without a default runs out of arms. Typing checked that the arms cover every tuple of non-null
-	 * values, so only a null element no arm matched gets here. Haxe's matcher reads that element's enum index, which
-	 * fails with a null access, so this throws the same.
+	 * Where a switch without a default over a nullable enum, or over a tuple, runs out of arms. Typing checked that the arms
+	 * cover every non-null value and every null below the subject (SwitchNullCoverage), so only a null subject, or a null
+	 * tuple element the decision starts from, gets here. Haxe's matcher reads its enum index, which fails with a null access,
+	 * so this throws the same.
 	 */
-	function throwUnmatchedTupleElement(builder:CfgBuilder):Void
+	function throwUnmatchedNull(builder:CfgBuilder):Void
 		builder.throwValue(builder.toDyn(builder.constString("Null access")));
 
 	static function tupleElementName(subjectName:String, index:Int):String

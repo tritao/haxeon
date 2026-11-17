@@ -1738,6 +1738,9 @@ class ExpressionTyper {
 		if (tupleTypes != null) {
 			var unmatched = typedDefault != null ? null : TupleSwitch.unmatched(session, bodyTyper, tupleTypes,
 				[for (typedCase in typedCases) typedCase.arm]);
+			if (unmatched == null && typedDefault == null)
+				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes,
+					[for (typedCase in typedCases) typedCase.arm]);
 			if (unmatched != null)
 				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
 		} else if (typedDefault == null && !BodyTyper.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
@@ -1760,8 +1763,14 @@ class ExpressionTyper {
 						&& !bodyTyper.enumCaseCovered(typedSubject.type, index, coverageCases))
 						missing.push(enumDecl.cases[index].name);
 			}
-			if (BodyTyper.isNullableEnum(typedSubject.type) && !seenCases.exists("null"))
-				missing.push("null");
+			// As in Haxe, the subject itself need not match null (it fails with a null access); a nullable payload below it
+			// must (SwitchNullCoverage).
+			if (missing.length == 0) {
+				var nullWitness = SwitchNullCoverage.witness(session, bodyTyper, typedSubject.type,
+					[for (typedCase in typedCases) typedCase.arm]);
+				if (nullWitness != null)
+					missing.push(nullWitness);
+			}
 			if (missing.length > 0)
 				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 		}

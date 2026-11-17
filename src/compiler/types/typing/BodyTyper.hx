@@ -2716,9 +2716,8 @@ class BodyTyper implements BodyTyping {
 		return values;
 	}
 
+	/** Whether `cases` cover every constructor. A null subject need not be matched: it fails with a null access, as in Haxe. */
 	public function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
-		if (isNullableEnum(type))
-			return false;
 		var enumName = enumName(type);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return false;
