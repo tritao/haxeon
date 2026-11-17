@@ -57,7 +57,18 @@ class GitSourceAcquirer implements SourceAcquirer {
 		var temporary = destination + '.checkout-${Std.int(Date.now().getTime())}';
 		if (FileSystem.exists(temporary))
 			throw 'Temporary Git checkout already exists: $temporary';
-		var cloneStatus = ProcessRunner.run("git", ["clone", "--no-checkout", url, temporary], parent, new Map());
+		// The checkout is named by a 64-character hash under the cache, and with Git's own object paths under it that passes
+		// Windows' 260-character limit from a moderately deep cache ("Filename too long"). core.longpaths, set in the new
+		// repository before it fetches, lets Git for Windows write longer paths; other Gits ignore it.
+		var cloneStatus = ProcessRunner.run("git", [
+			"clone",
+			"-c",
+			"core.longpaths=true",
+			"--no-checkout",
+			url,
+			temporary
+		], parent,
+			new Map());
 		if (cloneStatus != 0)
 			throw 'Could not clone Git dependency "$packageId" from $url';
 		var checkoutStatus = ProcessRunner.run("git", ["checkout", "--detach", revision], temporary, new Map());
