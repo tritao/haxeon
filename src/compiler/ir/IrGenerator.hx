@@ -761,32 +761,63 @@ class IrGenerator {
 					var exception = builder.catchValue(),
 						exceptionLocal = '$' + 'exception:${catchBlock}',
 						catchActive = false,
-						hasDynamicCatch = false;
+						catchesEveryValue = false;
 					var exceptionType:IrType = Dyn;
 					localTypes.set(exceptionLocal, exceptionType);
 					builder.store(exceptionLocal, exception);
+					// What the catches test, made once from the thrown value: haxe.Exception.caught(thrown) for catches of
+					// exceptions, and the value it unwraps to for catches of other types (TypedCatchSubject).
+					var caughtLocal = '$' + 'exception-caught:${catchBlock}',
+						unwrappedLocal = '$' + 'exception-unwrapped:${catchBlock}',
+						madeCaught = false,
+						madeUnwrapped = false;
+					for (catchClause in catches)
+						switch catchClause.subject {
+							case Caught if (!madeCaught):
+								madeCaught = true;
+								localTypes.set(caughtLocal, Dyn);
+								builder.store(caughtLocal,
+									builder.toDyn(builder.call(RuntimeType.EXCEPTION_CAUGHT,
+									[builder.load(exceptionLocal, Dyn)],
+									lowerType(TInstance(NominalKind.Class, RuntimeType.EXCEPTION, [])))));
+							case Unwrapped if (!madeUnwrapped):
+								madeUnwrapped = true;
+								localTypes.set(unwrappedLocal, Dyn);
+								builder.store(unwrappedLocal,
+									builder.call(RuntimeType.EXCEPTION_CAUGHT_VALUE,
+									[builder.load(exceptionLocal, Dyn)], Dyn));
+							default:
+						}
 					for (i in 0...catches.length) {
 						var catchClause = catches[i],
 							catchIrType = lowerType(catchClause.type),
-							nextDispatch:Null<CfgBlock> = null;
-						if ((switch (catchClause.type) {
-							case TDynamic: false;
-							default: true;
-						})) {
+							subjectLocal = switch catchClause.subject {
+								case Thrown: exceptionLocal;
+								case Caught: caughtLocal;
+								case Unwrapped: unwrappedLocal;
+							},
+								nextDispatch:Null<CfgBlock> = null;
+						// `catch (e:Dynamic)` and `catch (e:haxe.Exception)` catch every value.
+						var catchesAll = switch catchClause.type {
+							case TDynamic: true;
+							case TInstance(_, name, _): name == RuntimeType.EXCEPTION;
+							default: false;
+						};
+						if (!catchesAll) {
 							var handlerBlock = builder.createBlock(),
 								mismatchBlock = builder.createBlock();
 							nextDispatch = mismatchBlock;
 							builder.branch(builder.call("__exception_matches", [
-								builder.load(exceptionLocal, Dyn),
+								builder.load(subjectLocal, Dyn),
 								builder.typeValue(catchIrType)
 							], Bool),
 								handlerBlock, mismatchBlock);
 							builder.select(handlerBlock);
 						} else
-							hasDynamicCatch = true;
+							catchesEveryValue = true;
 						localTypes.set(catchClause.name, catchIrType);
 						builder.debugLocal(catchClause.name, catchClause.span, catchClause.span.end);
-						var caught = builder.load(exceptionLocal, Dyn);
+						var caught = builder.load(subjectLocal, Dyn);
 						initializeLocal(catchClause.name, (switch (catchClause.type) {
 							case TDynamic: true;
 							default: false;
@@ -796,10 +827,11 @@ class IrGenerator {
 							catchActive = true;
 							builder.jump(afterBlock);
 						}
-						if (nextDispatch != null)
-							builder.select(nextDispatch);
+						if (nextDispatch == null)
+							break;
+						builder.select(nextDispatch);
 					}
-					if (!hasDynamicCatch && !builder.isTerminated())
+					if (!catchesEveryValue && !builder.isTerminated())
 						builder.rethrowValue(builder.load(exceptionLocal, Dyn));
 					builder.select(afterBlock);
 					if (!tryActive && !catchActive)

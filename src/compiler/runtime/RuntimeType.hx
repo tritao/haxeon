@@ -14,6 +14,15 @@ import compiler.types.Type.NominalKind;
 class RuntimeType {
 	public static inline final SPECIALIZED_MAP = "haxeon.collections.HashMap";
 
+	/** The class whose statics turn a thrown value into what a catch clause tests (`TypedCatchSubject`). */
+	public static inline final EXCEPTION = "haxe.Exception";
+
+	/** `haxe.Exception.caught(value)`: the thrown exception, or a `haxe.ValueException` wrapping any other value. */
+	public static inline final EXCEPTION_CAUGHT = "haxe.Exception.caught";
+
+	/** `haxe.Exception.caughtValue(value)`: what `caught(value).unwrap()` gives, without wrapping a value that is no exception. */
+	public static inline final EXCEPTION_CAUGHT_VALUE = "haxe.Exception.caughtValue";
+
 	/** Nullary enum keys use their existing integer representation in the generic map. */
 	public static function specializedMapKey(key:CompilerType):CompilerType
 		return switch key {

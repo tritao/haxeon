@@ -4,6 +4,7 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.runtime.PlatformAbi;
+import compiler.runtime.RuntimeType;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstCatch;
 import compiler.syntax.Ast.AstStatement;
@@ -20,6 +21,7 @@ import compiler.types.IterationProtocol;
 import compiler.types.analysis.Scope;
 import compiler.types.analysis.Scope.LocalFunction;
 import compiler.types.TypedAst.TypedCatch;
+import compiler.types.TypedAst.TypedCatchSubject;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchBinding;
@@ -615,9 +617,11 @@ class StatementTyper {
 			catchScopes.push(catchScope);
 			catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
 			bodyTyper.bindCell(catchClause.name, catchClause.span, catchScope, loweredCatchType);
+			var subject = catchSubject(loweredCatchType);
 			typedCatches.push({
 				name: catchScope.requireId(catchClause.name),
 				type: loweredCatchType,
+				subject: subject,
 				statements: bodyTyper.typeStatements(catchClause.statements, catchScope, result),
 				span: catchClause.span
 			});
@@ -630,6 +634,19 @@ class StatementTyper {
 				continuing.push(catchScopes[i]);
 		scope.join(continuing);
 		return TTry(typedTry, typedCatches, span);
+	}
+
+	/**
+		What a catch of `type` tests: the thrown value for Dynamic, else what haxe.Exception's catch helpers make of it. A module
+		with a typed catch depends on haxe.Exception whenever the standard library has it (DependencyScanner); without one no
+		thrown value is an exception, so a catch of another type tests the thrown value itself.
+	**/
+	function catchSubject(type:CompilerType):TypedCatchSubject {
+		if (type.match(TDynamic))
+			return Thrown;
+		if (session.declarations.inheritance.project(type, RuntimeType.EXCEPTION) != null)
+			return Caught;
+		return session.declarations.classes.exists(RuntimeType.EXCEPTION) ? Unwrapped : Thrown;
 	}
 
 	public function typeIf(predicate:AstExpression, thenBranch:Array<AstStatement>, elseBranch:Array<AstStatement>,

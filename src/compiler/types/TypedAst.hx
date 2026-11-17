@@ -305,8 +305,30 @@ typedef TypedSwitchCoverageCase = {
 typedef TypedCatch = {
 	final name:String;
 	final type:CompilerType;
+	final subject:TypedCatchSubject;
 	final statements:Array<TypedStatement>;
 	final span:SourceSpan;
+}
+
+/**
+	The value a catch clause tests and binds, derived from the thrown value as Haxe's exception filter does on HashLink, where
+	`throw` throws a value as it is and only the catch wraps or unwraps it.
+**/
+enum TypedCatchSubject {
+	/** `catch (e:Dynamic)` binds the thrown value itself. */
+	Thrown;
+
+	/**
+		A catch of `haxe.Exception` or a subclass tests and binds `haxe.Exception.caught(thrown)`: the thrown exception, or a
+		`haxe.ValueException` wrapping any other value, so `catch (e:haxe.Exception)` catches `throw "x"`.
+	**/
+	Caught;
+
+	/**
+		A catch of any other type tests and binds `haxe.Exception.caught(thrown).unwrap()`: the thrown value, or the value a
+		thrown `haxe.ValueException` wraps, so `catch (e:String)` catches `throw new haxe.ValueException("x")`.
+	**/
+	Unwrapped;
 }
 
 /** Resolved enum-constructor signature. */

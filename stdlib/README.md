@@ -51,7 +51,10 @@ call site.
 
 The source exception subset provides `haxe.Exception`, `haxe.ValueException`,
 and `haxe.CallStack`. Exception objects retain messages, wrapped values, and
-previous-exception chains. Caught exception stacks resolve through HashLink's
+previous-exception chains. As on Haxe's HashLink target, `throw` throws a value
+as it is: `catch (e:haxe.Exception)` wraps a value that is no exception in a
+`haxe.ValueException`, a catch of another type tests the value a
+`ValueException` wraps, and `catch (e:Dynamic)` binds the thrown value. Caught exception stacks resolve through HashLink's
 native stack capture. Current-call snapshots remain empty.
 
 `EReg` accepts both `new EReg(pattern, options)` and Haxe regex-literal syntax.

@@ -41,6 +41,10 @@ class DependencyScanner {
 					scanStatement(x, dependencies, typeParameters);
 				for (catchClause in catches) {
 					scanAnnotation(catchClause.type, dependencies, typeParameters);
+					// A typed catch tests what haxe.Exception's catch helpers make of the thrown value (TypedCatchSubject),
+					// when the standard library has them.
+					if (!catchClause.type.match(NamedType("Dynamic")))
+						dependencies.set(OPTIONAL_PREFIX + compiler.runtime.RuntimeType.EXCEPTION, true);
 					for (x in catchClause.statements)
 						scanStatement(x, dependencies, typeParameters);
 				}

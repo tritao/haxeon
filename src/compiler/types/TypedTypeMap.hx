@@ -82,6 +82,7 @@ class TypedTypeMap {
 				{
 						name:caught.name,
 							type:map(caught.type),
+							subject:caught.subject,
 							statements:statements(caught.statements),
 							span:caught.span
 					}], span);
