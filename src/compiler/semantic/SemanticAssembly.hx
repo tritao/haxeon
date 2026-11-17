@@ -29,6 +29,9 @@ typedef SemanticAssemblyResult = {
 	final invalidations:Array<InvalidatedArtifact>;
 	final entryPoint:String;
 
+	/** The canonical names of the declarations whose type is inferred from their own body or initializer. */
+	final inferredDeclarations:Map<String, Bool>;
+
 	/** The purity and no-return answers the invalidation was decided against, for the typer to use as they are. */
 	final facts:ProgramFacts;
 
@@ -71,6 +74,10 @@ class SemanticAssembly {
 			aliasesByModule:Map<String, Array<{sourceName:String, declarationName:String}>> = [],
 			visibleAliasesByPackage:Map<String, Map<String, String>> = [],
 			enumCasesByType:Map<String, Array<String>> = [];
+		// The declarations whose type is inferred from their own body or initializer, and each class's such fields.
+		var inferredDeclarations:Map<String, Bool> = [],
+			inferredFieldsByClass:Map<String, Array<String>> = [],
+			inferredInstanceFields:Map<String, String> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;
@@ -96,6 +103,8 @@ class SemanticAssembly {
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.classes)
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
+			collectInferredDeclarations(program, moduleName, entryModule, inferredDeclarations, inferredFieldsByClass,
+				inferredInstanceFields);
 		}
 		// Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"). They are attached to each module's
 		// table as shared layers instead of being copied into it.
@@ -488,6 +497,7 @@ class SemanticAssembly {
 							classDeclarations, classAliases,
 							enumDeclarations, enumAbstractDeclarations),
 							classAliases, classDecl.typeParameters),
+						typeInferred: field.type == null ? true : null,
 						initializer: initializer,
 						readAccess: field.readAccess,
 						writeAccess: field.writeAccess,
@@ -728,7 +738,9 @@ class SemanticAssembly {
 		}
 		for (name in bodyChanged.keys())
 			invalidate(invalid, invalidationReasons, name, BodyChanged, name);
-		var reverseBodyDependencies:Map<String, Array<String>> = [];
+		var reverseBodyDependencies:Map<String, Array<String>> = [],
+			reverseDeclarationTypeReads:Map<String, Array<String>> = [],
+			reverseInitializerCalls:Map<String, Array<String>> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
 				continue;
@@ -742,7 +754,12 @@ class SemanticAssembly {
 							reverseBodyDependencies.set(dependency.targetId, dependents);
 						}
 						dependents.push(owner);
-					}
+					} else if (dependency.kind == SemanticDependencyKind.DeclarationType)
+						addReverseCall(reverseDeclarationTypeReads, dependency.target, owner);
+					else if (dependency.kind == SemanticDependencyKind.Initializer
+						&& inferredDeclarations.exists(owner))
+						addReverseCall(reverseInitializerCalls,
+							dependency.targetId == null ? dependency.target : dependency.targetId, owner);
 		}
 		// Before typing, `gate.worst()` only names the local `gate`, so the syntactic dependencies above cannot tell that a
 		// function calls `Gate.worst`. Typing can: it records the callee of every call against the function being typed (see
@@ -774,7 +791,7 @@ class SemanticAssembly {
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in invalid.keys())
-			if (helperOrigins.exists(name))
+			if (helperOrigins.exists(name) || inferredDeclarations.exists(name))
 				work.push(name);
 		for (name in bodyChanged.keys())
 			if (genericOrigins.exists(name)) {
@@ -800,6 +817,31 @@ class SemanticAssembly {
 			else if (!invalid.exists(changed))
 				invalidate(invalid, invalidationReasons, changed, DependencySignature, changed);
 			var changedId = context.state.semanticWorkspace.resolveSymbolId(changed);
+			// The coarse rule of lazy declaration typing (`LAZY_DECLARATION_TYPING.md`, "Invalidation"): a declaration whose type is
+			// inferred and that is typed again for any reason may get another type, so its signature counts as changed, and the
+			// readers of its type are typed again in turn.
+			if (!changedSignatures.exists(changed) && inferredDeclarations.exists(changed)) {
+				changedSignatures.set(changed, true);
+				var constructor = inferredInstanceFields.get(changed);
+				if (constructor != null && !invalid.exists(constructor)) {
+					work.push(constructor);
+					invalidate(invalid, invalidationReasons, constructor, DependencySignature, changed, changedId,
+						Std.string(SemanticDependencyKind.Initializer));
+				}
+			}
+			// A class's field initializers are one unit (`Class.__init`): what it read can change the type of each of the class's
+			// unannotated fields.
+			var initializerOwner = initializerClass(changed);
+			if (initializerOwner != null) {
+				var fields = inferredFieldsByClass.get(initializerOwner);
+				if (fields != null)
+					for (field in fields)
+						if (!invalid.exists(field)) {
+							work.push(field);
+							invalidate(invalid, invalidationReasons, field, DependencySignature, changed, changedId,
+								Std.string(SemanticDependencyKind.DeclarationType));
+						}
+			}
 			var helperOrigin = helperOrigins.get(changed);
 			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
 				work.push(helperOrigin);
@@ -815,6 +857,29 @@ class SemanticAssembly {
 							Std.string(compiler.modules.ModuleState.SemanticDependencyKind.Body));
 					}
 				}
+			if (changedSignatures.exists(changed)) {
+				var readers = reverseDeclarationTypeReads.get(changed);
+				if (readers != null)
+					for (reader in readers) {
+						var owner = enclosingFunction(reader);
+						if (!invalid.exists(owner)) {
+							work.push(owner);
+							invalidate(invalid, invalidationReasons, owner, DependencySignature, changed, changedId,
+								Std.string(SemanticDependencyKind.DeclarationType));
+						}
+					}
+				// A field initializer is typed with its class in every build, but its field's type is inferred from what it calls.
+				for (key in (changedId == null ? [changed] : [changed, changedId])) {
+					var fields = reverseInitializerCalls.get(key);
+					if (fields != null)
+						for (field in fields)
+							if (!invalid.exists(field)) {
+								work.push(field);
+								invalidate(invalid, invalidationReasons, field, DependencySignature, changed, changedId,
+									Std.string(SemanticDependencyKind.Initializer));
+							}
+				}
+			}
 			if (changedSignatures.exists(changed) && reverseTypedCalls.exists(changed))
 				for (caller in reverseTypedCalls.get(changed))
 					if (!invalid.exists(caller)) {
@@ -900,6 +965,7 @@ class SemanticAssembly {
 			selected: selected,
 			invalidations: orderedInvalidations(invalidationReasons),
 			entryPoint: entryPoint,
+			inferredDeclarations: inferredDeclarations,
 			facts: {
 				pure: freshInferredPure,
 				noReturn: freshNoReturn
@@ -986,6 +1052,49 @@ class SemanticAssembly {
 	 * A lambda is retyped with the function it is written in, so a dependency recorded on the lambda invalidates that function.
 	 * Lambda names read `$lambda:<enclosing>:<id>`, and the enclosing name can itself be a generic specialization.
 	 */
+	/** The class whose field initializers `unit` is (`Class.__init`), or null for any other unit. */
+	static function initializerClass(unit:String):Null<String>
+		return StringTools.endsWith(unit, INITIALIZER_SUFFIX) ? unit.substr(0,
+			unit.length - INITIALIZER_SUFFIX.length) : null;
+
+	static inline var INITIALIZER_SUFFIX = ".__init";
+
+	/**
+	 * The canonical names of the declarations of `program` whose type is inferred from their own body or initializer: a field
+	 * without a type, and a function without a result type or with an argument without one. Each class's such fields are also
+	 * listed under the class, and each such instance field names the constructor that holds its initializer.
+	 */
+	static function collectInferredDeclarations(program:AstProgram, moduleName:String, entryModule:String,
+			declarations:Map<String, Bool>, fieldsByClass:Map<String, Array<String>>,
+			instanceFields:Map<String, String>):Void {
+		for (fn in program.functions)
+			if (AstFunctions.leavesSignatureToInference(fn))
+				declarations.set(moduleName == entryModule && fn.name == "main" ? "main" : moduleName + "." + fn.name,
+					true);
+		for (classDecl in program.classes) {
+			var className = ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name),
+				fields:Array<String> = [];
+			for (field in classDecl.fields)
+				if (field.type == null) {
+					declarations.set(className + "." + field.name, true);
+					fields.push(className + "." + field.name);
+					if (!field.isStatic)
+						instanceFields.set(className + "." + field.name, className + ".new");
+				}
+			if (fields.length > 0)
+				fieldsByClass.set(className, fields);
+			for (method in classDecl.methods)
+				if (AstFunctions.leavesSignatureToInference(method))
+					declarations.set(className + "." + method.name, true);
+		}
+		for (abstractDecl in program.abstracts) {
+			var abstractName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, abstractDecl.name);
+			for (method in abstractDecl.methods)
+				if (AstFunctions.leavesSignatureToInference(method))
+					declarations.set(abstractName + "." + method.name, true);
+		}
+	}
+
 	static function enclosingFunction(name:String):String {
 		name = LambdaName.outermost(name);
 		if (StringTools.startsWith(name, "$generic:")) {

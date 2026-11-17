@@ -30,6 +30,12 @@ class UnitRecords {
 	/** Constants substituted into each typed body, including its omitted call arguments. */
 	public final inlineConstantDependencies:Map<String, Map<String, Bool>> = [];
 
+	/**
+	 * The unannotated declarations whose inferred type each unit read (through `DeclarationTypes`), keyed by that unit's name. They
+	 * become the unit's `DeclarationType` edges: an edit that may change one of those types retypes the unit.
+	 */
+	public final declarationTypeReads:Map<String, Map<String, Bool>> = [];
+
 	/** Source snapshots copied into callers when omitted arguments use declaration syntax. */
 	public final defaultArgumentSources:Map<String, Map<String, SourceFile>> = [];
 
@@ -57,6 +63,25 @@ class UnitRecords {
 
 	public function recordKeyPathUse(user:String, literal:String):Void
 		mark(keyPathUses, user, literal);
+
+	/** The reads of the reader recorded last: a body reads many declaration types in a row. */
+	var lastReader:Null<String>;
+
+	var lastReads:Null<Map<String, Bool>>;
+
+	public function recordDeclarationTypeRead(reader:String, declaration:String):Void {
+		var reads = lastReader == reader ? lastReads : null;
+		if (reads == null) {
+			reads = declarationTypeReads.get(reader);
+			if (reads == null) {
+				reads = [];
+				declarationTypeReads.set(reader, reads);
+			}
+			lastReader = reader;
+			lastReads = reads;
+		}
+		reads.set(declaration, true);
+	}
 
 	public function recordInlineConstantDependency(caller:String, constant:String):Void
 		mark(inlineConstantDependencies, caller, constant);
@@ -91,6 +116,7 @@ class UnitRecords {
 		mergeQueries(noReturnQueries, target.noReturnQueries);
 		mergeQueries(keyPathUses, target.keyPathUses);
 		mergeQueries(inlineConstantDependencies, target.inlineConstantDependencies);
+		mergeQueries(declarationTypeReads, target.declarationTypeReads);
 		for (caller => sources in defaultArgumentSources) {
 			var merged = target.defaultArgumentSources.get(caller);
 			if (merged == null) {

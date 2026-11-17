@@ -63,7 +63,9 @@ signatures of methods an object dispatches to (see "Changed signatures" below).
 An edit that changes a function's signature, such as a parameter added to a constructor or a static function, patches.
 It is the old function removed and a new one added under the same name: the assembler moves the old function out of
 its slot under a retired name (`<name>~retired<revision>`, `RetiredName.movedFunction`,
-`HlModuleAssembler.moveChangedSignatures`), and the function takes a new slot with a new stable ID.
+`HlModuleAssembler.moveChangedSignatures`), and the function takes a new slot with a new stable ID. An edit to the body of
+a function without a written result type, or to the initializer of a field without a written type, can change the
+declaration's inferred type, with the same consequences as an edited annotation.
 
 - **Direct callers** are compiled again in the same patch, wherever they are: the assembler finds every function whose
   lowered code calls, or makes a closure of, the old slot (`HlModuleAssembler.callersOfMoved`), callers in files the edit

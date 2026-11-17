@@ -59,4 +59,20 @@ class AstFunctions {
 	public static inline function withResult(fn:AstFunction, result:AstType):AstFunction
 		return copy(fn, fn.name, fn.isStatic, fn.metadata, fn.typeParameters, fn.typeConstraints, fn.arguments, result,
 			fn.statements, fn.span);
+
+	/** Whether the source leaves part of `fn`'s signature to inference: its result or an argument has no type. */
+	public static function leavesSignatureToInference(fn:AstFunction):Bool {
+		if (isInferred(fn.result))
+			return true;
+		for (argument in fn.arguments)
+			if (isInferred(argument.type))
+				return true;
+		return false;
+	}
+
+	public static function isInferred(type:AstType):Bool
+		return switch type {
+			case InferredType: true;
+			default: false;
+		};
 }

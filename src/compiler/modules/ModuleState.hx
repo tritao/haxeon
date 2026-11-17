@@ -16,6 +16,12 @@ enum abstract SemanticDependencyKind(String) {
 	var Layout = "layout";
 	var Initializer = "initializer";
 	var InlineConstant = "inline-constant";
+
+	/**
+	 * The owner read the inferred type of an unannotated declaration (its field type or its signature), so it is typed against
+	 * that type: when the declaration's body or initializer changes, so may the type (`LAZY_DECLARATION_TYPING.md`, "Invalidation").
+	 */
+	var DeclarationType = "declaration-type";
 }
 
 /** Dependency edge from one declaration artifact to another declaration. */
@@ -68,6 +74,13 @@ class ModuleState {
 	public var staticInitializerFingerprints:Map<String, String> = [];
 	public var instanceInitializerFingerprints:Map<String, String> = [];
 	public var bodyFingerprints:Map<String, String> = [];
+
+	/**
+	 * The type each unannotated declaration of the module was typed with when it was last typed, spelled by `SemanticSignature`: the
+	 * recorded answer that the readers of its type (its `DeclarationType` edges) were typed against. `--check-reuse` checks that
+	 * a declaration whose type changed had every such reader typed again.
+	 */
+	public var declarationTypeDigests:Map<String, String> = [];
 
 	/**
 	 * Typing warnings by the source function or field initializer that raised them (see TypingWarnings). A body typed again
@@ -188,6 +201,7 @@ class ModuleState {
 		result.staticInitializerFingerprints = copyMap(staticInitializerFingerprints);
 		result.instanceInitializerFingerprints = copyMap(instanceInitializerFingerprints);
 		result.bodyFingerprints = copyMap(bodyFingerprints);
+		result.declarationTypeDigests = copyMap(declarationTypeDigests);
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
 		result.purityQueries = copyNestedMap(purityQueries);

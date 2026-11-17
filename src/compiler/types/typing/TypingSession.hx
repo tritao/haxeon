@@ -301,7 +301,8 @@ class TypingSession {
 
 		declarations = semantic.declarations;
 		// Every reader of a declaration's type asks the program's table from here on.
-		declarations.bindTypes(new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType));
+		declarations.bindTypes(new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType,
+			recordDeclarationTypeRead));
 		relations = semantic.relations;
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;
@@ -359,6 +360,13 @@ class TypingSession {
 		if (caller != "")
 			output.records.recordPurity(caller, name, answer);
 		return answer;
+	}
+
+	/** Records that the body being typed read the inferred type of the declaration `key` (see `DeclarationTypeTable`). */
+	public function recordDeclarationTypeRead(key:String):Void {
+		var reader = currentContext.name;
+		if (reader != "")
+			output.records.recordDeclarationTypeRead(reader, key);
 	}
 
 	/** A value method can have global effects without writing its receiver. */

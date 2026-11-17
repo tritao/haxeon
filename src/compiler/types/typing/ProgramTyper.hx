@@ -493,6 +493,8 @@ class ProgramTyper {
 			runtimeDependencies: typedRuntimeDependencies,
 			purityQueries: session.programOutput.records.purityQueries,
 			inlineConstantDependencies: session.programOutput.records.inlineConstantDependencies,
+			declarationTypeReads: session.programOutput.records.declarationTypeReads,
+			typedUnits: session.programOutput.records.typedUnits,
 			defaultArgumentSources: session.programOutput.records.defaultArgumentSources,
 			noReturnQueries: session.programOutput.records.noReturnQueries,
 			keyPathUses: session.programOutput.records.keyPathUses,

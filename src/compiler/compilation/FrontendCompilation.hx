@@ -23,6 +23,7 @@ import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticAssembly;
 import compiler.semantic.SemanticAssembly.SemanticAssemblyResult;
+import compiler.semantic.SemanticSignature;
 import compiler.core.CancellationToken;
 import compiler.semantic.SemanticProgram;
 import compiler.types.Typer;
@@ -144,6 +145,8 @@ private class FrontendBuild {
 	public var noReturnQueries:Map<String, Map<String, Bool>>;
 	public var keyPathUses:Map<String, Map<String, Bool>>;
 	public var inlineConstantDependencies:Map<String, Map<String, Bool>>;
+	public var declarationTypeReads:Map<String, Map<String, Bool>>;
+	public var typedUnits:Map<String, Bool>;
 	public var defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;
 
 	// Publication of the typed program, pruning and IR generation.
@@ -413,6 +416,8 @@ class FrontendCompilation {
 			build.noReturnQueries = typedResult.noReturnQueries;
 			build.keyPathUses = typedResult.keyPathUses;
 			build.inlineConstantDependencies = typedResult.inlineConstantDependencies;
+			build.declarationTypeReads = typedResult.declarationTypeReads;
+			build.typedUnits = typedResult.typedUnits;
 			build.defaultArgumentSources = typedResult.defaultArgumentSources;
 			// A module that changes a representation is in the program before anything is typed (see `seedRepresentationModules`),
 			// so typing cannot have used a representation without it. If one is reported missing, a module was left out of the
@@ -660,7 +665,8 @@ class FrontendCompilation {
 			if (dependencies != null)
 				state.semanticDependencies.set(fn.name, [
 					for (dependency in dependencies)
-						if (dependency.kind != SemanticDependencyKind.InlineConstant) dependency
+						if (dependency.kind != SemanticDependencyKind.InlineConstant
+						&& dependency.kind != SemanticDependencyKind.DeclarationType) dependency
 				]);
 			var constants = inlineConstantDependencies.get(fn.name);
 			if (constants != null)
@@ -668,6 +674,7 @@ class FrontendCompilation {
 					SemanticDependencyCollector.addDependency(state.semanticDependencies, fn.name,
 						SemanticDependencyKind.InlineConstant, target,
 						context.state.semanticWorkspace.resolveSymbolId(target));
+			addDeclarationTypeEdges(context, state, fn.name, build.declarationTypeReads.get(fn.name));
 			var sourceRecord = defaultArgumentSources.get(fn.name);
 			if (sourceRecord != null)
 				state.defaultArgumentSources.set(fn.name, sourceRecord);
@@ -708,10 +715,104 @@ class FrontendCompilation {
 			} else
 				state.pendingIrFunctions.set(fn.name, true);
 		}
+		publishInitializerReads(build);
+		publishDeclarationTypeDigests(build);
 		var objectCache = context.state.objectCache;
 		for (object in build.currentObjects)
 			objectCache.set(object.name, object);
 		build.allocationAfterFunctions = AllocationMeter.sample();
+	}
+
+	/** Replaces the `DeclarationType` edges of `owner`, which was just typed, with the declaration types it read. */
+	static function addDeclarationTypeEdges(context:CompilationContext, state:ModuleState, owner:String,
+			reads:Null<Map<String, Bool>>):Void {
+		var dependencies = state.semanticDependencies.get(owner);
+		if (dependencies != null)
+			for (dependency in dependencies)
+				if (dependency.kind == SemanticDependencyKind.DeclarationType) {
+					state.semanticDependencies.set(owner, [
+						for (dependency in dependencies)
+							if (dependency.kind != SemanticDependencyKind.DeclarationType) dependency
+					]);
+					break;
+				}
+		if (reads != null)
+			for (target in reads.keys())
+				SemanticDependencyCollector.addDependency(state.semanticDependencies, owner,
+					SemanticDependencyKind.DeclarationType, target,
+					context.state.semanticWorkspace.resolveSymbolId(target));
+	}
+
+	/**
+	 * The field initializers of a class are one unit (`Class.__init`) and no typed function: what each typed one read is published
+	 * under that name, in the module of its class.
+	 */
+	static function publishInitializerReads(build:FrontendBuild):Void {
+		var owners = build.semanticAssembly.owners;
+		for (unit in build.typedUnits.keys()) {
+			var module = initializerModule(unit, owners);
+			if (module == null)
+				continue;
+			var state = build.context.state.modules.get(module);
+			if (state == null)
+				continue;
+			var reads = build.declarationTypeReads.get(unit);
+			if (reads == null && !state.semanticDependencies.exists(unit))
+				continue;
+			addDeclarationTypeEdges(build.context, build.context.state.writableState(module, build.rollbackModules),
+				unit,
+				reads);
+		}
+	}
+
+	/**
+	 * Each unannotated declaration typed in this build publishes the type it was typed with (`ModuleState.declarationTypeDigests`).
+	 * With `--check-reuse`, a declaration whose type differs from the one published before must have had every reader recorded
+	 * against it typed again: a reader that kept its body was typed against the old type, which a fresh build would not do.
+	 */
+	static function publishDeclarationTypeDigests(build:FrontendBuild):Void {
+		var context = build.context,
+			owners = build.semanticAssembly.owners,
+			inferred = build.semanticAssembly.inferredDeclarations,
+			changed:Array<{declaration:String, before:String, after:String}> = [];
+		function publish(module:Null<String>, declaration:String, type:CompilerType):Void {
+			if (module == null)
+				return;
+			var state = context.state.modules.get(module);
+			if (state == null)
+				return;
+			var digest = SemanticSignature.type(type),
+				before = state.declarationTypeDigests.get(declaration);
+			if (before == digest)
+				return;
+			if (before != null)
+				changed.push({declaration: declaration, before: before, after: digest});
+			context.state.writableState(module, build.rollbackModules).declarationTypeDigests.set(declaration, digest);
+		}
+		for (fn in build.typedNew.functions)
+			if (inferred.exists(fn.name))
+				publish(owners.get(fn.name), fn.name,
+					TFunction([for (argument in fn.arguments) argument.type], fn.result, []));
+		for (classDecl in build.typedNew.classes)
+			for (field in classDecl.fields)
+				if (inferred.exists(classDecl.name + "." + field.name))
+					publish(owners.get(classDecl.name + ".new"), classDecl.name + "." + field.name, field.type);
+		if (!context.options.checkReuse || changed.length == 0)
+			return;
+		for (change in changed)
+			for (module in build.names) {
+				var state = context.state.modules.get(module);
+				if (state == null)
+					continue;
+				for (owner => dependencies in state.semanticDependencies)
+					for (dependency in dependencies)
+						if (dependency.kind == SemanticDependencyKind.DeclarationType
+							&& dependency.target == change.declaration
+							&& !build.typedByName.exists(owner)
+							&& !build.typedUnits.exists(owner))
+							throw '--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
+								+ 'but "$owner", which read it, kept the body typed against the old one';
+			}
 	}
 
 	static function publishIndex(build:FrontendBuild):Void {

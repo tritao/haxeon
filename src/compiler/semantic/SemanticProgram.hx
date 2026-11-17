@@ -34,6 +34,13 @@ class SemanticProgram {
 	public final lifecycle:DeclarationLifecycle;
 	public final lifecycleMetrics:SemanticLifecycleMetrics;
 
+	/**
+	 * The functions whose signature the source leaves, in part, to inference (a result or an argument without a type), by their
+	 * name in `signatures`. `SignatureInference` fills those types in before anything is typed, so they no longer show in
+	 * `program`; a read of one is recorded for invalidation (`DeclarationTypeTable`).
+	 */
+	public final inferredSignatures:Map<String, Bool>;
+
 	public static function analyze(program:AstProgram):SemanticProgram {
 		return analyzeThrough(program, SignatureTyped);
 	}
@@ -43,6 +50,7 @@ class SemanticProgram {
 		if ((through:Int) > (SignatureTyped:Int))
 			throw "Semantic analysis cannot type bodies or finalize without Typer";
 		var started = Sys.time() * 1000.0;
+		var inferredSignatures = inferredSignaturesOf(program);
 		var inferred = SignatureInference.inferProgram(program);
 		var declarations = DeclarationIndex.registered(inferred),
 			declaredAt = Sys.time() * 1000.0,
@@ -60,7 +68,7 @@ class SemanticProgram {
 			lifecycle.advanceAll(SignatureTyped);
 			signaturesAt = Sys.time() * 1000.0;
 		}
-		return new SemanticProgram(inferred, declarations, null, null, null, lifecycle, {
+		return new SemanticProgram(inferred, inferredSignatures, declarations, null, null, null, lifecycle, {
 			declarationMs: declaredAt - started,
 			shapeConnectionMs: shapesAt - declaredAt,
 			signatureTypingMs: signaturesAt - shapesAt
@@ -146,7 +154,8 @@ class SemanticProgram {
 				if (selected.exists(name))
 					nextSignatures.set(name, withOwnerTypeParameters(method, decl.typeParameters));
 			}
-		return new SemanticProgram(nextProgram, declarations, nextSignatures, methodInfo, relations,
+		// Only explicitly typed bodies changed, so the functions left to inference are the same ones.
+		return new SemanticProgram(nextProgram, inferredSignatures, declarations, nextSignatures, methodInfo, relations,
 			new DeclarationLifecycle(declarations, SignatureTyped), {
 				declarationMs: 0.0,
 				shapeConnectionMs: 0.0,
@@ -164,6 +173,7 @@ class SemanticProgram {
 				isPublic: field.isPublic,
 				metadata: replacement.metadata,
 				type: field.type,
+				typeInferred: field.typeInferred,
 				initializer: replacement.initializer,
 				readAccess: field.readAccess,
 				writeAccess: field.writeAccess,
@@ -173,6 +183,22 @@ class SemanticProgram {
 				span: replacement.span
 			};
 		}];
+	}
+
+	static function inferredSignaturesOf(program:AstProgram):Map<String, Bool> {
+		var result:Map<String, Bool> = [];
+		for (fn in program.functions)
+			if (AstFunctions.leavesSignatureToInference(fn))
+				result.set(fn.name, true);
+		for (decl in program.classes)
+			for (method in decl.methods)
+				if (AstFunctions.leavesSignatureToInference(method))
+					result.set(decl.name + "." + method.name, true);
+		for (decl in program.abstracts)
+			for (method in decl.methods)
+				if (AstFunctions.leavesSignatureToInference(method))
+					result.set(decl.name + "." + method.name, true);
+		return result;
 	}
 
 	static function copyWithMethods<T>(declaration:T, methods:Array<AstFunction>):T {
@@ -198,11 +224,13 @@ class SemanticProgram {
 			signature.result, body.statements, body.span);
 	}
 
-	function new(program:AstProgram, declarations:DeclarationIndex, ?preparedSignatures:Map<String, AstFunction>,
+	function new(program:AstProgram, inferredSignatures:Map<String, Bool>, declarations:DeclarationIndex,
+			?preparedSignatures:Map<String, AstFunction>,
 			?preparedMethodInfo:Map<String, SemanticMethodInfo>, ?preparedRelations:TypeRelations,
 			?preparedLifecycle:DeclarationLifecycle,
 			?preparedLifecycleMetrics:SemanticLifecycleMetrics) {
 		this.program = program;
+		this.inferredSignatures = inferredSignatures;
 		this.declarations = declarations;
 		relations = preparedRelations == null ? new TypeRelations(declarations) : preparedRelations;
 		lifecycle = preparedLifecycle == null ? new DeclarationLifecycle(declarations,

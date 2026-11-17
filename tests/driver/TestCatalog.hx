@@ -65,6 +65,7 @@ class TestCatalog {
 		"TypedMetadataMergeMain",
 		"WarmRebuildReuseMain",
 		"StructuralWarmEditMain",
+		"InferredTypeWarmEditMain",
 		"WasmBackendSessionMain",
 		"PackedValuePatchMain",
 		"IrVerifyMemoMain",

@@ -235,6 +235,10 @@ Two cases are missed already (read from the code, not reproduced):
    its edge is an `Initializer` edge owned by a field, which the structural queue does not re-enqueue, so readers of
    `y` elsewhere are not.
 
+Slice 2 reproduced both (`tests/compiler/InferredTypeWarmEditMain.hx`), and a third of the same kind:
+`static var a = Lib.f()` with `f` annotated, then `f`'s result annotation edited. `f`'s callers are found, but the
+initializer is typed with its class in every build and is no caller, so the readers of `a` were not.
+
 Lazy typing makes both common: every unannotated declaration's type becomes a function of other declarations' bodies.
 So invalidation must be in place before on-demand typing ships (slice 2, below).
 
@@ -261,6 +265,28 @@ Before typing, the change analyzer cannot know a declaration's new type. So:
   have changed with what it read. This makes the rule transitive and closes both missed cases.
 - The `Initializer` edge is kept for what it means today (callees of an initializer). The type dependency moves to the
   new edge.
+
+As built (slice 2):
+
+- The signature fingerprint of a function with an unannotated result or argument includes its body's text (not its line).
+  A method argument with neither a type nor a default can also be inferred from its class's other methods and fields, so
+  for one the whole class's text counts. An unannotated field's initializer edit marks the field's signature changed.
+- "Invalidated for any reason" is what makes a reader unannotated-and-changed: a declaration whose type is inferred and
+  which the work queue reaches by any edge (a typed call, a body edge, a structural edge, a `DeclarationType` edge) counts
+  as a changed signature. A class's initializer unit (`Class.__init`) that is reached stands for each unannotated field of
+  the class; an unannotated instance field also invalidates its class's constructor, which holds the initializer.
+- Signature changes also walk `Initializer` edges backwards to the unannotated fields whose initializer calls the changed
+  function: the initializer is typed with its class in every build, so nothing else finds it.
+- `DeclarationType` edges are published per typed function (`FrontendCompilation.publishFunctions`) and per typed
+  initializer unit, and survive a reparse of their module until the reader is typed again. Reads are keyed by
+  `DeclarationTypeTable.fieldKey` and `functionKey`; a closure or a specialization has no key and records nothing.
+  Argument and result reads record the same key: the coarse rule cannot tell which part an edit changed. Slice 6 can
+  record them apart, so that a result change does not retype readers of the arguments only.
+- Which declarations are unannotated: `AstField.typeInferred` (canonical fields carry `FieldInference`'s type until slice
+  3) and `SemanticProgram.inferredSignatures` (taken before `SignatureInference` fills the types in, until slice 4).
+- An unannotated argument whose default is a call or `new` is typed against the current body's methods (slice 1b), so its
+  entry is not yet a function of the declaration alone; none exists in the repository. Slice 4 closes it.
+- `--check-reuse` checks the digests: a declaration whose digest changed must have had every recorded reader typed again.
 
 This is correct but not minimal: editing an unannotated body retypes every reader, even when its type did not change.
 It is still cheaper than today, where such an edit discards the `SemanticProgram`. Once slice 5 removes

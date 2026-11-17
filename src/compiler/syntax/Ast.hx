@@ -63,6 +63,13 @@ typedef AstField = {
 	final ?isPublic:Bool;
 	final metadata:Array<AstMetadata>;
 	final type:Null<AstType>;
+
+	/**
+	 * The source gives the field no type: `type` is what SemanticAssembly inferred from the initializer, so a reader of it reads
+	 * an inferred type (`DeclarationTypes`, `SemanticDependencyKind.DeclarationType`).
+	 */
+	final ?typeInferred:Bool;
+
 	final initializer:Null<AstExpression>;
 	final readAccess:Null<AstFieldAccess>;
 	final writeAccess:Null<AstFieldAccess>;

@@ -183,6 +183,11 @@ class ModuleChangeAnalyzer {
 					continue;
 				var fieldName = className + "." + field.name,
 					initializer = sourceFingerprint(state, field.span);
+				// An unannotated field's type is its initializer's: an edit to it is an edit to the field's signature.
+				if (field.type == null
+					&& (field.isStatic ? state.staticInitializerFingerprints : state.instanceInitializerFingerprints)
+					.get(fieldName) != initializer)
+					signatureChanged.set(fieldName, true);
 				if (field.isStatic) {
 					staticInitializers.set(fieldName, initializer);
 					if (!state.staticInitializerFingerprints.exists(fieldName)
@@ -226,7 +231,8 @@ class ModuleChangeAnalyzer {
 			}
 		for (fn in ast.functions) {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
-			var signature = SemanticSignature.parsedFunction(fn, ast.aliases),
+			var signature = SemanticSignature.parsedFunction(fn, ast.aliases)
+				+ inferredFrom(state, fn, null),
 				body = sourceFingerprint(state, fn.span, fn.typeParameters != null && fn.typeParameters.length > 0);
 			signatures.set(fn.name, signature);
 			bodies.set(fn.name, body);
@@ -286,7 +292,8 @@ class ModuleChangeAnalyzer {
 			for (method in classDecl.methods) {
 				var localName = className + "." + method.name,
 					canonical = localName,
-					signature = SemanticSignature.parsedFunction(method, ast.aliases),
+					signature = SemanticSignature.parsedFunction(method, ast.aliases)
+						+ inferredFrom(state, method, classDecl.span),
 					body = sourceFingerprint(state,
 						method.span, classDecl.typeParameters.length > 0 || method.typeParameters != null
 						&& method.typeParameters.length > 0);
@@ -302,7 +309,8 @@ class ModuleChangeAnalyzer {
 			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name);
 			for (method in abstractDecl.methods) {
 				var localName = abstractName + "." + method.name,
-					signature = SemanticSignature.parsedFunction(method, ast.aliases),
+					signature = SemanticSignature.parsedFunction(method, ast.aliases)
+						+ inferredFrom(state, method, null),
 					body = sourceFingerprint(state,
 						method.span, abstractDecl.typeParameters.length > 0 || method.typeParameters != null
 						&& method.typeParameters.length > 0);
@@ -351,6 +359,29 @@ class ModuleChangeAnalyzer {
 		state.wireFieldFingerprints = analysis.wireFieldFingerprints;
 		state.staticInitializerFingerprints = analysis.staticInitializerFingerprints;
 		state.instanceInitializerFingerprints = analysis.instanceInitializerFingerprints;
+	}
+
+	/**
+	 * What an unannotated part of a function's signature is inferred from, as source text; empty for a fully annotated function.
+	 * Its result comes from its body, so the body is part of its signature: before typing, nothing tells whether an edit to the
+	 * body changed the inferred type, and the coarse rule (`LAZY_DECLARATION_TYPING.md`, "Invalidation") counts every such edit as
+	 * a signature change. A method's argument without a type or a default value can also be inferred from the calls its class's
+	 * other methods make and from the class's fields (`SignatureInference`), so for one the whole class's text counts. Only the
+	 * text counts, not its line, which is debug metadata of the body alone.
+	 */
+	static function inferredFrom(state:compiler.modules.ModuleState, fn:compiler.syntax.Ast.AstFunction,
+			classSpan:Null<compiler.core.Source.SourceSpan>):String {
+		var result = compiler.syntax.AstFunctions.isInferred(fn.result), argumentFromClass = false;
+		for (argument in fn.arguments)
+			if (compiler.syntax.AstFunctions.isInferred(argument.type)) {
+				result = true;
+				if (argument.defaultValue == null)
+					argumentFromClass = true;
+			}
+		if (!result)
+			return "";
+		var span = argumentFromClass && classSpan != null ? classSpan : fn.span;
+		return " inferred-from:" + state.source.slice(span.start, span.end);
 	}
 
 	static function fieldMetadataFingerprint(state:compiler.modules.ModuleState,
