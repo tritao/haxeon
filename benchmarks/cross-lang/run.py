@@ -9,7 +9,8 @@ hanabi1224/Programming-Language-Benchmarks (see NOTICE.md).
   ./benchmarks/cross-lang/run.py --langs haxeon,csharp --problems nbody --runs 10
   ./benchmarks/cross-lang/run.py --test-only          # build + verify outputs only
 
-Languages whose toolchain is missing are skipped, not failed.
+Languages whose toolchain is missing are skipped, not failed; a program that does not build or gives the wrong output
+makes the run exit 1, so `--test-only` checks the benchmark programs.
 Times are whole-process wall clock (startup included) plus peak RSS.
 
 Timed runs are pinned to one core (a P-core on hybrid CPUs) so results do not depend on where the scheduler places
@@ -211,6 +212,12 @@ def main():
     Path(a.json).write_text(json.dumps(dict(runs=a.runs, pinned_cpu=int(PIN[-1]) if PIN else None, load_before=load_before,
                                             load_after=load_after, results=results), indent=2))
     shutil.rmtree(tmp, ignore_errors=True)
+    # A missing toolchain is a skip; a program that does not build or gives the wrong output fails the run.
+    failed = [f"{row['problem']}/{row['lang']}" for row in results if row["status"] in ("build-fail", "fail")]
+    if failed:
+        print(f"FAIL: {', '.join(failed)}", file=sys.stderr)
+        return 1
+    return 0
 
 
 if __name__ == "__main__":
