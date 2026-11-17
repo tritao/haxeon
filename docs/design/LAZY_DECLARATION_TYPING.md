@@ -385,16 +385,17 @@ Warm-edit cases (`tests/compiler`, warm against fresh bytes, with `--check-reuse
 - live: an inferred result change patches with callers recompiled; an inferred static field type change reloads with
   `GlobalLayoutChanged`; an inferred instance field type change reloads with `object_field_type_changed`.
 
-## Decisions for the user
+## Decisions (taken by the user, 2026-11-18)
 
 1. **An open type at the end of a declaration's unit** (`[]`, `new Map()`, a lone `return null`, an unconstrained
-   argument). Proposed: an error asking for an annotation. The alternative is `Dynamic`, which Haxe gives only when no
-   later use fixes it, so it would silently give some programs `Dynamic` where Haxe gives a real type.
-2. **Arguments fixed only by call sites.** `SignatureInference` infers them today from callers in the same class; that is
-   a Haxeon rule, order-free, standing in for Haxe's "the first caller fixes it". Proposed: drop it with the rest of
-   `SignatureInference`, after the slice 4 census, and annotate what the census finds. The alternative is to keep it as a
-   declared rule of the query, which keeps a piece of syntactic inference alive.
-3. **Cycles.** The brief assumed Haxe fails on a cycle. It does not: it types the cycle as `Unknown` (`Dynamic`), or as a
-   real type when one member fixes it. Proposed: a cycle across units is an error anyway, since accepting it needs
-   either `Dynamic` or the members of the cycle typed as one unit. Typing a cycle as one unit (a strongly connected
-   component) is possible but costs complexity for a rare case.
+   argument) is an error asking for an annotation. The alternative was `Dynamic`, which Haxe gives only when no later
+   use fixes the type, so it would silently give some programs `Dynamic` where Haxe gives a real type. The error rejects
+   only programs whose type in Haxe depends on typing order.
+2. **Arguments fixed only by call sites** are no longer inferred. That inference goes with the rest of
+   `SignatureInference`, after the slice 4 census, and the arguments the census finds are annotated. Haxe does not infer
+   argument types from callers in other units. The alternative was to keep it as a declared rule of the query, which
+   would keep a piece of syntactic inference alive.
+3. **A cycle across units** is an error on the cycle's first member in declaration order, asking for one annotation.
+   Self-recursion works as in Haxe. Haxe does not fail on a cycle: it types the cycle as `Unknown` (`Dynamic`), or as a
+   real type when one member fixes it. Typing a cycle as one unit (a strongly connected component) was rejected as too
+   complex for a rare case.
