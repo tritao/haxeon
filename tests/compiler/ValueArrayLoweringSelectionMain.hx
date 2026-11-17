@@ -14,7 +14,12 @@ class ValueArrayLoweringSelectionMain {
 	 */
 	static inline final MAX_BYTES_PER_FUNCTION_PER_SHAPE = 128.0;
 
-	static inline final FUNCTIONS = 128;
+	/**
+	 * Enough unrelated functions that each measurement is far above the counter's granularity: with allocation buffers
+	 * hl.Gc.totalAllocated() counts a thread's reserved run of blocks (about 4 KB), not each object, and at 128 functions
+	 * one run moved the metadata ratio across its 1.25 bound (61016 against 65112 plain bytes, 78752 both times).
+	 */
+	static inline final FUNCTIONS = 512;
 
 	static function main():Void {
 		var one = overhead(1), eight = overhead(8);
