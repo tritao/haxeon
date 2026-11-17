@@ -56,6 +56,7 @@ class TestCatalog {
 		"TypingRecoveryMain",
 		"UnboundLocalsMain",
 		"NonExceptionThrowsMain",
+		"ExceptionPurityMain",
 		"MixedArrayLiteralMain",
 		"EnumTypedefConstructorMain",
 		"AbstractTypeDependencyMain",

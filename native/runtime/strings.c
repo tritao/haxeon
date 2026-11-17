@@ -484,10 +484,9 @@ HL_PRIM varray *HL_NAME(__exception_stack)( void ) {
 	return realtime_string_array(hl_exception_stack());
 }
 
-/* The symbols of the HashLink frames now on the stack, innermost first, as hl_exception_stack names the frames of a throw. */
-HL_PRIM varray *HL_NAME(__call_stack)( void ) {
-	void *frames[0x400];
-	int count = hl_setup.capture_stack == NULL ? 0 : hl_setup.capture_stack(frames, 0x400), size = 0;
+/* The symbols of `count` frame addresses, in order; a frame with no symbol is left out. */
+static varray *frame_symbols( void **frames, int count ) {
+	int size = 0;
 	varray *result = hl_alloc_array(hl_string_type, count);
 	vstring **target = hl_aptr(result, vstring *);
 	for( int i = 0; i < count; i++ ) {
@@ -499,4 +498,42 @@ HL_PRIM varray *HL_NAME(__call_stack)( void ) {
 	}
 	result->size = size;
 	return result;
+}
+
+/* The symbols of the HashLink frames now on the stack, innermost first, as hl_exception_stack names the frames of a throw. */
+HL_PRIM varray *HL_NAME(__call_stack)( void ) {
+	void *frames[0x400];
+	int count = hl_setup.capture_stack == NULL ? 0 : hl_setup.capture_stack(frames, 0x400);
+	return frame_symbols(frames, count);
+}
+
+/*
+ * A stack taken now and named later: haxe.Exception takes one each time it is made, and naming a frame resolves its symbol,
+ * which is most of the cost, so only a stack someone reads is named (__stack_frame_symbols). The block holds the frame count,
+ * then the frame addresses, innermost first.
+ */
+static vbyte *frames_copy( void **frames, int count ) {
+	void **block = (void**)hl_gc_alloc_noptr(sizeof(void*) * (count + 1));
+	block[0] = (void*)(int_val)count;
+	memcpy(block + 1, frames, sizeof(void*) * count);
+	return (vbyte*)block;
+}
+
+/* The HashLink frames now on the stack, unnamed. */
+HL_PRIM vbyte *HL_NAME(__call_stack_frames)( void ) {
+	void *frames[0x400];
+	int count = hl_setup.capture_stack == NULL ? 0 : hl_setup.capture_stack(frames, 0x400);
+	return frames_copy(frames, count);
+}
+
+/* The frames of the last throw, as hl_exception_stack reads them, unnamed. */
+HL_PRIM vbyte *HL_NAME(__exception_stack_frames)( void ) {
+	hl_thread_info *thread = hl_get_thread();
+	return frames_copy(thread->exc_stack_trace, thread->exc_stack_count);
+}
+
+/* The symbols of the frames __call_stack_frames or __exception_stack_frames took. */
+HL_PRIM varray *HL_NAME(__stack_frame_symbols)( vbyte *frames ) {
+	void **block = (void**)frames;
+	return frame_symbols(block + 1, (int)(int_val)block[0]);
 }

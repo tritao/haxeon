@@ -9,7 +9,7 @@ package haxe;
 **/
 class Exception {
 	public var message(default, null):String;
-	public var stack(default, null):CallStack;
+	public var stack(get, null):CallStack;
 	public var previous(default, null):Null<Exception>;
 	public var native(default, null):Dynamic;
 
@@ -27,17 +27,31 @@ class Exception {
 		return value;
 	}
 
-	public function new(message:String, ?previous:Exception, ?native:Dynamic) {
+	/**
+		The frames taken when this exception was made, until `stack` names them: the frames calling the constructor, or for an
+		exception made for a value already thrown (`caught`), the frames of that throw (`fromThrow`).
+	**/
+	var stackFrames:Null<CallStack.StackFrames>;
+
+	var fromThrow:Bool;
+
+	/** Making an exception changes nothing anyone can see: it takes the call stack, so construction keeps flow facts. */
+	@:pure public function new(message:String, ?previous:Exception, ?native:Dynamic) {
 		this.message = message;
 		this.previous = previous;
-		// An exception made for a value already thrown (`caught`) carries the stack of that throw.
-		if (native == null) {
-			this.native = this;
-			stack = CallStack.constructorStack();
-		} else {
-			this.native = native;
-			stack = CallStack.exceptionStack();
+		fromThrow = native != null;
+		this.native = native == null ? this : native;
+		stackFrames = CallStack.takeFrames(fromThrow);
+	}
+
+	/** Names the frames on the first read and keeps the stack: every read sees the same stack, so reading it changes nothing. */
+	@:pure function get_stack():CallStack {
+		var taken = stackFrames;
+		if (taken != null) {
+			stack = fromThrow ? CallStack.thrownStack(taken) : CallStack.constructorStack(taken);
+			stackFrames = null;
 		}
+		return stack;
 	}
 
 	public function unwrap():Dynamic

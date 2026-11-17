@@ -166,6 +166,12 @@ class PurityInference {
 		for (name => declaration in classes) {
 			var key = inference.freshConstructorKey(name), fn = signatures.get(name + ".new");
 			if (key == null || (fn != null && fn.isExtern == true)) continue;
+			// `@:pure` on a constructor says making one has no effect anyone can see (haxe.Exception's, which reads the
+			// call stack), so constructing it, or a subclass that adds none, keeps flow facts.
+			if (fn != null && PurityAnnotations.hasPureMetadata(fn.metadata)) {
+				dependencies.set(key, []);
+				continue;
+			}
 			var found = inference.constructorDependencies(fn, name, declaration);
 			if (found != null) dependencies.set(key, found);
 		}
@@ -270,13 +276,28 @@ class PurityInference {
 	/** Stable synthetic fact for construction, including unsupported types which cannot have a positive fact. */
 	public static function constructorFact(name:String):String return FRESH_CONSTRUCTOR + name;
 
-	/** Only analyze exact, non-generic declarations with no inherited initialization. */
+	/**
+	 * Only analyze exact, non-generic declarations whose inherited initialization is analyzed too: a subclass's construction
+	 * is fresh when its own constructor is and the base constructor its `super(...)` runs is (`freshBaseKey`).
+	 */
 	public function freshConstructorKey(name:String):Null<String> {
 		var declaration = classes.get(name);
-		if (declaration == null || declaration.isExtern == true || declaration.base != null
-			|| declaration.typeParameters.length != 0)
+		if (declaration == null || declaration.isExtern == true || declaration.typeParameters.length != 0
+			|| declaration.base != null && freshBaseKey(name) == null)
 			return null;
 		return constructorFact(name);
+	}
+
+	/** The construction fact of `name`'s base class, which its constructor's `super(...)` call depends on, or null. */
+	public function freshBaseKey(name:String):Null<String> {
+		var declaration = classes.get(name);
+		if (declaration == null)
+			return null;
+		var base = switch declaration.base {
+			case NamedType(baseName) if (classes.exists(baseName)): baseName;
+			default: null;
+		};
+		return base == null ? null : freshConstructorKey(base);
 	}
 
 	/** A direct stored field of the fresh receiver; properties and static fields may have visible effects. */
@@ -718,6 +739,12 @@ private class PurityWalker {
 				all(arguments);
 			case Call(name, arguments, _) if (isPrivateMapOperation(name)):
 				all(arguments);
+			case Call("super", arguments, _) if (freshReceiver != null):
+				var key = inference.freshBaseKey(freshReceiver);
+				if (key == null || !all(arguments))
+					return false;
+				dependencies.set(key, true);
+				true;
 			case Call(name, arguments, _):
 				if (!all(arguments))
 					return false;

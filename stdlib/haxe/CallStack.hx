@@ -2,17 +2,46 @@ package haxe;
 
 #if wasm
 // Wasm has no runtime symbolizer yet, so stacks are empty.
+typedef StackFrames = Array<String>;
+
 function nativeExceptionStack():Array<String>
 	return [];
 
 function nativeCallStack():Array<String>
 	return [];
+
+function callStackFrames():StackFrames
+	return [];
+
+function exceptionStackFrames():StackFrames
+	return [];
+
+function stackFrameSymbols(frames:StackFrames):Array<String>
+	return frames;
 #else
+/**
+	A stack taken and not yet named: naming a frame resolves its symbol, most of what a stack costs, so haxe.Exception takes
+	one each time it is made and names it only when its `stack` is read.
+**/
+typedef StackFrames = hl.Bytes;
+
 @:hlNative("haxeon_runtime", "__exception_stack")
 extern function nativeExceptionStack():Array<String>;
 
 @:hlNative("haxeon_runtime", "__call_stack")
 extern function nativeCallStack():Array<String>;
+
+/** The frames now on the stack, innermost first, unnamed. */
+@:hlNative("haxeon_runtime", "__call_stack_frames")
+extern function callStackFrames():StackFrames;
+
+/** The frames of the last throw, unnamed. */
+@:hlNative("haxeon_runtime", "__exception_stack_frames")
+extern function exceptionStackFrames():StackFrames;
+
+/** The symbols of frames `callStackFrames` or `exceptionStackFrames` took, as `nativeCallStack` names them. */
+@:hlNative("haxeon_runtime", "__stack_frame_symbols")
+extern function stackFrameSymbols(frames:StackFrames):Array<String>;
 #end
 
 /** One portable call-stack entry. */
@@ -50,11 +79,14 @@ class CallStack {
 		return new CallStack([for (index in 1...symbols.length - 1) frame(symbols[index])]);
 	}
 
-	/** The frames calling an exception's constructor, as Haxe's HL std records for `new Exception(...)`. */
-	@:noCompletion public static function constructorStack():CallStack {
+	/**
+		The frames calling an exception's constructor, as Haxe's HL std records for `new Exception(...)`, from the frames
+		haxe.Exception's constructor took (`callStackFrames`).
+	**/
+	@:noCompletion public static function constructorStack(taken:StackFrames):CallStack {
 		// Haxe leaves out the constructors of the exception's subclasses too (each `super` call shifts the stack): the
 		// constructors run directly after haxe.Exception's.
-		var symbols = nativeCallStack(),
+		var symbols = stackFrameSymbols(taken),
 			start = symbols.length;
 		for (index in 0...symbols.length)
 			if (StringTools.startsWith(symbols[index], "haxe.Exception.new(")) {
@@ -69,6 +101,14 @@ class CallStack {
 	/** The frames of the last exception thrown, from the throw outwards. */
 	public static function exceptionStack(?fullStack:Bool = false):CallStack
 		return frames(nativeExceptionStack(), 0);
+
+	/** The frames of the last throw, or else the frames now on the stack, taken for an exception to name later. */
+	@:noCompletion public static function takeFrames(fromThrow:Bool):StackFrames
+		return fromThrow ? exceptionStackFrames() : callStackFrames();
+
+	/** The frames of a throw, from frames `exceptionStackFrames` took. */
+	@:noCompletion public static function thrownStack(taken:StackFrames):CallStack
+		return frames(stackFrameSymbols(taken), 0);
 
 	/** `\nCalled from <item>` for each item, as Haxe prints a stack. */
 	public static function toString(stack:CallStack):String {
