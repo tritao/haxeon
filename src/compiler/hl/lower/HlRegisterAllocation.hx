@@ -11,8 +11,9 @@ import compiler.hl.HlFunction.HlInstruction;
  * the register its assignment wrote, which a later value may then reuse.
  *
  * Live ranges are hulls in instruction order over a block-level liveness analysis, so they cover every point a register is live at;
- * registers are given slots by a linear scan per type. A function with a trap is left as it is (a handler is entered from anywhere
- * in its range), arguments keep their registers, and a register whose address is taken (`Ref`) keeps a slot of its own.
+ * registers are given slots by a linear scan per type. A trap's handler can be entered from any instruction while the trap is
+ * active, so every register live into a handler is live throughout each block it protects. Arguments keep their registers, and a
+ * register whose address is taken (`Ref`) keeps a slot of its own.
  */
 class HlRegisterAllocation {
 	/** Renames the registers of `instructions` in place and returns the types of the registers that remain. */
@@ -26,8 +27,6 @@ class HlRegisterAllocation {
 			pinned[index] = true;
 		for (instruction in instructions)
 			switch instruction {
-				case Trap(_, _, _):
-					return registerTypes;
 				case Ref(_, source):
 					pinned[source] = true;
 				default:
@@ -75,6 +74,9 @@ class HlRegisterAllocation {
 				next.push(block + 1);
 			successors.push(next);
 		}
+		var handlers = activeHandlers(instructions, blocks, blockStarts, blockEnd, blockOf, labels, successors);
+		if (handlers == null)
+			return registerTypes;
 		// Uses before definitions per block, then the live sets to a fixed point.
 		var words = (count + 31) >> 5;
 		function bits():Array<Int>
@@ -103,14 +105,22 @@ class HlRegisterAllocation {
 			changed = false;
 			var block = blocks;
 			while (block-- > 0) {
-				var out = liveOut[block], input = liveIn[block];
+				var out = liveOut[block], input = liveIn[block], thrown = bits();
 				for (successor in successors[block]) {
 					var into = liveIn[successor];
 					for (word in 0...words)
 						out[word] |= into[word];
 				}
+				// What a handler protecting this block reads is live from its first instruction to its last.
+				for (handler in handlers[block]) {
+					var into = liveIn[handler];
+					for (word in 0...words) {
+						out[word] |= into[word];
+						thrown[word] |= into[word];
+					}
+				}
 				for (word in 0...words) {
-					var next = used[block][word] | (out[word] & ~defined[block][word]);
+					var next = used[block][word] | (out[word] & ~defined[block][word]) | thrown[word];
 					if (next != input[word]) {
 						input[word] = next;
 						changed = true;
@@ -185,6 +195,56 @@ class HlRegisterAllocation {
 		for (index in 0...length)
 			instructions[index] = HlRegisters.map(instructions[index], register -> mapping[register]);
 		return types;
+	}
+
+	/**
+	 * Per block, the handler blocks of the traps active at any of its instructions: a trap is active from its `Trap` to the
+	 * `EndTrap` that closes it, along every path, and its handler is entered with the traps that were active before it. Null when
+	 * two paths reach a block with different traps active, which the lowering does not produce; the function is then left as it is.
+	 */
+	static function activeHandlers(instructions:Array<HlInstruction>, blocks:Int, blockStarts:Array<Int>,
+			blockEnd:Int->Int,
+			blockOf:Array<Int>, labels:Map<String, Int>, successors:Array<Array<Int>>):Null<Array<Array<Int>>> {
+		var handlers:Array<Array<Int>> = [for (_ in 0...blocks)[]],
+			entry:Array<Null<Array<Int>>> = [for (_ in 0...blocks) null],
+			work = [0],
+			consistent = true;
+		entry[0] = [];
+		function reach(block:Int, stack:Array<Int>):Void {
+			var known = entry[block];
+			if (known == null) {
+				entry[block] = stack.copy();
+				work.push(block);
+			} else if (known.length != stack.length) {
+				consistent = false;
+			} else
+				for (index in 0...stack.length)
+					if (known[index] != stack[index])
+						consistent = false;
+		}
+		while (work.length > 0 && consistent) {
+			var block = work.pop(), stack = entry[block].copy(), active = handlers[block], handlerEdge = -1;
+			for (index in blockStarts[block]...blockEnd(block)) {
+				for (handler in stack)
+					if (active.indexOf(handler) < 0)
+						active.push(handler);
+				switch instructions[index] {
+					case Trap(_, target, _):
+						handlerEdge = blockOf[labels.get(target)];
+						reach(handlerEdge, stack);
+						stack.push(handlerEdge);
+					case EndTrap(_, _):
+						if (stack.length == 0)
+							return null;
+						stack.pop();
+					default:
+				}
+			}
+			for (successor in successors[block])
+				if (successor != handlerEdge)
+					reach(successor, stack);
+		}
+		return consistent ? handlers : null;
 	}
 
 	static function exits(instruction:HlInstruction):Bool

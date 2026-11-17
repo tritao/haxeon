@@ -635,3 +635,4 @@ field-initializer-type-variables	42
 static-function-field-call	42
 method-value-dispatch	42
 single-block-loop	42
+try-register-sharing	42
