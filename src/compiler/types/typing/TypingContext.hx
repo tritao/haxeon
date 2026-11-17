@@ -29,6 +29,12 @@ class TypingContext {
 
 	public var receiver:Null<CompilerType>;
 
+	/**
+	 * An instance field's initializer, or a lambda written in one: it may not read `this`, nor a member through it, as in Haxe
+	 * ("Cannot access this or other member field in variable initialization").
+	 */
+	public var memberInitializer = false;
+
 	/** Owns the transition from conservative names to resolved lexical IDs. */
 	public final storage = new BindingStoragePlan();
 

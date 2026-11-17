@@ -110,6 +110,7 @@ class TestCatalog {
 		"FieldAliasFlowMain",
 		"MemberModuleShadowMain",
 		"FinalFieldMain",
+		"MemberInitializerAccessMain",
 		"ModuleVariablesMain",
 		"SignatureMetadataMain",
 		"LspFileUriMain",

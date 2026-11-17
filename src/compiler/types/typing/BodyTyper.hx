@@ -1720,6 +1720,9 @@ class BodyTyper implements BodyTyping {
 			|| lexicalMethod(sourceName) != null))
 			name = sourceName;
 		span = referencePrefixSpan(name, span);
+		// Haxe checks an instance field's typed initializer for `this`, which a member read through it is too.
+		if (name == "this" && context.memberInitializer)
+			fail("E1005", "Cannot access this or other member field in variable initialization", span);
 		var type = scope.resolve(name);
 		// A local whose type a use has since fixed reads as that type.
 		if (type != null && session.monomorphs.active())

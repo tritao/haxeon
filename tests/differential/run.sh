@@ -205,6 +205,7 @@ in_background run_compile_failure lazy-return-void-value
 in_background run_compile_failure lazy-return-child-parent
 in_background run_compile_failure lazy-override-mismatch
 in_background run_compile_failure type-error
+in_background run_compile_failure member-initializer-access
 # Width subtyping between structures waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4):
 # a copy into the narrower record would break identity (`narrow == wide`). The three rejections below are Haxe's too.
 in_background run_known_divergence anonymous-width-subtyping

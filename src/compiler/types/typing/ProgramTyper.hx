@@ -811,6 +811,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					var initializerContext = bodyTyper.enterBody(InitializerUnit.of(specialization.name, field.name),
 						erasedSubstitutions, classDecl.name),
 						scope = new Scope();
+					initializerContext.memberInitializer = !field.isStatic;
 					if (!field.isStatic)
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
 							field.span);
@@ -1195,6 +1196,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				classDecl.name),
 			scope = new Scope(),
 			expression = field.initializer;
+		context.memberInitializer = !field.isStatic;
 		if (expression == null)
 			throw 'Field "${classDecl.name}.${field.name}" has no initializer';
 		if (!field.isStatic)
@@ -1227,6 +1229,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			var context = bodyTyper.enterBody(InitializerUnit.of(classDecl.name, field.name), substitutions,
 				classDecl.name),
 				scope = new Scope();
+			context.memberInitializer = !field.isStatic;
 			if (!field.isStatic)
 				scope.defineReceiver(session.representation.receiverType(classDecl.name, substitutions), field.span);
 			lifted = bodyTyper.typeInferredFieldInitializer(expression, scope, classDecl.name, field.name,

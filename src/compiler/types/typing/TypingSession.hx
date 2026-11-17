@@ -654,8 +654,10 @@ class TypingSession {
 			source = sourceFunctionName != null ? sourceFunctionName : isLambda
 				? currentContext.sourceFunctionName : null,
 			body = new TypingContext(name, typeSubstitutions, owner, source);
-		if (isLambda)
+		if (isLambda) {
 			body.privateAccessDepth = currentContext.privateAccessDepth;
+			body.memberInitializer = currentContext.memberInitializer;
+		}
 		// A unit's outermost body: a top-level one, or a declaration's unit typed on demand inside another body.
 		if (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth)
 			programOutput.records.typedUnits.set(name, true);
