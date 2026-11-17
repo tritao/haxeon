@@ -100,8 +100,12 @@ test file whose lines are part of the test carries `@formatter:off` at the end o
 ./scripts/format.sh                        # haxeon dev format
 ./scripts/format.sh --check
 ./scripts/format.sh --changed              # only files that differ from the merge base with origin/main
+./scripts/format.sh --check --range A..B   # only files the commits in A..B change
 scripts/haxeon fmt --check FILE...         # exactly these files
 ```
+
+`git config core.hooksPath scripts/hooks` turns on a pre-push hook that runs that check over the commits a push sends, so a
+push CI's format check would fail is refused before it leaves (`git push --no-verify` skips it).
 
 ## Bootstrapping and self-hosting
 

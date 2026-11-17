@@ -5,29 +5,35 @@ import sys.FileSystem;
 import sys.io.Process;
 
 /**
- * `haxeon dev format [--check] [--changed]`: formats the Haxe sources of this checkout with `haxeon fmt`, after sorting their
+ * `haxeon dev format [--check] [--changed | --range FROM..TO]`: formats the Haxe sources of this checkout with `haxeon fmt`, after sorting their
  * imports with `haxeon lint --only import-order`, or with `--check` reports what either would change. `scripts/format.sh`
  * runs it. The style is each project's "format" setting in haxeon.json; this tree uses the default (tabs, 120 columns). A
  * file that must keep its layout (a test that names its lines) says so with `@formatter:off` on its first line.
  *
  * Every `.hx` file git tracks or would add is formatted, vendored code aside; with `--changed`, only those that differ from
- * the merge base with origin/main. `--check` exits 1 when a file is not formatted or its imports are out of order, and 2 when
+ * the merge base with origin/main; with `--range`, only those the commits in `FROM..TO` change, which is what the pre-push hook
+ * (scripts/hooks/pre-push) checks. `--check` exits 1 when a file is not formatted or its imports are out of order, and 2 when
  * a file cannot be formatted.
  */
 class FormatCommand {
 	public static function run(arguments:Array<String>, home:String):Int {
-		var check = false, changed = false;
-		for (argument in arguments)
-			switch argument {
+		var check = false, changed = false, range:Null<String> = null, index = 0;
+		while (index < arguments.length) {
+			switch arguments[index] {
 				case "--check":
 					check = true;
 				case "--changed":
 					changed = true;
+				case "--range" if (index + 1 < arguments.length && arguments[index + 1].indexOf("..") > 0):
+					range = arguments[++index];
 				case _:
-					Sys.stderr().writeString("Usage: haxeon dev format [--check] [--changed]\n");
+					Sys.stderr().writeString("Usage: haxeon dev format [--check] [--changed | --range FROM..TO]\n");
 					return 2;
 			}
-		var relatives = changed ? changedSources(home) : trackedSources(home),
+			index++;
+		}
+		var relatives = range != null ? rangeSources(home, range) : changed
+			? changedSources(home) : trackedSources(home),
 			files = [for (relative in relatives) Path.join([home, relative])];
 		if (files.length == 0)
 			return 0;
@@ -84,6 +90,10 @@ class FormatCommand {
 				"--exclude-standard"
 			]))));
 	}
+
+	/** The `.hx` files the commits in `range` (`FROM..TO`) change, deletions aside. */
+	static function rangeSources(home:String, range:String):Array<String>
+		return haxeSources(home, lines(capture("git", ["-C", home, "diff", "--name-only", "--diff-filter=d", range])));
 
 	static function haxeSources(home:String, names:Array<String>):Array<String> {
 		var seen:Map<String, Bool> = [], result = [];
