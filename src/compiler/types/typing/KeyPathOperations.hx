@@ -57,7 +57,7 @@ class KeyPathOperations {
 				} else {
 					new AnonymousTypeRegistry(session).register(receiver.type);
 					new TypedExpression(TClosureCall(new TypedExpression(TField(receiver, "$get"),
-						TFunction([root], value), span), [target]), value, span);
+						TFunction([root], value, []), span), [target]), value, span);
 				}
 			case TKeyPath(root, value, writable) if (name == "set"):
 				if (arguments.length != 2) fail("E1008", 'KeyPath.set expects 2 arguments, got ${arguments.length}',
@@ -100,7 +100,7 @@ class KeyPathOperations {
 						rootValue = session.relations.isValueClass(root) ? hold(session,
 							ValueCopy.bind(session, place, root), "root", span, statements) : place;
 					new AnonymousTypeRegistry(session).register(receiver.type);
-					var setter = new TypedExpression(TField(path, "$set"), TFunction([root, value], root), span),
+					var setter = new TypedExpression(TField(path, "$set"), TFunction([root, value], root, []), span),
 						updated = new TypedExpression(TClosureCall(setter, [rootValue, assigned]), root, span);
 					if (session.relations.isValueClass(root)) {
 						var result = hold(session, updated, "updated", span, statements),

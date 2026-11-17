@@ -100,7 +100,7 @@ class SemanticDependencyCollector {
 			case MapType(key, value):
 				addTypeDependency(result, owner, kind, key, aliases);
 				addTypeDependency(result, owner, kind, value, aliases);
-			case FunctionType(arguments, returnType):
+			case FunctionType(arguments, returnType, _):
 				for (argument in arguments)
 					addTypeDependency(result, owner, kind, argument, aliases);
 				addTypeDependency(result, owner, kind, returnType, aliases);

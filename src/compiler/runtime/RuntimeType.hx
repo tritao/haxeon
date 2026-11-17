@@ -115,7 +115,7 @@ class RuntimeType {
 		return switch type {
 			case TAbstract(_, _, representation): isRuntimeReference(representation);
 			case TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_), TMap(_, _),
-				TFunction(_, _), TKeyPath(_, _, _): true;
+				TFunction(_, _, _), TKeyPath(_, _, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			case TNullable(element): isRuntimeReference(element);
 			default: false;

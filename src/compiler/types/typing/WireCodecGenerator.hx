@@ -595,14 +595,15 @@ class WireCodecGenerator {
 
 	function mapKeyComparator(type:CompilerType, span:SourceSpan):TypedExpression
 		return switch type {
-			case TString: new TypedExpression(TFunctionRef(stringCompareName()), TFunction([TString, TString], TInt),
+			case TString: new TypedExpression(TFunctionRef(stringCompareName()),
+				TFunction([TString, TString], TInt, []),
 				span);
-			case TInt: new TypedExpression(TFunctionRef(intCompareName()), TFunction([TInt, TInt], TInt), span);
+			case TInt: new TypedExpression(TFunctionRef(intCompareName()), TFunction([TInt, TInt], TInt, []), span);
 			case TInstance(NominalKind.Enum, _, _): new TypedExpression(TFunctionRef(enumComparatorName(type)),
 				TFunction([
 					type,
 					type
-				], TInt), span);
+				], TInt, []), span);
 			default: throw 'No MessagePack map key comparator for "$type"';
 		};
 
@@ -986,7 +987,7 @@ class WireCodecGenerator {
 			writer = local(writerName, writerType, request.span),
 			statements:Array<TypedStatement> = [
 				TVar(writerName, new TypedExpression(TNew(writerClassName(),
-					[intLiteral(DEFAULT_MAX_BYTES, request.span)], true), writerType, request.span),
+					[limit(DEFAULT_MAX_BYTES, request.span)], true), writerType, request.span),
 					request.span),
 				TExpression(new TypedExpression(TCall(valueEncodeName(type), [writer, value]), TVoid, request.span),
 					request.span),
@@ -997,6 +998,10 @@ class WireCodecGenerator {
 			statements, request, "encode", type);
 	}
 
+	/** A reader's or writer's limit argument: they declare them `?maxDepth:Int = 64`, which is `Null<Int>`. */
+	function limit(value:Int, span:SourceSpan):TypedExpression
+		return new TypedExpression(TNullableWrap(intLiteral(value, span)), TNullable(TInt), span);
+
 	function decoder(type:CompilerType, request:WireCodecRequest):TypedFunction {
 		var readerType = classType(readerClassName()),
 			readerName = "__wire_reader",
@@ -1005,8 +1010,8 @@ class WireCodecGenerator {
 			reader = local(readerName, readerType, request.span),
 			statements:Array<TypedStatement> = [
 				TVar(readerName, new TypedExpression(TNew(readerClassName(), [
-					bytes, intLiteral(DEFAULT_MAX_CONTAINER, request.span),
-					intLiteral(DEFAULT_MAX_DEPTH, request.span), intLiteral(DEFAULT_MAX_BYTES, request.span)
+					bytes, limit(DEFAULT_MAX_CONTAINER, request.span),
+					limit(DEFAULT_MAX_DEPTH, request.span), limit(DEFAULT_MAX_BYTES, request.span)
 				],
 					true),
 					readerType, request.span),

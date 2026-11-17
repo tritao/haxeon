@@ -27,7 +27,7 @@ class GenericInstantiation {
 			scope:Scope, owner:Null<String>,
 			isStatic:Bool, ?presetSubstitutions:Map<String, CompilerType>, ?receiver:TypedExpression):TypedExpression {
 		var required = fn.arguments.length;
-		while (required > 0 && fn.arguments[required - 1].optional == true)
+		while (required > 0 && compiler.syntax.AstPredicates.isOptionalArgument(fn.arguments[required - 1]))
 			required--;
 		if (arguments.length < required || arguments.length > fn.arguments.length) {
 			var expected = required == fn.arguments.length ? '$required' : '$required to ${fn.arguments.length}';
@@ -249,10 +249,10 @@ class GenericInstantiation {
 								substitutions, span);
 					default:
 				}
-			case FunctionType(patternArguments, patternResult):
+			case FunctionType(patternArguments, patternResult, _):
 				switch actual {
 					case TFunction(actualArguments,
-						actualResult) if (patternArguments.length == actualArguments.length):
+						actualResult, _) if (patternArguments.length == actualArguments.length):
 						for (i in 0...patternArguments.length)
 							inferTypeParameters(patternArguments[i], actualArguments[i], parameters, substitutions,
 								span);

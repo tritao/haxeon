@@ -2029,7 +2029,7 @@ class FrontendCompilation {
 			case TMap(key, value):
 				addResolvedTypeDependencyWithin(result, owner, kind, key, context, explored);
 				addResolvedTypeDependencyWithin(result, owner, kind, value, context, explored);
-			case TFunction(arguments, resultType):
+			case TFunction(arguments, resultType, _):
 				for (argument in arguments)
 					addResolvedTypeDependencyWithin(result, owner, kind, argument, context, explored);
 				addResolvedTypeDependencyWithin(result, owner, kind, resultType, context, explored);

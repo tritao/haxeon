@@ -73,7 +73,7 @@ class Monomorphs {
 			case TNullable(element), TArray(element), TIterator(element): containsWithin(element, visiting);
 			case TMap(key, value): containsWithin(key, visiting) || containsWithin(value, visiting);
 			case TKeyPath(root, value, _): containsWithin(root, visiting) || containsWithin(value, visiting);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				if (containsWithin(result, visiting))
 					return true;
 				for (argument in arguments)
@@ -122,8 +122,8 @@ class Monomorphs {
 				resolveWithin(value, anonymous),
 				writable);
 			case TFunction(arguments,
-				result): TFunction([for (argument in arguments) resolveWithin(argument, anonymous)],
-				resolveWithin(result, anonymous));
+				result, optional): TFunction([for (argument in arguments) resolveWithin(argument, anonymous)],
+				resolveWithin(result, anonymous), optional);
 			case TInstance(kind, name, arguments): TInstance(kind, name,
 				[for (argument in arguments) resolveWithin(argument,
 				anonymous)]);
@@ -176,7 +176,7 @@ class Monomorphs {
 			case [TMap(k1, v1), TMap(k2, v2)]:
 				unify(k1, k2);
 				unify(v1, v2);
-			case [TFunction(a1, r1), TFunction(a2, r2)] if (a1.length == a2.length):
+			case [TFunction(a1, r1, _), TFunction(a2, r2, _)] if (a1.length == a2.length):
 				for (index in 0...a1.length)
 					unify(a2[index], a1[index]);
 				unify(r1, r2);
@@ -205,7 +205,7 @@ class Monomorphs {
 			case TMonomorph(other): other == cell;
 			case TNullable(element), TArray(element), TIterator(element): occurs(cell, element);
 			case TMap(key, value): occurs(cell, key) || occurs(cell, value);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				if (occurs(cell, result))
 					return true;
 				for (argument in arguments)

@@ -1,5 +1,6 @@
 package compiler.syntax;
 
+import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 
@@ -24,4 +25,15 @@ class AstPredicates {
 			case null, NullLiteral(_): true;
 			default: false;
 		};
+
+	/** Whether a call may omit `argument`: it is written `?x` or has a default value, as Haxe's optional flag. */
+	public static function isOptionalArgument(argument:AstArgument):Bool
+		return argument.optional == true || argument.defaultValue != null;
+
+	/**
+	 * Whether `argument`'s type is made nullable, by Haxe's rule: `?x:Int` and `?x:Int = 7` are `Null<Int>`, as is
+	 * `x:Int = null`; `x:Int = 7` is `Int`.
+	 */
+	public static function isNullableArgument(argument:AstArgument):Bool
+		return argument.optional == true || argument.defaultValue != null && isNullExpression(argument.defaultValue);
 }

@@ -985,7 +985,7 @@ class ExpressionTyper {
 		var arguments:Array<{name:String, type:CompilerType}> = switch type {
 			case TNullable(element) | TArray(element) | TIterator(element): [{name: "element", type: element}];
 			case TMap(key, value): [{name: "key", type: key}, {name: "value", type: value}];
-			case TFunction(parameters, result):
+			case TFunction(parameters, result, _):
 				[for (index in 0...parameters.length)
 					{
 						name:'parameter$index', type:parameters[index]
@@ -2638,7 +2638,7 @@ class ExpressionTyper {
 			switch left.type {
 				case TDynamic, TNativeAbstract(_), TAbstract(_, _, _), TInstance(Class, _, []),
 					TInstance(Interface, _, []), TInstance(Enum, _, _),
-					TNullable(_), TArray(_), TIterator(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _):
+					TNullable(_), TArray(_), TIterator(_), TMap(_, _), TFunction(_, _, _), TAnonymous(_, _):
 					return new TypedExpression(TEqual(left, right), TBool, span);
 				default:
 			}

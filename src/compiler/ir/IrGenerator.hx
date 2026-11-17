@@ -4064,7 +4064,7 @@ class IrGenerator {
 				}
 			case TArray(element): Array(lowerType(element));
 			case TIterator(element): Iterator(lowerType(element));
-			case TFunction(arguments, result): Function([for (argument in arguments) lowerType(argument)],
+			case TFunction(arguments, result, _): Function([for (argument in arguments) lowerType(argument)],
 				lowerType(result));
 			case TAnonymous(name, _): Obj(name);
 		};

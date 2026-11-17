@@ -428,7 +428,7 @@ class ModuleAnalyzer {
 			case MapType(key, value):
 				addModuleTypeDependency(key, state, dependencies, parameters);
 				addModuleTypeDependency(value, state, dependencies, parameters);
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, _):
 				for (argument in arguments)
 					addModuleTypeDependency(argument, state, dependencies, parameters);
 				addModuleTypeDependency(result, state, dependencies, parameters);

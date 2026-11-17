@@ -332,7 +332,7 @@ class ModuleCanonicalizer {
 			case ArrayType(element): 'Array<${astTypeName(element)}>';
 			case MapType(key, value): 'Map<${astTypeName(key)},${astTypeName(value)}>';
 			case NullableType(element): 'Null<${astTypeName(element)}>';
-			case FunctionType(arguments, result): '(' + [for (argument in arguments) astTypeName(argument)].join(',')
+			case FunctionType(arguments, result, _): '(' + [for (argument in arguments) astTypeName(argument)].join(',')
 				+ ')->' + astTypeName(result);
 			case AnonymousType(fields): '{' + [
 				for (field in fields)
@@ -733,8 +733,9 @@ class ModuleCanonicalizer {
 				canonicalType(value, aliases, typeParameters));
 			case NullableType(element): NullableType(canonicalType(element, aliases, typeParameters));
 			case FunctionType(arguments,
-				result): FunctionType([for (argument in arguments) canonicalType(argument, aliases, typeParameters)],
-				canonicalType(result, aliases, typeParameters));
+				result,
+				optional): FunctionType([for (argument in arguments) canonicalType(argument, aliases, typeParameters)],
+				canonicalType(result, aliases, typeParameters), optional);
 			case AnonymousType(fields): AnonymousType([for (field in fields)
 				{
 						name:field.name,

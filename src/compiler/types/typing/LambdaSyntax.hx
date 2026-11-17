@@ -18,7 +18,7 @@ class LambdaSyntax {
 			case BlockExpression(statements, Variable(name, _), _) if (statements.length == 1
 				&& StringTools.startsWith(name, "$typedLambda")):
 				switch statements[0] {
-					case VarDeclaration(local, FunctionType(_, _), value, _) if (local == name): value;
+					case VarDeclaration(local, FunctionType(_, _, _), value, _) if (local == name): value;
 					default: null;
 				}
 			default: null;

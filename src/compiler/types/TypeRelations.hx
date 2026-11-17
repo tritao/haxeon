@@ -117,7 +117,7 @@ class TypeRelations {
 						}
 					default: ReferenceCast;
 				}
-			case TFunction(_, _): ReferenceCast;
+			case TFunction(_, _, _): ReferenceCast;
 			case TNullable(_): WrapNullable;
 			default: Identity;
 		};
@@ -217,10 +217,12 @@ class TypeRelations {
 					case TIterator(actualElement): equals(actualElement, expectedElement);
 					default: false;
 				}
-			case TFunction(expectedArguments, expectedResult):
+			case TFunction(expectedArguments, expectedResult, expectedOptional):
 				switch actual {
-					case TFunction(actualArguments, actualResult):
+					case TFunction(actualArguments, actualResult, actualOptional):
+						// A function whose argument is required cannot stand for one a call may omit it from (Haxe's `Cant_force_optional`).
 						if (actualArguments.length != expectedArguments.length
+							|| !FunctionTypes.acceptsOptional(actualOptional, expectedOptional)
 							|| !isAssignable(actualResult, expectedResult)) false;
 						else {
 							var compatible = true;
@@ -268,7 +270,7 @@ class TypeRelations {
 			case TArray(element) | TNullable(element) | TIterator(element): [element];
 			case TMap(key, value): [key, value];
 			case TKeyPath(root, value, _): [root, value];
-			case TFunction(arguments, result): arguments.concat([result]);
+			case TFunction(arguments, result, _): arguments.concat([result]);
 			default: [];
 		};
 		for (child in children)
@@ -655,7 +657,7 @@ class TypeRelations {
 						&& equalsWithin(value, otherValue, visiting);
 					default: false;
 				}
-			case TFunction(arguments, result): sameFunction(right, arguments, result, visiting);
+			case TFunction(arguments, result, optional): sameFunction(right, arguments, result, optional, visiting);
 			case TKeyPath(root, value, writable): switch right {
 					case TKeyPath(otherRoot, otherValue, otherWritable): writable == otherWritable
 						&& equalsWithin(root, otherRoot,
@@ -742,10 +744,11 @@ class TypeRelations {
 		};
 
 	static function sameFunction(type:CompilerType, arguments:Array<CompilerType>, result:CompilerType,
-			visiting:Null<Array<FieldPair>>):Bool
+			optional:Array<Bool>, visiting:Null<Array<FieldPair>>):Bool
 		return switch type {
-			case TFunction(otherArguments, otherResult):
-				if (arguments.length != otherArguments.length) false;
+			case TFunction(otherArguments, otherResult, otherOptional):
+				if (arguments.length != otherArguments.length
+					|| !FunctionTypes.sameOptional(optional, otherOptional)) false;
 				else {
 					var same = true;
 					for (index in 0...arguments.length)
@@ -760,7 +763,7 @@ class TypeRelations {
 		return switch type {
 			case TAbstract(_, _, representation): isReference(representation);
 			case TString, TBytes, THlBytes, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_), TIterator(_),
-				TFunction(_, _), TMap(_, _),
+				TFunction(_, _, _), TMap(_, _),
 				TKeyPath(_, _, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			default: false;

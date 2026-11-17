@@ -36,7 +36,7 @@ class EnumDynamicBox {
 				TIterator(element): requestReflectedTypes(session, element, origin, span, seen);
 			case TMap(key, value): requestReflectedTypes(session, key, origin, span, seen);
 				requestReflectedTypes(session, value, origin, span, seen);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				for (argument in arguments) requestReflectedTypes(session, argument, origin, span, seen);
 				requestReflectedTypes(session, result, origin, span, seen);
 			case TAnonymous(_, fields):

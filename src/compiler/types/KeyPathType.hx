@@ -6,10 +6,10 @@ import compiler.types.Type.CompilerType;
 class KeyPathType {
 	public static function fields(root:CompilerType, value:CompilerType):Array<compiler.types.Type.AnonymousField>
 		return [for (entry in [
-			{name: "$get", type: TFunction([root], value)},
+			{name: "$get", type: TFunction([root], value, [])},
 			{
 				name: "$set",
-				type: TFunction([root, value], root)
+				type: TFunction([root, value], root, [])
 			},
 			{
 				name: "$key",

@@ -43,7 +43,7 @@ class NativeLayout {
 			case TNativeScalar(_) | TInstance(NominalKind.NativeValue, _, _): true;
 			case TAbstract(_, _, representation), TArray(representation):
 				containsUnsupportedRuntimeValueWithin(representation, explored);
-			case TNullable(_) | TIterator(_) | TMap(_, _) | TFunction(_, _): containsNativeLayoutType(type);
+			case TNullable(_) | TIterator(_) | TMap(_, _) | TFunction(_, _, _): containsNativeLayoutType(type);
 			case TAnonymous(_, fields):
 				var walked = explored == null ? [] : explored, found = false;
 				if (walked.indexOf(fields) < 0) {
@@ -66,7 +66,7 @@ class NativeLayout {
 				containsNativeLayoutWithin(representation, explored);
 			case TMap(key, value): containsNativeLayoutWithin(key, explored)
 				|| containsNativeLayoutWithin(value, explored);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				var found = containsNativeLayoutWithin(result, explored);
 				for (argument in arguments)
 					if (containsNativeLayoutWithin(argument, explored))

@@ -139,7 +139,8 @@ class NativeRegistry {
 			case TNullable(element): irType(element);
 			case TArray(element): Array(irType(element));
 			case TIterator(_): Abstract("realtime_iterator");
-			case TFunction(arguments, result): Function([for (argument in arguments) irType(argument)], irType(result));
+			case TFunction(arguments, result, _): Function([for (argument in arguments) irType(argument)],
+				irType(result));
 			case TAnonymous(name, _): Obj(name);
 		};
 

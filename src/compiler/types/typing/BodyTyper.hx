@@ -10,6 +10,7 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.AstChildren;
 import compiler.syntax.AstPredicates;
+import compiler.types.FunctionTypes;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.AnonymousField;
@@ -163,7 +164,7 @@ class BodyTyper implements BodyTyping {
 		if (type == null)
 			return null;
 		return switch type {
-			case TFunction(arguments, result): {arguments: arguments, result: result};
+			case TFunction(arguments, result, _): {arguments: arguments, result: result};
 			case TNullable(inner): expectedFunctionType(inner);
 			default: null;
 		};
@@ -368,7 +369,7 @@ class BodyTyper implements BodyTyping {
 			case TNullable(element): referenceCapture(element);
 			case TInstance(NominalKind.Class, name, _): session.classDecls.exists(name)
 				&& !session.relations.isValueClass(type);
-			case TFunction(_, _), TAbstract(_, _, _), TDynamic, TNativeAbstract(_): false;
+			case TFunction(_, _, _), TAbstract(_, _, _), TDynamic, TNativeAbstract(_): false;
 			default: compiler.types.TypeRelations.isReference(type);
 		};
 
@@ -1488,13 +1489,14 @@ class BodyTyper implements BodyTyping {
 				&& sameType(expectedFunction.arguments[0], TString)
 				&& sameType(expectedFunction.arguments[1], TString)
 				&& sameType(expectedFunction.result, TInt))
-				new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt), span);
+				new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt, []),
+					span);
 			else if (session.signatures.exists(functionName))
 				new TypedExpression(TFunctionRef(functionName),
 					functionType(requiredMapValue(session.signatures, functionName)), span);
 			else if (session.externals.exists(name)) {
 				var external = session.externals.get(name);
-				new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result), span);
+				new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result, []), span);
 			} else if (session.enumAbstractName(name) != null) {
 				var abstractName = session.enumAbstractName(name);
 				new TypedExpression(TClassRef(abstractName), TInstance(NominalKind.Class, abstractName, []), span);
@@ -1685,10 +1687,10 @@ class BodyTyper implements BodyTyping {
 		var literal = LambdaSyntax.annotated(expression);
 		if (literal != null && expectedType != null)
 			switch statements[0] {
-				case VarDeclaration(_, FunctionType(parameters, resultType), _, _):
+				case VarDeclaration(_, FunctionType(parameters, resultType, optional), _, _):
 					switch expectedType {
 						case TFunction(expectedParameters,
-							expectedResult) if (parameters.length == expectedParameters.length):
+							expectedResult, _) if (parameters.length == expectedParameters.length):
 							var resolved = [for (index in 0...parameters.length)
 								switch parameters[index] {
 									case InferredType:
@@ -1703,7 +1705,8 @@ class BodyTyper implements BodyTyping {
 											context.typeSubstitutions);
 								}];
 							var result = session.declarations.resolve(resultType, span, context.typeSubstitutions);
-							var value = typeExpression(literal, scope, TFunction(resolved, result));
+							var value = typeExpression(literal, scope,
+								TFunction(resolved, result, FunctionTypes.canonical(optional)));
 							// An unbound generic result uses Dynamic as an inference hint.
 							return (switch (expectedResult) {
 								case TDynamic: true;
@@ -2041,7 +2044,8 @@ class BodyTyper implements BodyTyping {
 					resolvedMethodInfo.owner)),
 					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
 					result = session.declarations.resolve(method.result, method.span, substitutions);
-				return new TypedExpression(TMethodRef(typedObject, methodKey), TFunction(arguments, result), span);
+				return new TypedExpression(TMethodRef(typedObject, methodKey),
+					TFunction(arguments, result, FunctionTypes.ofArguments(method.arguments)), span);
 			}
 		}
 		var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
@@ -2165,7 +2169,8 @@ class BodyTyper implements BodyTyping {
 	}
 
 	function functionType(fn:AstFunction):CompilerType
-		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result, fn.span));
+		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result, fn.span),
+			FunctionTypes.ofArguments(fn.arguments));
 
 	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>,
 			name:String):Array<TypedExpression> {
@@ -2193,9 +2198,7 @@ class BodyTyper implements BodyTyping {
 			inferred == null ? TDynamic : inferred;
 		} else substitutions == null ? lowerType(argument.type,
 			argument.span) : session.declarations.resolve(argument.type, argument.span, substitutions);
-		return argument.optional == true
-			&& AstPredicates.isNullExpression(argument.defaultValue)
-			&& !isNullable(type) ? CompilerType.TNullable(type) : type;
+		return AstPredicates.isNullableArgument(argument) && !isNullable(type) ? CompilerType.TNullable(type) : type;
 	}
 
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
@@ -2659,7 +2662,7 @@ class BodyTyper implements BodyTyping {
 	static function isReference(type:CompilerType):Bool
 		return switch type {
 			case TString, TDynamic, TInstance(Class, _, []), TInstance(Interface, _, []), TAnonymous(_, _), TArray(_),
-				TIterator(_), TFunction(_, _),
+				TIterator(_), TFunction(_, _, _),
 				TMap(_, _): true;
 			default: false;
 		};

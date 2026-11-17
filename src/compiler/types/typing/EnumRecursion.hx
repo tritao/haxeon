@@ -101,7 +101,7 @@ class EnumRecursion {
 		case TMap(key, value), TKeyPath(key, value, _) if (kind == BoxedDescriptor):
 			visit(key, current, dependencies);
 			visit(value, current, dependencies);
-		case TFunction(arguments, result) if (kind == BoxedDescriptor):
+		case TFunction(arguments, result, _) if (kind == BoxedDescriptor):
 			for (argument in arguments) visit(argument, current, dependencies);
 			visit(result, current, dependencies);
 		// Containers, closures, key paths, managed classes and anonymous records are

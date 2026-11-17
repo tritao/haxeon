@@ -42,8 +42,9 @@ class InterfaceOptionalArgumentsMain {
 			reject(candidate, StringTools.replace(valid, "value(40)", "value(40, 7)"), "E1009");
 			reject(candidate, StringTools.replace(valid, "value(40)", "value(40, null, 1)"), "E1008");
 		}
+		// An implementation whose argument is optional where the interface's is required no longer conforms, as in Haxe.
 		result.update("Service.hx", StringTools.replace(declaration, "?suffix", "suffix"));
-		reject(result, valid, "E1008");
+		reject(result, valid, "E1003");
 		result.update("Service.hx", declaration);
 		accept(result);
 		Sys.println("PASS: optional interface calls preserve metadata, runtime and cold/incremental rejection");

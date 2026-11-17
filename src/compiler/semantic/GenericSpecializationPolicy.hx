@@ -69,7 +69,7 @@ class GenericSpecializationPolicy {
 			case AppliedType(_, arguments): containsAny(arguments, parameter);
 			case ArrayType(element), NullableType(element): containsNested(element, parameter, true);
 			case MapType(key, value): containsNested(key, parameter, true) || containsNested(value, parameter, true);
-			case FunctionType(arguments, result): containsAny(arguments, parameter)
+			case FunctionType(arguments, result, _): containsAny(arguments, parameter)
 				|| containsNested(result, parameter, true);
 			case AnonymousType(fields):
 				var found = false;

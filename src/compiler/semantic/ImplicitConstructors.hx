@@ -155,9 +155,9 @@ class ImplicitConstructors {
 			case ArrayType(element): ArrayType(substitute(element, substitutions));
 			case MapType(key, value): MapType(substitute(key, substitutions), substitute(value, substitutions));
 			case NullableType(element): NullableType(substitute(element, substitutions));
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, optional):
 				FunctionType([for (argument in arguments) substitute(argument, substitutions)],
-					substitute(result, substitutions));
+					substitute(result, substitutions), optional);
 			case AnonymousType(fields):
 				AnonymousType([for (field in fields)
 					{

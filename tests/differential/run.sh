@@ -129,6 +129,7 @@ in_background run_case exception-capture-order 0
 in_background run_case exception-loop-control 0 interp
 in_background run_case assignment-evaluation-order 0
 in_background run_case interface-default-arguments 0
+in_background run_case optional-argument-types 0
 in_background run_compile_failure type-error
 status=0
 for index in "${!pids[@]}"; do

@@ -177,7 +177,8 @@ class HaxeXmlWriter {
 		output.add(escape([for (argument in fn.arguments) argument.name].join(":")));
 		output.add('">');
 		for (argument in fn.arguments)
-			emitType(output, argument.optional == true ? NullableType(argument.type) : argument.type);
+			emitType(output, compiler.syntax.AstPredicates.isOptionalArgument(argument)
+				? NullableType(argument.type) : argument.type);
 		emitType(output, fn.result);
 		output.add('</f>');
 		emitDocumentation(output, state, comments, fn.span);
@@ -222,7 +223,7 @@ class HaxeXmlWriter {
 				emitApplied(output, "Map", [key, value]);
 			case NullableType(element):
 				emitApplied(output, "Null", [element]);
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, _):
 				output.add('<f a="">');
 				for (argument in arguments)
 					emitType(output, argument);

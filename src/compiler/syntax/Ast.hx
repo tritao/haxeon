@@ -20,7 +20,8 @@ enum AstType {
 	ArrayType(element:AstType);
 	MapType(key:AstType, value:AstType);
 	NullableType(element:AstType);
-	FunctionType(arguments:Array<AstType>, result:AstType);
+	/** `optional` flags the arguments written `?x:T`, whose type is then `Null<T>`; see `CompilerType.TFunction`. */
+	FunctionType(arguments:Array<AstType>, result:AstType, optional:Array<Bool>);
 	AnonymousType(fields:Array<AstAnonymousField>);
 }
 
@@ -39,6 +40,8 @@ typedef AstArgument = {
 	final name:String;
 	final type:AstType;
 	final span:SourceSpan;
+
+	/** Written `?x`. A default value makes the argument optional too: see `AstPredicates.isOptionalArgument`. */
 	final ?optional:Bool;
 	final ?defaultValue:AstExpression;
 }

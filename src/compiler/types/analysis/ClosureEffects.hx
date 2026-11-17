@@ -142,7 +142,7 @@ class ClosureEffects extends BindingWalker {
 
 	static function holdsFunction(type:CompilerType):Bool
 		return switch type {
-			case TFunction(_, _): true;
+			case TFunction(_, _, _): true;
 			case TNullable(element), TArray(element): holdsFunction(element);
 			case TMap(key, value): holdsFunction(key) || holdsFunction(value);
 			default: false;

@@ -1187,7 +1187,7 @@ class SemanticIndex {
 				indexAbstractTypeDependencies(value, resolve, explored);
 			case TInstance(_, _, arguments): for (argument in arguments) indexAbstractTypeDependencies(argument,
 				resolve, explored);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				for (argument in arguments) indexAbstractTypeDependencies(argument, resolve, explored);
 				indexAbstractTypeDependencies(result, resolve, explored);
 			case TAnonymous(_, fields):
@@ -1331,7 +1331,7 @@ class SemanticIndex {
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
 				+ "<"
 				+ [for (argument in arguments) displayType(argument)].join(",") + ">";
-			case TFunction(arguments, result): "(" + [for (argument in arguments) displayType(argument)].join(",")
+			case TFunction(arguments, result, _): "(" + [for (argument in arguments) displayType(argument)].join(",")
 				+ ")->" + displayType(result);
 			case TAnonymous(name, _) if (SemanticSignature.isRecursiveAnonymousName(name)): name;
 			default: Std.string(type);
@@ -1351,7 +1351,8 @@ class SemanticIndex {
 			case ArrayType(element): 'Array<${displayAstType(element)}>';
 			case MapType(key, value): 'Map<${displayAstType(key)},${displayAstType(value)}>';
 			case NullableType(element): 'Null<${displayAstType(element)}>';
-			case FunctionType(arguments, result): "(" + [for (argument in arguments) displayAstType(argument)].join(",")
+			case FunctionType(arguments, result,
+				_): "(" + [for (argument in arguments) displayAstType(argument)].join(",")
 				+ ")->" + displayAstType(result);
 			default: Std.string(type);
 		};

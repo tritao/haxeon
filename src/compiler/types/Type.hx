@@ -43,7 +43,12 @@ enum CompilerType {
 	TMap(key:CompilerType, value:CompilerType);
 	/** Invariant stored-field reference; writable paths can be viewed as readable paths. */
 	TKeyPath(root:CompilerType, value:CompilerType, writable:Bool);
-	TFunction(arguments:Array<CompilerType>, result:CompilerType);
+	/**
+	 * A function type. `optional` flags the arguments a call may omit, as Haxe's `TFun` does (`(?x:Int)->Void`); it may be
+	 * shorter than `arguments`, an argument past its end being required, so `[]` is a type with no optional argument.
+	 * `FunctionTypes` reads and compares the flags.
+	 */
+	TFunction(arguments:Array<CompilerType>, result:CompilerType, optional:Array<Bool>);
 
 	/**
 	 * A structural record type. The structure can contain itself: `typedef Tree = {children:Array<Tree>}` resolves to

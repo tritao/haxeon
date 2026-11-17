@@ -250,7 +250,7 @@ class DependencyScanner {
 			case MapType(key, value):
 				scanType(key, dependencies, typeParameters);
 				scanType(value, dependencies, typeParameters);
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, _):
 				for (argument in arguments)
 					scanType(argument, dependencies, typeParameters);
 				scanType(result, dependencies, typeParameters);

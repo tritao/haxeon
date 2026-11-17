@@ -16,7 +16,9 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstEnumParameter;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstTypeConstraint;
+import compiler.syntax.AstPredicates;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
+import compiler.types.FunctionTypes;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.analysis.Scope;
@@ -417,7 +419,7 @@ class CallResolver {
 			scope:Scope, name:String, span:SourceSpan,
 			?substitutions:Map<String, CompilerType>, virtualCall:Bool = false):Array<TypedExpression> {
 		var required = parameters.length;
-		while (required > 0 && parameters[required - 1].optional == true)
+		while (required > 0 && AstPredicates.isOptionalArgument(parameters[required - 1]))
 			required--;
 		if (arguments.length < required || arguments.length > parameters.length) {
 			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
@@ -554,7 +556,7 @@ class CallResolver {
 		if (allTypeParametersBound(parameters, substitutions))
 			return session.declarations.resolve(declared, span, substitutions);
 		return switch declared {
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, optional):
 				for (argument in arguments)
 					if (mentionsUnbound(argument, parameters, substitutions))
 						return null;
@@ -564,7 +566,7 @@ class CallResolver {
 				];
 				CompilerType.TFunction(resolvedArguments,
 					mentionsUnbound(result, parameters, substitutions) ? TDynamic : session.declarations.resolve(result,
-					span, substitutions));
+					span, substitutions), FunctionTypes.canonical(optional));
 			default: null;
 		};
 	}
@@ -577,7 +579,7 @@ class CallResolver {
 			case ArrayType(element), NullableType(element): mentionsUnbound(element, parameters, substitutions);
 			case MapType(key, value): mentionsUnbound(key, parameters, substitutions)
 				|| mentionsUnbound(value, parameters, substitutions);
-			case FunctionType(arguments, result): mentionsUnbound(result, parameters,
+			case FunctionType(arguments, result, _): mentionsUnbound(result, parameters,
 				substitutions) || anyMentionsUnbound(arguments, parameters, substitutions);
 			case AnonymousType(fields): anyMentionsUnbound([for (field in fields) field.type], parameters,
 				substitutions);
@@ -799,7 +801,7 @@ class CallResolver {
 		if (callableFieldType == null)
 			return null;
 		return switch callableFieldType {
-			case TFunction(argumentTypes, result):
+			case TFunction(argumentTypes, result, _):
 				if (arguments.length != argumentTypes.length)
 					fail("E1008",
 						'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}',
@@ -824,7 +826,7 @@ class CallResolver {
 			return null;
 		var fieldCallable = typeExpressionValue(Variable(name, span), scope);
 		return switch fieldCallable.type {
-			case TFunction(argumentTypes, result):
+			case TFunction(argumentTypes, result, _):
 				if (arguments.length != argumentTypes.length)
 					fail("E1008",
 						'Function field "$name" expects ${argumentTypes.length} arguments, got ${arguments.length}',
@@ -851,9 +853,9 @@ class CallResolver {
 		}) && arguments.length == 0 && switch callee {
 			case Lambda(lambdaArguments, _, _, _): lambdaArguments.length == 0;
 			default: false;
-		}, typedCallee = bodyTyper.typeExpression(callee, scope, discarded ? TFunction([], TVoid) : null),
+		}, typedCallee = bodyTyper.typeExpression(callee, scope, discarded ? TFunction([], TVoid, []) : null),
 			functionType = switch typedCallee.type {
-			case TFunction(parameters, result): {arguments: parameters, result: result};
+			case TFunction(parameters, result, _): {arguments: parameters, result: result};
 			default: null;
 		};
 		if ((switch (typedCallee.type) {
@@ -877,7 +879,7 @@ class CallResolver {
 			localParameters = null;
 		var required = functionType.arguments.length;
 		if (localParameters != null)
-			while (required > 0 && localParameters[required - 1].optional == true)
+			while (required > 0 && AstPredicates.isOptionalArgument(localParameters[required - 1]))
 				required--;
 		if (arguments.length < required || arguments.length > functionType.arguments.length)
 			fail("E1008",
@@ -2085,7 +2087,7 @@ class CallResolver {
 		if (name == "exists") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.exists expects one predicate", span);
-			var predicateType = CompilerType.TFunction([element], TBool);
+			var predicateType = CompilerType.TFunction([element], TBool, []);
 			var predicate = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, predicateType), predicateType,
 				"array predicate", "E1002");
 			invalidateClosureWrites(arguments[0], null, scope);
@@ -2203,7 +2205,7 @@ class CallResolver {
 		if (name == "sort") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.sort expects one comparator", span);
-			var comparatorType = CompilerType.TFunction([element, element], TInt),
+			var comparatorType = CompilerType.TFunction([element, element], TInt, []),
 				comparator = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, comparatorType), comparatorType,
 					"array comparator", "E1002");
 			invalidateClosureWrites(arguments[0], null, scope);
@@ -2463,7 +2465,7 @@ class CallResolver {
 		} else {
 			var constructor = requiredMapValue(session.signatures, constructorName),
 				required = constructor.arguments.length;
-			while (required > 0 && constructor.arguments[required - 1].optional == true)
+			while (required > 0 && AstPredicates.isOptionalArgument(constructor.arguments[required - 1]))
 				required--;
 			if (arguments.length < required || arguments.length > constructor.arguments.length) {
 				var expected = required == constructor.arguments.length

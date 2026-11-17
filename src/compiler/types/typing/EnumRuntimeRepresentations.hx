@@ -32,7 +32,7 @@ class EnumRuntimeRepresentations {
 			case TNullable(element), TArray(element), TIterator(element): discover(element, seen);
 			case TMap(key, value), TKeyPath(key, value, _): discover(key, seen);
 				discover(value, seen);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				for (argument in arguments) discover(argument, seen);
 				discover(result, seen);
 			case TAnonymous(_, fields):

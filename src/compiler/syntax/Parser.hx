@@ -707,7 +707,7 @@ class Parser {
 					name: argumentToken.text,
 					type: argumentType,
 					span: argumentToken.span.merge(previous().span),
-					optional: optional || defaultValue != null,
+					optional: optional,
 					defaultValue: defaultValue
 				});
 			} while (match(TokenKind.Comma));
@@ -1091,7 +1091,7 @@ class Parser {
 						name: argumentName,
 						type: type,
 						span: span,
-						optional: optional || defaultValue != null,
+						optional: optional,
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
@@ -1164,7 +1164,7 @@ class Parser {
 						name: argument.text,
 						type: type,
 						span: argument.span.merge(previous().span),
-						optional: optional || defaultValue != null,
+						optional: optional,
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
@@ -1173,10 +1173,7 @@ class Parser {
 				body = parseStatementOrBlock(),
 				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
 				span = start.merge(end),
-				declared = result == null ? null : FunctionType([
-					for (argument in arguments)
-						localParameterType(argument.type, argument.optional, argument.defaultValue)
-				], result);
+				declared = result == null ? null : localFunctionType(arguments, result);
 			closeLambda();
 			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span), span);
 		}
@@ -1437,17 +1434,18 @@ class Parser {
 		return [Expression(expression, expressionSpan(expression))];
 	}
 
-	/**
-	 * The parameter type a local function exposes: a bare optional parameter
-	 * (no default, or a null default) is nullable, as for declared functions,
-	 * so a call that omits it can pass null.
-	 */
-	static function localParameterType(type:AstType, optional:Null<Bool>, defaultValue:Null<AstExpression>):AstType {
-		if (optional != true || !AstPredicates.isNullExpression(defaultValue))
-			return type;
-		return switch type {
-			case InferredType, NullableType(_): type;
-			default: NullableType(type);
+	/** The function type a local function or a lambda with a declared result exposes: its parameters' types and optional flags. */
+	static function localFunctionType(arguments:Array<AstArgument>, result:AstType):AstType
+		return FunctionType([for (argument in arguments) localParameterType(argument)], result,
+			[for (argument in arguments) AstPredicates.isOptionalArgument(argument)]);
+
+	/** The parameter type a local function exposes: nullable by Haxe's rule (`AstPredicates.isNullableArgument`), as for declared functions. */
+	static function localParameterType(argument:AstArgument):AstType {
+		if (!AstPredicates.isNullableArgument(argument))
+			return argument.type;
+		return switch argument.type {
+			case InferredType, NullableType(_): argument.type;
+			default: NullableType(argument.type);
 		};
 	}
 
@@ -1829,7 +1827,7 @@ class Parser {
 						name: argument.text,
 						type: type,
 						span: argument.span.merge(previous().span),
-						optional: optional || defaultValue != null,
+						optional: optional,
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
@@ -1844,10 +1842,8 @@ class Parser {
 			// Lambda carries no result type; bind it through a typed local like a named local function.
 			var name = "$typedLambda@" + identity;
 			return BlockExpression([
-				VarDeclaration(name, FunctionType([
-					for (argument in arguments)
-						localParameterType(argument.type, argument.optional, argument.defaultValue)
-				], result), Lambda(arguments, body, identity, span), span)
+				VarDeclaration(name, localFunctionType(arguments, result), Lambda(arguments, body, identity, span),
+					span)
 			], Variable(name, span), span);
 		}
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
@@ -2709,7 +2705,7 @@ class Parser {
 
 	function parseType():AstType {
 		if (match(TokenKind.LeftParen)) {
-			var arguments = [];
+			var arguments = [], optionals:Array<Bool> = [];
 			if (!check(TokenKind.RightParen)) {
 				do {
 					var optional = match(TokenKind.Question);
@@ -2719,25 +2715,29 @@ class Parser {
 					}
 					var argument = parseType();
 					arguments.push(optional ? NullableType(argument) : argument);
+					optionals.push(optional);
 				} while (match(TokenKind.Comma));
 			}
 			consume(TokenKind.RightParen);
 			consume(TokenKind.Arrow);
-			return chainedFunctionType(arguments, parseType());
+			return chainedFunctionType(arguments, parseType(), optionals);
 		}
 		var atomic = parseAtomicType();
 		if (match(TokenKind.Arrow))
 			return chainedFunctionType(switch atomic {
 				case VoidType: [];
 				default: [atomic];
-			}, parseType());
+			}, parseType(), []);
 		return atomic;
 	}
 
-	static function chainedFunctionType(arguments:Array<AstType>, result:AstType):AstType
+	static function chainedFunctionType(arguments:Array<AstType>, result:AstType, optional:Array<Bool>):AstType
 		return switch result {
-			case FunctionType(nextArguments, finalResult): FunctionType(arguments.concat(nextArguments), finalResult);
-			default: FunctionType(arguments, result);
+			case FunctionType(nextArguments, finalResult, nextOptional):
+				FunctionType(arguments.concat(nextArguments), finalResult,
+					[for (index in 0...arguments.length) index < optional.length
+					&& optional[index]].concat(nextOptional));
+			default: FunctionType(arguments, result, optional);
 		};
 
 	function parseAtomicType():AstType {

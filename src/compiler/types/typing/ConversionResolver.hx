@@ -7,6 +7,7 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
+import compiler.types.FunctionTypes;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;
@@ -414,7 +415,7 @@ class ConversionResolver {
 			case TInt64, TBool, TString: typeTest(type);
 			case TArray(_): typeTest(TArray(TDynamic));
 			case TInstance(_, _, _): typeTest(type);
-			case TFunction(_, _): new TypedExpression(TCall("Reflect.isFunction", [value]), TBool, span);
+			case TFunction(_, _, _): new TypedExpression(TCall("Reflect.isFunction", [value]), TBool, span);
 			default: null;
 		};
 		if (matches != null
@@ -451,7 +452,7 @@ class ConversionResolver {
 			];
 			var captured = new TypedExpression(TCaptured("source"), value.type, span, false, null, value.type);
 			var result = switch field.type {
-				case TFunction([], result): result;
+				case TFunction([], result, _): result;
 				default: throw "Expected protocol method";
 			};
 			var call = IterationProtocol.call(session, captured, field.name);
@@ -538,8 +539,8 @@ class ConversionResolver {
 			target = expectedFunctionType(expected);
 		return source != null
 			&& target != null
-			&& !TypeRelations.equals(TFunction(source.arguments, source.result),
-			TFunction(target.arguments, target.result));
+			&& !TypeRelations.equals(TFunction(source.arguments, source.result, []),
+			TFunction(target.arguments, target.result, []));
 	}
 
 	function functionAdapter(value:TypedExpression, expected:CompilerType, span:SourceSpan):TypedExpression {
@@ -554,7 +555,7 @@ class ConversionResolver {
 				adapterId = session.counters.peekFunctionAdapter(contextName),
 				localName = '$' + 'nullable-function-adapter:$contextName:$adapterId',
 				local = new TypedExpression(TLocal(localName), value.type, span),
-				sourceType = TFunction(sourceSignature.arguments, sourceSignature.result),
+				sourceType = TFunction(sourceSignature.arguments, sourceSignature.result, []),
 				nonNull = new TypedExpression(TCast(local), sourceType, span),
 				adapted = functionAdapter(nonNull, expected, span),
 				nullValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
@@ -666,7 +667,7 @@ class ConversionResolver {
 		if (type == null)
 			return null;
 		return switch type {
-			case TFunction(arguments, result): {arguments: arguments, result: result};
+			case TFunction(arguments, result, _): {arguments: arguments, result: result};
 			case TNullable(inner): expectedFunctionType(inner);
 			default: null;
 		};

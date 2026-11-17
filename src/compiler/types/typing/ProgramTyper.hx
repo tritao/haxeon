@@ -8,6 +8,7 @@ import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.semantic.SemanticProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.AstPredicates;
 import compiler.types.StructProperties;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -1523,12 +1524,27 @@ class ProgramTyper {
 			|| !TypeRelations.equals(session.declarations.resolve(left.result, left.span, leftSubstitutions),
 			session.declarations.resolve(right.result, right.span, rightSubstitutions)))
 			return false;
+		// Haxe compares the optional flags too (`Not_matching_optional`), and `?x:Int` is `Null<Int>`.
 		for (i in 0...left.arguments.length)
-			if (!TypeRelations.equals(session.declarations.resolve(left.arguments[i].type, left.arguments[i].span,
-				leftSubstitutions),
-				session.declarations.resolve(right.arguments[i].type, right.arguments[i].span, rightSubstitutions)))
+			if (AstPredicates.isOptionalArgument(left.arguments[i])
+				!= AstPredicates.isOptionalArgument(right.arguments[i])
+				|| !TypeRelations.equals(declaredArgumentType(left.arguments[i], leftSubstitutions),
+				declaredArgumentType(right.arguments[i], rightSubstitutions)))
 				return false;
 		return true;
+	}
+
+	function declaredArgumentType(argument:compiler.syntax.Ast.AstArgument,
+			substitutions:Null<Map<String, CompilerType>>):CompilerType {
+		var type = session.declarations.resolve(argument.type, argument.span, substitutions);
+		return switch type {
+			// `Null<String>` is `String`: the type holds null already.
+			case TNullable(inner) if (TypeRelations.isReference(inner)
+				&& !session.relations.isValueClass(inner)): inner;
+			case TNullable(_): type;
+			default: AstPredicates.isNullableArgument(argument)
+				&& !(TypeRelations.isReference(type) && !session.relations.isValueClass(type)) ? TNullable(type) : type;
+		};
 	}
 
 	static function rejectNativeBinding(fn:compiler.syntax.Ast.AstFunction, name:String):Void {

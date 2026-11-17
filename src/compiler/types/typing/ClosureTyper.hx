@@ -8,6 +8,7 @@ import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
+import compiler.types.FunctionTypes;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.CellStorageKind;
@@ -60,8 +61,7 @@ class ClosureTyper {
 					case InferredType: false;
 					default: true;
 				})
-					&& argument.optional == true
-					&& compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
+					&& compiler.syntax.AstPredicates.isNullableArgument(argument))
 					argumentType = switch argumentType {
 				case TNullable(_): argumentType;
 				default: TNullable(argumentType);
@@ -257,7 +257,9 @@ class ClosureTyper {
 					requiredMapValue(lambdaCellTypes, name),
 					requiredMapValue(lambdaCellKinds, name));
 		var lambdaResult = new TypedExpression(TLambda(lambdaName, environment, captures),
-			TFunction([for (argument in lambdaArguments) argument.type], inferredResult), span);
+			TFunction([for (argument in lambdaArguments) argument.type], inferredResult,
+			FunctionTypes.ofArguments(arguments)),
+			span);
 		session.counters.lambdaCache.set(variantKey, lambdaResult);
 		session.monomorphs.recordLambda(variantKey);
 		return lambdaResult;
@@ -270,7 +272,7 @@ class ClosureTyper {
 		if (type == null)
 			return null;
 		return switch type {
-			case TFunction(arguments, result): {arguments: arguments, result: result};
+			case TFunction(arguments, result, _): {arguments: arguments, result: result};
 			case TNullable(inner): expectedFunctionType(inner);
 			default: null;
 		};

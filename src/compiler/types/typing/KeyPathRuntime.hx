@@ -80,11 +80,11 @@ class KeyPathRuntime {
 				steps =
 					[for (entry in definition.fields) "/" + entry.declaration.name + "." + entry.field.name].join(""),
 				tail = [for (entry in definition.fields) entry.field.name].join("."),
-				getterType = TFunction([definition.root], definition.value),
+				getterType = TFunction([definition.root], definition.value, []),
 				setterType = TFunction([
 					definition.root,
 					definition.value
-				], definition.root),
+				], definition.root, []),
 				values:Array<compiler.types.TypedAst.TypedObjectField> = [
 					{
 						name: "$get",

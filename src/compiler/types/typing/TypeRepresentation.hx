@@ -289,7 +289,7 @@ class TypeRepresentation {
 				|| exceedsOwnerComplexity(value, depth + 1, active, remaining);
 			case TKeyPath(root, value, _): exceedsOwnerComplexity(root, depth + 1, active, remaining)
 				|| exceedsOwnerComplexity(value, depth + 1, active, remaining);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				anyExceedsOwnerComplexity(arguments, depth + 1, active, remaining)
 					|| exceedsOwnerComplexity(result, depth + 1, active, remaining);
 			case TAnonymous(_, fields):
@@ -345,7 +345,7 @@ class TypeRepresentation {
 				case TMap(key, value):
 					if (!typeNamesExist([key, value]))
 						return false;
-				case TFunction(arguments, result):
+				case TFunction(arguments, result, _):
 					if (!typeNamesExist(arguments) || !typeNamesExist([result]))
 						return false;
 				default:
@@ -389,7 +389,7 @@ class TypeRepresentation {
 				discoverOwners(value, explored, origin);
 			case TKeyPath(root, value, _): discoverOwners(root, explored, origin);
 				discoverOwners(value, explored, origin);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				for (argument in arguments) discoverOwners(argument, explored, origin);
 				discoverOwners(result, explored, origin);
 			case TAnonymous(_, fields):
@@ -412,7 +412,7 @@ class TypeRepresentation {
 			case TMap(key, value): containsTypeParameter(key, explored) || containsTypeParameter(value, explored);
 			case TKeyPath(root, value, _): containsTypeParameter(root, explored)
 				|| containsTypeParameter(value, explored);
-			case TFunction(arguments, result): anyTypeParameter(arguments, explored)
+			case TFunction(arguments, result, _): anyTypeParameter(arguments, explored)
 				|| containsTypeParameter(result, explored);
 			case TAnonymous(_, fields):
 				var found = false;
@@ -477,7 +477,7 @@ class TypeRepresentation {
 		case ArrayType(element), NullableType(element): enumContainsParameter(element, parameter, seen);
 		case MapType(key, value): enumContainsParameter(key, parameter, seen)
 			|| enumContainsParameter(value, parameter, seen);
-		case FunctionType(arguments, result):
+		case FunctionType(arguments, result, _):
 			var found = enumContainsParameter(result, parameter, seen);
 			for (argument in arguments) if (enumContainsParameter(argument, parameter, seen)) found = true;
 			found;
@@ -496,7 +496,7 @@ class TypeRepresentation {
 			found;
 		case ArrayType(element), NullableType(element): containsSyntaxParameter(element, parameter);
 		case MapType(key, value): containsSyntaxParameter(key, parameter) || containsSyntaxParameter(value, parameter);
-		case FunctionType(arguments, result):
+		case FunctionType(arguments, result, _):
 			var found = containsSyntaxParameter(result, parameter);
 			for (argument in arguments) if (containsSyntaxParameter(argument, parameter)) found = true;
 			found;
@@ -533,7 +533,7 @@ class TypeRepresentation {
 				containsExactValueLayout(representation, explored);
 			case TMap(key, value): containsExactValueLayout(key, explored) || containsExactValueLayout(value, explored);
 			case TKeyPath(_, _, _): true;
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				var found = containsExactValueLayout(result, explored);
 				for (argument in arguments)
 					if (containsExactValueLayout(argument, explored))
@@ -655,8 +655,8 @@ class TypeRepresentation {
 					case TInstance(_, _, erasedValues): scalarMapArguments(values, erasedValues, seen);
 					default: false;
 				};
-			case TFunction(values, result): switch physical {
-					case TFunction(erasedValues, erasedResult): scalarMapArguments(values, erasedValues, seen)
+			case TFunction(values, result, _): switch physical {
+					case TFunction(erasedValues, erasedResult, _): scalarMapArguments(values, erasedValues, seen)
 						|| hasMapStorageChange(result, erasedResult, seen);
 					default: false;
 				};
@@ -770,7 +770,7 @@ class TypeRepresentation {
 			case TNullable(_): true;
 			default: false;
 		};
-		if (argument.optional == true && AstPredicates.isNullExpression(argument.defaultValue) && !alreadyNullable) {
+		if (AstPredicates.isNullableArgument(argument) && !alreadyNullable) {
 			result = {
 				semantic: TNullable(result.semantic),
 				physical: TNullable(result.physical)

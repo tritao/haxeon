@@ -534,11 +534,11 @@ class DeclarationIndex {
 					case TNullable(_): resolved;
 					default: TNullable(resolved);
 				}
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, optional):
 				TFunction([
 					for (argument in arguments)
 						resolveInner(argument, span, resolving, substitutions)
-				], resolveInner(result, span, resolving, substitutions));
+				], resolveInner(result, span, resolving, substitutions), FunctionTypes.canonical(optional));
 			case AnonymousType(parsedFields):
 				var fields:Array<AnonymousField> = [];
 				fillAnonymousFields(parsedFields, span, resolving, substitutions, fields);
@@ -800,7 +800,7 @@ class DeclarationIndex {
 			case MapType(key, value):
 				collectAliasReferences(key, parameters, into);
 				collectAliasReferences(value, parameters, into);
-			case FunctionType(arguments, result):
+			case FunctionType(arguments, result, _):
 				for (argument in arguments)
 					collectAliasReferences(argument, parameters, into);
 				collectAliasReferences(result, parameters, into);
@@ -879,7 +879,7 @@ class DeclarationIndex {
 		return switch type {
 			case TNullable(_): type;
 			case TInt, TInt64, TBool, TFloat, TString, TDynamic, TNativeAbstract(_), TAnonymous(_, _), TArray(_),
-				TIterator(_), TFunction(_, _), TMap(_, _):
+				TIterator(_), TFunction(_, _, _), TMap(_, _):
 				TNullable(type);
 			case TInstance(NominalKind.NativeValue, _, _): type;
 			case TInstance(_, _, _): TNullable(type);
@@ -915,7 +915,7 @@ class DeclarationIndex {
 			case TKeyPath(root, value,
 				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + typeKey(root) + "," + typeKey(value) + ">";
 			case TFunction(arguments,
-				result): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
+				result, _): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
 			case TAnonymous(name, _): name;
 			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : typeKey(cell.bound);
 		};
@@ -1099,9 +1099,9 @@ class DeclarationIndex {
 			if (!TypeRelations.equals(inheritedArgumentType(argument, left),
 				inheritedArgumentType(baseArgument, right)))
 				return false;
-			if ((baseArgument.optional == true || baseArgument.defaultValue != null)
-				&& argument.optional != true
-				&& argument.defaultValue == null)
+			// Haxe requires the same optional flags (`Not_matching_optional`): the method's dispatch ABI depends on them.
+			if (compiler.syntax.AstPredicates.isOptionalArgument(baseArgument)
+				!= compiler.syntax.AstPredicates.isOptionalArgument(argument))
 				return false;
 		}
 		var result = resolve(method.result, method.span, left),
@@ -1118,13 +1118,15 @@ class DeclarationIndex {
 	}
 
 	function inheritedArgumentType(argument:AstArgument, substitutions:Map<String, CompilerType>):CompilerType {
-		var type = resolve(argument.type, argument.span, substitutions);
-		if (argument.optional == true && compiler.syntax.AstPredicates.isNullExpression(argument.defaultValue))
-			return switch type {
-				case TNullable(_): type;
-				default: TNullable(type);
-			};
-		return type;
+		var type = resolve(argument.type, argument.span, substitutions),
+			relations = new TypeRelations(this);
+		// `Null<String>` is `String`, as in Haxe: the type holds null already.
+		return switch type {
+			case TNullable(inner) if (TypeRelations.isReference(inner) && !relations.isValueClass(inner)): inner;
+			case TNullable(_): type;
+			default: compiler.syntax.AstPredicates.isNullableArgument(argument)
+				&& !(TypeRelations.isReference(type) && !relations.isValueClass(type)) ? TNullable(type) : type;
+		};
 	}
 
 	function inheritedMethodConstraints(method:AstFunction, parameter:String,

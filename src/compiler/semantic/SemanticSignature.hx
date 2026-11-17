@@ -76,8 +76,8 @@ class SemanticSignature {
 			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
 			case TKeyPath(root, value,
 				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + type(root) + "," + type(value) + ">";
-			case TFunction(arguments,
-				result): '(${[for (argument in arguments) type(argument)].join(",")})->${type(result)}';
+			case TFunction(arguments, result,
+				optional): '(${[for (index in 0...arguments.length) optionalMark(optional, index) + type(arguments[index])].join(",")})->${type(result)}';
 			case TAnonymous(name, _): name;
 			// A filled type variable is spelled as its type, so keys made while it is in a type match the ones made after.
 			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : type(cell.bound);
@@ -109,11 +109,14 @@ class SemanticSignature {
 			case TMap(key, value): 'Map<${display(key)},${display(value)}>';
 			case TKeyPath(root, value,
 				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + display(root) + "," + display(value) + ">";
-			case TFunction(arguments,
-				result): '(${[for (argument in arguments) display(argument)].join(",")})->${display(result)}';
+			case TFunction(arguments, result,
+				optional): '(${[for (index in 0...arguments.length) optionalMark(optional, index) + display(arguments[index])].join(",")})->${display(result)}';
 			case TAnonymous(name, _): name;
 			case TMonomorph(cell): cell.bound == null ? "Unknown" : display(cell.bound);
 		};
+
+	static function optionalMark(optional:Array<Bool>, index:Int):String
+		return compiler.types.FunctionTypes.isOptional(optional, index) ? "?" : "";
 
 	static function displayApplied(name:String, arguments:Array<CompilerType>):String
 		return arguments.length == 0 ? name : '$name<${[for (argument in arguments) display(argument)].join(",")}>';
@@ -204,8 +207,8 @@ class SemanticSignature {
 			case MapType(key,
 				value): 'Map<${parsedType(key, aliases, resolving)},${parsedType(value, aliases, resolving)}>';
 			case NullableType(element): 'Null<${parsedType(element, aliases, resolving)}>';
-			case FunctionType(arguments, result):
-				'(${[for (argument in arguments) parsedType(argument, aliases, resolving)].join(",")})->${parsedType(result, aliases, resolving)}';
+			case FunctionType(arguments, result, optional):
+				'(${[for (index in 0...arguments.length) optionalMark(optional, index) + parsedType(arguments[index], aliases, resolving)].join(",")})->${parsedType(result, aliases, resolving)}';
 			case AnonymousType(fields):
 				var ordered = fields.copy();
 				ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));

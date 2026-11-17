@@ -61,7 +61,7 @@ class GenericOwnerPolicyMain {
 			throw "an owner at the nesting limit must still specialize";
 		expectComplexityLimit(first, TArray(bounded));
 		var broad:CompilerType = TInt;
-		for (_ in 0...12) broad = TFunction([broad, broad], TVoid);
+		for (_ in 0...12) broad = TFunction([broad, broad], TVoid, []);
 		expectComplexityLimit(first, broad);
 		var fields:Array<compiler.types.Type.AnonymousField> = [];
 		var tree:CompilerType = TAnonymous("Tree", fields);
@@ -79,7 +79,7 @@ class GenericOwnerPolicyMain {
 		if (reloaded == null || reloaded.name != box.name || second.representation.genericOwnerRequestCount() != 1)
 			throw "owner identity or discovery changed across typing sessions";
 		second.representation.discoverGenericOwners(TFunction([TArray(instance("Nested", [firstValue, reference]))],
-			TVoid));
+			TVoid, []));
 		if (second.representation.genericOwnerRequestCount() != 2
 			|| second.representation.genericOwnerRequest(1).origin != "Nested")
 			throw "signature type discovery missed a nested generic owner";

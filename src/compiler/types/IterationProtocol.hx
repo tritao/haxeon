@@ -15,20 +15,20 @@ class IterationProtocol {
 		var fields:Array<AnonymousField> = name == "Iterator" ? [
 			{
 				name: "hasNext",
-				type: TFunction([], TBool),
+				type: TFunction([], TBool, []),
 				optional: false,
 				isFinal: true
 			},
 			{
 				name: "next",
-				type: TFunction([], element),
+				type: TFunction([], element, []),
 				optional: false,
 				isFinal: true
 			}
 		] : [
 			{
 				name: "iterator",
-				type: TFunction([], contract("Iterator", element)),
+				type: TFunction([], contract("Iterator", element), []),
 				optional: false,
 				isFinal: true
 			}
@@ -41,7 +41,7 @@ class IterationProtocol {
 			case TAnonymous(_, fields) if (iteratorFields(fields)): "Iterator";
 			case TAnonymous(_, [field]) if (field.name == "iterator" && field.isFinal && !field.optional):
 				switch field.type {
-					case TFunction([], TAnonymous(_, fields)) if (iteratorFields(fields)): "Iterable";
+					case TFunction([], TAnonymous(_, fields), _) if (iteratorFields(fields)): "Iterable";
 					default: null;
 				}
 			default: null;
@@ -57,12 +57,12 @@ class IterationProtocol {
 			switch field.name {
 				case "hasNext":
 					hasNext = switch field.type {
-						case TFunction([], TBool): true;
+						case TFunction([], TBool, _): true;
 						default: false;
 					};
 				case "next":
 					next = switch field.type {
-						case TFunction([], _): true;
+						case TFunction([], _, _): true;
 						default: false;
 					};
 				default:
@@ -79,15 +79,15 @@ class IterationProtocol {
 		switch type {
 			case TArray(element):
 				if (name == "iterator")
-					return {type: TFunction([], TIterator(element)), owner: null};
+					return {type: TFunction([], TIterator(element), []), owner: null};
 			case TMap(_, element):
 				if (name == "iterator")
-					return {type: TFunction([], TIterator(element)), owner: null};
+					return {type: TFunction([], TIterator(element), []), owner: null};
 			case TIterator(element):
 				if (name == "hasNext")
-					return {type: TFunction([], TBool), owner: null};
+					return {type: TFunction([], TBool, []), owner: null};
 				if (name == "next")
-					return {type: TFunction([], element), owner: null};
+					return {type: TFunction([], element, []), owner: null};
 			case TAnonymous(_, fields):
 				for (field in fields)
 					if (field.name == name && !field.optional)
@@ -113,7 +113,7 @@ class IterationProtocol {
 							type: TFunction([
 								for (argument in method.arguments)
 									declarations.resolve(argument.type, argument.span, substitutions)
-							], declarations.resolve(method.result, method.span, substitutions)),
+							], declarations.resolve(method.result, method.span, substitutions), []),
 							owner: owner
 						};
 					}
@@ -141,7 +141,7 @@ class IterationProtocol {
 	public static function result(declarations:DeclarationIndex, type:CompilerType, name:String):Null<CompilerType> {
 		var found = method(declarations, type, name);
 		return found == null ? null : switch found.type {
-			case TFunction([], result): result;
+			case TFunction([], result, _): result;
 			default: null;
 		};
 	}
@@ -186,7 +186,7 @@ class IterationProtocol {
 		if (found == null)
 			throw new CompileError(new Diagnostic("E1014", 'Iteration requires "$name()"', span));
 		var result = switch found.type {
-			case TFunction([], result): result;
+			case TFunction([], result, _): result;
 			default: throw new CompileError(new Diagnostic("E1014", 'Iteration requires a zero-argument "$name()"',
 				span));
 		};
@@ -206,7 +206,7 @@ class IterationProtocol {
 			case _ if (found.owner == null):
 				var representation = session.representation.resolveField(receiver.type, name, span);
 				var physicalResult = switch representation.physical {
-					case TFunction([], result): result;
+					case TFunction([], result, _): result;
 					default: throw "Expected callable iteration field";
 				};
 				var field = new TypedExpression(TField(receiver, name), representation.physical, span);

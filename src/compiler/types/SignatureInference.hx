@@ -468,7 +468,7 @@ class SignatureInference {
 				})) method.result;
 				else inferQualifiedCollectionCall(name, environment);
 			case ClosureCall(callee, _, _): switch inferExpression(callee, environment, enums, methods) {
-					case FunctionType(_, result): result;
+					case FunctionType(_, result, _): result;
 					default: null;
 				};
 			case MethodCall(object, name, _,
@@ -604,8 +604,8 @@ class SignatureInference {
 					case NullableType(other): sameType(element, other);
 					default: false;
 				};
-			case FunctionType(arguments, result): switch right {
-					case FunctionType(otherArguments, otherResult): sameTypes(arguments, otherArguments)
+			case FunctionType(arguments, result, _): switch right {
+					case FunctionType(otherArguments, otherResult, _): sameTypes(arguments, otherArguments)
 						&& sameType(result, otherResult);
 					default: false;
 				};

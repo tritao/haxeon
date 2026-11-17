@@ -49,7 +49,7 @@ class DefaultArguments {
 
 	static function holdsNull(type:CompilerType, relations:TypeRelations):Bool
 		return switch type {
-			case TString, TDynamic, TNullable(_), TArray(_), TMap(_, _), TFunction(_, _), TAnonymous(_, _): true;
+			case TString, TDynamic, TNullable(_), TArray(_), TMap(_, _), TFunction(_, _, _), TAnonymous(_, _): true;
 			case TInstance(NominalKind.Class, _, _): !relations.isValueClass(type);
 			case TInstance(NominalKind.Interface, _, _): true;
 			default: false;

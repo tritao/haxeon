@@ -2161,7 +2161,7 @@ class LanguageService {
 			case MapType(key, value): 'Map<${typeName(key)},${typeName(value)}>';
 			case NullableType(element): 'Null<${typeName(element)}>';
 			case FunctionType(arguments,
-				result): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
+				result, _): '(${[for (argument in arguments) typeName(argument)].join(",")})->${typeName(result)}';
 			case AnonymousType(fields): '{${[for (field in fields) (field.optional ? "?" : "") + field.name + ":" + typeName(field.type)].join(",")}}';
 		};
 	}
@@ -2181,7 +2181,8 @@ class LanguageService {
 			case TInstance(_, name, arguments): arguments.length == 0 ? name : name
 				+ "<"
 				+ [for (argument in arguments) compilerTypeName(argument)].join(",") + ">";
-			case TFunction(arguments, result): "(" + [for (argument in arguments) compilerTypeName(argument)].join(",")
+			case TFunction(arguments, result,
+				_): "(" + [for (argument in arguments) compilerTypeName(argument)].join(",")
 				+ ")->" + compilerTypeName(result);
 			default: Std.string(type);
 		};

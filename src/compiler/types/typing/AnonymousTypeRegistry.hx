@@ -32,7 +32,7 @@ class AnonymousTypeRegistry {
 			case TMap(key, value):
 				recordUses(key, seen);
 				recordUses(value, seen);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				for (argument in arguments)
 					recordUses(argument, seen);
 				recordUses(result, seen);
@@ -63,7 +63,7 @@ class AnonymousTypeRegistry {
 			case TMap(key, value):
 				discover(key);
 				discover(value);
-			case TFunction(arguments, result):
+			case TFunction(arguments, result, _):
 				for (argument in arguments)
 					discover(argument);
 				discover(result);

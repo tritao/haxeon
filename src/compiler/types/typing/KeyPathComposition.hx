@@ -42,8 +42,8 @@ class KeyPathComposition {
 			v = local("value", value, span),
 			mid = get(cp, r, middle, span),
 			read = get(cq, mid, value, span),
-			getterType = TFunction([root], value),
-			setterType = TFunction([root, value], root);
+			getterType = TFunction([root], value, []),
+			setterType = TFunction([root, value], root, []);
 		for (pathType in [left.type, right.type, type]) new AnonymousTypeRegistry(session).register(pathType);
 		session.closureConversion.addEnvironment(environment, captures);
 		function add(suffix:String, arguments:Array<{name:String, type:CompilerType}>, result:CompilerType,
@@ -113,14 +113,15 @@ class KeyPathComposition {
 	static function field(path:TypedExpression, name:String, type:CompilerType,
 			span:SourceSpan):TypedExpression return new TypedExpression(TField(path, name), type, span);
 	static function get(path:TypedExpression, root:TypedExpression, value:CompilerType, span:SourceSpan):TypedExpression
-		return new TypedExpression(TClosureCall(field(path, "$get", TFunction([root.type], value), span), [root]),
+		return new TypedExpression(TClosureCall(field(path, "$get", TFunction([root.type], value, []), span), [root]),
 			value, span);
 	static function set(path:TypedExpression, root:TypedExpression, value:TypedExpression, result:CompilerType,
 			span:SourceSpan):TypedExpression
-		return new TypedExpression(TClosureCall(field(path, "$set", TFunction([root.type, value.type], result), span), [
-			root,
-			value
-		]), result, span);
+		return new TypedExpression(TClosureCall(field(path, "$set", TFunction([root.type, value.type], result, []),
+			span), [
+				root,
+				value
+			]), result, span);
 	static function addStrings(a:TypedExpression, b:TypedExpression,
 			span:SourceSpan):TypedExpression return new TypedExpression(TAdd(a, b), TString, span);
 	static function dotted(a:TypedExpression, b:TypedExpression, span:SourceSpan):TypedExpression
