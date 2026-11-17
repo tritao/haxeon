@@ -735,7 +735,7 @@ class TestMain {
 		expectCompileError('function main():Int { throw; }', 'Expected expression');
 		expectCompileError('function noop():Void { return; } function main():Int { throw noop(); }',
 			'Cannot throw a Void value');
-		expectCompileError('function main():Int { throw null; }', 'Cannot throw null');
+		Frontend.compile('function main():Int { try { throw null; } catch (error:Dynamic) { return error == null ? 42 : 0; } }');
 		expectCompileError('function main():Int { try { return 42; } catch (error:Array<Int>) { return 0; } }',
 			'Unsupported catch binding type');
 		expectCompileError('function main():Int { try { return 42; } catch (error:Dynamic) { return 0; } catch (text:String) { return 1; } }',

@@ -2006,7 +2006,9 @@ class ExpressionTyper {
 		return ConversionResolver.plainValue(value, bodyTyper);
 
 	public function throwExpression(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression
-		return new TypedExpression(TThrowExpression(bodyTyper.typeExpression(value, scope)), TNever, span);
+		return new TypedExpression(TThrowExpression(ThrownValue.of(bodyTyper, bodyTyper.typeExpression(value, scope))),
+			TNever,
+			span);
 
 	public function postfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
 		var typedTarget = bodyTyper.typeExpression(target, scope);
