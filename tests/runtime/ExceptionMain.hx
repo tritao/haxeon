@@ -20,7 +20,7 @@ class ExceptionMain {
 			+ "  try { throw new ValueException(42, root); }\n"
 			+ "  catch (error:ValueException) {\n"
 			+ "    return identity(42) == 42 && checkSample() && error.value == 42 && error.message == '42' && error.previous != null && error.previous.message == 'root'"
-			+ " && error.stack.length == 0 && error.details() == '42' && CallStack.exceptionStack().length > 0 ? 42 : 0;\n"
+			+ " && error.stack.length > 0 && StringTools.startsWith(error.details(), 'Exception: root') && error.details().indexOf('Next Exception: 42') > 0 && CallStack.exceptionStack().length > 0 ? 42 : 0;\n"
 			+ "  }\n"
 			+ "}");
 		File.saveBytes(Sys.args()[0], HlWriter.encode(compiler.compile("Main").artifact.hashLink().module).flatten());

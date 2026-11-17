@@ -54,8 +54,12 @@ and `haxe.CallStack`. Exception objects retain messages, wrapped values, and
 previous-exception chains. As on Haxe's HashLink target, `throw` throws a value
 as it is: `catch (e:haxe.Exception)` wraps a value that is no exception in a
 `haxe.ValueException`, a catch of another type tests the value a
-`ValueException` wraps, and `catch (e:Dynamic)` binds the thrown value. Caught exception stacks resolve through HashLink's
-native stack capture. Current-call snapshots remain empty.
+`ValueException` wraps, and `catch (e:Dynamic)` binds the thrown value. Stacks resolve through HashLink's native stack
+capture: `CallStack.exceptionStack()` the frames of the last throw, `CallStack.callStack()` and a new exception's `stack`
+the frames calling them. `CallStack.toString` and `Exception.details()` print them as Haxe does on HashLink
+(`Exception: <message>`, then `Called from Class.method (file line N)` per frame, a `previous` chain joined by
+`Next`). Frame names are Haxeon's: a static method is `Class.method` (Haxe's `$Class.method`), a lambda keeps its
+`$lambda:` name, and a function the inliner spliced into its caller has no frame of its own. On Wasm stacks are empty.
 
 `EReg` accepts both `new EReg(pattern, options)` and Haxe regex-literal syntax.
 The current deterministic subset treats patterns literally and supports `i`

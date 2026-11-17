@@ -60,7 +60,7 @@ function check():Bool {
 			checks[index]();
 		} catch (error:Dynamic) {
 			var stack = CallStack.toString(CallStack.exceptionStack());
-			caught = Std.string(error).indexOf("Null access") >= 0 && stack.indexOf("WorkerNullAccess.hx:") >= 0;
+			caught = Std.string(error).indexOf("Null access") >= 0 && stack.indexOf("WorkerNullAccess.hx line ") >= 0;
 			if (index == 0)
 				caught = caught && stack.indexOf("resolveTarget") >= 0;
 			if (!caught)

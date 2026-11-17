@@ -521,6 +521,7 @@ DEFINE_PRIM(_I32,__string_index_of,_STRING _STRING);
 DEFINE_PRIM(_I32,__string_index_of_from,_STRING _STRING _I32);
 DEFINE_PRIM(_ARR,__string_split,_STRING _STRING);
 DEFINE_PRIM(_ARR,__exception_stack,_NO_ARG);
+DEFINE_PRIM(_ARR,__call_stack,_NO_ARG);
 DEFINE_PRIM(_I32,__string_compare_full,_STRING _STRING);
 DEFINE_PRIM(_STRING,__string_ltrim,_STRING);
 DEFINE_PRIM(_STRING,__string_trim,_STRING);

@@ -33,7 +33,7 @@ class Exception {
 		// An exception made for a value already thrown (`caught`) carries the stack of that throw.
 		if (native == null) {
 			this.native = this;
-			stack = CallStack.callStack();
+			stack = CallStack.constructorStack();
 		} else {
 			this.native = native;
 			stack = CallStack.exceptionStack();
@@ -46,6 +46,26 @@ class Exception {
 	public function toString():String
 		return message;
 
-	public function details():String
-		return message + CallStack.toString(stack);
+	/**
+		`Exception: <message>` and the stack, as Haxe prints it; with a chain of `previous` exceptions, each from the first
+		thrown on, its stack less the frames it shares with the one before it, joined by `Next`.
+	**/
+	public function details():String {
+		if (previous == null)
+			return 'Exception: ${toString()}${CallStack.toString(stack)}';
+		var result = "",
+			current:Null<Exception> = this,
+			after:Null<Exception> = null;
+		while (current != null) {
+			if (after == null)
+				result = 'Exception: ${current.message}${CallStack.toString(current.stack)}' + result;
+			else
+				result =
+					'Exception: ${current.message}${CallStack.toString(current.stack.subtract(after.stack))}\n\nNext '
+					+ result;
+			after = current;
+			current = current.previous;
+		}
+		return result;
+	}
 }

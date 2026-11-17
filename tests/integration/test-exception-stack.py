@@ -27,7 +27,7 @@ class Main {
     catch (error:Dynamic) {
       var stack = CallStack.toString(CallStack.exceptionStack());
       Sys.println(stack);
-      return stack.indexOf("Main.fail") >= 0 && stack.indexOf("Main.hx:") >= 0 ? 0 : 1;
+      return stack.indexOf("Main.fail") >= 0 && stack.indexOf("Main.hx line ") >= 0 ? 0 : 1;
     }
   }
 }

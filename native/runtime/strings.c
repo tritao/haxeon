@@ -483,3 +483,20 @@ extern varray *hl_exception_stack( void );
 HL_PRIM varray *HL_NAME(__exception_stack)( void ) {
 	return realtime_string_array(hl_exception_stack());
 }
+
+/* The symbols of the HashLink frames now on the stack, innermost first, as hl_exception_stack names the frames of a throw. */
+HL_PRIM varray *HL_NAME(__call_stack)( void ) {
+	void *frames[0x400];
+	int count = hl_setup.capture_stack == NULL ? 0 : hl_setup.capture_stack(frames, 0x400), size = 0;
+	varray *result = hl_alloc_array(hl_string_type, count);
+	vstring **target = hl_aptr(result, vstring *);
+	for( int i = 0; i < count; i++ ) {
+		uchar symbol[512];
+		int length = 512;
+		uchar *text = hl_setup.resolve_symbol == NULL ? NULL : hl_setup.resolve_symbol(frames[i], symbol, &length);
+		if( text != NULL )
+			hl_gc_store_ref(&target[size++],realtime_string_of_ustr(text),hl_string_type);
+	}
+	result->size = size;
+	return result;
+}
