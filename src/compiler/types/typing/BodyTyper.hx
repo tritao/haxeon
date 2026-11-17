@@ -303,6 +303,9 @@ class BodyTyper implements BodyTyping {
 			isExposed: hasFunctionMetadata(fn, "expose"),
 			arguments: arguments,
 			result: result,
+			dispatchEntry: !isConstructor && abstractReceiver == null && arguments.length == fn.arguments.length
+				&& DefaultArguments.hasDispatchEntry(fn.arguments, [for (argument in arguments) argument.type],
+				session.relations) ? DefaultArguments.dispatchName(functionName) : null,
 			statements: statements,
 			cells: copyMap(context.storage.cells),
 			cellCaptures: [],
@@ -315,8 +318,70 @@ class BodyTyper implements BodyTyping {
 					compiler.types.Monomorphs.resolve(requiredMapValue(context.storage.types, name)),
 					requiredMapValue(context.storage.kinds, name));
 		}
+		if (resultFunction.dispatchEntry != null)
+			session.closureConversion.addFunction(dispatchEntry(resultFunction, fn,
+				physicalOwner == null ? owner : physicalOwner, substitutions));
 		leaveBody(functionContext);
 		return resultFunction;
+	}
+
+	/**
+	 * The dispatch entry of `body`, typed from `fn`, when it has one (`DefaultArguments`): it takes `Null<T>` for each
+	 * argument with a value default, replaces null with the default and calls `body`. Its defaults are typed here, once,
+	 * in the function's own unit.
+	 */
+	function dispatchEntry(body:TypedFunction, fn:AstFunction, receiverOwner:Null<String>,
+			substitutions:Null<Map<String, CompilerType>>):TypedFunction {
+		var span = fn.span,
+			arguments:Array<{name:String, type:CompilerType}> = [],
+			callArguments:Array<TypedExpression> = [];
+		if (!body.isStatic && receiverOwner != null) {
+			// A generic owner's shared body takes its receiver as the erased class, as its method slot does.
+			var declaration = session.classDecls.get(requiredString(body.owner));
+			callArguments.push(new TypedExpression(TLocal("this"),
+				declaration != null && declaration.typeParameters.length > 0 ? TInstance(NominalKind.Class,
+				receiverOwner, []) : session.representation.receiverType(requiredString(body.owner),
+				context.typeSubstitutions), span));
+		}
+		for (index in 0...fn.arguments.length) {
+			var argument = fn.arguments[index], parameter = body.arguments[index];
+			if (!DefaultArguments.valueDefault(argument, parameter.type, session.relations)) {
+				arguments.push(parameter);
+				callArguments.push(new TypedExpression(TLocal(parameter.name), parameter.type, argument.span));
+				continue;
+			}
+			var boxedType = CompilerType.TNullable(parameter.type),
+				boxed = new TypedExpression(TLocal(parameter.name), boxedType, argument.span),
+				absent = new TypedExpression(TEqual(boxed,
+					new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, argument.span)),
+					boxedType,
+					argument.span)),
+					TBool, argument.span),
+				defaultValue = coerce(typeDefaultExpression(argument.defaultValue, parameter.type, body.name),
+					parameter.type, 'default argument ${index + 1} to "${body.name}"', "E1009");
+			arguments.push({name: parameter.name, type: boxedType});
+			callArguments.push(new TypedExpression(TConditional(absent, defaultValue,
+				new TypedExpression(TCast(boxed), parameter.type, argument.span)), parameter.type, argument.span));
+		}
+		var call = new TypedExpression(TCall(body.name, callArguments), body.result, span);
+		return {name: requiredString(body.dispatchEntry),
+			role: OtherFunction,
+			origin: body.name,
+			originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
+			typeArguments: body.typeArguments,
+			owner: body.owner,
+			physicalOwner: body.physicalOwner,
+			isStatic: body.isStatic,
+			isConstructor: false,
+			arguments: arguments,
+			result: body.result,
+			statements: switch body.result {
+				case TVoid: [TExpression(call, span), TReturnVoid(span)];
+				default: [TReturn(call, span)];
+			},
+				cells: [],
+				cellCaptures: [],
+				span: span};
 	}
 
 	/**
@@ -1492,10 +1557,15 @@ class BodyTyper implements BodyTyping {
 				&& sameType(expectedFunction.result, TInt))
 				new TypedExpression(TFunctionRef("__string_compare_full"), TFunction([TString, TString], TInt, []),
 					span);
-			else if (session.signatures.exists(functionName))
-				new TypedExpression(TFunctionRef(functionName),
-					functionType(requiredMapValue(session.signatures, functionName)), span);
-			else if (session.externals.exists(name)) {
+			else if (session.signatures.exists(functionName)) {
+				var fn = requiredMapValue(session.signatures, functionName),
+					types = [for (argument in fn.arguments) argumentType(argument)];
+				// A function value is the dispatch entry when the function has one: a call through it may omit an argument.
+				new TypedExpression(TFunctionRef(DefaultArguments.hasDispatchEntry(fn.arguments, types,
+					session.relations) ? DefaultArguments.dispatchName(functionName) : functionName),
+					dispatchFunctionType(fn, types, lowerType(fn.result, fn.span)), span);
+			}
+				else if (session.externals.exists(name)) {
 				var external = session.externals.get(name);
 				new TypedExpression(TFunctionRef(name), TFunction(external.arguments, external.result, []), span);
 			} else if (session.enumAbstractName(name) != null) {
@@ -2045,6 +2115,10 @@ class BodyTyper implements BodyTyping {
 					resolvedMethodInfo.owner)),
 					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
 					result = session.declarations.resolve(method.result, method.span, substitutions);
+				// A method value binds the dispatch entry when the method has one, as a virtual call reaches it.
+				if (DefaultArguments.hasDispatchEntry(method.arguments, arguments, session.relations))
+					return new TypedExpression(TMethodRef(typedObject, DefaultArguments.dispatchName(methodKey)),
+						dispatchFunctionType(method, arguments, result), span);
 				return new TypedExpression(TMethodRef(typedObject, methodKey),
 					TFunction(arguments, result, FunctionTypes.ofArguments(method.arguments)), span);
 			}
@@ -2169,9 +2243,12 @@ class BodyTyper implements BodyTyping {
 		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
 	}
 
-	function functionType(fn:AstFunction):CompilerType
-		return TFunction([for (argument in fn.arguments) argumentType(argument)], lowerType(fn.result, fn.span),
-			FunctionTypes.ofArguments(fn.arguments));
+	/** The type of a value of `fn`, whose arguments have `types`: the signature of its dispatch entry (`DefaultArguments`). */
+	function dispatchFunctionType(fn:AstFunction, types:Array<CompilerType>, result:CompilerType):CompilerType
+		return TFunction([
+			for (index in 0...fn.arguments.length)
+				DefaultArguments.dispatchType(fn.arguments[index], types[index], session.relations)
+		], result, FunctionTypes.ofArguments(fn.arguments));
 
 	function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>,
 			name:String):Array<TypedExpression> {
@@ -2211,7 +2288,8 @@ class BodyTyper implements BodyTyping {
 		var previousCaller = defaultArgumentCaller;
 		if (defaultArgumentCaller == null)
 			defaultArgumentCaller = context.name;
-		var body = enterBody(TypingSession.DEFAULT_ARGUMENT_PREFIX + declarationName, null,
+		var body = enterBody(TypingSession.defaultArgumentBody(requiredString(defaultArgumentCaller), declarationName),
+			null,
 			parentPath(declarationName));
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);

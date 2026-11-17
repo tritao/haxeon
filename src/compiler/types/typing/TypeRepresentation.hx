@@ -93,28 +93,43 @@ class TypeRepresentation {
 			method:AstFunction):TypeRepresentationResult
 		return resolve(method.result, method.span, methodSubstitutions(receiver, owner));
 
-	/** Resolve all method parameters through the receiver's nominal projection. */
-	public function resolveMethodArguments(receiver:CompilerType, owner:String,
-			method:AstFunction):Array<TypeRepresentationResult> {
+	/**
+	 * Resolve all method parameters through the receiver's nominal projection, as the method's body takes them, or as its
+	 * dispatch entry does (`dispatch`, `DefaultArguments`), which virtual and interface calls reach.
+	 */
+	public function resolveMethodArguments(receiver:CompilerType, owner:String, method:AstFunction,
+			dispatch:Bool = false):Array<TypeRepresentationResult> {
 		var substitutions = methodSubstitutions(receiver, owner),
 			result:Array<TypeRepresentationResult> = [];
 		for (argument in method.arguments)
-			result.push(resolveArgument(argument, substitutions));
+			result.push(dispatch ? dispatchArgument(argument, substitutions) : resolveArgument(argument,
+				substitutions));
 		return result;
 	}
 
-	/** Resolve one method parameter through the receiver's nominal projection. */
+	/** Resolve one method parameter through the receiver's nominal projection, as the dispatch entry takes it. */
 	public function resolveMethodArgument(receiver:CompilerType, owner:String,
 			argument:AstArgument):TypeRepresentationResult
-		return resolveArgument(argument, methodSubstitutions(receiver, owner));
+		return dispatchArgument(argument, methodSubstitutions(receiver, owner));
 
-	/** Adapt semantic call arguments to the physical method signature. */
+	/** Adapt semantic call arguments to the physical method signature, of the body or of the dispatch entry. */
 	public function adaptMethodArguments(receiver:CompilerType, owner:String, method:AstFunction,
-			arguments:Array<TypedExpression>):Array<TypedExpression> {
+			arguments:Array<TypedExpression>, dispatch:Bool = false):Array<TypedExpression> {
 		return adaptArguments(arguments, [
-			for (representation in resolveMethodArguments(receiver, owner, method))
+			for (representation in resolveMethodArguments(receiver, owner, method, dispatch))
 				representation.physical
 		], receiver);
+	}
+
+	function dispatchArgument(argument:AstArgument, substitutions:{
+		semantic:Map<String, CompilerType>,
+		physical:Map<String, CompilerType>
+	}):TypeRepresentationResult {
+		var result = resolveArgument(argument, substitutions);
+		return DefaultArguments.valueDefault(argument, result.semantic, session.relations) ? {
+			semantic: TNullable(result.semantic),
+			physical: TNullable(result.physical)
+		} : result;
 	}
 
 	/** Adapt constructor arguments, including constructors without a declaration. */

@@ -2246,9 +2246,12 @@ class IrGenerator {
 					lowerType(expression.type));
 			case TFunctionRef(name): builder.staticClosure(name, lowerType(expression.type));
 			case TMethodRef(object, name):
-				var separator = lastSeparator(name),
-					owner = name.substring(0, separator),
-					member = name.substring(separator + 1),
+				// A method with a dispatch entry is referenced through it; its owner and member are the method's.
+				var dispatched = compiler.types.typing.DefaultArguments.dispatchTarget(name),
+					method = dispatched == null ? name : dispatched,
+					separator = lastSeparator(method),
+					owner = method.substring(0, separator),
+					member = method.substring(separator + 1),
 					closureType = lowerType(expression.type);
 				var typedDispatch:Null<String> = null;
 				switch closureType {

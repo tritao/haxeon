@@ -51,7 +51,9 @@ class StatementTyper {
 			statementIndex:Int,
 			scope:Scope):Null<LocalFunction> {
 		var referenced = switch value.expression {
-			case TFunctionRef(target): target;
+			case TFunctionRef(target):
+				var dispatched = DefaultArguments.dispatchTarget(target);
+				dispatched == null ? target : dispatched;
 			default: return null;
 		};
 		var signature = session.signatures.get(referenced);

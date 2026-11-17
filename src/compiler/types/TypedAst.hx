@@ -385,6 +385,13 @@ typedef TypedFunction = {
 
 	final arguments:Array<{name:String, type:CompilerType}>;
 	final result:CompilerType;
+
+	/**
+	 * The function's dispatch entry, when it has one (`DefaultArguments`): its method slot and its values hold that entry.
+	 * Set on every copy of a method, typed or a signature only, so the slot does not depend on the entry being typed again.
+	 */
+	final ?dispatchEntry:String;
+
 	final statements:Array<TypedStatement>;
 	final cells:Map<String, String>;
 	final cellCaptures:Map<String, String>;

@@ -8,9 +8,10 @@ class InlineDefaultArgumentMain {
 			check(indexed, "static method",
 				"class Api { public static function read(value:Int = Constants.VALUE):Int return value; }",
 				"Api.read()");
+			// A virtual call passes null, and the method's dispatch entry fills the default: it is retyped, not the caller.
 			check(indexed, "instance method",
 				"class Api { public function new() {} public function read(value:Int = Constants.VALUE):Int return value; }",
-				"new Api().read()");
+				"new Api().read()", "$dispatch:Api.read");
 			check(indexed, "constructor",
 				"class Api { public var value:Int; public function new(value:Int = Constants.VALUE) this.value = value; }",
 				"new Api().value");
@@ -27,7 +28,7 @@ class InlineDefaultArgumentMain {
 	static function constants(value:Int):String
 		return 'class Constants { public static inline var VALUE:Int = $value; }';
 
-	static function check(indexed:Bool, label:String, api:String, call:String):Void {
+	static function check(indexed:Bool, label:String, api:String, call:String, filler:String = "main"):Void {
 		var compiler = new Compiler();
 		compiler.update("Constants.hx", constants(1));
 		compiler.update("Api.hx", "import Constants; " + api);
@@ -37,7 +38,7 @@ class InlineDefaultArgumentMain {
 			throw '$label (indexed=$indexed): wrong initial default';
 		compiler.update("Constants.hx", constants(2));
 		var changed = compiler.compile("Main", null, indexed);
-		if (changed.retyped.indexOf("main") < 0 || new IrInterpreter(changed.ir).run("main") != 2)
+		if (changed.retyped.indexOf(filler) < 0 || new IrInterpreter(changed.ir).run("main") != 2)
 			throw '$label (indexed=$indexed): retained stale default; retyped=${changed.retyped}';
 		if (compiler.compile("Main", null, indexed).retyped.length != 0)
 			throw '$label (indexed=$indexed): no-op compilation retyped functions';

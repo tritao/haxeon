@@ -381,7 +381,11 @@ class IrProgramAssembler {
 						var functionName = methodDecl.name;
 						var separator = lastSeparator(functionName);
 						var methodName = functionName.substring(separator + 1, functionName.length);
-						methods.push({name: methodName, functionName: functionName});
+						// A method slot holds the method's dispatch entry when it has one (`DefaultArguments`).
+						methods.push({
+							name: methodName,
+							functionName: methodDecl.dispatchEntry == null ? functionName : methodDecl.dispatchEntry
+						});
 						// HashLink string conversion calls a proto method named `__string`; the runtime reads the
 						// String object it returns.
 						if (methodName == "toString" && methodDecl.arguments.length == 0

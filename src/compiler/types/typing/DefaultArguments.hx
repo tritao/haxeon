@@ -19,11 +19,53 @@ import compiler.types.TypeRelations;
  *
  * Haxeon does the same for a parameter whose type holds null by reference: strings, class and interface instances,
  * arrays, maps, functions, structures, Dynamic and `Null<T>`. A virtual call passes null for such an omitted argument,
- * and the function's prologue fills it. A parameter of another type (Int, Float, Bool, an enum, an abstract, a value
- * class) takes its default at the call site from the static signature, as a direct call takes every default: holding
- * null would box the argument of every call.
+ * and the function's prologue fills it.
+ *
+ * A parameter of a value type with a default (`x:Int = 7`: Int, Float, Bool, an enum, an abstract, a value class;
+ * `valueDefault`) cannot hold null, so such a function has two entries. Its body is the direct entry, which takes the
+ * value itself: a call whose target is known statically (a static or module function, a constructor, `super.f()`)
+ * passes the default of that target's own declaration, unboxed. The dispatch entry (`dispatchName`) takes `Null<T>`
+ * for each such parameter, as Haxe's HashLink generator does (it passes a reference there), replaces null with the
+ * default and calls the body: interface and virtual calls, method values, function references and reflection use it,
+ * and they pass null for an omitted argument. Which entries a function has, and their signatures, follow from its own
+ * declaration alone.
  */
 class DefaultArguments {
+	static inline final DISPATCH_PREFIX = "$dispatch:";
+
+	/** The dispatch entry of the function named `name`. */
+	public static function dispatchName(name:String):String
+		return DISPATCH_PREFIX + name;
+
+	/** The function a dispatch entry named `name` calls, or null when `name` is not one. */
+	public static function dispatchTarget(name:String):Null<String>
+		return StringTools.startsWith(name, DISPATCH_PREFIX) ? name.substr(DISPATCH_PREFIX.length) : null;
+
+	/** Whether `argument`, of `type`, has a default its type cannot represent the absence of: a dispatch entry fills it. */
+	public static function valueDefault(argument:AstArgument, type:CompilerType, relations:TypeRelations):Bool
+		return argument.defaultValue != null
+			&& !AstPredicates.isNullExpression(argument.defaultValue)
+			&& !holdsNull(type, relations)
+			&& !isTypeParameter(type);
+
+	/** `type` as the dispatch entry takes `argument`: nullable when it has a value default. */
+	public static function dispatchType(argument:AstArgument, type:CompilerType, relations:TypeRelations):CompilerType
+		return valueDefault(argument, type, relations) ? TNullable(type) : type;
+
+	/** Whether a function declared with `arguments`, of `types`, has a dispatch entry. */
+	public static function hasDispatchEntry(arguments:Array<AstArgument>, types:Array<CompilerType>,
+			relations:TypeRelations):Bool {
+		for (index in 0...arguments.length)
+			if (valueDefault(arguments[index], types[index], relations))
+				return true;
+		return false;
+	}
+
+	static function isTypeParameter(type:CompilerType):Bool
+		return switch type {
+			case TTypeParameter(_, _): true;
+			default: false;
+		};
 	/** Whether a function fills `argument`'s default itself, `type` being the argument's type. */
 	public static function filledByCallee(argument:AstArgument, type:CompilerType, relations:TypeRelations):Bool
 		return argument.defaultValue != null

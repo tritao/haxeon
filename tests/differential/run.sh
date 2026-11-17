@@ -131,6 +131,7 @@ in_background run_case assignment-evaluation-order 0
 in_background run_case interface-default-arguments 0
 in_background run_case optional-argument-types 0
 in_background run_case local-function-defaults 0
+in_background run_case value-default-arguments 0
 in_background run_compile_failure type-error
 status=0
 for index in "${!pids[@]}"; do

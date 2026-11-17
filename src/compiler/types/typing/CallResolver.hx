@@ -413,7 +413,8 @@ class CallResolver {
 
 	/**
 		Types a call's arguments against the callee's declared parameters, filling omitted ones. A virtual call
-		(`virtualCall`) passes null for an omitted argument the method that runs fills itself (`DefaultArguments`).
+		(`virtualCall`) reaches the method's dispatch entry: it passes `Null<T>` for an argument with a value default, and
+		null for an omitted argument the method that runs fills itself (`DefaultArguments`).
 	**/
 	public function typeDeclaredCallArguments(arguments:Array<AstExpression>, parameters:Array<AstArgument>,
 			scope:Scope, name:String, span:SourceSpan,
@@ -425,31 +426,35 @@ class CallResolver {
 			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
 			fail("E1008", 'Function "$name" expects $expected arguments, got ${arguments.length}', span);
 		}
-		var typed:Array<TypedExpression> = [];
+		var typed:Array<TypedExpression> = [],
+			types = [for (parameter in parameters) {
+				var type = bodyTyper.argumentType(parameter, substitutions);
+				virtualCall ? DefaultArguments.dispatchType(parameter, type, session.relations) : type;
+			}];
 		for (i in 0...arguments.length) {
-			var supplied = bodyTyper.argumentType(parameters[i], substitutions),
+			var supplied = types[i],
 				value = bodyTyper.typeExpression(arguments[i], scope, supplied);
 			typed.push(bodyTyper.coerce(value, supplied, 'argument ${i + 1} to "$name"', "E1009"));
 		}
 		for (i in arguments.length...parameters.length) {
 			var parameter = parameters[i],
-				expected = bodyTyper.argumentType(parameter, substitutions),
+				expected = types[i],
 				defaultValue = parameter.defaultValue;
 			if (isPosInfosParameter(parameter))
 				typed.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
 					expected), expected,
 					'position argument ${i + 1} to "$name"',
 					"E1009"));
-			else if (defaultValue == null
-				|| virtualCall && DefaultArguments.filledByCallee(parameter, expected, session.relations))
+			else if (defaultValue == null || virtualCall && (DefaultArguments.filledByCallee(parameter, expected,
+				session.relations) || DefaultArguments.valueDefault(parameter, bodyTyper.argumentType(parameter,
+				substitutions), session.relations)))
 				typed.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
 					'default argument ${i + 1} to "$name"', "E1009"));
 			else
 				typed.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(defaultValue, expected, name), expected,
 					'default argument ${i + 1} to "$name"', "E1009"));
 		}
-		return coerceArguments(typed, [for (parameter in parameters) bodyTyper.argumentType(parameter, substitutions)],
-			name);
+		return coerceArguments(typed, types, name);
 	}
 
 	/**
@@ -722,7 +727,7 @@ class CallResolver {
 		var semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span,
 			substitutions, method.isExtern != true),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method,
-				semanticArguments),
+				semanticArguments, method.isExtern != true),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical,
 				span),
@@ -1051,7 +1056,7 @@ class CallResolver {
 			semanticArguments = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span,
 				substitutions, method.isExtern != true),
 			physicalArguments = session.representation.adaptMethodArguments(methodOwnerType, methodInfo.owner, method,
-				semanticArguments),
+				semanticArguments, method.isExtern != true),
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical,
 				span);

@@ -1427,6 +1427,10 @@ class ProgramTyper {
 			isConstructor: method.name == "new",
 			arguments: arguments,
 			result: result,
+			dispatchEntry: method.name == "new" || !DefaultArguments.hasDispatchEntry(method.arguments,
+				[for (argument in arguments) argument.type], session.relations)
+				? null : DefaultArguments.dispatchName(owner
+				+ "." + method.name),
 			statements: [],
 			cells: [],
 			cellCaptures: [],
@@ -1452,6 +1456,7 @@ class ProgramTyper {
 			isExposed: method.isExposed,
 			arguments: method.arguments,
 			result: method.result,
+			dispatchEntry: method.dispatchEntry,
 			statements: statements.concat(method.statements),
 			cells: method.cells,
 			cellCaptures: method.cellCaptures,

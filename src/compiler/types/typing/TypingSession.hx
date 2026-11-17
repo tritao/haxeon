@@ -177,11 +177,20 @@ class TypingSession {
 	public function generatedFunctionOrigin():String {
 		var name = currentContext.name;
 		return StringTools.startsWith(name, DEFAULT_ARGUMENT_PREFIX)
-			? name.substr(DEFAULT_ARGUMENT_PREFIX.length) : name;
+			? name.substr(name.indexOf(DEFAULT_ARGUMENT_SEPARATOR) + 1) : name;
 	}
 
 	/** The name prefix of the pseudo-body a default argument value is typed in. */
 	public static inline final DEFAULT_ARGUMENT_PREFIX = "$default:";
+
+	static inline final DEFAULT_ARGUMENT_SEPARATOR = "|";
+
+	/**
+	 * The pseudo-body a default of `declaration` is typed in for `caller`. It is named after both, so what it numbers (its
+	 * adapters, its lambdas) belongs to the caller's unit and does not depend on which other caller typed the default first.
+	 */
+	public static function defaultArgumentBody(caller:String, declaration:String):String
+		return DEFAULT_ARGUMENT_PREFIX + caller + DEFAULT_ARGUMENT_SEPARATOR + declaration;
 
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {

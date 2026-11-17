@@ -40,6 +40,7 @@ class TypedTypeMap {
 			name:argument.name, type:map(argument.type)
 		}],
 			result: map(fn.result),
+			dispatchEntry: fn.dispatchEntry,
 			statements: statements(fn.statements),
 			cells: fn.cells,
 			cellCaptures: fn.cellCaptures,

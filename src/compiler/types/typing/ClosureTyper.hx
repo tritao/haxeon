@@ -69,7 +69,12 @@ class ClosureTyper {
 			if (argumentType == null)
 				fail("E1003", 'Cannot infer lambda parameter "${argument.name}" without a function context',
 					argument.span);
-			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i]))
+			// A lambda has no direct entry: it takes `Null<T>` for an argument with a value default and fills it itself.
+			var declaredType = argumentType;
+			if (DefaultArguments.valueDefault(argument, argumentType, session.relations))
+				argumentType = TNullable(argumentType);
+			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i])
+				&& !TypeRelations.equals(declaredType, expectedFunction.arguments[i]))
 				fail("E1003", "Lambda argument type does not match its context", argument.span);
 			lambdaScope.define(localName, argumentType, argument.span);
 			lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
