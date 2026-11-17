@@ -23,6 +23,7 @@ import compiler.types.TypedAst.TypedSwitchArm;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchPredicate;
+import compiler.types.TypedAst.TypedSwitchFieldAccess;
 import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.ir.cfg.Cfg.CfgFunction;
@@ -4027,8 +4028,7 @@ class IrGenerator {
 			var field = builder.enumField(builder.load(subjectName, subjectType), constructorIndex, predicate.index,
 				lowerType(predicate.fieldStorageType));
 			for (access in predicate.nestedPath ?? [])
-				field = builder.enumField(field, access.constructorIndex, access.fieldIndex,
-					lowerType(access.storageType));
+				field = nestedEnumField(builder, field, access);
 			for (access in predicate.objectPath ?? [])
 				field = builder.fieldGet(field, access.name, lowerType(access.storageType));
 			if (predicate.arrayIndex >= 0)
@@ -4074,11 +4074,19 @@ class IrGenerator {
 			binding:TypedSwitchBinding):CfgValue {
 		var field = builder.enumField(subject, constructorIndex, binding.index, lowerType(binding.fieldStorageType));
 		for (access in binding.nestedPath ?? [])
-			field = builder.enumField(field, access.constructorIndex, access.fieldIndex, lowerType(access.storageType));
+			field = nestedEnumField(builder, field, access);
 		if (binding.arrayIndex >= 0)
 			field = elementGet(builder, field, builder.constInt(binding.arrayIndex), lowerType(binding.storageType));
 		return abiBoundaryCast(builder, field, lowerType(binding.type));
 	}
+
+	/**
+		Reads one payload field of a nested constructor pattern from the payload value read before it. That value is in its
+		storage type, which a recursive generic enum erases to Dynamic, so it is cast back to its enum type first.
+	**/
+	function nestedEnumField(builder:CfgBuilder, value:CfgValue, access:TypedSwitchFieldAccess):CfgValue
+		return builder.enumField(abiBoundaryCast(builder, value, lowerType(access.enumType)), access.constructorIndex,
+			access.fieldIndex, lowerType(access.storageType));
 
 	function isStringPatternType(type:CompilerType):Bool
 		return switch type {

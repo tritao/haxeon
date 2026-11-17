@@ -1126,6 +1126,7 @@ class BodyTyper implements BodyTyping {
 								for (predicate in nested.predicates) {
 									var nestedPath:Array<TypedSwitchFieldAccess> = [
 										{
+											enumType: parameterType,
 											constructorIndex: nested.index,
 											fieldIndex: predicate.index,
 											storageType: predicate.fieldStorageType
@@ -1149,6 +1150,7 @@ class BodyTyper implements BodyTyping {
 								for (binding in nested.bindings) {
 									var nestedPath:Array<TypedSwitchFieldAccess> = [
 										{
+											enumType: parameterType,
 											constructorIndex: nested.index,
 											fieldIndex: binding.index,
 											storageType: binding.fieldStorageType

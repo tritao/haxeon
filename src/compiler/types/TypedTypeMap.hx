@@ -283,7 +283,7 @@ class TypedTypeMap {
 	function fieldPath(path:Null<Array<TypedSwitchFieldAccess>>):Null<Array<TypedSwitchFieldAccess>>
 		return path == null ? null : [for (access in path)
 			{
-				constructorIndex:access.constructorIndex, fieldIndex:access.fieldIndex,
+				enumType:map(access.enumType), constructorIndex:access.constructorIndex, fieldIndex:access.fieldIndex,
 					storageType:map(access.storageType)
 			}];
 }

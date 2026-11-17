@@ -260,6 +260,13 @@ typedef TypedSwitchBinding = {
 
 /** One enum payload field traversed while matching a nested constructor pattern. */
 typedef TypedSwitchFieldAccess = {
+	/**
+		The enum type of the value whose payload field this access reads. The step before stores that value as its own
+		`storageType`, which a recursive generic enum erases (`Node(l:Tree<T>, ...)` keeps `l` as Dynamic), so lowering casts
+		the stored value back to this type before reading the field.
+	**/
+	final enumType:CompilerType;
+
 	final constructorIndex:Int;
 	final fieldIndex:Int;
 	final storageType:CompilerType;

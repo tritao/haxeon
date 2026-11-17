@@ -171,6 +171,7 @@ in_background run_case tuple-switch 0
 in_background run_case generic-enum-constructor-inference 0
 in_background run_case switch-shared-constructor-name 0
 in_background run_case tuple-switch-null-element 0
+in_background run_case recursive-generic-enum-nested-pattern 0
 in_background run_compile_failure type-error
 # Width subtyping between structures waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4):
 # a copy into the narrower record would break identity (`narrow == wide`). The three rejections below are Haxe's too.
