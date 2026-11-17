@@ -2851,8 +2851,9 @@ class IrGenerator {
 								subjectValue = abiBoundaryCast(builder, builder.load(subjectName, subjectType),
 									lowerType(valueType));
 							}
+							// A catch-all binds and tests its guard in its match block, as every arm does.
 							if (arm.isCatchAll)
-								builder.jump(bodyBlock);
+								builder.jump(matchBlock);
 							else {
 								var comparisonValue = arm.constructorIndex >= 0
 									&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue,
