@@ -48,8 +48,9 @@ class EnumInterfaceAdapter {
 			case TInstance(NominalKind.Enum, name, _): name;
 			default: throw 'Invalid enum interface adapter value "$key"';
 		};
+		// One adapter serves every conversion of the enum to the interface: it carries the enum's declaration span, not the first use's.
 		var ownerType:CompilerType = TInstance(NominalKind.Class, key, []),
-			span = request.span,
+			span = session.helperSpan(request.type, request.span),
 			receiver = new TypedExpression(TLocal("this"), ownerType, span),
 			payload = new TypedExpression(TField(receiver, "value"), request.type, span),
 			constructor:TypedFunction = {

@@ -289,10 +289,7 @@ class TestRunner {
 	 * is an expected failure: the case passes while the rebuild still differs in that way, and FAILS once it stops differing, so the
 	 * marker cannot outlive its cause. Nothing else is allowed to fail; do not add a name without a note that explains it.
 	 */
-	static final warmEditKnownFailures:Map<String, String> = [
-		"enum-generated-dependencies"
-			=> "docs/design/HELPER_OWNERSHIP.md: a shared helper's origin is chosen by the first requester"
-	];
+	static final warmEditKnownFailures:Map<String, String> = [];
 
 	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */
 	static function knownWarmFailure(run:ProgramRun, compilation:CommandResult):Null<{passed:Bool, output:String}> {

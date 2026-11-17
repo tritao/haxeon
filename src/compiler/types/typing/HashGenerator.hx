@@ -60,13 +60,15 @@ class HashGenerator {
 	}
 
 	static function hashFunction(session:TypingSession, req:EqualityRequest):TypedFunction {
+		// The helper is shared by every use of its type, so its body carries the type's declaration span (or the generated span of a
+		// structural type), never the span of whichever use asked first; a failure is still reported at the use.
 		var type = req.type,
-			span = req.span,
+			span = session.helperSpan(type, req.span),
 			value = new TypedExpression(TLocal("value"), type, span),
 			statements:Array<TypedStatement> = [];
 		switch type {
 			case TNativeScalar(name) if (name == "f32" || name == "f64"):
-				request(session, TFloat, req.origin, span);
+				request(session, TFloat, req.origin, req.span);
 				statements.push(TReturn(call(TFloat, new TypedExpression(TCast(value), TFloat, span), span), span));
 			case TInt, TBool, TNativeScalar(_):
 				statements.push(TReturn(primitiveHash(type, value, span), span));
@@ -83,14 +85,14 @@ class HashGenerator {
 				statements = stringHashStatements(new TypedExpression(TField(value, "$key"), TString, span), span);
 			case TAbstract(_, _, representation):
 				var castExpression = new TypedExpression(TCast(value), representation, span);
-				request(session, representation, req.origin, span);
+				request(session, representation, req.origin, req.span);
 				statements.push(TReturn(call(representation, castExpression, span), span));
 			case TNullable(element):
 				var nil = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), type,
 					span),
 					absent = new TypedExpression(TEqual(value, nil), TBool, span),
 					present = new TypedExpression(TCast(value), element, span);
-				request(session, element, req.origin, span);
+				request(session, element, req.origin, req.span);
 				statements.push(TIf(absent, [TReturn(new TypedExpression(TIntLiteral(0), TInt, span), span)], [],
 					span));
 				statements.push(TReturn(call(element, present, span), span));
@@ -105,7 +107,7 @@ class HashGenerator {
 				statements.push(TVar(hashName, new TypedExpression(TIntLiteral(17), TInt, span), span));
 				for (field in fields) {
 					var fieldValue = new TypedExpression(TField(value, field.name), field.type, span);
-					request(session, field.type, req.origin, span);
+					request(session, field.type, req.origin, req.span);
 					var running = new TypedExpression(TLocal(hashName), TInt, span),
 						mixed = new TypedExpression(TAdd(new TypedExpression(TMul(running,
 							new TypedExpression(TIntLiteral(31), TInt, span)), TInt, span),
@@ -117,7 +119,8 @@ class HashGenerator {
 			case TInstance(NominalKind.Enum, name, _):
 				var declaration = session.enumDecls.get(name);
 				if (declaration == null)
-					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable', span);
+					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable',
+						req.span);
 				var custom = EnumConformanceMethods.method(session, type, "hash");
 				if (custom != null) {
 					statements.push(TReturn(new TypedExpression(TCall(EnumConformanceMethods.name(type, "hash"),
@@ -158,7 +161,8 @@ class HashGenerator {
 			case TInstance(NominalKind.Class, name, arguments) if (session.relations.isStruct(type)):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
-					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable', span);
+					BodyTyper.fail("E1025", 'Cannot synthesize Hashable for "$name": declaration is unavailable',
+						req.span);
 				var custom = DiffIntrinsics.conformanceMethod(session, type, "hash");
 				if (custom != null) {
 					var receiver = new TypedExpression(TCast(value), custom.type, span);
@@ -185,7 +189,8 @@ class HashGenerator {
 				}
 			default:
 				BodyTyper.fail("E1025",
-					'Cannot synthesize Hashable for type "${compiler.semantic.SemanticSignature.display(type)}"', span);
+					'Cannot synthesize Hashable for type "${compiler.semantic.SemanticSignature.display(type)}"',
+					req.span);
 		}
 		return {
 			name: hashName(type),

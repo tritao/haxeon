@@ -1,12 +1,22 @@
-# Shared generated helpers: ownership by subject (design note, no code)
+# Shared generated helpers: ownership by subject (design note)
 
-Status: proposal, 2026-11-11. Input: the warm-edit sweep (`Main --warm-edit`, run by the checked suite), which leaves one program,
-`enum-generated-dependencies`, whose warm rebuild differs from a fresh build. It is listed by name in `driver.TestRunner.
-warmEditKnownFailures` with a reference to this note, and fails the day it starts passing.
+Status: spans done, origins open (2026-11-17). Input: the warm-edit sweep (`Main --warm-edit`, run by the checked suite). Its one
+known failure, `enum-generated-dependencies`, passes now and is gated: a shared helper's body carries its subject's span (below,
+"Done"). The `origin` of a request is still the first requester's, which decides the helper's owning module; that part is open and
+scheduled with ADR 0003 M4, since the invalidation key is a query dependency there and is not built here as a second hand-written
+`invalidated` extension.
 
-Scheduled with ADR 0003 M4: the invalidation key is a query dependency there, so it is not built here as a second hand-written `invalidated` extension.
+## Done: spans belong to the subject
 
-## The failure
+`TypingSession.helperSpan(type, fallback)` gives the span a shared helper's body carries: the declaration of its nominal subject
+(through `Nullable`), else the generated span of a structural type. The value and enum equality helpers used it already; the hash
+helpers (`HashGenerator`) and the enum-to-interface adapters (`EnumInterfaceAdapter`) use it now. A failure while generating
+(`E1025`, a type that cannot be hashed) is still reported at the requester's span, which is the useful place. Wire and JSON codecs and
+the `Flags`/`RawRepresentable` members were already built from declaration spans, and the enum custom methods are typed from their
+source. So no shared helper's bytes depend on which use asked first, or in which order the uses were typed, as long as every helper
+of a module is emitted into the same module, which holds whenever the requesters share one (every sweep program).
+
+## The failure (fixed for spans)
 
 `$hash$value$equality:<sha(T)>` is one function for a type `T`, however many functions need it. Each request is recorded by name in
 the requesting unit's `TypingOutput`, the outputs are merged in declaration order, and the first request wins: its `origin` (the
@@ -14,13 +24,15 @@ requesting function) and `span` become the helper's. In `enum-generated-dependen
 `$generic:...LateBox[constrained]<Key>.hash` and `$enum-custom:equals:...`. A fresh compiler sees them in one order (the order of
 their units, whatever order the bodies were typed in); a warm session, which types only the functions an edit touched, sees a
 different set of requesters, so the same helper gets a different `origin`. The origin decides the helper's owning module, when it
-is regenerated, and its stable function identity (HLB section 1), so the two modules differ.
+is regenerated, and its stable function identity (HLB section 1), so the two modules differ. Here both requesters are in one
+module, and what differed was the helper's span (`Hashing.hash(value)` in `LateBox<Key>.hash` against `Hashing.hash(key)` in
+`Value.equals`); with the span taken from `Key` the builds agree.
 
 The same shape is in every first-wins registry: `valueEqualityRequests`, `enumEqualityRequests`, `wireCodecRequests`,
 `jsonCodecRequests`, `enumMethodRequests`, `enumInterfaceAdapters`, `dynamicStructureConversions`. The sweep exercises only the hash
 one. (`keyPathDefinitions` was last-wins and is fixed: its span is now a function of the path.)
 
-## Principle
+## Principle (what is left: origins)
 
 A shared artifact's attributes are a function of its subject, never of its uses. Fresh and warm builds then agree by construction,
 without a record of who asked.
@@ -66,8 +78,8 @@ as origin; the sweep of every family below decides which.
    either order; an enum compared from a generic and from a custom method; a field type changed in another module; a conformance
    added; a requester removed; two requesters in two modules, the owning module edited; a nullable and an array of the subject; a codec
    (`wire`/`json`) of the same type from two requesters. Add them to the sweep as named programs.
-2. The mechanism with the hash registry only, behind the known-failure marker: `enum-generated-dependencies` must then pass and the
-   marker fail, which removes it.
+2. Done for spans: `enum-generated-dependencies` passes and is no longer marked. The origin mechanism still needs a case whose
+   requesters are in two modules.
 3. The other registries one at a time, each with its test case and the per-family hldump review (names, origins and function identities
    change for every helper whose first requester was not the subject's module, so every program with generated helpers is affected;
    the review is of identities and owners only).
