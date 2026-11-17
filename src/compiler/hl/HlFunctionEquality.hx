@@ -86,6 +86,12 @@ class HlFunctionEquality {
 					case LoadType(otherDestination, otherType): destination == otherDestination && type == otherType;
 					default: false;
 				}
+			case GetType(destination, source):
+				switch b {
+					case GetType(otherDestination, otherSource): destination == otherDestination
+						&& source == otherSource;
+					default: false;
+				}
 			case ToDyn(destination, source):
 				switch b {
 					case ToDyn(otherDestination, otherSource): destination == otherDestination && source == otherSource;

@@ -767,7 +767,7 @@ class HlLower {
 	}
 
 	function lowerFunction(fn:IrFunction):HlFunction {
-		var nonNull = new compiler.ir.IrNonNullFacts(fn, true);
+		var nonNull = new compiler.ir.IrNonNullFacts(fn, true), exactTypes = new compiler.ir.IrExactTypeFacts(fn);
 		var registers:Map<Int, Int> = [];
 		var registerTypes:Array<Int> = [];
 		var catchValues:Map<Int, IrValue> = [];
@@ -895,6 +895,10 @@ class HlLower {
 							case Less(output, _, _), LessEqual(output, _, _),
 								Equal(output, _, _) if (output.id == condition.id):
 								fusedCondition = condition.id;
+							case Call(output, name, arguments) if (output.id == condition.id && arguments.length == 2
+								&& (name == compiler.ir.IrExactTypeFacts.TEST
+								|| name == compiler.ir.IrReferenceIdentity.NAME)):
+								fusedCondition = condition.id;
 							default:
 						}
 					default:
@@ -1011,6 +1015,13 @@ class HlLower {
 						if (array != null && !bindingsByValue.exists(value.id))
 							instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
 								requireRegister(array, registers)));
+						else if (switch output.type {
+							case Obj(name): exactTypes.exactType(block.id, value.id) == name;
+							default: false;
+						})
+							// A dominating exact-class test proved the value an object of exactly this class.
+							instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+							requireRegister(value, registers)));
 						else
 							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
 								requireRegister(value, registers)));
@@ -1100,6 +1111,17 @@ class HlLower {
 							instructions);
 					case Intrinsic(_, _, _):
 						throw new InternalError("Unlowered IR intrinsic reached HashLink");
+					case Call(output, functionName, arguments) if (output.id == fusedCondition
+						&& functionName == compiler.ir.IrReferenceIdentity.NAME):
+						// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
+						var pointers = identityPointers(arguments, instructions, registers, registerTypes);
+						fusedComparison = comparisonJump(2, false, false, pointers[0], pointers[1], null);
+					case Call(output, functionName, arguments) if (output.id == fusedCondition):
+						// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
+						var actual = temporaryRegister(IrType.TypeRef, registerTypes);
+						instructions.push(HlInstruction.GetType(actual, requireRegister(arguments[0], registers)));
+						fusedComparison = comparisonJump(2, false, false, actual,
+							requireRegister(arguments[1], registers), null);
 					case Call(output, functionName, arguments):
 						if (functionName == compiler.ir.IrReceiverCheck.NAME
 							&& nonNull.has(block.id, instructionIndex)) {
@@ -2030,6 +2052,26 @@ class HlLower {
 	}
 
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
+	/** The two references a reference-identity test compares, as raw pointers: a virtual is compared by the object it wraps. */
+	function identityPointers(arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+			registerTypes:Array<Int>):Array<Int> {
+		var pointers:Array<Int> = [];
+		for (arg in arguments) {
+			var source = requireRegister(arg, registers);
+			switch arg.type {
+				case Virtual(_):
+					var concrete = temporaryRegister(IrType.Dyn, registerTypes);
+					instructions.push(HlInstruction.ToDyn(concrete, source));
+					source = concrete;
+				default:
+			}
+			var pointer = temporaryRegister(IrType.RawPtr, registerTypes);
+			instructions.push(HlInstruction.UnsafeCast(pointer, source));
+			pointers.push(pointer);
+		}
+		return pointers;
+	}
+
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>,
 			instructions:Array<HlInstruction>, registers:Map<Int, Int>,
 			registerTypes:Array<Int>):Bool {
@@ -2048,21 +2090,24 @@ class HlLower {
 				requireRegister(arguments[0], registers)));
 			return true;
 		}
+		if (name == compiler.ir.IrExactTypeFacts.TEST) {
+			// A plain object of exactly the class: its type pointer equals the class's. Null reads as `void`, a virtual as its own
+			// virtual type and a boxed value as its scalar type, so none of them matches an object class.
+			var actual = temporaryRegister(IrType.TypeRef, registerTypes),
+				result = defineRegister(output, registers, registerTypes),
+				yes = '__exact_true_${output.id}',
+				done = '__exact_done_${output.id}';
+			instructions.push(HlInstruction.GetType(actual, requireRegister(arguments[0], registers)));
+			instructions.push(HlInstruction.JumpEqual(actual, requireRegister(arguments[1], registers), yes));
+			instructions.push(HlInstruction.LoadBool(result, false));
+			instructions.push(HlInstruction.Jump(done));
+			instructions.push(HlInstruction.Label(yes));
+			instructions.push(HlInstruction.LoadBool(result, true));
+			instructions.push(HlInstruction.Label(done));
+			return true;
+		}
 		if (name == compiler.ir.IrReferenceIdentity.NAME) {
-			var pointers:Array<Int> = [];
-			for (arg in arguments) {
-				var source = requireRegister(arg, registers);
-				switch arg.type {
-					case Virtual(_):
-						var concrete = temporaryRegister(IrType.Dyn, registerTypes);
-						instructions.push(HlInstruction.ToDyn(concrete, source));
-						source = concrete;
-					default:
-				}
-				var pointer = temporaryRegister(IrType.RawPtr, registerTypes);
-				instructions.push(HlInstruction.UnsafeCast(pointer, source));
-				pointers.push(pointer);
-			}
+			var pointers = identityPointers(arguments, instructions, registers, registerTypes);
 			var result = defineRegister(output, registers, registerTypes),
 				yes = '__reference_true_${output.id}',
 				done = '__reference_done_${output.id}';

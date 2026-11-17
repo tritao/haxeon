@@ -8,6 +8,9 @@ import compiler.ir.Ir;
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
 class GenericOwnerErasure {
 	static inline final PREFIX = "$generic-erased:";
+
+	/** The full accessor behind an erased operation's inlinable fast path (see `generate`). */
+	static inline final DISPATCH_PREFIX = "$generic-erased-dispatch:";
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
 	/** Whether `name` is an operation through an erased generic owner (`$generic-erased:Owner:get|set|call:member`). */
 	public static inline function isOperation(name:String):Bool
@@ -57,40 +60,94 @@ class GenericOwnerErasure {
 				receiver = builder.argument("receiver", Dyn),
 				arguments = [for (index in 1...signature.arguments.length) builder.argument('argument$index',
 					signature.arguments[index])];
+			// The operation on one candidate class, its receiver already cast to it, emitted by `b` with its arguments `values`.
+			function arm(b:IrBuilder, values:Array<IrValue>, field:Null<IrObjectField>, method:Null<IrFunction>,
+					target:IrValue):Void
+				switch operation {
+					case "get" if (field != null):
+						b.returnValue(convert(b, b.fieldGet(target, member, field.type), signature.result, byName));
+					case "set" if (field != null && values.length == 1):
+						b.fieldSet(target, member, convert(b, values[0], field.type, byName));
+						b.returnValue(b.constVoid());
+					case "call" if (method != null):
+						if (method.arguments.length != values.length + 1)
+							throw new InternalError('Incompatible erased method "$name"');
+						var adapted = [
+							for (index in 0...values.length)
+								convert(b, values[index], method.arguments[index + 1].type, byName)
+						],
+							result = b.methodCall(target, member, adapted, method.result);
+						b.returnValue((switch (signature.result) {
+							case Void: true;
+							default: false;
+						}) ? result : convert(b, result, signature.result, byName));
+					default:
+						throw new InternalError('Invalid erased generic operation "$name"');
+				}
+			// First an exact-class arm per candidate, the owner's own layout first: a type compare and a cast that cannot fail
+			// (IrExactTypeFacts). Then the checked arms, most derived first, for what no exact arm matched: an object reached
+			// through a virtual, or a class the exact arms do not list.
+			var exact = candidates.copy();
+			exact.sort((a, b) -> (a.name == owner ? 0 : 1) - (b.name == owner ? 0 : 1));
+			for (candidate in exact) {
+				var field = operation == "call" ? null : findField(candidate, member, byName),
+					method = operation == "call" ? findMethod(candidate, member, byName, byFunction) : null;
+				if (field == null && method == null)
+					continue;
+				var matched = builder.createBlock(), next = builder.createBlock(), type:IrType = Obj(candidate.name);
+				builder.branch(builder.call(IrExactTypeFacts.TEST, [receiver, builder.typeValue(type)], Bool), matched,
+					next);
+				builder.select(matched);
+				arm(builder, arguments, field, method, builder.safeCast(receiver, type));
+				builder.select(next);
+			}
 			for (candidate in candidates) {
 				var field = operation == "call" ? null : findField(candidate, member, byName),
 					method = operation == "call" ? findMethod(candidate, member, byName, byFunction) : null;
-				if (field == null && method == null) continue;
+				if (field == null && method == null)
+					continue;
 				var matched = builder.createBlock(), next = builder.createBlock(), type:IrType = Obj(candidate.name);
 				builder.branch(builder.call("__std_is_of_type", [receiver, builder.typeValue(type)], Bool), matched,
 					next);
 				builder.select(matched);
-				var target = builder.safeCast(receiver, type);
-				switch operation {
-					case "get" if (field != null):
-						builder.returnValue(convert(builder, builder.fieldGet(target, member, field.type),
-							signature.result, byName));
-					case "set" if (field != null && arguments.length == 1):
-						builder.fieldSet(target, member, convert(builder, arguments[0], field.type, byName));
-						builder.returnValue(builder.constVoid());
-					case "call" if (method != null):
-						if (method.arguments.length != arguments.length + 1)
-							throw new InternalError('Incompatible erased method "$name"');
-						var adapted = [for (index in 0...arguments.length) convert(builder, arguments[index],
-							method.arguments[index + 1].type, byName)],
-							result = builder.methodCall(target, member, adapted, method.result);
-						builder.returnValue((switch (signature.result) {
-							case Void: true;
-							default: false;
-						}) ? result : convert(builder, result, signature.result, byName));
-					default: throw new InternalError('Invalid erased generic operation "$name"');
-				}
+				arm(builder, arguments, field, method, builder.safeCast(receiver, type));
 				builder.select(next);
 			}
 			builder.throwValue(builder.toDyn(builder.constString('Invalid receiver for $owner.$member')));
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks,
+			// When the owner's own class has the member, the operation's name is a fast path the inliner places at each call
+			// site: its own class's arm, else a call to the full accessor (the dispatch). An erased owner of a reference type
+			// argument is almost always its own class, so a read is a type compare and a field load.
+			var own = byName.get(owner),
+				ownField = own == null || operation == "call" ? null : findField(own, member, byName),
+				ownMethod = own == null || operation != "call" ? null : findMethod(own, member, byName, byFunction);
+			if (own == null || own.isValue || (ownField == null && ownMethod == null)) {
+				functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks,
+					Provider(TypeKey.of(Obj(owner)),
+					ProviderOperations.detailed(ProviderOperation.GenericErased, operation + ":" + member))));
+				continue;
+			}
+			var dispatch = DISPATCH_PREFIX + owner + ":" + operation + ":" + member;
+			functions.push(new IrFunction(dispatch, builder.arguments, signature.result, builder.blocks,
 				Provider(TypeKey.of(Obj(owner)),
-				ProviderOperations.detailed(ProviderOperation.GenericErased, operation + ":" + member))));
+				ProviderOperations.detailed(ProviderOperation.GenericErased, operation + ":" + member + ":dispatch"))));
+			var fast = new IrBuilder(),
+				fastReceiver = fast.argument("receiver", Dyn),
+				fastArguments = [
+					for (index in 1...signature.arguments.length)
+						fast.argument('argument$index', signature.arguments[index])
+				],
+				matched = fast.createBlock(),
+				other = fast.createBlock(),
+				ownType:IrType = Obj(owner);
+			fast.branch(fast.call(IrExactTypeFacts.TEST, [fastReceiver, fast.typeValue(ownType)], Bool), matched,
+				other);
+			fast.select(matched);
+			arm(fast, fastArguments, ownField, ownMethod, fast.safeCast(fastReceiver, ownType));
+			fast.select(other);
+			fast.returnValue(fast.call(dispatch, [fastReceiver].concat(fastArguments), signature.result));
+			functions.push(new IrFunction(name, fast.arguments, signature.result, fast.blocks,
+				Provider(TypeKey.of(Obj(owner)),
+				ProviderOperations.detailed(ProviderOperation.GenericErased, operation + ":" + member)), null, true));
 		}
 	}
 

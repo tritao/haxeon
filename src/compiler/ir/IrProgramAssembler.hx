@@ -729,6 +729,7 @@ class IrProgramAssembler {
 			needsTypeTestRuntime = false,
 			needsClosureTypeTestRuntime = false,
 			needsExactTypeTestRuntime = false,
+			needsObjectExactTypeTest = false,
 			needsDynamicEquality = false,
 			needsDynamicObjectTypeId = false,
 			needsDynamicObjectRuntime = false,
@@ -753,6 +754,8 @@ class IrProgramAssembler {
 								needsDynamicObjectTypeId = true;
 							if (name == "__std_is_exact_type")
 								needsExactTypeTestRuntime = true;
+							if (name == IrExactTypeFacts.TEST)
+								needsObjectExactTypeTest = true;
 							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
 								needsDynamicObjectRuntime = true;
 							if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
@@ -897,6 +900,15 @@ class IrProgramAssembler {
 		if (needsExactTypeTestRuntime && !hasNative(natives, "__std_is_exact_type"))
 			program.natives.push({
 				name: "__std_is_exact_type",
+				library: "haxeon_runtime",
+				symbol: "__std_is_exact_type",
+				arguments: [Dyn, TypeRef],
+				result: Bool
+			});
+		// HashLink lowers the exact object test inline; the Wasm targets, which have no virtuals, call __std_is_exact_type.
+		if (needsObjectExactTypeTest && !hasNative(natives, IrExactTypeFacts.TEST))
+			program.natives.push({
+				name: IrExactTypeFacts.TEST,
 				library: "haxeon_runtime",
 				symbol: "__std_is_exact_type",
 				arguments: [Dyn, TypeRef],

@@ -94,6 +94,7 @@ class IrTypeAwareWalk {
 		sites.set(IrEnumDynamicDispatch.REFLECT, reflective);
 		sites.set("__std_is_of_type", test);
 		sites.set("__std_is_exact_type", test);
+		sites.set(IrExactTypeFacts.TEST, test);
 		return sites;
 	}
 

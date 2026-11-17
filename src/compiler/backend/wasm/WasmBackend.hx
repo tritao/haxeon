@@ -26,6 +26,7 @@ class WasmBackend implements Backend {
 	 * the module they build, since those passes hand state (scalar ABI, adapters, field lowering) to the builder.
 	 */
 	public static final logical:IrStageList = new IrStageList("wasm-logical", [
+		new IrStage("exact-object-tests", exactObjectTests),
 		new IrStage("array-factory", arrayFactory),
 		new IrStage("strip-instrumentation", stripInstrumentation)
 	]);
@@ -35,6 +36,10 @@ class WasmBackend implements Backend {
 		new IrStage("nullable-erasure", nullableErasure),
 		new IrStage("dynamic-calls", dynamicCalls)
 	]);
+
+	/** Wasm has no virtuals: the exact object test is its runtime's exact type test. */
+	static function exactObjectTests(program:IrProgram, context:IrPipelineContext):IrProgram
+		return compiler.ir.IrExactTypeFacts.asStdExactTest(program);
 
 	static function arrayFactory(program:IrProgram, context:IrPipelineContext):IrProgram
 		return compiler.ir.IrArrayFactory.physical(program);

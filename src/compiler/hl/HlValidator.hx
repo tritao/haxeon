@@ -199,7 +199,7 @@ class HlValidator {
 				case LoadType(destination, type):
 					requireRegister(fn, destination);
 					requireType(code, type, 'type literal in function', fn.functionIndex);
-				case ToDyn(destination, source):
+				case ToDyn(destination, source), GetType(destination, source):
 					requireRegister(fn, destination);
 					requireRegister(fn, source);
 				case ToSFloat(destination, source):

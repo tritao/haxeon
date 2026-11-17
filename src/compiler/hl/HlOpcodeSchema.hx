@@ -21,7 +21,8 @@ class HlOpcodeSchema {
 				HlOpcode.ToDyn, HlOpcode.ToSFloat, HlOpcode.ToInt, HlOpcode.SafeCast, HlOpcode.UnsafeCast, HlOpcode.Ref,
 				HlOpcode.Unref, HlOpcode.Setref,
 				HlOpcode.ToVirtual, HlOpcode.Trap, HlOpcode.CleanupTrap, HlOpcode.ArraySize, HlOpcode.RefData,
-				HlOpcode.Type, HlOpcode.JTrue, HlOpcode.JNull, HlOpcode.JFalse, HlOpcode.JNotNull, HlOpcode.Call0,
+				HlOpcode.Type, HlOpcode.GetType, HlOpcode.JTrue, HlOpcode.JNull, HlOpcode.JFalse, HlOpcode.JNotNull,
+				HlOpcode.Call0,
 				HlOpcode.EnumAlloc, HlOpcode.EnumIndex: 2;
 			case HlOpcode.Add, HlOpcode.Sub, HlOpcode.Mul, HlOpcode.SDiv, HlOpcode.SMod, HlOpcode.Shl, HlOpcode.SShr,
 				HlOpcode.UShr, HlOpcode.And,

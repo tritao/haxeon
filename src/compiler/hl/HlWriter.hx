@@ -865,6 +865,11 @@ class HlWriter {
 					put2(destination, source);
 					HlOpcode.ToDyn;
 				}
+			case GetType(destination, source):
+				{
+					put2(destination, source);
+					HlOpcode.GetType;
+				}
 			case ToSFloat(destination, source):
 				{
 					put2(destination, source);

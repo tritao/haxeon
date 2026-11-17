@@ -2,6 +2,12 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
+/** A Bool that proves `value` non-null on one of a branch's edges: false for `value == null`, true for an exact-class test. */
+private typedef NullTest = {
+	final value:Int;
+	final onTrue:Bool;
+}
+
 /** Dense bits for the function's SSA identities; each set shares the immutable identity index. */
 private class NonNullFactSet {
 	final positions:Map<Int, Int>;
@@ -91,7 +97,7 @@ class IrNonNullFacts {
 			return;
 		var receivers:Map<Int, Bool> = [],
 			nulls:Map<Int, Bool> = [],
-			tests:Map<Int, Int> = [],
+			tests:Map<Int, NullTest> = [],
 			fresh:Map<Int, Bool> = [];
 		var hasTry = false;
 		for (block in fn.blocks)
@@ -114,11 +120,14 @@ class IrNonNullFacts {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
+					// An exact-class test holds only for a non-null object (IrExactTypeFacts).
+					case Call(out, name, arguments) if (name == IrExactTypeFacts.TEST && arguments.length == 2):
+						tests.set(out.id, {value: arguments[0].id, onTrue: true});
 					case Equal(out, left, right):
 						if (nulls.exists(left.id))
-							tests.set(out.id, right.id);
+							tests.set(out.id, {value: right.id, onTrue: false});
 						else if (nulls.exists(right.id))
-							tests.set(out.id, left.id);
+							tests.set(out.id, {value: left.id, onTrue: false});
 					default:
 				}
 		var graph = new IrGraph(fn),
@@ -226,14 +235,15 @@ class IrNonNullFacts {
 
 	static function transfer(instruction:IrInstruction, facts:NonNullFactSet, graph:IrGraph, block:Int,
 			outgoing:Map<Int, NonNullFactSet>,
-			tests:Map<Int, Int>, allowPhi:Bool, checkedDereferences:Bool):Void {
+			tests:Map<Int, NullTest>, allowPhi:Bool, checkedDereferences:Bool):Void {
 		var receiver = checked(instruction);
 		if (receiver != null && (checkedDereferences || isExplicitCheck(instruction)))
 			facts.set(receiver.id, true);
 		switch instruction {
 			case NewObject(out, _), ValueInit(out), StaticClosure(out, _), InstanceClosure(out, _, _):
 				facts.set(out.id, true);
-			case Upcast(out, value):
+			// A cast of a non-null value is non-null: it returns the value or throws.
+			case Upcast(out, value), SafeCast(out, value):
 				if (facts.exists(value.id))
 					facts.set(out.id, true);
 			case Phi(out, inputs) if (allowPhi && inputs.length > 0):
@@ -252,21 +262,24 @@ class IrNonNullFacts {
 		}
 	}
 
-	/** The value an edge proves non-null (its null test failed on the way), or -1. */
-	static function edgeFact(graph:IrGraph, from:Int, to:Int, tests:Map<Int, Int>):Int {
+	/** The value an edge proves non-null (a null test failed, or an exact-class test held, on the way), or -1. */
+	static function edgeFact(graph:IrGraph, from:Int, to:Int, tests:Map<Int, NullTest>):Int {
 		if (!graph.blocks.exists(from))
 			return -1;
 		var term = graph.block(from).terminator;
 		if (term != null)
 			switch term.value {
-				case Branch(condition, yes, no) if (yes != no && no == to && tests.exists(condition.id)):
-					return tests.get(condition.id);
+				case Branch(condition, yes, no) if (yes != no && tests.exists(condition.id)):
+					var test = tests.get(condition.id);
+					if ((test.onTrue ? yes : no) == to)
+						return test.value;
 				default:
 			}
 		return -1;
 	}
 
-	static function edgeHas(graph:IrGraph, from:Int, to:Int, outgoing:Map<Int, NonNullFactSet>, tests:Map<Int, Int>,
+	static function edgeHas(graph:IrGraph, from:Int, to:Int, outgoing:Map<Int, NonNullFactSet>,
+			tests:Map<Int, NullTest>,
 			value:Int):Bool {
 		var known = outgoing.get(from);
 		if (known != null && known.exists(value))
@@ -276,7 +289,8 @@ class IrNonNullFacts {
 		var term = graph.block(from).terminator;
 		return term != null && (switch term.value {
 			case Branch(condition, yes,
-				no) if (yes != no && no == to && tests.exists(condition.id)): tests.get(condition.id) == value;
+				no) if (yes != no && tests.exists(condition.id)): tests.get(condition.id).value == value
+				&& (tests.get(condition.id).onTrue ? yes : no) == to;
 			default: false;
 		});
 	}

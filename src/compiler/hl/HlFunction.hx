@@ -68,6 +68,9 @@ enum HlInstruction {
 	LoadNull(destination:Int);
 	LoadType(destination:Int, type:Int);
 	ToDyn(destination:Int, source:Int);
+
+	/** OGetType: the runtime type of the object or dynamic in `source` (`void` for null). */
+	GetType(destination:Int, source:Int);
 	ToSFloat(destination:Int, source:Int);
 	ToInt(destination:Int, source:Int);
 	SafeCast(destination:Int, source:Int);

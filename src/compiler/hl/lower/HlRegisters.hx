@@ -22,7 +22,7 @@ class HlRegisters {
 				use(destination, true);
 			case LoadType(destination, type):
 				use(destination, true);
-			case ToDyn(destination, source):
+			case ToDyn(destination, source), GetType(destination, source):
 				use(source, false);
 				use(destination, true);
 			case ToSFloat(destination, source):
@@ -246,6 +246,7 @@ class HlRegisters {
 			case LoadNull(destination): LoadNull(rename(destination));
 			case LoadType(destination, type): LoadType(rename(destination), type);
 			case ToDyn(destination, source): ToDyn(rename(destination), rename(source));
+			case GetType(destination, source): GetType(rename(destination), rename(source));
 			case ToSFloat(destination, source): ToSFloat(rename(destination), rename(source));
 			case ToInt(destination, source): ToInt(rename(destination), rename(source));
 			case SafeCast(destination, source): SafeCast(rename(destination), rename(source));
