@@ -22,7 +22,10 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parent.parent
 TOOLS = ROOT / ".tools"
-HL = TOOLS / "hashlink" / "hl"
+# The checkout's own VM (scripts/hashlink-path.sh), where scripts/build-native.sh puts it.
+HASHLINK_DIR = Path(subprocess.run([str(ROOT / "scripts" / "hashlink-path.sh")], capture_output=True, text=True).stdout.strip()
+                    or TOOLS / "hashlink")
+HL = HASHLINK_DIR / "hl"
 HAXE = TOOLS / "haxe" / "haxe"
 DOTNET = TOOLS / "dotnet" / "dotnet"
 DART = TOOLS / "dart-sdk" / "bin" / "dart"
@@ -89,14 +92,14 @@ def build(lang, problem, spec, work):
     work.mkdir(parents=True, exist_ok=True)
     if lang == "haxe-hl":
         if not HAXE.exists() or not HL.exists():
-            raise Skip("run scripts/bootstrap-tools.sh")
+            raise Skip("run scripts/bootstrap-tools.sh and scripts/build-native.sh")
         shutil.copy(src, work / "App.hx")
         env = dict(os.environ, HAXE_STD_PATH=str(TOOLS / "haxe" / "std"))
         sh([str(HAXE), "-m", "App", "--hl", "app.hl"], work, env)
         return [str(HL), str(work / "app.hl")], hl_env()
     if lang == "haxeon":
         if not HL.exists():
-            raise Skip("run scripts/bootstrap-tools.sh")
+            raise Skip("run scripts/bootstrap-tools.sh and scripts/build-native.sh")
         (work / "src").mkdir(exist_ok=True)
         shutil.copy(src, work / "src" / "App.hx")
         (work / "haxeon.json").write_text(json.dumps(dict(
@@ -128,7 +131,7 @@ def build(lang, problem, spec, work):
 
 
 def hl_env(*extra):
-    paths = [str(TOOLS / "hashlink"), *map(str, extra), os.environ.get("LD_LIBRARY_PATH", "")]
+    paths = [str(HASHLINK_DIR), str(ROOT / "out"), *map(str, extra), os.environ.get("LD_LIBRARY_PATH", "")]
     return dict(os.environ, LD_LIBRARY_PATH=":".join(paths))
 
 
