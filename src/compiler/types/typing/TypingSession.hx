@@ -21,6 +21,7 @@ typedef TypingCheckpoint = {
 	final output:TypingOutput;
 	final defaultArgumentDepth:Int;
 	final monomorphs:Int;
+	final unboundLocals:Int;
 }
 
 /**
@@ -129,7 +130,8 @@ class TypingSession {
 			outputs: outputs.length,
 			output: output,
 			defaultArgumentDepth: defaultArgumentDepth,
-			monomorphs: monomorphs.depth()
+			monomorphs: monomorphs.depth(),
+			unboundLocals: output.records.unboundLocals.length
 		};
 
 	/**
@@ -144,6 +146,8 @@ class TypingSession {
 		if (outputs.length > mark.outputs)
 			outputs.splice(mark.outputs, outputs.length - mark.outputs);
 		output = mark.output;
+		// A body typed in the output it returns to (a field initializer, in its class's) takes back the locals it recorded.
+		output.records.truncateUnboundLocals(mark.unboundLocals);
 		defaultArgumentDepth = mark.defaultArgumentDepth;
 		for (diagnostic in error.diagnostics)
 			recordRecovered(diagnostic);
@@ -162,7 +166,7 @@ class TypingSession {
 	/** Fails with every recovered error, if typing recovered from any, and with `typed`, the functions that did type. */
 	public function failIfRecovered(typed:Array<compiler.types.TypedAst.TypedFunction>):Void
 		if (recoveredErrors.length > 0)
-			throw new TypingFailure(recoveredErrors.copy(), typed);
+			throw new TypingFailure(recoveredErrors.copy(), typed, programOutput.records.unboundLocals.copy());
 
 	/** `error`, with the errors recovered before it first: what a typing that stops at `error` fails with. */
 	public function withRecovered(error:CompileError):CompileError {

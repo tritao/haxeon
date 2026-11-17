@@ -90,6 +90,7 @@ class StatementTyper {
 		if (variable != null) {
 			if (expected != null)
 				compiler.types.Monomorphs.hint(variable, expected);
+			compiler.types.Monomorphs.nameLocal(variable, name, span);
 			return variable;
 		}
 		if (expected != null)
@@ -165,6 +166,9 @@ class StatementTyper {
 					value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002");
 				else
 					value = ValueCopy.bind(session, value, value.type);
+				// Its type's empty variables (`var list = []`, `var x = null`) are this local's: one nothing fills is reported by it.
+				if (declared == null)
+					compiler.types.Monomorphs.nameLocal(declaredType != null ? declaredType : value.type, name, span);
 				if (recursiveCell != null)
 					return [
 						TDeclare(scope.requireId(name), declaredType, span),

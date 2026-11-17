@@ -86,7 +86,8 @@ class TypedProgramAssembler {
 			closurePlan: session.programOutput.closureConversion.plan(),
 			anonymousTypes: orderedAnonymousTypes(),
 			anonymousUnits: anonymousUnits(),
-			natives: natives
+			natives: natives,
+			unboundLocals: session.programOutput.records.unboundLocals.copy()
 		};
 	}
 

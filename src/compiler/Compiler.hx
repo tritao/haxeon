@@ -179,6 +179,9 @@ typedef AnalysisResult = {
 	final retyped:Array<String>;
 	final diagnosticModules:Array<String>;
 	final elapsedMs:Float;
+
+	/** The locals of the bodies this analysis typed whose type nothing fixed (`TypedProgram.unboundLocals`). */
+	final unboundLocals:Array<compiler.types.TypedAst.UnboundLocal>;
 }
 
 /**

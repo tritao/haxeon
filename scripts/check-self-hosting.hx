@@ -17,7 +17,7 @@ function main() {
 	// fails once it builds, so the list is cut as gaps close.
 	var buildingEntries = [
 		"compiler.tools.HaxeonCompiler", "Main", "FfiImportMain", "FfiAuditMain", "EditorServiceMain",
-		"compiler.tools.CompilerServer", "build.HaxeonBuild", "tools.HaxeonCli", "LspMain"
+		"compiler.tools.CompilerServer", "build.HaxeonBuild", "tools.HaxeonCli", "LspMain", "LintMain"
 	];
 	var entryGaps:Map<String, String> = [];
 	var root = Path.directory(Script.directory()),

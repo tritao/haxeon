@@ -86,6 +86,33 @@ wildcard, keeps its order and is not reported. `--only unused-imports` or
 `--only import-order` checks one rule. `scripts/format.sh` sorts and formats the
 whole tree, and `scripts/format.sh --check` is the CI check.
 
+Those two rules read syntax only and run by default. The rule `unbound-local` needs
+types, so it is opt-in and runs only when `--only unbound-local` names it:
+
+```bash
+./scripts/haxeon lint --only unbound-local src
+```
+
+It names each local whose type nothing fixes, which therefore is `Dynamic`: a
+`var x;` never assigned, a `var x = null` never given a value, or a `var list = []`
+never used in a way that fixes its element type.
+
+```text
+src/Main.hx:4: local "x" is Dynamic: nothing fixes the type of local "x"
+src/Main.hx:5: local "list" is Dynamic: nothing fixes the element type of this empty array
+```
+
+Haxe accepts such a local and gives it the type `Dynamic` without a warning, and so
+does Haxeon's compiler; the rule is there to audit code for them. A local that a
+later assignment, a `push` or a typed use (a return, a typed argument) fixes is not
+named. Each file is typed as the editor types it: its project is the nearest
+`haxeon.json` or `.hxml` above it (`--manifest` is not used), and the file's module
+is the entry. If a file's program has type errors, they go to standard error, the
+bodies that typed are still checked, and a body that failed is not. The command exits
+with 1 when it names a local or a program does not type. The rule has no `--fix`:
+give each local it names a type. It runs in a tool of its own (`LintMain`), built on
+first use like the language server.
+
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:
 

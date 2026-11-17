@@ -431,6 +431,9 @@ class BodyTyper implements BodyTyping {
 			// error is reported, so that none is left open after the body fails.
 			if (cell.mustBeFixed && unfixed == null)
 				unfixed = cell;
+			var localName = cell.localName, localSpan = cell.localSpan;
+			if (localName != null && localSpan != null && !cell.mustBeFixed)
+				session.output.records.unboundLocals.push({name: localName, span: localSpan, what: cell.origin});
 			compiler.types.Monomorphs.unify(TMonomorph(cell), TDynamic);
 		}
 		if (unfixed != null)

@@ -63,6 +63,25 @@ class Monomorphs {
 			default:
 		}
 
+	/**
+	 * Names the local `name`, declared at `span`, as the owner of each empty type variable in its type `type` that no local owns yet
+	 * (`MonomorphCell.localName`): `var list = []` owns its element type, `var copy = list` does not take it over.
+	 */
+	public static function nameLocal(type:CompilerType, name:String, span:SourceSpan):Void
+		switch follow(type) {
+			case TMonomorph(cell):
+				if (cell.localName == null) {
+					cell.localName = name;
+					cell.localSpan = span;
+				}
+			case TNullable(element), TArray(element), TIterator(element):
+				nameLocal(element, name, span);
+			case TMap(key, value):
+				nameLocal(key, name, span);
+				nameLocal(value, name, span);
+			default:
+		}
+
 	/** Whether `type` mentions a type variable, filled or not. */
 	public static function contains(type:CompilerType):Bool
 		return containsWithin(type, null);

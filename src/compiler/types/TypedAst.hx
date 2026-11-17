@@ -555,6 +555,24 @@ typedef TypedProgram = {
 	final anonymousUnits:Map<String, Array<TypedAnonymous>>;
 
 	final natives:Array<TypedNative>;
+
+	/** The locals of the bodies this compile typed whose type nothing fixed, so it settled to Dynamic, as in Haxe. */
+	final unboundLocals:Array<UnboundLocal>;
+}
+
+/**
+ * A local whose type, or part of it, nothing fixed (`var x;` never assigned, `var list = []` never used with a type), so it settled
+ * to Dynamic (`BodyTyper.settleFrame`). Haxe gives no warning, and neither does the compiler: `haxeon lint --only unbound-local`
+ * names them.
+ */
+typedef UnboundLocal = {
+	final name:String;
+
+	/** The local's declaration. */
+	final span:SourceSpan;
+
+	/** What settled: `the type of local "x"`, `the element type of this empty array`. */
+	final what:String;
 }
 
 /** A source-declared target function with no generated body. */

@@ -33,7 +33,18 @@ class UnitRecords {
 	/** Source snapshots copied into callers when omitted arguments use declaration syntax. */
 	public final defaultArgumentSources:Map<String, Map<String, SourceFile>> = [];
 
+	/**
+	 * The locals whose type nothing fixed, in the order their bodies settled. A body whose typing fails takes back what it added
+	 * (`TypingSession.recover`), so only bodies that typed are here.
+	 */
+	public final unboundLocals:Array<compiler.types.TypedAst.UnboundLocal> = [];
+
 	public function new() {}
+
+	/** Drops the unbound locals recorded after the first `count`. */
+	public function truncateUnboundLocals(count:Int):Void
+		if (unboundLocals.length > count)
+			unboundLocals.splice(count, unboundLocals.length - count);
 
 	public function recordAnonymousUse(unit:String, name:String, fields:Array<AnonymousField>):Void {
 		var uses = anonymousUnits.get(unit);
@@ -74,6 +85,8 @@ class UnitRecords {
 				target.recordAnonymousUse(unit, name, fields);
 		for (unit in typedUnits.keys())
 			target.typedUnits.set(unit, true);
+		for (local in unboundLocals)
+			target.unboundLocals.push(local);
 		mergeQueries(purityQueries, target.purityQueries);
 		mergeQueries(noReturnQueries, target.noReturnQueries);
 		mergeQueries(keyPathUses, target.keyPathUses);

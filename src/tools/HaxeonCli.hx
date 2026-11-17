@@ -136,7 +136,8 @@ class HaxeonCli {
 				case "platforms": platforms(arguments);
 				case "devices": devices(arguments);
 				case "fmt": fmt(arguments);
-				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]));
+				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]),
+					files -> runTool("LintMain", files));
 				case "build": build(arguments, false);
 				case "run" if (arguments.length > 0 && ScriptRun.isScript(arguments[0])):
 					runScript(arguments[0], arguments.slice(1));

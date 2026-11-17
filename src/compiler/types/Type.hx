@@ -91,6 +91,15 @@ class MonomorphCell {
 	 */
 	public final mustBeFixed:Bool;
 
+	/**
+	 * The local whose declared type it is part of (`var x;`, `var list = []`), named when the declaration is typed, or null for one
+	 * no local's type holds. When nothing fills it, the typer records that local as settled to Dynamic (`TypedProgram.unboundLocals`).
+	 */
+	public var localName:Null<String> = null;
+
+	/** Where that local is declared. */
+	public var localSpan:Null<compiler.core.Source.SourceSpan> = null;
+
 	public function new(origin:String, span:compiler.core.Source.SourceSpan, mustBeFixed:Bool = false) {
 		this.origin = origin;
 		this.span = span;

@@ -64,7 +64,8 @@ class AnalysisTransaction {
 				moduleNames: frontend.moduleNames,
 				retyped: frontend.retyped,
 				diagnosticModules: diagnosticModules,
-				elapsedMs: Sys.time() * 1000.0 - startedAt
+				elapsedMs: Sys.time() * 1000.0 - startedAt,
+				unboundLocals: frontend.typedProgram.unboundLocals
 			};
 		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

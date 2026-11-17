@@ -220,6 +220,23 @@ class LanguageService {
 	final structuralIndex:Map<String, StructuralIndexEntry> = [];
 	var editorDefines:Map<String, String> = [];
 
+	/**
+	 * Makes the Haxeon root the working directory, unless `stdlib` is already in it: the service resolves `stdlib` from there, and
+	 * a launcher (`haxeon lsp`, `haxeon lint`) need not run it from the root.
+	 */
+	public static function useHaxeonRoot():Void {
+		if (sys.FileSystem.exists("stdlib"))
+			return;
+		var root = Sys.getEnv("HAXEON_ROOT");
+		// The haxeon command names the checkout it belongs to.
+		if (root == null || root.length == 0)
+			root = Sys.getEnv("HAXEON_HOME");
+		if (root == null || root.length == 0)
+			root = haxe.io.Path.directory(haxe.io.Path.directory(sys.FileSystem.absolutePath(Sys.programPath())));
+		if (sys.FileSystem.exists(haxe.io.Path.join([root, "stdlib"])))
+			Sys.setCwd(root);
+	}
+
 	public function new(?identityState:haxe.io.Bytes) {
 		compiler = new Compiler(identityState, CompilerIntrinsics.configuration());
 		compiler.addStandardLibrarySourceRoot("stdlib");
