@@ -167,6 +167,8 @@ class IrNullableErasure {
 					case Rethrow(value): Rethrow(use(value));
 					case Jump(target): Jump(target);
 					case Branch(condition, whenTrue, whenFalse): Branch(use(condition), whenTrue, whenFalse);
+					case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
+						switchTargets.copy(), switchOtherwise);
 				}, terminator.provenance);
 			blocks.push(copy);
 		}

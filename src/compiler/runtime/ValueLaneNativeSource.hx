@@ -95,6 +95,11 @@ class ValueLaneNativeSource {
 				case Jump(target): edge(block.id, target);
 				case Branch(condition, yes,
 					no): 'if (${variable(condition)}) { ${edge(block.id, yes)} } else { ${edge(block.id, no)} }';
+				case Switch(value, targets, otherwise):
+					'switch (${variable(value)}) { '
+						+ [for (index in 0...targets.length) 'case $index: { ${edge(block.id, targets[index])} } ']
+						.join("")
+						+ 'default: { ${edge(block.id, otherwise)} } }';
 				case Return(value): value.type == Void ?"return;":'return ${variable(value)};';
 				case Throw(value): 'hl_throw(${variable(value)}); abort();';
 				default: throw 'Unsupported lane runtime C terminator: ${block.terminator.value}';

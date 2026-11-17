@@ -28,6 +28,13 @@ class IrTerminatorCodec {
 				IrValueTableCodec.writeReference(output, condition);
 				writeBlock(output, whenTrue);
 				writeBlock(output, whenFalse);
+			case Switch(value, targets, otherwise):
+				output.writeByte(6);
+				IrValueTableCodec.writeReference(output, value);
+				output.writeInt32(targets.length);
+				for (target in targets)
+					writeBlock(output, target);
+				writeBlock(output, otherwise);
 		};
 
 	public static function read(input:BytesInput, values:Map<Int, IrValue>, blocks:Map<Int, Bool>):IrTerminator
@@ -39,6 +46,12 @@ class IrTerminatorCodec {
 			case 5: Unreachable;
 			case 4: Branch(IrValueTableCodec.readReference(input, values), readBlock(input, blocks),
 				readBlock(input, blocks));
+			case 6:
+				var value = IrValueTableCodec.readReference(input, values), count = input.readInt32();
+				if (count < 0 || count > input.length - input.position)
+					throw "Invalid IR switch size";
+				var targets = [for (_ in 0...count) readBlock(input, blocks)];
+				Switch(value, targets, readBlock(input, blocks));
 			default: throw "Unknown IR terminator tag";
 		};
 

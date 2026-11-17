@@ -1011,6 +1011,8 @@ class IrInliner {
 					case Rethrow(value): Rethrow(use(value));
 					case Jump(target): Jump(target);
 					case Branch(condition, whenTrue, whenFalse): Branch(use(condition), whenTrue, whenFalse);
+					case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
+						switchTargets.copy(), switchOtherwise);
 				}, terminator.provenance);
 		}
 		return [for (binding in bindings)
@@ -1106,6 +1108,10 @@ class IrInliner {
 					copy.terminator = new Located(Jump(target(destination)), terminator.provenance);
 				case Branch(condition, whenTrue, whenFalse):
 					copy.terminator = new Located(Branch(use(condition), target(whenTrue), target(whenFalse)),
+						terminator.provenance);
+				case Switch(value, targets, otherwise):
+					copy.terminator = new Located(Switch(use(value), IrSwitch.mapTargets(targets, target),
+						target(otherwise)),
 						terminator.provenance);
 			}
 			cloned.push(copy);

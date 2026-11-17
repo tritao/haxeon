@@ -184,7 +184,7 @@ class WasmGcRoots {
 		var value:IrValue = switch terminator {
 			case Return(value), Throw(value), Rethrow(value): value;
 			case Jump(_), Unreachable: null;
-			case Branch(condition, _, _): condition;
+			case Branch(condition, _, _), Switch(condition, _, _): condition;
 		};
 		if (value != null && WasmTarget.isReference(value.type))
 			setBit(set, requiredIndex(indices, value.id));

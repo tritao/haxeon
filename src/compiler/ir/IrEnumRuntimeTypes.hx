@@ -93,7 +93,7 @@ class IrEnumRuntimeTypes {
 					switch block.terminator.value {
 						case Return(output), Throw(output), Rethrow(output):
 							visit(output.type);
-						case Branch(condition, _, _):
+						case Branch(condition, _, _), Switch(condition, _, _):
 							visit(condition.type);
 						case Jump(_), Unreachable:
 					}

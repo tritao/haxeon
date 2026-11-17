@@ -100,6 +100,9 @@ class IrGraph {
 				next.push(yes);
 				if (yes != no)
 					next.push(no);
+			case Switch(_, targets, otherwise):
+				for (target in IrSwitch.successors(targets, otherwise))
+					next.push(target);
 			case Return(_), Throw(_), Rethrow(_), Unreachable:
 		}
 		for (instruction in block.instructions)

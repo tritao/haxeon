@@ -462,7 +462,7 @@ class IrFunctionStateCodec {
 
 	static function collectTerminator(terminator:IrTerminator, values:Map<Int, IrValue>):Void {
 		switch terminator {
-			case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+			case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
 				collectValue(value, values);
 			case Jump(_), Unreachable:
 		}

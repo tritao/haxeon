@@ -212,7 +212,8 @@ class IrValueArrayPlaceRewrite {
 				if (!omit) target.instructions.push(new Located(instruction, located.provenance));
 			}
 			if (block.terminator != null) switch block.terminator.value {
-				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)):
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+					Switch(value, _, _) if (aliases.exists(value.id)):
 					throw "Array place escapes through a terminator";
 				default:
 			}

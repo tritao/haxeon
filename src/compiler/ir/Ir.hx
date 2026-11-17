@@ -175,6 +175,12 @@ enum IrTerminator {
 	Rethrow(value:IrValue);
 	Jump(target:Int);
 	Branch(condition:IrValue, whenTrue:Int, whenFalse:Int);
+
+	/**
+	 * A dense multiway branch on an `I32`: `targets[value]` when `0 <= value < targets.length`, `otherwise` for any other value.
+	 * An enum switch is one on the constructor index; HashLink lowers it to a jump table (`OSwitch`).
+	 */
+	Switch(value:IrValue, targets:Array<Int>, otherwise:Int);
 }
 
 /** SSA basic block identified independently of its position in the block array. */

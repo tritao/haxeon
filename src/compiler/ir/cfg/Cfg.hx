@@ -94,6 +94,9 @@ enum CfgTerminator {
 	Rethrow(value:CfgValue);
 	Jump(target:Int);
 	Branch(condition:CfgValue, whenTrue:Int, whenFalse:Int);
+
+	/** A dense multiway branch on an `I32` (`IrTerminator.Switch`). */
+	Switch(value:CfgValue, targets:Array<Int>, otherwise:Int);
 }
 
 /** Mutable basic block whose terminator is assigned exactly once during construction. */

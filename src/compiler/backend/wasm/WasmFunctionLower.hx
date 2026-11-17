@@ -45,6 +45,13 @@ private enum StructureWork {
 	Tree(id:Int);
 	Within(id:Int, children:Array<Int>, count:Int);
 	Edge(source:Int, target:Int);
+
+	/**
+	 * The rest of a switch from `source` on the Int in local `value`, from entry `index`: `if (value == index)` to that entry's block,
+	 * else the next entry; after the last, `otherwise`. Entries that select `otherwise` are not tested.
+	 */
+	SwitchFrom(source:Int, value:Int, targets:Array<Int>, index:Int, otherwise:Int);
+
 	Close;
 	Otherwise;
 }
@@ -410,6 +417,9 @@ class WasmFunctionLower {
 							emitThrow(body, requiredLocal(state.values, value.id));
 						case Jump(target):
 							pending.push(Edge(blockId, target));
+						case Switch(value, targets, otherwise):
+							pending.push(SwitchFrom(blockId, requiredLocal(state.values, value.id), targets, 0,
+								otherwise));
 						case Branch(condition, yes, no):
 							if (yes == no) pending.push(Edge(blockId, yes));
 							else {
@@ -437,6 +447,20 @@ class WasmFunctionLower {
 						false;
 				})));
 				else pending.push(Tree(target));
+			case SwitchFrom(source, value, targets, index, otherwise):
+				var entry = index;
+				while (entry < targets.length && targets[entry] == otherwise)
+					entry++;
+				if (entry == targets.length)
+					pending.push(Edge(source, otherwise));
+				else {
+					emit(body, [LocalGet(value), I32Const(entry), I32Eq, If(null)]);
+					state.frames.push(IfFrame);
+					pending.push(Close);
+					pending.push(SwitchFrom(source, value, targets, entry + 1, otherwise));
+					pending.push(Otherwise);
+					pending.push(Edge(source, targets[entry]));
+				}
 			case Close:
 				state.frames.pop();
 				body.push(End);
@@ -810,6 +834,20 @@ class WasmFunctionLower {
 				body.push(Else);
 				setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, no));
 				body.push(End);
+			case Switch(value, targets, otherwise):
+				// An if/else chain on the value; entries that select `otherwise` are not tested.
+				var local = requiredLocal(values, value.id), opened = 0;
+				for (entry in 0...targets.length)
+					if (targets[entry] != otherwise) {
+						emit(body, [LocalGet(local), I32Const(entry), I32Eq, If(null)]);
+						setPcAndContinue(body, pc, predecessor, block.id,
+							requiredBlockIndex(blockIndex, targets[entry]));
+						body.push(Else);
+						opened++;
+					}
+				setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, otherwise));
+				for (_ in 0...opened)
+					body.push(End);
 		}
 	}
 

@@ -57,7 +57,8 @@ class IrScalarValuePlaces {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (roots.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (roots.exists(value.id)):
 						valid.set(value.id, false);
 					default:
 				}

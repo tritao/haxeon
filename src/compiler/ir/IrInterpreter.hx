@@ -101,6 +101,10 @@ class IrInterpreter {
 					case Branch(condition, yes, no):
 						predecessor = current;
 						current = value(values, condition) ? yes : no;
+					case Switch(selector, targets, otherwise):
+						predecessor = current;
+						var index:Int = value(values, selector);
+						current = index >= 0 && index < targets.length ? targets[index] : otherwise;
 				}
 			} catch (failure:Dynamic) {
 				// A trap is no exception of the interpreted program: its own try blocks do not see it.

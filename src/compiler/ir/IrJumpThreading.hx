@@ -33,6 +33,9 @@ class IrJumpThreading {
 				case Jump(target): external.set(target, true);
 				case Branch(_, yes, no): external.set(yes, true);
 					external.set(no, true);
+				case Switch(_, targets, otherwise):
+					for (target in IrSwitch.successors(targets, otherwise))
+						external.set(target, true);
 				default:
 			}
 			for (located in block.instructions) switch located.value {

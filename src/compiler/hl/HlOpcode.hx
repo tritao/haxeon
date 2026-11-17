@@ -62,6 +62,7 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var JSLte = 51;
 	var JULt = 52;
 	var JUGte = 53;
+	var Switch = 70;
 	var JEq = 56;
 	var JAlways = 58;
 	var Ret = 67;

@@ -230,6 +230,8 @@ class HlRegisters {
 				use(register, false);
 			case Rethrow(register):
 				use(register, false);
+			case Switch(value, _):
+				use(value, false);
 			default:
 		}
 
@@ -323,6 +325,7 @@ class HlRegisters {
 			case Return(register): Return(rename(register));
 			case Throw(register): Throw(rename(register));
 			case Rethrow(register): Rethrow(rename(register));
+			case Switch(value, targets): Switch(rename(value), targets);
 			default: instruction;
 		};
 }

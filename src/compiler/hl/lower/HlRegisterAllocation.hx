@@ -49,7 +49,7 @@ class HlRegisterAllocation {
 					starts[index] = true;
 				default:
 			}
-			if (HlWriter.jumpTarget(instructions[index]) != null || exits(instructions[index]))
+			if (HlWriter.jumpTargets(instructions[index]).length > 0 || exits(instructions[index]))
 				starts[index + 1] = true;
 		}
 		var blockStarts:Array<Int> = [], blockOf:Array<Int> = [];
@@ -64,9 +64,9 @@ class HlRegisterAllocation {
 		var successors:Array<Array<Int>> = [];
 		for (block in 0...blocks) {
 			var last = blockEnd(block) - 1, next:Array<Int> = [], instruction = instructions[last];
-			var target = HlWriter.jumpTarget(instruction);
-			if (target != null)
-				next.push(blockOf[labels.get(target)]);
+			for (target in HlWriter.jumpTargets(instruction))
+				if (next.indexOf(blockOf[labels.get(target)]) < 0)
+					next.push(blockOf[labels.get(target)]);
 			var falls = switch instruction {
 				case Jump(_): false;
 				default: !exits(instruction);

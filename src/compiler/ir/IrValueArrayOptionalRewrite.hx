@@ -121,7 +121,7 @@ class IrValueArrayOptionalRewrite {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
 						use(value);
 					default:
 				}
@@ -331,7 +331,8 @@ class IrValueArrayOptionalRewrite {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (value.id == wrapper.id):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (value.id == wrapper.id):
 						return false;
 					default:
 				}

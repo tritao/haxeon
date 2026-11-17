@@ -174,7 +174,8 @@ class HlValidator {
 
 	static function validateInstructions(code:HlCode, fn:HlFunction, functionIndices:Map<Int, Bool>):Void {
 		var labels = collectLabels(fn);
-		for (instruction in fn.opcodes) {
+		for (position in 0...fn.opcodes.length) {
+			var instruction = fn.opcodes[position];
 			switch instruction {
 				case Move(destination, source):
 					requireRegister(fn, destination);
@@ -355,6 +356,15 @@ class HlValidator {
 				case Jump(target):
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+				case Switch(value, targets):
+					requireRegister(fn, value);
+					if (targets.length == 0)
+						throw 'Empty switch in function ${fn.functionIndex}';
+					for (target in targets)
+						if (!labels.exists(target))
+							throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						else if (labels.get(target) <= position)
+							throw 'Switch target "$target" is not after the switch in function ${fn.functionIndex}';
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);

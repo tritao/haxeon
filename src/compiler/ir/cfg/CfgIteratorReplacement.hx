@@ -193,7 +193,7 @@ class CfgIteratorReplacement {
 
 	static function terminatorOperands(terminator:CfgTerminator):Array<CfgValue>
 		return switch terminator {
-			case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): [value];
+			case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _): [value];
 			case Jump(_): [];
 		};
 

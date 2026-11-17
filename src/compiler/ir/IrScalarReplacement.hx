@@ -227,7 +227,7 @@ class IrScalarReplacement {
 				case Return(value), Throw(value), Rethrow(value):
 					if (value.id == object.id)
 						return null;
-				case Branch(condition, _, _):
+				case Branch(condition, _, _), Switch(condition, _, _):
 					if (condition.id == object.id)
 						return null;
 				case Jump(_), Unreachable:
@@ -408,7 +408,7 @@ class IrScalarReplacement {
 				case Return(value), Throw(value), Rethrow(value):
 					if (value.id == object.id)
 						return false;
-				case Branch(condition, _, _):
+				case Branch(condition, _, _), Switch(condition, _, _):
 					if (condition.id == object.id)
 						return false;
 				case Jump(_), Unreachable:

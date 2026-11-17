@@ -325,7 +325,8 @@ class IrScalarArguments {
 				switch block.terminator.value {
 					case Return(value) if (aliases.exists(value.id) && !isValue(fn.result, objects)):
 						return false;
-					case Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)):
+					case Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (aliases.exists(value.id)):
 						return false;
 					default:
 				}
@@ -387,7 +388,8 @@ class IrScalarArguments {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (aliases.exists(value.id)):
 						return false;
 					default:
 				}
@@ -447,7 +449,8 @@ class IrScalarArguments {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (aliases.exists(value.id)):
 						return false;
 					default:
 				}
@@ -512,7 +515,8 @@ class IrScalarArguments {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (aliases.exists(value.id)):
 						return false;
 					default:
 				}

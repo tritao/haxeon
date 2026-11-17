@@ -207,7 +207,7 @@ class IrNullableScalarFlow {
 				}
 				if (block.terminator != null)
 					switch block.terminator.value {
-						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
 							reject(value);
 						default:
 					}

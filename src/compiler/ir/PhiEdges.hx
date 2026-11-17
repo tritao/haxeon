@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 
 /** Gives each branch-to-phi edge a block for its parallel copies without mutating cached SSA. */
@@ -25,6 +26,10 @@ class PhiEdges {
 					case Branch(_, yes, no) if (phiBlocks.exists(yes) || phiBlocks.exists(no)):
 						splits = true;
 						break;
+					case Switch(_, targets, otherwise) if (phiBlocks.exists(otherwise)
+						|| Lambda.exists(targets, target -> phiBlocks.exists(target))):
+						splits = true;
+						break;
 					default:
 				}
 		if (!splits)
@@ -32,6 +37,19 @@ class PhiEdges {
 		var edges:Map<String, Int> = [],
 			result:Array<IrBlock> = [],
 			added:Array<IrBlock> = [];
+		// One edge block per predecessor and phi block: the switch values that select the same block share it.
+		function redirect(block:IrBlock, target:Int, provenance:SourceProvenance):Int {
+			if (!phiBlocks.exists(target))
+				return target;
+			var key = block.id + ":" + target;
+			if (!edges.exists(key)) {
+				var edge = new IrBlock(nextId++);
+				edge.terminator = new Located(Jump(target), provenance);
+				added.push(edge);
+				edges.set(key, edge.id);
+			}
+			return edgeId(edges, key);
+		}
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id), terminator = block.terminator;
 			copy.terminator = terminator;
@@ -55,6 +73,10 @@ class PhiEdges {
 						}
 						copy.terminator = new Located(Branch(condition, redirected[0], redirected[1]),
 							terminator.provenance);
+					case Switch(value, targets, otherwise):
+						copy.terminator = new Located(Switch(value,
+							[for (target in targets) redirect(block, target, terminator.provenance)],
+							redirect(block, otherwise, terminator.provenance)), terminator.provenance);
 					default:
 				}
 			result.push(copy);

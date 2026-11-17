@@ -549,7 +549,7 @@ class WasmGcTypePlan {
 				switch terminator.value {
 					case Return(value), Throw(value), Rethrow(value):
 						collectType(value.type);
-					case Branch(condition, _, _):
+					case Branch(condition, _, _), Switch(condition, _, _):
 						collectType(condition.type);
 					case Jump(_), Unreachable:
 				}

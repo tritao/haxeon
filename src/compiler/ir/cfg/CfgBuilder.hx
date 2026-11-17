@@ -119,6 +119,10 @@ class CfgBuilder {
 	public function branch(condition:CfgValue, yes:CfgBlock, no:CfgBlock):Void
 		terminate(Branch(condition, yes.id, no.id));
 
+	/** A dense multiway branch on the Int `value`: to `targets[value]`, or to `otherwise` for any other value. */
+	public function switchOn(value:CfgValue, targets:Array<CfgBlock>, otherwise:CfgBlock):Void
+		terminate(Switch(value, [for (target in targets) target.id], otherwise.id));
+
 	public function returnValue(value:CfgValue):Void
 		terminate(Return(value));
 

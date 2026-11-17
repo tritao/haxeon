@@ -256,7 +256,7 @@ class WasmFlattenValueFields {
 			var terminator = block.terminator;
 			if (terminator != null) {
 				var input = switch terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): value;
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _): value;
 					default: null;
 				};
 				if (input != null && aliases.exists(input.id)) {
@@ -268,6 +268,8 @@ class WasmFlattenValueFields {
 						case Throw(_): Throw(actual.value);
 						case Rethrow(_): Rethrow(actual.value);
 						case Branch(_, yes, no): Branch(actual.value, yes, no);
+						case Switch(switchValue, switchTargets, switchOtherwise): Switch(actual.value,
+							switchTargets.copy(), switchOtherwise);
 						default: terminator.value;
 					};
 					terminator = new Located(rewritten, terminator.provenance);

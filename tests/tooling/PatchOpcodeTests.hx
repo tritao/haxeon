@@ -81,6 +81,7 @@ class PatchOpcodeTests {
 			{instruction: JumpNotLess(0, 1, "target"), opcode: 54, operands: [0, 1, -2]},
 			{instruction: JumpNotGreaterOrEqual(0, 1, "target"), opcode: 55, operands: [0, 1, -2]},
 			{instruction: JumpNotEqual(0, 1, "target"), opcode: 57, operands: [0, 1, -2]},
+			{instruction: Switch(0, ["after"]), opcode: 70, operands: [0, 1, 0, 0]},
 			{instruction: JumpSignedLess(0, 1, "target"), opcode: 48, operands: [0, 1, -2]},
 			{instruction: JumpSignedLessOrEqual(0, 1, "target"), opcode: 51, operands: [0, 1, -2]},
 			{instruction: JumpUnsignedLess(0, 1, "target"), opcode: 52, operands: [0, 1, -2]},
@@ -136,7 +137,16 @@ class PatchOpcodeTests {
 				case Label(name): name;
 				default: null;
 			};
-			var code = module(loopHead == null ? [Label("target"), fixture.instruction, Return(0)] : [
+			// A switch takes only forward targets: its label follows it (and, not being a loop head, is not written).
+			var forward = switch fixture.instruction {
+				case Switch(_, _): true;
+				default: false;
+			};
+			var code = module(forward ? [fixture.instruction, Label("after"), Return(0)] : loopHead == null ? [
+				Label("target"),
+				fixture.instruction,
+				Return(0)
+			] : [
 				Label("target"),
 				fixture.instruction,
 				Jump(loopHead),
@@ -147,7 +157,7 @@ class PatchOpcodeTests {
 				native = Runtime.inspectPatch(bytes);
 			// The leading label is written only when the fixture jumps back to it (`HlWriter.layout`).
 			var actual = decoded.functions[0].instructions,
-				at = compiler.hl.HlWriter.jumpTarget(fixture.instruction) == null ? 0 : 1,
+				at = forward || compiler.hl.HlWriter.jumpTarget(fixture.instruction) == null ? 0 : 1,
 				tail = loopHead == null ? 1 : 2;
 			if (native.functionCount != 1
 				|| native.baseRevision != 1

@@ -259,7 +259,8 @@ class IrInlineEnumEligibility {
 					switch block.terminator.value {
 						case Throw(thrown), Rethrow(thrown):
 							escape(thrown.type, "exception escape");
-						case Return(result), Branch(result, _, _) if (descriptors.exists(result.id)):
+						case Return(result), Branch(result, _, _),
+							Switch(result, _, _) if (descriptors.exists(result.id)):
 							otherDescriptors.set(result.id, true);
 						default:
 					}

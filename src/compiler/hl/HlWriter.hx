@@ -637,7 +637,16 @@ class HlWriter {
 		return positions;
 	}
 
-	/** The label a jump or trap names, or null for any other instruction. */
+	/** Every label `instruction` can transfer to: a jump's or trap's one, each of a switch's. */
+	public static function jumpTargets(instruction:HlInstruction):Array<String>
+		return switch instruction {
+			case Switch(_, targets): targets;
+			default:
+				var target = jumpTarget(instruction);
+				target == null ? [] : [target];
+		};
+
+	/** The label a jump or trap names, or null for any other instruction (a switch names several: `jumpTargets`). */
 	public static function jumpTarget(instruction:HlInstruction):Null<String>
 		return switch instruction {
 			case JumpSignedLessOrEqual(_, _, target), JumpSignedLess(_, _, target), JumpUnsignedLess(_, _, target),
@@ -1167,6 +1176,14 @@ class HlWriter {
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JSGt;
 				}
+			case Switch(value, targets):
+				operands.resize(0);
+				operands.push(value);
+				operands.push(targets.length);
+				for (target in targets)
+					operands.push(requireLabel(labels, target) - (position + 1));
+				operands.push(0);
+				HlOpcode.Switch;
 			case Jump(target):
 				var targetPosition = requireLabel(labels, target);
 				{

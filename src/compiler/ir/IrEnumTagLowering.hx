@@ -264,6 +264,8 @@ class IrEnumTagLowering {
 						case Rethrow(value): Rethrow(use(value));
 						case Jump(id): Jump(id);
 						case Branch(condition, yes, no): Branch(use(condition), yes, no);
+						case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
+							switchTargets.copy(), switchOtherwise);
 					}, terminator.provenance);
 					result;
 				}];
@@ -282,7 +284,8 @@ class IrEnumTagLowering {
 						}
 						if (block.terminator != null)
 							switch block.terminator.value {
-								case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+								case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+									Switch(value, _, _):
 									used.set(value.id, true);
 								case Jump(_), Unreachable:
 							}

@@ -69,7 +69,7 @@ class IrScalarClosures {
 				}
 				if (block.terminator != null)
 					switch block.terminator.value {
-						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
 							use(value);
 						default:
 					}
@@ -440,6 +440,8 @@ class IrScalarClosures {
 					case Rethrow(value): Rethrow(map(value));
 					case Jump(target): Jump(target);
 					case Branch(condition, yes, no): Branch(map(condition), yes, no);
+					case Switch(switchValue, switchTargets, switchOtherwise): Switch(map(switchValue),
+						switchTargets.copy(), switchOtherwise);
 				}, terminator.provenance);
 			blocks.push(rewritten);
 		}

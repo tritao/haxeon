@@ -138,6 +138,7 @@ class SsaBuilder {
 			var next:Array<Int> = switch terminator.value {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
+				case Switch(_, targets, otherwise): compiler.ir.IrSwitch.successors(targets, otherwise);
 				case Return(_), Throw(_), Rethrow(_): [];
 			};
 			for (handler in handlers)
@@ -671,6 +672,7 @@ class SsaBuilder {
 			case Rethrow(value): Rethrow(resolve(value));
 			case Jump(to): Jump(to);
 			case Branch(condition, yes, no): Branch(resolve(condition), yes, no);
+			case Switch(value, targets, otherwise): Switch(resolve(value), targets.copy(), otherwise);
 		}, terminator.provenance);
 		for (successor in successors[id])
 			if (phiSlots[successor].length > 0) {

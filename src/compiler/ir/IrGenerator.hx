@@ -1054,109 +1054,156 @@ class IrGenerator {
 						exits:Array<CfgBlock> = [];
 					localTypes.set(switchName, switchType);
 					builder.store(switchName, lowerExpression(expression, builder, localTypes));
-					var checkBlock = builder.currentBlock(), // An unguarded `case _:` or `case other:` matches every value, so nothing falls out of the arms.
-						matchesEverything = false;
-					for (caseIndex in 0...cases.length) {
-						var switchCase = cases[caseIndex];
-						if (switchCase.guard == null && switchCase.isCatchAll)
-							matchesEverything = true;
-						var matchBlock = builder.createBlock(),
-							bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
-							nextBlock = builder.createBlock();
-						if (switchCase.arrayPattern != null)
-							lowerSwitchArrayPattern(switchCase.arrayPattern, switchName, switchType, caseIndex,
-								checkBlock, matchBlock, nextBlock, builder,
-								localTypes);
-						else {
-							builder.select(checkBlock);
-							var subjectValue = builder.load(switchName, switchType);
-							if (isNullableEnumType(expression.type) && switchCase.constructorIndex >= 0) {
-								var nonNullBlock = builder.createBlock();
-								builder.branch(builder.equal(subjectValue, builder.constNull(switchType)), nextBlock,
-									nonNullBlock);
-								builder.select(nonNullBlock);
-								subjectValue = builder.load(switchName, switchType);
-							}
-							var valueType = nullableSwitchValueType(expression.type);
-							if (valueType != null && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
-								var nonNullBlock = builder.createBlock();
-								builder.branch(builder.equal(subjectValue, builder.constNull(switchType)), nextBlock,
-									nonNullBlock);
-								builder.select(nonNullBlock);
-								subjectValue = abiBoundaryCast(builder, builder.load(switchName, switchType),
-									lowerType(valueType));
-							}
-							var predicateBlock = switchCase.predicates.length == 0 ? matchBlock : builder.createBlock();
-							if (switchCase.isCatchAll)
-								builder.jump(predicateBlock);
-							else {
-								var switchValue = switchCase.constructorIndex >= 0
-									&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
-									switchValueName = builder.operandName();
-								localTypes.set(switchValueName, switchValue.type);
-								builder.store(switchValueName, switchValue);
-								var caseValue = switchCase.constructorIndex >= 0
-									? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
-									builder, localTypes);
-								switchValue = builder.load(switchValueName, switchValue.type);
-								var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
-									builder.constNull(switchType));
-								else if ((switch (switchValue.type) {
-									case Bytes: true;
-									default: false;
-								})) builder.call("__string_equal", [switchValue, caseValue], Bool);
-								else builder.equal(switchValue, caseValue);
-								builder.branch(matches, predicateBlock, nextBlock);
-							}
-							if (switchCase.predicates.length > 0)
-								lowerEnumPredicates(switchName, switchType, switchCase.constructorIndex,
-									switchCase.predicates, predicateBlock, matchBlock,
-									nextBlock, builder, localTypes);
-						}
-						builder.select(matchBlock);
-						var subjectBinding = switchCase.subjectBinding;
-						if (subjectBinding != null && subjectBinding.length > 0) {
-							localTypes.set(subjectBinding, switchType);
-							initializeLocal(subjectBinding, builder.load(switchName, switchType), builder, localTypes);
-							builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
-						}
-						if (switchCase.arrayPattern != null)
-							lowerSwitchArrayPatternBindings(switchCase.arrayPattern, switchName, switchType,
-								switchCase.span, builder, localTypes);
-						else {
-							if (switchCase.constructorIndex >= 0)
-								for (binding in switchCase.bindings) {
-									localTypes.set(binding.name, lowerType(binding.type));
-									builder.debugLocal(binding.name, switchCase.span, switchCase.span.end);
-								}
-							for (binding in switchCase.bindings)
-								initializeLocal(binding.name,
-									lowerEnumBinding(builder, builder.load(switchName, switchType),
-									switchCase.constructorIndex, binding), builder, localTypes);
-						}
-						var guard = switchCase.guard;
-						if (guard != null) {
-							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
-							builder.select(bodyBlock);
-						}
-						lowerStatements(switchCase.statements, builder, localTypes, switchCase.span.end);
+					var switchArms:Array<SwitchArm> = [
+						for (arm in cases)
+							({
+								value: arm.value,
+								subjectBinding: arm.subjectBinding,
+								arrayPattern: arm.arrayPattern,
+								isCatchAll: arm.isCatchAll,
+								guard: arm.guard,
+								constructorIndex: arm.constructorIndex,
+								bindings: arm.bindings,
+								predicates: arm.predicates,
+								span: arm.span
+							}:SwitchArm)
+					];
+					var tablePlan = switchTablePlan(expression.type, switchArms);
+					if (tablePlan != null) {
+						// Arms that name constructors: one jump table on the constructor index (`lowerTableSwitch`).
+						var defaultBlock = builder.createBlock();
+						lowerTableSwitch(tablePlan, switchArms, switchName, switchType,
+							defaultBlock, true,
+							builder, localTypes, index -> {
+								lowerStatements(cases[index].statements, builder, localTypes, cases[index].span.end);
+								if (!builder.isTerminated())
+									exits.push(builder.currentBlock());
+							});
+						builder.select(defaultBlock);
+						if (!hasDefault && (isEnumType(expression.type) || tablePlan.catchAll >= 0))
+							builder.markUnreachable();
+						else
+							lowerStatements(defaultBranch, builder, localTypes,
+								statementsScopeEnd(defaultBranch, span.end));
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
-						checkBlock = nextBlock;
-					}
-					builder.select(checkBlock);
-					if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
-						builder.markUnreachable();
-					else
-						lowerStatements(defaultBranch, builder, localTypes,
-							statementsScopeEnd(defaultBranch, span.end));
-					if (!builder.isTerminated())
-						exits.push(builder.currentBlock());
-					if (exits.length > 0) {
-						var joinBlock = builder.createBlock();
-						for (exit in exits)
-							builder.jumpFrom(exit, joinBlock);
-						builder.select(joinBlock);
+						if (exits.length > 0) {
+							var joinBlock = builder.createBlock();
+							for (exit in exits)
+								builder.jumpFrom(exit, joinBlock);
+							builder.select(joinBlock);
+						}
+					} else {
+						var checkBlock = builder.currentBlock(), // An unguarded `case _:` or `case other:` matches every value, so nothing falls out of the arms.
+							matchesEverything = false;
+						for (caseIndex in 0...cases.length) {
+							var switchCase = cases[caseIndex];
+							if (switchCase.guard == null && switchCase.isCatchAll)
+								matchesEverything = true;
+							var matchBlock = builder.createBlock(),
+								bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
+								nextBlock = builder.createBlock();
+							if (switchCase.arrayPattern != null)
+								lowerSwitchArrayPattern(switchCase.arrayPattern, switchName, switchType, caseIndex,
+									checkBlock, matchBlock, nextBlock, builder,
+									localTypes);
+							else {
+								builder.select(checkBlock);
+								var subjectValue = builder.load(switchName, switchType);
+								if (isNullableEnumType(expression.type) && switchCase.constructorIndex >= 0) {
+									var nonNullBlock = builder.createBlock();
+									builder.branch(builder.equal(subjectValue, builder.constNull(switchType)),
+										nextBlock,
+										nonNullBlock);
+									builder.select(nonNullBlock);
+									subjectValue = builder.load(switchName, switchType);
+								}
+								var valueType = nullableSwitchValueType(expression.type);
+								if (valueType != null && !isNullExpression(switchCase.value)
+									&& !switchCase.isCatchAll) {
+									var nonNullBlock = builder.createBlock();
+									builder.branch(builder.equal(subjectValue, builder.constNull(switchType)),
+										nextBlock,
+										nonNullBlock);
+									builder.select(nonNullBlock);
+									subjectValue = abiBoundaryCast(builder, builder.load(switchName, switchType),
+										lowerType(valueType));
+								}
+								var predicateBlock = switchCase.predicates.length == 0
+									? matchBlock : builder.createBlock();
+								if (switchCase.isCatchAll)
+									builder.jump(predicateBlock);
+								else {
+									var switchValue = switchCase.constructorIndex >= 0
+										&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
+										switchValueName = builder.operandName();
+									localTypes.set(switchValueName, switchValue.type);
+									builder.store(switchValueName, switchValue);
+									var caseValue = switchCase.constructorIndex >= 0
+										? builder.constInt(switchCase.constructorIndex)
+										: lowerExpression(switchCase.value,
+										builder, localTypes);
+									switchValue = builder.load(switchValueName, switchValue.type);
+									var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
+										builder.constNull(switchType));
+									else if ((switch (switchValue.type) {
+										case Bytes: true;
+										default: false;
+									})) builder.call("__string_equal", [switchValue, caseValue], Bool);
+									else builder.equal(switchValue, caseValue);
+									builder.branch(matches, predicateBlock, nextBlock);
+								}
+								if (switchCase.predicates.length > 0)
+									lowerEnumPredicates(switchName, switchType, switchCase.constructorIndex,
+										switchCase.predicates, predicateBlock, matchBlock,
+										nextBlock, builder, localTypes);
+							}
+							builder.select(matchBlock);
+							var subjectBinding = switchCase.subjectBinding;
+							if (subjectBinding != null && subjectBinding.length > 0) {
+								localTypes.set(subjectBinding, switchType);
+								initializeLocal(subjectBinding, builder.load(switchName, switchType), builder,
+									localTypes);
+								builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
+							}
+							if (switchCase.arrayPattern != null)
+								lowerSwitchArrayPatternBindings(switchCase.arrayPattern, switchName, switchType,
+									switchCase.span, builder, localTypes);
+							else {
+								if (switchCase.constructorIndex >= 0)
+									for (binding in switchCase.bindings) {
+										localTypes.set(binding.name, lowerType(binding.type));
+										builder.debugLocal(binding.name, switchCase.span, switchCase.span.end);
+									}
+								for (binding in switchCase.bindings)
+									initializeLocal(binding.name,
+										lowerEnumBinding(builder, builder.load(switchName, switchType),
+										switchCase.constructorIndex, binding), builder, localTypes);
+							}
+							var guard = switchCase.guard;
+							if (guard != null) {
+								builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
+								builder.select(bodyBlock);
+							}
+							lowerStatements(switchCase.statements, builder, localTypes, switchCase.span.end);
+							if (!builder.isTerminated())
+								exits.push(builder.currentBlock());
+							checkBlock = nextBlock;
+						}
+						builder.select(checkBlock);
+						if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
+							builder.markUnreachable();
+						else
+							lowerStatements(defaultBranch, builder, localTypes,
+								statementsScopeEnd(defaultBranch, span.end));
+						if (!builder.isTerminated())
+							exits.push(builder.currentBlock());
+						if (exits.length > 0) {
+							var joinBlock = builder.createBlock();
+							for (exit in exits)
+								builder.jumpFrom(exit, joinBlock);
+							builder.select(joinBlock);
+						}
 					}
 				case TExpression(expression, _):
 					lowerExpression(expression, builder, localTypes);
@@ -2686,129 +2733,177 @@ class IrGenerator {
 				localTypes.set(subjectName, subjectType);
 				localTypes.set(resultName, resultType);
 				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
-				var entryBlock = builder.currentBlock();
-				var bodyBlocks:Array<CfgBlock> = [];
-				var matchBlocks:Array<CfgBlock> = [];
-				var checkBlocks:Array<CfgBlock> = [entryBlock];
-				for (caseIndex in 0...cases.length) {
-					var matchBlock = builder.createBlock();
-					matchBlocks.push(matchBlock);
-					bodyBlocks.push(cases[caseIndex].guard == null ? matchBlock : builder.createBlock());
-					if (caseIndex + 1 < cases.length)
-						checkBlocks.push(builder.createBlock());
-				}
-				// Keep all case and fallback blocks before their shared join. HashLink
-				// treats a backward branch as a loop edge and requires its target to
-				// dominate the branch.
-				var fallbackBlock = builder.createBlock(),
-					afterBlock = builder.createBlock();
-				if (cases.length == 0)
-					builder.jumpFrom(entryBlock, fallbackBlock);
-				for (caseIndex in 0...cases.length) {
-					var switchCase = cases[caseIndex],
-						isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1
-							&& switchCase.guard == null,
-						bodyBlock = bodyBlocks[caseIndex],
-						nextBlock = caseIndex + 1 < cases.length
-							? checkBlocks[caseIndex + 1] : (defaultExpression == null ? afterBlock : fallbackBlock);
-					var matchBlock = matchBlocks[caseIndex];
-					if (switchCase.arrayPattern != null)
-						lowerSwitchArrayPattern(switchCase.arrayPattern, subjectName, subjectType, caseIndex,
-							checkBlocks[caseIndex], matchBlocks[caseIndex],
-							nextBlock, builder, localTypes);
+				var switchArms:Array<SwitchArm> = [
+					for (arm in cases)
+						({
+							value: arm.value,
+							subjectBinding: arm.subjectBinding,
+							arrayPattern: arm.arrayPattern,
+							isCatchAll: arm.isCatchAll,
+							guard: arm.guard,
+							constructorIndex: arm.constructorIndex,
+							bindings: arm.bindings,
+							predicates: arm.predicates,
+							span: arm.span
+						}:SwitchArm)
+				];
+				var tablePlan = switchTablePlan(subject.type, switchArms);
+				if (tablePlan != null) {
+					// Arms that name constructors: one jump table on the constructor index (`lowerTableSwitch`). Without a default the
+					// arms are exhaustive, so no value reaches the fallback, as in a switch statement on an enum.
+					var afterBlock = builder.createBlock(), fallbackBlock = builder.createBlock();
+					lowerTableSwitch(tablePlan, switchArms, subjectName, subjectType,
+						fallbackBlock, false,
+						builder, localTypes, index -> {
+							var caseResult = abiBoundaryCast(builder,
+								lowerExpression(cases[index].result, builder, localTypes),
+								resultType);
+							if (!builder.isTerminated()) {
+								builder.store(resultName, caseResult);
+								builder.jump(afterBlock);
+							}
+						});
+					var fallback = defaultExpression;
+					builder.select(fallbackBlock);
+					if (fallback == null)
+						builder.markUnreachable();
 					else {
-						builder.select(checkBlocks[caseIndex]);
-						var subjectValue = builder.load(subjectName, subjectType);
-						if (isNullableEnumType(subject.type) && switchCase.constructorIndex >= 0
-							&& !isExhaustiveFinalCase) {
-							var nonNullBlock = builder.createBlock();
-							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
-								nonNullBlock);
-							builder.select(nonNullBlock);
-							subjectValue = builder.load(subjectName, subjectType);
+						var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
+							resultType);
+						if (!builder.isTerminated()) {
+							builder.store(resultName, fallbackResult);
+							builder.jump(afterBlock);
 						}
-						var valueType = nullableSwitchValueType(subject.type);
-						if (valueType != null && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
-							var nonNullBlock = builder.createBlock();
-							builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
-								nonNullBlock);
-							builder.select(nonNullBlock);
-							subjectValue = abiBoundaryCast(builder, builder.load(subjectName, subjectType),
-								lowerType(valueType));
-						}
-						if (switchCase.isCatchAll)
-							builder.jump(bodyBlock);
+					}
+					builder.select(afterBlock);
+					builder.load(resultName, resultType);
+				} else {
+					var entryBlock = builder.currentBlock();
+					var bodyBlocks:Array<CfgBlock> = [];
+					var matchBlocks:Array<CfgBlock> = [];
+					var checkBlocks:Array<CfgBlock> = [entryBlock];
+					for (caseIndex in 0...cases.length) {
+						var matchBlock = builder.createBlock();
+						matchBlocks.push(matchBlock);
+						bodyBlocks.push(cases[caseIndex].guard == null ? matchBlock : builder.createBlock());
+						if (caseIndex + 1 < cases.length)
+							checkBlocks.push(builder.createBlock());
+					}
+					// Keep all case and fallback blocks before their shared join. HashLink
+					// treats a backward branch as a loop edge and requires its target to
+					// dominate the branch.
+					var fallbackBlock = builder.createBlock(),
+						afterBlock = builder.createBlock();
+					if (cases.length == 0)
+						builder.jumpFrom(entryBlock, fallbackBlock);
+					for (caseIndex in 0...cases.length) {
+						var switchCase = cases[caseIndex],
+							isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1
+								&& switchCase.guard == null,
+							bodyBlock = bodyBlocks[caseIndex],
+							nextBlock = caseIndex + 1 < cases.length
+								? checkBlocks[caseIndex + 1] : (defaultExpression == null ? afterBlock : fallbackBlock);
+						var matchBlock = matchBlocks[caseIndex];
+						if (switchCase.arrayPattern != null)
+							lowerSwitchArrayPattern(switchCase.arrayPattern, subjectName, subjectType, caseIndex,
+								checkBlocks[caseIndex], matchBlocks[caseIndex],
+								nextBlock, builder, localTypes);
 						else {
-							var comparisonValue = switchCase.constructorIndex >= 0
-								&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue,
-								comparisonName = builder.operandName();
-							localTypes.set(comparisonName, comparisonValue.type);
-							builder.store(comparisonName, comparisonValue);
-							var caseValue = switchCase.constructorIndex >= 0
-								? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
-								builder, localTypes);
-							comparisonValue = builder.load(comparisonName, comparisonValue.type);
-							var matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
-								builder.constNull(subjectType));
-							else if ((switch (comparisonValue.type) {
-								case Bytes: true;
-								default: false;
-							})) builder.call("__string_equal", [comparisonValue, caseValue], Bool);
-							else builder.equal(comparisonValue, caseValue);
-							if (isExhaustiveFinalCase)
+							builder.select(checkBlocks[caseIndex]);
+							var subjectValue = builder.load(subjectName, subjectType);
+							if (isNullableEnumType(subject.type) && switchCase.constructorIndex >= 0
+								&& !isExhaustiveFinalCase) {
+								var nonNullBlock = builder.createBlock();
+								builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
+									nonNullBlock);
+								builder.select(nonNullBlock);
+								subjectValue = builder.load(subjectName, subjectType);
+							}
+							var valueType = nullableSwitchValueType(subject.type);
+							if (valueType != null && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
+								var nonNullBlock = builder.createBlock();
+								builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
+									nonNullBlock);
+								builder.select(nonNullBlock);
+								subjectValue = abiBoundaryCast(builder, builder.load(subjectName, subjectType),
+									lowerType(valueType));
+							}
+							if (switchCase.isCatchAll)
 								builder.jump(bodyBlock);
 							else {
-								var predicateBlock = switchCase.predicates.length == 0
-									? matchBlock : builder.createBlock();
-								builder.branch(matches, predicateBlock, nextBlock);
-								if (switchCase.predicates.length > 0)
-									lowerEnumPredicates(subjectName, subjectType, switchCase.constructorIndex,
-										switchCase.predicates, predicateBlock, matchBlock,
-										nextBlock, builder, localTypes);
+								var comparisonValue = switchCase.constructorIndex >= 0
+									&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue,
+									comparisonName = builder.operandName();
+								localTypes.set(comparisonName, comparisonValue.type);
+								builder.store(comparisonName, comparisonValue);
+								var caseValue = switchCase.constructorIndex >= 0
+									? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
+									builder, localTypes);
+								comparisonValue = builder.load(comparisonName, comparisonValue.type);
+								var matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
+									builder.constNull(subjectType));
+								else if ((switch (comparisonValue.type) {
+									case Bytes: true;
+									default: false;
+								})) builder.call("__string_equal", [comparisonValue, caseValue], Bool);
+								else builder.equal(comparisonValue, caseValue);
+								if (isExhaustiveFinalCase)
+									builder.jump(bodyBlock);
+								else {
+									var predicateBlock = switchCase.predicates.length == 0
+										? matchBlock : builder.createBlock();
+									builder.branch(matches, predicateBlock, nextBlock);
+									if (switchCase.predicates.length > 0)
+										lowerEnumPredicates(subjectName, subjectType, switchCase.constructorIndex,
+											switchCase.predicates, predicateBlock, matchBlock,
+											nextBlock, builder, localTypes);
+								}
 							}
 						}
-					}
-					builder.select(matchBlock);
-					var subjectBinding = switchCase.subjectBinding;
-					if (subjectBinding != null && subjectBinding.length > 0) {
-						localTypes.set(subjectBinding, subjectType);
-						initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder, localTypes);
-					}
-					if (switchCase.arrayPattern != null)
-						lowerSwitchArrayPatternBindings(switchCase.arrayPattern, subjectName, subjectType,
-							switchCase.span, builder, localTypes);
-					else {
-						for (binding in switchCase.bindings) {
-							localTypes.set(binding.name, lowerType(binding.type));
-							initializeLocal(binding.name,
-								lowerEnumBinding(builder, builder.load(subjectName, subjectType),
-								switchCase.constructorIndex, binding), builder, localTypes);
+						builder.select(matchBlock);
+						var subjectBinding = switchCase.subjectBinding;
+						if (subjectBinding != null && subjectBinding.length > 0) {
+							localTypes.set(subjectBinding, subjectType);
+							initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder,
+								localTypes);
+						}
+						if (switchCase.arrayPattern != null)
+							lowerSwitchArrayPatternBindings(switchCase.arrayPattern, subjectName, subjectType,
+								switchCase.span, builder, localTypes);
+						else {
+							for (binding in switchCase.bindings) {
+								localTypes.set(binding.name, lowerType(binding.type));
+								initializeLocal(binding.name,
+									lowerEnumBinding(builder, builder.load(subjectName, subjectType),
+									switchCase.constructorIndex, binding), builder, localTypes);
+							}
+						}
+						var guard = switchCase.guard;
+						if (guard != null) {
+							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
+							builder.select(bodyBlock);
+						}
+						var caseResult = abiBoundaryCast(builder,
+							lowerExpression(switchCase.result, builder, localTypes),
+							resultType);
+						if (!builder.isTerminated()) {
+							builder.store(resultName, caseResult);
+							builder.jump(afterBlock);
 						}
 					}
-					var guard = switchCase.guard;
-					if (guard != null) {
-						builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
-						builder.select(bodyBlock);
+					var fallback = defaultExpression;
+					if (fallback != null) {
+						builder.select(fallbackBlock);
+						var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
+							resultType);
+						if (!builder.isTerminated()) {
+							builder.store(resultName, fallbackResult);
+							builder.jump(afterBlock);
+						}
 					}
-					var caseResult = abiBoundaryCast(builder, lowerExpression(switchCase.result, builder, localTypes),
-						resultType);
-					if (!builder.isTerminated()) {
-						builder.store(resultName, caseResult);
-						builder.jump(afterBlock);
-					}
+					builder.select(afterBlock);
+					builder.load(resultName, resultType);
 				}
-				var fallback = defaultExpression;
-				if (fallback != null) {
-					builder.select(fallbackBlock);
-					var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
-						resultType);
-					if (!builder.isTerminated()) {
-						builder.store(resultName, fallbackResult);
-						builder.jump(afterBlock);
-					}
-				}
-				builder.select(afterBlock);
-				builder.load(resultName, resultType);
 			case TClosureCall(callee, args):
 				var operands:Array<TypedExpression> = [callee];
 				for (argument in args)
@@ -3776,6 +3871,120 @@ class IrGenerator {
 		}
 	}
 
+	/**
+	 * How a switch on an enum is a jump table on the constructor index, or null when it is not one: every arm names one
+	 * constructor (with any argument patterns, bindings and guard) or `null`, and a catch-all, if any, is the last arm and
+	 * unguarded. Arms run in source order: an arm whose patterns or guard fail hands over to the next arm that can match the same
+	 * value, since no arm naming another constructor can.
+	 */
+	function switchTablePlan(subject:CompilerType, arms:Array<SwitchArm>):Null<SwitchTablePlan> {
+		if (!isEnumType(subject) || arms.length < 2)
+			return null;
+		var nullable = isNullableEnumType(subject), catchAll = -1;
+		for (index in 0...arms.length) {
+			var arm = arms[index];
+			if (arm.arrayPattern != null)
+				return null;
+			if (arm.isCatchAll) {
+				if (arm.guard != null || index != arms.length - 1)
+					return null;
+				catchAll = index;
+			} else if (isNullExpression(arm.value)) {
+				if (!nullable)
+					return null;
+			} else if (arm.constructorIndex < 0)
+				return null;
+		}
+		var fallbacks:Array<Int> = [], entries:Array<Int> = [], nullArm = -1;
+		for (index in 0...arms.length) {
+			var arm = arms[index], isNull = !arm.isCatchAll && isNullExpression(arm.value), next = -1;
+			if (!arm.isCatchAll)
+				for (later in index + 1...arms.length) {
+					var other = arms[later];
+					if (other.isCatchAll
+						|| (isNull ? !other.isCatchAll && isNullExpression(other.value) : !isNullExpression(other.value)
+						&& other.constructorIndex == arm.constructorIndex)) {
+						next = later;
+						break;
+					}
+				}
+			fallbacks.push(next);
+			if (isNull) {
+				if (nullArm < 0)
+					nullArm = index;
+			} else if (!arm.isCatchAll) {
+				while (entries.length <= arm.constructorIndex)
+					entries.push(-1);
+				if (entries[arm.constructorIndex] < 0)
+					entries[arm.constructorIndex] = index;
+			}
+		}
+		return {
+			fallbacks: fallbacks,
+			entries: entries,
+			nullArm: nullArm >= 0 ? nullArm : catchAll,
+			catchAll: catchAll,
+			nullable: nullable
+		};
+	}
+
+	/**
+	 * Lowers the arms of a switch planned by `switchTablePlan`: a null subject goes to the null arm, any other to the arm the
+	 * table names for its constructor; each arm tests its argument patterns, binds, tests its guard and runs `lowerArm`, and on a
+	 * failed pattern or guard goes to its fallback arm. A value no arm takes goes to `defaultBlock`.
+	 */
+	function lowerTableSwitch(plan:SwitchTablePlan, arms:Array<SwitchArm>, subjectName:String, subjectType:IrType,
+			defaultBlock:CfgBlock, debugBindings:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>,
+			lowerArm:Int->Void):Void {
+		var entryBlocks = [for (_ in arms) builder.createBlock()],
+			matchBlocks = [for (index in 0...arms.length) arms[index].predicates.length == 0
+				? entryBlocks[index] : builder.createBlock()];
+		function blockOf(arm:Int):CfgBlock
+			return arm >= 0 ? entryBlocks[arm] : defaultBlock;
+		var otherwise = blockOf(plan.catchAll);
+		if (plan.nullable) {
+			var tableBlock = builder.createBlock();
+			builder.branch(builder.equal(builder.load(subjectName, subjectType), builder.constNull(subjectType)),
+				blockOf(plan.nullArm), tableBlock);
+			builder.select(tableBlock);
+		}
+		builder.switchOn(builder.enumIndex(builder.load(subjectName, subjectType)),
+			[for (arm in plan.entries) arm >= 0 ? entryBlocks[arm] : otherwise], otherwise);
+		for (index in 0...arms.length) {
+			var arm = arms[index], failure = blockOf(plan.fallbacks[index]);
+			if (arm.predicates.length > 0)
+				lowerEnumPredicates(subjectName, subjectType, arm.constructorIndex, arm.predicates, entryBlocks[index],
+					matchBlocks[index], failure, builder, localTypes);
+			builder.select(matchBlocks[index]);
+			var subjectBinding = arm.subjectBinding;
+			if (subjectBinding != null && subjectBinding.length > 0) {
+				localTypes.set(subjectBinding, subjectType);
+				initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder, localTypes);
+				if (debugBindings)
+					builder.debugLocal(subjectBinding, arm.span, arm.span.end);
+			}
+			if (arm.constructorIndex >= 0) {
+				for (binding in arm.bindings) {
+					localTypes.set(binding.name, lowerType(binding.type));
+					if (debugBindings)
+						builder.debugLocal(binding.name, arm.span, arm.span.end);
+				}
+				for (binding in arm.bindings)
+					initializeLocal(binding.name,
+						lowerEnumBinding(builder, builder.load(subjectName, subjectType), arm.constructorIndex,
+						binding),
+						builder, localTypes);
+			}
+			var guard = arm.guard;
+			if (guard != null) {
+				var bodyBlock = builder.createBlock();
+				builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, failure);
+				builder.select(bodyBlock);
+			}
+			lowerArm(index);
+		}
+	}
+
 	function lowerEnumPredicates(subjectName:String, subjectType:IrType, constructorIndex:Int,
 			predicates:Array<TypedSwitchPredicate>, firstBlock:CfgBlock,
 			matchBlock:CfgBlock, nextBlock:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
@@ -4702,4 +4911,32 @@ class IrGenerator {
 		} : resultType;
 		return referenceResultCast(builder, builder.call(nativeName, arguments, nativeResult), resultType);
 	}
+}
+
+/** What `IrGenerator.switchTablePlan` and `lowerTableSwitch` read of a statement's or an expression's switch arm. */
+private typedef SwitchArm = {
+	final value:TypedExpression;
+	final subjectBinding:Null<String>;
+	final arrayPattern:Null<compiler.types.TypedAst.TypedSwitchArrayPattern>;
+	final isCatchAll:Bool;
+	final guard:Null<TypedExpression>;
+	final constructorIndex:Int;
+	final bindings:Array<compiler.types.TypedAst.TypedSwitchBinding>;
+	final predicates:Array<compiler.types.TypedAst.TypedSwitchPredicate>;
+	final span:compiler.core.Source.SourceSpan;
+}
+
+/** A switch on an enum as a jump table (`IrGenerator.switchTablePlan`). Arms are by index; -1 is none (the default). */
+private typedef SwitchTablePlan = {
+	/** Per arm, the arm to run when its argument patterns or guard fail. */
+	final fallbacks:Array<Int>;
+
+	/** Per constructor index, the first arm naming it. */
+	final entries:Array<Int>;
+
+	/** The arm a null subject goes to: the first `case null`, else the catch-all. */
+	final nullArm:Int;
+
+	final catchAll:Int;
+	final nullable:Bool;
 }

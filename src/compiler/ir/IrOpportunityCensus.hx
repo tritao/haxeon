@@ -151,7 +151,7 @@ class IrOpportunityCensus {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _):
+					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _), Switch(v, _, _):
 						used.set(v.id, true);
 					default:
 				}
@@ -265,7 +265,7 @@ class IrOpportunityCensus {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Branch(condition, _, _):
+					case Branch(condition, _, _), Switch(condition, _, _):
 						switch bounds.definition(condition.id) {
 							case ConstBool(_, _): count(11);
 							default:
@@ -445,7 +445,7 @@ class IrOpportunityCensus {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _) if (v.id == value.id):
+					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _), Switch(v, _, _) if (v.id == value.id):
 						return constructorName(Std.string(block.terminator.value));
 					default:
 				}

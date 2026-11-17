@@ -56,6 +56,9 @@ class CfgVerifier {
 				case Branch(_, yes, no):
 					work.push(yes);
 					work.push(no);
+				case Switch(_, targets, otherwise):
+					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
+						work.push(target);
 				case Return(_), Throw(_), Rethrow(_):
 			}
 		}
@@ -463,6 +466,14 @@ class CfgVerifier {
 					expect(condition, Bool);
 					targetBlock(yes, blocks);
 					targetBlock(no, blocks);
+				case Switch(value, targets, otherwise):
+					require(value, available, block.id);
+					expect(value, I32);
+					if (targets.length == 0)
+						throw 'CFG switch in block ${block.id} of ${fn.name} has no targets';
+					for (target in targets)
+						targetBlock(target, blocks);
+					targetBlock(otherwise, blocks);
 			}
 	}
 

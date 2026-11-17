@@ -361,6 +361,8 @@ class IrInlineEnumLowering {
 						case Rethrow(value): Rethrow(use(value));
 						case Jump(id): Jump(id);
 						case Branch(condition, yes, no): Branch(use(condition), yes, no);
+						case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
+							switchTargets.copy(), switchOtherwise);
 					}, terminator.provenance);
 				blocks.push(copy);
 			}

@@ -803,7 +803,7 @@ class HlLower {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
 						countUse(value);
 					case Jump(_), Unreachable:
 				}
@@ -875,6 +875,7 @@ class HlLower {
 			for (block in orderedBlocks(fn))
 				if (block.instructions.length > 0 || block.terminator != null) block
 		];
+		var layoutPositions:Map<Int, Int> = [for (index in 0...emitted.length) emitted[index].id => index];
 		for (layoutIndex in 0...emitted.length) {
 			var block = emitted[layoutIndex],
 				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
@@ -1472,6 +1473,34 @@ class HlLower {
 						if (no != fallsThroughTo)
 							instructions.push(HlInstruction.Jump('block_$no'));
 					}
+				case Switch(value, targets, otherwise):
+					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
+						if (edgeMoves(edges, block.id, target) != null)
+							throw "Phi elimination requires split critical edges";
+					// HashLink's jump table takes only forward offsets: a target laid out before this block is reached through a
+					// jump placed after the table. Values outside it fall through to the jump to `otherwise`.
+					var stubs:Array<{label:String, target:Int}> = [], entries:Array<String> = [];
+					for (target in targets)
+						if (layoutPositions.get(target) > layoutIndex)
+							entries.push('block_$target');
+						else {
+							var stub = null;
+							for (existing in stubs)
+								if (existing.target == target)
+									stub = existing.label;
+							if (stub == null) {
+								stub = '__switch_${block.id}_${stubs.length}';
+								stubs.push({label: stub, target: target});
+							}
+							entries.push(stub);
+						}
+					instructions.push(HlInstruction.Switch(requireRegister(value, registers), entries));
+					if (otherwise != fallsThroughTo || stubs.length > 0)
+						instructions.push(HlInstruction.Jump('block_$otherwise'));
+					for (stub in stubs) {
+						instructions.push(HlInstruction.Label(stub.label));
+						instructions.push(HlInstruction.Jump('block_${stub.target}'));
+					}
 			}
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
 		}
@@ -1560,6 +1589,9 @@ class HlLower {
 					JumpSignedGreater(_, _, target),
 					JumpUnsignedGreaterOrEqual(_, _, target):
 					referenced.set(target, true);
+				case Switch(_, targets):
+					for (target in targets)
+						referenced.set(target, true);
 				default:
 			}
 		var located = debugLocations.length == instructions.length, kept = 0, positions:Array<Int> = [];
@@ -1725,6 +1757,7 @@ class HlLower {
 			var successors:Array<Int> = switch terminator.value {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
+				case Switch(_, targets, otherwise): compiler.ir.IrSwitch.successors(targets, otherwise);
 				case Return(_), Throw(_), Rethrow(_), Unreachable: [];
 			};
 			var successorIndex = successors.length;

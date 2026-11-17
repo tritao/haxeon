@@ -251,7 +251,7 @@ class IrOptionalFieldStorage {
 			var terminator = block.terminator;
 			if (terminator != null) {
 				var terminalValue = switch terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): value;
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _): value;
 					default: null;
 				};
 				if (terminalValue != null && aliases.exists(terminalValue.id)) {
@@ -263,6 +263,8 @@ class IrOptionalFieldStorage {
 						case Throw(_): Throw(actual.value);
 						case Rethrow(_): Rethrow(actual.value);
 						case Branch(_, yes, no): Branch(actual.value, yes, no);
+						case Switch(switchValue, switchTargets, switchOtherwise): Switch(actual.value,
+							switchTargets.copy(), switchOtherwise);
 						default: terminator.value;
 					};
 					terminator = new Located(mapped, terminator.provenance);

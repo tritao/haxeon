@@ -132,7 +132,7 @@ class IrValueArrayElementRewrite {
 				}
 			}
 			if (block.terminator != null) switch block.terminator.value {
-				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): use(value);
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _): use(value);
 				default:
 			}
 		}

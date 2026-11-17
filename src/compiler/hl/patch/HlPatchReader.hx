@@ -295,6 +295,12 @@ class HlPatchReader {
 	static function readOperands(input:BytesInput, op:Int):Array<Int>
 		return switch HlOpcodeSchema.arity(op) {
 			case HlOpcodeSchema.UNSUPPORTED: throw 'Unsupported patch opcode $op';
+			case HlOpcodeSchema.SWITCH_ARITY:
+				var register = readIndex(input), count = readOperandCount(input), operands = [register, count];
+				for (_ in 0...count)
+					operands.push(readIndex(input));
+				operands.push(readIndex(input));
+				operands;
 			case HlOpcodeSchema.VARIABLE_ARITY:
 				var first = readIndex(input),
 					second = readIndex(input),

@@ -254,7 +254,7 @@ class IrVerifier {
 				}
 				if (block.terminator != null)
 					switch block.terminator.value {
-						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _):
+						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
 							if (fails(value.type))
 								check(value.type, 'terminator ${fn.name}');
 							if (anyDescriptors)
@@ -712,6 +712,15 @@ class IrVerifier {
 						default: true;
 					}))
 						throw "IR branch condition is not Bool";
+				case Switch(value, targets, _):
+					verifyUse(value, id, block.instructions.length, values, graph);
+					if ((switch (value.type) {
+						case I32: false;
+						default: true;
+					}))
+						throw "IR switch value is not I32";
+					if (targets.length == 0)
+						throw "IR switch has no targets";
 				case Jump(_):
 			}
 		}

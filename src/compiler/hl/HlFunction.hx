@@ -152,6 +152,13 @@ enum HlInstruction {
 	JumpNotLess(left:Int, right:Int, target:String);
 	JumpNotGreaterOrEqual(left:Int, right:Int, target:String);
 	Jump(target:String);
+
+	/**
+	 * A jump table on an Int register: to `targets[value]` when `0 <= value < targets.length`, else to the next instruction. HashLink
+	 * takes only forward offsets, so every target comes after the switch.
+	 */
+	Switch(value:Int, targets:Array<String>);
+
 	Label(name:String);
 	Return(register:Int);
 	Throw(register:Int);

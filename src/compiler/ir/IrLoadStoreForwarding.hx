@@ -162,6 +162,8 @@ class IrLoadStoreForwarding {
 					case Throw(value): Throw(use(value));
 					case Rethrow(value): Rethrow(use(value));
 					case Branch(condition, yes, no): Branch(use(condition), yes, no);
+					case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
+						switchTargets.copy(), switchOtherwise);
 					case Jump(target): Jump(target);
 				}, term.provenance);
 		}

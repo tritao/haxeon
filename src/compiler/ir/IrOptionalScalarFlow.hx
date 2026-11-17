@@ -398,7 +398,8 @@ class IrOptionalScalarFlow {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (roots.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (roots.exists(value.id)):
 						return false;
 					default:
 				}
@@ -1126,7 +1127,7 @@ class IrOptionalScalarFlow {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _):
+					case Return(v), Throw(v), Rethrow(v), Branch(v, _, _), Switch(v, _, _):
 						used.set(v.id, true);
 					case Jump(_), Unreachable:
 				}

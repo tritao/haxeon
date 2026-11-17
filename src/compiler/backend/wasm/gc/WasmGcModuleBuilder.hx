@@ -326,7 +326,7 @@ class WasmGcModuleBuilder {
 						case Return(value) | Throw(value)
 							| Rethrow(value) if (value != null && markers.exists(value.id)):
 							throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
-						case Branch(condition, _, _) if (markers.exists(condition.id)):
+						case Branch(condition, _, _), Switch(condition, _, _) if (markers.exists(condition.id)):
 							throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
 						default:
 					}

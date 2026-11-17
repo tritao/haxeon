@@ -63,6 +63,17 @@ class IrConstantBranches {
 								targets = [];
 							targets.set(block.id, value == 1 ? whenTrue : whenFalse);
 						}
+					case Switch(value, cases, otherwise):
+						// A switch on a constant made in its own block goes to the one block that constant selects.
+						for (located in block.instructions)
+							switch located.value {
+								case ConstInt(output, constant) if (output.id == value.id):
+									if (targets == null)
+										targets = [];
+									targets.set(block.id,
+										constant >= 0 && constant < cases.length ? cases[constant] : otherwise);
+								default:
+							}
 					default:
 				}
 		if (targets == null)
@@ -99,6 +110,9 @@ class IrConstantBranches {
 					case Branch(_, whenTrue, whenFalse):
 						visit(whenTrue);
 						visit(whenFalse);
+					case Switch(_, cases, otherwise):
+						for (target in IrSwitch.successors(cases, otherwise))
+							visit(target);
 					default:
 				}
 		}
@@ -189,6 +203,8 @@ class IrConstantBranches {
 					return target == to;
 				case Branch(_, whenTrue, whenFalse):
 					return whenTrue == to || whenFalse == to;
+				case Switch(_, cases, otherwise):
+					return otherwise == to || cases.indexOf(to) >= 0;
 				default:
 			}
 		return false;

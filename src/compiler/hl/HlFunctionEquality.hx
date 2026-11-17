@@ -469,6 +469,13 @@ class HlFunctionEquality {
 						&& sameLabel(target, otherTarget, forward, backward);
 					default: false;
 				}
+			case Switch(value, targets):
+				switch b {
+					case Switch(otherValue, otherTargets): value == otherValue && targets.length == otherTargets.length
+						&& [for (index in 0...targets.length)
+						if (!sameLabel(targets[index], otherTargets[index], forward, backward)) index].length == 0;
+					default: false;
+				}
 			case Jump(target):
 				switch b {
 					case Jump(otherTarget): sameLabel(target, otherTarget, forward, backward);

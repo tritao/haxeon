@@ -38,7 +38,8 @@ class IrTypePositions {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (rewritten(value.type)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (rewritten(value.type)):
 						return true;
 					default:
 				}

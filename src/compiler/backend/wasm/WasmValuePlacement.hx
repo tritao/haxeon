@@ -142,7 +142,7 @@ class WasmValuePlacement {
 		return switch terminator {
 			case Return(value), Throw(value), Rethrow(value): [value];
 			case Jump(_), Unreachable: [];
-			case Branch(condition, _, _): [condition];
+			case Branch(condition, _, _), Switch(condition, _, _): [condition];
 		};
 
 	static function requiredPosition(values:Map<Int, Int>, valueId:Int):Int {

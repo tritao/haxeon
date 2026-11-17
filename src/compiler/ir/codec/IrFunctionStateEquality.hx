@@ -452,6 +452,12 @@ class IrFunctionStateEquality {
 						&& whenTrue == otherTrue && whenFalse == otherFalse;
 					default: false;
 				};
+			case Switch(input, targets, otherwise): switch b {
+					case Switch(other, otherTargets, otherOtherwise): value(input, other) && otherwise == otherOtherwise
+						&& targets.length == otherTargets.length && [for (index in 0...targets.length)
+						if (targets[index] != otherTargets[index]) index].length == 0;
+					default: false;
+				};
 		};
 
 	static function values(a:Array<IrValue>, b:Array<IrValue>):Bool {

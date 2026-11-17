@@ -623,7 +623,8 @@ class WasmScalarAbi {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _) if (aliases.exists(value.id)):
+					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (aliases.exists(value.id)):
 						return false;
 					default:
 				}
@@ -684,9 +685,9 @@ class WasmScalarAbi {
 			if (block.terminator == null)
 				return false;
 			switch block.terminator.value {
-				case Branch(value, _, _) if (aliases.exists(value.id)):
+				case Branch(value, _, _), Switch(value, _, _) if (aliases.exists(value.id)):
 					return false;
-				case Return(_), Throw(_), Rethrow(_), Branch(_, _, _), Jump(_):
+				case Return(_), Throw(_), Rethrow(_), Branch(_, _, _), Switch(_, _, _), Jump(_):
 				default:
 					return false;
 			}
@@ -789,7 +790,8 @@ class WasmScalarAbi {
 			}
 			if (block.terminator != null)
 				switch block.terminator.value {
-					case Throw(value), Rethrow(value), Branch(value, _, _) if (roots.exists(value.id)):
+					case Throw(value), Rethrow(value), Branch(value, _, _),
+						Switch(value, _, _) if (roots.exists(value.id)):
 						valid.set(roots.get(value.id), false);
 					default:
 				}

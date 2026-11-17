@@ -40,7 +40,7 @@ class IrDeadPureValues {
 				if (!removable(instruction)) inputs(instruction);
 			}
 			if (block.terminator != null) switch block.terminator.value {
-				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): mark(value);
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _): mark(value);
 				case Jump(_), Unreachable:
 			}
 		}

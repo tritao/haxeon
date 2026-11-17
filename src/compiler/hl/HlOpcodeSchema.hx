@@ -3,6 +3,9 @@ package compiler.hl;
 /** Operand shapes for the HashLink instructions emitted by this compiler. */
 class HlOpcodeSchema {
 	public static inline final VARIABLE_ARITY = -1;
+
+	/** OSwitch: the register, the table size, one offset per entry, and the end offset. */
+	public static inline final SWITCH_ARITY = -3;
 	public static inline final UNSUPPORTED = -2;
 	public static inline final VARIABLE_COUNT_OPERAND = 2;
 
@@ -29,11 +32,20 @@ class HlOpcodeSchema {
 			case HlOpcode.Call2, HlOpcode.EnumField: 4;
 			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure,
 				HlOpcode.MakeEnum: VARIABLE_ARITY;
+			case HlOpcode.Switch: SWITCH_ARITY;
 			default: UNSUPPORTED;
 		}
 
 	public static function validate(opcode:Int, operands:Array<Int>):Void {
 		var expected = arity(opcode);
+		if (expected == SWITCH_ARITY) {
+			if (operands.length < 3 || operands[1] < 1 || operands.length != operands[1] + 3)
+				throw 'Invalid switch operands';
+			for (index in 2...operands.length - 1)
+				if (operands[index] < 0)
+					throw 'A switch target is before the switch';
+			return;
+		}
 		if (expected == UNSUPPORTED)
 			throw 'Unsupported patch opcode $opcode';
 		if (expected == VARIABLE_ARITY) {

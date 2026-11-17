@@ -28,7 +28,8 @@ class IrReceiverCheckElision {
 				}
 			}
 			if (block.terminator != null) switch block.terminator.value {
-				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _): uses.set(value.id, true);
+				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
+					Switch(value, _, _): uses.set(value.id, true);
 				case Jump(_), Unreachable:
 			}
 		}
