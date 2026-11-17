@@ -107,6 +107,10 @@ HashLink):
 - Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
 - Structure patterns (`case {x: 0, y: y}:`) and extractor patterns (`case parse(_) => value:`).
 - Rest parameters (`function sum(...values:Int)`).
+- Width subtyping between structures: a structure with more fields where one with fewer is expected
+  (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
+  lowered as views of one object, so the narrower value is the same object (`docs/design/STRUCTURE_VALUES.md`, step 4);
+  the differential case `anonymous-width-subtyping` records it.
 - Module-level `var` and `final` (`var counter = 1;` beside a module-level `function main`): `E0002`. Module-level
   functions work; a script keeps such values as locals of `main` or in a class.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and

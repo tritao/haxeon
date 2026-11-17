@@ -1,5 +1,7 @@
 // A structure with more fields stands for one with fewer (Haxe's width subtyping), here between typedef'd structures
 // whose fields are final: as an argument, a local, a return value, a nested field, a nullable and an array element.
+// A known divergence: Haxeon rejects it until structures are lowered as views of one object
+// (docs/design/STRUCTURE_VALUES.md, step 4); tests/differential/run.sh fails once it compiles.
 typedef Arm = {
 	final value:Int;
 	final guard:Null<String>;

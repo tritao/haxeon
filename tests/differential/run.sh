@@ -108,6 +108,33 @@ run_compile_failure() {
 	echo "PASS: $name official and realtime compilers both reject invalid source"
 }
 
+# A known divergence: a program stock Haxe compiles and runs (exit 0) that Haxeon rejects until the step named beside the case lands
+# (each is listed in docs/reference/LANGUAGE_SUPPORT.md). The check fails once Haxeon compiles it, so the case moves to run_case.
+run_known_divergence() {
+	local name=$1
+	local official_dir
+	official_dir=$(mktemp -d "$out_dir/official-divergence.XXXXXX")
+	trap 'rm -rf "$official_dir"' RETURN
+	cp "$root_dir/tests/differential/$name.official.hx" "$official_dir/Main.hx"
+	"$haxe" -cp "$official_dir" -main Main -hl "$out_dir/$name.official.hl"
+	set +e
+	run_hl "$hashlink_dir" "$out_dir/$name.official.hl" >"$out_dir/$name.official.log" 2>&1
+	local official_status=$?
+	realtime_compile "tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
+	local realtime_status=$?
+	set -e
+	if [[ $official_status -ne 0 ]]; then
+		echo "$name: the reference should run and exit 0, got $official_status" >&2
+		cat "$out_dir/$name.official.log" >&2
+		exit 1
+	fi
+	if [[ $realtime_status -eq 0 ]]; then
+		echo "$name: Haxeon now compiles this known divergence; make it a run_case and drop it from LANGUAGE_SUPPORT.md" >&2
+		exit 1
+	fi
+	echo "PASS: $name is still a known divergence (Haxe runs it, Haxeon rejects it)"
+}
+
 # Cases are independent; run them concurrently and report in order.
 pids=()
 logs=()
@@ -141,10 +168,12 @@ in_background run_case local-inference-object-literal-context 0
 in_background run_case local-inference-int-float-widening 0
 in_background run_case local-inference-unbound-dynamic 0
 in_background run_case tuple-switch 0
-in_background run_case anonymous-width-subtyping 0
 in_background run_case switch-shared-constructor-name 0
 in_background run_case tuple-switch-null-element 0
 in_background run_compile_failure type-error
+# Width subtyping between structures waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4):
+# a copy into the narrower record would break identity (`narrow == wide`). The three rejections below are Haxe's too.
+in_background run_known_divergence anonymous-width-subtyping
 in_background run_compile_failure anonymous-width-missing-field
 in_background run_compile_failure anonymous-width-final-to-var
 in_background run_compile_failure anonymous-width-var-to-final

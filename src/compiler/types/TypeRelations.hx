@@ -21,9 +21,6 @@ enum ConversionPlan {
 	/** A nullable Int, Float, Bool or Int64 read as the plain type: null becomes the type's default (0, 0.0, false), as in Haxe. */
 	UnwrapNullableDefault;
 
-	/** A structure read as one with fewer or wider final fields (`anonymousWidening`): its fields are copied into that record. */
-	AnonymousWidening;
-
 	Incompatible;
 }
 
@@ -96,7 +93,7 @@ class TypeRelations {
 			default:
 		}
 		if (!isAssignable(actual, expected))
-			return anonymousWidening(actual, expected) ? AnonymousWidening : Incompatible;
+			return Incompatible;
 		switch actual {
 			case TNullable(element) if (acceptsNull(expected) && isAssignable(element, expected)):
 				return UnwrapNullable;
@@ -239,54 +236,6 @@ class TypeRelations {
 			default: false;
 		};
 	}
-
-	/**
-	 * Haxe's width subtyping between structures: `{final a:Int; final b:Int;}` stands for `{final a:Int;}`, and a final field
-	 * for a final field of a type it converts to. Each structure is a record of its own on the target, so the value is copied
-	 * into the expected one; that is only sound when every expected field is final, read from a final field (as Haxe also
-	 * requires of a final field), so no write can tell the copy from the value. A recursive widening is not supported.
-	 */
-	public function anonymousWidening(actual:CompilerType, expected:CompilerType):Bool
-		return structuralWidening(actual, expected, []);
-
-	function structuralWidening(actual:CompilerType, expected:CompilerType, inProgress:Array<FieldPair>):Bool {
-		var actualFields = anonymousFields(actual), expectedFields = anonymousFields(expected);
-		if (actualFields == null || expectedFields == null)
-			return false;
-		for (pair in inProgress)
-			if (pair.left == actualFields && pair.right == expectedFields)
-				return false;
-		var nested = inProgress.concat([new FieldPair(actualFields, expectedFields)]);
-		for (target in expectedFields) {
-			var source:Null<compiler.types.Type.AnonymousField> = null;
-			for (field in actualFields)
-				if (field.name == target.name)
-					source = field;
-			if (source == null || !source.isFinal || !target.isFinal || source.optional && !target.optional)
-				return false;
-			// A nested structure is compared here, with the pairs in progress, so a recursive one ends.
-			var converts = isAssignable(source.type, target.type)
-				|| (anonymousFields(source.type) != null ? structuralWidening(source.type, target.type,
-				nested) : switch conversion(source.type, target.type) {
-					case IntToFloat | AbstractIntToFloat | IntToInt64 | WrapNullable: true;
-					default: false;
-				});
-			if (!converts)
-				return false;
-		}
-		return true;
-	}
-
-	/** The fields of a structure, or of a nullable one; null for any other type. */
-	static function anonymousFields(type:CompilerType):Null<Array<compiler.types.Type.AnonymousField>>
-		return switch Monomorphs.follow(type) {
-			case TAnonymous(_, fields): fields;
-			case TNullable(element): switch Monomorphs.follow(element) {
-					case TAnonymous(_, fields): fields;
-					default: null;
-				};
-			default: null;
-		};
 
 	/** A mutable structural field can be viewed through the same read-only field. */
 	static function anonymousReadOnlyWidening(actual:CompilerType, expected:CompilerType):Bool {

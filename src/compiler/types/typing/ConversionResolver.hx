@@ -267,67 +267,12 @@ class ConversionResolver {
 				new TypedExpression(TCast(value), expected, value.span);
 			case UnwrapNullableDefault:
 				nullableWithDefault(value, expected, context, code);
-			case AnonymousWidening:
-				anonymousWidening(value, expected, context, code);
 			case Incompatible:
 				fail(code,
 					'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
 					value.span);
 				value;
 		};
-	}
-
-	/**
-	 * A structure as a narrower one (`TypeRelations.anonymousWidening`): the value, evaluated once, has each field the expected
-	 * structure names copied into a new record of that structure, each converted to its expected type. A null stays null.
-	 */
-	function anonymousWidening(value:TypedExpression, expected:CompilerType, context:String,
-			code:String):TypedExpression {
-		var target = anonymousTarget(expected), source = anonymousTarget(value.type);
-		var targetName:String = "", targetFields:Array<compiler.types.Type.AnonymousField> = [];
-		switch target {
-			case TAnonymous(name, fields):
-				targetName = name;
-				targetFields = fields;
-			default:
-				throw "Expected an anonymous widening target";
-		}
-		var sourceFields = switch source {
-			case TAnonymous(_, fields): fields;
-			default: throw "Expected an anonymous widening source";
-		};
-		var span = value.span,
-			origin = session.currentContext.name,
-			id = '$' + 'anonymous-widening:${session.counters.nextFunctionAdapter(origin)}',
-			local = new TypedExpression(TLocal(id), value.type, span),
-			nullable = isNullable(value.type),
-			record = nullable ? new TypedExpression(TCast(local), source, span) : local,
-			output:Array<compiler.types.TypedAst.TypedObjectField> = [];
-		for (field in targetFields) {
-			var sourceType = field.type;
-			for (sourceField in sourceFields)
-				if (sourceField.name == field.name)
-					sourceType = sourceField.type;
-			output.push({
-				name: field.name,
-				value: coerce(new TypedExpression(TField(record, field.name), sourceType, span), field.type, context,
-					code)
-			});
-		}
-		new AnonymousTypeRegistry(session).register(target);
-		var copy = new TypedExpression(TObjectLiteral(targetName, output, false), target, span),
-			result = TypeRelations.equals(target, expected) ? copy : new TypedExpression(TNullableWrap(copy), expected,
-				span);
-		if (nullable) {
-			var nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
-				value.type,
-				span),
-				nilResult = coerce(new TypedExpression(TNullLiteral, TNull, span), expected, context, code);
-			result = new TypedExpression(TConditional(new TypedExpression(TEqual(local, nilValue), TBool, span),
-				nilResult,
-				result), expected, span);
-		}
-		return new TypedExpression(TBlockExpression([TVar(id, value, span)], result), expected, span);
 	}
 
 	static function anonymousTarget(type:CompilerType):Null<CompilerType>
