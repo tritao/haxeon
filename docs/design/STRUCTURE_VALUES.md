@@ -453,24 +453,46 @@ Warm and live (`tests/compiler`, warm against fresh bytes with `--check-reuse`; 
 Benchmarks: the self-compile time, `benchmarks/cross-lang` (nbody and lru above all) and `benchmarks/structure-access`
 on HashLink and both Wasm targets, before and after slices 2a, 2b and 3.
 
-## Decisions for the user
+## Decisions taken by the user (2026-11-18)
 
-1. **The representation.** Recommended: the object itself, with field access dispatched on its class (above). The
-   alternative is Haxe's own HashLink model, virtuals in every structure slot, which costs every structure access an
-   indirection, doubles literal records, allocates on class conversions and has no Wasm counterpart.
-2. **`Dynamic` to a structure.** Recommended: Haxe's rule, a retype with no check; a missing field reads as its
-   default and a wrongly typed one fails when read, as a `Dynamic` field read does. Today Haxeon checks the required
-   fields and their types and copies, so a malformed value fails at the conversion with the field named, and writes do
-   not reach the source. The alternative keeps the check (without the copy), which rejects values Haxe accepts.
-3. **A literal's structure gaining optional fields from another unit** (a literal returned by an unannotated
-   function). Recommended: an error that asks for the result to be annotated, as 2.5 closes a declaration's type at the
-   end of its unit. The alternative accepts it as a view, which reads the missing field as `null` but cannot write it
-   (the record has no slot), where Haxe adds the field to the object.
-4. **Optional fields a literal never wrote.** A record keeps a slot for every field of its closed type, so writes
-   through any view work. Recommended: reflection and printing treat an optional field whose value is `null` as
-   absent, so `Reflect.fields(p)` is `[x]` and `trace(p)` prints `{x : 1}`, as in Haxe. The one difference left: Haxe
-   shows a field explicitly set to `null`, and Haxeon would not. The alternative keeps today's output
-   (`[x,y]`, `{x : 1, y : null}`).
-5. **Structures as `Map` keys.** Haxe uses identity; Haxeon hashes their fields (`STRUCTS.md`). Recommended: leave it
-   out of this step, which does not depend on it, and list it in `LANGUAGE_SUPPORT.md` as a difference. Matching Haxe
-   would change a deliberate feature that the UI package may use, and deserves its own census.
+1. **The representation** is the object itself, with field access dispatched on its class (above), not HashLink
+   virtuals.
+2. **`Dynamic` to a structure** follows Haxe's rule: a retype with no check and no copy. A missing field reads as its
+   default, and a field of the wrong type fails when it is read, as a `Dynamic` field read does.
+3. **A literal's structure gaining optional fields from another unit** is an error that asks for an annotation. This
+   matches step 2.5, which closes a declaration's type at the end of its unit.
+
+## Open decisions (recommendations, waiting for the user)
+
+4. **Optional fields a literal never wrote.** Recommended: reflection and printing treat an optional field whose value
+   is `null` as absent, as in Haxe. The one difference left: Haxe shows a field explicitly set to `null`, and Haxeon
+   would not. Tracking presence exactly would cost a flag per optional field on every write, for a reflection-only
+   case.
+5. **Structures as `Map` keys.** Recommended (revised): identity, as in Haxe. Structures are references, and
+   references compare by identity. Value equality and hashing would come only from a declared value type
+   (`Equatable`/`Hashable`, `STRUCTS.md`). This also removes a representation problem haxeon-e4 raised: once a
+   structure slot can hold a class instance or a wider record, hashing by fields would have to go through the
+   dispatcher. It would be a slice of its own, 4a: a census of structure-keyed maps and sets, then moving those users
+   to declared value types. 4a lands before slice 4, and ideally before 2a.
+
+## Review by haxeon-e4 (HashLink and IR owner, 2026-11-18)
+
+haxeon-e4 agrees with the representation and takes the representation track.
+
+- **Order.** The dispatcher lands before the structure type. Erased generic owners already carry the object as
+  `Dynamic` and need no `IrType.Structure`. So `IrShapeDispatch` is built and proven on them first: the generator, the
+  exact-class arms, the by-name arm, and provider-row patching against existing tests. This also brings the lru win
+  forward. The representation track's order is **1 → 2b-core + 3 (dispatch on erased owners) → 2a (structure type,
+  unguarded) → 2b (structure guards on the proven dispatcher)**, each with its gate as written.
+- **Cost of `OGetType`.** The fork's JIT emits a null test and a branch around every `OGetType` (`jit_emit.c:2297`).
+  A null value therefore fails the guard and reaches the dispatcher, which must raise the null field-access error
+  itself, naming the field. If 2b misses its gate, the first remedy is JIT-only, with no format change: skip the null
+  test when the same block has already checked the register for null. Try this before closed-world guard elision.
+- **Loops.** Refinement hoists a guard on a loop-invariant value to the loop preheader. Array-element loads keep their
+  guard (the nbody shape). nbody's 3% gate decides whether that is enough.
+- **Debug info.** With structure slots physically `dyn`, HashLink register types no longer name the structure. Slice
+  2a must make development-mode variable metadata use the logical type from the IR debug bindings, so the debugger
+  shows `{name, type}` again. The ci debug-metadata suite is part of its gate.
+- **Already in place for 2a.** `HlPatchReader` and `hlpatch.c` decode `OGetType`. The register allocator shares `dyn`
+  registers by type, so it needs no change. `HlInstruction.GetType` needs `HlRegisters`, `HlOpcodeSchema`,
+  `HlValidator` and a `PatchOpcodeTests` fixture, the same list as `Switch`.
