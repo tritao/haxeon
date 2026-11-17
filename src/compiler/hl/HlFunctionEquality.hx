@@ -450,6 +450,13 @@ class HlFunctionEquality {
 						&& sameLabel(target, otherTarget, forward, backward);
 					default: false;
 				}
+			case JumpUnsignedGreaterOrEqual(left, right, target):
+				switch b {
+					case JumpUnsignedGreaterOrEqual(otherLeft, otherRight, otherTarget): left == otherLeft
+						&& right == otherRight
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
 			case JumpSignedGreater(left, right, target):
 				switch b {
 					case JumpSignedGreater(otherLeft, otherRight, otherTarget): left == otherLeft && right == otherRight

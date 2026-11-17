@@ -22,6 +22,9 @@ enum HlSymbolRequest {
 	/** A reference to a type, for pointer-size-aware header access. */
 	RefTo(type:IrType, index:Int);
 
+	/** An object type laid out like a runtime header (`HlSymbolTable.internRuntimeHeader`). */
+	RuntimeHeader(kind:HlRuntimeHeader, index:Int);
+
 	/** The narrow storage type of a native field; null when the field has none. */
 	NativeStorage(type:IrType, layout:IrScalarStorage, index:Null<Int>);
 
@@ -45,6 +48,18 @@ enum HlSymbolRequest {
 
 	/** Whether the object type has a prototype slot for the method: 0 no slot table, 1 a slot, 2 a table without that method. */
 	MethodSlotKnown(typeName:String, name:String, answer:Int);
+}
+
+/**
+ * A runtime object whose header the HashLink lowering reads in place: its fields, after the header word every object starts with, are
+ * where an object type with these fields keeps them, on 32- and 64-bit alike.
+ */
+enum abstract HlRuntimeHeader(Int) {
+	/** `realtime_bytes`: the finalizer word, then `data` (field 0) and `length` (field 1). */
+	var BytesHeader = 0;
+
+	/** `varray`: the type word, the element type (field 0), then `size` (field 1) and `capacity` (field 2). */
+	var ArrayHeader = 1;
 }
 
 /** How a function's indices change between two builds, filled by replaying its requests. */
@@ -83,6 +98,8 @@ class HlRemap {
 				note(types, index, typeIndex(symbols, type));
 			case RefTo(type, index):
 				note(types, index, symbols.internReference(type));
+			case RuntimeHeader(kind, index):
+				note(types, index, symbols.internRuntimeHeader(kind));
 			case NativeStorage(type, layout, index):
 				var next = symbols.internNativeFieldStorageType(type, layout);
 				if (index != null && next != null)

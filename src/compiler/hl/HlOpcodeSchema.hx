@@ -25,7 +25,7 @@ class HlOpcodeSchema {
 				HlOpcode.GetI8, HlOpcode.GetI16, HlOpcode.GetMem, HlOpcode.SetI8, HlOpcode.SetI16, HlOpcode.SetMem,
 				HlOpcode.JSLt, HlOpcode.JSLte,
 				HlOpcode.JULt, HlOpcode.JEq, HlOpcode.JNotEq, HlOpcode.JNotLt, HlOpcode.JNotGte, HlOpcode.JSGte,
-				HlOpcode.JSGt, HlOpcode.RefOffset: 3;
+				HlOpcode.JSGt, HlOpcode.JUGte, HlOpcode.RefOffset: 3;
 			case HlOpcode.Call2, HlOpcode.EnumField: 4;
 			case HlOpcode.CallN, HlOpcode.CallMethod, HlOpcode.CallThis, HlOpcode.CallClosure,
 				HlOpcode.MakeEnum: VARIABLE_ARITY;

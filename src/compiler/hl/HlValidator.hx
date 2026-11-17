@@ -339,7 +339,7 @@ class HlValidator {
 				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target),
 					JumpEqual(left, right, target), JumpNotEqual(left, right, target), JumpNotLess(left, right, target),
 					JumpNotGreaterOrEqual(left, right, target), JumpSignedGreaterOrEqual(left, right, target),
-					JumpSignedGreater(left, right, target):
+					JumpSignedGreater(left, right, target), JumpUnsignedGreaterOrEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))

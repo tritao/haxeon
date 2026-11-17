@@ -142,6 +142,9 @@ enum HlInstruction {
 	JumpFalse(condition:Int, target:String);
 
 	JumpSignedGreaterOrEqual(left:Int, right:Int, target:String);
+
+	/** The complement of `JumpUnsignedLess`: jumps unless `left` is below `right` as unsigned integers. */
+	JumpUnsignedGreaterOrEqual(left:Int, right:Int, target:String);
 	JumpSignedGreater(left:Int, right:Int, target:String);
 
 	JumpNotNull(value:Int, target:String);

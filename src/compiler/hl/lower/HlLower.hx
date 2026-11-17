@@ -1,5 +1,6 @@
 package compiler.hl.lower;
 
+import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrFunction;
 import compiler.ir.PhiEdges;
@@ -1527,7 +1528,8 @@ class HlLower {
 					JumpNull(_, target), JumpEqual(_, _, target), JumpTrue(_, target), Jump(target), Trap(_, target, _),
 					JumpFalse(_, target), JumpNotNull(_, target), JumpNotEqual(_, _, target), JumpNotLess(_, _, target),
 					JumpNotGreaterOrEqual(_, _, target), JumpSignedGreaterOrEqual(_, _, target),
-					JumpSignedGreater(_, _, target):
+					JumpSignedGreater(_, _, target),
+					JumpUnsignedGreaterOrEqual(_, _, target):
 					referenced.set(target, true);
 				default:
 			}
@@ -1929,27 +1931,6 @@ class HlLower {
 		instructions.push(access(data, offset));
 	}
 
-	/**
-	 * Address a runtime header as pointer slots followed by Int slots. RefOffset scales by the referred type,
-	 * so this follows both 32- and 64-bit HashLink layouts without embedding the compiler host's pointer size.
-	 * The source object stays rooted; no interior reference is retained across a fast-path call.
-	 */
-	function runtimeFieldReference(object:Int, pointerSlots:Int, intSlots:Int, type:IrType,
-			instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
-		var pointers = temporaryRegisterType(internReference(IrType.RawPtr), registerTypes);
-		var offset = temporaryRegister(IrType.I32, registerTypes);
-		instructions.push(HlInstruction.UnsafeCast(pointers, object));
-		instructions.push(HlInstruction.LoadInt(offset, internInt(pointerSlots)));
-		instructions.push(HlInstruction.RefOffset(pointers, pointers, offset));
-		var field = temporaryRegisterType(internReference(type), registerTypes);
-		instructions.push(HlInstruction.UnsafeCast(field, pointers));
-		if (intSlots != 0) {
-			instructions.push(HlInstruction.LoadInt(offset, internInt(intSlots)));
-			instructions.push(HlInstruction.RefOffset(field, field, offset));
-		}
-		return field;
-	}
-
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>,
 			instructions:Array<HlInstruction>, registers:Map<Int, Int>,
@@ -2023,24 +2004,23 @@ class HlLower {
 		var destination = defineRegister(output, registers, registerTypes);
 		var args = [for (argument in arguments) requireRegister(argument, registers)];
 		var id = rawArrayAccesses++,
-			fast = "__runtime_fast_" + id,
 			slow = "__runtime_slow_" + id,
 			done = "__runtime_done_" + id;
 		var size = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.JumpNull(args[0], slow));
+		// The header is read through an object type laid out like it: one field access per header field. The fast path falls
+		// through; the slow path is the native, which keeps allocation and error behavior.
+		var header = temporaryRegisterType(internRuntimeHeader(push ? ArrayHeader : BytesHeader), registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(header, args[0]));
 		if (push) {
-			var sizeRef = runtimeFieldReference(args[0], 2, 0, IrType.I32, instructions, registerTypes);
-			var capacityRef = runtimeFieldReference(args[0], 2, 1, IrType.I32, instructions, registerTypes);
 			var capacity = temporaryRegister(IrType.I32, registerTypes);
 			var one = temporaryRegister(IrType.I32, registerTypes);
-			instructions.push(HlInstruction.Unref(size, sizeRef));
-			instructions.push(HlInstruction.Unref(capacity, capacityRef));
-			instructions.push(HlInstruction.JumpUnsignedLess(size, capacity, fast));
-			instructions.push(HlInstruction.Jump(slow));
-			instructions.push(HlInstruction.Label(fast));
+			instructions.push(HlInstruction.FieldGet(size, header, 1));
+			instructions.push(HlInstruction.FieldGet(capacity, header, 2));
+			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(size, capacity, slow));
 			instructions.push(HlInstruction.LoadInt(one, internInt(1)));
 			instructions.push(HlInstruction.Add(destination, size, one));
-			instructions.push(HlInstruction.Setref(sizeRef, destination));
+			instructions.push(HlInstruction.FieldSet(header, 1, destination));
 			// OSetref performs the managed store/write barrier without OSetArray's native bounds helper.
 			var data = temporaryRegister(IrType.RawPtr, registerTypes);
 			var slot = temporaryRegisterType(internReference(arguments[1].type), registerTypes);
@@ -2049,14 +2029,10 @@ class HlLower {
 			instructions.push(HlInstruction.RefOffset(slot, slot, size));
 			instructions.push(HlInstruction.Setref(slot, args[1]));
 		} else {
-			var sizeRef = runtimeFieldReference(args[0], 2, 0, IrType.I32, instructions, registerTypes);
-			instructions.push(HlInstruction.Unref(size, sizeRef));
-			instructions.push(HlInstruction.JumpUnsignedLess(args[1], size, fast));
-			instructions.push(HlInstruction.Jump(slow));
-			instructions.push(HlInstruction.Label(fast));
-			var dataRef = runtimeFieldReference(args[0], 1, 0, IrType.RawPtr, instructions, registerTypes);
 			var data = temporaryRegister(IrType.RawPtr, registerTypes);
-			instructions.push(HlInstruction.Unref(data, dataRef));
+			instructions.push(HlInstruction.FieldGet(size, header, 1));
+			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(args[1], size, slow));
+			instructions.push(HlInstruction.FieldGet(data, header, 0));
 			instructions.push(get ? HlInstruction.GetI8(destination, data, args[1]) : HlInstruction.SetI8(data, args[1],
 				args[2]));
 		}
@@ -2170,6 +2146,14 @@ class HlLower {
 		var index = symbols.internReference(type);
 		if (requests != null)
 			requests.push(RefTo(type, index));
+		return index;
+	}
+
+	/** An object type laid out like the runtime header `kind` (`HlSymbolTable.internRuntimeHeader`). */
+	function internRuntimeHeader(kind:HlRuntimeHeader):Int {
+		var index = symbols.internRuntimeHeader(kind);
+		if (requests != null)
+			requests.push(RuntimeHeader(kind, index));
 		return index;
 	}
 

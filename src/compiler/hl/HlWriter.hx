@@ -1091,6 +1091,12 @@ class HlWriter {
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JSGte;
 				}
+			case JumpUnsignedGreaterOrEqual(left, right, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JUGte;
+				}
 			case JumpSignedGreater(left, right, target):
 				var targetPosition = requireLabel(labels, target);
 				{

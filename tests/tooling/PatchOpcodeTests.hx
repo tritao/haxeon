@@ -77,6 +77,7 @@ class PatchOpcodeTests {
 			{instruction: JumpNotNull(0, "target"), opcode: 47, operands: [0, -2]},
 			{instruction: JumpSignedGreaterOrEqual(0, 1, "target"), opcode: 49, operands: [0, 1, -2]},
 			{instruction: JumpSignedGreater(0, 1, "target"), opcode: 50, operands: [0, 1, -2]},
+			{instruction: JumpUnsignedGreaterOrEqual(0, 1, "target"), opcode: 53, operands: [0, 1, -2]},
 			{instruction: JumpNotLess(0, 1, "target"), opcode: 54, operands: [0, 1, -2]},
 			{instruction: JumpNotGreaterOrEqual(0, 1, "target"), opcode: 55, operands: [0, 1, -2]},
 			{instruction: JumpNotEqual(0, 1, "target"), opcode: 57, operands: [0, 1, -2]},

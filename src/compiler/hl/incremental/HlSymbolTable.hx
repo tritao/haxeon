@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
 import compiler.abi.NameRewrite;
 import compiler.hl.HlCode.HlTypeDef;
@@ -400,6 +401,31 @@ class HlSymbolTable {
 		],
 			index = types.length;
 		types.push(HlTypeDef.Object(internString("String"), -1, 0, fields, [], []));
+		typeIndices.set(key, index);
+		return index;
+	}
+
+	/**
+	 * An object type laid out like the runtime header `kind`, so a fast path reads and writes its fields with one field access each
+	 * instead of addressing them as slots. No value ever has this type; a register is cast to it.
+	 */
+	public function internRuntimeHeader(kind:HlRuntimeHeader):Int {
+		var key = 'runtime-header:' + Std.string(kind);
+		if (typeIndices.exists(key))
+			return typeIndices.get(key);
+		var fields:Array<HlObjectField> = switch kind {
+			case BytesHeader: [
+				{name: internString("data"), type: internType(RawPtr)},
+				{name: internString("length"), type: internType(I32)}
+			];
+			case ArrayHeader: [
+				{name: internString("elementType"), type: internType(RawPtr)},
+				{name: internString("size"), type: internType(I32)},
+				{name: internString("capacity"), type: internType(I32)}
+			];
+		},
+			index = types.length;
+		types.push(HlTypeDef.Object(internString(key), -1, 0, fields, [], []));
 		typeIndices.set(key, index);
 		return index;
 	}
