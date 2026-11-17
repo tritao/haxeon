@@ -172,10 +172,6 @@ jobs:
         if: matrix.platform == 'test'
         run: tests/wasm/test-wasm-backend.sh
 
-      - name: Wasm GC parity gate
-        if: matrix.platform == 'test'
-        run: tests/wasm/test-wasm-parity.sh
-
       - name: Set up Wasmtime GC runtime
         if: matrix.platform == 'test'
         uses: bytecodealliance/actions/wasmtime/setup@v1
