@@ -11,6 +11,7 @@ import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
+import compiler.ir.IrSwitch;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;
 import compiler.backend.wasm.WasmCfgAnalysis;
@@ -39,6 +40,9 @@ private enum StructureFrame {
 
 	/** An `if`/`else`. */
 	IfFrame;
+
+	/** A `block` that a `br_table` leaves to reach one switch arm, whose code follows its `end`; no edge targets it by name. */
+	SwitchArmFrame;
 }
 
 /** Pending structured-control emission, held explicitly for arbitrarily deep CFGs. */
@@ -46,12 +50,6 @@ private enum StructureWork {
 	Tree(id:Int);
 	Within(id:Int, children:Array<Int>, count:Int);
 	Edge(source:Int, target:Int);
-
-	/**
-	 * The rest of a switch from `source` on the Int in local `value`, from entry `index`: `if (value == index)` to that entry's block,
-	 * else the next entry; after the last, `otherwise`. Entries that select `otherwise` are not tested.
-	 */
-	SwitchFrom(source:Int, value:Int, targets:Array<Int>, index:Int, otherwise:Int);
 
 	Close;
 	Otherwise;
@@ -419,8 +417,26 @@ class WasmFunctionLower {
 						case Jump(target):
 							pending.push(Edge(blockId, target));
 						case Switch(value, targets, otherwise):
-							pending.push(SwitchFrom(blockId, requiredLocal(state.values, value.id), targets, 0,
-								otherwise));
+							// One `block` per distinct successor, innermost first in the arm order, and one `br_table` inside
+							// the innermost: leaving block k reaches arm k's code, which follows that block's `end`. Every arm
+							// ends in a branch or an exit, so none runs into the next.
+							var arms = IrSwitch.successors(targets, otherwise);
+							if (arms.length == 1)
+								pending.push(Edge(blockId, arms[0]));
+							else {
+								for (_ in 0...arms.length) {
+									body.push(Block(null));
+									state.frames.push(SwitchArmFrame);
+								}
+								body.push(LocalGet(requiredLocal(state.values, value.id)));
+								body.push(BrTable([for (target in targets) arms.indexOf(target)],
+									arms.indexOf(otherwise)));
+								var arm = arms.length;
+								while (arm-- > 0) {
+									pending.push(Edge(blockId, arms[arm]));
+									pending.push(Close);
+								}
+							}
 						case Branch(condition, yes, no):
 							if (yes == no) pending.push(Edge(blockId, yes));
 							else {
@@ -448,20 +464,6 @@ class WasmFunctionLower {
 						false;
 				})));
 				else pending.push(Tree(target));
-			case SwitchFrom(source, value, targets, index, otherwise):
-				var entry = index;
-				while (entry < targets.length && targets[entry] == otherwise)
-					entry++;
-				if (entry == targets.length)
-					pending.push(Edge(source, otherwise));
-				else {
-					emit(body, [LocalGet(value), I32Const(entry), I32Eq, If(null)]);
-					state.frames.push(IfFrame);
-					pending.push(Close);
-					pending.push(SwitchFrom(source, value, targets, entry + 1, otherwise));
-					pending.push(Otherwise);
-					pending.push(Edge(source, targets[entry]));
-				}
 			case Close:
 				state.frames.pop();
 				body.push(End);
@@ -836,19 +838,25 @@ class WasmFunctionLower {
 				setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, no));
 				body.push(End);
 			case Switch(value, targets, otherwise):
-				// An if/else chain on the value; entries that select `otherwise` are not tested.
-				var local = requiredLocal(values, value.id), opened = 0;
-				for (entry in 0...targets.length)
-					if (targets[entry] != otherwise) {
-						emit(body, [LocalGet(local), I32Const(entry), I32Eq, If(null)]);
-						setPcAndContinue(body, pc, predecessor, block.id,
-							requiredBlockIndex(blockIndex, targets[entry]));
-						body.push(Else);
-						opened++;
+				// A `br_table` on the value leaves block k of one per distinct successor; arm k, after that block's `end`,
+				// sets the next block and leaves the outer block (the last arm falls out of it).
+				var arms = IrSwitch.successors(targets, otherwise);
+				if (arms.length == 1)
+					setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, arms[0]));
+				else {
+					body.push(Block(null));
+					for (_ in 0...arms.length)
+						body.push(Block(null));
+					body.push(LocalGet(requiredLocal(values, value.id)));
+					body.push(BrTable([for (target in targets) arms.indexOf(target)], arms.indexOf(otherwise)));
+					for (arm in 0...arms.length) {
+						body.push(End);
+						setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, arms[arm]));
+						if (arm + 1 < arms.length)
+							body.push(Br(arms.length - 1 - arm));
 					}
-				setPcAndContinue(body, pc, predecessor, block.id, requiredBlockIndex(blockIndex, otherwise));
-				for (_ in 0...opened)
 					body.push(End);
+				}
 		}
 	}
 

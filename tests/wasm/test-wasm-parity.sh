@@ -22,6 +22,7 @@ inline_cases=(
 	generic-erased-enum-inline
 	generic-erased-enum-nominal
 	observable-switch-cfg
+	enum-jump-table
 	wire-nested-value
 	readonly-array-context
 	equality-array-conformance

@@ -56,20 +56,20 @@ enum Op {
 				stack.push(slots[slot]);
 				continue;
 			case Store(slot):
-				slots[slot] = stack.pop();
+				slots[slot] = (stack.pop() ?? 0);
 				continue;
 			case Neg:
-				stack.push(-stack.pop());
+				stack.push(-(stack.pop() ?? 0));
 			case Add:
-				stack.push(stack.pop() + stack.pop());
+				stack.push((stack.pop() ?? 0) + (stack.pop() ?? 0));
 			case Sub:
-				var right = stack.pop();
-				stack.push(stack.pop() - right);
+				var right = (stack.pop() ?? 0);
+				stack.push((stack.pop() ?? 0) - right);
 			case Mul:
-				stack.push(stack.pop() * stack.pop());
+				stack.push((stack.pop() ?? 0) * (stack.pop() ?? 0));
 			case Div:
-				var right = stack.pop();
-				stack.push(Std.int(stack.pop() / right));
+				var right = (stack.pop() ?? 0);
+				stack.push(Std.int((stack.pop() ?? 0) / right));
 		}
 	}
 	return slots[0] * 100 + steps;
