@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.AllocationMeter;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
@@ -214,7 +215,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			else if (entryPoint == null && session.signatures.exists("Main.main"))
 				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
 			else
-				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
+				throw new CompileError(new compiler.core.Diagnostic("E1000",
+					'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"',
+					session.declarations.fallbackSpan));
 			var result = main.arguments.length == 0 ? bodyTyper.functionResultType(main, main.span) : TVoid,
 				returnsIntOrVoid = switch result {
 					case TInt, TVoid: true;
@@ -223,7 +226,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			// An unannotated entry point whose body failed has no result type: its body's error is the one to report.
 			var bodyFailed = AstFunctions.isInferred(main.result) && session.recoveredErrors.length > 0;
 			if (main.arguments.length != 0 || !returnsIntOrVoid && !bodyFailed)
-				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
+				throw new CompileError(new compiler.core.Diagnostic("E1000",
+					'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void',
+					main.span));
 		}
 		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [for (enumDecl in program.enums)
 			{
@@ -391,7 +396,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				var request = session.representation.genericOwnerRequest(ownerIndex++),
 					declaration = ownerDeclarations.get(request.origin);
 				if (declaration == null)
-					throw 'Missing generic owner declaration "${request.origin}"';
+					throw new InternalError('Missing generic owner declaration "${request.origin}"');
 				var specialized = typeClass(declaration, null, false, request);
 				typedClasses.push(specialized);
 				for (method in specialized.methods)
@@ -1200,7 +1205,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	function requiredTypes():DeclarationTypeTable {
 		var types = session.types;
 		if (types == null)
-			throw "Field initializers are typed after the program is bound";
+			throw new InternalError("Field initializers are typed after the program is bound");
 		return types;
 	}
 
@@ -1218,7 +1223,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			expression = field.initializer;
 		context.memberInitializer = !field.isStatic;
 		if (expression == null)
-			throw 'Field "${classDecl.name}.${field.name}" has no initializer';
+			throw new InternalError('Field "${classDecl.name}.${field.name}" has no initializer');
 		if (!field.isStatic)
 			scope.defineReceiver(session.representation.receiverType(classDecl.name, substitutions), field.span);
 		var initializer = type == null ? bodyTyper.typeInferredFieldInitializer(expression, scope, classDecl.name,
@@ -1332,7 +1337,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		}
 		var abstractDecl = session.declarations.abstracts.get(owner);
 		if (abstractDecl == null)
-			throw 'Unannotated function "$key" has no declaration the typer can type';
+			throw new InternalError('Unannotated function "$key" has no declaration the typer can type');
 		if (selected && abstractDecl.isExtern != true && fn.isStatic && !BodyTyper.isGeneric(fn))
 			return {
 				typed: bodyTyper.typeFunction(fn, owner, true, null, null, null, null, null, inference),
@@ -1725,10 +1730,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			name:String):TypedNativeLayout {
 		var layouts = layoutsByTarget.get(target);
 		if (layouts == null)
-			throw 'Missing native layout target "$target"';
+			throw new InternalError('Missing native layout target "$target"');
 		var layout = layouts.get(name);
 		if (layout == null)
-			throw 'Missing native layout for "$name" on target "$target"';
+			throw new InternalError('Missing native layout for "$name" on target "$target"');
 		return layout;
 	}
 
@@ -1740,7 +1745,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			return cached;
 		var key = target + ":" + name, declaration = classes.get(name);
 		if (declaration == null || (!declaration.isNativeValue && !declaration.isFlat))
-			throw 'Missing flat or native value record "$name"';
+			throw new InternalError('Missing flat or native value record "$name"');
 		if (visiting.exists(key))
 			BodyTyper.fail("E1022", 'Flat value record "$name" contains a by-value layout cycle', declaration.span);
 		visiting.set(key, true);
@@ -1753,7 +1758,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (!field.isStatic) {
 				name:field.name, type:compiler.types.StructProperties.isTagEnum(session.declarations,
 					field.type) ? TInt : field.type, span:field.span
-			}], nativeDeclarations, declaration.span) catch (error:Dynamic) {
+			}], nativeDeclarations, declaration.span) catch (error:haxe.Exception) {
 			visiting.remove(key);
 			BodyTyper.fail("E1022", 'Invalid flat value record "$name": ${Std.string(error)}', declaration.span);
 			cast null;
@@ -1787,7 +1792,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var nested = computeNativeLayout(name, target, classes, layouts, visiting),
 			nestedClass = classes.get(name);
 		if (nestedClass == null)
-			throw 'Missing flat or native value record "$name"';
+			throw new InternalError('Missing flat or native value record "$name"');
 		result.set(name, NativeLayout.nestedDeclaration(name, nested, nestedClass.span));
 	}
 
@@ -1908,7 +1913,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		for (field in fields) {
 			var initializer = field.initializer;
 			if (initializer == null)
-				throw 'Missing initializer for "$className.${field.name}"';
+				throw new InternalError('Missing initializer for "$className.${field.name}"');
 			statements.push(TFieldAssign(new TypedExpression(TLocal("this"),
 				receiverType == null ? TInstance(NominalKind.Class, className, []) : receiverType, field.span),
 				field.name, initializer, field.span));

@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.InternalError;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstArgument;
@@ -41,7 +42,7 @@ class SemanticProgram {
 	/** Build a semantic snapshot only through the requested declaration stage. */
 	public static function analyzeThrough(program:AstProgram, through:DeclarationStage):SemanticProgram {
 		if ((through:Int) > (SignatureTyped:Int))
-			throw "Semantic analysis cannot type bodies or finalize without Typer";
+			throw new InternalError("Semantic analysis cannot type bodies or finalize without Typer");
 		var started = Sys.time() * 1000.0;
 		// An unannotated accessor of an annotated property has the property's type; what else a signature leaves out, its body gives.
 		var inferred = AccessorSignatures.withPropertyTypes(program);

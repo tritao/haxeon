@@ -322,7 +322,7 @@ class BodyTyper implements BodyTyping {
 			var resolvedArguments:Array<CompilerType> = [];
 			for (parameter in typeParameters) {
 				if (!context.typeSubstitutions.exists(parameter))
-					throw 'Missing specialization for type parameter "$parameter"';
+					throw new InternalError('Missing specialization for type parameter "$parameter"');
 				resolvedArguments.push(context.typeSubstitutions.get(parameter));
 			}
 			typeArguments = resolvedArguments;

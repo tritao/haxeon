@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
@@ -316,7 +317,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 			if (fn == null || selected.exists(key) || functions.exists(key))
 				continue;
 			if (!hasShapeOf(fn, signature))
-				throw 'Function "$key" is seeded with a signature of another shape: its source changed, but it was not selected';
+				throw new InternalError('Function "$key" is seeded with a signature of another shape: its source changed, but it was not selected');
 			functions.set(key, Known(signature));
 			seeded.set(key, true);
 		}
@@ -367,14 +368,14 @@ class DeclarationTypeTable implements DeclarationTypes {
 				warnings: null,
 				output: null
 			};
-			case state: throw 'Field "$key" reaches its slot as $state';
+			case state: throw new InternalError('Field "$key" reaches its slot as $state');
 		};
 	}
 
 	function force(owner:String, field:AstField, key:String):CompilerType {
 		var classDecl = classes.get(owner);
 		if (typing == null || session == null || classDecl == null || field.initializer == null)
-			throw 'Unannotated field "$key" has no initializer the typer can type';
+			throw new InternalError('Unannotated field "$key" has no initializer the typer can type');
 		if (field.isInline) {
 			// An inline constant is typed once, on demand, by its own resolver, which reports its cycles.
 			var type = requiredTyping().inlineFieldType(classDecl, field);
@@ -383,7 +384,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 		}
 		fields.set(key, InProgress(null));
 		forcing.push(key);
-		var unit = try typeUnit(classDecl, field, null) catch (error:Dynamic) {
+		var unit = try typeUnit(classDecl, field, null) catch (error:haxe.Exception) {
 			forcing.pop();
 			fields.set(key, Failed);
 			throw error;
@@ -506,7 +507,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 					null;
 				} else {
 					if (provisional == null)
-						throw 'Function "$key" is read before its provisional signature exists';
+						throw new InternalError('Function "$key" is read before its provisional signature exists');
 					provisional;
 				}
 			case null:
@@ -524,11 +525,11 @@ class DeclarationTypeTable implements DeclarationTypes {
 		forceFunction(fn, key);
 		var typed = switch functions.get(key) {
 			case Known(fresh): fresh;
-			case state: throw '--check-reuse: the seeded function "$key" typed again as $state';
+			case state: throw new InternalError('--check-reuse: the seeded function "$key" typed again as $state');
 		};
 		if (signatureDigest(typed) != signatureDigest(signature))
-			throw '--check-reuse: the signature an earlier build gave "$key", ${signatureDigest(signature)}, differs from its body\'s, '
-				+ signatureDigest(typed);
+			throw new InternalError('--check-reuse: the signature an earlier build gave "$key", ${signatureDigest(signature)}, '
+				+ 'differs from its body\'s, ${signatureDigest(typed)}');
 	}
 
 	static function signatureDigest(signature:InferredSignature):String
@@ -546,13 +547,13 @@ class DeclarationTypeTable implements DeclarationTypes {
 	public function functionUnit(fn:AstFunction):Null<FunctionUnit> {
 		var key = inferredKeys.get(fn);
 		if (key == null)
-			throw 'Function "${fn.name}" leaves nothing of its signature to its body';
+			throw new InternalError('Function "${fn.name}" leaves nothing of its signature to its body');
 		if (!functions.exists(key))
 			forceFunction(fn, key);
 		return switch functions.get(key) {
 			case Typed(unit): unit;
 			case Failed: null;
-			case state: throw 'Function "$key" reaches its slot as $state';
+			case state: throw new InternalError('Function "$key" reaches its slot as $state');
 		};
 	}
 
@@ -578,7 +579,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 				throw error;
 			typingSession.recover(mark, error);
 			return;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			forcing.pop();
 			functions.set(key, Failed);
 			throw error;
@@ -586,7 +587,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 		forcing.pop();
 		var signature = inference.signature;
 		if (signature == null)
-			throw 'Function "$key" was typed without settling its signature';
+			throw new InternalError('Function "$key" was typed without settling its signature');
 		if (inCycle.exists(key))
 			functions.set(key, Failed);
 		else if (typed.kept)
@@ -623,7 +624,7 @@ class DeclarationTypeTable implements DeclarationTypes {
 			for (field in owner.fields)
 				if (field.name == name)
 					return field.span;
-		throw 'Unknown field "$key"';
+		throw new InternalError('Unknown field "$key"');
 	}
 
 	/**
@@ -662,21 +663,21 @@ class DeclarationTypeTable implements DeclarationTypes {
 	static function requiredOrder(order:Map<String, Int>, key:String):Int {
 		var index = order.get(key);
 		if (index == null)
-			throw 'Declaration "$key" is not declared';
+			throw new InternalError('Declaration "$key" is not declared');
 		return index;
 	}
 
 	function requiredSession():TypingSession {
 		var bound = session;
 		if (bound == null)
-			throw "No typing session types declarations";
+			throw new InternalError("No typing session types declarations");
 		return bound;
 	}
 
 	function requiredTyping():DeclarationTyping {
 		var bound = typing;
 		if (bound == null)
-			throw "No typer types declarations";
+			throw new InternalError("No typer types declarations");
 		return bound;
 	}
 }

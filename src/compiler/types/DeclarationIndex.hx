@@ -183,7 +183,8 @@ class DeclarationIndex {
 	 */
 	final recursiveAliases:Map<String, Bool>;
 
-	final fallbackSpan:SourceSpan;
+	/** Where a diagnostic about the program as a whole is reported: its first declaration. */
+	public final fallbackSpan:SourceSpan;
 
 	public static function validated(program:AstProgram):DeclarationIndex
 		return registered(program).validate(program);
