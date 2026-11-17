@@ -34,6 +34,7 @@ interface BodyTyping {
 	function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement>;
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;
+	function functionResultType(fn:AstFunction, span:SourceSpan):CompilerType;
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType;
 	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool;
 

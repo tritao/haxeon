@@ -113,7 +113,7 @@ class IterationProtocol {
 							type: TFunction([
 								for (argument in method.arguments)
 									declarations.resolve(argument.type, argument.span, substitutions)
-							], declarations.resolve(method.result, method.span, substitutions), []),
+							], declarations.types.signature(method, substitutions).result, []),
 							owner: owner
 						};
 					}
@@ -123,7 +123,7 @@ class IterationProtocol {
 						for (field in declaration.fields)
 							if (field.name == name && !field.isStatic)
 								return {
-									type: declarations.resolve(declarations.resolvedFieldType(owner, field), field.span,
+									type: declarations.types.fieldType(owner, field,
 										declarations.inheritance.substitutions(type)),
 									owner: null
 								};

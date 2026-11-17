@@ -160,7 +160,7 @@ class SemanticIndex {
 		for (method in methods)
 			try
 				setDeclarationType(owner + "." + method.name, method.span,
-					declarations.resolve(method.result, method.span))
+					declarations.types.signature(method).result)
 			catch (_:Dynamic)
 				setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
 	}

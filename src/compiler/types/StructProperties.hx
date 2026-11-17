@@ -120,8 +120,7 @@ class StructProperties {
 		for (field in declaration.fields)
 			if (!field.isStatic && hasStorage(field)) {
 				var fieldPath = nextPath.length == 0 ? field.name : nextPath + "." + field.name,
-					fieldType = declarations.resolve(declarations.resolvedFieldType(declaration.name, field),
-						field.span),
+					fieldType = declarations.types.fieldType(declaration.name, field),
 					facts = evaluateAt(declarations, fieldType, fieldPath, nextVisiting);
 				if (!facts.flat) {
 					flat = false;

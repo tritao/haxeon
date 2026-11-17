@@ -665,7 +665,7 @@ class CallResolver {
 					throw "Enum method without an enum receiver";
 			}
 			var typed = typeDeclaredCallArguments(arguments, enumMethod.arguments, scope, name, span, substitutions);
-			var result = session.declarations.resolve(enumMethod.result, enumMethod.span, substitutions);
+			var result = session.declarations.types.signature(enumMethod, substitutions).result;
 			EnumConformanceMethods.request(session, receiver.type, name, session.currentContext.name, span);
 			session.invalidateUnknownCall(scope);
 			return new TypedExpression(TCall(EnumConformanceMethods.name(receiver.type, name),
@@ -698,7 +698,7 @@ class CallResolver {
 			}
 			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 			return applyCallEffect(new TypedExpression(TCall(methodKey, typed),
-				bodyTyper.lowerType(method.result, method.span),
+				bodyTyper.functionResultType(method, method.span),
 				span), methodKey, scope);
 		}
 		// A static field that holds a function (`static var build:Void->Int`) is called as its value is, as in Haxe: read the field,
@@ -799,7 +799,7 @@ class CallResolver {
 			for (argument in typed)
 				callArguments.push(argument);
 			return new TypedExpression(TCall(methodKey, callArguments),
-				session.representation.semanticType(signature.result, signature.span, substitutions),
+				session.declarations.types.signature(signature, substitutions).result,
 				span);
 		}
 		var typedArguments = [for (argument in arguments) bodyTyper.typeExpression(argument, scope)];
@@ -972,7 +972,7 @@ class CallResolver {
 		if (hasSignature) {
 			var signature = requiredMapValue(session.signatures, name);
 			expectedArguments = [for (argument in signature.arguments) bodyTyper.argumentType(argument, null)];
-			result = bodyTyper.lowerType(signature.result, signature.span);
+			result = bodyTyper.functionResultType(signature, signature.span);
 		} else if (session.externals.exists(name)) {
 			var external = requiredMapValue(session.externals, name);
 			expectedArguments = external.arguments;
@@ -1056,7 +1056,7 @@ class CallResolver {
 		if (methodInfo.isStatic) {
 			var typed = typeDeclaredCallArguments(arguments, method.arguments, scope, methodKey, span);
 			return applyCallEffect(new TypedExpression(TCall(methodKey, typed),
-				bodyTyper.lowerType(method.result, method.span),
+				bodyTyper.functionResultType(method, method.span),
 				span), methodKey, scope);
 		}
 		if (scope.resolve("this") == null)

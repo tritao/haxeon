@@ -90,8 +90,13 @@ class TypeRepresentation {
 
 	/** Resolve a method result through the receiver's nominal projection. */
 	public function resolveMethodResult(receiver:CompilerType, owner:String,
-			method:AstFunction):TypeRepresentationResult
-		return resolve(method.result, method.span, methodSubstitutions(receiver, owner));
+			method:AstFunction):TypeRepresentationResult {
+		var substitutions = methodSubstitutions(receiver, owner);
+		return {
+			semantic: session.declarations.types.signature(method, substitutions.semantic).result,
+			physical: session.declarations.types.signature(method, substitutions.physical).result
+		};
+	}
 
 	/**
 	 * Resolve all method parameters through the receiver's nominal projection, as the method's body takes them, or as its
@@ -576,8 +581,8 @@ class TypeRepresentation {
 					argumentType(argument, representation.substitutions)
 			],
 			result:TypeRepresentationResult = {
-				semantic: semanticType(fn.result, fn.span, semanticSubstitutions),
-				physical: physicalType(fn.result, fn.span, representation.substitutions)
+				semantic: session.declarations.types.signature(fn, semanticSubstitutions).result,
+				physical: session.declarations.types.signature(fn, representation.substitutions).result
 			};
 		return {
 			representation: representation,
@@ -809,9 +814,7 @@ class TypeRepresentation {
 				if (declaration != null) {
 					for (field in declaration.fields)
 						if (field.name == name && !field.isStatic)
-							return session.declarations.resolve(session.declarations.resolvedFieldType(className,
-								field), field.span,
-								nominalSubstitutions(type));
+							return session.declarations.types.fieldType(className, field, nominalSubstitutions(type));
 					if (declaration.base != null)
 						return fieldType(session.declarations.resolve(declaration.base, declaration.span,
 							nominalSubstitutions(type)), name, span);
@@ -832,8 +835,7 @@ class TypeRepresentation {
 					result:Null<CompilerType> = null;
 				for (field in declaration.fields)
 					if (field.name == name && !field.isStatic)
-						result = physicalType(session.declarations.resolvedFieldType(className, field), field.span,
-							substitutions);
+						result = session.declarations.types.fieldType(className, field, substitutions);
 				if (result != null) result;
 				else if (declaration.base != null) physicalFieldType(session.declarations.resolve(declaration.base,
 					declaration.span, substitutions), name, span);

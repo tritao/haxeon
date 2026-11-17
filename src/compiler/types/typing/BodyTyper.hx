@@ -217,8 +217,8 @@ class BodyTyper implements BodyTyping {
 		fn = DefaultArguments.withFunctionPrologue(fn,
 			[for (argument in fn.arguments) argumentType(argument, substitutions)],
 			session.relations);
-		var result = substitutions == null ? lowerType(fn.result, fn.span) : session.declarations.resolve(fn.result,
-			fn.span, substitutions);
+		var result = substitutions == null ? functionResultType(fn, fn.span) : session.declarations.types.signature(fn,
+			substitutions).result;
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
 		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
@@ -727,7 +727,7 @@ class BodyTyper implements BodyTyping {
 		if (!session.signatures.exists(signatureName))
 			return null;
 		var signature = requiredMapValue(session.signatures, signatureName);
-		return isGeneric(signature) ? null : lowerType(signature.result, signature.span);
+		return isGeneric(signature) ? null : functionResultType(signature, signature.span);
 	}
 
 	function resolvedCallName(name:String):String {
@@ -1601,7 +1601,7 @@ class BodyTyper implements BodyTyping {
 				// A function value is the dispatch entry when the function has one: a call through it may omit an argument.
 				new TypedExpression(TFunctionRef(DefaultArguments.hasDispatchEntry(fn.arguments, types,
 					session.relations) ? DefaultArguments.dispatchName(functionName) : functionName),
-					dispatchFunctionType(fn, types, lowerType(fn.result, fn.span)), span);
+					dispatchFunctionType(fn, types, functionResultType(fn, fn.span)), span);
 			}
 				else if (session.externals.exists(name)) {
 				var external = session.externals.get(name);
@@ -2152,7 +2152,7 @@ class BodyTyper implements BodyTyping {
 				var substitutions = session.representation.nominalSubstitutions(projectNominal(typedObject.type,
 					resolvedMethodInfo.owner)),
 					arguments = [for (argument in method.arguments) argumentType(argument, substitutions)],
-					result = session.declarations.resolve(method.result, method.span, substitutions);
+					result = session.declarations.types.signature(method, substitutions).result;
 				// A method value binds the dispatch entry when the method has one, as a virtual call reaches it.
 				if (DefaultArguments.hasDispatchEntry(method.arguments, arguments, session.relations))
 					return new TypedExpression(TMethodRef(typedObject, DefaultArguments.dispatchName(methodKey)),
@@ -2257,7 +2257,7 @@ class BodyTyper implements BodyTyping {
 			if (field.name == name && field.isStatic)
 				return {
 					owner: className,
-					type: lowerType(session.declarations.resolvedFieldType(className, field), field.span)
+					type: session.declarations.types.fieldType(className, field, context.typeSubstitutions)
 				};
 		var base = classDecl.base;
 		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
@@ -2572,8 +2572,7 @@ class BodyTyper implements BodyTyping {
 					var classDecl = requiredMapValue(session.classDecls, className);
 					for (field in classDecl.fields)
 						if (field.name == name && !field.isStatic)
-							found = session.declarations.resolve(session.declarations.resolvedFieldType(className,
-								field), field.span,
+							found = session.declarations.types.fieldType(className, field,
 								session.representation.nominalSubstitutions(type));
 					var base = classDecl.base;
 					if (found == null && base != null)
@@ -2702,6 +2701,10 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/** `span` is where `type` is written: a name that fails to resolve, or resolves ambiguously, is reported there. */
+	/** The declared result of `fn` (DeclarationIndex.resultType) with this body's type substitutions. */
+	public function functionResultType(fn:AstFunction, span:SourceSpan):CompilerType
+		return session.declarations.types.signature(fn, context.typeSubstitutions).result;
+
 	public function lowerType(type:AstType, span:SourceSpan):CompilerType
 		return session.representation.semanticType(type, span, context.typeSubstitutions);
 

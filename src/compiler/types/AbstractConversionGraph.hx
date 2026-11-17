@@ -62,7 +62,7 @@ class AbstractConversionGraph {
 						case "to" if (!method.isStatic && method.arguments.length == 0):
 							toEdges.push({
 								source: owner,
-								target: node(declarations.resolve(method.result, method.span, substitutions), decl.name,
+								target: node(declarations.types.signature(method, substitutions).result, decl.name,
 									decl.typeParameters)
 							});
 						default:
@@ -155,7 +155,7 @@ class AbstractConversionGraph {
 				continue;
 			for (entry in metadata)
 				if (entry.name == "to"
-					&& TypeRelations.equals(expected, declarations.resolve(method.result, method.span, substitutions)))
+					&& TypeRelations.equals(expected, declarations.types.signature(method, substitutions).result))
 					return true;
 		}
 		return false;

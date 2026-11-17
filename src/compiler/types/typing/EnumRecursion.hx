@@ -54,8 +54,7 @@ class EnumRecursion {
 			var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
 				arguments);
 			var payloads = [for (field in declaration.fields) if (!field.isStatic)
-				session.representation.semanticType(session.declarations.resolvedFieldType(declaration.name, field),
-				field.span, substitutions)];
+				session.declarations.types.fieldType(declaration.name, field, substitutions)];
 			if (declaration.base != null) payloads.push(session.representation.semanticType(declaration.base,
 				declaration.span, substitutions));
 			add("value:" + declaration.name, declaration.name, declaration.typeParameters, payloads);

@@ -209,8 +209,7 @@ class KeyPathTyping {
 							owner: owner,
 							declaration: declaration,
 							field: field,
-							type: session.declarations.resolve(session.declarations.resolvedFieldType(className, field),
-								span, substitutions)
+							type: session.declarations.types.fieldType(className, field, substitutions)
 						};
 				for (method in declaration.methods)
 					if (method.name == name) fail('Cannot form a key path to method "$name"', span);

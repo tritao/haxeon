@@ -190,8 +190,7 @@ class DiffIntrinsics {
 						result.push({
 							declaration: declaration,
 							field: field,
-							type: session.declarations.resolve(session.declarations.resolvedFieldType(name, field),
-								field.span, substitutions)
+							type: session.declarations.types.fieldType(name, field, substitutions)
 						});
 				default: throw 'Expected a class in value conformance traversal: $current';
 			}

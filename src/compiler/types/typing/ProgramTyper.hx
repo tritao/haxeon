@@ -182,10 +182,10 @@ class ProgramTyper {
 				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
-			if (main.arguments.length != 0 || ((switch (bodyTyper.lowerType(main.result, main.span)) {
+			if (main.arguments.length != 0 || ((switch (bodyTyper.functionResultType(main, main.span)) {
 				case TInt: false;
 				default: true;
-			}) && (switch (bodyTyper.lowerType(main.result, main.span)) {
+			}) && (switch (bodyTyper.functionResultType(main, main.span)) {
 				case TVoid: false;
 				default: true;
 			})))
@@ -707,8 +707,7 @@ class ProgramTyper {
 			if (field.isInline && field.initializer == null)
 				BodyTyper.fail("E1002", 'Inline field "${classDecl.name}.${field.name}" requires an initializer',
 					field.span);
-			var type = session.representation.physicalType(session.declarations.resolvedFieldType(classDecl.name,
-				field), field.span, erasedSubstitutions);
+			var type = session.declarations.types.fieldType(classDecl.name, field, erasedSubstitutions);
 			if ((switch (type) {
 				case TVoid: true;
 				default: false;
@@ -850,8 +849,7 @@ class ProgramTyper {
 					classDecl.span);
 		}
 		for (field in DiffIntrinsics.storedFields(classDecl)) {
-			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(classDecl.name, field),
-				field.span, classSemanticSubstitutions);
+			var fieldType = session.declarations.types.fieldType(classDecl.name, field, classSemanticSubstitutions);
 			var enumField = switch fieldType {
 				case TInstance(NominalKind.Enum, _, _), TNullable(TInstance(NominalKind.Enum, _, _)): true;
 				default: false;
@@ -876,8 +874,8 @@ class ProgramTyper {
 						|| method.arguments.length != 1
 						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span,
 						classSemanticSubstitutions), declaredType)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
-						classSemanticSubstitutions), TBool))
+						|| !TypeRelations.equals(session.declarations.types.signature(method,
+						classSemanticSubstitutions).result, TBool))
 						BodyTyper.fail("E1003",
 							'Method "${classDecl.name}.equals" must have signature equals(other:${classDecl.name}):Bool',
 							method.span);
@@ -885,8 +883,8 @@ class ProgramTyper {
 					hasHash = true;
 					if (method.isStatic
 						|| method.arguments.length != 0
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
-						classSemanticSubstitutions), TInt))
+						|| !TypeRelations.equals(session.declarations.types.signature(method,
+						classSemanticSubstitutions).result, TInt))
 						BodyTyper.fail("E1003", 'Method "${classDecl.name}.hash" must have signature hash():Int',
 							method.span);
 				}
@@ -997,8 +995,8 @@ class ProgramTyper {
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
 						|| !TypeRelations.equals(session.declarations.resolve(method.arguments[0].type, method.span,
 						substitutions), type)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
-						substitutions), TBool))
+						|| !TypeRelations.equals(session.declarations.types.signature(method, substitutions).result,
+						TBool))
 						BodyTyper.fail("E1003",
 							'Method "${declaration.name}.equals" must have signature equals(other:${declaration.name}):Bool',
 							method.span);
@@ -1014,8 +1012,8 @@ class ProgramTyper {
 					if (method.isStatic
 						|| method.arguments.length != 0
 						|| (method.typeParameters != null && method.typeParameters.length > 0)
-						|| !TypeRelations.equals(session.declarations.resolve(method.result, method.span,
-						substitutions), TInt))
+						|| !TypeRelations.equals(session.declarations.types.signature(method, substitutions).result,
+						TInt))
 						BodyTyper.fail("E1003", 'Method "${declaration.name}.hash" must have signature hash():Int',
 							method.span);
 				}
@@ -1054,8 +1052,7 @@ class ProgramTyper {
 		for (field in declaration.fields) {
 			if (field.isStatic || !DiffIntrinsics.hasStoredField(field))
 				continue;
-			var type = session.declarations.resolve(session.declarations.resolvedFieldType(declaration.name, field),
-				field.span);
+			var type = session.declarations.types.fieldType(declaration.name, field);
 			validateFiniteValueField(type, path, complete);
 		}
 		complete.set(declaration.name, true);
@@ -1459,8 +1456,8 @@ class ProgramTyper {
 			{
 				name:argument.name,
 					type:bodyTyper.argumentType(argument, substitutions)
-			}], result = substitutions == null ? bodyTyper.lowerType(method.result,
-				method.span) : session.declarations.resolve(method.result, method.span, substitutions);
+			}], result = substitutions == null ? bodyTyper.functionResultType(method,
+				method.span) : session.declarations.types.signature(method, substitutions).result;
 		for (argument in arguments)
 			if (NativeLayout.containsUnsupportedRuntimeValueType(argument.type))
 				BodyTyper.fail("E1022",
@@ -1577,8 +1574,8 @@ class ProgramTyper {
 	function sameSignature(left:AstFunction, right:AstFunction, ?leftSubstitutions:Map<String, CompilerType>,
 			?rightSubstitutions:Map<String, CompilerType>):Bool {
 		if (left.arguments.length != right.arguments.length
-			|| !TypeRelations.equals(session.declarations.resolve(left.result, left.span, leftSubstitutions),
-			session.declarations.resolve(right.result, right.span, rightSubstitutions)))
+			|| !TypeRelations.equals(session.declarations.types.signature(left, leftSubstitutions).result,
+			session.declarations.types.signature(right, rightSubstitutions).result))
 			return false;
 		// Haxe compares the optional flags too (`Not_matching_optional`), and `?x:Int` is `Null<Int>`.
 		for (i in 0...left.arguments.length)

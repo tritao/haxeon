@@ -70,6 +70,7 @@ class ExternTyper {
 		for (argument in arguments)
 			if (NativeLayout.containsNativeLayoutType(argument))
 				fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);
+		// An extern function has no body, so its result is always written: it does not need DeclarationIndex.resultType.
 		var result = resultOverride == null ? lowerType(fn.result, fn.span) : resultOverride;
 		if (NativeLayout.containsNativeLayoutType(result))
 			fail("E1022", 'Native layout types cannot cross a foreign function boundary by value yet', fn.span);

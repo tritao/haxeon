@@ -53,8 +53,7 @@ class ValueCopy {
 		for (field in declaration.fields) {
 			if (field.isStatic || !hasStorage(field))
 				continue;
-			var fieldType = session.declarations.resolve(session.declarations.resolvedFieldType(name, field),
-				field.span);
+			var fieldType = session.declarations.types.fieldType(name, field);
 			var nestedType = switch fieldType {
 				case TNullable(element): element;
 				default: fieldType;

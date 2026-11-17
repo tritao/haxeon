@@ -11,6 +11,7 @@ import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.StructProperties;
+import compiler.types.DeclarationTypes.DeclaredTypes;
 
 /** Stable category used to identify a source declaration semantically. */
 enum abstract DeclarationKind(String) {
@@ -192,6 +193,8 @@ class DeclarationIndex {
 		return new DeclarationIndex(program, false, source.span(0, 0));
 
 	function new(program:AstProgram, validate:Bool, emptySpan:Null<SourceSpan>) {
+		declaredTypes = new DeclaredTypes(this);
+		types = declaredTypes;
 		fallbackSpan = firstSpan(program, emptySpan);
 		for (alias in program.aliases) {
 			declareType(alias.name, DeclarationKind.Alias, alias.span);
@@ -298,7 +301,21 @@ class DeclarationIndex {
 		};
 	}
 
-	public function resolvedFieldType(owner:String, field:compiler.syntax.Ast.AstField):AstType
+	/**
+	 * The resolved types of declarations: the declared ones (DeclaredTypes) until the typer binds its table
+	 * (TypingSession.bindSemantic). Every reader of a field's type or a function's signature asks here.
+	 */
+	public var types(default, null):DeclarationTypes;
+
+	/** Gives the typer's table, which answers for declarations whose type their initializer or body gives. */
+	public function bindTypes(table:DeclarationTypes):Void
+		types = table;
+
+	/** The declared types, as the syntax gives them, which the typer's table falls back on. */
+	public final declaredTypes:DeclaredTypes;
+
+	/** A field's type as its syntax gives it: its annotation, or what FieldInference reads from its initializer. */
+	public function declaredFieldType(owner:String, field:AstField):AstType
 		return FieldInference.resolvedType(field, owner, classes, new compiler.semantic.AliasTable(), enums,
 			enumAbstracts);
 
@@ -1025,7 +1042,7 @@ class DeclarationIndex {
 			for (parameter in decl.typeParameters)
 				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
 			for (field in decl.fields)
-				resolve(resolvedFieldType(decl.name, field), field.span, substitutions);
+				types.fieldType(decl.name, field, substitutions);
 			for (method in decl.methods)
 				resolveFunction(method, decl.name + "." + method.name, substitutions);
 		}
@@ -1104,8 +1121,8 @@ class DeclarationIndex {
 				!= compiler.syntax.AstPredicates.isOptionalArgument(argument))
 				return false;
 		}
-		var result = resolve(method.result, method.span, left),
-			expected = resolve(original.result, original.span, right);
+		var result = types.signature(method, left).result,
+			expected = types.signature(original, right).result;
 		if (TypeRelations.equals(result, expected))
 			return true;
 		// Covariant class results have the same pointer ABI; arbitrary function-type coercions require adapters.
@@ -1161,7 +1178,7 @@ class DeclarationIndex {
 				resolve(constraint.type, constraint.span, substitutions);
 		for (argument in fn.arguments)
 			resolve(argument.type, argument.span, substitutions);
-		resolve(fn.result, fn.span, substitutions);
+		types.signature(fn, substitutions).result;
 	}
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {

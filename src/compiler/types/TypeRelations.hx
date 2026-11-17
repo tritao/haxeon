@@ -354,8 +354,7 @@ class TypeRelations {
 					if (found == null)
 						for (entry in declaration.fields)
 							if (!entry.isStatic && StructProperties.hasStorage(entry)) {
-								var fieldType = declarations.resolve(declarations.resolvedFieldType(name, entry),
-									entry.span, substitutions);
+								var fieldType = declarations.types.fieldType(name, entry, substitutions);
 								found = recursiveAnonymousField(fieldType, visiting, entry.name, anonymousDepth,
 									nominalTypes);
 								if (found != null)

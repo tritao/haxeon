@@ -299,6 +299,8 @@ class TypingSession {
 			helperSpans.set(declaration.name, declaration.span);
 
 		declarations = semantic.declarations;
+		// Every reader of a declaration's type asks the program's table from here on.
+		declarations.bindTypes(new DeclarationTypeTable(declarations.declaredTypes));
 		relations = semantic.relations;
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;
