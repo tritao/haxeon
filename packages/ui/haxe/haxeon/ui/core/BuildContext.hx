@@ -697,10 +697,16 @@ class BuildContext {
 	}
 
 	/**
-	 * Called with the root of each rebuilt subtree once a patch has put it in the tree. A patch builds outside the view, so a view
-	 * wrapper that moves nodes after building (TooltipOverlayHost lifts tooltips) uses this to do the same for what the patch made.
+	 * Called with the root of each rebuilt subtree once a patch, or a render scope that ran again on its own, has put it in the
+	 * tree. Both build outside the view, so a view wrapper that moves nodes after building (TooltipOverlayHost lifts tooltips)
+	 * uses this to do the same for what they made.
 	 */
 	public var onPatched:Null<RenderNode->Void> = null;
+
+	@:allow(haxeon.ui.core.RenderScope) function renderScopeRebuilt(root:RenderNode):Void {
+		var patched = onPatched;
+		if (patched != null) patched(root);
+	}
 
 	/** Rebuild only owners still attached after ancestor/root structure has settled. */
 	public function applyPatches(submittedRoot:Null<RenderNode>, ?topology:RenderTreeTopology):Void {

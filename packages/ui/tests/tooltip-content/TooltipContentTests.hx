@@ -1,4 +1,10 @@
 import haxeon.platform.Runtime;
+import haxeon.reactive.Signal;
+import haxeon.ui.LayoutAxis;
+import haxeon.ui.LayoutStyle;
+import haxeon.ui.LayoutVisualKind;
+import haxeon.ui.component.TrackedScope;
+import haxeon.ui.core.BuildContext;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutFrame;
 import haxeon.ui.ResolvedLayoutItem;
@@ -6,9 +12,30 @@ import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiContext;
 import haxeon.ui.core.View;
 import haxeon.ui.widgets.controls.Button;
+import haxeon.ui.widgets.KeyedView;
+import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.overlays.Tooltip;
+import haxeon.ui.widgets.overlays.TooltipOverlayHost;
 import haxeon.ui.widgets.overlays.TooltipPlacement;
 import haxeon.ui.widgets.text.Text;
+
+/** A box whose root writes its resolved width into a State its build read, so the next frame runs its scope again. */
+class WidthBox implements View {
+	public function new() {}
+
+	public function build(context:BuildContext):RenderNode {
+		var width = context.state(context.id("box-width"), -1.0);
+		var style = new LayoutStyle();
+		style.width = LayoutAxis.stretch();
+		style.height = LayoutAxis.fixed(20);
+		var root = new RenderNode(context.id("box"), LayoutVisualKind.Box, style);
+		root.add(new Text("width " + width.value).build(context));
+		root.onResolved(function(geometry) {
+			if (width.value != geometry.width) width.update(geometry.width);
+		});
+		return root;
+	}
+}
 
 /** A tooltip builds its content only while it is shown, and is still placed inside the viewport when it appears. */
 class TooltipContentTests {
@@ -39,6 +66,66 @@ class TooltipContentTests {
 			if (done(root)) break;
 		}
 		return root;
+	}
+
+	/** Positioned tooltips in the tree, and how many of them TooltipOverlayHost has lifted to the root. */
+	static function tooltips(root:RenderNode):{count:Int, lifted:Int} {
+		var count = 0, lifted = 0;
+		root.walk(function(node) {
+			if (node.styleType != "tooltip") return;
+			count++;
+			if (node.parent == root) lifted++;
+		});
+		return {count: count, lifted: lifted};
+	}
+
+	/**
+	 * A TrackedScope that runs again alone (no root build) builds its positioned tooltip in its anchor again. The overlay
+	 * host must lift it in the place of the one it lifted before, or the next submit has two nodes with one ID.
+	 * `mode`: "signal" reruns for a signal written between frames, "feedback" for a State written in onResolved,
+	 * "content" makes the scope the host's content itself, so its rerun replaces the overlay's root.
+	 */
+	static function checkScopedTooltip(ui:UiContext, frame:LayoutFrame, mode:String):Void {
+		var bump = new Signal<Int>(0);
+		var bodyRuns = 0, viewBuilds = 0;
+		function content():View {
+			bump.value;
+			bodyRuns++;
+			var tip = new Tooltip("scoped-tip", new Button("Anchor", null, function() {}, "scoped-anchor"),
+				new Text("Hint"));
+			tip.fillAnchor = true;
+			tip.placement = TooltipPlacement.Above;
+			return mode == "feedback" ? new Column("scoped", [
+				new KeyedView("box", new WidthBox()),
+				new KeyedView("tip", tip)
+			]) : new Column("scoped", [new KeyedView("tip", tip)]);
+		}
+		var scope = new TrackedScope("scoped-" + mode, content);
+		var view = function():View {
+			viewBuilds++;
+			return new TooltipOverlayHost(mode == "content" ? scope : new Column("host", [
+				new KeyedView("outside", new Text("Outside")),
+				new KeyedView("scope", scope)
+			]));
+		};
+		var key = "scoped-tooltip-" + mode;
+		// The box's first width is written after the first frame resolves, so that frame's successors run the scope alone.
+		var root = ui.submitCached(view, frame, key);
+		if (mode != "feedback") for (_ in 0...2) root = ui.submitCached(view, frame, key);
+		var builds = viewBuilds, runs = bodyRuns;
+		if (mode != "feedback") bump.value = 1;
+		for (_ in 0...3) root = ui.submitCached(view, frame, key);
+		check(bodyRuns > runs, mode + ": the scope did not run again");
+		check(viewBuilds == builds, mode + ": the scope did not run alone (the root view was built again)");
+		var found = tooltips(root);
+		check(found.count == 1 && found.lifted == 1, mode + ": expected one lifted tooltip, found " + found.count + " ("
+			+ found.lifted + " lifted)");
+		// A root build after the scope ran alone puts the tooltip back in its current anchor before lifting it again.
+		bump.value = 2;
+		var forced = ui.submit(view(), frame);
+		found = tooltips(forced);
+		check(found.count == 1 && found.lifted == 1, mode + ": a root build after the rerun left " + found.count
+			+ " tooltips (" + found.lifted + " lifted)");
 	}
 
 	public static function main():Int {
@@ -146,6 +233,7 @@ class TooltipContentTests {
 		root = settle(ui, suppressed, frame, 0.2, 8, _ -> false);
 		check(hints(root) == 0 && ui.animations.activeCount == 0,
 			"an ineligible positioned tooltip started a timer or showed content");
+		for (mode in ["signal", "feedback", "content"]) checkScopedTooltip(ui, frame, mode);
 		Sys.println("PASS: tooltip content is built only while shown, and shown tooltips are placed");
 		fonts.dispose();
 		return 0;
