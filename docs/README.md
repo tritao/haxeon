@@ -77,6 +77,8 @@ Compiler (ADR 0003 and its follow-ups):
 - [HELPER_OWNERSHIP.md](design/HELPER_OWNERSHIP.md): ownership of shared generated helpers.
 - [INTERNED_NAMES.md](design/INTERNED_NAMES.md): interned names.
 - [FRONTEND_RESTART.md](design/FRONTEND_RESTART.md): removing the frontend restart.
+- [LAZY_DECLARATION_TYPING.md](design/LAZY_DECLARATION_TYPING.md): unannotated declaration types typed on demand
+  (plan step 2.5).
 
 Runtime and tools:
 

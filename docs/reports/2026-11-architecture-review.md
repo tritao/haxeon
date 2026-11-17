@@ -300,7 +300,7 @@ In order; each step unblocks the next.
 
 ### Phase 2: typer
 
-Can start alongside phase 1 (different packages), but 2.2 to 2.4 are in order.
+Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order.
 
 - **2.1 Callback wiring.** Replace the 42 callback typedefs and forwarding closures with one narrow interface held by
   each sub-typer. Pure refactor. Effort M.
@@ -315,6 +315,15 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.4 are in order.
   risk.
 - **2.4 Error recovery.** The typer records the diagnostic, produces an error-typed node and continues. Then delete
   the language service's approximate typer. Effort L.
+- **2.5 Lazy declaration typing** (added 2026-11-17, design in
+  [LAZY_DECLARATION_TYPING.md](../design/LAZY_DECLARATION_TYPING.md)). An unannotated field's type and an unannotated
+  function's return and argument types are those of its typed initializer or body, typed once, on demand, in its own
+  unit, and closed when that unit ends. One query returns a declaration's resolved type. A cycle between units and a type
+  left open are errors. Then delete `SignatureInference` and the inference half of `FieldInference`. A read of an
+  inferred type is recorded, so an edit retypes the readers. This widens 2.3's scope, which kept signatures and field
+  types syntactic. Six slices: the query, byte-identical; invalidation; fields; returns and arguments; deletion; early
+  cutoff with ADR 0003 M4. Gate: differential tests against Haxe 4.3.7, warm-edit tests for inferred types, and
+  `--reverse-typing-order` byte-identical. Effort L, high risk.
 
 ### Phase 3: service
 
