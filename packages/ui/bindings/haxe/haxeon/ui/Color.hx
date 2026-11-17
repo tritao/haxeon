@@ -44,6 +44,7 @@ struct Color implements Hashable implements Diffable {
 	@:allow(SolidPaint)
 	@:allow(GradientStop)
 	@:allow(TextColorRange)
+	@:allow(TextLayout)
 	private function nativeValue():nkui_color {
 		var result = new nkui_color();
 		result.set_red(red);

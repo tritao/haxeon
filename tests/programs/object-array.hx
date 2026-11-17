@@ -1,5 +1,5 @@
 class Box {
-	var value:Int;
+	public var value:Int;
 
 	public function new(value:Int) {
 		this.value = value;

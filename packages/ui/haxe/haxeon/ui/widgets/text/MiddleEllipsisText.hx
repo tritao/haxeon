@@ -104,7 +104,7 @@ class MiddleEllipsisText implements View {
 private class EllipsisMemo {
 	var geometry:Null<ResolvedLayoutItem> = null;
 	var geometryWidth:Float = 0.0;
-	var value:Null<String> = null;
+	public var value:Null<String> = null;
 	var available:Float = -1.0;
 	var font:Null<FontFamily> = null;
 	var fontSize:Float = 0.0;
