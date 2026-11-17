@@ -179,6 +179,9 @@ in_background run_case throw-type-check 0
 in_background run_case callstack-abstract 0
 in_background run_case abstract-properties 0
 in_background run_compile_failure abstract-property-never-write
+# Every member of an abstract is typed, called or not.
+in_background run_case abstract-uncalled-members 0
+in_background run_compile_failure abstract-uncalled-member-error
 in_background run_case abstract-module-members 0
 # Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0

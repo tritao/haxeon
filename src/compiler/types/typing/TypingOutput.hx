@@ -34,6 +34,12 @@ class TypingOutput {
 	/** How many body contexts were open when the unit began: a shared unit used from inside a body is part of its user's. */
 	public final baseDepth:Int;
 
+	/**
+	 * Whether the unit is typed for its errors alone and dropped (`TypingSession.beginCheckUnit`): nothing it meets becomes part of
+	 * the program, such as the anonymous types it uses.
+	 */
+	public final checkOnly:Bool;
+
 	public final requests = new HelperRequests();
 	public final closureConversion = new ClosureConversion();
 	public final records = new UnitRecords();
@@ -51,9 +57,10 @@ class TypingOutput {
 	/** Anonymous types a shared unit's bodies use before any of their own body contexts is open: its user's. */
 	final userAnonymousUses:Map<String, Array<AnonymousField>> = [];
 
-	public function new(shared:Bool, baseDepth:Int) {
+	public function new(shared:Bool, baseDepth:Int, checkOnly:Bool = false) {
 		this.shared = shared;
 		this.baseDepth = baseDepth;
+		this.checkOnly = checkOnly;
 	}
 
 	/** Adds a generic owner to be typed, unless it was requested before. */

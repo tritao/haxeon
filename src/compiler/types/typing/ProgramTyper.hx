@@ -1352,14 +1352,46 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			requiredTypes().alias(normalized, fn);
 			fn = normalized;
 		}
+		return signatureOnly(key, () -> typeAbstractBodyUnspecialized(abstractDecl, fn, key, inference));
+	}
+
+	/**
+	 * Types the body of `fn`, an instance method of `abstractDecl` or its constructor (normalized), whose code is typed per call,
+	 * with its own and the abstract's type parameters as themselves, the way Haxe types every member once.
+	 */
+	function typeAbstractBodyUnspecialized(abstractDecl:compiler.syntax.Ast.AstAbstract, fn:AstFunction, key:String,
+			?inference:DeclarationTypeTable.FunctionInference):TypedFunction {
 		// The signature table's abstract method has the abstract's type parameters among its own.
-		var substitutions = ownSubstitutions(owner, [], key, fn),
+		var owner = abstractDecl.name,
+			substitutions = ownSubstitutions(owner, [], key, fn),
 			receiver = fn.isStatic || fn.name == "new" ? null : TAbstract(owner, [
 				for (parameter in abstractDecl.typeParameters)
 					BodyTyper.requiredMapValue(substitutions, parameter)
 			], session.representation.semanticType(abstractDecl.underlying, abstractDecl.span, substitutions));
-		return signatureOnly(key, () -> bodyTyper.typeFunction(fn, owner, true, substitutions, null, receiver, null,
-			null, inference));
+		return bodyTyper.typeFunction(fn, owner, true, substitutions, null, receiver, null, null, inference);
+	}
+
+	/**
+	 * Checks the body of an abstract's instance method or constructor, which is typed per call (specialized), so an error in one
+	 * nothing calls is reported as Haxe reports it. The typing is for its errors alone: its unit is dropped, and the code is
+	 * what each call's specialization types.
+	 */
+	function checkAbstractMember(abstractDecl:compiler.syntax.Ast.AstAbstract, fn:AstFunction, key:String):Void {
+		if (requiredTypes().isInferred(fn)) {
+			// An unannotated member's body is typed for its signature, which records its error.
+			requiredTypes().resultType(fn);
+			return;
+		}
+		// A constructor is checked as each construction types it (`CallResolver.typeAbstractConstruction`).
+		var isConstructor = fn.name == "new",
+			body = isConstructor ? AbstractConstructorNormalizer.normalize(fn, abstractDecl.underlying) : fn;
+		var mark = session.checkpoint(), unit = session.beginCheckUnit();
+		try {
+			signatureOnly(key, () -> typeAbstractBodyUnspecialized(abstractDecl, body, key));
+			session.endUnit(unit);
+		} catch (error:CompileError) {
+			session.recover(mark, isConstructor ? AbstractConstructorNormalizer.constructorError(error, key) : error);
+		}
 	}
 
 	/**
@@ -1441,19 +1473,19 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function typeAbstractFunctions(abstracts:Array<compiler.syntax.Ast.AstAbstract>, selected:Null<Map<String, Bool>>,
 			units:Array<TypingOutput>):Array<TypedFunction> {
-		var methods:Array<{owner:String, signature:AstFunction}> = [];
+		var methods:Array<{owner:String, signature:AstFunction}> = [],
+			unspecialized:Array<{owner:compiler.syntax.Ast.AstAbstract, signature:AstFunction, name:String}> = [];
 		for (abstractDecl in abstracts)
 			for (method in abstractDecl.methods) {
 				var name = abstractDecl.name + "." + method.name;
-				if (abstractDecl.isExtern != true
-					&& method.isExtern != true
-					&& method.isStatic
-					&& !BodyTyper.isGeneric(BodyTyper.requiredMapValue(session.signatures, name))
-					&& (selected == null || selected.exists(name)))
-					methods.push({
-						owner: abstractDecl.name,
-						signature: BodyTyper.requiredMapValue(session.signatures, name)
-					});
+				if (abstractDecl.isExtern == true || method.isExtern == true
+					|| (selected != null && !selected.exists(name)))
+					continue;
+				var signature = BodyTyper.requiredMapValue(session.signatures, name);
+				if (method.isStatic && !BodyTyper.isGeneric(signature))
+					methods.push({owner: abstractDecl.name, signature: signature});
+				else if (!method.isStatic)
+					unspecialized.push({owner: abstractDecl, signature: signature, name: name});
 			}
 		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null],
 			outputs:Array<Null<TypingOutput>> = [for (_ in methods) null];
@@ -1475,6 +1507,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				session.recover(mark, error);
 			}
 		}
+		for (index in typingOrder(unspecialized.length))
+			checkAbstractMember(unspecialized[index].owner, unspecialized[index].signature, unspecialized[index].name);
 		for (unit in outputs)
 			if (unit != null)
 				units.push(unit);

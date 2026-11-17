@@ -82,8 +82,17 @@ class TypingSession {
 		return output.closureConversion;
 
 	/** Starts typing a unit (a function body, or a class's fields and initializers) into its own output. */
-	public function beginUnit():TypingOutput {
-		var unit = new TypingOutput(false, bodyContexts.length);
+	public function beginUnit():TypingOutput
+		return pushUnit(new TypingOutput(false, bodyContexts.length));
+
+	/**
+	 * Starts typing a unit for its errors alone, into an output the caller drops: a body whose code is typed elsewhere (an abstract's
+	 * member, per specialization). A shared unit or a declaration's unit it types is the program's, as anywhere else.
+	 */
+	public function beginCheckUnit():TypingOutput
+		return pushUnit(new TypingOutput(false, bodyContexts.length, true));
+
+	function pushUnit(unit:TypingOutput):TypingOutput {
 		outputs.push(output);
 		output = unit;
 		return unit;

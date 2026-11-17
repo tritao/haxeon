@@ -347,6 +347,10 @@ class CallResolver {
 	}
 
 	function nativeMemoryLayout(type:CompilerType, span:SourceSpan):{size:Int, signed:Bool} {
+		// A type parameter's layout is its specialization's. A body is typed with its parameters as themselves only to be checked
+		// (an abstract's member nothing calls), and the code of no specialization comes from it.
+		if (type.match(TTypeParameter(_, _)))
+			return {size: 0, signed: false};
 		if (NativeLayout.isNativeValue(type)) {
 			var name = switch type {
 				case TInstance(NominalKind.NativeValue, name, _): name;
@@ -2686,15 +2690,7 @@ class CallResolver {
 			constructed = genericInstantiation.specialize(constructorName, normalized, typedArguments, span, scope,
 				name, true, substitutions);
 		} catch (error:CompileError) {
-			var message = error.diagnostic.message;
-			if (StringTools.startsWith(message,
-				'Type mismatch for local "' + AbstractConstructorNormalizer.RESULT_PREFIX))
-				fail("E1003", 'Type mismatch for abstract constructor "$constructorName"', error.diagnostic.span);
-			if (StringTools.startsWith(message, 'Local "' + AbstractConstructorNormalizer.RESULT_PREFIX)
-				&& message.indexOf("may be used before assignment") >= 0)
-				fail("E1023", 'Abstract constructor "$constructorName" does not initialize this on every path',
-					error.diagnostic.span);
-			throw error;
+			throw AbstractConstructorNormalizer.constructorError(error, constructorName);
 		}
 		return session.representation.boundaryCast(bodyTyper.coerce(constructed, representation,
 			'abstract constructor "$constructorName"', "E1003"), valueType);

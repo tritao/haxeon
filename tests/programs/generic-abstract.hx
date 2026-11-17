@@ -1,9 +1,9 @@
 abstract Identity<T>(T) from T to T {
-	public function new(value:T, offset:T) {
-		this = value + offset;
+	public function new(value:T) {
+		this = value;
 	}
 
-	public static function wrap(value:T):Identity<T>
+	public static function wrap<T>(value:T):Identity<T>
 		return value;
 
 	public function unwrap():T
@@ -14,4 +14,4 @@ function read(value:Identity<Int>):Int
 	return value;
 
 function main():Int
-	return read(Identity.wrap(40)) + new Identity<Int>(1, 1).unwrap();
+	return read(Identity.wrap(40)) + new Identity<Int>(2).unwrap();

@@ -41,7 +41,9 @@ class AnonymousTypeRegistry {
 
 	public function register(type:CompilerType):Void {
 		recordUses(type, []);
-		discover(type);
+		// A unit typed to be checked and dropped adds no type to the program.
+		if (!session.output.checkOnly)
+			discover(type);
 	}
 
 	function discover(type:CompilerType):Void

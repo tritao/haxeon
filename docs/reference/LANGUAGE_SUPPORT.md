@@ -92,6 +92,9 @@ The current subset includes:
   abstract stores nothing but its underlying value, so its variables must be such properties (`Cannot declare member
   variable in abstract`, `Member property accessors must be get/set or never`, `Method get_length required by property
   length is missing`, in Haxe's words). A static variable of an abstract is not supported yet.
+- Every instance method and constructor of an abstract is typed, as in Haxe, whether or not anything calls it, so an error
+  in one nothing calls is reported. Its code is still each call's specialization. A generic static method of an abstract
+  is typed only where it is called (with its type arguments), as a generic function is.
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import
   one (`import pack.Settings.hits;`) or write its full path (`pack.Settings.hits`). As an extension stock Haxe rejects, they
   can also be reached through the module's name (`Settings.hits`, `Settings.record()` with `import pack.Settings;`). When the

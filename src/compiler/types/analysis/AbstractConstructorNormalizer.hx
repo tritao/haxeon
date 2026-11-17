@@ -26,6 +26,22 @@ class AbstractConstructorNormalizer {
 			statements, constructor.span);
 	}
 
+	/**
+	 * `error`, which typing the normalized constructor `constructorName` failed with, in the constructor's own terms: its result
+	 * local is `this`.
+	 */
+	public static function constructorError(error:CompileError, constructorName:String):CompileError {
+		var diagnostic = error.diagnostic, message = diagnostic.message;
+		if (StringTools.startsWith(message, 'Type mismatch for local "' + RESULT_PREFIX))
+			return new CompileError(new Diagnostic("E1003", 'Type mismatch for abstract constructor "$constructorName"',
+				diagnostic.span));
+		if (StringTools.startsWith(message, 'Local "' + RESULT_PREFIX)
+			&& message.indexOf("may be used before assignment") >= 0)
+			return new CompileError(new Diagnostic("E1023",
+				'Abstract constructor "$constructorName" does not initialize this on every path', diagnostic.span));
+		return error;
+	}
+
 	static function rewriteStatement(statement:AstStatement, resultName:String):AstStatement
 		return switch statement {
 			case PrivateAccessStatement(inner, span): PrivateAccessStatement(rewriteStatement(inner, resultName), span);

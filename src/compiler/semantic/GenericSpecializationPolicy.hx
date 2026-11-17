@@ -40,7 +40,7 @@ class GenericSpecializationPolicy {
 			if (containsNested(method.result, parameter, false))
 				return {representation: semantic, policy: "layout"};
 		}
-		return {representation: RuntimeShapes.representative(semantic), policy: "shape"};
+		return shared(semantic);
 	}
 
 	public static function decide(fn:AstFunction, parameter:String, semantic:CompilerType,
@@ -67,8 +67,18 @@ class GenericSpecializationPolicy {
 				return {representation: semantic, policy: "layout"};
 		if (containsNested(fn.result, parameter, false))
 			return {representation: semantic, policy: "layout"};
-		return {representation: RuntimeShapes.representative(semantic), policy: "shape"};
+		return shared(semantic);
 	}
+
+	/**
+	 * The representation a body shares with others of `semantic`'s runtime shape. A type parameter has no shape: it is met where a
+	 * generic body is typed with its parameters as themselves, to check it (an abstract's member nothing calls), and is kept.
+	 */
+	static function shared(semantic:CompilerType):SpecializationDecision
+		return switch semantic {
+			case TTypeParameter(_, _): {representation: semantic, policy: "parameter"};
+			default: {representation: RuntimeShapes.representative(semantic), policy: "shape"};
+		};
 
 	static function containsNested(type:AstType, parameter:String, nested:Bool):Bool
 		return switch type {
