@@ -233,7 +233,7 @@ class FrontendCompilation {
 		assembleSemantics(build);
 		typeProgram(build);
 		TypingWarnings.publish(context, entryModule, build.names, build.typedNew, rollbackModules);
-		rebuildSemanticIndex(build);
+		rebuildSemanticIndex(build, typedFieldTypes(build));
 		publishObjects(build);
 		publishFunctions(build);
 		publishIndex(build);
@@ -449,7 +449,7 @@ class FrontendCompilation {
 				}
 			if (build.indexSemantics && Std.isOfType(error, TypingFailure)) {
 				var failure:TypingFailure = cast error;
-				indexRecoveredTyping(build, failure.typed);
+				indexRecoveredTyping(build, failure);
 				for (module in build.reindexedModules.keys())
 					failure.indexedModules.set(module, true);
 			}
@@ -462,9 +462,10 @@ class FrontendCompilation {
 	 * indexed, as a successful build would index them, and the bodies that failed indexed from their syntax: an editor then has the
 	 * types the typer found everywhere but in a failed body. The build still fails; the models are only what the editor reads.
 	 */
-	static function indexRecoveredTyping(build:FrontendBuild, typed:Array<compiler.types.TypedAst.TypedFunction>):Void {
-		rebuildSemanticIndex(build);
-		var context = build.context,
+	static function indexRecoveredTyping(build:FrontendBuild, failure:TypingFailure):Void {
+		rebuildSemanticIndex(build, failure.inferredFieldTypes);
+		var typed = failure.typed,
+			context = build.context,
 			owners = build.semanticAssembly.owners,
 			typedByName = [for (fn in typed) fn.name => fn],
 			indexedSpans:Map<String, Map<Int, Bool>> = [];
@@ -493,6 +494,27 @@ class FrontendCompilation {
 				model.index.indexRecoveredSyntax(state.parsedAst(), spans == null ? [] : spans);
 			}
 		}
+		// The unannotated declarations that typed keep the types the table gave them, beside the error.
+		for (key => signature in failure.inferredSignatures) {
+			var module = owners.get(key);
+			if (module != null && build.reindexedModules.exists(module))
+				recordInferredSignature(context, module, key, signature);
+		}
+		for (key => type in failure.inferredFieldTypes)
+			for (module in build.reindexedModules.keys()) {
+				var state = context.state.modules.get(module),
+					model = state == null ? null : state.semanticModel;
+				if (model != null && modelOwnsType(model.program, compiler.core.QualifiedName.parentOrEmpty(key)))
+					model.index.recordInferredField(key, type);
+			}
+	}
+
+	static function recordInferredSignature(context:CompilationContext, module:String, key:String,
+			signature:compiler.types.DeclarationTypes.InferredSignature):Void {
+		var state = context.state.modules.get(module),
+			model = state == null ? null : state.semanticModel;
+		if (model != null)
+			model.index.recordInferredSignature(key, signature);
 	}
 
 	/** The module of a function a failed typing made, as `resolveFunctionModule` finds it, or null when its origin is not known. */
@@ -512,8 +534,21 @@ class FrontendCompilation {
 		return parent == null ? null : recoveredFunctionModule(parent, owners, typedByName, depth + 1);
 	}
 
-	/** New semantic models for the modules whose functions were selected, with their type references indexed. */
-	static function rebuildSemanticIndex(build:FrontendBuild):Void {
+	/** The types typing gave the unannotated fields of the typed program, by key. */
+	static function typedFieldTypes(build:FrontendBuild):Map<String, CompilerType> {
+		var inferred = build.semanticAssembly.inferredDeclarations, result:Map<String, CompilerType> = [];
+		for (classDecl in build.typedNew.classes)
+			for (field in classDecl.fields)
+				if (inferred.exists(classDecl.name + "." + field.name))
+					result.set(classDecl.name + "." + field.name, field.type);
+		return result;
+	}
+
+	/**
+	 * New semantic models for the modules whose functions were selected, and for those whose model shows an unannotated field with
+	 * another type than `fieldTypes` (the types typing gave, by key), with their type references indexed.
+	 */
+	static function rebuildSemanticIndex(build:FrontendBuild, fieldTypes:Map<String, CompilerType>):Void {
 		var context = build.context,
 			owners = build.semanticAssembly.owners;
 		var reindexedModules:Map<String, Bool> = [];
@@ -521,6 +556,25 @@ class FrontendCompilation {
 			var module = owners.get(functionName);
 			if (module != null)
 				reindexedModules.set(module, true);
+		}
+		if (build.indexSemantics) {
+			var classModules:Map<String, String> = [];
+			for (name in build.names) {
+				var state = context.state.modules.get(name), ast = state == null ? null : state.ast;
+				if (ast != null)
+					for (classDecl in ast.classes)
+						classModules.set(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, classDecl.name), name);
+			}
+			for (key => type in fieldTypes) {
+				var module = classModules.get(compiler.core.QualifiedName.parentOrEmpty(key));
+				if (module == null || reindexedModules.exists(module))
+					continue;
+				var state = context.state.modules.get(module),
+					model = state == null ? null : state.semanticModel,
+					shown = model == null ? null : model.index.inferredFieldTypes.get(key);
+				if (shown == null || SemanticSignature.type(shown) != SemanticSignature.type(type))
+					reindexedModules.set(module, true);
+			}
 		}
 		build.reindexedModules = reindexedModules;
 		if (build.indexSemantics) {
@@ -873,6 +927,13 @@ class FrontendCompilation {
 	static function publishIndex(build:FrontendBuild):Void {
 		if (build.indexSemantics) {
 			indexTypedInitializers(build.context, build.typedNew, build.reindexedModules);
+			// An unannotated function's signature, as the table gave it, also where this build did not index its body.
+			for (module in build.reindexedModules.keys()) {
+				var state = build.context.state.modules.get(module);
+				if (state != null)
+					for (key => signature in state.inferredSignatures)
+						recordInferredSignature(build.context, module, key, signature);
+			}
 			publishResolvedDependencies(build.context, build.typedNew, build.reindexedModules, build.rollbackModules);
 		}
 		build.allocationAfterIndexPublication = AllocationMeter.sample();

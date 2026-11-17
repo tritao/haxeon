@@ -54,10 +54,10 @@ class LanguageServiceMain {
 		var fieldSymbols = library.documentSymbols("Fields.hx"),
 			foundInferredField = false;
 		for (symbol in fieldSymbols)
-			if (symbol.name == "inferred" && symbol.detail == "inferred:_")
+			if (symbol.name == "inferred" && symbol.detail == "inferred:Int")
 				foundInferredField = true;
 		if (!foundInferredField)
-			throw "document symbols omitted an inferred field";
+			throw "document symbols omitted an inferred field, or its type from its initializer";
 		var formatSource =
 			"function main():Int {\nvar text = \"{ literal }\"; // }\n/* keep { } */\nif (true) {\nreturn 42;   \n}\n}\n",
 			formatted = Formatter.format(formatSource, FormatConfigTools.make(2, true)),
@@ -862,6 +862,56 @@ class LanguageServiceMain {
 			|| inheritedDefinition.span.file.slice(inheritedDefinition.span.start,
 			inheritedDefinition.span.end).indexOf("context") < 0)
 			throw "definition through an interface extending a same-package sibling did not reach the sibling";
+		inferredDeclarationTypes();
 		Sys.println("PASS: compiler-backed language service snapshot works");
+	}
+
+	/**
+	 * Hover, completion and symbols show an unannotated declaration's type as typing gave it (`DeclarationTypeTable`), not `_`, and
+	 * keep it beside an error in another body.
+	 */
+	static function inferredDeclarationTypes():Void {
+		var service = new LanguageService(),
+			lib =
+				"class Lib { public static var count = [for (i in 0...3) i * 2]; public static function scale(x) return x * 1.5; "
+				+ "public var label = 'a'; public function new(start) label = start; public function shout() return label + '!'; "
+				+ "public static function twice() return Lib.scale(2) * 2; }",
+			main =
+				"class Main { static function main():Void { var lib = new Lib('b'); Sys.println(Lib.scale(2) + lib.shout().length + Lib.count.length); } }";
+		service.update("Lib.hx", lib);
+		service.update("Main.hx", main);
+		service.compile("Main");
+		function check(label:String):Void {
+			var details:Map<String, String> =
+				[for (symbol in service.documentSymbols("Lib.hx")) symbol.name => symbol.detail];
+			if (details.get("count") != "count:Array<Int>" || details.get("scale") != "scale():Float"
+				|| details.get("label") != "label:String" || details.get("shout") != "shout():String")
+				throw '$label: document symbols show ${[for (name => detail in details) detail].join(", ")}';
+			var hovered = service.hover("Lib.hx", lib.indexOf("scale") + 1);
+			if (hovered == null || hovered.indexOf("x:Float") < 0 || hovered.indexOf("Float") < 0)
+				throw '$label: hover on an unannotated function shows $hovered';
+			var statics:Map<String, String> = [
+				for (item in service.complete("Lib.hx", lib.indexOf("Lib.scale") + 4)) item.label => item.detail
+			];
+			if (statics.get("scale") != "scale(Float):Float" || statics.get("count") != "count:Array<Int>")
+				throw '$label: completion of Lib shows ${[for (name => detail in statics) detail].join(", ")}';
+			var members:Map<String, String> = [
+				for (item in service.complete("Main.hx", main.indexOf("lib.shout") + 4)) item.label => item.detail
+			];
+			if (members.get("shout") != "shout():String" || members.get("label") != "label:String")
+				throw '$label: completion of a Lib instance shows ${[for (name => detail in members) detail].join(", ")}';
+		}
+		check("after a build");
+		// Another body of the module fails: the declarations that typed keep their types next to the error.
+		var broken = StringTools.replace(lib, "return Lib.scale(2) * 2;", "return Lib.scale(2) * missing;");
+		service.update("Lib.hx", broken);
+		var rejected = try {
+			service.analyze("Main");
+			false;
+		} catch (_:CompileError) true;
+		if (!rejected)
+			throw "the language service accepted a body that reads an unknown name";
+		lib = broken;
+		check("after a failed build");
 	}
 }

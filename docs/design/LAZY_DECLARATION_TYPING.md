@@ -281,6 +281,22 @@ declaration on a difference.
 - `TypingFailure` already carries the functions that did type. It also carries the table's `Done` entries, so the
   editor keeps the types of everything that typed.
 
+As built (after slice 5):
+
+- The table's answers reach the editor through the semantic index, keyed by declaration: `SemanticIndex.inferredFieldTypes`
+  and `inferredSignatures`. A successful build records each unannotated field's typed initializer type
+  (`indexTypedInitializer`) and each unannotated function's signature from its module's `ModuleState.inferredSignatures`
+  (`recordInferredSignature`, which also gives a function whose body this build did not index its signature help, and a
+  constructor's to its class). A module whose model shows an unannotated field with another type than typing gave is
+  indexed again, so a class of static fields alone gets its types too.
+- `TypingFailure` carries the table's field types and typed signatures (`knownFieldTypes`, `typedSignatures`), and
+  `FrontendCompilation.indexRecoveredTyping` records them in the failed modules' models: the editor keeps them next to the
+  error.
+- Hover, completion, document and workspace symbols read them (`LanguageService.fieldTypeText`, `methodDetail`,
+  `resultText`) instead of printing an unannotated type as `_`; `_` remains only for a declaration nothing has typed yet
+  (a syntax-only index). `SemanticIndex.recoveredType` stays for recovered syntax only: an unannotated result is no longer
+  read from it.
+
 ## Invalidation
 
 ### Today

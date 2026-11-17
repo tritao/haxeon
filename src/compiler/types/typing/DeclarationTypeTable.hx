@@ -334,6 +334,18 @@ class DeclarationTypeTable implements DeclarationTypes {
 		return true;
 	}
 
+	/** The types of the unannotated fields typed or known so far, by key; not those that failed. */
+	public function knownFieldTypes():Map<String, CompilerType> {
+		var result:Map<String, CompilerType> = [];
+		for (key => state in fields)
+			switch state {
+				case Typed(unit): result.set(key, unit.type);
+				case Known(type): result.set(key, type);
+				case InProgress(_), Failed:
+			}
+		return result;
+	}
+
 	/**
 	 * The signatures of the unannotated functions whose bodies this build typed, by key, which the next build seeds the ones it does
 	 * not type again with; not the seeded ones, nor those that failed.

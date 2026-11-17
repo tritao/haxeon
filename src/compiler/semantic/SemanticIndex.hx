@@ -12,6 +12,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.Type.CompilerType;
+import compiler.types.DeclarationTypes.InferredSignature;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstFunction;
@@ -90,6 +91,18 @@ class SemanticIndex {
 
 	/** The fields declared without a type: theirs is their initializer's, indexed from the typed program (`indexTypedInitializer`). */
 	final inferredFields:Map<SemanticSymbolId, Bool> = [];
+
+	/**
+	 * The types typing gave this module's unannotated fields, by key (`Owner.field`), as `DeclarationTypeTable` gave them: what the
+	 * editor shows for a field declared without a type, also after a typing that failed elsewhere (`recordInferredField`).
+	 */
+	public final inferredFieldTypes:Map<String, CompilerType> = [];
+
+	/** The signatures typing gave this module's unannotated functions, by key, as `DeclarationTypeTable` gave them. */
+	public final inferredSignatures:Map<String, InferredSignature> = [];
+
+	/** The module's methods and constructors by key, for the signature of one whose types typing gave (`recordInferredSignature`). */
+	final declaredFunctions:Map<String, AstFunction> = [];
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final tokens:Array<Token>;
@@ -164,12 +177,56 @@ class SemanticIndex {
 							declarations.resolve(field.type, field.span))
 					catch (_:Dynamic)
 						setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
-		for (method in methods)
-			try
-				setDeclarationType(owner + "." + method.name, method.span,
-					declarations.types.resultType(method))
-			catch (_:Dynamic)
-				setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
+		for (method in methods) {
+			declaredFunctions.set(owner + "." + method.name, method);
+			// An unannotated result is the body's: typing gives it (`indexTypedFunction`, `recordInferredSignature`).
+			if (!compiler.syntax.AstFunctions.isInferred(method.result))
+				try
+					setDeclarationType(owner + "." + method.name, method.span,
+						declarations.types.resultType(method))
+				catch (_:Dynamic)
+					setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
+		}
+	}
+
+	/** Records the type typing gave the unannotated field `key` of this module, and indexes it as the field's type. */
+	public function recordInferredField(key:String, type:CompilerType):Void {
+		inferredFieldTypes.set(key, type);
+		for (symbol in symbols)
+			if (symbol.name == key && inferredFields.exists(symbol.id))
+				declarationTypes.set(symbol.id, type);
+	}
+
+	/**
+	 * Records the signature typing gave the unannotated function `key` of this module, and indexes it as the function's signature
+	 * where its body was not indexed (it failed, or this build did not type it); a constructor's is also its class's.
+	 */
+	public function recordInferredSignature(key:String, signature:InferredSignature):Void {
+		inferredSignatures.set(key, signature);
+		var fn = declaredFunctions.get(key);
+		if (fn == null || signature.arguments.length != fn.arguments.length)
+			return;
+		var parameters = [for (index in 0...fn.arguments.length) {
+			var argument = fn.arguments[index], inferred = signature.arguments[index];
+			sourceLocalName(argument.name) + ":"
+				+ (inferred == null ? displayAstType(argument.type) : displayType(inferred));
+		}],
+			inferredResult = signature.result,
+			result = inferredResult == null ? displayAstType(fn.result) : displayType(inferredResult);
+		for (id in declarationIds(key, fn.span))
+			if (!signatures.exists(id)) {
+				signatures.set(id, {
+					label: sourceName(key) + "(" + parameters.join(", ") + "):" + result,
+					parameters: parameters,
+					result: result
+				});
+				if (inferredResult != null)
+					declarationTypes.set(id, inferredResult);
+			}
+		if (StringTools.endsWith(key, ".new")) {
+			var owner = key.substr(0, key.length - 4);
+			setDeclaredSignature(owner, owner + "(" + parameters.join(", ") + ")", parameters, owner);
+		}
 	}
 
 	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void
@@ -674,8 +731,10 @@ class SemanticIndex {
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		currentCaller = resolve(owner);
 		var field = currentCaller;
-		if (field != null && inferredFields.exists(field))
+		if (field != null && inferredFields.exists(field)) {
 			declarationTypes.set(field, type);
+			inferredFieldTypes.set(owner, type);
+		}
 		currentCallerName = owner;
 		currentAbstractDependencies = [];
 		currentDependencyKind = SemanticDependencyKind.Initializer;
@@ -1337,6 +1396,8 @@ class SemanticIndex {
 
 	static function displayType(type:CompilerType):String
 		return switch type {
+			case TDynamic: "Dynamic";
+			case TTypeParameter(_, name): name;
 			case TInt: "Int";
 			case TInt64: "haxe.Int64";
 			case TFloat: "Float";

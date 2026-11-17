@@ -830,7 +830,7 @@ class LanguageService {
 			result.push({
 				name: fn.name,
 				kind: "function",
-				detail: '${fn.name}():${typeName(fn.result)}',
+				detail: '${fn.name}():${resultText(state, ast, null, fn)}',
 				span: fn.span
 			});
 		for (alias in ast.aliases)
@@ -881,14 +881,14 @@ class LanguageService {
 				result.push({
 					name: field.name,
 					kind: "field",
-					detail: '${field.name}:${typeName(field.type)}',
+					detail: '${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}',
 					span: field.span
 				});
 			for (method in classDecl.methods)
 				result.push({
 					name: method.name,
 					kind: "method",
-					detail: '${method.name}():${typeName(method.result)}',
+					detail: '${method.name}():${resultText(state, ast, classDecl.name, method)}',
 					span: method.span
 				});
 		}
@@ -946,14 +946,14 @@ class LanguageService {
 							result.push({
 								label: field.name,
 								kind: "field",
-								detail: '${field.name}:${typeName(field.type)}'
+								detail: '${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}'
 							});
 					for (method in classDecl.methods)
 						if (method.isStatic && (prefix.length == 0 || StringTools.startsWith(method.name, prefix)))
 							result.push({
 								label: method.name,
 								kind: "method",
-								detail: '${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}'
+								detail: methodDetail(state, ast, classDecl.name, method)
 							});
 				}
 			if (result.length > 0) {
@@ -1158,7 +1158,7 @@ class LanguageService {
 				if (classDecl.name == qualifier)
 					for (field in classDecl.fields)
 						if (field.name == name && field.isStatic)
-							return '${field.name}:${typeName(field.type)}';
+							return '${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}';
 			var model = effectiveSemanticModel(state),
 				context = model == null ? null : model.index.completionContext(position, qualifier),
 				members:Array<CompletionItem> = [];
@@ -1532,12 +1532,13 @@ class LanguageService {
 							if (classDecl.name == name) {
 								for (field in classDecl.fields)
 									if (!field.isStatic)
-										addMember(field.name, "field", '${field.name}:${typeName(field.type)}', prefix,
+										addMember(field.name, "field",
+											'${field.name}:${fieldTypeText(state, ast, classDecl.name, field)}', prefix,
 											result);
 								for (method in classDecl.methods)
 									if (!method.isStatic)
 										addMember(method.name, "method",
-											'${method.name}(${[for (argument in method.arguments) typeName(argument.type)].join(",")}):${typeName(method.result)}',
+											methodDetail(state, ast, classDecl.name, method),
 											prefix, result);
 								if (classDecl.base != null)
 									addInstanceMembers(TInstance(Class, ModuleCanonicalizer.astTypeName(classDecl.base),
@@ -1856,7 +1857,8 @@ class LanguageService {
 		var result:Array<WorkspaceSymbol> = [];
 		if (ast != null) {
 			for (fn in ast.functions)
-				addWorkspaceSymbol(result, state, fn.name, "function", null, '${fn.name}():${typeName(fn.result)}',
+				addWorkspaceSymbol(result, state, fn.name, "function", null,
+					'${fn.name}():${resultText(state, ast, null, fn)}',
 					fn.span);
 			for (alias in ast.aliases)
 				addWorkspaceSymbol(result, state, alias.name, "type", null,
@@ -1881,10 +1883,10 @@ class LanguageService {
 				addWorkspaceSymbol(result, state, decl.name, "class", null, 'class ${decl.name}', decl.span);
 				for (field in decl.fields)
 					addWorkspaceSymbol(result, state, field.name, "field", decl.name,
-						'${field.name}:${typeName(field.type)}', field.span);
+						'${field.name}:${fieldTypeText(state, ast, decl.name, field)}', field.span);
 				for (method in decl.methods)
 					addWorkspaceSymbol(result, state, method.name, "method", decl.name,
-						'${method.name}():${typeName(method.result)}', method.span);
+						'${method.name}():${resultText(state, ast, decl.name, method)}', method.span);
 			}
 		}
 		workspaceIndex.set(state.name, {revision: state.revision, symbols: result});
@@ -2187,8 +2189,64 @@ class LanguageService {
 		};
 	}
 
+	/**
+	 * The type of `field` of class `owner` (as `ast` names it) as text: its annotation, or the type typing gave it
+	 * (`SemanticIndex.inferredFieldTypes`), `_` until it has one.
+	 */
+	static function fieldTypeText(state:ModuleState, ast:compiler.syntax.Ast.AstProgram, owner:String,
+			field:compiler.syntax.Ast.AstField):String {
+		var type = field.type;
+		if (type != null)
+			return typeName(type);
+		var model = effectiveSemanticModel(state),
+			inferred = model == null
+				? null : model.index.inferredFieldTypes.get(ModuleCanonicalizer.qualifiedTypeName(ast.packageName,
+				owner) + "." + field.name);
+		return inferred == null ? "_" : compilerTypeName(inferred);
+	}
+
+	/**
+	 * The signature typing gave `fn`, a method of class `owner` (as `ast` names it) or, without one, a module function, when its
+	 * source leaves part of it to its body (`SemanticIndex.inferredSignatures`); null otherwise, or until it has one.
+	 */
+	static function inferredSignature(state:ModuleState, ast:compiler.syntax.Ast.AstProgram, owner:Null<String>,
+			fn:compiler.syntax.Ast.AstFunction):Null<compiler.types.DeclarationTypes.InferredSignature> {
+		if (!compiler.syntax.AstFunctions.leavesSignatureToInference(fn))
+			return null;
+		var model = effectiveSemanticModel(state);
+		if (model == null)
+			return null;
+		var signatures = model.index.inferredSignatures;
+		if (owner != null)
+			return signatures.get(ModuleCanonicalizer.qualifiedTypeName(ast.packageName, owner) + "." + fn.name);
+		var qualified = signatures.get(state.name + "." + fn.name);
+		return qualified != null ? qualified : signatures.get(fn.name);
+	}
+
+	/** `fn`'s result type as text: its annotation, or the one typing gave it. */
+	static function resultText(state:ModuleState, ast:compiler.syntax.Ast.AstProgram, owner:Null<String>,
+			fn:compiler.syntax.Ast.AstFunction):String {
+		var signature = inferredSignature(state, ast, owner, fn),
+			inferred = signature == null ? null : signature.result;
+		return inferred == null ? typeName(fn.result) : compilerTypeName(inferred);
+	}
+
+	/** `name(arguments):result` for the method `fn` of class `owner`, with the types typing gave its unannotated parts. */
+	static function methodDetail(state:ModuleState, ast:compiler.syntax.Ast.AstProgram, owner:String,
+			fn:compiler.syntax.Ast.AstFunction):String {
+		var signature = inferredSignature(state, ast, owner, fn),
+			arguments = [for (index in 0...fn.arguments.length) {
+				var inferred = signature == null
+					|| index >= signature.arguments.length ? null : signature.arguments[index];
+				inferred == null ? typeName(fn.arguments[index].type) : compilerTypeName(inferred);
+			}];
+		return '${fn.name}(${arguments.join(",")}):${resultText(state, ast, owner, fn)}';
+	}
+
 	static function compilerTypeName(type:CompilerType):String
 		return switch type {
+			case TDynamic: "Dynamic";
+			case TTypeParameter(_, name): name;
 			case TInt: "Int";
 			case TInt64: "haxe.Int64";
 			case TFloat: "Float";

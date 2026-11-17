@@ -176,11 +176,18 @@ class TypingSession {
 		recoveredErrors.push(diagnostic);
 	}
 
-	/** Fails with every recovered error, if typing recovered from any, and with `typed`, the functions that did type. */
-	public function failIfRecovered(typed:Array<compiler.types.TypedAst.TypedFunction>):Void
-		if (recoveredErrors.length > 0)
-			throw new TypingFailure(recoveredErrors.copy(), typed, programOutput.records.unboundLocals.copy(),
-				programOutput.records.nonExceptionThrows.copy());
+	/**
+	 * Fails with every recovered error, if typing recovered from any, and with `typed`, the functions that did type, and the types the
+	 * table gave the unannotated declarations that typed.
+	 */
+	public function failIfRecovered(typed:Array<compiler.types.TypedAst.TypedFunction>):Void {
+		if (recoveredErrors.length == 0)
+			return;
+		var table = types;
+		throw new TypingFailure(recoveredErrors.copy(), typed, programOutput.records.unboundLocals.copy(),
+			programOutput.records.nonExceptionThrows.copy(), table == null ? [] : table.knownFieldTypes(),
+			table == null ? [] : table.typedSignatures());
+	}
 
 	/** `error`, with the errors recovered before it first: what a typing that stops at `error` fails with. */
 	public function withRecovered(error:CompileError):CompileError {
