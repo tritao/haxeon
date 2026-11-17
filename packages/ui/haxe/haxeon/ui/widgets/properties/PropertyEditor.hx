@@ -75,10 +75,10 @@ class PropertyEditor implements View implements Observable {
 	final generation:Int;
 	@:unobservable public var revision(default, null):Int;
 	@:allow(haxeon.ui.widgets.properties.PropertyEditorRow) final rowIds:Map<String, WidgetId> = new Map();
-	final options:PropertyEditorOptions;
+	@:allow(haxeon.ui.widgets.properties.PropertyEditorRowContent) final options:PropertyEditorOptions;
 	final drafts:Map<String, String>;
 	final errors:Map<String, String>;
-	final pending:Map<String, haxeon.ui.properties.PropertyPendingEdit> = new Map();
+	@:allow(haxeon.ui.widgets.properties.PropertyEditorRowContent) final pending:Map<String, haxeon.ui.properties.PropertyPendingEdit> = new Map();
 
 	public function new(key:String,
 			descriptors:Array<PropertyDescriptor>,
@@ -223,6 +223,7 @@ class PropertyEditor implements View implements Observable {
 
 	public function errorFor(id:String):Null<String> return errors.get(id);
 
+	@:allow(haxeon.ui.widgets.properties.PropertyEditorRowContent)
 	function editorView(context:BuildContext, descriptor:PropertyDescriptor, value:PropertyValue):View {
 		var editorKey = "editor:" + descriptor.id;
 		var writable = options.enabled && !descriptor.readOnly && !pending.exists(descriptor.id);
