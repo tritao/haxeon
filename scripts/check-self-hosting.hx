@@ -70,10 +70,18 @@ function main() {
 
 	// A fixed point says the stages agree, not that they are right: a miscompilation the self-hosted compiler repeats when it
 	// builds itself passes every check above. The program cases state their expected results, so compiling them all with the
-	// self-hosted compile server catches one wherever a case exercises it.
+	// self-hosted compile server catches one wherever a case exercises it. They are also rebuilt warm after edits, with the
+	// reuse checks (`--check-reuse`): a resident server's second build runs code a fresh build never reaches.
 	Sys.println("programs: compiling the program cases with the self-hosted compile server");
 	var programsLog = '$work/programs.log';
-	if (Script.run(Script.haxeon(), ["dev", "test-driver", Std.string(processorCount()), "--suite", "programs"],
+	if (Script.run(Script.haxeon(), [
+		"dev",
+		"test-driver",
+		Std.string(processorCount()),
+		"--suite",
+		"programs",
+		"--check-reuse"
+	],
 		{
 			cwd: root,
 			env: ["HAXEON_COMPILER_SERVER_HL" => '$work/entry-compiler.tools.CompilerServer.hl'],

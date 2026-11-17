@@ -2,7 +2,9 @@ package compiler.ir;
 
 /**
  * One thing the verifier read about the rest of the program while it checked a function: the table, the key and the answer it got, kept
- * by reference. Whether a later answer is the same is decided by identity first and by the printed value only when identity differs.
+ * by reference. Whether a later answer is the same is decided by its printed value, which is made once per object (`print`), so an
+ * answer that is the same object costs a lookup. Comparing the answers with `==` would not do: they are `Dynamic`, and an enum value
+ * without declared equality has none.
  */
 class IrVerifyRead {
 	public final table:String;
@@ -88,10 +90,7 @@ class IrVerifyMemo {
 			var lookup = tables.get(read.table);
 			if (lookup == null)
 				return false;
-			var now = lookup(read.key);
-			if (now == read.value)
-				continue;
-			if (print(read.value) != print(now))
+			if (print(read.value) != print(lookup(read.key)))
 				return false;
 		}
 		skippedFunctions++;
