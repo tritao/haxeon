@@ -59,6 +59,8 @@ class TextField implements View {
 	/** Show a trailing ellipsis while an overflowing single-line value is not being edited. */
 	public var ellipsizeWhenUnfocused:Bool = false;
 	public final multiline:Bool;
+	/** What the on-screen keyboard's action key is (NativeKit text-input action: 0 default, 5 send); Enter reaches the field as a key either way. */
+	public var imeAction:Int = 0;
 	public final style:LayoutStyle;
 	public final textStyle:Null<TextStyle>;
 	public final textColor:Null<Color>;
@@ -915,7 +917,8 @@ class TextField implements View {
 			: nativekit.ffi.NativeKitTypes.TextInputFlags.empty(),
 			caretRect,
 			selectionGeometry,
-			compositionGeometry);
+			compositionGeometry,
+			imeAction);
 	}
 
 	function publishSelection(editor:TextEditorState):Void {
