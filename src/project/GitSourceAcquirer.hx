@@ -54,7 +54,9 @@ class GitSourceAcquirer implements SourceAcquirer {
 	function checkout(url:String, revision:String, destination:String, packageId:PackageId):Void {
 		var parent = Path.directory(destination);
 		ensureDirectory(parent);
-		var temporary = destination + '.checkout-${Std.int(Date.now().getTime())}';
+		// Milliseconds overflow Std.int, which saturated every name to the same one; a random part keeps two clones started in
+		// the same millisecond apart.
+		var temporary = destination + '.checkout-${Math.ffloor(Date.now().getTime())}-${Std.random(0x7FFFFFFF)}';
 		if (FileSystem.exists(temporary))
 			throw 'Temporary Git checkout already exists: $temporary';
 		// The checkout is named by a 64-character hash under the cache, and with Git's own object paths under it that passes
