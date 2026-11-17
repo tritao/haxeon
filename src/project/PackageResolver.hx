@@ -190,7 +190,7 @@ class PackageResolver {
 	static function resolveDirectory(root:String, relative:String, kind:String, packageName:String):String {
 		var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
 		if (!FileSystem.exists(path) || !FileSystem.isDirectory(path))
-			throw 'Package "$packageName" $kind does not exist: $path';
+			throw MissingPath.describe('Package "$packageName" $kind', path);
 		return FileSystem.fullPath(path);
 	}
 
@@ -199,7 +199,7 @@ class PackageResolver {
 		for (relative in paths) {
 			var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
 			if (!FileSystem.exists(path) || FileSystem.isDirectory(path))
-				throw 'Package "$packageName" $kind does not exist: $path';
+				throw MissingPath.describe('Package "$packageName" $kind', path);
 			result.push(FileSystem.fullPath(path));
 		}
 		result.sort(Reflect.compare);
@@ -209,7 +209,7 @@ class PackageResolver {
 	static function resolveInput(root:String, relative:String, kind:String, packageName:String):String {
 		var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
 		if (!FileSystem.exists(path))
-			throw 'Package "$packageName" $kind does not exist: $path';
+			throw MissingPath.describe('Package "$packageName" $kind', path);
 		return FileSystem.fullPath(path);
 	}
 

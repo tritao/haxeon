@@ -318,7 +318,8 @@ class TestCatalog {
 		"SharedWireHelperEditMain",
 		"CompilerSessionMain",
 		"CompilerInputsMain",
-		"CompilerKeepAliveMain"
+		"CompilerKeepAliveMain",
+		"MissingPathMain"
 	];
 	static final runtimeMains = [
 		"EnumTagPatchMain",

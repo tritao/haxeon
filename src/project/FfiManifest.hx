@@ -143,7 +143,7 @@ class FfiImportManifest {
 	static function resolveFile(base:String, value:String, manifestPath:String, kind:String):String {
 		var path = Path.normalize(Path.isAbsolute(value) ? value : Path.join([base, value]));
 		if (!FileSystem.exists(path) || FileSystem.isDirectory(path))
-			throw '$manifestPath $kind does not exist: $path';
+			throw MissingPath.describe('$manifestPath $kind', path);
 		return FileSystem.fullPath(path);
 	}
 
@@ -152,7 +152,7 @@ class FfiImportManifest {
 		for (value in values) {
 			var path = Path.normalize(Path.isAbsolute(value) ? value : Path.join([base, value]));
 			if (!FileSystem.exists(path) || !FileSystem.isDirectory(path))
-				throw '$manifestPath include directory does not exist: $path';
+				throw MissingPath.describe('$manifestPath include directory', path);
 			result.push(FileSystem.fullPath(path));
 		}
 		result.sort(Reflect.compare);

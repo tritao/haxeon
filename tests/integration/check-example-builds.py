@@ -39,14 +39,6 @@ def mirror(source, target, project_dirs):
             destination.symlink_to(child, target_is_directory=child.is_dir())
 
 
-def uninitialized_submodules_in(text):
-    """The never-initialized submodules (as in a fresh worktree) whose paths a failed build's output names: the build reads a
-    missing file there (Audio Lab's native inputs are in vendor/nativekit), and the cause is the checkout, not the build."""
-    status = subprocess.check_output(["git", "submodule", "status"], cwd=root, text=True)
-    return [path for path in (line.split()[1] for line in status.splitlines() if line.startswith("-"))
-            if "/" + path + "/" in text]
-
-
 def main():
     manifests = projects()
     with tempfile.TemporaryDirectory(prefix="haxeon-example-builds-") as tmp:
@@ -77,11 +69,6 @@ def main():
                                         stdout=subprocess.PIPE, stderr=subprocess.STDOUT)
                 if result.returncode:
                     print(result.stdout, end="", file=sys.stderr)
-                    missing = uninitialized_submodules_in(result.stdout)
-                    if missing:
-                        raise RuntimeError(f"{project.relative_to(tree)} target {target}: " + ", ".join(missing)
-                                           + (" is" if len(missing) == 1 else " are") + " not initialized; run "
-                                           + "git submodule update --init " + " ".join(missing))
                     raise RuntimeError(f"{project.relative_to(tree)} target {target}: exit {result.returncode}")
                 if not output.is_file() or not output.stat().st_size:
                     raise RuntimeError(f"{project.relative_to(tree)} target {target}: empty output")
