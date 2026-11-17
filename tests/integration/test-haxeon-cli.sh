@@ -2,7 +2,8 @@
 set -euo pipefail
 
 repo_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
-project_dir=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cli.XXXXXX")
+# The physical path: the CLI reports resolved paths, and macOS temporary directories sit behind the /var -> /private/var link.
+project_dir=$(cd "$(mktemp -d "${TMPDIR:-/tmp}/haxeon-cli.XXXXXX")" && pwd -P)
 trap 'rm -rf -- "$project_dir"' EXIT
 
 cli="$repo_dir/scripts/haxeon"
