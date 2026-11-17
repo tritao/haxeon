@@ -60,7 +60,13 @@ int main(int argc, char **argv) {
 	if(!check(callback_count==100 && callback_bad==0,"allocation callback observes every allocation")) goto done;
 	owned=hl_gc_alloc_gen_owner(NULL,17,MEM_KIND_RAW|MEM_ZERO,&owner);
 	hl_add_root(&owned);
-	if(!check(hl_gc_owner_live_count(&owner)==1,"owned allocations retain their owner")) goto done;
+	{
+		int live=hl_gc_owner_live_count(&owner);
+		if(live!=1) {
+			fprintf(stderr,"FAIL: owned allocations retain their owner: %d live, expected 1\n",live);
+			goto done;
+		}
+	}
 	hl_remove_root(&owned);
 	hl_gc_alloc_gen(NULL,17,MEM_KIND_NOPTR|MEM_ZERO);
 	hl_gc_profile_stats(&a,&b,&c,&before,&d);
