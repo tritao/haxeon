@@ -38,8 +38,15 @@ class CompilerSession {
 	public function new(?compilerBuild:String)
 		this.compilerBuild = compilerBuild;
 
+	/**
+	 * The digest of the identity state this session last wrote (`writeBaseline`). A `baseline` request naming exactly that state
+	 * builds on the session, which holds it; any other baseline starts the session over from the file.
+	 */
+	var writtenBaseline:Null<String>;
+
 	public function reset():Void {
 		compiler = null;
+		writtenBaseline = null;
 		unrecordedPublication = null;
 		configuration = null;
 		writerCache = new HlWriterCache();
@@ -93,6 +100,12 @@ class CompilerSession {
 		// A fresh request owes nothing to the requests before it.
 		if (request.session == CompileSessionMode.Fresh)
 			reset();
+		// A baseline the session did not write (one a device rejected an edit from, say) is where the module now is.
+		var baseline = request.baseline;
+		if (baseline != null && writtenBaseline != digest(File.getBytes(baseline)))
+			reset();
+		// This compile moves the session past whatever it wrote; only writing the state again names it.
+		writtenBaseline = null;
 		// Every consumer of a source in this request sees the same bytes.
 		requestSources = [];
 		var host = hostInterfaces(BackendTargets.parse(request.target)),
@@ -155,7 +168,8 @@ class CompilerSession {
 		// `report` is caller code, so nothing proved about the field survives a call to it; a local does.
 		existing = compiler;
 		if (existing == null) {
-			var resumed = request.live ? resumeLiveModule(request, identity, interfaces, projections, report) : null;
+			var resumed = baseline != null ? resumeBaseline(baseline, interfaces, projections,
+				report) : request.live ? resumeLiveModule(request, identity, interfaces, projections, report) : null;
 			var created = resumed == null ? new Compiler() : resumed;
 			compiler = created;
 			if (resumed == null) {
@@ -231,6 +245,27 @@ class CompilerSession {
 		else
 			report('live host runs revision ${record.running}, which this compiler no longer holds; restart the live session to patch again');
 	}
+
+	/** A compiler resumed from the identity state at `path`, as the module built from it left it. */
+	function resumeBaseline(path:String, interfaces:Array<FfiInterfaceSource>, projections:Array<FfiProjectionSource>,
+			report:String->Void):Compiler {
+		report("compiling against the baseline " + path);
+		return new Compiler(File.getBytes(path), CompilerIntrinsics.configuration(),
+			new FfiConfiguration(interfaces, projections));
+	}
+
+	/** Writes the session's identity state to `path`: the baseline a later request compiles against (`CompilerRequest.baseline`). */
+	public function writeBaseline(path:String):Void {
+		var active = compiler;
+		if (active == null)
+			throw "No compiler to write a baseline from";
+		var state = active.exportIdentityState();
+		File.saveBytes(path, state);
+		writtenBaseline = digest(state);
+	}
+
+	static function digest(bytes:Bytes):String
+		return build.execution.ContentDigest.makeHex(bytes);
 
 	/** Notes a live publication whose history `recordLiveState` writes once the session is idle. */
 	public function recordLivePublication(output:String, marker:String):Void

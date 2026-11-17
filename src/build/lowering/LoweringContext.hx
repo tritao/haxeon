@@ -28,6 +28,12 @@ class LoweringContext {
 	/** Build for `haxeon run --watch --live`: the compiler keeps the history patches address the running module by. */
 	public final live:Bool;
 
+	/**
+	 * The identity state an Android edit compiles against (the `.hcs` of the module the device runs), or null for a build. The
+	 * module is then a patch or a reload of that one.
+	 */
+	public final baseline:Null<String>;
+
 	/** What a watching process keeps between rebuilds; null for one-shot builds. */
 	public final session:Null<BuildSession>;
 
@@ -35,8 +41,9 @@ class LoweringContext {
 			?compilerHome:String,
 			?extraDefines:Array<String>, ?selfHosted:Bool, ?sharedNative:Bool, ?live:Bool, ?session:BuildSession,
 			?nativeCache:String,
-			developmentMetadata:Bool = true) {
+			developmentMetadata:Bool = true, ?baseline:String) {
 		this.developmentMetadata = developmentMetadata;
+		this.baseline = baseline;
 		this.nativeCache = nativeCache;
 		this.session = session;
 		this.sharedNative = sharedNative == true;

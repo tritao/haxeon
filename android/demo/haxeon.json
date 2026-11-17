@@ -1,0 +1,20 @@
+{
+	"version": 1,
+	"package": {
+		"name": "demo"
+	},
+	"entry": "Main",
+	"sources": [
+		"Main.hx"
+	],
+	"sourceRoots": [
+		"."
+	],
+	"target": "android",
+	"defines": [],
+	"outputDir": "build",
+	"android": {
+		"applicationId": "org.haxeon.android",
+		"label": "Haxeon"
+	}
+}

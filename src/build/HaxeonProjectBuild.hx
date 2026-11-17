@@ -10,7 +10,10 @@ import build.native.NativeCache;
 import haxe.io.Path;
 import project.ResolvedProject;
 
-/** Project-facing structured build path shared by CLI build and run, for the host and for Wasm. */
+/**
+ * Project-facing structured build path shared by CLI build and run, for the host, Wasm and Android. An Android build compiles
+ * the module Gradle packages and the project's native libraries (docs/design/ANDROID_BUILD.md).
+ */
 class HaxeonProjectBuild {
 	/**
 	 * The project's build directory. The instrumented flavor builds into its own (`build-instrument` beside `build`), so
@@ -29,14 +32,27 @@ class HaxeonProjectBuild {
 		];
 	}
 
+	/** Where an Android build writes its module, with `.hli`, `.entry` and `.hcs` beside it. */
+	public static function androidModulePath(project:ResolvedProject, target:Target):String
+		return new TargetLayout(new BuildEnvironment(project.root, outputDirectory(project, false),
+			BuildProfile.Release,
+			target)).hashLinkModulePath("app");
+
+	/** The directory of an Android build's native libraries, one directory per ABI (`jniLibs/arm64-v8a`), as Gradle takes them. */
+	public static function androidNativeRoot(project:ResolvedProject, target:Target):String {
+		var environment = new BuildEnvironment(project.root, outputDirectory(project, false), BuildProfile.Release,
+			target);
+		return Path.join([environment.buildRoot, new TargetLayout(environment).targetDirectory(), "jniLibs"]);
+	}
+
 	public static function build(project:ResolvedProject, home:String, output:String, defines:Array<String>, jobs:Int,
 			planOnly:Bool, explain:Bool,
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false,
 			live:Bool = false, instrument:Bool = false,
-			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target):Int {
+			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String):Int {
 		var buildTarget = target == null ? Target.detectHost() : target;
-		if (!buildTarget.isWasm() && !buildTarget.equals(Target.detectHost()))
-			throw 'The structured build supports the host and wasm32 targets, not "$buildTarget"';
+		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
+			throw 'The structured build supports the host, wasm32 and android targets, not "$buildTarget"';
 		var timings = new BuildTimings();
 		timings.add("resolve", resolutionMs);
 		if (instrument)
@@ -47,8 +63,22 @@ class HaxeonProjectBuild {
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
 			execution = PlanLowerer.lower(plan,
-				new LoweringContext(environment, null, project, output, home, defines, selfHosted, false, live, session,
-				NativeCache.root(home, environment), developmentMetadata));
+				new LoweringContext(
+					environment,
+					null,
+					project,
+					output,
+					home,
+					defines,
+					selfHosted,
+					false,
+					live,
+					session,
+					// Android packages build their own trees, publishing into jniLibs, as Gradle packages them.
+					buildTarget.isAndroid() ? null : NativeCache.root(home, environment),
+					developmentMetadata,
+					baseline
+				));
 		if (compilerOnly)
 			execution = compilerExecution(execution);
 		timings.addElapsed("plan and lower", lowerStarted);

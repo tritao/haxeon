@@ -15,6 +15,9 @@ class CompilerArguments {
 			xmlOutput:Null<String> = null,
 			irOutput:Null<String> = null,
 			inputsOutput:Null<String> = null,
+			baseline:Null<String> = null,
+			baselineOutput:Null<String> = null,
+			entryIdOutput:Null<String> = null,
 			entry = "compiler.tools.HaxeonCompiler",
 			dumpFunction = -1,
 			live = false,
@@ -63,6 +66,12 @@ class CompilerArguments {
 				irOutput = value(argument, "--ir-output=");
 			else if (StringTools.startsWith(argument, "--inputs-output="))
 				inputsOutput = value(argument, "--inputs-output=");
+			else if (StringTools.startsWith(argument, "--baseline="))
+				baseline = value(argument, "--baseline=");
+			else if (StringTools.startsWith(argument, "--baseline-output="))
+				baselineOutput = value(argument, "--baseline-output=");
+			else if (StringTools.startsWith(argument, "--entry-id-output="))
+				entryIdOutput = value(argument, "--entry-id-output=");
 			else if (StringTools.startsWith(argument, "--root="))
 				roots.push(value(argument, "--root="));
 			else if (StringTools.startsWith(argument, "--sources-file=")) {
@@ -136,6 +145,10 @@ class CompilerArguments {
 			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";
 		if (live && backend != HashLink)
 			throw "--live requires --target=hl";
+		if (baseline != null && !live)
+			throw "--baseline requires --live";
+		if ((baselineOutput != null || entryIdOutput != null) && backend != HashLink)
+			throw "--baseline-output and --entry-id-output require --target=hl";
 		if (buildMode != "release" && buildMode != "development")
 			throw 'Unsupported compiler build mode "$buildMode"';
 		if (live && buildModeExplicit && buildMode != "development")
@@ -165,6 +178,9 @@ class CompilerArguments {
 			xmlOutput: xmlOutput,
 			irOutput: irOutput,
 			inputsOutput: inputsOutput,
+			baseline: baseline,
+			baselineOutput: baselineOutput,
+			entryIdOutput: entryIdOutput,
 			entry: entry,
 			dumpFunction: dumpFunction,
 			importMemory: importMemory,

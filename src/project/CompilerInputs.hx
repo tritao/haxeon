@@ -21,8 +21,8 @@ typedef GeneratedFfiInputs = {
 
 /**
  * What a resolved project gives the compiler, worked out in one place for every consumer: the build renders it as compiler
- * arguments (`build.provider.CompilerProvider`), the language server configures its compiler with it
- * (`editor.lsp.ProjectWorkspace`), and the Android asset build loads it (`tools.AndroidBuild`).
+ * arguments (`build.provider.CompilerProvider`, for every target, Android's included) and the language server configures its
+ * compiler with it (`editor.lsp.ProjectWorkspace`).
  */
 class CompilerInputs {
 	/** The compiler's target name (`--target`): `wasm32` for a Wasm build target, otherwise `hl`. */

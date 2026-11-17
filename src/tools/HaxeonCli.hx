@@ -3,7 +3,6 @@ package tools;
 import build.BuildOutput;
 import build.BuildSession;
 import build.HashLinkPath;
-import build.HaxeonNativePackageBuild;
 import build.HaxeonProjectBuild;
 import build.NativeTargetSupport;
 import build.Target;
@@ -48,6 +47,13 @@ private typedef BuildOptions = {
 	final quiet:Bool;
 
 	final compilerOnly:Bool;
+
+	/**
+	 * `--gradle-inputs FILE`, Android only: build what Gradle packages and describe it in FILE, without running Gradle. The
+	 * Android Gradle project passes it when Gradle runs on its own (docs/design/ANDROID_BUILD.md).
+	 */
+	final gradleInputs:Null<String>;
+
 	final watch:Bool;
 	final live:Bool;
 
@@ -662,21 +668,22 @@ class HaxeonCli {
 			throw 'Option "--live" requires "haxeon run --watch"';
 		if (options.strictLive && !options.live)
 			throw 'Option "--strict-live" requires "haxeon run --watch --live"';
-		// A host build runs here; a host or Wasm build goes through the structured build (HaxeonProjectBuild), and an Android build
-		// through its native package build and Gradle.
+		// Every target goes through the structured build (HaxeonProjectBuild); an Android build then has Gradle package it.
 		var hostBuild = targetInfo.equals(Target.detectHost())
 			&& Target.parse(project.manifest.target).equals(Target.detectHost()),
-			structuredBuild = hostBuild || targetInfo.isWasm();
+			structuredBuild = hostBuild || targetInfo.isWasm() || targetInfo.isAndroid();
 		if (options.watch && !targetInfo.isAndroid() && !hostBuild)
 			throw 'Option "--watch" currently requires a host or Android project';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (!targetInfo.isAndroid() && options.device != null)
 			throw 'Option "--device" requires "--target android"';
+		if (options.gradleInputs != null && (launch || !targetInfo.isAndroid()))
+			throw 'Option "--gradle-inputs" is only valid with "haxeon build --target android"';
 		if ((options.plan || options.explain || options.timings) && !structuredBuild)
-			throw 'Plan, explanation, and timing output are currently available for host and wasm32 builds only';
+			throw 'Plan, explanation, and timing output are available for host, wasm32 and android builds only';
 		if (options.selfHosted && !structuredBuild)
-			throw 'The self-hosted compiler is currently available for host and wasm32 builds only';
+			throw 'The self-hosted compiler is available for host, wasm32 and android builds only';
 		if (options.profile && (!launch || !hostBuild))
 			throw 'Profiling is currently available for "haxeon run" host builds only';
 		// The instrument source runs the instrumented build flavor, which builds into a directory of its own.
@@ -845,31 +852,49 @@ class HaxeonCli {
 		}
 		if (!targetInfo.isAndroid())
 			throw 'Target "$target" cannot be built yet; build for the host, wasm32 or android';
-		if (options.plan)
-			throw 'Plan output is currently available for host and wasm32 builds only';
 		// The Android debug host always accepts live patches.
 		if (options.buildModeExplicit && options.buildMode == "release")
 			throw "The Android live-patch host requires development build mode";
+		// The NDK the project's native packages build with, and later Gradle and adb.
 		configureAndroidEnvironment(home);
-		var nativeStatus = HaxeonNativePackageBuild.build(project, home, targetInfo, options.jobs, false);
-		if (nativeStatus != 0)
-			return nativeStatus;
+		// The module, its sidecars and the native libraries, as for any target; Gradle only packages them. A watch keeps the
+		// session, so its edits reach the compiler worker that built the module.
+		var module = HaxeonProjectBuild.androidModulePath(project, targetInfo),
+			session = options.watch ? new BuildSession() : null;
+		if (options.quiet)
+			BuildOutput.capture();
+		var buildStatus = try HaxeonProjectBuild.build(project, home, module, options.defines, options.jobs,
+			options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
+			false, false, session, true, targetInfo) catch (error:Dynamic) {
+				releaseQuietOutput(options, true);
+				throw error;
+			}
+		releaseQuietOutput(options, buildStatus != 0);
+		if (buildStatus != 0 || options.plan || options.compilerOnly)
+			return buildStatus;
+		var requested = options.gradleInputs,
+			gradleInputs = requested == null ? module + ".gradle.properties" : resolvePath(requested, Sys.getCwd());
+		writeGradleInputs(gradleInputs, module, HaxeonProjectBuild.androidNativeRoot(project, targetInfo));
+		// Gradle asked for these; it packages them itself.
+		if (options.gradleInputs != null)
+			return 0;
 		var androidOutput = options.output == null ? Path.join([
 			HaxeonProjectBuild.outputDirectory(project, false),
 			"android",
 			"app-debug.apk"
 		]) : resolvePath(options.output, project.root);
-		var status = buildAndroid(home, projectConfigPath, project, androidOutput,
-			HaxeonNativePackageBuild.nativeRoot(project, targetInfo));
+		var status = buildAndroid(home, project, androidOutput, gradleInputs);
 		if (status != 0 || !launch)
 			return status;
 		var launched = installAndLaunchAndroid(home, androidOutput, project.manifest.androidApplicationId,
 			options.device);
 		if (launched != 0 || !options.watch)
 			return launched;
-		// Each saved edit is compiled and sent to the running app (AndroidWatch).
+		// Each saved edit is compiled against the baseline this build wrote and sent to the running app (AndroidWatch).
 		var adb = androidExecutable(home, "adb");
-		return AndroidWatch.run(home, projectConfigPath, project, adb, selectAndroidDevice(adb, options.device));
+		var device = selectAndroidDevice(adb, options.device);
+		return AndroidWatch.run(home, project, targetInfo, module, options.defines, options.jobs, options.selfHosted,
+			session, adb, device);
 	}
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
@@ -965,9 +990,23 @@ class HaxeonCli {
 		return runtimeStatus == 0 && trace == null ? 1 : runtimeStatus;
 	}
 
-	static function buildAndroid(home:String, projectConfigPath:String, project:ResolvedProject, output:String,
-			nativeRoot:String):Int {
-		configureAndroidEnvironment(home);
+	/**
+	 * Describes what Gradle packages, as Java properties: the module and the sidecars the host loads (`app.hl`, `app.hli`,
+	 * `app.entry` in the APK) and the directory of the native libraries, one per ABI.
+	 */
+	static function writeGradleInputs(path:String, module:String, nativeRoot:String):Void {
+		function property(key:String, value:String):String
+			return key + "=" + StringTools.replace(Path.normalize(value), "\\", "\\\\") + "\n";
+		ensureDirectory(Path.directory(path));
+		File.saveContent(path, "# Written by haxeon build --target android; read by android/app/build.gradle.\n"
+			+ property("module", module)
+			+ property("identity", module + ".hli")
+			+ property("entry", module + ".entry")
+			+ property("nativeRoot", nativeRoot));
+	}
+
+	/** Has Gradle package the module and native libraries `gradleInputs` describes into the APK at `output`. */
+	static function buildAndroid(home:String, project:ResolvedProject, output:String, gradleInputs:String):Int {
 		var sdk = Path.join([home, ".tools", "android-sdk"]),
 			ndk = Path.join([sdk, "ndk", "30.0.16248370"]);
 		if (!FileSystem.exists(sdk) || !FileSystem.exists(ndk))
@@ -984,8 +1023,7 @@ class HaxeonCli {
 			"-p",
 			androidDirectory,
 			"assembleDebug",
-			"-PhaxeonProject=" + projectConfigPath,
-			"-PhaxeonNativeRoot=" + nativeRoot,
+			"-PhaxeonInputs=" + gradleInputs,
 			"-PhaxeonApplicationId=" + project.manifest.androidApplicationId,
 			"-PhaxeonAppLabel=" + project.manifest.androidAppLabel
 		];
@@ -1114,6 +1152,7 @@ class HaxeonCli {
 			timings = false,
 			quiet = false,
 			compilerOnly = false,
+			gradleInputs:Null<String> = null,
 			watch = false,
 			live = false,
 			strictLive = false,
@@ -1164,7 +1203,7 @@ class HaxeonCli {
 				profile = true;
 			} else if (argument == "--project" || argument == "--target" || argument == "--build-mode"
 				|| argument == "--output" || argument == "--define"
-				|| argument == "--device" || argument == "--jobs") {
+				|| argument == "--device" || argument == "--jobs" || argument == "--gradle-inputs") {
 				if (index >= arguments.length)
 					throw 'Option "$argument" requires a value';
 				var value = arguments[index++];
@@ -1182,6 +1221,8 @@ class HaxeonCli {
 						defines.push(value);
 					case "--device":
 						device = value;
+					case "--gradle-inputs":
+						gradleInputs = value;
 					case "--jobs":
 						var parsedJobs = Std.parseInt(value);
 						if (parsedJobs == null || parsedJobs < 1)
@@ -1250,6 +1291,7 @@ class HaxeonCli {
 			timings: timings,
 			quiet: quiet,
 			compilerOnly: compilerOnly,
+			gradleInputs: gradleInputs,
 			watch: watch,
 			live: live,
 			strictLive: strictLive,
@@ -1518,6 +1560,7 @@ class HaxeonCli {
 		Sys.println("                                    Inspect planning details or timings");
 		Sys.println("       [--build-mode release|development]  Select artifact build mode");
 		Sys.println("       [--self-hosted]              Compile with bootstrap/compiler.hl instead of reference Haxe");
+		Sys.println("       [--gradle-inputs FILE]       Android: build what Gradle packages and describe it in FILE, without Gradle");
 		Sys.println("  run [--target TARGET] [--quiet] [-- args] Build and launch (host or Android); --quiet prints the build only if it fails");
 		Sys.println("  SCRIPT.hx [args]               Build and run one Haxe file (also: run SCRIPT.hx [args])");
 		Sys.println("       [--watch]                    Rebuild and relaunch a host app on source edits");

@@ -54,6 +54,18 @@ typedef CompilerRequest = {
 	 */
 	final ?publishedOutput:String;
 
+	/**
+	 * An identity state (`Compiler.exportIdentityState`, an Android `.hcs`) to compile against instead of the session's own
+	 * history: the module a device runs, so the result patches or reloads that module. Requires `live`.
+	 */
+	final ?baseline:String;
+
+	/** Where to write the identity state after the module is published: the baseline a later `baseline` request starts from. */
+	final ?baselineOutput:String;
+
+	/** Where to write the stable ID of the entry's `main():Void`, which an embedded host (Android's) calls by that ID. */
+	final ?entryIdOutput:String;
+
 	final exports:Array<String>;
 	final ffiHeader:Null<String>;
 	final ffiLibrary:Null<String>;

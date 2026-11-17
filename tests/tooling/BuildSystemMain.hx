@@ -7,6 +7,7 @@ import build.BuildIntent;
 import build.BuildPlan;
 import build.BuildPlanner;
 import build.BuildSession;
+import build.HaxeonProjectBuild;
 import build.NativeArtifactDemand.NativeArtifactDemand;
 import build.Target;
 import build.TargetLayout;
@@ -1320,6 +1321,44 @@ class BuildSystemMain {
 			expect(arguments.indexOf(expected) >= 0, 'the compile request should pass $expected');
 		expect(arguments.indexOf('--package-root=app=$appRoot') < 0,
 			"the root package is not scoped when its entry is outside it");
+		expect(arguments.indexOf("--live") < 0, "a host build is not live unless asked");
+		// An Android module is built live for the debug host, with the baseline its edits compile against and main's stable ID.
+		var androidTarget = Target.parse("android"),
+			androidEnvironment = new BuildEnvironment(project.root, Path.join([project.root, "build"]),
+				BuildProfile.Release,
+				androidTarget),
+			module = new TargetLayout(androidEnvironment).hashLinkModulePath("app");
+		function androidCompile(?baseline:String):ExecutionAction
+			return compilerAction(PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, androidTarget,
+				NativeArtifactDemand.Shared),
+				new LoweringContext(androidEnvironment, null, project, module, Sys.getCwd(), null, null, null, null,
+				null, null,
+				false, baseline)));
+		function compilerArguments(action:ExecutionAction):Array<String>
+			return switch action.action {
+				case Compiler(_, arguments, _, _, _): arguments;
+				case _: [];
+			};
+		var androidBuild = androidCompile(), androidArguments = compilerArguments(androidBuild);
+		for (expected in [
+			"--live",
+			"--build-mode=development",
+			"--define=android",
+			"--baseline-output=" + module + ".hcs",
+			"--entry-id-output=" + module + ".entry"
+		])
+			expect(androidArguments.indexOf(expected) >= 0, 'an Android compile request should pass $expected');
+		expect(androidBuild.outputs.indexOf(module + ".hcs") >= 0
+			&& androidBuild.outputs.indexOf(module + ".entry") >= 0
+			&& androidBuild.outputs.indexOf(module + ".hli") >= 0,
+			"an Android build declares its baseline, entry ID and runtime identity");
+		expect(!Lambda.exists(androidArguments, argument -> StringTools.startsWith(argument, "--baseline=")),
+			"a build compiles against no baseline");
+		var baseline = module + ".hcs", edit = androidCompile(baseline);
+		expect(compilerArguments(edit).indexOf("--baseline=" + baseline) >= 0 && edit.inputs.indexOf(baseline) >= 0,
+			"an edit compiles against the baseline, which is one of its inputs");
+		expect(module == HaxeonProjectBuild.androidModulePath(project, androidTarget),
+			"the CLI and Gradle find the module where the build writes it");
 		FileTree.remove(root);
 	}
 

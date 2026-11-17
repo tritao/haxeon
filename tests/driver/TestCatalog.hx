@@ -317,6 +317,7 @@ class TestCatalog {
 		"SharedEqualityHelperEditMain",
 		"SharedWireHelperEditMain",
 		"CompilerSessionMain",
+		"AndroidBaselineMain",
 		"CompilerInputsMain",
 		"CompilerKeepAliveMain",
 		"MissingPathMain"

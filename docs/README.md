@@ -81,6 +81,7 @@ Compiler (ADR 0003 and its follow-ups):
 Runtime and tools:
 
 - [WASM_LINEAR_RUNTIME.md](design/WASM_LINEAR_RUNTIME.md): the wasm32 runtime in C.
+- [ANDROID_BUILD.md](design/ANDROID_BUILD.md): haxeon compiles the Android module, Gradle packages it.
 - [PROFILER_DESIGN.md](design/PROFILER_DESIGN.md): the instrumenting profiler.
 - [PROFILER_DESIGN_POSIX.md](design/PROFILER_DESIGN_POSIX.md): native instrumentation on Linux and macOS (proposal).
 

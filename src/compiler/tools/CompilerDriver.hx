@@ -33,7 +33,8 @@ class CompilerDriver {
 		var allocationAtStart = AllocationMeter.sample();
 		var memoryContract = request.memoryContract == null ? null : MemoryContractCodec.load(request.memoryContract);
 		report("loading " + Std.string(request.paths.length) + " sources");
-		var compiler = (session == null ? new CompilerSession() : session).prepare(request, report);
+		var compilerSession = session == null ? new CompilerSession() : session,
+			compiler = compilerSession.prepare(request, report);
 		// A persistent session serves interactive and batch requests alike, so the mode is set per request.
 		compiler.livePatching = request.live;
 		compiler.developmentMetadata = request.buildMode == "development";
@@ -62,6 +63,9 @@ class CompilerDriver {
 		for (warning in compiler.warnings(result.moduleNames))
 			report(warning.format());
 		try {
+			// Checked before anything is written: a module its host cannot call is not published.
+			var entryIdOutput = request.entryIdOutput,
+				mainId = entryIdOutput == null ? -1 : entryId(result, request.entry);
 			var compiledAt = Sys.time() * 1000.0;
 			var allocationAfterCompile = AllocationMeter.sample();
 			if (cancellation != null)
@@ -160,6 +164,12 @@ class CompilerDriver {
 				if (!deferFullModule)
 					publishPatch();
 			}
+			if (entryIdOutput != null)
+				File.saveContent(entryIdOutput, Std.string(mainId));
+			// After the publication is acknowledged, so the state is the published module's.
+			var baselineOutput = request.baselineOutput;
+			if (baselineOutput != null)
+				compilerSession.writeBaseline(baselineOutput);
 			File.saveContent(request.output + ".build-id",
 				build.execution.ContentDigest.makeHex(File.getBytes(request.output)));
 			if (request.xmlOutput != null)
@@ -183,8 +193,8 @@ class CompilerDriver {
 					Base64.encode(BackendArtifacts.hashLink(result.artifact).runtimeIdentity.sub(4, 16)) + ":"
 					+ result.revision);
 			// The history this revision was assembled from is recorded beside it once the session is idle, so a session that
-			// starts after this one patches the module it published.
-			if (!isWasm && request.live && session != null)
+			// starts after this one patches the module it published. An edit against a baseline is resumed from that baseline.
+			if (!isWasm && request.live && request.baseline == null && session != null)
 				session.recordLivePublication(request.publishedOutput == null
 					? request.output : request.publishedOutput,
 					File.getContent(request.output + ".live.full"));
@@ -252,6 +262,22 @@ class CompilerDriver {
 			]);
 		}
 		return Json.stringify(rows);
+	}
+
+	/** The stable ID of the entry's `main():Void`, by which an embedded host calls it, with no arguments and no result. */
+	static function entryId(result:CompileResult, entry:String):Int {
+		var main:Null<compiler.ir.IrFunction> = null;
+		for (fn in result.ir.functions)
+			if (fn.name == "main")
+				main = fn;
+		if (main == null)
+			throw 'Entry module "$entry" must define a top-level main():Void function';
+		if (main.arguments.length != 0 || main.result != compiler.ir.Ir.IrType.Void)
+			throw 'Entry function "main" must have signature main():Void';
+		var id = BackendArtifacts.hashLink(result.artifact).functionIds.get("main");
+		if (id == null)
+			throw 'Entry function "main" has no stable ID';
+		return id;
 	}
 
 	static function hasPublication(output:String, result:CompileResult):Bool {

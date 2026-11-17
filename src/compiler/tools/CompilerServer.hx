@@ -153,7 +153,15 @@ class CompilerServer {
 		var staged:Dynamic = Reflect.copy(request);
 		var outputs:Array<{temporary:String, destination:String}> = [];
 		var stagingSuffix = ".request-" + Std.string(Std.random(0x3fffffff));
-		for (field in ["output", "xmlOutput", "irOutput", "inputsOutput", "ffiHeader"]) {
+		for (field in [
+			"output",
+			"xmlOutput",
+			"irOutput",
+			"inputsOutput",
+			"ffiHeader",
+			"baselineOutput",
+			"entryIdOutput"
+		]) {
 			var destination:Null<String> = Reflect.field(request, field);
 			if (destination == null)
 				continue;

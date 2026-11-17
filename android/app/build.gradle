@@ -1,3 +1,5 @@
+import javax.inject.Inject
+
 plugins {
     id 'com.android.application'
 }
@@ -6,10 +8,15 @@ def haxeonRoot = rootProject.projectDir.parentFile
 def haxeonApplicationId = providers.gradleProperty('haxeonApplicationId').getOrElse('org.haxeon.android')
 def haxeonAppLabel = providers.gradleProperty('haxeonAppLabel').getOrElse('Haxeon')
 def isWindows = System.getProperty('os.name').toLowerCase().contains('windows')
-def haxeExecutable = new File(haxeonRoot, '.tools/haxe/haxe' + (isWindows ? '.exe' : ''))
-def appAssets = file('src/main/assets')
-def appAsset = new File(appAssets, 'app.hl')
-def haxeonNativeRoot = providers.gradleProperty('haxeonNativeRoot').orNull
+// What haxeon built for Gradle to package (docs/design/ANDROID_BUILD.md). `haxeon build --target android` builds it first and
+// names it with -PhaxeonInputs; on its own (Android Studio, scripts/build-android.sh) Gradle asks haxeon to build it.
+def haxeonInputsProperty = providers.gradleProperty('haxeonInputs').orNull
+def haxeonInputsFile = haxeonInputsProperty != null ? file(haxeonInputsProperty)
+    : layout.buildDirectory.file('haxeon/inputs.properties').get().asFile
+def haxeonCommand = providers.gradleProperty('haxeonCommand')
+    .getOrElse(new File(haxeonRoot, 'scripts/haxeon' + (isWindows ? '.cmd' : '')).absolutePath)
+def haxeonProject = providers.gradleProperty('haxeonProject')
+    .getOrElse(new File(haxeonRoot, 'android/demo/haxeon.json').absolutePath)
 
 android {
     namespace 'org.haxeon.android'
@@ -44,37 +51,87 @@ android {
             version '3.30.5'
         }
     }
+}
 
-    if (haxeonNativeRoot != null) {
-        sourceSets {
-            main {
-                jniLibs.srcDirs = [new File(haxeonNativeRoot)]
+// Runs only when Gradle runs on its own: haxeon compiles the module and the native libraries (incrementally, through its
+// compile server) and describes them in haxeonInputs.
+def buildHaxeon = tasks.register('buildHaxeon', Exec) {
+    onlyIf { haxeonInputsProperty == null }
+    workingDir haxeonRoot
+    commandLine haxeonCommand, 'build', '--target', 'android', '--project', haxeonProject,
+        '--gradle-inputs', haxeonInputsFile.absolutePath
+    // haxeon decides what is up to date.
+    outputs.upToDateWhen { false }
+}
+
+/** Copies what haxeonInputs describes to the names the host loads (app.hl, app.hli, app.entry) and the ABI directories. */
+abstract class HaxeonPackageInputs extends DefaultTask {
+    @Internal
+    abstract RegularFileProperty getHaxeonInputs()
+
+    @OutputDirectory
+    abstract DirectoryProperty getAssets()
+
+    @OutputDirectory
+    abstract DirectoryProperty getJniLibs()
+
+    /** Where builds before this one wrote the module, which would now be packaged beside the generated one. */
+    @Internal
+    abstract DirectoryProperty getLegacyAssets()
+
+    @Inject
+    abstract FileSystemOperations getFiles()
+
+    @TaskAction
+    void copy() {
+        def inputsFile = haxeonInputs.get().asFile
+        if (!inputsFile.isFile()) {
+            throw new GradleException("haxeon did not describe the Android build: ${inputsFile} is missing")
+        }
+        def described = new Properties()
+        inputsFile.withInputStream { described.load(it) }
+        def assetsDirectory = assets.get().asFile, jniLibsDirectory = jniLibs.get().asFile
+        files.delete {
+            delete assetsDirectory, jniLibsDirectory
+            delete legacyAssets.get().asFileTree.matching {
+                include 'app.hl', 'app.hli', 'app.entry', 'app.hcs', 'app.hcs.pending', 'app.hlp', 'app.hxr'
+            }
+        }
+        assetsDirectory.mkdirs()
+        jniLibsDirectory.mkdirs()
+        ['module': 'app.hl', 'identity': 'app.hli', 'entry': 'app.entry'].each { key, name ->
+            def source = new File(described.getProperty(key, ''))
+            if (!source.isFile()) {
+                throw new GradleException("haxeon did not build the ${key} ${source} described by ${inputsFile}")
+            }
+            files.copy {
+                from source
+                into assetsDirectory
+                rename { name }
+            }
+        }
+        def nativeRoot = new File(described.getProperty('nativeRoot', ''))
+        if (nativeRoot.isDirectory()) {
+            files.copy {
+                from nativeRoot
+                into jniLibsDirectory
             }
         }
     }
 }
 
-tasks.register('generateHaxeonAsset', Exec) {
-    workingDir haxeonRoot
-    doFirst {
-        if (!haxeExecutable.isFile()) {
-            throw new GradleException("Pinned Haxe compiler is missing: ${haxeExecutable}; run scripts/bootstrap-tools.sh")
-        }
-        delete fileTree(appAssets) {
-            include 'app.hl', 'app.hli', 'app.entry', 'app.hcs', 'app.hlp', 'app.hxr', 'app.hcs.pending'
-        }
-        def projectManifest = providers.gradleProperty('haxeonProject').orNull
-        // common.hxml lists the compiler's class paths, as every stock-Haxe build of its sources takes them (docs/DEVELOPMENT.md).
-        if (projectManifest != null) {
-            commandLine haxeExecutable.absolutePath, 'common.hxml',
-                '--run', 'tools.AndroidBuild', '--project', projectManifest, appAsset.absolutePath
-        } else {
-            commandLine haxeExecutable.absolutePath, 'common.hxml',
-                '--run', 'tools.AndroidBuild', new File(haxeonRoot, 'android/demo/Main.hx').absolutePath, appAsset.absolutePath
-        }
-    }
+def packageHaxeon = tasks.register('packageHaxeon', HaxeonPackageInputs) {
+    dependsOn buildHaxeon
+    haxeonInputs.set(haxeonInputsFile)
+    assets.set(layout.buildDirectory.dir('generated/haxeon/assets'))
+    jniLibs.set(layout.buildDirectory.dir('generated/haxeon/jniLibs'))
+    legacyAssets.set(layout.projectDirectory.dir('src/main/assets'))
+    outputs.upToDateWhen { false }
 }
 
-tasks.named('preBuild').configure {
-    dependsOn tasks.named('generateHaxeonAsset')
+androidComponents {
+    onVariants(selector().all()) { variant ->
+        variant.sources.assets.addGeneratedSourceDirectory(packageHaxeon, { it.assets })
+        variant.sources.jniLibs.addGeneratedSourceDirectory(packageHaxeon, { it.jniLibs })
+    }
 }

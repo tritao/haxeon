@@ -113,7 +113,9 @@ creates `src/Main.hx` and a project file like this:
 
 Paths in the project file are relative to that file. Host builds go to
 `build/host/main.hl`; Wasm32 builds go to `build/wasm32/main.wasm`; Android
-builds go to `build/android/app-debug.apk`. Android projects require a
+builds go to `build/android/app-debug.apk`, packaged by Gradle from the module
+the build compiles to `build/android-arm64/app.hl` (see
+[ANDROID.md](ANDROID.md)). Android projects require a
 top-level `main():Void` entry function and an installed Android SDK/NDK. Use
 `--device SERIAL` with `run --target android` when more than one device is
 connected. Android builds use the pinned `vendor/libffi` submodule, which is

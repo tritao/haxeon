@@ -26,9 +26,13 @@ class CompilerProvider {
 				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
 			compilerInputs = CompilerInputs.of(project, context.layout),
 			sourcePaths = compilerInputs.sources,
+			// An Android module runs in the debug host, which patches it: it is always built live, with the baseline the patches
+			// are compiled against (`.hcs`) and the stable ID the host calls `main` by (`.entry`).
+			android = context.environment.target.isAndroid(),
+			live = context.live || android,
 			arguments = [
 				"--target=" + compilerInputs.target,
-				"--build-mode=" + (context.live || context.developmentMetadata ? "development" : "release"),
+				"--build-mode=" + (live || context.developmentMetadata ? "development" : "release"),
 				"--output=" + output,
 				"--entry=" + project.manifest.entry,
 				"--inputs-output=" + output + ".inputs.json"
@@ -63,8 +67,17 @@ class CompilerProvider {
 		if (!compilerInputs.inlineEnabled)
 			arguments.push("--no-inline");
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
-		if (context.live)
+		if (live)
 			arguments.push("--live");
+		if (android) {
+			arguments.push("--baseline-output=" + output + ".hcs");
+			arguments.push("--entry-id-output=" + output + ".entry");
+		}
+		var baseline = context.baseline;
+		if (baseline != null) {
+			arguments.push("--baseline=" + baseline);
+			inputs.push(baseline);
+		}
 		var command:String,
 			argumentsWithLauncher:Array<String>,
 			environment:Map<String, String>;
@@ -122,6 +135,10 @@ class CompilerProvider {
 		if (compilerInputs.target == "hl") {
 			outputs.push(output + ".hli");
 			outputs.push(output + ".live.json");
+		}
+		if (android) {
+			outputs.push(output + ".hcs");
+			outputs.push(output + ".entry");
 		}
 		return new ExecutionAction(actionId, dependencies, inputs, outputs,
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',

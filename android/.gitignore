@@ -3,6 +3,7 @@
 build/
 local.properties
 app/build/
+# Written by builds before haxeon built the module (docs/design/ANDROID_BUILD.md); packageHaxeon deletes them.
 app/src/main/assets/app.hl
 app/src/main/assets/app.hli
 app/src/main/assets/app.entry
