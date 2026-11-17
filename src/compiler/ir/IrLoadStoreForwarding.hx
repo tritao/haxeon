@@ -233,48 +233,45 @@ class IrLoadStoreForwarding {
 			for (i in 1...predecessors.length)
 				into.intersect(outgoing.get(predecessors[i]));
 		}
+		// A block with an instruction that forgets every field leaves with what the instructions after the last such one give, whatever
+		// it was entered with: its state is made once, from nothing, and only the other blocks meet their predecessors.
+		var resumeAt:Map<Int, Int> = [], settled:Map<Int, Bool> = [];
+		for (id in graph.order) {
+			var instructions = graph.block(id).instructions, resume = 0;
+			for (index in 0...instructions.length)
+				if (forgetsFields(instructions[index].value, objects))
+					resume = index + 1;
+			resumeAt.set(id, resume);
+		}
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (id in graph.order) {
-				meet(id, before);
-				after.copyFrom(before);
-				for (located in graph.block(id).instructions)
-					switch located.value {
-						case FieldSet(object, field, value):
-							if (excludedField(value.type, objects) || !plainObject(object.type))
-								after.clear();
-							else {
-								var sameName = byField.get(field);
-								if (sameName != null)
-									for (key in sameName)
-										after.present[key] = false;
+				var instructions = graph.block(id).instructions, resume = resumeAt.get(id);
+				if (resume > 0) {
+					if (settled.exists(id))
+						continue;
+					settled.set(id, true);
+					after.clear();
+				} else
+					meet(id, after);
+				for (index in resume...instructions.length)
+					switch instructions[index].value {
+						case FieldSet(_, field, _):
+							var sameName = byField.get(field);
+							if (sameName != null)
+								for (key in sameName)
+									after.present[key] = false;
+						case FieldGet(out, object, field) if (!excludedField(out.type, objects)):
+							// Every field access of a plain object was given a key above.
+							var fields = byObject.get(object.id),
+								found = fields == null ? null : fields.get(field),
+								key = found == null ? throw 'No field key for $field' : found;
+							if (!after.present[key]) {
+								after.present[key] = true;
+								after.values[key] = out;
 							}
-						case FieldGet(out, object, field):
-							if (!plainObject(object.type))
-								after.clear();
-							else if (!excludedField(out.type, objects)) {
-								// Every field access of a plain object was given a key above.
-								var fields = byObject.get(object.id),
-									found = fields == null ? null : fields.get(field),
-									key = found == null ? throw 'No field key for $field' : found;
-								if (!after.present[key]) {
-									after.present[key] = true;
-									after.values[key] = out;
-								}
-							}
-						case ArraySet(array, _, value):
-							if (!plainArray(array.type) || excludedField(value.type, objects))
-								after.clear();
-						case ArrayGet(_, array, _):
-							if (!plainArray(array.type))
-								after.clear();
-						// Across blocks, even a non-writing call is an explicit barrier.
-						case Call(_, _, _):
-							after.clear();
 						default:
-							if (mayWriteMemory(located.value))
-								after.clear();
 					}
 				if (!after.matches(outgoing.get(id))) {
 					outgoing.set(id, after.compact());
@@ -295,6 +292,18 @@ class IrLoadStoreForwarding {
 		}
 		return result;
 	}
+
+	/** Whether `instruction` makes every available field unknown: an access the keys do not cover, a call or a memory write. */
+	static function forgetsFields(instruction:IrInstruction, objects:Null<IrObjectTable>):Bool
+		return switch instruction {
+			case FieldSet(object, _, value): excludedField(value.type, objects) || !plainObject(object.type);
+			case FieldGet(_, object, _): !plainObject(object.type);
+			case ArraySet(array, _, value): !plainArray(array.type) || excludedField(value.type, objects);
+			case ArrayGet(_, array, _): !plainArray(array.type);
+			// Across blocks, even a non-writing call is an explicit barrier.
+			case Call(_, _, _): true;
+			default: mayWriteMemory(instruction);
+		};
 
 	static inline function sameType(a:IrType, b:IrType):Bool
 		return IrTypeIdentity.same(a, b);
