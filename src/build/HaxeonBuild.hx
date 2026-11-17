@@ -162,9 +162,19 @@ class HaxeonBuild {
 		return status;
 	}
 
+	/**
+	 * The build mode of a tool artifact: the checked-in bootstrap compiler now, and the compile server, CLI and language server
+	 * when Haxeon builds them. Tools are release builds (ADR 0003 section 12): smaller and quicker to load, with the function
+	 * identities and line table kept inline so their crash traces still name functions and lines; nothing reads development
+	 * metadata (source snapshots, opcode spans, live patch metadata) from a tool's own bytecode. scripts/check-self-hosting.hx
+	 * reaches its fixed point in the same mode, so what the bootstrap is built with is what the compiler compiling itself tests.
+	 */
+	public static inline final TOOL_BUILD_MODE = "release";
+
 	static function compilerArguments(output:String, sourcesFile:String):Array<String>
 		return [
 			'--output=$output',
+			'--build-mode=$TOOL_BUILD_MODE',
 			"--entry=compiler.tools.HaxeonCompiler",
 			"--root=src",
 			"--root=stdlib",

@@ -30,7 +30,13 @@ function main() {
 
 	var sources = Path.join([work, "compiler-sources.txt"]);
 	sys.io.File.saveContent(sources, sourceList(root, ["src", "stdlib"]));
-	var arguments = ["--entry=compiler.tools.HaxeonCompiler", "--root=src", "--root=stdlib", '--sources-file=$sources'];
+	// Tool artifacts, the compiler and every entry point below, are release builds: the mode build.HaxeonBuild.TOOL_BUILD_MODE
+	// gives the checked-in bootstrap, so the fixed point exercises the code generation the bootstrap is built with. The program
+	// cases further down still build in development mode, which covers its metadata.
+	var toolMode = "--build-mode=release";
+	var arguments = [
+		toolMode, "--entry=compiler.tools.HaxeonCompiler", "--root=src", "--root=stdlib", '--sources-file=$sources'
+	];
 
 	Sys.println("seed: building the compiler with the Haxe interpreter");
 	step(haxe, ["--cwd", root, "common.hxml", "--run", "compiler.tools.HaxeonCompiler",
@@ -52,7 +58,7 @@ function main() {
 	sys.io.File.saveContent(entrySources, sourceList(root, ["src", "stdlib", "lib/haxeon-io"]));
 	function buildEntry(entry:String):Int
 		return Script.run(hl, [
-			'$work/stage-1.hl', '--entry=$entry', "--root=src", "--root=stdlib", "--root=lib/haxeon-io",
+			'$work/stage-1.hl', toolMode, '--entry=$entry', "--root=src", "--root=stdlib", "--root=lib/haxeon-io",
 			'--sources-file=$entrySources', '--output=$work/entry-$entry.hl'
 		], {
 			cwd: root,

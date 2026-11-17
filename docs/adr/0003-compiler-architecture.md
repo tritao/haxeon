@@ -276,8 +276,8 @@ packages in another checkout): the Haxeon-built server starts in 1.00 s against 
 passes the program cases cold and warm. It loses on its own build: the pinned Haxe builds the server in 14.8 s, the Haxeon-built
 compiler in 24.4 s (21.8 s at a 0.8 GC threshold).
 
-**Tool artifacts build in release mode (decided 2026-11-17, queued).** What decides the mode is the artifact's role, said once
-in `HaxeonBuild`: a tool artifact (the checked-in bootstrap compiler now; the compile server, CLI and language server when
+**Tool artifacts build in release mode (decided and implemented 2026-11-17).** What decides the mode is the artifact's role,
+said once in `HaxeonBuild` (`TOOL_BUILD_MODE`): a tool artifact (the checked-in bootstrap compiler now; the compile server, CLI and language server when
 Haxeon builds them) is a release build, so a Haxeon-built worker inherits it. A release module keeps minimal symbols inline,
 the function identities (stack-trace and profiler names) and the line table, about 2 MB of the server's 7 MB; development
 mode adds source snapshots, opcode spans and live metadata (the bootstrap is 27 MB). Conditions:
@@ -288,6 +288,9 @@ mode adds source snapshots, opcode spans and live metadata (the bootstrap is 27 
   compiling itself; development metadata stays covered by the live builds of the program cases;
 - nothing reads development metadata from the compiler's own bytecode (live patching and the language server act on the programs
   it builds, not on it).
+
+The release bootstrap is 5.97 MB (development: 27.2 MB); it converges in one self-host stage and rebuilds itself identically,
+and `scripts/check-self-hosting.hx` builds the compiler and its ten entry points in release mode.
 
 **Separate symbol files: deferred.** They would move about 2 MB of 7 out of the module, at the cost of the VM, the profiler and
 crash reports finding a sidecar matched to the module (`.hl.build-id` would key it), and of traces without it showing bare
