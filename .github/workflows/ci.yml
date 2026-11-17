@@ -22,12 +22,14 @@ jobs:
       # Each platform reports its own result: one failing platform must not hide the others behind cancellations.
       fail-fast: false
       matrix:
+        # Each limit leaves room for a slow runner and still stops a hung job: Linux x86 takes 77 to 88 minutes and Apple
+        # Silicon 59 to 73, and one slow run pushed both past a 90-minute limit with every suite passing.
         include:
           - name: test
             platform: test
             os: linux
             runs_on: ubuntu-24.04
-            timeout: 90
+            timeout: 120
           - name: linux-arm64
             platform: linux-arm64
             os: linux
@@ -49,7 +51,7 @@ jobs:
             platform: macos-arm64
             os: macos
             runs_on: macos-15
-            timeout: 90
+            timeout: 120
             test_jobs: 4
     runs-on: ${{ matrix.runs_on }}
     timeout-minutes: ${{ matrix.timeout }}
