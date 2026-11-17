@@ -47,7 +47,7 @@ class PrivateAccessMain {
 		// What Haxe allows.
 		Frontend.compile(ITEM + 'function main():Int { var item = new Item(); return item.peek(item); }');
 		Frontend.compile(ITEM + 'class Child extends Item { public function new() super(); '
-			+ 'public function read():Int return secret + hidden() + count + make().secret; } '
+			+ 'public function read():Int return secret + hidden() + Item.count + Item.make().secret; } '
 			+ 'function main():Int return new Child().read();');
 		Frontend.compile(abstractId + 'function main():Int return Id.of(1).read();');
 		Frontend.compile('@:allow(Friend) ' + ITEM + 'class Friend { public static function read(item:Item):Int '

@@ -726,7 +726,8 @@ class CallResolver {
 			}
 		}
 		if (methodInfo == null || methodInfo.isStatic)
-			fail("E1007", 'Unknown instance method "$className.$name"', span);
+			fail("E1007", classReference
+				? 'Unknown static method "$className.$name"' : 'Unknown instance method "$className.$name"', span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
 		var methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
 			substitutions = session.representation.nominalSubstitutions(methodOwnerType),

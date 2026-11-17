@@ -78,6 +78,9 @@ The current subset includes:
   loop over a class whose `iterator()` is private. An override written without a modifier keeps the overridden method's
   visibility, and a class without a constructor of its own is constructed through its base's, as in Haxe. A private
   module-level variable is visible in its own module.
+- Static members belong to the class that declares them, as in Haxe: a subclass does not inherit them, so its code names a
+  base class's static through that class (`Base.count`, `Base.make()`), and `Derived.count` or a bare `count` in Derived
+  does not reach it.
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import
   one (`import pack.Settings.hits;`) or write its full path (`pack.Settings.hits`). As an extension stock Haxe rejects, they
   can also be reached through the module's name (`Settings.hits`, `Settings.record()` with `import pack.Settings;`). When the

@@ -41,7 +41,10 @@ typedef DeclaredMember = {
  * `@:privateAccess`). A site the compiler generates, or one that reads a member for its own reasons, does not call them.
  */
 class MemberAccess {
-	/** The field `name` of class `className` or of the nearest base class declaring it; static or instance as `isStatic` asks. */
+	/**
+	 * The field `name` of class `className`: an instance field of it or of the nearest base class declaring it, or a static field of
+	 * `className` itself (statics are not inherited, as in Haxe).
+	 */
 	public static function classField(session:TypingSession, className:String, name:String,
 			isStatic:Bool):Null<DeclaredField> {
 		var owner:Null<String> = className, seen:Map<String, Bool> = [];
@@ -55,16 +58,23 @@ class MemberAccess {
 			for (field in declaration.fields)
 				if (field.name == name && field.isStatic == isStatic)
 					return {declaration: declaration, field: field};
+			// A static belongs to the class that declares it: a subclass neither inherits it nor names it.
+			if (isStatic)
+				return null;
 			owner = declaration.base == null ? null : baseName(declaration.base);
 		}
 		return null;
 	}
 
-	/** The method `name` of `className`, its base classes or (for an interface) its base interfaces, first found first. */
+	/**
+	 * The method `name` of `className`: its own, or an instance method of its base classes or (for an interface) its base
+	 * interfaces, first found first. A static method is `className`'s own only: statics are not inherited, as in Haxe, so
+	 * `Derived.make()` and a bare `make()` inside Derived do not reach Base's static `make`.
+	 */
 	public static function methodInfo(session:TypingSession, className:String, name:String):Null<SemanticMethodInfo> {
 		var results:Array<SemanticMethodInfo> = [];
 		findMethods(session, className, name, results);
-		return results.length == 0 ? null : results[0];
+		return results.length == 0 || results[0].isStatic && results[0].owner != className ? null : results[0];
 	}
 
 	static function findMethods(session:TypingSession, className:String, name:String,

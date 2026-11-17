@@ -16,8 +16,9 @@ class PatternCheck extends PatternBase {
 		case Entry(captured): captured == "bound";
 		default: false;
 	};
+	// A base class's constant is named through its class: statics are not inherited, as in Haxe.
 	public static function inherited(value:NameValue):Bool return switch value {
-		case Entry(INHERITED): true;
+		case Entry(PatternBase.INHERITED): true;
 		default: false;
 	};
 }
