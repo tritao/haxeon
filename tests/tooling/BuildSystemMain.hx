@@ -1294,6 +1294,11 @@ class BuildSystemMain {
 			"a Wasm layout compiles Wasm and reads FFI imports from its own directory");
 		expect(android.target == "hl" && android.defines.join(",") == "android,app-flag",
 			"an Android build compiles HashLink code with the android define");
+		// The CLI builds wasm32 through the structured build, whatever target the manifest names.
+		expect(BuildPlanner.project(ProjectDiscovery.discover(Path.join([lib, "haxeon.json"])), BuildIntent.Build,
+			Target.parse("wasm32"), NativeArtifactDemand.Shared)
+			.toDebugString()
+			.indexOf("lib:WasmModule") >= 0, "a wasm32 build plans a Wasm module");
 		// The build passes exactly these to the compiler.
 		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
 			execution = PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, environment.target,

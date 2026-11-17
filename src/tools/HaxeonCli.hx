@@ -9,7 +9,6 @@ import build.NativeTargetSupport;
 import build.Target;
 import build.WorkspaceBuild;
 import build.WorkspaceManifest;
-import build.execution.CompilerClient;
 import build.execution.Executor;
 import build.execution.JobServer;
 import build.execution.ProcessRunner;
@@ -31,17 +30,6 @@ import sys.FileSystem;
 import sys.io.File;
 import tools.WatchRun.WatchChange;
 import tools.WatchRun.WatchProfiling;
-
-private typedef ProjectConfig = {
-	final entry:String;
-	final sources:Array<String>;
-	final sourceRoots:Array<String>;
-	final target:String;
-	final defines:Array<String>;
-	final outputDir:String;
-	final androidApplicationId:String;
-	final androidAppLabel:String;
-}
 
 private typedef BuildOptions = {
 	final projectPath:String;
@@ -652,9 +640,6 @@ class HaxeonCli {
 			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
 		if (!FileSystem.exists(projectConfigPath))
 			throw 'Project file not found: $projectConfigPath (run "haxeon init" to create one)';
-		var projectDirectory = Path.directory(projectConfigPath);
-		if (projectDirectory == "")
-			projectDirectory = Sys.getCwd();
 		var requestedTarget:Null<Target> = options.target == null ? null : Target.parse(options.target),
 			resolveStarted = Sys.time() * 1000.0,
 			project = discoverProject(projectConfigPath, requestedTarget),
@@ -677,26 +662,22 @@ class HaxeonCli {
 			throw 'Option "--live" requires "haxeon run --watch"';
 		if (options.strictLive && !options.live)
 			throw 'Option "--strict-live" requires "haxeon run --watch --live"';
-		if (options.watch
-			&& !targetInfo.isAndroid()
-			&& !(targetInfo.equals(Target.detectHost())
-			&& Target.parse(project.manifest.target).equals(Target.detectHost())))
+		// A host build runs here; a host or Wasm build goes through the structured build (HaxeonProjectBuild), and an Android build
+		// through its native package build and Gradle.
+		var hostBuild = targetInfo.equals(Target.detectHost())
+			&& Target.parse(project.manifest.target).equals(Target.detectHost()),
+			structuredBuild = hostBuild || targetInfo.isWasm();
+		if (options.watch && !targetInfo.isAndroid() && !hostBuild)
 			throw 'Option "--watch" currently requires a host or Android project';
 		if (!launch && options.device != null)
 			throw 'Option "--device" is only valid with "haxeon run --target android"';
 		if (!targetInfo.isAndroid() && options.device != null)
 			throw 'Option "--device" requires "--target android"';
-		if ((options.plan || options.explain || options.timings)
-			&& !(targetInfo.equals(Target.detectHost())
-			&& Target.parse(project.manifest.target).equals(Target.detectHost())))
-			throw 'Plan, explanation, and timing output are currently available for structured host builds only';
-		if (options.selfHosted
-			&& !(targetInfo.equals(Target.detectHost())
-			&& Target.parse(project.manifest.target).equals(Target.detectHost())))
-			throw 'The self-hosted compiler is currently available for structured host builds only';
-		if (options.profile
-			&& (!launch || !(targetInfo.equals(Target.detectHost())
-			&& Target.parse(project.manifest.target).equals(Target.detectHost()))))
+		if ((options.plan || options.explain || options.timings) && !structuredBuild)
+			throw 'Plan, explanation, and timing output are currently available for host and wasm32 builds only';
+		if (options.selfHosted && !structuredBuild)
+			throw 'The self-hosted compiler is currently available for host and wasm32 builds only';
+		if (options.profile && (!launch || !hostBuild))
 			throw 'Profiling is currently available for "haxeon run" host builds only';
 		// The instrument source runs the instrumented build flavor, which builds into a directory of its own.
 		var instrument = options.profile && options.profileSources.indexOf("instrument") >= 0;
@@ -711,8 +692,7 @@ class HaxeonCli {
 
 		var home = haxeonHome();
 		NativeTargetSupport.validate(project, targetInfo);
-		if (targetInfo.equals(Target.detectHost())
-			&& Target.parse(project.manifest.target).equals(Target.detectHost())) {
+		if (hostBuild) {
 			var buildDirectory = HaxeonProjectBuild.outputDirectory(project, instrument);
 			var output = options.output == null
 				? Path.join([buildDirectory, "host", "main.hl"]) : resolvePath(options.output, project.root);
@@ -838,76 +818,58 @@ class HaxeonCli {
 			return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments),
 				scriptRun ? invokedFrom : project.root, launchEnvironment());
 		}
-		if (options.plan)
-			throw 'Plan output is currently available for host builds only';
 		for (resolvedPackage in project.packages.packages)
 			if (resolvedPackage.nativeSources.length > 0 && !targetInfo.isAndroid())
 				throw 'Native C package "${resolvedPackage.name}" requires target "host" or an Android NDK provider; target "$target" is not supported yet';
-		var config = loadConfig(projectConfigPath);
-		if (targetInfo.isAndroid()) {
-			// The Android debug host always accepts live patches.
-			if (options.buildModeExplicit && options.buildMode == "release")
-				throw "The Android live-patch host requires development build mode";
-			configureAndroidEnvironment(home);
-			var nativeStatus = HaxeonNativePackageBuild.build(project, home, targetInfo, options.jobs, false);
-			if (nativeStatus != 0)
-				return nativeStatus;
-			var androidOutput = options.output == null ? defaultOutput(config, projectDirectory,
-				"android") : resolvePath(options.output, projectDirectory);
-			var status = buildAndroid(home, projectConfigPath, config, androidOutput,
-				HaxeonNativePackageBuild.nativeRoot(project, targetInfo));
-			if (status != 0 || !launch)
-				return status;
-			var launched = installAndLaunchAndroid(home, androidOutput, config.androidApplicationId, options.device);
-			if (launched != 0 || !options.watch)
-				return launched;
-			// Each saved edit is compiled and sent to the running app (AndroidWatch).
-			var adb = androidExecutable(home, "adb");
-			return AndroidWatch.run(home, projectConfigPath, project, adb, selectAndroidDevice(adb, options.device));
+		if (targetInfo.isWasm()) {
+			// `haxeon run` has no Wasm runner (checked above), so this only builds.
+			var output = options.output == null ? Path.join([
+				HaxeonProjectBuild.outputDirectory(project, false),
+				"wasm32",
+				"main.wasm"
+			]) : resolvePath(options.output, project.root);
+			if (options.quiet)
+				BuildOutput.capture();
+			var buildStatus = try HaxeonProjectBuild.build(project, home, output, options.defines, options.jobs,
+				options.plan, options.explain, options.timings, resolutionMs, options.selfHosted, options.compilerOnly,
+				false,
+				false, null, options.buildMode == "development",
+				targetInfo) catch (error:Dynamic) {
+					releaseQuietOutput(options, true);
+					throw error;
+				}
+			releaseQuietOutput(options, buildStatus != 0);
+			if (buildStatus == 0 && !options.plan && !options.quiet)
+				Sys.println('Built wasm32 -> $output');
+			return buildStatus;
 		}
-
-		var output = options.output == null ? defaultOutput(config, projectDirectory,
-			target) : resolvePath(options.output, projectDirectory);
-		ensureDirectory(Path.directory(output));
-		var compiler = Path.join([home, ".tools", "haxe", "haxe" + executableSuffix()]);
-		if (!FileSystem.exists(compiler))
-			throw 'Pinned Haxe is missing: $compiler (run scripts/build-native.sh)';
-
-		var compilerArguments = [
-			"--target=" + (target == "host" ? "hl" : "wasm32"),
-			"--build-mode=" + options.buildMode,
-			"--output=" + output,
-			"--entry=" + config.entry
-		];
-		for (root in config.sourceRoots)
-			compilerArguments.push("--root=" + resolvePath(root, projectDirectory));
-		for (define in config.defines.concat(options.defines))
-			compilerArguments.push("--define=" + define);
-		for (source in config.sources) {
-			var absoluteSource = resolvePath(source, projectDirectory);
-			if (!FileSystem.exists(absoluteSource))
-				throw 'Source file not found: $absoluteSource';
-			compilerArguments.push(absoluteSource);
-		}
-
-		// Compiled as the structured build compiles: in the project's compile server when one can run, so a rebuild reuses
-		// what the last one typed.
-		var compileStatus = CompilerClient.compile(compiler, Path.join([home, "src"]), compilerArguments, home,
-			Path.directory(output), projectDirectory);
-		if (compileStatus != 0)
-			return compileStatus;
-		if (!launch) {
-			Sys.println('Built $target -> $output');
-			return 0;
-		}
-
-		var hashlink = Path.join([HashLinkPath.directory(home), "hl" + executableSuffix()]);
-		if (!FileSystem.exists(hashlink))
-			throw 'HashLink is missing: $hashlink (run scripts/build-native.sh)';
-		configureRuntimeLibraryPath(home);
-		Sys.println('Launching $output');
-		return ProcessRunner.run(hashlink, [output].concat(options.runtimeArguments), projectDirectory,
-			launchEnvironment());
+		if (!targetInfo.isAndroid())
+			throw 'Target "$target" cannot be built yet; build for the host, wasm32 or android';
+		if (options.plan)
+			throw 'Plan output is currently available for host and wasm32 builds only';
+		// The Android debug host always accepts live patches.
+		if (options.buildModeExplicit && options.buildMode == "release")
+			throw "The Android live-patch host requires development build mode";
+		configureAndroidEnvironment(home);
+		var nativeStatus = HaxeonNativePackageBuild.build(project, home, targetInfo, options.jobs, false);
+		if (nativeStatus != 0)
+			return nativeStatus;
+		var androidOutput = options.output == null ? Path.join([
+			HaxeonProjectBuild.outputDirectory(project, false),
+			"android",
+			"app-debug.apk"
+		]) : resolvePath(options.output, project.root);
+		var status = buildAndroid(home, projectConfigPath, project, androidOutput,
+			HaxeonNativePackageBuild.nativeRoot(project, targetInfo));
+		if (status != 0 || !launch)
+			return status;
+		var launched = installAndLaunchAndroid(home, androidOutput, project.manifest.androidApplicationId,
+			options.device);
+		if (launched != 0 || !options.watch)
+			return launched;
+		// Each saved edit is compiled and sent to the running app (AndroidWatch).
+		var adb = androidExecutable(home, "adb");
+		return AndroidWatch.run(home, projectConfigPath, project, adb, selectAndroidDevice(adb, options.device));
 	}
 
 	static function pumpProcessOutput(input:haxe.io.Input, output:haxe.io.Output, done:sys.thread.Lock):Void {
@@ -1003,7 +965,7 @@ class HaxeonCli {
 		return runtimeStatus == 0 && trace == null ? 1 : runtimeStatus;
 	}
 
-	static function buildAndroid(home:String, projectConfigPath:String, config:ProjectConfig, output:String,
+	static function buildAndroid(home:String, projectConfigPath:String, project:ResolvedProject, output:String,
 			nativeRoot:String):Int {
 		configureAndroidEnvironment(home);
 		var sdk = Path.join([home, ".tools", "android-sdk"]),
@@ -1024,8 +986,8 @@ class HaxeonCli {
 			"assembleDebug",
 			"-PhaxeonProject=" + projectConfigPath,
 			"-PhaxeonNativeRoot=" + nativeRoot,
-			"-PhaxeonApplicationId=" + config.androidApplicationId,
-			"-PhaxeonAppLabel=" + config.androidAppLabel
+			"-PhaxeonApplicationId=" + project.manifest.androidApplicationId,
+			"-PhaxeonAppLabel=" + project.manifest.androidAppLabel
 		];
 		var status = ProcessRunner.run(javaExecutable(), arguments, Sys.getCwd(), new Map());
 		if (status != 0)
@@ -1475,111 +1437,6 @@ class HaxeonCli {
 		}
 		active.remove(current.name);
 		return null;
-	}
-
-	static function loadConfig(path:String):ProjectConfig {
-		var raw:Dynamic;
-		try {
-			raw = Json.parse(File.getContent(path));
-		} catch (error:Dynamic) {
-			throw 'Could not parse $path: ${Std.string(error)}';
-		}
-		if (raw == null || !Reflect.isObject(raw))
-			throw '$path must contain a JSON object';
-		var version:Dynamic = Reflect.field(raw, "version");
-		if (version != null && Std.int(version) != 1)
-			throw 'Unsupported $CONFIG_FILE version "$version"';
-		var entry = requiredString(raw, "entry", path),
-			sources = stringArray(raw, "sources", path, []),
-			sourceRoots = stringArray(raw, "sourceRoots", path, ["src"]),
-			target = optionalString(raw, "target", "host"),
-			defines = stringArray(raw, "defines", path, []),
-			outputDir = optionalString(raw, "outputDir", "build");
-		var android:Dynamic = Reflect.field(raw, "android"),
-			androidApplicationId = "org.haxeon.android",
-			androidAppLabel = "Haxeon";
-		if (android != null) {
-			if (!Reflect.isObject(android) || Std.isOfType(android, Array))
-				throw '$path "android" must be an object';
-			androidApplicationId = optionalString(android, "applicationId", androidApplicationId);
-			androidAppLabel = optionalString(android, "label", androidAppLabel);
-		}
-		if (!isAndroidApplicationId(androidApplicationId))
-			throw '$path "android.applicationId" must be a dotted Java package name, such as "org.example.game"';
-		if (sources.length == 0)
-			throw '$path must list at least one source in "sources"';
-		if (sourceRoots.length == 0)
-			throw '$path must list at least one path in "sourceRoots"';
-		try {
-			Target.parse(target);
-		} catch (error:Dynamic) {
-			throw '$path has an invalid target "$target": ${Std.string(error)}';
-		}
-		return {
-			entry: entry,
-			sources: sources,
-			sourceRoots: sourceRoots,
-			target: target,
-			defines: defines,
-			outputDir: outputDir,
-			androidApplicationId: androidApplicationId,
-			androidAppLabel: androidAppLabel
-		};
-	}
-
-	static function isAndroidApplicationId(value:String):Bool {
-		var parts = value.split(".");
-		if (parts.length < 2)
-			return false;
-		for (part in parts) {
-			if (part.length == 0 || !isAsciiLetter(part.charCodeAt(0)) && part.charCodeAt(0) != 95)
-				return false;
-			for (index in 1...part.length) {
-				var code = part.charCodeAt(index);
-				if (!isAsciiLetter(code) && (code < 48 || code > 57) && code != 95)
-					return false;
-			}
-		}
-		return true;
-	}
-
-	static function isAsciiLetter(code:Int):Bool
-		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-
-	static function requiredString(raw:Dynamic, field:String, path:String):String {
-		var value:Dynamic = Reflect.field(raw, field);
-		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path requires a non-empty "$field" string';
-		return cast value;
-	}
-
-	static function optionalString(raw:Dynamic, field:String, fallback:String):String {
-		var value:Dynamic = Reflect.field(raw, field);
-		if (value == null)
-			return fallback;
-		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '"$field" must be a non-empty string';
-		return cast value;
-	}
-
-	static function stringArray(raw:Dynamic, field:String, path:String, fallback:Array<String>):Array<String> {
-		var value:Dynamic = Reflect.field(raw, field);
-		if (value == null)
-			return fallback.copy();
-		if (!Std.isOfType(value, Array))
-			throw '$path "$field" must be an array of strings';
-		var result:Array<String> = [];
-		for (item in (cast value:Array<Dynamic>)) {
-			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
-				throw '$path "$field" must contain only non-empty strings';
-			result.push(cast item);
-		}
-		return result;
-	}
-
-	static function defaultOutput(config:ProjectConfig, projectDirectory:String, target:String):String {
-		var output = target == "host" ? "main.hl" : target == "wasm32" ? "main.wasm" : "app-debug.apk";
-		return resolvePath(Path.join([config.outputDir, target, output]), projectDirectory);
 	}
 
 	static function configureRuntimeLibraryPath(home:String, ?extraDirectories:Array<String>):Void {

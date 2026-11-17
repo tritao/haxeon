@@ -8,10 +8,9 @@ import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCache;
 import haxe.io.Path;
-import project.ProjectDiscovery;
 import project.ResolvedProject;
 
-/** Project-facing structured build path shared by CLI build and run. */
+/** Project-facing structured build path shared by CLI build and run, for the host and for Wasm. */
 class HaxeonProjectBuild {
 	/**
 	 * The project's build directory. The instrumented flavor builds into its own (`build-instrument` beside `build`), so
@@ -34,15 +33,16 @@ class HaxeonProjectBuild {
 			planOnly:Bool, explain:Bool,
 			timingsEnabled:Bool, resolutionMs:Float, selfHosted:Bool = false, compilerOnly:Bool = false,
 			live:Bool = false, instrument:Bool = false,
-			?session:BuildSession, developmentMetadata:Bool = true):Int {
-		if (project.manifest.target != "host")
-			throw 'The structured native package build currently supports target "host", got "${project.manifest.target}"';
+			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target):Int {
+		var buildTarget = target == null ? Target.detectHost() : target;
+		if (!buildTarget.isWasm() && !buildTarget.equals(Target.detectHost()))
+			throw 'The structured build supports the host and wasm32 targets, not "$buildTarget"';
 		var timings = new BuildTimings();
 		timings.add("resolve", resolutionMs);
 		if (instrument)
 			defines = defines.concat(instrumentDefines(project));
 		var environment = new BuildEnvironment(project.root, outputDirectory(project, instrument), BuildProfile.Release,
-			null, null,
+			buildTarget, null,
 			instrument ? project.manifest.instrument : null),
 			plan = BuildPlanner.project(project, BuildIntent.Build, environment.target, NativeArtifactDemand.Shared),
 			lowerStarted = Sys.time() * 1000.0,
@@ -53,7 +53,7 @@ class HaxeonProjectBuild {
 			execution = compilerExecution(execution);
 		timings.addElapsed("plan and lower", lowerStarted);
 		if (planOnly) {
-			Sys.println('Build ${project.rootPackage.name} [host]');
+			Sys.println('Build ${project.rootPackage.name} [${new TargetLayout(environment).targetDirectory()}]');
 			Sys.println(plan.toDebugString());
 			if (explain)
 				Sys.print(plan.toExplainString());

@@ -11,7 +11,6 @@ import build.Artifact.ArtifactKind.NativeSharedLibrary;
 import build.Artifact.ArtifactKind.NativeStaticLibrary;
 import build.Artifact.ArtifactKind.WasmModule;
 import build.NativeArtifactDemand.NativeArtifactDemand;
-import project.ResolvedPackage;
 import project.ResolvedProject;
 
 /** Pure entry points for producing the first logical build graphs. */
@@ -128,7 +127,7 @@ class BuildPlanner {
 				libraryRequirements.push(statik);
 		}
 		libraryRequirements = libraryRequirements.concat(ffiNativeLibraries);
-		var kind = project.manifest.target == "wasm32" ? WasmModule : HashLinkModule;
+		var kind = target.isWasm() ? WasmModule : HashLinkModule;
 		if (intent == Check)
 			kind = Diagnostics;
 		var moduleId = new ArtifactId(project.rootPackage.name, kind, target);

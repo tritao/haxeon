@@ -1,6 +1,10 @@
 package tools;
 
+import build.BuildEnvironment;
+import build.BuildEnvironment.BuildProfile;
+import build.HaxeonProjectBuild;
 import build.Target;
+import build.TargetLayout;
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.hl.HlWriter;
@@ -13,14 +17,12 @@ import compiler.tools.SourceManifestLoader;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import haxe.io.Path;
-import project.PackageLockfile;
-import project.PackageResolver;
-import project.ProjectSourceAcquirer;
-import project.SourceCache;
+import project.CompilerInputs;
+import project.ProjectDiscovery;
 import sys.FileSystem;
 import sys.io.File;
 
-/** What an Android build compiles: the sources, their roots and the entry module. */
+/** What an Android build compiles: the sources, their roots, the entry module and the defines, `android` among them. */
 private typedef AndroidSources = {
 	final sources:Array<String>;
 	final roots:Array<String>;
@@ -71,42 +73,37 @@ class AndroidBuild {
 			sources: [source],
 			roots: [Path.directory(source)],
 			entry: ModulePath.fromFile(Path.withoutDirectory(source)),
-			defines: [],
+			defines: ["android"],
 			packageRoots: []
 		};
 	}
 
+	/**
+	 * A project's sources as every build of it reads them (`CompilerInputs`): resolved with its lockfile, its dependencies' roots
+	 * scoped to their packages, and the android define.
+	 */
 	static function projectSources(projectPath:String):AndroidSources {
-		var absoluteProjectPath = FileSystem.fullPath(projectPath),
-			lockPath = Path.join([Path.directory(absoluteProjectPath), "haxeon.lock"]),
-			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null,
-			project = new PackageResolver(new ProjectSourceAcquirer(SourceCache.root())).resolve(absoluteProjectPath,
-				lockfile, lockfile != null, Target.parse("android")),
-			packageRoots:Array<PackageSourceRoot> = [];
-		for (resolvedPackage in project.packages.packages) {
-			var shouldScopeRoot = resolvedPackage.name != project.rootPackage.name
-				|| project.manifest.entry == resolvedPackage.name
-				|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + ".");
-			if (shouldScopeRoot)
-				for (sourceRoot in resolvedPackage.sourceRoots)
-					packageRoots.push({packageName: resolvedPackage.name, path: sourceRoot});
-		}
-		return {
-			sources: [for (resolvedPackage in project.packages.packages) for (source in resolvedPackage.sources)
-				source],
-			roots: [for (resolvedPackage in project.packages.packages) for (root in resolvedPackage.sourceRoots) root],
-			entry: project.manifest.entry,
-			defines: project.manifest.defines.copy(),
-			packageRoots: packageRoots
-		};
+		var target = Target.parse("android"),
+			project = ProjectDiscovery.resolve(FileSystem.fullPath(projectPath), target),
+			inputs = CompilerInputs.of(project,
+				new TargetLayout(new BuildEnvironment(project.root, HaxeonProjectBuild.outputDirectory(project, false),
+				BuildProfile.Debug, target))),
+			entry = inputs.entry;
+		if (entry == null)
+			throw 'Root package "${project.rootPackage.name}" must declare an "entry" for an Android build';
+		return {sources: inputs.sources,
+			roots: inputs.roots,
+			entry: entry,
+			defines: inputs.defines,
+			packageRoots: [for (root in inputs.packageRoots) {
+				packageName:root.packageName, path:root.path
+			}]};
 	}
 
 	/** A compiler set up the same way for a build and for an edit, from `baseline` when there is one. */
 	static function prepare(sources:AndroidSources, ?baseline:Bytes):Compiler {
 		var compiler = new Compiler(baseline, CompilerIntrinsics.configuration()),
-			defines = CompilerDriver.targetDefines("hl");
-		defines.push("android");
-		defines = defines.concat(sources.defines);
+			defines = CompilerDriver.targetDefines("hl").concat(sources.defines);
 		compiler.configure("cli:android:" + defines.join("|"), "cli:android", defines);
 		compiler.enablePublicationTracking();
 		compiler.addStandardLibrarySourceRoot(FileSystem.fullPath("stdlib"));

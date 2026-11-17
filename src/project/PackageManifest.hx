@@ -281,12 +281,34 @@ class PackageManifest {
 				throw '$path "android" must be an object';
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
+			if (!isAndroidApplicationId(androidApplicationId))
+				throw '$path "android.applicationId" must be a dotted Java package name, such as "org.example.game"';
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
 			outputDir, dependencies, native, ffi, androidApplicationId, androidAppLabel, compatibility, inlineEnabled,
 			parseInstrument(raw, path));
 	}
+
+	/** A Java package name with at least two parts, as Android requires of an application ID. */
+	static function isAndroidApplicationId(value:String):Bool {
+		var parts = value.split(".");
+		if (parts.length < 2)
+			return false;
+		for (part in parts) {
+			if (part.length == 0 || !isAsciiLetter(part.charCodeAt(0)) && part.charCodeAt(0) != 95)
+				return false;
+			for (index in 1...part.length) {
+				var code = part.charCodeAt(index);
+				if (!isAsciiLetter(code) && (code < 48 || code > 57) && code != 95)
+					return false;
+			}
+		}
+		return true;
+	}
+
+	static function isAsciiLetter(code:Int):Bool
+		return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
 
 	static function parseInstrument(raw:Dynamic, path:String):Null<InstrumentManifest> {
 		var data:Dynamic = Reflect.field(raw, "instrument");

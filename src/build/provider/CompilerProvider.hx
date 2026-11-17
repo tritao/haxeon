@@ -110,16 +110,20 @@ class CompilerProvider {
 				environment) : CompilerClient.compile(command, compilerSourcePath, arguments, context.compilerHome,
 				context.environment.buildRoot, project.root, context.session);
 		};
-		return new ExecutionAction(actionId, dependencies, inputs, [
+		var outputs = [
 			output,
 			output + ".inputs.json",
 			output + ".functions",
-			output + ".hli",
-			output + ".live.json",
 			output + ".build-id",
 			output + ".descriptors",
 			output + ".descriptors.json"
-		],
+		];
+		// A HashLink module also has its runtime identity and live description; a Wasm module has neither.
+		if (compilerInputs.target == "hl") {
+			outputs.push(output + ".hli");
+			outputs.push(output + ".live.json");
+		}
+		return new ExecutionAction(actionId, dependencies, inputs, outputs,
 			'Compile Haxe package "${project.rootPackage.name}" -> $output',
 			Compiler(command, argumentsWithLauncher, context.compilerHome, environment, invoke), false);
 	}
