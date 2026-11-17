@@ -93,6 +93,14 @@ enum TypedExpressionKind {
 		defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>, isDynamic:Bool);
 	TArrayLiteral(values:Array<TypedExpression>);
+
+	/**
+	 * The subject of `switch [a, b]`, which Haxe matches element by element without building the array: each element keeps
+	 * its own type, and the cases are tuple patterns over them. It is no value, so its type is Void and only a switch
+	 * lowers it.
+	 */
+	TTuple(values:Array<TypedExpression>);
+
 	TMapLiteral(entries:Array<TypedMapEntry>);
 	TArrayComprehension(keyName:String, valueName:Null<String>, iterable:TypedExpression,
 		condition:Null<TypedExpression>, value:TypedExpression,

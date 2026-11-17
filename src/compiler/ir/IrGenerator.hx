@@ -1051,9 +1051,8 @@ class IrGenerator {
 				case TSwitch(expression, cases, defaultBranch, hasDefault, span):
 					var switchName = '$' + 'switch:${span.start}',
 						switchType = lowerType(expression.type),
+						tuple = storeSwitchSubject(switchName, expression, builder, localTypes),
 						exits:Array<CfgBlock> = [];
-					localTypes.set(switchName, switchType);
-					builder.store(switchName, lowerExpression(expression, builder, localTypes));
 					var switchArms:Array<SwitchArm> = [
 						for (arm in cases)
 							({
@@ -1104,10 +1103,15 @@ class IrGenerator {
 								bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
 								nextBlock = builder.createBlock();
 							if (switchCase.arrayPattern != null)
-								lowerSwitchArrayPattern(switchCase.arrayPattern, switchName, switchType, caseIndex,
+								lowerSwitchArrayPattern(switchCase.arrayPattern, switchName, switchType, tuple,
+									caseIndex,
 									checkBlock, matchBlock, nextBlock, builder,
 									localTypes);
-							else {
+							else if (tuple) {
+								// `case _`, the one other tuple case.
+								builder.select(checkBlock);
+								builder.jump(matchBlock);
+							} else {
 								builder.select(checkBlock);
 								var subjectValue = builder.load(switchName, switchType);
 								if (isNullableEnumType(expression.type) && switchCase.constructorIndex >= 0) {
@@ -1167,7 +1171,7 @@ class IrGenerator {
 								builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
 							}
 							if (switchCase.arrayPattern != null)
-								lowerSwitchArrayPatternBindings(switchCase.arrayPattern, switchName, switchType,
+								lowerSwitchArrayPatternBindings(switchCase.arrayPattern, switchName, switchType, tuple,
 									switchCase.span, builder, localTypes);
 							else {
 								if (switchCase.constructorIndex >= 0)
@@ -1191,7 +1195,8 @@ class IrGenerator {
 							checkBlock = nextBlock;
 						}
 						builder.select(checkBlock);
-						if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
+						// The arms of a tuple switch without a default cover every tuple, as typing checked.
+						if (!hasDefault && (isEnumType(expression.type) || matchesEverything || tuple))
 							builder.markUnreachable();
 						else
 							lowerStatements(defaultBranch, builder, localTypes,
@@ -2730,9 +2735,8 @@ class IrGenerator {
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
 					subjectType = lowerType(subject.type),
 					resultType = lowerType(expression.type);
-				localTypes.set(subjectName, subjectType);
 				localTypes.set(resultName, resultType);
-				builder.store(subjectName, lowerExpression(subject, builder, localTypes));
+				var tuple = storeSwitchSubject(subjectName, subject, builder, localTypes);
 				var switchArms:Array<SwitchArm> = [
 					for (arm in cases)
 						({
@@ -2802,13 +2806,18 @@ class IrGenerator {
 								&& switchCase.guard == null,
 							bodyBlock = bodyBlocks[caseIndex],
 							nextBlock = caseIndex + 1 < cases.length
-								? checkBlocks[caseIndex + 1] : (defaultExpression == null ? afterBlock : fallbackBlock);
+								? checkBlocks[caseIndex + 1]
+								: (defaultExpression == null && !tuple ? afterBlock : fallbackBlock);
 						var matchBlock = matchBlocks[caseIndex];
 						if (switchCase.arrayPattern != null)
-							lowerSwitchArrayPattern(switchCase.arrayPattern, subjectName, subjectType, caseIndex,
+							lowerSwitchArrayPattern(switchCase.arrayPattern, subjectName, subjectType, tuple, caseIndex,
 								checkBlocks[caseIndex], matchBlocks[caseIndex],
 								nextBlock, builder, localTypes);
-						else {
+						else if (tuple) {
+							// `case _`, the one other tuple case.
+							builder.select(checkBlocks[caseIndex]);
+							builder.jump(matchBlock);
+						} else {
 							builder.select(checkBlocks[caseIndex]);
 							var subjectValue = builder.load(subjectName, subjectType);
 							if (isNullableEnumType(subject.type) && switchCase.constructorIndex >= 0
@@ -2868,7 +2877,7 @@ class IrGenerator {
 								localTypes);
 						}
 						if (switchCase.arrayPattern != null)
-							lowerSwitchArrayPatternBindings(switchCase.arrayPattern, subjectName, subjectType,
+							lowerSwitchArrayPatternBindings(switchCase.arrayPattern, subjectName, subjectType, tuple,
 								switchCase.span, builder, localTypes);
 						else {
 							for (binding in switchCase.bindings) {
@@ -2892,7 +2901,11 @@ class IrGenerator {
 						}
 					}
 					var fallback = defaultExpression;
-					if (fallback != null) {
+					if (fallback == null && tuple) {
+						// The arms cover every tuple, as typing checked; only an unmatched null element gets here.
+						builder.select(fallbackBlock);
+						builder.markUnreachable();
+					} else if (fallback != null) {
 						builder.select(fallbackBlock);
 						var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
 							resultType);
@@ -3000,6 +3013,8 @@ class IrGenerator {
 							[builder.toDyn(builder.load(objectName, objectType))], Void);
 					builder.load(objectName, objectType);
 				}
+			case TTuple(_):
+				throw 'A tuple is only a switch subject, at ${expression.span.file.path}:${expression.span.start}';
 			case TArrayLiteral(values):
 				var element = switch expression.type {
 					case TArray(element): element;
@@ -3779,13 +3794,17 @@ class IrGenerator {
 	}
 
 	function lowerSwitchArrayPattern(pattern:TypedSwitchArrayPattern, subjectName:String, subjectType:IrType,
-			caseIndex:Int, checkBlock:CfgBlock,
+			tuple:Bool, caseIndex:Int, checkBlock:CfgBlock,
 			matchBlock:CfgBlock, nextBlock:CfgBlock, builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		builder.select(checkBlock);
-		var array = builder.load(subjectName, subjectType),
-			firstElement = pattern.elements.length == 0 ? matchBlock : builder.createBlock();
-		builder.branch(builder.equal(builder.arraySize(array), builder.constInt(pattern.elements.length)), firstElement,
-			nextBlock);
+		var firstElement = pattern.elements.length == 0 ? matchBlock : builder.createBlock();
+		// A tuple pattern has the subject's length by typing, so only an array's length is tested.
+		if (tuple)
+			builder.jump(firstElement);
+		else
+			builder.branch(builder.equal(builder.arraySize(builder.load(subjectName, subjectType)),
+				builder.constInt(pattern.elements.length)), firstElement,
+				nextBlock);
 		var elementCheck = firstElement;
 		for (index in 0...pattern.elements.length) {
 			var elementPattern = pattern.elements[index],
@@ -3795,8 +3814,7 @@ class IrGenerator {
 				builder.jump(successBlock);
 			else {
 				var elementType = lowerType(elementPattern.type),
-					elementValue = elementGet(builder, builder.load(subjectName, subjectType), builder.constInt(index),
-						elementType);
+					elementValue = switchElement(builder, subjectName, subjectType, tuple, index, elementType);
 				if (elementPattern.constructorIndex >= 0) {
 					// Include the subject local in the compiler-generated name.  Case and
 					// element indices restart for every switch, so using only those indices
@@ -3849,12 +3867,42 @@ class IrGenerator {
 		}
 	}
 
+	/**
+	 * Stores a switch subject in `name` and says whether it is a tuple. A tuple subject (`switch [a, b]`) is never built:
+	 * its elements are evaluated in order, each into its own local (`tupleElementName`).
+	 */
+	function storeSwitchSubject(name:String, subject:TypedExpression, builder:CfgBuilder,
+			localTypes:Map<String, IrType>):Bool {
+		switch subject.expression {
+			case TTuple(values):
+				for (index in 0...values.length) {
+					var elementName = tupleElementName(name, index);
+					localTypes.set(elementName, lowerType(values[index].type));
+					builder.store(elementName, lowerExpression(values[index], builder, localTypes));
+				}
+				return true;
+			default:
+				localTypes.set(name, lowerType(subject.type));
+				builder.store(name, lowerExpression(subject, builder, localTypes));
+				return false;
+		}
+	}
+
+	static function tupleElementName(subjectName:String, index:Int):String
+		return '$subjectName:$index';
+
+	/** Element `index` of an array pattern's subject: read from the array, or from its local for a tuple. */
+	function switchElement(builder:CfgBuilder, subjectName:String, subjectType:IrType, tuple:Bool, index:Int,
+			type:IrType):CfgValue
+		return tuple ? builder.load(tupleElementName(subjectName, index), type) : elementGet(builder,
+			builder.load(subjectName, subjectType), builder.constInt(index), type);
+
 	function lowerSwitchArrayPatternBindings(pattern:TypedSwitchArrayPattern, subjectName:String, subjectType:IrType,
-			caseSpan:compiler.core.Source.SourceSpan,
+			tuple:Bool, caseSpan:compiler.core.Source.SourceSpan,
 			builder:CfgBuilder, localTypes:Map<String, IrType>):Void {
 		for (index in 0...pattern.elements.length) {
 			var elementPattern = pattern.elements[index],
-				elementValue = elementGet(builder, builder.load(subjectName, subjectType), builder.constInt(index),
+				elementValue = switchElement(builder, subjectName, subjectType, tuple, index,
 					lowerType(elementPattern.type));
 			if (elementPattern.subjectBinding != null) {
 				var name = elementPattern.subjectBinding;

@@ -1011,7 +1011,7 @@ class SemanticIndex {
 				indexExpression(fn, callee, resolve, resolveEnumCase);
 				for (argument in arguments)
 					indexExpression(fn, argument, resolve, resolveEnumCase);
-			case TArrayLiteral(values):
+			case TArrayLiteral(values), TTuple(values):
 				for (value in values)
 					indexExpression(fn, value, resolve, resolveEnumCase);
 			default:

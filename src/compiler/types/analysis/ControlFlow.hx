@@ -76,8 +76,10 @@ class ControlFlow {
 					].indexOf(false) < 0)
 						return true;
 				case TSwitch(expression, cases, defaultBranch, hasDefault, _):
+					// A tuple switch without a default was typed only once its arms cover every tuple.
 					var covered = hasDefault ? alwaysTerminates(defaultBranch, exhaustive, loopExit,
-						complete) : (complete && hasCatchAllArm(cases)) || exhaustive(expression.type, cases);
+						complete) : (complete && hasCatchAllArm(cases)) || isTuple(expression)
+						|| exhaustive(expression.type, cases);
 					if (covered && [
 						for (switchCase in cases)
 							alwaysTerminates(switchCase.statements, exhaustive, loopExit, complete)
@@ -95,6 +97,12 @@ class ControlFlow {
 				return true;
 		return false;
 	}
+
+	static function isTuple(expression:TypedExpression):Bool
+		return switch expression.expression {
+			case TTuple(_): true;
+			default: false;
+		};
 
 	static function isTrueLiteral(expression:TypedExpression):Bool
 		return switch expression.expression {

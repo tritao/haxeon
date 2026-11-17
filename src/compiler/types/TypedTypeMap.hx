@@ -192,6 +192,7 @@ class TypedTypeMap {
 						name:field.name, value:expression(field.value)
 					}], isDynamic);
 			case TArrayLiteral(values): TArrayLiteral(expressions(values));
+			case TTuple(values): TTuple(expressions(values));
 			case TMapLiteral(entries): TMapLiteral([for (entry in entries) {
 					key:expression(entry.key), value:expression(entry.value)
 				}]);

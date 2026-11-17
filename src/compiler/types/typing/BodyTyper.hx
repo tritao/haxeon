@@ -927,72 +927,104 @@ class BodyTyper implements BodyTyping {
 
 	function typeSwitchArrayPattern(value:AstExpression, expected:CompilerType,
 			scope:Scope):Null<TypedSwitchArrayPattern> {
-		return switch value {
-			case ArrayLiteral(values, _):
-				var elementType = switch expected {
-					case TArray(element): element;
-					default: return null;
-				};
-				var elements:Array<TypedSwitchArrayElement> = [];
-				for (pattern in values) {
-					var capture = switchCapture(pattern, elementType, scope),
-						elementPattern = capture == null ? pattern : capture.pattern,
-						isWildcard = isSwitchCatchAll(elementPattern),
-						subjectBinding = capture != null ? capture.name : isWildcard
-							? null : switchSubjectBinding(elementPattern, elementType, scope),
-						isCatchAll = isWildcard || capture == null && subjectBinding != null,
-						enumPattern = isCatchAll ? null : typeEnumPattern(elementPattern, elementType, scope),
-						typedValue:Null<TypedExpression> = null,
-						equalityFunction:Null<String> = null,
-						constructorIndex = -1,
-						bindings:Array<TypedSwitchBinding> = [],
-						predicates:Array<TypedSwitchPredicate> = [];
-					if (enumPattern != null) {
-						typedValue = enumPattern.value;
-						constructorIndex = enumPattern.index;
-						bindings = enumPattern.bindings;
-						predicates = enumPattern.predicates;
-					} else if (!isCatchAll) {
-						typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType,
-							"array switch pattern", "E1019");
-						var literal = enumLiteral(typedValue);
-						if (literal != null)
-							constructorIndex = literal.index;
-						if (literal == null && !AstPredicates.isNullExpression(elementPattern)) {
-							var valueType = switch elementType {
-								case TNullable(inner): inner;
-								default: elementType;
-							};
-							var needsConformance = session.relations.isStruct(valueType) || (switch valueType {
-								case TArray(_) | TAnonymous(_, _): true;
-								default: false;
-							});
-							if (needsConformance && !DeclaredConformance.supportsEquality(session, elementType))
-								fail("E1025",
-									'Type "${compiler.semantic.SemanticSignature.display(elementType)}" does not conform to Equatable',
-									typedValue.span);
-							if (DeclaredConformance.usesEquality(session, elementType)) {
-								ValueEqualityGenerator.request(session, elementType, session.currentContext.name,
-									typedValue.span);
-								equalityFunction = ValueEqualityGenerator.equalsName(elementType);
-							}
-						}
-					}
-					elements.push({
-						type: elementType,
-						value: typedValue,
-						equalityFunction: equalityFunction,
-						subjectBinding: subjectBinding,
-						isCatchAll: isCatchAll,
-						constructorIndex: constructorIndex,
-						bindings: bindings,
-						predicates: predicates
-					});
-				}
-				{
-					elements:elements
-				};
+		return switch [value, expected] {
+			case [ArrayLiteral(values, _), TArray(element)]: typeArrayPatternElements(values,
+				[for (_ in values) element],
+				scope);
 			default: null;
+		};
+	}
+
+	/** The element patterns of an array or tuple pattern, the one at each index typed as `elementTypes` gives. */
+	function typeArrayPatternElements(values:Array<AstExpression>, elementTypes:Array<CompilerType>,
+			scope:Scope):TypedSwitchArrayPattern {
+		var elements:Array<TypedSwitchArrayElement> = [];
+		for (index in 0...values.length) {
+			var pattern = values[index], elementType = elementTypes[index];
+			var capture = switchCapture(pattern, elementType, scope),
+				elementPattern = capture == null ? pattern : capture.pattern,
+				isWildcard = isSwitchCatchAll(elementPattern),
+				subjectBinding = capture != null ? capture.name : isWildcard
+					? null : switchSubjectBinding(elementPattern, elementType, scope),
+				isCatchAll = isWildcard || capture == null && subjectBinding != null,
+				enumPattern = isCatchAll ? null : typeEnumPattern(elementPattern, elementType, scope),
+				typedValue:Null<TypedExpression> = null,
+				equalityFunction:Null<String> = null,
+				constructorIndex = -1,
+				bindings:Array<TypedSwitchBinding> = [],
+				predicates:Array<TypedSwitchPredicate> = [];
+			if (enumPattern != null) {
+				typedValue = enumPattern.value;
+				constructorIndex = enumPattern.index;
+				bindings = enumPattern.bindings;
+				predicates = enumPattern.predicates;
+			} else if (!isCatchAll) {
+				typedValue = coerce(typeExpression(elementPattern, scope, elementType), elementType,
+					"array switch pattern", "E1019");
+				var literal = enumLiteral(typedValue);
+				if (literal != null)
+					constructorIndex = literal.index;
+				if (literal == null && !AstPredicates.isNullExpression(elementPattern)) {
+					var valueType = switch elementType {
+						case TNullable(inner): inner;
+						default: elementType;
+					};
+					var needsConformance = session.relations.isStruct(valueType) || (switch valueType {
+						case TArray(_) | TAnonymous(_, _): true;
+						default: false;
+					});
+					if (needsConformance && !DeclaredConformance.supportsEquality(session, elementType))
+						fail("E1025",
+							'Type "${compiler.semantic.SemanticSignature.display(elementType)}" does not conform to Equatable',
+							typedValue.span);
+					if (DeclaredConformance.usesEquality(session, elementType)) {
+						ValueEqualityGenerator.request(session, elementType, session.currentContext.name,
+							typedValue.span);
+						equalityFunction = ValueEqualityGenerator.equalsName(elementType);
+					}
+				}
+			}
+			elements.push({
+				type: elementType,
+				value: typedValue,
+				equalityFunction: equalityFunction,
+				subjectBinding: subjectBinding,
+				isCatchAll: isCatchAll,
+				constructorIndex: constructorIndex,
+				bindings: bindings,
+				predicates: predicates
+			});
+		}
+		return {elements: elements};
+	}
+
+	/**
+	 * Classifies one case of a tuple switch, `switch [a, b]`: as in Haxe, a case is `_` or an array pattern with one element
+	 * per subject element, each typed as its own element. The tuple itself is no value, so no case can bind it.
+	 */
+	public function switchTuplePattern(value:AstExpression, elementTypes:Array<CompilerType>, caseSpan:SourceSpan,
+			scope:Scope):SwitchTypingRules.SwitchCasePattern {
+		var arrayPattern:Null<TypedSwitchArrayPattern> = null;
+		switch value {
+			case Variable("_", _):
+			case ArrayLiteral(values, span):
+				if (values.length != elementTypes.length)
+					fail("E1019",
+						'Tuple pattern has ${values.length} elements, but the switch subject has ${elementTypes.length}',
+						span);
+				arrayPattern = typeArrayPatternElements(values, elementTypes, scope);
+			case Variable(_, span), Capture(_, _, span):
+				fail("E1019", "Cannot bind matched tuple to variable, use _ instead", span);
+			default:
+				fail("E1019", 'Tuple switch case must be _ or an array pattern of ${elementTypes.length} elements',
+					caseSpan);
+		}
+		return {
+			value: value,
+			subjectBinding: null,
+			isCatchAll: arrayPattern == null,
+			arrayPattern: arrayPattern,
+			enumPattern: null
 		};
 	}
 

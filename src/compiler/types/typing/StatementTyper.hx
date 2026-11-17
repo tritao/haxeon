@@ -799,9 +799,12 @@ class StatementTyper {
 	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>,
 			hasDefault:Bool, span:SourceSpan,
 			scope:Scope, result:Null<CompilerType>):TypedStatement {
-		var typedExpression = bodyTyper.typeExpression(expression, scope),
+		var tupleElements = TupleSwitch.subjectElements(expression),
+			typedExpression = tupleElements == null ? bodyTyper.typeExpression(expression,
+				scope) : TupleSwitch.typeSubject(bodyTyper, tupleElements, span, scope),
+			tupleTypes = TupleSwitch.elementTypes(typedExpression),
 			constantType = bodyTyper.switchConstantType(typedExpression.type);
-		if (constantType == null && !isArraySwitchable(typedExpression.type)
+		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedExpression.type)
 			&& !BodyTyper.isEnum(typedExpression.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
 		var typedCases:Array<TypedSwitchCase> = [],
@@ -809,7 +812,8 @@ class StatementTyper {
 			seenCases:Map<String, Bool> = [];
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				classified = bodyTyper.switchCasePattern(switchCase.value, typedExpression.type, caseScope),
+				classified = tupleTypes == null ? bodyTyper.switchCasePattern(switchCase.value, typedExpression.type,
+					caseScope) : bodyTyper.switchTuplePattern(switchCase.value, tupleTypes, switchCase.span, caseScope),
 				subjectBinding = classified.subjectBinding,
 				isCatchAll = classified.isCatchAll,
 				arrayPattern = classified.arrayPattern,
@@ -860,6 +864,14 @@ class StatementTyper {
 				span: switchCase.span
 			});
 		}
+		if (tupleTypes != null && !hasDefault) {
+			var unmatched = TupleSwitch.unmatched(session, bodyTyper, tupleTypes, [for (typedCase in typedCases)
+				{
+					arrayPattern:typedCase.arrayPattern, isCatchAll:typedCase.isCatchAll, guard:typedCase.guard
+				}]);
+			if (unmatched != null)
+				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
+		}
 		if (BodyTyper.isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 			var enumName = Std.string(BodyTyper.enumName(typedExpression.type));
 			var missing:Array<String> = [],
@@ -909,7 +921,7 @@ class StatementTyper {
 		if (hasDefault) {
 			if (!alwaysExits(typedDefault))
 				continuing.push(defaultScope);
-		} else if (!bodyTyper.exhaustiveEnum(typedExpression.type, typedCases))
+		} else if (tupleTypes == null && !bodyTyper.exhaustiveEnum(typedExpression.type, typedCases))
 			continuing.push(scope);
 		scope.join(continuing);
 		return TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span);

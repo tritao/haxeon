@@ -1606,9 +1606,13 @@ class ExpressionTyper {
 	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		var typedSubject = bodyTyper.typeExpression(expression, scope),
+		var tupleElements = TupleSwitch.subjectElements(expression),
+			typedSubject = tupleElements == null ? bodyTyper.typeExpression(expression,
+				scope) : TupleSwitch.typeSubject(bodyTyper, tupleElements, span, scope),
+			tupleTypes = TupleSwitch.elementTypes(typedSubject),
 			constantType = bodyTyper.switchConstantType(typedSubject.type);
-		if (constantType == null && !isArraySwitchable(typedSubject.type) && !BodyTyper.isEnum(typedSubject.type))
+		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedSubject.type)
+			&& !BodyTyper.isEnum(typedSubject.type))
 			fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
 			deferredCaseResults:Map<Int, {expression:AstExpression, scope:Scope}> = [],
@@ -1635,7 +1639,8 @@ class ExpressionTyper {
 			resultType = typedDefault.type;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				classified = bodyTyper.switchCasePattern(switchCase.value, typedSubject.type, caseScope),
+				classified = tupleTypes == null ? bodyTyper.switchCasePattern(switchCase.value, typedSubject.type,
+					caseScope) : bodyTyper.switchTuplePattern(switchCase.value, tupleTypes, switchCase.span, caseScope),
 				subjectBinding = classified.subjectBinding,
 				isCatchAll = classified.isCatchAll,
 				arrayPattern = classified.arrayPattern,
@@ -1738,7 +1743,15 @@ class ExpressionTyper {
 			typedDefault = exhaustiveEnumAbstractDefault(typedSubject.type, seenCases, span);
 		if (typedDefault != null)
 			typedDefault = branchResult(typedDefault, resultType, "switch branch");
-		if (typedDefault == null && !BodyTyper.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
+		if (tupleTypes != null) {
+			var unmatched = typedDefault != null ? null : TupleSwitch.unmatched(session, bodyTyper, tupleTypes,
+				[for (typedCase in typedCases)
+				{
+					arrayPattern:typedCase.arrayPattern, isCatchAll:typedCase.isCatchAll, guard:typedCase.guard
+				}]);
+			if (unmatched != null)
+				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
+		} else if (typedDefault == null && !BodyTyper.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
 			fail("E1021", "Switch expression requires a default branch", span);
 		if (BodyTyper.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(BodyTyper.enumName(typedSubject.type)),

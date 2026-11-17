@@ -81,6 +81,8 @@ interface BodyTyping {
 
 	// Switch rules, shared by statement switches and switch expressions.
 	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchCasePattern;
+	function switchTuplePattern(value:AstExpression, elementTypes:Array<CompilerType>, caseSpan:SourceSpan,
+			scope:Scope):SwitchCasePattern;
 
 	/** The type constant cases compare as (the subject's, or the value type of a nullable one), or null when none apply. */
 	function switchConstantType(subject:CompilerType):Null<CompilerType>;
