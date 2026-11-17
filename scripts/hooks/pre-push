@@ -2,7 +2,8 @@
 # Refuses a push whose commits leave a Haxe file unformatted or its imports out of order, which CI's format check would
 # fail. Enable it in a checkout with `git config core.hooksPath scripts/hooks`; `git push --no-verify` skips it.
 #
-# It checks the files the pushed commits change, as they are in this working tree: run it from the tree you push.
+# It checks the files the pushed commits change, as they are in this working tree: run it from the tree you push. A push that
+# changes no Haxe file is not checked, nor one from a tree without a native build (a scratch worktree), which CI still checks.
 set -eu
 root=$(git rev-parse --show-toplevel)
 zero=0000000000000000000000000000000000000000
@@ -13,6 +14,11 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 		base=$(git merge-base "$local_sha" origin/main 2>/dev/null) || continue
 	else
 		base=$remote_sha
+	fi
+	[ -n "$(git diff --name-only --diff-filter=d "$base..$local_sha" -- '*.hx')" ] || continue
+	if [ ! -f "$(dirname "$("$root/scripts/hashlink-path.sh")")/CMakeCache.txt" ]; then
+		echo "pre-push: no native build in this tree, so the format of the pushed Haxe files is not checked" >&2
+		continue
 	fi
 	"$root/scripts/format.sh" --check --range "$base..$local_sha" || status=1
 done
