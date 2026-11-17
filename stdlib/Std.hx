@@ -161,8 +161,9 @@ extern function stdIntFloat(value:Float):Int;
 extern function stdRandom(limit:Int):Int;
 #else
 /**
- * Wasm draws from a xorshift32 generator with a fixed seed, so every session sees the same
- * sequence, as HashLink's unseeded C `rand()` does. It is not suitable for anything secret.
+ * Wasm draws from a xorshift32 generator with a fixed seed, so every session sees the same sequence. HashLink seeds its
+ * generator from the time and the process id, as Haxe does; seeding here needs a host clock that every Wasm compile has,
+ * and HaxeonHost is only registered for full Wasm builds. It is not suitable for anything secret.
  */
 function stdRandom(limit:Int):Int {
 	if (limit <= 0)

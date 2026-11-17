@@ -347,7 +347,20 @@ HL_PRIM int HL_NAME(__std_int_f64)( double value ) { return (int)value; }
 HL_PRIM int HL_NAME(__std_int_dynamic)( vdynamic *value ) {
 	return value == NULL ? 0 : hl_dyn_casti(&value, &hlt_dyn, &hlt_i32);
 }
-HL_PRIM int HL_NAME(__std_random)( int limit ) { return limit <= 0 ? 0 : rand() % limit; }
+// Std.random as Haxe's HashLink standard library does it: the VM's generator, seeded from the time and the process id
+// (hl_rnd_init_system) when first used. The C library's rand() was never seeded, so every run drew the same numbers.
+typedef struct _rnd rnd;
+HL_API rnd *hl_rnd_init_system( void );
+HL_API unsigned int hl_rnd_int( rnd *r );
+static rnd *std_random_state;
+HL_PRIM int HL_NAME(__std_random)( int limit ) {
+	if( limit <= 0 ) return 0;
+	if( std_random_state == NULL ) {
+		hl_add_root(&std_random_state);
+		std_random_state = hl_rnd_init_system();
+	}
+	return (int)((hl_rnd_int(std_random_state) & 0x3FFFFFFF) % (unsigned int)limit);
+}
 
 HL_PRIM vstring *HL_NAME(__std_string)( vdynamic *value ) {
 	if( realtime_is_string(value) ) return (vstring *)value;
