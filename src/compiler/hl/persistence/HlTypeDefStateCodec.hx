@@ -62,6 +62,10 @@ class HlTypeDefStateCodec {
 					output.writeByte(2);
 					writeInts(output, arguments);
 					output.writeInt32(result);
+				case Method(arguments, result):
+					output.writeByte(9);
+					writeInts(output, arguments);
+					output.writeInt32(result);
 				case Object(name, base, global, fields, methods, bindings):
 					output.writeByte(3);
 					output.writeInt32(name);
@@ -168,6 +172,7 @@ class HlTypeDefStateCodec {
 					Enum(name, global, constructors);
 				case 6: Parameterized(cast input.readByte(), input.readInt32());
 				case 8: EnumTag(input.readInt32(), readInts(input));
+				case 9: Method(readInts(input), input.readInt32());
 				default: throw "Unknown HashLink type state tag";
 			});
 		return result;
@@ -199,7 +204,7 @@ class HlTypeDefStateCodec {
 					validateTypeReference(parameter, types.length);
 				case Abstract(name):
 					validateStringReference(name, strings);
-				case Function(arguments, result):
+				case Function(arguments, result), Method(arguments, result):
 					for (argument in arguments)
 						validateTypeReference(argument, types.length);
 					validateTypeReference(result, types.length);

@@ -460,8 +460,8 @@ class HlPatchWriter {
 				case Abstract(name):
 					h = hashBytes(intBytes(HashLinkType.Abstract), h);
 					h = hashBytes(intBytes(name), h);
-				case Function(args, result):
-					h = hashBytes(intBytes(HashLinkType.Fun), h);
+				case Function(args, result), Method(args, result):
+					h = hashBytes(intBytes(values[i].match(Method(_, _)) ? HashLinkType.Method : HashLinkType.Fun), h);
 					h = hashBytes(intBytes(args.length), h);
 					for (a in args)
 						h = hashBytes(intBytes(a), h);
@@ -549,8 +549,8 @@ class HlPatchWriter {
 			case Abstract(name):
 				out.writeByte(HashLinkType.Abstract);
 				writeSignedIndex(out, name);
-			case Function(args, result):
-				out.writeByte(HashLinkType.Fun);
+			case Function(args, result), Method(args, result):
+				out.writeByte(type.match(Method(_, _)) ? HashLinkType.Method : HashLinkType.Fun);
 				out.writeByte(args.length);
 				for (a in args)
 					writeSignedIndex(out, a);

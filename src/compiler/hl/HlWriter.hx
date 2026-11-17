@@ -533,10 +533,10 @@ class HlWriter {
 			case Abstract(name):
 				output.writeByte(HlType.Abstract);
 				writeIndex(name);
-			case Function(arguments, result):
+			case Function(arguments, result), Method(arguments, result):
 				if (arguments.length > 255)
 					throw "HL function types support at most 255 arguments";
-				output.writeByte(HlType.Fun);
+				output.writeByte(type.match(Method(_, _)) ? HlType.Method : HlType.Fun);
 				output.writeByte(arguments.length);
 				for (argument in arguments)
 					writeIndex(argument);

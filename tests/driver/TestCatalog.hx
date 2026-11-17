@@ -316,6 +316,8 @@ class TestCatalog {
 		"InlinerCycleMain",
 		"HlWriterCacheMain",
 		"HlTrapRegionMain",
+		"HlOpcodeTableMain",
+		"HlModuleRoundTripMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"IdentityPathMain",

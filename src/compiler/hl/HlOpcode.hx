@@ -83,4 +83,29 @@ enum abstract HlOpcode(Int) from Int to Int {
 	var CleanupTrap = 102;
 	var EndCleanupTrap = 103;
 	var ToVirtual = 65;
+
+	// Opcodes Haxeon does not emit; HlModuleReader decodes them in modules other compilers wrote.
+	var Bytes = 4;
+	var UDiv = 11;
+	var UMod = 13;
+	var Neg = 20;
+	var Not = 21;
+	var Incr = 22;
+	var Decr = 23;
+	var Call3 = 27;
+	var Call4 = 28;
+	var VirtualClosure = 35;
+	var GetThis = 40;
+	var SetThis = 41;
+	var DynGet = 42;
+	var DynSet = 43;
+	var ToUFloat = 61;
+	var GetType = 85;
+	var GetTID = 86;
+	var SetEnumField = 94;
+	var Assert = 95;
+	var Nop = 98;
+	var Prefetch = 99;
+	var Asm = 100;
+	var Catch = 101;
 }

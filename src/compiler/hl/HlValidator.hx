@@ -43,7 +43,7 @@ class HlValidator {
 						for (param in constructor.params)
 							requireType(code, param, "enum constructor parameter");
 					}
-				case Function(arguments, result):
+				case Function(arguments, result), Method(arguments, result):
 					for (argument in arguments)
 						requireType(code, argument, "function type argument");
 					requireType(code, result, "function type result");

@@ -230,40 +230,12 @@ class HlPatchReader {
 		return hash;
 	}
 
+	/** A type, decoded as modules decode it (HlBytecodeInput); a patch carries no enum type. */
 	static function readType(input:BytesInput):HlTypeDef {
-		var tag = input.readByte();
-		if (tag == HlType.Enum || tag == HlType.EnumTag)
+		var type = HlBytecodeInput.type(input, true, "HLP");
+		if (type.match(Enum(_, _, _) | EnumTag(_, _)))
 			throw "Enum type patches require a structural reload";
-		if (tag == HlType.Obj || tag == HlType.Struct) {
-			var name = readIndex(input),
-				base = readIndex(input),
-				global = readUnsigned(input),
-				fieldCount = readUnsigned(input),
-				methodCount = readUnsigned(input),
-				bindingCount = readUnsigned(input);
-			var fields = [for (_ in 0...fieldCount) {
-				name:readIndex(input), type:readIndex(input)
-			}],
-				methods = [for (_ in 0...methodCount)
-				{
-				name:readIndex(input), functionIndex:readIndex(input), prototype:readIndex(input)
-			}],
-				bindings = [for (_ in 0...bindingCount * 2) readIndex(input)];
-			return tag == HlType.Obj ? Object(name, base, global, fields, methods, bindings) : Structure(name, global,
-				fields, methods, bindings);
-		}
-		if (tag == HlType.Virtual)
-			return Virtual(readIndex(input), [for (_ in 0...readUnsigned(input)) {
-				name:readIndex(input), type:readIndex(input)
-			}]);
-		if (tag == HlType.Abstract)
-			return Abstract(readIndex(input));
-		if (tag == HlType.Ref || tag == HlType.Null || tag == HlType.Packed)
-			return Parameterized(cast tag, readIndex(input));
-		return if (tag == HlType.Fun) {
-			var n = input.readByte();
-			Function([for (_ in 0...n) readIndex(input)], readIndex(input));
-		} else Simple(cast tag);
+		return type;
 	}
 
 	static function readFunction(input:BytesInput):HlPatchFunction {
@@ -292,50 +264,13 @@ class HlPatchReader {
 		};
 	}
 
+	/** A patch holds only the opcodes this compiler emits (HlOpcodeSchema.arity). */
 	static function readOperands(input:BytesInput, op:Int):Array<Int>
-		return switch HlOpcodeSchema.arity(op) {
-			case HlOpcodeSchema.UNSUPPORTED: throw 'Unsupported patch opcode $op';
-			case HlOpcodeSchema.SWITCH_ARITY:
-				var register = readIndex(input), count = readOperandCount(input), operands = [register, count];
-				for (_ in 0...count)
-					operands.push(readIndex(input));
-				operands.push(readIndex(input));
-				operands;
-			case HlOpcodeSchema.VARIABLE_ARITY:
-				var first = readIndex(input),
-					second = readIndex(input),
-					count = readOperandCount(input),
-					operands = [first, second, count];
-				for (_ in 0...count)
-					operands.push(readIndex(input));
-				operands;
-			case count: [for (_ in 0...count) readIndex(input)];
-		}
+		return HlBytecodeInput.operands(input, op, HlOpcodeSchema.arity(op), "HLP");
 
-	static function readOperandCount(input:BytesInput):Int {
-		var count = readUnsigned(input);
-		// Match the native decoder's bound before reading any variable operands.
-		if (count > 0x1000000)
-			throw "Invalid variable operand count";
-		return count;
-	}
+	static function readUnsigned(input:BytesInput):Int
+		return HlBytecodeInput.unsigned(input, "HLP");
 
-	static function readUnsigned(input:BytesInput):Int {
-		var v = readIndex(input);
-		if (v < 0)
-			throw "Negative unsigned HLP index";
-		return v;
-	}
-
-	static function readIndex(input:BytesInput):Int {
-		var first = input.readByte();
-		if ((first & 0x80) == 0)
-			return first & 0x7F;
-		if ((first & 0x40) == 0) {
-			var v = input.readByte() | ((first & 31) << 8);
-			return (first & 0x20) == 0 ? v : -v;
-		}
-		var v = ((first & 31) << 24) | (input.readByte() << 16) | (input.readByte() << 8) | input.readByte();
-		return (first & 0x20) == 0 ? v : -v;
-	}
+	static function readIndex(input:BytesInput):Int
+		return HlBytecodeInput.index(input);
 }
