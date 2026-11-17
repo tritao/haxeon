@@ -349,6 +349,30 @@ The trade, then: a guarded read costs more than a virtual read (about 1.9 ns aga
 run), while a virtual costs four times the allocation time and three times the bytes for every literal, 68 ns and 56
 bytes for every class conversion, and a hash lookup for every read whose field type differs.
 
+### Baseline: `benchmarks/structure-access` (slice 1)
+
+The read kinds that compile today with both compilers, measured before any representation change (HashLink, release
+builds, one core, best of 5 runs of 20M reads; load average about 15, so again the ratios):
+
+| receiver | stock Haxe 4.3.7 | Haxeon | |
+|---|---:|---:|---|
+| class instance field | 1.17 ns | 2.94 ns | Haxeon 2.5× slower |
+| structure literal's field | 6.59 ns | 2.53 ns | Haxeon 2.6× faster (an exact record against a virtual) |
+| field of `Box<Int>` read as `Box<Dynamic>` (erased owner) | 5.72 ns | 18.12 ns | Haxeon 3.2× slower: the lru gap, slice 3's target |
+| field read by name through `Dynamic` | 26.81 ns | 62.05 ns | Haxeon 2.3× slower; a dispatcher's last arm is this read |
+
+Two of these are not structure costs and are followed up on their own, re-measured on a quiet machine first:
+
+- **The class read.** Haxeon's loop has the same instruction count as stock's, but computes the constant `COUNT - 1` of
+  an `inline final` every iteration (stock folds it), and reloads the captured array from the closure, with its null
+  check, every iteration (no loop-invariant load hoisting).
+- **The by-name read** costs twice stock's. It is the dispatcher's fallback arm, so it matters to slices 2b and 3 even when
+  rare.
+
+The view cases (a class seen as a structure, a wider literal through a narrower type) join the benchmark when the typer
+accepts them (slice 4). The miss-count option counts executed guard misses, so it comes with the guards (slice 2b); the
+IR census gains its receiver kinds now.
+
 ### Estimates
 
 - **Object model, today's programs.** No program converts between structures yet, so every access hits the fast
