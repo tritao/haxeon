@@ -631,3 +631,4 @@ observable-switch-cfg	42
 long-arithmetic-chain	42
 anonymous-structure-string	42
 field-initializer-type-variables	42
+static-function-field-call	42

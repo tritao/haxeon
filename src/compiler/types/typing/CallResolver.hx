@@ -701,6 +701,15 @@ class CallResolver {
 				bodyTyper.lowerType(method.result, method.span),
 				span), methodKey, scope);
 		}
+		// A static field that holds a function (`static var build:Void->Int`) is called as its value is, as in Haxe: read the field,
+		// then call what it holds, with the arity, optional arguments and effects of any function value.
+		if (classReference && (methodInfo == null || !methodInfo.isStatic)) {
+			var field = bodyTyper.findStaticFieldNullable(className, name);
+			if (field != null) {
+				var qualified = field.owner + "." + name;
+				return typeClosureCall(Variable(qualified, span), arguments, span, scope, qualified);
+			}
+		}
 		if (methodInfo == null || methodInfo.isStatic)
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
 		var methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
