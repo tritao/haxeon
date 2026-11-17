@@ -17,7 +17,7 @@ class IrScalarAbiEligibility {
 					case ProviderOperation.Equals, ProviderOperation.ReflectEquals, ProviderOperation.Hash,
 						ProviderOperation.InlineEnumHelper,
 						ProviderOperation.TypedInterfaceEntry, ProviderOperation.InterfaceUnbox,
-						ProviderOperation.GenericMethodReference,
+						ProviderOperation.MethodReference,
 						ProviderOperation.KeyPath, ProviderOperation.OptionalBox, ProviderOperation.OptionalUnbox,
 						ProviderOperation.ValueArrayElement,
 						ProviderOperation.DynamicDispatch, ProviderOperation.OptionalCopy: true;

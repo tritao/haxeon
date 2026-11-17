@@ -8,26 +8,15 @@ import compiler.ir.Ir;
 class GenericOwnerErasure {
 	static inline final PREFIX = "$generic-erased:";
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
-	public static inline final METHOD_REFERENCE_PREFIX = "$generic-method-reference:";
-
-	/**
-		The generic class and member a `$generic-method-reference:<class>:<member>:<receiver type>:<closure type>` target is
-		for, or null when `target` is not one. The class is a declared generic class, whose name has no colon; the types after
-		it may contain colons (`class:Promise<Array<String>>`), which is why only the first two components are read.
-	**/
-	public static function methodReferenceOf(target:String):Null<{owner:String, member:String}> {
-		if (!StringTools.startsWith(target, METHOD_REFERENCE_PREFIX))
-			return null;
-		var parts = target.substr(METHOD_REFERENCE_PREFIX.length).split(":");
-		return parts.length < 3 ? null : {owner: parts[0], member: parts[1]};
-	}
+	/** The erased-generic call a bound method of an erased owner makes (see IrMethodReferences). */
+	public static inline function erasedCallName(owner:String, member:String):String
+		return PREFIX + owner + ":call:" + member;
 
 	public static function typeTestName(owner:String, exact:Bool):String
 		return TYPE_TEST_PREFIX + (exact ? "exact:" : "instance:") + owner;
 
 	/** Generate only the operations that occur in typed code, before value-field lowering. */
 	public static function generate(facts:ProgramFacts, functions:Array<IrFunction>, objects:Array<IrObject>):Void {
-		generateMethodReferences(functions, objects);
 		generateTypeTests(facts, functions, objects);
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
@@ -130,60 +119,6 @@ class GenericOwnerErasure {
 			functions.push(new IrFunction(name, builder.arguments, Bool, builder.blocks,
 				Provider(TypeKey.of(Obj(owner)),
 				ProviderOperations.detailed(ProviderOperation.GenericTypeTest, exact ? "exact" : "instance"))));
-		}
-	}
-
-	/** A bound method keeps virtual dispatch and adapts its concrete owner ABI to the closure ABI. */
-	static function generateMethodReferences(functions:Array<IrFunction>, objects:Array<IrObject>):Void {
-		var requests:Map<String, {receiver:IrType, closure:IrType}> = [];
-		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
-			switch instruction.value {
-			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name, METHOD_REFERENCE_PREFIX)):
-				var previous = requests.get(name);
-				if (previous != null
-					&& (!Type.enumEq(previous.receiver, receiver.type) || !Type.enumEq(previous.closure, output.type)))
-					throw 'Conflicting generic method reference "$name"';
-				requests.set(name, {receiver: receiver.type, closure: output.type});
-			default:
-		}
-		var byName = [for (object in objects) object.name => object],
-			byFunction = new IrFunctionIndex("generic-owner-erasure", functions),
-			names = [for (name in requests.keys()) name];
-		names.sort(Reflect.compare);
-		for (name in names) {
-			var reference = methodReferenceOf(name),
-				request = requests.get(name);
-			if (reference == null || request == null)
-				throw 'Invalid generic method reference "$name"';
-			var owner = reference.owner, member = reference.member, signature = switch request.closure {
-				case Function(arguments, result): {arguments: arguments, result: result};
-				default: throw 'Generic method reference "$name" is not a function';
-			}, builder = new IrBuilder(), receiver = builder.argument("receiver", request.receiver),
-				arguments = [for (index in 0...signature.arguments.length) builder.argument('argument$index',
-				signature.arguments[index])];
-			var result:IrValue;
-			switch request.receiver {
-				case Dyn:
-					result = builder.call(PREFIX + owner + ":call:" + member, [receiver].concat(arguments),
-						signature.result);
-				case Obj(className):
-					var object = byName.get(className),
-						method = object == null ? null : findMethod(object, member, byName, byFunction);
-					if (method == null || method.arguments.length != arguments.length + 1)
-						throw 'Missing target for generic method reference "$name"';
-					var adapted = [for (index in 0...arguments.length) convert(builder, arguments[index],
-						method.arguments[index + 1].type, byName)];
-					var called = builder.methodCall(receiver, member, adapted, method.result);
-					result = (switch (signature.result) {
-						case Void: true;
-						default: false;
-					}) ? called : convert(builder, called, signature.result, byName);
-				default: throw 'Invalid receiver for generic method reference "$name"';
-			}
-			builder.returnValue(result);
-			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks,
-				Provider(TypeKey.of(Obj(owner)),
-				ProviderOperations.detailed(ProviderOperation.GenericMethodReference, name))));
 		}
 	}
 
@@ -293,7 +228,7 @@ class GenericOwnerErasure {
 		return null;
 	}
 
-	static function findMethod(object:IrObject, name:String, objects:Map<String, IrObject>,
+	public static function findMethod(object:IrObject, name:String, objects:Map<String, IrObject>,
 			functions:IrFunctionIndex):Null<IrFunction> {
 		var current:Null<IrObject> = object;
 		while (current != null) {

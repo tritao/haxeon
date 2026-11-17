@@ -35,7 +35,7 @@ enum abstract ProviderOperation(String) to String {
 	var ValueArrayAccess = "value-array-access";
 	var GenericErased = "generic-erased";
 	var GenericTypeTest = "generic-type-test";
-	var GenericMethodReference = "generic-method-reference";
+	var MethodReference = "method-reference";
 	var OverrideBridge = "override-bridge";
 	var DynamicStructure = "dynamic-structure";
 	var StaticInitializer = "static-initializer";

@@ -244,6 +244,8 @@ class IrPipeline {
 	}
 
 	static function genericOwnerErasure(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+		// Method values first: a bound method of an erased generic owner calls an erased operation, which erasure then makes.
+		IrMethodReferences.generate(assembly.functions, assembly.objects);
 		GenericOwnerErasure.generate(assembly.generator.facts, assembly.functions, assembly.objects);
 		return assembly;
 	}

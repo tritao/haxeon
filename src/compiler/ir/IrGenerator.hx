@@ -2261,11 +2261,12 @@ class IrGenerator {
 							member, arguments, result);
 					default:
 				}
-				var target = typedDispatch != null ? typedDispatch : facts.genericClasses.exists(owner) ? '$'
-					+ 'generic-method-reference:$owner:$member:'
-					+ compiler.semantic.SemanticSignature.type(object.type)
-					+ ':'
-					+ compiler.semantic.SemanticSignature.type(expression.type) : name;
+				// A method value binds the method of the receiver's class, as in Haxe (IrMethodReferences); a value type has no
+				// subclasses, so its method is bound directly.
+				var target = typedDispatch != null ? typedDispatch : dispatchesVirtually(object.type)
+					? IrMethodReferences.name(owner,
+					member, compiler.semantic.SemanticSignature.type(object.type),
+					compiler.semantic.SemanticSignature.type(expression.type)) : name;
 				builder.instanceClosure(target, lowerExpression(object, builder, localTypes),
 					lowerType(expression.type));
 			case TLambda(name, environment, captures):
@@ -4004,6 +4005,15 @@ class IrGenerator {
 				return name;
 		return null;
 	}
+
+	/** Whether a method of a value of `type` can run a subclass's or an implementing class's method: a class (not a value type) or an interface. */
+	function dispatchesVirtually(type:CompilerType):Bool
+		return switch type {
+			case TNullable(inner): dispatchesVirtually(inner);
+			case TInstance(NominalKind.Class, name, _): !facts.valueClasses.exists(name);
+			case TInstance(NominalKind.Interface, _, _): true;
+			default: false;
+		};
 
 	function isIdentityReference(type:CompilerType):Bool
 		return switch type {

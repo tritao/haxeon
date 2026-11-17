@@ -65,7 +65,7 @@ class IrStateEqualityMain {
 			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InlineEnumHelper),
 			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.TypedInterfaceEntry),
 			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.InterfaceUnbox),
-			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.GenericMethodReference),
+			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.MethodReference),
 			OptionalScalar(null),
 			OptionalScalar("owner.method"),
 			Provider(compiler.ir.TypeKey.of(I32), compiler.core.Provides.ProviderOperation.OptionalBox),

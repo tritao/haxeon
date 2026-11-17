@@ -967,8 +967,8 @@ class SemanticAssembly {
 	static function genericOrigin(target:String):Null<String> {
 		if (StringTools.startsWith(target, "$generic:"))
 			return enclosingFunction(target);
-		// A bound method of a generic class.
-		var reference = compiler.ir.GenericOwnerErasure.methodReferenceOf(target);
+		// A bound method (a method value): made from its owner's method.
+		var reference = compiler.ir.IrMethodReferences.of(target);
 		return reference == null ? null : reference.owner + "." + reference.member;
 	}
 
