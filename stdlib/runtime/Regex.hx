@@ -16,6 +16,7 @@ package runtime;
  * Subjects use UTF-16 positions, consistently with `String`; `.` and classes consume
  * one whole Unicode scalar.
  */
+@:allow(runtime)
 class Regex {
 	static inline var CHAR = 0;
 	static inline var ANY = 1;
