@@ -389,9 +389,36 @@ class BodyTyper implements BodyTyping {
 	 * type in the body's statements, its lambdas and their cache entries, and its closure cells, so none leaves the typer.
 	 */
 	function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement> {
+		var map = settleFrame(frame);
+		return map == null ? statements : map.statements(statements);
+	}
+
+	/**
+	 * A field initializer, typed as a body is: in a type-variable frame of its own, so an empty `[]`, `new Map()` or `null` inside it
+	 * (in a comprehension, a nested literal, a lambda's locals) is settled by what follows it there, as in a function body.
+	 */
+	public function typeFieldInitializer(expression:AstExpression, scope:Scope, type:CompilerType,
+			label:String):TypedExpression {
+		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
+		try
+			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
+		catch (error:Dynamic) {
+			session.monomorphs.end(frame);
+			throw error;
+		}
+		var map = settleFrame(frame);
+		return map == null ? typed : map.expression(typed);
+	}
+
+	/**
+	 * Ends `frame` and settles its type variables: an unbound one takes the type a later use hinted, or is an error. Returns the map
+	 * that writes the settled types into what was typed in the frame (closure conversions and lambdas are mapped here), or null
+	 * when the frame made none.
+	 */
+	function settleFrame(frame:MonomorphFrame):Null<compiler.types.TypedTypeMap> {
 		session.monomorphs.end(frame);
 		if (frame.cells.length == 0)
-			return statements;
+			return null;
 		for (cell in frame.cells)
 			if (compiler.types.Monomorphs.isUnbound(TMonomorph(cell))) {
 				// Nothing filled it, but a later use expects a type of it: that is its type.
@@ -406,7 +433,7 @@ class BodyTyper implements BodyTyping {
 		session.closureConversion.mapTypesSince(frame.conversionMark, map);
 		for (key in frame.lambdaKeys)
 			session.mapCachedLambda(key, map);
-		return map.statements(statements);
+		return map;
 	}
 
 	public function boundCell(name:String, scope:Scope):Null<String> {

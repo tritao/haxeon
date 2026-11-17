@@ -708,10 +708,9 @@ class ProgramTyper {
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
 							field.span);
 					try {
-						initializer = bodyTyper.coerce(bodyTyper.typeExpression(parsedInitializer, scope, type),
-							type,
-							(field.isStatic ? 'static field "${classDecl.name}.${field.name}"'
-							: 'field "${classDecl.name}.${field.name}"'), "E1002");
+						initializer = bodyTyper.typeFieldInitializer(parsedInitializer, scope, type,
+							field.isStatic ? 'static field "${classDecl.name}.${field.name}"'
+							: 'field "${classDecl.name}.${field.name}"');
 					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);
 						throw error;
