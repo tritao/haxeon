@@ -382,6 +382,17 @@ These were settled before implementation so the steps can run without further in
 - Scope is locals and the parameters and returns of lambdas inside a body. Function signatures and field types keep
   `SignatureInference` and `FieldInference`.
 - Open structural constraints are out of scope.
+- `BodyTyper.inferBodyLocalTypes` (`localExpectedTypes`), the last look-ahead pass, stays until object literals get
+  Haxe's model. It gives an object literal that fills an empty array or a `null` local the structure a later use
+  expects, optional fields included (`arguments.push({name, type, span, optional, defaultValue})` in `Parser.hx`,
+  passed on as `Array<AstArgument>`). Haxe needs no look-ahead for this: an object literal's structure may gain the
+  optional fields of a structure it is unified with, in place, so the array's element type becomes the later use's
+  (`var c = {name: "y"}; var d:{name:String, ?optional:Bool} = c;` passes in Haxe and fails in Haxeon). Replacing the
+  pass means giving each literal its own field list, open to optional fields until its body is settled and named only
+  then, with the post-body pass rewriting the literal and every value of its type. That changes how anonymous types are
+  registered and named for their HashLink layouts, so it is a step of its own. The pass also fills a local with its
+  hint when a value widens to it (`values.push(1)` into an array returned as `Array<Float>`), which Haxe rejects with
+  `Int should be Float`; that divergence goes with the pass.
 
 **2.4 Error recovery**
 
