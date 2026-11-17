@@ -352,7 +352,10 @@ class CompilerSession {
 	}
 
 	function read(path:String):String {
+		// fullPath is null for a path that does not exist (a source list that names a deleted file).
 		var key = FileSystem.fullPath(path);
+		if (key == null)
+			throw 'Source file does not exist: $path';
 		var cached = requestSources.get(key);
 		if (cached != null)
 			return cached;
