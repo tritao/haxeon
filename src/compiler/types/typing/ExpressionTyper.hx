@@ -173,6 +173,10 @@ class ExpressionTyper {
 					scope.invalidateAllExpressions();
 				call;
 		};
+		// A value whose type mentions a type variable a use has since filled reads as that type (`map.get(key) * 2`).
+		if (session.monomorphs.active() && compiler.types.Monomorphs.contains(result.type))
+			result = new TypedExpression(result.expression, compiler.types.Monomorphs.resolve(result.type),
+				result.span, result.stableFlowValue, result.mapKeySource, result.storageType, result.semanticReference);
 		session.enumRepresentations.discover(result.type);
 		return result;
 	}

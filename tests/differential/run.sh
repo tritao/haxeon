@@ -133,6 +133,7 @@ in_background run_case optional-argument-types 0
 in_background run_case local-function-defaults 0
 in_background run_case value-default-arguments 0
 in_background run_case function-value-optional-arguments 0
+in_background run_case local-inference-int-float-widening 0
 in_background run_compile_failure type-error
 status=0
 for index in "${!pids[@]}"; do
