@@ -808,6 +808,21 @@ class HlLower {
 					case Jump(_), Unreachable:
 				}
 		}
+		// An array boxed only to be cast back to an array, as a coercion between array types does, is the same HashLink array
+		// (`HlType.Array` carries no element type): the cast takes the array itself unchecked, and the box is not made.
+		var arrayRecasts:Map<Int, IrValue> = [], unboxedArrays:Map<Int, Bool> = [];
+		for (block in fn.blocks)
+			for (index in 0...block.instructions.length - 1)
+				switch block.instructions[index].value {
+					case ToDyn(boxed, value) if (isArray(value.type) && uses.get(boxed.id) == 1):
+						switch block.instructions[index + 1].value {
+							case SafeCast(output, source) if (source.id == boxed.id && isArray(output.type)):
+								arrayRecasts.set(output.id, value);
+								unboxedArrays.set(boxed.id, true);
+							default:
+						}
+					default:
+				}
 		var edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
@@ -973,6 +988,7 @@ class HlLower {
 					case TypeValue(output, type):
 						instructions.push(HlInstruction.LoadType(defineRegister(output, registers, registerTypes),
 							internType(type)));
+					case ToDyn(output, _) if (unboxedArrays.exists(output.id) && !bindingsByValue.exists(output.id)):
 					case ToDyn(output, value):
 						instructions.push(HlInstruction.ToDyn(defineRegister(output, registers, registerTypes),
 							requireRegister(value, registers)));
@@ -989,8 +1005,13 @@ class HlLower {
 						instructions.push(HlInstruction.ToSFloat(defineRegister(output, registers, registerTypes),
 							requireRegister(value, registers)));
 					case SafeCast(output, value):
-						instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
-							requireRegister(value, registers)));
+						var array = arrayRecasts.get(output.id);
+						if (array != null && !bindingsByValue.exists(value.id))
+							instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
+								requireRegister(array, registers)));
+						else
+							instructions.push(HlInstruction.SafeCast(defineRegister(output, registers, registerTypes),
+								requireRegister(value, registers)));
 					case BeginTry(catchBlock, _, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
 							throw 'Try block $block.id has no catch value in block $catchBlock';
@@ -1807,6 +1828,12 @@ class HlLower {
 			case JumpNull(value, _): HlInstruction.JumpNotNull(value, target);
 			case JumpEqual(left, right, _): HlInstruction.JumpNotEqual(left, right, target);
 			default: throw "Not a comparison jump";
+		};
+
+	static function isArray(type:IrType):Bool
+		return switch type {
+			case Array(_): true;
+			default: false;
 		};
 
 	static function isFloat(type:IrType):Bool
