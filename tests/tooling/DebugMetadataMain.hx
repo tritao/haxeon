@@ -15,8 +15,12 @@ import haxe.io.BytesOutput;
 /** Focused regression coverage for the source-local debug metadata pipeline. */
 class DebugMetadataMain {
 	static function main():Void {
+		// The loop gives probe a label before its assignments (a loop header is entered again), which a straight-line body
+		// no longer has; it counts down a static variable, so it adds no source local to the bindings checked below.
 		var program = Frontend.compileFile(new SourceFile("debug-metadata.hx",
-			"function probe(input:Int):Int {\n"
+			"class Spin { public static var count = 0; }\n"
+			+ "function probe(input:Int):Int {\n"
+			+ "  while (Spin.count > 0) Spin.count--;\n"
 			+ "  var result = input + 1;\n"
 			+ "  result = result + 1;\n"
 			+ "  return result;\n"
@@ -84,7 +88,7 @@ class DebugMetadataMain {
 		Sys.println("PASS: HL assignments use encoded opcode positions, including labels");
 
 		var bytes = HlWriter.encode(code).flatten(),
-			suffix = encodedAssignmentSuffix(fn.debugAssignments);
+			suffix = encodedAssignmentSuffix(fn);
 		if (bytes.get(3) != compiler.hl.HlCode.VERSION
 			|| code.debugSections.length != 2
 			|| code.debugSections[0].kind != HlWriter.FUNCTION_IDENTITIES
@@ -133,8 +137,14 @@ class DebugMetadataMain {
 				code.ints.length, code.floats.length,
 				code.strings.length, code.types.length));
 		for (index in 0...patch.functions.length) {
-			var actual = patch.functions[index].debug,
-				expected = code.functions[index].debugLocations;
+			var compiledFunction = code.functions[index],
+				positions = HlWriter.layout(compiledFunction.opcodes),
+				actual = patch.functions[index].debug,
+				// One span per instruction written: a label no jump lands on again is left out (HlWriter.layout).
+				expected = [
+					for (opcode in 0...compiledFunction.opcodes.length)
+						if (positions[opcode + 1] != positions[opcode]) compiledFunction.debugLocations[opcode]
+				];
 			if (actual.length != expected.length)
 				throw "HLP lost opcode source spans";
 			for (opcode in 0...actual.length)
@@ -257,13 +267,14 @@ class DebugMetadataMain {
 		return false;
 	}
 
-	static function encodedAssignmentSuffix(assignments:Array<compiler.hl.HlFunction.HlDebugAssignment>):Bytes {
-		var output = new BytesOutput();
-		output.write(HlWriter.encodeIndex(assignments.length));
-		for (assignment in assignments) {
+	/** `fn`'s debug assignments as HlWriter writes them: each position is where its instruction lands (HlWriter.layout). */
+	static function encodedAssignmentSuffix(fn:compiler.hl.HlFunction):Bytes {
+		var output = new BytesOutput(), positions = HlWriter.layout(fn.opcodes);
+		output.write(HlWriter.encodeIndex(fn.debugAssignments.length));
+		for (assignment in fn.debugAssignments) {
 			output.write(HlWriter.encodeIndex(assignment.name));
-			output.write(HlWriter.encodeIndex(assignment.position + 1));
-			output.write(HlWriter.encodeIndex(assignment.scopeEnd + 1));
+			output.write(HlWriter.encodeIndex(assignment.position < 0 ? 0 : positions[assignment.position] + 1));
+			output.write(HlWriter.encodeIndex(assignment.scopeEnd < 0 ? 0 : positions[assignment.scopeEnd] + 1));
 		}
 		return output.getBytes();
 	}
