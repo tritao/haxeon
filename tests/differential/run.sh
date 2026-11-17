@@ -143,6 +143,7 @@ in_background run_case local-inference-unbound-dynamic 0
 in_background run_case tuple-switch 0
 in_background run_case anonymous-width-subtyping 0
 in_background run_case switch-shared-constructor-name 0
+in_background run_case tuple-switch-null-element 0
 in_background run_compile_failure type-error
 in_background run_compile_failure anonymous-width-missing-field
 in_background run_compile_failure anonymous-width-final-to-var

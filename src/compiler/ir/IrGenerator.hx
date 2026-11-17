@@ -1195,8 +1195,9 @@ class IrGenerator {
 							checkBlock = nextBlock;
 						}
 						builder.select(checkBlock);
-						// The arms of a tuple switch without a default cover every tuple, as typing checked.
-						if (!hasDefault && (isEnumType(expression.type) || matchesEverything || tuple))
+						if (!hasDefault && tuple)
+							throwUnmatchedTupleElement(builder);
+						else if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
 							builder.markUnreachable();
 						else
 							lowerStatements(defaultBranch, builder, localTypes,
@@ -2902,9 +2903,8 @@ class IrGenerator {
 					}
 					var fallback = defaultExpression;
 					if (fallback == null && tuple) {
-						// The arms cover every tuple, as typing checked; only an unmatched null element gets here.
 						builder.select(fallbackBlock);
-						builder.markUnreachable();
+						throwUnmatchedTupleElement(builder);
 					} else if (fallback != null) {
 						builder.select(fallbackBlock);
 						var fallbackResult = abiBoundaryCast(builder, lowerExpression(fallback, builder, localTypes),
@@ -3887,6 +3887,14 @@ class IrGenerator {
 				return false;
 		}
 	}
+
+	/**
+	 * Where a tuple switch without a default runs out of arms. Typing checked that the arms cover every tuple of non-null
+	 * values, so only a null element no arm matched gets here. Haxe's matcher reads that element's enum index, which
+	 * fails with a null access, so this throws the same.
+	 */
+	function throwUnmatchedTupleElement(builder:CfgBuilder):Void
+		builder.throwValue(builder.toDyn(builder.constString("Null access")));
 
 	static function tupleElementName(subjectName:String, index:Int):String
 		return '$subjectName:$index';
