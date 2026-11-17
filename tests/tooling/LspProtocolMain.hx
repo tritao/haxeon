@@ -74,6 +74,7 @@ class LspProtocolMain {
 	static function main():Void {
 		fileUris();
 		haxeonManifestWorkspace();
+		hxmlOutputDirectories();
 		offlineManifestDependency();
 		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
@@ -1948,6 +1949,75 @@ class LspProtocolMain {
 		if (!reported || sys.FileSystem.exists(base + "/cache/git"))
 			throw 'an uncached Git dependency was not reported offline: $messages';
 		Sys.println("PASS: the language server resolves a project offline and reports a dependency to install");
+	}
+
+	/**
+	 * Without a haxeon.json, `build` and `out` are presumed to be outputs only in a project's own directory: here a class path
+	 * that is the HXML's directory (an unconfigured workspace root is one too). Below a class path such as `-cp src` they are packages
+	 * (this repository's src/build), and the outputs there are the targets the HXML names.
+	 */
+	static function hxmlOutputDirectories():Void {
+		var base = haxe.io.Path.normalize(sys.FileSystem.fullPath("out")) + "/lsp-hxml-outputs-"
+			+ Std.random(0x7fffffff);
+		try {
+			hxmlOutputDirectoriesAt(base);
+		} catch (failure:Dynamic) {
+			FileTree.remove(base);
+			throw failure;
+		}
+		FileTree.remove(base);
+	}
+
+	static function hxmlOutputDirectoriesAt(base:String):Void {
+		var files = [
+			// A class path below the HXML: its build and out directories are packages, and the named target is skipped.
+				"nested/build.hxml" => "-cp src\n-main app.Main\n-js src/www/app.js\n",
+				"nested/src/app/Main.hx" => "package app; class Main { public static function main() {} }",
+				"nested/src/build/Tool.hx" => "package build; class Tool {}",
+				"nested/src/out/Writer.hx" => "package out; class Writer {}",
+				"nested/src/www/Generated.hx" => "generated output",
+				"nested/build/Stale.hx" => "outside the class path",
+				// The HXML's own directory as class path: build and out are presumed outputs, and the named target is one too.
+				"flat/flat.hxml" => "-cp .\n-main Flat\n-hl bin/app.hl\n",
+				"flat/Flat.hx" => "class Flat { public static function main() {} }",
+				"flat/build/Generated.hx" => "generated output",
+				"flat/out/Generated.hx" => "generated output",
+				"flat/bin/Generated.hx" => "generated output"
+			];
+		for (relative => text in files) {
+			var path = base + "/" + relative;
+			sys.FileSystem.createDirectory(haxe.io.Path.directory(path));
+			sys.io.File.saveContent(path, text);
+		}
+		var protocol = new LspProtocol();
+		request(protocol, Json.stringify({jsonrpc: "2.0",
+			id: 811,
+			method: "initialize",
+			params: {workspaceFolders: [for (root in ["nested", "flat"]) {
+				uri:FileUri.fromPath(base + "/" + root), name:root
+			}]}}));
+		var loaded = [
+			"nested/src/app/Main.hx",
+			"nested/src/build/Tool.hx",
+			"nested/src/out/Writer.hx",
+			"flat/Flat.hx"
+		],
+			skipped = [
+				"nested/src/www/Generated.hx",
+				"nested/build/Stale.hx",
+				"flat/build/Generated.hx",
+				"flat/out/Generated.hx",
+				"flat/bin/Generated.hx"
+			];
+		for (relative in loaded)
+			if (!protocol.project.hasDiskSource(base + "/" + relative))
+				throw 'the workspace did not load the source $relative';
+		for (relative in skipped)
+			if (protocol.project.hasDiskSource(base + "/" + relative))
+				throw 'the workspace loaded the output $relative';
+		if (protocol.project.compilerPath(base + "/nested/src/build/Tool.hx") != "build/Tool.hx")
+			throw "a build package below a class path is not a module of that class path";
+		Sys.println("PASS: build and out are outputs only in a project's own directory, or where an HXML names its target");
 	}
 
 	static function haxeonManifestWorkspace():Void {

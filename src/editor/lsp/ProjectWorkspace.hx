@@ -74,8 +74,14 @@ class ProjectWorkspace {
 	final diskSources:Map<String, String> = [];
 	final declaredSourceDirectories:Map<String, Bool> = [];
 	final outputDirectories:Map<String, Bool> = [];
-	// Source folders of haxeon.json packages below the package root; the manifest names their outputs exactly.
-	final manifestSourceRoots:Map<String, Bool> = [];
+	/**
+		Source roots that are a project's own directory, where a directory named `build` or `out` is presumed to hold generated
+		output rather than a package: an unconfigured workspace root, a class path that is its configuration's directory (named
+		or implied), and a haxeon.json root other than its source folders. A class path below its configuration's directory
+		(`-cp src`) is a package root, so `src/build` is the `build` package; outputs there are only those a configuration names
+		(`outputDirectories`).
+	**/
+	final presumedOutputRoots:Map<String, Bool> = [];
 	// Source roots whose files belong to a package (`scopeSourceRoots`), by root: its files are modules of that package.
 	final packageRootNames:Map<String, String> = [];
 	final compilerPathByDisk:Map<String, String> = [];
@@ -127,7 +133,7 @@ class ProjectWorkspace {
 		diskSources.clear();
 		declaredSourceDirectories.clear();
 		outputDirectories.clear();
-		manifestSourceRoots.clear();
+		presumedOutputRoots.clear();
 		packageRootNames.clear();
 		compilerPathByDisk.clear();
 		diskPathByCompiler.clear();
@@ -252,6 +258,7 @@ class ProjectWorkspace {
 			if (!configuredRoots.exists(root)) {
 				sourceRoots.push(root);
 				unconfiguredSourceRoots.push(root);
+				presumedOutputRoots.set(normalize(root), true);
 			}
 		for (configuration in configurations)
 			for (classPath in configuration.classPaths)
@@ -398,6 +405,20 @@ class ProjectWorkspace {
 						libraries.push(value);
 						index++;
 					}
+				// A target the build writes: the directory a file target goes to, or a directory target itself.
+				case "-hl", "--hl", "-js", "--js", "-lua", "--lua", "-neko", "--neko", "-python", "--python", "-swf",
+					"--swf", "--jvm":
+					if (value != null) {
+						var directory = Path.directory(resolve(base, value));
+						if (directory != normalize(base))
+							outputDirectories.set(directory, true);
+						index++;
+					}
+				case "-cpp", "--cpp", "-cs", "--cs", "-java", "--java", "-php", "--php":
+					if (value != null) {
+						outputDirectories.set(resolve(base, value), true);
+						index++;
+					}
 				default:
 					if (StringTools.startsWith(option, "-cp="))
 						classPaths.push(resolve(base, option.substr(4)));
@@ -417,6 +438,7 @@ class ProjectWorkspace {
 		visiting.remove(file);
 		if (classPaths.length == 0)
 			classPaths.push(base);
+		presumeProjectDirectoryOutputs(base, classPaths);
 		return new HaxeProjectConfiguration(file, classPaths, entries, defines, libraries);
 	}
 
@@ -433,7 +455,8 @@ class ProjectWorkspace {
 				spelling = new LinkSpelling(Path.directory(file)),
 				roots:Array<String> = [],
 				interfaces:Map<String, String> = [],
-				projections:Map<String, String> = [];
+				projections:Map<String, String> = [],
+				sourceFolders:Map<String, Bool> = [];
 			// Discovery returns native separators and resolves symbolic links; ownership compares
 			// normalized paths in the spelling the editor opened the workspace by.
 			function local(path:String):String
@@ -450,7 +473,7 @@ class ProjectWorkspace {
 				}
 				for (root in value.sourceRoots.map(local))
 					if (root != packageRoot)
-						manifestSourceRoots.set(root, true);
+						sourceFolders.set(root, true);
 			}
 			for (root in inputs.roots.map(local))
 				if (roots.indexOf(root) < 0)
@@ -474,6 +497,10 @@ class ProjectWorkspace {
 				if (projectionRoot != null && roots.indexOf(local(projectionRoot)) < 0)
 					roots.push(local(projectionRoot));
 			}
+			// The manifest names the outputs of its source folders exactly; elsewhere build and out are presumed outputs.
+			for (root in roots)
+				if (!sourceFolders.exists(root))
+					presumedOutputRoots.set(root, true);
 			if (ungenerated > 0)
 				errors.push('$file: $ungenerated FFI import(s) have not been generated yet; build the project once ("haxeon build")');
 			var interfacePaths = [for (path in interfaces.keys()) path],
@@ -506,16 +533,22 @@ class ProjectWorkspace {
 		appendStrings(value, "libraries", item -> libraries.push(item));
 		if (classPaths.length == 0)
 			classPaths.push(base);
+		presumeProjectDirectoryOutputs(base, classPaths);
 		return new HaxeProjectConfiguration(file, classPaths, entries, defines, libraries);
 	}
+
+	/** A class path that is its configuration's own directory is a project directory, where build and out are presumed outputs. */
+	function presumeProjectDirectoryOutputs(base:String, classPaths:Array<String>):Void
+		for (classPath in classPaths)
+			if (normalize(classPath) == normalize(base))
+				presumedOutputRoots.set(normalize(classPath), true);
 
 	function loadSources(root:String, service:LanguageService, isOpen:String->Bool):Void {
 		if (!FileSystem.exists(root) || !FileSystem.isDirectory(root)) {
 			errors.push('Source root does not exist: $root');
 			return;
 		}
-		// Without a manifest, build and out are presumed to hold generated output rather than packages.
-		var pending = [root], loaded = 0, presumeOutputs = !manifestSourceRoots.exists(normalize(root));
+		var pending = [root], loaded = 0, presumeOutputs = presumedOutputRoots.exists(normalize(root));
 		while (pending.length > 0 && loaded < 10000) {
 			var directory = pending.pop(),
 				names = FileSystem.readDirectory(directory);
