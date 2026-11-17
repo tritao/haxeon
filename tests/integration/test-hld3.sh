@@ -11,7 +11,7 @@ out="$haxeon_suite_out/hld3"
 mkdir -p "$out"
 "$haxeon_haxe" --cwd "$haxeon_root" tests/hxml/dap-hot-reload-probe.hxml -hl "$out/dap-hot-reload-probe.hl"
 cd "$out"
-# The timeout only catches a hang: the probe runs the whole compiler three times under -debug and the debugger, and sleeps 8 s,
-# which took over 15 s on an idle Apple Silicon runner and past 20 under the suite's parallel load.
+# The timeout only catches a hang. The probe runs the whole compiler three times under -debug and waits on nothing but the
+# debugger's acknowledgements, about 2 s here; the rest is headroom for a slow runner under the suite's parallel load.
 python3 "$haxeon_root/tests/integration/hld3-harness.py" dap-hot-reload-probe.hl \
-	--hl "$("$haxeon_root/scripts/hashlink-path.sh")/hl" --timeout 120
+	--hl "$("$haxeon_root/scripts/hashlink-path.sh")/hl" --timeout 60

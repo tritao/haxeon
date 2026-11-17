@@ -18,15 +18,32 @@ class ProtocolError(RuntimeError):
 
 
 class Reader:
-    def __init__(self, sock: socket.socket):
+    """Reads the HLD3 stream; a read that outlasts the deadline names the record it was waiting for."""
+
+    def __init__(self, sock: socket.socket, deadline: float):
         self.sock = sock
+        self.deadline = deadline
+        self.waiting_for = "the HLD3 handshake"
+
+    def expect(self, marker: bytes, waiting_for: str) -> None:
+        self.waiting_for = f"{marker.decode()} ({waiting_for})"
+        actual = self.read(4)
+        if actual != marker:
+            raise ProtocolError(f"expected {self.waiting_for}, got {actual!r}")
 
     def read(self, size: int) -> bytes:
         chunks = bytearray()
         while len(chunks) < size:
-            chunk = self.sock.recv(size - len(chunks))
+            remaining = self.deadline - time.monotonic()
+            if remaining <= 0:
+                raise ProtocolError(f"timed out waiting for {self.waiting_for}")
+            self.sock.settimeout(remaining)
+            try:
+                chunk = self.sock.recv(size - len(chunks))
+            except socket.timeout:
+                raise ProtocolError(f"timed out waiting for {self.waiting_for}") from None
             if not chunk:
-                raise ProtocolError("unexpected end of HLD3 stream")
+                raise ProtocolError(f"HLD3 stream ended while waiting for {self.waiting_for}")
             chunks.extend(chunk)
         return bytes(chunks)
 
@@ -131,8 +148,7 @@ def read_patch_regions(reader: Reader, pointer_size: int) -> ModuleMappings:
 
 
 def read_handshake(reader: Reader) -> tuple[int, list[ModuleMappings]]:
-    if reader.read(4) != b"HLD3":
-        raise ProtocolError("runtime did not negotiate HLD3")
+    reader.expect(b"HLD3", "the handshake of a runtime started with HL_DEBUG_PROTOCOL=3")
     flags = reader.i32()
     pointer_size = 8 if flags & 1 else 4
     _hl_version = reader.i32()
@@ -161,9 +177,8 @@ def read_handshake(reader: Reader) -> tuple[int, list[ModuleMappings]]:
     return pointer_size, modules
 
 
-def read_refresh(reader: Reader, pointer_size: int, marker: bytes | None = None) -> list[ModuleMappings]:
-    if (marker if marker is not None else reader.read(4)) != b"MAP3":
-        raise ProtocolError("missing MAP3 refresh marker")
+def read_refresh(reader: Reader, pointer_size: int) -> list[ModuleMappings]:
+    reader.expect(b"MAP3", "the refresh answering R")
     module_count = reader.i32()
     if module_count <= 0:
         raise ProtocolError("MAP3 refresh contains no modules")
@@ -205,40 +220,36 @@ def main() -> int:
     )
     sock: socket.socket | None = None
     try:
+        # One deadline for the whole exchange: each read below names what it waits for when the deadline passes.
+        deadline = time.monotonic() + args.timeout
         sock = connect(port, process, args.timeout)
-        sock.settimeout(args.timeout)
-        reader = Reader(sock)
+        reader = Reader(sock, deadline)
         pointer_size, initial = read_handshake(reader)
         initial_revisions = {module.identity: module.revision for module in initial}
-        deadline = time.monotonic() + args.timeout
         observed: ModuleMappings | None = None
         # A releases --debug-wait without racing a redundant live snapshot.
         sock.sendall(b"A")
-        if reader.read(4) != b"ACK3":
-            raise ProtocolError("missing initial ACK3")
-        while time.monotonic() < deadline and process.poll() is None:
-            marker = reader.read(4)
-            if marker != b"REV3":
-                raise ProtocolError("missing REV3 notification")
+        reader.expect(b"ACK3", "the acknowledgement releasing --debug-wait")
+        # The runtime sends REV3 when the probe loads its module and again when it patches it, and holds the probe until A
+        # acknowledges, so each revision is read here before the probe goes on; no wait of the probe's own is involved.
+        while observed is None:
+            reader.expect(b"REV3", "a module revision; the probe compiles under -debug before loading and before each patch")
             reader.pointer(pointer_size)
             if reader.i32() <= 0:
                 raise ProtocolError("invalid REV3 revision")
             sock.sendall(b"R")
-            marker = reader.read(4)
-            for module in read_refresh(reader, pointer_size, marker):
+            for module in read_refresh(reader, pointer_size):
                 if module.regions and module.revision > initial_revisions.get(module.identity, 0):
                     observed = module
                     break
             sock.sendall(b"A")
-            if observed is not None:
-                break
-            time.sleep(0.005)
-        if observed is None:
-            raise ProtocolError("no revised module with patch JIT mappings was observed")
         sock.sendall(b"Q")
         sock.close()
         sock = None
-        output, _ = process.communicate(timeout=args.timeout)
+        try:
+            output, _ = process.communicate(timeout=max(deadline - time.monotonic(), 1))
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("timed out waiting for HashLink to exit once the debugger quit") from None
         if process.returncode != 0:
             raise RuntimeError(f"HashLink exited with {process.returncode}:\n{output}")
         active = sum(not region.retired for region in observed.regions)
@@ -248,6 +259,11 @@ def main() -> int:
             f"{active} active region(s) and {functions} mapped function(s)"
         )
         return 0
+    except ProtocolError as error:
+        # The probe's own output says why it stopped talking, when it crashed.
+        process.kill()
+        output, _ = process.communicate()
+        raise ProtocolError(f"{error}\nHashLink output:\n{output}") from None
     finally:
         if sock is not None:
             sock.close()

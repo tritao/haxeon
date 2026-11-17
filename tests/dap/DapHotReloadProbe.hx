@@ -8,6 +8,10 @@ class DapHotReloadProbe {
 	static function disposeLoaded(loaded:runtime.LoadedModule):Void
 		Runtime.dispose(loaded);
 
+	// Where a DAP driver breaks to look at the module before the probe goes on (the DAP hot-reload test). The runtime itself needs no
+	// pause: loading, patching and retiring a module each wait for the attached debugger to acknowledge the change.
+	static function checkpoint(stage:String):Void {}
+
 	static function main() {
 		var compiler = new Compiler();
 		compiler.update("Value.hx",
@@ -16,8 +20,7 @@ class DapHotReloadProbe {
 		var initial = compiler.compile("Main");
 		var functionIndex = BackendArtifacts.hashLink(initial.artifact).functionIds.get("Value.value");
 		var loaded = Runtime.load(HlWriter.encode(BackendArtifacts.hashLink(initial.artifact).module).flatten(), BackendArtifacts.hashLink(initial.artifact).runtimeIdentity);
-		for (gate in 0...100)
-			Sys.sleep(0.02);
+		checkpoint("loaded");
 		var initialValue = Runtime.callInt(loaded, functionIndex);
 
 		compiler.update("Value.hx",
@@ -29,18 +32,15 @@ class DapHotReloadProbe {
 				"\n  ", "\n    "));
 		var changedAgain = compiler.compile("Main");
 		Runtime.patchSet(loaded, new PatchSet(initial.revision, changed.revision, BackendArtifacts.hashLink(changed.artifact).patchBytes, changed.changedFunctions));
-		for (gate in 0...100)
-			Sys.sleep(0.02);
+		checkpoint("patched");
 		var patchedValue = Runtime.callInt(loaded, functionIndex);
 
 		Runtime.patchSet(loaded, new PatchSet(changed.revision, changedAgain.revision, BackendArtifacts.hashLink(changedAgain.artifact).patchBytes, changedAgain.changedFunctions));
-		for (gate in 0...100)
-			Sys.sleep(0.02);
+		checkpoint("patchedAgain");
 		var patchedAgainValue = Runtime.callInt(loaded, functionIndex);
 		disposeLoaded(loaded);
 		Runtime.retryRetirements();
-		for (gate in 0...100)
-			Sys.sleep(0.02);
+		checkpoint("retired");
 		Sys.println('$initialValue -> $patchedValue -> $patchedAgainValue');
 	}
 }

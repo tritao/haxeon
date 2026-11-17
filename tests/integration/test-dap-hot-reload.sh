@@ -91,20 +91,33 @@ read_locals() {
 	"${dap[@]}" variables --name "$session" --variables-reference "$ref"
 }
 
+# The probe stops at a checkpoint after each step (load, patch, patch again, retire): the module is inspected there, and the probe
+# goes on only when continued. Each step has already been acknowledged by the adapter when the probe reaches the checkpoint.
+probe_source="$repo_dir/tests/dap/DapHotReloadProbe.hx"
+checkpoint_line() { grep -n "checkpoint(\"$1\");" "$probe_source" | cut -d: -f1; }
 "${dap[@]}" start >/dev/null
-launch_json=$(python3 - "$repo_dir" "$debug_port" "$trace_file" <<'PY'
+# dap-cli 0.3.0 sends __dapCliInitialBreakpoints before configurationDone, while HashLink still waits under --debug-wait, so the
+# checkpoints are set before the probe can reach the first one.
+launch_json=$(python3 - "$repo_dir" "$debug_port" "$trace_file" "$probe_source" \
+	"$(checkpoint_line loaded)" "$(checkpoint_line patched)" "$(checkpoint_line patchedAgain)" "$(checkpoint_line retired)" <<'PY'
 import json,sys
-r,port,trace=sys.argv[1:]
-print(json.dumps({"type":"hl","request":"launch","name":"HLD3 hot reload","cwd":r+"/out","program":r+"/out/dap-hot-reload-probe.hl","hl":r+"/vendor/hashlink/hl","port":int(port),"classPaths":[r+"/out/dap-hot-reload-source",r+"/tests",r+"/src",r+"/.tools/haxe/std"],"env":{"LD_LIBRARY_PATH":r+"/vendor/hashlink","HL_DEBUG_PROTOCOL":"3","HL_DEBUG_TRACE":trace}}))
+r,port,trace,probe,*lines=sys.argv[1:]
+print(json.dumps({"type":"hl","request":"launch","name":"HLD3 hot reload","cwd":r+"/out","program":r+"/out/dap-hot-reload-probe.hl","hl":r+"/vendor/hashlink/hl","port":int(port),"classPaths":[r+"/out/dap-hot-reload-source",r+"/tests",r+"/tests/dap",r+"/src",r+"/.tools/haxe/std"],"env":{"LD_LIBRARY_PATH":r+"/vendor/hashlink","HL_DEBUG_PROTOCOL":"3","HL_DEBUG_TRACE":trace},"__dapCliInitialBreakpoints":[{"source":{"path":probe},"breakpoints":[{"line":int(line)} for line in lines]}]}))
 PY
 )
 "${dap[@]}" launch --adapter hashlink --name "$session" --json "$launch_json" >/dev/null
+module_events() {
+	"${dap[@]}" events --name "$session" ${1:+--after-cursor "$1"} --include module
+}
+
+wait_frame DapHotReloadProbe.hx "$(checkpoint_line loaded)"
 value=$("${dap[@]}" breakpoints set --name "$session" --source "$source_dir/Value.hx" --line 6)
 python3 -c 'import json,sys; points=json.load(sys.stdin)["data"]["breakpoints"]; assert len(points)==1 and points[0]["verified"]' <<<"$value"
+"${dap[@]}" continue --name "$session" >/dev/null
 wait_frame Value.hx 6
 initial_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
 module_id=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["totalModules"]==len(d["modules"])>=1, d; matches=[m for m in d["modules"] if m["sourceSnapshots"]>=1]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="1" and m["revision"]==1, m; assert m["activeRegions"]==0 and m["retiredRegions"]==0, m; print(m["id"])' <<<"$initial_modules")
-initial_events=$("${dap[@]}" events --name "$session" --include module)
+initial_events=$(module_events)
 event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="new" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; assert matches[0]["body"]["module"]["version"]=="1", matches[0]; print(d["cursor"])' "$module_id" <<<"$initial_events")
 first_module=$("${dap[@]}" request --name "$session" modules --json '{"startModule":0,"moduleCount":1}')
 python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; assert d["totalModules"]>=1 and len(d["modules"])==1, d' <<<"$first_module"
@@ -114,33 +127,25 @@ python3 -c 'import json,sys; vs=json.load(sys.stdin)["data"]["variables"]; asser
 cp "$source_dir/Value.patched.hx" "$source_dir/Value.hx"
 "${dap[@]}" breakpoints clear --name "$session" --source "$source_dir/Value.hx" >/dev/null
 "${dap[@]}" continue --name "$session" >/dev/null
-patched_events=
-for _ in {1..120}; do
-	patched_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
-	if python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; raise SystemExit(0 if any(e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1] and e["body"]["module"]["version"]=="2" for e in events) else 1)' "$module_id" <<<"$patched_events"; then break; fi
-	sleep 0.05
-done
+wait_frame DapHotReloadProbe.hx "$(checkpoint_line patched)"
+patched_events=$(module_events "$event_cursor")
 event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; assert matches[0]["body"]["module"]["version"]=="2", matches[0]; print(d["cursor"])' "$module_id" <<<"$patched_events")
 patched_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
 python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[m for m in d["modules"] if str(m["id"])==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="2" and m["revision"]==2, m; assert m["activeRegions"]>=1 and m["retiredRegions"]==0, m; assert m["sourceSnapshots"]>=1, m' "$module_id" <<<"$patched_modules"
 
 cp "$source_dir/Value.patched-again.hx" "$source_dir/Value.hx"
-third_events=
-for _ in {1..120}; do
-	third_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
-	if python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; raise SystemExit(0 if any(e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1] and e["body"]["module"]["version"]=="3" for e in events) else 1)' "$module_id" <<<"$third_events"; then break; fi
-	sleep 0.05
-done
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame DapHotReloadProbe.hx "$(checkpoint_line patchedAgain)"
+third_events=$(module_events "$event_cursor")
 third_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
 python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[m for m in d["modules"] if str(m["id"])==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]; assert m["version"]=="3" and m["revision"]==3, m; assert m["activeRegions"]>=1 and m["retiredRegions"]>=0, m; assert m["sourceSnapshots"]>=1, m' "$module_id" <<<"$third_modules"
 event_cursor=$(python3 -c 'import json,sys; d=json.load(sys.stdin)["data"]; matches=[e for e in d["events"] if e.get("body",{}).get("reason")=="changed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, d; m=matches[0]["body"]["module"]; assert m["version"]=="3" and m["revision"]==3 and m["retiredRegions"]>=0, m; print(d["cursor"])' "$module_id" <<<"$third_events")
-removed_events=
-for _ in {1..120}; do
-	removed_events=$("${dap[@]}" events --name "$session" --after-cursor "$event_cursor" --include module)
-	if python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; raise SystemExit(0 if any(e.get("body",{}).get("reason")=="removed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1] for e in events) else 1)' "$module_id" <<<"$removed_events"; then break; fi
-	sleep 0.05
-done
+
+"${dap[@]}" continue --name "$session" >/dev/null
+wait_frame DapHotReloadProbe.hx "$(checkpoint_line retired)"
+removed_events=$(module_events "$event_cursor")
 python3 -c 'import json,sys; events=json.load(sys.stdin)["data"]["events"]; matches=[e for e in events if e.get("body",{}).get("reason")=="removed" and str(e.get("body",{}).get("module",{}).get("id"))==sys.argv[1]]; assert len(matches)==1, events' "$module_id" <<<"$removed_events"
 remaining_modules=$("${dap[@]}" request --name "$session" modules --json '{}')
 python3 -c 'import json,sys; modules=json.load(sys.stdin)["data"]["modules"]; assert all(str(m["id"])!=sys.argv[1] for m in modules), modules' "$module_id" <<<"$remaining_modules"
+"${dap[@]}" continue --name "$session" >/dev/null
 echo "PASS: dap-cli recorded the complete module lifecycle through hot reload and removal"
