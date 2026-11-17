@@ -9,6 +9,10 @@ mutable captures, shadowed bindings, independent loop captures, and loop exits
 through protected regions. Assignment fixtures log receiver, index, and RHS
 evaluation, including mutation of the target, thrown operands, conditional
 operands, postfix updates, and replacement of a nested field's receiver.
+The `local-inference-*` fixtures cover locals whose type a later use fixes:
+an empty array, `var x;`, `var x = null`, `new Map()`, an object literal that
+takes the structure of a later typed use, and Ints flowing into a local that
+is already Float.
 
 ## Reference exception
 
