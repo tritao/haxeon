@@ -529,6 +529,10 @@ class ModuleAnalyzer {
 			typeNames.set(declaration.name, true);
 		for (declaration in ast.aliases)
 			typeNames.set(declaration.name, true);
+		// Module-level variables are members of the module, as its functions are (ModuleFields).
+		if (ast.fields != null)
+			for (field in ast.fields)
+				members.set(field.name, true);
 		var mainName = QualifiedName.last(moduleName);
 		for (declaration in ast.classes)
 			if (declaration.name == mainName) {

@@ -18,6 +18,9 @@ class AliasTable {
 	final local:Map<String, String> = [];
 	var removed:Null<Map<String, Bool>> = null;
 
+	/** Where each module-level variable is stored (ModuleFields): `pack.Mod.x` => `pack.Mod$fields.x`; shared, read-only. */
+	var moduleFieldStorage:Null<Map<String, String>> = null;
+
 	/** A table with no names that resolves through `parent`, if any, and that `set` and `remove` change without touching it. */
 	public function new(?parent:AliasTable) {
 		this.parent = parent;
@@ -65,6 +68,32 @@ class AliasTable {
 		if (removed == null)
 			removed = [];
 		removed.set(name, true);
+	}
+
+	/** Resolves module-level variables, by their names as module members, to the hidden class that stores them. */
+	public function useModuleFieldStorage(storage:Map<String, String>):Void
+		moduleFieldStorage = storage;
+
+	/**
+	 * `path` with a module-level variable it starts with (`pack.Mod.x`, `pack.Mod.x.push`) named where it is stored
+	 * (`pack.Mod$fields.x`, `pack.Mod$fields.x.push`); `path` itself otherwise.
+	 */
+	public function moduleFieldPath(path:String):String {
+		var storage = moduleFieldStorage, table = parent;
+		while (storage == null && table != null) {
+			storage = table.moduleFieldStorage;
+			table = table.parent;
+		}
+		if (storage == null)
+			return path;
+		var end = path.indexOf(".");
+		while (end >= 0) {
+			end = path.indexOf(".", end + 1);
+			var prefix = end < 0 ? path : path.substr(0, end), stored = storage.get(prefix);
+			if (stored != null)
+				return end < 0 ? stored : stored + path.substr(end);
+		}
+		return path;
 	}
 
 	/** A table for a nested scope: it sees everything this one does and changes only itself. */

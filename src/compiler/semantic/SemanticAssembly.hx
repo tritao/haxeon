@@ -114,6 +114,19 @@ class SemanticAssembly {
 		for (typeName => caseNames in enumCasesByType)
 			for (caseName in caseNames)
 				aliasUniverse.push(typeName + "#" + caseName);
+		// Where each module-level variable is stored (ModuleFields): name resolution names it there. A module that adds or removes
+		// one changes the key, so the modules that resolve names are resolved again.
+		var moduleFieldStorage:Map<String, String> = [];
+		for (moduleName in names)
+			if (modules.exists(moduleName)) {
+				var parsed = modules.get(moduleName).parsedAst();
+				if (parsed.fields != null)
+					for (field in parsed.fields) {
+						moduleFieldStorage.set(moduleName + "." + field.name,
+							ModuleFields.storageName(moduleName) + "." + field.name);
+						aliasUniverse.push("field " + moduleName + "." + field.name);
+					}
+			}
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
 		var classDeclarations:Map<String, AstClass> = [],
@@ -242,6 +255,7 @@ class SemanticAssembly {
 			var importedTypes = context.moduleAnalyzer.importAliases(ast.imports),
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
+			aliases.useModuleFieldStorage(moduleFieldStorage);
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			// Unpackaged names wait until the current package's own types are in:

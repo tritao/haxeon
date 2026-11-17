@@ -358,10 +358,14 @@ class ModuleCanonicalizer {
 	static function canonicalAssignmentTarget(name:String, module:String, locals:LocalScope,
 			aliases:Null<AliasTable>):String {
 		if (name.indexOf(".") < 0)
-			return locals.get(name) == true ? module + "." + name : name;
+			return locals.get(name) == true ? stored(module + "." + name, aliases) : name;
 		var imported = importedReference(name, locals, aliases);
-		return imported == null ? name : imported;
+		return stored(imported == null ? name : imported, aliases);
 	}
+
+	/** `path` with a module-level variable it names given where that variable is stored (AliasTable.moduleFieldPath). */
+	static inline function stored(path:String, aliases:Null<AliasTable>):String
+		return aliases == null ? path : aliases.moduleFieldPath(path);
 
 	/**
 	 * The span of an assignment or increment whose bare target was qualified as a module-level variable, carrying the source name
@@ -450,16 +454,19 @@ class ModuleCanonicalizer {
 				ErrorExpression(_): e;
 			case Variable(name, span):
 				var imported = importedReference(name, locals, aliases),
-					resolved = imported != null ? imported
+					resolved = stored(imported != null ? imported
 						: name.indexOf(".") < 0 && locals.get(name) == true
-						? (module == entry && name == "main" ? "main" : module + "." + name) : name;
+						? (module == entry && name == "main" ? "main" : module + "." + name) : name, aliases);
 				resolved == name ? e : Variable(resolved,
 					new compiler.core.Source.SourceSpan(span.file, span.start, span.end, span.isBareReference,
 					span.referenceName == null ? name : span.referenceName));
 			case Member(object, name, s):
 				var qualifiedName = expressionPath(e),
-					imported = qualifiedName == null ? null : importedReference(qualifiedName, locals, aliases);
-				if (imported != null) Variable(imported, s);
+					imported = qualifiedName == null ? null : importedReference(qualifiedName, locals, aliases),
+					// A module-level variable named by its full path (`pack.Mod.x`) is read where it is stored.
+					storedPath = qualifiedName == null || imported != null ? null : stored(qualifiedName, aliases);
+				if (imported != null) Variable(stored(imported, aliases), s);
+				else if (storedPath != null && storedPath != qualifiedName) Variable(storedPath, s);
 				else Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases),
 				canonicalExpression(b, module, entry, locals, aliases), s);
@@ -569,6 +576,7 @@ class ModuleCanonicalizer {
 				else if (dot > 0 && locals.get(prefix) == true)
 					// A method of a module-level variable (`names.push(x)`): the variable is qualified as a read of it is.
 					resolved = module + "." + name;
+				resolved = stored(resolved, aliases);
 				Call(resolved, [
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,

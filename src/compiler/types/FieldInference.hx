@@ -273,7 +273,9 @@ class FieldInference {
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" from this initializer', field.span));
 		}
-		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases),
+		var targetOwner = storageOwner(reference.owner, reference.name,
+			resolveOwner(reference.owner, owner, classes, aliases),
+			aliases),
 			targetClass = classes.get(targetOwner),
 			target:Null<AstField> = null;
 		if (targetClass != null)
@@ -497,7 +499,9 @@ class FieldInference {
 			};
 		if (reference == null)
 			return null;
-		var targetOwner = resolveOwner(reference.owner, owner, classes, aliases),
+		var targetOwner = storageOwner(reference.owner, reference.name,
+			resolveOwner(reference.owner, owner, classes, aliases),
+			aliases),
 			targetClass = classes.get(targetOwner);
 		if (targetClass == null)
 			return null;
@@ -573,6 +577,17 @@ class FieldInference {
 				separator < 0 ? null : {owner: path.substring(0, separator), name: path.substring(separator + 1)};
 			default: null;
 		};
+	}
+
+	/**
+	 * The class that stores `owner.name`: the hidden class of the module's variables when it names a module-level variable
+	 * (`Provider.value`, ModuleFields), as name resolution reads it; `resolved` otherwise.
+	 */
+	static function storageOwner(owner:String, name:String, resolved:String, aliases:AliasTable):String {
+		var qualified = aliases.exists(owner) ? aliases.get(owner) : resolved,
+			path = qualified + "." + name,
+			stored = aliases.moduleFieldPath(path);
+		return stored == path ? resolved : stored.substr(0, stored.length - name.length - 1);
 	}
 
 	static function resolveOwner(name:String, currentOwner:String, classes:Map<String, compiler.syntax.Ast.AstClass>,
