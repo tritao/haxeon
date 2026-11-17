@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.AllocationMeter;
+import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
@@ -47,10 +48,30 @@ class ProgramTyper {
 		this.assembler = new TypedProgramAssembler(session, function(type) bodyTyper.registerAnonymousTypes(type));
 	}
 
+	/**
+	 * Types the program. A body (a function, a field initializer) whose typing fails is recorded and left out, and the other bodies are
+	 * typed; the program then fails with every recorded error, before anything is generated from the bodies. An error outside the
+	 * bodies (a declaration, a generated helper) stops typing where it is met, with the errors recorded before it.
+	 */
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>,
 			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts,
 			?retained:RetainedFromPrevious):MeasuredTypedProgram {
+		try {
+			var typed = typeProgramPhases(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retained);
+			session.failIfRecovered([]);
+			return typed;
+		} catch (error:CompileError) {
+			// A failure after the bodies were typed carries them already; any other comes with the errors recovered before it.
+			if (Std.isOfType(error, TypingFailure))
+				throw error;
+			throw session.withRecovered(error);
+		}
+	}
+
+	function typeProgramPhases(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
+			entryPoint:Null<String>, cachedMetadata:Null<TypedProgram>, facts:Null<compiler.semantic.ProgramFacts>,
+			retained:Null<RetainedFromPrevious>):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
@@ -287,6 +308,15 @@ class ProgramTyper {
 					typedFunctions.push(method);
 		for (fn in abstractFunctions)
 			typedFunctions.push(fn);
+		// What the bodies ask for is generated next: not from a program some of whose bodies failed. The ones that typed go with
+		// the failure, with the lambdas and specializations they made, for the editor.
+		if (session.recoveredErrors.length > 0) {
+			var conversion = session.programOutput.closureConversion;
+			session.failIfRecovered(typedFunctions.concat([
+				for (index in 0...conversion.generatedFunctionCount())
+					conversion.generatedFunction(index)
+			]));
+		}
 		var functionBodiesDoneAt = Sys.time() * 1000.0;
 		var allocationAfterFunctionBodies = AllocationMeter.sample();
 		// Field and signature types can request owners without a construction expression. A
@@ -700,9 +730,11 @@ class ProgramTyper {
 					initializer = resolved.initializer;
 					inlineValue = resolved.value;
 				} else {
-					var initializerContext =
-						bodyTyper.enterBody((specialization == null ? classDecl.name : specialization.name) + ".__init",
-						erasedSubstitutions, specialization == null ? null : classDecl.name),
+					var mark = session.checkpoint(),
+						initializerContext =
+							bodyTyper.enterBody((specialization == null ? classDecl.name : specialization.name)
+							+ ".__init",
+							erasedSubstitutions, specialization == null ? null : classDecl.name),
 						scope = new Scope();
 					if (!field.isStatic)
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
@@ -711,12 +743,15 @@ class ProgramTyper {
 						initializer = bodyTyper.typeFieldInitializer(parsedInitializer, scope, type,
 							field.isStatic ? 'static field "${classDecl.name}.${field.name}"'
 							: 'field "${classDecl.name}.${field.name}"');
-					} catch (error:Dynamic) {
 						bodyTyper.leaveBody(initializerContext);
-						throw error;
+						initializerContextWarnings = initializerContext.warnings;
+					} catch (error:CompileError) {
+						// A declared class's initializer that fails is recorded and the field is kept without it, so the next
+						// body is typed; a specialization's fails the body that asked for it.
+						if (specialization != null)
+							throw error;
+						session.recover(mark, error);
 					}
-					bodyTyper.leaveBody(initializerContext);
-					initializerContextWarnings = initializerContext.warnings;
 				}
 			}
 			fieldNames.set(field.name, true);
@@ -1075,10 +1110,15 @@ class ProgramTyper {
 		for (index in typingOrder(functions.length)) {
 			var fn = functions[index];
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
-				var unit = session.beginUnit();
-				outputs[index] = unit;
-				typed[index] = bodyTyper.typeFunction(fn);
-				session.endUnit(unit);
+				// A body that fails is left out, with its output: its error is recorded and the next body is typed.
+				var mark = session.checkpoint(), unit = session.beginUnit();
+				try {
+					typed[index] = bodyTyper.typeFunction(fn);
+					session.endUnit(unit);
+					outputs[index] = unit;
+				} catch (error:CompileError) {
+					session.recover(mark, error);
+				}
 			}
 		}
 		for (unit in outputs)
@@ -1105,10 +1145,14 @@ class ProgramTyper {
 		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null],
 			outputs:Array<Null<TypingOutput>> = [for (_ in methods) null];
 		for (index in typingOrder(methods.length)) {
-			var unit = session.beginUnit();
-			outputs[index] = unit;
-			typed[index] = bodyTyper.typeFunction(methods[index].signature, methods[index].owner, true);
-			session.endUnit(unit);
+			var mark = session.checkpoint(), unit = session.beginUnit();
+			try {
+				typed[index] = bodyTyper.typeFunction(methods[index].signature, methods[index].owner, true);
+				session.endUnit(unit);
+				outputs[index] = unit;
+			} catch (error:CompileError) {
+				session.recover(mark, error);
+			}
 		}
 		for (unit in outputs)
 			if (unit != null)
@@ -1176,25 +1220,33 @@ class ProgramTyper {
 				continue;
 			if (BodyTyper.isGeneric(method))
 				continue;
-			var unit = units == null ? null : session.beginUnit();
-			methodUnits[methodIndex] = unit;
+			if (method.name == "new")
+				hasConstructor = true;
 			var qualified = classDecl.name + "." + method.name,
-				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified)),
-				typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic, substitutions,
+				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified));
+			// A declared class's method body that fails is left out, with its output: its error is recorded and the next body is
+			// typed. A specialization's fails the body that asked for it.
+			var mark = session.checkpoint(), unit = units == null ? null : session.beginUnit();
+			try {
+				var typedMethod = typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
+					substitutions,
 					specialization == null ? null : specialization.name + "." + method.name, null,
 					specialization == null ? null : specialization.name,
 					specialization == null ? null : specialization.typeArguments) : methodSignature(method,
 					classDecl.name, substitutions);
-			if (method.name == "new") {
-				hasConstructor = true;
-				if (typeBody && instanceInitializers.length > 0)
+				if (method.name == "new" && typeBody && instanceInitializers.length > 0)
 					typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers,
 						specialization == null ? null : session.representation.receiverType(classDecl.name,
 						substitutions));
+				methodsTyped[methodIndex] = typedMethod;
+				if (unit != null)
+					session.endUnit(unit);
+				methodUnits[methodIndex] = unit;
+			} catch (error:CompileError) {
+				if (specialization != null || !typeBody)
+					throw error;
+				session.recover(mark, error);
 			}
-			methodsTyped[methodIndex] = typedMethod;
-			if (unit != null)
-				session.endUnit(unit);
 		}
 		for (typedMethod in methodsTyped)
 			if (typedMethod != null)

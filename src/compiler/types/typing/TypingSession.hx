@@ -14,6 +14,15 @@ import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.core.Source.SourceSpan;
 import compiler.types.analysis.Scope;
 
+/** Where typing stood before a body: see `TypingSession.checkpoint`. */
+typedef TypingCheckpoint = {
+	final contexts:Int;
+	final outputs:Int;
+	final output:TypingOutput;
+	final defaultArgumentDepth:Int;
+	final monomorphs:Int;
+}
+
 /**
  * The typing state of one compilation: the program view bodies are typed against (declarations, relations, signatures,
  * representations, the facts about purity and no-return functions) and the body context stack, plus where typing writes:
@@ -105,6 +114,63 @@ class TypingSession {
 			throw error;
 		}
 		endUnit(unit);
+	}
+
+	/**
+	 * The errors typing recovered from, in the order they were met: one per body (a function, a field initializer) whose typing
+	 * failed. The program typer goes on with the next body, then fails with all of them (`failIfRecovered`).
+	 */
+	public final recoveredErrors:Array<Diagnostic> = [];
+
+	/** Where typing stands between bodies, to come back to when the next one fails (`recover`). */
+	public function checkpoint():TypingCheckpoint
+		return {
+			contexts: bodyContexts.length,
+			outputs: outputs.length,
+			output: output,
+			defaultArgumentDepth: defaultArgumentDepth,
+			monomorphs: monomorphs.depth()
+		};
+
+	/**
+	 * Records the errors of a body whose typing failed and returns to `mark`, taken before it: the body contexts, outputs and
+	 * type-variable frames it left open are closed (its type variables become Dynamic, so none escapes), and its output, which the
+	 * caller drops, is no longer written to. Only a `CompileError` is recovered from; anything else is a compiler bug and stops typing.
+	 */
+	public function recover(mark:TypingCheckpoint, error:CompileError):Void {
+		monomorphs.discardFrom(mark.monomorphs);
+		if (bodyContexts.length > mark.contexts)
+			bodyContexts.splice(mark.contexts, bodyContexts.length - mark.contexts);
+		if (outputs.length > mark.outputs)
+			outputs.splice(mark.outputs, outputs.length - mark.outputs);
+		output = mark.output;
+		defaultArgumentDepth = mark.defaultArgumentDepth;
+		for (diagnostic in error.diagnostics)
+			recordRecovered(diagnostic);
+	}
+
+	function recordRecovered(diagnostic:Diagnostic):Void {
+		// A shared unit (an inline constant) that fails is typed again, and fails again, in each body that uses it: report it once.
+		for (existing in recoveredErrors)
+			if (existing.code == diagnostic.code && existing.message == diagnostic.message
+				&& existing.span.start == diagnostic.span.start && existing.span.end == diagnostic.span.end
+				&& existing.span.file.path == diagnostic.span.file.path)
+				return;
+		recoveredErrors.push(diagnostic);
+	}
+
+	/** Fails with every recovered error, if typing recovered from any, and with `typed`, the functions that did type. */
+	public function failIfRecovered(typed:Array<compiler.types.TypedAst.TypedFunction>):Void
+		if (recoveredErrors.length > 0)
+			throw new TypingFailure(recoveredErrors.copy(), typed);
+
+	/** `error`, with the errors recovered before it first: what a typing that stops at `error` fails with. */
+	public function withRecovered(error:CompileError):CompileError {
+		if (recoveredErrors.length == 0)
+			return error;
+		for (diagnostic in error.diagnostics)
+			recordRecovered(diagnostic);
+		return new CompileError(recoveredErrors[0], recoveredErrors.slice(1));
 	}
 
 	/** Merges the outputs of units typed in any order into the program's, in the order of `units` (declaration order). */

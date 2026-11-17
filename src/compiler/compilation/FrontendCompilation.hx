@@ -31,6 +31,7 @@ import compiler.types.TypedAst.TypedProgram;
 import compiler.types.typing.EnumRuntimeType;
 import compiler.types.typing.RetainedFromPrevious;
 import compiler.types.typing.RuntimeDependencyTracker;
+import compiler.types.typing.TypingFailure;
 import compiler.types.Type.CompilerType;
 import compiler.modules.ModuleState.SemanticDependencyKind;
 import compiler.semantic.SemanticDependencyCollector;
@@ -424,13 +425,77 @@ class FrontendCompilation {
 				}
 			context.state.semanticProgram = semantic;
 		} catch (error:CompileError) {
-			for (name in names) {
-				var state:compiler.modules.ModuleState = context.state.modules.get(name);
-				if (state.source.path == error.diagnostic.span.file.path)
-					context.state.writableState(name, build.rollbackModules).diagnostics.push(error.diagnostic);
+			// Typing recovers from a failed body and goes on, so the error can carry one diagnostic per failed body: each goes to
+			// the module of its file.
+			for (diagnostic in error.diagnostics)
+				for (name in names) {
+					var state:compiler.modules.ModuleState = context.state.modules.get(name);
+					if (state.source.path == diagnostic.span.file.path)
+						context.state.writableState(name, build.rollbackModules).diagnostics.push(diagnostic);
+				}
+			if (build.indexSemantics && Std.isOfType(error, TypingFailure)) {
+				var failure:TypingFailure = cast error;
+				indexRecoveredTyping(build, failure.typed);
+				for (module in build.reindexedModules.keys())
+					failure.indexedModules.set(module, true);
 			}
 			throw error;
 		}
+	}
+
+	/**
+	 * After a typing that recovered from failed bodies, the selected modules get new semantic models with the bodies that typed
+	 * indexed, as a successful build would index them, and the bodies that failed indexed from their syntax: an editor then has the
+	 * types the typer found everywhere but in a failed body. The build still fails; the models are only what the editor reads.
+	 */
+	static function indexRecoveredTyping(build:FrontendBuild, typed:Array<compiler.types.TypedAst.TypedFunction>):Void {
+		rebuildSemanticIndex(build);
+		var context = build.context,
+			owners = build.semanticAssembly.owners,
+			typedByName = [for (fn in typed) fn.name => fn],
+			indexedSpans:Map<String, Map<Int, Bool>> = [];
+		for (fn in typed) {
+			var module = recoveredFunctionModule(fn, owners, typedByName, 0);
+			if (module == null || !build.reindexedModules.exists(module))
+				continue;
+			var state = context.state.modules.get(module),
+				model = state == null ? null : state.semanticModel;
+			if (model == null)
+				continue;
+			model.index.indexTypedFunction(fn, context.state.semanticWorkspace.resolveSymbolId,
+				context.state.semanticWorkspace.resolveEnumCaseId, build.token);
+			var spans = indexedSpans.get(module);
+			if (spans == null) {
+				spans = [];
+				indexedSpans.set(module, spans);
+			}
+			spans.set(fn.span.start, true);
+		}
+		for (module in build.reindexedModules.keys()) {
+			var state = context.state.modules.get(module),
+				model = state == null ? null : state.semanticModel;
+			if (model != null && state != null) {
+				var spans = indexedSpans.get(module);
+				model.index.indexRecoveredSyntax(state.parsedAst(), spans == null ? [] : spans);
+			}
+		}
+	}
+
+	/** The module of a function a failed typing made, as `resolveFunctionModule` finds it, or null when its origin is not known. */
+	static function recoveredFunctionModule(fn:compiler.types.TypedAst.TypedFunction, owners:Map<String, String>,
+			typedByName:Map<String, compiler.types.TypedAst.TypedFunction>, depth:Int):Null<String> {
+		if (owners.exists(fn.name))
+			return owners.get(fn.name);
+		var origin = fn.origin;
+		if (origin == null || depth > 64)
+			return null;
+		if (owners.exists(origin))
+			return owners.get(origin);
+		var initializer = initializerModule(origin, owners);
+		if (initializer != null)
+			return initializer;
+		var parent = typedByName.get(origin);
+		return parent == null ? null : recoveredFunctionModule(parent, owners, typedByName, depth + 1);
 	}
 
 	/** New semantic models for the modules whose functions were selected, with their type references indexed. */

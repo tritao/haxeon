@@ -46,15 +46,26 @@ class Diagnostic {
 	}
 }
 
-/** Exception wrapper used to propagate one structured diagnostic internally. */
+/**
+ * Exception wrapper used to propagate structured diagnostics internally: one, or, when typing recovered from errors in several
+ * independent bodies, all of them (`diagnostics`), the first of which is `diagnostic`.
+ */
 class CompileError {
 	public final diagnostic:Diagnostic;
 
-	public function new(diagnostic:Diagnostic) {
+	/** Every diagnostic of the failure, `diagnostic` first. */
+	public final diagnostics:Array<Diagnostic>;
+
+	public function new(diagnostic:Diagnostic, ?others:Array<Diagnostic>) {
 		this.diagnostic = diagnostic;
+		this.diagnostics = others == null ? [diagnostic] : [diagnostic].concat(others);
 	}
 
 	/** Located, so an error nobody catches still says where it happened. */
 	public function toString():String
 		return diagnostic.format();
+
+	/** Every diagnostic, one per line. */
+	public function formatAll():String
+		return [for (item in diagnostics) item.format()].join("\n");
 }

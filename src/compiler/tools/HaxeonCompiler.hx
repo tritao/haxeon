@@ -9,8 +9,7 @@ class HaxeonCompiler {
 		try {
 			CompilerDriver.compile(request, Sys.println);
 		} catch (failure:CompileError) {
-			var diagnostic = failure.diagnostic;
-			Sys.println(diagnostic.format());
+			Sys.println(failure.formatAll());
 			throw failure;
 		}
 	}

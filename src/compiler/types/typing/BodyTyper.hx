@@ -403,7 +403,7 @@ class BodyTyper implements BodyTyping {
 		try
 			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
 		catch (error:Dynamic) {
-			session.monomorphs.end(frame);
+			session.monomorphs.discard(frame);
 			throw error;
 		}
 		var map = settleFrame(frame);
@@ -420,17 +420,21 @@ class BodyTyper implements BodyTyping {
 		session.monomorphs.end(frame);
 		if (frame.cells.length == 0)
 			return null;
+		var unfixed:Null<compiler.types.Type.MonomorphCell> = null;
 		for (cell in frame.cells) {
 			// Nothing filled it, but a later use expects a type of it: that is its type.
 			if (cell.hint != null && compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
 				compiler.types.Monomorphs.unify(TMonomorph(cell), cell.hint);
 			if (!compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
 				continue;
-			// Otherwise it is Dynamic, as an unbound monomorph is in Haxe, which says nothing of it.
-			if (cell.mustBeFixed)
-				fail("E1003", 'Cannot infer ${cell.origin}: nothing after it fixes it; give it a type', cell.span);
+			// Otherwise it is Dynamic, as an unbound monomorph is in Haxe, which says nothing of it. Every one is settled before an
+			// error is reported, so that none is left open after the body fails.
+			if (cell.mustBeFixed && unfixed == null)
+				unfixed = cell;
 			compiler.types.Monomorphs.unify(TMonomorph(cell), TDynamic);
 		}
+		if (unfixed != null)
+			fail("E1003", 'Cannot infer ${unfixed.origin}: nothing after it fixes it; give it a type', unfixed.span);
 		for (check in frame.deferred)
 			check();
 		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);

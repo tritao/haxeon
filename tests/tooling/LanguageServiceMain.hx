@@ -785,6 +785,35 @@ class LanguageServiceMain {
 				expandedHasSlate = true;
 		if (expandedCompletion.isIncomplete || !expandedHasSlate)
 			throw "workspace completion index did not recover after indexing a newly added module";
+		// A type error in one function leaves the others typed: their locals have the types the typer found, not ones guessed from
+		// syntax, and both failed functions are reported.
+		var typedService = new LanguageService(),
+			typedSource = "function names():Array<String> return [\"a\"];\n"
+				+ "function good():Int { var found = names(); return found.length; }\n"
+				+ "function bad():Int { var wrong:String = 1; return 0; }\n"
+				+ "function worse():Int { var count:Int = \"x\"; return count; }\n"
+				+ "function main():Int return good();\n";
+		typedService.update("Typed.hx", typedSource);
+		try {
+			typedService.analyze("Typed");
+			throw "a module with type errors analyzed";
+		} catch (_:CompileError) {}
+		var typedDiagnostics = typedService.diagnostics("Typed.hx");
+		if (typedDiagnostics.length != 2 || typedDiagnostics[0].code != "E1002" || typedDiagnostics[1].code != "E1002")
+			throw 'both failed functions were not reported: ${[for (diagnostic in typedDiagnostics) diagnostic.format()]}';
+		var foundHover = typedService.hover("Typed.hx", typedSource.indexOf("found =") + 2);
+		if (foundHover != "found:Array<String>")
+			throw 'a local of a function that typed did not have its typed type beside a type error: $foundHover';
+		var memberPosition = typedSource.indexOf("found.length") + "found.".length,
+			members = [for (item in typedService.complete("Typed.hx", memberPosition + 2)) item.label];
+		if (members.indexOf("length") < 0)
+			throw 'member completion on a typed local beside a type error missed its members: $members';
+		var failedLocals = [
+			for (item in typedService.complete("Typed.hx", typedSource.indexOf("return count") + "return co".length))
+				item.label
+		];
+		if (failedLocals.indexOf("count") < 0)
+			throw 'completion in the failed function lost its locals: $failedLocals';
 		var discoveredRoot = haxe.io.Path.join([
 			Sys.getCwd(),
 			"out",

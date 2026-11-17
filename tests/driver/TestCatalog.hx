@@ -53,6 +53,7 @@ class TestCatalog {
 		"CompilerGapsMain",
 		"RuntimeFastPathsMain",
 		"NullReassignmentMain",
+		"TypingRecoveryMain",
 		"MixedArrayLiteralMain",
 		"EnumTypedefConstructorMain",
 		"AbstractTypeDependencyMain",

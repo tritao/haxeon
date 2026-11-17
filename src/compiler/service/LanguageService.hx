@@ -317,9 +317,13 @@ class LanguageService {
 		workspaceIndexCursor = 0;
 	}
 
+	/**
+	 * After a failed analysis, a module left without a current syntax tree is parsed with recovery and indexed from its syntax,
+	 * unless the failed typing already left it the real typer's index of the bodies that typed (`AnalysisTransaction`).
+	 */
 	function recoverCurrentSyntax():Void {
 		for (state in compiler.modules) {
-			if (state.ast != null)
+			if (state.ast != null || state.recoveredSemanticModel != null)
 				continue;
 			try {
 				var conditional = ConditionalCompilation.process(state.source, editorDefines);

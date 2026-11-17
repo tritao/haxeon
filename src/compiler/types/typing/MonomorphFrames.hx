@@ -44,6 +44,31 @@ class MonomorphFrames {
 			frames.splice(index, frames.length - index);
 	}
 
+	/** How many frames are open: a mark to `discardFrom`. */
+	public function depth():Int
+		return frames.length;
+
+	/**
+	 * Ends the frames from `depth` on, of bodies whose typing failed, and makes each of their type variables that nothing filled
+	 * Dynamic, so that none is left open in whatever the failed typing wrote before it stopped.
+	 */
+	public function discardFrom(depth:Int):Void {
+		if (depth >= frames.length)
+			return;
+		for (index in depth...frames.length)
+			for (cell in frames[index].cells)
+				if (compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
+					compiler.types.Monomorphs.unify(TMonomorph(cell), TDynamic);
+		frames.splice(depth, frames.length - depth);
+	}
+
+	/** Discards `frame` and any frame left open inside it (see `discardFrom`). */
+	public function discard(frame:MonomorphFrame):Void {
+		var index = frames.indexOf(frame);
+		if (index >= 0)
+			discardFrom(index);
+	}
+
 	/**
 	 * A new type variable standing for `origin` (`the type of local "x"`), or null where no body is being typed (a field
 	 * initializer, a generated helper), which has no frame to settle one. One that `mustBeFixed` is an error when nothing

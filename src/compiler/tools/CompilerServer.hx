@@ -118,9 +118,8 @@ class CompilerServer {
 						try {
 							var message = Std.string(error);
 							if (Std.isOfType(error, CompileError)) {
-								var failure:CompileError = cast error,
-									diagnostic = failure.diagnostic;
-								message = diagnostic.format();
+								var failure:CompileError = cast error;
+								message = failure.formatAll();
 							}
 							send(client, Message(message));
 							send(client, Status(1));

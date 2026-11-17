@@ -5,6 +5,7 @@ import compiler.Compiler.AnalysisResult;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic;
 import compiler.modules.ModuleState;
+import compiler.types.typing.TypingFailure;
 
 /** Runs compiler analysis transactionally without assembling or publishing a runtime artifact. */
 class AnalysisTransaction {
@@ -74,6 +75,23 @@ class AnalysisTransaction {
 					var state:ModuleState = compiler.modules.get(name);
 					state.diagnostics = diagnostics;
 				}
+			// A typing that recovered from failed bodies indexed the ones that typed (`FrontendCompilation.indexRecoveredTyping`):
+			// a module the failed candidate parsed keeps that index as its recovered state, which the editor reads until the
+			// next analysis, so it need not guess from syntax.
+			if (Std.isOfType(error, TypingFailure)) {
+				var failure:TypingFailure = cast error;
+				for (name => candidateState in candidate.modules) {
+					var state = compiler.modules.get(name),
+						ast = candidateState.ast;
+					if (failure.indexedModules.exists(name) && state != null && state.ast == null && ast != null
+						&& candidateState.semanticModel != null
+						&& candidateState.revision == state.revision) {
+						state.recoveredAst = ast;
+						state.recoveredTokens = candidateState.tokens;
+						state.recoveredSemanticModel = candidateState.semanticModel;
+					}
+				}
+			}
 			throw error;
 		}
 	}

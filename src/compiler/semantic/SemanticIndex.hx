@@ -263,8 +263,11 @@ class SemanticIndex {
 		indexingMs += (Sys.time() - started) * 1000.0;
 	}
 
-	/** Index usable local facts from a recovered syntax tree without requiring successful typing. */
-	public function indexRecoveredSyntax(program:AstProgram):Void {
+	/**
+	 * Index usable local facts from a recovered syntax tree without requiring successful typing: of every function, or, after a
+	 * typing that recovered from failed bodies, of the functions it did not type (`typed`, by where they start).
+	 */
+	public function indexRecoveredSyntax(program:AstProgram, ?typed:Map<Int, Bool>):Void {
 		for (owner in program.classes) {
 			for (field in owner.fields)
 				rememberRecoveredMember(owner.name, field.name, field.span);
@@ -272,13 +275,16 @@ class SemanticIndex {
 				rememberRecoveredMember(owner.name, method.name, method.span);
 		}
 		for (fn in program.functions)
-			indexRecoveredFunction(fn, null);
+			if (typed == null || !typed.exists(fn.span.start))
+				indexRecoveredFunction(fn, null);
 		for (owner in program.classes)
 			for (fn in owner.methods)
-				indexRecoveredFunction(fn, owner.name);
+				if (typed == null || !typed.exists(fn.span.start))
+					indexRecoveredFunction(fn, owner.name);
 		for (owner in program.abstracts)
 			for (fn in owner.methods)
-				indexRecoveredFunction(fn, owner.name);
+				if (typed == null || !typed.exists(fn.span.start))
+					indexRecoveredFunction(fn, owner.name);
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 	}
 
