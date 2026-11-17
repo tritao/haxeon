@@ -25,7 +25,7 @@ class Window {
 	var disposing:Bool = false;
 
 	/** Transfers the fresh native handle into this retryable managed owner. */
-	@:allow(Runtime)
+	@:allow(haxeon.platform.Runtime)
 	private function new(owned:OwnedWindowHandle) {
 		this.value = owned.borrow();
 	}
@@ -91,7 +91,7 @@ class Window {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Runtime)
+	@:allow(haxeon.platform.Runtime)
 	function attachOwner(registration:DisposalRegistration):Void owner = registration;
 
 	function ensureCanCreate():Void {

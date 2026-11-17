@@ -20,7 +20,7 @@ class BufferDesc {
 		stream = false;
 	}
 
-	@:allow(Buffer)
+	@:allow(haxeon.gpu.Buffer)
 	function nativeValue():nkgpu_buffer_desc {
 		var value = new nkgpu_buffer_desc();
 		value.set_struct_size(nkgpu_buffer_desc.size());

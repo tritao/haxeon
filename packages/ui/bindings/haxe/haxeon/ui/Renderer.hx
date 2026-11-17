@@ -130,7 +130,7 @@ class Renderer {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeHandle():nkui_renderer {
 		ensureLive();
 		return value;

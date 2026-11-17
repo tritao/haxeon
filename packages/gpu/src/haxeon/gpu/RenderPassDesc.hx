@@ -50,7 +50,7 @@ class RenderPassDesc {
 		return this;
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function nativeValue():nkgpu_render_pass_desc {
 		var value = new nkgpu_render_pass_desc();
 		value.set_struct_size(nkgpu_render_pass_desc.size());

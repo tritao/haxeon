@@ -23,7 +23,7 @@ class Shader {
 	final value:nkgpu_shader;
 	var disposed:Bool = false;
 
-	@:allow(ShaderBuilder)
+	@:allow(haxeon.gpu.ShaderBuilder)
 	private function new(renderer:Renderer, value:nkgpu_shader) {
 		this.renderer = renderer;
 		this.value = value;
@@ -62,7 +62,7 @@ class Shader {
 		return value;
 	}
 
-	@:allow(Pipeline)
+	@:allow(haxeon.gpu.Pipeline)
 	function rendererOwner():Renderer
 		return renderer;
 
@@ -78,7 +78,7 @@ class Shader {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		disposed = true;
 		registration.detach();
@@ -98,7 +98,7 @@ class ShaderBuilder {
 	final value:nkgpu_shader_builder;
 	var consumed:Bool = false;
 
-	@:allow(Shader)
+	@:allow(haxeon.gpu.Shader)
 	private function new(renderer:Renderer, value:nkgpu_shader_builder) {
 		this.renderer = renderer;
 		this.value = value;
@@ -186,7 +186,7 @@ class ShaderBuilder {
 		return new Shader(renderer, made.out_shader);
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		consumed = true;
 		registration.detach();

@@ -109,7 +109,7 @@ class Batch {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		disposed = true;
 		registration.detach();

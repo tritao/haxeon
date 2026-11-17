@@ -18,8 +18,8 @@ class Surface {
 	public static function fromNativeSurface(surface:PlatformSurface):Surface
 		return new Surface(surface.nativeHandle());
 
-	@:allow(Renderer)
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.Renderer)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeHandle():SurfaceHandle
 		return value;
 }

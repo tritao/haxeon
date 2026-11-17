@@ -21,7 +21,7 @@ class Pipeline {
 	final value:nkgpu_pipeline;
 	var disposed:Bool = false;
 
-	@:allow(PipelineBuilder)
+	@:allow(haxeon.gpu.PipelineBuilder)
 	private function new(renderer:Renderer, value:nkgpu_pipeline) {
 		this.renderer = renderer;
 		this.value = value;
@@ -73,11 +73,11 @@ class Pipeline {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(CommandBuffer)
+	@:allow(haxeon.gpu.CommandBuffer)
 	function rendererOwner():Renderer
 		return renderer;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		disposed = true;
 		registration.detach();
@@ -97,7 +97,7 @@ class PipelineBuilder {
 	final value:nkgpu_pipeline_builder;
 	var consumed:Bool = false;
 
-	@:allow(Pipeline)
+	@:allow(haxeon.gpu.Pipeline)
 	private function new(renderer:Renderer, value:nkgpu_pipeline_builder) {
 		this.renderer = renderer;
 		this.value = value;
@@ -142,7 +142,7 @@ class PipelineBuilder {
 		return new Pipeline(renderer, made.out_pipeline);
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		consumed = true;
 		registration.detach();

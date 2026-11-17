@@ -16,7 +16,7 @@ class CommandBuffer {
 	var bytes:Bytes;
 	var length:Int;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	private function new(renderer:Renderer, capacity:Int) {
 		if (capacity <= 0)
 			throw BindingError.invalidArgument("CommandBuffer.new", "command buffer capacity must be positive");
@@ -34,7 +34,7 @@ class CommandBuffer {
 	public function size():Int
 		return length;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function ensureRenderer(owner:Renderer):Void {
 		if (renderer != owner)
 			throw BindingError.invalidArgument("CommandBuffer.ensureRenderer",

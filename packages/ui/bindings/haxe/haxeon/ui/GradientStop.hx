@@ -14,7 +14,7 @@ class GradientStop {
 		this.color = color;
 	}
 
-	@:allow(LinearGradientPaint)
+	@:allow(haxeon.ui.LinearGradientPaint)
 	private function nativeValue():nkui_gradient_stop {
 		var result = new nkui_gradient_stop();
 		result.set_offset(offset);

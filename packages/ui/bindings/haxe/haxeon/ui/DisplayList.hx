@@ -53,9 +53,9 @@ class DisplayList {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Renderer)
-	@:allow(Canvas)
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.Renderer)
+	@:allow(haxeon.ui.Canvas)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeHandle():nkui_display_list {
 		ensureLive();
 		return value;

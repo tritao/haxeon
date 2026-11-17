@@ -14,6 +14,7 @@ class DspInstrument {
 	final owned:OwnedDspInstrumentHandle;
 	var disposed:Bool = false;
 
+	@:allow(haxeon.audio.DspEngine)
 	private function new(owned:OwnedDspInstrumentHandle) {
 		this.owned = owned;
 		this.value = owned.borrow();

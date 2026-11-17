@@ -30,7 +30,7 @@ class CustomEffectRegistration {
 		this.metalMacosFragment = metalMacosFragment;
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.ui.Renderer)
 	private function nativeValue():nkui_custom_effect_registration {
 		var result = new nkui_custom_effect_registration();
 		result.set_registration_id(definition.id);

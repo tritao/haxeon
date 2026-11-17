@@ -16,7 +16,7 @@ class LayoutMeasureConstraints {
 		this.maxHeight = maxHeight;
 	}
 
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.LayoutSession)
 	private static function fromNative(value:nkui_layout_measure_constraints):LayoutMeasureConstraints {
 		return new LayoutMeasureConstraints(value.get_min_width(), value.get_max_width(),
 			value.get_min_height(), value.get_max_height());

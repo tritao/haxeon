@@ -16,7 +16,7 @@ class TextColorRange {
 		this.color = color;
 	}
 
-	@:allow(TextLayout)
+	@:allow(haxeon.ui.TextLayout)
 	private function nativeValue():nkui_text_color_range {
 		var result = new nkui_text_color_range();
 		result.set_start(start);

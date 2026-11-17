@@ -26,7 +26,7 @@ class LayoutFrame {
 		return this;
 	}
 
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeValue():nkui_layout_frame_input {
 		nativeFrame.set_width(width);
 		nativeFrame.set_height(height);

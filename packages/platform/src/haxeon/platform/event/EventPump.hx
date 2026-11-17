@@ -15,9 +15,10 @@ class EventPump {
 	final listeners:Array<PlatformEvent->Void> = [];
 	var disposed:Bool = false;
 
-	@:allow(Runtime)
+	@:allow(haxeon.platform.Runtime)
 	@:allow(ShowcaseDesktop)
 	@:allow(ShowcaseWeb)
+	@:allow(haxeon.ui.host.BrowserUiHost)
 	private function new() {
 		requests = new Requests();
 	}
@@ -57,14 +58,15 @@ class EventPump {
 		return disposed;
 
 	/** Removes one listener when its subscription is disposed. */
-	@:allow(EventSubscription)
+	@:allow(haxeon.platform.event.EventSubscription)
 	private function removeListener(listener:PlatformEvent->Void):Bool
 		return listeners.remove(listener);
 
 	/** Stops the pump after its owning runtime shuts down. */
-	@:allow(Runtime)
+	@:allow(haxeon.platform.Runtime)
 	@:allow(ShowcaseDesktop)
 	@:allow(ShowcaseWeb)
+	@:allow(haxeon.ui.host.BrowserUiHost)
 	private function runtimeShutdown():Void {
 		disposed = true;
 		listeners.resize(0);

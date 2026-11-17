@@ -24,14 +24,14 @@ class NativeKitUIResource {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(CanvasCommandBuffer)
-	@:allow(Canvas)
-	@:allow(DisplayList)
-	@:allow(FontCollection)
-	@:allow(GraphicsSurface)
+	@:allow(haxeon.ui.CanvasCommandBuffer)
+	@:allow(haxeon.ui.Canvas)
+	@:allow(haxeon.ui.DisplayList)
+	@:allow(haxeon.ui.FontCollection)
+	@:allow(haxeon.ui.GraphicsSurface)
 	@:allow(ShowcaseCube)
-	@:allow(TextLayout)
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.TextLayout)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeHandle():nkui_resource {
 		if (disposed)
 			throw "NativeKit UI resource has been disposed";

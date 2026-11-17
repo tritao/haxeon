@@ -402,7 +402,7 @@ class Canvas {
 	public function update(displayList:DisplayList):Void
 		displayList.update(this);
 
-	@:allow(DisplayList)
+	@:allow(haxeon.ui.DisplayList)
 	private function submitTo(list:nkui_display_list):Void {
 		if (openLayers != 0)
 			throw "Canvas update with an open layer";

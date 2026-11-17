@@ -10,7 +10,7 @@ class Paint extends NativeKitUIResource {
 
 /** A uniform RGBA paint. */
 class SolidPaint extends Paint {
-	@:allow(SolidPaint)
+	@:allow(haxeon.ui.SolidPaint)
 	private function new(value:nkui_resource)
 		super(value);
 

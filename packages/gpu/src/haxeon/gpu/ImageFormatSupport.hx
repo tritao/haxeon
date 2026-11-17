@@ -24,7 +24,7 @@ class ImageFormatSupport {
 		storage = value.get_storage() != 0;
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	static function fromNative(value:nkgpu_image_format_support):ImageFormatSupport
 		return new ImageFormatSupport(value);
 }

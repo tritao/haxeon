@@ -12,7 +12,7 @@ class Promise<T> {
 
 	public function new() future = new Future<T>();
 
-	@:allow(Requests)
+	@:allow(haxeon.platform.async.Requests)
 	private function resolve(outcome:Outcome<T>):Void future.finish(outcome);
 
 	public function complete(value:T):Void future.finish(Success(value));

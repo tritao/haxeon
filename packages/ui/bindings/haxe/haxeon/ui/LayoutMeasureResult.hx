@@ -21,7 +21,7 @@ class LayoutMeasureResult {
 		this.hasBaseline = hasBaseline;
 	}
 
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeValue():nkui_layout_measure_result {
 		var result = new nkui_layout_measure_result();
 		result.set_width(width);

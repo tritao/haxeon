@@ -14,7 +14,7 @@ class Uniforms {
 	final value:nkgpu_uniform_builder;
 	var consumed:Bool = false;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	private function new(renderer:Renderer, value:nkgpu_uniform_builder) {
 		this.renderer = renderer;
 		this.value = value;
@@ -38,7 +38,7 @@ class Uniforms {
 		registration.detach();
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		consumed = true;
 		registration.detach();

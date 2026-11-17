@@ -137,13 +137,13 @@ class Buffer {
 	function rendererOwner():Renderer
 		return renderer;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		disposed = true;
 		registration.detach();
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("Buffer.ensureLive", "GPU buffer has been disposed");

@@ -32,7 +32,7 @@ class DisposalRegistry {
 
 	public function count():Int return entries.length;
 
-	@:allow(DisposalRegistration)
+	@:allow(haxeon.platform.DisposalRegistration)
 	function remove(entry:DisposalRegistration):Void {
 		entries.remove(entry);
 	}

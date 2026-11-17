@@ -18,7 +18,7 @@ class WebView {
 	var owner:Null<DisposalRegistration>;
 
 	/** Transfers the fresh native handle into this retryable managed owner. */
-	@:allow(Window)
+	@:allow(haxeon.platform.Window)
 	private function new(owned:OwnedWebViewHandle) {
 		this.value = owned.borrow();
 	}
@@ -70,7 +70,7 @@ class WebView {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Window)
+	@:allow(haxeon.platform.Window)
 	function attachOwner(registration:DisposalRegistration):Void owner = registration;
 
 	function ensureLive():Void {

@@ -38,8 +38,8 @@ class FrameInfo {
 		return this;
 	}
 
-	@:allow(Renderer)
-	@:allow(LayoutSession)
+	@:allow(haxeon.ui.Renderer)
+	@:allow(haxeon.ui.LayoutSession)
 	private function nativeValue():nkui_frame_info {
 		nativeFrame.set_logical_width(logicalWidth);
 		nativeFrame.set_logical_height(logicalHeight);

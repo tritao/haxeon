@@ -283,7 +283,7 @@ class Renderer {
 	public function batch():Batch
 		return Batch.begin(this);
 
-	@:allow(SurfaceFrame)
+	@:allow(haxeon.gpu.SurfaceFrame)
 	function ownsSurface(surface:Surface):Bool
 		return this.surface == surface;
 

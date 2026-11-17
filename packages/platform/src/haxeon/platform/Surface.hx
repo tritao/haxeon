@@ -16,7 +16,7 @@ class Surface {
 	var owner:Null<DisposalRegistration>;
 	var frameSubscription:Null<SurfaceFrameSubscription>;
 
-	@:allow(Window)
+	@:allow(haxeon.platform.Window)
 	private function new(value:SurfaceHandle, ownsHandle:Bool) {
 		this.value = value;
 		this.ownsHandle = ownsHandle;
@@ -30,7 +30,7 @@ class Surface {
 		return new Surface(value, false);
 	}
 
-	@:allow(Window)
+	@:allow(haxeon.platform.Window)
 	private static function adopt(owned:OwnedSurfaceHandle):Surface
 		return new Surface(owned.borrow(), true);
 
@@ -79,7 +79,7 @@ class Surface {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(SurfaceFrameSubscription)
+	@:allow(haxeon.platform.SurfaceFrameSubscription)
 	function detach(subscription:SurfaceFrameSubscription):Void {
 		if (frameSubscription != subscription) {
 			subscription.releasedAfterDetach();
@@ -90,7 +90,7 @@ class Surface {
 		subscription.releasedAfterDetach();
 	}
 
-	@:allow(Window)
+	@:allow(haxeon.platform.Window)
 	function attachOwner(registration:DisposalRegistration):Void owner = registration;
 
 	function ensureLive():Void {

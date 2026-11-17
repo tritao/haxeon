@@ -35,7 +35,7 @@ class ImageDesc {
 		type = ImageType.Auto;
 	}
 
-	@:allow(Image)
+	@:allow(haxeon.gpu.Image)
 	function nativeValue():nkgpu_image_desc {
 		var value = new nkgpu_image_desc();
 		value.set_struct_size(nkgpu_image_desc.size());

@@ -60,11 +60,11 @@ class Sampler {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(CommandBuffer)
+	@:allow(haxeon.gpu.CommandBuffer)
 	function rendererOwner():Renderer
 		return renderer;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		disposed = true;
 		registration.detach();

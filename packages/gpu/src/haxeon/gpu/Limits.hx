@@ -26,7 +26,7 @@ class Limits {
 		maxCubeSize = value.get_max_cube_size();
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	static function fromNative(value:nkgpu_limits):Limits
 		return new Limits(value);
 }

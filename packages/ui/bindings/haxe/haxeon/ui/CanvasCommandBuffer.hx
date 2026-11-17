@@ -29,7 +29,7 @@ class CanvasCommandBuffer {
 	}
 
 	@:noCompletion
-	@:allow(Canvas)
+	@:allow(haxeon.ui.Canvas)
 	private function reset():Void
 		length = 0;
 
@@ -259,15 +259,15 @@ class CanvasCommandBuffer {
 
 	/** Internal submission bridge; public callers should use Canvas and DisplayList. */
 	@:noCompletion
-	@:allow(DisplayList)
-	@:allow(Canvas)
+	@:allow(haxeon.ui.DisplayList)
+	@:allow(haxeon.ui.Canvas)
 	private function submit(list:nkui_display_list):NativeKitUI.UiStatus
 		return submitRange(list, 0, length);
 
 	/** Internal range submission bridge. */
 	@:noCompletion
-	@:allow(DisplayList)
-	@:allow(Canvas)
+	@:allow(haxeon.ui.DisplayList)
+	@:allow(haxeon.ui.Canvas)
 	private function submitRange(list:nkui_display_list, offset:Int, count:Int):NativeKitUI.UiStatus {
 		if (offset < 0 || offset > length || count < 0 || count > length - offset)
 			throw "Command range is out of bounds";

@@ -9,7 +9,7 @@ class EventSubscription {
 	final listener:PlatformEvent->Void;
 	var disposed:Bool = false;
 
-	@:allow(EventPump)
+	@:allow(haxeon.platform.event.EventPump)
 	private function new(events:EventPump, listener:PlatformEvent->Void) {
 		this.events = events;
 		this.listener = listener;

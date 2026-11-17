@@ -167,6 +167,8 @@ class Showcase {
 	var footerBounds:Rect;
 
 	/** Takes ownership of the configured font collection. */
+	@:allow(ShowcaseDesktop)
+	@:allow(ShowcaseWeb)
 	function new(fonts:FontCollection, ?multilingualText:String) {
 		benchmarkBaseText = multilingualText == null ? "NativeKit — مرحبا — שלום — こんにちは 👋" : multilingualText;
 		resources = [];

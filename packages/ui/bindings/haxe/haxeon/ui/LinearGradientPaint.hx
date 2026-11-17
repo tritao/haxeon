@@ -4,7 +4,7 @@ import NativeKitUI;
 
 /** Immutable linear gradient paint with up to eight color stops. */
 class LinearGradientPaint extends Paint {
-	@:allow(LinearGradientPaint)
+	@:allow(haxeon.ui.LinearGradientPaint)
 	private function new(value:nkui_resource)
 		super(value);
 

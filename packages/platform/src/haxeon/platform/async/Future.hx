@@ -13,7 +13,7 @@ class Future<T> {
 	var cancellationRequested:Bool = false;
 	final callbacks:Array<Outcome<T>->Void> = [];
 
-	@:allow(Promise)
+	@:allow(haxeon.platform.async.Promise)
 	private function new() {}
 
 	public function onComplete(callback:Outcome<T>->Void):Future<T> {
@@ -47,13 +47,13 @@ class Future<T> {
 		return true;
 	}
 
-	@:allow(Requests)
+	@:allow(haxeon.platform.async.Requests)
 	function setControls(cancel:Null<Void->Void>, detach:Void->Void):Void {
 		this.cancellation = cancel;
 		this.detach = detach;
 	}
 
-	@:allow(Promise)
+	@:allow(haxeon.platform.async.Promise)
 	function finish(value:Outcome<T>):Void {
 		if (outcome != null) return;
 		outcome = value;

@@ -40,11 +40,11 @@ struct Color implements Hashable implements Diffable {
 	public static function fromBytes(red:Int, green:Int, blue:Int, alpha:Int = 255):Color
 		return new Color(red / 255.0, green / 255.0, blue / 255.0, alpha / 255.0);
 
-	@:allow(Paint)
-	@:allow(SolidPaint)
-	@:allow(GradientStop)
-	@:allow(TextColorRange)
-	@:allow(TextLayout)
+	@:allow(haxeon.ui.Paint)
+	@:allow(haxeon.ui.SolidPaint)
+	@:allow(haxeon.ui.GradientStop)
+	@:allow(haxeon.ui.TextColorRange)
+	@:allow(haxeon.ui.TextLayout)
 	private function nativeValue():nkui_color {
 		var result = new nkui_color();
 		result.set_red(red);

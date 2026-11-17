@@ -26,7 +26,7 @@ class Requests {
 	final entries:Map<String, NativeRequestEntry> = [];
 	var disposed:Bool = false;
 
-	@:allow(EventPump)
+	@:allow(haxeon.platform.event.EventPump)
 	private function new() {}
 
 	public function readClipboardText():Future<String> {
@@ -193,7 +193,7 @@ class Requests {
 		return true;
 	}
 
-	@:allow(EventPump)
+	@:allow(haxeon.platform.event.EventPump)
 	function runtimeShutdown():Void {
 		if (disposed) return;
 		disposed = true;

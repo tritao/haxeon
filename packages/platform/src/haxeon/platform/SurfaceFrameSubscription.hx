@@ -9,7 +9,7 @@ class SurfaceFrameSubscription {
 	final callback:SurfaceFrameCallbackCallback;
 	var disposed:Bool = false;
 
-	@:allow(Surface)
+	@:allow(haxeon.platform.Surface)
 	private function new(surface:Surface, callback:SurfaceFrameCallbackCallback) {
 		this.surface = surface;
 		this.callback = callback;
@@ -24,7 +24,7 @@ class SurfaceFrameSubscription {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Surface)
+	@:allow(haxeon.platform.Surface)
 	function releasedAfterDetach():Void {
 		if (disposed)
 			return;

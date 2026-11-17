@@ -32,7 +32,7 @@ class Features {
 		timestamps = value.get_timestamps() != 0;
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	static function fromNative(value:nkgpu_features):Features
 		return new Features(value);
 }

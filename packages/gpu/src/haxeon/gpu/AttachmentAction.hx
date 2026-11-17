@@ -30,7 +30,7 @@ class AttachmentAction {
 		clearStencil = 0;
 	}
 
-	@:allow(RenderPassDesc)
+	@:allow(haxeon.gpu.RenderPassDesc)
 	function nativeValue():nkgpu_attachment_action {
 		var value = new nkgpu_attachment_action();
 		value.set_load_action(loadAction);

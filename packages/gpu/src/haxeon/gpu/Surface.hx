@@ -87,18 +87,18 @@ class Surface {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function attachRenderer(renderer:Renderer):Void {
 		ensureLive();
 		renderers.push(renderer);
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererDisposed(renderer:Renderer):Void {
 		renderers.remove(renderer);
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function windowOwner():Window
 		return window;
 

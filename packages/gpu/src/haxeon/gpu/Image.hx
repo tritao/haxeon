@@ -123,13 +123,13 @@ class Image {
 	function rendererOwner():Renderer
 		return renderer;
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function rendererClosed():Void {
 		disposed = true;
 		registration.detach();
 	}
 
-	@:allow(Renderer)
+	@:allow(haxeon.gpu.Renderer)
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("Image.ensureLive", "GPU image has been disposed");

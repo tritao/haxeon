@@ -36,7 +36,7 @@ class LayoutNode {
 	public var children(default, null):Array<LayoutNode>;
 	static final NoChildren:Array<LayoutNode> = [];
 	/** Set by LayoutTransaction to the encode that last visited this node, so duplicates are found without a lookup table. */
-	@:allow(LayoutTransaction)
+	@:allow(haxeon.ui.LayoutTransaction)
 	var encodeStamp:Int;
 
 	public function new(id:Int, visualKind:LayoutVisualKind = LayoutVisualKind.Box,

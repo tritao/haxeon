@@ -68,17 +68,8 @@ import testing.ExplorerSmokeSequence;
 import testing.ExplorerVisualCases;
 
 /** Interactive showcase for the Haxeon UI framework. */
-@:allow(pages.GraphicsPage)
-@:allow(pages.ControlsPage)
-@:allow(pages.DecorationsPage)
-@:allow(pages.EffectsPage)
-@:allow(pages.GesturesPage)
-@:allow(pages.LayoutPage)
-@:allow(pages.ListsPage)
-@:allow(pages.OverlaysPage)
-@:allow(pages.OverviewPage)
-@:allow(pages.TextPage)
-@:allow(pages.WebViewPage)
+// The page builders are the explorer's own parts, private classes of their modules included.
+@:allow(pages)
 @:allow(shell.CatalogSidebar)
 @:allow(shell.ExplorerShell)
 @:allow(shell.TopBar)

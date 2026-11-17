@@ -7,7 +7,7 @@ class DisposalRegistration {
 	var owner:Null<DisposalRegistry>;
 	var action:Null<Void->Void>;
 
-	@:allow(DisposalRegistry)
+	@:allow(haxeon.platform.internal.DisposalRegistry)
 	private function new(owner:DisposalRegistry, action:Void->Void) {
 		this.owner = owner;
 		this.action = action;
@@ -19,7 +19,7 @@ class DisposalRegistration {
 		action = null;
 	}
 
-	@:allow(DisposalRegistry)
+	@:allow(haxeon.platform.internal.DisposalRegistry)
 	function release():Void {
 		if (action == null) return;
 		action();
