@@ -51,6 +51,11 @@ The current subset includes:
   (`case moving = Fast | Slow:`), an enum payload (`case Group(lead = Circle(_), _):`), an array element
   (`case [first = 1, _]:`) or the pattern of `value.match(...)`. Over alternatives it binds whichever one matched.
 - Array iteration and comprehensions
+- Static initialization runs in Haxe's order: every class's `static function __init__()` first, then the static
+  initializers, class by class, each class's in declaration order. Classes go module by module in path order, each
+  module's in declaration order, after the classes their static initialization reaches (a base class, and the classes
+  whose statics, static methods or constructors it uses). A static read before its initializer runs reads its default
+  (`0`, `false`, `null`), and initializers that read each other in a cycle compile, as in Haxe.
 - Exceptions
 - Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves
   (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.

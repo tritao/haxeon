@@ -48,12 +48,13 @@ class LazyFieldTypingMain {
 			"}"
 		], "2:9",
 			'Field "Main.a" needs a type annotation: its type depends on "Main.b", which depends on it; annotate one of them');
-		// Forcing nests as deep as the chain of fields each reading the next one declared after it.
+		// Forcing nests as deep as the chain of fields each reading the next one declared after it. They run in declaration
+		// order, as in Haxe, so f0 reads f1 before it is set: 0 + 1.
 		var chain = ["class Main {"];
 		for (index in 0...199)
 			chain.push('	static var f$index = f${index + 1} + 1;');
 		chain.push("	static var f199 = 1;");
-		chain.push("	static function main():Int return f0 - 158;");
+		chain.push("	static function main():Int return f0 + 41;");
 		chain.push("}");
 		runs("a forced chain of 200 fields", chain, 42);
 		runs("fields typed from their initializers", [

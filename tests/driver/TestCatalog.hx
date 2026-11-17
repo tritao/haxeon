@@ -449,7 +449,7 @@ class TestCatalog {
 				"nullable enum tuple and payload patterns fall through without dereferencing null"),
 			hxmlCase("runtime", "static-init-order", "tests/hxml/static-init-order-test.hxml",
 				"static-init-order-test.hl", 0,
-				"static initializers respect dependency order"),
+				"static initializers run in Haxe's order"),
 			hxmlCase("runtime", "string-escapes", "tests/hxml/string-escapes-test.hxml",
 				"string-escapes-test.hl", 0,
 				"string escapes decode hex, unicode, octal and quote forms in both literal kinds"),

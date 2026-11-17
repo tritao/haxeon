@@ -328,7 +328,9 @@ class FrontendCompilation {
 			names = reachability.finish(token);
 			var initializationStartedAt = now();
 			graph.rebuild(modules);
-			var initializationNames = graph.initializationOrder(modules, names);
+			// Haxe's type order: modules by path, each module's classes as it declares them (`StaticInitializationOrder`).
+			var initializationNames = names.copy();
+			initializationNames.sort(compiler.ir.StaticInitializationOrder.compareModules);
 			for (name in initializationNames) {
 				var state = modules.get(name), ast = state.parsedAst();
 				for (classDecl in ast.classes)

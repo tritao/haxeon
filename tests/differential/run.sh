@@ -178,6 +178,9 @@ in_background run_case exception-details 0
 in_background run_case throw-type-check 0
 in_background run_case callstack-abstract 0
 in_background run_case abstract-module-members 0
+# Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
+in_background run_case static-init-order 0
+in_background run_case static-init-order-reach 0
 in_background run_case switch-null-coverage 0
 in_background run_case switch-guarded-catch-all 0
 in_background run_case switch-bool 0

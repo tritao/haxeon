@@ -19,7 +19,7 @@ class StaticInitOrderMain {
 				result.artifact.hashLink().runtimeIdentity);
 		var value = Runtime.callInt(live, result.artifact.hashLink().functionIds.get("main"));
 		if (value != 42)
-			throw "Static initializers did not respect module dependency order";
+			throw "Static initializers did not run a provider before its consumer";
 		Runtime.dispose(live);
 		var fields:Array<String> = [];
 		for (index in 0...80)
@@ -43,45 +43,39 @@ class StaticInitOrderMain {
 		if (Runtime.callInt(live, chunked.artifact.hashLink().functionIds.get("main")) != 82)
 			throw "Static initializer order changed across chunks";
 		Runtime.dispose(live);
-		// A dependency declared later in the same module, in the same class, or behind a call still runs first.
-		var forward = [
-			"a class declared later"
-				=> "class A { public static final X:Int = B.X; } class B { public static final X:Int = 7; } function main():Int { return A.X; }",
-			"a field declared later in the same class"
-				=> "class A { public static final X:Int = Y; public static final Y:Int = 7; } function main():Int { return A.X; }",
-			"a static read behind a call"
-				=> "class A { public static final X:Int = B.get(); } class B { static final V:Int = 7; public static function get():Int return V; } "
+		// A class runs after the classes its static initialization reaches, as in Haxe (StaticInitializationOrder); within a
+		// class, initializers run in declaration order. tests/differential/static-init-order*.hx check the order against Haxe.
+		var forward = ["a class declared later" => {
+			source:"class A { public static final X:Int = B.X; } class B { public static final X:Int = 7; } function main():Int { return A.X; }",
+				expected:7
+		},
+			"a field declared later in the same class reads its default" => {
+			source:"class A { public static final X:Int = Y; public static final Y:Int = 7; } function main():Int { return A.X; }",
+				expected:0
+		},
+			"a static read behind a call" => {
+			source:"class A { public static final X:Int = B.get(); } class B { static final V:Int = 7; public static function get():Int return V; } "
 				+ "function main():Int { return A.X; }",
-			"a stored callback is not an initializer dependency"
-				=> "class A { public static final callback:()->Int = () -> B.value; } class B { public static final value:Int = A.callback == null ? 0 : 7; } function main():Int { var callback = A.callback; return callback(); }",
-			"a deferred callback passed through a recursive helper"
-				=> "class A { public static final value:Int = store(() -> B.value, 0) + 7; static function store(f:()->Int, depth:Int):Int return depth <= 0 ? 0 : store(f, depth - 1); } class B { public static final value:Int = A.value; } function main():Int return B.value;",
-			"a callback read from a static field and invoked at startup"
-				=> "class Seed { public static final value:Int = 0; } class A { public static final callback:()->Int = () -> B.value; public static final value:Int = invoke(); static function invoke():Int { var f = callback; return f(); } } class B { public static final value:Int = 7; } function main():Int return A.value;",
-			"a returned callback invoked at startup"
-				=> "class Seed { public static final value:Int = 0; } class A { public static final value:Int = factory()(); static function factory():()->Int return () -> B.value; } class B { public static final value:Int = 7; } function main():Int return A.value;",
-			"an immediately invoked closure"
-				=> "class Seed { public static final value:Int = 0; } class A { public static final value:Int = (() -> B.value)(); } class B { public static final value:Int = 7; } function main():Int return A.value;",
-			"an invoked callback argument"
-				=> "class Seed { public static final value:Int = 0; } class A { public static final value:Int = apply(() -> B.value); static function apply(f:()->Int):Int return forward(f); static function forward(f:()->Int):Int return f(); } class B { public static final value:Int = 7; } function main():Int return A.value;",
-			"a callback invoked through a constructor field"
-				=> "class Seed { public static final value:Int = 0; } class Holder { var callback:()->Int; public var value:Int; public function new(f:()->Int) { callback = f; var action = callback; value = action(); } } class A { public static final value:Holder = new Holder(() -> B.value); } class B { public static final value:Int = 7; } function main():Int return A.value.value;",
-			"unrelated methods with the same name are not dependencies"
-				=> "class A { public static final value:Int = new B().get(); } class B { public function new() {} public function get():Int return 7; } class Unrelated { public function new() {} public function get():Int return A.value; } function main():Int { new Unrelated(); return A.value; }",
-			"overriding methods can read static dependencies"
-				=> "class Seed { public static final value:Int = 0; } class A { public static final value:Int = read(new Child()); static function read(base:Base):Int return base.get(); } class Base { public function new() {} public function get():Int return 0; } class Child extends Base { public function new() { super(); } public override function get():Int return Provider.value; } class Provider { public static final value:Int = 7; } function main():Int return A.value;",
-			"a static read behind a method call"
-				=> "class A { public static final X:Int = new B().get(); } class B { public function new() {} public function get():Int return C.V; } "
-				+ "class C { public static final V:Int = 7; } function main():Int { return A.X; }"
-		];
-		for (description => source in forward) {
+				expected:7
+		},
+			"a static read behind an instance method is not followed" => {
+			source:"class A { public static final X:Int = new B().get(); } class B { public function new() {} public function get():Int return C.V; } "
+				+ "class C { public static final V:Int = 7; } function main():Int { return A.X; }",
+				expected:0
+		},
+			"a cycle runs in the order the walk found" => {
+			source:"class A { public static final X:Int = B.X + 7; } class B { public static final X:Int = A.X + 1; } function main():Int return A.X * 100 + B.X;",
+				expected:801
+		}];
+		for (description => test in forward) {
 			compiler = new Compiler();
-			compiler.update("Main.hx", source);
+			compiler.update("Main.hx", test.source);
 			var ordered = compiler.compile("Main");
 			live = Runtime.load(HlWriter.encode(ordered.artifact.hashLink().module).flatten(),
 				ordered.artifact.hashLink().runtimeIdentity);
-			if (Runtime.callInt(live, ordered.artifact.hashLink().functionIds.get("main")) != 7)
-				throw 'Static initializers ran before their dependency: $description';
+			var value = Runtime.callInt(live, ordered.artifact.hashLink().functionIds.get("main"));
+			if (value != test.expected)
+				throw 'Static initialization order differs from Haxe ($description): $value, expected ${test.expected}';
 			Runtime.dispose(live);
 		}
 		// The stateless frontend uses the same assembler without the incremental function cache.
@@ -130,24 +124,6 @@ class StaticInitOrderMain {
 					+ ".wasm"), bytes);
 			}
 		}
-		for (source in [
-			"class A { public static final X:Int = B.X + 7; } class B { public static final X:Int = A.X + 1; } function main():Int return 0;",
-			"class A { public static final X:Int = X + 1; } function main():Int return 0;",
-			"class A { static final callback:()->Int = () -> X; public static final X:Int = invoke(); static function invoke():Int { var f = callback; return f(); } } function main():Int return 0;"
-		]) {
-			compiler = new Compiler();
-			compiler.update("Main.hx", source);
-			var rejected = false;
-			try
-				compiler.compile("Main")
-			catch (error:compiler.core.Diagnostic.CompileError) {
-				if (error.diagnostic.code != "E_STATIC_INIT_CYCLE" || error.diagnostic.message.indexOf("A.X ->") < 0)
-					throw error;
-				rejected = true;
-			}
-			if (!rejected)
-				throw "Static initializer cycle was accepted";
-		}
 		compiler = new Compiler();
 		compiler.update("Main.hx",
 			'class Missing { public static final values:Array<Int> = null; } class Consumer { public static final count:Int = Missing.values.length; } function main():Int return Consumer.count;');
@@ -156,7 +132,7 @@ class StaticInitOrderMain {
 			HlWriter.encode(nullResult.artifact.hashLink().module).flatten());
 		if (failed.status == 0 || failed.output.indexOf('Cannot dereference null static "Missing.values"') < 0)
 			throw "Null static dereference at startup did not report an error: " + failed.output;
-		Sys.println("PASS: static initializers respect dependency order");
+		Sys.println("PASS: static initializers run in Haxe's order");
 	}
 
 	static function runBytecode(path:String, bytes:haxe.io.Bytes):{status:Int, output:String} {
