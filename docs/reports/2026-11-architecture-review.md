@@ -300,7 +300,7 @@ In order; each step unblocks the next.
 
 ### Phase 2: typer
 
-Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order.
+Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2.6 runs beside 2.5 (see its note).
 
 - **2.1 Callback wiring.** Replace the 42 callback typedefs and forwarding closures with one narrow interface held by
   each sub-typer. Pure refactor. Effort M.
@@ -324,6 +324,17 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order.
   types syntactic. Six slices: the query, byte-identical; invalidation; fields; returns and arguments; deletion; early
   cutoff with ADR 0003 M4. Gate: differential tests against Haxe 4.3.7, warm-edit tests for inferred types, and
   `--reverse-typing-order` byte-identical. Effort L, high risk.
+- **2.6 Open anonymous types and structure values** (added 2026-11-18, design in
+  [STRUCTURE_VALUES.md](../design/STRUCTURE_VALUES.md)). An object literal's structure stays open while its unit is
+  typed and gains the optional fields of the structures it meets, as in Haxe; it is closed and named when the unit's
+  frame is settled. Width subtyping (var and final fields, `Array` and function variance), class and interface to
+  structure, and `Dynamic` to structure become retypes that keep identity: a structure value is the object itself, and a
+  field access tests the object's exact class, with a generated dispatcher for other shapes (one model on HashLink,
+  Wasm32 and Wasm GC; erased generic owners move onto the same dispatcher). Then delete `localExpectedTypes`. Replaces
+  the reverted copy-based widening of `c618c16d8`. Two tracks: representation (haxeon-e4: census, `Structure(S)`,
+  dispatchers, erased owners) and typing (open literals, then the deletion), joined by the relations slice. Gate:
+  differential tests against Haxe 4.3.7, `--reverse-typing-order` byte-identical, warm and live structure edits, the
+  self-compile no slower than noise and nbody within 3%. Effort L, high risk.
 
 ### Phase 3: service
 

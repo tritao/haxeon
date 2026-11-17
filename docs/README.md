@@ -63,6 +63,8 @@ Language:
 - [UI_LANGUAGE_FEATURES.md](design/UI_LANGUAGE_FEATURES.md): features the reactive UI model needs.
 - [INLINING_AND_VALUE_TYPES.md](design/INLINING_AND_VALUE_TYPES.md): the inliner and scalar replacement.
 - [INTERFACE_VALUES.md](design/INTERFACE_VALUES.md): one interface-value model on every backend.
+- [STRUCTURE_VALUES.md](design/STRUCTURE_VALUES.md): open anonymous types, width subtyping, structures as
+  the object itself (plan step 2.6).
 - [VALUE_CONSTRUCTOR_DESTINATION.md](design/VALUE_CONSTRUCTOR_DESTINATION.md): value constructors that return their value.
 - [PURITY.md](design/PURITY.md), [SCOPED_PLACES.md](design/SCOPED_PLACES.md), [SHADERS.md](design/SHADERS.md): deferred.
 
