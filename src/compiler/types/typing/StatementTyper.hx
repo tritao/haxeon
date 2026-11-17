@@ -851,24 +851,24 @@ class StatementTyper {
 				seenCases.set(caseKey, true);
 			}
 			typedCases.push({
-				value: typedValue,
-				subjectBinding: subjectBinding,
-				arrayPattern: arrayPattern,
-				isCatchAll: isCatchAll,
-				guard: typedGuard,
-				statements: typedBody,
-				enumName: enumName,
-				constructorIndex: constructorIndex,
-				bindings: bindings,
-				predicates: predicates,
-				span: switchCase.span
+				arm: {
+					value: typedValue,
+					subjectBinding: subjectBinding,
+					arrayPattern: arrayPattern,
+					isCatchAll: isCatchAll,
+					guard: typedGuard,
+					enumName: enumName,
+					constructorIndex: constructorIndex,
+					bindings: bindings,
+					predicates: predicates,
+					span: switchCase.span
+				},
+				statements: typedBody
 			});
 		}
 		if (tupleTypes != null && !hasDefault) {
-			var unmatched = TupleSwitch.unmatched(session, bodyTyper, tupleTypes, [for (typedCase in typedCases)
-				{
-					arrayPattern:typedCase.arrayPattern, isCatchAll:typedCase.isCatchAll, guard:typedCase.guard
-				}]);
+			var unmatched = TupleSwitch.unmatched(session, bodyTyper, tupleTypes,
+				[for (typedCase in typedCases) typedCase.arm]);
 			if (unmatched != null)
 				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
 		}
@@ -877,11 +877,11 @@ class StatementTyper {
 			var missing:Array<String> = [],
 				coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in typedCases)
 					{
-						constructorIndex:switchCase.constructorIndex,
-							subjectBinding:switchCase.subjectBinding,
-							isCatchAll:switchCase.isCatchAll,
-							guard:switchCase.guard,
-							predicates:switchCase.predicates
+						constructorIndex:switchCase.arm.constructorIndex,
+							subjectBinding:switchCase.arm.subjectBinding,
+							isCatchAll:switchCase.arm.isCatchAll,
+							guard:switchCase.arm.guard,
+							predicates:switchCase.arm.predicates
 					}];
 			if (session.enumDecls.exists(enumName)) {
 				var enumDecl = session.enumDecls.get(enumName);

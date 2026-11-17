@@ -142,17 +142,19 @@ class RawRepresentableGenerator {
 								continue;
 							seen.set(code, true);
 							cases.push({
-								value: constant,
-								subjectBinding: null,
-								arrayPattern: null,
-								isCatchAll: false,
-								guard: null,
-								statements: [TReturn(present, span)],
-								enumName: null,
-								constructorIndex: -1,
-								bindings: [],
-								predicates: [],
-								span: span
+								arm: {
+									value: constant,
+									subjectBinding: null,
+									arrayPattern: null,
+									isCatchAll: false,
+									guard: null,
+									enumName: null,
+									constructorIndex: -1,
+									bindings: [],
+									predicates: [],
+									span: span
+								},
+								statements: [TReturn(present, span)]
 							});
 						default:
 							statements.push(TIf(new TypedExpression(TEqual(input, constant), TBool, span),

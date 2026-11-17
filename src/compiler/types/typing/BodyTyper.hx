@@ -2740,11 +2740,11 @@ class BodyTyper implements BodyTyping {
 		var enumDecl = requiredMapValue(session.enumDecls, enumName),
 			coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in cases)
 				{
-					constructorIndex:switchCase.constructorIndex,
-						subjectBinding:switchCase.subjectBinding,
-						isCatchAll:switchCase.isCatchAll,
-						guard:switchCase.guard,
-						predicates:switchCase.predicates
+					constructorIndex:switchCase.arm.constructorIndex,
+						subjectBinding:switchCase.arm.subjectBinding,
+						isCatchAll:switchCase.arm.isCatchAll,
+						guard:switchCase.arm.guard,
+						predicates:switchCase.arm.predicates
 				}];
 		for (index in 0...enumDecl.cases.length)
 			if (!enumCaseCovered(type, index, coverageCases))

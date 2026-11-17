@@ -93,7 +93,7 @@ class ControlFlow {
 	/** An arm without a guard that matches every value: the wildcard `case _:` or a bare name `case other:`. It is the default. */
 	static function hasCatchAllArm(cases:Array<TypedSwitchCase>):Bool {
 		for (switchCase in cases)
-			if (switchCase.guard == null && switchCase.isCatchAll)
+			if (switchCase.arm.guard == null && switchCase.arm.isCatchAll)
 				return true;
 		return false;
 	}

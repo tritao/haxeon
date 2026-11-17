@@ -4,17 +4,10 @@ import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.TypedAst.TypedSwitchArm;
 import compiler.types.TypedAst.TypedSwitchArrayElement;
-import compiler.types.TypedAst.TypedSwitchArrayPattern;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.analysis.Scope;
-
-/** One arm of a tuple switch, as coverage reads it. */
-typedef TupleSwitchArm = {
-	final arrayPattern:Null<TypedSwitchArrayPattern>;
-	final isCatchAll:Bool;
-	final guard:Null<TypedExpression>;
-}
 
 /** One value of a finite element type: an enum constructor, `true`, `false`, or a closed enum abstract value. */
 private typedef ElementValue = {
@@ -58,7 +51,7 @@ class TupleSwitch {
 	 * switch's unreachable fallback, which throws.
 	 */
 	public static function unmatched(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
-			arms:Array<TupleSwitchArm>):Null<String> {
+			arms:Array<TypedSwitchArm>):Null<String> {
 		var rows:Array<Array<TypedSwitchArrayElement>> = [];
 		for (arm in arms)
 			if (arm.guard == null) {

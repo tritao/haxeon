@@ -158,25 +158,10 @@ typedef TypedMapEntry = {
 	final value:TypedExpression;
 }
 
-/** Type-checked, guarded arm of a switch expression. */
+/** Type-checked arm of a switch expression: its pattern and the value it produces. */
 typedef TypedSwitchExpressionCase = {
-	final value:TypedExpression;
-
-	/** The local the matched subject is bound to: `case name:` or the capture `case name = pattern:`. */
-	final subjectBinding:Null<String>;
-
-	final arrayPattern:Null<TypedSwitchArrayPattern>;
-	final span:SourceSpan;
-
-	/** True when the arm matches every value: the wildcard `_`, or a bare name (which also sets `subjectBinding`). */
-	final isCatchAll:Bool;
-
-	final guard:Null<TypedExpression>;
+	final arm:TypedSwitchArm;
 	final result:TypedExpression;
-	final enumName:Null<String>;
-	final constructorIndex:Int;
-	final bindings:Array<TypedSwitchBinding>;
-	final predicates:Array<TypedSwitchPredicate>;
 }
 
 /** Type-checked statements with explicit storage and dispatch decisions. */
@@ -213,8 +198,17 @@ enum TypedStatement {
 	TExpression(expression:TypedExpression, span:SourceSpan);
 }
 
-/** Type-checked switch arm with resolved enum bindings, when applicable. */
+/** Type-checked arm of a switch statement: its pattern and the statements it runs. */
 typedef TypedSwitchCase = {
+	final arm:TypedSwitchArm;
+	final statements:Array<TypedStatement>;
+}
+
+/**
+ * The pattern side of a switch arm, shared by statement and expression switches: what the arm matches, what it binds and its
+ * guard, with resolved enum bindings when applicable.
+ */
+typedef TypedSwitchArm = {
 	final value:TypedExpression;
 
 	/** The local the matched subject is bound to: `case name:` or the capture `case name = pattern:`. */
@@ -226,7 +220,6 @@ typedef TypedSwitchCase = {
 	final isCatchAll:Bool;
 
 	final guard:Null<TypedExpression>;
-	final statements:Array<TypedStatement>;
 	final enumName:Null<String>;
 	final constructorIndex:Int;
 	final bindings:Array<TypedSwitchBinding>;

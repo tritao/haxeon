@@ -94,17 +94,7 @@ class TypedTypeMap {
 			case TSwitch(subject, cases, defaultBranch, hasDefault, span): TSwitch(expression(subject),
 				[for (switchCase in cases)
 				{
-						value:expression(switchCase.value),
-							subjectBinding:switchCase.subjectBinding,
-							arrayPattern:arrayPattern(switchCase.arrayPattern),
-							isCatchAll:switchCase.isCatchAll,
-							guard:optional(switchCase.guard),
-							statements:statements(switchCase.statements),
-							enumName:switchCase.enumName,
-							constructorIndex:switchCase.constructorIndex,
-							bindings:bindings(switchCase.bindings),
-							predicates:predicates(switchCase.predicates),
-							span:switchCase.span
+						arm:switchArm(switchCase.arm), statements:statements(switchCase.statements)
 					}], statements(defaultBranch), hasDefault, span);
 			case TCellIncrement(name, cellClass, valueType, delta, span): TCellIncrement(name, cellClass,
 				map(valueType), delta,
@@ -120,6 +110,20 @@ class TypedTypeMap {
 			item.mapKeySource == null ? null : expression(item.mapKeySource),
 			item.storageType == null ? null : map(item.storageType),
 			item.semanticReference);
+
+	function switchArm(arm:TypedSwitchArm):TypedSwitchArm
+		return {
+			value: expression(arm.value),
+			subjectBinding: arm.subjectBinding,
+			arrayPattern: arrayPattern(arm.arrayPattern),
+			isCatchAll: arm.isCatchAll,
+			guard: optional(arm.guard),
+			enumName: arm.enumName,
+			constructorIndex: arm.constructorIndex,
+			bindings: bindings(arm.bindings),
+			predicates: predicates(arm.predicates),
+			span: arm.span
+		};
 
 	function optional(item:Null<TypedExpression>):Null<TypedExpression>
 		return item == null ? null : expression(item);
@@ -175,17 +179,7 @@ class TypedTypeMap {
 			case TSwitchExpression(subject, cases, defaultExpression): TSwitchExpression(expression(subject),
 				[for (switchCase in cases)
 				{
-						value:expression(switchCase.value),
-							subjectBinding:switchCase.subjectBinding,
-							arrayPattern:arrayPattern(switchCase.arrayPattern),
-							span:switchCase.span,
-							isCatchAll:switchCase.isCatchAll,
-							guard:optional(switchCase.guard),
-							result:expression(switchCase.result),
-							enumName:switchCase.enumName,
-							constructorIndex:switchCase.constructorIndex,
-							bindings:bindings(switchCase.bindings),
-							predicates:predicates(switchCase.predicates)
+						arm:switchArm(switchCase.arm), result:expression(switchCase.result)
 					}], optional(defaultExpression));
 			case TObjectLiteral(name, fields, isDynamic): TObjectLiteral(name, [for (field in fields)
 				{

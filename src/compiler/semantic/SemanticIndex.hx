@@ -813,9 +813,9 @@ class SemanticIndex {
 					indexCompletionLocals(body, span, depth + 1);
 				case TSwitch(_, cases, fallback, _, span):
 					for (item in cases) {
-						for (binding in item.bindings)
-							addCompletionLocal(binding.name, binding.type, item.span, item.span, depth + 1);
-						indexCompletionLocals(item.statements, item.span, depth + 1);
+						for (binding in item.arm.bindings)
+							addCompletionLocal(binding.name, binding.type, item.arm.span, item.arm.span, depth + 1);
+						indexCompletionLocals(item.statements, item.arm.span, depth + 1);
 					}
 					indexCompletionLocals(fallback, span, depth + 1);
 				default:
@@ -910,8 +910,8 @@ class SemanticIndex {
 				case TSwitch(value, cases, fallback, _, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
 					for (item in cases) {
-						indexExpression(fn, item.value, resolve, resolveEnumCase);
-						bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.span);
+						indexExpression(fn, item.arm.value, resolve, resolveEnumCase);
+						bindEnumCase(resolveEnumCase, item.arm.enumName, item.arm.constructorIndex, item.arm.span);
 						indexStatements(fn, item.statements, resolve, resolveEnumCase);
 					}
 					indexStatements(fn, fallback, resolve, resolveEnumCase);
@@ -999,10 +999,10 @@ class SemanticIndex {
 			case TSwitchExpression(value, cases, fallback):
 				indexExpression(fn, value, resolve, resolveEnumCase);
 				for (item in cases) {
-					bindEnumCase(resolveEnumCase, item.enumName, item.constructorIndex, item.value.span);
-					indexExpression(fn, item.value, resolve, resolveEnumCase);
-					if (item.guard != null)
-						indexExpression(fn, item.guard, resolve, resolveEnumCase);
+					bindEnumCase(resolveEnumCase, item.arm.enumName, item.arm.constructorIndex, item.arm.value.span);
+					indexExpression(fn, item.arm.value, resolve, resolveEnumCase);
+					if (item.arm.guard != null)
+						indexExpression(fn, item.arm.guard, resolve, resolveEnumCase);
 					indexExpression(fn, item.result, resolve, resolveEnumCase);
 				}
 				if (fallback != null)

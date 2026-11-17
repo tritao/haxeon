@@ -19,6 +19,7 @@ import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.TypedAst.TypedSwitchArm;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchBinding;
 import compiler.types.TypedAst.TypedSwitchPredicate;
@@ -1053,28 +1054,15 @@ class IrGenerator {
 						switchType = lowerType(expression.type),
 						tuple = storeSwitchSubject(switchName, expression, builder, localTypes),
 						exits:Array<CfgBlock> = [];
-					var switchArms:Array<SwitchArm> = [
-						for (arm in cases)
-							({
-								value: arm.value,
-								subjectBinding: arm.subjectBinding,
-								arrayPattern: arm.arrayPattern,
-								isCatchAll: arm.isCatchAll,
-								guard: arm.guard,
-								constructorIndex: arm.constructorIndex,
-								bindings: arm.bindings,
-								predicates: arm.predicates,
-								span: arm.span
-							}:SwitchArm)
-					];
-					var tablePlan = switchTablePlan(expression.type, switchArms);
+					var arms = [for (switchCase in cases) switchCase.arm];
+					var tablePlan = switchTablePlan(expression.type, arms);
 					if (tablePlan != null) {
 						// Arms that name constructors: one jump table on the constructor index (`lowerTableSwitch`).
 						var defaultBlock = builder.createBlock();
-						lowerTableSwitch(tablePlan, switchArms, switchName, switchType,
+						lowerTableSwitch(tablePlan, arms, switchName, switchType,
 							defaultBlock, true,
 							builder, localTypes, index -> {
-								lowerStatements(cases[index].statements, builder, localTypes, cases[index].span.end);
+								lowerStatements(cases[index].statements, builder, localTypes, arms[index].span.end);
 								if (!builder.isTerminated())
 									exits.push(builder.currentBlock());
 							});
@@ -1096,14 +1084,14 @@ class IrGenerator {
 						var checkBlock = builder.currentBlock(), // An unguarded `case _:` or `case other:` matches every value, so nothing falls out of the arms.
 							matchesEverything = false;
 						for (caseIndex in 0...cases.length) {
-							var switchCase = cases[caseIndex];
-							if (switchCase.guard == null && switchCase.isCatchAll)
+							var switchCase = cases[caseIndex], arm = switchCase.arm;
+							if (arm.guard == null && arm.isCatchAll)
 								matchesEverything = true;
 							var matchBlock = builder.createBlock(),
-								bodyBlock = switchCase.guard == null ? matchBlock : builder.createBlock(),
+								bodyBlock = arm.guard == null ? matchBlock : builder.createBlock(),
 								nextBlock = builder.createBlock();
-							if (switchCase.arrayPattern != null)
-								lowerSwitchArrayPattern(switchCase.arrayPattern, switchName, switchType, tuple,
+							if (arm.arrayPattern != null)
+								lowerSwitchArrayPattern(arm.arrayPattern, switchName, switchType, tuple,
 									caseIndex,
 									checkBlock, matchBlock, nextBlock, builder,
 									localTypes);
@@ -1114,7 +1102,7 @@ class IrGenerator {
 							} else {
 								builder.select(checkBlock);
 								var subjectValue = builder.load(switchName, switchType);
-								if (isNullableEnumType(expression.type) && switchCase.constructorIndex >= 0) {
+								if (isNullableEnumType(expression.type) && arm.constructorIndex >= 0) {
 									var nonNullBlock = builder.createBlock();
 									builder.branch(builder.equal(subjectValue, builder.constNull(switchType)),
 										nextBlock,
@@ -1123,8 +1111,8 @@ class IrGenerator {
 									subjectValue = builder.load(switchName, switchType);
 								}
 								var valueType = nullableSwitchValueType(expression.type);
-								if (valueType != null && !isNullExpression(switchCase.value)
-									&& !switchCase.isCatchAll) {
+								if (valueType != null && !isNullExpression(arm.value)
+									&& !arm.isCatchAll) {
 									var nonNullBlock = builder.createBlock();
 									builder.branch(builder.equal(subjectValue, builder.constNull(switchType)),
 										nextBlock,
@@ -1133,22 +1121,22 @@ class IrGenerator {
 									subjectValue = abiBoundaryCast(builder, builder.load(switchName, switchType),
 										lowerType(valueType));
 								}
-								var predicateBlock = switchCase.predicates.length == 0
+								var predicateBlock = arm.predicates.length == 0
 									? matchBlock : builder.createBlock();
-								if (switchCase.isCatchAll)
+								if (arm.isCatchAll)
 									builder.jump(predicateBlock);
 								else {
-									var switchValue = switchCase.constructorIndex >= 0
+									var switchValue = arm.constructorIndex >= 0
 										&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
 										switchValueName = builder.operandName();
 									localTypes.set(switchValueName, switchValue.type);
 									builder.store(switchValueName, switchValue);
-									var caseValue = switchCase.constructorIndex >= 0
-										? builder.constInt(switchCase.constructorIndex)
-										: lowerExpression(switchCase.value,
+									var caseValue = arm.constructorIndex >= 0
+										? builder.constInt(arm.constructorIndex)
+										: lowerExpression(arm.value,
 										builder, localTypes);
 									switchValue = builder.load(switchValueName, switchValue.type);
-									var matches = if (isNullExpression(switchCase.value)) builder.equal(switchValue,
+									var matches = if (isNullExpression(arm.value)) builder.equal(switchValue,
 										builder.constNull(switchType));
 									else if ((switch (switchValue.type) {
 										case Bytes: true;
@@ -1157,39 +1145,39 @@ class IrGenerator {
 									else builder.equal(switchValue, caseValue);
 									builder.branch(matches, predicateBlock, nextBlock);
 								}
-								if (switchCase.predicates.length > 0)
-									lowerEnumPredicates(switchName, switchType, switchCase.constructorIndex,
-										switchCase.predicates, predicateBlock, matchBlock,
+								if (arm.predicates.length > 0)
+									lowerEnumPredicates(switchName, switchType, arm.constructorIndex,
+										arm.predicates, predicateBlock, matchBlock,
 										nextBlock, builder, localTypes);
 							}
 							builder.select(matchBlock);
-							var subjectBinding = switchCase.subjectBinding;
+							var subjectBinding = arm.subjectBinding;
 							if (subjectBinding != null && subjectBinding.length > 0) {
 								localTypes.set(subjectBinding, switchType);
 								initializeLocal(subjectBinding, builder.load(switchName, switchType), builder,
 									localTypes);
-								builder.debugLocal(subjectBinding, switchCase.span, switchCase.span.end);
+								builder.debugLocal(subjectBinding, arm.span, arm.span.end);
 							}
-							if (switchCase.arrayPattern != null)
-								lowerSwitchArrayPatternBindings(switchCase.arrayPattern, switchName, switchType, tuple,
-									switchCase.span, builder, localTypes);
+							if (arm.arrayPattern != null)
+								lowerSwitchArrayPatternBindings(arm.arrayPattern, switchName, switchType, tuple,
+									arm.span, builder, localTypes);
 							else {
-								if (switchCase.constructorIndex >= 0)
-									for (binding in switchCase.bindings) {
+								if (arm.constructorIndex >= 0)
+									for (binding in arm.bindings) {
 										localTypes.set(binding.name, lowerType(binding.type));
-										builder.debugLocal(binding.name, switchCase.span, switchCase.span.end);
+										builder.debugLocal(binding.name, arm.span, arm.span.end);
 									}
-								for (binding in switchCase.bindings)
+								for (binding in arm.bindings)
 									initializeLocal(binding.name,
 										lowerEnumBinding(builder, builder.load(switchName, switchType),
-										switchCase.constructorIndex, binding), builder, localTypes);
+										arm.constructorIndex, binding), builder, localTypes);
 							}
-							var guard = switchCase.guard;
+							var guard = arm.guard;
 							if (guard != null) {
 								builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 								builder.select(bodyBlock);
 							}
-							lowerStatements(switchCase.statements, builder, localTypes, switchCase.span.end);
+							lowerStatements(switchCase.statements, builder, localTypes, arm.span.end);
 							if (!builder.isTerminated())
 								exits.push(builder.currentBlock());
 							checkBlock = nextBlock;
@@ -2738,26 +2726,13 @@ class IrGenerator {
 					resultType = lowerType(expression.type);
 				localTypes.set(resultName, resultType);
 				var tuple = storeSwitchSubject(subjectName, subject, builder, localTypes);
-				var switchArms:Array<SwitchArm> = [
-					for (arm in cases)
-						({
-							value: arm.value,
-							subjectBinding: arm.subjectBinding,
-							arrayPattern: arm.arrayPattern,
-							isCatchAll: arm.isCatchAll,
-							guard: arm.guard,
-							constructorIndex: arm.constructorIndex,
-							bindings: arm.bindings,
-							predicates: arm.predicates,
-							span: arm.span
-						}:SwitchArm)
-				];
-				var tablePlan = switchTablePlan(subject.type, switchArms);
+				var arms = [for (switchCase in cases) switchCase.arm];
+				var tablePlan = switchTablePlan(subject.type, arms);
 				if (tablePlan != null) {
 					// Arms that name constructors: one jump table on the constructor index (`lowerTableSwitch`). Without a default the
 					// arms are exhaustive, so no value reaches the fallback, as in a switch statement on an enum.
 					var afterBlock = builder.createBlock(), fallbackBlock = builder.createBlock();
-					lowerTableSwitch(tablePlan, switchArms, subjectName, subjectType,
+					lowerTableSwitch(tablePlan, arms, subjectName, subjectType,
 						fallbackBlock, false,
 						builder, localTypes, index -> {
 							var caseResult = abiBoundaryCast(builder,
@@ -2790,7 +2765,7 @@ class IrGenerator {
 					for (caseIndex in 0...cases.length) {
 						var matchBlock = builder.createBlock();
 						matchBlocks.push(matchBlock);
-						bodyBlocks.push(cases[caseIndex].guard == null ? matchBlock : builder.createBlock());
+						bodyBlocks.push(arms[caseIndex].guard == null ? matchBlock : builder.createBlock());
 						if (caseIndex + 1 < cases.length)
 							checkBlocks.push(builder.createBlock());
 					}
@@ -2803,15 +2778,16 @@ class IrGenerator {
 						builder.jumpFrom(entryBlock, fallbackBlock);
 					for (caseIndex in 0...cases.length) {
 						var switchCase = cases[caseIndex],
+							arm = switchCase.arm,
 							isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1
-								&& switchCase.guard == null,
+								&& arm.guard == null,
 							bodyBlock = bodyBlocks[caseIndex],
 							nextBlock = caseIndex + 1 < cases.length
 								? checkBlocks[caseIndex + 1]
 								: (defaultExpression == null && !tuple ? afterBlock : fallbackBlock);
 						var matchBlock = matchBlocks[caseIndex];
-						if (switchCase.arrayPattern != null)
-							lowerSwitchArrayPattern(switchCase.arrayPattern, subjectName, subjectType, tuple, caseIndex,
+						if (arm.arrayPattern != null)
+							lowerSwitchArrayPattern(arm.arrayPattern, subjectName, subjectType, tuple, caseIndex,
 								checkBlocks[caseIndex], matchBlocks[caseIndex],
 								nextBlock, builder, localTypes);
 						else if (tuple) {
@@ -2821,7 +2797,7 @@ class IrGenerator {
 						} else {
 							builder.select(checkBlocks[caseIndex]);
 							var subjectValue = builder.load(subjectName, subjectType);
-							if (isNullableEnumType(subject.type) && switchCase.constructorIndex >= 0
+							if (isNullableEnumType(subject.type) && arm.constructorIndex >= 0
 								&& !isExhaustiveFinalCase) {
 								var nonNullBlock = builder.createBlock();
 								builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
@@ -2830,7 +2806,7 @@ class IrGenerator {
 								subjectValue = builder.load(subjectName, subjectType);
 							}
 							var valueType = nullableSwitchValueType(subject.type);
-							if (valueType != null && !isNullExpression(switchCase.value) && !switchCase.isCatchAll) {
+							if (valueType != null && !isNullExpression(arm.value) && !arm.isCatchAll) {
 								var nonNullBlock = builder.createBlock();
 								builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
 									nonNullBlock);
@@ -2838,19 +2814,19 @@ class IrGenerator {
 								subjectValue = abiBoundaryCast(builder, builder.load(subjectName, subjectType),
 									lowerType(valueType));
 							}
-							if (switchCase.isCatchAll)
+							if (arm.isCatchAll)
 								builder.jump(bodyBlock);
 							else {
-								var comparisonValue = switchCase.constructorIndex >= 0
+								var comparisonValue = arm.constructorIndex >= 0
 									&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue,
 									comparisonName = builder.operandName();
 								localTypes.set(comparisonName, comparisonValue.type);
 								builder.store(comparisonName, comparisonValue);
-								var caseValue = switchCase.constructorIndex >= 0
-									? builder.constInt(switchCase.constructorIndex) : lowerExpression(switchCase.value,
+								var caseValue = arm.constructorIndex >= 0
+									? builder.constInt(arm.constructorIndex) : lowerExpression(arm.value,
 									builder, localTypes);
 								comparisonValue = builder.load(comparisonName, comparisonValue.type);
-								var matches = if (isNullExpression(switchCase.value)) builder.equal(comparisonValue,
+								var matches = if (isNullExpression(arm.value)) builder.equal(comparisonValue,
 									builder.constNull(subjectType));
 								else if ((switch (comparisonValue.type) {
 									case Bytes: true;
@@ -2860,35 +2836,35 @@ class IrGenerator {
 								if (isExhaustiveFinalCase)
 									builder.jump(bodyBlock);
 								else {
-									var predicateBlock = switchCase.predicates.length == 0
+									var predicateBlock = arm.predicates.length == 0
 										? matchBlock : builder.createBlock();
 									builder.branch(matches, predicateBlock, nextBlock);
-									if (switchCase.predicates.length > 0)
-										lowerEnumPredicates(subjectName, subjectType, switchCase.constructorIndex,
-											switchCase.predicates, predicateBlock, matchBlock,
+									if (arm.predicates.length > 0)
+										lowerEnumPredicates(subjectName, subjectType, arm.constructorIndex,
+											arm.predicates, predicateBlock, matchBlock,
 											nextBlock, builder, localTypes);
 								}
 							}
 						}
 						builder.select(matchBlock);
-						var subjectBinding = switchCase.subjectBinding;
+						var subjectBinding = arm.subjectBinding;
 						if (subjectBinding != null && subjectBinding.length > 0) {
 							localTypes.set(subjectBinding, subjectType);
 							initializeLocal(subjectBinding, builder.load(subjectName, subjectType), builder,
 								localTypes);
 						}
-						if (switchCase.arrayPattern != null)
-							lowerSwitchArrayPatternBindings(switchCase.arrayPattern, subjectName, subjectType, tuple,
-								switchCase.span, builder, localTypes);
+						if (arm.arrayPattern != null)
+							lowerSwitchArrayPatternBindings(arm.arrayPattern, subjectName, subjectType, tuple,
+								arm.span, builder, localTypes);
 						else {
-							for (binding in switchCase.bindings) {
+							for (binding in arm.bindings) {
 								localTypes.set(binding.name, lowerType(binding.type));
 								initializeLocal(binding.name,
 									lowerEnumBinding(builder, builder.load(subjectName, subjectType),
-									switchCase.constructorIndex, binding), builder, localTypes);
+									arm.constructorIndex, binding), builder, localTypes);
 							}
 						}
-						var guard = switchCase.guard;
+						var guard = arm.guard;
 						if (guard != null) {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 							builder.select(bodyBlock);
@@ -3933,7 +3909,7 @@ class IrGenerator {
 	 * unguarded. Arms run in source order: an arm whose patterns or guard fail hands over to the next arm that can match the same
 	 * value, since no arm naming another constructor can.
 	 */
-	function switchTablePlan(subject:CompilerType, arms:Array<SwitchArm>):Null<SwitchTablePlan> {
+	function switchTablePlan(subject:CompilerType, arms:Array<TypedSwitchArm>):Null<SwitchTablePlan> {
 		if (!isEnumType(subject) || arms.length < 2)
 			return null;
 		var nullable = isNullableEnumType(subject), catchAll = -1;
@@ -3989,7 +3965,7 @@ class IrGenerator {
 	 * table names for its constructor; each arm tests its argument patterns, binds, tests its guard and runs `lowerArm`, and on a
 	 * failed pattern or guard goes to its fallback arm. A value no arm takes goes to `defaultBlock`.
 	 */
-	function lowerTableSwitch(plan:SwitchTablePlan, arms:Array<SwitchArm>, subjectName:String, subjectType:IrType,
+	function lowerTableSwitch(plan:SwitchTablePlan, arms:Array<TypedSwitchArm>, subjectName:String, subjectType:IrType,
 			defaultBlock:CfgBlock, debugBindings:Bool, builder:CfgBuilder, localTypes:Map<String, IrType>,
 			lowerArm:Int->Void):Void {
 		var entryBlocks = [for (_ in arms) builder.createBlock()],
@@ -4970,18 +4946,6 @@ class IrGenerator {
 }
 
 /** What `IrGenerator.switchTablePlan` and `lowerTableSwitch` read of a statement's or an expression's switch arm. */
-private typedef SwitchArm = {
-	final value:TypedExpression;
-	final subjectBinding:Null<String>;
-	final arrayPattern:Null<compiler.types.TypedAst.TypedSwitchArrayPattern>;
-	final isCatchAll:Bool;
-	final guard:Null<TypedExpression>;
-	final constructorIndex:Int;
-	final bindings:Array<compiler.types.TypedAst.TypedSwitchBinding>;
-	final predicates:Array<compiler.types.TypedAst.TypedSwitchPredicate>;
-	final span:compiler.core.Source.SourceSpan;
-}
-
 /** A switch on an enum as a jump table (`IrGenerator.switchTablePlan`). Arms are by index; -1 is none (the default). */
 private typedef SwitchTablePlan = {
 	/** Per arm, the arm to run when its argument patterns or guard fail. */
