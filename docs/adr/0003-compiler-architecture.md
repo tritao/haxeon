@@ -270,6 +270,33 @@ Go/no-go, measured against the stock-Haxe worker on the `app` builds (cold, no-o
 
 Until then, shared general-purpose code stays in the portable root, never in `#if` forks.
 
+Measured 2026-11-17 (compile server, release mode, the compiler's own sources in place of `app`, whose build compiles native
+packages in another checkout): the Haxeon-built server starts in 1.00 s against 1.02 s, compiles cold in 22 s against 28-30 s
+(one-shot 28.2 s against 37.7 s), rebuilds a no-op or one-line edit in 7 s against 10 s, peaks at 2.06 GB against 2.35 GB, and
+passes the program cases cold and warm. It loses on its own build: the pinned Haxe builds the server in 14.8 s, the Haxeon-built
+compiler in 24.4 s (21.8 s at a 0.8 GC threshold).
+
+**Tool artifacts build in release mode (decided 2026-11-17, queued).** What decides the mode is the artifact's role, said once
+in `HaxeonBuild`: a tool artifact (the checked-in bootstrap compiler now; the compile server, CLI and language server when
+Haxeon builds them) is a release build, so a Haxeon-built worker inherits it. A release module keeps minimal symbols inline,
+the function identities (stack-trace and profiler names) and the line table, about 2 MB of the server's 7 MB; development
+mode adds source snapshots, opcode spans and live metadata (the bootstrap is 27 MB). Conditions:
+
+- a release-built compiler's crash traces name functions and lines (they do: `CompilerArguments.parse
+  (compiler/tools/CompilerArguments.hx:119)`);
+- the self-hosting check reaches its fixed point in release mode, so release-only code generation is exercised by the compiler
+  compiling itself; development metadata stays covered by the live builds of the program cases;
+- nothing reads development metadata from the compiler's own bytecode (live patching and the language server act on the programs
+  it builds, not on it).
+
+**Separate symbol files: deferred.** They would move about 2 MB of 7 out of the module, at the cost of the VM, the profiler and
+crash reports finding a sidecar matched to the module (`.hl.build-id` would key it), and of traces without it showing bare
+indices. They are for a distribution need, end-user, mobile or Wasm downloads symbolicated offline, as `--debug-info=inline |
+separate | none`; development metadata is the first candidate for a sidecar if development builds' load time ever matters.
+
+**To decide separately:** the bootstrap binary in git adds its whole size to the history at every refresh. Pinning it by hash
+and fetching it, as `.tools/haxe` is, or building it from the pinned Haxe on first use, would end that.
+
 ### 13. Reachability with explicit providers; whole-program work runs on the reachable program (added 2026-11-11)
 
 Two attempts on 2026-11-10 failed for the same reason: some dependencies are not edges in the IR.
