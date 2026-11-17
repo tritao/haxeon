@@ -588,6 +588,9 @@ typedef TypedProgram = {
 
 	/** The locals of the bodies this compile typed whose type nothing fixed, so it settled to Dynamic, as in Haxe. */
 	final unboundLocals:Array<UnboundLocal>;
+
+	/** The `throw`s of the bodies this compile typed whose value is not statically a haxe.Exception. */
+	final nonExceptionThrows:Array<NonExceptionThrow>;
 }
 
 /**
@@ -603,6 +606,19 @@ typedef UnboundLocal = {
 
 	/** What settled: `the type of local "x"`, `the element type of this empty array`. */
 	final what:String;
+}
+
+/**
+ * A `throw` whose value's static type is not haxe.Exception or a subclass of it (a String, Dynamic, an enum), so a catch of
+ * haxe.Exception sees it wrapped in a ValueException. Haxe accepts it, and so does the compiler: `haxeon lint --only
+ * throw-non-exception` names them, for code that keeps to throwing exceptions.
+ */
+typedef NonExceptionThrow = {
+	/** The `throw`. */
+	final span:SourceSpan;
+
+	/** The thrown value's static type, as a diagnostic writes it. */
+	final thrown:String;
 }
 
 /** A source-declared target function with no generated body. */

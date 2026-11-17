@@ -259,7 +259,7 @@ class StatementTyper {
 				var value = bodyTyper.typeExpression(expression, scope);
 				if (TypeRelations.equals(value.type, TVoid))
 					fail("E1021", "Cannot throw a Void value", span);
-				[TThrow(ThrownValue.of(bodyTyper, value), span)];
+				[TThrow(ThrownValue.of(session, bodyTyper, value, span), span)];
 			case Break(span):
 				if (context.loopDepth == 0)
 					fail("E1017", "break is only valid inside a loop", span);

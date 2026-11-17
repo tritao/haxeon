@@ -183,6 +183,9 @@ typedef AnalysisResult = {
 	/** The locals of the bodies this analysis typed whose type nothing fixed (`TypedProgram.unboundLocals`). */
 	final unboundLocals:Array<compiler.types.TypedAst.UnboundLocal>;
 
+	/** The `throw`s of the bodies this analysis typed whose value is not statically a haxe.Exception (`TypedProgram.nonExceptionThrows`). */
+	final nonExceptionThrows:Array<compiler.types.TypedAst.NonExceptionThrow>;
+
 	/** The analyzed modules' variables and functions named through their module's name (AliasTable.ModuleNamespaceUse). */
 	final moduleNamespaceUses:Array<compiler.semantic.AliasTable.ModuleNamespaceUse>;
 }

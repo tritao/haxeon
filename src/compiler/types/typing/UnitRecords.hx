@@ -3,6 +3,12 @@ package compiler.types.typing;
 import compiler.core.Source.SourceFile;
 import compiler.types.Type.AnonymousField;
 
+/** How many of each lint fact a `UnitRecords` holds: see `UnitRecords.lintFactCounts`. */
+typedef LintFactCounts = {
+	final unboundLocals:Int;
+	final nonExceptionThrows:Int;
+}
+
 /**
  * What each typed unit relied on, for the next incremental build. A unit is a function body or a field initializer
  * (`Class.__init.x`); the query records are kept by the body that asked, a lambda's own name included. An unchanged body
@@ -45,12 +51,22 @@ class UnitRecords {
 	 */
 	public final unboundLocals:Array<compiler.types.TypedAst.UnboundLocal> = [];
 
+	/** The `throw`s of a value not statically a haxe.Exception, in typing order; kept, like `unboundLocals`, only for bodies that typed. */
+	public final nonExceptionThrows:Array<compiler.types.TypedAst.NonExceptionThrow> = [];
+
 	public function new() {}
 
-	/** Drops the unbound locals recorded after the first `count`. */
-	public function truncateUnboundLocals(count:Int):Void
-		if (unboundLocals.length > count)
-			unboundLocals.splice(count, unboundLocals.length - count);
+	/** How many lint facts (`unboundLocals`, `nonExceptionThrows`) are recorded, to take back to with `truncateLintFacts`. */
+	public function lintFactCounts():LintFactCounts
+		return {unboundLocals: unboundLocals.length, nonExceptionThrows: nonExceptionThrows.length};
+
+	/** Drops the lint facts recorded after `counts`. */
+	public function truncateLintFacts(counts:LintFactCounts):Void {
+		if (unboundLocals.length > counts.unboundLocals)
+			unboundLocals.splice(counts.unboundLocals, unboundLocals.length - counts.unboundLocals);
+		if (nonExceptionThrows.length > counts.nonExceptionThrows)
+			nonExceptionThrows.splice(counts.nonExceptionThrows, nonExceptionThrows.length - counts.nonExceptionThrows);
+	}
 
 	public function recordAnonymousUse(unit:String, name:String, fields:Array<AnonymousField>):Void {
 		var uses = anonymousUnits.get(unit);
@@ -112,6 +128,8 @@ class UnitRecords {
 			target.typedUnits.set(unit, true);
 		for (local in unboundLocals)
 			target.unboundLocals.push(local);
+		for (thrown in nonExceptionThrows)
+			target.nonExceptionThrows.push(thrown);
 		mergeQueries(purityQueries, target.purityQueries);
 		mergeQueries(noReturnQueries, target.noReturnQueries);
 		mergeQueries(keyPathUses, target.keyPathUses);

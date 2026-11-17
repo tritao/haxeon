@@ -18,7 +18,7 @@ import sys.io.File;
 /**
  * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`) and runs of
  * imports out of order (rule `import-order`, see ImportOrder); `--only` checks one rule. Both read syntax only. The opt-in rules
- * `unbound-local` and `module-namespace` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
+ * `unbound-local`, `module-namespace` and `throw-non-exception` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
  * through `typedRules`, which runs it in a tool that links the compiler.
  *
  * Each file's imports resolve against its own project: the source roots of the nearest haxeon.json and of its path dependencies, the
@@ -40,7 +40,7 @@ class LintCommand {
 	function new() {}
 
 	/** The rules `--only` selects; the typed ones run only when it names them. */
-	static final RULES = "unused-imports, import-order, unbound-local, module-namespace";
+	static final RULES = "unused-imports, import-order, unbound-local, module-namespace, throw-non-exception";
 
 	/**
 	 * Lints the files `arguments` names. `typedRules` runs a typed rule on the expanded files and returns its status: the
@@ -65,7 +65,7 @@ class LintCommand {
 				switch arguments[index++] {
 					case "unused-imports": checkOrder = false;
 					case "import-order": checkUnused = false;
-					case rule = "unbound-local" | "module-namespace":
+					case rule = "unbound-local" | "module-namespace" | "throw-non-exception":
 						checkUnused = false;
 						checkOrder = false;
 						typedRule = rule;
@@ -85,8 +85,11 @@ class LintCommand {
 			throw "haxeon lint requires at least one file";
 		if (typedRule != null) {
 			if (fix)
-				throw typedRule == "unbound-local" ? 'Rule "unbound-local" has no fix: give each local it names a type'
-					: 'Rule "module-namespace" has no fix: import each member it names, or write it in full';
+				throw switch typedRule {
+					case "unbound-local": 'Rule "unbound-local" has no fix: give each local it names a type';
+					case "throw-non-exception": 'Rule "throw-non-exception" has no fix: throw a haxe.Exception subclass at each throw it names';
+					default: 'Rule "module-namespace" has no fix: import each member it names, or write it in full';
+				};
 			if (typedRules == null)
 				throw 'Rule "$typedRule" needs the typed lint tool';
 			return typedRules(typedRule, SourceFiles.expand(paths));

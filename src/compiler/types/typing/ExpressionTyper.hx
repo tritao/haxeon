@@ -2006,7 +2006,8 @@ class ExpressionTyper {
 		return ConversionResolver.plainValue(value, bodyTyper);
 
 	public function throwExpression(value:AstExpression, span:SourceSpan, scope:Scope):TypedExpression
-		return new TypedExpression(TThrowExpression(ThrownValue.of(bodyTyper, bodyTyper.typeExpression(value, scope))),
+		return new TypedExpression(TThrowExpression(ThrownValue.of(session, bodyTyper,
+			bodyTyper.typeExpression(value, scope), span)),
 			TNever,
 			span);
 

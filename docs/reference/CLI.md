@@ -130,6 +130,25 @@ path; a class's own static named through the imported class (`Store.count`) is
 Haxe's too and is not named. It reads each file's project as `unbound-local` does,
 exits with 1 when it names a use or a program does not compile, and has no `--fix`.
 
+The opt-in rule `throw-non-exception` names each `throw` whose value's static type
+is not `haxe.Exception` or a subclass of it: a `String`, an enum, `Dynamic`, or a
+type variable nothing has fixed when the `throw` is typed:
+
+```bash
+./scripts/haxeon lint --only throw-non-exception src
+```
+
+```text
+src/Main.hx:12: throw of String, not a haxe.Exception: throw an Exception subclass
+```
+
+Haxe accepts any thrown value, and so does Haxeon; a `catch (e:haxe.Exception)`
+sees such a value wrapped in a `haxe.ValueException`. Code that throws only
+exceptions never needs that wrap, and this rule checks that it does. Only the
+`throw`s written in source are named, not those the compiler generates. It reads
+each file's project as `unbound-local` does, skips a body that does not type,
+exits with 1 when it names a `throw` or a program does not type, and has no `--fix`.
+
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:
 

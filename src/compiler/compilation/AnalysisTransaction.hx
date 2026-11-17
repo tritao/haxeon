@@ -72,6 +72,7 @@ class AnalysisTransaction {
 				diagnosticModules: diagnosticModules,
 				elapsedMs: Sys.time() * 1000.0 - startedAt,
 				unboundLocals: frontend.typedProgram.unboundLocals,
+				nonExceptionThrows: frontend.typedProgram.nonExceptionThrows,
 				moduleNamespaceUses: namespaceUses
 			};
 		} catch (error:Dynamic) {

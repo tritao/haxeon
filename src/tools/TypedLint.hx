@@ -6,6 +6,7 @@ import compiler.core.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.semantic.AliasTable.ModuleNamespaceUse;
 import compiler.service.LanguageService;
+import compiler.types.TypedAst.NonExceptionThrow;
 import compiler.types.TypedAst.UnboundLocal;
 import compiler.types.typing.TypingFailure;
 import editor.lsp.ProjectWorkspace;
@@ -25,11 +26,14 @@ typedef TypedFinding = {
  * - `module-namespace`: each module-level variable or function named through its module's name (`Settings.hits` with
  *   `import pack.Settings`), a Haxeon extension Haxe rejects (AliasTable.ModuleNamespaceUse). Haxe's forms are an import of the
  *   member or its full path, so code that must also compile with Haxe can find each use.
+ * - `throw-non-exception`: each `throw` whose value's static type is not haxe.Exception or a subclass of it (a String, Dynamic, an
+ *   enum), which a catch of haxe.Exception sees wrapped in a ValueException. Code that throws only exceptions never needs the wrap.
  *
  * The rules read the analysis where the editor does: each file's project is found and configured by `ProjectWorkspace` (the nearest
  * haxeon.json or .hxml) and analyzed by `LanguageService.analyze`, with the file's module as the entry. The typer records the locals it
- * settles (`TypedProgram.unboundLocals`), and only for bodies that typed: a body whose typing failed is not reported, though the
- * analysis that fails with it still reports the other bodies' (`TypingFailure.unboundLocals`). Module-namespace uses come from the
+ * settles (`TypedProgram.unboundLocals`) and the throws of a non-exception (`TypedProgram.nonExceptionThrows`), and only for bodies
+ * that typed: a body whose typing failed is not reported, though the analysis that fails with it still reports the other bodies'
+ * (`TypingFailure`). Module-namespace uses come from the
  * canonical code of the analyzed modules, which a failed analysis does not give. `haxeon lint` runs these in a tool of its own
  * (`LintMain`), since the command line does not link the compiler.
  */
@@ -38,7 +42,7 @@ class TypedLint {
 	final workspace = new ProjectWorkspace();
 
 	/** The typed rules, by name. */
-	public static final RULES = ["unbound-local", "module-namespace"];
+	public static final RULES = ["unbound-local", "module-namespace", "throw-non-exception"];
 
 	final rule:String;
 
@@ -112,8 +116,11 @@ class TypedLint {
 			collect(findings(result));
 			return true;
 		} catch (failure:TypingFailure) {
-			if (rule == "unbound-local")
-				collect(unbound(failure.unboundLocals));
+			switch rule {
+				case "unbound-local": collect(unbound(failure.unboundLocals));
+				case "throw-non-exception": collect(nonExceptions(failure.nonExceptionThrows));
+				default:
+			}
 			reportErrors(failure);
 		} catch (error:CompileError) {
 			reportErrors(error);
@@ -123,12 +130,22 @@ class TypedLint {
 
 	/** What this run's rule finds in `result`. */
 	function findings(result:AnalysisResult):Array<TypedFinding>
-		return rule == "unbound-local" ? unbound(result.unboundLocals) : namespaceUses(result.moduleNamespaceUses);
+		return switch rule {
+			case "unbound-local": unbound(result.unboundLocals);
+			case "throw-non-exception": nonExceptions(result.nonExceptionThrows);
+			default: namespaceUses(result.moduleNamespaceUses);
+		};
 
 	static function unbound(locals:Array<UnboundLocal>):Array<TypedFinding>
 		return [for (local in locals)
 			{
 				span:local.span, message:'local "${local.name}" is Dynamic: nothing fixes ${local.what}'
+			}];
+
+	static function nonExceptions(throws:Array<NonExceptionThrow>):Array<TypedFinding>
+		return [for (thrown in throws)
+			{
+				span:thrown.span, message:'throw of ${thrown.thrown}, not a haxe.Exception: throw an Exception subclass'
 			}];
 
 	static function namespaceUses(uses:Array<ModuleNamespaceUse>):Array<TypedFinding>

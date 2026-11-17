@@ -1556,7 +1556,7 @@ class HaxeonCli {
 		Sys.println("                                    the \"format\" section of haxeon.json (default: tabs, 120 columns)");
 		Sys.println("  lint [--fix] [--only RULE] [--manifest FILE]... FILE...  Report (or fix) unused imports and imports out of order;");
 		Sys.println("                                    RULE is unused-imports or import-order; opt-in: unbound-local,");
-		Sys.println("                                    module-namespace");
+		Sys.println("                                    module-namespace, throw-non-exception");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");
