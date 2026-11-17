@@ -406,6 +406,21 @@ class DeclarationTypeTable implements DeclarationTypes {
 		}];
 	}
 
+	/**
+	 * The type the body of `fn` gave its unannotated argument `index`, in the function's own and its owner's type parameters, not
+	 * substituted: what a call infers those parameters from, as it does from an annotation. Null where the argument is annotated, or
+	 * the body failed.
+	 */
+	public function inferredArgumentType(fn:AstFunction, index:Int):Null<CompilerType> {
+		var key = inferredKeys.get(fn);
+		if (key == null)
+			return null;
+		if (recordRead != null)
+			recordRead(key);
+		var signature = functionSignature(fn, key);
+		return signature == null ? null : signature.arguments[index];
+	}
+
 	public function resultType(fn:AstFunction, ?substitutions:Map<String, CompilerType>):CompilerType {
 		var key = inferredKeys.get(fn);
 		if (key == null)

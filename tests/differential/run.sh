@@ -196,6 +196,7 @@ in_background run_case lazy-return-object 0
 in_background run_case lazy-return-call 0
 in_background run_case lazy-argument-body 0
 in_background run_case lazy-accessor 0
+in_background run_case lazy-argument-generic 0
 in_background run_compile_failure lazy-return-int-float
 in_background run_compile_failure lazy-return-void-value
 in_background run_compile_failure lazy-return-child-parent

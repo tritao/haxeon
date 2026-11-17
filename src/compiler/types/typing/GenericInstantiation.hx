@@ -38,7 +38,8 @@ class GenericInstantiation {
 			? [] : [for (parameter => type in presetSubstitutions) parameter => type],
 			parameters = functionTypeParameters(fn);
 		for (i in 0...arguments.length)
-			inferTypeParameters(fn.arguments[i].type, arguments[i].type, parameters, substitutions, arguments[i].span);
+			inferArgumentTypeParameters(fn, i, fn.arguments[i], arguments[i].type, parameters, substitutions,
+				arguments[i].span);
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
@@ -196,29 +197,125 @@ class GenericInstantiation {
 			}
 		}]);
 
+	/**
+	 * Infers `parameters` from the value `actual` passed as argument `index` (`argument`) of `fn`: from its annotation, or, for an
+	 * unannotated argument, from the type the function's body gave it, which is in the function's own and its owner's type
+	 * parameters as an annotation is (`DeclarationTypeTable.inferredArgumentType`). Without `fn` (an enum constructor's
+	 * parameters), from the annotation.
+	 */
+	public function inferArgumentTypeParameters(fn:Null<AstFunction>, index:Int,
+			argument:compiler.syntax.Ast.AstArgument,
+			actual:CompilerType, parameters:Array<String>, substitutions:Map<String, CompilerType>,
+			span:SourceSpan):Void {
+		if (fn == null || !AstFunctions.isInferred(argument.type)) {
+			inferTypeParameters(argument.type, actual, parameters, substitutions, span);
+			return;
+		}
+		var pattern = inferredArgumentPattern(fn, index);
+		if (pattern != null)
+			inferFromType(pattern, actual, parameters, substitutions, span);
+	}
+
+	/** The type argument `index` of `fn` expects once `substitutions` binds every type parameter it mentions. */
+	public function expectedArgumentType(fn:Null<AstFunction>, index:Int, argument:compiler.syntax.Ast.AstArgument,
+			substitutions:Map<String, CompilerType>):CompilerType {
+		if (fn == null || !AstFunctions.isInferred(argument.type))
+			return session.declarations.resolve(argument.type, argument.span, substitutions);
+		var pattern = inferredArgumentPattern(fn, index);
+		return pattern == null ? TDynamic : DeclarationTypeTable.substitute(pattern, substitutions);
+	}
+
+	function inferredArgumentPattern(fn:AstFunction, index:Int):Null<CompilerType> {
+		var table = session.types;
+		return table == null ? null : table.inferredArgumentType(fn, index);
+	}
+
+	/** `inferTypeParameters` for a pattern that is a resolved type, whose type parameters are `TTypeParameter`s. */
+	function inferFromType(pattern:CompilerType, actual:CompilerType, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
+		function each(patterns:Array<CompilerType>, actuals:Array<CompilerType>):Void
+			if (patterns.length == actuals.length)
+				for (index in 0...patterns.length)
+					inferFromType(patterns[index], actuals[index], parameters, substitutions, span);
+		switch pattern {
+			case TTypeParameter(_, name) if (parameters.indexOf(name) >= 0):
+				bindTypeParameter(name, actual, substitutions, span);
+			case TNullable(element):
+				switch actual {
+					case TNullable(actualElement): inferFromType(element, actualElement, parameters, substitutions,
+						span);
+					default: inferFromType(element, actual, parameters, substitutions, span);
+				}
+			case TArray(element):
+				switch actual {
+					case TArray(actualElement): inferFromType(element, actualElement, parameters, substitutions, span);
+					default:
+				}
+			case TIterator(element):
+				switch actual {
+					case TIterator(actualElement): inferFromType(element, actualElement, parameters, substitutions,
+						span);
+					default:
+				}
+			case TMap(key, value):
+				switch actual {
+					case TMap(actualKey, actualValue):
+						inferFromType(key, actualKey, parameters, substitutions, span);
+						inferFromType(value, actualValue, parameters, substitutions, span);
+					default:
+				}
+			case TFunction(patternArguments, patternResult, _):
+				switch actual {
+					case TFunction(actualArguments, actualResult, _):
+						each(patternArguments, actualArguments);
+						inferFromType(patternResult, actualResult, parameters, substitutions, span);
+					default:
+				}
+			case TInstance(_, name, patternArguments):
+				var projected = session.declarations.inheritance.project(actual, name);
+				switch projected == null ? actual : projected {
+					case TInstance(_, actualName, actualArguments) if (actualName == name): each(patternArguments,
+						actualArguments);
+					default:
+				}
+			case TAbstract(name, patternArguments, _):
+				switch actual {
+					case TAbstract(actualName, actualArguments, _) if (actualName == name): each(patternArguments,
+						actualArguments);
+					default:
+				}
+			default:
+		}
+	}
+
+	function bindTypeParameter(name:String, actual:CompilerType, substitutions:Map<String, CompilerType>,
+			span:SourceSpan):Void {
+		if (substitutions.exists(name)) {
+			var previous = requiredMapValue(substitutions, name);
+			if ((switch (previous) {
+				case TDynamic: true;
+				default: false;
+			}))
+				substitutions.set(name, actual);
+			else if ((switch (actual) {
+				case TDynamic: false;
+				default: true;
+			}) && !TypeRelations.equals(previous, actual)) {
+				if (session.relations.isAssignable(actual, previous))
+					substitutions.set(name, actual);
+				else if (!session.relations.isAssignable(previous, actual))
+					fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
+			}
+		} else
+			substitutions.set(name, actual);
+	}
+
 	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void
 		switch pattern {
 			case NamedType(name) if (parameters.indexOf(name) >= 0):
-				if (substitutions.exists(name)) {
-					var previous = requiredMapValue(substitutions, name);
-					if ((switch (previous) {
-						case TDynamic: true;
-						default: false;
-					}))
-						substitutions.set(name, actual);
-					else if ((switch (actual) {
-						case TDynamic: false;
-						default: true;
-					}) && !TypeRelations.equals(previous, actual)) {
-						if (session.relations.isAssignable(actual, previous))
-							substitutions.set(name, actual);
-						else if (!session.relations.isAssignable(previous, actual))
-							fail("E1003", 'Conflicting types inferred for generic parameter "$name"', span);
-					}
-				} else
-					substitutions.set(name, actual);
+				bindTypeParameter(name, actual, substitutions, span);
 			case ArrayType(element):
 				switch actual {
 					case TArray(actualElement): inferTypeParameters(element, actualElement, parameters, substitutions,

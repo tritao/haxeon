@@ -10,6 +10,7 @@ import compiler.semantic.InitializerUnit;
 import compiler.semantic.SemanticProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
+import compiler.syntax.AstFunctions;
 import compiler.syntax.AstPredicates;
 import compiler.types.DeclarationIndex;
 import compiler.types.StructProperties;
@@ -195,13 +196,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				main = BodyTyper.requiredMapValue(session.signatures, "Main.main");
 			else
 				throw 'Program must define executable entry point "${entryPoint == null ? "main" : entryPoint}"';
-			if (main.arguments.length != 0 || ((switch (bodyTyper.functionResultType(main, main.span)) {
-				case TInt: false;
-				default: true;
-			}) && (switch (bodyTyper.functionResultType(main, main.span)) {
-				case TVoid: false;
-				default: true;
-			})))
+			var result = main.arguments.length == 0 ? bodyTyper.functionResultType(main, main.span) : TVoid,
+				returnsIntOrVoid = switch result {
+					case TInt, TVoid: true;
+					default: false;
+				};
+			// An unannotated entry point whose body failed has no result type: its body's error is the one to report.
+			var bodyFailed = AstFunctions.isInferred(main.result) && session.recoveredErrors.length > 0;
+			if (main.arguments.length != 0 || !returnsIntOrVoid && !bodyFailed)
 				throw 'Executable entry point "${entryPoint == null ? main.name : entryPoint}" must take no arguments and return Int or Void';
 		}
 		var typedEnums:Array<TypedEnum> = cachedMetadata == null ? [for (enumDecl in program.enums)

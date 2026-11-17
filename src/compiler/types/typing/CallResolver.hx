@@ -475,7 +475,7 @@ class CallResolver {
 				substitutions:Map<String, CompilerType>
 			} {
 		return typeGenericArguments(BodyTyper.functionTypeParameters(fn), fn.arguments, arguments, scope, span, leading,
-			presetSubstitutions);
+			presetSubstitutions, fn);
 	}
 
 	/**
@@ -484,7 +484,7 @@ class CallResolver {
 	**/
 	function typeGenericArguments(parameters:Array<String>, declaredArguments:Array<AstArgument>,
 			arguments:Array<AstExpression>, scope:Scope, span:SourceSpan, ?leading:Array<TypedExpression>,
-			?presetSubstitutions:Map<String, CompilerType>):{
+			?presetSubstitutions:Map<String, CompilerType>, ?fn:AstFunction):{
 				arguments:Array<TypedExpression>,
 				substitutions:Map<String, CompilerType>
 			} {
@@ -494,9 +494,9 @@ class CallResolver {
 			lambdas:Array<Int> = [];
 		if (leading != null)
 			for (index in 0...leading.length) {
-				genericInstantiation.inferTypeParameters(declaredArguments[index].type, leading[index].type, parameters,
-					substitutions,
-					leading[index].span);
+				genericInstantiation.inferArgumentTypeParameters(fn, index, declaredArguments[index],
+					leading[index].type,
+					parameters, substitutions, leading[index].span);
 				typed.push(leading[index]);
 			}
 		for (index in 0...arguments.length) {
@@ -508,10 +508,10 @@ class CallResolver {
 			var declared = declaredArguments[offset + index],
 				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
-				expected = session.declarations.resolve(declared.type, declared.span, substitutions);
+				expected = genericInstantiation.expectedArgumentType(fn, offset + index, declared, substitutions);
 			var argument = bodyTyper.typeExpression(arguments[index], scope, expected, expected != null);
-			genericInstantiation.inferTypeParameters(declared.type, argument.type, parameters, substitutions,
-				argument.span);
+			genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type, parameters,
+				substitutions, argument.span);
 			typed.push(argument);
 		}
 		while (lambdas.length > 0) {
@@ -522,8 +522,9 @@ class CallResolver {
 				if (expected == null && !lambdaParametersAnnotated(arguments[index]))
 					continue;
 				var argument = bodyTyper.typeExpression(arguments[index], scope, expected, expected != null);
-				genericInstantiation.inferTypeParameters(declared.type, argument.type, parameters, substitutions,
-					argument.span);
+				genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type,
+					parameters,
+					substitutions, argument.span);
 				typed[offset + index] = argument;
 				lambdas.remove(index);
 				progressed = true;
@@ -2528,13 +2529,12 @@ class CallResolver {
 		for (index in 0...arguments.length) {
 			var expectedArgument:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions) && constructor != null)
-				expectedArgument = session.declarations.resolve(constructor.arguments[index].type,
-					constructor.arguments[index].span, substitutions);
+				expectedArgument = genericInstantiation.expectedArgumentType(constructor, index,
+					constructor.arguments[index], substitutions);
 			var argument = typeExpressionValue(arguments[index], scope, expectedArgument);
 			if (constructor != null)
-				genericInstantiation.inferTypeParameters(constructor.arguments[index].type, argument.type, parameters,
-					substitutions,
-					argument.span);
+				genericInstantiation.inferArgumentTypeParameters(constructor, index, constructor.arguments[index],
+					argument.type, parameters, substitutions, argument.span);
 			typed.push(argument);
 		}
 		for (parameter in parameters)

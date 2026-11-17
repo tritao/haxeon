@@ -22,6 +22,12 @@ class LazyFunctionTypingMain {
 		],
 			"2:9",
 			'Cannot infer the return type of function "Main.f": nothing in its body fixes the type of the null it returns; annotate it');
+		// The entry point's own result comes from its body: when the body fails, its error is the one reported.
+		rejects("an unannotated entry point whose body fails", [
+			"class Main {",
+			"	static function main() { var x:Int = 'text'; }",
+			"}"
+		], "2:39", 'Type mismatch for local "x": expected Int, got String');
 		rejects("an argument only a caller fixes", [
 			"class Main {",
 			"	static function g(x) {}",

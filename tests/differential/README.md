@@ -23,6 +23,9 @@ whose result and arguments are what their bodies give them: several returns
 returned structures and lambdas, calls between unannotated functions and from
 field initializers, arguments fixed by their uses and defaults, accessors of a
 typed property, and the return and override mismatches both compilers reject.
+`lazy-argument-generic` covers unannotated arguments of a generic class's
+constructor and methods and of a static generic function, whose types mention
+the declaration's own type parameters, called from a generic and a concrete class.
 
 ## Reference exception
 
