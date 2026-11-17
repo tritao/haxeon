@@ -4,6 +4,7 @@ import build.execution.ContentDigest;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.Path;
+import haxeon.io.FileTree;
 import project.PackageManifest;
 import sys.FileSystem;
 import sys.io.File;
@@ -81,18 +82,9 @@ class ScriptRun {
 					? Std.parseFloat(File.getContent(stamp)) : FileSystem.stat(directory).mtime.getTime() / 1000;
 			if (Math.isNaN(lastRun) || now - lastRun > UNUSED_SECONDS)
 				try
-					removeTree(directory)
+					FileTree.remove(directory)
 				catch (_:Dynamic) {} // in use by another run, or already gone: the next run tries again
 		}
-	}
-
-	static function removeTree(path:String):Void {
-		if (FileSystem.isDirectory(path)) {
-			for (name in FileSystem.readDirectory(path))
-				removeTree(Path.join([path, name]));
-			FileSystem.deleteDirectory(path);
-		} else
-			FileSystem.deleteFile(path);
 	}
 
 	static function cacheRoot():String {

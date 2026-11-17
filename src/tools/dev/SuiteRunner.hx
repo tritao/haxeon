@@ -2,6 +2,7 @@ package tools.dev;
 
 import haxe.io.Bytes;
 import haxe.io.Path;
+import haxeon.io.FileTree;
 import sys.FileSystem;
 import sys.io.File;
 import sys.io.FileOutput;
@@ -471,16 +472,7 @@ class SuiteRunner {
 		var runs = FileSystem.readDirectory(root).filter(entry -> FileSystem.isDirectory(Path.join([root, entry])));
 		runs.sort((a, b) -> a < b ? 1 : a > b ? -1 : 0);
 		for (index in KEPT_RUNS - 1...runs.length)
-			removeTree(Path.join([root, runs[index]]));
-	}
-
-	static function removeTree(path:String):Void {
-		if (FileSystem.isDirectory(path)) {
-			for (entry in FileSystem.readDirectory(path))
-				removeTree(Path.join([path, entry]));
-			FileSystem.deleteDirectory(path);
-		} else
-			FileSystem.deleteFile(path);
+			FileTree.remove(Path.join([root, runs[index]]));
 	}
 
 	static function ensureDirectory(path:String):Void {

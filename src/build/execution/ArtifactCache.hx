@@ -3,6 +3,7 @@ package build.execution;
 import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
+import haxeon.io.FileTree;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -110,10 +111,10 @@ class ArtifactCache {
 			if (!FileSystem.exists(directory))
 				FileSystem.rename(temporary, directory);
 			else
-				removeTree(temporary);
+				FileTree.remove(temporary);
 		} catch (_:Dynamic) {
 			if (FileSystem.exists(temporary))
-				removeTree(temporary);
+				FileTree.remove(temporary);
 		}
 	}
 
@@ -153,15 +154,4 @@ class ArtifactCache {
 			throw 'Could not restore permissions for $path';
 	}
 
-	static function removeTree(path:String):Void {
-		if (!FileSystem.exists(path))
-			return;
-		if (!FileSystem.isDirectory(path)) {
-			FileSystem.deleteFile(path);
-			return;
-		}
-		for (entry in FileSystem.readDirectory(path))
-			removeTree(Path.join([path, entry]));
-		FileSystem.deleteDirectory(path);
-	}
 }

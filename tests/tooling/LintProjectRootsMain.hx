@@ -1,4 +1,5 @@
 import haxe.io.Path;
+import haxeon.io.FileTree;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -30,19 +31,11 @@ class LintProjectRootsMain {
 			if (status != 0 || File.getContent(mainPath) != main)
 				throw 'lint sorted a run whose order decides what Circle means (files: ${arguments.length})';
 		}
-		removeTree(base);
+		FileTree.remove(base);
 		Sys.println("PASS: lint resolves each file against its own project, whatever else is listed");
 	}
 
 	static function write(base:String, relative:String, text:String):Void
 		File.saveContent(Path.join([base, relative]), text);
 
-	static function removeTree(path:String):Void {
-		if (FileSystem.isDirectory(path)) {
-			for (name in FileSystem.readDirectory(path))
-				removeTree(Path.join([path, name]));
-			FileSystem.deleteDirectory(path);
-		} else
-			FileSystem.deleteFile(path);
-	}
 }

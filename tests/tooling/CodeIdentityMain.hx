@@ -1,6 +1,7 @@
 import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
 import compiler.tools.CompilerSession;
+import haxeon.io.FileTree;
 import sys.FileSystem;
 import sys.io.File;
 import sys.io.Process;
@@ -166,19 +167,8 @@ class Main {
 		expect(changed(v1, build(sessionV, "sv2", ["--define=compiler-version=2"])) == all.join(","),
 			"a session rebuild with a new compiler version");
 
-		deleteTree(root);
+		FileTree.remove(root);
 		Sys.println("PASS: code identities (" + checks + " checks)");
-	}
-
-	static function deleteTree(path:String):Void {
-		for (entry in FileSystem.readDirectory(path)) {
-			var child = path + "/" + entry;
-			if (FileSystem.isDirectory(child))
-				deleteTree(child);
-			else
-				FileSystem.deleteFile(child);
-		}
-		FileSystem.deleteDirectory(path);
 	}
 
 	static function expect(condition:Bool, message:String):Void {

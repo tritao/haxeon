@@ -8,6 +8,7 @@ import editor.lsp.LspDispatcher;
 import editor.lsp.LspProtocol;
 import haxe.Json;
 import haxe.io.Path;
+import haxeon.io.FileTree;
 
 class BlockingLanguageService extends LanguageService {
 	public final entered = new sys.thread.Lock();
@@ -475,7 +476,7 @@ class LspProtocolMain {
 		}));
 		if (watchProtocol.project.configurationFor(Path.join([alternateRoot, "Alternate.hx"])).file != secondConfigPath)
 			throw "explicit Haxe build selection did not override path ownership";
-		deleteTree(watchRoot);
+		FileTree.remove(watchRoot);
 		var folderRoot = Path.join([temporaryRoot, "haxeon-lsp-folders-" + runId]),
 			folderA = Path.join([folderRoot, "folder-a"]),
 			folderB = Path.join([folderRoot, "folder-b"]),
@@ -565,7 +566,7 @@ class LspProtocolMain {
 		folderProtocol.handle(workspaceFolderChange([], [{uri: FileUri.fromPath(folderB), name: "folder-b"}]));
 		if (!folderProtocol.project.hasDiskSource(folderAPath) || !folderProtocol.project.hasDiskSource(folderBPath))
 			throw "removing an overlapping child folder discarded files still owned by its parent";
-		deleteTree(folderRoot);
+		FileTree.remove(folderRoot);
 		var source = "function main():Int { var answer = 42; return answer; }",
 			uri = "file:///workspace/Main.hx";
 		var opened = protocol.handle(Json.stringify({
@@ -1868,7 +1869,7 @@ class LspProtocolMain {
 			base = sys.FileSystem.absolutePath("out/lsp-linked-workspace");
 		if (Sys.command("rm", ["-f", base]) != 0)
 			throw "could not remove the previous workspace link";
-		deleteTree(target);
+		FileTree.remove(target);
 		for (directory in [
 			target,
 			target + "/app",
@@ -1930,7 +1931,7 @@ class LspProtocolMain {
 			}));
 		} catch (error:Dynamic) {
 			Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
-			deleteTree(base);
+			FileTree.remove(base);
 			throw error;
 		}
 		Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
@@ -1943,7 +1944,7 @@ class LspProtocolMain {
 			if (text.indexOf("not in the source cache") >= 0 && text.indexOf("haxeon install") >= 0)
 				reported = true;
 		}
-		deleteTree(base);
+		FileTree.remove(base);
 		if (!reported || sys.FileSystem.exists(base + "/cache/git"))
 			throw 'an uncached Git dependency was not reported offline: $messages';
 		Sys.println("PASS: the language server resolves a project offline and reports a dependency to install");
@@ -1960,10 +1961,10 @@ class LspProtocolMain {
 		try {
 			haxeonManifestWorkspaceAt(base);
 		} catch (failure:Dynamic) {
-			deleteTree(base);
+			FileTree.remove(base);
 			throw failure;
 		}
-		deleteTree(base);
+		FileTree.remove(base);
 	}
 
 	static function haxeonManifestWorkspaceAt(base:String):Void {
@@ -2382,15 +2383,4 @@ class LspProtocolMain {
 		return true;
 	}
 
-	static function deleteTree(path:String):Void {
-		if (!sys.FileSystem.exists(path))
-			return;
-		if (!sys.FileSystem.isDirectory(path)) {
-			sys.FileSystem.deleteFile(path);
-			return;
-		}
-		for (name in sys.FileSystem.readDirectory(path))
-			deleteTree(Path.join([path, name]));
-		sys.FileSystem.deleteDirectory(path);
-	}
 }

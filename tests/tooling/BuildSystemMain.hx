@@ -32,6 +32,7 @@ import build.native.NativeDependencyScanner;
 import build.native.NativeToolchain;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
+import haxeon.io.FileTree;
 import project.CompilerInputs;
 import project.FfiManifest.FfiImportManifest;
 import project.HaxelibSourceAcquirer;
@@ -149,7 +150,7 @@ class BuildSystemMain {
 			expectThrows(() -> PackageManifest.parse(root + "/invalid.json",
 				'{"version":1,"native":{"cmake":{"source":"native","target":"aggregate",' + declaration + '}}}'),
 				"invalid CMake library declarations must be rejected");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testMissingDeclaredOutputs():Void {
@@ -179,7 +180,7 @@ class BuildSystemMain {
 			expect(failure.exitCode != 0 && !ran,
 				"a missing process output must block dependents in either executor backend");
 		}
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testDirectoryOutputs():Void {
@@ -210,7 +211,7 @@ class BuildSystemMain {
 			Process("fixture", [], root, new Map()), true, false, false, [directory]);
 		expect(!ArtifactCache.isShareable(processAction),
 			"directory outputs are excluded from the portable file artifact cache");
-		removeTree(directory);
+		FileTree.remove(directory);
 		File.saveContent(directory, "wrong kind");
 		expect(!ActionFingerprint.outputsExist(action), "a file cannot satisfy a directory output");
 		var wrongKind = new ExecutionAction(new ActionId("wrong-output-kind"), [], [], [directory], "directory output",
@@ -220,7 +221,7 @@ class BuildSystemMain {
 		expectThrows(() -> new ExecutionAction(action.id, [], [], [], "invalid", action.action, true, false, false,
 			[directory]),
 			"directory outputs must also appear in declared outputs");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testTargetsAndToolchains():Void {
@@ -272,7 +273,7 @@ class BuildSystemMain {
 			&& gnuLink.indexOf("libfoo.dll.a") >= 0,
 			"MinGW C++ toolchains should use GNU standard, DLL, and import-library arguments");
 		testLinuxNativeInstrumentation(root);
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	/** Linux instruments the sources in the native scope with the compiler's flags and links the hooks into each module. */
@@ -400,7 +401,7 @@ class BuildSystemMain {
 		expect(!dependentRan, "a failed dependency must prevent its consumer from executing");
 		expect(!deepDependentRan, "failure should block every level of dependent actions");
 		expect(independentRan, "actions unrelated to the failure should still be allowed to complete");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testExecutorBackendSelection():Void {
@@ -409,7 +410,7 @@ class BuildSystemMain {
 			backend = ExecutionBackendFactory.create(environment, 1, _ -> {});
 		expect(backend.name() == "native",
 			"the native executor should be selected behind a replaceable backend boundary");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	/**
@@ -461,7 +462,7 @@ class BuildSystemMain {
 		expect(result.exitCode == 0 && FileSystem.exists(leftDone) && FileSystem.exists(rightDone),
 			'independent external process actions should overlap on host targets (exit ${result.exitCode}, action statuses ${[for (action in result.actions) action.exitCode].join(",")}, '
 			+ 'markers: left=${FileSystem.exists(leftDone)}, right=${FileSystem.exists(rightDone)})');
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	#if (target.threaded && !eval)
@@ -488,7 +489,7 @@ class BuildSystemMain {
 			action("parallel-b", [], "parallel B", invoke)
 		]));
 		expect(result.exitCode == 0 && peakActive == 2, "independent ready actions should overlap on threaded targets");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testDependentStartsWithoutWaitingForSlowSibling():Void {
@@ -513,7 +514,7 @@ class BuildSystemMain {
 		expect(result.exitCode == 0 && result.actions.length == 3, "the work queue should finish every action");
 		expect(!slowFinishedWhenDependentStarted,
 			"a ready dependent should start while a slow sibling still runs, not wait for a wave to end");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testJobServerTokens():Void {
@@ -538,7 +539,7 @@ class BuildSystemMain {
 		expect(server.acquire() && server.acquire(), "returned tokens are usable again");
 		server.stop();
 		expect(!FileSystem.exists(server.path), "stopping the server removes its FIFO");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testExecutorSharesJobServerTokens():Void {
@@ -575,7 +576,7 @@ class BuildSystemMain {
 		server.stop();
 		expect(result.exitCode == 0 && result.actions.length == 4, "actions sharing a job server should all complete");
 		expect(peakActive == 2, 'two tokens should cap four workers at two running actions, saw $peakActive');
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testCompilerConcurrencyLimit():Void {
@@ -607,7 +608,7 @@ class BuildSystemMain {
 		]));
 		expect(result.exitCode == 0 && result.actions.length == 3, "limited compiler actions should all still run");
 		expect(peakActive == 1, "maxConcurrentCompilers should serialize compiler actions even with idle workers");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 	#end
 
@@ -720,7 +721,7 @@ class BuildSystemMain {
 			"an edit made after the compiler read a module must not be saved as clean");
 		FileSystem.deleteFile(report);
 		expect(!executeReported().actions[0].skipped, "missing dependency reports force compilation");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testPersistentDigestCache():Void {
@@ -755,7 +756,7 @@ class BuildSystemMain {
 		local.file(source);
 		local.file(source);
 		expect(local.hashes == 1, "a per-execution cache serves a freshly written file from memory");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testSharedDigestsAcrossExecutions():Void {
@@ -794,7 +795,7 @@ class BuildSystemMain {
 ");
 		expect(!executor().execute(new ExecutionPlan([action])).actions[0].skipped && runs == 3,
 			"a same-size edit right after a build still reruns the action");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testWorkerVersionMemo():Void {
@@ -823,7 +824,7 @@ class BuildSystemMain {
 			"without a session the version follows the sources");
 		expect(CompilerClient.workerVersion("haxe", source, home, root, "4242", session) != one,
 			"a profile port selects a different worker");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	/** The watch snapshot stats each Haxe file under the source roots and the manifest, and nothing else. */
@@ -855,7 +856,7 @@ class BuildSystemMain {
 		File.saveContent(Path.join([root, "src", "Main.hx"]), "class Main { static function main() {} }
 ");
 		expect(!WatchRun.same(files, WatchRun.snapshot(project)), "an edit changes the snapshot");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	#if (target.threaded && !eval)
@@ -902,7 +903,7 @@ class BuildSystemMain {
 		expect(status == 0, "the watched app exits normally");
 		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
 		expect(builds[2] == File.getContent(source), "the last build saw the last save");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 	#end
 
@@ -943,7 +944,7 @@ class BuildSystemMain {
 		File.saveContent(target, "one");
 		var watcher = DirectoryWatcher.create([{path: root, recursive: true}]);
 		if (watcher == null) {
-			removeTree(root);
+			FileTree.remove(root);
 			return;
 		}
 		expect(!watcher.wait(0.05), "an idle tree reports no change");
@@ -960,7 +961,7 @@ class BuildSystemMain {
 		File.saveContent(Path.join([root, "src", "B.hx"]), "new");
 		expect(watcher.wait(2.0), "a new file is reported");
 		watcher.close();
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testDelegatedNativeInvalidation():Void {
@@ -1009,7 +1010,7 @@ class BuildSystemMain {
 			Process("cmake", [], root, new Map()));
 		expect(!build.execution.ArtifactCache.isShareable(stampAction),
 			"CMake package stamps cannot restore missing runtime libraries");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testArtifactCache():Void {
@@ -1047,9 +1048,9 @@ class BuildSystemMain {
 			&& File.getContent(secondOutput) == "same input\n"
 			&& (Sys.systemName() == "Windows" || (FileSystem.stat(secondOutput).mode & 0x40) != 0),
 			"portable process artifacts should restore from the global cache with executable permissions");
-		removeTree(cache);
-		removeTree(firstRoot);
-		removeTree(secondRoot);
+		FileTree.remove(cache);
+		FileTree.remove(firstRoot);
+		FileTree.remove(secondRoot);
 	}
 
 	static function testProjectDiscovery():Void {
@@ -1189,7 +1190,7 @@ class BuildSystemMain {
 		writePackage(child, '{"version":1,"package":{"name":"child"},"dependencies":{"cycle":{"path":".."}}}', []);
 		expectThrows(() -> ProjectDiscovery.discover(Path.join([cycle, "haxeon.json"])),
 			"path dependency cycles should be reported");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testNativeDependencyScanning():Void {
@@ -1206,7 +1207,7 @@ class BuildSystemMain {
 		expect(dependencies.length == 2 && dependencies[0].indexOf("first.h") >= 0
 			&& dependencies[1].indexOf("second.h") >= 0,
 			"native dependency scanning should follow recursive local includes");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testFfiProjectIntegration():Void {
@@ -1244,7 +1245,7 @@ class BuildSystemMain {
 			&& executionText.indexOf("projection.sources") >= 0
 			&& executionText.indexOf("Compile Haxe package") >= 0,
 			"project FFI recipes should become build artifacts before Haxe compilation");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	/** The one translation of a project into compiler inputs, which the build renders and the language server reads. */
@@ -1319,7 +1320,7 @@ class BuildSystemMain {
 			expect(arguments.indexOf(expected) >= 0, 'the compile request should pass $expected');
 		expect(arguments.indexOf('--package-root=app=$appRoot') < 0,
 			"the root package is not scoped when its entry is outside it");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	/**
@@ -1363,11 +1364,11 @@ class BuildSystemMain {
 				"offline resolution follows the lockfile's commit for a ref");
 		} catch (error:Dynamic) {
 			Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
-			removeTree(root);
+			FileTree.remove(root);
 			throw error;
 		}
 		Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testPackageSourceModel():Void {
@@ -1438,7 +1439,7 @@ class BuildSystemMain {
 			"haxeon.json"
 		])),
 			"unsupported Haxelib compiler parameters should be diagnosed");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testRegistryAdapter():Void {
@@ -1469,7 +1470,7 @@ class BuildSystemMain {
 		File.saveContent(Path.join([foo, ".haxeon-checksum"]), "tampered\n");
 		expectThrows(() -> resolver.resolve(Path.join([app, "haxeon.json"])),
 			"registry source checksums should be verified on every use");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testRegistryPublisher():Void {
@@ -1487,7 +1488,7 @@ class BuildSystemMain {
 		expectThrows(() -> RegistryPublisher.publish(Path.join([packageRoot, "haxeon.json"]), "local", "1.0.0",
 			registryRoot),
 			"registry publication should reject replacing an existing version");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testResolverDelegatesAcquisition():Void {
@@ -1500,7 +1501,7 @@ class BuildSystemMain {
 			project = new PackageResolver(acquirer).resolve(Path.join([app, "haxeon.json"]));
 		expect(acquirer.calls == 1 && project.packages.get("foo").source != null,
 			"package resolution should delegate source acquisition and retain the source identity");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testAlternateRootManifest():Void {
@@ -1514,7 +1515,7 @@ class BuildSystemMain {
 			&& project.manifest.entry == "app.TestMain"
 			&& project.rootPackage.manifest.entry == "app.TestMain",
 			"the requested root manifest must define the root package and build entry");
-		removeTree(root);
+		FileTree.remove(root);
 	}
 
 	static function testLockfileRoundTrip():Void {
@@ -1548,7 +1549,7 @@ class BuildSystemMain {
 		// The epoch in milliseconds does not fit in an Int, so the timestamp stays a Float; a stale directory
 		// left by an interrupted run is removed rather than making createDirectory fail.
 		var path = Path.join([base, 'haxeon-build-$name-${Std.string(Date.now().getTime())}']);
-		removeTree(path);
+		FileTree.remove(path);
 		FileSystem.createDirectory(path);
 		return FileSystem.fullPath(path);
 	}
@@ -1580,25 +1581,6 @@ class BuildSystemMain {
 			threw = true;
 		}
 		expect(threw, message);
-	}
-
-	/** Deletes `path` and everything under it, a Git checkout included: Git writes its objects read-only, and Windows does not delete a read-only file. */
-	static function removeTree(path:String):Void {
-		if (Sys.systemName() == "Windows" && FileSystem.exists(path) && FileSystem.isDirectory(path))
-			Sys.command("attrib", ["-R", StringTools.replace(path, "/", "\\") + "\\*", "/S", "/D"]);
-		removeEntries(path);
-	}
-
-	static function removeEntries(path:String):Void {
-		if (!FileSystem.exists(path))
-			return;
-		if (!FileSystem.isDirectory(path)) {
-			FileSystem.deleteFile(path);
-			return;
-		}
-		for (entry in FileSystem.readDirectory(path))
-			removeEntries(Path.join([path, entry]));
-		FileSystem.deleteDirectory(path);
 	}
 
 	static function compilerAction(plan:ExecutionPlan):Null<ExecutionAction> {
