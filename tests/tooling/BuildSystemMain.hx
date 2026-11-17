@@ -1582,7 +1582,14 @@ class BuildSystemMain {
 		expect(threw, message);
 	}
 
+	/** Deletes `path` and everything under it, a Git checkout included: Git writes its objects read-only, and Windows does not delete a read-only file. */
 	static function removeTree(path:String):Void {
+		if (Sys.systemName() == "Windows" && FileSystem.exists(path) && FileSystem.isDirectory(path))
+			Sys.command("attrib", ["-R", StringTools.replace(path, "/", "\\") + "\\*", "/S", "/D"]);
+		removeEntries(path);
+	}
+
+	static function removeEntries(path:String):Void {
 		if (!FileSystem.exists(path))
 			return;
 		if (!FileSystem.isDirectory(path)) {
@@ -1590,7 +1597,7 @@ class BuildSystemMain {
 			return;
 		}
 		for (entry in FileSystem.readDirectory(path))
-			removeTree(Path.join([path, entry]));
+			removeEntries(Path.join([path, entry]));
 		FileSystem.deleteDirectory(path);
 	}
 
