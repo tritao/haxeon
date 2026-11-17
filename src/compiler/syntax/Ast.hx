@@ -181,6 +181,10 @@ typedef AstAbstract = {
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;
+
+	/** The abstract's properties, `var name(get, never):Type`: an abstract stores nothing but its underlying value. */
+	final fields:Array<AstField>;
+
 	final methods:Array<AstFunction>;
 	final span:SourceSpan;
 }

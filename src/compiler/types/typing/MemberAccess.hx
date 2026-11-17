@@ -123,6 +123,18 @@ class MemberAccess {
 			metadata: field.metadata
 		}, span);
 
+	/** Source reaches the property `field` of abstract `declaration`: a read or write, which calls its accessor. */
+	public static function abstractProperty(session:TypingSession, declaration:AstAbstract,
+			field:AstField, span:SourceSpan):Void
+		require(session, {
+			owner: declaration.name,
+			name: field.name,
+			isPublic: field.isPublic,
+			declaredIn: field.span,
+			ownerMetadata: declaration.metadata == null ? [] : declaration.metadata,
+			metadata: field.metadata
+		}, span);
+
 	/**
 	 * Source names the method `name` that `owner` declares (`owner.new` for a constructor): a call, a method value or `super`.
 	 * `owner` is the declaring class, interface or abstract, as the method's lookup found it.

@@ -1777,8 +1777,7 @@ class BodyTyper implements BodyTyping {
 				}
 				var thisType = scope.resolve("this");
 				if (thisType != null && findFieldType(thisType, name) != null)
-					return typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span,
-						scope);
+					return typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 			}
 			var enumLiteral = sourceIsBareReference(span) ? expectedEnumLiteral(name, expectedType, span) : null;
 			if (enumLiteral != null)
@@ -1879,7 +1878,7 @@ class BodyTyper implements BodyTyping {
 					var field = findFieldType(thisType, name);
 					if (field == null)
 						fail("E1005", 'Unknown variable "$name"', span);
-					typedMemberWithFlow(typeExpression(Variable("this", span), scope), name, span, scope);
+					typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 				} else {
 					var parts = splitPath(name),
 						objectName = parts[0],
@@ -2175,6 +2174,10 @@ class BodyTyper implements BodyTyping {
 				object = new TypedExpression(TCast(object), refinedObject, object.span);
 		}
 		explainNullableReceiver(object, name, span, scope);
+		var property = AbstractProperties.find(session, object.type, name);
+		if (property != null)
+			return callResolver.typeAbstractAccessorCall(object, AbstractProperties.accessor(session, property, true,
+				span), [], span, scope);
 		var member = typedMember(object, name, span),
 			path = FlowAnalysis.accessPath(member);
 		if (path == null)
@@ -2781,8 +2784,39 @@ class BodyTyper implements BodyTyping {
 							session.representation.nominalSubstitutions(type)), name);
 				}
 				found;
+			case TAbstract(_, _, _):
+				var property = AbstractProperties.find(session, type, name);
+				property == null ? null : AbstractProperties.typeOf(session, type, property);
 			default: null;
 		};
+
+	/**
+	 * A write of `expression` to the property `name` of `object`, a value of an abstract: a call to its setter
+	 * (`AbstractProperties`). Null when the abstract has no such property.
+	 */
+	public function abstractPropertyWrite(object:TypedExpression, name:String, expression:AstExpression,
+			span:SourceSpan,
+			scope:Scope):Null<TypedExpression> {
+		var property = AbstractProperties.find(session, object.type, name);
+		if (property == null)
+			return null;
+		var setter = AbstractProperties.accessor(session, property, false, span),
+			type = AbstractProperties.typeOf(session, object.type, property),
+			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
+		return callResolver.typeAbstractAccessorCall(object, setter, [value], span, scope);
+	}
+
+	/**
+	 * The receiver of a member named without one: `this`, as the abstract's own type in an abstract's method (where `this` itself
+	 * reads as the underlying value), so its properties are found.
+	 */
+	public function implicitReceiver(span:SourceSpan, scope:Scope):TypedExpression {
+		var receiver = typeExpression(Variable("this", span), scope), thisType = scope.resolve("this");
+		return switch thisType {
+			case TAbstract(_, _, _): session.representation.boundaryCast(receiver, thisType);
+			default: receiver;
+		};
+	}
 
 	public function enumCaseCovered(type:CompilerType, constructorIndex:Int,
 			cases:Array<TypedSwitchCoverageCase>):Bool {

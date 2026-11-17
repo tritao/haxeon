@@ -807,7 +807,7 @@ class CallResolver {
 			signature = requiredMapValue(session.signatures, methodKey),
 			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
 				typeArguments);
-		if (declaration.isExtern == true) {
+		if (declaration.isExtern == true || method.isExtern == true) {
 			var typed = typeDeclaredCallArguments(arguments, signature, scope, methodKey, span,
 				substitutions),
 				callArguments:Array<TypedExpression> = [
@@ -822,6 +822,37 @@ class CallResolver {
 		}
 		var typedArguments = [for (argument in arguments) bodyTyper.typeExpression(argument, scope)];
 		return genericInstantiation.specialize(methodKey, signature, typedArguments, span, scope, abstractName, false,
+			substitutions, receiver);
+	}
+
+	/**
+	 * A call of the accessor `accessor` (`get_x`, `set_x`) of an abstract's property on `receiver`, a value of the abstract, with
+	 * `arguments` typed already. The property's visibility was checked (`AbstractProperties.accessor`), not the accessor's.
+	 */
+	public function typeAbstractAccessorCall(receiver:TypedExpression, accessor:String,
+			arguments:Array<TypedExpression>,
+			span:SourceSpan, scope:Scope):TypedExpression {
+		var abstractName:String, typeArguments:Array<CompilerType>;
+		switch receiver.type {
+			case TAbstract(name, arguments, _):
+				abstractName = name;
+				typeArguments = arguments;
+			default:
+				throw new InternalError('Accessor "$accessor" is called on a value of no abstract');
+		}
+		var declaration = session.declarations.abstractDeclaration(abstractName);
+		if (declaration == null)
+			throw new InternalError('Missing abstract declaration "$abstractName"');
+		var methodKey = abstractName + "." + accessor,
+			signature = requiredMapValue(session.signatures, methodKey),
+			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
+				typeArguments);
+		if (declaration.isExtern == true || signature.isExtern == true)
+			return new TypedExpression(TCall(methodKey, [
+				session.representation.boundaryCast(receiver,
+					session.representation.semanticType(declaration.underlying, declaration.span, substitutions))
+			].concat(arguments)), session.declarations.types.resultType(signature, substitutions), span);
+		return genericInstantiation.specialize(methodKey, signature, arguments, span, scope, abstractName, false,
 			substitutions, receiver);
 	}
 

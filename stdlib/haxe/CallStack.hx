@@ -3,45 +3,13 @@ package haxe;
 #if wasm
 // Wasm has no runtime symbolizer yet, so stacks are empty.
 typedef StackFrames = Array<String>;
-
-function nativeExceptionStack():Array<String>
-	return [];
-
-function nativeCallStack():Array<String>
-	return [];
-
-function callStackFrames():StackFrames
-	return [];
-
-function exceptionStackFrames():StackFrames
-	return [];
-
-function stackFrameSymbols(frames:StackFrames):Array<String>
-	return frames;
 #else
+
 /**
 	A stack taken and not yet named: naming a frame resolves its symbol, most of what a stack costs, so haxe.Exception takes
 	one each time it is made and names it only when its `stack` is read.
 **/
 typedef StackFrames = hl.Bytes;
-
-@:hlNative("haxeon_runtime", "__exception_stack")
-extern function nativeExceptionStack():Array<String>;
-
-@:hlNative("haxeon_runtime", "__call_stack")
-extern function nativeCallStack():Array<String>;
-
-/** The frames now on the stack, innermost first, unnamed. */
-@:hlNative("haxeon_runtime", "__call_stack_frames")
-extern function callStackFrames():StackFrames;
-
-/** The frames of the last throw, unnamed. */
-@:hlNative("haxeon_runtime", "__exception_stack_frames")
-extern function exceptionStackFrames():StackFrames;
-
-/** The symbols of frames `callStackFrames` or `exceptionStackFrames` took, as `nativeCallStack` names them. */
-@:hlNative("haxeon_runtime", "__stack_frame_symbols")
-extern function stackFrameSymbols(frames:StackFrames):Array<String>;
 #end
 
 /** One portable call-stack entry. */
@@ -59,9 +27,14 @@ enum StackItem {
 	As in Haxe, it is an abstract over its items: `stack[i]`, `stack.length`, and an `Array<StackItem>` where a stack is
 	expected.
 **/
-@:forward(length)
 @:arrayAccess
 abstract CallStack(Array<StackItem>) from Array<StackItem> {
+	/** The number of frames. */
+	public var length(get, never):Int;
+
+	inline function get_length():Int
+		return this.length;
+
 	/**
 		The frames calling the function that calls this one (Haxe's `CallStack.callStack()`), without the program's entry.
 		This function's own frame, the stack's first, is left out; it must stay a frame of its own, which its loop sees to:
@@ -102,6 +75,41 @@ abstract CallStack(Array<StackItem>) from Array<StackItem> {
 	/** The frames of a throw, from frames `exceptionStackFrames` took. */
 	@:noCompletion public static function thrownStack(taken:StackFrames):CallStack
 		return frames(stackFrameSymbols(taken), 0);
+
+	#if wasm
+	static function nativeExceptionStack():Array<String>
+		return [];
+
+	static function nativeCallStack():Array<String>
+		return [];
+
+	static function callStackFrames():StackFrames
+		return [];
+
+	static function exceptionStackFrames():StackFrames
+		return [];
+
+	static function stackFrameSymbols(frames:StackFrames):Array<String>
+		return frames;
+	#else
+	@:hlNative("haxeon_runtime", "__exception_stack")
+	static extern function nativeExceptionStack():Array<String>;
+
+	@:hlNative("haxeon_runtime", "__call_stack")
+	static extern function nativeCallStack():Array<String>;
+
+	/** The frames now on the stack, innermost first, unnamed. */
+	@:hlNative("haxeon_runtime", "__call_stack_frames")
+	static extern function callStackFrames():StackFrames;
+
+	/** The frames of the last throw, unnamed. */
+	@:hlNative("haxeon_runtime", "__exception_stack_frames")
+	static extern function exceptionStackFrames():StackFrames;
+
+	/** The symbols of frames `callStackFrames` or `exceptionStackFrames` took, as `nativeCallStack` names them. */
+	@:hlNative("haxeon_runtime", "__stack_frame_symbols")
+	static extern function stackFrameSymbols(frames:StackFrames):Array<String>;
+	#end
 
 	/** `\nCalled from <item>` for each item, as Haxe prints a stack. */
 	public static function toString(stack:CallStack):String {

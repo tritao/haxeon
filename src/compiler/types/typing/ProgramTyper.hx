@@ -124,9 +124,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			}
 		if (cachedMetadata == null)
 			for (classDecl in program.classes) {
-				var defaultLibrary = externTyper.nativeLibrary(classDecl.name, classDecl.metadata);
-				if (classDecl.isExtern == true || defaultLibrary != null) {
-					for (method in classDecl.methods) {
+				var defaultLibrary = externTyper.nativeLibrary(classDecl.name, classDecl.metadata),
+					externClass = classDecl.isExtern == true || defaultLibrary != null;
+				// An extern class's methods are natives, and so is an `extern` method without a body in any other class.
+				for (method in classDecl.methods)
+					if (externClass || method.isExtern == true) {
 						if (!method.isStatic)
 							BodyTyper.fail("E1021",
 								'Extern instance method "${classDecl.name}.${method.name}" is not supported yet',
@@ -136,13 +138,13 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						typedNatives.push(externTyper.typeExtern(method, nativeName, null, defaultLibrary, null,
 							defaultLibrary != null));
 					}
-				}
 			}
 		if (cachedMetadata == null)
-			for (abstractDecl in program.abstracts)
-				if (abstractDecl.isExtern == true) {
-					var defaultLibrary = externTyper.nativeLibrary(abstractDecl.name, abstractDecl.metadata);
-					for (method in abstractDecl.methods) {
+			for (abstractDecl in program.abstracts) {
+				var defaultLibrary = abstractDecl.isExtern == true ? externTyper.nativeLibrary(abstractDecl.name,
+					abstractDecl.metadata) : null;
+				for (method in abstractDecl.methods)
+					if (abstractDecl.isExtern == true || method.isExtern == true) {
 						var nativeName = method.name.indexOf(".") >= 0
 							? method.name : abstractDecl.name + "." + method.name;
 						var receiverType = method.isStatic
@@ -156,7 +158,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 						typedNatives.push(externTyper.typeExtern(method, nativeName, receiverType, defaultLibrary,
 							resultOverride));
 					}
-				}
+			}
 		if (cachedMetadata == null) {
 			// A native binding replaces a function's body, so only an extern function can carry one;
 			// on any other function the body would silently run instead of the native.
@@ -166,11 +168,15 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true && externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null)
 					for (method in classDecl.methods)
-						rejectNativeBinding(method, classDecl.name + "." + method.name);
+						if (method.isExtern != true)
+							rejectNativeBinding(method, classDecl.name + "." + method.name);
 			for (abstractDecl in program.abstracts)
 				if (abstractDecl.isExtern != true)
 					for (method in abstractDecl.methods)
-						rejectNativeBinding(method, abstractDecl.name + "." + method.name);
+						if (method.isExtern != true)
+							rejectNativeBinding(method, abstractDecl.name + "." + method.name);
+			for (abstractDecl in program.abstracts)
+				AbstractProperties.validate(session, abstractDecl);
 		}
 		for (native in typedNatives)
 			switch native.convention {
@@ -1412,6 +1418,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			for (method in abstractDecl.methods) {
 				var name = abstractDecl.name + "." + method.name;
 				if (abstractDecl.isExtern != true
+					&& method.isExtern != true
 					&& method.isStatic
 					&& !BodyTyper.isGeneric(BodyTyper.requiredMapValue(session.signatures, name))
 					&& (selected == null || selected.exists(name)))
@@ -1504,7 +1511,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				continue;
 			if (specialization == null && !method.isStatic && isConstrainedOwnerTemplate(classDecl.name))
 				continue;
-			if (BodyTyper.isGeneric(method))
+			// An `extern` method has no body: it is a native (`typeProgramPhases`).
+			if (BodyTyper.isGeneric(method) || method.isExtern == true)
 				continue;
 			if (method.name == "new")
 				hasConstructor = true;

@@ -229,11 +229,32 @@ class ModuleCanonicalizer {
 			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases, decl.typeParameters)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
+			fields: [
+				for (field in decl.fields)
+					canonicalAbstractField(field, decl.typeParameters, module, entry, locals, aliases)
+			],
 			methods: [
 				for (method in decl.methods)
 					canonicalAbstractMethod(method, decl.typeParameters, module, entry, locals, method.name, aliases)
 			],
 			span: decl.span
+		};
+
+	/** An abstract's property with its type and metadata resolved in the module (`AbstractProperties` checks what it may be). */
+	static function canonicalAbstractField(field:compiler.syntax.Ast.AstField, ownerTypeParameters:Array<String>,
+			module:String, entry:String, locals:LocalScope, aliases:AliasTable):compiler.syntax.Ast.AstField
+		return {
+			name: field.name,
+			isPublic: field.isPublic,
+			metadata: canonicalMetadata(field.metadata, module, entry, locals, aliases),
+			type: field.type == null ? null : canonicalType(field.type, aliases, ownerTypeParameters),
+			initializer: canonicalOptionalExpression(field.initializer, module, entry, locals, aliases),
+			readAccess: field.readAccess,
+			writeAccess: field.writeAccess,
+			isStatic: field.isStatic,
+			isInline: field.isInline,
+			isFinal: field.isFinal,
+			span: field.span
 		};
 
 	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String,

@@ -107,6 +107,14 @@ class ModuleChangeAnalyzer {
 							SemanticSignature.parsed(type, ast.aliases)
 					].join(",") + " to "
 					+ [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type, ast.aliases)].join(",");
+			// A property is read and written through its accessors, so its declaration is part of how the abstract types.
+			signature += ":properties:"
+				+ [
+					for (field in abstractDecl.fields)
+						(field.isStatic ? "static " : "") + field.name + "(" + field.readAccess + ","
+						+ field.writeAccess + "):"
+						+ (field.type == null ? "" : SemanticSignature.parsed(field.type, ast.aliases))
+				].join(";");
 			// Operator and conversion metadata changes the abstract's typing behavior, even if method signatures do not change.
 			signature += ":method-metadata:"
 				+ [for (method in abstractDecl.methods) if (method.isStatic && method.metadata != null)

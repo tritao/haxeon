@@ -280,6 +280,9 @@ class ModuleAnalyzer {
 				addModuleTypeDependency(type, state, dependencies, abstractDecl.typeParameters);
 			for (constraint in abstractDecl.typeConstraints ?? [])
 				addModuleTypeDependency(constraint.type, state, dependencies, abstractDecl.typeParameters);
+			for (field in abstractDecl.fields)
+				if (field.type != null)
+					addModuleTypeDependency(field.type, state, dependencies, abstractDecl.typeParameters);
 			for (method in abstractDecl.methods)
 				addFunctionTypeDependencies(method, state, dependencies, abstractDecl.typeParameters);
 		}

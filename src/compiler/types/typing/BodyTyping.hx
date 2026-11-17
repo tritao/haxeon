@@ -74,6 +74,9 @@ interface BodyTyping {
 	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>;
 	function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
 			span:SourceSpan):TypedExpression;
+	function abstractPropertyWrite(object:TypedExpression, name:String, expression:AstExpression, span:SourceSpan,
+			scope:Scope):Null<TypedExpression>;
+	function implicitReceiver(span:SourceSpan, scope:Scope):TypedExpression;
 
 	// Captured locals.
 	function boundCell(name:String, scope:Scope):Null<String>;

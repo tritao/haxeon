@@ -341,21 +341,33 @@ class Parser {
 				toTypes.push(conversionType);
 		}
 		consume(TokenKind.LeftBrace);
-		var methods:Array<AstFunction> = [];
+		var methods:Array<AstFunction> = [], fields:Array<AstField> = [];
 		while (!check(TokenKind.RightBrace)) {
-			var methodMetadata = parseMetadata();
-			var isStatic = false, isInline = false, isPublic:Null<Bool> = null, isExternMember = false;
+			var methodMetadata = parseMetadata(),
+				memberStart = current().span;
+			var isStatic = false,
+				isInline = false,
+				isFinal = false,
+				isPublic:Null<Bool> = null,
+				isExternMember = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline)
-				|| check(TokenKind.Static) || isExternModifier()) {
+				|| check(TokenKind.Static) || check(TokenKind.Final) || isExternModifier()) {
 				if (match(TokenKind.Static))
 					isStatic = true;
 				else if (match(TokenKind.Inline))
 					isInline = true;
+				else if (match(TokenKind.Final))
+					isFinal = true;
 				else if (isExternModifier()) {
 					isExternMember = true;
 					advance();
 				} else
 					isPublic = advance().kind == TokenKind.Public;
+			}
+			if (!check(TokenKind.Function)) {
+				// A property: what it may be is checked with its type (`AbstractProperties`), as Haxe does.
+				fields.push(parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart));
+				continue;
 			}
 			var functionStart = consume(TokenKind.Function).span,
 				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
@@ -372,6 +384,7 @@ class Parser {
 			underlying: underlying,
 			fromTypes: fromTypes,
 			toTypes: toTypes,
+			fields: fields,
 			methods: methods,
 			span: start.merge(end)
 		};

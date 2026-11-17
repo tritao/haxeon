@@ -149,6 +149,7 @@ class DeclarationIndex {
 			underlying: declaration.underlying,
 			fromTypes: declaration.fromTypes,
 			toTypes: declaration.toTypes,
+			fields: [],
 			methods: [],
 			span: declaration.span
 		};

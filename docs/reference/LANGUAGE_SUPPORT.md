@@ -86,6 +86,12 @@ The current subset includes:
 - Static members belong to the class that declares them, as in Haxe: a subclass does not inherit them, so its code names a
   base class's static through that class (`Base.count`, `Base.make()`), and `Derived.count` or a bare `count` in Derived
   does not reach it.
+- Properties on an abstract, as in Haxe: `public var length(get, never):Int;` with `function get_length() return
+  this.length;` is read as `stack.length` and, with `set`, written as `stack.top = 1`, `stack.top += 1` or `stack.top++`,
+  from outside and from the abstract's own methods (`length`). Each access calls the accessor; `never` forbids it. An
+  abstract stores nothing but its underlying value, so its variables must be such properties (`Cannot declare member
+  variable in abstract`, `Member property accessors must be get/set or never`, `Method get_length required by property
+  length is missing`, in Haxe's words). A static variable of an abstract is not supported yet.
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import
   one (`import pack.Settings.hits;`) or write its full path (`pack.Settings.hits`). As an extension stock Haxe rejects, they
   can also be reached through the module's name (`Settings.hits`, `Settings.record()` with `import pack.Settings;`). When the
@@ -224,7 +230,12 @@ Bindings participate in normal name and type checking, but emit only a native
 table entry. Missing, duplicate, non-string, or malformed bindings are compile
 errors. Static methods on `extern class` and static or instance methods on
 `extern abstract` use the same form; an instance abstract method passes its
-underlying representation as native argument zero.
+underlying representation as native argument zero. So does an `extern` method
+without a body in a class or abstract that is not extern itself
+(`@:hlNative("std", "math_sqrt") static extern function sqrt(v:Float):Float;`),
+which Haxe leaves unimplemented on HashLink. Haxe also binds `@:hlNative` on a
+method with a body, ignoring the body; Haxeon rejects that (`E1021`), since
+the body would otherwise look like it runs.
 
 An extern class or abstract can provide a default library for all its methods.
 The method name is used as the native symbol unless the method carries its own

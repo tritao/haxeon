@@ -16,6 +16,7 @@ import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue.*;
+import compiler.syntax.AssignmentTarget;
 import compiler.syntax.Ast.AstMetadata;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstClass;
@@ -2045,6 +2046,19 @@ class ExpressionTyper {
 				TPostfixField(object, name, delta);
 			case TIndex(array, index): TPostfixIndex(array, index, delta);
 			default:
+				// A property of an abstract is read and written through its accessors.
+				var property = switch target {
+					case Member(object, field, _): {object: object, field: field};
+					case Variable(name, variableSpan) if (name.lastIndexOf(".") > 0):
+						{
+							object: Variable(name.substring(0, name.lastIndexOf(".")), variableSpan),
+							field: name.substring(name.lastIndexOf(".") + 1)
+						};
+					default: null;
+				};
+				if (property != null && isAbstractProperty(property.object, property.field, scope))
+					return rewrittenPostfixIncrement(Member(property.object, property.field, span), delta, span, scope,
+						true);
 				fail("E1018", "Postfix increment target is not assignable", span);
 				TPostfixLocal("", delta);
 		};
@@ -2082,12 +2096,30 @@ class ExpressionTyper {
 			default: false;
 		};
 
+	/** Whether `object.field` names a property of an abstract (`AbstractProperties`); `object` may name no value at all. */
+	function isAbstractProperty(object:AstExpression, field:String, scope:Scope):Bool {
+		var mark = session.checkpoint();
+		try
+			return AbstractProperties.find(session, bodyTyper.typeExpression(object, scope).type, field) != null
+		catch (_:CompileError) {
+			session.rewind(mark);
+			return false;
+		}
+	}
+
 	/**
 	 * `target++` on a Dynamic value or a nullable number: the value is the old one, and the target becomes it plus (or minus)
 	 * one, `{ var old = target; target = old + 1; old }`, with the operators of the target's type (a nullable reads as its
-	 * number there).
+	 * number there). With `stabilize`, a field's receiver is evaluated once, as an assignment's is.
 	 */
-	function rewrittenPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
+	function rewrittenPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope,
+			stabilize:Bool = false):TypedExpression {
+		var bindings:Array<AstStatement> = [];
+		if (stabilize) {
+			var stable = AssignmentTarget.stabilize(target, span, _ -> span);
+			target = stable.target;
+			bindings = stable.bindings;
+		}
 		var old = "__haxeon_incremented", // Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
 			updated = Add(Variable(old, span),
 				delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span), span),
@@ -2098,8 +2130,8 @@ class ExpressionTyper {
 					fail("E1018", "Postfix increment target is not assignable", span);
 					Assignment("", updated, span);
 			};
-		return bodyTyper.typeExpression(BlockExpression([VarDeclaration(old, null, target, span), store],
-			Variable(old, span), span), scope);
+		var statements = bindings.concat([VarDeclaration(old, null, target, span), store]);
+		return bodyTyper.typeExpression(BlockExpression(statements, Variable(old, span), span), scope);
 	}
 
 	public static function containsNullLiteral(expression:AstExpression):Bool

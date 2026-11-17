@@ -177,6 +177,8 @@ in_background run_case exception-throw-null 0
 in_background run_case exception-details 0
 in_background run_case throw-type-check 0
 in_background run_case callstack-abstract 0
+in_background run_case abstract-properties 0
+in_background run_compile_failure abstract-property-never-write
 in_background run_case abstract-module-members 0
 # Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0

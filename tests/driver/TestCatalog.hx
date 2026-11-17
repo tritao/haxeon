@@ -111,6 +111,7 @@ class TestCatalog {
 		"MemberModuleShadowMain",
 		"FinalFieldMain",
 		"MemberInitializerAccessMain",
+		"AbstractPropertiesMain",
 		"ModuleVariablesMain",
 		"SignatureMetadataMain",
 		"LspFileUriMain",
