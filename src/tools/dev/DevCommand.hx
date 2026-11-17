@@ -10,6 +10,13 @@ import tools.dev.ToolArtifacts.ToolRequest;
  *       Print the path of a HashLink build of the entry point MAIN, built with the pinned Haxe and cached by content (ToolArtifacts).
  *       Build diagnostics go to stderr; stdout is only the path.
  *
+ *   haxeon dev hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]
+ *       What a HashLink module is made of: part sizes, opcode counts, the largest functions, one function's instructions
+ *       (HlStatCommand, reading with compiler.hl.HlModuleReader).
+ *
+ *   haxeon dev tool-build-mode
+ *       Print the build mode tool artifacts are built in (build.HaxeonBuild.TOOL_BUILD_MODE), for scripts that build them.
+ *
  *   haxeon dev run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]
  *       Run that build of MAIN on this checkout's VM with the arguments and the caller's streams and directory.
  *
@@ -36,6 +43,10 @@ class DevCommand {
 		var command = arguments.length == 0 ? "" : arguments.shift();
 		return switch command {
 			case "tool-path": toolPath(arguments, home);
+			case "hl-stat": HlStatCommand.run(arguments);
+			case "tool-build-mode":
+				Sys.println(build.HaxeonBuild.TOOL_BUILD_MODE);
+				0;
 			case "run": runEntry(arguments, home);
 			case "test": test(arguments, home);
 			case "format": FormatCommand.run(arguments, home);
@@ -160,6 +171,10 @@ class DevCommand {
 		out.writeString("Usage: haxeon dev <command>   (commands for working on a Haxeon checkout)\n");
 		out.writeString("  tool-path [--cp DIR]... [--define NAME[=VALUE]]... MAIN\n");
 		out.writeString("      Print the path of a cached HashLink build of the entry point MAIN (built with the pinned Haxe)\n");
+		out.writeString("  hl-stat MODULE [--ops [N]] [--top N] [--dump NAME [--index I]] [--around OPCODE] [--sections]\n");
+		out.writeString("      What a HashLink module is made of: part sizes, opcodes, largest functions, one function's code\n");
+		out.writeString("  tool-build-mode\n");
+		out.writeString("      Print the build mode tool artifacts are built in (the checked-in bootstrap's)\n");
 		out.writeString("  run [--cp DIR]... [--define NAME[=VALUE]]... MAIN [arguments]\n");
 		out.writeString("      Run that build of MAIN with the arguments (the benchmarks: run --cp benchmarks BenchmarkMain)\n");
 		out.writeString("  format [--check] [--changed]\n");

@@ -30,10 +30,10 @@ function main() {
 
 	var sources = Path.join([work, "compiler-sources.txt"]);
 	sys.io.File.saveContent(sources, sourceList(root, ["src", "stdlib"]));
-	// Tool artifacts, the compiler and every entry point below, are release builds: the mode build.HaxeonBuild.TOOL_BUILD_MODE
-	// gives the checked-in bootstrap, so the fixed point exercises the code generation the bootstrap is built with. The program
-	// cases further down still build in development mode, which covers its metadata.
-	var toolMode = "--build-mode=release";
+	// Tool artifacts, the compiler and every entry point below, build in the mode the build gives the checked-in bootstrap
+	// (build.HaxeonBuild.TOOL_BUILD_MODE), so the fixed point exercises the code generation the bootstrap is built with. The
+	// program cases further down still build in development mode, which covers its metadata.
+	var toolMode = "--build-mode=" + StringTools.trim(Script.output(Script.haxeon(), ["dev", "tool-build-mode"]));
 	var arguments = [
 		toolMode, "--entry=compiler.tools.HaxeonCompiler", "--root=src", "--root=stdlib", '--sources-file=$sources'
 	];

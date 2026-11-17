@@ -507,17 +507,17 @@ directly with `haxeon heap inspect BYTECODE DUMP`.
 
 ## Bytecode size
 
-`scripts/hl-stat.py MODULE` reads a HashLink module and reports what it is made of: the bytes of each section (strings, types,
-function registers, instructions, debug lines, debug sections), function, instruction and register counts, and on request
-the most frequent opcodes (`--ops`), the largest functions (`--top N`), one function's instructions (`--dump NAME`), the
-opcodes around one (`--around OSwitch`) and the debug sections (`--sections`). HashLink compiles every instruction of a
-module when it loads it, so instruction counts are start-up time; `HL_JIT_REGSTATS=1 hl MODULE` reports what the JIT made of
-them. Comparing a module the stock-Haxe-built compiler wrote with one the Haxeon-built compiler wrote shows where ours is
-bigger:
+`haxeon dev hl-stat MODULE` reads a HashLink module (with `compiler.hl.HlModuleReader`, which follows the VM's loader and
+reads stock Haxe's modules too) and reports what it is made of: the bytes of each part (strings, types, globals and natives,
+function instructions, debug lines, debug sections), function, instruction and register counts, and on request the most
+frequent opcodes (`--ops`), the largest functions (`--top N`), one function's instructions (`--dump NAME`), the opcodes
+around one (`--around OSwitch`) and the debug sections (`--sections`). HashLink compiles every instruction of a module when
+it loads it, so instruction counts are start-up time; `HL_JIT_REGSTATS=1 hl MODULE` reports what the JIT made of them.
+Comparing a module the stock-Haxe-built compiler wrote with one the Haxeon-built compiler wrote shows where ours is bigger:
 
 ```sh
-scripts/hl-stat.py out/server-stock.hl --ops 20 --top 10
-scripts/hl-stat.py out/server-haxeon.hl --ops 20 --top 10
+scripts/haxeon dev hl-stat out/server-stock.hl --ops 20 --top 10
+scripts/haxeon dev hl-stat out/server-haxeon.hl --ops 20 --top 10
 ```
 
 ## Compiler profiling
