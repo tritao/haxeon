@@ -20,6 +20,7 @@ class AliasTable {
 
 	/** Where each module-level variable is stored (ModuleFields): `pack.Mod.x` => `pack.Mod$fields.x`; shared, read-only. */
 	var moduleFieldStorage:Null<Map<String, String>> = null;
+	var typeStatics:Null<Map<String, Bool>> = null;
 
 	/** A table with no names that resolves through `parent`, if any, and that `set` and `remove` change without touching it. */
 	public function new(?parent:AliasTable) {
@@ -70,9 +71,24 @@ class AliasTable {
 		removed.set(name, true);
 	}
 
-	/** Resolves module-level variables, by their names as module members, to the hidden class that stores them. */
-	public function useModuleFieldStorage(storage:Map<String, String>):Void
+	/**
+	 * Resolves module-level variables, by their names as module members, to the hidden class that stores them. `statics`
+	 * names those that share their name with a static of the module's own class (`pack.Store.count`).
+	 */
+	public function useModuleFieldStorage(storage:Map<String, String>, statics:Map<String, Bool>):Void {
 		moduleFieldStorage = storage;
+		typeStatics = statics;
+	}
+
+	/** Whether `path` (`pack.Store.count`) is a static of the module's own class as well as a module-level variable. */
+	public function isTypeStatic(path:String):Bool {
+		var statics = typeStatics, table = parent;
+		while (statics == null && table != null) {
+			statics = table.typeStatics;
+			table = table.parent;
+		}
+		return statics != null && statics.exists(path);
+	}
 
 	/**
 	 * `path` with a module-level variable it starts with (`pack.Mod.x`, `pack.Mod.x.push`) named where it is stored

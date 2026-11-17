@@ -116,16 +116,26 @@ class SemanticAssembly {
 				aliasUniverse.push(typeName + "#" + caseName);
 		// Where each module-level variable is stored (ModuleFields): name resolution names it there. A module that adds or removes
 		// one changes the key, so the modules that resolve names are resolved again.
-		var moduleFieldStorage:Map<String, String> = [];
+		// One that shares its name with a static of the module's own class is that static when named through the imported class.
+		var moduleFieldStorage:Map<String, String> = [], moduleTypeStatics:Map<String, Bool> = [];
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
-				if (parsed.fields != null)
+				if (parsed.fields != null) {
+					var ownClass = null;
+					for (decl in parsed.classes)
+						if (ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, decl.name) == moduleName)
+							ownClass = decl;
 					for (field in parsed.fields) {
-						moduleFieldStorage.set(moduleName + "." + field.name,
-							ModuleFields.storageName(moduleName) + "." + field.name);
-						aliasUniverse.push("field " + moduleName + "." + field.name);
+						var path = moduleName + "." + field.name;
+						moduleFieldStorage.set(path, ModuleFields.storageName(moduleName) + "." + field.name);
+						aliasUniverse.push("field " + path);
+						if (ownClass != null && declaresStatic(ownClass, field.name)) {
+							moduleTypeStatics.set(path, true);
+							aliasUniverse.push("static " + path);
+						}
 					}
+				}
 			}
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
@@ -255,7 +265,7 @@ class SemanticAssembly {
 			var importedTypes = context.moduleAnalyzer.importAliases(ast.imports),
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
-			aliases.useModuleFieldStorage(moduleFieldStorage);
+			aliases.useModuleFieldStorage(moduleFieldStorage, moduleTypeStatics);
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			// Unpackaged names wait until the current package's own types are in:
@@ -1174,4 +1184,16 @@ class SemanticAssembly {
 			case AstType.NamedType(name), AstType.AppliedType(name, _): name;
 			default: null;
 		};
+
+	/** Whether class `decl` declares a static field or method `name`. */
+	static function declaresStatic(decl:AstClass, name:String):Bool {
+		for (field in decl.fields)
+			if (field.isStatic && field.name == name)
+				return true;
+		for (method in decl.methods)
+			if (method.isStatic && method.name == name)
+				return true;
+		return false;
+	}
+
 }

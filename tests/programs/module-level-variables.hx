@@ -18,6 +18,7 @@ function main():Int {
 	add(base);
 	add(Settings.derived); // 21
 	if (Settings.names.join(",") != "record" || greeting != "hello" || Merged.label + "/" + Merged.own != "merged/own"
+		|| modulevars.Merged.own != "module"
 		|| shadow != 102 || hits != 1000)
 		return 1;
 	return total == 11 + 10 + 21 ? 42 : 2;
