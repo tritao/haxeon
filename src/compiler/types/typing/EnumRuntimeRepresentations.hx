@@ -22,8 +22,13 @@ class EnumRuntimeRepresentations {
 	public function discover(type:CompilerType, ?seen:Array<Array<compiler.types.Type.AnonymousField>>):Void {
 		switch type {
 			case TInstance(NominalKind.Enum, _, arguments):
-				if (arguments.length > 0 && !session.representation.containsTypeParameter(type, [])) {
-					session.output.discoverEnum(EnumRuntimeType.name(type), type);
+				// An argument a type variable still holds open is known when the body is typed (`Some(null)`, `None`).
+				if (arguments.length > 0 && compiler.types.Monomorphs.containsUnbound(type))
+					session.monomorphs.whenKnown(type, () -> discover(compiler.types.Monomorphs.resolve(type)));
+				else if (arguments.length > 0) {
+					type = compiler.types.Monomorphs.resolve(type);
+					if (!session.representation.containsTypeParameter(type, []))
+						session.output.discoverEnum(EnumRuntimeType.name(type), type);
 				}
 			// Arguments contribute to identity, not necessarily storage. The instantiated
 			// payloads are discovered when this declaration is drained below.

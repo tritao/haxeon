@@ -168,6 +168,7 @@ in_background run_case local-inference-object-literal-context 0
 in_background run_case local-inference-int-float-widening 0
 in_background run_case local-inference-unbound-dynamic 0
 in_background run_case tuple-switch 0
+in_background run_case generic-enum-constructor-inference 0
 in_background run_case switch-shared-constructor-name 0
 in_background run_case tuple-switch-null-element 0
 in_background run_compile_failure type-error
@@ -177,6 +178,7 @@ in_background run_known_divergence anonymous-width-subtyping
 in_background run_compile_failure anonymous-width-missing-field
 in_background run_compile_failure anonymous-width-final-to-var
 in_background run_compile_failure anonymous-width-var-to-final
+in_background run_compile_failure generic-enum-constructor-mixed-arguments
 in_background run_compile_failure tuple-switch-missing-case
 in_background run_compile_failure tuple-switch-pattern-length
 in_background run_compile_failure tuple-switch-binding

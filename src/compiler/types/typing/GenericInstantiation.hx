@@ -177,6 +177,24 @@ class GenericInstantiation {
 		return session.representation.boundaryCast(call, result);
 	}
 
+	/**
+	 * The instance of the enum `name` that one of its constructors makes where no expected type names one, as Haxe types it: each
+	 * type parameter in `typeParameters` is what `inferred` gives from the arguments (`Some(Move(4))` is an `Option<Ins>`), else a
+	 * type variable that what the value meets fixes (`var o = None; o = Some(1);`), settled like a local's (`Monomorphs`), or
+	 * Dynamic where no body is being typed. Null, Void and Never fix nothing.
+	 */
+	public function constructedEnumType(name:String, typeParameters:Array<String>,
+			inferred:Null<Map<String, CompilerType>>,
+			span:SourceSpan):CompilerType
+		return TInstance(Enum, name, [for (parameter in typeParameters) {
+			var type = inferred == null ? null : inferred.get(parameter);
+			switch type {
+				case null | TNull | TVoid | TNever:
+					session.monomorphs.create('the type parameter "$parameter" of $name', span) ?? TDynamic;
+				default: type;
+			}
+		}]);
+
 	public function inferTypeParameters(pattern:AstType, actual:CompilerType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>,
 			span:SourceSpan):Void

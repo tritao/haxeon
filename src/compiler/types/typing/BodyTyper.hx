@@ -1687,21 +1687,8 @@ class BodyTyper implements BodyTyping {
 						for (index in 0...expectedEnum.cases.length) {
 							var enumCase = expectedEnum.cases[index];
 							if (enumCase.name == name && enumCase.params.length == 0) {
-								var literalType:CompilerType = TInstance(NominalKind.Enum, expectedEnum.name, []);
-								var resolvedExpected = expectedType;
-								if (resolvedExpected != null)
-									switch resolvedExpected {
-										case TInstance(Enum, _, arguments):
-											literalType = TInstance(NominalKind.Enum, expectedEnum.name, arguments);
-										case TNullable(element):
-											switch element {
-												case TInstance(Enum, _, arguments): literalType =
-													TInstance(NominalKind.Enum, expectedEnum.name, arguments);
-												default:
-											}
-										default:
-									}
-								return new TypedExpression(TEnumLiteral(expectedEnum.name, index), literalType, span);
+								return new TypedExpression(TEnumLiteral(expectedEnum.name, index),
+									enumLiteralType(expectedEnum, expectedType, span), span);
 							}
 						}
 					}
@@ -1763,24 +1750,9 @@ class BodyTyper implements BodyTyping {
 							fail("E1005", 'Unknown enum case "$name"', span);
 						if (enumDecl.cases[index].params.length > 0)
 							fail("E1008", 'Enum case "$name" requires constructor arguments', span);
-						var literalType:CompilerType = isEnumAlias ? qualifiedEnum : TInstance(NominalKind.Enum,
-							enumName, []);
-						var expectedEnumName = BodyTyper.enumName(expectedType);
-						if (!isEnumAlias && expectedEnumName == enumName) {
-							var resolvedExpected = expectedType;
-							if (resolvedExpected != null)
-								switch resolvedExpected {
-									case TInstance(Enum, _, arguments):
-										literalType = TInstance(NominalKind.Enum, enumName, arguments);
-									case TNullable(element):
-										switch element {
-											case TInstance(Enum, _, arguments): literalType =
-												TInstance(NominalKind.Enum, enumName, arguments);
-											default:
-										}
-									default:
-								}
-						}
+						var literalType:CompilerType = isEnumAlias ? qualifiedEnum : enumLiteralType(enumDecl,
+							expectedType,
+							span);
 						return new TypedExpression(TEnumLiteral(enumName, index), literalType, span, false, null, null,
 							isEnumAlias ? qualifierName : null);
 					}
@@ -2489,13 +2461,8 @@ class BodyTyper implements BodyTyping {
 		for (index in 0...declaration.cases.length) {
 			var enumCase = declaration.cases[index];
 			if (enumCase.name == caseName && enumCase.params.length == 0) {
-				var literalType:CompilerType = TInstance(NominalKind.Enum, declaration.name, []);
-				switch enumInstance(expectedType) {
-					case TInstance(Enum, _, arguments):
-						literalType = TInstance(NominalKind.Enum, declaration.name, arguments);
-					case _:
-				}
-				return new TypedExpression(TEnumLiteral(declaration.name, index), literalType, span);
+				return new TypedExpression(TEnumLiteral(declaration.name, index),
+					enumLiteralType(declaration, expectedType, span), span);
 			}
 		}
 		return null;
@@ -2584,7 +2551,23 @@ class BodyTyper implements BodyTyping {
 		}
 		if (enumName == null)
 			return null;
-		return new TypedExpression(TEnumLiteral(enumName, index), TInstance(NominalKind.Enum, enumName, []), span);
+		return new TypedExpression(TEnumLiteral(enumName, index),
+			enumLiteralType(requiredMapValue(session.enumDecls, enumName), null, span), span);
+	}
+
+	/**
+	 * The type of a constructor without arguments of `declaration`: the instance `expectedType` names with every type argument,
+	 * else one whose type parameters what the value meets fixes (`GenericInstantiation.constructedEnumType`).
+	 */
+	function enumLiteralType(declaration:compiler.syntax.Ast.AstEnum, expectedType:Null<CompilerType>,
+			span:SourceSpan):CompilerType {
+		var expected = enumInstance(expectedType);
+		return switch expected {
+			case TInstance(Enum, name, arguments) if ((name:String) == declaration.name
+				&& arguments.length == declaration.typeParameters.length):
+				expected;
+			default: genericInstantiation.constructedEnumType(declaration.name, declaration.typeParameters, null, span);
+		};
 	}
 
 	static function sourceIsBareReference(span:SourceSpan):Bool

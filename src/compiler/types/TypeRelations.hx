@@ -46,6 +46,10 @@ class TypeRelations {
 	public function conversion(actual:CompilerType, expected:CompilerType):ConversionPlan {
 		actual = Monomorphs.follow(actual);
 		expected = Monomorphs.follow(expected);
+		// A null where a type variable is expected is wrapped as a null of that type, which the variable's type replaces when it is
+		// settled (`Some(null)`, before what the value meets fixes the parameter); it does not fill the variable.
+		if (Monomorphs.isUnbound(expected) && actual.match(TNull))
+			return WrapNullable;
 		if (Monomorphs.isUnbound(actual) || Monomorphs.isUnbound(expected))
 			return Identity;
 		if (equals(actual, expected))

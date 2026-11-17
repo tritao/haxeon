@@ -473,14 +473,27 @@ class CallResolver {
 				arguments:Array<TypedExpression>,
 				substitutions:Map<String, CompilerType>
 			} {
-		var parameters = BodyTyper.functionTypeParameters(fn),
-			substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : copyMap(presetSubstitutions),
+		return typeGenericArguments(BodyTyper.functionTypeParameters(fn), fn.arguments, arguments, scope, span, leading,
+			presetSubstitutions);
+	}
+
+	/**
+		`typeGenericCallArguments` for any callee whose `declaredArguments` mention the type parameters `parameters`: a
+		generic function, or a generic enum's constructor (`typeEnumConstructor`).
+	**/
+	function typeGenericArguments(parameters:Array<String>, declaredArguments:Array<AstArgument>,
+			arguments:Array<AstExpression>, scope:Scope, span:SourceSpan, ?leading:Array<TypedExpression>,
+			?presetSubstitutions:Map<String, CompilerType>):{
+				arguments:Array<TypedExpression>,
+				substitutions:Map<String, CompilerType>
+			} {
+		var substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : copyMap(presetSubstitutions),
 			typed:Array<Null<TypedExpression>> = [],
 			offset = leading == null ? 0 : leading.length,
 			lambdas:Array<Int> = [];
 		if (leading != null)
 			for (index in 0...leading.length) {
-				genericInstantiation.inferTypeParameters(fn.arguments[index].type, leading[index].type, parameters,
+				genericInstantiation.inferTypeParameters(declaredArguments[index].type, leading[index].type, parameters,
 					substitutions,
 					leading[index].span);
 				typed.push(leading[index]);
@@ -491,7 +504,7 @@ class CallResolver {
 				typed.push(null);
 				continue;
 			}
-			var declared = fn.arguments[offset + index],
+			var declared = declaredArguments[offset + index],
 				expected:Null<CompilerType> = null;
 			if (allTypeParametersBound(parameters, substitutions))
 				expected = session.declarations.resolve(declared.type, declared.span, substitutions);
@@ -503,7 +516,7 @@ class CallResolver {
 		while (lambdas.length > 0) {
 			var progressed = false;
 			for (index in lambdas.copy()) {
-				var declared = fn.arguments[offset + index],
+				var declared = declaredArguments[offset + index],
 					expected = lambdaExpectation(declared.type, declared.span, parameters, substitutions);
 				if (expected == null && !lambdaParametersAnnotated(arguments[index]))
 					continue;
@@ -1208,30 +1221,61 @@ class CallResolver {
 	function typeEnumConstructor(name:String, arguments:Array<AstExpression>, expectedType:Null<CompilerType>,
 			enumCase:EnumConstructorInfo, span:SourceSpan,
 			scope:Scope):TypedExpression {
+		var required = requiredEnumParameters(enumCase.params);
+		if (arguments.length < required || arguments.length > enumCase.params.length)
+			fail("E1008",
+				'Enum constructor "$name" expects $required to ${enumCase.params.length} arguments, got ${arguments.length}',
+				span);
+		var instance = enumCase.aliasType ?? enumInstanceOf(enumCase, expectedType),
+			typedArguments:Array<TypedExpression>;
+		if (instance == null && enumCase.typeParameters.length == 0)
+			instance = TInstance(NominalKind.Enum, enumCase.enumName, []);
+		if (instance == null) {
+			// A generic enum's constructor infers its type parameters as a generic function call does, from its arguments
+			// (`GenericInstantiation.constructedEnumType`).
+			var parameters = enumCase.typeParameters;
+			var declared:Array<AstArgument> = [];
+			for (parameter in enumCase.params)
+				declared.push({name: parameter.name ?? "", type: parameter.type, span: parameter.span});
+			var prepared = typeGenericArguments(parameters, declared, arguments, scope, span);
+			typedArguments = prepared.arguments;
+			instance = genericInstantiation.constructedEnumType(enumCase.enumName, parameters, prepared.substitutions,
+				span);
+		} else
+			typedArguments = [
+				for (index in 0...arguments.length)
+					bodyTyper.typeExpression(arguments[index], scope,
+					enumParameterType(enumCase.typeParameters, enumCase.params[index], instance))
+			];
 		var expected = [
 			for (parameter in enumCase.params)
-				enumParameterType(enumCase.typeParameters, parameter, enumCase.aliasType ?? expectedType)
-		],
-			required = requiredEnumParameters(enumCase.params);
-		if (arguments.length < required || arguments.length > expected.length)
-			fail("E1008",
-				'Enum constructor "$name" expects $required to ${expected.length} arguments, got ${arguments.length}',
-				span);
-		var typedArguments = [
-			for (index in 0...arguments.length)
-				bodyTyper.typeExpression(arguments[index], scope, expected[index])
+				enumParameterType(enumCase.typeParameters, parameter, instance)
 		];
 		while (typedArguments.length < expected.length)
 			typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 		typedArguments = coerceArguments(typedArguments, expected, name);
-		var resultType:CompilerType = enumCase.aliasType ?? TInstance(NominalKind.Enum, enumCase.enumName, []);
-		if (enumCase.aliasType == null && expectedType != null && enumName(expectedType) == enumCase.enumName)
+		var resultType:CompilerType = enumCase.aliasType ?? compiler.types.Monomorphs.resolve(instance);
+		if (enumCase.aliasType == null && enumInstanceOf(enumCase, expectedType) != null)
 			resultType = expectedType;
 		for (index in 0...typedArguments.length)
 			typedArguments[index] = session.representation.boundaryCast(typedArguments[index],
 				session.representation.enumStorageType(enumCase.typeParameters, enumCase.params[index], resultType));
 		return new TypedExpression(TEnumConstruct(enumCase.enumName, enumCase.index, typedArguments), resultType, span,
 			false, null, null, enumCase.aliasName);
+	}
+
+	/**
+	 * The instance of `enumCase`'s enum that `expectedType` names with every type argument (`Option<Int>`, also through `Null<>`
+	 * or an abstract), whose arguments the constructor takes; null when it names none.
+	 */
+	static function enumInstanceOf(enumCase:EnumConstructorInfo, expectedType:Null<CompilerType>):Null<CompilerType> {
+		var instance = enumInstance(expectedType);
+		return switch instance {
+			case TInstance(Enum, name, arguments) if ((name:String) == enumCase.enumName
+				&& arguments.length == enumCase.typeParameters.length):
+				instance;
+			default: null;
+		};
 	}
 
 	/**
