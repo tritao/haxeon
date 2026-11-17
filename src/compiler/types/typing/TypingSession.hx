@@ -321,7 +321,7 @@ class TypingSession {
 
 	public function bindSemantic(semantic:SemanticProgram,
 			?defaultValueType:compiler.syntax.Ast.AstExpression->Null<CompilerType>,
-			?initializers:DeclarationTypeTable.FieldInitializerTyping):Void {
+			?typing:DeclarationTypeTable.DeclarationTyping):Void {
 		constants.clearEnumAbstractValues();
 		flagsMasks.clear();
 		for (declaration in semantic.program.enums)
@@ -335,7 +335,7 @@ class TypingSession {
 		// Every reader of a declaration's type asks the program's table from here on.
 		types = new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType,
 			recordDeclarationTypeRead,
-			this, initializers);
+			this, typing);
 		declarations.bindTypes(types);
 		relations = semantic.relations;
 		signatures = semantic.signatures;

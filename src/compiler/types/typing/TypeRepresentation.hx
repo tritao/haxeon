@@ -104,11 +104,15 @@ class TypeRepresentation {
 	 */
 	public function resolveMethodArguments(receiver:CompilerType, owner:String, method:AstFunction,
 			dispatch:Bool = false):Array<TypeRepresentationResult> {
+		// Through the declaration types: an unannotated argument's type is its function body's.
 		var substitutions = methodSubstitutions(receiver, owner),
+			semantic = session.declarations.types.argumentTypes(method, substitutions.semantic),
+			physical = session.declarations.types.argumentTypes(method, substitutions.physical),
 			result:Array<TypeRepresentationResult> = [];
-		for (argument in method.arguments)
-			result.push(dispatch ? dispatchArgument(argument, substitutions) : resolveArgument(argument,
-				substitutions));
+		for (index in 0...method.arguments.length) {
+			var resolved:TypeRepresentationResult = {semantic: semantic[index], physical: physical[index]};
+			result.push(dispatch ? dispatchResult(method.arguments[index], resolved) : resolved);
+		}
 		return result;
 	}
 
@@ -130,12 +134,15 @@ class TypeRepresentation {
 		semantic:Map<String, CompilerType>,
 		physical:Map<String, CompilerType>
 	}):TypeRepresentationResult {
-		var result = resolveArgument(argument, substitutions);
-		return DefaultArguments.valueDefault(argument, result.semantic, session.relations) ? {
-			semantic: TNullable(result.semantic),
-			physical: TNullable(result.physical)
-		} : result;
+		return dispatchResult(argument, resolveArgument(argument, substitutions));
 	}
+
+	/** `resolved`, the type of `argument`, as the dispatch entry takes it: `Null<T>` for an argument with a value default. */
+	function dispatchResult(argument:AstArgument, resolved:TypeRepresentationResult):TypeRepresentationResult
+		return DefaultArguments.valueDefault(argument, resolved.semantic, session.relations) ? {
+			semantic: TNullable(resolved.semantic),
+			physical: TNullable(resolved.physical)
+		} : resolved;
 
 	/** Adapt constructor arguments, including constructors without a declaration. */
 	public function adaptConstructorArguments(receiver:CompilerType, owner:String, method:Null<AstFunction>,

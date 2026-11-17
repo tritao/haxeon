@@ -199,6 +199,46 @@ body is reused the way it is today). The seed is valid because the declaration i
 below, so is every type it read. `--check-reuse` retypes every seeded declaration and compares the types, naming the
 declaration on a difference.
 
+### As built (slice 4)
+
+- `SemanticProgram` no longer runs `SignatureInference`, and `SemanticAssembly` no longer applies its field-bound argument
+  rule: an unannotated result or argument stays `InferredType` in the program, and the function is in `inferredSignatures`.
+  The one declared rule left, an unannotated `get_x`/`set_x` taking property `x`'s annotated type, is applied to the syntax
+  before analysis (`AccessorSignatures`), so such an accessor is not inferred.
+- `DeclarationTypeTable` keeps a `FunctionState` per inferred key (InProgress / Typed / Known / Failed), beside the fields'.
+  `argumentTypes` and `resultType` of an inferred function read its `InferredSignature` (the unannotated parts only; annotated
+  parts are resolved as before), forcing the body the first time. Fields and functions share one forcing stack, so a cycle
+  through both is found; its diagnostic names a `Field` or a `Function`, on the member first in declaration order (each
+  class's fields and methods by position, then module functions, then abstract methods).
+- Forcing calls `ProgramTyper.typeInferredFunction` inside a checkpoint and a declaration unit. A function its own slot types
+  in this build (a module function, a non-generic method of a non-generic declared class, an abstract's static method, when
+  selected) is typed as that slot types it, and the unit is kept: `typeModuleFunctions`, `typeClassMethods` and
+  `typeAbstractFunctions` take it from `functionUnit` and merge its output at the slot. Any other (a generic function, a
+  generic class's method, an abstract's instance method, or one a warm build does not type again) is typed with its own and
+  its owner's type parameters for the signature alone, in a unit that is dropped and not counted as typed.
+- `BodyTyper.typeFunction` takes a `FunctionInference`. It enters the body and begins its frame first, makes a type variable
+  for each unannotated argument without a default (nullable when optional) and for an unannotated result, and gives them to
+  the table as the provisional signature, which a read from the body itself gets. When the body is typed, an unbound result
+  is `Void`; a signature type variable nothing fixed is `E1002` (`Cannot infer the return type of function ...`, `Cannot
+  infer the type of argument ...`); then the frame is settled and the signature resolved. An unannotated argument with a
+  default has the default's type, as before, now typed in the function's own context.
+- Returns: `return null` against an unbound result makes it `Null<?>`; `return;` makes it `Void`. An operator over an
+  unbound operand fills it from the other operand, as Haxe's `unify_int` does (`x + 1` makes `x` an Int, two unknown
+  operands Ints), and a `Null<?>` meeting a value fills `?`.
+- Native layouts are computed before any body can be forced (`ProgramTyper.prepareNativeLayouts`, before the entry point's
+  result is read), from the declared field types of the non-generic value and native-value classes. Their instance fields
+  must be annotated (`E1022`, `Value field "C.x" needs a type annotation: its type is part of the layout`).
+  `layoutNativeClasses` still runs on the typed classes and gives the same layouts.
+- Overrides: `DeclarationIndex.validateInheritedMethods` skips the signature comparison of a pair where either method is
+  inferred; `validateInferredOverrides` compares them through the query when `ProgramTyper.typeClass` types the class.
+  Interface conformance (`sameSignature`), `IterationProtocol` and `TypeRepresentation.resolveMethodArguments` read argument
+  types through the query.
+- Census of arguments only call sites fixed (`SignatureInference.collectCallConstraints`), over `src/`, `stdlib/`,
+  `packages/` and the test programs: `CfgBuilder.temporary(type)`, `IrVerifier.verifyInstruction(signatures)` and
+  `IrVerifier.methodSignature(signatures)`, now annotated. The test mains' embedded programs needed none.
+- Warm builds do not seed function signatures yet: a function a warm build does not type again is typed for its signature
+  alone when a typed unit reads it. Its result equals the previous build's, by the invalidation rule, but costs a typing.
+
 ## Error recovery and the language service
 
 - A failed declaration (its initializer or body throws a `CompileError`, or it is in a cycle) becomes `Failed`. The

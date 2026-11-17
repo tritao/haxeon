@@ -965,7 +965,8 @@ class IrVerifier {
 			throw 'IR value ${value.id} does not dominate its use in block $block';
 	}
 
-	static function verifyInstruction(instruction:IrInstruction, values:IrVerifyValues, signatures,
+	static function verifyInstruction(instruction:IrInstruction, values:IrVerifyValues,
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>,
 			objects:IrVerifyTable<IrObject>,
 			interfaces:IrVerifyTable<IrInterface>, enums:IrVerifyTable<IrEnum>, globals:IrVerifyTable<IrType>):Void
 		switch instruction {
@@ -1634,7 +1635,9 @@ class IrVerifier {
 		return base == null ? null : findMethodFunction(base, name, objects);
 	}
 
-	static function methodSignature(type:IrType, name:String, signatures, objects:IrVerifyTable<IrObject>,
+	static function methodSignature(type:IrType, name:String,
+			signatures:IrVerifyTable<{arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}>,
+			objects:IrVerifyTable<IrObject>,
 			interfaces:IrVerifyTable<IrInterface>):Null<{
 				arguments:Array<IrType>,
 				result:IrType,

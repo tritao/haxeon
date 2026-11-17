@@ -11,6 +11,7 @@ import compiler.semantic.SemanticProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.AstPredicates;
+import compiler.types.DeclarationIndex;
 import compiler.types.StructProperties;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -31,7 +32,7 @@ import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
-class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
+class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	final bodyTyper:BodyTyper;
 	final session:TypingSession;
 	final externTyper:ExternTyper;
@@ -39,6 +40,9 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 
 	/** Type bodies and field initializers last declared first; see `CompileOptions.reverseTypingOrder`. */
 	final reverseTypingOrder:Bool;
+
+	/** The bodies the program being typed types again (null: all), which `typeInferredFunction` keeps for their slots. */
+	var selectedBodies:Null<Map<String, Bool>> = null;
 
 	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false) {
 		this.bodyTyper = bodyTyper;
@@ -76,6 +80,7 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
+		selectedBodies = selected;
 		session.bindSemantic(semantic, bodyTyper.defaultValueType, this);
 		var refreshing:Map<String, Bool> = [];
 		if (cachedMetadata != null) {
@@ -177,6 +182,9 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 		bodyTyper.checkNoReturnOverrides();
 		var noReturnDoneAt = Sys.time() * 1000.0;
 		var allocationAfterNoReturn = AllocationMeter.sample();
+		// Body typing reads native layouts, and an unannotated declaration's body is typed as soon as its type is first needed.
+		if (cachedMetadata == null)
+			prepareNativeLayouts(program.classes);
 		if (requireMain) {
 			var main:AstFunction;
 			if (entryPoint != null && session.signatures.exists(entryPoint))
@@ -855,6 +863,8 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 		]);
 		validateObservable(classDecl, declaredType, classSemanticSubstitutions, isValue, isNativeValue);
 		validateDeclaredConformance(classDecl, declaredType, classSemanticSubstitutions);
+		if (specialization == null)
+			session.declarations.validateInferredOverrides(classDecl);
 		var parsedBase = classDecl.base, baseName:Null<String> = null;
 		if (parsedBase != null) {
 			baseName = BodyTyper.inheritanceName(parsedBase);
@@ -1257,6 +1267,84 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 		return resolved.value.type;
 	}
 
+	/**
+	 * Whether `method` of declared class `classDecl` is typed in its own slot of `typeClassMethods`, with its signature as it is: not
+	 * when the class or the method is generic (the slot's body is typed erased, or per specialization) or the class is extern.
+	 */
+	function hasOwnSlot(classDecl:AstClass, method:AstFunction):Bool
+		return classDecl.isExtern != true
+			&& externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null
+			&& classDecl.typeParameters.length == 0
+			&& !BodyTyper.isGeneric(method);
+
+	public function typeInferredFunction(fn:AstFunction, key:String,
+			inference:DeclarationTypeTable.FunctionInference):DeclarationTypeTable.InferredFunction {
+		var declared = session.signatures.get(key);
+		if (declared != null)
+			fn = declared;
+		var selected = selectedBodies == null || selectedBodies.exists(key),
+			info = session.methodInfo.get(key);
+		if (info == null) {
+			if (selected && fn.isExtern != true && !BodyTyper.isGeneric(fn))
+				return {
+					typed: bodyTyper.typeFunction(fn, null, false, null, null, null, null, null, inference),
+					kept: true
+				};
+			return signatureOnly(key,
+				() -> bodyTyper.typeFunction(fn, null, false, ownSubstitutions(key, [], key, fn), null,
+				null, null, null, inference));
+		}
+		var owner = info.owner, classDecl = session.classDecls.get(owner);
+		if (classDecl != null) {
+			if (selected && hasOwnSlot(classDecl, fn))
+				return {
+					typed: bodyTyper.typeFunction(fn, owner, fn.isStatic,
+						session.representation.erasedNominalSubstitutions(owner), null, null, null, null, inference),
+					kept: true
+				};
+			return signatureOnly(key, () -> bodyTyper.typeFunction(fn, owner, fn.isStatic,
+				ownSubstitutions(owner, classDecl.typeParameters, key, fn), null, null, null, null, inference));
+		}
+		var abstractDecl = session.declarations.abstracts.get(owner);
+		if (abstractDecl == null)
+			throw 'Unannotated function "$key" has no declaration the typer can type';
+		if (selected && abstractDecl.isExtern != true && fn.isStatic && !BodyTyper.isGeneric(fn))
+			return {
+				typed: bodyTyper.typeFunction(fn, owner, true, null, null, null, null, null, inference),
+				kept: true
+			};
+		// The signature table's abstract method has the abstract's type parameters among its own.
+		var substitutions = ownSubstitutions(owner, [], key, fn),
+			receiver = fn.isStatic || fn.name == "new" ? null : TAbstract(owner, [
+				for (parameter in abstractDecl.typeParameters)
+					BodyTyper.requiredMapValue(substitutions, parameter)
+			], session.representation.semanticType(abstractDecl.underlying, abstractDecl.span, substitutions));
+		return signatureOnly(key, () -> bodyTyper.typeFunction(fn, owner, true, substitutions, null, receiver, null,
+			null, inference));
+	}
+
+	/**
+	 * Types an unannotated function's body for its signature alone, in a unit the table drops: it is not the function's code, so it
+	 * does not count as a unit this build typed.
+	 */
+	function signatureOnly(key:String, type:() -> TypedFunction):DeclarationTypeTable.InferredFunction {
+		var typedUnits = session.programOutput.records.typedUnits, wasTyped = typedUnits.exists(key);
+		var typed = type();
+		if (!wasTyped)
+			typedUnits.remove(key);
+		return {typed: typed, kept: false};
+	}
+
+	/** Each of `ownerParameters` and of `fn`'s own type parameters as itself, the way a declaration's signature is resolved. */
+	static function ownSubstitutions(owner:String, ownerParameters:Array<String>, key:String,
+			fn:AstFunction):Map<String, CompilerType> {
+		var substitutions = BodyTyper.declarationTypeSubstitutions(owner, ownerParameters);
+		for (parameter in BodyTyper.functionTypeParameters(fn))
+			if (!substitutions.exists(parameter))
+				substitutions.set(parameter, TTypeParameter(key, parameter));
+		return substitutions;
+	}
+
 	/** Whether `type` mentions Dynamic; `visiting` holds the structures being walked, so a recursive one is entered once. */
 	static function mentionsDynamic(type:CompilerType,
 			?visiting:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
@@ -1286,6 +1374,15 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 		for (index in typingOrder(functions.length)) {
 			var fn = functions[index];
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
+				// An unannotated function is typed in its own unit when its signature is first needed, and kept for here.
+				if (requiredTypes().isInferred(fn)) {
+					var unit = requiredTypes().functionUnit(fn);
+					if (unit != null) {
+						typed[index] = unit.typed;
+						outputs[index] = unit.output;
+					}
+					continue;
+				}
 				// A body that fails is left out, with its output: its error is recorded and the next body is typed.
 				var mark = session.checkpoint(), unit = session.beginUnit();
 				try {
@@ -1321,6 +1418,14 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null],
 			outputs:Array<Null<TypingOutput>> = [for (_ in methods) null];
 		for (index in typingOrder(methods.length)) {
+			if (requiredTypes().isInferred(methods[index].signature)) {
+				var unit = requiredTypes().functionUnit(methods[index].signature);
+				if (unit != null) {
+					typed[index] = unit.typed;
+					outputs[index] = unit.output;
+				}
+				continue;
+			}
 			var mark = session.checkpoint(), unit = session.beginUnit();
 			try {
 				typed[index] = bodyTyper.typeFunction(methods[index].signature, methods[index].owner, true);
@@ -1400,6 +1505,26 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 				hasConstructor = true;
 			var qualified = classDecl.name + "." + method.name,
 				typeBody = !deferBodies && (specialization != null || selected == null || selected.exists(qualified));
+			// An unannotated method of a declared class is typed in its own unit when its signature is first needed, and kept for
+			// here. Its unit is merged in declaration order with the others, or at once without them.
+			if (typeBody && specialization == null && hasOwnSlot(classDecl, method)
+				&& requiredTypes().isInferred(method)) {
+				var functionUnit = requiredTypes().functionUnit(method),
+					typedMethod = functionUnit == null ? null : functionUnit.typed;
+				if (functionUnit != null && typedMethod != null) {
+					if (method.name == "new" && instanceInitializers.length > 0)
+						typedMethod = prependInstanceInitializers(typedMethod, classDecl.name, instanceInitializers);
+					methodsTyped[methodIndex] = typedMethod;
+					var output = functionUnit.output;
+					if (output != null) {
+						if (units != null)
+							methodUnits[methodIndex] = output;
+						else
+							session.mergeUnits([output]);
+					}
+				}
+				continue;
+			}
 			// A declared class's method body that fails is left out, with its output: its error is recorded and the next body is
 			// typed. A specialization's fails the body that asked for it.
 			var mark = session.checkpoint(), unit = units == null ? null : session.beginUnit();
@@ -1509,6 +1634,64 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 					span:classDecl.span
 			}
 		}];
+	}
+
+	/**
+	 * Gives the session the native layouts of the flat and native-value classes before any body is typed, as `layoutNativeClasses`
+	 * computes them again once the classes are typed: a body can read them, and an unannotated declaration's initializer or body is
+	 * typed when its type is first needed, which can be while the classes are typed. A layout needs only the field types of those
+	 * classes, so a value class's fields must be annotated: their types are its layout.
+	 */
+	function prepareNativeLayouts(declarations:Array<AstClass>):Void {
+		var valueClasses:Array<{declaration:AstClass, isNativeValue:Bool}> = [];
+		for (classDecl in declarations) {
+			if (classDecl.isExtern == true || externTyper.nativeLibrary(classDecl.name, classDecl.metadata) != null)
+				continue;
+			var requestedValue = classDecl.isStruct == true || hasMetadata(classDecl.metadata, "value"),
+				isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue);
+			if (!requestedValue && !isNativeValue)
+				continue;
+			for (field in classDecl.fields)
+				if (!field.isStatic && field.type == null)
+					BodyTyper.fail("E1022",
+						'${isNativeValue ? "Native value" : "Value"} field "${classDecl.name}.${field.name}" needs a type annotation: its type is part of the layout',
+						field.span);
+			// A generic value class is rejected when the class is typed: it has no layout.
+			if (classDecl.typeParameters.length == 0)
+				valueClasses.push({declaration: classDecl, isNativeValue: isNativeValue});
+		}
+		var records:Array<TypedClass> = [];
+		for (entry in valueClasses) {
+			var classDecl = entry.declaration,
+				isFlat = StructProperties.evaluate(session.declarations,
+					TInstance(NominalKind.Class, classDecl.name, [])).flat;
+			if (!entry.isNativeValue && !isFlat)
+				continue;
+			records.push({name: classDecl.name,
+				isValue: !entry.isNativeValue,
+				isFlat: isFlat,
+				isPortable: false,
+				isNativeValue: entry.isNativeValue,
+				nativeLayouts: [],
+				base: null,
+				interfaces: [],
+				fields: [for (field in classDecl.fields) if (!field.isStatic) {
+					name:field.name,
+						metadata:field.metadata,
+						type:session.declarations.types.fieldType(classDecl.name, field),
+						initializer:null,
+						inlineValue:null,
+						readAccess:field.readAccess,
+						writeAccess:field.writeAccess,
+						isStatic:false,
+						isInline:field.isInline,
+						isFinal:field.isFinal,
+						span:field.span
+				}],
+					methods: [],
+					span: classDecl.span});
+		}
+		layoutNativeClasses(records);
 	}
 
 	static function requiredNativeLayout(layoutsByTarget:Map<String, Map<String, TypedNativeLayout>>, target:String,
@@ -1757,26 +1940,15 @@ class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 			session.declarations.types.resultType(right, rightSubstitutions)))
 			return false;
 		// Haxe compares the optional flags too (`Not_matching_optional`), and `?x:Int` is `Null<Int>`.
+		var leftArguments = session.declarations.types.argumentTypes(left, leftSubstitutions),
+			rightArguments = session.declarations.types.argumentTypes(right, rightSubstitutions);
 		for (i in 0...left.arguments.length)
 			if (AstPredicates.isOptionalArgument(left.arguments[i])
 				!= AstPredicates.isOptionalArgument(right.arguments[i])
-				|| !TypeRelations.equals(declaredArgumentType(left.arguments[i], leftSubstitutions),
-				declaredArgumentType(right.arguments[i], rightSubstitutions)))
+				|| !TypeRelations.equals(DeclarationIndex.comparedArgumentType(leftArguments[i], session.relations),
+				DeclarationIndex.comparedArgumentType(rightArguments[i], session.relations)))
 				return false;
 		return true;
-	}
-
-	function declaredArgumentType(argument:compiler.syntax.Ast.AstArgument,
-			substitutions:Null<Map<String, CompilerType>>):CompilerType {
-		var type = session.declarations.resolve(argument.type, argument.span, substitutions);
-		return switch type {
-			// `Null<String>` is `String`: the type holds null already.
-			case TNullable(inner) if (TypeRelations.isReference(inner)
-				&& !session.relations.isValueClass(inner)): inner;
-			case TNullable(_): type;
-			default: AstPredicates.isNullableArgument(argument)
-				&& !(TypeRelations.isReference(type) && !session.relations.isValueClass(type)) ? TNullable(type) : type;
-		};
 	}
 
 	static function rejectNativeBinding(fn:compiler.syntax.Ast.AstFunction, name:String):Void {

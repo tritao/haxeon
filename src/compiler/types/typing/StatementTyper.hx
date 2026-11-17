@@ -203,8 +203,16 @@ class StatementTyper {
 				[TVar(scope.requireId(name), value, span)];
 			case Return(expression, span):
 				var expected = result == null ? context.inferredResult : result;
-				var value = bodyTyper.typeExpression(expression, scope, expected),
+				var value = bodyTyper.typeExpression(expression, scope,
+					expected == null ? null : compiler.types.Monomorphs.expectation(expected)),
 					output:Array<TypedStatement> = [];
+				// An unannotated function's result that a `return null` meets first is a `Null<?>`, which a later return fills.
+				if (expected != null && compiler.types.Monomorphs.isUnbound(expected)
+					&& TypeRelations.equals(value.type, TNull)) {
+					var element = session.monomorphs.create("the type of the null it returns", span);
+					if (element != null)
+						compiler.types.Monomorphs.close(expected, TNullable(element));
+				}
 				var thrown = switch value.expression {
 					case TThrowExpression(thrown): thrown;
 					default: null;
@@ -236,9 +244,12 @@ class StatementTyper {
 				output;
 			case ReturnVoid(span):
 				var expected = result == null ? context.inferredResult : result;
+				// An unannotated function's result that a `return;` meets first is Void.
+				if (expected != null && compiler.types.Monomorphs.isUnbound(expected))
+					compiler.types.Monomorphs.close(expected, TVoid);
 				if (expected == null)
 					context.inferredResult = TVoid;
-				else if ((switch (expected) {
+				else if ((switch (compiler.types.Monomorphs.follow(expected)) {
 					case TVoid: false;
 					default: true;
 				}))

@@ -110,10 +110,8 @@ class IterationProtocol {
 						&& (method.typeParameters == null || method.typeParameters.length == 0)) {
 						var substitutions = declarations.inheritance.substitutions(type);
 						return {
-							type: TFunction([
-								for (argument in method.arguments)
-									declarations.resolve(argument.type, argument.span, substitutions)
-							], declarations.types.resultType(method, substitutions), []),
+							type: TFunction(declarations.types.argumentTypes(method, substitutions),
+								declarations.types.resultType(method, substitutions), []),
 							owner: owner
 						};
 					}

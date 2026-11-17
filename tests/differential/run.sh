@@ -186,6 +186,17 @@ in_background run_case lazy-field-order 0
 in_background run_case lazy-field-call 0
 in_background run_case lazy-generic-field 0
 in_background run_compile_failure lazy-field-mixed-array
+# Unannotated functions take their result and argument types from their bodies, typed on demand (slice 4).
+in_background run_case lazy-return-several 0
+in_background run_case lazy-return-recursive 0
+in_background run_case lazy-return-object 0
+in_background run_case lazy-return-call 0
+in_background run_case lazy-argument-body 0
+in_background run_case lazy-accessor 0
+in_background run_compile_failure lazy-return-int-float
+in_background run_compile_failure lazy-return-void-value
+in_background run_compile_failure lazy-return-child-parent
+in_background run_compile_failure lazy-override-mismatch
 in_background run_compile_failure type-error
 # Width subtyping between structures waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4):
 # a copy into the narrower record would break identity (`narrow == wide`). The three rejections below are Haxe's too.

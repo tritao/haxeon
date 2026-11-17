@@ -517,7 +517,7 @@ class CfgBuilder {
 		return out;
 	}
 
-	function temporary(type):CfgValue
+	function temporary(type:IrType):CfgValue
 		return new CfgValue(nextValue++, type);
 
 	function emit(value:CfgInstruction):Void {

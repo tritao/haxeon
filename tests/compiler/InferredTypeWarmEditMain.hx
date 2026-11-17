@@ -21,12 +21,13 @@ class InferredTypeWarmEditMain {
 		public static function annotated():Int return 3;
 		public static function scale() return 2;
 		public static function count() return 4;
+		public static function take(x) return x * 2;
 	}";
 
 	static final otherSource = "class Other { public static var x = 1; }";
 	static final boxSource = "class Box { public var v = 1; public function new() {} }";
 	static final middleSource =
-		"class Middle { public static var y = Other.x; public static var a = Lib.annotated(); public static var z = Lib.count(); public static var list = [for (i in 0...2) i * 2]; }";
+		"class Middle { public static var y = Other.x; public static var a = Lib.annotated(); public static var z = Lib.count(); public static var list = [for (i in 0...2) i * 2]; public static function viaLib() return Lib.count() * 2; }";
 
 	static final mainSource =
 		"class Main {
@@ -40,7 +41,9 @@ class InferredTypeWarmEditMain {
 			var scaleOf = Lib.scale;
 			var g = scaleOf();
 			var b = new Box().v;
-			Sys.println(Std.string(v) + ' ' + Std.string(s) + ' ' + Std.string(y) + ' ' + Std.string(a) + ' ' + Std.string(g) + ' ' + Std.string(b) + ' ' + Std.string(z) + ' ' + Std.string(list) + ' ' + Std.string(0.5));
+			var via = Middle.viaLib();
+			var taken = Lib.take(3);
+			Sys.println(Std.string(v) + ' ' + Std.string(s) + ' ' + Std.string(y) + ' ' + Std.string(a) + ' ' + Std.string(g) + ' ' + Std.string(b) + ' ' + Std.string(z) + ' ' + Std.string(list) + ' ' + Std.string(0.5) + ' ' + Std.string(via) + ' ' + Std.string(taken));
 			return 0;
 		}
 	}";
@@ -78,11 +81,20 @@ class InferredTypeWarmEditMain {
 			files -> files.set("Box.hx", StringTools.replace(boxSource, "v = 1;", "v = 1.5;")));
 		edit(failures, "a field initialized from an unannotated function whose body changes its result",
 			files -> files.set("Lib.hx", StringTools.replace(libSource, "count() return 4;", "count() return 4.5;")));
+		edit(failures,
+			"an unannotated function's result changes, read through an unannotated function of another module",
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "count() return 4;", "count() return 0.5;")));
+		edit(failures, "an argument its body fixes changes type",
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "x * 2;", "x * 2.5;")));
 		edit(failures, "a comprehension field's element type changes",
 			files -> files.set("Middle.hx", StringTools.replace(middleSource, "i * 2]", "i * 0.5]")));
 		breakThenFix(failures, "an edit makes two fields need each other's type, the next removes the cycle",
 			files -> files.set("Other.hx", "class Other { public static var x = Middle.y + 1; }"),
 			files -> files.set("Other.hx", "class Other { public static var x = 1.5; }"));
+		breakThenFix(failures, "an edit makes two functions need each other's type, the next removes the cycle",
+			files -> files.set("Lib.hx",
+			StringTools.replace(libSource, "count() return 4;", "count() return Middle.viaLib();")),
+			files -> files.set("Lib.hx", StringTools.replace(libSource, "count() return 4;", "count() return 4.5;")));
 		breakThenFix(failures, "an edit breaks an unannotated field, the next fixes it with another type",
 			files -> files.set("Other.hx", "class Other { public static var x = missing; }"),
 			files -> files.set("Other.hx", "class Other { public static var x = 1.5; }"));

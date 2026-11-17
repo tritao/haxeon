@@ -2197,10 +2197,38 @@ class ExpressionTyper {
 			default: throw "ExpressionTyper.typeLiteral requires a literal expression";
 		};
 
+	/**
+	 * Fills an operand's empty type variable from the other operand, as Haxe does for an operator over a monomorph (`unify_int`):
+	 * `x + 1` makes an unannotated argument `x` an Int, `x + 1.5` a Float, `x == "s"` a String, and two unknown operands are Ints.
+	 */
+	function fixUnknownOperands(left:TypedExpression, right:TypedExpression):{
+		left:TypedExpression,
+		right:TypedExpression
+	} {
+		var leftOpen = compiler.types.Monomorphs.isUnbound(left.type),
+			rightOpen = compiler.types.Monomorphs.isUnbound(right.type);
+		if (leftOpen && rightOpen) {
+			compiler.types.Monomorphs.unify(left.type, TInt);
+			compiler.types.Monomorphs.unify(right.type, TInt);
+		} else if (leftOpen)
+			compiler.types.Monomorphs.unify(left.type, right.type);
+		else
+			compiler.types.Monomorphs.unify(right.type, left.type);
+		function resolved(value:TypedExpression):TypedExpression
+			return new TypedExpression(value.expression, compiler.types.Monomorphs.resolve(value.type), value.span,
+				value.stableFlowValue, value.mapKeySource, value.storageType, value.semanticReference);
+		return {left: resolved(left), right: resolved(right)};
+	}
+
 	public function arithmetic(a:AstExpression, b:AstExpression, scope:Scope, add:Bool, span:SourceSpan,
 			expected:Null<CompilerType>):TypedExpression {
 		var left = bodyTyper.typeExpression(a, scope),
 			right = bodyTyper.typeExpression(b, scope);
+		if (compiler.types.Monomorphs.isUnbound(left.type) || compiler.types.Monomorphs.isUnbound(right.type)) {
+			var fixed = fixUnknownOperands(left, right);
+			left = fixed.left;
+			right = fixed.right;
+		}
 		var overloaded = callResolver.typeAbstractOperator(add ? "+" : "-", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
@@ -2258,6 +2286,11 @@ class ExpressionTyper {
 			span:SourceSpan):TypedExpression {
 		var left = bodyTyper.typeExpression(a, scope),
 			right = bodyTyper.typeExpression(b, scope);
+		if (compiler.types.Monomorphs.isUnbound(left.type) || compiler.types.Monomorphs.isUnbound(right.type)) {
+			var fixed = fixUnknownOperands(left, right);
+			left = fixed.left;
+			right = fixed.right;
+		}
 		var overloaded = callResolver.typeAbstractOperator(operation == 2 ? "*" : "/", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
@@ -2276,6 +2309,11 @@ class ExpressionTyper {
 	public function modulo(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = bodyTyper.typeExpression(a, scope),
 			right = bodyTyper.typeExpression(b, scope);
+		if (compiler.types.Monomorphs.isUnbound(left.type) || compiler.types.Monomorphs.isUnbound(right.type)) {
+			var fixed = fixUnknownOperands(left, right);
+			left = fixed.left;
+			right = fixed.right;
+		}
 		var overloaded = callResolver.typeAbstractOperator("%", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
@@ -2300,6 +2338,11 @@ class ExpressionTyper {
 			span:SourceSpan):TypedExpression {
 		var left = bodyTyper.typeExpression(a, scope),
 			right = bodyTyper.typeExpression(b, scope);
+		if (compiler.types.Monomorphs.isUnbound(left.type) || compiler.types.Monomorphs.isUnbound(right.type)) {
+			var fixed = fixUnknownOperands(left, right);
+			left = fixed.left;
+			right = fixed.right;
+		}
 		var overloaded = callResolver.typeAbstractOperator(["&", "^", "|", "<<", ">>", ">>>"][operation], [left, right],
 			span, scope);
 		if (overloaded != null)
@@ -2360,6 +2403,11 @@ class ExpressionTyper {
 			reversed:Bool = false):TypedExpression {
 		var left = bodyTyper.typeExpression(a, scope),
 			right = bodyTyper.typeExpression(b, scope, left.type);
+		if (compiler.types.Monomorphs.isUnbound(left.type) || compiler.types.Monomorphs.isUnbound(right.type)) {
+			var fixed = fixUnknownOperands(left, right);
+			left = fixed.left;
+			right = fixed.right;
+		}
 		if (symbol == null)
 			symbol = operation == 0 ? "<" : operation == 1 ? "<=" : "==";
 		var overloaded = callResolver.typeAbstractOperator(symbol, [left, right], span, scope);
@@ -2717,8 +2765,13 @@ class ExpressionTyper {
 
 	function notEqual(a:AstExpression, b:AstExpression, scope:Scope, span:SourceSpan):TypedExpression {
 		var left = bodyTyper.typeExpression(a, scope),
-			right = bodyTyper.typeExpression(b, scope, left.type),
-			overloaded = callResolver.typeAbstractOperator("!=", [left, right], span, scope);
+			right = bodyTyper.typeExpression(b, scope, left.type);
+		if (compiler.types.Monomorphs.isUnbound(left.type) || compiler.types.Monomorphs.isUnbound(right.type)) {
+			var fixed = fixUnknownOperands(left, right);
+			left = fixed.left;
+			right = fixed.right;
+		}
+		var overloaded = callResolver.typeAbstractOperator("!=", [left, right], span, scope);
 		if (overloaded != null)
 			return overloaded;
 		return new TypedExpression(TNot(compareTyped(left, right, 2, span, false, scope)), TBool, span);

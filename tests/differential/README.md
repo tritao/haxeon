@@ -16,7 +16,13 @@ is already Float. The `lazy-*` fixtures cover unannotated fields, whose type is
 their initializer's: comprehensions, `map` with a lambda, lambdas, fields read
 across classes before their declaration, calls to unannotated and annotated
 functions and module-level functions, enum constructors, a generic class's
-`new Array<T>()`, and a mixed array both compilers reject.
+`new Array<T>()`, and a mixed array both compilers reject. The `lazy-return-*`,
+`lazy-argument-body` and `lazy-accessor` fixtures cover unannotated functions,
+whose result and arguments are what their bodies give them: several returns
+(Float then Int, `null` first, no value return, only a throw), recursion,
+returned structures and lambdas, calls between unannotated functions and from
+field initializers, arguments fixed by their uses and defaults, accessors of a
+typed property, and the return and override mismatches both compilers reject.
 
 ## Reference exception
 

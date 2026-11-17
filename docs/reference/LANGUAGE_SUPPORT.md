@@ -157,15 +157,23 @@ value stays null), and a warning can point out a surprising case.
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet
   the rule, so it is due to become a warning.
 
-An unannotated field's type is its initializer's, typed when something first needs it, as in Haxe. Where Haxe would let a
-later use in another function fix that type, Haxe's result depends on the order it types functions in, so Haxeon asks for
-an annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's decisions):
+An unannotated field's type is its initializer's, and an unannotated function's result and arguments are what its body
+gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must
+match it, `return null` first makes it nullable, and no value return makes it `Void`. Where Haxe would let a later use in
+another function fix such a type, Haxe's result depends on the order it types functions in, so Haxeon asks for an
+annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's decisions):
 
 - A type the initializer leaves open: `static var e = [];`, `static var m = new Map();`, `static var n = null;`
   (`Cannot infer the type of field "C.e": nothing in its initializer fixes ...; annotate it`).
-- Fields whose initializers need each other's type (`static var a = b + 1; static var b = a + 1;`), which Haxe types as
-  `Dynamic` or, when one of them fixes the type, as that type. The error is on the first of them in declaration order and
-  names the others; annotating one of them is enough.
+- A type a function's body leaves open: a lone `return null` (`Cannot infer the return type of function "C.f": nothing in
+  its body fixes the type of the null it returns; annotate it`), or an argument only its callers fix, `function g(x) {}`
+  called as `g(1)` (`Cannot infer the type of argument "x" of function "C.g": nothing in its body fixes it; annotate it`).
+  Haxe takes the first caller's type.
+- Declarations that need each other's type: fields (`static var a = b + 1; static var b = a + 1;`), functions
+  (`function c() return d() + 1; function d() return c();`), or a field and a function. Haxe types them as `Dynamic` or,
+  when one of them fixes the type, as that type. The error is on the first of them in declaration order and names the
+  others; annotating one of them is enough. A function that calls itself is typed as in Haxe.
+- A field of a value struct or a native value record without a type (`E1022`): its type is part of the layout.
 - In a generic class, an initializer whose type the class's type parameters cannot express (a structure mentioning one):
   the class's initializers are compiled with the parameters erased, so the type is read from typing it with them.
 

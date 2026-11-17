@@ -226,6 +226,9 @@ class Monomorphs {
 			// A value converts to its nullable: what fixes `?` in `Null<?>` is the value's own type.
 			case [_, TNullable(b)] if (isUnbound(b) && !isNullish(left)):
 				unify(left, b);
+			// And a nullable meets its value's type: an optional unannotated argument `?x` stored in an Int field is a `Null<Int>`.
+			case [TNullable(a), _] if (isUnbound(a) && !isNullish(right)):
+				unify(a, right);
 			case [TMap(k1, v1), TMap(k2, v2)]:
 				unify(k1, k2);
 				unify(v1, v2);
@@ -240,6 +243,17 @@ class Monomorphs {
 			default:
 		}
 	}
+
+	/**
+	 * Fills the empty type variable `type` with `value`, which, unlike what `unify` fills, may be Void or a nullable: what closes
+	 * an unannotated function's result (`return;`, `return null`, no value return at all).
+	 */
+	public static function close(type:CompilerType, value:CompilerType):Void
+		switch follow(type) {
+			case TMonomorph(cell):
+				cell.bound = value;
+			default:
+		}
 
 	static function fill(cell:MonomorphCell, type:CompilerType):Void {
 		if (isNullish(type) || occurs(cell, type))

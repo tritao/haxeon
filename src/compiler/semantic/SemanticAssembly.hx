@@ -13,7 +13,6 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.compilation.CompilationContext;
 import compiler.modules.ModuleState;
 import compiler.core.CancellationToken;
-import compiler.types.SignatureInference;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
 import compiler.semantic.Invalidation.InvalidationReason;
@@ -425,8 +424,7 @@ class SemanticAssembly {
 					parsedMethods = discoveredMethods(classDecl, className, prefixes);
 				}
 				var classMethods:Array<AstFunction> = [];
-				for (parsedMethod in parsedMethods) {
-					var method = SignatureInference.inferFieldBoundArguments(parsedMethod, classDecl);
+				for (method in parsedMethods) {
 					var canonical = ModuleCanonicalizer.canonicalFunction(method, name, entryModule, locals,
 						className + "." + method.name, classAliases);
 					functions.push(canonical);

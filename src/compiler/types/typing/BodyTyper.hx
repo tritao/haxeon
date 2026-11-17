@@ -200,14 +200,30 @@ class BodyTyper implements BodyTyping {
 		return value;
 	}
 
+	/**
+	 * Types `fn`'s body. With `inference`, `fn` is an unannotated function whose signature its body gives it
+	 * (docs/design/LAZY_DECLARATION_TYPING.md): each unannotated argument without a default and an unannotated result are type
+	 * variables of the body's own frame, which a read of the function from its own body gets too (`FunctionInference.provisional`);
+	 * the body fixes them, and they are final when the frame is settled (`FunctionInference.settle`).
+	 */
 	public function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false,
 			?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType, ?physicalOwner:String,
-			?ownerTypeArguments:Array<CompilerType>):TypedFunction {
+			?ownerTypeArguments:Array<CompilerType>,
+			?inference:DeclarationTypeTable.FunctionInference):TypedFunction {
 		compiler.types.analysis.ScopedEscapeChecker.check(fn.arguments, fn.statements);
 		var functionName = specializedName == null
 			? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
-		var argumentTypes = argumentTypesOf(fn, substitutions);
+		// The declaration the query knows: the prologue below makes a copy of it.
+		var declaration = fn;
+		var functionContext:Null<TypingContext> = null, frame:Null<MonomorphFrame> = null;
+		if (inference != null) {
+			// The body's frame holds the signature's type variables, so it is begun before anything reads the signature.
+			functionContext = enterBody(functionName, substitutions, null, null);
+			frame = session.monomorphs.begin(session.closureConversion.mark());
+			inference.provisional(provisionalSignature(declaration, functionName, substitutions));
+		}
+		var argumentTypes = argumentTypesOf(declaration, substitutions);
 		for (index in 0...fn.arguments.length) {
 			var argumentValueType = argumentTypes[index];
 			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(argumentValueType))
@@ -215,13 +231,14 @@ class BodyTyper implements BodyTyping {
 					'Native layout type "$argumentValueType" cannot be passed or stored as a Haxe runtime value yet',
 					fn.arguments[index].span);
 		}
+		var result = substitutions == null ? functionResultType(declaration,
+			fn.span) : session.declarations.types.resultType(declaration, substitutions);
 		fn = DefaultArguments.withFunctionPrologue(fn, argumentTypes, session.relations);
-		var result = substitutions == null ? functionResultType(fn, fn.span) : session.declarations.types.resultType(fn,
-			substitutions);
 		if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
 			fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
-		var functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
-			specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
+		if (functionContext == null)
+			functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
+				specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue,
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
@@ -250,7 +267,7 @@ class BodyTyper implements BodyTyping {
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
 		// Resolved again inside the body: with no substitutions given, the body's own context supplies them.
-		var bodyArgumentTypes = argumentTypesOf(fn, substitutions);
+		var bodyArgumentTypes = argumentTypesOf(declaration, substitutions);
 		for (index in 0...fn.arguments.length) {
 			var argument = fn.arguments[index], type = bodyArgumentTypes[index];
 			scope.define(argument.name, type, argument.span);
@@ -264,8 +281,28 @@ class BodyTyper implements BodyTyping {
 		}
 		context.expectedReturnType = result;
 		inferBodyLocalTypes(fn.statements, result);
-		var monomorphs = session.monomorphs.begin(session.closureConversion.mark());
-		var statements = settleMonomorphs(monomorphs, typeStatements(fn.statements, scope, result));
+		var monomorphs = frame == null ? session.monomorphs.begin(session.closureConversion.mark()) : frame;
+		var typedStatements = typeStatements(fn.statements, scope, result);
+		if (inference != null) {
+			closeSignature(declaration, functionName, argumentTypes, result);
+			var map = settleFrame(monomorphs);
+			if (map != null) {
+				typedStatements = map.statements(typedStatements);
+				arguments = [for (argument in arguments) {
+					name:argument.name, type:map.type(argument.type)
+				}];
+			}
+			result = compiler.types.Monomorphs.resolve(result);
+			inference.settle(settledSignature(declaration, argumentTypes, result));
+			for (index in 0...arguments.length)
+				if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(arguments[index].type))
+					fail("E1022",
+						'Native layout type "${arguments[index].type}" cannot be passed or stored as a Haxe runtime value yet',
+						fn.span);
+			if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(result))
+				fail("E1022", 'Native layout type "$result" cannot be returned as a Haxe runtime value yet', fn.span);
+		}
+		var statements = inference == null ? settleMonomorphs(monomorphs, typedStatements) : typedStatements;
 		if (compiler.types.analysis.NoReturnDeclarations.has(fn)) {
 			if (compiler.types.analysis.AstScan.returns(fn.statements))
 				fail("E1006", 'Function ${fn.name} is declared @:noReturn but returns', fn.span);
@@ -325,6 +362,77 @@ class BodyTyper implements BodyTyping {
 		leaveBody(functionContext);
 		return resultFunction;
 	}
+
+	/**
+	 * The signature a read of the unannotated function `fn` gets while its body is typed: a type variable for each unannotated
+	 * argument without a default (nullable when the argument is optional) and for an unannotated result, made in the body's own
+	 * frame; an unannotated argument with a default has the default's type.
+	 */
+	function provisionalSignature(fn:AstFunction, name:String,
+			substitutions:Null<Map<String, CompilerType>>):DeclarationTypeTable.InferredSignature {
+		var arguments:Array<Null<CompilerType>> = [];
+		for (argument in fn.arguments)
+			if (!compiler.syntax.AstFunctions.isInferred(argument.type))
+				arguments.push(null);
+			else if (argument.defaultValue != null)
+				arguments.push(session.declarations.declaredTypes.argumentType(argument, substitutions,
+					defaultValueType(argument.defaultValue)));
+			else {
+				var variable = requiredType(session.monomorphs.create(argumentOrigin(argument.name, name),
+					argument.span));
+				arguments.push(AstPredicates.isNullableArgument(argument) ? TNullable(variable) : variable);
+			}
+		return {
+			arguments: arguments,
+			result: compiler.syntax.AstFunctions.isInferred(fn.result)
+				? requiredType(session.monomorphs.create('the return type of function "$name"',
+				fn.span)) : null
+		};
+	}
+
+	/**
+	 * Closes the signature of the unannotated function `fn` once its body is typed, before its frame is settled: a result no value
+	 * return fixed is Void, as in Haxe, and a type variable of the signature that nothing in the body fixed is an error asking for an
+	 * annotation, since only a caller, in another unit, could fix it (docs/design/LAZY_DECLARATION_TYPING.md, decision 1).
+	 */
+	function closeSignature(fn:AstFunction, name:String, argumentTypes:Array<CompilerType>, result:CompilerType):Void {
+		if (compiler.syntax.AstFunctions.isInferred(fn.result)) {
+			if (compiler.types.Monomorphs.isUnbound(result))
+				compiler.types.Monomorphs.close(result, TVoid);
+			var unfixed = compiler.types.Monomorphs.firstUnfixed(result);
+			if (unfixed != null)
+				fail("E1002",
+					'Cannot infer the return type of function "$name": nothing in its body fixes ${unfixed.origin}; annotate it',
+					fn.span);
+		}
+		for (index in 0...fn.arguments.length) {
+			var argument = fn.arguments[index];
+			if (!compiler.syntax.AstFunctions.isInferred(argument.type) || argument.defaultValue != null)
+				continue;
+			var unfixed = compiler.types.Monomorphs.firstUnfixed(argumentTypes[index]);
+			if (unfixed != null)
+				fail("E1002",
+					'Cannot infer the type of argument "${argument.name}" of function "$name": nothing in its body fixes '
+					+ (unfixed.origin == argumentOrigin(argument.name, name) ? "it" : unfixed.origin) + "; annotate it",
+					argument.span);
+		}
+	}
+
+	static function argumentOrigin(argument:String, functionName:String):String
+		return 'the type of argument "$argument" of function "$functionName"';
+
+	/** The settled signature of the unannotated function `fn`: its unannotated parts, with their type variables replaced. */
+	static function settledSignature(fn:AstFunction, argumentTypes:Array<CompilerType>,
+			result:CompilerType):DeclarationTypeTable.InferredSignature
+		return {
+			arguments: [
+				for (index in 0...fn.arguments.length)
+					compiler.syntax.AstFunctions.isInferred(fn.arguments[index].type)
+					? compiler.types.Monomorphs.resolve(argumentTypes[index]) : null
+			],
+			result: compiler.syntax.AstFunctions.isInferred(fn.result)
+				? compiler.types.Monomorphs.resolve(result) : null
+		};
 
 	/**
 	 * The dispatch entry of `body`, typed from `fn`, when it has one (`DefaultArguments`): it takes `Null<T>` for each

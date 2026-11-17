@@ -1059,6 +1059,10 @@ class DeclarationIndex {
 	}
 
 	/** A method occupies the inherited virtual slot by name; incompatible redeclarations cannot hide it safely. */
+	/**
+	 * Checks each class's methods against the ones it inherits. A pair whose signature, on either side, is left in part to the body
+	 * is checked once the typer can give that signature (`validateInferredOverrides`), as Haxe checks an override on the typed body.
+	 */
 	function validateInheritedMethods(program:AstProgram):Void {
 		for (decl in program.classes) {
 			var own = declarationSubstitutions(decl.name, decl.typeParameters);
@@ -1083,7 +1087,8 @@ class DeclarationIndex {
 						if (method.isStatic != original.isStatic)
 							fail('Method "$member" conflicts with inherited "$ancestor": static and instance methods cannot share a slot',
 								method.span);
-						if (!compatibleInheritedSignature(method, original, own, inherited, member))
+						if (!inferredPair(method, original)
+							&& !compatibleInheritedSignature(method, original, own, inherited, member))
 							fail('Method "$member" has an incompatible signature with inherited "$ancestor"',
 								method.span);
 						if (method.isPublic == false && original.isPublic == true)
@@ -1097,6 +1102,35 @@ class DeclarationIndex {
 				if (method.isOverride == true && !overrides.exists(method.name))
 					fail('Method "${decl.name}.${method.name}" is declared override but has no inherited instance method',
 						method.span);
+		}
+	}
+
+	static function inferredPair(method:AstFunction, original:AstFunction):Bool
+		return compiler.syntax.AstFunctions.leavesSignatureToInference(method)
+			|| compiler.syntax.AstFunctions.leavesSignatureToInference(original);
+
+	/**
+	 * Checks the methods of `decl` that override an inherited one where either signature is left in part to its body, through the
+	 * declaration types, which type those bodies: an unannotated override does not take its parent's type, and its own must match.
+	 */
+	public function validateInferredOverrides(decl:compiler.syntax.Ast.AstClass):Void {
+		var own = declarationSubstitutions(decl.name, decl.typeParameters);
+		var base = decl.base == null ? null : resolve(decl.base, decl.span, own);
+		while (base != null) {
+			var baseName = NominalInheritance.name(base);
+			if (baseName == null || !classes.exists(baseName))
+				break;
+			var parent = classes.get(baseName),
+				inherited = inheritance.substitutions(base);
+			for (method in decl.methods)
+				if (method.name != "new" && !method.isStatic)
+					for (original in parent.methods)
+						if (method.name == original.name && !original.isStatic && inferredPair(method, original)
+							&& !compatibleInheritedSignature(method, original, own, inherited,
+							decl.name + "." + method.name))
+							fail('Method "${decl.name}.${method.name}" has an incompatible signature with inherited "$baseName.${original.name}"',
+								method.span);
+			base = parent.base == null ? null : resolve(parent.base, parent.span, inherited);
 		}
 	}
 
@@ -1118,11 +1152,12 @@ class DeclarationIndex {
 			if (inheritedMethodConstraints(method, parameters[index], left) != inheritedMethodConstraints(original,
 				baseParameters[index], right))
 				return false;
+		var arguments = types.argumentTypes(method, left), baseArguments = types.argumentTypes(original, right);
 		for (index in 0...method.arguments.length) {
 			var argument = method.arguments[index],
 				baseArgument = original.arguments[index];
-			if (!TypeRelations.equals(inheritedArgumentType(argument, left),
-				inheritedArgumentType(baseArgument, right)))
+			if (!TypeRelations.equals(inheritedArgumentType(arguments[index]),
+				inheritedArgumentType(baseArguments[index])))
 				return false;
 			// Haxe requires the same optional flags (`Not_matching_optional`): the method's dispatch ABI depends on them.
 			if (compiler.syntax.AstPredicates.isOptionalArgument(baseArgument)
@@ -1142,17 +1177,19 @@ class DeclarationIndex {
 		};
 	}
 
-	function inheritedArgumentType(argument:AstArgument, substitutions:Map<String, CompilerType>):CompilerType {
-		var type = resolve(argument.type, argument.span, substitutions),
-			relations = new TypeRelations(this);
-		// `Null<String>` is `String`, as in Haxe: the type holds null already.
+	/** An argument's type as callers see it (`types.argumentTypes`), compared for an override: `Null<String>` is `String`, as in Haxe. */
+	function inheritedArgumentType(type:CompilerType):CompilerType
+		return comparedArgumentType(type, new TypeRelations(this));
+
+	/**
+	 * An argument type as callers see it (`DeclarationTypes.argumentTypes`), as signatures compare it: a nullable reference is the
+	 * reference, since the type holds null already (`Null<String>` is `String`, as in Haxe).
+	 */
+	public static function comparedArgumentType(type:CompilerType, relations:TypeRelations):CompilerType
 		return switch type {
 			case TNullable(inner) if (TypeRelations.isReference(inner) && !relations.isValueClass(inner)): inner;
-			case TNullable(_): type;
-			default: compiler.syntax.AstPredicates.isNullableArgument(argument)
-				&& !(TypeRelations.isReference(type) && !relations.isValueClass(type)) ? TNullable(type) : type;
+			default: type;
 		};
-	}
 
 	function inheritedMethodConstraints(method:AstFunction, parameter:String,
 			substitutions:Map<String, CompilerType>):String {
@@ -1184,9 +1221,12 @@ class DeclarationIndex {
 		if (constraints != null)
 			for (constraint in constraints)
 				resolve(constraint.type, constraint.span, substitutions);
+		// An unannotated argument or result is the body's to give, once it is typed.
 		for (argument in fn.arguments)
-			resolve(argument.type, argument.span, substitutions);
-		types.resultType(fn, substitutions);
+			if (!compiler.syntax.AstFunctions.isInferred(argument.type))
+				resolve(argument.type, argument.span, substitutions);
+		if (!compiler.syntax.AstFunctions.isInferred(fn.result))
+			types.resultType(fn, substitutions);
 	}
 
 	function visitClass(name:String, visiting:Map<String, Bool>):Void {

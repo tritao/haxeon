@@ -8,8 +8,8 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.AstFunctions;
+import compiler.types.AccessorSignatures;
 import compiler.types.DeclarationIndex;
-import compiler.types.SignatureInference;
 import compiler.types.TypeRelations;
 
 typedef SemanticLifecycleMetrics = {
@@ -35,9 +35,9 @@ class SemanticProgram {
 	public final lifecycleMetrics:SemanticLifecycleMetrics;
 
 	/**
-	 * The functions whose signature the source leaves, in part, to inference (a result or an argument without a type), by their
-	 * name in `signatures`. `SignatureInference` fills those types in before anything is typed, so they no longer show in
-	 * `program`; a read of one is recorded for invalidation (`DeclarationTypeTable`).
+	 * The functions whose signature the source leaves, in part, to their bodies (a result or an argument without a type), by their
+	 * name in `signatures`. The typer types those bodies when their signature is first needed (`DeclarationTypeTable`), and a read
+	 * of one is recorded for invalidation.
 	 */
 	public final inferredSignatures:Map<String, Bool>;
 
@@ -50,8 +50,9 @@ class SemanticProgram {
 		if ((through:Int) > (SignatureTyped:Int))
 			throw "Semantic analysis cannot type bodies or finalize without Typer";
 		var started = Sys.time() * 1000.0;
-		var inferredSignatures = inferredSignaturesOf(program);
-		var inferred = SignatureInference.inferProgram(program);
+		// An unannotated accessor of an annotated property has the property's type; what else a signature leaves out, its body gives.
+		var inferred = AccessorSignatures.withPropertyTypes(program);
+		var inferredSignatures = inferredSignaturesOf(inferred);
 		var declarations = DeclarationIndex.registered(inferred),
 			declaredAt = Sys.time() * 1000.0,
 			lifecycle = new DeclarationLifecycle(declarations),
