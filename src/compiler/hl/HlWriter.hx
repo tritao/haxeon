@@ -13,6 +13,9 @@ import sys.io.File;
 typedef HlOpcodeSourceSpanGroup = {
 	final stableId:Int;
 	final locations:Array<HlDebugLocation>;
+
+	/** The function's instructions, which say which of them are written (`HlWriter.layout`). */
+	final opcodes:Array<HlInstruction>;
 }
 
 /** Serializes the in-memory HashLink model using canonical HLB encodings. */
@@ -442,12 +445,15 @@ class HlWriter {
 	}
 
 	function writeSpanGroup(group:HlOpcodeSourceSpanGroup, fileIndices:Map<String, Int>):Void {
+		var positions = layout(group.opcodes);
 		writeUnsignedIndex(group.stableId);
-		writeUnsignedIndex(group.locations.length);
+		writeUnsignedIndex(positions[group.opcodes.length]);
 		var previousPath = "", previousFileIndex = -1;
-		for (opcode in 0...group.locations.length) {
-			var location = group.locations[opcode];
-			writeUnsignedIndex(opcode);
+		for (index in 0...group.locations.length) {
+			if (positions[index + 1] == positions[index])
+				continue;
+			var location = group.locations[index];
+			writeUnsignedIndex(positions[index]);
 			if (location.path != previousPath) {
 				previousPath = location.path;
 				previousFileIndex = cast fileIndices.get(previousPath);
@@ -595,27 +601,83 @@ class HlWriter {
 			writeUnsignedIndex(binding);
 	}
 
+	/**
+	 * Where each of a function's instructions lands in what HashLink is given: `positions[i]` for instruction `i`, or, when `i` is
+	 * left out, for the instruction written after it; `positions[opcodes.length]` is how many are written. Only labels are left out,
+	 * those no jump at or after them lands on: the VM needs a label where a loop is entered again and finds every other jump target
+	 * from the jump. Everything that names an instruction by position (jumps, debug lines, assignments, opcode spans, patch
+	 * relocations) uses these positions.
+	 */
+	public static function layout(opcodes:Array<HlInstruction>):Array<Int> {
+		var labels:Map<String, Int> = [], loopHeads:Map<String, Bool> = [];
+		for (index in 0...opcodes.length)
+			switch opcodes[index] {
+				case Label(name):
+					labels.set(name, index);
+				default:
+			}
+		for (index in 0...opcodes.length) {
+			var target = jumpTarget(opcodes[index]);
+			if (target != null) {
+				var label = labels.get(target);
+				if (label != null && label <= index)
+					loopHeads.set(target, true);
+			}
+		}
+		var positions:Array<Int> = [], written = 0;
+		for (instruction in opcodes) {
+			positions.push(written);
+			switch instruction {
+				case Label(name) if (!loopHeads.exists(name)):
+				default:
+					written++;
+			}
+		}
+		positions.push(written);
+		return positions;
+	}
+
+	/** The label a jump or trap names, or null for any other instruction. */
+	public static function jumpTarget(instruction:HlInstruction):Null<String>
+		return switch instruction {
+			case JumpSignedLessOrEqual(_, _, target), JumpSignedLess(_, _, target), JumpUnsignedLess(_, _, target),
+				JumpNull(_, target), JumpEqual(_, _, target), JumpTrue(_, target), Jump(target), Trap(_, target, _),
+				JumpFalse(_, target), JumpNotNull(_, target), JumpNotEqual(_, _, target), JumpNotLess(_, _, target),
+				JumpNotGreaterOrEqual(_, _, target), JumpSignedGreaterOrEqual(_, _, target),
+				JumpSignedGreater(_, _, target),
+				JumpUnsignedGreaterOrEqual(_, _, target): target;
+			default: null;
+		};
+
 	function writeFunction(fn:HlFunction):Void {
-		var labels = HlValidator.collectLabels(fn);
+		var positions = layout(fn.opcodes), count = fn.opcodes.length;
+		var labels:Map<String, Int> = [];
+		for (index in 0...count)
+			switch fn.opcodes[index] {
+				case Label(name):
+					labels.set(name, positions[index]);
+				default:
+			}
 		writeIndex(fn.type);
 		writeUnsignedIndex(fn.functionIndex);
 		writeUnsignedIndex(fn.registers.length);
-		// Every instruction, labels included, is one HashLink instruction.
-		writeUnsignedIndex(fn.opcodes.length);
+		writeUnsignedIndex(positions[count]);
 		for (type in fn.registers)
 			writeIndex(type);
-		for (position in 0...fn.opcodes.length) {
-			var opcode = lowerInstruction(fn.opcodes[position], position, labels);
+		for (index in 0...count) {
+			if (positions[index + 1] == positions[index])
+				continue;
+			var opcode = lowerInstruction(fn.opcodes[index], positions[index], labels);
 			HlOpcodeSchema.validate(opcode, operands);
 			writeOpcode(opcode, operands);
 		}
 		if (hasDebug) {
-			writeDebugLocations(fn);
+			writeDebugLocations(fn, positions);
 			writeUnsignedIndex(fn.debugAssignments.length);
 			for (assignment in fn.debugAssignments) {
 				writeUnsignedIndex(assignment.name);
-				writeIndex(assignment.position + 1);
-				writeIndex(assignment.scopeEnd + 1);
+				writeIndex(assignment.position < 0 ? 0 : positions[assignment.position] + 1);
+				writeIndex(assignment.scopeEnd < 0 ? 0 : positions[assignment.scopeEnd] + 1);
 			}
 		}
 	}
@@ -674,10 +736,14 @@ class HlWriter {
 	/** The location of a function that was given none. */
 	static final generatedLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
-	function writeDebugLocations(fn:HlFunction):Void {
+	function writeDebugLocations(fn:HlFunction, positions:Array<Int>):Void {
+		var located:Array<HlDebugLocation> = [];
+		for (index in 0...fn.opcodes.length)
+			if (positions[index + 1] != positions[index])
+				located.push(fn.debugLocations.length == 0 ? generatedLocation : fn.debugLocations[index]);
 		var currentFile = -1, currentLine = 0, index = 0;
-		while (index < fn.opcodes.length) {
-			var location:HlDebugLocation = fn.debugLocations.length == 0 ? generatedLocation : fn.debugLocations[index];
+		while (index < located.length) {
+			var location:HlDebugLocation = located[index];
 			if (location.line > 0x1FFFFF)
 				throw 'Debug line ${location.line} exceeds the HashLink format limit';
 			if (!debugFileIndices.exists(location.path))
@@ -690,12 +756,10 @@ class HlWriter {
 			}
 			if (location.line == currentLine) {
 				var count = 1;
-				while (count < 15 && index + count < fn.opcodes.length) {
-					if (fn.debugLocations.length != 0) {
-						var next = fn.debugLocations[index + count];
-						if (next.path != location.path || next.line != currentLine)
-							break;
-					}
+				while (count < 15 && index + count < located.length) {
+					var next = located[index + count];
+					if (next.path != location.path || next.line != currentLine)
+						break;
 					count++;
 				}
 				output.writeByte((count << 2) | 2);

@@ -515,17 +515,18 @@ class TestMain {
 			|| patch.functions.length != 1
 			|| patch.functions[0].functionIndex != 0x10001)
 			throw "HLP round trip lost revision or function identity";
-		if (patch.functions[0].instructions.length != 7
+		// The catch label is not written: HashLink is given a label only where a loop is entered again (`HlWriter.layout`).
+		if (patch.functions[0].instructions.length != 6
 			|| patch.functions[0].instructions[1].opcode != HlOpcode.ToDyn
 			|| patch.functions[0].instructions[2].opcode != HlOpcode.Trap
 			|| patch.functions[0].instructions[3].opcode != HlOpcode.EndTrap
-			|| patch.functions[0].instructions[6].opcode != HlOpcode.Throw)
+			|| patch.functions[0].instructions[5].opcode != HlOpcode.Throw)
 			throw "HLP round trip lost function bytecode";
 		if (patch.debugFiles.length != 1
 			|| patch.debugFiles[0] != "patch-debug.hx"
-			|| patch.functions[0].debug.length != 7
+			|| patch.functions[0].debug.length != 6
 			|| patch.functions[0].debug[0].line != 10
-			|| patch.functions[0].debug[6].line != 16)
+			|| patch.functions[0].debug[5].line != 16)
 			throw "HLP round trip lost function debug metadata";
 		try {
 			HlPatchReader.decode(patchBytes.sub(0, patchBytes.length - 1));

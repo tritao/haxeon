@@ -343,8 +343,12 @@ class HlPatchWriter {
 			if (!stableIdsBySlot.exists(fn.functionIndex))
 				throw 'Missing stable function identity for slot "${fn.functionIndex}"';
 			writeIndex(out, stableIdsBySlot.get(fn.functionIndex));
-			writeIndex(out, fn.debugLocations.length);
-			for (location in fn.debugLocations) {
+			var positions = HlWriter.layout(fn.opcodes);
+			writeIndex(out, positions[fn.opcodes.length]);
+			for (index in 0...fn.debugLocations.length) {
+				if (positions[index + 1] == positions[index])
+					continue;
+				var location = fn.debugLocations[index];
 				if (!fileIndices.exists(location.path))
 					throw 'Missing patch debug source index for "${location.path}"';
 				writeIndex(out, fileIndices.get(location.path));
@@ -369,19 +373,16 @@ class HlPatchWriter {
 
 	static function callRelocations(fn:HlFunction, stableIdsBySlot:Map<Int, Int>):Array<{instruction:Int,
 		stableId:Int}> {
-		var result = [], instruction = 0;
-		for (op in fn.opcodes)
-			switch op {
-				case Label(_):
-					instruction++;
+		// Instructions are counted as written (`HlWriter.layout`), which leaves out labels only loops need.
+		var result = [], positions = HlWriter.layout(fn.opcodes);
+		for (index in 0...fn.opcodes.length)
+			switch fn.opcodes[index] {
 				case Call0(_, target), Call1(_, target, _), Call2(_, target, _, _), CallN(_, target, _),
 					StaticClosure(_, target),
 					InstanceClosure(_, target, _):
 					if (stableIdsBySlot.exists(target))
-						result.push({instruction: instruction, stableId: stableIdsBySlot.get(target)});
-					instruction++;
+						result.push({instruction: positions[index], stableId: stableIdsBySlot.get(target)});
 				default:
-					instruction++;
 			}
 		return result;
 	}

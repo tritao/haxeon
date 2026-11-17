@@ -131,19 +131,32 @@ class PatchOpcodeTests {
 		for (fixture in fixtures) {
 			var name = HaxeType.enumConstructor(fixture.instruction);
 			covered.set(name, true);
-			var code = module([Label("target"), fixture.instruction, Return(0)]);
+			// A label is written only as a loop head, so the label fixture is one: the jump after it lands on it.
+			var loopHead = switch fixture.instruction {
+				case Label(name): name;
+				default: null;
+			};
+			var code = module(loopHead == null ? [Label("target"), fixture.instruction, Return(0)] : [
+				Label("target"),
+				fixture.instruction,
+				Jump(loopHead),
+				Return(0)
+			]);
 			var bytes = HlPatchWriter.encode(code, HaxeBytes.alloc(16), [0], [0 => 70000], 1, 2);
 			var decoded = HlPatchReader.decode(bytes),
 				native = Runtime.inspectPatch(bytes);
-			var actual = decoded.functions[0].instructions;
+			// The leading label is written only when the fixture jumps back to it (`HlWriter.layout`).
+			var actual = decoded.functions[0].instructions,
+				at = compiler.hl.HlWriter.jumpTarget(fixture.instruction) == null ? 0 : 1,
+				tail = loopHead == null ? 1 : 2;
 			if (native.functionCount != 1
 				|| native.baseRevision != 1
 				|| native.revision != 2
-				|| actual.length != 3
-				|| actual[1].opcode != fixture.opcode
-				|| actual[1].operands.join(",") != fixture.operands.join(",")
-				|| actual[2].opcode != 67
-				|| actual[2].operands.join(",") != "0")
+				|| actual.length != at + 1 + tail
+				|| actual[at].opcode != fixture.opcode
+				|| actual[at].operands.join(",") != fixture.operands.join(",")
+				|| actual[at + tail].opcode != 67
+				|| actual[at + tail].operands.join(",") != "0")
 				throw 'Patch opcode decoding disagrees for $name';
 		}
 		for (name in HaxeType.getEnumConstructs(HlInstruction))

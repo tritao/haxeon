@@ -535,7 +535,11 @@ class HlLower {
 			for (index in 0...code.functions.length) {
 				var identity = identities[index],
 					loweredFunction = code.functions[index];
-				spanGroups.push({stableId: identity.stableId, locations: loweredFunction.debugLocations});
+				spanGroups.push({
+					stableId: identity.stableId,
+					locations: loweredFunction.debugLocations,
+					opcodes: loweredFunction.opcodes
+				});
 			}
 			allocationAfterSpanGroups = AllocationMeter.sample();
 			// The groups only point at the functions' locations; the section is encoded when the module is written.
