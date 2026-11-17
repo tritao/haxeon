@@ -1924,6 +1924,10 @@ class ExpressionTyper {
 			span);
 		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
 		var typedValue = bodyTyper.typeExpression(value, scope, target == null ? null : targetType);
+		// A value that never arrives (a `throw`) has every type, as Haxe's Never: `(throw e : Int)` and `cast (throw e)` are that
+		// expression, typed as the target, as any other coercion of Never makes it.
+		if (typedValue.type.match(TNever))
+			return bodyTyper.coerce(typedValue, targetType, "cast", "E1003");
 		// Lowering requires a typed null. Preserve nullable targets directly; use the normal Dynamic cast for scalars.
 		if ((switch typedValue.type {
 			case TNull: true;

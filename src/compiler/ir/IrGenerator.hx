@@ -2669,9 +2669,11 @@ class IrGenerator {
 				if (builder.isTerminated()) placeholder;
 				else lowerExpression(result, builder, localTypes);
 			case TThrowExpression(value):
-				var placeholder = unreachableValue(lowerType(expression.type), builder);
 				builder.throwValue(builder.toDyn(lowerExpression(value, builder, localTypes)));
-				placeholder;
+				// The expression around the throw (a call it is an argument of, an array it is an element of) is lowered on, in a
+				// block nothing reaches, with a value of the throw's type standing for the one it never gives.
+				builder.select(builder.createBlock());
+				unreachableValue(lowerType(expression.type), builder);
 			case TCast(value), TAbiCast(value):
 				var source = lowerExpression(value, builder, localTypes),
 					target = lowerType(expression.type);
