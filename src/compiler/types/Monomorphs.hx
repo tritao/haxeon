@@ -11,7 +11,8 @@ import compiler.types.Type.MonomorphCell;
  *
  * A type variable is made only while a body is typed and is filled at most once, by `unify`, where a value meets the type
  * it must have (`ConversionResolver.coerce`). It never leaves the typer: when the body is typed, every filled one is
- * replaced by its type throughout what the body made (`TypedTypeMap`), and one still empty is an error.
+ * replaced by its type throughout what the body made (`TypedTypeMap`), and one still empty becomes Dynamic, as in Haxe
+ * (`BodyTyper.settleFrame`).
  */
 class Monomorphs {
 	/** The type `type` stands for: a filled type variable's type, followed through chains, or `type` itself. */

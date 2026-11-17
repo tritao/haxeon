@@ -85,9 +85,16 @@ class MonomorphCell {
 	 */
 	public var hint:Null<CompilerType> = null;
 
-	public function new(origin:String, span:compiler.core.Source.SourceSpan) {
+	/**
+	 * Whether nothing filling it is an error rather than Dynamic: a `new Map()`'s key and value, whose implementation Haxe
+	 * picks from them (`Type parameters of multi type abstracts must be known`).
+	 */
+	public final mustBeFixed:Bool;
+
+	public function new(origin:String, span:compiler.core.Source.SourceSpan, mustBeFixed:Bool = false) {
 		this.origin = origin;
 		this.span = span;
+		this.mustBeFixed = mustBeFixed;
 	}
 }
 

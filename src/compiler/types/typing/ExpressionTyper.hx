@@ -1255,11 +1255,11 @@ class ExpressionTyper {
 			});
 		}
 		// With nothing expected, `new Map()` has type variables for its key and value, which the first use that fixes them
-		// fills (`Monomorphs`).
+		// fills (`Monomorphs`). As in Haxe, which picks the map's implementation from them, they cannot be left to Dynamic.
 		if (keyType == null && entries.length == 0)
-			keyType = session.monomorphs.create("the key type of this empty map", span);
+			keyType = session.monomorphs.create("the key type of this empty map", span, true);
 		if (valueType == null && entries.length == 0)
-			valueType = session.monomorphs.create("the value type of this empty map", span);
+			valueType = session.monomorphs.create("the value type of this empty map", span, true);
 		if (keyType == null || valueType == null)
 			fail("E1003", "An empty map literal requires an expected key and value type", span);
 		DeclaredConformance.requireMapRuntime(session, keyType, valueType, span);

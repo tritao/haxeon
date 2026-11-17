@@ -46,13 +46,14 @@ class MonomorphFrames {
 
 	/**
 	 * A new type variable standing for `origin` (`the type of local "x"`), or null where no body is being typed (a field
-	 * initializer, a generated helper), which has no frame to settle one.
+	 * initializer, a generated helper), which has no frame to settle one. One that `mustBeFixed` is an error when nothing
+	 * fills it; any other becomes Dynamic.
 	 */
-	public function create(origin:String, span:SourceSpan):Null<CompilerType> {
+	public function create(origin:String, span:SourceSpan, mustBeFixed:Bool = false):Null<CompilerType> {
 		var frame = frames.length == 0 ? null : frames[frames.length - 1];
 		if (frame == null)
 			return null;
-		var cell = new MonomorphCell(origin, span);
+		var cell = new MonomorphCell(origin, span, mustBeFixed);
 		frame.cells.push(cell);
 		return TMonomorph(cell);
 	}

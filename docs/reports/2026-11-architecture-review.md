@@ -378,7 +378,8 @@ These were settled before implementation so the steps can run without further in
 
 - A monomorph exists only while a body is typed. A post-body pass replaces each with its bound type, and a verifier
   asserts none escapes into the typed AST, IR, caches or fingerprints.
-- A local whose type is never determined becomes `Dynamic`, as in Haxe, and the compiler emits a warning naming it.
+- A local whose type is never determined becomes `Dynamic`, as in Haxe. Haxe gives no warning for it, so neither does
+  Haxeon. A `new Map()` whose key and value are never determined stays an error, as in Haxe.
 - Scope is locals and the parameters and returns of lambdas inside a body. Function signatures and field types keep
   `SignatureInference` and `FieldInference`.
 - Open structural constraints are out of scope.

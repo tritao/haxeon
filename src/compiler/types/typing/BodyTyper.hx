@@ -385,8 +385,8 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/**
-	 * Ends a body's type variables (`Monomorphs`): one nothing filled is an error, and every filled one is replaced by its
-	 * type in the body's statements, its lambdas and their cache entries, and its closure cells, so none leaves the typer.
+	 * Ends a body's type variables (`Monomorphs`): one nothing filled is Dynamic (or an error, for a `new Map()`), and every
+	 * one is replaced by its type in the body's statements, its lambdas and their cache entries, and its closure cells, so none leaves the typer.
 	 */
 	function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement> {
 		var map = settleFrame(frame);
@@ -411,7 +411,8 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/**
-	 * Ends `frame` and settles its type variables: an unbound one takes the type a later use hinted, or is an error. Returns the map
+	 * Ends `frame` and settles its type variables: an unbound one takes the type a later use hinted, or else is Dynamic, as in
+	 * Haxe, except a `new Map()`'s key and value, which are an error (`MonomorphCell.mustBeFixed`). Returns the map
 	 * that writes the settled types into what was typed in the frame (closure conversions and lambdas are mapped here), or null
 	 * when the frame made none.
 	 */
@@ -419,14 +420,17 @@ class BodyTyper implements BodyTyping {
 		session.monomorphs.end(frame);
 		if (frame.cells.length == 0)
 			return null;
-		for (cell in frame.cells)
-			if (compiler.types.Monomorphs.isUnbound(TMonomorph(cell))) {
-				// Nothing filled it, but a later use expects a type of it: that is its type.
-				if (cell.hint != null)
-					compiler.types.Monomorphs.unify(TMonomorph(cell), cell.hint);
-				else
-					fail("E1003", 'Cannot infer ${cell.origin}: nothing after it fixes it; give it a type', cell.span);
-			}
+		for (cell in frame.cells) {
+			// Nothing filled it, but a later use expects a type of it: that is its type.
+			if (cell.hint != null && compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
+				compiler.types.Monomorphs.unify(TMonomorph(cell), cell.hint);
+			if (!compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
+				continue;
+			// Otherwise it is Dynamic, as an unbound monomorph is in Haxe, which says nothing of it.
+			if (cell.mustBeFixed)
+				fail("E1003", 'Cannot infer ${cell.origin}: nothing after it fixes it; give it a type', cell.span);
+			compiler.types.Monomorphs.unify(TMonomorph(cell), TDynamic);
+		}
 		for (check in frame.deferred)
 			check();
 		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);

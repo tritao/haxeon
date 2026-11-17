@@ -139,6 +139,7 @@ in_background run_case local-inference-null-initializer 0
 in_background run_case local-inference-empty-map 0
 in_background run_case local-inference-object-literal-context 0
 in_background run_case local-inference-int-float-widening 0
+in_background run_case local-inference-unbound-dynamic 0
 in_background run_compile_failure type-error
 status=0
 for index in "${!pids[@]}"; do
