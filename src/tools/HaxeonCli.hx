@@ -10,6 +10,7 @@ import build.WorkspaceBuild;
 import build.WorkspaceManifest;
 import build.execution.Executor;
 import build.execution.JobServer;
+import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
 import compiler.core.InternalError;
@@ -810,6 +811,8 @@ class HaxeonCli {
 							if (windows)
 								Sys.putEnv("PATH", runPath);
 							Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
+							// The watch loop reports the failure from what the build printed.
+							OutputCapture.record("haxeon: " + Std.string(error) + "\n");
 							return null;
 						}
 					}, session);
