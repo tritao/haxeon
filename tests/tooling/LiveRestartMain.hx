@@ -8,7 +8,7 @@ import sys.io.File;
  * A live session that starts after another one published the module (the compile server started after the editor
  * restarts) patches that module: it resumes the history recorded beside it, so the first edit keeps the module identity
  * and continues its revisions instead of assembling a new module the running app must reload. A module whose recorded
- * history does not match it starts a new module.
+ * history does not match it, or whose history another build of the compiler recorded, starts a new module.
  */
 class LiveRestartMain {
 	static function main():Void {
@@ -72,13 +72,19 @@ class LiveRestartMain {
 			"edits after the first must keep patching");
 		expect(restarted.recordLiveState(), "the resumed session must record its own publications");
 		// History a resumed session recorded (its constant pools included) resumes again.
-		var again = build(new CompilerSession(), 4);
+		var resumed = new CompilerSession(), again = build(resumed, 4);
 		expect(again.moduleIdentity == first.moduleIdentity
 			&& again.revision == next.revision + 1
 			&& again.patchAvailable == true
 			&& again.requiresReload == false,
 			"history recorded by a resumed session must resume again");
+		expect(resumed.recordLiveState(), "the resumed session must record its own publications");
 		next = again;
+		// Another build of the compiler, at the same path (a compile server rebuilt in place), lowers the unchanged functions
+		// its history holds differently, so it starts a new module.
+		var rebuilt = build(new CompilerSession("another build of the compiler"), 4);
+		expect(rebuilt.moduleIdentity != first.moduleIdentity,
+			"history recorded by another build of the compiler must not be resumed");
 		// A module the history does not describe (here, one whose marker names another revision) starts a new module.
 		File.saveContent(output + ".live.full", next.moduleIdentity + ":" + Std.string(next.revision + 7));
 		var stale = build(new CompilerSession(), 5);

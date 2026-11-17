@@ -10,6 +10,7 @@ import compiler.ffi.HxiInterfaceOrder;
 import compiler.hl.HlCode;
 import compiler.hl.HlWriter;
 import compiler.hl.HlWriterCache;
+import compiler.modules.CodeIdentityTable;
 import compiler.modules.ModulePath;
 import compiler.runtime.CompilerIntrinsics;
 import compiler.tools.CompilerRequest.CompileSessionMode;
@@ -28,7 +29,14 @@ class CompilerSession {
 	var unrecordedPublication:Null<{output:String, marker:String}>;
 	var requestSources:Map<String, String> = [];
 
-	public function new() {}
+	/**
+	 * The build of the compiler its live history is keyed by: the running program's fingerprint
+	 * (`CodeIdentityTable.compilerVersion`) unless one is given.
+	 */
+	final compilerBuild:Null<String>;
+
+	public function new(?compilerBuild:String)
+		this.compilerBuild = compilerBuild;
 
 	public function reset():Void {
 		compiler = null;
@@ -230,7 +238,7 @@ class CompilerSession {
 
 	/**
 	 * Records the history the last live revision was assembled from beside the module it published (`<output>.live.state`),
-	 * keyed by that publication's `.live.full` marker, this session's configuration and the compiler program. A later
+	 * keyed by that publication's `.live.full` marker, this session's configuration and the compiler build. A later
 	 * session, such as the compile server started after the editor restarts, resumes it and patches the module the app is
 	 * running instead of assembling a new module whose identity forces a reload. Encoding the history of an app takes
 	 * seconds, so the server calls this between requests rather than on an edit's path. True when it wrote the history.
@@ -295,9 +303,18 @@ class CompilerSession {
 		}
 	}
 
-	static function liveStateKey(marker:String, configuration:String):String
-		return marker + " " + build.execution.ContentDigest
-			.makeHex(Bytes.ofString(configuration + "\n" + Path.withoutDirectory(Sys.programPath())));
+	/**
+	 * The key of the history recorded for the module `marker` names under `configuration`. It names the compiler's build, not
+	 * its program's path: history is the functions, slots and stable ids that build lowered the module to, and another build
+	 * at the same path (a compile server rebuilt in place) lowers the unchanged functions differently, so it must not patch
+	 * on top of them.
+	 */
+	function liveStateKey(marker:String, configuration:String):String {
+		var program = compilerBuild;
+		if (program == null)
+			program = CodeIdentityTable.compilerVersion();
+		return marker + " " + build.execution.ContentDigest.makeHex(Bytes.ofString(configuration + "\n" + program));
+	}
 
 	function read(path:String):String {
 		var key = FileSystem.fullPath(path);
