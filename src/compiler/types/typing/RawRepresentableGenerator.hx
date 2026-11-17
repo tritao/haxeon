@@ -1,6 +1,5 @@
 package compiler.types.typing;
 
-import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.InlineConstantEvaluator;
@@ -9,6 +8,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.typing.HelperRequests.HelperRequest;
 
 /** Declared raw-value capabilities are synthesized from the current constants, never from runtime reflection. */
 @:access(compiler.types.typing.BodyTyper)

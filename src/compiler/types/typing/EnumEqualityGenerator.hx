@@ -1,6 +1,5 @@
 package compiler.types.typing;
 
-import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -11,6 +10,7 @@ import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.typing.HelperRequests.EqualityRequest;
+import compiler.types.typing.HelperRequests.HelperRequest;
 import haxe.crypto.Sha256;
 
 /** Generates declared enum equality and the separate structural Type.enumEq operation. */

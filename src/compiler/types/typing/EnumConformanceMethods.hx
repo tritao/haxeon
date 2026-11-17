@@ -1,6 +1,5 @@
 package compiler.types.typing;
 
-import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
@@ -10,6 +9,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
+import compiler.types.typing.HelperRequests.HelperRequest;
 import haxe.crypto.Sha256;
 
 /** Handwritten enum conformance methods lower to statically dispatched functions over the enum value. */

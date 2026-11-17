@@ -1,6 +1,5 @@
 package compiler.types.typing;
 
-import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
@@ -11,6 +10,7 @@ import compiler.types.TypedAst.TypedField;
 import compiler.types.TypedAst.TypedFunction;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.typing.HelperRequests.HelperRequest;
 import haxe.crypto.Sha256;
 
 /** An enum obtains an object only at an explicit interface conversion boundary. */
