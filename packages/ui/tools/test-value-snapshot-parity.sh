@@ -146,7 +146,7 @@ if (( $# > 0 )); then
 fi
 for inline in 0 1; do
     for target in hl wasm32 wasm-gc; do
-        options=()
+        options=()  # expanded as ${options[@]+...}: bash 3.2 (macOS) treats an empty array as unset under set -u
         suffix=hl
         if [[ $target == hl ]]; then
             platform_hxi="$root/packages/platform/bindings/nativekit.hxi"
@@ -161,7 +161,7 @@ for inline in 0 1; do
         fi
         for entry in "${entries[@]}"; do
             artifact="$tmp/$entry-$inline-$target.$suffix"
-            if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --entry="$entry" --output="$artifact" "${common[@]}" \
+            if ! "$hl" "$compiler" $( ((inline)) || echo --no-inline ) ${options[@]+"${options[@]}"} --entry="$entry" --output="$artifact" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
                     --ffi-interface="$ui_hxi" --ffi-projection="$ui/bindings/nativekit-ui.hxmap" \
@@ -209,7 +209,7 @@ JS
                 done
                 if [[ $selected == 0 ]]; then continue; fi
             fi
-            if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) "${options[@]}" --entry="$entry" \
+            if "$hl" "$compiler" $( ((inline)) || echo --no-inline ) ${options[@]+"${options[@]}"} --entry="$entry" \
                     --output="$tmp/rejected.$suffix" "${common[@]}" \
                     --ffi-interface="$platform_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit.hxmap" \
                     --ffi-interface="$net_hxi" --ffi-projection="$root/packages/platform/bindings/nativekit-net.hxmap" \
