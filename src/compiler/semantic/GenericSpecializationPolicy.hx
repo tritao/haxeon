@@ -45,6 +45,13 @@ class GenericSpecializationPolicy {
 
 	public static function decide(fn:AstFunction, parameter:String, semantic:CompilerType,
 			requiresLayoutSpecialization:Null<CompilerType->Bool> = null):SpecializationDecision {
+		// A body typed for its signature in its own type parameters (an unannotated generic declaration's, which
+		// `DeclarationTypeTable` types) calls with one of them: it has no runtime shape, and is kept as it is.
+		switch semantic {
+			case TTypeParameter(_, _):
+				return {representation: semantic, policy: "layout"};
+			default:
+		}
 		var constraints = fn.typeConstraints;
 		if (constraints != null)
 			for (constraint in constraints)

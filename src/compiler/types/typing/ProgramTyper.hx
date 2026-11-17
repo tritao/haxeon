@@ -30,6 +30,7 @@ import compiler.types.TypedAst.TypedNative;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.types.TypedAst.TypedProgram;
 import compiler.types.TypedAst.TypedStatement;
+import compiler.types.analysis.AbstractConstructorNormalizer;
 import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 
@@ -1338,11 +1339,19 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		var abstractDecl = session.declarations.abstracts.get(owner);
 		if (abstractDecl == null)
 			throw new InternalError('Unannotated function "$key" has no declaration the typer can type');
-		if (selected && abstractDecl.isExtern != true && fn.isStatic && !BodyTyper.isGeneric(fn))
+		var isConstructor = fn.name == "new";
+		if (selected && abstractDecl.isExtern != true && fn.isStatic && !isConstructor && !BodyTyper.isGeneric(fn))
 			return {
 				typed: bodyTyper.typeFunction(fn, owner, true, null, null, null, null, null, inference),
 				kept: true
 			};
+		// An abstract's constructor is typed as each construction inlines it: as a function that returns the representation
+		// `this` is assigned (`AbstractConstructorNormalizer`).
+		if (isConstructor) {
+			var normalized = AbstractConstructorNormalizer.normalize(fn, abstractDecl.underlying);
+			requiredTypes().alias(normalized, fn);
+			fn = normalized;
+		}
 		// The signature table's abstract method has the abstract's type parameters among its own.
 		var substitutions = ownSubstitutions(owner, [], key, fn),
 			receiver = fn.isStatic || fn.name == "new" ? null : TAbstract(owner, [

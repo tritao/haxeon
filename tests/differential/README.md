@@ -26,6 +26,9 @@ typed property, and the return and override mismatches both compilers reject.
 `lazy-argument-generic` covers unannotated arguments of a generic class's
 constructor and methods and of a static generic function, whose types mention
 the declaration's own type parameters, called from a generic and a concrete class.
+`lazy-own-type-parameters` covers bodies typed for their signature in their own
+type parameters: generic functions, a generic class's methods over `Array<T>`,
+and an abstract's unannotated constructor and instance methods.
 
 ## Reference exception
 

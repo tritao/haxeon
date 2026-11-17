@@ -235,6 +235,20 @@ class DeclarationTypeTable implements DeclarationTypes {
 				inferredFunctions.set(key, fn);
 		}
 
+	/**
+	 * Makes `copy`, a function rewritten from the declaration `original` with the same arguments and result (an abstract's
+	 * constructor as a construction inlines it), read the original's signature.
+	 */
+	public function alias(copy:AstFunction, original:AstFunction):Void {
+		var key = keys.get(original);
+		if (key == null)
+			return;
+		keys.set(copy, key);
+		var inferred = inferredKeys.get(original);
+		if (inferred != null)
+			inferredKeys.set(copy, inferred);
+	}
+
 	/** The stable key of the declaration `fn` is, or null for a function no declaration holds (a closure, a specialization). */
 	public function functionKey(fn:AstFunction):Null<String>
 		return keys.get(fn);

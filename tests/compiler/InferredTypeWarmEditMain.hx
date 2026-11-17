@@ -31,6 +31,9 @@ class InferredTypeWarmEditMain {
 
 	static final otherSource = "class Other { public static var x = 1; }";
 	static final boxSource = "class Box { public var v = 1; public var pair = new Pair(2); public function new() {} }";
+	static final baseSource = "class Base { public function new() {} public function value() return 1; }";
+	static final childSource =
+		"class Child extends Base { public function new() super(); override public function value():Int return 2; }";
 	static final pairSource = "@:value class Pair { public final a:Int; public function new(seed:Int) a = seed; }";
 	static final middleSource =
 		"class Middle { public static var y = Other.x; public static var a = Lib.annotated(); public static var z = Lib.count(); public static var list = [for (i in 0...2) i * 2]; public static function viaLib() return Lib.count() * 2; }";
@@ -48,6 +51,8 @@ class InferredTypeWarmEditMain {
 			var g = scaleOf();
 			var b = new Box().v;
 			var paired = new Box().pair.a;
+			var child:Base = new Child();
+			Sys.println(Std.string(child.value()));
 			Sys.println(Std.string(paired));
 			var via = Middle.viaLib();
 			var taken = Lib.take(3);
@@ -68,6 +73,8 @@ class InferredTypeWarmEditMain {
 			"Middle.hx" => middleSource,
 			"Box.hx" => boxSource,
 			"Pair.hx" => pairSource,
+			"Base.hx" => baseSource,
+			"Child.hx" => childSource,
 			"Main.hx" => mainSource
 		];
 
@@ -136,6 +143,11 @@ class InferredTypeWarmEditMain {
 			files -> files.set("Lib.hx",
 			StringTools.replace(libSource, "count() return 4;", "count() return Middle.viaLib();")),
 			files -> files.set("Lib.hx", StringTools.replace(libSource, "count() return 4;", "count() return 4.5;")));
+		// The override check reads the base method's inferred signature: an edit that changes it checks the child again, though the
+		// child's module is unchanged.
+		breakThenFix(failures, "a base method's inferred result changes under an annotated override, then changes back",
+			files -> files.set("Base.hx", StringTools.replace(baseSource, "return 1;", "return 'one';")),
+			files -> files.set("Base.hx", baseSource));
 		breakThenFix(failures, "an edit breaks an unannotated field, the next fixes it with another type",
 			files -> files.set("Other.hx", "class Other { public static var x = missing; }"),
 			files -> files.set("Other.hx", "class Other { public static var x = 1.5; }"));

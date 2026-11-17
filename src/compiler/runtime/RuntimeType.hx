@@ -128,6 +128,9 @@ class RuntimeType {
 				TFunction(_, _, _), TKeyPath(_, _, _): true;
 			case TInstance(kind, _, _): kind != NominalKind.NativeValue;
 			case TNullable(element): isRuntimeReference(element);
+			// A type parameter left unsubstituted is erased to a boxed reference. Only a body typed for its signature in its own
+			// type parameters (`DeclarationTypeTable`) sees one, and no code is generated from it.
+			case TTypeParameter(_, _): true;
 			default: false;
 		};
 }

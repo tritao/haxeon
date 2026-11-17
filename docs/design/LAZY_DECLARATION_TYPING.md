@@ -249,6 +249,15 @@ declaration on a difference.
 
 ### As built (slice 5)
 
+- A body typed for its signature alone, in its own type parameters, meets operations on a type parameter that ask for a
+  runtime representation (an `Array<T>` method, a call to another generic function or abstract method). A type
+  parameter left unsubstituted counts as a boxed reference there (`RuntimeType.isRuntimeReference`) and keeps its
+  specialization as it is (`GenericSpecializationPolicy.decide`): no code is generated from that body.
+- An abstract's unannotated constructor is typed as a construction inlines it, as a function returning its representation
+  (`AbstractConstructorNormalizer`); the normalized copy reads the declaration's signature (`DeclarationTypeTable.alias`).
+- A generic call infers its type parameters from an unannotated argument's inferred type as from an annotation
+  (`GenericInstantiation.inferArgumentTypeParameters`, `60f3e8afd`).
+
 - `SignatureInference` (732 lines) and `FieldInference` (637 lines) are deleted. Nothing guesses a declaration's type from its
   syntax any more: an unannotated declaration's type is only ever the table's.
 - `FieldInference.parsedType` is not kept. The three places that read it no longer need a guess: the module graph finds what an

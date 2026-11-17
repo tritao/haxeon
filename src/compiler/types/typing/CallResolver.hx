@@ -2677,7 +2677,10 @@ class CallResolver {
 			default: new Map<String, CompilerType>();
 		}, representation = session.representation.abstractUnderlying(valueType);
 		var normalized = AbstractConstructorNormalizer.normalize(constructor, decl.underlying),
-			typedArguments = [for (argument in arguments) bodyTyper.typeExpression(argument, scope)],
+			table = session.types;
+		if (table != null)
+			table.alias(normalized, constructor);
+		var typedArguments = [for (argument in arguments) bodyTyper.typeExpression(argument, scope)],
 			constructed:TypedExpression;
 		try {
 			constructed = genericInstantiation.specialize(constructorName, normalized, typedArguments, span, scope,
