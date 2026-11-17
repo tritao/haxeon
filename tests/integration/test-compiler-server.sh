@@ -54,10 +54,12 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
                                     stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         unrelated = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(unrelated_state)], env=env,
                                      stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(100):
+        # A worker publishes its state once the VM has loaded the compiler, which takes seconds, not milliseconds.
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
             if obsolete_state.exists() and unrelated_state.exists():
                 break
-            time.sleep(0.01)
+            time.sleep(0.05)
         assert obsolete_state.exists() and unrelated_state.exists(), 'extra workers did not start'
         time.sleep(1)
         source('9')
@@ -80,26 +82,37 @@ with tempfile.TemporaryDirectory(prefix='haxeon-compiler-server-') as directory:
         run(10)
         unrelated.wait(timeout=5)
         assert not unrelated_state.exists(), 'least recently used worker was not retired'
+        # Whether a worker's process is alive and how much memory it holds are read from /proc, so only Linux retires a dead
+        # worker's state file or a worker beyond the memory budget (CompilerClient.workerMemory).
+        linux = sys.platform.startswith('linux')
         # A state file whose process is gone is dropped.
         dead_state = states / ('2' * 64 + '-' + 'e' * 16 + '.json')
         dead_state.write_text(json.dumps({'port': 1, 'token': '0' * 64, 'pid': 2 ** 22 + 1}))
         source('9')
         build()
-        assert not dead_state.exists(), 'dead worker state was not removed'
+        assert not linux or not dead_state.exists(), 'dead worker state was not removed'
+        if not linux:
+            dead_state.unlink()
         # Beyond the memory budget, other workers are retired even under the count limit.
         heavy_state = states / ('3' * 64 + '-' + 'd' * 16 + '.json')
         heavy = subprocess.Popen([str(pathlib.Path(subprocess.check_output([str(repo / 'scripts/hashlink-path.sh')], text=True).strip()) / 'hl'), str(next(states.glob('*.hl'))), str(heavy_state)], env=env,
                                  stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(100):
+        deadline = time.monotonic() + 30
+        while time.monotonic() < deadline:
             if heavy_state.exists():
                 break
-            time.sleep(0.01)
+            time.sleep(0.05)
+        assert heavy_state.exists(), 'the heavy worker did not start'
         time.sleep(1)
         source('12')
         build(environment=dict(env, HAXEON_COMPILER_MEMORY_MB='1'))
         run(12)
-        heavy.wait(timeout=5)
-        assert not heavy_state.exists(), 'worker beyond the memory budget was not retired'
+        if linux:
+            heavy.wait(timeout=5)
+            assert not heavy_state.exists(), 'worker beyond the memory budget was not retired'
+        else:
+            stop(heavy_state)
+            heavy.wait(timeout=5)
         source('unknown_value')
         build(success=False)
         source('11')

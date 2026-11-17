@@ -23,7 +23,7 @@ def main():
 class Main {
   static function fail():Void throw "boom";
   static function main():Int {
-    try { fail(); }
+    try { fail(); return 2; }
     catch (error:Dynamic) {
       var stack = CallStack.toString(CallStack.exceptionStack());
       Sys.println(stack);

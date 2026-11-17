@@ -8,11 +8,9 @@
 # once it passes. A file that only a listed file runs is listed too, as its helper.
 
 # Helpers: run only by a test listed below.
-tests/integration/hld3-harness.py                    HLD3 protocol client that test-hld3.sh drives
 tests/hxml/dap-cli-probe.hxml                        debuggee of test-dap-cli.sh
 tests/hxml/dap-exception-probe.hxml                  debuggee of test-dap-exceptions.sh
 tests/hxml/dap-function-probe.hxml                   debuggee of test-dap-function-breakpoints.sh
-tests/hxml/dap-hot-reload-probe.hxml                 debuggee of test-dap-hot-reload.sh and test-hld3.sh
 tests/runtime/HxiNativeKitSceneMain.hx               generator that test-hxi-nativekit-scene.sh runs
 tests/runtime/NativeKitCxxMain.hx                    generator that test-nativekit-cxx-profile.sh runs
 
@@ -57,10 +55,3 @@ tests/profiler/ProfilerCalibrationMain.hx            not run: main of profiler-c
 tests/profiler/ProfilerHotReloadLspMain.hx           not run: main of profiler-hot-reload-lsp-test.hxml
 tests/profiler/ProfilerLspMain.hx                    not run: main of profiler-lsp-test.hxml
 tests/profiler/ProfilerProtocolBenchmarkMain.hx      not run: main of profiler-protocol-benchmark.hxml
-
-# Not run: fails today.
-tests/integration/test-cli-cache.py                  not run: fails; its copied checkout lacks lib/ and common.hxml, so scripts/haxeon --help exits 1
-tests/integration/test-compiler-server.sh            not run: fails with "extra workers did not start"
-tests/integration/test-exception-stack.py            not run: fails; its generated Main does not return on every path (E1006)
-tests/integration/test-hlb-debug-sections.sh         not run: fails; its in-tree `make -C vendor/hashlink` no longer links hl (hl_prof_boundary_*)
-tests/integration/test-hld3.sh                       not run: fails the same in-tree HashLink make as test-hlb-debug-sections.sh
