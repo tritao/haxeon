@@ -1733,16 +1733,45 @@ class HlLower {
 			}
 			return writes;
 		}
-		var temporaries:Array<Int> = [];
+		// The moves happen at once: a move is written once no move still to be written reads its destination, and a cycle of
+		// moves is broken by saving one destination in a temporary and reading that instead.
+		var pending:Array<{destination:Int, source:Int, value:IrValue}> = [];
 		for (move in moves) {
-			var temporary = registerTypes.length;
-			registerTypes.push(internType(move.source.type));
-			temporaries.push(temporary);
-			instructions.push(HlInstruction.Move(temporary, requireRegister(move.source, registers)));
+			var destination = requireRegister(move.destination, registers),
+				source = requireRegister(move.source, registers);
+			if (destination != source)
+				pending.push({destination: destination, source: source, value: move.destination});
 		}
-		for (i in 0...moves.length) {
-			writes.push({value: moves[i].destination, position: instructions.length});
-			instructions.push(HlInstruction.Move(requireRegister(moves[i].destination, registers), temporaries[i]));
+		while (pending.length > 0) {
+			var ready = -1;
+			for (index in 0...pending.length) {
+				var read = false;
+				for (other in pending)
+					if (other.source == pending[index].destination) {
+						read = true;
+						break;
+					}
+				if (!read) {
+					ready = index;
+					break;
+				}
+			}
+			if (ready < 0) {
+				var saved = pending[0].destination,
+					temporary = temporaryRegisterType(registerTypes[saved], registerTypes);
+				instructions.push(HlInstruction.Move(temporary, saved));
+				for (index in 0...pending.length)
+					if (pending[index].source == saved)
+						pending[index] = {
+							destination: pending[index].destination,
+							source: temporary,
+							value: pending[index].value
+						};
+				continue;
+			}
+			var move = pending.splice(ready, 1)[0];
+			writes.push({value: move.value, position: instructions.length});
+			instructions.push(HlInstruction.Move(move.destination, move.source));
 		}
 		return writes;
 	}

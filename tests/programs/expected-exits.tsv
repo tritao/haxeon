@@ -77,6 +77,7 @@ while-arithmetic	42
 numeric-promotion	42
 branch-assignment	42
 branch-fall-through	42
+phi-parallel-moves	42
 static-class	42
 static-field	81
 static-field-init	42
