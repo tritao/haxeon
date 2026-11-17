@@ -1,6 +1,6 @@
 package driver;
 
-import haxe.Json;
+import compiler.tools.CompilerServerProtocol;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -49,7 +49,9 @@ class CompileWorker {
 				throw 'the compile server did not start: ${printed()}';
 			Sys.sleep(0.02);
 		}
-		var state:Dynamic = Json.parse(File.getContent(rendezvous));
+		var state = CompilerServerProtocol.decodeState(File.getContent(rendezvous));
+		if (state == null)
+			throw 'the compile server published an unreadable rendezvous file: $rendezvous';
 		token = state.token;
 		port = state.port;
 		return state.port;
@@ -60,10 +62,7 @@ class CompileWorker {
 		var socket = new Socket();
 		socket.connect(new Host("127.0.0.1"), ready());
 		socket.setTimeout(3600);
-		var bytes = haxe.io.Bytes.ofString(Json.stringify({token: token, arguments: arguments}));
-		socket.output.writeInt32(bytes.length);
-		socket.output.write(bytes);
-		socket.output.flush();
+		CompilerServerProtocol.writeRequest(socket.output, token, Compile(arguments));
 		return socket;
 	}
 
@@ -71,15 +70,14 @@ class CompileWorker {
 	public function answer(socket:Socket):CompileOutcome {
 		var output = new StringBuf();
 		try {
-			while (true) {
-				var response:Dynamic = Json.parse(socket.input.readLine());
-				if (response.message != null)
-					output.add(response.message + "\n");
-				if (response.status != null) {
-					socket.close();
-					return {status: response.status, output: output.toString()};
+			while (true)
+				switch CompilerServerProtocol.readResponse(socket.input) {
+					case Message(text):
+						output.add(text + "\n");
+					case Status(code):
+						socket.close();
+						return {status: code, output: output.toString()};
 				}
-			}
 		} catch (error:Dynamic) {
 			socket.close();
 			return {status: 1,
@@ -99,10 +97,7 @@ class CompileWorker {
 			try {
 				var socket = new Socket();
 				socket.connect(new Host("127.0.0.1"), port);
-				var bytes = haxe.io.Bytes.ofString(Json.stringify({token: token, shutdown: true}));
-				socket.output.writeInt32(bytes.length);
-				socket.output.write(bytes);
-				socket.output.flush();
+				CompilerServerProtocol.writeRequest(socket.output, token, Shutdown);
 				socket.close();
 			} catch (_:Dynamic) {}
 		process.exitCode();

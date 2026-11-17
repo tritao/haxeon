@@ -128,7 +128,10 @@ class HaxeonBuild {
 		FileSystem.createDirectory(work);
 		var driver = Path.join([work, "test-driver.hl"]), status:Int;
 		try {
-			status = run(haxe(), ["--cwd", root(), "-cp", "tests", "-hl", driver, "-main", "driver.TestDriver"]);
+			// `src` for the compile server's wire format (compiler.tools.CompilerServerProtocol), which the driver speaks.
+			status = run(haxe(), [
+				"--cwd", root(), "-cp", "tests", "-cp", "src", "-hl", driver, "-main", "driver.TestDriver"
+			]);
 			if (status == 0)
 				status = run(hashlink(), [driver, "--root", root(), "--jobs", jobs].concat(arguments.slice(1)));
 		} catch (error:Dynamic) {

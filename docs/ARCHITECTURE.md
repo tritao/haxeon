@@ -135,7 +135,7 @@ Packages of `src/compiler/`, bottom layer first:
 | `compilation` | One build: `CompilationPipeline`, `FrontendCompilation`, the backend sessions (`HashLinkBackendSession`, `WasmBackendSession`), and the candidate and publication transactions. |
 | root | `Compiler`, the session that holds the last successful build, and `Frontend`, a stateless path from source text to IR. |
 | `service` | The language service, the REPL, and the import lints. |
-| `tools` | The compiler CLI and driver, the compiler worker (`CompilerServer`, `CompilerSession`), the memory and allocation censuses, `BootstrapStatus`. |
+| `tools` | The compiler CLI and driver, the compiler worker (`CompilerServer`, `CompilerSession`) and its wire format (`CompilerServerProtocol`, shared with its clients), the memory and allocation censuses, `BootstrapStatus`. |
 | `formatter`, `documentation` | The source formatter; documentation comments and the Haxe XML writer. |
 
 The rest of the repository:

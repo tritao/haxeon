@@ -2,7 +2,7 @@ package compiler.tools;
 
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
-import haxe.Json;
+import compiler.tools.CompilerServerProtocol;
 import sys.FileSystem;
 import sys.io.File;
 import sys.net.Host;
@@ -50,7 +50,7 @@ class CompilerServer {
 		listener.listen(8);
 		var idleSeconds = idleTimeout();
 		// `idleSeconds` also tells clients how often to ping, and that this worker understands pings.
-		var descriptor = Json.stringify({
+		var descriptor = CompilerServerProtocol.encodeState({
 			port: listener.host().port,
 			token: token,
 			pid: processId(),
@@ -75,45 +75,41 @@ class CompilerServer {
 				var client = listener.accept(), answered = false;
 				client.setTimeout(600);
 				try {
-					var length = client.input.readInt32();
-					if (length <= 0 || length > 8 * 1024 * 1024)
-						throw "Invalid compiler request length";
-					var request:Dynamic = Json.parse(client.input.readString(length));
-					if (request.token != token)
-						throw "Invalid compiler session token";
-					if (request.shutdown == true) {
-						running = false;
-					} else if (request.ping == true) {
-						// A watch session is still running; the request only counts as activity. The pinger does not wait for
-						// an answer, so none is sent.
-						answered = true;
-						client.close();
-					} else if (request.background == true) {
-						// The requester only warms the session (a live run that starts from a module it built before), so it is
-						// answered at once and the compile runs to completion with nobody waiting; later requests queue behind it.
-						send(client, {status: 0});
-						client.close();
-						answered = true;
-						var started = Sys.time();
-						var result = compileConnected(null, cast request.arguments, session);
-						recordLiveState(session);
-						Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped');
-					} else {
-						var started = Sys.time();
-						#if (hl && !haxeon)
-						var memoryBefore = hl.Gc.stats();
-						#end
-						var result = compileConnected(client, cast request.arguments, session);
-						#if (hl && !haxeon)
-						var memoryAfter = hl.Gc.stats();
-						send(client,
-							{message: 'worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'});
-						#end
-						send(client,
-							{message: 'compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'});
+					switch CompilerServerProtocol.readRequest(client.input, token) {
+						case Shutdown:
+							running = false;
+						case Ping:
+							// A watch session is still running; the request only counts as activity. The pinger does not wait for
+							// an answer, so none is sent.
+							answered = true;
+							client.close();
+						case Background(arguments):
+							// The requester only warms the session (a live run that starts from a module it built before), so it is
+							// answered at once and the compile runs to completion with nobody waiting; later requests queue behind
+							// it.
+							send(client, Status(0));
+							client.close();
+							answered = true;
+							var started = Sys.time();
+							var result = compileConnected(null, arguments, session);
+							recordLiveState(session);
+							Sys.println('background compile: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped');
+						case Compile(arguments):
+							var started = Sys.time();
+							#if (hl && !haxeon)
+							var memoryBefore = hl.Gc.stats();
+							#end
+							var result = compileConnected(client, arguments, session);
+							#if (hl && !haxeon)
+							var memoryAfter = hl.Gc.stats();
+							send(client,
+								Message('worker allocations: bytes=${WholeNumber.text(memoryAfter.totalAllocated - memoryBefore.totalAllocated)} count=${WholeNumber.text(memoryAfter.allocationCount - memoryBefore.allocationCount)} heap=${WholeNumber.text(memoryAfter.currentMemory)}'));
+							#end
+							send(client,
+								Message('compiler: ${Math.round((Sys.time() - started) * 1000)} ms, ${result.metrics.retypedFunctions} functions retyped'));
 					}
 					if (!answered)
-						send(client, {status: 0});
+						send(client, Status(0));
 				} catch (error:Dynamic) {
 					session.reset();
 					if (answered)
@@ -126,8 +122,8 @@ class CompilerServer {
 									diagnostic = failure.diagnostic;
 								message = diagnostic.format();
 							}
-							send(client, {message: message});
-							send(client, {status: 1});
+							send(client, Message(message));
+							send(client, Status(1));
 						} catch (_:Dynamic) {}
 				}
 				if (!answered)
@@ -208,7 +204,7 @@ class CompilerServer {
 					cancellation.check();
 					var requester = client;
 					if (requester != null)
-						send(requester, {message: message});
+						send(requester, Message(message));
 				}, session, cancellation, publishEarly)
 					catch (error:Dynamic)
 					failure = error;
@@ -308,8 +304,6 @@ class CompilerServer {
 		return null;
 	#end
 
-	static function send(client:Socket, value:Dynamic):Void {
-		client.output.writeString(Json.stringify(value) + "\n");
-		client.output.flush();
-	}
+	static function send(client:Socket, response:CompilerServerResponse):Void
+		CompilerServerProtocol.writeResponse(client.output, response);
 }

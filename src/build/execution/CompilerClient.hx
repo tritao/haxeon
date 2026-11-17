@@ -1,6 +1,6 @@
 package build.execution;
 
-import haxe.Json;
+import compiler.tools.CompilerServerProtocol;
 import haxe.SysTools;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
@@ -130,25 +130,17 @@ class CompilerClient {
 				session.workerPings.set(statePath, Sys.time());
 			var socket = connection.socket;
 			socket.setTimeout(600);
-			var bytes = haxe.io.Bytes.ofString(Json.stringify(background ? {
-				token: connection.token, arguments: arguments, background: true
-			} : {
-				token: connection.token,
-				arguments: arguments
-			}));
-			socket.output.writeInt32(bytes.length);
-			socket.output.write(bytes);
-			socket.output.flush();
-			while (true) {
-				var response:Dynamic = Json.parse(socket.input.readLine());
-				if (response.message != null)
-					build.BuildOutput.line(response.message);
-				if (response.status != null) {
-					socket.close();
-					markUsed(statePath);
-					return response.status;
+			CompilerServerProtocol.writeRequest(socket.output, connection.token,
+				background ? Background(arguments) : Compile(arguments));
+			while (true)
+				switch CompilerServerProtocol.readResponse(socket.input) {
+					case Message(text):
+						build.BuildOutput.line(text);
+					case Status(code):
+						socket.close();
+						markUsed(statePath);
+						return code;
 				}
-			}
 		} catch (error:Dynamic) {
 			if (connection != null)
 				try
@@ -182,23 +174,16 @@ class CompilerClient {
 
 	/** Pings one worker; the seconds until the next ping is due, or null when no worker that understands pings answers. */
 	static function pingWorker(statePath:String):Null<Float> {
-		var idleSeconds = 0.0;
-		try {
-			var state:Dynamic = Json.parse(File.getContent(statePath));
-			if (Std.isOfType(state.idleSeconds, Float))
-				idleSeconds = state.idleSeconds;
-		} catch (_:Dynamic) {}
+		var state = readState(statePath);
 		// A worker from before pings would take one for a compile request.
-		if (idleSeconds <= 0)
+		if (state == null || state.idleSeconds <= 0)
 			return null;
+		var idleSeconds = state.idleSeconds;
 		var connection = connect(statePath);
 		if (connection == null)
 			return null;
 		try {
-			var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, ping: true}));
-			connection.socket.output.writeInt32(request.length);
-			connection.socket.output.write(request);
-			connection.socket.output.flush();
+			CompilerServerProtocol.writeRequest(connection.socket.output, connection.token, Ping);
 			connection.socket.close();
 		} catch (_:Dynamic) {
 			try
@@ -211,13 +196,18 @@ class CompilerClient {
 		return Math.max(0.25, idleSeconds / 3);
 	}
 
+	/** The state a worker published, or null when there is none a client can reach. */
+	static function readState(statePath:String):Null<CompilerServerState> {
+		var text = try File.getContent(statePath) catch (_:Dynamic) null;
+		return text == null ? null : CompilerServerProtocol.decodeState(text);
+	}
+
 	static function connect(statePath:String):Null<Connection> {
+		var state = readState(statePath);
+		if (state == null)
+			return null;
 		var socket:Null<Socket> = null;
 		try {
-			var state:Dynamic = Json.parse(File.getContent(statePath));
-			if (!Std.isOfType(state.port, Int) || state.port <= 0 || state.port > 65535
-				|| !Std.isOfType(state.token, String) || state.token.length != 64)
-				return null;
 			socket = new Socket();
 			socket.setTimeout(0.2);
 			socket.connect(new Host("127.0.0.1"), state.port);
@@ -485,11 +475,14 @@ class CompilerClient {
 	static function workerMemory(statePath:String):Null<Float> {
 		if (Sys.systemName() != "Linux")
 			return 0;
+		var state = readState(statePath);
+		if (state == null)
+			return 0;
+		var pid = state.pid;
+		if (pid == null)
+			return 0;
 		try {
-			var state:Dynamic = Json.parse(File.getContent(statePath));
-			if (!Std.isOfType(state.pid, Int))
-				return 0;
-			var process = "/proc/" + state.pid;
+			var process = "/proc/" + pid;
 			if (!FileSystem.exists(process))
 				return null;
 			var commandLine = readProcFile(process + "/cmdline");
@@ -561,10 +554,7 @@ class CompilerClient {
 			return;
 		}
 		try {
-			var request = haxe.io.Bytes.ofString(Json.stringify({token: connection.token, shutdown: true}));
-			connection.socket.output.writeInt32(request.length);
-			connection.socket.output.write(request);
-			connection.socket.output.flush();
+			CompilerServerProtocol.writeRequest(connection.socket.output, connection.token, Shutdown);
 			connection.socket.setTimeout(1);
 			connection.socket.input.readLine();
 			connection.socket.close();
