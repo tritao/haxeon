@@ -412,6 +412,50 @@ class HlFunctionEquality {
 						&& sameLabel(target, otherTarget, forward, backward);
 					default: false;
 				}
+			case JumpFalse(condition, target):
+				switch b {
+					case JumpFalse(otherCondition, otherTarget): condition == otherCondition
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
+			case JumpNotNull(value, target):
+				switch b {
+					case JumpNotNull(otherValue, otherTarget): value == otherValue
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
+			case JumpNotEqual(left, right, target):
+				switch b {
+					case JumpNotEqual(otherLeft, otherRight, otherTarget): left == otherLeft && right == otherRight
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
+			case JumpNotLess(left, right, target):
+				switch b {
+					case JumpNotLess(otherLeft, otherRight, otherTarget): left == otherLeft && right == otherRight
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
+			case JumpNotGreaterOrEqual(left, right, target):
+				switch b {
+					case JumpNotGreaterOrEqual(otherLeft, otherRight, otherTarget): left == otherLeft
+						&& right == otherRight
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
+			case JumpSignedGreaterOrEqual(left, right, target):
+				switch b {
+					case JumpSignedGreaterOrEqual(otherLeft, otherRight, otherTarget): left == otherLeft
+						&& right == otherRight
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
+			case JumpSignedGreater(left, right, target):
+				switch b {
+					case JumpSignedGreater(otherLeft, otherRight, otherTarget): left == otherLeft && right == otherRight
+						&& sameLabel(target, otherTarget, forward, backward);
+					default: false;
+				}
 			case JumpTrue(condition, target):
 				switch b {
 					case JumpTrue(otherCondition, otherTarget): condition == otherCondition

@@ -1055,6 +1055,48 @@ class HlWriter {
 					put2(condition, targetPosition - (position + 1));
 					HlOpcode.JTrue;
 				}
+			case JumpFalse(condition, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put2(condition, targetPosition - (position + 1));
+					HlOpcode.JFalse;
+				}
+			case JumpNotNull(value, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put2(value, targetPosition - (position + 1));
+					HlOpcode.JNotNull;
+				}
+			case JumpNotEqual(left, right, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JNotEq;
+				}
+			case JumpNotLess(left, right, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JNotLt;
+				}
+			case JumpNotGreaterOrEqual(left, right, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JNotGte;
+				}
+			case JumpSignedGreaterOrEqual(left, right, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JSGte;
+				}
+			case JumpSignedGreater(left, right, target):
+				var targetPosition = requireLabel(labels, target);
+				{
+					put3(left, right, targetPosition - (position + 1));
+					HlOpcode.JSGt;
+				}
 			case Jump(target):
 				var targetPosition = requireLabel(labels, target);
 				{

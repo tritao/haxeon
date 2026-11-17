@@ -132,6 +132,22 @@ enum HlInstruction {
 	JumpNull(value:Int, target:String);
 	JumpEqual(left:Int, right:Int, target:String);
 	JumpTrue(condition:Int, target:String);
+
+	/**
+	 * The complements of the jumps above, so a branch whose taken side is written next jumps to the other side. For integers the
+	 * complement of `<` is `>=` and of `<=` is `>` (`JumpSignedGreaterOrEqual`, `JumpSignedGreater`). For floats it is "not less"
+	 * (`JumpNotLess`) and "not greater or equal" (`JumpNotGreaterOrEqual`), which also jump when either side is NaN; the VM
+	 * compares those as floats, never as signed integers.
+	 */
+	JumpFalse(condition:Int, target:String);
+
+	JumpSignedGreaterOrEqual(left:Int, right:Int, target:String);
+	JumpSignedGreater(left:Int, right:Int, target:String);
+
+	JumpNotNull(value:Int, target:String);
+	JumpNotEqual(left:Int, right:Int, target:String);
+	JumpNotLess(left:Int, right:Int, target:String);
+	JumpNotGreaterOrEqual(left:Int, right:Int, target:String);
 	Jump(target:String);
 	Label(name:String);
 	Return(register:Int);

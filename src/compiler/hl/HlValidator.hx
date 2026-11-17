@@ -337,16 +337,18 @@ class HlValidator {
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
 				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target),
-					JumpEqual(left, right, target):
+					JumpEqual(left, right, target), JumpNotEqual(left, right, target), JumpNotLess(left, right, target),
+					JumpNotGreaterOrEqual(left, right, target), JumpSignedGreaterOrEqual(left, right, target),
+					JumpSignedGreater(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
-				case JumpNull(value, target):
+				case JumpNull(value, target), JumpNotNull(value, target):
 					requireRegister(fn, value);
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';
-				case JumpTrue(condition, target):
+				case JumpTrue(condition, target), JumpFalse(condition, target):
 					requireRegister(fn, condition);
 					if (!labels.exists(target))
 						throw 'Unknown label "$target" in function ${fn.functionIndex}';

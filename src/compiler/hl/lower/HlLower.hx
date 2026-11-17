@@ -850,15 +850,21 @@ class HlLower {
 		}
 		var instructions:Array<HlInstruction> = [],
 			debugLocations:Array<HlDebugLocation> = [];
-		for (block in orderedBlocks(fn)) {
-			if (block.instructions.length == 0 && block.terminator == null)
-				continue;
+		// A jump to the block written next is left out: control falls through to it.
+		var emitted = [
+			for (block in orderedBlocks(fn))
+				if (block.instructions.length > 0 || block.terminator != null) block
+		];
+		for (layoutIndex in 0...emitted.length) {
+			var block = emitted[layoutIndex],
+				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
 			instructions.push(HlInstruction.Label('block_${block.id}'));
 			debugLocations.push(debugLocation(blockProvenance(block)));
 			// A comparison that ends its block and feeds only that block's branch becomes the branch itself, with
 			// no Bool in between: the loop test then costs one compare-and-jump instead of a compare, two moves and a test.
 			var fusedCondition:Null<Int> = null,
-				fusedComparison:Null<HlInstruction> = null;
+				fusedComparison:Null<HlInstruction> = null,
+				fusedFloat = false;
 			if (block.terminator != null && block.instructions.length > 0)
 				switch block.terminator.value {
 					case Branch(condition, _,
@@ -1045,9 +1051,11 @@ class HlLower {
 							registerTypes), requireRegister(left, registers),
 							requireRegister(right, registers)));
 					case Less(output, left, right) if (output.id == fusedCondition):
+						fusedFloat = isFloat(left.type) || isFloat(right.type);
 						fusedComparison = comparisonJump(0, false, false, requireRegister(left, registers),
 							requireRegister(right, registers), null);
 					case LessEqual(output, left, right) if (output.id == fusedCondition):
+						fusedFloat = isFloat(left.type) || isFloat(right.type);
 						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers),
 							requireRegister(right, registers), null);
 					case Equal(output, left, right) if (output.id == fusedCondition):
@@ -1420,15 +1428,24 @@ class HlLower {
 									}
 								}
 						}
-					instructions.push(HlInstruction.Jump('block_$target'));
+					if (target != fallsThroughTo)
+						instructions.push(HlInstruction.Jump('block_$target'));
 				case Branch(condition, yes, no):
 					if (edgeMoves(edges, block.id, yes) != null || edgeMoves(edges, block.id, no) != null)
 						throw "Phi elimination requires split critical edges";
-					if (fusedComparison != null)
-						instructions.push(withJumpTarget(fusedComparison, 'block_$yes'));
-					else
-						instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers), 'block_$yes'));
-					instructions.push(HlInstruction.Jump('block_$no'));
+					if (yes == fallsThroughTo && no != fallsThroughTo)
+						// The taken side is written next: jump to the other side on the complement, and fall through.
+						instructions.push(fusedComparison != null ? complementJump(fusedComparison, 'block_$no',
+							fusedFloat) : HlInstruction.JumpFalse(requireRegister(condition, registers), 'block_$no'));
+					else {
+						if (fusedComparison != null)
+							instructions.push(withJumpTarget(fusedComparison, 'block_$yes'));
+						else
+							instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers),
+								'block_$yes'));
+						if (no != fallsThroughTo)
+							instructions.push(HlInstruction.Jump('block_$no'));
+					}
 			}
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
 		}
@@ -1490,9 +1507,56 @@ class HlLower {
 				};
 			}
 		}
+		dropUnreferencedLabels(instructions, debugLocations, scopedAssignments);
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
 			requireFunction(fn.name), registerTypes,
 			instructions, debugLocations, scopedAssignments);
+	}
+
+	/**
+	 * Removes the labels no jump or trap names. HashLink needs a label only where control lands by a jump, and every label written is an
+	 * instruction the VM compiles at load; a block reached by falling through needs none. Debug locations and the positions of
+	 * debug assignments follow the instructions that stay.
+	 */
+	static function dropUnreferencedLabels(instructions:Array<HlInstruction>, debugLocations:Array<HlDebugLocation>,
+			assignments:Array<HlDebugAssignment>):Void {
+		var referenced:Map<String, Bool> = [];
+		for (instruction in instructions)
+			switch instruction {
+				case JumpSignedLessOrEqual(_, _, target), JumpSignedLess(_, _, target), JumpUnsignedLess(_, _, target),
+					JumpNull(_, target), JumpEqual(_, _, target), JumpTrue(_, target), Jump(target), Trap(_, target, _),
+					JumpFalse(_, target), JumpNotNull(_, target), JumpNotEqual(_, _, target), JumpNotLess(_, _, target),
+					JumpNotGreaterOrEqual(_, _, target), JumpSignedGreaterOrEqual(_, _, target),
+					JumpSignedGreater(_, _, target):
+					referenced.set(target, true);
+				default:
+			}
+		var located = debugLocations.length == instructions.length, kept = 0, positions:Array<Int> = [];
+		for (index in 0...instructions.length) {
+			positions.push(kept);
+			switch instructions[index] {
+				case Label(name) if (!referenced.exists(name)):
+				default:
+					instructions[kept] = instructions[index];
+					if (located)
+						debugLocations[kept] = debugLocations[index];
+					kept++;
+			}
+		}
+		if (kept == instructions.length)
+			return;
+		positions.push(kept);
+		instructions.resize(kept);
+		if (located)
+			debugLocations.resize(kept);
+		for (index in 0...assignments.length) {
+			var assignment = assignments[index];
+			assignments[index] = {
+				name: assignment.name,
+				position: assignment.position < 0 ? assignment.position : positions[assignment.position],
+				scopeEnd: assignment.scopeEnd < 0 ? assignment.scopeEnd : positions[assignment.scopeEnd]
+			};
+		}
 	}
 
 	function appendDebugLocations(output:Array<HlDebugLocation>, count:Int, provenance:SourceProvenance):Void
@@ -1693,6 +1757,28 @@ class HlLower {
 			default: HlInstruction.JumpEqual(leftReg, rightReg, label);
 		};
 	}
+
+	/**
+	 * The jump taken exactly when the comparison `jump` is not, to `target`. Floats (`float`) use the VM's "not" jumps, taken on NaN too;
+	 * the VM compares those as floats only, so integers use the signed complements.
+	 */
+	static function complementJump(jump:HlInstruction, target:String, float:Bool):HlInstruction
+		return switch jump {
+			case JumpSignedLess(left, right, _): float ? HlInstruction.JumpNotLess(left, right,
+				target) : HlInstruction.JumpSignedGreaterOrEqual(left, right, target);
+			// !(left <= right) is !(right >= left), and for integers left > right
+			case JumpSignedLessOrEqual(left, right, _): float ? HlInstruction.JumpNotGreaterOrEqual(right, left,
+				target) : HlInstruction.JumpSignedGreater(left, right, target);
+			case JumpNull(value, _): HlInstruction.JumpNotNull(value, target);
+			case JumpEqual(left, right, _): HlInstruction.JumpNotEqual(left, right, target);
+			default: throw "Not a comparison jump";
+		};
+
+	static function isFloat(type:IrType):Bool
+		return switch type {
+			case F32 | F64: true;
+			default: false;
+		};
 
 	static function withJumpTarget(jump:HlInstruction, target:String):HlInstruction
 		return switch jump {
