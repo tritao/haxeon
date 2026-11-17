@@ -1051,9 +1051,7 @@ class BodyTyper implements BodyTyping {
 	}> {
 		return switch value {
 			case Variable(name, span):
-				var expectedEnum = enumName(expected),
-					info = expectedEnum == null
-						|| !span.isBareReference ? null : enumCaseInfo(expectedEnum + "." + name);
+				var info = patternConstructor(name, span, expected, scope);
 				if (info == null || info.params.length != 0)
 					return null;
 				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
@@ -1066,25 +1064,10 @@ class BodyTyper implements BodyTyping {
 						predicates:[]
 				};
 			case Call(name, arguments, span):
-				var expectedEnum = enumName(expected);
-				var constructorName = name.indexOf(".") < 0 ? name : lastPathSegment(name);
-				var info = expectedEnum != null
-					&& sourceIsBareReference(span) ? enumCaseInfo(expectedEnum + "." + constructorName) : null;
-				if (info == null) {
-					info = enumCaseInfo(name);
-					if (expectedEnum != null)
-						if (info == null && name.indexOf(".") < 0)
-							info = enumCaseInfo(expectedEnum + "." + constructorName);
-				}
+				var info = patternConstructor(name, span, expected, scope);
 				if (info == null)
 					return null;
 				var instanceType = enumInstance(expected) ?? TInstance(NominalKind.Enum, info.enumName, []);
-				var instanceName = switch instanceType {
-					case TInstance(Enum, value, _): value;
-					default: "";
-				};
-				if (instanceName != info.enumName)
-					fail("E1019", "Enum switch case has the wrong enum type", span);
 				var required = requiredEnumParameters(info.params);
 				if (arguments.length < required || arguments.length > info.params.length)
 					fail("E1019", 'Enum switch case "$name" expects $required to ${info.params.length} bindings', span);
@@ -1117,9 +1100,9 @@ class BodyTyper implements BodyTyping {
 								inlineField = staticField == null
 									? null : inlineConstantResolver.resolve(staticField.owner, binding, bindingSpan);
 							if (binding == "_") {} else if (constantName != null
-								|| binding.indexOf(".") >= 0
 								|| inlineField != null
-								|| enumLiteralPattern(parameterType, binding)) {
+								|| patternConstructor(binding, bindingSpan, parameterType, scope) != null
+								|| binding.indexOf(".") >= 0) {
 								predicates.push(typeEnumPredicate(argument, parameterType, storageType, index,
 									constantName));
 							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType,
@@ -1241,19 +1224,20 @@ class BodyTyper implements BodyTyping {
 									});
 									for (arrayIndex in 0...values.length)
 										switch values[arrayIndex] {
-											case Variable(binding, bindingSpan):
-												if (binding != "_") {
-													scope.define(binding, elementType, bindingSpan);
-													bindCell(binding, bindingSpan, scope, elementType);
-													bindings.push({
-														name: scope.requireId(binding),
-														type: elementType,
-														storageType: elementStorage,
-														fieldStorageType: storageType,
-														index: index,
-														arrayIndex: arrayIndex
-													});
-												}
+											case Variable("_", _):
+											// A name binds the element unless it names a constructor, which is matched.
+											case Variable(binding, bindingSpan) if (patternConstructor(binding,
+												bindingSpan, elementType, scope) == null):
+												scope.define(binding, elementType, bindingSpan);
+												bindCell(binding, bindingSpan, scope, elementType);
+												bindings.push({
+													name: scope.requireId(binding),
+													type: elementType,
+													storageType: elementStorage,
+													fieldStorageType: storageType,
+													index: index,
+													arrayIndex: arrayIndex
+												});
 											default:
 												predicates.push(typeEnumPredicate(values[arrayIndex], elementType,
 													elementStorage, index, null, arrayIndex,
@@ -1347,12 +1331,7 @@ class BodyTyper implements BodyTyping {
 				var owner = context.lexicalOwner;
 				if (owner != null && findStaticFieldNullable(owner, name) != null)
 					return null;
-				var info = enumCaseInfo(name);
-				if (info == null && name.indexOf(".") < 0) {
-					var expectedEnum = enumName(expected);
-					if (expectedEnum != null)
-						info = enumCaseInfo(expectedEnum + "." + name);
-				}
+				var info = patternConstructor(name, span, expected, scope);
 				// Enum abstracts are erased to their underlying type, so the
 				// subject cannot name its values; a bare value name resolves as
 				// in any expression rather than binding the subject.
@@ -1367,6 +1346,62 @@ class BodyTyper implements BodyTyping {
 				}
 			default: null;
 		}
+	}
+
+	/**
+	 * The enum constructor a case pattern names, resolved as Haxe's matcher resolves it: a bare name is first looked up
+	 * among the constructors of the enum the subject holds, so it wins over a constructor of the same name in another
+	 * enum; otherwise the name resolves as in any expression, where a local or a static field shadows a constructor.
+	 * Null when the name is no enum constructor. A constructor whose enum the subject cannot hold is an error, as in
+	 * Haxe, rather than a pattern matching by constructor index.
+	 */
+	function patternConstructor(name:String, span:SourceSpan, expected:CompilerType,
+			scope:Scope):Null<EnumConstructorInfo> {
+		var expectedEnum = enumName(expected);
+		if (span.isBareReference) {
+			var sourceName = span.referenceName ?? name;
+			if (expectedEnum != null) {
+				var own = enumCaseInfo(expectedEnum + "." + lastPathSegment(sourceName));
+				if (own != null)
+					return own;
+			}
+			var owner = context.lexicalOwner;
+			if (scope.resolve(sourceName) != null || owner != null
+				&& findStaticFieldNullable(owner, sourceName) != null)
+				return null;
+		}
+		var info = name.indexOf(".") >= 0 ? enumCaseInfo(name) : fileEnumCaseInfo(name, span);
+		if (info != null && info.enumName != expectedEnum) {
+			var found:CompilerType = TInstance(NominalKind.Enum, info.enumName, []),
+				foundName = compiler.semantic.SemanticSignature.display(found),
+				expectedName = compiler.semantic.SemanticSignature.display(expected),
+				constructorName = lastPathSegment(name);
+			if (!isAssignable(found, expected))
+				fail("E1019",
+					'$foundName should be $expectedName: the case pattern names constructor "$constructorName" of $foundName, but the value matched is $expectedName',
+					span);
+			// Haxe matches a constructor against a Dynamic value too; here only a value known to be of an enum can be matched.
+			fail("E1019",
+				'Constructor "$constructorName" of $foundName cannot be matched against a value of type $expectedName; give the matched value its enum type',
+				span);
+		}
+		return info;
+	}
+
+	/** The constructor a bare name picks out among the enums declared in the file it is written in. */
+	function fileEnumCaseInfo(name:String, span:SourceSpan):Null<EnumConstructorInfo> {
+		for (entry in session.enumsInFile(span.file.path))
+			for (index in 0...entry.declaration.cases.length) {
+				var enumCase = entry.declaration.cases[index];
+				if (enumCase.name == name)
+					return {
+						enumName: entry.name,
+						index: index,
+						params: enumCase.params,
+						typeParameters: entry.declaration.typeParameters
+					};
+			}
+		return null;
 	}
 
 	function isEnumAbstractValueName(name:String):Bool {
@@ -1440,16 +1475,6 @@ class BodyTyper implements BodyTyping {
 			if (value.name == memberName)
 				return abstractName + "." + memberName;
 		return null;
-	}
-
-	function enumLiteralPattern(type:CompilerType, name:String):Bool {
-		var expectedEnumName = enumName(type);
-		if (expectedEnumName == null || !session.enumDecls.exists(expectedEnumName))
-			return false;
-		for (enumCase in requiredMapValue(session.enumDecls, expectedEnumName).cases)
-			if (enumCase.name == name && enumCase.params.length == 0)
-				return true;
-		return false;
 	}
 
 	function enumPatternKey(name:String, index:Int, predicates:Array<TypedSwitchPredicate>):String {
