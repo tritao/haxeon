@@ -497,7 +497,12 @@ class FrontendCompilation {
 			}
 		for (classDecl in typedNew.classes)
 			canonicalObjectCache.remove(classDecl.name);
-		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew);
+		var typedObjects = IrProgramAssembler.objectsFrom(generator, typedNew, null, false, printsStructures(context));
+		// The printers the anonymous structures among these objects name, made from the same typed program as the objects and kept
+		// beside them (`objectCache`): a later pass or build may take an object from the cache without typing its structure again.
+		if (printsStructures(context))
+			for (fn in IrProgramAssembler.anonymousStringsFrom(generator, typedNew))
+				context.state.anonymousStrings.set(fn.name, fn);
 		var canonicalAbi = compiler.ir.IrInlineEnumLayout.CANONICAL_ABI;
 		if (typedNew.nativeAbiTarget == canonicalAbi) {
 			for (object in typedObjects)
@@ -987,6 +992,14 @@ class FrontendCompilation {
 		dropUnusedKeyPathFields(build.typedNew, cached);
 	}
 
+	/**
+	 * Whether this compile prints anonymous structures through generated `__string` methods (IrProgramAssembler.anonymousStringsFrom):
+	 * when it has the `__std_string` intrinsic that string conversion lowers to, as every compile configured with the compiler's
+	 * intrinsics does.
+	 */
+	static function printsStructures(context:CompilationContext):Bool
+		return context.natives.signatures().exists("__std_string");
+
 	/** The declaration tables, natives and initializers the IR pipeline assembles the program from. */
 	static function assembleTables(build:FrontendBuild):Void {
 		var context = build.context,
@@ -1034,6 +1047,20 @@ class FrontendCompilation {
 				build.cached))
 				compiler.ir.IrSourceRehash.of(fn, currentHashes)
 		].concat(liveInitializers);
+		// The printers made with the objects (`context.state.anonymousStrings`), for every structure the program has.
+		if (printsStructures(context)) {
+			var printers = context.state.anonymousStrings;
+			// Every object whose `__string` objectsFrom pointed at a generated printer.
+			for (object in build.objects)
+				for (method in object.methods)
+					if (method.name == "__string"
+						&& method.functionName == IrProgramAssembler.anonymousStringName(object.name)) {
+						var printer = printers.get(method.functionName);
+						if (printer == null)
+							throw 'Anonymous structure "${object.name}" has no generated __string';
+						build.cached.push(printer);
+					}
+		}
 		build.reflectable = IrProgramAssembler.reflectableObjectsFrom(typedNew);
 	}
 

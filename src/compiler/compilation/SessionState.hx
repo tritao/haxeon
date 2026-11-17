@@ -38,6 +38,12 @@ class SessionState {
 	public var objectCache(default, null):Map<String, IrObject> = [];
 	public var canonicalObjectCache(default, null):Map<String, IrObject> = [];
 
+	/**
+	 * The `__string` of each anonymous structure type a build has made (IrProgramAssembler.anonymousStringsFrom), by function name:
+	 * a warm build takes objects typed by earlier builds from `objectCache`, and each needs its printer too.
+	 */
+	public var anonymousStrings(default, null):Map<String, compiler.ir.IrFunction> = [];
+
 	/** Last successfully assembled typed program; failed edits never replace it. */
 	public var lastTypedProgram:Null<TypedProgram> = null;
 
@@ -92,6 +98,7 @@ class SessionState {
 			result.modules.set(name, state);
 		result.objectCache = [for (name => object in objectCache) name => object];
 		result.canonicalObjectCache = [for (name => object in canonicalObjectCache) name => object];
+		result.anonymousStrings = [for (name => fn in anonymousStrings) name => fn];
 		result.lastTypedProgram = lastTypedProgram;
 		result.semanticProgram = semanticProgram;
 		result.publishedAbi = publishedAbi;

@@ -42,6 +42,7 @@ enum abstract ProviderOperation(String) to String {
 	var ReceiverCheck = "receiver-check";
 	var RawRepresentable = "raw-representable";
 	var Flags = "flags";
+	var StructureString = "structure-string";
 }
 
 /** Operations on the names of provider operations (kept out of the enum abstract: the compiler's own front end reads these sources). */

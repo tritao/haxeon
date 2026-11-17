@@ -189,6 +189,54 @@ class IrProgramAssembler {
 		return functions;
 	}
 
+	/** The function that prints a value of the anonymous structure type `name` (see `anonymousStringsFrom`). */
+	public static inline function anonymousStringName(name:String):String
+		return name + ".__string";
+
+	/**
+	 * The `__string` method of each anonymous structure type: `{a : 1, b : x}`, its fields in layout order (as Reflect.fields lists
+	 * them), each as Std.string converts it, as Haxe prints a structure. It is a runtime method only, with no `toString` field, so
+	 * Haxe code and Reflect do not see it; every backend's printer calls it as it calls a class's toString, and reachability keeps
+	 * it only for structures that are created while something converts values to strings. Only for a compile with the
+	 * `__std_string` intrinsic, as `objectsFrom` registers them (see `FrontendCompilation.printsStructures`).
+	 */
+	public static function anonymousStringsFrom(generator:IrGenerator, typed:TypedProgram):Array<IrFunction> {
+		var functions:Array<IrFunction> = [];
+		for (anonymous in typed.anonymousTypes) {
+			var span = new compiler.core.Source.SourceSpan(new compiler.core.Source.SourceFile("<generated>", ""), 0,
+				0),
+				self = new TypedExpression(TLocal("this"), TAnonymous(anonymous.name, anonymous.fields), span);
+			function text(value:String):TypedExpression
+				return new TypedExpression(TStringLiteral(value), TString, span);
+			function join(left:TypedExpression, right:TypedExpression):TypedExpression
+				return new TypedExpression(TAdd(left, right), TString, span);
+			var line = text("{");
+			for (index in 0...anonymous.fields.length) {
+				var field = anonymous.fields[index],
+					value = new TypedExpression(TField(self, field.name), field.type, span);
+				line = join(line, text((index > 0 ? ", " : "") + field.name + " : "));
+				line = join(line, new TypedExpression(TCall("__std_string", [
+					new TypedExpression(TToDynamic(value), TDynamic, span)
+				]), TString, span));
+			}
+			functions.push(generator.generateFunction({
+				name: anonymousStringName(anonymous.name),
+				role: ProviderFunction(TAnonymous(anonymous.name, anonymous.fields),
+					compiler.core.Provides.ProviderOperation.StructureString),
+				owner: anonymous.name,
+				isStatic: false,
+				isConstructor: false,
+				arguments: [],
+				result: TString,
+				statements: [TReturn(join(line, text("}")), span)],
+				cells: [],
+				cellCaptures: [],
+				span: span
+			}));
+		}
+		return functions;
+	}
+
 	static function initializerFunction(generator:IrGenerator, name:String, statements:Array<TypedStatement>,
 			span:compiler.core.Source.SourceSpan):IrFunction
 		return generator.generateFunction({
@@ -337,8 +385,12 @@ class IrProgramAssembler {
 			}];
 	}
 
+	/**
+	 * With `printsStructures` (a compile that has the `__std_string` intrinsic), each anonymous structure type has the `__string`
+	 * method `anonymousStringsFrom` generates.
+	 */
 	public static function objectsFrom(generator:IrGenerator, typed:TypedProgram, ?layoutTarget:String,
-			canonicalValuesOnly:Bool = false):Array<IrObject> {
+			canonicalValuesOnly:Bool = false, printsStructures:Bool = false):Array<IrObject> {
 		var abiTarget = layoutTarget == null ? typed.nativeAbiTarget : layoutTarget;
 		var objects:Array<IrObject> = [],
 			classesByName:Map<String, compiler.types.TypedAst.TypedClass> = [];
@@ -449,7 +501,8 @@ class IrProgramAssembler {
 				{
 					name:field.name, type:generator.lowerType(field.type)
 				}],
-					methods: []});
+					methods: printsStructures
+					? [{name: "__string", functionName: anonymousStringName(anonymous.name)}] : []});
 		return objects;
 	}
 
