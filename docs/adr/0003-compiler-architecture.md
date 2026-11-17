@@ -294,6 +294,16 @@ crash reports finding a sidecar matched to the module (`.hl.build-id` would key 
 indices. They are for a distribution need, end-user, mobile or Wasm downloads symbolicated offline, as `--debug-info=inline |
 separate | none`; development metadata is the first candidate for a sidecar if development builds' load time ever matters.
 
+**Compressed debug sections (decided 2026-11-17, queued).** A debug-section header flag says its payload is LZ4 HC compressed;
+the VM decompresses it at load, or on first use for sections only traces and the profiler read. The function identities come
+first (the compile server's 1.15 MB section is 234 KB, decoded in 0.4 ms), then the development sections (source snapshots and
+opcode spans, most of a development module's size). The compressor is a native of the HashLink runtime over the LZ4 the fork
+vendors (one file), so the stock-built and the Haxeon-built compiler write the same bytes. Measured alternatives on the same
+section: LZ4 fast 286 KB, zlib -9 (miniz's format) 195 KB decoded in 5 ms, zstd -19 168 KB (a large new dependency, kept for a
+distribution need). Deduplicating the section's strings first (a path table, names over a string table) gains only 22 KB after
+compression, so the section keeps its format. HashLink's per-instruction line table is part of the bytecode format, not a
+section, and stays as it is.
+
 **To decide separately:** the bootstrap binary in git adds its whole size to the history at every refresh. Pinning it by hash
 and fetching it, as `.tools/haxe` is, or building it from the pinned Haxe on first use, would end that.
 
