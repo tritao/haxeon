@@ -42,10 +42,7 @@ class InlineConstantResolver {
 			}
 		if (field == null || field.initializer == null)
 			return null;
-		var staticField = bodyTyper.findStaticFieldNullable(owner, name);
-		if (staticField == null)
-			return null;
-		var key = staticField.owner + "." + name,
+		var key = owner + "." + name,
 			cached = session.constants.inlineConstants.get(key),
 			unit = "$inline:" + key;
 		// The constant is typed once, as a shared unit of its own: what typing it produces belongs to its first user.
@@ -59,11 +56,12 @@ class InlineConstantResolver {
 		session.constants.inlineConstantsInProgress.set(key, true);
 		var dependencies:Map<String, Bool> = [];
 		dependencyCollectors.push(dependencies);
+		// An unannotated constant's type is its value's: the field's type asks for it here (`DeclarationTypeTable`).
 		var typed:Array<ResolvedInlineConstant> = [],
 			syntax = field.initializer,
 			fieldSpan = field.span,
-			constantOwner = staticField.owner,
-			constantType = staticField.type,
+			constantOwner = owner,
+			constantType = field.type == null ? null : session.declarations.types.fieldType(owner, field),
 			typeParameters = classDecl.typeParameters;
 		try {
 			session.typeSharedUnit(unit, function() {
@@ -78,7 +76,8 @@ class InlineConstantResolver {
 				typed.push({
 					dependencies: targets,
 					initializer: initializer,
-					value: bodyTyper.coerce(literal, constantType, 'inline field "$constantOwner.$name"', "E1002")
+					value: bodyTyper.coerce(literal, constantType == null ? initializer.type : constantType,
+						'inline field "$constantOwner.$name"', "E1002")
 				});
 			});
 		} catch (error:Dynamic) {

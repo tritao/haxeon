@@ -142,6 +142,18 @@ value stays null), and a warning can point out a surprising case.
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet
   the rule, so it is due to become a warning.
 
+An unannotated field's type is its initializer's, typed when something first needs it, as in Haxe. Where Haxe would let a
+later use in another function fix that type, Haxe's result depends on the order it types functions in, so Haxeon asks for
+an annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's decisions):
+
+- A type the initializer leaves open: `static var e = [];`, `static var m = new Map();`, `static var n = null;`
+  (`Cannot infer the type of field "C.e": nothing in its initializer fixes ...; annotate it`).
+- Fields whose initializers need each other's type (`static var a = b + 1; static var b = a + 1;`), which Haxe types as
+  `Dynamic` or, when one of them fixes the type, as that type. The error is on the first of them in declaration order and
+  names the others; annotating one of them is enough.
+- In a generic class, an initializer whose type the class's type parameters cannot express (a structure mentioning one):
+  the class's initializers are compiled with the parameters erased, so the type is read from typing it with them.
+
 Planned with these rules: a way to silence `W1001`, per project or per expression, for code that relies on the defaults
 on purpose; and fixing the pattern capture that reads a function or variable of the same name (above).
 

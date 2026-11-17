@@ -124,6 +124,39 @@ class Monomorphs {
 	public static function containsUnbound(type:CompilerType):Bool
 		return contains(type) && contains(resolve(type));
 
+	/**
+	 * The first empty type variable in `type` that no later use hinted either (`MonomorphCell.hint`): what settling the frame it
+	 * belongs to could only make Dynamic. Null when there is none.
+	 */
+	public static function firstUnfixed(type:CompilerType):Null<MonomorphCell>
+		return contains(type) ? firstUnfixedWithin(resolve(type), []) : null;
+
+	static function firstUnfixedWithin(type:CompilerType, visiting:Array<Array<AnonymousField>>):Null<MonomorphCell> {
+		function first(types:Array<CompilerType>):Null<MonomorphCell> {
+			for (part in types) {
+				var found = firstUnfixedWithin(part, visiting);
+				if (found != null)
+					return found;
+			}
+			return null;
+		}
+		return switch type {
+			case TMonomorph(cell): cell.hint == null ? cell : null;
+			case TNullable(element), TArray(element), TIterator(element): firstUnfixedWithin(element, visiting);
+			case TMap(key, value), TKeyPath(key, value, _): first([key, value]);
+			case TFunction(arguments, result, _): first(arguments.concat([result]));
+			case TInstance(_, _, arguments), TAbstract(_, arguments, _): first(arguments);
+			case TAnonymous(_, fields):
+				if (visiting.indexOf(fields) >= 0)
+					null;
+				else {
+					visiting.push(fields);
+					first([for (field in fields) field.type]);
+				}
+			default: null;
+		};
+	}
+
 	/** `type` with every filled type variable replaced by its type; `type` itself when it mentions none. */
 	public static function resolve(type:CompilerType):CompilerType
 		return contains(type) ? resolveWithin(type, []) : type;

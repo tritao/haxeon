@@ -58,7 +58,7 @@ interface BodyTyping {
 	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
 			declarationName:String):TypedExpression;
 	function posInfosExpression(span:SourceSpan):AstExpression;
-	function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:CompilerType,
+	function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:Null<CompilerType>,
 			typeParameters:Array<String>):TypedExpression;
 
 	// Members, fields and receivers.

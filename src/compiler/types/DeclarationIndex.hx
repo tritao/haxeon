@@ -314,10 +314,16 @@ class DeclarationIndex {
 	/** The declared types, as the syntax gives them, which the typer's table falls back on. */
 	public final declaredTypes:DeclaredTypes;
 
-	/** A field's type as its syntax gives it: its annotation, or what FieldInference reads from its initializer. */
-	public function declaredFieldType(owner:String, field:AstField):AstType
-		return FieldInference.resolvedType(field, owner, classes, new compiler.semantic.AliasTable(), enums,
-			enumAbstracts);
+	/**
+	 * A field's annotation. An unannotated field has none: its type is its initializer's, which only the typer's table gives
+	 * (`DeclarationTypeTable`), so reading it before typing is a compiler bug.
+	 */
+	public function declaredFieldType(owner:String, field:AstField):AstType {
+		var type = field.type;
+		if (type == null)
+			throw 'The type of unannotated field "$owner.${field.name}" is read before the typer gives it';
+		return type;
+	}
 
 	public function symbol(kind:DeclarationKind, name:String):Null<DeclarationSymbol>
 		return symbols.get('$kind:$name');
@@ -1041,8 +1047,10 @@ class DeclarationIndex {
 			var substitutions:Map<String, CompilerType> = [];
 			for (parameter in decl.typeParameters)
 				substitutions.set(parameter, TTypeParameter(decl.name, parameter));
+			// An unannotated field's type is checked when its initializer is typed.
 			for (field in decl.fields)
-				types.fieldType(decl.name, field, substitutions);
+				if (field.type != null)
+					types.fieldType(decl.name, field, substitutions);
 			for (method in decl.methods)
 				resolveFunction(method, decl.name + "." + method.name, substitutions);
 		}

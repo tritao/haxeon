@@ -86,6 +86,9 @@ class SemanticIndex {
 	final functionReceivers:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final completionTypes:Array<{span:SourceSpan, type:CompilerType}> = [];
 	final declarationTypes:Map<SemanticSymbolId, CompilerType> = [];
+
+	/** The fields declared without a type: theirs is their initializer's, indexed from the typed program (`indexTypedInitializer`). */
+	final inferredFields:Map<SemanticSymbolId, Bool> = [];
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
 	final tokens:Array<Token>;
@@ -151,12 +154,15 @@ class SemanticIndex {
 			methods:Array<compiler.syntax.Ast.AstFunction>,
 			declarations:DeclarationIndex):Void {
 		for (field in fields)
-			if (field.type != null)
-				try
-					setDeclarationType(owner + "." + field.name, field.span,
-						declarations.resolve(field.type, field.span))
-				catch (_:Dynamic)
-					setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
+			if (field.type == null)
+				for (id in declarationIds(owner + "." + field.name, field.span))
+					inferredFields.set(id, true);
+				else
+					try
+						setDeclarationType(owner + "." + field.name, field.span,
+							declarations.resolve(field.type, field.span))
+					catch (_:Dynamic)
+						setDeclarationType(owner + "." + field.name, field.span, recoveredType(field.type));
 		for (method in methods)
 			try
 				setDeclarationType(owner + "." + method.name, method.span,
@@ -165,15 +171,14 @@ class SemanticIndex {
 				setDeclarationType(owner + "." + method.name, method.span, recoveredType(method.result));
 	}
 
-	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void {
-		var id = declarationSymbolsBySpan.get(spanKey(span));
-		if (id != null) {
+	function setDeclarationType(name:String, span:SourceSpan, type:CompilerType):Void
+		for (id in declarationIds(name, span))
 			declarationTypes.set(id, type);
-			return;
-		}
-		for (symbol in symbols)
-			if (symbol.name == name)
-				declarationTypes.set(symbol.id, type);
+
+	/** The symbols of the declaration `name` at `span`: the one declared there, or else every symbol of that name. */
+	function declarationIds(name:String, span:SourceSpan):Array<SemanticSymbolId> {
+		var id = declarationSymbolsBySpan.get(spanKey(span));
+		return id != null ? [id] : [for (symbol in symbols) if (symbol.name == name) symbol.id];
 	}
 
 	static inline function spanKey(span:SourceSpan):String
@@ -659,10 +664,17 @@ class SemanticIndex {
 		return resolvedReferences.copy();
 
 	/** Index a typed field initializer under its field declaration identity. */
-	public function indexTypedInitializer(owner:String, expression:TypedExpression,
+	/**
+	 * Indexes the typed initializer of field `owner`, whose type is `type`. An unannotated field has no declared type to index
+	 * before typing: its type is its initializer's, known from here.
+	 */
+	public function indexTypedInitializer(owner:String, type:CompilerType, expression:TypedExpression,
 			resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>):Void {
 		currentCaller = resolve(owner);
+		var field = currentCaller;
+		if (field != null && inferredFields.exists(field))
+			declarationTypes.set(field, type);
 		currentCallerName = owner;
 		currentAbstractDependencies = [];
 		currentDependencyKind = SemanticDependencyKind.Initializer;

@@ -13,7 +13,6 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.compilation.CompilationContext;
 import compiler.modules.ModuleState;
 import compiler.core.CancellationToken;
-import compiler.types.FieldInference;
 import compiler.types.SignatureInference;
 import compiler.semantic.Invalidation.InvalidatedArtifact;
 import compiler.semantic.Invalidation.InvalidationKind;
@@ -74,9 +73,8 @@ class SemanticAssembly {
 			aliasesByModule:Map<String, Array<{sourceName:String, declarationName:String}>> = [],
 			visibleAliasesByPackage:Map<String, Map<String, String>> = [],
 			enumCasesByType:Map<String, Array<String>> = [];
-		// The declarations whose type is inferred from their own body or initializer, and each class's such fields.
+		// The declarations whose type is inferred from their own body or initializer.
 		var inferredDeclarations:Map<String, Bool> = [],
-			inferredFieldsByClass:Map<String, Array<String>> = [],
 			inferredInstanceFields:Map<String, String> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
@@ -103,7 +101,7 @@ class SemanticAssembly {
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.classes)
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
-			collectInferredDeclarations(program, moduleName, entryModule, inferredDeclarations, inferredFieldsByClass,
+			collectInferredDeclarations(program, moduleName, entryModule, inferredDeclarations,
 				inferredInstanceFields);
 		}
 		// Type names that every module sees: dotted ones ("pkg.Type") and plain ones ("Type"). They are attached to each module's
@@ -155,50 +153,6 @@ class SemanticAssembly {
 			}
 		aliasUniverse.sort(Reflect.compare);
 		var aliasKey = aliasUniverse.join(";");
-		var classDeclarations:Map<String, AstClass> = [],
-			enumDeclarations:Map<String, compiler.syntax.Ast.AstEnum> = [],
-			enumAbstractDeclarations:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
-		for (moduleName in names)
-			if (modules.exists(moduleName)) {
-				var parsed = modules.get(moduleName).parsedAst();
-				for (enumDecl in parsed.enums)
-					enumDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, enumDecl.name),
-						enumDecl);
-				for (abstractDecl in parsed.enumAbstracts)
-					enumAbstractDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName,
-						abstractDecl.name), abstractDecl);
-				// Field inference reads this map only: each class of the module sees the module's functions as static methods, after
-				// its own, so a static initializer may call one (`static var x = f();`, a module-level `var x = f();`, `Mod.f()`).
-				var moduleFunctions:Array<AstFunction> = [
-					for (fn in parsed.functions)
-						if (fn.typeParameters == null || fn.typeParameters.length == 0)
-						({
-							name: fn.name,
-							isStatic: true,
-							arguments: fn.arguments,
-							result: fn.result,
-							statements: [],
-							span: fn.span
-						}:AstFunction)
-				];
-				for (classDecl in parsed.classes)
-					classDeclarations.set(ModuleCanonicalizer.qualifiedTypeName(parsed.packageName, classDecl.name),
-						moduleFunctions.length == 0 ? classDecl : {
-							name: classDecl.name,
-							isStruct: classDecl.isStruct,
-							isExtern: classDecl.isExtern,
-							typeParameters: classDecl.typeParameters,
-							typeConstraints: classDecl.typeConstraints,
-							isPrivate: classDecl.isPrivate,
-							metadata: classDecl.metadata,
-							base: classDecl.base,
-							interfaces: classDecl.interfaces,
-							fields: classDecl.fields,
-							methods: classDecl.methods.concat(moduleFunctions),
-							span: classDecl.span
-						});
-			}
-
 		var discoveryPrefixes:Map<String, Array<String>> = [];
 		for (moduleName in names) {
 			if (!modules.exists(moduleName))
@@ -504,17 +458,16 @@ class SemanticAssembly {
 					var initializer = ModuleCanonicalizer.canonicalOptionalExpression(field.initializer, name,
 						entryModule, locals, classAliases);
 					if (initializer != null)
-						LambdaCollector.collectExpression(initializer, className + ".__init", name, generatedByModule);
+						LambdaCollector.collectExpression(initializer, InitializerUnit.of(className, field.name), name,
+							generatedByModule);
 					canonicalFields.push({
 						name: field.name,
 						isPublic: field.isPublic,
 						metadata: ModuleCanonicalizer.canonicalMetadata(field.metadata, name, entryModule, locals,
 							classAliases),
-						type: ModuleCanonicalizer.canonicalType(FieldInference.resolvedType(field, className,
-							classDeclarations, classAliases,
-							enumDeclarations, enumAbstractDeclarations),
-							classAliases, classDecl.typeParameters),
-						typeInferred: field.type == null ? true : null,
+						// An unannotated field's type is its initializer's, typed on demand (`DeclarationTypeTable`).
+						type: field.type == null ? null : ModuleCanonicalizer.canonicalType(field.type, classAliases,
+							classDecl.typeParameters),
 						initializer: initializer,
 						readAccess: field.readAccess,
 						writeAccess: field.writeAccess,
@@ -847,18 +800,12 @@ class SemanticAssembly {
 						Std.string(SemanticDependencyKind.Initializer));
 				}
 			}
-			// A class's field initializers are one unit (`Class.__init`): what it read can change the type of each of the class's
-			// unannotated fields.
-			var initializerOwner = initializerClass(changed);
-			if (initializerOwner != null) {
-				var fields = inferredFieldsByClass.get(initializerOwner);
-				if (fields != null)
-					for (field in fields)
-						if (!invalid.exists(field)) {
-							work.push(field);
-							invalidate(invalid, invalidationReasons, field, DependencySignature, changed, changedId,
-								Std.string(SemanticDependencyKind.DeclarationType));
-						}
+			// A field's initializer is a unit of its own (`Class.__init.x`): what it read can change the type of its field.
+			var initialized = InitializerUnit.field(changed);
+			if (initialized != null && inferredDeclarations.exists(initialized) && !invalid.exists(initialized)) {
+				work.push(initialized);
+				invalidate(invalid, invalidationReasons, initialized, DependencySignature, changed, changedId,
+					Std.string(SemanticDependencyKind.DeclarationType));
 			}
 			var helperOrigin = helperOrigins.get(changed);
 			if (helperOrigin != null && !invalid.exists(helperOrigin)) {
@@ -1070,37 +1017,25 @@ class SemanticAssembly {
 	 * A lambda is retyped with the function it is written in, so a dependency recorded on the lambda invalidates that function.
 	 * Lambda names read `$lambda:<enclosing>:<id>`, and the enclosing name can itself be a generic specialization.
 	 */
-	/** The class whose field initializers `unit` is (`Class.__init`), or null for any other unit. */
-	static function initializerClass(unit:String):Null<String>
-		return StringTools.endsWith(unit, INITIALIZER_SUFFIX) ? unit.substr(0,
-			unit.length - INITIALIZER_SUFFIX.length) : null;
-
-	static inline var INITIALIZER_SUFFIX = ".__init";
-
 	/**
 	 * The canonical names of the declarations of `program` whose type is inferred from their own body or initializer: a field
-	 * without a type, and a function without a result type or with an argument without one. Each class's such fields are also
-	 * listed under the class, and each such instance field names the constructor that holds its initializer.
+	 * without a type, and a function without a result type or with an argument without one. Each such instance field names the
+	 * constructor that holds its initializer.
 	 */
 	static function collectInferredDeclarations(program:AstProgram, moduleName:String, entryModule:String,
-			declarations:Map<String, Bool>, fieldsByClass:Map<String, Array<String>>,
-			instanceFields:Map<String, String>):Void {
+			declarations:Map<String, Bool>, instanceFields:Map<String, String>):Void {
 		for (fn in program.functions)
 			if (AstFunctions.leavesSignatureToInference(fn))
 				declarations.set(moduleName == entryModule && fn.name == "main" ? "main" : moduleName + "." + fn.name,
 					true);
 		for (classDecl in program.classes) {
-			var className = ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name),
-				fields:Array<String> = [];
+			var className = ModuleCanonicalizer.qualifiedTypeName(program.packageName, classDecl.name);
 			for (field in classDecl.fields)
 				if (field.type == null) {
 					declarations.set(className + "." + field.name, true);
-					fields.push(className + "." + field.name);
 					if (!field.isStatic)
 						instanceFields.set(className + "." + field.name, className + ".new");
 				}
-			if (fields.length > 0)
-				fieldsByClass.set(className, fields);
 			for (method in classDecl.methods)
 				if (AstFunctions.leavesSignatureToInference(method))
 					declarations.set(className + "." + method.name, true);

@@ -412,6 +412,41 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/**
+	 * The initializer of the unannotated field `name` of `owner`, whose type is the field's (docs/design/LAZY_DECLARATION_TYPING.md).
+	 * It is typed in a frame of its own, and the field's type is final when the frame is settled: a type variable of that type that
+	 * nothing in the initializer fixes (`[]`, `new Map()`, a lone `null`) is an error asking for an annotation, since only a later
+	 * use, in another unit, could fix it. While it is typed, a read of the field itself gets `provisional`'s argument, a type
+	 * variable of this frame that the initializer's type then fills, as a self-reference reads its own field in Haxe.
+	 */
+	public function typeInferredFieldInitializer(expression:AstExpression, scope:Scope, owner:String, name:String,
+			isStatic:Bool, span:SourceSpan, provisional:CompilerType->Void):TypedExpression {
+		var frame = session.monomorphs.begin(session.closureConversion.mark()),
+			field = 'field "$owner.$name"',
+			typed:TypedExpression;
+		try {
+			var self = requiredType(session.monomorphs.create('the type of $field', span));
+			provisional(self);
+			var value = typeExpression(expression, scope, null);
+			if (TypeRelations.equals(value.type, TNull))
+				fail("E1002",
+					'Cannot infer the type of $field: nothing in its initializer fixes the type of its null value; annotate it',
+					span);
+			compiler.types.Monomorphs.unify(self, value.type);
+			var unfixed = compiler.types.Monomorphs.firstUnfixed(value.type);
+			if (unfixed != null)
+				fail("E1002",
+					'Cannot infer the type of $field: nothing in its initializer fixes ${unfixed.origin}; annotate it',
+					span);
+			typed = coerce(value, value.type, isStatic ? 'static $field' : field, "E1002");
+		} catch (error:Dynamic) {
+			session.monomorphs.discard(frame);
+			throw error;
+		}
+		var map = settleFrame(frame);
+		return map == null ? typed : map.expression(typed);
+	}
+
+	/**
 	 * Ends `frame` and settles its type variables: an unbound one takes the type a later use hinted, or else is Dynamic, as in
 	 * Haxe, except a `new Map()`'s key and value, which are an error (`MonomorphCell.mustBeFixed`). Returns the map
 	 * that writes the settled types into what was typed in the frame (closure conversions and lambdas are mapped here), or null
@@ -2048,13 +2083,16 @@ class BodyTyper implements BodyTyping {
 	function resolveInlineConstant(owner:String, name:String, span:SourceSpan):Null<ResolvedInlineConstant>
 		return inlineConstantResolver.resolve(owner, name, span);
 
-	public function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:CompilerType,
+	/** An inline field's initializer, against its annotation `expected`, or giving an unannotated one (`expected` null) its type. */
+	public function typeInlineInitializer(expression:AstExpression, owner:String, name:String,
+			expected:Null<CompilerType>,
 			typeParameters:Array<String>):TypedExpression {
 		var body = enterBody(owner + ".__inline", declarationTypeSubstitutions(owner, typeParameters), owner);
 		var initializer:TypedExpression;
 		try {
-			initializer = coerce(typeExpression(expression, new Scope(), expected), expected,
-				'inline field "$owner.$name"', "E1002");
+			var value = typeExpression(expression, new Scope(), expected);
+			initializer = coerce(value, expected == null ? value.type : expected, 'inline field "$owner.$name"',
+				"E1002");
 		} catch (error:Dynamic) {
 			leaveBody(body);
 			throw error;

@@ -173,7 +173,6 @@ class SemanticProgram {
 				isPublic: field.isPublic,
 				metadata: replacement.metadata,
 				type: field.type,
-				typeInferred: field.typeInferred,
 				initializer: replacement.initializer,
 				readAccess: field.readAccess,
 				writeAccess: field.writeAccess,

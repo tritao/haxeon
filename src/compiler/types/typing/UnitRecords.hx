@@ -4,8 +4,8 @@ import compiler.core.Source.SourceFile;
 import compiler.types.Type.AnonymousField;
 
 /**
- * What each typed unit relied on, for the next incremental build. A unit is a function body or the field initializers of a
- * class (`Class.__init`); the query records are kept by the body that asked, a lambda's own name included. An unchanged body
+ * What each typed unit relied on, for the next incremental build. A unit is a function body or a field initializer
+ * (`Class.__init.x`); the query records are kept by the body that asked, a lambda's own name included. An unchanged body
  * is typed again when one of its answers changes (the drift check in `SemanticAssembly`).
  */
 class UnitRecords {

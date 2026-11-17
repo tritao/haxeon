@@ -12,7 +12,11 @@ operands, postfix updates, and replacement of a nested field's receiver.
 The `local-inference-*` fixtures cover locals whose type a later use fixes:
 an empty array, `var x;`, `var x = null`, `new Map()`, an object literal that
 takes the structure of a later typed use, and Ints flowing into a local that
-is already Float.
+is already Float. The `lazy-*` fixtures cover unannotated fields, whose type is
+their initializer's: comprehensions, `map` with a lambda, lambdas, fields read
+across classes before their declaration, calls to unannotated and annotated
+functions and module-level functions, enum constructors, a generic class's
+`new Array<T>()`, and a mixed array both compilers reject.
 
 ## Reference exception
 

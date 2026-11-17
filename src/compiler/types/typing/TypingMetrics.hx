@@ -51,7 +51,7 @@ typedef MeasuredTypedProgram = {
 	/** The unannotated declarations whose inferred type each typed unit read, by unit name (see `UnitRecords`). */
 	final declarationTypeReads:Map<String, Map<String, Bool>>;
 
-	/** The units this typing typed: function bodies, and the field initializers of a class (`Class.__init`). */
+	/** The units this typing typed: function bodies, and field initializers (`Class.__init.x`). */
 	final typedUnits:Map<String, Bool>;
 
 	final defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;

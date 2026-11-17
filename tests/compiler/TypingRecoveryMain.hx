@@ -12,6 +12,8 @@ class TypingRecoveryMain {
 		'class Box {',
 		'	public var a:Int = "no";',
 		'	public var b:Int = 3;',
+		'	public static var c = missingThing + 1;',
+		'	public static var d = [c];',
 		'	public function new() {}',
 		'	public function bad():Int return "x";',
 		'	public function good():Int return b + first();',
@@ -25,13 +27,16 @@ class TypingRecoveryMain {
 		'function third():Int { var m = new Map(); return 1; }',
 		'function usesFirst():Int return first() + identity(1);',
 		'function usesIdentity():Int return identity(2);',
-		'function main():Int { var x:Bool = 5; return usesFirst() + usesIdentity(); }'
+		'function readsC():Int { var c:Int = Box.c; return c + Box.d.length; }',
+		'function main():Int { var x:Bool = 5; return usesFirst() + usesIdentity() + readsC(); }'
 	].join("\n");
 
 	static final fixed = [
 		'class Box {',
 		'	public var a:Int = 1;',
 		'	public var b:Int = 3;',
+		'	public static var c = 1 + 1;',
+		'	public static var d = [c];',
 		'	public function new() {}',
 		'	public function bad():Int return 2;',
 		'	public function good():Int return b + first();',
@@ -45,19 +50,24 @@ class TypingRecoveryMain {
 		'function third():Int { var m = new Map<String, Int>(); return 1; }',
 		'function usesFirst():Int return first() + identity(1);',
 		'function usesIdentity():Int return identity(2);',
-		'function main():Int { var box = new Box(); return 30 + usesFirst() + usesIdentity() + box.good() + box.bad() + Meters.parse("ab"); }'
+		'function readsC():Int { var c:Int = Box.c; return c + Box.d.length; }',
+		'function main():Int { var box = new Box(); return 27 + usesFirst() + usesIdentity() + readsC() + box.good() + box.bad() + Meters.parse("ab"); }'
 	].join("\n");
 
-	/** Line and code of each expected error, in typing order: field initializers, method bodies, module functions, abstract statics. */
+	/**
+	 * Line and code of each expected error, in typing order: field initializers, method bodies, module functions, abstract statics.
+	 * The unannotated field Box.c fails once; Box.d and readsC read it as Dynamic and report nothing.
+	 */
 	static final expected = [
 		"2:E1002", // Box.a
-		"5:E1003", // Box.bad
-		"12:E1002", // first
-		"13:E1005", // second
-		"14:E1003", // third: a map nothing fixes
-		"11:E1002", // identity<Int>, typed for usesFirst, which fails with it; usesIdentity uses the same body and is not reported
-		"17:E1002", // main
-		"9:E1003" // Meters.parse
+		"4:E1005", // Box.c
+		"7:E1003", // Box.bad
+		"14:E1002", // first
+		"15:E1005", // second
+		"16:E1003", // third: a map nothing fixes
+		"13:E1002", // identity<Int>, typed for usesFirst, which fails with it; usesIdentity uses the same body and is not reported
+		"20:E1002", // main
+		"11:E1003" // Meters.parse
 	];
 
 	static function compiler():Compiler {

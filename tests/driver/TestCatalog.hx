@@ -66,6 +66,7 @@ class TestCatalog {
 		"WarmRebuildReuseMain",
 		"StructuralWarmEditMain",
 		"InferredTypeWarmEditMain",
+		"LazyFieldTypingMain",
 		"WasmBackendSessionMain",
 		"PackedValuePatchMain",
 		"IrVerifyMemoMain",

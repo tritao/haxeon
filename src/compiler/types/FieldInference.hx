@@ -9,14 +9,23 @@ import compiler.core.Diagnostic.CompileError;
 
 /** Resolves field annotations before class signatures and bodies are typed. */
 class FieldInference {
-	public static function parsedType(field:AstField, ?expression:AstExpression):AstType {
+	/**
+	 * A field's declared type, or for an unannotated one a guess from its initializer's syntax, `InferredType` when there is none.
+	 * The typer gives an unannotated field its type (`DeclarationTypeTable`); the guess only feeds fingerprints and layout
+	 * dependencies until slice 5 of docs/design/LAZY_DECLARATION_TYPING.md, so it never rejects an initializer.
+	 */
+	public static function parsedType(field:AstField):AstType {
 		var declaredType = field.type;
 		if (declaredType != null)
 			return declaredType;
-		var initializer = expression == null ? field.initializer : expression;
+		var initializer = field.initializer;
 		if (initializer == null)
 			throw new CompileError(new Diagnostic("E1002",
 				'Cannot infer type of field "${field.name}" without an initializer', field.span));
+		return try syntacticType(field, initializer) catch (_:CompileError) InferredType;
+	}
+
+	static function syntacticType(field:AstField, initializer:AstExpression):AstType {
 		return switch compiler.syntax.AstPredicates.unannotatedExpression(initializer) {
 			case IntegerLiteral(_, _): IntType;
 			case FloatLiteral(_, _): FloatType;
@@ -228,7 +237,7 @@ class FieldInference {
 			aliases:AliasTable, enums:Map<String, compiler.syntax.Ast.AstEnum>,
 			enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract>,
 			resolving:Map<String, Bool>):AstType {
-		var inferred = parsedType(field, expression);
+		var inferred = syntacticType(field, expression);
 		if ((switch (inferred) {
 			case InferredType: false;
 			default: true;

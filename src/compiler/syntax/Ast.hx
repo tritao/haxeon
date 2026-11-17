@@ -62,13 +62,11 @@ typedef AstField = {
 	/** Source visibility retained for checked field references such as key paths. */
 	final ?isPublic:Bool;
 	final metadata:Array<AstMetadata>;
-	final type:Null<AstType>;
-
 	/**
-	 * The source gives the field no type: `type` is what SemanticAssembly inferred from the initializer, so a reader of it reads
-	 * an inferred type (`DeclarationTypes`, `SemanticDependencyKind.DeclarationType`).
+	 * The field's annotation, or null when the source gives it none: its type is then its initializer's, which the typer gives
+	 * (`DeclarationTypes`), and a reader of it reads an inferred type (`SemanticDependencyKind.DeclarationType`).
 	 */
-	final ?typeInferred:Bool;
+	final type:Null<AstType>;
 
 	final initializer:Null<AstExpression>;
 	final readAccess:Null<AstFieldAccess>;

@@ -703,14 +703,16 @@ class TestMain {
 		expectCompileError('class Invalid { public static inline final VALUE:Int = Invalid.VALUE; } function main():Int return 0;',
 			'Cyclic inline constant reference through "Invalid.VALUE"');
 		expectCompileError('class First { static final value = Second.value; } class Second { static final value = First.value; } function main():Int return 0;',
-			'Cyclic field type inference through "First.value"');
+			'Field "First.value" needs a type annotation: its type depends on "Second.value", which depends on it; annotate one of them');
 		expectCompileError('class Constants { public static final TEXT = "text"; public static final NUMBER = 1; } class Invalid { static final values = [Constants.TEXT, Constants.NUMBER]; } function main():Int return 0;',
-			'Array initializer for field "values" has mixed element types');
+			'Array elements have incompatible types; use Array<Dynamic> for a mixed-type array');
 		expectCompileError('class First { public static final values = [Second.values]; } class Second { public static final values = [First.values]; } function main():Int return 0;',
-			'Cyclic field type inference through "First.values"');
+			'Field "First.values" needs a type annotation: its type depends on "Second.values", which depends on it; annotate one of them');
 
-		expectCompileError('class Invalid { static final value = "count: " + 1; } function main():Int { return 0; }',
-			'Cannot infer type of field "value" from this initializer');
+		// An unannotated field's type is its typed initializer's, as in Haxe.
+		Frontend.compile('class Valid { public static final value = "count: " + 1; public static final rest = Other.F % 2; } '
+			+ 'class Other { public static final F = 3.5; } '
+			+ 'function main():Int { var text:String = Valid.value; var rest:Float = Valid.rest; return 0; }');
 		// A native binding on a function with a body would silently run the body instead.
 		expectCompileError('class Lock { public function new() {} @:hlNative("std", "mutex_acquire") public function acquire():Void {} } function main():Int return 0;',
 			'@:hlNative binds only an extern function; "Lock.acquire" has a body, which would run instead');
@@ -725,9 +727,7 @@ class TestMain {
 			+ 'function main():Int { var half:Int = Units.HALF; return half; }',
 			'Type mismatch for local "half": expected Int, got Float');
 		expectCompileError('class Invalid { static final value = Other.S * 2; } class Other { public static final S = "b"; } function main():Int { return 0; }',
-			'Cannot infer type of field "value" from this initializer');
-		expectCompileError('class Invalid { static final value = Other.F % 2; } class Other { public static final F = 3.5; } function main():Int { return 0; }',
-			'Cannot infer type of field "value" from this initializer');
+			'Arithmetic requires matching numeric operands');
 		expectCompileError('class Invalid { static final value:Int = "wrong"; } function main():Int { return 0; }',
 			'Type mismatch for static field "Invalid.value": expected Int, got String');
 		expectCompileError('function main():Int { var value:Int = 1; value = "wrong"; return value; }',

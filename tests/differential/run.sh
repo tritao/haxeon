@@ -174,6 +174,13 @@ in_background run_case tuple-switch-null-element 0
 in_background run_case recursive-generic-enum-nested-pattern 0
 in_background run_case exception-catch-wrapping 0
 in_background run_case switch-null-coverage 0
+# Unannotated fields take their initializer's type, typed on demand (docs/design/LAZY_DECLARATION_TYPING.md, slice 3).
+in_background run_case lazy-field-comprehension 0
+in_background run_case lazy-field-map-lambda 0
+in_background run_case lazy-field-order 0
+in_background run_case lazy-field-call 0
+in_background run_case lazy-generic-field 0
+in_background run_compile_failure lazy-field-mixed-array
 in_background run_compile_failure type-error
 # Width subtyping between structures waits for structures lowered as views of one object (docs/design/STRUCTURE_VALUES.md, step 4):
 # a copy into the narrower record would break identity (`narrow == wide`). The three rejections below are Haxe's too.

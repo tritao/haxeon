@@ -41,8 +41,8 @@ class TypingWarnings {
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields)
 				if (field.initializer != null)
-					record(moduleByPath.get(field.span.file.path), classDecl.name + ".__init." + field.name,
-						field.warnings);
+					record(moduleByPath.get(field.span.file.path),
+						compiler.semantic.InitializerUnit.of(classDecl.name, field.name), field.warnings);
 		for (name in names) {
 			var state = context.state.modules.get(name);
 			if (state == null)
@@ -80,8 +80,8 @@ class TypingWarnings {
 
 	/** The declaration a key names: the function itself, or the class of a field initializer. */
 	static function declarationOf(key:String):String {
-		var initializer = key.indexOf(".__init.");
-		return initializer >= 0 ? key.substr(0, initializer) : key;
+		var owner = compiler.semantic.InitializerUnit.ownerClass(key);
+		return owner == null ? key : owner;
 	}
 
 	/** The canonical names of the functions, methods and classes the module declares now. */

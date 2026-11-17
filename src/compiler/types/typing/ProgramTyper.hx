@@ -6,6 +6,7 @@ import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
+import compiler.semantic.InitializerUnit;
 import compiler.semantic.SemanticProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
@@ -30,7 +31,7 @@ import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
-class ProgramTyper {
+class ProgramTyper implements DeclarationTypeTable.FieldInitializerTyping {
 	final bodyTyper:BodyTyper;
 	final session:TypingSession;
 	final externTyper:ExternTyper;
@@ -75,9 +76,12 @@ class ProgramTyper {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
-		session.bindSemantic(semantic, bodyTyper.defaultValueType);
-		if (cachedMetadata != null)
+		session.bindSemantic(semantic, bodyTyper.defaultValueType, this);
+		var refreshing:Map<String, Bool> = [];
+		if (cachedMetadata != null) {
 			bindCachedNativeLayouts(cachedMetadata.classes);
+			refreshing = classesToRefresh(semantic.program.classes, cachedMetadata.classes, selected);
+		}
 		var program = semantic.program;
 		for (decl in program.enumAbstracts) {
 			RawRepresentableGenerator.validate(session, bodyTyper, decl);
@@ -86,6 +90,15 @@ class ProgramTyper {
 				EnumAbstractValues.raw(bodyTyper, decl, value);
 		}
 		session.bindNominalDeclarations();
+		// With the facts of `SemanticAssembly` there is nothing to infer: they are about this same program. They are known before
+		// anything reads a field's type, which can type its initializer (`DeclarationTypeTable`).
+		if (facts == null) {
+			bodyTyper.declareNoReturnFunctions();
+			session.inferPureFunctions();
+		} else {
+			bodyTyper.useNoReturnFunctions(facts.noReturn);
+			session.usePureFunctions(facts.pure);
+		}
 		for (declaration in program.enums)
 			validateEnumConformance(declaration);
 		bodyTyper.expressionTyper.prepareNativeTypeAnnotations(program);
@@ -161,14 +174,6 @@ class ProgramTyper {
 			}
 		var setupDoneAt = Sys.time() * 1000.0;
 		var allocationAfterSetup = AllocationMeter.sample();
-		// With the facts of `SemanticAssembly` there is nothing to infer: they are about this same program.
-		if (facts == null) {
-			bodyTyper.declareNoReturnFunctions();
-			session.inferPureFunctions();
-		} else {
-			bodyTyper.useNoReturnFunctions(facts.noReturn);
-			session.usePureFunctions(facts.pure);
-		}
 		bodyTyper.checkNoReturnOverrides();
 		var noReturnDoneAt = Sys.time() * 1000.0;
 		var allocationAfterNoReturn = AllocationMeter.sample();
@@ -238,7 +243,7 @@ class ProgramTyper {
 				}]
 		}] : cachedMetadata.interfaces, typedClasses:Array<TypedClass> = cachedMetadata == null
 			? typeDeclaredClasses(program.classes, selected) : refreshCachedClasses(program.classes,
-			cachedMetadata.classes, selected),
+			cachedMetadata.classes, selected, refreshing),
 			typedFunctions:Array<TypedFunction> = [];
 		// Unchanged code keeps the generic owners and generated classes it uses, whether or not the declaration metadata of the
 		// previous program is reused. Owners are asked for again and typed from the current declarations, so a program that
@@ -533,22 +538,23 @@ class ProgramTyper {
 	**/
 	/**
 	 * A unit this build did not type keeps the anonymous types it registered when it was typed, as long as it still exists: the
-	 * program lists them, and so does a fresh build, which types every unit. A class's field initializers are the unit
-	 * `Class.__init`.
+	 * program lists them, and so does a fresh build, which types every unit. A field's initializer is the unit `Class.__init.x`
+	 * (`InitializerUnit`).
 	 */
 	function keepAnonymousUnits(previous:Null<TypedProgram>, classes:Array<AstClass>):Void {
 		if (previous == null)
 			return;
-		var classNames:Map<String, Bool> = [for (classDecl in classes) classDecl.name => true],
-			suffix = ".__init",
-			registry = new AnonymousTypeRegistry(session);
+		var fields:Map<String, Bool> = [], registry = new AnonymousTypeRegistry(session);
+		for (classDecl in classes)
+			for (field in classDecl.fields)
+				if (field.initializer != null)
+					fields.set(classDecl.name + "." + field.name, true);
 		for (unit => types in previous.anonymousUnits) {
 			if (session.programOutput.records.typedUnits.exists(unit)
 				|| session.programOutput.records.anonymousUnits.exists(unit))
 				continue;
-			var exists = session.signatures.exists(unit)
-				|| StringTools.endsWith(unit, suffix)
-				&& classNames.exists(unit.substr(0, unit.length - suffix.length));
+			var initialized = InitializerUnit.field(unit),
+				exists = session.signatures.exists(unit) || initialized != null && fields.exists(initialized);
 			if (!exists)
 				continue;
 			var uses:Map<String, Array<compiler.types.Type.AnonymousField>> = [];
@@ -593,32 +599,51 @@ class ProgramTyper {
 		return carried;
 	}
 
-	function refreshCachedClasses(parsed:Array<AstClass>, cached:Array<TypedClass>,
-			selected:Null<Map<String, Bool>>):Array<TypedClass> {
-		if (selected == null)
-			return cached;
-		var parsedByName = [for (decl in parsed) decl.name => decl];
+	/**
+	 * The cached classes this build types again: those a selected function is named under, or whose file changed. The others'
+	 * unannotated fields keep the types they were typed with (`seedFieldTypes`), given before anything reads them.
+	 */
+	function classesToRefresh(parsed:Array<AstClass>, cached:Array<TypedClass>,
+			selected:Null<Map<String, Bool>>):Map<String, Bool> {
+		var parsedByName = [for (decl in parsed) decl.name => decl], refreshing:Map<String, Bool> = [];
 		// A class is refreshed when a selected function is named under it. Checking that against every selected name for
 		// every class is quadratic (millions of string concatenations in a large program), so collect the dotted prefixes
 		// of the selected names once: a class is changed when its name is one of them.
 		var owners:Map<String, Bool> = [];
-		for (name in selected.keys()) {
-			var dot = name.indexOf(".");
-			while (dot >= 0) {
-				owners.set(name.substr(0, dot), true);
-				dot = name.indexOf(".", dot + 1);
+		if (selected != null)
+			for (name in selected.keys()) {
+				var dot = name.indexOf(".");
+				while (dot >= 0) {
+					owners.set(name.substr(0, dot), true);
+					dot = name.indexOf(".", dot + 1);
+				}
 			}
-		}
-		return [for (cachedClass in cached) {
+		for (cachedClass in cached) {
 			var declaration = parsedByName.get(cachedClass.name);
-			var changed = owners.exists(cachedClass.name)
-				|| (declaration != null && declaration.span.file != cachedClass.span.file);
-			if (!changed || !parsedByName.exists(cachedClass.name)) cachedClass else {
+			if (declaration == null)
+				continue;
+			// The typed class holds a generic class's field types erased, not in its type parameters, so it is typed again.
+			if (declaration.typeParameters.length > 0 && hasInferredField(declaration)
+				|| selected != null
+				&& (owners.exists(cachedClass.name) || declaration.span.file != cachedClass.span.file))
+				refreshing.set(cachedClass.name, true);
+			else
+				seedFieldTypes(declaration, cachedClass);
+		}
+		return refreshing;
+	}
+
+	function refreshCachedClasses(parsed:Array<AstClass>, cached:Array<TypedClass>, selected:Null<Map<String, Bool>>,
+			refreshing:Map<String, Bool>):Array<TypedClass> {
+		var parsedByName = [for (decl in parsed) decl.name => decl];
+		return [for (cachedClass in cached) {
+			if (!refreshing.exists(cachedClass.name)) cachedClass else {
 				var refreshed = typeClass(parsedByName.get(cachedClass.name), selected),
 					cachedMethods = [for (method in cachedClass.methods) method.name => method];
 				var methods = [
 					for (method in refreshed.methods)
-						selected.exists(method.name) ? method : cachedMethods.exists(method.name)
+						selected == null
+						|| selected.exists(method.name) ? method : cachedMethods.exists(method.name)
 						? cachedMethods.get(method.name) : method
 				];
 				{
@@ -639,6 +664,28 @@ class ProgramTyper {
 		}];
 	}
 
+	static function hasInferredField(declaration:AstClass):Bool {
+		for (field in declaration.fields)
+			if (field.type == null && !field.isInline)
+				return true;
+		return false;
+	}
+
+	/**
+	 * Gives the unannotated fields of `declaration`, which this build does not type again, the types the previous build typed them
+	 * with: the declaration is unchanged and, by the invalidation rule, so is every type its initializers read
+	 * (docs/design/LAZY_DECLARATION_TYPING.md, "Warm builds: reused declarations").
+	 */
+	function seedFieldTypes(declaration:AstClass, cachedClass:TypedClass):Void {
+		var cachedFields = [for (field in cachedClass.fields) field.name => field];
+		for (field in declaration.fields)
+			if (field.type == null) {
+				var cachedField = cachedFields.get(field.name);
+				if (cachedField != null)
+					requiredTypes().seedField(DeclarationTypeTable.fieldKey(declaration.name, field), cachedField.type);
+			}
+	}
+
 	function bindCachedNativeLayouts(classes:Array<TypedClass>):Void
 		for (classDecl in classes)
 			if (classDecl.isNativeValue || classDecl.isFlat)
@@ -646,8 +693,19 @@ class ProgramTyper {
 					if (layout.target == session.nativeAbiTarget)
 						session.nativeLayoutsByName.set(classDecl.name, layout);
 
+	/**
+	 * Types `classDecl`: its fields, their initializers and its method signatures, and its method bodies unless they are deferred. A
+	 * declared class's field initializers are units of their own, whose outputs are added to `fieldUnits` in declaration order, or
+	 * merged into the program's at once without it.
+	 */
 	function typeClass(classDecl:AstClass, selected:Null<Map<String, Bool>>, deferMethodBodies:Bool = false,
-			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation):TypedClass {
+			?specialization:compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation,
+			?fieldUnits:Array<TypingOutput>):TypedClass {
+		if (specialization == null && fieldUnits == null) {
+			var units:Array<TypingOutput> = [], typed = typeClass(classDecl, selected, deferMethodBodies, null, units);
+			session.mergeUnits(units);
+			return typed;
+		}
 		var isStruct = classDecl.isStruct == true,
 			requestedValue = isStruct || hasMetadata(classDecl.metadata, "value"),
 			isNativeValue = validateRepresentationMetadata(classDecl.metadata, requestedValue),
@@ -730,29 +788,26 @@ class ProgramTyper {
 							field.span);
 					initializer = resolved.initializer;
 					inlineValue = resolved.value;
+				} else if (specialization == null) {
+					// A declared class's initializer is a unit of its own, typed here or earlier, when its type was first needed. One
+					// that fails is recorded and the field is kept without it, so the next body is typed.
+					var unit = requiredTypes().fieldInitializer(classDecl, field, type);
+					initializer = unit.initializer;
+					initializerContextWarnings = unit.warnings;
+					if (unit.output != null && fieldUnits != null)
+						fieldUnits.push(unit.output);
 				} else {
-					var mark = session.checkpoint(),
-						initializerContext =
-							bodyTyper.enterBody((specialization == null ? classDecl.name : specialization.name)
-							+ ".__init",
-							erasedSubstitutions, specialization == null ? null : classDecl.name),
+					// A specialization's initializers are typed as its owner is requested, and fail the body that asked for it.
+					var initializerContext = bodyTyper.enterBody(InitializerUnit.of(specialization.name, field.name),
+						erasedSubstitutions, classDecl.name),
 						scope = new Scope();
 					if (!field.isStatic)
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
 							field.span);
-					try {
-						initializer = bodyTyper.typeFieldInitializer(parsedInitializer, scope, type,
-							field.isStatic ? 'static field "${classDecl.name}.${field.name}"'
-							: 'field "${classDecl.name}.${field.name}"');
-						bodyTyper.leaveBody(initializerContext);
-						initializerContextWarnings = initializerContext.warnings;
-					} catch (error:CompileError) {
-						// A declared class's initializer that fails is recorded and the field is kept without it, so the next
-						// body is typed; a specialization's fails the body that asked for it.
-						if (specialization != null)
-							throw error;
-						session.recover(mark, error);
-					}
+					initializer = bodyTyper.typeFieldInitializer(parsedInitializer, scope, type,
+						initializerLabel(classDecl, field));
+					bodyTyper.leaveBody(initializerContext);
+					initializerContextWarnings = initializerContext.warnings;
 				}
 			}
 			fieldNames.set(field.name, true);
@@ -1084,22 +1139,144 @@ class ProgramTyper {
 
 	/**
 	 * The declared classes with their fields and initializers typed and their method bodies deferred, in declaration order.
-	 * Each class is a unit; its output is merged into the program's once all are typed.
+	 * Each field initializer is a unit (`InitializerUnit`), and so is the rest of each class; their outputs are merged into the
+	 * program's once all are typed, each class's initializers first.
 	 */
 	function typeDeclaredClasses(declarations:Array<AstClass>, selected:Null<Map<String, Bool>>):Array<TypedClass> {
 		var typed:Array<Null<TypedClass>> = [for (_ in declarations) null],
-			units:Array<Null<TypingOutput>> = [for (_ in declarations) null];
+			units:Array<Array<TypingOutput>> = [for (_ in declarations)[]];
 		for (index in typingOrder(declarations.length)) {
 			var classDecl = declarations[index];
 			if (classDecl.isExtern != true && externTyper.nativeLibrary(classDecl.name, classDecl.metadata) == null) {
-				var unit = session.beginUnit();
-				units[index] = unit;
-				typed[index] = typeClass(classDecl, selected, true);
+				var unit = session.beginUnit(), fieldUnits:Array<TypingOutput> = [];
+				typed[index] = typeClass(classDecl, selected, true, null, fieldUnits);
 				session.endUnit(unit);
+				fieldUnits.push(unit);
+				units[index] = fieldUnits;
 			}
 		}
-		session.mergeUnits([for (unit in units) if (unit != null) unit]);
+		session.mergeUnits([for (classUnits in units) for (unit in classUnits) unit]);
 		return [for (typedClass in typed) if (typedClass != null) typedClass];
+	}
+
+	/** The label of `field`'s initializer in an error that its value does not fit the field. */
+	static function initializerLabel(classDecl:AstClass, field:compiler.syntax.Ast.AstField):String
+		return field.isStatic
+			? 'static field "${classDecl.name}.${field.name}"' : 'field "${classDecl.name}.${field.name}"';
+
+	function requiredTypes():DeclarationTypeTable {
+		var types = session.types;
+		if (types == null)
+			throw "Field initializers are typed after the program is bound";
+		return types;
+	}
+
+	public function typeFieldInitializer(classDecl:AstClass, field:compiler.syntax.Ast.AstField,
+			type:Null<CompilerType>,
+			provisional:CompilerType->Void):{
+				initializer:TypedExpression,
+				warnings:Array<compiler.core.Diagnostic>,
+				type:CompilerType
+			} {
+		var substitutions = session.representation.erasedNominalSubstitutions(classDecl.name),
+			context = bodyTyper.enterBody(InitializerUnit.of(classDecl.name, field.name), substitutions,
+				classDecl.name),
+			scope = new Scope(),
+			expression = field.initializer;
+		if (expression == null)
+			throw 'Field "${classDecl.name}.${field.name}" has no initializer';
+		if (!field.isStatic)
+			scope.defineReceiver(session.representation.receiverType(classDecl.name, substitutions), field.span);
+		var initializer = type == null ? bodyTyper.typeInferredFieldInitializer(expression, scope, classDecl.name,
+			field.name, field.isStatic, field.span, provisional) : bodyTyper.typeFieldInitializer(expression, scope,
+			type,
+			initializerLabel(classDecl, field));
+		var fieldType = type == null ? initializer.type : type;
+		// A generic class's initializers are typed with its type parameters erased to Dynamic, as its methods are, so a Dynamic in
+		// the type may stand for one: the type in the class's own parameters is then what typing it with them gives.
+		if (type == null && classDecl.typeParameters.length > 0 && mentionsDynamic(fieldType))
+			fieldType = genericFieldType(classDecl, field, expression, fieldType);
+		bodyTyper.leaveBody(context);
+		return {initializer: initializer, warnings: context.warnings, type: fieldType};
+	}
+
+	/**
+	 * The type of unannotated `field` of generic `classDecl` in the class's own type parameters, as Haxe types it: its initializer
+	 * typed again with them, in a unit whose output is dropped (only the erased typing, `erased`, is code). The two must agree once
+	 * the parameters are erased, and a structure cannot mention them; otherwise the field needs an annotation.
+	 */
+	function genericFieldType(classDecl:AstClass, field:compiler.syntax.Ast.AstField,
+			expression:compiler.syntax.Ast.AstExpression, erased:CompilerType):CompilerType {
+		var substitutions = BodyTyper.declarationTypeSubstitutions(classDecl.name, classDecl.typeParameters),
+			mark = session.checkpoint(),
+			begun = session.beginDeclarationUnit(),
+			lifted:Null<CompilerType> = null;
+		try {
+			var context = bodyTyper.enterBody(InitializerUnit.of(classDecl.name, field.name), substitutions,
+				classDecl.name),
+				scope = new Scope();
+			if (!field.isStatic)
+				scope.defineReceiver(session.representation.receiverType(classDecl.name, substitutions), field.span);
+			lifted = bodyTyper.typeInferredFieldInitializer(expression, scope, classDecl.name, field.name,
+				field.isStatic,
+				field.span, _ -> {}).type;
+			bodyTyper.leaveBody(context);
+			session.endDeclarationUnit(begun);
+		} catch (_:CompileError) {
+			session.rewind(mark);
+		}
+		var type = lifted;
+		if (type == null || structureMentionsParameter(type)
+			|| !TypeRelations.equals(DeclarationTypeTable.substitute(type,
+			session.representation.erasedNominalSubstitutions(classDecl.name)), erased))
+			BodyTyper.fail("E1002",
+				'Cannot infer the type of field "${classDecl.name}.${field.name}" in generic class "${classDecl.name}" from its initializer; annotate it',
+				field.span);
+		return type;
+	}
+
+	/** Whether `type` has a structure that mentions a type parameter, which `DeclarationTypeTable.substitute` does not reach. */
+	function structureMentionsParameter(type:CompilerType):Bool
+		return switch type {
+			case TNullable(element), TArray(element), TIterator(element): structureMentionsParameter(element);
+			case TMap(key, value),
+				TKeyPath(key, value, _): structureMentionsParameter(key) || structureMentionsParameter(value);
+			case TFunction(arguments, result, _):
+				structureMentionsParameter(result) || Lambda.exists(arguments, structureMentionsParameter);
+			case TInstance(_, _, arguments): Lambda.exists(arguments, structureMentionsParameter);
+			case TAbstract(_, arguments, representation):
+				Lambda.exists(arguments, structureMentionsParameter) || structureMentionsParameter(representation);
+			case TAnonymous(_, _): session.representation.containsTypeParameter(type, []);
+			default: false;
+		};
+
+	public function inlineFieldType(classDecl:AstClass, field:compiler.syntax.Ast.AstField):CompilerType {
+		var resolved = bodyTyper.resolveInlineConstant(classDecl.name, field.name, field.span);
+		if (resolved == null)
+			BodyTyper.fail("E1002", 'Unable to resolve inline constant "${classDecl.name}.${field.name}"', field.span);
+		return resolved.value.type;
+	}
+
+	/** Whether `type` mentions Dynamic; `visiting` holds the structures being walked, so a recursive one is entered once. */
+	static function mentionsDynamic(type:CompilerType,
+			?visiting:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
+		var seen = visiting == null ? [] : visiting;
+		return switch type {
+			case TDynamic: true;
+			case TNullable(element), TArray(element), TIterator(element): mentionsDynamic(element, seen);
+			case TMap(key, value), TKeyPath(key, value, _): mentionsDynamic(key, seen) || mentionsDynamic(value, seen);
+			case TFunction(arguments, result, _):
+				mentionsDynamic(result, seen) || Lambda.exists(arguments, argument -> mentionsDynamic(argument, seen));
+			case TInstance(_, _, arguments), TAbstract(_, arguments, _):
+				Lambda.exists(arguments, argument -> mentionsDynamic(argument, seen));
+			case TAnonymous(_, fields):
+				if (seen.indexOf(fields) >= 0) false;
+				else {
+					seen.push(fields);
+					Lambda.exists(fields, field -> mentionsDynamic(field.type, seen));
+				}
+			default: false;
+		};
 	}
 
 	function typeModuleFunctions(functions:Array<AstFunction>, selected:Null<Map<String, Bool>>,

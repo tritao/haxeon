@@ -744,8 +744,8 @@ class FrontendCompilation {
 	}
 
 	/**
-	 * The field initializers of a class are one unit (`Class.__init`) and no typed function: what each typed one read is published
-	 * under that name, in the module of its class.
+	 * A field initializer is a unit of its own (`Class.__init.x`, `InitializerUnit`) and no typed function: what each typed one read
+	 * is published under that name, in the module of its class.
 	 */
 	static function publishInitializerReads(build:FrontendBuild):Void {
 		var owners = build.semanticAssembly.owners;
@@ -903,9 +903,9 @@ class FrontendCompilation {
 			// specialization was typed again in this request, its old lambdas that were not made again belong to the
 			// earlier typing (an edit moved them, so they are named by another offset) and must not outlive it.
 			var supersededByRetyping = origin != null && typedByName.exists(origin) && !typedByName.exists(cached);
-			var sourceOwner = origin != null
-				&& initializerModule(origin, owners) != null ? origin.substr(0,
-				origin.length - INITIALIZER_SUFFIX.length) + ".new" : origin;
+			var initializedClass = origin == null ? null : compiler.semantic.InitializerUnit.ownerClass(origin);
+			var sourceOwner = initializedClass != null
+				&& owners.exists(initializedClass + ".new") ? initializedClass + ".new" : origin;
 			// Shared helpers may move to another requesting module. Keep only the fresh owner's copy,
 			// otherwise assembling cached bodies can resurrect the previous owner's stale IR.
 			var supersededOwner = typedByName.exists(cached) && owners.get(cached) != name;
@@ -2050,14 +2050,10 @@ class FrontendCompilation {
 		return module;
 	}
 
-	static inline var INITIALIZER_SUFFIX = ".__init";
-
 	/** Field initializers are pseudo-bodies owned by the declaring class module. */
 	static function initializerModule(name:String, owners:Map<String, String>):Null<String> {
-		if (!StringTools.endsWith(name, INITIALIZER_SUFFIX))
-			return null;
-		var className = name.substr(0, name.length - INITIALIZER_SUFFIX.length);
-		return owners.get(className + ".new");
+		var className = compiler.semantic.InitializerUnit.ownerClass(name);
+		return className == null ? null : owners.get(className + ".new");
 	}
 
 	static function stage(name:String, ms:Float, allocation:PhaseAllocation):{
@@ -2145,7 +2141,8 @@ class FrontendCompilation {
 					continue;
 				for (field in classDecl.fields)
 					if (field.initializer != null)
-						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.initializer,
+						model.index.indexTypedInitializer(classDecl.name + "." + field.name, field.type,
+							field.initializer,
 							context.state.semanticWorkspace.resolveSymbolId,
 							context.state.semanticWorkspace.resolveEnumCaseId);
 			}

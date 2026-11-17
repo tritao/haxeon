@@ -26,9 +26,9 @@ interface DeclarationTypes {
 }
 
 /**
- * The declared types as the syntax gives them: an annotation, or what FieldInference and SignatureInference read from an
- * initializer or body. What DeclarationIndex answers before the typer binds its table, and what that table answers for
- * annotated declarations.
+ * The declared types as the syntax gives them: an annotation, or for a function what SignatureInference reads from its body.
+ * What DeclarationIndex answers before the typer binds its table, and what that table answers for annotated declarations. An
+ * unannotated field has no declared type: only the table gives it.
  */
 class DeclaredTypes implements DeclarationTypes {
 	final declarations:DeclarationIndex;

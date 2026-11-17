@@ -52,6 +52,10 @@ class TypingSession {
 		return resolved != null && enumAbstractDecls.exists(resolved) ? resolved : null;
 	}
 	public var declarations:DeclarationIndex;
+
+	/** The declaration types of the program bound last (`bindSemantic`), which `declarations.types` answers with. */
+	public var types(default, null):Null<DeclarationTypeTable> = null;
+
 	public var relations:TypeRelations;
 
 	/**
@@ -140,6 +144,16 @@ class TypingSession {
 	 * caller drops, is no longer written to. Only a `CompileError` is recovered from; anything else is a compiler bug and stops typing.
 	 */
 	public function recover(mark:TypingCheckpoint, error:CompileError):Void {
+		rewind(mark);
+		for (diagnostic in error.diagnostics)
+			recordRecovered(diagnostic);
+	}
+
+	/**
+	 * Returns to `mark`, taken before a body whose typing stopped, without recording why (`recover` records it): the body contexts,
+	 * outputs and type-variable frames it left open are closed, and its output is no longer written to.
+	 */
+	public function rewind(mark:TypingCheckpoint):Void {
 		monomorphs.discardFrom(mark.monomorphs);
 		if (bodyContexts.length > mark.contexts)
 			bodyContexts.splice(mark.contexts, bodyContexts.length - mark.contexts);
@@ -149,8 +163,6 @@ class TypingSession {
 		// A body typed in the output it returns to (a field initializer, in its class's) takes back the locals it recorded.
 		output.records.truncateUnboundLocals(mark.unboundLocals);
 		defaultArgumentDepth = mark.defaultArgumentDepth;
-		for (diagnostic in error.diagnostics)
-			recordRecovered(diagnostic);
 	}
 
 	function recordRecovered(diagnostic:Diagnostic):Void {
@@ -182,9 +194,12 @@ class TypingSession {
 		for (unit in units)
 			unit.mergeInto(programOutput, sharedOutputs, mergedUnits, null);
 
-	/** The unit the anonymous types used here belong to: the outermost body, or null for the user of the shared unit being typed. */
+	/**
+	 * The unit the anonymous types used here belong to: the unit's outermost body, or null for the user of the shared unit being
+	 * typed. A declaration's unit typed on demand begins inside the body that needed its type, and its outermost body is its own.
+	 */
 	function anonymousUnit():Null<String>
-		return output.shared && output.baseDepth >= 2 ? null : bodyContexts[1].name;
+		return output.shared && output.baseDepth >= 2 ? null : bodyContexts[output.shared ? 1 : output.baseDepth].name;
 
 	/** The type variables of the bodies being typed; see `Monomorphs`. */
 	public final monomorphs = new MonomorphFrames();
@@ -200,6 +215,22 @@ class TypingSession {
 
 	/** How many default argument pseudo-bodies (`$default:`) are open. */
 	var defaultArgumentDepth = 0;
+
+	/**
+	 * Starts typing a declaration's own unit on demand (`DeclarationTypeTable`), wherever its type was first needed: a unit of its
+	 * own, numbered by its own counters even inside a default argument's pseudo-body. Returns what `endDeclarationUnit` restores.
+	 */
+	public function beginDeclarationUnit():{unit:TypingOutput, defaultArgumentDepth:Int} {
+		var suspended = defaultArgumentDepth;
+		defaultArgumentDepth = 0;
+		return {unit: beginUnit(), defaultArgumentDepth: suspended};
+	}
+
+	/** Ends the declaration unit `begun` and returns to the body that needed it. */
+	public function endDeclarationUnit(begun:{unit:TypingOutput, defaultArgumentDepth:Int}):Void {
+		endUnit(begun.unit);
+		defaultArgumentDepth = begun.defaultArgumentDepth;
+	}
 
 	/** Passes the cached lambda typed at `key` through `map`, wherever it is cached. */
 	public function mapCachedLambda(key:String, map:compiler.types.TypedTypeMap):Void {
@@ -289,7 +320,8 @@ class TypingSession {
 	}
 
 	public function bindSemantic(semantic:SemanticProgram,
-			?defaultValueType:compiler.syntax.Ast.AstExpression->Null<CompilerType>):Void {
+			?defaultValueType:compiler.syntax.Ast.AstExpression->Null<CompilerType>,
+			?initializers:DeclarationTypeTable.FieldInitializerTyping):Void {
 		constants.clearEnumAbstractValues();
 		flagsMasks.clear();
 		for (declaration in semantic.program.enums)
@@ -301,8 +333,10 @@ class TypingSession {
 
 		declarations = semantic.declarations;
 		// Every reader of a declaration's type asks the program's table from here on.
-		declarations.bindTypes(new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType,
-			recordDeclarationTypeRead));
+		types = new DeclarationTypeTable(declarations.declaredTypes, semantic, defaultValueType,
+			recordDeclarationTypeRead,
+			this, initializers);
+		declarations.bindTypes(types);
 		relations = semantic.relations;
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;
@@ -620,7 +654,8 @@ class TypingSession {
 			body = new TypingContext(name, typeSubstitutions, owner, source);
 		if (isLambda)
 			body.privateAccessDepth = currentContext.privateAccessDepth;
-		if (bodyContexts.length == 1)
+		// A unit's outermost body: a top-level one, or a declaration's unit typed on demand inside another body.
+		if (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth)
 			programOutput.records.typedUnits.set(name, true);
 		if (StringTools.startsWith(name, DEFAULT_ARGUMENT_PREFIX))
 			defaultArgumentDepth++;
