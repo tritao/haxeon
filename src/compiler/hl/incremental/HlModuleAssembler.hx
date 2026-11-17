@@ -759,6 +759,15 @@ class HlModuleAssembler {
 			?relocated:Array<String>,
 			?dispatched:Map<String, Bool>):HlAssemblyResult {
 		var startedAt = Sys.time() * 1000.0;
+		// Runtime calls the lowering writes a fast path for go through one helper each (`IrSharedRuntimeCalls`); a helper this module
+		// has not published yet is new code, which a patch must carry.
+		var shared = compiler.ir.IrSharedRuntimeCalls.apply(program),
+			slotted:Map<String, Bool> = [for (name in cache.slots) name => true];
+		program = shared.program;
+		regenerated = regenerated.copy();
+		for (name in shared.helpers)
+			if (!slotted.exists(name) && regenerated.indexOf(name) < 0)
+				regenerated.push(name);
 		var reload = switch decision {
 			case Patch: false;
 			case ReloadDomain(_): true;
