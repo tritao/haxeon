@@ -78,7 +78,16 @@ class IrOpportunityCensus {
 		"receiverChecksOnFreshValues",
 		"sameTypeSafeCasts",
 		"overwrittenFieldStores",
-		"smallDirectCalls"
+		"smallDirectCalls",
+		// Field accesses by receiver kind (docs/design/STRUCTURE_VALUES.md, slice 1): a structure's record ($anon:), with
+		// the stores into a record this function just made counted apart (the representation never guards those), a class
+		// instance, and calls through an erased generic owner's accessor.
+		"structureFieldReads",
+		"structureFieldWrites",
+		"structureConstructorStores",
+		"classFieldReads",
+		"classFieldWrites",
+		"erasedOwnerCalls"
 	];
 
 	public static function report(program:IrProgram, allowInline:Bool):Void {
@@ -136,12 +145,18 @@ class IrOpportunityCensus {
 		var counts:Array<Int> = [for (_ in labels) 0],
 			weighted:Array<Float> = [for (_ in labels) 0.0],
 			opcodes:Map<String, Int> = [],
-			used:Map<Int, Bool> = [];
+			used:Map<Int, Bool> = [],
+			fresh:Map<Int, Bool> = [];
 		var blocks:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block];
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				for (input in IrOperands.inputs(located.value))
 					used.set(input.id, true);
+				switch located.value {
+					case NewObject(output, _):
+						fresh.set(output.id, true);
+					default:
+				}
 				switch located.value {
 					case Phi(_, inputs):
 						for (input in inputs)
@@ -167,6 +182,23 @@ class IrOpportunityCensus {
 			};
 			for (located in block.instructions) {
 				var instruction = located.value;
+				switch instruction {
+					case FieldGet(_, object, _):
+						switch receiverKind(object) {
+							case 1: count(18);
+							case 2: count(21);
+							default:
+						}
+					case FieldSet(object, _, _):
+						switch receiverKind(object) {
+							case 1: count(fresh.exists(object.id) ? 20 : 19);
+							case 2: count(22);
+							default:
+						}
+					case Call(_, name, _) if (GenericOwnerErasure.isOperation(name)):
+						count(23);
+					default:
+				}
 				switch instruction {
 					case FieldSet(object, field, _):
 						var key = object.id + ":" + field;
@@ -289,6 +321,14 @@ class IrOpportunityCensus {
 			histogram: sortedHistogram(opcodes)
 		};
 	}
+
+	/** 1 for a structure's record, 2 for a class instance, 0 for any other receiver. */
+	static function receiverKind(object:IrValue):Int
+		return switch object.type {
+			case Obj(name): compiler.semantic.SemanticSignature.isAnonymousName(name) ? 1 : 2;
+			case Nullable(Obj(name)): compiler.semantic.SemanticSignature.isAnonymousName(name) ? 1 : 2;
+			default: 0;
+		};
 
 	static function pureArithmetic(instruction:IrInstruction):Bool {
 		return switch instruction {

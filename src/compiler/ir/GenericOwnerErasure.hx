@@ -9,6 +9,10 @@ import compiler.ir.Ir;
 class GenericOwnerErasure {
 	static inline final PREFIX = "$generic-erased:";
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
+	/** Whether `name` is an operation through an erased generic owner (`$generic-erased:Owner:get|set|call:member`). */
+	public static inline function isOperation(name:String):Bool
+		return StringTools.startsWith(name, PREFIX);
+
 	/** The erased-generic call a bound method of an erased owner makes (see IrMethodReferences). */
 	public static inline function erasedCallName(owner:String, member:String):String
 		return PREFIX + owner + ":call:" + member;
