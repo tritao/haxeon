@@ -59,6 +59,12 @@ The current subset includes:
   effect cannot silently replace a type the current package declares: using that name is `E1029`, reported at the use, and
   naming the import (`import pack.Module.Type;`) or the module's own declaration settles it. `import pack.Module as M;` is a
   namespace: the module's types are `M.Type` and none come in by their bare names (stock Haxe rejects this form).
+- Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import
+  one (`import pack.Settings.hits;`) or write its full path (`pack.Settings.hits`). As an extension stock Haxe rejects, they
+  can also be reached through the module's name (`Settings.hits`, `Settings.record()` with `import pack.Settings;`). When the
+  module declares a class of its own name with a static of the same name, `Store.count` is that static, as in Haxe, and
+  only the full path names the variable, so the extension never changes code Haxe accepts. `haxeon lint --only
+  module-namespace` names each use of it, for code that must also compile with Haxe.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
 
 Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
@@ -111,8 +117,6 @@ HashLink):
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
   lowered as views of one object, so the narrower value is the same object (`docs/design/STRUCTURE_VALUES.md`, step 4);
   the differential case `anonymous-width-subtyping` records it.
-- Module-level `var` and `final` (`var counter = 1;` beside a module-level `function main`): `E0002`. Module-level
-  functions work; a script keeps such values as locals of `main` or in a class.
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
   class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.

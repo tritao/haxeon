@@ -17,9 +17,9 @@ import sys.io.File;
 
 /**
  * `haxeon lint [--fix] [--only RULE] [--manifest FILE]... FILE...` reports unused imports (rule `unused-imports`) and runs of
- * imports out of order (rule `import-order`, see ImportOrder); `--only` checks one rule. Both read syntax only. The opt-in rule
- * `unbound-local` (UnboundLocalLint) needs types, so it runs only when `--only unbound-local` selects it, through `typedRules`,
- * which runs it in a tool that links the compiler.
+ * imports out of order (rule `import-order`, see ImportOrder); `--only` checks one rule. Both read syntax only. The opt-in rules
+ * `unbound-local` and `module-namespace` (TypedLint) need the compiler's analysis, so each runs only when `--only` names it,
+ * through `typedRules`, which runs it in a tool that links the compiler.
  *
  * Each file's imports resolve against its own project: the source roots of the nearest haxeon.json and of its path dependencies, the
  * directory its package declaration implies, Haxeon's standard library, and any manifest given with `--manifest`. Never against the
@@ -40,21 +40,21 @@ class LintCommand {
 	function new() {}
 
 	/** The rules `--only` selects; the typed ones run only when it names them. */
-	static final RULES = "unused-imports, import-order, unbound-local";
+	static final RULES = "unused-imports, import-order, unbound-local, module-namespace";
 
 	/**
-	 * Lints the files `arguments` names. `typedRules` runs the typed rules on the expanded files and returns their status: the
+	 * Lints the files `arguments` names. `typedRules` runs a typed rule on the expanded files and returns its status: the
 	 * command line runs them in the `LintMain` tool, a test in its own process.
 	 */
 	public static function run(arguments:Array<String>, ?standardLibrary:String,
-			?typedRules:Array<String>->Int):Int {
+			?typedRules:(rule:String, files:Array<String>) -> Int):Int {
 		var fix = false,
 			manifests:Array<String> = [],
 			paths:Array<String> = [],
 			index = 0,
 			checkUnused = true,
 			checkOrder = true,
-			checkUnboundLocals = false;
+			typedRule:Null<String> = null;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
 			if (argument == "--fix")
@@ -65,10 +65,10 @@ class LintCommand {
 				switch arguments[index++] {
 					case "unused-imports": checkOrder = false;
 					case "import-order": checkUnused = false;
-					case "unbound-local":
+					case rule = "unbound-local" | "module-namespace":
 						checkUnused = false;
 						checkOrder = false;
-						checkUnboundLocals = true;
+						typedRule = rule;
 					case other: throw 'Unknown lint rule "$other" (known: $RULES)';
 				}
 			}
@@ -83,12 +83,13 @@ class LintCommand {
 		}
 		if (paths.length == 0)
 			throw "haxeon lint requires at least one file";
-		if (checkUnboundLocals) {
+		if (typedRule != null) {
 			if (fix)
-				throw 'Rule "unbound-local" has no fix: give each local it names a type';
+				throw typedRule == "unbound-local" ? 'Rule "unbound-local" has no fix: give each local it names a type'
+					: 'Rule "module-namespace" has no fix: import each member it names, or write it in full';
 			if (typedRules == null)
-				throw 'Rule "unbound-local" needs the typed lint tool';
-			return typedRules(SourceFiles.expand(paths));
+				throw 'Rule "$typedRule" needs the typed lint tool';
+			return typedRules(typedRule, SourceFiles.expand(paths));
 		}
 		var command = new LintCommand();
 		if (standardLibrary != null)

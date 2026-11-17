@@ -60,12 +60,19 @@ class AnalysisTransaction {
 					diagnosticModules.push(name);
 			}
 			diagnosticModules.sort(Reflect.compare);
+			var namespaceUses:Array<compiler.semantic.AliasTable.ModuleNamespaceUse> = [];
+			for (name in frontend.moduleNames) {
+				var state:ModuleState = candidate.modules.get(name);
+				for (use in state.canonicalNamespaceUses)
+					namespaceUses.push(use);
+			}
 			return {
 				moduleNames: frontend.moduleNames,
 				retyped: frontend.retyped,
 				diagnosticModules: diagnosticModules,
 				elapsedMs: Sys.time() * 1000.0 - startedAt,
-				unboundLocals: frontend.typedProgram.unboundLocals
+				unboundLocals: frontend.typedProgram.unboundLocals,
+				moduleNamespaceUses: namespaceUses
 			};
 		} catch (error:Dynamic) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];

@@ -137,7 +137,7 @@ class HaxeonCli {
 				case "devices": devices(arguments);
 				case "fmt": fmt(arguments);
 				case "lint": LintCommand.run(arguments, Path.join([haxeonHome(), "stdlib"]),
-					files -> runTool("LintMain", files));
+					(rule, files) -> runTool("LintMain", [rule].concat(files)));
 				case "build": build(arguments, false);
 				case "run" if (arguments.length > 0 && ScriptRun.isScript(arguments[0])):
 					runScript(arguments[0], arguments.slice(1));
@@ -1555,7 +1555,8 @@ class HaxeonCli {
 		Sys.println("       [--check] [--stdin]      Check files or format stdin; indentation and line width come from");
 		Sys.println("                                    the \"format\" section of haxeon.json (default: tabs, 120 columns)");
 		Sys.println("  lint [--fix] [--only RULE] [--manifest FILE]... FILE...  Report (or fix) unused imports and imports out of order;");
-		Sys.println("                                    RULE is unused-imports or import-order");
+		Sys.println("                                    RULE is unused-imports or import-order; opt-in: unbound-local,");
+		Sys.println("                                    module-namespace");
 		Sys.println("  build [--target TARGET]        Build project in haxeon.json (host, wasm32, android)");
 		Sys.println("       [--plan] [--explain] [--timings] [--compiler-only] [--jobs COUNT]");
 		Sys.println("                                    Inspect planning details or timings");

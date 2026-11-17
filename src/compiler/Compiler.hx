@@ -182,6 +182,9 @@ typedef AnalysisResult = {
 
 	/** The locals of the bodies this analysis typed whose type nothing fixed (`TypedProgram.unboundLocals`). */
 	final unboundLocals:Array<compiler.types.TypedAst.UnboundLocal>;
+
+	/** The analyzed modules' variables and functions named through their module's name (AliasTable.ModuleNamespaceUse). */
+	final moduleNamespaceUses:Array<compiler.semantic.AliasTable.ModuleNamespaceUse>;
 }
 
 /**

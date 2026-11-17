@@ -113,6 +113,11 @@ class ModuleState {
 	public var dirty:Bool = true;
 	public var canonicalFunctions:Array<AstFunction> = [];
 	public var canonicalAllFunctions:Array<AstFunction> = [];
+
+	/** The module-namespace uses of the module's canonical code (AliasTable.ModuleNamespaceUse), and of its functions alone. */
+	public var canonicalNamespaceUses:Array<compiler.semantic.AliasTable.ModuleNamespaceUse> = [];
+
+	public var canonicalFunctionNamespaceUses:Array<compiler.semantic.AliasTable.ModuleNamespaceUse> = [];
 	public var canonicalProgramFunctions:Array<AstFunction> = [];
 	public var canonicalAliases:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 	public var canonicalEnums:Array<compiler.syntax.Ast.AstEnum> = [];
@@ -215,6 +220,8 @@ class ModuleState {
 		result.dirty = dirty;
 		result.canonicalFunctions = canonicalFunctions;
 		result.canonicalAllFunctions = canonicalAllFunctions;
+		result.canonicalNamespaceUses = canonicalNamespaceUses;
+		result.canonicalFunctionNamespaceUses = canonicalFunctionNamespaceUses;
 		result.canonicalProgramFunctions = canonicalProgramFunctions;
 		result.canonicalAliases = canonicalAliases;
 		result.canonicalEnums = canonicalEnums;

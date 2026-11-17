@@ -291,6 +291,7 @@ class TestCatalog {
 		"CompilerStaticsMain",
 		"LintProjectRootsMain",
 		"LintUnboundLocalMain",
+		"LintModuleNamespaceMain",
 		"LanguageServiceMain",
 		"ImplicitConstructorServiceMain",
 		"ProtocolMain",

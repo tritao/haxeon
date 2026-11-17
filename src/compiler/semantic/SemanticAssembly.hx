@@ -126,10 +126,16 @@ class SemanticAssembly {
 		// Where each module-level variable is stored (ModuleFields): name resolution names it there. A module that adds or removes
 		// one changes the key, so the modules that resolve names are resolved again.
 		// One that shares its name with a static of the module's own class is that static when named through the imported class.
-		var moduleFieldStorage:Map<String, String> = [], moduleTypeStatics:Map<String, Bool> = [];
+		// Every module-level variable and function by its path as a module member, which tells the module-namespace uses apart: one
+		// added or removed changes no name's meaning in a module that compiles, so it is not part of the key.
+		var moduleFieldStorage:Map<String, String> = [],
+			moduleTypeStatics:Map<String, Bool> = [],
+			moduleMembers:Map<String, Bool> = [];
 		for (moduleName in names)
 			if (modules.exists(moduleName)) {
 				var parsed = modules.get(moduleName).parsedAst();
+				for (fn in parsed.functions)
+					moduleMembers.set(moduleName + "." + fn.name, true);
 				if (parsed.fields != null) {
 					var ownClass = null;
 					for (decl in parsed.classes)
@@ -138,6 +144,7 @@ class SemanticAssembly {
 					for (field in parsed.fields) {
 						var path = moduleName + "." + field.name;
 						moduleFieldStorage.set(path, ModuleFields.storageName(moduleName) + "." + field.name);
+						moduleMembers.set(path, true);
 						aliasUniverse.push("field " + path);
 						if (ownClass != null && declaresStatic(ownClass, field.name)) {
 							moduleTypeStatics.set(path, true);
@@ -274,7 +281,9 @@ class SemanticAssembly {
 			var importedTypes = context.moduleAnalyzer.importAliases(ast.imports),
 				locals = LocalScope.ofNames([]),
 				aliases = AliasTable.of(importedTypes);
-			aliases.useModuleFieldStorage(moduleFieldStorage, moduleTypeStatics);
+			aliases.useModuleFieldStorage(moduleFieldStorage, moduleTypeStatics, moduleMembers);
+			var namespaceUses:Array<AliasTable.ModuleNamespaceUse> = [];
+			aliases.recordNamespaceUses(namespaceUses);
 			// An explicit import outranks a same-named type elsewhere in the
 			// program, such as an unpackaged `Path` shadowing `import nav.Path`.
 			// Unpackaged names wait until the current package's own types are in:
@@ -391,14 +400,22 @@ class SemanticAssembly {
 					locals.set(field.name, true);
 			var canonicalFunctions:Array<AstFunction>;
 			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule
-				&& state.canonicalAliasKey == aliasKey)
+				&& state.canonicalAliasKey == aliasKey) {
 				canonicalFunctions = state.canonicalFunctions;
-			else {
+				for (use in state.canonicalFunctionNamespaceUses)
+					namespaceUses.push(use);
+			} else {
 				state = context.state.writableState(name, rollbackModules);
+				var functionUses:Array<AliasTable.ModuleNamespaceUse> = [];
+				aliases.recordNamespaceUses(functionUses);
 				canonicalFunctions = [
 					for (fn in ast.functions)
 						ModuleCanonicalizer.canonicalFunction(fn, name, entryModule, locals, null, aliases)
 				];
+				aliases.recordNamespaceUses(namespaceUses);
+				for (use in functionUses)
+					namespaceUses.push(use);
+				state.canonicalFunctionNamespaceUses = functionUses;
 				var canonicalCalls:Map<String, Array<String>> = [];
 				for (canonical in canonicalFunctions) {
 					var calls:Map<String, Bool> = [],
@@ -539,6 +556,7 @@ class SemanticAssembly {
 			state.canonicalInterfaces = interfaces.slice(interfaceStart);
 			state.canonicalClasses = classes.slice(classStart);
 			state.canonicalAllFunctions = functions.slice(functionStart);
+			state.canonicalNamespaceUses = namespaceUses;
 			state.canonicalProgramFunctions = programFunctions.slice(programFunctionStart);
 			state.canonicalGenericOrigins = [
 				for (functionName in genericOrigins.keys())

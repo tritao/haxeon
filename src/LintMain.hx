@@ -1,11 +1,12 @@
 /**
- * The lint rules that need types, which the command line (`tools.HaxeonCli`) does not link the compiler for: `haxeon lint --only
- * unbound-local FILE...` runs this tool with the files (`tools.UnboundLocalLint`).
+ * The lint rules that need the compiler's analysis, which the command line (`tools.HaxeonCli`) does not link the compiler for:
+ * `haxeon lint --only RULE FILE...` runs this tool with the rule and the files (`tools.TypedLint`).
  */
 class LintMain {
 	static function main():Void {
 		var invokedFrom = Sys.getCwd();
 		compiler.service.LanguageService.useHaxeonRoot();
-		Sys.exit(tools.UnboundLocalLint.run(Sys.args(), invokedFrom));
+		var arguments = Sys.args();
+		Sys.exit(tools.TypedLint.run(arguments[0], arguments.slice(1), invokedFrom));
 	}
 }

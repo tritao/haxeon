@@ -3,7 +3,7 @@ import haxeon.io.FileTree;
 import sys.FileSystem;
 import sys.io.File;
 import tools.LintCommand;
-import tools.UnboundLocalLint;
+import tools.TypedLint;
 
 /**
  * `haxeon lint --only unbound-local` names each local whose type nothing fixes, which settles to Dynamic, typing the file's project
@@ -73,24 +73,24 @@ class LintUnboundLocalMain {
 			brokenPath = Path.join([base, "app/src/app/Broken.hx"]);
 
 		// Each local named once, at its declaration; Other.hx is typed as Main's dependency and reported only when listed.
-		var report = UnboundLocalLint.find([mainPath], "/");
+		var report = TypedLint.find("unbound-local", [mainPath], "/");
 		expect("Main.hx", report.lines, [
 			'$mainPath:4: local "never" is Dynamic: nothing fixes the type of local "never"',
 			'$mainPath:9: local "items" is Dynamic: nothing fixes the element type of this empty array'
 		]);
 		if (report.failed)
 			throw "Main.hx types, but the rule says it failed";
-		report = UnboundLocalLint.find([mainPath, otherPath], "/");
+		report = TypedLint.find("unbound-local", [mainPath, otherPath], "/");
 		if (report.lines.length != 3
 			|| report.lines[2] != '$otherPath:5: local "unused" is Dynamic: nothing fixes the type of local "unused"')
 			throw 'Other.hx: unexpected report:\n${report.lines.join("\n")}';
 		// A relative path is resolved against the base and printed as given.
-		report = UnboundLocalLint.find(["app/src/app/Other.hx"], base);
+		report = TypedLint.find("unbound-local", ["app/src/app/Other.hx"], base);
 		expect("relative path", report.lines,
 			['app/src/app/Other.hx:5: local "unused" is Dynamic: nothing fixes the type of local "unused"']);
 
 		// A body that fails is not reported; the bodies that type still are, and the run fails.
-		report = UnboundLocalLint.find([brokenPath], "/");
+		report = TypedLint.find("unbound-local", [brokenPath], "/");
 		expect("Broken.hx", report.lines,
 			['$brokenPath:4: local "stillReported" is Dynamic: nothing fixes the type of local "stillReported"']);
 		if (!report.failed)
@@ -98,8 +98,8 @@ class LintUnboundLocalMain {
 
 		// The option: off by default, run through the typed-rule tool only when `--only unbound-local` names it.
 		var ran:Null<Array<String>> = null;
-		function typedRules(files:Array<String>):Int {
-			ran = files;
+		function typedRules(rule:String, files:Array<String>):Int {
+			ran = rule == "unbound-local" ? files : null;
 			return 1;
 		}
 		var status = LintCommand.run([mainPath], null, typedRules);

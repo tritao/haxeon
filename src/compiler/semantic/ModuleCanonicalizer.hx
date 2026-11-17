@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.Source.SourceSpan;
 import compiler.syntax.AstChildren;
 import compiler.syntax.AstFunctions;
 import compiler.syntax.Ast;
@@ -355,12 +356,12 @@ class ModuleCanonicalizer {
 	 * a local, a field of `this`, a static of the enclosing class, or a module-level variable of this module (qualified as
 	 * reads are), and is never an import.
 	 */
-	static function canonicalAssignmentTarget(name:String, module:String, locals:LocalScope,
-			aliases:Null<AliasTable>):String {
+	static function canonicalAssignmentTarget(name:String, module:String, locals:LocalScope, aliases:Null<AliasTable>,
+			span:SourceSpan):String {
 		if (name.indexOf(".") < 0)
 			return locals.get(name) == true ? stored(module + "." + name, aliases) : name;
 		var imported = importedReference(name, locals, aliases);
-		return imported == null ? stored(name, aliases) : storedImport(name, imported, aliases);
+		return imported == null ? stored(name, aliases) : storedImport(name, imported, aliases, span);
 	}
 
 	/** `path` with a module-level variable it names given where that variable is stored (AliasTable.moduleFieldPath). */
@@ -371,17 +372,33 @@ class ModuleCanonicalizer {
 	 * `imported`, the qualified form of `written`, named where a module-level variable it names is stored, except that a path
 	 * through an imported type names that type's own static when it has one, as in Haxe: with `import pack.Store`,
 	 * `Store.count` is class Store's static even when module pack.Store also has a variable `count`, which only the full path
-	 * `pack.Store.count` names.
+	 * `pack.Store.count` names. A module's variable or function reached through the module's name is recorded at `span` for the
+	 * lint rule `module-namespace` (AliasTable.ModuleNamespaceUse).
 	 */
-	static function storedImport(written:String, imported:String, aliases:Null<AliasTable>):String {
-		var dot = written.indexOf(".");
-		if (aliases != null && dot > 0 && imported != written) {
-			var next = written.indexOf(".", dot + 1), tail = next < 0 ? "" : written.substr(next);
-			if (StringTools.endsWith(imported, tail)
-				&& aliases.isTypeStatic(imported.substr(0, imported.length - tail.length)))
+	static function storedImport(written:String, imported:String, aliases:Null<AliasTable>, span:SourceSpan):String {
+		var member = importedMember(written, imported);
+		if (aliases != null && member != null) {
+			if (aliases.isTypeStatic(member.qualified))
 				return imported;
+			if (aliases.isModuleMember(member.qualified))
+				aliases.noteNamespaceUse({written: member.written, member: member.qualified, span: span});
 		}
 		return stored(imported, aliases);
+	}
+
+	/**
+	 * The member a path through an imported name names (`Store.count.length` => `Store.count`, qualified `pack.Store.count`), or
+	 * null for a path written in full (the alias table returns it unchanged) or with nothing after the imported name.
+	 */
+	static function importedMember(written:String, imported:String):Null<{written:String, qualified:String}> {
+		var dot = written.indexOf(".");
+		if (dot <= 0 || imported == written)
+			return null;
+		var next = written.indexOf(".", dot + 1), tail = next < 0 ? "" : written.substr(next);
+		return StringTools.endsWith(imported, tail) ? {
+			written: written.substr(0, written.length - tail.length),
+			qualified: imported.substr(0, imported.length - tail.length)
+		} : null;
 	}
 
 	/**
@@ -408,7 +425,7 @@ class ModuleCanonicalizer {
 				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases),
 					canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e,
-				span): Assignment(canonicalAssignmentTarget(n, module, locals, aliases),
+				span): Assignment(canonicalAssignmentTarget(n, module, locals, aliases, span),
 				canonicalExpression(e, module, entry, locals, aliases), targetSpan(n, module, locals, span));
 			case IndexAssignment(array, offset, e,
 				span): IndexAssignment(canonicalExpression(array, module, entry, locals, aliases),
@@ -432,7 +449,7 @@ class ModuleCanonicalizer {
 			case ReturnVoid(span): ReturnVoid(span);
 			case Break(span): Break(span);
 			case Continue(span): Continue(span);
-			case Increment(name, delta, span): Increment(canonicalAssignmentTarget(name, module, locals, aliases),
+			case Increment(name, delta, span): Increment(canonicalAssignmentTarget(name, module, locals, aliases, span),
 				delta,
 				targetSpan(name, module, locals, span));
 			case If(c, y, n,
@@ -471,7 +488,8 @@ class ModuleCanonicalizer {
 				ErrorExpression(_): e;
 			case Variable(name, span):
 				var imported = importedReference(name, locals, aliases),
-					resolved = imported != null ? storedImport(name, imported, aliases) : stored(name.indexOf(".") < 0
+					resolved = imported != null ? storedImport(name, imported, aliases,
+						span) : stored(name.indexOf(".") < 0
 						&& locals.get(name) == true
 						? (module == entry && name == "main" ? "main" : module + "." + name) : name,
 						aliases);
@@ -483,7 +501,7 @@ class ModuleCanonicalizer {
 					imported = qualifiedName == null ? null : importedReference(qualifiedName, locals, aliases),
 					// A module-level variable named by its full path (`pack.Mod.x`) is read where it is stored.
 					storedPath = qualifiedName == null || imported != null ? null : stored(qualifiedName, aliases);
-				if (imported != null) Variable(storedImport(qualifiedName, imported, aliases), s);
+				if (imported != null) Variable(storedImport(qualifiedName, imported, aliases, s), s);
 				else if (storedPath != null && storedPath != qualifiedName) Variable(storedPath, s);
 				else Member(canonicalExpression(object, module, entry, locals, aliases), name, s);
 			case Add(a, b, s): Add(canonicalExpression(a, module, entry, locals, aliases),
@@ -588,13 +606,15 @@ class ModuleCanonicalizer {
 					prefix = compiler.core.QualifiedName.first(name),
 					imported = locals.get(prefix) == false ? null : resolveOptionalExpressionAlias(name, aliases);
 				if (imported != null)
-					resolved = imported;
-				else if (name.indexOf(".") < 0 && locals.get(name) == true)
-					resolved = module == entry && name == "main" ? "main" : module + "." + name;
-				else if (dot > 0 && locals.get(prefix) == true)
-					// A method of a module-level variable (`names.push(x)`): the variable is qualified as a read of it is.
-					resolved = module + "." + name;
-				resolved = stored(resolved, aliases);
+					resolved = storedImport(name, imported, aliases, s);
+				else {
+					if (name.indexOf(".") < 0 && locals.get(name) == true)
+						resolved = module == entry && name == "main" ? "main" : module + "." + name;
+					else if (dot > 0 && locals.get(prefix) == true)
+						// A method of a module-level variable (`names.push(x)`): the variable is qualified as a read of it is.
+						resolved = module + "." + name;
+					resolved = stored(resolved, aliases);
+				}
 				Call(resolved, [
 					for (index in 0...args.length)
 						index == 1 && isTypeTestCall(name) ? canonicalTypeArgument(args[index], module, entry, locals,

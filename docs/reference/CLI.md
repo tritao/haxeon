@@ -113,6 +113,23 @@ with 1 when it names a local or a program does not type. The rule has no `--fix`
 give each local it names a type. It runs in a tool of its own (`LintMain`), built on
 first use like the language server.
 
+The opt-in rule `module-namespace` names each module-level variable or function
+reached through its module's name, a Haxeon extension stock Haxe rejects (see
+[Language support](LANGUAGE_SUPPORT.md)):
+
+```bash
+./scripts/haxeon lint --only module-namespace src
+```
+
+```text
+src/Main.hx:8: "Settings.hits" names app.Settings.hits through its module's name, which Haxe rejects: import app.Settings.hits or write it in full
+```
+
+Haxe's forms are an import of the member (`import app.Settings.hits;`) or its full
+path; a class's own static named through the imported class (`Store.count`) is
+Haxe's too and is not named. It reads each file's project as `unbound-local` does,
+exits with 1 when it names a use or a program does not compile, and has no `--fix`.
+
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:
 
