@@ -119,7 +119,7 @@ The UI snapshot regression was introduced by `ac5c2f79`; its parent `9e4819ae` c
 `Unknown Wasm function "__haxeon_varargs_adapter_Function([Obj(haxeon.ui.Canvas)],Void)"` on Wasm GC.
 Reverting only Canvas's cleanup port also reproduces it. The generated scalar escape wrapper added that callback
 cast after the initial varargs scan. `tests/wasm/test-wasm-parity.sh` now runs
-`packages/ui/tools/test-value-snapshot-parity.sh` on all three targets with inlining enabled and disabled. The ten
+`packages/ui/tools/test-value-snapshot-parity.hx` on all three targets with inlining enabled and disabled. The ten
 other UI scripts exercise HashLink; the Showcase uses a different reachable graph and did not cover this fixture.
 
 Wasm exports that accept or return a scalar struct closure adapt it at the host boundary. The internal closure keeps

@@ -1219,4 +1219,4 @@ JS
 
 # This UI graph reaches higher-order closure adapters that the Showcase does not.
 # Run all three targets, with and without inlining, as part of every Wasm parity gate.
-bash "$root_dir/packages/ui/tools/test-value-snapshot-parity.sh"
+"$root_dir/scripts/haxeon" "$root_dir/packages/ui/tools/test-value-snapshot-parity.hx"
