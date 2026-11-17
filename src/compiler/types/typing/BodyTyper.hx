@@ -358,7 +358,7 @@ class BodyTyper implements BodyTyping {
 					argument.span)),
 					TBool, argument.span),
 				defaultValue = coerce(typeDefaultExpression(argument.defaultValue, parameter.type, body.name),
-					parameter.type, 'default argument ${index + 1} to "${body.name}"', "E1009");
+					parameter.type, 'default argument ${index + 1} to "${body.name}"');
 			arguments.push({name: parameter.name, type: boxedType});
 			callArguments.push(new TypedExpression(TConditional(absent, defaultValue,
 				new TypedExpression(TCast(boxed), parameter.type, argument.span)), parameter.type, argument.span));
@@ -2351,7 +2351,7 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String):TypedExpression {
+			code:String = "E1009"):TypedExpression {
 		if ((switch expected {
 			case TDynamic: true;
 			default: false;

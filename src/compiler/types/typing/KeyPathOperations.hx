@@ -48,7 +48,7 @@ class KeyPathOperations {
 					throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E1008",
 						'KeyPath.get expects 1 argument, got ${arguments.length}', span));
 				var target = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, root), root,
-					"key path root", "E1009"),
+					"key path root"),
 					definition = KeyPathTyping.known(session, receiver);
 				if (definition != null) {
 					for (entry in definition.fields)
@@ -82,8 +82,7 @@ class KeyPathOperations {
 					ValuePlaceRules.requireWritable(session, target, span);
 					var last = definition.fields[definition.fields.length - 1],
 						assigned = bodyTyper.coerce(bodyTyper.typeExpression(arguments[1], scope, value), value,
-							"key path value",
-							"E1009"),
+							"key path value"),
 						physical = session.representation.resolveField(target.type, last.field.name, span).physical;
 					new TypedExpression(TBlockExpression([TFieldAssign(target, last.field.name,
 						session.representation.boundaryCast(assigned, physical), span)],
@@ -96,7 +95,7 @@ class KeyPathOperations {
 							: hold(session, target, "root", span, statements),
 						assigned = hold(session,
 							bodyTyper.coerce(bodyTyper.typeExpression(arguments[1], scope, value), value,
-							"key path value", "E1009"), "value", span, statements),
+							"key path value"), "value", span, statements),
 						rootValue = session.relations.isValueClass(root) ? hold(session,
 							ValueCopy.bind(session, place, root), "root", span, statements) : place;
 					new AnonymousTypeRegistry(session).register(receiver.type);

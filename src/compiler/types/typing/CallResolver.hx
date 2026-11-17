@@ -56,7 +56,7 @@ class CallResolver {
 			name:String):Array<TypedExpression> {
 		var output:Array<TypedExpression> = [];
 		for (i in 0...arguments.length)
-			output.push(bodyTyper.coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"', "E1009"));
+			output.push(bodyTyper.coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"'));
 		return output;
 	}
 
@@ -434,7 +434,7 @@ class CallResolver {
 		for (i in 0...arguments.length) {
 			var supplied = types[i],
 				value = bodyTyper.typeExpression(arguments[i], scope, supplied);
-			typed.push(bodyTyper.coerce(value, supplied, 'argument ${i + 1} to "$name"', "E1009"));
+			typed.push(bodyTyper.coerce(value, supplied, 'argument ${i + 1} to "$name"'));
 		}
 		for (i in arguments.length...parameters.length) {
 			var parameter = parameters[i],
@@ -443,16 +443,15 @@ class CallResolver {
 			if (isPosInfosParameter(parameter))
 				typed.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
 					expected), expected,
-					'position argument ${i + 1} to "$name"',
-					"E1009"));
+					'position argument ${i + 1} to "$name"'));
 			else if (defaultValue == null || virtualCall && (DefaultArguments.filledByCallee(parameter, expected,
 				session.relations) || DefaultArguments.valueDefault(parameter, bodyTyper.argumentType(parameter,
 				substitutions), session.relations)))
 				typed.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
-					'default argument ${i + 1} to "$name"', "E1009"));
+					'default argument ${i + 1} to "$name"'));
 			else
 				typed.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(defaultValue, expected, name), expected,
-					'default argument ${i + 1} to "$name"', "E1009"));
+					'default argument ${i + 1} to "$name"'));
 		}
 		return coerceArguments(typed, types, name);
 	}
@@ -620,7 +619,7 @@ class CallResolver {
 			typedArguments = [
 				for (argument in arguments)
 					bodyTyper.coerce(bodyTyper.typeExpression(argument, scope, TDynamic), TDynamic,
-					'argument to dynamic method "$name"', "E1009")
+					'argument to dynamic method "$name"')
 			];
 		session.invalidateUnknownCall(scope);
 		return new TypedExpression(TClosureCall(callee, typedArguments), TDynamic, span);
@@ -639,7 +638,7 @@ class CallResolver {
 					fail("E1008", 'Method "equals" expects 1 argument, got ${arguments.length}', span);
 				var other = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, receiver.type),
 					receiver.type,
-					"enum equality operand", "E1009");
+					"enum equality operand");
 				EnumEqualityGenerator.request(session, receiver.type, session.currentContext.name, span);
 				session.invalidateUnknownCall(scope);
 				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(receiver.type), [receiver, other]),
@@ -860,7 +859,7 @@ class CallResolver {
 			default: false;
 		}, typedCallee = bodyTyper.typeExpression(callee, scope, discarded ? TFunction([], TVoid, []) : null),
 			functionType = switch typedCallee.type {
-			case TFunction(parameters, result, _): {arguments: parameters, result: result};
+			case TFunction(parameters, result, optional): {arguments: parameters, result: result, optional: optional};
 			default: null;
 		};
 		if ((switch (typedCallee.type) {
@@ -870,8 +869,7 @@ class CallResolver {
 			var typedArguments = [
 				for (argument in arguments)
 					bodyTyper.coerce(bodyTyper.typeExpression(argument, scope, TDynamic), TDynamic,
-					"argument to dynamic function",
-					"E1009")
+					"argument to dynamic function")
 			];
 			session.invalidateUnknownCall(scope);
 			return new TypedExpression(TClosureCall(typedCallee, typedArguments), TDynamic, span);
@@ -882,7 +880,8 @@ class CallResolver {
 		var localParameters = callableName == null ? null : scope.localFunctionParameters(callableName);
 		if (localParameters != null && localParameters.length != functionType.arguments.length)
 			localParameters = null;
-		var required = functionType.arguments.length;
+		// A call may omit the arguments the function type flags optional, as in Haxe; the function fills their defaults.
+		var required = FunctionTypes.requiredCount(functionType.optional, functionType.arguments.length);
 		if (localParameters != null)
 			while (required > 0 && AstPredicates.isOptionalArgument(localParameters[required - 1]))
 				required--;
@@ -896,12 +895,15 @@ class CallResolver {
 			for (index in 0...arguments.length)
 				bodyTyper.typeExpression(arguments[index], scope, functionType.arguments[index])
 		];
-		if (localParameters != null)
-			for (index in arguments.length...functionType.arguments.length) {
-				var defaultValue = localParameters[index].defaultValue;
-				typedArguments.push(defaultValue == null ? new TypedExpression(TNullLiteral, TNull,
-					span) : bodyTyper.typeDefaultExpression(defaultValue, functionType.arguments[index], callableName));
-			}
+		// An omitted argument is passed as null: the function that runs replaces it with its own default. A local function
+		// whose declared type takes the value itself (`function add(extra:Int = 2):Int`) is called with its default.
+		for (index in arguments.length...functionType.arguments.length) {
+			var parameter = localParameters == null ? null : localParameters[index];
+			typedArguments.push(parameter != null
+				&& DefaultArguments.valueDefault(parameter, functionType.arguments[index], session.relations)
+				? bodyTyper.typeDefaultExpression(parameter.defaultValue, functionType.arguments[index],
+				callableName) : new TypedExpression(TNullLiteral, TNull, span));
+		}
 		typedArguments = coerceArguments(typedArguments, functionType.arguments,
 			callableName == null ? "function expression" : callableName);
 		invalidateClosureWrites(callee, callableName, scope);
@@ -1089,8 +1091,7 @@ class CallResolver {
 					fail("E1008", "fromRaw expects one argument", span);
 				var raw = bodyTyper.lowerType(declaration.underlying, declaration.span),
 					argument = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, raw), raw,
-						"fromRaw argument",
-						"E1009");
+						"fromRaw argument");
 				return new TypedExpression(TCall(RawRepresentableGenerator.request(session, rawOwner, "fromRaw", span),
 					[argument]),
 					TNullable(TAbstract(rawOwner, [], raw)), span);
@@ -1902,36 +1903,30 @@ class CallResolver {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.indexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var needle = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
-				"String.indexOf needle",
-				"E1009");
+				"String.indexOf needle");
 			if (arguments.length == 1)
 				return new TypedExpression(TStringIndexOf(receiver, needle), TInt, span);
 			var start = bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt,
-				"String.indexOf start index",
-				"E1009");
+				"String.indexOf start index");
 			return new TypedExpression(TCall("__string_index_of_from", [receiver, needle, start]), TInt, span);
 		}
 		if (name == "lastIndexOf") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.lastIndexOf" expects 1 or 2 arguments, got ${arguments.length}', span);
 			var needle = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
-				"String.lastIndexOf needle",
-				"E1009");
+				"String.lastIndexOf needle");
 			if (arguments.length == 1)
 				return new TypedExpression(TCall("__string_last_index_of", [receiver, needle]), TInt, span);
 			var start = bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt,
-				"String.lastIndexOf start index",
-				"E1009");
+				"String.lastIndexOf start index");
 			return new TypedExpression(TCall("__string_last_index_of_from", [receiver, needle, start]), TInt, span);
 		}
 		if (name == "substring" || name == "substr") {
 			if (arguments.length < 1 || arguments.length > 2)
 				fail("E1008", 'Function "String.$name" expects 1 or 2 arguments, got ${arguments.length}', span);
-			var start = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, 'String.$name start',
-				"E1009"),
+			var start = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, 'String.$name start'),
 				end:Null<TypedExpression> = arguments.length == 1
-					? null : bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt, 'String.$name end',
-					"E1009");
+					? null : bodyTyper.coerce(typeExpressionValue(arguments[1], scope, TInt), TInt, 'String.$name end');
 			if (name == "substr")
 				return typeSubstr(receiver, start, end, span);
 			return new TypedExpression(TStringSubstring(receiver, start, end), TString, span);
@@ -1940,23 +1935,20 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.charCodeAt" expects 1 argument, got ${arguments.length}', span);
 			var index = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt,
-				"String.charCodeAt index",
-				"E1009");
+				"String.charCodeAt index");
 			return new TypedExpression(TStringCharCodeAt(receiver, index), TInt, span);
 		}
 		if (name == "charAt") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.charAt" expects 1 argument, got ${arguments.length}', span);
-			var index = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, "String.charAt index",
-				"E1009");
+			var index = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TInt), TInt, "String.charAt index");
 			return new TypedExpression(TStringCharAt(receiver, index), TString, span);
 		}
 		if (name == "split") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "String.split" expects one argument, got ${arguments.length}', span);
 			var separator = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, TString), TString,
-				"String.split separator",
-				"E1009");
+				"String.split separator");
 			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
 		}
 		throw new CompileError(new Diagnostic("E1007", 'Unknown String method "$name"', span));

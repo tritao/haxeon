@@ -2188,12 +2188,12 @@ class ExpressionTyper {
 			case TNever: true;
 			default: false;
 		}) && isNumeric(right.type))
-			left = bodyTyper.coerce(left, right.type, "arithmetic operand", "E1009");
+			left = bodyTyper.coerce(left, right.type, "arithmetic operand");
 		if ((switch (right.type) {
 			case TNever: true;
 			default: false;
 		}) && isNumeric(left.type))
-			right = bodyTyper.coerce(right, left.type, "arithmetic operand", "E1009");
+			right = bodyTyper.coerce(right, left.type, "arithmetic operand");
 		if (add && (isStringOperand(left.type) || isStringOperand(right.type))) {
 			left = stringify(left);
 			right = stringify(right);
@@ -2538,9 +2538,9 @@ class ExpressionTyper {
 			return new TypedExpression(TBoolLiteral(false), TBool, span);
 		if (operation == 2) {
 			if (sameType(left.type, TNull) && isNullable(right.type))
-				left = bodyTyper.coerce(left, right.type, "null comparison", "E1009");
+				left = bodyTyper.coerce(left, right.type, "null comparison");
 			else if (sameType(right.type, TNull) && isNullable(left.type))
-				right = bodyTyper.coerce(right, left.type, "null comparison", "E1009");
+				right = bodyTyper.coerce(right, left.type, "null comparison");
 		}
 		// Equality observes nullable operands without binding new locations. In particular, retain the local in a
 		// null test so flow narrowing can recognize it; nullable struct copies are made at actual bindings instead.

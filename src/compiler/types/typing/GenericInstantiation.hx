@@ -62,15 +62,14 @@ class GenericInstantiation {
 			if (CallResolver.isPosInfosParameter(parameter))
 				arguments.push(bodyTyper.coerce(bodyTyper.typeExpression(bodyTyper.posInfosExpression(span), scope,
 					expected), expected,
-					'position argument ${index + 1} to "$baseName"', "E1009"));
+					'position argument ${index + 1} to "$baseName"'));
 			else if (defaultValue == null)
 				arguments.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
-					'default argument ${index + 1} to "$baseName"', "E1009"));
+					'default argument ${index + 1} to "$baseName"'));
 			else
 				arguments.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(defaultValue, expected, baseName),
 					expected,
-					'default argument ${index + 1} to "$baseName"',
-					"E1009"));
+					'default argument ${index + 1} to "$baseName"'));
 		}
 		// An iterable parameter is structural, but a generic body can keep its concrete
 		// collection representation. Include it in the specialization identity so
@@ -118,8 +117,7 @@ class GenericInstantiation {
 				// under the same concrete-type list.
 				if (IterationProtocol.name(expected) != null)
 					concrete.push(expected);
-				semanticArguments.push(bodyTyper.coerce(argument, expected, 'argument ${index + 1} to "$baseName"',
-					"E1009"));
+				semanticArguments.push(bodyTyper.coerce(argument, expected, 'argument ${index + 1} to "$baseName"'));
 			}
 		}
 		if (concrete.length > 0)
