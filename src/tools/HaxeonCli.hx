@@ -21,6 +21,7 @@ import haxe.io.Path;
 import project.PackageLockfile;
 import project.PackageResolver;
 import project.PackageSourceTools;
+import project.ProjectDiscovery;
 import project.ProjectSourceAcquirer;
 import project.RegistryPublisher;
 import project.ResolvedPackage;
@@ -1408,11 +1409,8 @@ class HaxeonCli {
 		return {projectPath: projectPath, registry: registry, version: version};
 	}
 
-	static function discoverProject(manifestPath:String, ?target:Target):ResolvedProject {
-		var lockPath = lockfilePath(manifestPath),
-			lockfile = FileSystem.exists(lockPath) ? PackageLockfile.parse(lockPath, File.getContent(lockPath)) : null;
-		return resolveProject(manifestPath, lockfile, lockfile != null, target);
-	}
+	static function discoverProject(manifestPath:String, ?target:Target):ResolvedProject
+		return ProjectDiscovery.resolve(manifestPath, target);
 
 	static function resolveProject(manifestPath:String, lockfile:Null<PackageLockfile>, locked:Bool,
 			?target:Target):ResolvedProject {
@@ -1430,7 +1428,7 @@ class HaxeonCli {
 	}
 
 	static function lockfilePath(manifestPath:String):String
-		return Path.join([Path.directory(manifestPath), "haxeon.lock"]);
+		return ProjectDiscovery.lockfilePath(manifestPath);
 
 	static function inferPackageName(url:String):String {
 		var value = url;

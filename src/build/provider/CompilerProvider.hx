@@ -7,6 +7,7 @@ import build.execution.ExecutionAction.ActionKind;
 import build.execution.ProcessRunner;
 import build.execution.CompilerClient;
 import build.execution.Directories;
+import project.CompilerInputs;
 import project.ResolvedProject;
 import sys.io.File;
 
@@ -23,56 +24,43 @@ class CompilerProvider {
 			compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
 			compilerSourcePath = compilerSource == null
 				|| compilerSource == "" ? haxe.io.Path.join([context.compilerHome, "src"]) : compilerSource,
-			sourcePaths:Array<String> = [],
+			compilerInputs = CompilerInputs.of(project, context.layout),
+			sourcePaths = compilerInputs.sources,
 			arguments = [
-				"--target=" + (project.manifest.target == "host" ? "hl" : project.manifest.target),
+				"--target=" + compilerInputs.target,
 				"--build-mode=" + (context.live || context.developmentMetadata ? "development" : "release"),
 				"--output=" + output,
 				"--entry=" + project.manifest.entry,
 				"--inputs-output=" + output + ".inputs.json"
 			],
 			inputs:Array<String> = [];
-		for (resolvedPackage in project.packages.packages) {
-			for (sourceRoot in resolvedPackage.sourceRoots)
-				arguments.push("--root=" + sourceRoot);
-			var shouldScopeRoot = resolvedPackage.manifest.scopeSourceRoots
-				&& (resolvedPackage.name != project.rootPackage.name
-				|| project.manifest.entry == resolvedPackage.name
-				|| StringTools.startsWith(project.manifest.entry, resolvedPackage.name + "."));
-			if (shouldScopeRoot)
-				for (sourceRoot in resolvedPackage.sourceRoots)
-					if (resolvedPackage.unscopedSourceRoots.indexOf(sourceRoot) < 0)
-						arguments.push('--package-root=${resolvedPackage.name}=$sourceRoot');
-			for (source in resolvedPackage.sources)
-				sourcePaths.push(source);
-			for (projection in resolvedPackage.ffiProjections)
-				arguments.push("--ffi-projection=" + projection);
-			for (interfacePath in resolvedPackage.ffiInterfaces)
-				arguments.push("--ffi-interface=" + interfacePath);
-		}
-		for (resolvedPackage in project.packages.packages)
-			for (ffi in resolvedPackage.ffiImports) {
-				var interfacePath = context.layout.ffiInterfacePath(resolvedPackage.name, ffi.config.name);
-				arguments.push("--ffi-interface=" + interfacePath);
-				inputs.push(interfacePath);
-				if (ffi.config.projection) {
-					var projectionPath = context.layout.ffiProjectionPath(resolvedPackage.name, ffi.config.name),
-						projectionManifest = context.layout.ffiProjectionManifestPath(resolvedPackage.name,
-							ffi.config.name);
-					arguments.push("--root=" + projectionPath);
-					arguments.push("--sources-file=" + projectionManifest);
-					inputs.push(projectionManifest);
-				}
+		for (sourceRoot in compilerInputs.roots)
+			arguments.push("--root=" + sourceRoot);
+		for (root in compilerInputs.packageRoots)
+			arguments.push('--package-root=${root.packageName}=${root.path}');
+		for (projection in compilerInputs.ffiProjections)
+			arguments.push("--ffi-projection=" + projection);
+		for (interfacePath in compilerInputs.ffiInterfaces)
+			arguments.push("--ffi-interface=" + interfacePath);
+		// The FFI imports' outputs, which this module's FFI actions write first.
+		for (ffi in compilerInputs.generatedFfi) {
+			arguments.push("--ffi-interface=" + ffi.interfacePath);
+			inputs.push(ffi.interfacePath);
+			var projectionRoot = ffi.projectionRoot, projectionManifest = ffi.projectionManifest;
+			if (projectionRoot != null && projectionManifest != null) {
+				arguments.push("--root=" + projectionRoot);
+				arguments.push("--sources-file=" + projectionManifest);
+				inputs.push(projectionManifest);
 			}
+		}
 		// Keep the process command line short on Windows; CompilerArguments already supports
 		// newline-delimited source manifests, as used by the compiler bootstrap.
-		sourcePaths.sort(Reflect.compare);
 		var sourceManifest = output + ".sources.txt";
 		arguments.push("--sources-file=" + sourceManifest);
-		for (define in project.manifest.defines.concat(context.extraDefines))
+		for (define in compilerInputs.defines.concat(context.extraDefines))
 			arguments.push("--define=" + define);
 		// The passes are the request's (`CompileOptions`): the manifest's `inline: false` turns inlining off.
-		if (project.manifest.inlineEnabled == false)
+		if (!compilerInputs.inlineEnabled)
 			arguments.push("--no-inline");
 		// Artifact builds are the default: the module depends only on the source. Live sessions opt in.
 		if (context.live)
@@ -99,14 +87,9 @@ class CompilerProvider {
 			environment = new Map();
 		}
 		inputs.push(haxe.io.Path.join([context.compilerHome, "stdlib"]));
-		for (resolvedPackage in project.packages.packages) {
-			for (source in resolvedPackage.sources)
-				inputs.push(source);
-			for (projection in resolvedPackage.ffiProjections)
-				inputs.push(projection);
-			for (interfacePath in resolvedPackage.ffiInterfaces)
-				inputs.push(interfacePath);
-		}
+		for (paths in [compilerInputs.sources, compilerInputs.ffiProjections, compilerInputs.ffiInterfaces])
+			for (path in paths)
+				inputs.push(path);
 		var session = context.session;
 		if (context.live && !context.selfHosted && session != null)
 			session.liveWarmup = function():Int {

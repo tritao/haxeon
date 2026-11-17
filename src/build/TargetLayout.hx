@@ -11,6 +11,10 @@ class TargetLayout {
 	public function new(environment:BuildEnvironment)
 		this.environment = environment;
 
+	/** The target whose outputs this lays out. */
+	public function target():Target
+		return environment.target;
+
 	public function packageRoot(packageName:String):String
 		return Path.join([environment.buildRoot, targetDirectory(), "native", packageName]);
 

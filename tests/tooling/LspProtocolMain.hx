@@ -73,6 +73,7 @@ class LspProtocolMain {
 	static function main():Void {
 		fileUris();
 		haxeonManifestWorkspace();
+		offlineManifestDependency();
 		linkedManifestWorkspace();
 		recoveredDefinitionNavigation();
 		recoveredTypeNavigation();
@@ -1900,7 +1901,52 @@ class LspProtocolMain {
 			|| !protocol.project.hasDiskSource(mainPath)
 			|| !protocol.project.hasDiskSource(base + "/lib/code/Value.hx"))
 			throw "a manifest workspace opened through a symbolic link lost its sources";
+		// A dependency's root is scoped to its package (scopeSourceRoots, on by default), as the build passes it: its files are that
+		// package's modules.
+		if (protocol.project.compilerPath(base + "/lib/code/Value.hx") != "helper/Value.hx")
+			throw 'a dependency module is named ${protocol.project.compilerPath(base + "/lib/code/Value.hx")}, not helper/Value.hx';
 		Sys.println("PASS: a manifest workspace opened through a symbolic link keeps its sources and dependencies");
+	}
+
+	/**
+	 * The editor resolves a project offline: a Git dependency that is not in the source cache is reported on the workspace, as
+	 * something to install, and nothing is fetched.
+	 */
+	static function offlineManifestDependency():Void {
+		var base = haxe.io.Path.normalize(sys.FileSystem.fullPath("out")) + "/lsp-offline-" + Std.random(0x7fffffff),
+			previousCache = Sys.getEnv("HAXEON_SOURCE_CACHE");
+		sys.FileSystem.createDirectory(base + "/src");
+		sys.io.File.saveContent(base + "/haxeon.json",
+			'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"dep":{"git":"https://example.invalid/dep.git","rev":"0123456789012345678901234567890123456789"}}}');
+		sys.io.File.saveContent(base + "/src/Main.hx", "class Main { public static function main():Int return 0; }");
+		Sys.putEnv("HAXEON_SOURCE_CACHE", base + "/cache");
+		var protocol = new LspProtocol(), messages:Array<String> = [];
+		try {
+			messages = protocol.handle(Json.stringify({
+				jsonrpc: "2.0",
+				id: 861,
+				method: "initialize",
+				params: {rootUri: FileUri.fromPath(base)}
+			}));
+		} catch (error:Dynamic) {
+			Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
+			deleteTree(base);
+			throw error;
+		}
+		Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
+		var reported = false;
+		for (raw in messages) {
+			var message:Dynamic = Json.parse(raw);
+			if (message.method != "window/showMessage")
+				continue;
+			var text:String = message.params.message;
+			if (text.indexOf("not in the source cache") >= 0 && text.indexOf("haxeon install") >= 0)
+				reported = true;
+		}
+		deleteTree(base);
+		if (!reported || sys.FileSystem.exists(base + "/cache/git"))
+			throw 'an uncached Git dependency was not reported offline: $messages';
+		Sys.println("PASS: the language server resolves a project offline and reports a dependency to install");
 	}
 
 	static function haxeonManifestWorkspace():Void {

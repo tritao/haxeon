@@ -32,6 +32,7 @@ import build.native.NativeDependencyScanner;
 import build.native.NativeToolchain;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
+import project.CompilerInputs;
 import project.FfiManifest.FfiImportManifest;
 import project.HaxelibSourceAcquirer;
 import project.PackageLockfile;
@@ -93,6 +94,8 @@ class BuildSystemMain {
 		testTargetsAndToolchains();
 		testProjectDiscovery();
 		testFfiProjectIntegration();
+		testCompilerInputs();
+		testOfflineGitResolution();
 		testPackageSourceModel();
 		testPackageCompatibility();
 		testHaxelibAdapter();
@@ -1241,6 +1244,124 @@ class BuildSystemMain {
 			&& executionText.indexOf("projection.sources") >= 0
 			&& executionText.indexOf("Compile Haxe package") >= 0,
 			"project FFI recipes should become build artifacts before Haxe compilation");
+		removeTree(root);
+	}
+
+	/** The one translation of a project into compiler inputs, which the build renders and the language server reads. */
+	static function testCompilerInputs():Void {
+		var root = temporaryDirectory("compiler-inputs"),
+			app = Path.join([root, "app"]),
+			lib = Path.join([root, "lib"]);
+		writePackage(app,
+			'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"defines":["app-flag"],"inline":false,"dependencies":{"lib":{"path":"../lib"}},"ffi":{"imports":["ffi/fixture.ffi.json"]}}',
+			["src/Main.hx", "src/Zed.hx", "headers/fixture.hpp"]);
+		ensureDirectory(Path.join([app, "ffi"]));
+		File.saveContent(Path.join([app, "ffi", "fixture.ffi.json"]),
+			'{"version":1,"name":"fixture","language":"c++","profile":"direct","header":"../headers/fixture.hpp","std":"c++20","library":"fixture","interface":"Fixture","select":["fixture::Widget::reset"],"projection":true}\n');
+		writePackage(lib,
+			'{"version":1,"package":{"name":"lib"},"sourceRoots":["src","examples"],"unscopedSourceRoots":["examples"]}',
+			["src/Value.hx", "examples/Example.hx"]);
+		var project = ProjectDiscovery.discover(Path.join([app, "haxeon.json"])),
+			hostLayout = new TargetLayout(new BuildEnvironment(project.root, Path.join([project.root, "build"]))),
+			host = CompilerInputs.of(project, hostLayout),
+			appRoot = project.packages.get("app").sourceRoots[0],
+			libRoot = project.packages.get("lib").sourceRoots[0];
+		expect(host.target == "hl" && host.entry == "Main",
+			"a host build compiles HashLink code from the manifest's entry");
+		expect(host.roots.join(",") == project.packages.get("lib").sourceRoots.concat([appRoot]).join(","),
+			"every package's source roots are compiler roots, dependencies first");
+		expect(host.packageRoots.length == 1 && host.packageRoots[0].packageName == "lib"
+			&& host.packageRoots[0].path == libRoot,
+			"a dependency's scoped roots belong to its package; its unscoped roots and the root package's do not");
+		var sorted = host.sources.copy();
+		sorted.sort(Reflect.compare);
+		expect(host.sources.length == 4 && host.sources.join(",") == sorted.join(","),
+			"the sources are every package's, sorted");
+		expect(host.generatedFfi.length == 1
+			&& host.generatedFfi[0].interfacePath == hostLayout.ffiInterfacePath("app", "fixture")
+			&& host.generatedFfi[0].projectionRoot == hostLayout.ffiProjectionPath("app", "fixture"),
+			"an FFI import is read from where the layout generates it");
+		expect(host.defines.join(",") == "app-flag" && !host.inlineEnabled,
+			"the manifest's defines and inlining carry over");
+		var wasm = CompilerInputs.of(project,
+			new TargetLayout(new BuildEnvironment(project.root, Path.join([project.root, "build"]), BuildProfile.Debug,
+			Target.parse("wasm32")))),
+			android = CompilerInputs.of(project,
+				new TargetLayout(new BuildEnvironment(project.root, Path.join([project.root, "build"]),
+				BuildProfile.Debug,
+				Target.parse("android-arm64"))));
+		expect(wasm.target == "wasm32" && wasm.generatedFfi[0].interfacePath.indexOf("wasm32") >= 0,
+			"a Wasm layout compiles Wasm and reads FFI imports from its own directory");
+		expect(android.target == "hl" && android.defines.join(",") == "android,app-flag",
+			"an Android build compiles HashLink code with the android define");
+		// The build passes exactly these to the compiler.
+		var environment = new BuildEnvironment(project.root, Path.join([project.root, "build"])),
+			execution = PlanLowerer.lower(BuildPlanner.project(project, BuildIntent.Build, environment.target,
+				NativeArtifactDemand.Shared),
+				new LoweringContext(environment, null, project, hostLayout.hashLinkModulePath("main"), Sys.getCwd())),
+			arguments = switch compilerAction(execution).action {
+				case Compiler(_, arguments, _, _, _): arguments;
+				case _: [];
+			};
+		for (expected in [
+			"--target=hl",
+			'--package-root=lib=$libRoot',
+			"--root=" + appRoot,
+			"--ffi-interface=" + host.generatedFfi[0].interfacePath,
+			"--define=app-flag",
+			"--no-inline"
+		])
+			expect(arguments.indexOf(expected) >= 0, 'the compile request should pass $expected');
+		expect(arguments.indexOf('--package-root=app=$appRoot') < 0,
+			"the root package is not scoped when its entry is outside it");
+		removeTree(root);
+	}
+
+	/**
+	 * Offline resolution (the editor's) takes a Git dependency only from the source cache, at the commit the lockfile names: it
+	 * neither resolves a ref nor clones.
+	 */
+	static function testOfflineGitResolution():Void {
+		var root = temporaryDirectory("offline-git"),
+			repository = Path.join([root, "repository"]),
+			app = Path.join([root, "app"]),
+			previousCache = Sys.getEnv("HAXEON_SOURCE_CACHE");
+		writePackage(repository, '{"version":1,"package":{"name":"dep"},"sourceRoots":["src"]}', ["src/Dep.hx"]);
+		var git = (arguments:Array<String>) -> ProcessRunner.capture("git", ["-C", repository].concat(arguments));
+		for (command in [
+			["init", "-q"],
+			["add", "-A"],
+			["-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "dep"]
+		])
+			expect(git(command).status == 0, "could not prepare the Git fixture");
+		var commit = StringTools.trim(git(["rev-parse", "HEAD"]).output);
+		Sys.putEnv("HAXEON_SOURCE_CACHE", Path.join([root, "cache"]));
+		try {
+			writePackage(app,
+				'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"dep":{"git":"$repository","rev":"$commit"}}}',
+				["src/Main.hx"]);
+			var manifest = Path.join([app, "haxeon.json"]);
+			expectThrows(() -> ProjectDiscovery.resolve(manifest, null, true),
+				"offline resolution must not clone a dependency missing from the source cache");
+			expect(ProjectDiscovery.resolve(manifest).packages.get("dep") != null,
+				"online resolution clones the dependency");
+			expect(ProjectDiscovery.resolve(manifest, null, true).packages.get("dep") != null,
+				"offline resolution uses the cached checkout");
+			writePackage(app,
+				'{"version":1,"package":{"name":"app"},"entry":"Main","sourceRoots":["src"],"dependencies":{"dep":{"git":"$repository","rev":"HEAD"}}}',
+				["src/Main.hx"]);
+			expectThrows(() -> ProjectDiscovery.resolve(manifest, null, true),
+				"offline resolution must not ask the remote what a ref names");
+			File.saveContent(ProjectDiscovery.lockfilePath(manifest),
+				ProjectDiscovery.resolve(manifest).lockfile.toJson());
+			expect(ProjectDiscovery.resolve(manifest, null, true).packages.get("dep") != null,
+				"offline resolution follows the lockfile's commit for a ref");
+		} catch (error:Dynamic) {
+			Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
+			removeTree(root);
+			throw error;
+		}
+		Sys.putEnv("HAXEON_SOURCE_CACHE", previousCache == null ? "" : previousCache);
 		removeTree(root);
 	}
 

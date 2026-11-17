@@ -5,21 +5,30 @@ import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
 
-/** Resolves a Git ref to a commit and checks it out into a source root. */
+/**
+ * Resolves a Git ref to a commit and checks it out into a source root. Offline, it neither resolves a ref nor clones: the
+ * commit must be named (as the lockfile names it) and its checkout already in the cache.
+ */
 class GitSourceAcquirer implements SourceAcquirer {
 	final sourceRoot:String;
+	final offline:Bool;
 
-	public function new(sourceRoot:String)
+	public function new(sourceRoot:String, offline:Bool = false) {
 		this.sourceRoot = Path.normalize(sourceRoot);
+		this.offline = offline;
+	}
 
 	public function acquire(source:PackageSource, ownerRoot:String, packageId:PackageId):AcquiredSource
 		return switch source {
 			case PackageSource.Git(url, rev):
 				var resolvedRevision = resolveRevision(url, rev),
 					destination = Path.join([sourceRoot, "git", Sha256.encode(url + "\n" + resolvedRevision)]);
-				if (!FileSystem.exists(destination))
+				if (!FileSystem.exists(destination)) {
+					if (offline)
+						throw 'Git dependency "$packageId" at $resolvedRevision is not in the source cache; run "haxeon install"';
 					checkout(url, resolvedRevision, destination, packageId);
-				else
+				}
+					else
 					validateCheckout(destination, resolvedRevision, packageId);
 				new AcquiredSource(destination, PackageSource.Git(url, resolvedRevision), resolvedRevision);
 			case _:
@@ -29,6 +38,8 @@ class GitSourceAcquirer implements SourceAcquirer {
 	function resolveRevision(url:String, rev:String):String {
 		if (isSha(rev))
 			return rev;
+		if (offline)
+			throw 'Git dependency $url@$rev is not locked to a commit; run "haxeon install" to write haxeon.lock';
 		var result = ProcessRunner.capture("git", ["ls-remote", url, rev]);
 		if (result.status != 0)
 			throw 'Could not resolve Git dependency $url@$rev: ${StringTools.trim(result.output)}';

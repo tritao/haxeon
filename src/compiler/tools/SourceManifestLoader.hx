@@ -56,13 +56,22 @@ class SourceManifestLoader {
 		return result;
 	}
 
+	/**
+	 * The path of a file `relative` to a source root whose files belong to `packageName`: under the package's directory, whether
+	 * the root holds that directory (`ui/Button.hx`) or is it (`Button.hx`).
+	 */
+	public static function packagePath(relative:String, packageName:String):String
+		return packagedPath(relative, packageName.split(".").join("/") + "/");
+
+	static function packagedPath(relative:String, packagePrefix:String):String
+		return StringTools.startsWith(relative, packagePrefix) ? relative : packagePrefix + relative;
+
 	static function locate(path:String, roots:Array<ResolvedRoot>, packageRoots:Array<ResolvedRoot>):String {
 		var canonicalFile = canonicalPath(path);
 		for (root in packageRoots)
-			if (StringTools.startsWith(canonicalFile, root.prefix)) {
-				var relative = canonicalFile.substring(root.prefix.length, canonicalFile.length);
-				return StringTools.startsWith(relative, root.packagePrefix) ? relative : root.packagePrefix + relative;
-			}
+			if (StringTools.startsWith(canonicalFile, root.prefix))
+				return packagedPath(canonicalFile.substring(root.prefix.length, canonicalFile.length),
+					root.packagePrefix);
 		for (root in roots)
 			if (StringTools.startsWith(canonicalFile, root.prefix))
 				return canonicalFile.substring(root.prefix.length, canonicalFile.length);
