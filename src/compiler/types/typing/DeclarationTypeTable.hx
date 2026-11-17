@@ -211,20 +211,23 @@ class DeclarationTypeTable implements DeclarationTypes {
 			if (decl.methods != null)
 				for (method in decl.methods)
 					keys.set(method, decl.name + "." + method.name);
-		// What the source leaves to a body: of a module function, a class's method or an abstract's (both as the signature table
-		// holds it and as declared).
+		// What the source leaves to a body: of a module function, a class's method or an abstract's, as the signature table holds
+		// it (which a reused semantic program gives the new bodies) and as the program declares it. An interface's method has no
+		// body to give it.
+		var interfaces = [for (decl in semantic.program.interfaces) decl.name => true];
+		for (name => fn in semantic.signatures) {
+			var info = semantic.methodInfo.get(name);
+			if (info == null || !interfaces.exists(info.owner))
+				markInferred(fn, name);
+		}
 		for (fn in semantic.program.functions)
 			markInferred(fn, fn.name);
 		for (decl in semantic.program.classes)
 			for (method in decl.methods)
 				markInferred(method, decl.name + "." + method.name);
 		for (decl in semantic.program.abstracts)
-			for (method in decl.methods) {
-				var key = decl.name + "." + method.name, signature = semantic.signatures.get(key);
-				if (signature != null)
-					markInferred(signature, key);
-				markInferred(method, key);
-			}
+			for (method in decl.methods)
+				markInferred(method, decl.name + "." + method.name);
 	}
 
 	/** Marks `fn` inferred when its source leaves a part of its signature (its result or an argument's type) to its body. */
