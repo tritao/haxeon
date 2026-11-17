@@ -14,6 +14,10 @@ The current subset includes:
   `Flags` combine their values, so their switches still need a default.
 - A switch over a nullable `Int`, `String` or enum abstract matches `case null` apart from its values; a switch over a
   nullable enum abstract without a default must cover `null` too. A catch-all or capture binds the nullable value.
+- A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
+  and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
+  default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`
+  does on HashLink.
 - `null` in a switch over enums follows Haxe's matcher: the value the switch decides on first need not match `null` (a
   null there throws "Null access"), but a `Null<Enum>` or `Null<Bool>` decided on below it must, by `case null` or a
   pattern that leaves it open: a constructor argument (`case Wait(null):` beside `Wait(Jump(_))` and `Wait(Return)`) or

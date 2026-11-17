@@ -175,6 +175,7 @@ in_background run_case recursive-generic-enum-nested-pattern 0
 in_background run_case exception-catch-wrapping 0
 in_background run_case switch-null-coverage 0
 in_background run_case switch-guarded-catch-all 0
+in_background run_case switch-bool 0
 # Unannotated fields take their initializer's type, typed on demand (docs/design/LAZY_DECLARATION_TYPING.md, slice 3).
 in_background run_case lazy-field-comprehension 0
 in_background run_case lazy-field-map-lambda 0
@@ -193,6 +194,7 @@ in_background run_compile_failure generic-enum-constructor-mixed-arguments
 in_background run_compile_failure tuple-switch-missing-case
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
+in_background run_compile_failure switch-bool-missing
 in_background run_compile_failure tuple-switch-pattern-length
 in_background run_compile_failure tuple-switch-binding
 in_background run_compile_failure switch-wrong-enum-pattern

@@ -42,7 +42,8 @@ class StatementTyper {
 	}
 
 	function alwaysExits(statements:Array<TypedStatement>):Bool
-		return ControlFlow.alwaysExits(statements, function(type, cases) return bodyTyper.exhaustiveEnum(type, cases));
+		return ControlFlow.alwaysExits(statements,
+			function(type, cases) return bodyTyper.exhaustiveSwitch(type, cases));
 
 	/**
 	 * A local initialized with a reference to a declared function and never reassigned is that function: calls
@@ -823,7 +824,7 @@ class StatementTyper {
 			constantType = bodyTyper.switchConstantType(typedExpression.type);
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedExpression.type)
 			&& !BodyTyper.isEnum(typedExpression.type))
-			fail("E1019", "Switch requires an Int, String, array, or enum value", typedExpression.span);
+			fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedExpression.span);
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
 			seenCases:Map<String, Bool> = [];
@@ -921,6 +922,13 @@ class StatementTyper {
 			if (missing.length > 0)
 				fail("E1021", 'Enum switch is missing cases: ${missing.join(", ")}', span);
 		}
+		// A switch over Bool covers `true` and `false`, as Haxe requires of a statement too; one over Null<Bool> need not match
+		// null (it reads as false).
+		if (isBoolSwitch(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
+			var missing = [for (value in ["true", "false"]) if (!seenCases.exists('bool:$value')) value];
+			if (missing.length > 0)
+				fail("E1021", 'Bool switch is missing cases: ${missing.join(", ")}', span);
+		}
 		// A switch over a closed enum abstract covers every declared value, as one over an enum covers every constructor.
 		// Its implicit default throws, so a value outside the declared set fails at the switch rather than skipping it.
 		var unmatchedEnumAbstract:Null<String> = null;
@@ -947,7 +955,7 @@ class StatementTyper {
 		if (hasDefault) {
 			if (!alwaysExits(typedDefault))
 				continuing.push(defaultScope);
-		} else if (tupleTypes == null && !bodyTyper.exhaustiveEnum(typedExpression.type, typedCases))
+		} else if (tupleTypes == null && !bodyTyper.exhaustiveSwitch(typedExpression.type, typedCases))
 			continuing.push(scope);
 		scope.join(continuing);
 		return TSwitch(typedExpression, typedCases, typedDefault, hasDefault, span);
@@ -964,6 +972,12 @@ class StatementTyper {
 	static function isArraySwitchable(type:CompilerType):Bool
 		return switch type {
 			case TArray(_): true;
+			default: false;
+		};
+
+	static function isBoolSwitch(type:CompilerType):Bool
+		return switch type {
+			case TBool | TNullable(TBool): true;
 			default: false;
 		};
 

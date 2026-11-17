@@ -235,7 +235,7 @@ class ClosureTyper {
 			case TVoid: false;
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(typedBody,
-			function(type, cases) return bodyTyper.exhaustiveEnum(type, cases)))
+			function(type, cases) return bodyTyper.exhaustiveSwitch(type, cases)))
 			fail("E1006", 'Function $lambdaName does not return on every path', span);
 		var environment:Null<String> = null;
 		if (captures.length > 0)

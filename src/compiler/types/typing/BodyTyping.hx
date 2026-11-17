@@ -36,7 +36,7 @@ interface BodyTyping {
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;
 	function functionResultType(fn:AstFunction, span:SourceSpan):CompilerType;
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType;
-	function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool;
+	function exhaustiveSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool;
 
 	// Expression forms BodyTyper owns.
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,

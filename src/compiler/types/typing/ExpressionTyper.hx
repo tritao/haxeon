@@ -1613,7 +1613,7 @@ class ExpressionTyper {
 			constantType = bodyTyper.switchConstantType(typedSubject.type);
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedSubject.type)
 			&& !BodyTyper.isEnum(typedSubject.type))
-			fail("E1019", "Switch requires an Int, String, array, or enum value", typedSubject.span);
+			fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedSubject.span);
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
 			deferredCaseResults:Map<Int, {expression:AstExpression, scope:Scope}> = [],
 			deferredDefault:Null<{expression:AstExpression, scope:Scope}> = null,
@@ -1743,8 +1743,15 @@ class ExpressionTyper {
 					[for (typedCase in typedCases) typedCase.arm]);
 			if (unmatched != null)
 				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
-		} else if (typedDefault == null && !BodyTyper.isEnum(typedSubject.type) && !seenCases.exists("$catchall"))
-			fail("E1021", "Switch expression requires a default branch", span);
+		} else if (typedDefault == null && !seenCases.exists("$catchall")) {
+			// A switch over Bool covers `true` and `false`; one over Null<Bool> need not match null (it reads as false).
+			if (isBoolSwitch(typedSubject.type)) {
+				var missing = [for (value in ["true", "false"]) if (!seenCases.exists('bool:$value')) value];
+				if (missing.length > 0)
+					fail("E1021", 'Bool switch is missing cases: ${missing.join(", ")}', span);
+			} else if (!BodyTyper.isEnum(typedSubject.type))
+				fail("E1021", "Switch expression requires a default branch", span);
+		}
 		if (BodyTyper.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(BodyTyper.enumName(typedSubject.type)),
 				missing:Array<String> = [],
@@ -1809,6 +1816,12 @@ class ExpressionTyper {
 	static function isArraySwitchable(type:CompilerType):Bool
 		return switch type {
 			case TArray(_): true;
+			default: false;
+		};
+
+	static function isBoolSwitch(type:CompilerType):Bool
+		return switch type {
+			case TBool | TNullable(TBool): true;
 			default: false;
 		};
 

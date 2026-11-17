@@ -269,14 +269,14 @@ class BodyTyper implements BodyTyping {
 		if (compiler.types.analysis.NoReturnDeclarations.has(fn)) {
 			if (compiler.types.analysis.AstScan.returns(fn.statements))
 				fail("E1006", 'Function ${fn.name} is declared @:noReturn but returns', fn.span);
-			if (!ControlFlow.alwaysExits(statements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+			if (!ControlFlow.alwaysExits(statements, function(type, cases) return this.exhaustiveSwitch(type, cases)))
 				fail("E1006", 'Function ${fn.name} is declared @:noReturn but can finish without throwing', fn.span);
 		}
 		if ((switch (result) {
 			case TVoid: false;
 			default: true;
 		}) && !ControlFlow.returnsOnEveryPath(statements,
-			function(type, cases) return this.exhaustiveEnum(type, cases)))
+			function(type, cases) return this.exhaustiveSwitch(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
 		var typeArguments:Null<Array<CompilerType>> = ownerTypeArguments,
 			typeParameters = fn.typeParameters;
@@ -571,7 +571,7 @@ class BodyTyper implements BodyTyping {
 		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
 			var statement = statements[statementIndex];
-			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveEnum(type, cases))) {
+			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveSwitch(type, cases))) {
 				if (isNoReturnPlaceholder(output, statement))
 					continue;
 				fail("E1012", "Unreachable statement", statementSpan(statement));
@@ -1548,6 +1548,7 @@ class BodyTyper implements BodyTyping {
 		return switch value.expression {
 			case TIntLiteral(v): 'int:$v';
 			case TStringLiteral(v): 'string:$v';
+			case TBoolLiteral(v): 'bool:$v';
 			case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
 			case TNullLiteral: "null";
 			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): switchCaseKey(inner, predicates);
@@ -1919,7 +1920,7 @@ class BodyTyper implements BodyTyping {
 			}
 		var blockScope = new Scope(scope),
 			typedStatements = typeStatements(statements, blockScope, context.expectedReturnType);
-		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveEnum(type, cases)))
+		if (ControlFlow.alwaysExits(typedStatements, function(type, cases) return this.exhaustiveSwitch(type, cases)))
 			return new TypedExpression(TBlockExpression(typedStatements,
 				new TypedExpression(TUnreachable, TNever, span)), TNever, span);
 		var typedResult = typeExpression(result, blockScope, expectedType);
@@ -2678,67 +2679,75 @@ class BodyTyper implements BodyTyping {
 				&& (switchCase.isCatchAll || switchCase.constructorIndex == constructorIndex
 				&& switchCase.predicates.length == 0))
 				return true;
-		var groups:Map<String, {enumName:String, constructors:Map<Int, Bool>}> = [];
+		// Arms that differ in one argument only, matched there by every constructor of its enum or by `true` and `false`.
+		var groups:Map<String, {count:Int, constructors:Map<Int, Bool>}> = [];
 		for (switchCase in cases) {
 			if (switchCase.constructorIndex != constructorIndex || switchCase.guard != null
 				|| switchCase.predicates.length != 1)
 				continue;
 			var predicate = switchCase.predicates[0],
-				innerIndex = predicate.nestedConstructorIndex;
+				innerIndex = predicate.nestedConstructorIndex,
+				value = predicate.value;
 			if (predicate.arrayLength >= 0 || predicate.arrayIndex >= 0)
 				continue;
-			if (innerIndex == null) {
-				var value = predicate.value;
-				if (value == null)
-					continue;
-				var literal = enumLiteral(value);
-				if (literal == null)
-					continue;
-				innerIndex = literal.index;
+			var innerName = enumName(predicate.type),
+				bool = switch predicate.type {
+					case TBool | TNullable(TBool): true;
+					default: false;
+				};
+			if (innerIndex == null && value != null) {
+				var key = bool ? constantPatternKey(value) : null,
+					literal = enumLiteral(value);
+				if (key == "bool:true" || key == "bool:false")
+					innerIndex = key == "bool:true" ? 1 : 0;
+				else if (literal != null)
+					innerIndex = literal.index;
 			}
-			var innerName = enumName(predicate.type);
-			if (innerName == null || !session.enumDecls.exists(innerName))
+			if (innerIndex == null)
+				continue;
+			var count = bool ? 2 : innerName != null
+				&& session.enumDecls.exists(innerName) ? requiredMapValue(session.enumDecls,
+				innerName).cases.length : 0;
+			if (count == 0)
 				continue;
 			var nestedPath = [
 				for (access in predicate.nestedPath ?? [])
 					'${access.constructorIndex}.${access.fieldIndex}'
 			].join("/"),
-				key = '${predicate.index}:$nestedPath:$innerName',
+				key = '${predicate.index}:$nestedPath:${bool ? "Bool" : innerName}',
 				group = groups.get(key);
 			if (group == null) {
-				group = {enumName: innerName, constructors: []};
+				group = {count: count, constructors: []};
 				groups.set(key, group);
 			}
 			group.constructors.set(innerIndex, true);
 		}
-		for (group in groups)
-			if (session.enumDecls.exists(group.enumName)) {
-				var declaration = requiredMapValue(session.enumDecls, group.enumName),
-					complete = declaration.cases.length > 0;
-				for (index in 0...declaration.cases.length)
-					if (!group.constructors.exists(index))
-						complete = false;
-				if (complete)
-					return true;
-			}
+		for (group in groups) {
+			var complete = true;
+			for (index in 0...group.count)
+				if (!group.constructors.exists(index))
+					complete = false;
+			if (complete)
+				return true;
+		}
 		return false;
 	}
+
+	/**
+	 * The type a switch over `subject` compares its constant cases as: Int, String, Bool, or an enum abstract over Int or
+	 * String, each also nullable, when `case null` is matched apart from the value. Null for subjects without constant cases.
+	 */
+	public function switchConstantType(subject:CompilerType):Null<CompilerType>
+		return switch subject {
+			case TInt | TString | TBool: subject;
+			case TNullable(inner): switchConstantType(inner);
+			default: EnumAbstractValues.switchable(session, subject) ? subject : null;
+		};
 
 	/**
 	 * The declared values of a closed enum abstract, keyed as switch cases are (`int:N`, `string:S`), or null when `type`
 	 * is not one. Flags combine their values, so their switches have no fixed set to cover.
 	 */
-	/**
-	 * The type a switch over `subject` compares its constant cases as: Int, String, or an enum abstract over one, each also
-	 * nullable, when `case null` is matched apart from the value. Null for subjects without constant cases.
-	 */
-	public function switchConstantType(subject:CompilerType):Null<CompilerType>
-		return switch subject {
-			case TInt | TString: subject;
-			case TNullable(inner): switchConstantType(inner);
-			default: EnumAbstractValues.switchable(session, subject) ? subject : null;
-		};
-
 	public function closedEnumAbstractValues(type:CompilerType):Null<Array<{name:String, key:String}>> {
 		switch type {
 			case TNullable(inner):
@@ -2765,8 +2774,25 @@ class BodyTyper implements BodyTyping {
 		return values;
 	}
 
-	/** Whether `cases` cover every constructor. A null subject need not be matched: it fails with a null access, as in Haxe. */
-	public function exhaustiveEnum(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
+	/**
+	 * Whether `cases` cover every value of an enum (each constructor) or Bool (`true` and `false`) subject. A null subject need not
+	 * be matched, as in Haxe: an enum fails with a null access, and a `Null<Bool>` is read as `false`.
+	 */
+	public function exhaustiveSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool {
+		switch type {
+			case TBool | TNullable(TBool):
+				var seen:Map<String, Bool> = [];
+				for (switchCase in cases)
+					if (switchCase.arm.guard == null) {
+						if (switchCase.arm.isCatchAll)
+							return true;
+						var key = switchCaseKey(switchCase.arm.value, []);
+						if (key != null)
+							seen.set(key, true);
+					}
+				return seen.exists("bool:true") && seen.exists("bool:false");
+			default:
+		}
 		var enumName = enumName(type);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return false;

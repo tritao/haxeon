@@ -1117,7 +1117,8 @@ class IrGenerator {
 						}
 					} else {
 						var checkBlock = builder.currentBlock(), // An unguarded `case _:` or `case other:` matches every value, so nothing falls out of the arms.
-							matchesEverything = false;
+							matchesEverything = false,
+							nullAsFalse = readsNullAsFalse(expression.type, arms, hasDefault);
 						for (caseIndex in 0...cases.length) {
 							var switchCase = cases[caseIndex], arm = switchCase.arm;
 							if (arm.guard == null && arm.isCatchAll)
@@ -1145,21 +1146,26 @@ class IrGenerator {
 									builder.select(nonNullBlock);
 									subjectValue = builder.load(switchName, switchType);
 								}
-								var valueType = nullableSwitchValueType(expression.type);
+								var valueType = nullableSwitchValueType(expression.type),
+									predicateBlock = arm.predicates.length == 0 ? matchBlock : builder.createBlock(),
+									boolPattern = boolLiteral(arm.value);
 								if (valueType != null && !isNullExpression(arm.value)
 									&& !arm.isCatchAll) {
 									var nonNullBlock = builder.createBlock();
+									// A null that reads as false matches `case false`; otherwise it matches no constant.
 									builder.branch(builder.equal(subjectValue, builder.constNull(switchType)),
-										nextBlock,
+										nullAsFalse && boolPattern == false ? predicateBlock : nextBlock,
 										nonNullBlock);
 									builder.select(nonNullBlock);
 									subjectValue = abiBoundaryCast(builder, builder.load(switchName, switchType),
 										lowerType(valueType));
 								}
-								var predicateBlock = arm.predicates.length == 0
-									? matchBlock : builder.createBlock();
 								if (arm.isCatchAll)
 									builder.jump(predicateBlock);
+								else if (boolPattern != null)
+									// `case true` and `case false` branch on the value itself.
+									builder.branch(subjectValue, boolPattern ? predicateBlock : nextBlock,
+										boolPattern ? nextBlock : predicateBlock);
 								else {
 									var switchValue = arm.constructorIndex >= 0
 										&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
@@ -1218,9 +1224,11 @@ class IrGenerator {
 							checkBlock = nextBlock;
 						}
 						builder.select(checkBlock);
-						if (!hasDefault && (tuple || isNullableEnumType(expression.type) && !matchesEverything))
+						if (!hasDefault
+							&& (tuple || nullReachesFallback(expression.type, nullAsFalse) && !matchesEverything))
 							throwUnmatchedNull(builder);
-						else if (!hasDefault && (isEnumType(expression.type) || matchesEverything))
+						else if (!hasDefault && (isEnumType(expression.type) || isBoolType(expression.type)
+							|| matchesEverything))
 							builder.markUnreachable();
 						else
 							lowerStatements(defaultBranch, builder, localTypes,
@@ -2795,7 +2803,10 @@ class IrGenerator {
 					builder.select(afterBlock);
 					builder.load(resultName, resultType);
 				} else {
-					var entryBlock = builder.currentBlock();
+					var entryBlock = builder.currentBlock(),
+						nullAsFalse = readsNullAsFalse(subject.type, arms, defaultExpression != null),
+						throwsAtFallback = defaultExpression == null
+							&& (tuple || nullReachesFallback(subject.type, nullAsFalse));
 					var bodyBlocks:Array<CfgBlock> = [];
 					var matchBlocks:Array<CfgBlock> = [];
 					var checkBlocks:Array<CfgBlock> = [entryBlock];
@@ -2821,7 +2832,7 @@ class IrGenerator {
 							bodyBlock = bodyBlocks[caseIndex],
 							nextBlock = caseIndex + 1 < cases.length
 								? checkBlocks[caseIndex + 1]
-								: (defaultExpression == null && !tuple ? afterBlock : fallbackBlock);
+								: (defaultExpression == null && !throwsAtFallback ? afterBlock : fallbackBlock);
 						var matchBlock = matchBlocks[caseIndex];
 						if (arm.arrayPattern != null)
 							lowerSwitchArrayPattern(arm.arrayPattern, subjectName, subjectType, tuple, caseIndex,
@@ -2842,10 +2853,14 @@ class IrGenerator {
 								builder.select(nonNullBlock);
 								subjectValue = builder.load(subjectName, subjectType);
 							}
-							var valueType = nullableSwitchValueType(subject.type);
-							if (valueType != null && !isNullExpression(arm.value) && !arm.isCatchAll) {
+							var valueType = nullableSwitchValueType(subject.type),
+								boolPattern = boolLiteral(arm.value);
+							if (valueType != null && !isNullExpression(arm.value) && !arm.isCatchAll
+								&& !isExhaustiveFinalCase) {
 								var nonNullBlock = builder.createBlock();
-								builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)), nextBlock,
+								// A null that reads as false matches `case false`; otherwise it matches no constant.
+								builder.branch(builder.equal(subjectValue, builder.constNull(subjectType)),
+									nullAsFalse && boolPattern == false ? matchBlock : nextBlock,
 									nonNullBlock);
 								builder.select(nonNullBlock);
 								subjectValue = abiBoundaryCast(builder, builder.load(subjectName, subjectType),
@@ -2854,6 +2869,19 @@ class IrGenerator {
 							// A catch-all binds and tests its guard in its match block, as every arm does.
 							if (arm.isCatchAll)
 								builder.jump(matchBlock);
+							else if (isExhaustiveFinalCase) {
+								// The last arm of an exhaustive switch takes what reaches it, but an enum subject is still read, so
+								// a null one fails with a null access as Haxe's does.
+								if (arm.constructorIndex >= 0 && isEnumType(subject.type)) {
+									var indexName = builder.operandName(), index = builder.enumIndex(subjectValue);
+									localTypes.set(indexName, index.type);
+									builder.store(indexName, index);
+								}
+								builder.jump(matchBlock);
+							} else if (boolPattern != null)
+								// `case true` and `case false` branch on the value itself.
+								builder.branch(subjectValue, boolPattern ? matchBlock : nextBlock,
+									boolPattern ? nextBlock : matchBlock);
 							else {
 								var comparisonValue = arm.constructorIndex >= 0
 									&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue,
@@ -2871,17 +2899,12 @@ class IrGenerator {
 									default: false;
 								})) builder.call("__string_equal", [comparisonValue, caseValue], Bool);
 								else builder.equal(comparisonValue, caseValue);
-								if (isExhaustiveFinalCase)
-									builder.jump(bodyBlock);
-								else {
-									var predicateBlock = arm.predicates.length == 0
-										? matchBlock : builder.createBlock();
-									builder.branch(matches, predicateBlock, nextBlock);
-									if (arm.predicates.length > 0)
-										lowerEnumPredicates(subjectName, subjectType, arm.constructorIndex,
-											arm.predicates, predicateBlock, matchBlock,
-											nextBlock, builder, localTypes);
-								}
+								var predicateBlock = arm.predicates.length == 0 ? matchBlock : builder.createBlock();
+								builder.branch(matches, predicateBlock, nextBlock);
+								if (arm.predicates.length > 0)
+									lowerEnumPredicates(subjectName, subjectType, arm.constructorIndex,
+										arm.predicates, predicateBlock, matchBlock,
+										nextBlock, builder, localTypes);
 							}
 						}
 						builder.select(matchBlock);
@@ -2916,7 +2939,7 @@ class IrGenerator {
 						}
 					}
 					var fallback = defaultExpression;
-					if (fallback == null && (tuple || isNullableEnumType(subject.type))) {
+					if (throwsAtFallback) {
 						builder.select(fallbackBlock);
 						throwUnmatchedNull(builder);
 					} else if (fallback != null) {
@@ -4145,7 +4168,50 @@ class IrGenerator {
 	 */
 	function nullableSwitchValueType(type:CompilerType):Null<CompilerType>
 		return switch type {
-			case TNullable(inner = TInt | TString | TAbstract(_, _, TInt | TString)): inner;
+			case TNullable(inner = TInt | TString | TBool | TAbstract(_, _, TInt | TString)): inner;
+			default: null;
+		};
+
+	/**
+	 * Whether a switch over `subject` reads a null subject as `false` rather than testing it apart. Haxe compiles a switch over
+	 * `Null<Bool>` without `case null`, a default or an unguarded catch-all to `if (subject)`, where null is false; otherwise
+	 * null skips the `true` and `false` arms and reaches `case null`, a catch-all or the default.
+	 */
+	function readsNullAsFalse(subject:CompilerType, arms:Array<TypedSwitchArm>, hasDefault:Bool):Bool {
+		switch subject {
+			case TNullable(TBool):
+			default:
+				return false;
+		}
+		if (hasDefault)
+			return false;
+		for (arm in arms)
+			if (isNullExpression(arm.value) || arm.isCatchAll && arm.guard == null)
+				return false;
+		return true;
+	}
+
+	/**
+	 * Whether a null subject can fall out of the arms of a switch without a default: one over a nullable enum, or over
+	 * `Null<Bool>` unless null reads as false. It fails with a null access there, as in Haxe.
+	 */
+	function nullReachesFallback(subject:CompilerType, nullAsFalse:Bool):Bool
+		return isNullableEnumType(subject) || !nullAsFalse && (switch subject {
+			case TNullable(TBool): true;
+			default: false;
+		});
+
+	static function isBoolType(type:CompilerType):Bool
+		return switch type {
+			case TBool | TNullable(TBool): true;
+			default: false;
+		};
+
+	/** The value of a `case true` or `case false` pattern, or null for any other. */
+	static function boolLiteral(expression:TypedExpression):Null<Bool>
+		return switch expression.expression {
+			case TBoolLiteral(value): value;
+			case TNullableWrap(value), TCast(value), TAbiCast(value): boolLiteral(value);
 			default: null;
 		};
 
