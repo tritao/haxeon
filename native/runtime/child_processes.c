@@ -318,6 +318,24 @@ static bool realtime_child_pipe(int fds[2]) {
 }
 #endif
 
+#ifdef HL_WIN
+/* Whether a detached child may leave the job this process runs in. Asking is one cheap call; trying and retrying after
+   ERROR_ACCESS_DENIED made every detached start create the process twice inside a job that forbids breakaway. */
+static bool realtime_child_may_break_away(void) {
+	static int known = -1;
+	if (known >= 0) return known != 0;
+	BOOL inJob = FALSE;
+	int allowed = 1;
+	if (IsProcessInJob(GetCurrentProcess(), NULL, &inJob) && inJob) {
+		JOBOBJECT_EXTENDED_LIMIT_INFORMATION current = {0};
+		allowed = QueryInformationJobObject(NULL, JobObjectExtendedLimitInformation, &current, sizeof(current), NULL) &&
+			(current.BasicLimitInformation.LimitFlags & (JOB_OBJECT_LIMIT_BREAKAWAY_OK | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK)) != 0;
+	}
+	known = allowed ? 1 : 0;
+	return allowed != 0;
+}
+#endif
+
 HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varray *arguments,
 	vstring *cwd, varray *keys, varray *values, bool detached, bool new_process_group) {
 #ifdef HL_WIN
@@ -403,10 +421,18 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 	startup.lpAttributeList = attributes;
 	PROCESS_INFORMATION information = {0};
 	DWORD flags = EXTENDED_STARTUPINFO_PRESENT | CREATE_UNICODE_ENVIRONMENT | CREATE_SUSPENDED |
-		(detached ? CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | CREATE_BREAKAWAY_FROM_JOB : 0);
+		(detached ? CREATE_NO_WINDOW | CREATE_NEW_PROCESS_GROUP | (realtime_child_may_break_away() ? CREATE_BREAKAWAY_FROM_JOB : 0) : 0);
 	BOOL started = CreateProcessW(NULL, command_line, NULL, NULL, TRUE, flags, environment, directory,
 		&startup.StartupInfo, &information);
 	DWORD error = started ? ERROR_SUCCESS : GetLastError();
+	// A job that does not allow breakaway (a sandbox, a CI runner, some terminals) refuses CREATE_BREAKAWAY_FROM_JOB
+	// with ERROR_ACCESS_DENIED. The detached child then starts inside that job instead: it still outlives this
+	// process, but not the job.
+	if (!started && detached && error == ERROR_ACCESS_DENIED) {
+		started = CreateProcessW(NULL, command_line, NULL, NULL, TRUE, flags & ~CREATE_BREAKAWAY_FROM_JOB, environment,
+			directory, &startup.StartupInfo, &information);
+		error = started ? ERROR_SUCCESS : GetLastError();
+	}
 	DeleteProcThreadAttributeList(attributes); free(attributes);
 	realtime_child_handle_close(&child_stdin); realtime_child_handle_close(&child_stdout);
 	realtime_child_handle_close(&child_stderr);
