@@ -106,6 +106,14 @@ class IteratorTypeDescriptorMain {
 				symbol: "__std_is_of_type",
 				arguments: [Dyn, TypeRef],
 				result: Bool
+			},
+			// The erased-owner accessors test exact classes first (GenericOwnerErasure); the assembler declares it in a build.
+			{
+				name: compiler.ir.IrExactTypeFacts.TEST,
+				library: "haxeon_runtime",
+				symbol: "__std_is_exact_type",
+				arguments: [Dyn, TypeRef],
+				result: Bool
 			}
 		];
 		program.functions = [new IrFunction("main", b.arguments, I32, b.blocks, Ordinary)];
