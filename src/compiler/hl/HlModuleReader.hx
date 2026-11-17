@@ -1,5 +1,6 @@
 package compiler.hl;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode.HlFunctionIdentity;
 import compiler.hl.HlCode.HlTypeDef;
 import haxe.io.Bytes;
@@ -17,10 +18,10 @@ class HlModuleReader {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		if (bytes.length < 4 || input.readString(3) != "HLB")
-			throw "Not a HashLink module";
+			throw new InternalError("Not a HashLink module");
 		var version = input.readByte();
 		if (version < 4 || version > HlCode.VERSION)
-			throw 'Unsupported HLB version $version';
+			throw new InternalError('Unsupported HLB version $version');
 		var sizes:Array<HlModulePart> = [], mark = input.position;
 		function part(name:String):Void {
 			sizes.push({name: name, bytes: input.position - mark});
@@ -124,7 +125,7 @@ class HlModuleReader {
 			}
 		part("debug sections");
 		if (input.position != bytes.length)
-			throw 'HLB module has ${bytes.length - input.position} bytes after its last section';
+			throw new InternalError('HLB module has ${bytes.length - input.position} bytes after its last section');
 		return {
 			version: version,
 			debug: debug,
@@ -175,11 +176,11 @@ class HlModuleReader {
 			if (c & 1 != 0) {
 				file = ((c >> 1) << 8) | input.readByte();
 				if (file >= files)
-					throw "Invalid HLB debug file";
+					throw new InternalError("Invalid HLB debug file");
 			} else if (c & 2 != 0) {
 				var delta = c >> 6, run = (c >> 2) & 15;
 				if (result.length + run > count)
-					throw "HLB debug lines outside the function";
+					throw new InternalError("HLB debug lines outside the function");
 				for (_ in 0...run)
 					result.push({file: file, line: line});
 				line += delta;

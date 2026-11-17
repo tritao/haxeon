@@ -1,5 +1,6 @@
 package editor.profiler;
 
+import compiler.core.InternalError;
 import haxe.Int64;
 import profiler.HldiClient;
 import profiler.ProfilerSession;
@@ -51,11 +52,11 @@ class ProfilerService {
 				case "haxeon.profiler.captureStart": captureStart(options);
 				case "haxeon.profiler.captureStop": captureStop();
 				case "haxeon.profiler.disconnect": disconnect();
-				default: throw 'Unknown Haxeon profiler command "$command"';
+				default: throw new InternalError('Unknown Haxeon profiler command "$command"');
 			};
 			mutex.release();
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			mutex.release();
 			throw error;
 		}
@@ -89,7 +90,7 @@ class ProfilerService {
 			requestedMaxEntries = intOption(options, "maxEntries", 100),
 			token = optionalString(options, "token");
 		if (requestedMaxEntries < 1)
-			throw "Profiler maxEntries must be positive";
+			throw new InternalError("Profiler maxEntries must be positive");
 		session = new ProfilerSession(new HldiClient(host, port, timeout, token));
 		viewModel.reset();
 		emittedMetadataChanges = 0;
@@ -110,12 +111,12 @@ class ProfilerService {
 			allocationInterval = intOption(options, "allocationInterval", 0),
 			sources = intOption(options, "sources", 0);
 		if (interval < 10)
-			throw "Profiler polling interval must be at least 10ms";
+			throw new InternalError("Profiler polling interval must be at least 10ms");
 		pollIntervalSeconds = interval / 1000.0;
 		if (allocationInterval < 0)
-			throw "Profiler allocation interval must not be negative";
+			throw new InternalError("Profiler allocation interval must not be negative");
 		if (sources < 0 || sources > 7)
-			throw "Profiler sources must be a combination of instrument (1), sampling (2) and alloc (4)";
+			throw new InternalError("Profiler sources must be a combination of instrument (1), sampling (2) and alloc (4)");
 		// Sources default to sampling, plus allocation sampling when an interval is set.
 		current.start(rate, allocationInterval, sources == 0 ? null : sources);
 		wake.release();
@@ -154,7 +155,7 @@ class ProfilerService {
 		var current = requireSession(),
 			path = stringOption(options, "path", "");
 		if (path.length == 0)
-			throw "Profiler capture path must not be empty";
+			throw new InternalError("Profiler capture path must not be empty");
 		current.startCapture(path);
 		return snapshot(current.snapshot());
 	}
@@ -222,7 +223,7 @@ class ProfilerService {
 
 	function requireSession():ProfilerSession {
 		if (session == null)
-			throw "Profiler is not connected";
+			throw new InternalError("Profiler is not connected");
 		return session;
 	}
 
@@ -429,7 +430,7 @@ class ProfilerService {
 	static function requiredInt(options:Dynamic, name:String):Int {
 		var value:Dynamic = Reflect.field(options, name);
 		if (!Std.isOfType(value, Int))
-			throw 'Profiler option "$name" must be an integer';
+			throw new InternalError('Profiler option "$name" must be an integer');
 		return cast value;
 	}
 
@@ -441,7 +442,7 @@ class ProfilerService {
 			return fallback;
 		var value:Dynamic = Reflect.field(options, name);
 		if (!Std.isOfType(value, Float) && !Std.isOfType(value, Int))
-			throw 'Profiler option "$name" must be numeric';
+			throw new InternalError('Profiler option "$name" must be numeric');
 		return cast value;
 	}
 
@@ -450,7 +451,7 @@ class ProfilerService {
 			return fallback;
 		var value:Dynamic = Reflect.field(options, name);
 		if (!Std.isOfType(value, String))
-			throw 'Profiler option "$name" must be a string';
+			throw new InternalError('Profiler option "$name" must be a string');
 		return cast value;
 	}
 
@@ -459,7 +460,7 @@ class ProfilerService {
 			return null;
 		var value:Dynamic = Reflect.field(options, name);
 		if (!Std.isOfType(value, String))
-			throw 'Profiler option "$name" must be a string';
+			throw new InternalError('Profiler option "$name" must be a string');
 		return cast value;
 	}
 }

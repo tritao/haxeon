@@ -1,5 +1,6 @@
 package compiler.hl.patch;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes as HaxeBytes;
 import haxe.io.BytesOutput;
 import compiler.hl.HlWriter;
@@ -41,10 +42,10 @@ class HlPatchWriter {
 			}>,
 			?globalNames:Map<String, Int>):HaxeBytes {
 		if (baseRevision < 0 || revision <= baseRevision)
-			throw "Invalid patch revision range";
+			throw new InternalError("Invalid patch revision range");
 		var selected:Array<HlFunction> = [];
 		if (moduleId.length != 16)
-			throw "Module ID must contain 16 bytes";
+			throw new InternalError("Module ID must contain 16 bytes");
 		for (index in changedSlots) {
 			var found:Null<HlFunction> = null;
 			for (fn in code.functions)
@@ -53,7 +54,7 @@ class HlPatchWriter {
 					break;
 				}
 			if (found == null)
-				throw 'Patch references missing function $index';
+				throw new InternalError('Patch references missing function $index');
 			selected.push(found);
 		}
 		var symbols = new BytesOutput();
@@ -90,7 +91,7 @@ class HlPatchWriter {
 		writeIndex(functions, selected.length);
 		for (fn in selected) {
 			if (!stableIdsBySlot.exists(fn.functionIndex))
-				throw 'Missing stable ID for function slot ${fn.functionIndex}';
+				throw new InternalError('Missing stable ID for function slot ${fn.functionIndex}');
 			var stableId = stableIdsBySlot.get(fn.functionIndex);
 			var body = HlWriter.encodeFunction(fn), bytes = new BytesOutput();
 			bytes.bigEndian = false;
@@ -129,7 +130,7 @@ class HlPatchWriter {
 				|| section.tag == ADDED_FUNCTIONS || section.tag == GLOBALS || section.tag == OBJECT_FIELDS
 				|| section.tag == MIGRATIONS
 				|| section.tag == GUARDS)
-				throw 'Extension section uses reserved HLP tag ${section.tag}';
+				throw new InternalError('Extension section uses reserved HLP tag ${section.tag}');
 		writeIndex(out,
 			2
 			+ (debug == null ? 0 : 1)
@@ -227,7 +228,7 @@ class HlPatchWriter {
 		for (migration in layout.migrations) {
 			var stableId = stableIdsBySlot.get(migration.slot);
 			if (stableId == null)
-				throw 'Missing stable ID for migration slot ${migration.slot}';
+				throw new InternalError('Missing stable ID for migration slot ${migration.slot}');
 			writeIndex(out, migration.type);
 			writeIndex(out, stableId);
 		}
@@ -268,7 +269,7 @@ class HlPatchWriter {
 				out.writeByte(0);
 				writeIndex(out, code.globals[global]);
 			} else
-				throw "A patch can add only constant globals and the value globals of new object types";
+				throw new InternalError("A patch can add only constant globals and the value globals of new object types");
 		}
 		return out.getBytes();
 	}
@@ -291,9 +292,9 @@ class HlPatchWriter {
 				if (fn.functionIndex == entry.slot)
 					found = fn;
 			if (found == null)
-				throw 'Added function slot ${entry.slot} has no body in the patch';
+				throw new InternalError('Added function slot ${entry.slot} has no body in the patch');
 			if (!stableIdsBySlot.exists(entry.slot))
-				throw 'Missing stable ID for added function slot ${entry.slot}';
+				throw new InternalError('Missing stable ID for added function slot ${entry.slot}');
 			var name = HaxeBytes.ofString(entry.name);
 			writeIndex(out, stableIdsBySlot.get(entry.slot));
 			writeIndex(out, entry.slot);
@@ -339,9 +340,9 @@ class HlPatchWriter {
 		writeIndex(out, functions.length);
 		for (fn in functions) {
 			if (fn.debugLocations.length != fn.opcodes.length)
-				throw 'Debug location count does not match opcodes in function ${fn.functionIndex}';
+				throw new InternalError('Debug location count does not match opcodes in function ${fn.functionIndex}');
 			if (!stableIdsBySlot.exists(fn.functionIndex))
-				throw 'Missing stable function identity for slot "${fn.functionIndex}"';
+				throw new InternalError('Missing stable function identity for slot "${fn.functionIndex}"');
 			writeIndex(out, stableIdsBySlot.get(fn.functionIndex));
 			var positions = HlWriter.layout(fn.opcodes);
 			writeIndex(out, positions[fn.opcodes.length]);
@@ -350,7 +351,7 @@ class HlPatchWriter {
 					continue;
 				var location = fn.debugLocations[index];
 				if (!fileIndices.exists(location.path))
-					throw 'Missing patch debug source index for "${location.path}"';
+					throw new InternalError('Missing patch debug source index for "${location.path}"');
 				writeIndex(out, fileIndices.get(location.path));
 				writeIndex(out, location.line);
 				writeIndex(out, location.column);
@@ -529,21 +530,21 @@ class HlPatchWriter {
 
 	static function checkBase(base:Int, total:Int):Void
 		if (base < 0 || base > total)
-			throw "Invalid HLP symbol base";
+			throw new InternalError("Invalid HLP symbol base");
 
 	static function writeType(out:BytesOutput, type:HlTypeDef):Void
 		switch type {
 			case Simple(kind):
 				if (kind == HashLinkType.Ref || kind == HashLinkType.Null || kind == HashLinkType.Packed
 					|| kind == HashLinkType.EnumTag)
-					throw 'HashLink type $kind requires a parameter';
+					throw new InternalError('HashLink type $kind requires a parameter');
 				if (kind == HashLinkType.Obj || kind == HashLinkType.Struct || kind == HashLinkType.Virtual
 					|| kind == HashLinkType.Enum)
-					throw 'HashLink type $kind requires its layout';
+					throw new InternalError('HashLink type $kind requires its layout');
 				out.writeByte(kind);
 			case Parameterized(kind, parameter):
 				if (kind != HashLinkType.Ref && kind != HashLinkType.Null && kind != HashLinkType.Packed)
-					throw 'Unsupported parameterized HashLink patch type $kind';
+					throw new InternalError('Unsupported parameterized HashLink patch type $kind');
 				out.writeByte(kind);
 				writeSignedIndex(out, parameter);
 			case Abstract(name):
@@ -571,14 +572,14 @@ class HlPatchWriter {
 					writeIndex(out, field.type);
 				}
 			case Enum(_, _, _), EnumTag(_, _):
-				throw "Enum type patches require a structural reload";
+				throw new InternalError("Enum type patches require a structural reload");
 		}
 
 	static function writeObjectType(out:BytesOutput, name:Int, base:Int, global:Int,
 			fields:Array<compiler.hl.HlCode.HlObjectField>,
 			methods:Array<compiler.hl.HlCode.HlObjectMethod>, bindings:Array<Int>):Void {
 		if (bindings.length % 2 != 0)
-			throw "Object bindings come in field and function pairs";
+			throw new InternalError("Object bindings come in field and function pairs");
 		writeIndex(out, name);
 		writeSignedIndex(out, base);
 		writeIndex(out, global);
@@ -600,7 +601,7 @@ class HlPatchWriter {
 
 	static function writeIndex(out:BytesOutput, v:Int):Void {
 		if (v < 0)
-			throw 'Negative patch index $v';
+			throw new InternalError('Negative patch index $v');
 		writeSignedIndex(out, v);
 	}
 

@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.Diagnostic;
+import compiler.core.InternalError;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
@@ -90,7 +91,7 @@ class TypingSession {
 
 	public function endUnit(unit:TypingOutput):Void {
 		if (output != unit)
-			throw "Typing outputs must be left in stack order";
+			throw new InternalError("Typing outputs must be left in stack order");
 		output = outputs.pop();
 	}
 
@@ -114,7 +115,7 @@ class TypingSession {
 		output = unit;
 		try {
 			type();
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			endUnit(unit);
 			throw error;
 		}
@@ -674,7 +675,7 @@ class TypingSession {
 
 	public function leaveBody(body:TypingContext):Void {
 		if (currentContext != body)
-			throw "Body typing contexts must be left in stack order";
+			throw new InternalError("Body typing contexts must be left in stack order");
 		bodyContexts.pop();
 		if (StringTools.startsWith(body.name, DEFAULT_ARGUMENT_PREFIX))
 			defaultArgumentDepth--;

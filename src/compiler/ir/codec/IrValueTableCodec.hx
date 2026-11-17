@@ -1,5 +1,6 @@
 package compiler.ir.codec;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
 import haxe.io.Bytes as HaxeBytes;
@@ -26,23 +27,23 @@ class IrValueTableCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "IRV")
-				throw "Invalid IR value table";
+				throw new InternalError("Invalid IR value table");
 			var version = input.readByte();
 			if (version < 1 || version > VERSION)
-				throw "Unsupported IR value table version";
+				throw new InternalError("Unsupported IR value table version");
 			var result = read(input, bytes.length);
 			if (input.position != bytes.length)
-				throw "Trailing IR value table data";
+				throw new InternalError("Trailing IR value table data");
 			return result;
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated IR value table";
+			throw new InternalError("Truncated IR value table");
 		}
 	}
 
 	public static function write(output:BytesOutput, values:Array<IrValue>, named:Bool = true,
 			erase:Bool = false):Void {
 		if (values.length > MAX_VALUES)
-			throw "Too many IR values";
+			throw new InternalError("Too many IR values");
 		var ordered = values.copy();
 		ordered.sort(function(a, b) return (a.id:Int) - (b.id:Int));
 		output.writeInt32(ordered.length);
@@ -50,7 +51,7 @@ class IrValueTableCodec {
 		for (value in ordered) {
 			var id:Int = value.id;
 			if (id < 0 || id <= previous)
-				throw "Duplicate or invalid IR value ID";
+				throw new InternalError("Duplicate or invalid IR value ID");
 			previous = id;
 			output.writeInt32(id);
 			writeString(output, named ? value.name : "");
@@ -61,12 +62,12 @@ class IrValueTableCodec {
 	public static function read(input:BytesInput, totalLength:Int):Array<IrValue> {
 		var count = input.readInt32();
 		if (count < 0 || count > MAX_VALUES)
-			throw "Invalid IR value count";
+			throw new InternalError("Invalid IR value count");
 		var result:Array<IrValue> = [], seen:Map<Int, Bool> = [];
 		for (_ in 0...count) {
 			var id = input.readInt32();
 			if (id < 0 || seen.exists(id))
-				throw "Duplicate or invalid IR value ID";
+				throw new InternalError("Duplicate or invalid IR value ID");
 			seen.set(id, true);
 			result.push(new IrValue(id, readString(input, totalLength), IrTypeCodec.readType(input, totalLength, 0)));
 		}
@@ -78,7 +79,7 @@ class IrValueTableCodec {
 		for (value in values) {
 			var id:Int = value.id;
 			if (result.exists(id))
-				throw "Duplicate IR value ID";
+				throw new InternalError("Duplicate IR value ID");
 			result.set(id, value);
 		}
 		return result;
@@ -90,14 +91,14 @@ class IrValueTableCodec {
 	public static function readReference(input:BytesInput, values:Map<Int, IrValue>):IrValue {
 		var id = input.readInt32();
 		if (id < 0 || !values.exists(id))
-			throw "Unknown IR value reference";
+			throw new InternalError("Unknown IR value reference");
 		return values.get(id);
 	}
 
 	static function writeString(output:BytesOutput, value:String):Void {
 		var bytes = HaxeBytes.ofString(value);
 		if (bytes.length > 0x100000)
-			throw "IR value name is too long";
+			throw new InternalError("IR value name is too long");
 		output.writeInt32(bytes.length);
 		output.write(bytes);
 	}
@@ -105,7 +106,7 @@ class IrValueTableCodec {
 	static function readString(input:BytesInput, totalLength:Int):String {
 		var length = input.readInt32();
 		if (length < 0 || length > 0x100000 || length > totalLength - input.position)
-			throw "Invalid IR value name";
+			throw new InternalError("Invalid IR value name");
 		return input.readString(length);
 	}
 }

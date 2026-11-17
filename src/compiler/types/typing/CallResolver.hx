@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
@@ -111,7 +112,7 @@ class CallResolver {
 		for (owner in owners) {
 			var declaration = session.declarations.abstractDeclaration(owner);
 			if (declaration == null)
-				throw 'Missing abstract declaration "$owner"';
+				throw new InternalError('Missing abstract declaration "$owner"');
 			for (method in declaration.methods) {
 				if (method.arguments.length != operands.length
 					|| !DeclarationIndex.methodDeclaresOperator(method, symbol))
@@ -349,7 +350,7 @@ class CallResolver {
 		if (NativeLayout.isNativeValue(type)) {
 			var name = switch type {
 				case TInstance(NominalKind.NativeValue, name, _): name;
-				case _: throw "Native value type check lost its nominal type";
+				case _: throw new InternalError("Native value type check lost its nominal type");
 			};
 			var layout = session.nativeLayoutsByName.get(name);
 			if (layout == null)
@@ -540,7 +541,7 @@ class CallResolver {
 
 	static function requiredArgument(argument:Null<TypedExpression>):TypedExpression {
 		if (argument == null)
-			throw "Generic call argument was not typed";
+			throw new InternalError("Generic call argument was not typed");
 		return argument;
 	}
 
@@ -668,13 +669,13 @@ class CallResolver {
 				case TInstance(NominalKind.Enum, owner, typeArguments):
 					var declaration = session.enumDecls.get(owner);
 					if (declaration == null)
-						throw 'Missing enum declaration "$owner"';
+						throw new InternalError('Missing enum declaration "$owner"');
 					for (index in 0...declaration.typeParameters.length)
 						substitutions.set(declaration.typeParameters[index],
 							index < typeArguments.length ? typeArguments[index] : TTypeParameter(owner,
 							declaration.typeParameters[index]));
 				default:
-					throw "Enum method without an enum receiver";
+					throw new InternalError("Enum method without an enum receiver");
 			}
 			var typed = typeDeclaredCallArguments(arguments, enumMethod, scope, name, span, substitutions);
 			var result = session.declarations.types.resultType(enumMethod, substitutions);
@@ -792,7 +793,7 @@ class CallResolver {
 		}
 		var declaration = session.declarations.abstractDeclaration(abstractName);
 		if (declaration == null)
-			throw 'Missing abstract declaration "$abstractName"';
+			throw new InternalError('Missing abstract declaration "$abstractName"');
 		var method:Null<AstFunction> = null;
 		for (candidate in declaration.methods)
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
@@ -1527,7 +1528,7 @@ class CallResolver {
 		}
 		if (name == "$value.place") {
 			if (arguments.length != 1)
-				throw "Invalid compiler-generated place binding";
+				throw new InternalError("Invalid compiler-generated place binding");
 			var value = typeExpressionValue(arguments[0], scope);
 			ValuePlaceRules.requireWritable(session, value, span);
 			return new TypedExpression(TCall("$value.place", [value]), value.type, span);
@@ -2093,7 +2094,7 @@ class CallResolver {
 		}
 		var element = switch receiver.type {
 			case TArray(value): value;
-			default: throw "Not an array";
+			default: throw new InternalError("Not an array");
 		}, value = switch element {
 			case TNullable(inner): inner;
 			default: element;
@@ -2107,7 +2108,7 @@ class CallResolver {
 			span:SourceSpan, scope:Scope):TypedExpression {
 		var element = switch receiver.type {
 			case TArray(value): value;
-			default: throw "Not an array";
+			default: throw new InternalError("Not an array");
 		};
 		// An element still to be fixed (`var list = []`) is checked once the push that fixes it has been typed.
 		session.monomorphs.whenKnown(element, function() {
@@ -2371,7 +2372,7 @@ class CallResolver {
 			case "next":
 				var element = switch receiver.type {
 					case TIterator(value): value;
-					default: throw "Not an iterator";
+					default: throw new InternalError("Not an iterator");
 				};
 				new TypedExpression(TCall("__iterator_next", [receiver]), element, span);
 			default: throw new CompileError(new Diagnostic("E1007", 'Unknown Iterator method "$name"', span));
@@ -2400,7 +2401,7 @@ class CallResolver {
 			span:SourceSpan, scope:Scope):TypedExpression {
 		var mapType = switch receiver.type {
 			case TMap(key, value): {key: key, value: value};
-			default: throw "Not a map";
+			default: throw new InternalError("Not a map");
 		};
 		DeclaredConformance.requireMapRuntime(session, mapType.key, mapType.value, span);
 		if (name == "set") {
@@ -2698,7 +2699,7 @@ class CallResolver {
 
 	static function requiredMapValue<T>(source:Map<String, T>, name:String):T {
 		if (!source.exists(name))
-			throw 'Missing map entry "$name"';
+			throw new InternalError('Missing map entry "$name"');
 		return source.get(name);
 	}
 

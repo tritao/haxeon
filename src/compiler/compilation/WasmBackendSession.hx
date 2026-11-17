@@ -11,6 +11,7 @@ import compiler.compilation.BackendSession.BackendAssemblyResult;
 import compiler.compilation.BackendSession.BackendTimings;
 import compiler.core.AllocationMeter;
 import compiler.core.CancellationToken;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
 import haxe.Json;
 import haxe.io.Bytes;
@@ -61,7 +62,7 @@ class WasmBackendSession implements BackendSession {
 		var requested = context.backendOptions;
 		if (requested != null) {
 			if (requested.target != target)
-				throw 'Wasm session for ${Std.string(target)} was given options for ${Std.string(requested.target)}';
+				throw new InternalError('Wasm session for ${Std.string(target)} was given options for ${Std.string(requested.target)}');
 			return requested;
 		}
 		return {target: target, debugNames: true, developmentMetadata: context.developmentMetadata};
@@ -161,7 +162,7 @@ class WasmBackendSession implements BackendSession {
 	public function patch(program:IrProgram, changed:Array<String>, options:BackendOptions):WasmPatchArtifact {
 		var state = patchState;
 		if (state == null)
-			throw "A Wasm patch needs a live base module (patchBase)";
+			throw new InternalError("A Wasm patch needs a live base module (patchBase)");
 		var artifact = new WasmBackend().compilePatch(state, program, changed, options);
 		patchState = artifact.state;
 		return artifact;

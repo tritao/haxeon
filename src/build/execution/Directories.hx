@@ -19,7 +19,7 @@ class Directories {
 		if (!FileSystem.exists(path))
 			try {
 				FileSystem.createDirectory(path);
-			} catch (error:Dynamic) {
+			} catch (error:haxe.Exception) {
 				if (!FileSystem.exists(path))
 					throw error;
 			}

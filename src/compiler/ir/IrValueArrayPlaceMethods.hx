@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -48,14 +49,14 @@ class IrValueArrayPlaceMethods {
 	/** Queue an entry point; nested value calls add their own requests while the queue is generated. */
 	public function method(receiverType:IrType, method:String, path:Array<String>):String {
 		if (finished)
-			throw "Array place methods have already been generated";
+			throw new InternalError("Array place methods have already been generated");
 		return request(receiverType, method, path);
 	}
 
 	/** Store a separately evaluated struct value into an element projection. */
 	public function valueSetter(type:IrType, path:Array<String>):String {
 		if (finished || (!isValue(type) && !isNullableScalar(type)))
-			throw "Invalid array place value setter";
+			throw new InternalError("Invalid array place value setter");
 		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([
 			haxe.crypto.Base64.encode(IrTypeCodec.encode(type)),
 			path
@@ -70,7 +71,7 @@ class IrValueArrayPlaceMethods {
 	/** Read a nullable scalar projection as components after the generated boundary is expanded. */
 	public function scalarGetter(type:IrType, path:Array<String>):String {
 		if (finished || !isNullableScalar(type))
-			throw "Invalid array place nullable scalar getter";
+			throw new InternalError("Invalid array place nullable scalar getter");
 		var encoded = haxe.crypto.Base64.encode(haxe.io.Bytes.ofString(haxe.Json.stringify([
 			haxe.crypto.Base64.encode(IrTypeCodec.encode(type)),
 			path
@@ -84,14 +85,14 @@ class IrValueArrayPlaceMethods {
 
 	public function generate(originals:Map<String, IrFunction>):Array<IrFunction> {
 		if (finished)
-			throw "Array place methods have already been generated";
+			throw new InternalError("Array place methods have already been generated");
 		var result:Array<IrFunction> = [], index = 0;
 		while (index < requests.length) {
 			var entry = requests[index++],
 				originalName = resolveMethod(entry.receiverType, entry.method, originals),
 				original = originals.get(originalName);
 			if (original == null)
-				throw 'Missing array place method "$originalName"';
+				throw new InternalError('Missing array place method "$originalName"');
 			result.push(specialize(Provider(TypeKey.of(element),
 				ProviderOperations.detailed(ProviderOperation.ValueArrayMethod, entry.name)), entry.name,
 				original, entry.path));
@@ -130,7 +131,7 @@ class IrValueArrayPlaceMethods {
 	public function specialize(kind:compiler.ir.IrFunction.IrFunctionKind, name:String, fn:IrFunction,
 			path:Array<String>):IrFunction {
 		if (fn.arguments.length == 0 || !isValue(fn.arguments[0].type))
-			throw 'Array place method "$name" has no value receiver';
+			throw new InternalError('Array place method "$name" has no value receiver');
 		var receiver = fn.arguments[0],
 			next = nextId(fn),
 			array = new IrValue(next++, "$array-place", Array(element)),
@@ -228,7 +229,7 @@ class IrValueArrayPlaceMethods {
 					case FieldSet(owner, _, value) if (optionalCandidates.exists(value.id)):
 						var home = optionalHomes.get(value.id);
 						if (home == null)
-							throw 'Missing optional array value ${value.id}';
+							throw new InternalError('Missing optional array value ${value.id}');
 						freshLinks.push({child: home.child, parent: owner.id});
 					default:
 				}
@@ -335,7 +336,7 @@ class IrValueArrayPlaceMethods {
 		}
 		for (argument in fn.arguments)
 			if (needed.exists(argument.id))
-				throw 'Nullable scalar array place argument requires component specialization';
+				throw new InternalError('Nullable scalar array place argument requires component specialization');
 		for (block in fn.blocks)
 			for (located in block.instructions) {
 				var output = IrOperands.output(located.value);
@@ -347,7 +348,7 @@ class IrValueArrayPlaceMethods {
 						"$array-optional-payload", scalarInner(output.type));
 					case ConstNull(_),
 						Phi(_, _): new IrValue(next++, "$array-optional-payload", scalarInner(output.type));
-					default: throw 'Unsupported nullable scalar array place producer ${Std.string(located.value)}';
+					default: throw new InternalError('Unsupported nullable scalar array place producer ${Std.string(located.value)}');
 				};
 				optionalScalars.set(output.id, {
 					present: new IrValue(next++, "$array-optional-present", Bool),
@@ -382,7 +383,7 @@ class IrValueArrayPlaceMethods {
 						var nested = freshFields.get(value.id),
 							present = new IrValue(next++, "$array-optional-struct-present", Bool);
 						if (nested == null)
-							throw 'Missing optional constructed array value';
+							throw new InternalError('Missing optional constructed array value');
 						target.instructions.push(new Located(ConstBool(present, true), located.provenance));
 						optionalFresh.set(out.id, {value: out, fields: nested.copy(), present: present});
 						omit = true;
@@ -390,10 +391,10 @@ class IrValueArrayPlaceMethods {
 					case FieldSet(owner, field, value) if (virtualFresh.exists(owner.id)):
 						var fields = freshFields.get(owner.id);
 						if (fields == null)
-							throw 'Missing constructed array value';
+							throw new InternalError('Missing constructed array value');
 						var nested = virtualFresh.exists(value.id) ? freshFields.get(value.id) : null;
 						if (virtualFresh.exists(value.id) && nested == null)
-							throw 'Missing nested constructed array value';
+							throw new InternalError('Missing nested constructed array value');
 						var optional = optionalFresh.get(value.id);
 						if (optional != null)
 							fields.set(field, optional);
@@ -427,7 +428,7 @@ class IrValueArrayPlaceMethods {
 						for (input in inputs) {
 							var components = optionalScalars.get(input.value.id);
 							if (components == null)
-								throw 'Missing nullable scalar phi input ${input.value.id}';
+								throw new InternalError('Missing nullable scalar phi input ${input.value.id}');
 							presence.push({block: input.block, value: components.present});
 							payload.push({block: input.block, value: components.payload});
 						}
@@ -504,11 +505,11 @@ class IrValueArrayPlaceMethods {
 								slots = helpers.subtree(fieldPath),
 								sourceValues:Array<IrValue> = [];
 							if (fields == null)
-								throw 'Missing constructed array value';
+								throw new InternalError('Missing constructed array value');
 							for (entry in slots) {
 								var relative = entry.slot.path.slice(fieldPath.length);
 								if (relative.length == 0)
-									throw 'Optional constructed array value requires component specialization';
+									throw new InternalError('Optional constructed array value requires component specialization');
 								var field:Null<ArrayFreshField> = null,
 									currentFields = fields;
 								for (part in 0...relative.length) {
@@ -517,7 +518,7 @@ class IrValueArrayPlaceMethods {
 										break;
 									if (part + 1 < relative.length) {
 										if (field.fields == null)
-											throw 'Nested constructed array value requires component specialization';
+											throw new InternalError('Nested constructed array value requires component specialization');
 										currentFields = field.fields;
 									}
 								}
@@ -534,9 +535,9 @@ class IrValueArrayPlaceMethods {
 										: scalar == null ? null : scalar.present) : entry.slot.nullablePayload
 										? (scalar == null ? null : scalar.payload) : fieldValue;
 								if (leaf == null)
-									throw 'Constructed array field "${relative[0]}" requires component specialization';
+									throw new InternalError('Constructed array field "${relative[0]}" requires component specialization');
 								if (!IrVerifier.sameType(leaf.type, entry.slot.type))
-									throw 'Constructed array field "${relative[0]}" requires component specialization';
+									throw new InternalError('Constructed array field "${relative[0]}" requires component specialization');
 								sourceValues.push(leaf);
 							}
 							for (i in 0...slots.length) {
@@ -553,10 +554,10 @@ class IrValueArrayPlaceMethods {
 							var sourceValues:Array<IrValue> = [],
 								slots = helpers.subtree(fieldPath);
 							if (slots.length == 0 && !fresh.exists(value.id))
-								throw 'Empty array value source requires a receiver check';
+								throw new InternalError('Empty array value source requires a receiver check');
 							for (entry in slots) {
 								if (entry.slot.isPresence || entry.slot.nullablePayload)
-									throw 'Optional source fields require component specialization';
+									throw new InternalError('Optional source fields require component specialization');
 								var current = value;
 								for (part in entry.slot.path.slice(fieldPath.length)) {
 									var type = fieldType(current.type, part),
@@ -566,7 +567,7 @@ class IrValueArrayPlaceMethods {
 									current = leaf;
 								}
 								if (!IrVerifier.sameType(current.type, entry.slot.type))
-									throw 'Incompatible value source for array place';
+									throw new InternalError('Incompatible value source for array place');
 								sourceValues.push(current);
 							}
 							for (i in 0...slots.length) {
@@ -580,12 +581,12 @@ class IrValueArrayPlaceMethods {
 							}
 							omit = true;
 						} else if (isValue(value.type) || aliases.exists(value.id))
-							throw 'Composite array place write requires value specialization';
+							throw new InternalError('Composite array place write requires value specialization');
 						else if (isNullableScalar(value.type)) {
 							var snapshot = optionalScalars.get(value.id),
 								inner = scalarInner(value.type);
 							if (snapshot == null)
-								throw 'Missing nullable scalar array place components';
+								throw new InternalError('Missing nullable scalar array place components');
 							instruction = Call(ignored, helpers.optionalSetter(fieldPath, inner), [
 								array,
 								index,
@@ -605,7 +606,7 @@ class IrValueArrayPlaceMethods {
 						var snapshot = optionalScalars.get(optionalScalars.exists(left.id) ? left.id : right.id),
 							no = new IrValue(next++, "$array-optional-false", Bool);
 						if (snapshot == null)
-							throw "Missing nullable scalar comparison components";
+							throw new InternalError("Missing nullable scalar comparison components");
 						target.instructions.push(new Located(ConstBool(no, false), located.provenance));
 						instruction = Equal(out, snapshot.present, no);
 						handled = true;
@@ -618,10 +619,10 @@ class IrValueArrayPlaceMethods {
 						|| (aliases.exists(right.id) && nulls.exists(left.id))):
 						var alias = aliases.exists(left.id) ? left : right;
 						if (!isNullable(alias.type))
-							throw 'Non-null array place compared with null';
+							throw new InternalError('Non-null array place compared with null');
 						var aliasPath = aliases.get(alias.id);
 						if (aliasPath == null)
-							throw "Missing optional array place";
+							throw new InternalError("Missing optional array place");
 						var present = new IrValue(next++, "$array-place-present", Bool),
 							no = new IrValue(next++, "$array-place-false", Bool);
 						target.instructions
@@ -635,7 +636,7 @@ class IrValueArrayPlaceMethods {
 					case MethodCall(out, owner, method, arguments, _) if (aliases.exists(owner.id)):
 						for (argument in arguments)
 							if (aliases.exists(argument.id) || optionalScalars.exists(argument.id))
-								throw 'Array place argument requires value specialization';
+								throw new InternalError('Array place argument requires value specialization');
 						var nested = request(owner.type, method, aliases.get(owner.id));
 						instruction = Call(out, nested, [array, index].concat(arguments));
 						handled = true;
@@ -644,7 +645,7 @@ class IrValueArrayPlaceMethods {
 						&& aliases.exists(arguments[0].id)):
 						for (argument in arguments.slice(1))
 							if (aliases.exists(argument.id) || optionalScalars.exists(argument.id))
-								throw 'Array place argument requires value specialization';
+								throw new InternalError('Array place argument requires value specialization');
 						var nested = request(arguments[0].type, method, aliases.get(arguments[0].id));
 						instruction = Call(out, nested, [array, index].concat(arguments.slice(1)));
 						handled = true;
@@ -653,17 +654,17 @@ class IrValueArrayPlaceMethods {
 				if (!handled) {
 					for (input in IrOperands.inputs(instruction)) {
 						if (aliases.exists(input.id))
-							throw 'Array place receiver escapes through ${Std.string(instruction)}';
+							throw new InternalError('Array place receiver escapes through ${Std.string(instruction)}');
 						if (optionalScalars.exists(input.id))
-							throw 'Nullable scalar snapshot escapes through ${Std.string(instruction)}';
+							throw new InternalError('Nullable scalar snapshot escapes through ${Std.string(instruction)}');
 						if (virtualFresh.exists(input.id))
-							throw 'Constructed array value escapes through ${Std.string(instruction)}';
+							throw new InternalError('Constructed array value escapes through ${Std.string(instruction)}');
 					}
 					switch instruction {
 						case Phi(_, inputs):
 							for (input in inputs)
 								if (aliases.exists(input.value.id) || optionalScalars.exists(input.value.id))
-									throw 'Array place value requires component phi specialization';
+									throw new InternalError('Array place value requires component phi specialization');
 						default:
 					}
 				}
@@ -680,7 +681,7 @@ class IrValueArrayPlaceMethods {
 					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _)
 						if (aliases.exists(value.id) || optionalScalars.exists(value.id)
 						|| virtualFresh.exists(value.id)):
-						throw 'Array place receiver escapes through a terminator';
+						throw new InternalError('Array place receiver escapes through a terminator');
 					default:
 				}
 			target.terminator = source.terminator;
@@ -717,7 +718,7 @@ class IrValueArrayPlaceMethods {
 			return method;
 		var name = switch receiverType {
 			case Obj(value), Nullable(Obj(value)): value;
-			default: throw 'Invalid array place method receiver $receiverType';
+			default: throw new InternalError('Invalid array place method receiver $receiverType');
 		};
 		while (name != null) {
 			var object = objects.get(name);
@@ -728,7 +729,7 @@ class IrValueArrayPlaceMethods {
 					return candidate.functionName;
 			name = object.base;
 		}
-		throw 'Unknown array place method "$method" on $receiverType';
+		throw new InternalError('Unknown array place method "$method" on $receiverType');
 	}
 
 	function isValue(type:IrType):Bool
@@ -741,15 +742,15 @@ class IrValueArrayPlaceMethods {
 	function fieldType(type:IrType, field:String):IrType {
 		var name = switch type {
 			case Obj(value): value;
-			default: throw 'Cannot project "$field" from $type';
+			default: throw new InternalError('Cannot project "$field" from $type');
 		};
 		var object = objects.get(name);
 		if (object == null)
-			throw 'Missing value source "$name"';
+			throw new InternalError('Missing value source "$name"');
 		for (candidate in object.fields)
 			if (candidate.name == field)
 				return candidate.type;
-		throw 'Missing value source field "$name.$field"';
+		throw new InternalError('Missing value source field "$name.$field"');
 	}
 
 	static function isNullable(type:IrType):Bool
@@ -767,7 +768,7 @@ class IrValueArrayPlaceMethods {
 	static function scalarInner(type:IrType):IrType
 		return switch type {
 			case Nullable(inner) if (isNullableScalar(type)): inner;
-			default: throw 'Not a nullable scalar: $type';
+			default: throw new InternalError('Not a nullable scalar: $type');
 		};
 
 	static function zero(value:IrValue):IrInstruction
@@ -775,7 +776,7 @@ class IrValueArrayPlaceMethods {
 			case I32, I64: ConstInt(value, 0);
 			case F32, F64: ConstFloat(value, 0);
 			case Bool: ConstBool(value, false);
-			default: throw 'Invalid optional scalar payload ${value.type}';
+			default: throw new InternalError('Invalid optional scalar payload ${value.type}');
 		};
 
 	static function defaultValue(value:IrValue):IrInstruction

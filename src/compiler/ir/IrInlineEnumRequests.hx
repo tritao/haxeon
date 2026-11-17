@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -13,36 +14,36 @@ class IrInlineEnumRequests {
 		function resolveOperation(output:IrValue, operation:IrIntrinsic, arguments:Array<IrValue>):IrInstruction {
 			var request = IrProviders.typedOperation(operation);
 			if (request == null)
-				throw "Inline enum operation has no provider request";
+				throw new InternalError("Inline enum operation has no provider request");
 			var subject = switch operation {
 				case InlineEnumBox(Enum(name)), InlineEnumUnbox(Enum(name)):
 					name;
 				default:
-					throw "Inline enum request requires a nominal enum type";
+					throw new InternalError("Inline enum request requires a nominal enum type");
 			};
 			if (declarations == null)
 				declarations = [for (entry in program.enums) entry.name => entry];
 			var declaration = declarations.get(subject);
 			if (declaration == null || declaration.inlineStorage == null)
-				throw "Inline enum request requires declared inline storage";
+				throw new InternalError("Inline enum request requires declared inline storage");
 			var storage:IrType = Obj(declaration.inlineStorage);
 			if (arguments.length != 1)
-				throw "Inline enum request requires one argument";
+				throw new InternalError("Inline enum request requires one argument");
 			switch operation {
 				case InlineEnumBox(_):
 					if (!IrVerifier.sameType(arguments[0].type, storage) || !IrVerifier.sameType(output.type, Dyn))
-						throw "Invalid inline enum box request signature";
+						throw new InternalError("Invalid inline enum box request signature");
 				case InlineEnumUnbox(_):
 					if (!IrVerifier.sameType(arguments[0].type, Dyn) || !IrVerifier.sameType(output.type, storage))
-						throw "Invalid inline enum unbox request signature";
+						throw new InternalError("Invalid inline enum unbox request signature");
 				default:
-					throw "Expected an inline enum request";
+					throw new InternalError("Expected an inline enum request");
 			}
 			if (rows == null)
 				rows = IrProviders.rows(program.functions);
 			var name = rows.get(IrProviders.row(request.subject, request.operation));
 			if (name == null)
-				throw 'Missing inline enum provider for ${request.subject} / ${request.operation}';
+				throw new InternalError('Missing inline enum provider for ${request.subject} / ${request.operation}');
 			if (providers == null)
 				providers = [for (fn in program.functions) fn.name => fn];
 			var provider = providers.get(name);
@@ -50,7 +51,7 @@ class IrInlineEnumRequests {
 				|| provider.arguments.length != 1
 				|| !IrVerifier.sameType(arguments[0].type, provider.arguments[0].type)
 				|| !IrVerifier.sameType(output.type, provider.result))
-				throw 'Invalid inline enum provider signature for $name';
+				throw new InternalError('Invalid inline enum provider signature for $name');
 			return Call(output, name, arguments);
 		}
 		var result:Null<Array<IrFunction>> = null;

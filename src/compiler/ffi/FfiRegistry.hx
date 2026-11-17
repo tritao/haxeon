@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
@@ -73,7 +74,7 @@ class FfiRegistry {
 	public function registerInterface(path:String, source:String):Void {
 		var model = HxiParser.parse(path, source);
 		if (interfaceModels.exists(model.name))
-			throw 'FFI interface "${model.name}" is already registered';
+			throw new InternalError('FFI interface "${model.name}" is already registered');
 		var dependencies:Array<HxiInterface> = [];
 		for (dependencyName in model.dependencies) {
 			var dependency = interfaceModels.get(dependencyName);
@@ -97,9 +98,9 @@ class FfiRegistry {
 		var profile = HxiProjectionProfile.parse(path, source),
 			name = profile.interfaceName;
 		if (name == null)
-			throw 'FFI projection "$path" does not name an interface';
+			throw new InternalError('FFI projection "$path" does not name an interface');
 		if (projectionProfiles.exists(name))
-			throw 'FFI projection for interface "$name" is already registered';
+			throw new InternalError('FFI projection for interface "$name" is already registered');
 		var model = interfaceModels.get(name);
 		if (model != null) {
 			var composition = compositionOf(model);
@@ -125,7 +126,7 @@ class FfiRegistry {
 	public function cNatives():Array<IrCNative> {
 		for (name in sortedProjectionNames())
 			if (!interfaceModels.exists(name))
-				throw 'FFI projection "${projectionPaths.get(name)}" names unknown interface "$name"';
+				throw new InternalError('FFI projection "${projectionPaths.get(name)}" names unknown interface "$name"');
 		var result:Array<IrCNative> = [];
 		for (model in interfaces()) {
 			var composition = compositionOf(model);
@@ -214,12 +215,12 @@ class FfiRegistry {
 			declarations:Map<String, HxiDeclaration>, visited:Map<String, Bool>,
 			active:Map<String, Bool>):Void {
 		if (active.get(name) == true)
-			throw 'Cyclic HXI dependency involving "$owner" and "$name"';
+			throw new InternalError('Cyclic HXI dependency involving "$owner" and "$name"');
 		if (visited.get(name) == true)
 			return;
 		var dependency = interfaceModels.get(name);
 		if (dependency == null)
-			throw 'FFI interface "$owner" depends on unknown interface "$name"';
+			throw new InternalError('FFI interface "$owner" depends on unknown interface "$name"');
 		active.set(name, true);
 		for (nested in dependency.dependencies)
 			collectDependency(owner, nested, omitted, declarations, visited, active);

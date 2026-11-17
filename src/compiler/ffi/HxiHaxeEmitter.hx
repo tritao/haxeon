@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiAbi.HxiIntegerSign;
 import compiler.ffi.HxiModel.HxiInterface;
@@ -58,13 +59,14 @@ class HxiHaxeEmitter {
 	static function projectedEnumValueName(value:ProjectedEnum, nativeName:String):String {
 		var projected = Lambda.find(value.values, entry -> entry.nativeName == nativeName);
 		return projected == null
-			? throw 'Missing projected enum value "${value.nativeName}.$nativeName"' : projected.name;
+			? throw new InternalError('Missing projected enum value "${value.nativeName}.$nativeName"')
+			: projected.name;
 	}
 
 	public static function functionNameForSymbol(declarations:Array<HxiDeclaration>, symbol:String):String {
 		return switch functionDeclarationForSymbol(declarations, symbol) {
 			case Function(name, _, _, _, _, _, _, _): name;
-			case _: throw 'Native symbol "$symbol" is not an HXI function';
+			case _: throw new InternalError('Native symbol "$symbol" is not an HXI function');
 		};
 	}
 
@@ -76,7 +78,7 @@ class HxiHaxeEmitter {
 					return declaration;
 				case _:
 			}
-		throw 'Missing HXI function for native symbol "$symbol"';
+		throw new InternalError('Missing HXI function for native symbol "$symbol"');
 	}
 
 	public static function sortedKeys<T>(values:Map<String, T>):Array<String> {
@@ -176,7 +178,7 @@ class HxiHaxeEmitter {
 
 	@:noReturn
 	public static function profileError(path:String, message:String):Void
-		throw 'Invalid Haxe projection profile "$path": $message';
+		throw new InternalError('Invalid Haxe projection profile "$path": $message');
 
 	public static function cNatives(model:HxiInterface, ?omitted:Map<String, Bool>,
 			?visibleDeclarations:Map<String, HxiDeclaration>, ?providedAbi:HxiAbi,
@@ -428,7 +430,7 @@ class HxiHaxeEmitter {
 
 	static function requiredFieldOffset(field:HxiField):Int {
 		if (field.offset == null)
-			throw 'Missing native offset for HXI field "${field.name}"';
+			throw new InternalError('Missing native offset for HXI field "${field.name}"');
 		return field.offset;
 	}
 
@@ -560,10 +562,10 @@ class HxiHaxeEmitter {
 							projected = project(value, false, profile),
 							mask = nativeFlagsMask(value, abi);
 						if (projected == null || mask == null)
-							throw "Missing native flags projection";
+							throw new InternalError("Missing native flags projection");
 						var layout = abi.layout(representation);
 						if (layout == null)
-							throw "Missing native flags layout";
+							throw new InternalError("Missing native flags layout");
 						var wide = layout.size == 8,
 							rawType = wide ? "haxe.Int64" : "Int";
 						output.add('/** Native boundary: discard bits not declared by this interface; fromRaw remains strict. */\n');
@@ -598,7 +600,7 @@ class HxiHaxeEmitter {
 						var projectedHandle = Lambda.find(plan.handles,
 							handle -> handle.nativeName == name && handle.kind == OpaqueHandle);
 						if (projectedHandle == null)
-							throw 'Missing projected opaque handle "$name"';
+							throw new InternalError('Missing projected opaque handle "$name"');
 						var projectedName = projectedHandle.name;
 						emitDocumentation(output, model, name);
 						output.add('abstract $projectedName(hl.Abstract<"native_pointer">) {\n');
@@ -622,7 +624,7 @@ class HxiHaxeEmitter {
 					case Callback(name, parameters, result, callConvention, _):
 						var projectedCallback = Lambda.find(plan.callbacks, callback -> callback.nativeName == name);
 						if (projectedCallback == null)
-							throw 'Missing projected callback "$name"';
+							throw new InternalError('Missing projected callback "$name"');
 						var projectedName = projectedCallback.name;
 						var argumentTypes:Array<String> = [],
 							codes:Array<String> = [],
@@ -746,7 +748,7 @@ class HxiHaxeEmitter {
 					case Enumeration(name, representation, flags, values, _):
 						var projectedEnum = Lambda.find(plan.enums, value -> value.nativeName == name);
 						if (projectedEnum == null)
-							throw 'Missing projected enum "$name"';
+							throw new InternalError('Missing projected enum "$name"');
 						var underlying = project(abi.classify(representation), false, profile);
 						if (underlying == null)
 							continue;
@@ -799,7 +801,7 @@ class HxiHaxeEmitter {
 						var projectedHandle = Lambda.find(plan.handles,
 							handle -> handle.nativeName == name && handle.kind == ValueHandle);
 						if (projectedHandle == null)
-							throw 'Missing projected value handle "$name"';
+							throw new InternalError('Missing projected value handle "$name"');
 						var projectedName = projectedHandle.name;
 						emitDocumentation(output, model, name);
 						// Keep handles nominal at the Haxe boundary. Explicit construction and
@@ -817,18 +819,18 @@ class HxiHaxeEmitter {
 							var destroyFunction = functionDeclarationForSymbol(model.declarations, destroySymbol),
 								destroyName = switch destroyFunction {
 									case Function(value, _, _, _, _, _, _, _): value;
-									case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+									case _: throw new InternalError('Native symbol "$destroySymbol" is not an HXI function');
 								},
 									destroyResult = switch destroyFunction {
 								case Function(_, _, value, _, _, _, _, _): value;
-								case _: throw 'Native symbol "$destroySymbol" is not an HXI function';
+								case _: throw new InternalError('Native symbol "$destroySymbol" is not an HXI function');
 							},
 								closeResultValue = switch abi.classify(destroyResult, true) {
 								case VoidValue: null;
 								case value:
 									var projected = project(value, true, profile);
 									if (projected == null)
-										throw 'Unsupported destroy result for handle "$name"';
+										throw new InternalError('Unsupported destroy result for handle "$name"');
 									projected.haxeType;
 							},
 								destroyFunctionName = projectedFunctionName(destroyName, profile),
@@ -866,7 +868,7 @@ class HxiHaxeEmitter {
 				case Structure(name, size, _, fields, _):
 					var projectedStruct = Lambda.find(plan.structures, value -> value.nativeName == name);
 					if (projectedStruct == null)
-						throw 'Missing projected structure "$name"';
+						throw new InternalError('Missing projected structure "$name"');
 					var projectedName = projectedStruct.name,
 						rootSlots = Std.int(Math.ceil(size / pointerSize)),
 						pointerFree = pointerFreeValue(Named(name), declarations, []);
@@ -893,7 +895,7 @@ class HxiHaxeEmitter {
 						var projectedField = Lambda.find(projectedStruct.fields,
 							value -> value.nativeName == field.name);
 						if (projectedField == null)
-							throw 'Missing projected field "$name.${field.name}"';
+							throw new InternalError('Missing projected field "$name.${field.name}"');
 						var fieldName = projectedField.name,
 							fieldOffset = requiredFieldOffset(field);
 						if (field.lengthField != null) {
@@ -902,12 +904,12 @@ class HxiHaxeEmitter {
 								usesPointerFields = true;
 								var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 								if (lengthField == null)
-									throw 'Missing length field "${field.lengthField}"';
+									throw new InternalError('Missing length field "${field.lengthField}"');
 								var lengthValue = abi.classify(lengthField.type),
 									lengthAccess = switch lengthValue {
 										case IntegerValue(64, _): "I64";
 										case IntegerValue(_, _): "I32";
-										case _: throw 'Invalid length field "${lengthField.name}"';
+										case _: throw new InternalError('Invalid length field "${lengthField.name}"');
 									},
 										lengthExpression = lengthAccess == "I64"
 										? "haxe.Int64.ofInt(values.length)" : "values.length",
@@ -925,11 +927,11 @@ class HxiHaxeEmitter {
 							}
 							var lengthField = Lambda.find(fields, candidate -> candidate.name == field.lengthField);
 							if (lengthField == null)
-								throw 'Missing length field "${field.lengthField}"';
+								throw new InternalError('Missing length field "${field.lengthField}"');
 							var lengthValue = abi.classify(lengthField.type),
 								lengthBytes = switch lengthValue {
 									case IntegerValue(bits, _): Std.int(bits / 8);
-									case _: throw 'Invalid length field "${lengthField.name}"';
+									case _: throw new InternalError('Invalid length field "${lengthField.name}"');
 								};
 							var utf8Array = utf8PointerArray(field.type);
 							if (utf8Array) {
@@ -1213,7 +1215,7 @@ class HxiHaxeEmitter {
 				var publicName = projectedFunction.name;
 				var parameters = switch functions.get(fn.name) {
 					case Function(_, value, _, _, _, _, _, _): value;
-					case _: throw 'Missing HXI function "${fn.name}"';
+					case _: throw new InternalError('Missing HXI function "${fn.name}"');
 				};
 				var argumentTypes:Array<String> = [],
 					codes:Array<String> = [],
@@ -1240,7 +1242,7 @@ class HxiHaxeEmitter {
 					aggregateDescriptors), fn.callConvention),
 					declaredResult = switch functions.get(fn.name) {
 						case Function(_, _, value, _, _, _, _, _): value;
-						case _: throw 'Missing HXI function "${fn.name}"';
+						case _: throw new InternalError('Missing HXI function "${fn.name}"');
 					},
 						aggregateResult = structureType(declaredResult, declarations, profile);
 				var ownedHandleResult = projectedFunction.ownedResult == null
@@ -1293,26 +1295,26 @@ class HxiHaxeEmitter {
 								aggregateResult == null ? null : aggregateResult.name, nativeFlagsMask(fn.result, abi),
 								structSize(result.code) == 8, nativeEnumDecoder(fn.result, abi, profile));
 						case NoOutputWrapper:
-							throw 'Output parameters were not normalized for "${fn.name}"';
+							throw new InternalError('Output parameters were not normalized for "${fn.name}"');
 					}
 				} else if (abi.isFlagsValue(fn.result)) {
 					var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 						callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
 						mask = nativeFlagsMask(fn.result, abi);
 					if (mask == null)
-						throw "Native result mask disappeared";
+						throw new InternalError("Native result mask disappeared");
 					output.add('function $publicName(${arguments.join(", ")}):$resultType return ${nativeFlagsRead(resultType, (resultType == "haxe.Int64" ? '$rawName($callArguments)' : '$rawName($callArguments).rawValue()'), mask, structSize(result.code) == 8)};\n');
 				} else if (abi.isEnumValue(fn.result)) {
 					var arguments = [for (index in 0...argumentTypes.length) 'arg$index:${argumentTypes[index]}'],
 						callArguments = [for (index in 0...argumentTypes.length) 'arg$index'].join(", "),
 						decoder = nativeEnumDecoder(fn.result, abi, profile);
 					if (decoder == null)
-						throw "Native enum result decoder disappeared";
+						throw new InternalError("Native enum result decoder disappeared");
 					output.add('function $publicName(${arguments.join(", ")}):$resultType return $decoder($rawName($callArguments).rawValue());\n');
 				} else if (spanResult != null) {
 					var countName = switch functionDeclarationForSymbol(model.declarations, spanResult.count) {
 						case Function(value, _, _, _, _, _, _, _): projectedFunctionName(value, profile);
-						case _: throw 'Native symbol "${spanResult.count}" is not an HXI function';
+						case _: throw new InternalError('Native symbol "${spanResult.count}" is not an HXI function');
 					};
 					emitSpanResultWrapper(output, publicName, rawName, argumentTypes, spanResult.element, countName,
 						Std.int(abi.pointerBits),
@@ -1428,7 +1430,7 @@ class HxiHaxeEmitter {
 			+ [for (field in outputFields) field.name + ": __result." + field.name].join(", ") + "}" else "",
 			resultName = switch nativeFunctionResult(model.declarations, nativeName) {
 			case Named(name): name;
-			case _: throw 'Result policy applied to non-enum result for "$nativeName"';
+			case _: throw new InternalError('Result policy applied to non-enum result for "$nativeName"');
 		},
 			success = resultSuccessMember(model.declarations, resultName, policy.successValue, profile),
 			diagnostic = policy.diagnosticFunction == null ? "null" : projectedFunctionName(policy.diagnosticFunction,
@@ -1459,7 +1461,7 @@ class HxiHaxeEmitter {
 					return result;
 				case _:
 			}
-		throw 'Missing HXI function "$name"';
+		throw new InternalError('Missing HXI function "$name"');
 	}
 
 	static function resultSuccessMember(declarations:Array<HxiDeclaration>, enumName:String, nativeValue:String,
@@ -1473,7 +1475,7 @@ class HxiHaxeEmitter {
 							return enumValueName(value.name, prefix, name, profile);
 				case _:
 			}
-		throw 'Missing success enum value "$enumName.$nativeValue"';
+		throw new InternalError('Missing success enum value "$enumName.$nativeValue"');
 	}
 
 	public static function hasOutput(parameters:Array<compiler.ffi.HxiModel.HxiParameter>):Bool {
@@ -1526,7 +1528,7 @@ class HxiHaxeEmitter {
 			case Owned:
 				switch type {
 					case HandleValue(name): ownedTypeName(name, profile);
-					case _: throw "Validated owned HXI value handle did not classify as a handle";
+					case _: throw new InternalError("Validated owned HXI value handle did not classify as a handle");
 				}
 			case Unspecified:
 				null;
@@ -1551,12 +1553,12 @@ class HxiHaxeEmitter {
 			} {
 		var element = switch parameter.type {
 			case Pointer(value): value;
-			case _: throw "HXI output parameters require a pointer type";
+			case _: throw new InternalError("HXI output parameters require a pointer type");
 		};
 		var classified = abi.classify(element),
 			projected = project(classified, false, profile);
 		if (projected == null)
-			throw "HXI output parameter has an unsupported pointee type";
+			throw new InternalError("HXI output parameter has an unsupported pointee type");
 		return switch classified {
 			case AggregateValue(name, size, alignment): {
 				haxeType: projectedTypeName(name, profile),
@@ -1595,7 +1597,7 @@ class HxiHaxeEmitter {
 			case IntegerValue(_, _) | EnumerationValue(_, _, _) | Boolean32Value | FloatValue(_):
 				var size = structSize(projected.code);
 				if (size == 0)
-					throw "HXI output parameter has an unsupported scalar type";
+					throw new InternalError("HXI output parameter has an unsupported scalar type");
 				{
 					haxeType:projected.haxeType,
 						rawHaxeType:projected.haxeType,
@@ -1615,7 +1617,7 @@ class HxiHaxeEmitter {
 				var owned = switch parameter.ownership {
 					case Owned(_): true;
 					case Borrowed: false;
-					case Unspecified: throw 'Opaque pointer output parameter "${parameter.name}" requires an ownership contract';
+					case Unspecified: throw new InternalError('Opaque pointer output parameter "${parameter.name}" requires an ownership contract');
 				}, typeName = owned ? ownedTypeName(opaquePointee, profile) : projectedTypeName(opaquePointee, profile);
 				{
 					haxeType:nullable ? 'Null<$typeName>' : typeName,
@@ -1633,7 +1635,7 @@ class HxiHaxeEmitter {
 						nullable:nullable,
 						owned:owned
 				};
-			case _: throw "HXI output parameters currently support scalar, fixed-structure, and typed opaque-pointer pointees";
+			case _: throw new InternalError("HXI output parameters currently support scalar, fixed-structure, and typed opaque-pointer pointees");
 		};
 	}
 
@@ -1985,7 +1987,7 @@ class HxiHaxeEmitter {
 					var expression = if (info.opaquePointer) {
 						if (info.owned) {
 							if (parameter.handleDisposition == Owned)
-								throw 'Owned value handle output parameter "${parameter.name}" cannot use pointer output storage';
+								throw new InternalError('Owned value handle output parameter "${parameter.name}" cannot use pointer output storage');
 							var release = switch parameter.ownership {
 								case Owned(symbol): symbol;
 								case Borrowed | Unspecified: "";
@@ -2335,12 +2337,12 @@ class HxiHaxeEmitter {
 			profile:HxiProjectionProfile):ProjectedArrayElement {
 		var elementType = arrayPointeeType(type);
 		if (elementType == null)
-			throw "HXI counted array must use a pointer type";
+			throw new InternalError("HXI counted array must use a pointer type");
 		var value = abi.classify(elementType),
 			projected = project(value, false, profile),
 			layout = abi.layout(elementType);
 		if (projected == null || layout == null || projected.code == 11)
-			throw "HXI counted array has an unsupported element type";
+			throw new InternalError("HXI counted array has an unsupported element type");
 		return {
 			haxeType: projected.haxeType,
 			code: projected.code,
@@ -2987,7 +2989,7 @@ class HxiHaxeEmitter {
 		for (index in 0...parameters.length)
 			if (parameters[index].name == name)
 				return index;
-		throw 'Unknown HXI argument length parameter "$name"';
+		throw new InternalError('Unknown HXI argument length parameter "$name"');
 	}
 
 	static function isConstPointer(type:compiler.ffi.HxiModel.HxiType):Bool
@@ -3018,10 +3020,10 @@ class HxiHaxeEmitter {
 			case Boolean32Value: "6";
 			case FloatValue(32): "9";
 			case FloatValue(64): "10";
-			case FloatValue(bits): throw 'Unsupported $bits-bit floating-point ABI value';
+			case FloatValue(bits): throw new InternalError('Unsupported $bits-bit floating-point ABI value');
 			case PointerValue(_, _, _, _) | CallbackValue(_, _, _, _): "11";
 			case Utf8Value(nullable): nullable ? "14" : "13";
-			case _: throw "Unsupported HXI ABI value";
+			case _: throw new InternalError("Unsupported HXI ABI value");
 		};
 
 	static function aggregateDescriptor(name:String, size:Int, align:Int, declarations:Map<String, HxiDeclaration>,
@@ -3039,7 +3041,7 @@ class HxiHaxeEmitter {
 					var layout = abiLayout(field.type, declarations, abi);
 					var offset = fieldOffset(field);
 					if (offset < cursor)
-						throw 'HXI structure "$name" cannot be passed by value because its fields overlap';
+						throw new InternalError('HXI structure "$name" cannot be passed by value because its fields overlap');
 					appendPadding(elements, offset - cursor);
 					elements = elements.concat(fieldDescriptors(field.type, declarations, abi, aggregateDescriptors));
 					cursor = offset + layout.size;
@@ -3047,11 +3049,11 @@ class HxiHaxeEmitter {
 				}
 				appendPadding(elements, size - cursor);
 				if (cursor > size || naturalAlign != align || ((cursor + naturalAlign - 1) & -naturalAlign) != size)
-					throw 'HXI structure "$name" cannot be passed by value because its layout is incompatible with the declared alignment';
+					throw new InternalError('HXI structure "$name" cannot be passed by value because its layout is incompatible with the declared alignment');
 				if (elements.length == 0)
-					throw 'HXI structure "$name" cannot be passed by value because it has no ABI elements';
+					throw new InternalError('HXI structure "$name" cannot be passed by value because it has no ABI elements');
 				'{$size;$align;${elements.join(",")}}';
-			case _: throw 'Missing HXI structure "$name"';
+			case _: throw new InternalError('Missing HXI structure "$name"');
 		};
 		if (aggregateDescriptors != null)
 			aggregateDescriptors.set(name, descriptor);
@@ -3072,7 +3074,7 @@ class HxiHaxeEmitter {
 			} {
 		var layout = abi.layout(type);
 		if (layout == null)
-			throw 'HXI type $type has no fixed ABI layout';
+			throw new InternalError('HXI type $type has no fixed ABI layout');
 		return {size: layout.size, align: layout.align};
 	}
 
@@ -3099,7 +3101,7 @@ class HxiHaxeEmitter {
 	static function fieldOffset(field:HxiField):Int {
 		var offset = field.offset;
 		if (offset == null)
-			throw 'HXI field "${field.name}" has no offset';
+			throw new InternalError('HXI field "${field.name}" has no offset');
 		return offset;
 	}
 
@@ -3158,14 +3160,14 @@ class HxiHaxeEmitter {
 		return switch value {
 			case EnumerationValue(_, _, _) if (!abi.isFlagsValue(value)):
 				var projected = project(value, false, profile);
-				if (projected == null) throw "Missing native enum decoder type";
+				if (projected == null) throw new InternalError("Missing native enum decoder type");
 				var separator = projected.haxeType.lastIndexOf("."),
 					owner = separator < 0 ? "" : projected.haxeType.substr(0, separator),
 					name = projected.haxeType.substr(separator + 1),
 					module = separator < 0 ? (profile.typeModule != null ? profile.typeModule : profile.functionModule)
 						: compiler.core.QualifiedName.last(owner);
 				if (module == null) module = abi.interfaceName;
-				if (module == null) throw "Missing native enum owning module";
+				if (module == null) throw new InternalError("Missing native enum owning module");
 				(owner.length == 0 ? "" : owner + ".") + upperFirst(module) + "EnumDecoders.decode" + name;
 			default: null;
 		};
@@ -3183,7 +3185,7 @@ class HxiHaxeEmitter {
 					high = int64PartAsInt(haxe.Int64.ushr(mask, 32)),
 					low = int64PartAsInt(haxe.Int64.and(mask, haxe.Int64.parseString("4294967295")));
 				bits <= 32 ? int64PartAsInt(mask) : 'haxe.Int64.make($high, $low)';
-			default: throw "Native flags ABI disappeared";
+			default: throw new InternalError("Native flags ABI disappeared");
 		};
 	}
 

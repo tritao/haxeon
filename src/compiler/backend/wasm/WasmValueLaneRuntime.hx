@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrValueLaneRuntime;
@@ -19,7 +20,7 @@ class WasmValueLaneRuntime {
 			&& StringTools.startsWith(native.symbol, "__value_array_")) needed = true;
 		if (!needed) return;
 		for (fn in program.functions) if (StringTools.startsWith(fn.name, IrValueLaneRuntime.PREFIX))
-			throw "Lane runtime linked twice";
+			throw new InternalError("Lane runtime linked twice");
 		// Keep existing Wasm backing-lane sizes: sparse requests need no geometric over-reservation.
 		var policy = IrValueLaneRuntime.program(false);
 		program.functions = program.functions.concat(policy.functions);

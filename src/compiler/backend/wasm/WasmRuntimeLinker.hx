@@ -6,6 +6,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 
@@ -37,7 +38,7 @@ class WasmRuntimeLinker {
 
 	function linkInto(module:WasmModule, guest:String->Int, entryFuelFunction:Null<Int>):Map<String, Int> {
 		if (bytes.length < 8 || bytes.getInt32(0) != 0x6d736100 || bytes.getInt32(4) != 1)
-			throw "The Wasm runtime is not a version 1 WebAssembly module";
+			throw new InternalError("The Wasm runtime is not a version 1 WebAssembly module");
 		position = 8;
 		var types:Array<WasmFunctionType> = [],
 			importedFunctions:Array<String> = [],
@@ -55,7 +56,7 @@ class WasmRuntimeLinker {
 				case 1:
 					for (_ in 0...u32()) {
 						if (bytes.get(position++) != 0x60)
-							throw "The Wasm runtime declares a non-function type";
+							throw new InternalError("The Wasm runtime declares a non-function type");
 						var parameters = [for (_ in 0...u32()) valueType()],
 							results = [for (_ in 0...u32()) valueType()];
 						types.push({parameters: parameters, results: results});
@@ -74,7 +75,7 @@ class WasmRuntimeLinker {
 								u32();
 								if (flags & 1 != 0) u32();
 							default:
-								throw 'The Wasm runtime imports $moduleName.$fieldName, which the linker cannot provide';
+								throw new InternalError('The Wasm runtime imports $moduleName.$fieldName, which the linker cannot provide');
 						}
 					}
 				case 3:
@@ -83,10 +84,10 @@ class WasmRuntimeLinker {
 				case 4 if (entryFuelFunction != null):
 					var tableCount = u32();
 					if (tableCount > 1)
-						throw "The runtime-neutral Wasm runtime declares more than one table";
+						throw new InternalError("The runtime-neutral Wasm runtime declares more than one table");
 					for (_ in 0...tableCount) {
 						if (bytes.get(position++) != 0x70)
-							throw "The runtime-neutral Wasm runtime uses a non-funcref table";
+							throw new InternalError("The runtime-neutral Wasm runtime uses a non-funcref table");
 						var flags = u32();
 						u32();
 						if (flags & 1 != 0)
@@ -102,19 +103,19 @@ class WasmRuntimeLinker {
 							case I32: false;
 							default: true;
 						}))
-							throw "The runtime-neutral Wasm runtime defines a non-i32 global";
+							throw new InternalError("The runtime-neutral Wasm runtime defines a non-i32 global");
 						if (bytes.get(position++) != 0x41)
-							throw "The runtime-neutral Wasm runtime uses a non-constant global initializer";
+							throw new InternalError("The runtime-neutral Wasm runtime uses a non-constant global initializer");
 						initializer.push(I32Const(s32()));
 						if (bytes.get(position++) != 0x0b)
-							throw "The runtime-neutral Wasm runtime has an unsupported global initializer";
+							throw new InternalError("The runtime-neutral Wasm runtime has an unsupported global initializer");
 						runtimeGlobals.push({type: type, mutable: mutable, init: initializer});
 					}
 				case 7:
 					for (_ in 0...u32()) {
 						var exportName = name(), kind = bytes.get(position++), index = u32();
 						if (kind != 0)
-							throw 'The Wasm runtime exports $exportName, which is not a function';
+							throw new InternalError('The Wasm runtime exports $exportName, which is not a function');
 						exports.push({name: exportName, index: index});
 					}
 				case 10:
@@ -124,12 +125,12 @@ class WasmRuntimeLinker {
 						position += bodySize;
 					}
 				default:
-					throw 'The Wasm runtime has section $id; it may define only functions';
+					throw new InternalError('The Wasm runtime has section $id; it may define only functions');
 			}
 			position = end;
 		}
 		if (bodies.length != functionTypes.length)
-			throw "The Wasm runtime's function and code sections disagree";
+			throw new InternalError("The Wasm runtime's function and code sections disagree");
 		var importCount = importedFunctions.length,
 			firstIndex = module.functionCount(),
 			globalBase = module.globals.length,
@@ -222,14 +223,14 @@ class WasmRuntimeLinker {
 						case 11:
 							position += 1;
 						case sub:
-							throw 'The Wasm runtime uses unsupported instruction 0xfc $sub';
+							throw new InternalError('The Wasm runtime uses unsupported instruction 0xfc $sub');
 					}
 				case _
 					if (opcode <= 0x01 || opcode == 0x05 || opcode == 0x0b || opcode == 0x0f || opcode == 0x1a
 					|| opcode == 0x1b
 					|| (opcode >= 0x45 && opcode <= 0xc4)):
 				default:
-					throw 'The Wasm runtime uses unsupported instruction 0x${StringTools.hex(opcode, 2)}';
+					throw new InternalError('The Wasm runtime uses unsupported instruction 0x${StringTools.hex(opcode, 2)}');
 			}
 		}
 		flush(end);
@@ -274,7 +275,7 @@ class WasmRuntimeLinker {
 			case 0x7e: I64;
 			case 0x7d: F32;
 			case 0x7c: F64;
-			case code: throw 'The Wasm runtime uses value type 0x${StringTools.hex(code, 2)}';
+			case code: throw new InternalError('The Wasm runtime uses value type 0x${StringTools.hex(code, 2)}');
 		};
 
 	static function writeU32(output:BytesOutput, value:Int):Void {

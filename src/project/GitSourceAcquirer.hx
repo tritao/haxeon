@@ -1,6 +1,7 @@
 package project;
 
 import build.execution.ProcessRunner;
+import compiler.core.InternalError;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -25,30 +26,30 @@ class GitSourceAcquirer implements SourceAcquirer {
 					destination = Path.join([sourceRoot, "git", Sha256.encode(url + "\n" + resolvedRevision)]);
 				if (!FileSystem.exists(destination)) {
 					if (offline)
-						throw 'Git dependency "$packageId" at $resolvedRevision is not in the source cache; run "haxeon install"';
+						throw new InternalError('Git dependency "$packageId" at $resolvedRevision is not in the source cache; run "haxeon install"');
 					checkout(url, resolvedRevision, destination, packageId);
 				}
 					else
 					validateCheckout(destination, resolvedRevision, packageId);
 				new AcquiredSource(destination, PackageSource.Git(url, resolvedRevision), resolvedRevision);
 			case _:
-				throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the Git acquirer';
+				throw new InternalError('Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the Git acquirer');
 		};
 
 	function resolveRevision(url:String, rev:String):String {
 		if (isSha(rev))
 			return rev;
 		if (offline)
-			throw 'Git dependency $url@$rev is not locked to a commit; run "haxeon install" to write haxeon.lock';
+			throw new InternalError('Git dependency $url@$rev is not locked to a commit; run "haxeon install" to write haxeon.lock');
 		var result = ProcessRunner.capture("git", ["ls-remote", url, rev]);
 		if (result.status != 0)
-			throw 'Could not resolve Git dependency $url@$rev: ${StringTools.trim(result.output)}';
+			throw new InternalError('Could not resolve Git dependency $url@$rev: ${StringTools.trim(result.output)}');
 		for (line in result.output.split("\n")) {
 			var fields = line.split("\t");
 			if (fields.length >= 2 && isSha(StringTools.trim(fields[0])))
 				return StringTools.trim(fields[0]);
 		}
-		throw 'Git dependency $url has no revision matching "$rev"';
+		throw new InternalError('Git dependency $url has no revision matching "$rev"');
 	}
 
 	function checkout(url:String, revision:String, destination:String, packageId:PackageId):Void {
@@ -58,7 +59,7 @@ class GitSourceAcquirer implements SourceAcquirer {
 		// the same millisecond apart.
 		var temporary = destination + '.checkout-${Math.ffloor(Date.now().getTime())}-${Std.random(0x7FFFFFFF)}';
 		if (FileSystem.exists(temporary))
-			throw 'Temporary Git checkout already exists: $temporary';
+			throw new InternalError('Temporary Git checkout already exists: $temporary');
 		// The checkout is named by a 64-character hash under the cache, and with Git's own object paths under it that passes
 		// Windows' 260-character limit from a moderately deep cache ("Filename too long"). core.longpaths, set in the new
 		// repository before it fetches, lets Git for Windows write longer paths; other Gits ignore it.
@@ -72,17 +73,17 @@ class GitSourceAcquirer implements SourceAcquirer {
 		], parent,
 			new Map());
 		if (cloneStatus != 0)
-			throw 'Could not clone Git dependency "$packageId" from $url';
+			throw new InternalError('Could not clone Git dependency "$packageId" from $url');
 		var checkoutStatus = ProcessRunner.run("git", ["checkout", "--detach", revision], temporary, new Map());
 		if (checkoutStatus != 0)
-			throw 'Could not check out Git dependency "$packageId" at $revision';
+			throw new InternalError('Could not check out Git dependency "$packageId" at $revision');
 		FileSystem.rename(temporary, destination);
 	}
 
 	function validateCheckout(destination:String, revision:String, packageId:PackageId):Void {
 		var result = ProcessRunner.capture("git", ["-C", destination, "rev-parse", "HEAD"]);
 		if (result.status != 0 || StringTools.trim(result.output) != revision)
-			throw 'Cached Git source for "$packageId" is not immutable at $revision';
+			throw new InternalError('Cached Git source for "$packageId" is not immutable at $revision');
 	}
 
 	static function isSha(value:String):Bool {

@@ -1,5 +1,6 @@
 package compiler.runtime;
 
+import compiler.core.InternalError;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
@@ -29,7 +30,7 @@ class RuntimeShapes {
 			case TNullable(element): TypeRelations.isReference(element) ? of(element) : RuntimeShape.Dynamic;
 			default:
 				if (TypeRelations.isReference(type)) RuntimeShape.Ref;
-				else throw 'No runtime shape for ${SemanticSignature.type(type)}';
+				else throw new InternalError('No runtime shape for ${SemanticSignature.type(type)}');
 		};
 
 	public static function representative(type:CompilerType):CompilerType
@@ -39,6 +40,6 @@ class RuntimeShapes {
 			case RuntimeShape.F64: TFloat;
 			case RuntimeShape.Bool: TBool;
 			case RuntimeShape.Bytes, RuntimeShape.Ref, RuntimeShape.Dynamic: TDynamic;
-			default: throw 'Unknown runtime shape $type';
+			default: throw new InternalError('Unknown runtime shape $type');
 		};
 }

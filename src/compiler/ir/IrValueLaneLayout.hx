@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrScalarStorage;
 import compiler.ir.Ir.IrType;
@@ -63,7 +64,7 @@ class IrValueLaneLayout {
 	final target:IrValueLaneTarget;
 
 	public function new(objects:IrObjectTable, pointerBits:Int, target:IrValueLaneTarget) {
-		if (pointerBits != 32 && pointerBits != 64) throw 'Unsupported pointer width $pointerBits';
+		if (pointerBits != 32 && pointerBits != 64) throw new InternalError('Unsupported pointer width $pointerBits');
 		this.objects = objects;
 		this.pointerBits = pointerBits;
 		this.target = target;
@@ -72,7 +73,7 @@ class IrValueLaneLayout {
 	/** A shared payload word width lets overlapping enum cases address the same scalar lane. */
 	public function shape(type:IrType, ?payloadWordBits:Int):IrValueLaneShape {
 		if (payloadWordBits != null && payloadWordBits != 32 && payloadWordBits != 64)
-			throw 'Unsupported payload word width $payloadWordBits';
+			throw new InternalError('Unsupported payload word width $payloadWordBits');
 		var parts:Array<LanePart> = [];
 		append(type, [], [], null, parts);
 		var wordBits = 32;
@@ -84,7 +85,7 @@ class IrValueLaneLayout {
 			}
 		if (payloadWordBits != null) {
 			if (payloadWordBits < wordBits)
-				throw 'Payload word width $payloadWordBits cannot hold a $wordBits-bit leaf';
+				throw new InternalError('Payload word width $payloadWordBits cannot hold a $wordBits-bit leaf');
 			wordBits = payloadWordBits;
 		}
 		var slots:Array<IrValueLaneSlot> = [], scalarBits = 0, references = 0;
@@ -132,16 +133,16 @@ class IrValueLaneLayout {
 
 	/** Capacity uses the bit stride, not rounded words per element: Flat records can share a word. */
 	public static function scalarStorageWords(shape:IrValueLaneShape, length:Int):Int {
-		if (length < 0) throw 'Negative value array capacity';
+		if (length < 0) throw new InternalError('Negative value array capacity');
 		var words = Math.fceil((length * 1.0 * shape.scalarStrideBits) / shape.scalarWordBits);
-		if (words > 0x7fffffff) throw 'Value array scalar lane is too large';
+		if (words > 0x7fffffff) throw new InternalError('Value array scalar lane is too large');
 		return Std.int(words);
 	}
 
 	public static function referenceStorageSlots(shape:IrValueLaneShape, length:Int):Int {
-		if (length < 0) throw 'Negative value array capacity';
+		if (length < 0) throw new InternalError('Negative value array capacity');
 		var slots = length * 1.0 * shape.references;
-		if (slots > 0x7fffffff) throw 'Value array reference lane is too large';
+		if (slots > 0x7fffffff) throw new InternalError('Value array reference lane is too large');
 		return Std.int(slots);
 	}
 
@@ -152,7 +153,8 @@ class IrValueLaneLayout {
 				parts.push(Leaf(presence(path)));
 				append(Obj(name), path, visiting, null, parts);
 			case Obj(name) if (isValue(name)):
-				if (visiting.indexOf(name) >= 0) throw 'Value layout contains a by-value cycle at "$name"';
+				if (visiting.indexOf(name) >= 0)
+					throw new InternalError('Value layout contains a by-value cycle at "$name"');
 				var object = requireValue(name), next = visiting.concat([name]), nativeLayout = object.nativeLayout;
 				if (nativeLayout != null) {
 					var leaves:Array<LaneLeaf> = [];
@@ -173,7 +175,7 @@ class IrValueLaneLayout {
 					scalar: scalar(inner, storage),
 					flatOffset: 0
 				}));
-			case Void: throw 'Void cannot be stored in a value lane';
+			case Void: throw new InternalError('Void cannot be stored in a value lane');
 			default:
 				parts.push(Leaf({
 					path: path,
@@ -189,22 +191,24 @@ class IrValueLaneLayout {
 	/** Preserve every nested C offset; no reference is permitted in a Flat record. */
 	function appendFlat(object:IrObject, path:Array<String>, visiting:Array<String>, base:Int,
 			leaves:Array<LaneLeaf>):Void {
-		if (visiting.indexOf(object.name) >= 0) throw 'Value layout contains a by-value cycle at "${object.name}"';
+		if (visiting.indexOf(object.name) >= 0)
+			throw new InternalError('Value layout contains a by-value cycle at "${object.name}"');
 		var next = visiting.concat([object.name]);
 		for (field in object.fields) {
 			var native = field.nativeLayout;
-			if (native == null) throw 'Missing Flat field layout for "${object.name}.${field.name}"';
+			if (native == null) throw new InternalError('Missing Flat field layout for "${object.name}.${field.name}"');
 			var fieldPath = path.concat([field.name]), offset = base + native.offset;
 			if (native.inlineRecord) {
 				var child = switch field.type {
 					case Obj(name): requireValue(name);
-					default: throw 'Invalid Flat field "${object.name}.${field.name}"';
+					default: throw new InternalError('Invalid Flat field "${object.name}.${field.name}"');
 				};
-				if (child.nativeLayout == null) throw 'Missing Flat layout for "${child.name}"';
+				if (child.nativeLayout == null) throw new InternalError('Missing Flat layout for "${child.name}"');
 				appendFlat(child, fieldPath, next, offset, leaves);
 			} else {
 				var representation = scalar(field.type, IrFieldStorage.scalar(field));
-				if (representation == null) throw 'Flat field "${object.name}.${field.name}" is not scalar';
+				if (representation == null)
+					throw new InternalError('Flat field "${object.name}.${field.name}" is not scalar');
 				leaves.push({
 					path: fieldPath,
 					type: field.type,
@@ -229,7 +233,7 @@ class IrValueLaneLayout {
 
 	static function scalarSlot(leaf:LaneLeaf, start:Int, wordBits:Int):IrValueLaneSlot {
 		var scalar = leaf.scalar;
-		if (scalar == null) throw 'Reference leaf cannot occupy the scalar lane';
+		if (scalar == null) throw new InternalError('Reference leaf cannot occupy the scalar lane');
 		return {
 			path: leaf.path,
 			type: leaf.type,
@@ -244,7 +248,7 @@ class IrValueLaneLayout {
 	}
 
 	static function align(bits:Int, alignment:Int):Int {
-		if (alignment <= 0) throw 'Invalid lane alignment $alignment';
+		if (alignment <= 0) throw new InternalError('Invalid lane alignment $alignment');
 		var remainder = bits % alignment;
 		return remainder == 0 ? bits : bits + alignment - remainder;
 	}
@@ -261,7 +265,7 @@ class IrValueLaneLayout {
 
 	function requireValue(name:String):IrObject {
 		var object = objects.get(name);
-		if (object == null || !object.isValue) throw 'Missing value object "$name"';
+		if (object == null || !object.isValue) throw new InternalError('Missing value object "$name"');
 		return object;
 	}
 

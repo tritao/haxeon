@@ -1,5 +1,6 @@
 package compiler.hl.patch;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlOpcode;
 import compiler.hl.HlOpcodeSchema;
@@ -18,14 +19,14 @@ class HlPatchReader {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != HlPatchFormat.MAGIC)
-				throw "Invalid HLP magic";
+				throw new InternalError("Invalid HLP magic");
 			if (input.readByte() != HlPatchFormat.VERSION)
-				throw "Unsupported HLP version";
+				throw new InternalError("Unsupported HLP version");
 			var moduleId = input.read(16),
 				base = readUnsigned(input),
 				revision = readUnsigned(input);
 			if (revision <= base)
-				throw "Invalid patch revision range";
+				throw new InternalError("Invalid patch revision range");
 			var baseInts = -1,
 				baseFloats = -1,
 				baseStrings = -1,
@@ -54,11 +55,11 @@ class HlPatchReader {
 					length = readUnsigned(input),
 					end = input.position + length;
 				if (end > bytes.length)
-					throw "Truncated HLP data";
+					throw new InternalError("Truncated HLP data");
 				switch tag {
 					case 1:
 						if (baseInts >= 0)
-							throw "Duplicate HLP symbols section";
+							throw new InternalError("Duplicate HLP symbols section");
 						intPrefixHash = input.readInt32();
 						baseInts = readUnsigned(input);
 						ints = [for (_ in 0...readUnsigned(input)) input.readInt32()];
@@ -74,37 +75,37 @@ class HlPatchReader {
 							types.push(readType(input));
 					case 2:
 						if (functions.length > 0)
-							throw "Duplicate HLP functions section";
+							throw new InternalError("Duplicate HLP functions section");
 						for (_ in 0...readUnsigned(input)) {
 							var functionLength = readUnsigned(input),
 								functionEnd = input.position + functionLength;
 							functions.push(readFunction(input));
 							if (input.position != functionEnd)
-								throw "Invalid patch function length";
+								throw new InternalError("Invalid patch function length");
 						}
 					case 3:
 						if (haveDebug)
-							throw "Duplicate HLP debug section";
+							throw new InternalError("Duplicate HLP debug section");
 						haveDebug = true;
 						debugFiles = [for (_ in 0...readUnsigned(input)) input.readString(readUnsigned(input))];
 						var debugFunctions = readUnsigned(input),
 							seen:Map<Int, Bool> = [];
 						if (debugFunctions != functions.length)
-							throw "HLP debug function count mismatch";
+							throw new InternalError("HLP debug function count mismatch");
 						for (_ in 0...debugFunctions) {
 							var stableId = readUnsigned(input),
 								found:Null<HlPatchFunction> = null;
 							if (seen.exists(stableId))
-								throw "Duplicate HLP function debug metadata";
+								throw new InternalError("Duplicate HLP function debug metadata");
 							seen.set(stableId, true);
 							for (fn in functions)
 								if (fn.functionIndex == stableId)
 									found = fn;
 							if (found == null)
-								throw "Unknown HLP debug function";
+								throw new InternalError("Unknown HLP debug function");
 							var count = readUnsigned(input);
 							if (count != found.instructions.length)
-								throw "HLP debug opcode count mismatch";
+								throw new InternalError("HLP debug opcode count mismatch");
 							for (_ in 0...count) {
 								var file = readUnsigned(input),
 									line = readUnsigned(input),
@@ -119,7 +120,7 @@ class HlPatchReader {
 								if (file >= debugFiles.length || line < 1 || column < 1 || endLine < line
 									|| endColumn < 1 || endLine == line
 									&& endColumn < column || !validRange)
-									throw "Invalid HLP debug location";
+									throw new InternalError("Invalid HLP debug location");
 								found.debug.push({
 									file: file,
 									line: line,
@@ -135,20 +136,20 @@ class HlPatchReader {
 						}
 					case 4:
 						if (haveSnapshots)
-							throw "Duplicate HLP source snapshot section";
+							throw new InternalError("Duplicate HLP source snapshot section");
 						haveSnapshots = true;
 						var seenHashes:Map<Int, Bool> = [];
 						for (_ in 0...readUnsigned(input)) {
 							var sourceHash = input.readInt32(),
 								content = input.read(readUnsigned(input));
 							if (sourceHash == 0 || seenHashes.exists(sourceHash) || hashBytes(content) != sourceHash)
-								throw "Invalid HLP source snapshot";
+								throw new InternalError("Invalid HLP source snapshot");
 							seenHashes.set(sourceHash, true);
 							sourceSnapshots.push({sourceHash: sourceHash, content: content});
 						}
 					case 5:
 						if (haveAdded)
-							throw "Duplicate HLP added functions section";
+							throw new InternalError("Duplicate HLP added functions section");
 						haveAdded = true;
 						for (_ in 0...readUnsigned(input)) {
 							var added:HlPatchAddedFunction = {
@@ -159,12 +160,12 @@ class HlPatchReader {
 							};
 							for (other in addedFunctions)
 								if (other.stableId == added.stableId || other.functionIndex == added.functionIndex)
-									throw "Duplicate HLP added function";
+									throw new InternalError("Duplicate HLP added function");
 							addedFunctions.push(added);
 						}
 					case 6:
 						if (haveGlobals)
-							throw "Duplicate HLP globals section";
+							throw new InternalError("Duplicate HLP globals section");
 						haveGlobals = true;
 						globalPrefixHash = input.readInt32();
 						baseGlobals = readUnsigned(input);
@@ -179,21 +180,21 @@ class HlPatchReader {
 									fields: [for (_ in 0...readUnsigned(input)) readUnsigned(input)]
 								});
 							else
-								throw "Invalid HLP global kind";
+								throw new InternalError("Invalid HLP global kind");
 						}
 					default:
 						input.position = end;
 				}
 				if (input.position != end)
-					throw "Invalid HLP section length";
+					throw new InternalError("Invalid HLP section length");
 			}
 			if (baseInts < 0 || functions.length == 0)
-				throw "Missing required HLP section";
+				throw new InternalError("Missing required HLP section");
 			for (global in globals)
 				if (global.type >= baseTypes + types.length)
-					throw "Invalid HLP global type";
+					throw new InternalError("Invalid HLP global type");
 			if (input.position != bytes.length)
-				throw "Trailing HLP data";
+				throw new InternalError("Trailing HLP data");
 			return {
 				moduleId: moduleId,
 				baseRevision: base,
@@ -219,7 +220,7 @@ class HlPatchReader {
 				sourceSnapshots: sourceSnapshots
 			};
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated HLP data";
+			throw new InternalError("Truncated HLP data");
 		}
 	}
 
@@ -234,7 +235,7 @@ class HlPatchReader {
 	static function readType(input:BytesInput):HlTypeDef {
 		var type = HlBytecodeInput.type(input, true, "HLP");
 		if (type.match(Enum(_, _, _) | EnumTag(_, _)))
-			throw "Enum type patches require a structural reload";
+			throw new InternalError("Enum type patches require a structural reload");
 		return type;
 	}
 

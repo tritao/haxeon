@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -27,13 +28,14 @@ class IrInlineEnumEscapes {
 				return builder.safeCast(builder.call(boxName(nested.name), [value], Dyn), logical);
 			}
 			if (!IrVerifier.sameType(value.type, logical))
-				throw 'Missing inline enum escape conversion from ${value.type} to $logical';
+				throw new InternalError('Missing inline enum escape conversion from ${value.type} to $logical');
 			return value;
 		}
 		for (name in names) {
 			var declaration = declarations.get(name), shape = planner.shape(name);
 			if (declaration == null || shape == null
-				|| shape.valueObject.name != declaration.inlineStorage) throw 'Invalid enum escape storage for "$name"';
+				|| shape.valueObject.name != declaration.inlineStorage)
+				throw new InternalError('Invalid enum escape storage for "$name"');
 			IrInlineEnumStorage.validate(declaration, objects);
 			var storage:IrType = Obj(declaration.inlineStorage), access = new IrInlineEnumCaseAccess(shape, objects);
 			var box = new IrBuilder(), value = box.argument("value", storage), tag = box.fieldGet(value, "tag", I32);

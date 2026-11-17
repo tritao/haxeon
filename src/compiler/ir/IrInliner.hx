@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.ir.Ir;
@@ -385,7 +386,7 @@ class IrInliner {
 						do {
 							var popped = stack.pop();
 							if (popped == null)
-								throw "Strongly connected component stack emptied before its root";
+								throw new InternalError("Strongly connected component stack emptied before its root");
 							member = popped;
 							onStack[member] = false;
 							components[member] = component;
@@ -565,7 +566,7 @@ class IrInliner {
 			for (dependency in memo.dependencies) {
 				var dependencyId = ids.get(dependency.name);
 				if (dependencyId == null)
-					throw 'Inline memo of "$name" depends on unknown function "${dependency.name}"';
+					throw new InternalError('Inline memo of "$name" depends on unknown function "${dependency.name}"');
 				memoDependencyIds.push(dependencyId);
 			}
 			dependencyIdsOf[id] = memoDependencyIds;
@@ -609,7 +610,7 @@ class IrInliner {
 			[for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
 		if (usable && checkingMemo && memo != null) {
 			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
-				throw '--check-reuse: the inlined form of $name differs from the one its memo holds';
+				throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
 			result = memo.result;
 		}
 		done[id] = result;
@@ -906,7 +907,7 @@ class IrInliner {
 				callOutput = out;
 				actuals = [object].concat(arguments);
 			default:
-				throw "Inliner expected a call";
+				throw new InternalError("Inliner expected a call");
 		}
 		var source = callee.blocks[0],
 			values:Map<Int, IrValue> = [],
@@ -926,20 +927,20 @@ class IrInliner {
 		var use = function(value:IrValue):IrValue {
 			var mapped = values.get(value.id);
 			if (mapped == null)
-				throw "Inliner found an undefined callee value";
+				throw new InternalError("Inliner found an undefined callee value");
 			return mapped;
 		};
 		var noBlocks = function(id:Int):Int {
-			throw "A straight-line callee has no blocks to remap";
+			throw new InternalError("A straight-line callee has no blocks to remap");
 		};
 		for (located in source.instructions)
 			copies.push(new Located(remap(located.value, use, noBlocks), located.provenance));
 		var terminator = source.terminator;
 		if (terminator == null)
-			throw "A straight-line callee must end in a terminator";
+			throw new InternalError("A straight-line callee must end in a terminator");
 		var returned:IrValue = switch terminator.value {
 			case Return(value): use(value);
-			default: throw "A straight-line callee must return";
+			default: throw new InternalError("A straight-line callee must return");
 		};
 		if ((switch (callOutput.type) {
 			case Void: true;
@@ -1050,7 +1051,7 @@ class IrInliner {
 				callOutput = out;
 				actuals = [object].concat(arguments);
 			default:
-				throw "Inliner expected a call";
+				throw new InternalError("Inliner expected a call");
 		}
 		var values:Map<Int, IrValue> = [],
 			blockIds:Map<Int, Int> = [],
@@ -1078,13 +1079,13 @@ class IrInliner {
 		var use = function(value:IrValue):IrValue {
 			var mapped = values.get(value.id);
 			if (mapped == null)
-				throw "Inliner found an undefined callee value";
+				throw new InternalError("Inliner found an undefined callee value");
 			return mapped;
 		};
 		var target = function(id:Int):Int {
 			var mapped = blockIds.get(id);
 			if (mapped == null)
-				throw "Inliner found an unknown callee block";
+				throw new InternalError("Inliner found an unknown callee block");
 			return mapped;
 		};
 		var cloned:Array<IrBlock> = [], returned:Array<IrPhiInput> = [];
@@ -1094,7 +1095,7 @@ class IrInliner {
 				copy.instructions.push(new Located(remap(located.value, use, target), located.provenance));
 			var terminator = block.terminator;
 			if (terminator == null)
-				throw "Inliner found a callee block without a terminator";
+				throw new InternalError("Inliner found a callee block without a terminator");
 			switch terminator.value {
 				case Unreachable:
 					copy.terminator = new Located(Unreachable, terminator.provenance);
@@ -1136,7 +1137,7 @@ class IrInliner {
 		var successors:Array<Int> = [];
 		var continued = continuation.terminator;
 		if (continued == null)
-			throw "Inliner found a call site without a terminator";
+			throw new InternalError("Inliner found a call site without a terminator");
 		switch continued.value {
 			case Jump(destination):
 				successors.push(destination);

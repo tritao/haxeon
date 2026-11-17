@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
@@ -43,10 +44,11 @@ class IrValueDynamicDispatch {
 		};
 		function register(suffix:String, type:IrType):Void {
 			var value = valueType(type);
-			if (value == null) throw 'Dynamic struct boundary "$suffix" has no value type';
+			if (value == null) throw new InternalError('Dynamic struct boundary "$suffix" has no value type');
 			var previous = requests.get(suffix);
 			if (previous != null
-				&& !IrVerifier.sameType(previous, value)) throw 'Conflicting Dynamic struct descriptor "$suffix"';
+				&& !IrVerifier.sameType(previous, value))
+				throw new InternalError('Conflicting Dynamic struct descriptor "$suffix"');
 			requests.set(suffix, value);
 			switch value {
 				case Obj(name): registeredValues.set(name, true);
@@ -117,7 +119,7 @@ class IrValueDynamicDispatch {
 					builder.safeCast(right, type)
 				], Bool));
 				else if (declaredEquatable(type))
-					throw 'internal error: struct "${Std.string(type)}" declares Equatable but has no equality provider ($equality)';
+					throw new InternalError('internal error: struct "${Std.string(type)}" declares Equatable but has no equality provider ($equality)');
 				else builder.throwValue(builder.toDyn(builder.constString("Struct value does not conform to Equatable")));
 				builder.select(next);
 			}

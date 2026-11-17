@@ -1,6 +1,7 @@
 package project;
 
 import build.Target;
+import compiler.core.InternalError;
 
 /** Resolution-time compatibility requirements carried by a package manifest. */
 class PackageCompatibility {
@@ -24,7 +25,7 @@ class PackageCompatibility {
 
 	public function validate(packageName:String, target:Target):Void {
 		if (haxeon != null && !satisfiesVersionRange(haxeon, CURRENT_HAXEON))
-			throw 'Package $packageName requires Haxeon "$haxeon" (current ${CURRENT_HAXEON})';
+			throw new InternalError('Package $packageName requires Haxeon "$haxeon" (current ${CURRENT_HAXEON})');
 		if (targets.length > 0) {
 			var matches = false;
 			for (declared in targets)
@@ -33,17 +34,17 @@ class PackageCompatibility {
 						matches = true;
 				} catch (_:Dynamic) {}
 			if (!matches)
-				throw 'Package $packageName does not support target ${target.toString()} (supported: ${targets.join(", ")})';
+				throw new InternalError('Package $packageName does not support target ${target.toString()} (supported: ${targets.join(", ")})');
 		}
 		if (runtimeAbi != null && runtimeAbi != CURRENT_RUNTIME_ABI)
-			throw 'Package $packageName requires runtime ABI $runtimeAbi (current ${CURRENT_RUNTIME_ABI})';
+			throw new InternalError('Package $packageName requires runtime ABI $runtimeAbi (current ${CURRENT_RUNTIME_ABI})');
 	}
 
 	public static function parse(raw:Dynamic, path:String):PackageCompatibility {
 		if (raw == null)
 			return new PackageCompatibility();
 		if (!Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw '$path "compatibility" must be an object';
+			throw new InternalError('$path "compatibility" must be an object');
 		var haxeon = optionalString(raw, "haxeon", path),
 			targets = stringArray(raw, "targets", path),
 			runtimeAbi = optionalString(raw, "runtimeAbi", path),
@@ -53,7 +54,7 @@ class PackageCompatibility {
 			try {
 				Target.parse(target);
 			} catch (error:Dynamic) {
-				throw '$path "compatibility.targets" contains an invalid target "$target": ${Std.string(error)}';
+				throw new InternalError('$path "compatibility.targets" contains an invalid target "$target": ${Std.string(error)}');
 			}
 		return new PackageCompatibility(haxeon, targets, runtimeAbi, nativeRequirements, features);
 	}
@@ -109,7 +110,7 @@ class PackageCompatibility {
 				continue;
 			var parsed = Std.parseInt(parts[index]);
 			if (parsed == null)
-				throw 'Invalid semantic version "$value"';
+				throw new InternalError('Invalid semantic version "$value"');
 			result[index] = parsed;
 		}
 		return result;
@@ -127,7 +128,7 @@ class PackageCompatibility {
 		if (value == null)
 			return null;
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path "$field" must be a non-empty string';
+			throw new InternalError('$path "$field" must be a non-empty string');
 		return cast value;
 	}
 
@@ -136,11 +137,11 @@ class PackageCompatibility {
 		if (value == null)
 			return [];
 		if (!Std.isOfType(value, Array))
-			throw '$path "$field" must be an array of strings';
+			throw new InternalError('$path "$field" must be an array of strings');
 		var result:Array<String> = [];
 		for (item in (cast value:Array<Dynamic>)) {
 			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
-				throw '$path "$field" must contain only non-empty strings';
+				throw new InternalError('$path "$field" must contain only non-empty strings');
 			result.push(cast item);
 		}
 		return result;

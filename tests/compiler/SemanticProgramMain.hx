@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.semantic.DeclarationLifecycle;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
@@ -31,8 +32,8 @@ class SemanticProgramMain {
 		try {
 			Typer.typeAnalyzed(declarationsOnly, selected);
 			throw "Typer accepted declarations without signatures";
-		} catch (error:String) {
-			expect(error.indexOf("signature-typed is required") >= 0,
+		} catch (error:InternalError) {
+			expect(error.message.indexOf("signature-typed is required") >= 0,
 				"premature body typing produced the wrong lifecycle error");
 		}
 		var shapes = SemanticProgram.analyzeThrough(parsed, ShapeConnected);
@@ -42,8 +43,8 @@ class SemanticProgramMain {
 		try {
 			machine.advanceAll(BodyTyped);
 			throw "declaration lifecycle allowed a skipped stage";
-		} catch (error:String) {
-			expect(error.indexOf("cannot advance") >= 0, "skipped lifecycle stage produced the wrong error");
+		} catch (error:InternalError) {
+			expect(error.message.indexOf("cannot advance") >= 0, "skipped lifecycle stage produced the wrong error");
 		}
 
 		Sys.println("PASS: validated semantic program feeds Typer");

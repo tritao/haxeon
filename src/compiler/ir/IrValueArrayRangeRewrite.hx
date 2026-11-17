@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -44,7 +45,8 @@ class IrValueArrayRangeRewrite {
 							case [ToDyn(boxed, source), SafeCast(out, input)] if (source.id == raw.id
 								&& input.id == boxed.id && Type.enumEq(out.type, arrayType)):
 								if (uses.get(raw.id) != 1
-									|| uses.get(boxed.id) != 1) throw "Checked array range intermediate escapes";
+									|| uses.get(boxed.id) != 1)
+									throw new InternalError("Checked array range intermediate escapes");
 								output = out;
 								arguments = args;
 								operation = rangeOperation(name);
@@ -58,7 +60,7 @@ class IrValueArrayRangeRewrite {
 					var arity = operation == "copy" ? 1 : operation == "slice" ? 3 : 2;
 					if (arguments.length != arity || !Type.enumEq(arguments[0].type, arrayType)
 						|| (operation == "concat" && !Type.enumEq(arguments[1].type, arrayType)))
-						throw 'Invalid inline array $operation operands';
+						throw new InternalError('Invalid inline array $operation operands');
 					replacement.instructions.push(new Located(Call(output, factory.rangeNativeName(operation),
 						arguments), located.provenance));
 					changed = true;

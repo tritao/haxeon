@@ -42,7 +42,7 @@ class EnumAbstractValues {
 			session.constants.enumAbstractConstantsInProgress.remove(key);
 			session.constants.enumAbstractConstants.set(key, expression);
 			return expression;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			session.constants.enumAbstractConstantOwner = previous;
 			session.constants.enumAbstractConstantsInProgress.remove(key);
 			throw error;

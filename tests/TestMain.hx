@@ -6,6 +6,7 @@ import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.backend.wasm.WasmCfgAnalysis;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.documentation.Documentation.DocumentationTools;
 import compiler.documentation.HaxeXmlWriter;
@@ -530,8 +531,8 @@ class TestMain {
 		try {
 			HlPatchReader.decode(patchBytes.sub(0, patchBytes.length - 1));
 			throw "truncated HLP was accepted";
-		} catch (error:String) {
-			if (error != "Truncated HLP data")
+		} catch (error:InternalError) {
+			if (error.message != "Truncated HLP data")
 				throw error;
 		}
 		var extended = HlPatchWriter.encode(patchCode, testModuleId, [1], stableBySlot, 7, 8, 0, 0, 0, 0, [{
@@ -2189,8 +2190,8 @@ class TestMain {
 		try {
 			new GenericSpecializationRegistry(corruptSpecializations.getBytes());
 			throw "Generic specialization registry accepted colliding restored names";
-		} catch (error:String) {
-			if (error != "Generic specialization name collision")
+		} catch (error:InternalError) {
+			if (error.message != "Generic specialization name collision")
 				throw error;
 		}
 		var resumedGeneric = new Compiler(incrementalGeneric.exportIdentityState());
@@ -2368,8 +2369,8 @@ class TestMain {
 		try {
 			HlWriter.encode(code).flatten();
 			throw 'writer accepted invalid module; expected "$expected"';
-		} catch (error:String) {
-			if (error != expected)
+		} catch (error:InternalError) {
+			if (error.message != expected)
 				throw error;
 		}
 	}
@@ -2423,8 +2424,8 @@ class TestMain {
 		try {
 			CfgVerifier.verify(cfg);
 			throw 'CFG verifier accepted invalid graph; expected "$expected"';
-		} catch (error:String) {
-			if (error != expected)
+		} catch (error:InternalError) {
+			if (error.message != expected)
 				throw error;
 		}
 	}
@@ -2433,8 +2434,8 @@ class TestMain {
 		try {
 			compiler.ir.IrVerifier.verify(program);
 			throw 'IR verifier accepted invalid program; expected "$expected"';
-		} catch (error:String) {
-			if (error != expected)
+		} catch (error:InternalError) {
+			if (error.message != expected)
 				throw error;
 		}
 	}
@@ -2443,8 +2444,8 @@ class TestMain {
 		try {
 			new Compiler(state);
 			throw 'compiler accepted invalid identity state; expected "$expected"';
-		} catch (error:String) {
-			if (error != expected)
+		} catch (error:InternalError) {
+			if (error.message != expected)
 				throw error;
 		}
 	}
@@ -2453,8 +2454,8 @@ class TestMain {
 		try {
 			action();
 			throw 'operation succeeded; expected "$expected"';
-		} catch (error:String) {
-			if (error != expected)
+		} catch (error:InternalError) {
+			if (error.message != expected)
 				throw error;
 		}
 	}

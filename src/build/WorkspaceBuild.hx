@@ -9,6 +9,7 @@ import build.execution.ExecutionPlan;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCMakeProvider;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import project.ResolvedProject;
 
@@ -83,7 +84,7 @@ class WorkspaceBuild {
 		for (member in projects) {
 			var project = resolve(member.manifestPath);
 			if (project.manifest.target != "host")
-				throw 'Workspace project "${member.name}" targets "${project.manifest.target}"; workspace builds support "host" only';
+				throw new InternalError('Workspace project "${member.name}" targets "${project.manifest.target}"; workspace builds support "host" only');
 			var output = Path.join([project.root, project.manifest.outputDir, "host", "main.hl"]),
 				plan = BuildPlanner.project(project, BuildIntent.Build, environment.target,
 					NativeArtifactDemand.Shared),
@@ -122,7 +123,7 @@ class WorkspaceBuild {
 	 */
 	public static function withTests(workspace:LoweredWorkspace, home:String, useCache:Bool = true):ExecutionPlan {
 		if (Sys.systemName() == "Windows")
-			throw "Workspace tests currently run on Linux and macOS only";
+			throw new InternalError("Workspace tests currently run on Linux and macOS only");
 		var actions = workspace.plan.actions.copy(),
 			context = new LoweringContext(workspace.environment, null, null, null, home, [], false, true),
 			hashlink = Path.join([build.HashLinkPath.directory(home), "hl"]),
@@ -135,7 +136,7 @@ class WorkspaceBuild {
 				if (StringTools.startsWith(id.key(), "compile-project:"))
 					compile = id;
 			if (compile == null)
-				throw 'Workspace project "${member.name}" has no compile action to test';
+				throw new InternalError('Workspace project "${member.name}" has no compile action to test');
 			var directories = [Path.join([home, "out"]), build.HashLinkPath.directory(home)], // What a passing run depends on besides the compile action: the module, the HashLink runtime,
 				// the native libraries it loads, and the files beside its project. The project directory
 				// stands in for test data; list data kept elsewhere under `inputs` in the workspace file.

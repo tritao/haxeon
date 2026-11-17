@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import compiler.ffi.HxiAudit;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiParser;
@@ -48,11 +49,11 @@ class FfiAuditMain {
 			else if (StringTools.startsWith(argument, "--exclude-header="))
 				excludedHeaders.push(argument.substring(17));
 			else if (StringTools.startsWith(argument, "--"))
-				throw 'Unknown FFI audit option "$argument"';
+				throw new InternalError('Unknown FFI audit option "$argument"');
 			else
 				paths.push(argument);
 		if (paths.length != 1 || targets.length < 2 || (format != "text" && format != "json"))
-			throw "Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw new InternalError("Usage: haxeon ffi audit --target=<triple> --target=<triple> [--profile=portable-abi64|portable-abi32] [--format=text|json] [--output=<file>] [--library=<name>] [--interface=<name>] [--depends=<interface>] [--dependency-hxi=<path>] [--include=<dir>] [--source-label=<path>] [--exclude-header=<path>] <header>");
 		var dependencyInterfaces:Array<HxiInterface> = [];
 		for (path in dependencyPaths) {
 			var model = HxiParser.parse(path, File.getContent(path));

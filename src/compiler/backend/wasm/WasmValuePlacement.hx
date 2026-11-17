@@ -4,6 +4,7 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmHeapType;
 import compiler.backend.wasm.WasmRepresentation.WasmValueRepresentation;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
@@ -134,7 +135,7 @@ class WasmValuePlacement {
 
 	public function local(valueId:Int):Int {
 		if (!values.exists(valueId))
-			throw 'Wasm value $valueId has no placement';
+			throw new InternalError('Wasm value $valueId has no placement');
 		return requiredPosition(values, valueId);
 	}
 
@@ -147,7 +148,7 @@ class WasmValuePlacement {
 
 	static function requiredPosition(values:Map<Int, Int>, valueId:Int):Int {
 		if (!values.exists(valueId))
-			throw 'Missing Wasm value placement for $valueId';
+			throw new InternalError('Missing Wasm value placement for $valueId');
 		return values.get(valueId);
 	}
 

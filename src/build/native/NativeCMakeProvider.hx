@@ -11,6 +11,7 @@ import build.execution.ExecutionAction.ActionKind;
 import build.Target;
 import build.Target.TargetAbi;
 import build.Target.TargetOs;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import project.FfiManifest.ResolvedFfiImport;
 import project.ResolvedPackage;
@@ -24,7 +25,7 @@ class NativeCMakeProvider {
 			} {
 		var native = resolvedPackage.manifest.native;
 		if (native == null || native.cmake == null)
-			throw 'Package "${resolvedPackage.name}" has no native.cmake provider';
+			throw new InternalError('Package "${resolvedPackage.name}" has no native.cmake provider');
 		// A shared tree is named and configured with real paths, so every route to a directory gives the same arguments.
 		var cached = !context.sharedNative && context.nativeCache != null,
 			home = cached ? NativeCache.canonical(context.compilerHome) : context.compilerHome,
@@ -200,13 +201,13 @@ class NativeCMakeProvider {
 				&& artifact.id.kind == ArtifactKind.FfiNativeSharedLibrary) {
 				var ffiName = artifact.details.get("ffi");
 				if (ffiName == null)
-					throw 'CMake FFI shared library ${artifact.id} is missing its FFI name';
+					throw new InternalError('CMake FFI shared library ${artifact.id} is missing its FFI name');
 				var imports = [
 					for (candidate in resolvedPackage.ffiImports)
 						if (candidate.config.name == ffiName) candidate
 				];
 				if (imports.length != 1)
-					throw 'CMake FFI shared library ${artifact.id} refers to missing FFI import $ffiName';
+					throw new InternalError('CMake FFI shared library ${artifact.id} refers to missing FFI import $ffiName');
 				var ffi:ResolvedFfiImport = imports[0],
 					sourceRelative = 'ffi/$ffiName/$ffiName-thunks.cpp',
 					thunkSource = layout.ffiThunkSourcePath(resolvedPackage.name, ffiName),

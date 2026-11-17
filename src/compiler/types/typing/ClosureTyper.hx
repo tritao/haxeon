@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -294,7 +295,7 @@ class ClosureTyper {
 
 	static function requiredMapValue<T>(source:Map<String, T>, name:String):T {
 		if (!source.exists(name))
-			throw 'Missing map entry "$name"';
+			throw new InternalError('Missing map entry "$name"');
 		return source.get(name);
 	}
 

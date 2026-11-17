@@ -2,6 +2,7 @@ package compiler.backend.wasm.linear;
 
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmModuleSupport;
+import compiler.core.InternalError;
 
 /**
  * How a wasm32 module's runtime checks fail: a catchable null Haxe exception when the program can catch one (in a runtime-neutral
@@ -36,7 +37,7 @@ class WasmLinearFailure {
 			if (neutral) {
 				var flag = pendingFlag, value = pendingValue;
 				if (flag == null || value == null)
-					throw "Runtime-neutral exception globals were not initialized";
+					throw new InternalError("Runtime-neutral exception globals were not initialized");
 				builder.i32Const(0);
 				builder.emit(GlobalSet(value));
 				builder.i32Const(1);

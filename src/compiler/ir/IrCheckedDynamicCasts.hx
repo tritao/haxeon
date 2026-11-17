@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
@@ -51,7 +52,7 @@ class IrCheckedDynamicCasts {
 					case Obj(name) if (declarations.exists(name)
 						&& (checkObjects || (checkValueObjects && declarations.get(name).isValue))):
 						var declaration = declarations.get(name);
-						if (declaration == null) throw 'Missing cast target "$name"';
+						if (declaration == null) throw new InternalError('Missing cast target "$name"');
 						[new Located(Call(out, helperFor(out.type, out.type, name, !declaration.isValue), [input]),
 							located.provenance)];
 					case Nullable(Obj(name)) if (checkValueObjects && declarations.exists(name)
@@ -67,7 +68,7 @@ class IrCheckedDynamicCasts {
 					case Nullable(Function(_, _)) if (checkFunctionCasts):
 						var inner = switch out.type {
 							case Nullable(value): value;
-							default: throw "Invalid nullable function cast";
+							default: throw new InternalError("Invalid nullable function cast");
 						};
 						[new Located(Call(out, helperFor(out.type, inner, Std.string(inner), true), [input]),
 							located.provenance)];

@@ -1,5 +1,6 @@
 package tools;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -54,7 +55,7 @@ class ProfileCapture {
 		if (FileSystem.exists(manifest)) {
 			var artifacts:Dynamic = Reflect.field(Json.parse(File.getContent(manifest)), "artifacts");
 			if (artifacts == null || Reflect.field(artifacts, "profile") != Path.withoutDirectory(capture))
-				throw 'Capture directory $directory already holds another capture; choose an empty directory';
+				throw new InternalError('Capture directory $directory already holds another capture; choose an empty directory');
 		}
 	}
 
@@ -96,7 +97,7 @@ class ProfileCapture {
 		for (source in list.split(",")) {
 			source = StringTools.trim(source);
 			if (source != "instrument" && source != "sampling" && source != "alloc")
-				throw 'Unknown profiling source "$source" (expected instrument, sampling or alloc)';
+				throw new InternalError('Unknown profiling source "$source" (expected instrument, sampling or alloc)');
 			if (sources.indexOf(source) < 0)
 				sources.push(source);
 		}
@@ -106,7 +107,7 @@ class ProfileCapture {
 	/** Parses `--profile-start`: "launch" or "manual". */
 	public static function parseStart(value:String):String {
 		if (value != "launch" && value != "manual")
-			throw 'Option "--profile-start" must be "launch" or "manual"';
+			throw new InternalError('Option "--profile-start" must be "launch" or "manual"');
 		return value;
 	}
 
@@ -114,7 +115,7 @@ class ProfileCapture {
 	public static function parseMinCall(value:String):Float {
 		var parsed = number(value);
 		if (parsed == null || parsed > 4000000)
-			throw 'Option "--profile-min-call" takes microseconds from 0 to 4000000, not "$value"';
+			throw new InternalError('Option "--profile-min-call" takes microseconds from 0 to 4000000, not "$value"');
 		return parsed;
 	}
 
@@ -136,20 +137,20 @@ class ProfileCapture {
 			return [];
 		var parts = window.split(":");
 		if (parts.length != 2)
-			throw 'Option "--profile-window" takes START:END in seconds';
+			throw new InternalError('Option "--profile-window" takes START:END in seconds');
 		var arguments = [], bounds:Array<Null<Float>> = [null, null];
 		for (index in 0...2) {
 			if (StringTools.trim(parts[index]) == "")
 				continue;
 			var seconds = number(parts[index]);
 			if (seconds == null)
-				throw 'Option "--profile-window" takes START:END in seconds, not "$window"';
+				throw new InternalError('Option "--profile-window" takes START:END in seconds, not "$window"');
 			bounds[index] = seconds;
 			arguments.push(index == 0 ? "--start-ms" : "--end-ms");
 			arguments.push(Std.string(Math.round(seconds * 1000)));
 		}
 		if (bounds[0] != null && bounds[1] != null && bounds[0] >= bounds[1])
-			throw 'Option "--profile-window" needs START before END, not "$window"';
+			throw new InternalError('Option "--profile-window" needs START before END, not "$window"');
 		return arguments;
 	}
 
@@ -296,7 +297,7 @@ class ProfileCapture {
 				socket.close();
 			}
 		}
-		throw "Could not find a free diagnostics port for profiling";
+		throw new InternalError("Could not find a free diagnostics port for profiling");
 	}
 
 	static function ensureDirectory(path:String):Void

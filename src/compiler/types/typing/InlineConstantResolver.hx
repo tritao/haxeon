@@ -80,7 +80,7 @@ class InlineConstantResolver {
 						'inline field "$constantOwner.$name"', "E1002")
 				});
 			});
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			dependencyCollectors.pop();
 			session.constants.inlineConstantsInProgress.remove(key);
 			throw error;

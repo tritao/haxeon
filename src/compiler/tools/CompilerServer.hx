@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.tools.CompilerServerProtocol;
 import sys.FileSystem;
 import sys.io.File;
@@ -33,13 +34,13 @@ class CompilerServer {
 		return null;
 	#else
 	static function windowsSecureToken():String
-		throw "A secure random token requires the Haxeon runtime";
+		throw new InternalError("A secure random token requires the Haxeon runtime");
 	#end
 
 	public static function main():Void {
 		var args = Sys.args();
 		if (args.length != 1)
-			throw "CompilerServer requires a rendezvous path";
+			throw new InternalError("CompilerServer requires a rendezvous path");
 		serve(args[0]);
 	}
 
@@ -146,7 +147,7 @@ class CompilerServer {
 			session:CompilerSession):compiler.Compiler.CompileResult {
 		var cancellation = new CancellationToken(), done = new Lock();
 		var result:compiler.Compiler.CompileResult = null;
-		var failure:Dynamic = null;
+		var failure:Null<haxe.Exception> = null;
 		var request = CompilerArguments.parse(arguments);
 		// Stage every artifact so cancellation preserves the previous successful publication.
 		var staged:Dynamic = Reflect.copy(request);
@@ -213,7 +214,7 @@ class CompilerServer {
 					if (requester != null)
 						send(requester, Message(message));
 				}, session, cancellation, publishEarly)
-					catch (error:Dynamic)
+					catch (error:haxe.Exception)
 					failure = error;
 			if (counting)
 				AllocationCensus.end();

@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.InternalError;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 import haxe.io.Bytes;
@@ -50,23 +51,23 @@ class GenericSpecializationRegistry {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "GSR" || input.readByte() != 1)
-				throw "Invalid generic specialization state";
+				throw new InternalError("Invalid generic specialization state");
 			var count = input.readInt32();
 			if (count < 0 || count > 0x100000)
-				throw "Invalid generic specialization count";
+				throw new InternalError("Invalid generic specialization count");
 			for (_ in 0...count) {
 				var key = readString(input), name = readString(input);
 				if (names.exists(key))
-					throw "Duplicate generic specialization";
+					throw new InternalError("Duplicate generic specialization");
 				if (restoredNames.exists(name))
-					throw "Generic specialization name collision";
+					throw new InternalError("Generic specialization name collision");
 				names.set(key, name);
 				restoredNames.set(name, true);
 			}
 			if (input.position != state.length)
-				throw "Trailing generic specialization state";
+				throw new InternalError("Trailing generic specialization state");
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated generic specialization state";
+			throw new InternalError("Truncated generic specialization state");
 		}
 	}
 
@@ -79,7 +80,7 @@ class GenericSpecializationRegistry {
 	static function readString(input:BytesInput):String {
 		var length = input.readInt32();
 		if (length < 0 || length > 0x100000)
-			throw "Invalid generic specialization string";
+			throw new InternalError("Invalid generic specialization string");
 		return input.readString(length);
 	}
 

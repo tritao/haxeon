@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -227,8 +228,8 @@ class InlineRequestModelMain {
 			var unresolvedRejected = false;
 			try
 				compiler.ir.IrVerifier.verifyResolvedEnumOperations([fn])
-			catch (error:String) {
-				if (error.indexOf("unresolved typed enum conversion") < 0)
+			catch (error:InternalError) {
+				if (error.message.indexOf("unresolved typed enum conversion") < 0)
 					throw error;
 				unresolvedRejected = true;
 			}
@@ -306,8 +307,8 @@ class InlineRequestModelMain {
 		var rejectedImpostor = false;
 		try
 			compiler.ir.IrVerifier.verifyInlineEnumsLowered(impostor)
-		catch (error:String) {
-			if (error.indexOf('IR inline enum "Payload" retains nominal value storage') < 0)
+		catch (error:InternalError) {
+			if (error.message.indexOf('IR inline enum "Payload" retains nominal value storage') < 0)
 				throw error;
 			rejectedImpostor = true;
 		}
@@ -337,8 +338,8 @@ class InlineRequestModelMain {
 		var rejected = false;
 		try
 			IrEnumTagLowering.escapes(missing)
-		catch (error:String) {
-			if (error.indexOf("Missing inline enum provider") < 0)
+		catch (error:InternalError) {
+			if (error.message.indexOf("Missing inline enum provider") < 0)
 				throw error;
 			rejected = true;
 		}
@@ -364,8 +365,8 @@ class InlineRequestModelMain {
 		rejected = false;
 		try
 			IrEnumTagLowering.escapes(malformed)
-		catch (error:String) {
-			if (error.indexOf("Invalid inline enum box request signature") < 0)
+		catch (error:InternalError) {
+			if (error.message.indexOf("Invalid inline enum box request signature") < 0)
 				throw error;
 			rejected = true;
 		}
@@ -388,8 +389,8 @@ class InlineRequestModelMain {
 		rejected = false;
 		try
 			IrEnumTagLowering.escapes(badProviderProgram)
-		catch (error:String) {
-			if (error.indexOf("Invalid inline enum provider signature") < 0)
+		catch (error:InternalError) {
+			if (error.message.indexOf("Invalid inline enum provider signature") < 0)
 				throw error;
 			rejected = true;
 		}

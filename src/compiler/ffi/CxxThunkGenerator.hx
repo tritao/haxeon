@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxModel;
@@ -142,7 +143,7 @@ class CxxThunkGenerator {
 					case CxxStdByte: "std::byte";
 					case CxxUInt8: "std::uint8_t";
 				};
-			case _: throw "CXX016 expected a byte std::span";
+			case _: throw new InternalError("CXX016 expected a byte std::span");
 		};
 
 	static function cppType(type:CxxType):String {
@@ -153,13 +154,14 @@ class CxxThunkGenerator {
 			case CxxConst(element): "const " + cppType(element);
 			case CxxPointer(element): cppType(element) + " *";
 			case CxxReference(element): cppType(element) + " &";
-			case CxxRValueReference(_): throw "CXX016 cannot generate a thunk for an rvalue reference";
+			case CxxRValueReference(_): throw new InternalError("CXX016 cannot generate a thunk for an rvalue reference");
 			case CxxFunctionPointer(parameters, result, isNoexcept):
 				cppType(result) + " (*) (" + [for (parameter in parameters) cppType(parameter)].join(", ") + ")"
 					+ (isNoexcept ? " noexcept" : "");
-			case CxxStringView: throw "CXX016 std::string_view is emitted through the adapter parameter expansion";
-			case CxxByteSpan(_): throw "CXX016 byte std::span is emitted through the adapter parameter expansion";
-			case CxxUnsupported(raw, reason): throw 'CXX016 cannot generate a thunk for "$raw": $reason';
+			case CxxStringView: throw new InternalError("CXX016 std::string_view is emitted through the adapter parameter expansion");
+			case CxxByteSpan(_): throw new InternalError("CXX016 byte std::span is emitted through the adapter parameter expansion");
+			case CxxUnsupported(raw,
+				reason): throw new InternalError('CXX016 cannot generate a thunk for "$raw": $reason');
 		};
 	}
 
@@ -168,7 +170,7 @@ class CxxThunkGenerator {
 			case CxxFunctionPointer(parameters, result, isNoexcept):
 				'${cppType(result)} (*$name)(${[for (parameter in parameters) cppType(parameter)].join(", ")})${isNoexcept ? " noexcept" : ""}';
 			case CxxConst(element): functionPointerParameter(element, name);
-			case _: throw "CXX016 expected a C++ function pointer parameter";
+			case _: throw new InternalError("CXX016 expected a C++ function pointer parameter");
 		};
 
 	static function isFunctionPointer(type:CxxType):Bool
@@ -206,7 +208,7 @@ class CxxThunkGenerator {
 			case "isize": "intptr_t";
 			case "usize": "std::size_t";
 			case "c_wchar": "wchar_t";
-			case _: throw 'CXX016 cannot spell primitive type "$name" in a generated thunk';
+			case _: throw new InternalError('CXX016 cannot spell primitive type "$name" in a generated thunk');
 		};
 	}
 
@@ -219,7 +221,7 @@ class CxxThunkGenerator {
 
 	static function fallback(type:CxxType):String {
 		return switch type {
-			case CxxReference(_): throw "CXX016 throwing C++ calls cannot return references through a generated thunk";
+			case CxxReference(_): throw new InternalError("CXX016 throwing C++ calls cannot return references through a generated thunk");
 			case CxxConst(element): fallback(element);
 			case CxxPointer(_): "nullptr";
 			case _: '${cppType(type)}{}';

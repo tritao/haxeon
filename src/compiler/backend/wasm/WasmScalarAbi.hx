@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmScalarClosureEscapes;
 import compiler.backend.wasm.WasmValueLayout;
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
@@ -202,7 +203,7 @@ class WasmScalarAbi {
 			if (candidates.exists(name) && !methodClones.exists(name)) {
 				var fn = originals.get(name);
 				if (fn == null)
-					throw 'Missing scalar method "$name"';
+					throw new InternalError('Missing scalar method "$name"');
 				var args = [for (argument in fn.arguments) argument.type],
 					clone = "$wasm:scalar-method:" + name.length + ":" + name;
 				methodClones.set(name, clone);
@@ -878,10 +879,10 @@ class WasmScalarAbi {
 			if (own != null) {
 				var expected = expandedTypes(own.arguments);
 				if (expected.length != fn.arguments.length)
-					throw 'Wrong scalar parameter count in ${fn.name}';
+					throw new InternalError('Wrong scalar parameter count in ${fn.name}');
 				for (index in 0...expected.length)
 					if (!IrVerifier.sameType(expected[index], fn.arguments[index].type))
-						throw 'Wrong scalar parameter type in ${fn.name}';
+						throw new InternalError('Wrong scalar parameter type in ${fn.name}');
 			}
 			for (block in fn.blocks)
 				for (located in block.instructions)
@@ -897,19 +898,19 @@ class WasmScalarAbi {
 								case Bool: false;
 								default: true;
 							}))
-								throw 'Invalid scalar rethrow in ${fn.name}';
+								throw new InternalError('Invalid scalar rethrow in ${fn.name}');
 						case MethodCall(out, receiver, method, arguments,
 							_) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
 							var virtual = scalarVirtuals.get(virtualKey(receiver.type, method));
 							if (virtual == null)
-								throw 'Missing scalar virtual method "$method"';
+								throw new InternalError('Missing scalar virtual method "$method"');
 							var expected = expandedTypes(virtual.signature.arguments);
 							if (arguments.length != expected.length)
-								throw 'Wrong scalar virtual arity in ${fn.name}';
+								throw new InternalError('Wrong scalar virtual arity in ${fn.name}');
 							for (index in 0...expected.length)
 								if (!IrVerifier.compatibleType(arguments[index].type, expected[index], objects,
 									interfaces))
-									throw 'Wrong scalar virtual argument $index in ${fn.name}';
+									throw new InternalError('Wrong scalar virtual argument $index in ${fn.name}');
 							if (values.isValue(virtual.signature.result))
 								handles.set(out.id, resultTypes(virtual.signature));
 						case CallClosure(out, closure,
@@ -922,28 +923,28 @@ class WasmScalarAbi {
 									throwsReceiver: false,
 									receiverId: -1
 								};
-								default: throw "Invalid scalar closure type";
+								default: throw new InternalError("Invalid scalar closure type");
 							};
 							var expected = expandedTypes(signature.arguments);
 							if (arguments.length != expected.length)
-								throw 'Wrong scalar closure arity in ${fn.name}';
+								throw new InternalError('Wrong scalar closure arity in ${fn.name}');
 							for (index in 0...expected.length)
 								if (!IrVerifier.compatibleType(arguments[index].type, expected[index], objects,
 									interfaces))
-									throw 'Wrong scalar closure argument $index in ${fn.name}';
+									throw new InternalError('Wrong scalar closure argument $index in ${fn.name}');
 							if (values.isValue(signature.result))
 								handles.set(out.id, resultTypes(signature));
 						case Call(out, name, arguments) if (signatures.exists(name)):
 							var signature = signatures.get(name);
 							if (signature == null)
-								throw 'Missing scalar function "$name"';
+								throw new InternalError('Missing scalar function "$name"');
 							var expected = expandedTypes(signature.arguments);
 							if (arguments.length != expected.length)
-								throw 'Wrong scalar call arity for "$name"';
+								throw new InternalError('Wrong scalar call arity for "$name"');
 							for (index in 0...expected.length)
 								if (!IrVerifier.compatibleType(arguments[index].type, expected[index], objects,
 									interfaces))
-									throw 'Wrong scalar call argument $index for "$name": got ${arguments[index].type}, expected ${expected[index]}';
+									throw new InternalError('Wrong scalar call argument $index for "$name": got ${arguments[index].type}, expected ${expected[index]}');
 							if (signature.mutatesReceiver || values.isValue(signature.result))
 								handles.set(out.id, resultTypes(signature));
 						case Call(out, name, arguments) if (name == RETURN_MARKER):
@@ -951,13 +952,13 @@ class WasmScalarAbi {
 								case Void: false;
 								default: true;
 							}))
-								throw 'Unexpected scalar return in ${fn.name}';
+								throw new InternalError('Unexpected scalar return in ${fn.name}');
 							var expected = resultTypes(own);
 							if (arguments.length != expected.length)
-								throw 'Wrong scalar result count in ${fn.name}';
+								throw new InternalError('Wrong scalar result count in ${fn.name}');
 							for (index in 0...expected.length)
 								if (!IrVerifier.sameType(arguments[index].type, expected[index]))
-									throw 'Wrong scalar result type in ${fn.name}';
+									throw new InternalError('Wrong scalar result type in ${fn.name}');
 						default:
 					}
 			for (block in fn.blocks)
@@ -971,7 +972,7 @@ class WasmScalarAbi {
 								|| index < 0
 								|| index >= fields.length
 								|| !IrVerifier.sameType(out.type, fields[index]))
-								throw 'Invalid scalar call result "$name" in ${fn.name}';
+								throw new InternalError('Invalid scalar call result "$name" in ${fn.name}');
 						default:
 					}
 		}
@@ -1024,7 +1025,7 @@ class WasmScalarAbi {
 		var isolated = isolatedValues(fn);
 		var first = fn.blocks[0], end = first.terminator;
 		if (end == null)
-			throw 'Missing entry terminator in ${fn.name}';
+			throw new InternalError('Missing entry terminator in ${fn.name}');
 		var provenance = first.instructions.length == 0 ? end.provenance : first.instructions[0].provenance;
 		for (argument in fn.arguments) {
 			if (signature == null || !values.isValue(argument.type)) {
@@ -1130,7 +1131,7 @@ class WasmScalarAbi {
 			next:Int):Int {
 		var virtual = scalarVirtuals.get(virtualKey(receiver.type, method));
 		if (virtual == null)
-			throw 'Missing scalar virtual method "$method"';
+			throw new InternalError('Missing scalar virtual method "$method"');
 		var expanded:Array<IrValue> = [];
 		for (index in 0...originalArgs.length) {
 			var argument = originalArgs[index],
@@ -1165,7 +1166,7 @@ class WasmScalarAbi {
 			originalArgs:Array<IrValue>, next:Int):Int {
 		var signature = switch closure.type {
 			case Function(arguments, result): {arguments: arguments, result: result};
-			default: throw "Scalar closure has no function type";
+			default: throw new InternalError("Scalar closure has no function type");
 		};
 		var expanded:Array<IrValue> = [];
 		for (index in 0...originalArgs.length) {
@@ -1201,7 +1202,7 @@ class WasmScalarAbi {
 			originalArgs:Array<IrValue>, next:Int):Int {
 		var callee = signatures.get(name);
 		if (callee == null)
-			throw 'Missing scalar Wasm GC signature "$name"';
+			throw new InternalError('Missing scalar Wasm GC signature "$name"');
 		var expanded:Array<IrValue> = [];
 		for (index in 0...originalArgs.length) {
 			var argument = originalArgs[index],
@@ -1310,17 +1311,17 @@ class WasmScalarAbi {
 	function findField(type:IrType, name:String):IrObjectField {
 		var owner = objectName(type), object = objects.get(owner);
 		if (object == null)
-			throw 'Missing Wasm GC value "$owner"';
+			throw new InternalError('Missing Wasm GC value "$owner"');
 		for (field in object.fields)
 			if (field.name == name)
 				return field;
-		throw 'Missing Wasm GC value field "$owner.$name"';
+		throw new InternalError('Missing Wasm GC value field "$owner.$name"');
 	}
 
 	static function objectName(type:IrType):String
 		return switch type {
 			case Obj(name): name;
-			default: throw 'Expected a value object, got $type';
+			default: throw new InternalError('Expected a value object, got $type');
 		};
 
 	static function nextId(fn:IrFunction):Int {

@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.InternalError;
 import compiler.types.StructProperties;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -301,7 +302,7 @@ class TypeRelations {
 
 	static function requiredDepth(depths:Map<String, Int>, key:String):Int {
 		if (!depths.exists(key))
-			throw 'Missing recursion depth "$key"';
+			throw new InternalError('Missing recursion depth "$key"');
 		return depths.get(key);
 	}
 
@@ -581,7 +582,7 @@ class TypeRelations {
 	static function representationConstraintName(type:CompilerType):String
 		return switch type {
 			case TInstance(NominalKind.Interface, name, _): name;
-			case _: throw 'Not a representation constraint: $type';
+			case _: throw new InternalError('Not a representation constraint: $type');
 		};
 
 	public static function equals(left:CompilerType, right:CompilerType):Bool

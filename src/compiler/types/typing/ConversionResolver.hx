@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.types.Monomorphs;
 
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -295,7 +296,7 @@ class ConversionResolver {
 	function dynamicStructure(value:TypedExpression, expected:CompilerType):TypedExpression {
 		var target = structuralCopyTarget(expected);
 		if (target == null)
-			throw "Expected anonymous conversion target";
+			throw new InternalError("Expected anonymous conversion target");
 		var name = switch target {
 			case TAnonymous(name, _): name;
 			default: compiler.semantic.SemanticSignature.type(target);
@@ -354,7 +355,7 @@ class ConversionResolver {
 				case TArray(element):
 					var matches = dynamicFieldMatches(source, target);
 					if (matches == null)
-						throw "Missing array conversion check";
+						throw new InternalError("Missing array conversion check");
 					var message =
 						new TypedExpression(TStringLiteral("Expected an array in dynamic structure conversion"),
 						TString, span);
@@ -370,7 +371,7 @@ class ConversionResolver {
 						[TExpression(new TypedExpression(TArrayPush(copied, item), TInt, span), span)], span));
 					result = copied;
 				default:
-					throw "Unsupported structural copy target";
+					throw new InternalError("Unsupported structural copy target");
 			}
 			statements.push(TReturn(result, span));
 			session.closureConversion.addFunction({
@@ -431,7 +432,7 @@ class ConversionResolver {
 	function iterationAdapter(value:TypedExpression, expected:CompilerType):TypedExpression {
 		var fields = switch expected {
 			case TAnonymous(_, fields): fields;
-			default: throw "Expected iteration contract";
+			default: throw new InternalError("Expected iteration contract");
 		};
 		var span = value.span, context = session.currentContext.name;
 		var id = session.counters.nextFunctionAdapter(context);
@@ -453,7 +454,7 @@ class ConversionResolver {
 			var captured = new TypedExpression(TCaptured("source"), value.type, span, false, null, value.type);
 			var result = switch field.type {
 				case TFunction([], result, _): result;
-				default: throw "Expected protocol method";
+				default: throw new InternalError("Expected protocol method");
 			};
 			var call = IterationProtocol.call(session, captured, field.name);
 			var converted = coerce(call, result, "iteration method result");

@@ -1,6 +1,7 @@
 package compiler.formatter;
 
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.formatter.CommentAttachment.CommentAttachmentTools;
 import compiler.formatter.FormatToken.FormatTokenTools;
@@ -71,11 +72,11 @@ class Formatter {
 						default: LeftBracket;
 					};
 					if (open.length == 0 || open.pop() != expected)
-						throw "unbalanced brackets";
+						throw new InternalError("unbalanced brackets");
 				default:
 			}
 		if (open.length > 0)
-			throw "unbalanced brackets";
+			throw new InternalError("unbalanced brackets");
 	}
 
 	/**

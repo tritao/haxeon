@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 
 /** The logical enum remains public; only typed storage uses its private value record. */
@@ -10,7 +11,7 @@ class IrInlineEnumStorage {
 			validate(declaration, objects);
 			return Obj(declaration.inlineStorage);
 		}
-		throw 'Unknown enum "$name"';
+		throw new InternalError('Unknown enum "$name"');
 	}
 
 	public static function validate(declaration:IrEnum, objects:IrObjectTable):Void {
@@ -20,10 +21,10 @@ class IrInlineEnumStorage {
 		if (declaration.isRecursive == true || name != IrInlineEnumLayout.VALUE_PREFIX + declaration.name
 			|| object == null || !object.isValue || object.base != null || object.interfaces.length != 0
 			|| object.methods.length != 0)
-			throw 'Invalid inline storage for enum "${declaration.name}"';
+			throw new InternalError('Invalid inline storage for enum "${declaration.name}"');
 		if (object.fields.length == 0 || object.fields[0].name != "tag"
 			|| !IrVerifier.sameType(object.fields[0].type, I32))
-			throw 'Inline enum storage "$name" requires an Int tag';
+			throw new InternalError('Inline enum storage "$name" requires an Int tag');
 		var scalar = 0, reference = 0, width = 0, referencesStarted = false;
 		for (index in 1...object.fields.length) {
 			var field = object.fields[index];
@@ -34,13 +35,13 @@ class IrInlineEnumStorage {
 					default: 0;
 				};
 				if (bits == 0 || width != 0
-					&& bits != width) throw 'Invalid scalar word in inline enum storage "$name"';
+					&& bits != width) throw new InternalError('Invalid scalar word in inline enum storage "$name"');
 				width = bits;
 				scalar++;
 			} else {
 				referencesStarted = true;
 				if (field.name != 'reference$reference' || !IrValueLaneReference.isCarrier(field.type))
-					throw 'Invalid reference slot in inline enum storage "$name"';
+					throw new InternalError('Invalid reference slot in inline enum storage "$name"');
 				reference++;
 			}
 		}

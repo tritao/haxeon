@@ -1,5 +1,6 @@
 package compiler.hl;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlInstruction;
 
@@ -7,7 +8,7 @@ import compiler.hl.HlFunction.HlInstruction;
 class HlValidator {
 	public static function validate(code:HlCode, ?cache:HlWriterCache, checkReuse:Bool = false):Void {
 		if (code.types.length == 0)
-			throw "HL module has no types";
+			throw new InternalError("HL module has no types");
 
 		for (type in code.types) {
 			switch type {
@@ -16,28 +17,28 @@ class HlValidator {
 					switch code.types[boxedType] {
 						case Enum(_, _, constructors):
 							if (constructors.length != cacheGlobals.length)
-								throw "Enum tag case count mismatch";
+								throw new InternalError("Enum tag case count mismatch");
 							for (i in 0...constructors.length) {
 								var global = cacheGlobals[i];
 								if (constructors[i].params.length != 0 || global < 0 || global >= code.globals.length
 									|| code.globals[global] != boxedType)
-									throw "Invalid enum tag case global";
+									throw new InternalError("Invalid enum tag case global");
 							}
-						default: throw "Enum tag requires a boxed enum descriptor";
+						default: throw new InternalError("Enum tag requires a boxed enum descriptor");
 					}
 				case Simple(kind):
 					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed || kind == HlType.EnumTag)
-						throw 'HashLink type $kind requires a parameter';
+						throw new InternalError('HashLink type $kind requires a parameter');
 				case Parameterized(kind, parameter):
 					if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
-						throw 'Unsupported parameterized HashLink type $kind';
+						throw new InternalError('Unsupported parameterized HashLink type $kind');
 					requireType(code, parameter, "parameterized type argument");
 				case Abstract(name):
 					requireString(code, name, "abstract name");
 				case Enum(name, global, constructors):
 					requireString(code, name, "enum name");
 					if (global < 0)
-						throw 'Invalid enum global $global';
+						throw new InternalError('Invalid enum global $global');
 					for (constructor in constructors) {
 						requireString(code, constructor.name, "enum constructor name");
 						for (param in constructor.params)
@@ -52,7 +53,7 @@ class HlValidator {
 					if (base >= 0)
 						requireType(code, base, "object base");
 					if (global > code.globals.length && global != 0)
-						throw 'Invalid object global $global';
+						throw new InternalError('Invalid object global $global');
 					for (field in fields) {
 						requireString(code, field.name, "object field name");
 						requireType(code, field.type, "object field type");
@@ -61,15 +62,15 @@ class HlValidator {
 						requireString(code, method.name, "object method name");
 						requireFunctionIndex(code, method.functionIndex, "object method");
 						if (method.prototype < 0 && method.prototype != HlCode.TYPED_METHOD_PROTOTYPE)
-							throw 'Invalid object method prototype ${method.prototype}';
+							throw new InternalError('Invalid object method prototype ${method.prototype}');
 						if (method.prototype == HlCode.TYPED_METHOD_PROTOTYPE
 							&& !StringTools.startsWith(code.strings[method.name], "$typed-method:"))
-							throw "Invalid private typed method key";
+							throw new InternalError("Invalid private typed method key");
 					}
 				case Structure(name, global, fields, methods, bindings):
 					requireString(code, name, "structure name");
 					if (global > code.globals.length && global != 0)
-						throw 'Invalid structure global $global';
+						throw new InternalError('Invalid structure global $global');
 					for (field in fields) {
 						requireString(code, field.name, "structure field name");
 						requireType(code, field.type, "structure field type");
@@ -78,7 +79,7 @@ class HlValidator {
 						requireString(code, method.name, "structure method name");
 						requireFunctionIndex(code, method.functionIndex, "structure method");
 						if (method.prototype < 0)
-							throw 'Invalid structure method prototype ${method.prototype}';
+							throw new InternalError('Invalid structure method prototype ${method.prototype}');
 					}
 				case Virtual(name, fields):
 					requireString(code, name, "virtual identity");
@@ -106,10 +107,10 @@ class HlValidator {
 			if (cache != null && cache.isValidated(fn))
 				continue;
 			if (fn.debugLocations.length != 0 && fn.debugLocations.length != fn.opcodes.length)
-				throw 'Debug location count does not match opcodes in function ${fn.functionIndex}';
+				throw new InternalError('Debug location count does not match opcodes in function ${fn.functionIndex}');
 			for (location in fn.debugLocations)
 				if (location.path == null || location.line < 1)
-					throw 'Invalid debug location in function ${fn.functionIndex}';
+					throw new InternalError('Invalid debug location in function ${fn.functionIndex}');
 			for (registerType in fn.registers)
 				requireType(code, registerType, 'register in function', fn.functionIndex);
 			validateInstructions(code, fn, functionIndices);
@@ -117,14 +118,14 @@ class HlValidator {
 				cache.markValidated(fn);
 		}
 		if (!functionIndices.exists(code.entryPoint))
-			throw 'Entry point ${code.entryPoint} is not a function';
+			throw new InternalError('Entry point ${code.entryPoint} is not a function');
 		var debugSections:Map<String, Bool> = [];
 		for (section in code.debugSections) {
 			if (section.kind <= 0 || section.version <= 0 || section.flags < 0 || !section.hasPayload())
-				throw "Invalid HLB debug section";
+				throw new InternalError("Invalid HLB debug section");
 			var key = section.kind + ":" + section.version;
 			if (debugSections.exists(key))
-				throw 'Duplicate HLB debug section $key';
+				throw new InternalError('Duplicate HLB debug section $key');
 			debugSections.set(key, true);
 		}
 		var snapshotHashes:Map<Int, Bool> = [];
@@ -133,7 +134,7 @@ class HlValidator {
 				|| snapshotHashes.exists(snapshot.sourceHash)
 				|| (cache == null || !cache.isSnapshotValidated(snapshot.content, snapshot.sourceHash))
 				&& hashBytes(snapshot.content) != snapshot.sourceHash)
-				throw "Invalid source snapshot";
+				throw new InternalError("Invalid source snapshot");
 			if (cache != null)
 				cache.markSnapshotValidated(snapshot.content, snapshot.sourceHash);
 			snapshotHashes.set(snapshot.sourceHash, true);
@@ -149,11 +150,11 @@ class HlValidator {
 			for (section in code.debugSections)
 				if (section.kind == HlWriter.SOURCE_SNAPSHOTS && section.version == 1) {
 					if (checking && !section.payload.equals(encoded))
-						throw "HLB source snapshot section does not match its model";
+						throw new InternalError("HLB source snapshot section does not match its model");
 					found = true;
 				}
 			if (!found)
-				throw "Missing HLB source snapshot section";
+				throw new InternalError("Missing HLB source snapshot section");
 		}
 	}
 
@@ -166,9 +167,9 @@ class HlValidator {
 
 	static function addFunctionIndex(indices:Map<Int, Bool>, index:Int):Void {
 		if (index < 0)
-			throw 'Negative function index $index';
+			throw new InternalError('Negative function index $index');
 		if (indices.exists(index))
-			throw 'Duplicate function index $index';
+			throw new InternalError('Duplicate function index $index');
 		indices.set(index, true);
 	}
 
@@ -183,11 +184,11 @@ class HlValidator {
 				case LoadInt(destination, constant):
 					requireRegister(fn, destination);
 					if (constant < 0 || constant >= code.ints.length)
-						throw 'Invalid integer constant $constant in function ${fn.functionIndex}';
+						throw new InternalError('Invalid integer constant $constant in function ${fn.functionIndex}');
 				case LoadFloat(destination, constant):
 					requireRegister(fn, destination);
 					if (constant < 0 || constant >= code.floats.length)
-						throw 'Invalid float constant $constant in function ${fn.functionIndex}';
+						throw new InternalError('Invalid float constant $constant in function ${fn.functionIndex}');
 				case LoadString(destination, constant):
 					requireRegister(fn, destination);
 					requireString(code, constant, 'function', fn.functionIndex);
@@ -219,7 +220,7 @@ class HlValidator {
 				case Trap(destination, target, _):
 					requireRegister(fn, destination);
 					if (!labels.exists(target))
-						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 				case EndTrap(destination, _):
 					requireRegister(fn, destination);
 				case GlobalGet(destination, global):
@@ -282,7 +283,7 @@ class HlValidator {
 				case CallMethod(destination, method, arguments):
 					requireRegister(fn, destination);
 					if (method < 0)
-						throw 'Invalid object method $method in function ${fn.functionIndex}';
+						throw new InternalError('Invalid object method $method in function ${fn.functionIndex}');
 					for (argument in arguments)
 						requireRegister(fn, argument);
 				case New(destination, type, _):
@@ -292,12 +293,12 @@ class HlValidator {
 					requireRegister(fn, destination);
 					requireRegister(fn, object);
 					if (field < 0)
-						throw 'Invalid object field $field in function ${fn.functionIndex}';
+						throw new InternalError('Invalid object field $field in function ${fn.functionIndex}');
 				case FieldSet(object, field, source):
 					requireRegister(fn, object);
 					requireRegister(fn, source);
 					if (field < 0)
-						throw 'Invalid object field $field in function ${fn.functionIndex}';
+						throw new InternalError('Invalid object field $field in function ${fn.functionIndex}');
 				case ArrayGet(destination, array, index):
 					requireRegister(fn, destination);
 					requireRegister(fn, array);
@@ -321,7 +322,7 @@ class HlValidator {
 				case MakeEnum(destination, constructor, arguments):
 					requireRegister(fn, destination);
 					if (constructor < 0)
-						throw 'Invalid enum constructor $constructor in function ${fn.functionIndex}';
+						throw new InternalError('Invalid enum constructor $constructor in function ${fn.functionIndex}');
 					for (argument in arguments)
 						requireRegister(fn, argument);
 				case EnumIndex(destination, value):
@@ -331,12 +332,12 @@ class HlValidator {
 					requireRegister(fn, destination);
 					requireRegister(fn, value);
 					if (constructor < 0 || field < 0)
-						throw 'Invalid enum field ${constructor}.${field} in function ${fn.functionIndex}';
+						throw new InternalError('Invalid enum field ${constructor}.${field} in function ${fn.functionIndex}');
 				case JumpSignedLessOrEqual(left, right, target):
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))
-						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target),
 					JumpEqual(left, right, target), JumpNotEqual(left, right, target), JumpNotLess(left, right, target),
 					JumpNotGreaterOrEqual(left, right, target), JumpSignedGreaterOrEqual(left, right, target),
@@ -344,27 +345,27 @@ class HlValidator {
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))
-						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 				case JumpNull(value, target), JumpNotNull(value, target):
 					requireRegister(fn, value);
 					if (!labels.exists(target))
-						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 				case JumpTrue(condition, target), JumpFalse(condition, target):
 					requireRegister(fn, condition);
 					if (!labels.exists(target))
-						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 				case Jump(target):
 					if (!labels.exists(target))
-						throw 'Unknown label "$target" in function ${fn.functionIndex}';
+						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 				case Switch(value, targets):
 					requireRegister(fn, value);
 					if (targets.length == 0)
-						throw 'Empty switch in function ${fn.functionIndex}';
+						throw new InternalError('Empty switch in function ${fn.functionIndex}');
 					for (target in targets)
 						if (!labels.exists(target))
-							throw 'Unknown label "$target" in function ${fn.functionIndex}';
+							throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
 						else if (labels.get(target) <= position)
-							throw 'Switch target "$target" is not after the switch in function ${fn.functionIndex}';
+							throw new InternalError('Switch target "$target" is not after the switch in function ${fn.functionIndex}');
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);
@@ -388,12 +389,12 @@ class HlValidator {
 				case Trap(_, target, _):
 					var handler = labels.get(target);
 					if (handler <= position)
-						throw 'Trap handler "$target" is not after its trap in function ${fn.functionIndex}';
+						throw new InternalError('Trap handler "$target" is not after its trap in function ${fn.functionIndex}');
 					var depthAt:Map<Int, Int> = [], work:Array<Int> = [], depths:Array<Int> = [];
 					function reach(at:Int, depth:Int):Void {
 						if (at <= position || at >= handler)
-							throw 'Instruction $at runs inside the trap at $position but is not between it and its handler "$target" '
-								+ 'in function ${fn.functionIndex}';
+							throw new InternalError('Instruction $at runs inside the trap at $position but is not between it and its handler "$target" '
+								+ 'in function ${fn.functionIndex}');
 						if (!depthAt.exists(at)) {
 							depthAt.set(at, depth);
 							work.push(at);
@@ -430,7 +431,7 @@ class HlValidator {
 			switch instruction {
 				case Label(name):
 					if (labels.exists(name))
-						throw 'Duplicate label "$name" in function ${fn.functionIndex}';
+						throw new InternalError('Duplicate label "$name" in function ${fn.functionIndex}');
 					labels.set(name, position);
 					position++;
 				default:
@@ -442,34 +443,34 @@ class HlValidator {
 
 	static function requireCallable(indices:Map<Int, Bool>, callee:Int, caller:Int):Void {
 		if (!indices.exists(callee))
-			throw 'Function $caller calls unknown function $callee';
+			throw new InternalError('Function $caller calls unknown function $callee');
 	}
 
 	static function requireFunctionIndex(code:HlCode, index:Int, context:String):Void {
 		if (index < 0)
-			throw 'Invalid function index $index for $context';
+			throw new InternalError('Invalid function index $index for $context');
 	}
 
 	static function requireRegister(fn:HlFunction, register:Int):Void {
 		if (register < 0 || register >= fn.registers.length)
-			throw 'Invalid register $register in function ${fn.functionIndex}';
+			throw new InternalError('Invalid register $register in function ${fn.functionIndex}');
 	}
 
 	/** `index`, when not -1, completes `context` ("register in function" and 12); the text is made only to report a failure. */
 	static function requireType(code:HlCode, type:Int, context:String, index:Int = -1):Void {
 		if (type < 0 || type >= code.types.length)
-			throw 'Invalid type $type for ${index == -1 ? context : context + " " + index}';
+			throw new InternalError('Invalid type $type for ${index == -1 ? context : context + " " + index}');
 	}
 
 	/** `index`, when not -1, completes `context` ("register in function" and 12); the text is made only to report a failure. */
 	static function requireString(code:HlCode, string:Int, context:String, index:Int = -1):Void {
 		if (string < 0 || string >= code.strings.length)
-			throw 'Invalid string $string for ${index == -1 ? context : context + " " + index}';
+			throw new InternalError('Invalid string $string for ${index == -1 ? context : context + " " + index}');
 	}
 
 	/** `index`, when not -1, completes `context` ("register in function" and 12); the text is made only to report a failure. */
 	static function requireGlobal(code:HlCode, global:Int, context:String, index:Int = -1):Void {
 		if (global < 0 || global >= code.globals.length)
-			throw 'Invalid global $global for ${index == -1 ? context : context + " " + index}';
+			throw new InternalError('Invalid global $global for ${index == -1 ? context : context + " " + index}');
 	}
 }

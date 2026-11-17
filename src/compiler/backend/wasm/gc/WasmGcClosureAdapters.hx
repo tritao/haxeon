@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 
 import compiler.ir.Ir.IrProgram;
@@ -49,14 +50,14 @@ class WasmGcClosureAdapters {
 	public static function signature(module:WasmModule, plan:WasmGcTypePlan, type:IrType):Int
 		return switch type {
 			case Function(_, _): module.typeIndex(plan.closureFunctionType(type));
-			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
+			default: throw new InternalError('Wasm GC closure has a non-function type ${Std.string(type)}');
 		};
 
 	/** Semantic identity is separate from the Wasm function type: Bool and Int both lower to i32. */
 	public static function signatureId(plan:WasmGcTypePlan, type:IrType):Int
 		return switch type {
 			case Function(_, _): plan.closureSignatureId(type);
-			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
+			default: throw new InternalError('Wasm GC closure has a non-function type ${Std.string(type)}');
 		};
 
 	/** The function type of an instance closure's target, which takes the receiver first. */
@@ -68,7 +69,7 @@ class WasmGcClosureAdapters {
 					parameters: [Ref({nullable: true, heap: Any})].concat(signature.parameters),
 					results: signature.results
 				});
-			default: throw 'Wasm GC closure has a non-function type ${Std.string(type)}';
+			default: throw new InternalError('Wasm GC closure has a non-function type ${Std.string(type)}');
 		};
 
 	/**
@@ -186,7 +187,7 @@ class WasmGcClosureAdapters {
 			var slot = tableSlots.get(source == -1
 				? WasmDynamicCalls.varargsAdapterName(targetTypes.get(target)) : adapterName(source, target));
 			if (slot == null)
-				throw 'Wasm GC closure adapter ${adapterName(source, target)} has no table slot';
+				throw new InternalError('Wasm GC closure adapter ${adapterName(source, target)} has no table slot');
 			body = body.concat([
 				LocalGet(signatureLocal),
 				I32Const(source),
@@ -240,7 +241,7 @@ class WasmGcClosureAdapters {
 		try {
 			body = adapterBody(lowering, allocateLocal, source, sourceArguments, sourceResult, targetArguments,
 				targetResult);
-		} catch (error:String) {
+		} catch (error:InternalError) {
 			// A value with no Dynamic form (a borrowed native pointer) cannot cross; such a cast traps.
 			locals = [];
 			body = [Unreachable];
@@ -335,6 +336,6 @@ class WasmGcClosureAdapters {
 	static function handled(result:WasmLoweringResult):Array<WasmInstruction>
 		return switch result {
 			case Handled(instructions): instructions;
-			case UseDefault: throw "Wasm GC closure adapter conversion has no lowering";
+			case UseDefault: throw new InternalError("Wasm GC closure adapter conversion has no lowering");
 		};
 }

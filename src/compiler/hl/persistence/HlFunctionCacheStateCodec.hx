@@ -1,5 +1,6 @@
 package compiler.hl.persistence;
 
+import compiler.core.InternalError;
 import compiler.hl.incremental.HlFunctionCache;
 import compiler.hl.incremental.HlFunctionCache.HlFunctionCacheState;
 import compiler.ir.codec.IrTypeCodec;
@@ -43,7 +44,7 @@ class HlFunctionCacheStateCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "HFC" || input.readByte() != 1)
-				throw "Invalid function cache state";
+				throw new InternalError("Invalid function cache state");
 			var next = input.readInt32(),
 				slots = [
 					for (_ in 0...readCount(input))
@@ -65,7 +66,7 @@ class HlFunctionCacheStateCodec {
 					bytes: readBytes(input, bytes.length)
 				});
 			if (input.position != bytes.length)
-				throw "Trailing function cache state data";
+				throw new InternalError("Trailing function cache state data");
 			return {
 				slots: slots,
 				stableIds: ids,
@@ -74,7 +75,7 @@ class HlFunctionCacheStateCodec {
 				nextStableId: next
 			};
 		} catch (error:haxe.io.Eof)
-			throw "Truncated function cache state";
+			throw new InternalError("Truncated function cache state");
 	}
 
 	public static function restore(bytes:Bytes):HlFunctionCache
@@ -82,20 +83,20 @@ class HlFunctionCacheStateCodec {
 
 	static function writeCount(out:BytesOutput, count:Int):Void {
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Too many function cache entries";
+			throw new InternalError("Too many function cache entries");
 		out.writeInt32(count);
 	}
 
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Invalid function cache count";
+			throw new InternalError("Invalid function cache count");
 		return count;
 	}
 
 	static function writeBytes(out:BytesOutput, bytes:Bytes):Void {
 		if (bytes.length > 0x10000000)
-			throw "Cached function is too large";
+			throw new InternalError("Cached function is too large");
 		out.writeInt32(bytes.length);
 		out.write(bytes);
 	}
@@ -103,7 +104,7 @@ class HlFunctionCacheStateCodec {
 	static function readBytes(input:BytesInput, total:Int):Bytes {
 		var length = input.readInt32();
 		if (length < 0 || length > 0x10000000 || length > total - input.position)
-			throw "Invalid cached function length";
+			throw new InternalError("Invalid cached function length");
 		return input.read(length);
 	}
 }

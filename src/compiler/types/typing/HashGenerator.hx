@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -35,7 +36,7 @@ class HashGenerator {
 			for (name in pending) {
 				var requested = session.programOutput.requests.hashes.get(name);
 				if (requested == null)
-					throw 'Missing hash-generation request "$name"';
+					throw new InternalError('Missing hash-generation request "$name"');
 				var owner = compiler.core.QualifiedName.parent(requested.origin),
 					context = session.enterBody(requested.origin, null, owner == null ? "$hash" : owner);
 				try {
@@ -48,7 +49,7 @@ class HashGenerator {
 								EnumConformanceMethods.typeMethod(session, typer, requested.type, custom, name));
 					}
 					session.leaveBody(context);
-				} catch (error:Dynamic) {
+				} catch (error:haxe.Exception) {
 					session.leaveBody(context);
 					throw error;
 				}

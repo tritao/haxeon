@@ -1,6 +1,7 @@
 package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.WasmValueLayout;
+import compiler.core.InternalError;
 import compiler.ir.IrProgramIndex;
 import compiler.ir.IrTypeIdentity;
 
@@ -168,12 +169,12 @@ class WasmGcTypePlan {
 	/** Appends the plan to a fresh module before function signatures are interned. */
 	public function addTo(module:WasmModule):Void {
 		if (module.typeCount() != 0)
-			throw "Wasm GC type plans must be added before other module types";
+			throw new InternalError("Wasm GC type plans must be added before other module types");
 		for (group in typeGroups)
 			switch group {
 				case RecGroup(types):
 					if (module.addRecGroup(types) != 0)
-						throw "Wasm GC type plan did not begin at type index zero";
+						throw new InternalError("Wasm GC type plan did not begin at type index zero");
 				case Single(type):
 					module.addType(type);
 			}
@@ -201,11 +202,11 @@ class WasmGcTypePlan {
 			if (bytePayloadObjects.exists(name)) continue;
 			bytePayloadObjects.set(name, true);
 			var object = objectDeclarations.get(name);
-			if (object == null) throw 'Missing Wasm GC record "$name"';
+			if (object == null) throw new InternalError('Missing Wasm GC record "$name"');
 			for (field in object.fields) if (field.nativeLayout != null && field.nativeLayout.inlineRecord)
 				switch field.type {
 				case Obj(child): pending.push(child);
-				default: throw 'Invalid inline record ${field.name}';
+				default: throw new InternalError('Invalid inline record ${field.name}');
 			}
 		}
 	}
@@ -213,7 +214,7 @@ class WasmGcTypePlan {
 	public function objectFieldIndex(objectName:String, fieldName:String):Int {
 		var fields = objectFieldIndices.get(objectName);
 		if (fields == null || !fields.exists(fieldName))
-			throw 'Unknown field "$objectName.$fieldName" in Wasm GC type plan';
+			throw new InternalError('Unknown field "$objectName.$fieldName" in Wasm GC type plan');
 		return fields.get(fieldName);
 	}
 
@@ -223,12 +224,12 @@ class WasmGcTypePlan {
 			for (field in fields)
 				if (field.name == fieldName)
 					return field;
-		throw 'Unknown field "$objectName.$fieldName" in Wasm GC type plan';
+		throw new InternalError('Unknown field "$objectName.$fieldName" in Wasm GC type plan');
 	}
 
 	public function physicalFields(objectName:String):Array<IrObjectField> {
 		var fields = physicalObjectFields.get(objectName);
-		if (fields == null) throw 'Unknown Wasm GC object "$objectName"';
+		if (fields == null) throw new InternalError('Unknown Wasm GC object "$objectName"');
 		return fields;
 	}
 
@@ -257,7 +258,7 @@ class WasmGcTypePlan {
 	public function enumConstructorType(name:String, constructor:Int):Int {
 		var constructors = enumConstructorTypeIndices.get(name);
 		if (constructors == null || constructor < 0 || constructor >= constructors.length)
-			throw 'Unknown constructor $constructor in Wasm GC enum "$name"';
+			throw new InternalError('Unknown constructor $constructor in Wasm GC enum "$name"');
 		return constructors[constructor];
 	}
 
@@ -265,9 +266,9 @@ class WasmGcTypePlan {
 	public function enumFieldIndex(name:String, constructor:Int, field:Int):Int {
 		var declaration = enumDeclarations.get(name);
 		if (declaration == null || constructor < 0 || constructor >= declaration.cases.length)
-			throw 'Unknown constructor $constructor in Wasm GC enum "$name"';
+			throw new InternalError('Unknown constructor $constructor in Wasm GC enum "$name"');
 		if (field < 0 || field >= declaration.cases[constructor].params.length)
-			throw 'Unknown field $field in Wasm GC enum constructor $constructor of "$name"';
+			throw new InternalError('Unknown field $field in Wasm GC enum constructor $constructor of "$name"');
 		return field + 1;
 	}
 
@@ -366,13 +367,13 @@ class WasmGcTypePlan {
 		return switch type {
 			case Function(arguments, result): scalarClosures.exists(IrTypeIdentity.text(type))
 				? scalarFunctionType(arguments, result) : wasmFunctionType(arguments, result);
-			default: throw 'Not a Wasm GC closure type: $type';
+			default: throw new InternalError('Not a Wasm GC closure type: $type');
 		};
 
 	public function valueType(type:IrType):WasmValueType {
 		return switch type {
 			case Void:
-				throw "Void has no Wasm GC value type";
+				throw new InternalError("Void has no Wasm GC value type");
 			// A native callback is the host's function-table index, like a raw pointer an i32 whose null is 0.
 			case I32, EnumTag(_), Bool, RawPtr, Abstract("native_callback"): I32;
 			case I64: I64;
@@ -404,7 +405,7 @@ class WasmGcTypePlan {
 			case F32: "f64";
 			case F64: "f64";
 			case TypeRef: "type-ref";
-			default: throw 'No Wasm GC primitive box exists for $type';
+			default: throw new InternalError('No Wasm GC primitive box exists for $type');
 		};
 		return requireIndex(boxedPrimitiveTypeIndices, key, 'Missing Wasm GC box type "$key"');
 	}
@@ -440,16 +441,16 @@ class WasmGcTypePlan {
 	function indexDeclarations():Void {
 		for (object in program.objects) {
 			if (objectDeclarations.exists(object.name))
-				throw 'Duplicate Wasm GC object declaration "${object.name}"';
+				throw new InternalError('Duplicate Wasm GC object declaration "${object.name}"');
 			objectDeclarations.set(object.name, object);
 		}
 		for (enumDecl in program.enums) {
 			if (enumDeclarations.exists(enumDecl.name))
-				throw 'Duplicate Wasm GC enum declaration "${enumDecl.name}"';
+				throw new InternalError('Duplicate Wasm GC enum declaration "${enumDecl.name}"');
 			var caseNames:Map<String, Bool> = [];
 			for (constructor in enumDecl.cases) {
 				if (caseNames.exists(constructor.name))
-					throw 'Duplicate constructor "${constructor.name}" in Wasm GC enum "${enumDecl.name}"';
+					throw new InternalError('Duplicate constructor "${constructor.name}" in Wasm GC enum "${enumDecl.name}"');
 				caseNames.set(constructor.name, true);
 			}
 			enumDeclarations.set(enumDecl.name, enumDecl);
@@ -477,12 +478,12 @@ class WasmGcTypePlan {
 		if (state == 2)
 			return;
 		if (state == 1)
-			throw 'Cyclic Wasm GC object inheritance at "${object.name}"';
+			throw new InternalError('Cyclic Wasm GC object inheritance at "${object.name}"');
 		states.set(object.name, 1);
 		if (object.base != null) {
 			var base = objectDeclarations.get(object.base);
 			if (base == null)
-				throw 'Unknown Wasm GC base object "${object.base}" for "${object.name}"';
+				throw new InternalError('Unknown Wasm GC base object "${object.base}" for "${object.name}"');
 			visitObject(base, states);
 		}
 		states.set(object.name, 2);
@@ -695,7 +696,7 @@ class WasmGcTypePlan {
 		var needsValueArrays = false;
 		for (native in program.natives) if (native.symbol == "__value_array_alloc") needsValueArrays = true;
 		if (needsValueArrays) {
-			if (wrapperTypeIndex < 0) throw "Inline value arrays require an array wrapper type";
+			if (wrapperTypeIndex < 0) throw new InternalError("Inline value arrays require an array wrapper type");
 			valueArrayWrapperTypeIndex = reserveType();
 			valueArrayI32LaneTypeIndex = reserveType();
 			valueArrayI64LaneTypeIndex = reserveType();
@@ -721,7 +722,7 @@ class WasmGcTypePlan {
 		for (object in orderedObjects) {
 			var fields = physicalObjectFields.get(object.name);
 			if (fields == null)
-				throw 'Missing flattened fields for Wasm GC object "${object.name}"';
+				throw new InternalError('Missing flattened fields for Wasm GC object "${object.name}"');
 			var baseIndex = object.base == null ? null : objectTypeIndices.get(object.base),
 				supertypes:Array<Int> = [baseIndex == null ? objectRootTypeIndex : baseIndex],
 				wasmFields:Array<WasmFieldType> = [
@@ -911,14 +912,14 @@ class WasmGcTypePlan {
 	function arrayPlan(element:IrType):WasmGcArrayTypePlan {
 		var key = typeKey(element), plan = arrayTypes.get(key);
 		if (plan == null)
-			throw 'Array element type $element was not present when the Wasm GC type plan was built';
+			throw new InternalError('Array element type $element was not present when the Wasm GC type plan was built');
 		return plan;
 	}
 
 	function requireMapPlan(name:String):WasmGcMapTypePlan {
 		var plan = mapTypes.get(name);
 		if (plan == null)
-			throw 'Unknown Wasm GC map type "$name"';
+			throw new InternalError('Unknown Wasm GC map type "$name"');
 		return plan;
 	}
 
@@ -936,7 +937,7 @@ class WasmGcTypePlan {
 			"_bool")) Bool else if (StringTools.endsWith(mapName,
 			"_f64")) F64 else if (StringTools.endsWith(mapName,
 			"_bytes")) Bytes else if (StringTools.endsWith(mapName, "_ref")) Dyn
-			else throw 'Unknown Wasm GC map value type "$mapName"';
+			else throw new InternalError('Unknown Wasm GC map value type "$mapName"');
 	}
 
 	function reserveType():Int {
@@ -954,7 +955,7 @@ class WasmGcTypePlan {
 
 	static function requireIndex(values:Map<String, Int>, key:String, message:String):Int {
 		if (!values.exists(key))
-			throw message;
+			throw new InternalError(message);
 		return values.get(key);
 	}
 

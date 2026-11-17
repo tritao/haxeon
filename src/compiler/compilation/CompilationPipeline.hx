@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.core.AllocationMeter;
+import compiler.core.InternalError;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
@@ -90,7 +91,7 @@ class CompilationPipeline {
 			names = frontend.moduleNames,
 			typedNew = frontend.typedProgram;
 		if (ir == null)
-			throw "Build frontend did not produce IR";
+			throw new InternalError("Build frontend did not produce IR");
 		var retyped = frontend.retyped,
 			regenerated = frontend.regenerated,
 			typerMetrics = frontend.typerMetrics;
@@ -113,7 +114,7 @@ class CompilationPipeline {
 		if (previousBackend != null && checkingReuse) {
 			var difference = session.difference(previousBackend, backend);
 			if (difference != null)
-				throw '--check-reuse: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)';
+				throw new InternalError('--check-reuse: the module reused for equal pipeline inputs differs from a fresh assembly ($difference)');
 		}
 		var snapshot = context.state.pipelineSnapshot;
 		if (snapshot != null && !backendReused) {

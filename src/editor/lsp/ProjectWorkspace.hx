@@ -5,6 +5,7 @@ import build.BuildEnvironment.BuildProfile;
 import build.HaxeonProjectBuild;
 import build.Target;
 import build.TargetLayout;
+import compiler.core.InternalError;
 import compiler.service.LanguageService;
 import compiler.tools.SourceManifestLoader;
 import haxe.Json;
@@ -364,7 +365,7 @@ class ProjectWorkspace {
 		if (visiting == null)
 			visiting = [];
 		if (visiting.exists(file))
-			throw 'Cyclic HXML reference: $file';
+			throw new InternalError('Cyclic HXML reference: $file');
 		visiting.set(file, true);
 		var base = Path.directory(file),
 			classPaths = [],

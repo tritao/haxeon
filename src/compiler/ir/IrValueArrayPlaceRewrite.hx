@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.SourceProvenance.SourceOrigin;
@@ -46,7 +47,7 @@ class IrValueArrayPlaceRewrite {
 			next = 0;
 		function requiredPlace(id:Int):ArrayPlace {
 			var place = aliases.get(id);
-			if (place == null) throw 'Missing array place $id';
+			if (place == null) throw new InternalError('Missing array place $id');
 			return place;
 		}
 		function isValue(type:IrType):Bool return switch type {
@@ -67,7 +68,7 @@ class IrValueArrayPlaceRewrite {
 				case ConstNull(value): nulls.set(value.id, true);
 				case ArrayGet(value, array, index) if (roots.exists(value.id)):
 					if (!Type.enumEq(array.type, arrayType)
-						|| !Type.enumEq(value.type, element)) throw "Invalid array place root";
+						|| !Type.enumEq(value.type, element)) throw new InternalError("Invalid array place root");
 					aliases.set(value.id, {array: array, index: index, path: []});
 				case Call(value, "__array_get_any", args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
 					switch located.provenance.origin {
@@ -81,11 +82,11 @@ class IrValueArrayPlaceRewrite {
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
 			case SafeCast(out, input) if (roots.exists(out.id) && raw.exists(input.id)):
 				var place = raw.get(input.id);
-				if (place == null) throw "Missing checked array place";
+				if (place == null) throw new InternalError("Missing checked array place");
 				aliases.set(out.id, place);
 			default:
 		}
-		for (id in roots.keys()) if (!aliases.exists(id)) throw 'Missing array place root $id';
+		for (id in roots.keys()) if (!aliases.exists(id)) throw new InternalError('Missing array place root $id');
 		var changed = true;
 		while (changed) {
 			changed = false;
@@ -115,7 +116,7 @@ class IrValueArrayPlaceRewrite {
 				switch instruction {
 					case Call(out, "__array_get_any", _) if (raw.exists(out.id)):
 						var place = raw.get(out.id);
-						if (place == null) throw "Missing checked array place";
+						if (place == null) throw new InternalError("Missing checked array place");
 						var check = new IrValue(next++, "$array-place-check", Void);
 						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
 						handled = true;
@@ -142,7 +143,8 @@ class IrValueArrayPlaceRewrite {
 						var place = requiredPlace(owner.id),
 							path = place.path.concat([field]),
 							check = new IrValue(next++, "$array-place-check", Void);
-						if (aliases.exists(value.id)) throw "Aliased place write requires component specialization";
+						if (aliases.exists(value.id))
+							throw new InternalError("Aliased place write requires component specialization");
 						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [
 							place.array,
 							place.index
@@ -180,14 +182,14 @@ class IrValueArrayPlaceRewrite {
 						handled = true;
 					case MethodCall(out, owner, method, arguments, _) if (aliases.exists(owner.id)):
 						for (argument in arguments) if (aliases.exists(argument.id))
-							throw "Array place argument requires component specialization";
+							throw new InternalError("Array place argument requires component specialization");
 						var place = requiredPlace(owner.id), name = methods.method(owner.type, method, place.path);
 						instruction = Call(out, name, [place.array, place.index].concat(arguments));
 						handled = true;
 					case ArraySet(array, index, value) if (aliases.exists(value.id)):
 						var place = requiredPlace(value.id);
 						if (place.path.length != 0 || place.array.id != array.id || place.index.id != index.id)
-							throw "Array place writeback changed its destination";
+							throw new InternalError("Array place writeback changed its destination");
 						omit = true;
 						handled = true;
 					case Call(_, "__array_set_any",
@@ -195,17 +197,17 @@ class IrValueArrayPlaceRewrite {
 						var place = requiredPlace(arguments[2].id);
 						if (place.path.length != 0 || place.array.id != arguments[0].id
 							|| place.index.id != arguments[1].id)
-							throw "Checked array place writeback changed its destination";
+							throw new InternalError("Checked array place writeback changed its destination");
 						omit = true;
 						handled = true;
 					default:
 				}
 				if (!handled) {
 					for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id))
-						throw 'Array place ${input.id}:${input.type} escapes through ${Std.string(instruction)}';
+						throw new InternalError('Array place ${input.id}:${input.type} escapes through ${Std.string(instruction)}');
 					switch instruction {
 						case Phi(_, inputs): for (input in inputs) if (aliases.exists(input.value.id))
-							throw "Array place phi requires component specialization";
+							throw new InternalError("Array place phi requires component specialization");
 						default:
 					}
 				}
@@ -214,7 +216,7 @@ class IrValueArrayPlaceRewrite {
 			if (block.terminator != null) switch block.terminator.value {
 				case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
 					Switch(value, _, _) if (aliases.exists(value.id)):
-					throw "Array place escapes through a terminator";
+					throw new InternalError("Array place escapes through a terminator");
 				default:
 			}
 			target.terminator = block.terminator;

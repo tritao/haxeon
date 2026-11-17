@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -42,7 +43,7 @@ class WasmLinearClosureAdapters {
 	public function signatureId(type:IrType):Int {
 		var id = signatureIds.get(IrTypeIdentity.text(type));
 		if (id == null)
-			throw 'Unplanned Wasm32 closure signature ${Std.string(type)}';
+			throw new InternalError('Unplanned Wasm32 closure signature ${Std.string(type)}');
 		return id;
 	}
 
@@ -72,7 +73,7 @@ class WasmLinearClosureAdapters {
 			roots:Array<String>):WasmLinearClosureAdapters {
 		var adapters = new WasmLinearClosureAdapters(program);
 		if (Lambda.exists(program.functions, fn -> fn.name == SIGNATURE_FUNCTION))
-			throw "Linear Wasm closure adapters were generated twice for one program";
+			throw new InternalError("Linear Wasm closure adapters were generated twice for one program");
 		var targetTypes:Map<String, IrType> = [],
 			sourceTypes:Map<String, IrType> = [];
 		var signatureTypes:Map<String, Bool> = [];

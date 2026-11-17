@@ -2,6 +2,7 @@ package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmTypes;
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrTypedInterfaceDispatch;
 
@@ -16,7 +17,7 @@ class WasmTypedInterfaceTables {
 		while (true) {
 			if (StringTools.startsWith(name, "$wasm:scalar-function:")) {
 				var rest = name.substr("$wasm:scalar-function:".length), colon = rest.indexOf(":");
-				if (colon < 0) throw "Malformed scalar function name";
+				if (colon < 0) throw new InternalError("Malformed scalar function name");
 				name = rest.substr(colon + 1);
 			} else {
 				var original = IrTypedInterfaceDispatch.originalEntryName(name);
@@ -31,14 +32,14 @@ class WasmTypedInterfaceTables {
 		var rest = plain.substr(IrTypedInterfaceDispatch.ADAPTER_PREFIX.length),
 			colon = rest.indexOf(":"),
 			length = Std.parseInt(rest.substr(0, colon));
-		if (length == null || colon < 0) throw "Malformed typed interface entry";
+		if (length == null || colon < 0) throw new InternalError("Malformed typed interface entry");
 		var dispatch = rest.substr(colon + 1, length),
 			tail = rest.substr(colon + length + 2),
 			separator = tail.indexOf(":"),
 			objectLength = Std.parseInt(tail.substr(0, separator)),
 			object = tail.substr(separator + 1);
 		if (separator < 0 || objectLength == null
-			|| object.length != objectLength) throw "Malformed typed interface class entry";
+			|| object.length != objectLength) throw new InternalError("Malformed typed interface class entry");
 		return {dispatch: dispatch, object: object};
 	}
 	static function hash(id:Int, seed:Int, bits:Int):Int return bits == 0 ? 0 : (id * seed) >>> (32 - bits);
@@ -62,7 +63,7 @@ class WasmTypedInterfaceTables {
 			var total = 0;
 			for (bucket in buckets) total += bucket.length * bucket.length;
 			if (total <= 4 * entries.length) break;
-			if (attempt > 10000) throw "Cannot construct primary typed method table";
+			if (attempt > 10000) throw new InternalError("Cannot construct primary typed method table");
 		}
 		var body:Array<WasmInstruction>= [];
 		// A block per bucket: br_table selects its code directly, without testing preceding buckets.
@@ -95,7 +96,7 @@ class WasmTypedInterfaceTables {
 						slots[index] = entry;
 					}
 					if (!collision) break;
-					if (trial > 100000) throw "Cannot construct secondary typed method table";
+					if (trial > 100000) throw new InternalError("Cannot construct secondary typed method table");
 				}
 				body.push(Block(null));
 				for (_ in slots) body.push(Block(null));
@@ -127,7 +128,7 @@ class WasmTypedInterfaceTables {
 		names.sort(Reflect.compare);
 		for (name in names) {
 			var index = functions.get(name);
-			if (index == null) throw "Missing typed dispatcher";
+			if (index == null) throw new InternalError("Missing typed dispatcher");
 			var original = module.functionAt(index),
 				entries:Array<Entry>= [],
 				seen:Map<String, Bool>= [],
@@ -137,10 +138,10 @@ class WasmTypedInterfaceTables {
 				var entry = adapter(target);
 				if (entry == null || entry.dispatch != base(name) || seen.exists(entry.object)) continue;
 				var targetIndex = functions.get(target);
-				if (targetIndex == null) throw "Missing typed class entry";
+				if (targetIndex == null) throw new InternalError("Missing typed class entry");
 				if (module.typeIndex(original.type) != module.typeIndex(module.functionType(targetIndex))) continue;
 				var targetSlot = tableSlots.get(target);
-				if (targetSlot == null) throw "Missing typed method table slot";
+				if (targetSlot == null) throw new InternalError("Missing typed method table slot");
 				seen.set(entry.object, true);
 				entries.push({id: module.runtimeTypeId(Obj(entry.object)), slot: targetSlot});
 			}

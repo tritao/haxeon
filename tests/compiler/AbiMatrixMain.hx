@@ -8,6 +8,7 @@ import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.RuntimeAbiCodec;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 
 typedef AbiFixture = {
 	final name:String;
@@ -376,8 +377,8 @@ class AbiMatrixMain {
 		try {
 			AbiChangeSchema.decode(99, {code: "object_added", entityKind: "object", entityId: "Editor"});
 			throw "ABI reason schema accepted an unknown version";
-		} catch (error:String) {
-			if (error.indexOf("Unsupported ABI change schema") < 0)
+		} catch (error:InternalError) {
+			if (error.message.indexOf("Unsupported ABI change schema") < 0)
 				throw error;
 		}
 		try {
@@ -387,8 +388,8 @@ class AbiMatrixMain {
 				entityId: "Editor"
 			});
 			throw "ABI reason schema accepted an unknown code";
-		} catch (error:String) {
-			if (error.indexOf("Unknown ABI change code") < 0)
+		} catch (error:InternalError) {
+			if (error.message.indexOf("Unknown ABI change code") < 0)
 				throw error;
 		}
 	}
@@ -530,7 +531,7 @@ class AbiMatrixMain {
 		var collided = try {
 			new compiler.abi.NameRewrite([group + "#0" => group + "#1"]).keys(keyed);
 			false;
-		} catch (error:String) StringTools.startsWith(error, "Renaming lambdas gives");
+		} catch (error:InternalError) StringTools.startsWith(error.message, "Renaming lambdas gives");
 		if (!collided)
 			throw 'lambda rename: renaming #0 onto a #1 the map still holds must throw';
 		var moved = new compiler.abi.NameRewrite([group + "#0" => group + "#1",

@@ -1,5 +1,6 @@
 package compiler.ir.codec;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrType;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -25,16 +26,16 @@ class IrTypeCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "IRT")
-				throw "Invalid IR type state";
+				throw new InternalError("Invalid IR type state");
 			var version = input.readByte();
 			if (version < 1 || version > VERSION)
-				throw "Unsupported IR type state version";
+				throw new InternalError("Unsupported IR type state version");
 			var result = readType(input, bytes.length, 0);
 			if (input.position != bytes.length)
-				throw "Trailing IR type state data";
+				throw new InternalError("Trailing IR type state data");
 			return result;
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated IR type state";
+			throw new InternalError("Truncated IR type state");
 		}
 	}
 
@@ -45,7 +46,7 @@ class IrTypeCodec {
 	 */
 	public static function writeType(output:BytesOutput, type:IrType, depth:Int, erase:Bool = false):Void {
 		if (depth >= MAX_DEPTH)
-			throw "IR type nesting limit exceeded";
+			throw new InternalError("IR type nesting limit exceeded");
 		switch type {
 			case Void:
 				output.writeByte(0);
@@ -81,7 +82,7 @@ class IrTypeCodec {
 				writeNamed(output, 11, name, erase);
 			case Function(arguments, result):
 				if (arguments.length > MAX_ARGUMENTS)
-					throw "Too many IR function type arguments";
+					throw new InternalError("Too many IR function type arguments");
 				output.writeByte(12);
 				output.writeInt32(arguments.length);
 				for (argument in arguments)
@@ -101,7 +102,7 @@ class IrTypeCodec {
 
 	public static function readType(input:BytesInput, totalLength:Int, depth:Int):IrType {
 		if (depth >= MAX_DEPTH)
-			throw "IR type nesting limit exceeded";
+			throw new InternalError("IR type nesting limit exceeded");
 		return switch input.readByte() {
 			case 0: Void;
 			case 1: I32;
@@ -121,20 +122,20 @@ class IrTypeCodec {
 			case 12:
 				var count = input.readInt32();
 				if (count < 0 || count > MAX_ARGUMENTS)
-					throw "Invalid IR function type argument count";
+					throw new InternalError("Invalid IR function type argument count");
 				Function([for (_ in 0...count) readType(input, totalLength, depth + 1)],
 					readType(input, totalLength, depth + 1));
 			case 13: I64;
 			case 16: RawPtr;
 			case 17: F32;
 			case 18: Nullable(readType(input, totalLength, depth + 1));
-			default: throw "Unknown IR type tag";
+			default: throw new InternalError("Unknown IR type tag");
 		};
 	}
 
 	static function writeNamed(output:BytesOutput, tag:Int, name:String, erase:Bool):Void {
 		if (name.length == 0)
-			throw "IR named type cannot be empty";
+			throw new InternalError("IR named type cannot be empty");
 		output.writeByte(tag);
 		writeString(output, erase ? withoutOrdinals(name) : name);
 	}
@@ -169,7 +170,7 @@ class IrTypeCodec {
 	public static function writeString(output:BytesOutput, value:String):Void {
 		var bytes = haxe.io.Bytes.ofString(value);
 		if (bytes.length > MAX_STRING_BYTES)
-			throw "IR state string is too long";
+			throw new InternalError("IR state string is too long");
 		output.writeInt32(bytes.length);
 		output.write(bytes);
 	}
@@ -177,10 +178,10 @@ class IrTypeCodec {
 	public static function readString(input:BytesInput, totalLength:Int):String {
 		var length = input.readInt32();
 		if (length < 0 || length > MAX_STRING_BYTES || length > totalLength - input.position)
-			throw "Invalid IR state string";
+			throw new InternalError("Invalid IR state string");
 		var value = input.readString(length);
 		if (value.length == 0)
-			throw "IR state string cannot be empty";
+			throw new InternalError("IR state string cannot be empty");
 		return value;
 	}
 }

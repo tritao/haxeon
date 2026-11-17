@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneRuntime;
 import compiler.backend.wasm.WasmFunctionBuilder;
@@ -94,7 +95,7 @@ class WasmGcLaneStorage {
 			case "clear-scalars", "copy-scalars",
 				"swap-scalars": WasmGcScalarRange.emit(b, plan, operation, read, write);
 			case "clear-references", "copy-references", "swap-references": referenceRange(b, plan, operation);
-			default: throw 'Unknown GC lane storage operation $operation';
+			default: throw new InternalError('Unknown GC lane storage operation $operation');
 		}
 		b.emit(Return);
 		return b.finish();

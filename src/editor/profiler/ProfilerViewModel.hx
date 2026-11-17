@@ -1,5 +1,7 @@
 package editor.profiler;
 
+import compiler.core.InternalError;
+
 private class ProfilerViewNode {
 	public final id:String;
 	public final parentId:Null<String>;
@@ -87,7 +89,7 @@ class ProfilerViewModel {
 					if (parent == null)
 						roots.push(path);
 					else if (parentNode == null)
-						throw 'Profiler frame "$path" arrived before its parent';
+						throw new InternalError('Profiler frame "$path" arrived before its parent');
 					else
 						parentNode.children.push(path);
 				}

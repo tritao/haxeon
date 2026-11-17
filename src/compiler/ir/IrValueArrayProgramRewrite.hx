@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.SourceProvenance.Located;
@@ -505,7 +506,7 @@ class IrValueArrayProgramRewrite {
 						Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any",
 							[array, index, value]);
 					case Call(out, name, args): Call(out, name.substr(0, name.length - 3) + "any", args);
-					default: throw "Dynamic array classifier disagrees with its rewrite";
+					default: throw new InternalError("Dynamic array classifier disagrees with its rewrite");
 				};
 				target.instructions.push(new Located(instruction, located.provenance));
 			}
@@ -531,7 +532,7 @@ class IrValueArrayProgramRewrite {
 						if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref")
 						&& IrVerifier.sameType(out.type, arrayType)):
 						if (arguments.length != 1)
-							throw "Invalid array factory arguments";
+							throw new InternalError("Invalid array factory arguments");
 						changed = true;
 						Call(out, allocator, arguments);
 					default: located.value;

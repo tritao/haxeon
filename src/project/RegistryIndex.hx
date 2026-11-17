@@ -1,5 +1,6 @@
 package project;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import project.PackageManifest.NativeManifest;
@@ -31,13 +32,13 @@ class RegistryIndex {
 	public function resolve(name:String, range:String):RegistryVersion {
 		var candidates = packages.get(name);
 		if (candidates == null)
-			throw 'Registry has no package "$name"';
+			throw new InternalError('Registry has no package "$name"');
 		var exact = isExactVersion(range), sorted = candidates.copy();
 		sorted.sort((left, right) -> compareVersions(right.version, left.version));
 		for (candidate in sorted)
 			if (PackageCompatibility.satisfiesVersionRange(range, candidate.version) && (exact || !candidate.yanked))
 				return candidate;
-		throw 'Registry has no non-yanked release of "$name" matching "$range"';
+		throw new InternalError('Registry has no non-yanked release of "$name" matching "$range"');
 	}
 
 	public static function parse(path:String, content:String):RegistryIndex {
@@ -45,23 +46,23 @@ class RegistryIndex {
 		try {
 			raw = Json.parse(content);
 		} catch (error:Dynamic) {
-			throw 'Could not parse registry index $path: ${Std.string(error)}';
+			throw new InternalError('Could not parse registry index $path: ${Std.string(error)}');
 		}
 		if (!Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw '$path must contain a JSON object';
+			throw new InternalError('$path must contain a JSON object');
 		var rawPackages:Dynamic = Reflect.field(raw, "packages");
 		if (!Reflect.isObject(rawPackages) || Std.isOfType(rawPackages, Array))
-			throw '$path "packages" must be an object';
+			throw new InternalError('$path "packages" must be an object');
 		var packages:Map<String, Array<RegistryVersion>> = new Map();
 		for (name in Reflect.fields(rawPackages)) {
 			var packageData:Dynamic = Reflect.field(rawPackages, name),
 				rawVersions:Dynamic = Reflect.field(packageData, "versions");
 			if (!Reflect.isObject(packageData) || Std.isOfType(packageData, Array) || !Std.isOfType(rawVersions, Array))
-				throw '$path package "$name" requires a versions array';
+				throw new InternalError('$path package "$name" requires a versions array');
 			var versions:Array<RegistryVersion> = [];
 			for (rawVersion in (cast rawVersions:Array<Dynamic>)) {
 				if (!Reflect.isObject(rawVersion) || Std.isOfType(rawVersion, Array))
-					throw '$path package "$name" contains an invalid release';
+					throw new InternalError('$path package "$name" contains an invalid release');
 				var version = requiredString(rawVersion, "version", path),
 					checksum = requiredString(rawVersion, "checksum", path),
 					yankedValue:Dynamic = Reflect.field(rawVersion, "yanked"),
@@ -88,14 +89,14 @@ class RegistryIndex {
 			try {
 				raw = Json.parse(File.getContent(path));
 			} catch (error:Dynamic) {
-				throw 'Could not parse registry index $path: ${Std.string(error)}';
+				throw new InternalError('Could not parse registry index $path: ${Std.string(error)}');
 			}
 		} else {
 			raw = {version: 1, packages: {}};
 		}
 		var rawPackages:Dynamic = Reflect.field(raw, "packages");
 		if (!Reflect.isObject(rawPackages) || Std.isOfType(rawPackages, Array))
-			throw '$path "packages" must be an object';
+			throw new InternalError('$path "packages" must be an object');
 		var packageData:Dynamic = Reflect.field(rawPackages, name);
 		if (packageData == null) {
 			packageData = {versions: []};
@@ -103,10 +104,10 @@ class RegistryIndex {
 		}
 		var rawVersions:Dynamic = Reflect.field(packageData, "versions");
 		if (!Std.isOfType(rawVersions, Array))
-			throw '$path package "$name" requires a versions array';
+			throw new InternalError('$path package "$name" requires a versions array');
 		for (existing in (cast rawVersions:Array<Dynamic>))
 			if (Reflect.field(existing, "version") == version)
-				throw 'Registry release "$name@$version" is already published';
+				throw new InternalError('Registry release "$name@$version" is already published');
 		var release:Dynamic = {version: version, checksum: checksum, yanked: false};
 		if (compatibility.haxeon != null)
 			Reflect.setField(release, "haxeon", compatibility.haxeon);
@@ -165,7 +166,7 @@ class RegistryIndex {
 				continue;
 			var parsed = Std.parseInt(fields[index]);
 			if (parsed == null)
-				throw 'Invalid registry version "$value"';
+				throw new InternalError('Invalid registry version "$value"');
 			result[index] = parsed;
 		}
 		return result;
@@ -174,13 +175,13 @@ class RegistryIndex {
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path requires a non-empty "$field" string';
+			throw new InternalError('$path requires a non-empty "$field" string');
 		return cast value;
 	}
 
 	static function castBool(value:Dynamic):Bool {
 		if (!Std.isOfType(value, Bool))
-			throw "Registry yanked metadata must be boolean";
+			throw new InternalError("Registry yanked metadata must be boolean");
 		return cast value;
 	}
 }

@@ -1,6 +1,7 @@
 package compiler.syntax;
 
 import compiler.core.Diagnostic;
+import compiler.core.InternalError;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFieldAccess;
@@ -2186,7 +2187,7 @@ class Parser {
 			case "alignof": AlignOf;
 			case "offsetof": OffsetOf;
 			case "typeInfo": TypeInfo;
-			default: throw "Invalid native layout query";
+			default: throw new InternalError("Invalid native layout query");
 		};
 		consume(TokenKind.Less);
 		var type = parseType();

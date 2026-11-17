@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.backend.wasm.WasmLayout;
@@ -167,7 +168,7 @@ class WasmLinearGc {
 			callType:WasmFunctionType, frame:Null<Int>, context:WasmLinearContext):Void {
 		var pendingFlag = context.pendingExceptionFlag;
 		if (pendingFlag == null)
-			throw "Runtime-neutral exception flag was not initialized";
+			throw new InternalError("Runtime-neutral exception flag was not initialized");
 		var resultLocals:Array<Int> = [];
 		for (result in callType.results) {
 			var index = fn.type.parameters.length + locals.length;

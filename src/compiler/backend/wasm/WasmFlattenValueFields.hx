@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInlineValueLayout;
@@ -58,7 +59,7 @@ class WasmFlattenValueFields {
 			var method = methods[methodIndex++],
 				original = originals.get(method.original);
 			if (original == null || original.arguments.length == 0)
-				throw 'Missing Wasm GC place method "${method.original}"';
+				throw new InternalError('Missing Wasm GC place method "${method.original}"');
 			var next = nextId(original),
 				owner = new IrValue(next, "$wasm-gc-place-owner", Obj(method.owner)),
 				args = [owner].concat(original.arguments.slice(1)),
@@ -119,7 +120,7 @@ class WasmFlattenValueFields {
 						case FieldGet(out, owner, field) if (values.isValue(out.type) && !aliases.exists(out.id)):
 							var name = switch out.type {
 								case Obj(value): value;
-								default: throw "Invalid value projection";
+								default: throw new InternalError("Invalid value projection");
 							};
 							var parent = aliases.get(owner.id);
 							aliases.set(out.id, parent == null ? {
@@ -205,7 +206,7 @@ class WasmFlattenValueFields {
 						var place = aliases.get(receiver.id),
 							target = methodName(place.typeName, method);
 						if (target == null)
-							throw 'Missing Wasm GC method "${place.typeName}.$method"';
+							throw new InternalError('Missing Wasm GC method "${place.typeName}.$method"');
 						var args:Array<IrValue> = [place.owner];
 						for (argument in arguments) {
 							var actual = materialize(argument, aliases, replacement, located, next);
@@ -362,7 +363,7 @@ class WasmFlattenValueFields {
 	static function valueName(type:IrType):String
 		return switch type {
 			case Obj(name): name;
-			default: throw 'Expected an object type, got $type';
+			default: throw new InternalError('Expected an object type, got $type');
 		};
 
 	static function nextId(fn:IrFunction):Int {
@@ -382,12 +383,12 @@ class WasmFlattenValueFields {
 	/** Translate a logical field path to its one physical GC field. */
 	function physical(type:IrType, path:Array<String>):String {
 		if (path.length == 0)
-			throw "Empty Wasm GC field path";
+			throw new InternalError("Empty Wasm GC field path");
 		if (path.length == 1)
 			return path[0];
 		var field = findField(type, path[0]);
 		if (field == null || !values.isValue(field.type))
-			throw 'Invalid Wasm GC field path ${path.join(".")}';
+			throw new InternalError('Invalid Wasm GC field path ${path.join(".")}');
 		for (slot in values.leaves(field.type)) {
 			if (slot.path.length != path.length - 1)
 				continue;
@@ -398,7 +399,7 @@ class WasmFlattenValueFields {
 			if (matches)
 				return WasmValueLayout.fieldName(path[0], slot);
 		}
-		throw 'Missing Wasm GC leaf ${path.join(".")}';
+		throw new InternalError('Missing Wasm GC leaf ${path.join(".")}');
 	}
 
 	function findField(type:IrType, field:String):Null<IrObjectField> {

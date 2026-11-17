@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneRuntime;
 import compiler.backend.wasm.WasmFunctionBuilder;
@@ -211,7 +212,7 @@ class WasmLinearLaneStorage {
 					End,
 					End
 				]);
-			default: throw 'Unknown Wasm32 lane storage primitive: $operation';
+			default: throw new InternalError('Unknown Wasm32 lane storage primitive: $operation');
 		}
 		b.emit(Return);
 		return b.finish();

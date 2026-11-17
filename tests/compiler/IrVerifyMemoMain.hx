@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -44,8 +45,8 @@ class IrVerifyMemoMain {
 		var rejected = false;
 		try
 			IrVerifier.verifyReusing(program([f, callee(Bool)]), memo)
-		catch (error:String)
-			rejected = error.indexOf("f") >= 0;
+		catch (error:InternalError)
+			rejected = error.message.indexOf("f") >= 0;
 		expect(rejected, "a function accepted against another signature of its callee was not checked again");
 		IrVerifier.verifyReusing(program([f, g, callee(I32, "h")]), memo);
 		expect(memo.skippedFunctions == 2 && memo.checkedFunctions == 1,

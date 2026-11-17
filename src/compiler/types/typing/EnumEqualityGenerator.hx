@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -50,7 +51,7 @@ class EnumEqualityGenerator {
 			for (name in pending) {
 				var request = session.programOutput.requests.enumEqualities.get(name);
 				if (request == null)
-					throw 'Missing enum equality request "$name"';
+					throw new InternalError('Missing enum equality request "$name"');
 				var owner = compiler.core.QualifiedName.parent(request.origin),
 					context = session.enterBody(request.origin, null, owner == null ? "$enum-equality" : owner);
 				try {
@@ -64,7 +65,7 @@ class EnumEqualityGenerator {
 								EnumConformanceMethods.typeMethod(session, typer, request.type, custom, name));
 					}
 					session.leaveBody(context);
-				} catch (error:Dynamic) {
+				} catch (error:haxe.Exception) {
 					session.leaveBody(context);
 					throw error;
 				}

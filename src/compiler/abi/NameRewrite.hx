@@ -1,5 +1,6 @@
 package compiler.abi;
 
+import compiler.core.InternalError;
 import compiler.semantic.LambdaName;
 
 /**
@@ -21,7 +22,7 @@ class NameRewrite {
 		this.lambdas = lambdas;
 		for (from => to in lambdas) {
 			if (!LambdaName.is(from) || !LambdaName.is(to))
-				throw 'Only lambdas are renamed: $from -> $to';
+				throw new InternalError('Only lambdas are renamed: $from -> $to');
 			pairs.push({from: from, to: to});
 			pairs.push({from: ENVIRONMENT + from.substr(LAMBDA.length), to: ENVIRONMENT + to.substr(LAMBDA.length)});
 		}
@@ -85,7 +86,7 @@ class NameRewrite {
 			var renamed = apply(key);
 			var earlier = sources.get(renamed);
 			if (earlier != null)
-				throw 'Renaming lambdas gives $earlier and $key the same name $renamed';
+				throw new InternalError('Renaming lambdas gives $earlier and $key the same name $renamed');
 			sources.set(renamed, key);
 			result.set(renamed, value);
 		}

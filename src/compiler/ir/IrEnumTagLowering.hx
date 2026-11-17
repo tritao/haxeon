@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -239,7 +240,7 @@ class IrEnumTagLowering {
 									[for (argument in arguments) use(argument)]);
 							case Call(output, name, arguments) if (dynamicUnboxes.exists(name)):
 								if (!IrVerifier.sameType(dynamicUnboxes.get(name), output.type))
-									throw "Malformed enum unbox signature";
+									throw new InternalError("Malformed enum unbox signature");
 								switch use(output).type {
 									case EnumTag(enumName): instruction = Intrinsic(use(output),
 										EnumTagUnbox(EnumTag(enumName)),
@@ -616,7 +617,7 @@ class IrEnumTagLowering {
 								case EnumTag(name):
 									name;
 								default:
-									throw "Expected tag";
+									throw new InternalError("Expected tag");
 							};
 							required.set(name, true);
 							Call(output, boxNames.get(name), [value]);
@@ -627,7 +628,7 @@ class IrEnumTagLowering {
 								case EnumTag(name):
 									name;
 								default:
-									throw "Expected tag";
+									throw new InternalError("Expected tag");
 							};
 							required.set(name, true);
 							Call(output, unboxNames.get(name), [value]);
@@ -636,7 +637,7 @@ class IrEnumTagLowering {
 								|| arguments.length != 1
 								|| !IrVerifier.sameType(arguments[0].type, EnumTag(name))
 								|| !IrVerifier.sameType(output.type, Dyn))
-								throw "Invalid enum tag box signature";
+								throw new InternalError("Invalid enum tag box signature");
 							markChanged();
 							changed = true;
 							required.set(name, true);
@@ -646,7 +647,7 @@ class IrEnumTagLowering {
 								|| arguments.length != 1
 								|| !IrVerifier.sameType(arguments[0].type, Dyn)
 								|| !IrVerifier.sameType(output.type, EnumTag(name)))
-								throw "Invalid enum tag unbox signature";
+								throw new InternalError("Invalid enum tag unbox signature");
 							markChanged();
 							changed = true;
 							required.set(name, true);
@@ -683,7 +684,7 @@ class IrEnumTagLowering {
 							arguments) if (hasTag(arguments) && needsArguments(arguments, signature(name))):
 							var expected = signature(name);
 							if (expected == null)
-								throw 'Missing tag escape signature "$name"';
+								throw new InternalError('Missing tag escape signature "$name"');
 							changed = true;
 							CNativeCall(output, name, [
 								for (index in 0...arguments.length)

@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.InternalError;
 import compiler.types.DeclarationIndex;
 import compiler.types.DeclarationIndex.DeclarationId;
 
@@ -34,7 +35,7 @@ class DeclarationLifecycle {
 	public function stage(id:DeclarationId):DeclarationStage {
 		var position = positions.get(id);
 		if (position == null)
-			throw 'Unknown declaration lifecycle identity "$id"';
+			throw new InternalError('Unknown declaration lifecycle identity "$id"');
 		return current[position];
 	}
 
@@ -44,14 +45,14 @@ class DeclarationLifecycle {
 			if ((next:Int) < (stage:Int))
 				continue;
 			if ((next:Int) > (stage:Int) + 1)
-				throw 'Declaration "${ids[position]}" cannot advance from ${name(stage)} to ${name(next)}';
+				throw new InternalError('Declaration "${ids[position]}" cannot advance from ${name(stage)} to ${name(next)}');
 			current[position] = next;
 		}
 
 	public function requireAtLeast(required:DeclarationStage):Void
 		for (position in 0...ids.length)
 			if ((current[position]:Int) < (required:Int))
-				throw 'Declaration "${ids[position]}" is ${name(current[position])}; ${name(required)} is required';
+				throw new InternalError('Declaration "${ids[position]}" is ${name(current[position])}; ${name(required)} is required');
 
 	public function snapshot():Map<String, DeclarationStage>
 		return [for (position in 0...ids.length) ids[position] => current[position]];

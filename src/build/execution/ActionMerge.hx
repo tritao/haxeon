@@ -1,6 +1,7 @@
 package build.execution;
 
 import build.execution.ExecutionAction.ActionKind;
+import compiler.core.InternalError;
 
 /**
  * Merges actions that share an identity. Shared CMake nodes are requested by several packages, and each
@@ -37,7 +38,7 @@ class ActionMerge {
 			|| existing.jobserverClient != incoming.jobserverClient)
 			problems.push("scheduling flags differ");
 		if (problems.length > 0)
-			throw 'Action ${existing.id} differs between $earlier and $later: ${problems.join("; ")}';
+			throw new InternalError('Action ${existing.id} differs between $earlier and $later: ${problems.join("; ")}');
 		return new ExecutionAction(existing.id, union(existing.dependencies, incoming.dependencies, id -> id.key()),
 			union(existing.inputs, incoming.inputs, path -> path), existing.outputs, existing.description,
 			existing.action, existing.fingerprintDependencies,

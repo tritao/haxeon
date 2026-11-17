@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
 
@@ -9,7 +10,7 @@ class IrInlineEnumWordAccess {
 	final wordType:IrType;
 
 	public function new(bits:Int) {
-		if (bits != 32 && bits != 64) throw 'Invalid enum payload word size $bits';
+		if (bits != 32 && bits != 64) throw new InternalError('Invalid enum payload word size $bits');
 		this.bits = bits;
 		this.wordType = bits == 64 ? I64 : I32;
 	}
@@ -49,8 +50,8 @@ class IrInlineEnumWordAccess {
 
 	/** The caller initializes the destination's words before storing any payload leaves. */
 	public function write(builder:IrBuilder, owner:IrValue, slot:IrValueLaneSlot, value:IrValue):Void {
-		if (slot.isReference) throw "Reference slots are not scalar words";
-		if (slot.bitWidth > bits) throw "A scalar payload must fit its enum word width";
+		if (slot.isReference) throw new InternalError("Reference slots are not scalar words");
+		if (slot.bitWidth > bits) throw new InternalError("A scalar payload must fit its enum word width");
 		var encoded = encode(builder, value), first = Std.int(Math.min(slot.bitWidth, bits - slot.bitOffset));
 		writePart(builder, owner, slot.index, slot.bitOffset, first, encoded);
 		var remaining = slot.bitWidth - first;
@@ -59,8 +60,8 @@ class IrInlineEnumWordAccess {
 	}
 
 	public function read(builder:IrBuilder, owner:IrValue, slot:IrValueLaneSlot):IrValue {
-		if (slot.isReference) throw "Reference slots are not scalar words";
-		if (slot.bitWidth > bits) throw "A scalar payload must fit its enum word width";
+		if (slot.isReference) throw new InternalError("Reference slots are not scalar words");
+		if (slot.bitWidth > bits) throw new InternalError("A scalar payload must fit its enum word width");
 		var first = Std.int(Math.min(slot.bitWidth, bits - slot.bitOffset)),
 			value = readPart(builder, owner, slot.index, slot.bitOffset, first),
 			remaining = slot.bitWidth - first;
@@ -95,7 +96,7 @@ class IrInlineEnumWordAccess {
 	}
 
 	function maskFor(builder:IrBuilder, width:Int):IrValue {
-		if (width <= 0 || width > bits) throw 'Invalid enum payload bit width $width';
+		if (width <= 0 || width > bits) throw new InternalError('Invalid enum payload bit width $width');
 		var all = builder.constInt(-1, wordType);
 		return width == bits ? all : builder.unsignedShiftRight(all, builder.constInt(bits - width));
 	}
@@ -123,7 +124,7 @@ class IrInlineEnumWordAccess {
 			builder.jump(done);
 			builder.select(done);
 			builder.phi(wordType, [{block: yes.id, value: one}, {block: no.id, value: zero}]);
-		default: throw 'Unsupported enum scalar payload ${value.type}';
+		default: throw new InternalError('Unsupported enum scalar payload ${value.type}');
 	};
 
 	function decode(builder:IrBuilder, value:IrValue, type:IrType):IrValue return switch type {
@@ -137,6 +138,6 @@ class IrInlineEnumWordAccess {
 		case F32: builder.call("__i32_to_f32_bits",
 			[bits == 32 ? value : builder.call("haxe.Int64.toInt", [value], I32)], F32);
 		case Bool: builder.equal(builder.equal(value, builder.constInt(0, wordType)), builder.constBool(false));
-		default: throw 'Unsupported enum scalar payload $type';
+		default: throw new InternalError('Unsupported enum scalar payload $type');
 	};
 }

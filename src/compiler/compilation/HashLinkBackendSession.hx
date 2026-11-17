@@ -8,6 +8,7 @@ import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.core.InternalError;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlPlainBuild;
@@ -70,7 +71,7 @@ class HashLinkBackendSession implements BackendSession {
 	public function reuse(previous:BackendAssemblyResult, at:Float):BackendAssemblyResult {
 		var reusedAssembler = previous.assembler;
 		if (reusedAssembler == null)
-			throw "A HashLink session cannot reuse another backend's result";
+			throw new InternalError("A HashLink session cannot reuse another backend's result");
 		assembler = reusedAssembler;
 		return {
 			artifact: previous.artifact,
@@ -173,7 +174,7 @@ class HashLinkBackendSession implements BackendSession {
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
 				case ReloadDomain(reasons): reasons;
-				case Reject(diagnostics): throw diagnostics.join("; ");
+				case Reject(diagnostics): throw new InternalError(diagnostics.join("; "));
 			};
 		reloadReasons.sort(function(a, b) return Reflect.compare(Std.string(a), Std.string(b)));
 		if (reloadReasons.length > 0)
@@ -224,7 +225,7 @@ class HashLinkBackendSession implements BackendSession {
 				attachSourceSnapshots(context, freshAssembly.module);
 			var difference = moduleDifference(assembly.module, freshAssembly.module);
 			if (difference != null)
-				throw '--check-reuse: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)';
+				throw new InternalError('--check-reuse: a module with ${candidateAssembler.reusedFunctions} functions linked from the last build differs from one lowered afresh ($difference)');
 		}
 		compiler.hl.HlOpportunityCensus.report(assembly.module, assembly.functionIndices);
 		var backendAssemblyDoneAt = Sys.time() * 1000.0;
@@ -330,7 +331,7 @@ class HashLinkBackendSession implements BackendSession {
 				continue;
 			var content = source.bytes, existing = byHash.get(hash);
 			if (existing != null && existing.compare(content) != 0)
-				throw 'Source snapshot hash collision for ${source.path}';
+				throw new InternalError('Source snapshot hash collision for ${source.path}');
 			byHash.set(hash, content);
 		}
 		code.sourceSnapshots = [for (hash => content in byHash) {

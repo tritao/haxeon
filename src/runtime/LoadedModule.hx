@@ -26,7 +26,7 @@ class LoadedModule {
 			var result = operation(current);
 			mutex.release();
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			mutex.release();
 			throw error;
 		}
@@ -45,7 +45,7 @@ class LoadedModule {
 			borrowers++;
 			mutex.release();
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			mutex.release();
 			throw error;
 		}
@@ -63,7 +63,7 @@ class LoadedModule {
 			var result = operation(current);
 			mutex.release();
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			mutex.release();
 			throw error;
 		}
@@ -91,7 +91,7 @@ class LoadedModule {
 					}
 					mutex.release();
 					throw error;
-				} catch (error:Dynamic) {
+				} catch (error:haxe.Exception) {
 					mutex.release();
 					throw error;
 				}
@@ -116,7 +116,7 @@ class LoadedModule {
 				parts.push(native);
 			mutex.release();
 			return parts.length == 0 ? null : parts.join(", ");
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			mutex.release();
 			throw error;
 		}
@@ -148,7 +148,7 @@ class LoadedModule {
 			}
 			mutex.release();
 			throw error;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			mutex.release();
 			throw error;
 		}

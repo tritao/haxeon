@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
 import compiler.abi.NameRewrite;
@@ -158,14 +159,14 @@ class HlSymbolTable {
 			result.ints.push(value);
 		for (index in 0...state.ints.length)
 			if (result.intIndices.exists(state.ints[index]))
-				throw "Duplicate persisted integer symbol";
+				throw new InternalError("Duplicate persisted integer symbol");
 			else
 				result.intIndices.set(state.ints[index], index);
 		for (value in state.strings)
 			result.strings.push(value);
 		for (index in 0...state.strings.length)
 			if (result.stringIndices.exists(state.strings[index]))
-				throw "Duplicate persisted string symbol";
+				throw new InternalError("Duplicate persisted string symbol");
 			else
 				result.stringIndices.set(state.strings[index], index);
 		for (value in state.floats)
@@ -174,7 +175,7 @@ class HlSymbolTable {
 			// The key `internFloat` looks constants up by: a decoded table must find the floats it already holds.
 			var key = floatKey(state.floats[index]);
 			if (result.floatIndices.exists(key))
-				throw "Duplicate persisted float symbol";
+				throw new InternalError("Duplicate persisted float symbol");
 			else
 				result.floatIndices.set(key, index);
 		}
@@ -210,14 +211,14 @@ class HlSymbolTable {
 	static function loadMap(entries:Array<HlNamedIndex>, target:Map<String, Int>, kind:String):Void
 		for (entry in entries) {
 			if (entry.name.length == 0 || entry.index < 0 || target.exists(entry.name))
-				throw 'Invalid persisted $kind index';
+				throw new InternalError('Invalid persisted $kind index');
 			target.set(entry.name, entry.index);
 		}
 
 	static function loadNestedMap(entries:Array<HlNamedSlots>, target:Map<String, Map<String, Int>>, kind:String):Void
 		for (entry in entries) {
 			if (entry.name.length == 0 || target.exists(entry.name))
-				throw 'Invalid persisted $kind owner';
+				throw new InternalError('Invalid persisted $kind owner');
 			var slots:Map<String, Int> = [];
 			loadMap(entry.slots, slots, kind);
 			target.set(entry.name, slots);
@@ -312,13 +313,13 @@ class HlSymbolTable {
 			case EnumTag(name):
 				var boxed = typeIndices.get('enum:$name');
 				if (boxed == null)
-					throw 'Enum tag "$name" must be registered before use';
+					throw new InternalError('Enum tag "$name" must be registered before use');
 				var caseCount = switch types[boxed] {
 					case HlTypeDef.Enum(_, _, constructors): constructors.length;
 					default:
 						var pendingCount = pendingEnumCaseCounts.get(name);
 						if (pendingCount == null)
-							throw 'Missing enum tag declaration "$name"';
+							throw new InternalError('Missing enum tag declaration "$name"');
 						pendingCount;
 				};
 				var cacheGlobals = [for (i in 0...caseCount) internEnumConstant(name, i)];
@@ -329,9 +330,9 @@ class HlSymbolTable {
 			case Function(arguments, result):
 				return internFunction(arguments, result);
 			case Enum(name):
-				throw 'Enum type "$name" must be registered before use';
+				throw new InternalError('Enum type "$name" must be registered before use');
 			case Virtual(name):
-				throw 'Virtual type "$name" must be registered before use';
+				throw new InternalError('Virtual type "$name" must be registered before use');
 			case Nullable(element):
 				// Nullable value objects retain their payload type in IR, but still use the previous Dyn ABI.
 				// HashLink's HNULL describes primitive boxes, not an inline nullable HSTRUCT.
@@ -357,7 +358,7 @@ class HlSymbolTable {
 		}
 		var index = types.length;
 		if (typeKey(type).indexOf("obj:") == 0)
-			throw 'Object type "$type" must be registered before use';
+			throw new InternalError('Object type "$type" must be registered before use');
 		types.push(switch type {
 			case ManagedBytes: HlTypeDef.Abstract(internString("realtime_bytes"));
 			case RawPtr: HlTypeDef.Simple(HlType.Bytes);
@@ -366,24 +367,24 @@ class HlSymbolTable {
 			default: HlTypeDef.Simple(switch type {
 					case Void: HlType.Void;
 					case I32: HlType.I32;
-					case EnumTag(_): throw "Enum tag must be interned with its descriptor";
+					case EnumTag(_): throw new InternalError("Enum tag must be interned with its descriptor");
 					case I64: HlType.I64;
 					case Bool: HlType.Bool;
 					case F32: HlType.F32;
 					case F64: HlType.F64;
-					case Bytes: throw 'String type must be interned as an object';
+					case Bytes: throw new InternalError('String type must be interned as an object');
 					case RawPtr: HlType.Bytes;
-					case ManagedBytes: throw 'Managed byte type must be handled by the outer type switch';
+					case ManagedBytes: throw new InternalError('Managed byte type must be handled by the outer type switch');
 					case Dyn: HlType.Dyn;
-					case Nullable(_): throw 'Nullable type must be handled by the outer type switch';
+					case Nullable(_): throw new InternalError('Nullable type must be handled by the outer type switch');
 					case TypeRef: HlType.Type;
 					case Array(_): HlType.Array;
-					case Iterator(_): throw 'Iterator type must be handled by the outer type switch';
-					case Obj(name): throw 'Object type "$name" must be registered before use';
-					case Abstract(name): throw 'Abstract type "$name" must be handled by the outer type switch';
-					case Virtual(name): throw 'Virtual type "$name" must be registered before use';
-					case Function(_, _): throw 'Function type must be interned with internFunction';
-					case Enum(name): throw 'Enum type "$name" must be registered before use';
+					case Iterator(_): throw new InternalError('Iterator type must be handled by the outer type switch');
+					case Obj(name): throw new InternalError('Object type "$name" must be registered before use');
+					case Abstract(name): throw new InternalError('Abstract type "$name" must be handled by the outer type switch');
+					case Virtual(name): throw new InternalError('Virtual type "$name" must be registered before use');
+					case Function(_, _): throw new InternalError('Function type must be interned with internFunction');
+					case Enum(name): throw new InternalError('Enum type "$name" must be registered before use');
 				});
 		});
 		typeIndices.set(key, index);
@@ -503,7 +504,7 @@ class HlSymbolTable {
 		var completeFields:Array<HlVirtualField> = [];
 		for (field in fields)
 			if (field == null) {
-				throw 'Interface "$name" has an unassigned virtual slot';
+				throw new InternalError('Interface "$name" has an unassigned virtual slot');
 			} else
 				completeFields.push(field);
 		var contract = [name];
@@ -511,7 +512,7 @@ class HlSymbolTable {
 			var baseIndex = internType(IrType.Virtual(base));
 			switch types[baseIndex] {
 				case Virtual(baseIdentity, _): contract.push(strings[baseIdentity]);
-				default: throw 'Base interface "$base" has no virtual identity';
+				default: throw new InternalError('Base interface "$base" has no virtual identity');
 			}
 		}
 		for (method in interfaceDecl.methods)
@@ -549,7 +550,7 @@ class HlSymbolTable {
 			for (slot in interfaceSlots) {
 				var virtualKey = 'virt:$slot';
 				if (!typeIndices.exists(virtualKey))
-					throw 'Interface "$slot" must be registered before "${object.name}"';
+					throw new InternalError('Interface "$slot" must be registered before "${object.name}"');
 				// HashLink recognizes an unnamed field of the interface's type as the cache for its virtual.
 				// Read the index before interning: the call could change the table the existence check just covered.
 				var virtualType = typeIndices.get(virtualKey);
@@ -568,7 +569,7 @@ class HlSymbolTable {
 			var baseName = Std.string(object.base);
 			var baseKey = 'obj:$baseName';
 			if (!typeIndices.exists(baseKey))
-				throw 'Object base "$baseName" must be registered before "${object.name}"';
+				throw new InternalError('Object base "$baseName" must be registered before "${object.name}"');
 			base = typeIndices.get(baseKey);
 			if (objectMethodIndices.exists(baseName))
 				for (name => slot in objectMethodIndices.get(baseName)) {
@@ -587,13 +588,13 @@ class HlSymbolTable {
 				slots.set(method.name, slot);
 			}
 			if (!functionIndices.exists(method.functionName))
-				throw 'Unknown object method function "${method.functionName}"';
+				throw new InternalError('Unknown object method function "${method.functionName}"');
 			var functionIndex = functionIndices.get(method.functionName);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
 		if (typedEntries != null) for (entry in typedEntries) {
 			var typedIndex = functionIndices.get(entry.functionName);
-			if (typedIndex == null) throw 'Unknown typed interface entry "${entry.functionName}"';
+			if (typedIndex == null) throw new InternalError('Unknown typed interface entry "${entry.functionName}"');
 			methods.push({
 				name: internString(entry.name),
 				functionIndex: typedIndex,
@@ -843,25 +844,25 @@ class HlSymbolTable {
 
 	public function requireGlobalIndex(name:String):Int {
 		if (!globalIndices.exists(name))
-			throw 'Unknown static field global "$name"';
+			throw new InternalError('Unknown static field global "$name"');
 		return globalIndices.get(name);
 	}
 
 	public function requireObjectMethodIndex(objectName:String, methodName:String):Int {
 		if (!objectMethodIndices.exists(objectName))
-			throw 'Unknown IR method "$objectName.$methodName"';
+			throw new InternalError('Unknown IR method "$objectName.$methodName"');
 		var methods = objectMethodIndices.get(objectName);
 		if (!methods.exists(methodName))
-			throw 'Unknown IR method "$objectName.$methodName"';
+			throw new InternalError('Unknown IR method "$objectName.$methodName"');
 		return methods.get(methodName);
 	}
 
 	public function requireInterfaceMethodIndex(interfaceName:String, methodName:String):Int {
 		if (!interfaceMethodIndices.exists(interfaceName))
-			throw 'Unknown IR method "$interfaceName.$methodName"';
+			throw new InternalError('Unknown IR method "$interfaceName.$methodName"');
 		var methods = interfaceMethodIndices.get(interfaceName);
 		if (!methods.exists(methodName))
-			throw 'Unknown IR method "$interfaceName.$methodName"';
+			throw new InternalError('Unknown IR method "$interfaceName.$methodName"');
 		return methods.get(methodName);
 	}
 

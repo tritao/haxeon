@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -27,17 +28,18 @@ class IrValueArrayElementRewrite {
 						changed = true;
 					case IteratorNext(out, iterator) if (Type.enumEq(iterator.type, Iterator(element))):
 						if (!Type.enumEq(out.type, helpers.storage))
-							throw 'Wrong inline array iterator type ${out.type}';
+							throw new InternalError('Wrong inline array iterator type ${out.type}');
 						helpers.useIterator();
 						instruction = Call(out, helpers.iteratorNextName(), [iterator]);
 						changed = true;
 					case ArrayGet(out, array, index) if (Type.enumEq(array.type, arrayType)):
-						if (!Type.enumEq(out.type, helpers.storage)) throw 'Wrong inline array read type ${out.type}';
+						if (!Type.enumEq(out.type, helpers.storage))
+							throw new InternalError('Wrong inline array read type ${out.type}');
 						instruction = Call(out, helpers.getName(), [array, index]);
 						changed = true;
 					case ArraySet(array, index, value) if (Type.enumEq(array.type, arrayType)):
 						if (!Type.enumEq(value.type, helpers.storage))
-							throw 'Wrong inline array write type ${value.type}';
+							throw new InternalError('Wrong inline array write type ${value.type}');
 						instruction = Call(new IrValue(next++, "$array-element-write", Void), helpers.setName(), [
 							array,
 							index,
@@ -49,7 +51,7 @@ class IrValueArrayElementRewrite {
 						if (!Type.enumEq(arguments[1].type, helpers.storage) || (switch (out.type) {
 							case I32: false;
 							default: true;
-						})) throw "Wrong inline array push type";
+						})) throw new InternalError("Wrong inline array push type");
 						instruction = Call(out, helpers.pushName(), arguments);
 						changed = true;
 					case Call(out, "__array_unshift_ref",
@@ -57,7 +59,7 @@ class IrValueArrayElementRewrite {
 						if (!Type.enumEq(arguments[1].type, helpers.storage) || (switch (out.type) {
 							case I32: false;
 							default: true;
-						})) throw "Wrong inline array unshift type";
+						})) throw new InternalError("Wrong inline array unshift type");
 						instruction = Call(out, helpers.unshiftName(), arguments);
 						changed = true;
 					case Call(out, name, arguments) if ((name == "__array_pop_ref" || name == "__array_shift_ref")
@@ -75,7 +77,7 @@ class IrValueArrayElementRewrite {
 							case Void: false;
 							default: true;
 						}))
-							throw "Wrong inline array insert type";
+							throw new InternalError("Wrong inline array insert type");
 						instruction = Call(out, helpers.insertName(), arguments);
 						changed = true;
 					case Call(out, "__array_resize_ref" | "__array_resize_any",
@@ -86,7 +88,7 @@ class IrValueArrayElementRewrite {
 						}) || (switch (out.type) {
 							case Void: false;
 							default: true;
-						})) throw "Wrong inline array resize type";
+						})) throw new InternalError("Wrong inline array resize type");
 						instruction = Call(out, "__value_array_resize", arguments);
 						changed = true;
 					case Call(out, "__array_reverse_ref" | "__array_reverse_any",
@@ -94,7 +96,7 @@ class IrValueArrayElementRewrite {
 						if ((switch (out.type) {
 							case Void: false;
 							default: true;
-						})) throw "Wrong inline array reverse type";
+						})) throw new InternalError("Wrong inline array reverse type");
 						instruction = Call(out, "__value_array_reverse", arguments);
 						changed = true;
 					case Call(out, "__array_splice_ref",
@@ -106,7 +108,7 @@ class IrValueArrayElementRewrite {
 							case I32: false;
 							default: true;
 						}) || !Type.enumEq(out.type, arrayType))
-							throw "Wrong inline array splice type";
+							throw new InternalError("Wrong inline array splice type");
 						instruction = Call(out, IrValueArrayElements.spliceNativeName(element), arguments);
 						changed = true;
 					default:
@@ -148,7 +150,7 @@ class IrValueArrayElementRewrite {
 							default: false;
 						})):
 							if (position + 1 >= block.instructions.length)
-							throw "Missing checked value array removal conversion";
+							throw new InternalError("Missing checked value array removal conversion");
 					switch block.instructions[position + 1].value {
 						case SafeCast(out, source) if (source.id == raw.id && Type.enumEq(out.type, helpers.storage)
 							&& uses.get(raw.id) == 1):
@@ -168,12 +170,12 @@ class IrValueArrayElementRewrite {
 							removed.set(raw.id, true);
 							position++;
 							changed = true;
-						default: throw 'Invalid checked value array removal conversion in ${fn.name}: ${block.instructions[position + 1].value}';
+						default: throw new InternalError('Invalid checked value array removal conversion in ${fn.name}: ${block.instructions[position + 1].value}');
 					}
 					case Call(raw, "__array_splice_any",
 						args) if (args.length == 3 && Type.enumEq(args[0].type, arrayType)):
 						if (position + 2 >= block.instructions.length)
-							throw "Missing checked nullable array splice conversion";
+							throw new InternalError("Missing checked nullable array splice conversion");
 						switch [block.instructions[position + 1].value, block.instructions[position + 2].value] {
 							case [ToDyn(boxed, source), SafeCast(out, input)]
 								if (source.id == raw.id && input.id == boxed.id && Type.enumEq(out.type, arrayType)
@@ -189,7 +191,7 @@ class IrValueArrayElementRewrite {
 							removed.set(boxed.id, true);
 							position += 2;
 							changed = true;
-							default: throw "Invalid checked nullable array splice conversion";
+							default: throw new InternalError("Invalid checked nullable array splice conversion");
 						}
 					default:
 				}

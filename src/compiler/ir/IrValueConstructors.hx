@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -175,7 +176,7 @@ class IrValueConstructors {
 							var mapped = IrInliner.remap(instruction.value, value -> {
 								var found = mapping.get(value.id);
 								if (found == null)
-									throw 'Missing value constructor operand ${value.id}';
+									throw new InternalError('Missing value constructor operand ${value.id}');
 								return found;
 							}, id -> id);
 							expanded.push(new Located(mapped, instruction.provenance));

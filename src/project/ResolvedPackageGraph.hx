@@ -1,5 +1,7 @@
 package project;
 
+import compiler.core.InternalError;
+
 class ResolvedPackageGraph {
 	/** Dependency-first deterministic order. */
 	public final packages:Array<ResolvedPackage>;
@@ -11,7 +13,7 @@ class ResolvedPackageGraph {
 		byName = new Map();
 		for (resolvedPackage in this.packages) {
 			if (byName.exists(resolvedPackage.name))
-				throw 'Duplicate package name "${resolvedPackage.name}"';
+				throw new InternalError('Duplicate package name "${resolvedPackage.name}"');
 			byName.set(resolvedPackage.name, resolvedPackage);
 		}
 	}

@@ -1,6 +1,7 @@
 package compiler.compilation;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.core.InternalError;
 
 /** Runtime revision and ABI last acknowledged by the host. */
 typedef PublishedBaseline = {
@@ -71,13 +72,13 @@ class CompilerPublication {
 		state = switch state {
 			case Untracked: Ready({revision: revision, abi: abi, backendAvailable: backendAvailable});
 			case Ready(_): state;
-			case Pending(_): throw "Cannot change publication tracking with a pending build";
+			case Pending(_): throw new InternalError("Cannot change publication tracking with a pending build");
 		};
 
 	public function beforeCompile():Void
 		switch state {
 			case Pending(candidate):
-				throw 'Publication revision ${candidate.revision} is still pending';
+				throw new InternalError('Publication revision ${candidate.revision} is still pending');
 			case Untracked, Ready(_):
 		}
 
@@ -90,7 +91,7 @@ class CompilerPublication {
 				abi: abi,
 				snapshot: snapshot
 			});
-			case Pending(candidate): throw 'Publication revision ${candidate.revision} is still pending';
+			case Pending(candidate): throw new InternalError('Publication revision ${candidate.revision} is still pending');
 		};
 
 	/** A no-op build needs no host action and must not create an acknowledgement opportunity. */
@@ -99,9 +100,9 @@ class CompilerPublication {
 			case Untracked:
 			case Ready(baseline):
 				if (revision != baseline.revision)
-					throw 'Unchanged publication revision mismatch: expected ${baseline.revision}, got $revision';
+					throw new InternalError('Unchanged publication revision mismatch: expected ${baseline.revision}, got $revision');
 			case Pending(candidate):
-				throw 'Publication revision ${candidate.revision} is still pending';
+				throw new InternalError('Publication revision ${candidate.revision} is still pending');
 		}
 
 	public function acknowledge(revision:Int):Void {
@@ -173,7 +174,7 @@ class CompilerPublication {
 		return switch state {
 			case Untracked: {tracking: false, revision: 0, abi: null};
 			case Ready(baseline): {tracking: true, revision: baseline.revision, abi: baseline.abi};
-			case Pending(candidate): throw 'Cannot persist pending publication revision ${candidate.revision}';
+			case Pending(candidate): throw new InternalError('Cannot persist pending publication revision ${candidate.revision}');
 		};
 
 	public function reconcile(runtimeRevision:Int):ReconnectDecision
@@ -190,11 +191,11 @@ class CompilerPublication {
 
 	function requirePending(revision:Int):PendingPublication
 		return switch state {
-			case Untracked: throw "Publication tracking is not enabled";
-			case Ready(_): throw "No publication is pending";
+			case Untracked: throw new InternalError("Publication tracking is not enabled");
+			case Ready(_): throw new InternalError("No publication is pending");
 			case Pending(candidate):
 				if (candidate.revision != revision)
-					throw 'Publication revision mismatch: expected ${candidate.revision}, got $revision';
+					throw new InternalError('Publication revision mismatch: expected ${candidate.revision}, got $revision');
 				candidate;
 		};
 }

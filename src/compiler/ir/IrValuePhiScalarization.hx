@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
@@ -171,7 +172,7 @@ class IrValuePhiScalarization {
 		function declared(type:IrType, field:String):IrObjectField {
 			var name = switch type {
 				case Obj(value): value;
-				default: throw "Invalid value phi field";
+				default: throw new InternalError("Invalid value phi field");
 			};
 			while (name != null) {
 				var object = objects.get(name);
@@ -182,7 +183,7 @@ class IrValuePhiScalarization {
 						return candidate;
 				name = object.base;
 			}
-			throw 'Missing value phi field "$field"';
+			throw new InternalError('Missing value phi field "$field"');
 		}
 		var deferred:Map<Int, Array<Located<IrInstruction>>> = [];
 		for (block in fn.blocks)

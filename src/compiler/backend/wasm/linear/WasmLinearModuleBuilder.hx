@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.IrReachability;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
@@ -240,16 +241,16 @@ class WasmLinearModuleBuilder {
 		exportedFunctions = boundaryExportNames;
 		if (contract != null) {
 			if (!importMemory)
-				throw "A Wasm memory contract requires imported memory";
+				throw new InternalError("A Wasm memory contract requires imported memory");
 			MemoryContractCodec.validate(contract);
 		}
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
-			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
+			throw new InternalError('Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase');
 		module.importMemory = importMemory;
 		module.sharedMemory = options.sharedMemory == true;
 		if (module.sharedMemory) {
 			if (!importMemory || contract == null)
-				throw "Shared Wasm memory requires imported memory and a bounded contract";
+				throw new InternalError("Shared Wasm memory requires imported memory and a bounded contract");
 			module.memoryMax = WasmModuleSupport.memoryPages(contract.memorySize);
 		}
 		preferredEntry = WasmModuleSupport.hasFunction(program,
@@ -378,7 +379,7 @@ class WasmLinearModuleBuilder {
 		rootLimit = rootBase + rootReserve;
 		heapStart = rootLimit;
 		if (contract != null && heapStart > contract.guestLimit)
-			throw 'Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}';
+			throw new InternalError('Wasm guest layout exceeds memory contract guest limit ${contract.guestLimit}');
 		module.memoryMin = contract == null
 			? WasmModuleSupport.memoryPages(heapStart) : WasmModuleSupport.memoryPages(contract.memorySize);
 		rootTop = module.globals.length;
@@ -479,7 +480,7 @@ class WasmLinearModuleBuilder {
 	 */
 	function linkRuntime():Void {
 		if (runtimeNeutral && options.wasmLinearRuntime != null)
-			throw "--wasm-runtime-neutral does not accept a custom wasm32 runtime without fuel instrumentation";
+			throw new InternalError("--wasm-runtime-neutral does not accept a custom wasm32 runtime without fuel instrumentation");
 		var runtime = options.wasmLinearRuntime != null
 			? options.wasmLinearRuntime : (runtimeNeutral ? runtimeNeutralRuntime() : defaultRuntime());
 		linear.collectorFunction = module.addFunction(new WasmFunction("__haxeon_gc_collect", {
@@ -489,12 +490,12 @@ class WasmLinearModuleBuilder {
 		var exports = WasmRuntimeLinker.link(module, runtime, name -> switch name {
 			case "collect": linear.collectorFunction;
 			case "fuel_charge" if (runtimeNeutral): requiredFuelFunction();
-			default: throw 'The wasm32 runtime imports unknown guest function "$name"';
+			default: throw new InternalError('The wasm32 runtime imports unknown guest function "$name"');
 		}, runtimeNeutral ? requiredFuelFunction() : null);
 		function required(name:String):Int {
 			var index = exports.get(name);
 			if (index == null)
-				throw 'The wasm32 runtime does not export $name';
+				throw new InternalError('The wasm32 runtime does not export $name');
 			return index;
 		}
 		linear.heapAllocFunction = required("haxeon_heap_alloc");
@@ -510,7 +511,7 @@ class WasmLinearModuleBuilder {
 	static function defaultRuntime():haxe.io.Bytes {
 		if (cachedRuntime == null) {
 			if (!sys.FileSystem.exists(DEFAULT_RUNTIME))
-				throw 'The wasm32 backend links $DEFAULT_RUNTIME, which is missing; build it with the haxeon-wasm-runtime target of the native build';
+				throw new InternalError('The wasm32 backend links $DEFAULT_RUNTIME, which is missing; build it with the haxeon-wasm-runtime target of the native build');
 			cachedRuntime = sys.io.File.getBytes(DEFAULT_RUNTIME);
 		}
 		return cachedRuntime;
@@ -520,7 +521,7 @@ class WasmLinearModuleBuilder {
 		if (cachedRuntimeNeutral == null) {
 			var path = "stdlib/haxeon/wasm/linear-runtime-neutral.wasm";
 			if (!sys.FileSystem.exists(path))
-				throw 'The runtime-neutral wasm32 runtime $path is missing; build it with the haxeon-wasm-runtime target of the native build';
+				throw new InternalError('The runtime-neutral wasm32 runtime $path is missing; build it with the haxeon-wasm-runtime target of the native build');
 			cachedRuntimeNeutral = sys.io.File.getBytes(path);
 		}
 		return cachedRuntimeNeutral;
@@ -545,7 +546,7 @@ class WasmLinearModuleBuilder {
 				try
 					parameters.push(WasmModuleSupport.requireValueType(argument.type))
 				catch (error:Dynamic)
-					throw 'Wasm function ${fn.name} has an unsupported parameter type: $error';
+					throw new InternalError('Wasm function ${fn.name} has an unsupported parameter type: $error');
 			var results:Array<WasmValueType> = [],
 				signature = scalarAbi.signatures.get(fn.name);
 			try
@@ -554,17 +555,17 @@ class WasmLinearModuleBuilder {
 						WasmModuleSupport.requireValueType(result)
 				]
 			catch (error:Dynamic)
-				throw 'Wasm function ${fn.name} has an unsupported result type: $error';
+				throw new InternalError('Wasm function ${fn.name} has an unsupported result type: $error');
 			var type:WasmFunctionType = {parameters: parameters, results: results};
 			functions.set(fn.name, module.addFunction(new WasmFunction(fn.name, type)));
 		}
 		closureTypes = WasmModuleSupport.collectClosureTypes(module, program, scalarAbi);
 		var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
 		if (bytesDataPointer == null)
-			throw "Linear Wasm bytes data pointer helper is missing";
+			throw new InternalError("Linear Wasm bytes data pointer helper is missing");
 		var cstringCopy = functions.get("__haxeon_cstring_copy");
 		if (cstringCopy == null)
-			throw "Linear Wasm C string copy helper is missing";
+			throw new InternalError("Linear Wasm C string copy helper is missing");
 		var linearRepresentation = new WasmLinearRepresentation(layout, allocator, bytesDataPointer, cstringCopy,
 			scalarAbi, functions, null, null,
 			staticClosureDescriptors, closureAdapters);
@@ -579,7 +580,7 @@ class WasmLinearModuleBuilder {
 		for (record in staticClosureRecords) {
 			var slot = tableSlots.get(record.name);
 			if (slot == null)
-				throw 'Static closure target ${record.name} has no table slot';
+				throw new InternalError('Static closure target ${record.name} has no table slot');
 			record.bytes.setInt32(WasmLayout.STATIC_CLOSURE_FUNCTION_OFFSET, slot);
 		}
 		closureAdapters.defineSignatureQuery(module, functions);
@@ -636,7 +637,7 @@ class WasmLinearModuleBuilder {
 
 	function requiredFuelFunction():Int {
 		if (fuelChargeFunction == null)
-			throw "Runtime-neutral fuel helper was not initialized";
+			throw new InternalError("Runtime-neutral fuel helper was not initialized");
 		return fuelChargeFunction;
 	}
 
@@ -646,7 +647,7 @@ class WasmLinearModuleBuilder {
 	function finalizeExports():Void {
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
-			throw 'Wasm entry point $preferredEntry was not emitted';
+			throw new InternalError('Wasm entry point $preferredEntry was not emitted');
 		var initializer = WasmModuleSupport.hasFunction(program, "__init") ? functions.get("__init") : null;
 		if (initializer != null)
 			module.start = runtimeNeutral ? addNeutralStart(initializer) : initializer;
@@ -658,7 +659,7 @@ class WasmLinearModuleBuilder {
 			var exportIndex = functions.get(boundaryExportAdapters.exists(exported)
 				? boundaryExportAdapters.get(exported) : exported);
 			if (exportIndex == null)
-				throw 'Wasm export "$exported" is not a reachable function';
+				throw new InternalError('Wasm export "$exported" is not a reachable function');
 			module.exports.push({
 				name: exported,
 				functionIndex: runtimeNeutral ? addNeutralBoundary('__haxeon_export_$exported',
@@ -690,7 +691,7 @@ class WasmLinearModuleBuilder {
 	function addNeutralStart(initializer:Int):Int {
 		var type = module.functionType(initializer);
 		if (type.parameters.length != 0 || type.results.length != 0)
-			throw "Runtime-neutral profile requires __init to have type () -> ()";
+			throw new InternalError("Runtime-neutral profile requires __init to have type () -> ()");
 		var body:Array<compiler.backend.wasm.WasmTypes.WasmInstruction> = [Call(initializer)];
 		var pendingFlag = pendingExceptionFlag;
 		if (pendingFlag != null)
@@ -707,7 +708,7 @@ class WasmLinearModuleBuilder {
 		if (pendingFlag != null) {
 			var pendingValue = pendingExceptionValue;
 			if (pendingValue == null)
-				throw "Runtime-neutral exception payload was not initialized";
+				throw new InternalError("Runtime-neutral exception payload was not initialized");
 			body.push(I32Const(0));
 			body.push(GlobalSet(pendingFlag));
 			body.push(I32Const(0));

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 
 private typedef ReflectedLayout = {
@@ -97,7 +98,7 @@ class ObjectReflection {
 				case "__reflect_object_field_count": fieldCount(native.name, layouts);
 				case "__reflect_object_field_name": fieldName(native.name, layouts, functions);
 				case "__reflect_object_delete_field": deleteField(native.name, layouts, functions);
-				default: throw 'Unknown object reflection native "${native.symbol}"';
+				default: throw new InternalError('Unknown object reflection native "${native.symbol}"');
 			});
 			verify(native, layouts, start);
 		}
@@ -139,24 +140,24 @@ class ObjectReflection {
 						case Call(_, target, _) if (!names.exists(target) && !StringTools.startsWith(target, "__")
 							&& !StringTools.startsWith(target, OPTIONAL_PREFIX)):
 							if (HELPER_CALLEES.indexOf(target) < 0)
-								throw 'reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)';
+								throw new InternalError('reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)');
 							emitted.set(target, true);
 						default:
 					}
 		var expected = expectedCallees(used, symbol);
 		for (name in expected.keys())
 			if (!emitted.exists(name))
-				throw 'the "$symbol" helpers should call $name for their layouts but do not';
+				throw new InternalError('the "$symbol" helpers should call $name for their layouts but do not');
 		for (name in emitted.keys())
 			if (!expected.exists(name))
-				throw 'the "$symbol" helpers call $name, which their layouts do not need';
+				throw new InternalError('the "$symbol" helpers call $name, which their layouts do not need');
 		var declared:Map<String, Bool> = [];
 		for (layout in used)
 			for (name in dependencies(objects, observableBits, layout.name, symbol, _ -> true))
 				declared.set(name, true);
 		for (name in expected.keys())
 			if (!declared.exists(name))
-				throw 'the "$symbol" helpers call $name, which ObjectReflection.dependencies did not tell the walk';
+				throw new InternalError('the "$symbol" helpers call $name, which ObjectReflection.dependencies did not tell the walk');
 	}
 
 	/** The name prefix of the native a layout-specific HashLink helper falls back to for any other value. */
@@ -223,7 +224,7 @@ class ObjectReflection {
 		};
 		for (name in needed)
 			if (!hasFunction(name))
-				throw 'internal error: the "$symbol" helper of observable class "$className" needs $name, which is not in the program';
+				throw new InternalError('internal error: the "$symbol" helper of observable class "$className" needs $name, which is not in the program');
 		return needed;
 	}
 
@@ -334,7 +335,7 @@ class ObjectReflection {
 						});
 						inner.returnValue(inner.call(fallback, [inner.toDyn(target)].concat(args), Void));
 					};
-				default: throw 'Unsupported HashLink reflection native "${native.symbol}"';
+				default: throw new InternalError('Unsupported HashLink reflection native "${native.symbol}"');
 			};
 			var helper = layoutFunction('${native.name}.${layout.name}', layout, functions, native.result, parameters,
 				body);
@@ -556,7 +557,7 @@ class ObjectReflection {
 				parameters = [{name: "field", type: Bytes}];
 				body = deleteFieldBody;
 			default:
-				throw 'Unknown object reflection native "${native.symbol}"';
+				throw new InternalError('Unknown object reflection native "${native.symbol}"');
 		}
 		return [
 			for (layout in layouts)

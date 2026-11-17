@@ -1,5 +1,6 @@
 package compiler.ir.codec;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrTerminator;
 import compiler.ir.Ir.IrValue;
 import haxe.io.BytesInput;
@@ -49,22 +50,22 @@ class IrTerminatorCodec {
 			case 6:
 				var value = IrValueTableCodec.readReference(input, values), count = input.readInt32();
 				if (count < 0 || count > input.length - input.position)
-					throw "Invalid IR switch size";
+					throw new InternalError("Invalid IR switch size");
 				var targets = [for (_ in 0...count) readBlock(input, blocks)];
 				Switch(value, targets, readBlock(input, blocks));
-			default: throw "Unknown IR terminator tag";
+			default: throw new InternalError("Unknown IR terminator tag");
 		};
 
 	static function writeBlock(output:BytesOutput, block:Int):Void {
 		if (block < 0)
-			throw "Invalid IR block reference";
+			throw new InternalError("Invalid IR block reference");
 		output.writeInt32(block);
 	}
 
 	static function readBlock(input:BytesInput, blocks:Map<Int, Bool>):Int {
 		var block = input.readInt32();
 		if (block < 0 || !blocks.exists(block))
-			throw "Unknown IR block reference";
+			throw new InternalError("Unknown IR block reference");
 		return block;
 	}
 }

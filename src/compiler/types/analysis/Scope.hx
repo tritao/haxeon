@@ -1,5 +1,6 @@
 package compiler.types.analysis;
 
+import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 import compiler.core.Source.SourceSpan;
 import compiler.core.Diagnostic;
@@ -226,7 +227,7 @@ class Scope {
 			var current:Null<Scope> = path;
 			while (current != this) {
 				if (current == null)
-					throw 'Scope.join: a path is not this scope or below it';
+					throw new InternalError('Scope.join: a path is not this scope or below it');
 				var ownAssignments = current.assigned;
 				if (ownAssignments != null)
 					for (id in ownAssignments.keys()) {
@@ -439,7 +440,7 @@ class Scope {
 	public function requireCellClass(name:String):String {
 		var resolved = cellClass(name);
 		if (resolved == null)
-			throw 'Missing capture cell for "$name"';
+			throw new InternalError('Missing capture cell for "$name"');
 		return resolved;
 	}
 
@@ -476,7 +477,7 @@ class Scope {
 	public function markScoped(name:String):Void {
 		var value = resolveLocal(name);
 		if (value == null)
-			throw 'Missing scoped binding "$name"';
+			throw new InternalError('Missing scoped binding "$name"');
 		value.scoped = true;
 	}
 
@@ -498,7 +499,7 @@ class Scope {
 	public function requireId(name:String):String {
 		var value = resolveLocal(name);
 		if (value == null)
-			throw 'Missing binding for local "$name"';
+			throw new InternalError('Missing binding for local "$name"');
 		return value.id;
 	}
 

@@ -13,6 +13,7 @@ import compiler.backend.wasm.WasmTypes.WasmTypeGroup;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmGlobal;
+import compiler.core.InternalError;
 
 private typedef WasmControl = {
 	final kind:Int;
@@ -32,10 +33,10 @@ class WasmValidator {
 		if (module.exceptionTagType != null) {
 			var tagType = module.exceptionTagType;
 			if (tagType < 0 || tagType >= module.typeCount())
-				throw 'Wasm exception tag references invalid function type $tagType';
+				throw new InternalError('Wasm exception tag references invalid function type $tagType');
 			var signature = module.functionTypeAt(tagType);
 			if (signature.results.length != 0)
-				throw "Wasm exception tag function type must not have results";
+				throw new InternalError("Wasm exception tag function type must not have results");
 		}
 		var functionTypes = [for (index in 0...module.functionCount()) module.functionType(index)];
 		for (fn in module.functions)
@@ -43,14 +44,14 @@ class WasmValidator {
 				validateFunction(fn, functionTypes, module.globals, module, module.tableMin, module.exceptionTagType);
 		for (entry in module.exports)
 			if (entry.functionIndex < 0 || entry.functionIndex >= module.functionCount())
-				throw 'Wasm export "${entry.name}" references function ${entry.functionIndex}';
+				throw new InternalError('Wasm export "${entry.name}" references function ${entry.functionIndex}');
 		var start = module.start;
 		if (start != null) {
 			if (start < 0 || start >= module.functionCount())
-				throw 'Wasm start references function $start';
+				throw new InternalError('Wasm start references function $start');
 			var startType = module.functionType(start);
 			if (startType.parameters.length != 0 || startType.results.length != 0)
-				throw 'Wasm start function must have no parameters or results';
+				throw new InternalError('Wasm start function must have no parameters or results');
 		}
 	}
 
@@ -60,16 +61,16 @@ class WasmValidator {
 			var subtype = module.typeAt(index),
 				typeLimit = typeGroupEnd(module, index);
 			if (subtype.supertypes.length > 1)
-				throw 'Wasm type $index declares more than one supertype';
+				throw new InternalError('Wasm type $index declares more than one supertype');
 			for (supertype in subtype.supertypes)
 				if (supertype < 0 || supertype >= typeCount)
-					throw 'Wasm type $index references invalid supertype $supertype';
+					throw new InternalError('Wasm type $index references invalid supertype $supertype');
 				else if (supertype >= index)
-					throw 'Wasm type $index must reference an earlier supertype';
+					throw new InternalError('Wasm type $index must reference an earlier supertype');
 				else if (module.typeAt(supertype).finalType)
-					throw 'Wasm type $index extends final type $supertype';
+					throw new InternalError('Wasm type $index extends final type $supertype');
 				else if (!isCompositeSubtype(subtype.composite, module.typeAt(supertype).composite, module))
-					throw 'Wasm type $index is not a valid subtype of $supertype';
+					throw new InternalError('Wasm type $index is not a valid subtype of $supertype');
 			switch subtype.composite {
 				case Func(type):
 					validateFunctionType(type, module, typeLimit);
@@ -97,7 +98,7 @@ class WasmValidator {
 				return current + size;
 			current += size;
 		}
-		throw 'Unknown Wasm type index $typeIndex';
+		throw new InternalError('Unknown Wasm type index $typeIndex');
 	}
 
 	static function validateFunctionType(type:WasmFunctionType, module:WasmModule, typeLimit:Int):Void {
@@ -127,7 +128,7 @@ class WasmValidator {
 		switch type {
 			case Type(index):
 				if (index < 0 || index >= typeLimit)
-					throw 'Wasm reference uses invalid heap type index $index';
+					throw new InternalError('Wasm reference uses invalid heap type index $index');
 			default:
 		}
 	}
@@ -154,7 +155,7 @@ class WasmValidator {
 						switch clause {
 							case Tag(tag, label):
 								if (tagType == null || tag != 0)
-									throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+									throw new InternalError('Wasm function ${fn.name} references an invalid exception tag $tag');
 								validateDepth(fn, label, labels.length);
 								var parameters = module.functionTypeAt(tagType).parameters,
 									target = labels[labels.length - label - 1];
@@ -162,11 +163,11 @@ class WasmValidator {
 									|| (target.result != null
 									&& !isValueSubtype(parameters[0], target.result,
 									module)))
-									throw 'Wasm function ${fn.name} has an exception catch incompatible with label $label';
+									throw new InternalError('Wasm function ${fn.name} has an exception catch incompatible with label $label');
 							case CatchAll(label):
 								validateDepth(fn, label, labels.length);
 								if (labels[labels.length - label - 1].result != null)
-									throw 'Wasm function ${fn.name} has a catch-all incompatible with label $label';
+									throw new InternalError('Wasm function ${fn.name} has a catch-all incompatible with label $label');
 						}
 					labels.push({isIf: false, result: result});
 				case If(result):
@@ -175,36 +176,36 @@ class WasmValidator {
 					labels.push({isIf: true, result: result});
 				case Else:
 					if (labels.length == 0 || !labels[labels.length - 1].isIf)
-						throw 'Wasm function ${fn.name} has an else without an if';
+						throw new InternalError('Wasm function ${fn.name} has an else without an if');
 				case Catch(tag):
 					if (tagType == null || tag != 0)
-						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+						throw new InternalError('Wasm function ${fn.name} references an invalid exception tag $tag');
 				case End:
 					if (labels.length == 0)
-						throw 'Wasm function ${fn.name} has an unmatched end';
+						throw new InternalError('Wasm function ${fn.name} has an unmatched end');
 					labels.pop();
 				case Br(depth), BrIf(depth):
 					if (depth < 0 || depth >= labels.length)
-						throw 'Wasm function ${fn.name} has an invalid branch depth $depth';
+						throw new InternalError('Wasm function ${fn.name} has an invalid branch depth $depth');
 				case BrTable(targets, defaultDepth):
 					for (depth in targets)
 						validateDepth(fn, depth, labels.length);
 					validateDepth(fn, defaultDepth, labels.length);
 				case LocalGet(index), LocalSet(index), LocalTee(index):
 					if (index < 0 || index >= localCount)
-						throw 'Wasm function ${fn.name} references invalid local $index';
+						throw new InternalError('Wasm function ${fn.name} references invalid local $index');
 				case Call(index):
 					if (index < 0 || index >= functions.length)
-						throw 'Wasm function ${fn.name} references invalid function $index';
+						throw new InternalError('Wasm function ${fn.name} references invalid function $index');
 				case CallIndirect(typeIndex):
 					if (tableMin == null)
-						throw 'Wasm function ${fn.name} uses call_indirect without a table';
+						throw new InternalError('Wasm function ${fn.name} uses call_indirect without a table');
 					if (typeIndex < 0 || typeIndex >= module.typeCount())
-						throw 'Wasm function ${fn.name} references invalid indirect type $typeIndex';
+						throw new InternalError('Wasm function ${fn.name} references invalid indirect type $typeIndex');
 					module.functionTypeAt(typeIndex);
 				case GlobalGet(index), GlobalSet(index):
 					if (index < 0 || index >= globals.length)
-						throw 'Wasm function ${fn.name} references invalid global $index';
+						throw new InternalError('Wasm function ${fn.name} references invalid global $index');
 				case RefNull(heapType):
 					validateHeapType(heapType, module, module.typeCount());
 				case RefTest(type), RefCast(type):
@@ -230,7 +231,7 @@ class WasmValidator {
 			}
 		}
 		if (labels.length != 0)
-			throw 'Wasm function ${fn.name} has ${labels.length} unclosed control blocks';
+			throw new InternalError('Wasm function ${fn.name} has ${labels.length} unclosed control blocks');
 		validateStack(fn, functions, globals, module, tagType);
 	}
 
@@ -304,12 +305,12 @@ class WasmValidator {
 							case Tag(_, label) | CatchAll(label): label;
 						}, targetIndex = controls.length - label - 1;
 						if (label < 0 || targetIndex < 0 || targetIndex >= controls.length)
-							throw 'Wasm function ${fn.name} has an invalid exception catch label $label';
+							throw new InternalError('Wasm function ${fn.name} has an invalid exception catch label $label');
 						var target = controls[targetIndex];
 						target.catchTypes = switch clause {
 							case Tag(_, _):
 								if (tagType == null)
-									throw 'Wasm function ${fn.name} has a catch without an exception tag';
+									throw new InternalError('Wasm function ${fn.name} has a catch without an exception tag');
 								module.functionTypeAt(tagType).parameters.copy();
 							case CatchAll(_): [];
 						};
@@ -332,15 +333,15 @@ class WasmValidator {
 					});
 				case Else:
 					if (controls.length == 0 || controls[controls.length - 1].kind != 2)
-						throw 'Wasm function ${fn.name} has an invalid else frame';
+						throw new InternalError('Wasm function ${fn.name} has an invalid else frame');
 					var frame = controls[controls.length - 1];
 					reset(stack, frame.height, frame.result, reachable, fn, module, false);
 					reachable = true;
 				case Catch(tag):
 					if (tagType == null)
-						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+						throw new InternalError('Wasm function ${fn.name} references an invalid exception tag $tag');
 					if (controls.length == 0 || controls[controls.length - 1].kind != 3)
-						throw 'Wasm function ${fn.name} has a catch without a try';
+						throw new InternalError('Wasm function ${fn.name} has a catch without a try');
 					var catchFrame = controls[controls.length - 1];
 					reset(stack, catchFrame.height, catchFrame.result, reachable, fn, module, false);
 					for (parameter in tagParameters)
@@ -380,7 +381,7 @@ class WasmValidator {
 					reachable = false;
 				case Throw(tag):
 					if (tagType == null || tag != 0)
-						throw 'Wasm function ${fn.name} references an invalid exception tag $tag';
+						throw new InternalError('Wasm function ${fn.name} references an invalid exception tag $tag');
 					if (reachable) {
 						for (index in 0...tagParameters.length)
 							pop(stack, tagParameters[tagParameters.length - index - 1], fn, module);
@@ -429,7 +430,7 @@ class WasmValidator {
 					if (reachable) {
 						var actual = popAny(stack, fn);
 						if (!isValueSubtype(actual, locals[index], module))
-							throw 'Wasm function ${fn.name} local $index expects ${locals[index]}, got $actual';
+							throw new InternalError('Wasm function ${fn.name} local $index expects ${locals[index]}, got $actual');
 					}
 				case LocalTee(index):
 					if (reachable) {
@@ -575,7 +576,7 @@ class WasmValidator {
 						var right = popReference(stack, fn),
 							left = popReference(stack, fn);
 						if (!isHeapSubtype(left.heap, Eq, module) || !isHeapSubtype(right.heap, Eq, module))
-							throw 'Wasm function ${fn.name} uses ref.eq with a non-equatable reference';
+							throw new InternalError('Wasm function ${fn.name} uses ref.eq with a non-equatable reference');
 						stack.push(I32);
 					}
 				case RefTest(_):
@@ -598,7 +599,7 @@ class WasmValidator {
 				case StructNewDefault(typeIndex):
 					for (field in structType(module, typeIndex))
 						if (!isDefaultable(field.type))
-							throw 'Wasm function ${fn.name} uses struct.new_default with a non-defaultable field';
+							throw new InternalError('Wasm function ${fn.name} uses struct.new_default with a non-defaultable field');
 					if (reachable)
 						stack.push(nonNullTypeRef(typeIndex));
 				case StructGet(typeIndex, fieldIndex):
@@ -622,7 +623,7 @@ class WasmValidator {
 				case StructSet(typeIndex, fieldIndex):
 					var field = structField(module, typeIndex, fieldIndex);
 					if (!field.mutable)
-						throw 'Wasm function ${fn.name} writes an immutable struct field';
+						throw new InternalError('Wasm function ${fn.name} writes an immutable struct field');
 					if (reachable) {
 						pop(stack, storageValue(field.type), fn, module);
 						popTypedReference(stack, typeIndex, fn, module);
@@ -637,7 +638,7 @@ class WasmValidator {
 				case ArrayNewDefault(typeIndex):
 					var field = arrayType(module, typeIndex);
 					if (!isDefaultable(field.type))
-						throw 'Wasm function ${fn.name} uses array.new_default with a non-defaultable element type';
+						throw new InternalError('Wasm function ${fn.name} uses array.new_default with a non-defaultable element type');
 					if (reachable) {
 						pop(stack, I32, fn);
 						stack.push(nonNullTypeRef(typeIndex));
@@ -645,9 +646,9 @@ class WasmValidator {
 				case ArrayNewData(typeIndex, dataIndex):
 					var field = arrayType(module, typeIndex);
 					if (!isNumericStorage(field.type))
-						throw 'Wasm function ${fn.name} uses array.new_data with a reference element type';
+						throw new InternalError('Wasm function ${fn.name} uses array.new_data with a reference element type');
 					if (dataIndex < 0 || dataIndex >= module.data.length || module.data[dataIndex].passive != true)
-						throw 'Wasm function ${fn.name} uses array.new_data with invalid passive data segment $dataIndex';
+						throw new InternalError('Wasm function ${fn.name} uses array.new_data with invalid passive data segment $dataIndex');
 					if (reachable) {
 						pop(stack, I32, fn);
 						pop(stack, I32, fn);
@@ -677,7 +678,7 @@ class WasmValidator {
 				case ArraySet(typeIndex):
 					var field = arrayType(module, typeIndex);
 					if (!field.mutable)
-						throw 'Wasm function ${fn.name} writes an immutable array element';
+						throw new InternalError('Wasm function ${fn.name} writes an immutable array element');
 					if (reachable) {
 						pop(stack, storageValue(field.type), fn, module);
 						pop(stack, I32, fn);
@@ -687,13 +688,13 @@ class WasmValidator {
 					if (reachable) {
 						var reference = popReference(stack, fn);
 						if (!isArrayReference(reference, module))
-							throw 'Wasm function ${fn.name} uses array.len with a non-array reference';
+							throw new InternalError('Wasm function ${fn.name} uses array.len with a non-array reference');
 						stack.push(I32);
 					}
 				case ArrayFill(typeIndex):
 					var field = arrayType(module, typeIndex);
 					if (!field.mutable)
-						throw 'Wasm function ${fn.name} fills an immutable array element';
+						throw new InternalError('Wasm function ${fn.name} fills an immutable array element');
 					if (reachable) {
 						pop(stack, I32, fn);
 						pop(stack, storageValue(field.type), fn, module);
@@ -704,7 +705,7 @@ class WasmValidator {
 					var destination = arrayType(module, destinationTypeIndex),
 						source = arrayType(module, sourceTypeIndex);
 					if (!destination.mutable || !isStorageSubtype(source.type, destination.type, module))
-						throw 'Wasm function ${fn.name} uses array.copy with incompatible array element types';
+						throw new InternalError('Wasm function ${fn.name} uses array.copy with incompatible array element types');
 					if (reachable) {
 						pop(stack, I32, fn);
 						pop(stack, I32, fn);
@@ -716,10 +717,10 @@ class WasmValidator {
 			}
 		}
 		if (controls.length != 0)
-			throw 'Wasm function ${fn.name} has unclosed stack control frames';
+			throw new InternalError('Wasm function ${fn.name} has unclosed stack control frames');
 		if (reachable) {
 			if (stack.length != fn.type.results.length)
-				throw 'Wasm function ${fn.name} leaves ${stack.length} stack values for ${fn.type.results.length} results';
+				throw new InternalError('Wasm function ${fn.name} leaves ${stack.length} stack values for ${fn.type.results.length} results');
 			for (index in 0...fn.type.results.length)
 				pop(stack, fn.type.results[fn.type.results.length - index - 1], fn, module);
 		}
@@ -734,26 +735,26 @@ class WasmValidator {
 
 	static function structType(module:WasmModule, typeIndex:Int):Array<WasmFieldType> {
 		if (typeIndex < 0 || typeIndex >= module.typeCount())
-			throw 'Wasm instruction references invalid struct type $typeIndex';
+			throw new InternalError('Wasm instruction references invalid struct type $typeIndex');
 		return switch module.typeAt(typeIndex).composite {
 			case Struct(fields): fields;
-			default: throw 'Wasm type $typeIndex is not a struct type';
+			default: throw new InternalError('Wasm type $typeIndex is not a struct type');
 		};
 	}
 
 	static function structField(module:WasmModule, typeIndex:Int, fieldIndex:Int):WasmFieldType {
 		var fields = structType(module, typeIndex);
 		if (fieldIndex < 0 || fieldIndex >= fields.length)
-			throw 'Wasm struct type $typeIndex has no field $fieldIndex';
+			throw new InternalError('Wasm struct type $typeIndex has no field $fieldIndex');
 		return fields[fieldIndex];
 	}
 
 	static function arrayType(module:WasmModule, typeIndex:Int):WasmFieldType {
 		if (typeIndex < 0 || typeIndex >= module.typeCount())
-			throw 'Wasm instruction references invalid array type $typeIndex';
+			throw new InternalError('Wasm instruction references invalid array type $typeIndex');
 		return switch module.typeAt(typeIndex).composite {
 			case Array(field): field;
-			default: throw 'Wasm type $typeIndex is not an array type';
+			default: throw new InternalError('Wasm type $typeIndex is not an array type');
 		};
 	}
 
@@ -769,9 +770,9 @@ class WasmValidator {
 			case I8 if (mode == 1 || mode == 2): I32;
 			case I16 if (mode == 1 || mode == 2): I32;
 			case I8, I16:
-				throw 'Wasm function ${fn.name} uses a packed-field access with the wrong signedness';
+				throw new InternalError('Wasm function ${fn.name} uses a packed-field access with the wrong signedness');
 			case Value(_):
-				throw 'Wasm function ${fn.name} uses a packed-field access on an unpacked field';
+				throw new InternalError('Wasm function ${fn.name} uses a packed-field access on an unpacked field');
 		};
 	}
 
@@ -840,7 +841,7 @@ class WasmValidator {
 	static function popReference(stack:Array<WasmValueType>, fn:WasmFunction):WasmRefType {
 		return switch popAny(stack, fn) {
 			case Ref(type): type;
-			default: throw 'Wasm function ${fn.name} expected a reference on the value stack';
+			default: throw new InternalError('Wasm function ${fn.name} expected a reference on the value stack');
 		};
 	}
 
@@ -848,7 +849,7 @@ class WasmValidator {
 			module:WasmModule):Void {
 		var type = popReference(stack, fn);
 		if (!isHeapSubtype(type.heap, Type(typeIndex), module))
-			throw 'Wasm function ${fn.name} expected a reference to heap type $typeIndex, got $type';
+			throw new InternalError('Wasm function ${fn.name} expected a reference to heap type $typeIndex, got $type');
 	}
 
 	static function isArrayReference(type:WasmRefType, module:WasmModule):Bool {
@@ -858,7 +859,7 @@ class WasmValidator {
 	static function pop(stack:Array<WasmValueType>, expected:WasmValueType, fn:WasmFunction, ?module:WasmModule):Void {
 		var actual = popAny(stack, fn);
 		if (module == null ? !sameValueType(actual, expected) : !isValueSubtype(actual, expected, module))
-			throw 'Wasm function ${fn.name} expected $expected on the value stack, got $actual';
+			throw new InternalError('Wasm function ${fn.name} expected $expected on the value stack, got $actual');
 	}
 
 	static function isValueSubtype(actual:WasmValueType, expected:WasmValueType, module:WasmModule):Bool {
@@ -984,7 +985,7 @@ class WasmValidator {
 
 	static function popAny(stack:Array<WasmValueType>, fn:WasmFunction):WasmValueType {
 		if (stack.length == 0)
-			throw 'Wasm function ${fn.name} underflowed the value stack';
+			throw new InternalError('Wasm function ${fn.name} underflowed the value stack');
 		return stack.pop();
 	}
 
@@ -994,11 +995,11 @@ class WasmValidator {
 		if (reachable) {
 			var resultCount = result == null ? 0 : 1;
 			if (stack.length < height + resultCount)
-				throw 'Wasm function ${fn.name} ended a control frame with too few values (stack ${stack.length}, height $height, result $result)';
+				throw new InternalError('Wasm function ${fn.name} ended a control frame with too few values (stack ${stack.length}, height $height, result $result)');
 			if (stack.length > height + resultCount)
-				throw 'Wasm function ${fn.name} ended a control frame with too many values (${stack.length}, expected ${height + resultCount})';
+				throw new InternalError('Wasm function ${fn.name} ended a control frame with too many values (${stack.length}, expected ${height + resultCount})');
 			if (result != null && !isValueSubtype(stack[height], result, module))
-				throw 'Wasm function ${fn.name} ended a control frame with an incompatible result type';
+				throw new InternalError('Wasm function ${fn.name} ended a control frame with an incompatible result type');
 		}
 		while (stack.length > height)
 			stack.pop();
@@ -1012,10 +1013,10 @@ class WasmValidator {
 
 	static function validateBranch(controls:Array<WasmControl>, depth:Int, fn:WasmFunction):Void {
 		if (depth < 0 || depth >= controls.length)
-			throw 'Wasm function ${fn.name} branches to invalid stack depth $depth';
+			throw new InternalError('Wasm function ${fn.name} branches to invalid stack depth $depth');
 	}
 
 	static function validateDepth(fn:WasmFunction, depth:Int, labelCount:Int):Void
 		if (depth < 0 || depth >= labelCount)
-			throw 'Wasm function ${fn.name} has an invalid branch-table depth $depth';
+			throw new InternalError('Wasm function ${fn.name} has an invalid branch-table depth $depth');
 }

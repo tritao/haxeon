@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -41,7 +42,7 @@ class IrMethodReferences {
 				if (previous != null
 					&& (!IrVerifier.sameType(previous.receiver, receiver.type)
 					|| !IrVerifier.sameType(previous.closure, output.type)))
-					throw 'Conflicting method reference "$name"';
+					throw new InternalError('Conflicting method reference "$name"');
 				requests.set(name, {receiver: receiver.type, closure: output.type});
 			default:
 		}
@@ -53,10 +54,10 @@ class IrMethodReferences {
 			var reference = of(name),
 				request = requests.get(name);
 			if (reference == null || request == null)
-				throw 'Invalid method reference "$name"';
+				throw new InternalError('Invalid method reference "$name"');
 			var owner = reference.owner, member = reference.member, signature = switch request.closure {
 				case Function(arguments, result): {arguments: arguments, result: result};
-				default: throw 'Method reference "$name" is not a function';
+				default: throw new InternalError('Method reference "$name" is not a function');
 			}, builder = new IrBuilder(), receiver = builder.argument("receiver", request.receiver),
 				arguments = [for (index in 0...signature.arguments.length) builder.argument('argument$index',
 				signature.arguments[index])];
@@ -75,7 +76,7 @@ class IrMethodReferences {
 						method = object == null ? null : GenericOwnerErasure.findMethod(object, member, byName,
 							byFunction);
 					if (method == null || method.arguments.length != arguments.length + 1)
-						throw 'Missing target for method reference "$name"';
+						throw new InternalError('Missing target for method reference "$name"');
 					var adapted = [for (index in 0...arguments.length) GenericOwnerErasure.convert(builder,
 						arguments[index],
 						method.arguments[index + 1].type, byName)];
@@ -84,7 +85,7 @@ class IrMethodReferences {
 						case Void: true;
 						default: false;
 					}) ? called : GenericOwnerErasure.convert(builder, called, signature.result, byName);
-				default: throw 'Invalid receiver for method reference "$name"';
+				default: throw new InternalError('Invalid receiver for method reference "$name"');
 			}
 			builder.returnValue(result);
 			functions.push(new IrFunction(name, builder.arguments, signature.result, builder.blocks,

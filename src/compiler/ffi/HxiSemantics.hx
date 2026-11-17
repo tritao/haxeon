@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiModel.HxiDeclaration;
@@ -149,7 +150,7 @@ class HxiSemantics {
 		if (disposition == Owned)
 			return switch value {
 				case HandleValue(name): OwnedHandle(name, handleDestroy(name, declarations));
-				case _: throw "Validated owned HXI value handle did not classify as a handle";
+				case _: throw new InternalError("Validated owned HXI value handle did not classify as a handle");
 			};
 		return switch ownership {
 			case Owned(release): OwnedPointer(value, release);
@@ -170,7 +171,7 @@ class HxiSemantics {
 	static function handleDestroy(name:String, declarations:Map<String, HxiDeclaration>):String
 		return switch declarations.get(name) {
 			case Handle(_, _, destroySymbol, _) if (destroySymbol != null): destroySymbol;
-			case _: throw 'Validated owned HXI handle "$name" has no destructor';
+			case _: throw new InternalError('Validated owned HXI handle "$name" has no destructor');
 		};
 
 	static function pointeeValue(type:HxiType, abi:HxiAbi):HxiAbiValue
@@ -180,7 +181,7 @@ class HxiSemantics {
 		return switch type {
 			case Pointer(element) | Nullable(Pointer(element)): element;
 			case Const(element): pointeeType(element);
-			case _: throw "Expected pointer HXI type";
+			case _: throw new InternalError("Expected pointer HXI type");
 		};
 
 	static function isByteType(type:HxiType, declarations:Map<String, HxiDeclaration>, visiting:Map<String, Bool>):Bool

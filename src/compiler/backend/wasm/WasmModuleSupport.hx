@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrProgramIndex;
 import compiler.ir.IrReachability;
@@ -293,10 +294,10 @@ class WasmModuleSupport {
 						case InstanceClosure(output, name, _):
 							var target = IrProgramIndex.of(program).func(name);
 							if (target == null || target.arguments.length == 0)
-								throw 'Wasm instance closure target "$name" has no receiver';
+								throw new InternalError('Wasm instance closure target "$name" has no receiver');
 							var closureArguments = switch output.type {
 								case Function(arguments, _): arguments;
-								default: throw 'Wasm instance closure has an invalid function type';
+								default: throw new InternalError('Wasm instance closure has an invalid function type');
 							};
 							var resultType = switch output.type {
 								case Function(_, result): result;
@@ -423,18 +424,18 @@ class WasmModuleSupport {
 		for (fn in program.functions)
 			if (fn.name == name)
 				return fn;
-		throw 'Unknown IR function "$name"';
+		throw new InternalError('Unknown IR function "$name"');
 	}
 
 	public static function requiredGlobal(globals:Map<String, Int>, name:String):Int {
 		if (!globals.exists(name))
-			throw 'Unknown Wasm global "$name"';
+			throw new InternalError('Unknown Wasm global "$name"');
 		return globals.get(name);
 	}
 
 	public static function requiredFunctionIndex(functions:Map<String, Int>, name:String):Int {
 		if (!functions.exists(name))
-			throw 'Unknown Wasm function "$name"';
+			throw new InternalError('Unknown Wasm function "$name"');
 		return functions.get(name);
 	}
 
@@ -446,6 +447,6 @@ class WasmModuleSupport {
 			case F64: F64;
 			case RawPtr, Bytes, ManagedBytes, Dyn, TypeRef, Array(_), Enum(_), Obj(_), Abstract(_), Virtual(_),
 				Iterator(_), Function(_, _): I32;
-			default: throw 'Wasm scalar backend does not yet support IR type ${Std.string(type)}';
+			default: throw new InternalError('Wasm scalar backend does not yet support IR type ${Std.string(type)}');
 		};
 }

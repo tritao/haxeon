@@ -1,6 +1,7 @@
 package build;
 
 import build.execution.ProcessRunner;
+import compiler.core.InternalError;
 
 enum TargetOs {
 	Windows;
@@ -88,16 +89,16 @@ class Target {
 		if (normalized == "wasm32" || normalized == "wasm32-wasi")
 			return new Target(TargetOs.Wasm, TargetArch.Wasm32, TargetAbi.Wasm);
 		if (normalized == "wasm64" || normalized == "wasm64-wasi")
-			throw 'Target "$value" is not implemented yet; use "wasm32"';
+			throw new InternalError('Target "$value" is not implemented yet; use "wasm32"');
 		var parts = normalized.split("-");
 		if (parts.length == 0 || parts[0] == "")
-			throw 'Target "$value" is empty';
+			throw new InternalError('Target "$value" is empty');
 		var os = switch parts[0] {
 			case "windows", "win": TargetOs.Windows;
 			case "macos", "darwin", "mac": TargetOs.MacOS;
 			case "linux": TargetOs.Linux;
 			case "android": TargetOs.Android;
-			case _: throw 'Unknown target operating system in "$value"';
+			case _: throw new InternalError('Unknown target operating system in "$value"');
 		};
 		var archText = parts.length > 1 ? parts[1] : (os == TargetOs.Android ? "aarch64" : "x86_64"),
 			arch = switch archText {
@@ -105,7 +106,7 @@ class Target {
 				case "x86_64", "amd64", "x64": TargetArch.X64;
 				case "aarch64", "arm64": TargetArch.Arm64;
 				case "wasm32": TargetArch.Wasm32;
-				case _: throw 'Unknown target architecture in "$value"';
+				case _: throw new InternalError('Unknown target architecture in "$value"');
 			};
 		var abi = if (parts.length > 2) switch parts[2] {
 			case "msvc": TargetAbi.Msvc;
@@ -114,7 +115,7 @@ class Target {
 			case "android": TargetAbi.Android;
 			case "wasm", "wasi": TargetAbi.Wasm;
 			case "system": TargetAbi.System;
-			case _: throw 'Unknown target ABI in "$value"';
+			case _: throw new InternalError('Unknown target ABI in "$value"');
 		} else switch os {
 			case TargetOs.Windows: TargetAbi.Msvc;
 			case TargetOs.MacOS: TargetAbi.Darwin;
@@ -124,11 +125,11 @@ class Target {
 			case TargetOs.Other(_): TargetAbi.System;
 		};
 		if (os == TargetOs.Android && abi != TargetAbi.Android)
-			throw 'Android target "$value" must use the android ABI';
+			throw new InternalError('Android target "$value" must use the android ABI');
 		if (os != TargetOs.Android && abi == TargetAbi.Android)
-			throw 'Only Android targets may use the android ABI';
+			throw new InternalError('Only Android targets may use the android ABI');
 		if (os == TargetOs.Wasm || arch == TargetArch.Wasm32)
-			throw 'Use "wasm32" for Wasm targets';
+			throw new InternalError('Use "wasm32" for Wasm targets');
 		return new Target(os, arch, abi);
 	}
 

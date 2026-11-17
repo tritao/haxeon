@@ -1,6 +1,7 @@
 package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
 
 /** Object-model-neutral C kernels linked through the existing C ABI, on both browser backends. */
@@ -31,21 +32,21 @@ class WasmCryptoRuntime {
 		}
 		var exports = WasmRuntimeLinker.link(module, runtimeBytes, name -> switch name {
 			case "fuel_charge" if (fuelChargeFunction != null): fuelChargeFunction;
-			default: throw 'Unexpected crypto guest import "$name"';
+			default: throw new InternalError('Unexpected crypto guest import "$name"');
 		}, fuelChargeFunction);
 		for (native in needed) {
 			var index = exports.get(native.symbol);
 			if (index == null)
-				throw 'Unknown built-in crypto kernel "${native.symbol}"';
+				throw new InternalError('Unknown built-in crypto kernel "${native.symbol}"');
 			var type = module.functionType(index);
 			if (native.symbol != "haxeon_sha256" || type.parameters.length != 6 || type.results.length != 0)
-				throw 'Invalid crypto kernel signature "${native.symbol}"';
+				throw new InternalError('Invalid crypto kernel signature "${native.symbol}"');
 			for (parameter in type.parameters)
 				if ((switch (parameter) {
 					case compiler.backend.wasm.WasmTypes.WasmValueType.I32: false;
 					default: true;
 				}))
-					throw 'Invalid crypto kernel argument "${native.symbol}"';
+					throw new InternalError('Invalid crypto kernel argument "${native.symbol}"');
 			functions.set(native.name, index);
 		}
 	}

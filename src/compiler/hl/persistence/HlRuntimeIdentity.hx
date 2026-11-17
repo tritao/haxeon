@@ -2,6 +2,7 @@ package compiler.hl.persistence;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.abi.RuntimeAbiCodec;
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -43,9 +44,9 @@ class HlRuntimeIdentity {
 	public static function encode(moduleId:Bytes, revision:Int, indices:Map<String, Int>,
 			stableIds:Map<String, Int>):Bytes {
 		if (moduleId.length != 16)
-			throw "Module ID must contain 16 bytes";
+			throw new InternalError("Module ID must contain 16 bytes");
 		if (revision < 0)
-			throw "Runtime revision cannot be negative";
+			throw new InternalError("Runtime revision cannot be negative");
 		var names = [for (name in stableIds.keys()) if (indices.exists(name)) name];
 		names.sort(Reflect.compare);
 		var out = new BytesOutput();
@@ -60,7 +61,7 @@ class HlRuntimeIdentity {
 		for (name in names) {
 			var stableId = stableIds.get(name), index = indices.get(name);
 			if (stableId == null || index == null)
-				throw 'Missing runtime identity mapping for "$name"';
+				throw new InternalError('Missing runtime identity mapping for "$name"');
 			out.writeInt32(stableId);
 			out.writeInt32(index);
 		}
@@ -73,12 +74,12 @@ class HlRuntimeIdentity {
 			?assemblerState:Bytes,
 			?specializationState:Bytes):Bytes {
 		if (moduleId.length != 16)
-			throw "Module ID must contain 16 bytes";
+			throw new InternalError("Module ID must contain 16 bytes");
 		if (acknowledgedRevision < 0
 			|| (!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
 			|| (acknowledgedRevision > 0 && (acknowledgedAbi == null || assemblerState == null))
 			|| (acknowledgedRevision == 0 && assemblerState != null))
-			throw "Invalid acknowledged publication state";
+			throw new InternalError("Invalid acknowledged publication state");
 		var names = [for (name in stableIds.keys()) name];
 		names.sort(Reflect.compare);
 		var out = new BytesOutput();
@@ -90,7 +91,7 @@ class HlRuntimeIdentity {
 		for (name in names) {
 			var bytes = Bytes.ofString(name);
 			if (!stableIds.exists(name))
-				throw 'Missing persistent function identity for "$name"';
+				throw new InternalError('Missing persistent function identity for "$name"');
 			out.writeInt32(stableIds.get(name));
 			out.writeInt32(bytes.length);
 			out.write(bytes);
@@ -120,37 +121,37 @@ class HlRuntimeIdentity {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "HCS")
-				throw "Invalid compiler identity state";
+				throw new InternalError("Invalid compiler identity state");
 			var version = input.readByte();
 			if (version != VERSION)
-				throw "Invalid compiler identity state";
+				throw new InternalError("Invalid compiler identity state");
 			var moduleId = input.read(16),
 				count = input.readInt32(),
 				stableIds:Map<String, Int> = [];
 			if (count < 0 || count > 0x100000)
-				throw "Invalid compiler identity count";
+				throw new InternalError("Invalid compiler identity count");
 			for (_ in 0...count) {
 				var id = input.readInt32(), length = input.readInt32();
 				if (id < 0 || length < 0 || length > 0x100000)
-					throw "Invalid compiler identity entry";
+					throw new InternalError("Invalid compiler identity entry");
 				var name = input.readString(length);
 				if (stableIds.exists(name))
-					throw "Duplicate compiler identity name";
+					throw new InternalError("Duplicate compiler identity name");
 				stableIds.set(name, id);
 			}
 			var typeLength = input.readInt32();
 			if (typeLength < 0 || typeLength > 0x10000000 || typeLength > bytes.length - input.position)
-				throw "Invalid compiler type identity state";
+				throw new InternalError("Invalid compiler type identity state");
 			var typeState:Null<Bytes> = input.read(typeLength);
 			var publishedAbi:Null<RuntimeAbiDescriptor> = null;
 			var abiLength = input.readInt32();
 			if (abiLength < 0 || abiLength > 0x10000000 || abiLength > bytes.length - input.position)
-				throw "Invalid published ABI state";
+				throw new InternalError("Invalid published ABI state");
 			if (abiLength > 0)
 				publishedAbi = RuntimeAbiCodec.decode(input.read(abiLength));
 			var trackingByte = input.readByte();
 			if (trackingByte != 0 && trackingByte != 1)
-				throw "Invalid publication tracking state";
+				throw new InternalError("Invalid publication tracking state");
 			var publicationTracking = trackingByte == 1,
 				acknowledgedRevision = input.readInt32(),
 				acknowledgedLength = input.readInt32();
@@ -158,26 +159,26 @@ class HlRuntimeIdentity {
 				|| acknowledgedLength < 0
 				|| acknowledgedLength > 0x10000000
 				|| acknowledgedLength > bytes.length - input.position)
-				throw "Invalid acknowledged publication state";
+				throw new InternalError("Invalid acknowledged publication state");
 			var acknowledgedAbi:Null<RuntimeAbiDescriptor> = acknowledgedLength == 0
 				? null : RuntimeAbiCodec.decode(input.read(acknowledgedLength));
 			if ((!publicationTracking && (acknowledgedRevision != 0 || acknowledgedAbi != null))
 				|| (acknowledgedRevision > 0 && acknowledgedAbi == null))
-				throw "Invalid acknowledged publication state";
+				throw new InternalError("Invalid acknowledged publication state");
 			var assemblerLength = input.readInt32();
 			if (assemblerLength < 0 || assemblerLength > 0x10000000 || assemblerLength > bytes.length - input.position)
-				throw "Invalid assembler baseline state";
+				throw new InternalError("Invalid assembler baseline state");
 			var assemblerState:Null<Bytes> = assemblerLength == 0 ? null : input.read(assemblerLength);
 			if ((acknowledgedRevision > 0 && assemblerState == null)
 				|| (acknowledgedRevision == 0 && assemblerState != null))
-				throw "Invalid acknowledged assembler baseline";
+				throw new InternalError("Invalid acknowledged assembler baseline");
 			var specializationLength = input.readInt32();
 			if (specializationLength < 0 || specializationLength > 0x10000000
 				|| specializationLength > bytes.length - input.position)
-				throw "Invalid generic specialization state";
+				throw new InternalError("Invalid generic specialization state");
 			var specializationState:Null<Bytes> = specializationLength == 0 ? null : input.read(specializationLength);
 			if (input.position != bytes.length)
-				throw "Trailing compiler identity data";
+				throw new InternalError("Trailing compiler identity data");
 			return {
 				moduleId: moduleId,
 				stableIds: stableIds,
@@ -190,7 +191,7 @@ class HlRuntimeIdentity {
 				specializationState: specializationState
 			};
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated compiler identity state";
+			throw new InternalError("Truncated compiler identity state");
 		}
 	}
 }

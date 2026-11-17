@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import haxe.Int64;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -53,11 +54,11 @@ class CHeaderImporter {
 		sourceFiles.clear();
 		ClangAstTools.beginImport();
 		if (interfaceName != null && !~/^[A-Za-z_][A-Za-z0-9_]*$/.match(interfaceName))
-			throw 'Invalid HXI interface name "$interfaceName"';
+			throw new InternalError('Invalid HXI interface name "$interfaceName"');
 		if (dependencies != null)
 			for (dependency in dependencies)
 				if (!~/^[A-Za-z_][A-Za-z0-9_]*$/.match(dependency))
-					throw 'Invalid HXI dependency name "$dependency"';
+					throw new InternalError('Invalid HXI dependency name "$dependency"');
 		var frontend = ClangFrontend.run({
 			header: header,
 			target: target,
@@ -89,15 +90,15 @@ class CHeaderImporter {
 			var alias:Dynamic = enumAlias(enumName, declarations),
 				representation = alias == null ? null : mapType(field(field(alias, "type"), "qualType"));
 			if (alias == null)
-				throw '${declarationLocation(declaration)}: annotated enum "$enumName" has no matching typedef';
+				throw new InternalError('${declarationLocation(declaration)}: annotated enum "$enumName" has no matching typedef');
 			if (isFlags) {
 				if (representation != "u8" && representation != "u16" && representation != "u32"
 					&& representation != "u64")
-					throw '${declarationLocation(declaration)}: annotated flags "$enumName" must use an unsigned 8-, 16-, 32-, or 64-bit fixed-width integer typedef';
+					throw new InternalError('${declarationLocation(declaration)}: annotated flags "$enumName" must use an unsigned 8-, 16-, 32-, or 64-bit fixed-width integer typedef');
 			} else if (representation != "i8" && representation != "u8" && representation != "i16"
 				&& representation != "u16" && representation != "i32"
 				&& representation != "u32")
-				throw '${declarationLocation(declaration)}: annotated enum "$enumName" must use an 8-, 16-, or 32-bit fixed-width integer typedef';
+				throw new InternalError('${declarationLocation(declaration)}: annotated enum "$enumName" must use an 8-, 16-, or 32-bit fixed-width integer typedef');
 			Reflect.setField(declaration, "_hxiEnumRepresentation", representation);
 			Reflect.setField(declaration, "_hxiDocumentationNode", alias);
 			Reflect.setField(alias, "_hxiEnumAlias", true);
@@ -114,7 +115,7 @@ class CHeaderImporter {
 				if (hasAnnotation(declaration, "hxi:handle_destroy")) {
 					var destroySymbol = annotationMacroArgument(declaration, "hxi:handle_destroy");
 					if (destroySymbol == null)
-						throw '${declarationLocation(declaration)}: could not resolve the HXI handle destroy symbol';
+						throw new InternalError('${declarationLocation(declaration)}: could not resolve the HXI handle destroy symbol');
 					handleDestroySymbols.set(name, destroySymbol);
 				}
 			}
@@ -140,7 +141,7 @@ class CHeaderImporter {
 									case [Primitive(left), Primitive(right)]: left == right && flags == previousFlags;
 									default: false;
 								};
-								if (!compatible) throw 'Conflicting C enum value groups for "$name"';
+								if (!compatible) throw new InternalError('Conflicting C enum value groups for "$name"');
 								var combined = previousValues.concat(values);
 								// Anonymous C groups need not have a stable AST order across targets.
 								// Raw values, rather than declaration order, define this native domain.
@@ -151,7 +152,7 @@ class CHeaderImporter {
 								});
 								hxiDeclarations[index] = Enumeration(name, representation, flags, combined,
 									previousSpan);
-							default: throw "C enum group index does not name an enum";
+							default: throw new InternalError("C enum group index does not name an enum");
 						}
 					default:
 						hxiDeclarations.push(imported);
@@ -250,13 +251,13 @@ class CHeaderImporter {
 					callback = functionPointer(qualified);
 				if (hasAnnotation(node, "hxi:opaque")) {
 					if (!StringTools.startsWith(qualified, "struct ") || layouts.exists(qualified.substring(7)))
-						throw '${declarationLocation(node)}: hxi:opaque requires an incomplete struct typedef';
+						throw new InternalError('${declarationLocation(node)}: hxi:opaque requires an incomplete struct typedef');
 					addDocumentation(documentation, name, node);
 					return Opaque(name, sourceSpan(node));
 				}
 				if (hasAnnotation(node, "hxi:bool32")) {
 					if (mapType(qualified) != "u32")
-						throw '${declarationLocation(node)}: ABI bool typedef "$name" must use uint32_t storage';
+						throw new InternalError('${declarationLocation(node)}: ABI bool typedef "$name" must use uint32_t storage');
 					addDocumentation(documentation, name, node);
 					return Alias(name, Primitive("bool32"), sourceSpan(node));
 				}
@@ -306,7 +307,7 @@ class CHeaderImporter {
 						qualifiedType:String = field(fieldType, "qualType"),
 						offset = layout == null ? null : layout.offsets.get(fieldName);
 					if (StringTools.endsWith(qualifiedType, "[]"))
-						throw '${declarationLocation(entry)}: unsupported flexible array field "$fieldName"';
+						throw new InternalError('${declarationLocation(entry)}: unsupported flexible array field "$fieldName"');
 					addDocumentation(documentation, '$name.$fieldName', entry, previousFieldEnd);
 					previousFieldEnd = endOffset(entry);
 					var typeName = fieldTypeProjection(entry, qualifiedType),
@@ -338,7 +339,7 @@ class CHeaderImporter {
 					sourceSpan(node));
 			case "FunctionDecl":
 				if (field(node, "variadic") == true)
-					throw '${declarationLocation(node)}: unsupported variadic function "$name"';
+					throw new InternalError('${declarationLocation(node)}: unsupported variadic function "$name"');
 				var parameters = [for (child in children(node)) if (field(child, "kind") == "ParmVarDecl") child],
 					rawSignature:String = withoutMacroQualifier(field(type, "qualType"),
 						field(type, "desugaredQualType")),
@@ -368,7 +369,7 @@ class CHeaderImporter {
 				if (hasAnnotation(node, "hxi:returns_span")) {
 					span = annotationMacroArgument(node, "hxi:returns_span");
 					if (span == null)
-						throw '${declarationLocation(node)}: span result of "$name" needs its element-count function';
+						throw new InternalError('${declarationLocation(node)}: span result of "$name" needs its element-count function');
 					ownership = Borrowed;
 					resultMetadata.set("span", ['"$span"']);
 				}
@@ -505,14 +506,14 @@ class CHeaderImporter {
 			if (annotation.indexOf("hxi:out_array") >= 0) {
 				argument = expansionArgument(parameter, child);
 				if (argument == null)
-					throw '${declarationLocation(parameter)}: could not resolve output-array count parameter';
+					throw new InternalError('${declarationLocation(parameter)}: could not resolve output-array count parameter');
 				metadata.set("out_array", ['"$argument"']);
 				return {direction: OutArray(argument), metadata: metadata};
 			}
 			if (annotation.indexOf("hxi:in_array") >= 0) {
 				argument = expansionArgument(parameter, child);
 				if (argument == null)
-					throw '${declarationLocation(parameter)}: could not resolve input-array count parameter';
+					throw new InternalError('${declarationLocation(parameter)}: could not resolve input-array count parameter');
 				metadata.set("in_array", ['"$argument"']);
 				return {direction: InArray(argument), metadata: metadata};
 			}
@@ -533,7 +534,7 @@ class CHeaderImporter {
 					}
 				}
 				if (argument == null)
-					throw '${declarationLocation(parameter)}: could not resolve output-buffer size parameter';
+					throw new InternalError('${declarationLocation(parameter)}: could not resolve output-buffer size parameter');
 				metadata.set("out_buffer", ['"$argument"']);
 				return {direction: OutBuffer(argument), metadata: metadata};
 			}
@@ -568,7 +569,7 @@ class CHeaderImporter {
 				return pattern.matched(1);
 			var argument = expansionArgument(parameter, child, "[0-9]+");
 			if (argument == null)
-				throw '${declarationLocation(parameter)}: could not resolve the initial capacity; it must be a decimal literal';
+				throw new InternalError('${declarationLocation(parameter)}: could not resolve the initial capacity; it must be a decimal literal');
 			return argument;
 		}
 		return null;
@@ -586,7 +587,7 @@ class CHeaderImporter {
 				return direct.matched(1);
 			var argument = expansionArgument(entry, child);
 			if (argument == null)
-				throw '${declarationLocation(entry)}: could not resolve borrowed-buffer length field';
+				throw new InternalError('${declarationLocation(entry)}: could not resolve borrowed-buffer length field');
 			return argument;
 		}
 		return null;
@@ -617,11 +618,11 @@ class CHeaderImporter {
 				}
 			}
 			if (separator < 0)
-				throw 'Invalid imported HXI array type "$value"';
+				throw new InternalError('Invalid imported HXI array type "$value"');
 			var element = typeFromProjection(inner.substring(0, separator)),
 				length = Std.parseInt(StringTools.trim(inner.substring(separator + 1)));
 			if (length == null)
-				throw 'Invalid imported HXI array length in "$value"';
+				throw new InternalError('Invalid imported HXI array length in "$value"');
 			return Array(element, length);
 		}
 		return switch value {
@@ -697,18 +698,18 @@ class CHeaderImporter {
 			records:Map<String, Dynamic>):Void {
 		if (!StringTools.startsWith(qualified, "struct ")) {
 			if (mapType(qualified) != "u32")
-				throw 'Handle "$name" must use uint32_t storage';
+				throw new InternalError('Handle "$name" must use uint32_t storage');
 			return;
 		}
 		var recordName = qualified.substring(7),
 			layout = layouts.get(recordName),
 			record = records.get(recordName);
 		if (layout == null || layout.size != 4 || layout.align != 4 || record == null)
-			throw 'Handle "$name" must have a 4-byte, 4-byte-aligned record representation';
+			throw new InternalError('Handle "$name" must have a 4-byte, 4-byte-aligned record representation');
 		var fields:Array<Dynamic> = [for (child in children(record)) if (field(child, "kind") == "FieldDecl") child];
 		if (fields.length != 1 || field(fields[0], "name") != "id"
 			|| mapType(field(field(fields[0], "type"), "qualType")) != "u32")
-			throw 'Handle "$name" must contain one uint32_t field named id';
+			throw new InternalError('Handle "$name" must contain one uint32_t field named id');
 	}
 
 	static function documentationText(node:Dynamic, ?notBefore:Int):Null<String> {
@@ -946,7 +947,7 @@ class CHeaderImporter {
 		if (StringTools.endsWith(value, "]")) {
 			var split = value.lastIndexOf("[");
 			if (split == value.length - 2)
-				throw 'Unsupported flexible array type "$value"';
+				throw new InternalError('Unsupported flexible array type "$value"');
 			return 'array<${mapType(value.substring(0, split))}, ${value.substring(split + 1, value.length - 1)}>';
 		}
 		if (StringTools.endsWith(value, "*")) {
@@ -1024,12 +1025,12 @@ class CHeaderImporter {
 		if (allowUnsigned64 && StringTools.startsWith(value, "-")) {
 			var parsedNegative = parseProjectedInt64(value);
 			if (Int64.compare(parsedNegative, parseProjectedInt64("-9223372036854775808")) < 0)
-				throw '${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit Haxe Int64';
+				throw new InternalError('${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit Haxe Int64');
 			return Int64.toStr(parsedNegative);
 		}
 		if (allowUnsigned64 && compareDecimal(value, "9223372036854775807") > 0) {
 			if (compareDecimal(value, "18446744073709551615") > 0)
-				throw '${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit unsigned integer';
+				throw new InternalError('${declarationLocation(node)}: flag constant "$value" does not fit a 64-bit unsigned integer');
 			value = "-" + subtractDecimal("18446744073709551616", value);
 			return Int64.toStr(parseProjectedInt64(value));
 		}
@@ -1037,7 +1038,7 @@ class CHeaderImporter {
 			minimum = Int64.parseString("-2147483648"),
 			maximum = Int64.parseString(allowUnsigned64 ? "9223372036854775807" : "4294967295");
 		if (Int64.compare(parsed, minimum) < 0 || Int64.compare(parsed, maximum) > 0)
-			throw '${declarationLocation(node)}: untyped constant "$value" does not fit a ${allowUnsigned64 ? "64-bit" : "32-bit"} Haxe Int';
+			throw new InternalError('${declarationLocation(node)}: untyped constant "$value" does not fit a ${allowUnsigned64 ? "64-bit" : "32-bit"} Haxe Int');
 		if (!allowUnsigned64 && Int64.compare(parsed, Int64.parseString("2147483647")) > 0)
 			parsed = Int64.sub(parsed, Int64.parseString("4294967296"));
 		return Int64.toStr(parsed);
@@ -1098,7 +1099,7 @@ class CHeaderImporter {
 			var argument = expansionArgument(node, child);
 			if (argument != null)
 				return argument;
-			throw '${declarationLocation(node)}: could not resolve annotated $kind type';
+			throw new InternalError('${declarationLocation(node)}: could not resolve annotated $kind type');
 		}
 		return null;
 	}

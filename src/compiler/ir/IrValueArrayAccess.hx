@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneLayout.IrValueLaneSlot;
 
@@ -9,7 +10,7 @@ class IrValueArrayAccess {
 	final declarations:Map<String, IrNative> = [];
 
 	public function new(wordBits:Int) {
-		if (wordBits != 32 && wordBits != 64) throw 'Unsupported value lane word width $wordBits';
+		if (wordBits != 32 && wordBits != 64) throw new InternalError('Unsupported value lane word width $wordBits');
 		this.wordBits = wordBits;
 	}
 
@@ -47,7 +48,7 @@ class IrValueArrayAccess {
 	/** The caller grows the array before writing and marks the element initialized after all leaves are written. */
 	public function write(builder:IrBuilder, array:IrValue, index:IrValue, slot:IrValueLaneSlot, value:IrValue):Void {
 		if (!IrVerifier.sameType(value.type, slot.type))
-			throw 'Wrong value lane slot type: ${value.type}, expected ${slot.type}';
+			throw new InternalError('Wrong value lane slot type: ${value.type}, expected ${slot.type}');
 		var args = [array, index, builder.constInt(slot.isReference ? slot.index : scalarOffset(slot))];
 		if (slot.isReference) {
 			declare(IrValueLaneReference.WRITE, [Array(Dyn), I32, I32, IrValueLaneReference.type()], Void);
@@ -93,7 +94,7 @@ class IrValueArrayAccess {
 
 	function scalarOffset(slot:IrValueLaneSlot):Int {
 		var offset = slot.index * 1.0 * wordBits + slot.bitOffset;
-		if (offset > 0x7fffffff) throw 'Value lane offset is too large';
+		if (offset > 0x7fffffff) throw new InternalError('Value lane offset is too large');
 		return Std.int(offset);
 	}
 
@@ -106,16 +107,16 @@ class IrValueArrayAccess {
 		case RawPtr: "ptr";
 		case TypeRef: "type";
 		case Abstract("native_callback"): "callback";
-		default: throw 'Unsupported scalar value lane type $type';
+		default: throw new InternalError('Unsupported scalar value lane type $type');
 	};
 
 	function declare(name:String, arguments:Array<IrType>, result:IrType):Void {
 		var previous = declarations.get(name);
 		if (previous != null) {
 			if (!IrVerifier.sameType(previous.result, result) || previous.arguments.length != arguments.length)
-				throw 'Conflicting value lane native "$name"';
+				throw new InternalError('Conflicting value lane native "$name"');
 			for (i in 0...arguments.length) if (!IrVerifier.sameType(previous.arguments[i], arguments[i]))
-				throw 'Conflicting value lane native "$name"';
+				throw new InternalError('Conflicting value lane native "$name"');
 			return;
 		}
 		declarations.set(name, {

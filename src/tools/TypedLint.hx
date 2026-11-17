@@ -2,6 +2,7 @@ package tools;
 
 import compiler.Compiler.AnalysisResult;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.semantic.AliasTable.ModuleNamespaceUse;
@@ -58,7 +59,7 @@ class TypedLint {
 
 	function new(rule:String) {
 		if (RULES.indexOf(rule) < 0)
-			throw 'Unknown typed lint rule "$rule"';
+			throw new InternalError('Unknown typed lint rule "$rule"');
 		this.rule = rule;
 	}
 

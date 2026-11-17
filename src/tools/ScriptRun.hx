@@ -1,6 +1,7 @@
 package tools;
 
 import build.execution.ContentDigest;
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.Path;
@@ -28,13 +29,13 @@ class ScriptRun {
 	/** The `run` arguments that build and run `script` with `runtimeArguments`, after writing its project. */
 	public static function runArguments(script:String, runtimeArguments:Array<String>):Array<String> {
 		if (!FileSystem.exists(script) || FileSystem.isDirectory(script))
-			throw 'Script not found: $script';
+			throw new InternalError('Script not found: $script');
 		var path = Path.normalize(FileSystem.fullPath(script)),
 			directory = Path.directory(path),
 			module = Path.withoutExtension(Path.withoutDirectory(path));
 		// The file's name is its module's, dashes and all (as the program cases' are): an entry module is never imported by name.
 		if (module == "" || module.indexOf(".") >= 0)
-			throw 'A script needs a name before ".hx" with no other dots: ${Path.withoutDirectory(path)}';
+			throw new InternalError('A script needs a name before ".hx" with no other dots: ${Path.withoutDirectory(path)}');
 		var projectDirectory = Path.join([cacheRoot(), ContentDigest.makeHex(Bytes.ofString(path)).substr(0, 16)]),
 			manifest:Dynamic = {
 				version: 1,

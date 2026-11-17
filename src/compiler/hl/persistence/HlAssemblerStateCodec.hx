@@ -1,5 +1,6 @@
 package compiler.hl.persistence;
 
+import compiler.core.InternalError;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlModuleAssembler.HlAssemblerState;
 import compiler.ir.Ir.IrNative;
@@ -48,13 +49,13 @@ class HlAssemblerStateCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "HAS")
-				throw "Invalid HashLink assembler state";
+				throw new InternalError("Invalid HashLink assembler state");
 			var version = input.readByte();
 			if (version < 1 || version > 5)
-				throw "Unsupported HashLink assembler state version";
+				throw new InternalError("Unsupported HashLink assembler state version");
 			var initialized = input.readByte();
 			if (initialized != 0 && initialized != 1)
-				throw "Invalid HashLink assembler initialization state";
+				throw new InternalError("Invalid HashLink assembler initialization state");
 			var state:HlAssemblerState = {
 				initialized: initialized == 1,
 				revision: input.readInt32(),
@@ -71,10 +72,10 @@ class HlAssemblerStateCodec {
 					? [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, bytes.length)] : null
 			};
 			if (input.position != bytes.length)
-				throw "Trailing HashLink assembler state data";
+				throw new InternalError("Trailing HashLink assembler state data");
 			return HlModuleAssembler.fromState(state);
 		} catch (error:haxe.io.Eof)
-			throw "Truncated HashLink assembler state";
+			throw new InternalError("Truncated HashLink assembler state");
 	}
 
 	static function writeNatives(out:BytesOutput, natives:Array<IrNative>):Void {
@@ -100,14 +101,14 @@ class HlAssemblerStateCodec {
 		if (present == 0)
 			return null;
 		if (present != 1)
-			throw "Invalid dispatch native presence";
+			throw new InternalError("Invalid dispatch native presence");
 		return [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, limit)];
 	}
 
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > 0x100000)
-			throw "Invalid native import count";
+			throw new InternalError("Invalid native import count");
 		return count;
 	}
 
@@ -121,7 +122,7 @@ class HlAssemblerStateCodec {
 				returnType = IrTypeCodec.readType(input, limit, 0),
 				dependencies = [for (_ in 0...readCount(input)) IrTypeCodec.readString(input, limit)];
 			if (names.exists(name))
-				throw "Duplicate native import in assembler state";
+				throw new InternalError("Duplicate native import in assembler state");
 			names.set(name, true);
 			result.push({
 				name: name,
@@ -137,7 +138,7 @@ class HlAssemblerStateCodec {
 
 	static function writeSection(output:BytesOutput, bytes:Bytes):Void {
 		if (bytes.length > 0x10000000)
-			throw "HashLink assembler section is too large";
+			throw new InternalError("HashLink assembler section is too large");
 		output.writeInt32(bytes.length);
 		output.write(bytes);
 	}
@@ -145,7 +146,7 @@ class HlAssemblerStateCodec {
 	static function readSection(input:BytesInput, total:Int):Bytes {
 		var length = input.readInt32();
 		if (length < 0 || length > 0x10000000 || length > total - input.position)
-			throw "Invalid HashLink assembler section";
+			throw new InternalError("Invalid HashLink assembler section");
 		return input.read(length);
 	}
 }

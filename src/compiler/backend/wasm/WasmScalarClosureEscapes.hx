@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrCheckedDynamicCasts;
@@ -224,7 +225,7 @@ class WasmScalarClosureEscapes {
 	function signatureCheck(type:IrType):String {
 		var signature = functionType(type);
 		if (signature == null)
-			throw 'Expected closure signature, got $type';
+			throw new InternalError('Expected closure signature, got $type');
 		var key = IrTypeIdentity.text(signature),
 			existing = signatureChecks.get(key);
 		if (existing != null)
@@ -235,7 +236,7 @@ class WasmScalarClosureEscapes {
 			invoke = "$wasm:closure-escape-call:" + suffix,
 			arguments = switch signature {
 				case Function(args, _): args;
-				default: throw "Expected closure signature";
+				default: throw new InternalError("Expected closure signature");
 			};
 		signatureChecks.set(key, name);
 		adapter(type);
@@ -272,7 +273,7 @@ class WasmScalarClosureEscapes {
 					case Function(_, _): true;
 					default: false;
 				}))
-					throw "Nullable scalar closure escape requires a function";
+					throw new InternalError("Nullable scalar closure escape requires a function");
 				var innerAdapter = adapter(inner),
 					maker = "$wasm:closure-escape-nullable:" + haxe.crypto.Sha256.encode(key).substr(0, 32),
 					b = new IrBuilder(),
@@ -290,7 +291,7 @@ class WasmScalarClosureEscapes {
 				return maker;
 			case Function(_, _):
 			default:
-				throw "A scalar closure escape must have a function type";
+				throw new InternalError("A scalar closure escape must have a function type");
 		}
 		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32),
 			environment = "$wasm:closure-escape:" + suffix,
@@ -298,7 +299,7 @@ class WasmScalarClosureEscapes {
 			maker = "$wasm:closure-escape-make:" + suffix,
 			signature = switch type {
 				case Function(arguments, result): {arguments: arguments, result: result};
-				default: throw "A scalar closure escape must have a function type";
+				default: throw new InternalError("A scalar closure escape must have a function type");
 			};
 		adapters.set(key, maker);
 		restoration(type);
@@ -374,7 +375,7 @@ class WasmScalarClosureEscapes {
 					case Function(_, _): true;
 					default: false;
 				}))
-					throw "Nullable scalar closure restoration requires a function";
+					throw new InternalError("Nullable scalar closure restoration requires a function");
 				var innerRestoration = restoration(inner),
 					maker = "$wasm:closure-restore-nullable:" + haxe.crypto.Sha256.encode(key).substr(0, 32),
 					b = new IrBuilder(),
@@ -391,7 +392,7 @@ class WasmScalarClosureEscapes {
 				return maker;
 			case Function(_, _):
 			default:
-				throw "A restored scalar closure must have a function type";
+				throw new InternalError("A restored scalar closure must have a function type");
 		}
 		var suffix = haxe.crypto.Sha256.encode(key).substr(0, 32),
 			environment = "$wasm:closure-restored:" + suffix,
@@ -399,7 +400,7 @@ class WasmScalarClosureEscapes {
 			maker = "$wasm:closure-restore-make:" + suffix,
 			signature = switch type {
 				case Function(arguments, result): {arguments: arguments, result: result};
-				default: throw "A restored scalar closure must have a function type";
+				default: throw new InternalError("A restored scalar closure must have a function type");
 			},
 				dynamicType:IrType = Function([for (_ in signature.arguments) Dyn], Dyn);
 		restorations.set(key, maker);

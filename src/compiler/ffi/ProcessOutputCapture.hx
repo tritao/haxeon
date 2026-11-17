@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import haxe.Timer;
 import haxe.io.Bytes;
 import haxe.io.BytesBuffer;
@@ -26,13 +27,13 @@ class ProcessOutputCapture {
 	public static function capture(command:String, arguments:Array<String>, stderrLimit:Null<Int>,
 			?timeoutSeconds:Float):ProcessCaptureResult {
 		if (stderrLimit != null && stderrLimit < 0)
-			throw "Process stderr limit cannot be negative";
+			throw new InternalError("Process stderr limit cannot be negative");
 		if (timeoutSeconds != null && timeoutSeconds <= 0)
-			throw "Process timeout must be positive";
+			throw new InternalError("Process timeout must be positive");
 		#if eval
 		// Haxe eval can stall when both blocking Process pipes are read from separate threads.
 		if (timeoutSeconds != null)
-			throw "Haxe eval process capture does not support timeouts";
+			throw new InternalError("Haxe eval process capture does not support timeouts");
 		return captureSequential(command, arguments, stderrLimit);
 		#else
 		var process = new Process(command, arguments),
@@ -79,20 +80,20 @@ class ProcessOutputCapture {
 		var exitCode:Null<Int>;
 		try
 			exitCode = process.exitCode()
-		catch (error:Dynamic) {
+		catch (error:haxe.Exception) {
 			process.close();
 			throw error;
 		}
 		process.close();
 
 		if (timedOut)
-			throw 'Process "$command" timed out after $timeoutSeconds seconds';
+			throw new InternalError('Process "$command" timed out after $timeoutSeconds seconds');
 		if (stdoutError != null)
-			throw 'Could not read stdout from "$command": $stdoutError';
+			throw new InternalError('Could not read stdout from "$command": $stdoutError');
 		if (stderrError != null)
-			throw 'Could not read stderr from "$command": $stderrError';
+			throw new InternalError('Could not read stderr from "$command": $stderrError');
 		if (stdoutBytes == null || stderrResult == null || exitCode == null)
-			throw 'Process "$command" completed without returning all captured output';
+			throw new InternalError('Process "$command" completed without returning all captured output');
 
 		return {
 			stdout: stdoutBytes.toString(),
@@ -117,11 +118,11 @@ class ProcessOutputCapture {
 		} catch (error:Dynamic) {
 			kill(process);
 			process.close();
-			throw 'Could not capture output from "$command": $error';
+			throw new InternalError('Could not capture output from "$command": $error');
 		}
 		process.close();
 		if (stdoutBytes == null || stderrResult == null || exitCode == null)
-			throw 'Process "$command" completed without returning all captured output';
+			throw new InternalError('Process "$command" completed without returning all captured output');
 		return {
 			stdout: stdoutBytes.toString(),
 			stderr: stderrResult.bytes.toString(),
@@ -141,7 +142,7 @@ class ProcessOutputCapture {
 			if (length < 0)
 				break;
 			if (length == 0)
-				throw haxe.io.Error.Blocked;
+				throw new InternalError("Blocked");
 			if (limit == null) {
 				captured.addBytes(chunk, 0, length);
 				continue;

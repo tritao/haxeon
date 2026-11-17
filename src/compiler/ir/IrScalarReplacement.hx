@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -556,7 +557,7 @@ class IrScalarReplacement {
 				incoming = pending.incoming;
 			var block = graph.blocks.get(blockId);
 			if (block == null)
-				throw "Scalar replacement walked to an unknown block";
+				throw new InternalError("Scalar replacement walked to an unknown block");
 			var current:Map<String, IrValue> = [for (name => value in incoming) name => value];
 			if (phis.exists(blockId))
 				for (name => output in phis.get(blockId))

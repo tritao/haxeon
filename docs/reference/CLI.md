@@ -145,9 +145,13 @@ src/Main.hx:12: throw of String, not a haxe.Exception: throw an Exception subcla
 Haxe accepts any thrown value, and so does Haxeon; a `catch (e:haxe.Exception)`
 sees such a value wrapped in a `haxe.ValueException`. Code that throws only
 exceptions never needs that wrap, and this rule checks that it does. Only the
-`throw`s written in source are named, not those the compiler generates. It reads
-each file's project as `unbound-local` does, skips a body that does not type,
-exits with 1 when it names a `throw` or a program does not type, and has no `--fix`.
+`throw`s written in source are named, not those the compiler generates, and only
+in code the project's configuration compiles: a branch of `#if` it does not take
+is not typed, so not checked. It reads each file's project as `unbound-local`
+does, skips a body that does not type, exits with 1 when it names a `throw` or a
+program does not type, and has no `--fix`. Haxeon's own sources keep to the
+subset: the compiler and its tools throw `CompileError` for a located compile
+error and `compiler.core.InternalError` for any other failure.
 
 On Windows, use `scripts/haxeon.cmd` or `scripts/haxeon.ps1`. `haxeon init`
 creates `src/Main.hx` and a project file like this:

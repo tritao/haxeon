@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -33,7 +34,7 @@ class ClangInvocation {
 			ProcessOutputCapture.defaultDiagnosticLimit),
 			output = StringTools.trim(process.stdout);
 		if (process.exitCode != 0 || output.length == 0)
-			throw 'Clang "$clang" could not report its host target${output.length == 0 ? "" : ":\n$output"}';
+			throw new InternalError('Clang "$clang" could not report its host target${output.length == 0 ? "" : ":\n$output"}');
 		var target = StringTools.trim(output.split("\n")[0]);
 		hostTargets.set(clang, target);
 		return target;
@@ -46,9 +47,9 @@ class ClangInvocation {
 
 	public function new(options:ClangInvocationOptions) {
 		if (options.language != "c" && options.language != "c++")
-			throw 'Unsupported Clang language "${options.language}"';
+			throw new InternalError('Unsupported Clang language "${options.language}"');
 		if (options.standard.length == 0)
-			throw "Clang language standard cannot be empty";
+			throw new InternalError("Clang language standard cannot be empty");
 		this.options = options;
 	}
 
@@ -75,15 +76,15 @@ class ClangInvocation {
 
 	function compileDatabaseFlags(path:String, header:String):Array<String> {
 		if (!FileSystem.exists(path))
-			throw 'Compilation database "$path" does not exist';
+			throw new InternalError('Compilation database "$path" does not exist');
 		var parsed:Dynamic;
 		try {
 			parsed = Json.parse(File.getContent(path));
 		} catch (error:Dynamic)
-			throw 'Could not parse compilation database "$path": $error';
+			throw new InternalError('Could not parse compilation database "$path": $error');
 		var entries:Array<Dynamic> = parsed;
 		if (entries == null)
-			throw 'Compilation database "$path" must contain an array';
+			throw new InternalError('Compilation database "$path" must contain an array');
 		var headerPath = FileSystem.fullPath(header), selected:Dynamic = null;
 		for (entry in entries) {
 			var file:String = Reflect.field(entry, "file"),
@@ -100,13 +101,13 @@ class ClangInvocation {
 				selected = entry;
 		}
 		if (selected == null)
-			throw 'Compilation database "$path" contains no commands';
+			throw new InternalError('Compilation database "$path" contains no commands');
 		var directory:String = Reflect.field(selected, "directory"),
 			arguments:Array<String> = Reflect.field(selected, "arguments");
 		if (arguments == null) {
 			var command:String = Reflect.field(selected, "command");
 			if (command == null)
-				throw 'Compilation database entry in "$path" has neither arguments nor command';
+				throw new InternalError('Compilation database entry in "$path" has neither arguments nor command');
 			arguments = splitCommand(command);
 		}
 		var result:Array<String> = [], index = 1;

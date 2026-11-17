@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;
@@ -72,7 +73,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 							_) if (scalarAbi.scalarVirtuals.exists(WasmScalarAbi.virtualKey(receiver.type, method))):
 							var virtual = scalarAbi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
 							if (virtual == null)
-								throw "Missing scalar virtual signature";
+								throw new InternalError("Missing scalar virtual signature");
 							if (scalarAbi.isValue(virtual.signature.result))
 								reserveScalarResults(out, scalarAbi.valueTypes(virtual.signature.result));
 						case CallClosure(out, closure,
@@ -85,7 +86,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 
 	function reserveScalarResults(output:IrValue, types:Array<IrType>):Void {
 		if (allocateLocal == null)
-			throw "Scalar Wasm results require function locals";
+			throw new InternalError("Scalar Wasm results require function locals");
 		scalarResultTypes.set(output.id, types);
 		scalarResults.set(output.id, [for (type in types) allocateLocal(valueType(type))]);
 	}
@@ -94,7 +95,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		for (object in layout.program.objects)
 			if (object.name == name)
 				return object.fields;
-		throw 'Unknown scalar value "$name"';
+		throw new InternalError('Unknown scalar value "$name"');
 	}
 
 	public function scalarLocal(instruction:IrInstruction, locals:Map<Int, Int>):Null<Array<WasmInstruction>> {
@@ -131,7 +132,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 						if (item.name == name)
 							field = item;
 					if (field == null)
-						throw 'Missing scalar field "$name"';
+						throw new InternalError('Missing scalar field "$name"');
 					appendScalarNarrowing(body, field);
 					body.push(LocalSet(requiredScalarField(candidate.fields, name)));
 					body;
@@ -143,14 +144,14 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	static function requiredScalarField(fields:Map<String, Int>, name:String):Int {
 		var local = fields.get(name);
 		if (local == null)
-			throw 'Missing scalar field "$name"';
+			throw new InternalError('Missing scalar field "$name"');
 		return local;
 	}
 
 	static function requiredScalarValue(locals:Map<Int, Int>, id:Int):Int {
 		var local = locals.get(id);
 		if (local == null)
-			throw 'Missing scalar value $id';
+			throw new InternalError('Missing scalar value $id');
 		return local;
 	}
 
@@ -165,7 +166,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				if (compiler.backend.wasm.WasmTarget.isReference(field.type)) {
 					var local = candidate.fields.get(field.name);
 					if (local == null)
-						throw 'Missing scalar reference field "${field.name}"';
+						throw new InternalError('Missing scalar reference field "${field.name}"');
 					references.push(local);
 				}
 			result.set(id, references);
@@ -252,7 +253,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			var index = Std.parseInt(fieldName.substr(WasmScalarAbi.RESULT_FIELD_PREFIX.length)),
 				results = scalarResults.get(object.id);
 			if (index == null || results == null || index < 0 || index >= results.length)
-				throw 'Missing scalar Wasm call result $fieldName';
+				throw new InternalError('Missing scalar Wasm call result $fieldName');
 			return [LocalGet(results[index]), LocalSet(destination)];
 		}
 		if (fieldName == compiler.ir.IrReceiverCheck.CHECK_FIELD)
@@ -307,12 +308,12 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		var abi = scalarAbi;
 		if (abi == null)
-			throw "Missing scalar ABI";
+			throw new InternalError("Missing scalar ABI");
 		var results:Array<Int> = [];
 		if (abi.isValue(output.type)) {
 			var stored = scalarResults.get(output.id);
 			if (stored == null)
-				throw "Missing scalar closure result locals";
+				throw new InternalError("Missing scalar closure result locals");
 			results = stored;
 		} else if ((switch (output.type) {
 			case Void: false;
@@ -418,16 +419,16 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	public function scalarReturnTypes(signature:compiler.backend.wasm.WasmScalarAbi.WasmScalarSignature):Array<IrType> {
 		var abi = scalarAbi;
 		if (abi == null)
-			throw "Missing scalar ABI";
+			throw new InternalError("Missing scalar ABI");
 		return abi.resultTypes(signature);
 	}
 
 	public function scalarExceptionResult(fn:IrFunction, locals:Map<Int, Int>, exception:Int):Array<WasmInstruction> {
 		var abi = scalarAbi, signature = scalarSignature(fn.name);
 		if (abi == null)
-			throw "Missing scalar ABI";
+			throw new InternalError("Missing scalar ABI");
 		if (signature == null || !signature.throwsReceiver || allocateLocal == null)
-			throw 'Invalid scalar exception return "${fn.name}"';
+			throw new InternalError('Invalid scalar exception return "${fn.name}"');
 		var receiver:Null<IrValue> = null;
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -437,10 +438,10 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 					default:
 				}
 		if (receiver == null)
-			throw 'Scalar method "${fn.name}" has no receiver state';
+			throw new InternalError('Scalar method "${fn.name}" has no receiver state');
 		var name = switch receiver.type {
 			case Obj(value): value;
-			default: throw "Invalid scalar receiver";
+			default: throw new InternalError("Invalid scalar receiver");
 		}, candidate = scalarLocals == null ? null : scalarLocals.get(receiver), result:Array<WasmInstruction> = [];
 		for (field in physicalFields(name)) {
 			if (candidate != null)
@@ -476,7 +477,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		if (tag == null)
 			return null;
 		if (allocateLocal == null)
-			throw 'Scalar method "${fn.name}" requires function locals';
+			throw new InternalError('Scalar method "${fn.name}" requires function locals');
 		var exception = allocateLocal(valueType(Dyn)),
 			result:Array<WasmInstruction> = [Try(null)];
 		for (instruction in body)
@@ -498,16 +499,16 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			functionIndex:Int):Array<WasmInstruction> {
 		var abi = scalarAbi;
 		if (abi == null)
-			throw "Missing scalar ABI";
+			throw new InternalError("Missing scalar ABI");
 		var signature = abi.signatures.get(name),
 			body:Array<WasmInstruction> = [for (local in argumentLocals) LocalGet(local)];
 		if (signature == null || allocateLocal == null)
-			throw 'Missing scalar call signature "$name"';
+			throw new InternalError('Missing scalar call signature "$name"');
 		body.push(Call(functionIndex));
 		if (signature.mutatesReceiver || abi.isValue(signature.result)) {
 			var locals = scalarResults.get(output.id);
 			if (locals == null)
-				throw 'Missing scalar result locals for "$name"';
+				throw new InternalError('Missing scalar result locals for "$name"');
 			var index = locals.length - 1;
 			while (index >= 0) {
 				body.push(LocalSet(locals[index]));
@@ -529,15 +530,15 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			argumentLocals:Array<Int>):Array<WasmInstruction> {
 		var abi = scalarAbi;
 		if (abi == null)
-			throw "Missing scalar ABI";
+			throw new InternalError("Missing scalar ABI");
 		var virtual = abi.scalarVirtuals.get(WasmScalarAbi.virtualKey(receiver.type, method));
 		if (virtual == null || allocateLocal == null || functions == null)
-			throw 'Missing scalar virtual method "$method"';
+			throw new InternalError('Missing scalar virtual method "$method"');
 		var results:Array<Int> = [];
 		if (abi.isValue(virtual.signature.result)) {
 			results = scalarResults.get(output.id);
 			if (results == null)
-				throw 'Missing scalar virtual result locals for "$method"';
+				throw new InternalError('Missing scalar virtual result locals for "$method"');
 		} else if ((switch (virtual.signature.result) {
 			case Void: false;
 			default: true;
@@ -548,7 +549,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			var target = virtual.targets[index],
 				functionIndex = functions.get(target.clone);
 			if (functionIndex == null)
-				throw 'Missing scalar virtual target "${target.clone}"';
+				throw new InternalError('Missing scalar virtual target "${target.clone}"');
 			body.push(LocalGet(receiverLocal));
 			body.push(I32Load(0));
 			body.push(I32Const(layout.runtimeTypeIds.id(Obj(target.typeName))));
@@ -626,7 +627,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	function assignValueField(parent:Array<WasmInstruction>, offset:Int, source:Array<WasmInstruction>, name:String,
 			visiting:Array<String>):Array<WasmInstruction> {
 		if (visiting.indexOf(name) >= 0)
-			throw 'Cyclic inline Wasm value "$name"';
+			throw new InternalError('Cyclic inline Wasm value "$name"');
 		var destination = parent.concat([I32Load(offset)]),
 			result = destination.concat([I32Eqz]);
 		// A zero source is an uninitialized value. Keep the existing null representation.
@@ -654,7 +655,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	function nativeFieldGet(field:WasmFieldLayout, destination:Int, objectLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
-			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
+			throw new InternalError('Flat Wasm field "${field.name}" is missing layout metadata');
 		var body = flatFieldBase(objectLocal, native.offset),
 			load:Array<WasmInstruction> = [];
 		if ((switch (field.type) {
@@ -704,14 +705,14 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		}) && native.size == 8)
 			load = [F64Load(0)];
 		else
-			throw 'Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}';
+			throw new InternalError('Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}');
 		return body.concat(load).concat([LocalSet(destination)]);
 	}
 
 	function nativeFieldSet(field:WasmFieldLayout, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
-			throw 'Flat Wasm field "${field.name}" is missing layout metadata';
+			throw new InternalError('Flat Wasm field "${field.name}" is missing layout metadata');
 		var body:Array<WasmInstruction> = flatFieldBase(objectLocal, native.offset).concat([LocalGet(valueLocal)]);
 		if (((switch (field.type) {
 			case I32, EnumTag(_): true;
@@ -758,17 +759,17 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 		}) && native.size == 8)
 			body.push(F64Store(0));
 		else
-			throw 'Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}';
+			throw new InternalError('Unsupported flat Wasm field storage ${native.size} bytes for ${Std.string(field.type)}');
 		return body;
 	}
 
 	function inlineRecordGet(field:WasmFieldLayout, destination:Int, objectLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
-			throw 'Inline flat Wasm field "${field.name}" is missing layout metadata';
+			throw new InternalError('Inline flat Wasm field "${field.name}" is missing layout metadata');
 		var childName = switch field.type {
 			case Obj(name): name;
-			case _: throw 'Inline flat Wasm field "${field.name}" is not a source struct';
+			case _: throw new InternalError('Inline flat Wasm field "${field.name}" is not a source struct');
 		};
 		var body = newObject(childName, destination);
 		body.push(LocalGet(destination));
@@ -783,7 +784,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	function inlineRecordSet(field:WasmFieldLayout, objectLocal:Int, valueLocal:Int):Array<WasmInstruction> {
 		var native = field.nativeLayout;
 		if (native == null)
-			throw 'Inline flat Wasm field "${field.name}" is missing layout metadata';
+			throw new InternalError('Inline flat Wasm field "${field.name}" is missing layout metadata');
 		var body:Array<WasmInstruction> = [];
 		for (offset in 0...native.size) {
 			body = body.concat(flatFieldBase(objectLocal, native.offset));
@@ -873,7 +874,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				case I64: false;
 				default: true;
 			}) || argumentLocals.length != 1)
-				throw "Invalid Wasm Int64.toFloat signature";
+				throw new InternalError("Invalid Wasm Int64.toFloat signature");
 			return [LocalGet(argumentLocals[0]), F64ConvertI64S, LocalSet(outputLocal)];
 		}
 		if (name == "__wasm_memory_load_i32") {
@@ -884,7 +885,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				case I32: false;
 				default: true;
 			}) || argumentLocals.length != 1)
-				throw "Invalid Wasm runtime memory.load i32 signature";
+				throw new InternalError("Invalid Wasm runtime memory.load i32 signature");
 			return [LocalGet(argumentLocals[0]), I32Load(0), LocalSet(outputLocal)];
 		}
 		// Float32 values live in f64 locals, so a Float rounded to 32 bits (FloatBits.toInt32) converts the same way.
@@ -893,7 +894,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				|| arguments.length != 1
 				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, name == "__f32_to_i32_bits" ? F32 : F64)
 				|| argumentLocals.length != 1)
-				throw "Invalid Wasm Float32 bit conversion signature";
+				throw new InternalError("Invalid Wasm Float32 bit conversion signature");
 			return [
 				LocalGet(argumentLocals[0]),
 				F32DemoteF64,
@@ -906,7 +907,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				|| arguments.length != 1
 				|| !compiler.ir.IrVerifier.sameType(arguments[0].type, I32)
 				|| argumentLocals.length != 1)
-				throw "Invalid Wasm Float32 bit conversion signature";
+				throw new InternalError("Invalid Wasm Float32 bit conversion signature");
 			return [
 				LocalGet(argumentLocals[0]),
 				F32ReinterpretI32,
@@ -922,7 +923,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				case F64: false;
 				default: true;
 			}) || argumentLocals.length != 1)
-				throw "Invalid Wasm FloatBits.toInt64 signature";
+				throw new InternalError("Invalid Wasm FloatBits.toInt64 signature");
 			return [LocalGet(argumentLocals[0]), I64ReinterpretF64, LocalSet(outputLocal)];
 		}
 		if (name == "__i64_to_f64_bits" || name == "runtime.FloatBits.fromInt64") {
@@ -933,7 +934,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 				case I64: false;
 				default: true;
 			}) || argumentLocals.length != 1)
-				throw "Invalid Wasm FloatBits.fromInt64 signature";
+				throw new InternalError("Invalid Wasm FloatBits.fromInt64 signature");
 			return [LocalGet(argumentLocals[0]), F64ReinterpretI64, LocalSet(outputLocal)];
 		}
 		return UseDefault;
@@ -966,7 +967,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			case ManagedBytes: false;
 			default: true;
 		}) || outputLocal < 0)
-			throw 'Linear Wasm C native "${native.name}" has an invalid fixed aggregate result contract';
+			throw new InternalError('Linear Wasm C native "${native.name}" has an invalid fixed aggregate result contract');
 		var allocationSize = WasmLayout.STRING_DATA_OFFSET + fixed.size;
 		// The record result lands in a managed Bytes value that the generated HXI wrapper then attaches the
 		// projected fixed-layout record to. The native either returns its single scalar, stored here, or
@@ -1037,7 +1038,7 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 	function objectField(object:IrValue, name:String):WasmFieldLayout {
 		return switch object.type {
 			case Obj(objectName): layout.field(objectName, name);
-			default: throw 'Wasm field access requires an object reference, got ${Std.string(object.type)}';
+			default: throw new InternalError('Wasm field access requires an object reference, got ${Std.string(object.type)}');
 		};
 	}
 

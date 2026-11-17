@@ -1,6 +1,7 @@
 package compiler.ir.cfg;
 
 import compiler.core.Arrays;
+import compiler.core.InternalError;
 import haxe.ds.ReadOnlyArray;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.cfg.CfgVerifier;
@@ -120,7 +121,7 @@ class SsaBuilder {
 			if (id == null)
 				break;
 			if (id < 0 || id >= cfg.blocks.length)
-				throw 'Unknown CFG block $id';
+				throw new InternalError('Unknown CFG block $id');
 			if (reachable[id])
 				continue;
 			reachable[id] = true;
@@ -134,7 +135,7 @@ class SsaBuilder {
 				}
 			var terminator = block.terminator;
 			if (terminator == null)
-				throw 'Reachable CFG block $id has no terminator';
+				throw new InternalError('Reachable CFG block $id has no terminator');
 			var next:Array<Int> = switch terminator.value {
 				case Jump(target): [target];
 				case Branch(_, yes, no): [yes, no];
@@ -169,7 +170,7 @@ class SsaBuilder {
 			for (index in 1...postorder.length) {
 				var id = postorder[index];
 				if (predecessors[id].length == 0)
-					throw 'Reachable SSA block $id has no predecessor or handler root';
+					throw new InternalError('Reachable SSA block $id has no predecessor or handler root');
 				var next = -1;
 				for (predecessor in predecessors[id])
 					if (immediate[predecessor] >= 0)
@@ -183,7 +184,7 @@ class SsaBuilder {
 		for (id in postorder)
 			if (roots.indexOf(id) < 0) {
 				if (immediate[id] < 0)
-					throw 'Reachable SSA block $id has no immediate dominator';
+					throw new InternalError('Reachable SSA block $id has no immediate dominator');
 				append(children, immediate[id], id);
 			}
 		// Only a list of its own can hold two children; the shared empty one is never written.
@@ -400,7 +401,7 @@ class SsaBuilder {
 		for (slot in definitionSlots) {
 			var blocks = definitionBlocks[slot];
 			if (blocks == null)
-				throw 'Missing SSA definitions for local "${slotNames[slot]}"';
+				throw new InternalError('Missing SSA definitions for local "${slotNames[slot]}"');
 			for (block in blocks)
 				defined[block] = slot;
 			var work = blocks.copy();
@@ -665,7 +666,7 @@ class SsaBuilder {
 		}
 		var terminator = block.terminator;
 		if (terminator == null)
-			throw 'Reachable CFG block $id has no terminator';
+			throw new InternalError('Reachable CFG block $id has no terminator');
 		target.terminator = new Located(switch terminator.value {
 			case Return(value): Return(resolve(value));
 			case Throw(value): Throw(resolve(value));
@@ -710,10 +711,10 @@ class SsaBuilder {
 	function resolve(value:CfgValue):IrValue {
 		var id:Int = value.id;
 		if (id < 0 || id >= temporaries.length)
-			throw 'CFG value ${value.id} used before definition';
+			throw new InternalError('CFG value ${value.id} used before definition');
 		var resolved = temporaries[id];
 		if (resolved == null)
-			throw 'CFG value ${value.id} used before definition';
+			throw new InternalError('CFG value ${value.id} used before definition');
 		return resolved;
 	}
 
@@ -748,7 +749,7 @@ class SsaBuilder {
 	function current(slot:Int):IrValue {
 		var stack = stackBySlot[slot];
 		if (stack == null || stack.length == 0)
-			throw 'Local "${slotNames[slot]}" used before definition';
+			throw new InternalError('Local "${slotNames[slot]}" used before definition');
 		return stack[stack.length - 1];
 	}
 }

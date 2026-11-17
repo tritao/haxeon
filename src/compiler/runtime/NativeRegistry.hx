@@ -1,5 +1,6 @@
 package compiler.runtime;
 
+import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.ir.Ir.IrNative;
@@ -30,9 +31,9 @@ class NativeRegistry {
 			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):Void {
 		if (isReserved(name))
-			throw 'Native "$name" is reserved by the compiler runtime ABI';
+			throw new InternalError('Native "$name" is reserved by the compiler runtime ABI');
 		if (definitions.exists(name))
-			throw 'Native "$name" is already registered';
+			throw new InternalError('Native "$name" is already registered');
 		definitions.set(name, {
 			name: name,
 			library: library,
@@ -87,7 +88,7 @@ class NativeRegistry {
 
 	function requireDefinition(name:String):NativeDefinition {
 		if (!definitions.exists(name))
-			throw 'Missing native definition "$name"';
+			throw new InternalError('Missing native definition "$name"');
 		return definitions.get(name);
 	}
 
@@ -104,7 +105,7 @@ class NativeRegistry {
 
 	static function irType(type:CompilerType):IrType
 		return switch type {
-			case TMonomorph(cell): throw 'Internal error: the type of ${cell.origin} reached a native signature unresolved';
+			case TMonomorph(cell): throw new InternalError('Internal error: the type of ${cell.origin} reached a native signature unresolved');
 			case TAbstract(declaration, _, _) if (StringTools.endsWith(Std.string(declaration), "RawPtr")): RawPtr;
 			case TAbstract(_, _, representation): irType(representation);
 			case TInt: I32;
@@ -121,17 +122,18 @@ class NativeRegistry {
 			case THlBytes: RawPtr;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
-			case TNever: throw "Never is not a runtime ABI type";
-			case TTypeParameter(owner, name): throw 'Type parameter "$owner.$name" is not a runtime ABI type';
-			case TRange: throw "Range is not a runtime ABI type";
+			case TNever: throw new InternalError("Never is not a runtime ABI type");
+			case TTypeParameter(owner,
+				name): throw new InternalError('Type parameter "$owner.$name" is not a runtime ABI type');
+			case TRange: throw new InternalError("Range is not a runtime ABI type");
 			case TVoid: Void;
 			case TInstance(kind, name, _):
 				switch kind {
 					case NominalKind.Class: Obj(name);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(name);
-					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
-					default: throw 'Unknown nominal kind $kind';
+					case NominalKind.NativeValue: throw new InternalError('Native value record "$name" cannot be lowered as a managed value');
+					default: throw new InternalError('Unknown nominal kind $kind');
 				}
 			case TMap(_, _): Abstract("map_string_i32");
 			case TKeyPath(root, value, _): Obj(compiler.types.KeyPathType.descriptorName(root, value));

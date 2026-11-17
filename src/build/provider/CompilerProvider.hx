@@ -7,6 +7,7 @@ import build.execution.ExecutionAction.ActionKind;
 import build.execution.ProcessRunner;
 import build.execution.CompilerClient;
 import build.execution.Directories;
+import compiler.core.InternalError;
 import project.CompilerInputs;
 import project.ResolvedProject;
 import sys.io.File;
@@ -17,9 +18,9 @@ class CompilerProvider {
 			dependencies:Array<ActionId>,
 			output:String):ExecutionAction {
 		if (project == null)
-			throw "CompilerProvider requires a resolved project";
+			throw new InternalError("CompilerProvider requires a resolved project");
 		if (project.manifest.entry == null)
-			throw 'Root package "${project.rootPackage.name}" must declare an "entry" for a build';
+			throw new InternalError('Root package "${project.rootPackage.name}" must declare an "entry" for a build');
 		var suffix = Sys.systemName() == "Windows" ? ".exe" : "",
 			compilerSource = Sys.getEnv("HAXEON_COMPILER_SOURCE"),
 			compilerSourcePath = compilerSource == null

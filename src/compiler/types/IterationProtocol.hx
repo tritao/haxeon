@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.NominalKind;
@@ -205,7 +206,7 @@ class IterationProtocol {
 				var representation = session.representation.resolveField(receiver.type, name, span);
 				var physicalResult = switch representation.physical {
 					case TFunction([], result, _): result;
-					default: throw "Expected callable iteration field";
+					default: throw new InternalError("Expected callable iteration field");
 				};
 				var field = new TypedExpression(TField(receiver, name), representation.physical, span);
 				expression = session.representation.boundaryCast(new TypedExpression(TClosureCall(field, []),

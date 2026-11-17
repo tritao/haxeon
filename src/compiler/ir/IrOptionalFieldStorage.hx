@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -114,7 +115,7 @@ class IrOptionalFieldStorage {
 			all.push(accessor(plan, true));
 			var element = switch plan.type {
 				case Nullable(Obj(value)): value;
-				default: throw "Invalid optional field plan";
+				default: throw new InternalError("Invalid optional field plan");
 			};
 			var rootReader = new IrBuilder(),
 				rootOwner = rootReader.argument("owner", Obj(plan.owner));
@@ -140,7 +141,7 @@ class IrOptionalFieldStorage {
 								generated.set(name, true);
 								var original = originals.get(request.method);
 								if (original == null)
-									throw 'Missing value method "${request.method}" for optional field';
+									throw new InternalError('Missing value method "${request.method}" for optional field');
 								all.push(specializeMethod(name, request, original));
 							}
 						default:
@@ -153,7 +154,7 @@ class IrOptionalFieldStorage {
 	function specializeMethod(name:String, request:OptionalMethodRequest, fn:IrFunction):IrFunction {
 		var plan = planFor(request.owner, request.field);
 		if (plan == null || fn.arguments.length == 0)
-			throw 'Invalid optional method specialization "$name"';
+			throw new InternalError('Invalid optional method specialization "$name"');
 		var receiver = fn.arguments[0],
 			next = nextId(fn),
 			owner = new IrValue(next++, "$optional-owner", Obj(request.owner)),
@@ -309,16 +310,16 @@ class IrOptionalFieldStorage {
 		for (part in path) {
 			var name = switch type {
 				case Obj(value), Nullable(Obj(value)): value;
-				default: throw 'Invalid optional field path at "$part"';
+				default: throw new InternalError('Invalid optional field path at "$part"');
 			};
 			var object = objects.get(name), found:Null<IrType> = null;
 			if (object == null)
-				throw 'Missing optional field path object "$name"';
+				throw new InternalError('Missing optional field path object "$name"');
 			for (field in object.fields)
 				if (field.name == part)
 					found = field.type;
 			if (found == null)
-				throw 'Missing optional field path "$name.$part"';
+				throw new InternalError('Missing optional field path "$name.$part"');
 			type = found;
 		}
 		return type;
@@ -327,7 +328,7 @@ class IrOptionalFieldStorage {
 	function methodName(type:IrType, method:String):String {
 		var name = switch type {
 			case Obj(value): value;
-			default: throw 'Invalid value method receiver';
+			default: throw new InternalError('Invalid value method receiver');
 		};
 		while (name != null) {
 			var object = objects.get(name);
@@ -338,7 +339,7 @@ class IrOptionalFieldStorage {
 					return entry.functionName;
 			name = object.base;
 		}
-		throw 'Unknown value method "$method"';
+		throw new InternalError('Unknown value method "$method"');
 	}
 
 	/** Translate an already-lowered nested optional slot through a specialized receiver. */
@@ -367,7 +368,7 @@ class IrOptionalFieldStorage {
 			case Obj(name) if (isValue(name)):
 				var object = objects.get(name);
 				if (object == null)
-					throw 'Missing value object "$name"';
+					throw new InternalError('Missing value object "$name"');
 				for (field in object.fields) {
 					var childPath = path.concat([field.name]);
 					if (isComposite(field.type)) {
@@ -430,14 +431,14 @@ class IrOptionalFieldStorage {
 							case Void: false;
 							default: true;
 						}))
-							throw 'Invalid optional field copy "$name"';
+							throw new InternalError('Invalid optional field copy "$name"');
 						var target = planFor(fields[0], fields[1]),
 							source = planFor(fields[2], fields[3]);
 						if (target == null
 							|| source == null
 							|| !Type.enumEq(target.type, source.type)
 							|| target.slots.length != source.slots.length)
-							throw 'Incompatible optional field copy "$name"';
+							throw new InternalError('Incompatible optional field copy "$name"');
 						var destination = arguments[0], origin = arguments[1];
 						if (!Type.enumEq(destination.type, Obj(target.owner))) {
 							var base = new IrValue(next++, "$optional-copy-target", Obj(target.owner));
@@ -571,7 +572,7 @@ class IrOptionalFieldStorage {
 				var value = builder.valueInit(name),
 					object = objects.get(name);
 				if (object == null)
-					throw 'Missing value object "$name"';
+					throw new InternalError('Missing value object "$name"');
 				for (field in object.fields)
 					builder.fieldSet(value, field.name,
 						readValue(builder, plan, owner, field.type, path.concat([field.name])));
@@ -600,7 +601,7 @@ class IrOptionalFieldStorage {
 			case Obj(name) if (isValue(name)):
 				var object = objects.get(name);
 				if (object == null)
-					throw 'Missing value object "$name"';
+					throw new InternalError('Missing value object "$name"');
 				for (field in object.fields)
 					writeValue(builder, plan, owner, field.type, path.concat([field.name]),
 						builder.fieldGet(value, field.name, field.type));
@@ -695,7 +696,7 @@ class IrOptionalFieldStorage {
 			return null;
 		var components:Array<String> = cast haxe.Json.parse(name.substr(METHOD_PREFIX.length));
 		if (components.length < 3)
-			throw 'Invalid optional method specialization "$name"';
+			throw new InternalError('Invalid optional method specialization "$name"');
 		return {
 			owner: components[0],
 			field: components[1],

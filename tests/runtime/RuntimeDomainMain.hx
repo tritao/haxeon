@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import runtime.Plugin;
 import runtime.ReloadablePlugin;
@@ -86,8 +87,8 @@ class RuntimeDomainMain {
 		try {
 			RuntimeStateEnvelope.decode(unsupported);
 			throw "runtime state envelope accepted an unknown version";
-		} catch (error:String) {
-			if (error != "Unsupported runtime state envelope")
+		} catch (error:InternalError) {
+			if (error.message != "Unsupported runtime state envelope")
 				throw error;
 		}
 	}

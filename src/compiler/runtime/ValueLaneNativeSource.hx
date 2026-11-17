@@ -1,5 +1,6 @@
 package compiler.runtime;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;
@@ -24,7 +25,7 @@ class ValueLaneNativeSource {
 			return "realtime_lane_" + value.substr(IrValueLaneRuntime.PREFIX.length).split("-").join("_");
 		if (StringTools.startsWith(value, IrValueLaneRuntime.PRIMITIVE))
 			return "realtime_lane_storage_" + value.substr(IrValueLaneRuntime.PRIMITIVE.length).split("-").join("_");
-		throw 'Unexpected lane runtime callee: $value';
+		throw new InternalError('Unexpected lane runtime callee: $value');
 	}
 
 	static function type(value:IrType):String return switch value {
@@ -33,7 +34,7 @@ class ValueLaneNativeSource {
 		case Bool: "bool";
 		case Array(Dyn): "varray *";
 		case Dyn: "vdynamic *";
-		default: throw 'Unexpected lane runtime type: $value';
+		default: throw new InternalError('Unexpected lane runtime type: $value');
 	};
 	static function variable(value:IrValue):String return 'v${value.id}';
 	static function declaration(value:IrValue):String return type(value.type) + " " + variable(value);
@@ -60,7 +61,7 @@ class ValueLaneNativeSource {
 				case Phi(value, inputs):
 					var input = null;
 					for (candidate in inputs) if (candidate.block == from) input = candidate.value;
-					if (input == null) throw 'Missing lane runtime phi edge $from -> $target';
+					if (input == null) throw new InternalError('Missing lane runtime phi edge $from -> $target');
 					reads.push('p${value.id} = ${variable(input)};');
 					writes.push('${variable(value)} = p${value.id};');
 				default:
@@ -85,12 +86,12 @@ class ValueLaneNativeSource {
 					case Equal(_, a, z): '${variable(a)} == ${variable(z)}';
 					case Call(_, callee,
 						arguments): name(callee) + "(" + [for (arg in arguments) variable(arg)].join(", ") + ")";
-					default: throw 'Unsupported lane runtime C instruction: ${item.value}';
+					default: throw new InternalError('Unsupported lane runtime C instruction: ${item.value}');
 				};
 				if (expression != null)
 					out.add("\t" + (value.type == Void ?"":variable(value) + " = ") + expression + ";\n");
 			}
-			if (block.terminator == null) throw 'Unterminated lane runtime block ${block.id}';
+			if (block.terminator == null) throw new InternalError('Unterminated lane runtime block ${block.id}');
 			out.add("\t" + (switch block.terminator.value {
 				case Jump(target): edge(block.id, target);
 				case Branch(condition, yes,
@@ -102,7 +103,7 @@ class ValueLaneNativeSource {
 						+ 'default: { ${edge(block.id, otherwise)} } }';
 				case Return(value): value.type == Void ?"return;":'return ${variable(value)};';
 				case Throw(value): 'hl_throw(${variable(value)}); abort();';
-				default: throw 'Unsupported lane runtime C terminator: ${block.terminator.value}';
+				default: throw new InternalError('Unsupported lane runtime C terminator: ${block.terminator.value}');
 			}) + "\n");
 		}
 		out.add("}\n");

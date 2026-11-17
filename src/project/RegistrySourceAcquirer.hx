@@ -1,6 +1,7 @@
 package project;
 
 import build.execution.ProcessRunner;
+import compiler.core.InternalError;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -19,20 +20,20 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 				var registryDirectory = Path.join([cacheRoot, Sha256.encode(registry)]),
 					indexPath = Path.join([registryDirectory, "index.json"]);
 				if (!FileSystem.exists(indexPath))
-					throw 'Registry index for "$registry" is not in the Haxeon cache: $indexPath';
+					throw new InternalError('Registry index for "$registry" is not in the Haxeon cache: $indexPath');
 				var index = RegistryIndex.parse(indexPath, File.getContent(indexPath)),
 					release = index.resolve(name, range),
 					destination = Path.join([registryDirectory, name, release.version]);
 				if (!FileSystem.exists(destination))
 					publishArchive(registryDirectory, name, release.version, release.checksum, destination, packageId);
 				else if (!FileSystem.isDirectory(destination))
-					throw 'Registry cache entry for "$packageId" is not a directory: $destination';
+					throw new InternalError('Registry cache entry for "$packageId" is not a directory: $destination');
 				validateChecksum(destination, release.checksum, packageId);
 				new AcquiredSource(FileSystem.fullPath(destination),
 					PackageSource.Registry(registry, name, release.version), release.version,
 					release.checksum, release.compatibility);
 			case _:
-				throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the registry acquirer';
+				throw new InternalError('Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the registry acquirer');
 		};
 
 	function publishArchive(registryDirectory:String, name:String, version:String, checksum:String, destination:String,
@@ -42,10 +43,10 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 		if (!FileSystem.exists(archive))
 			archive = Path.join([archiveRoot, '$name-$version.tar.gz']);
 		if (!FileSystem.exists(archive))
-			throw 'Registry release "$name@$version" is not in the Haxeon cache; place its archive at $archive';
+			throw new InternalError('Registry release "$name@$version" is not in the Haxeon cache; place its archive at $archive');
 		var bytes = File.getBytes(archive);
 		if (Sha256.make(bytes).toHex() != checksum)
-			throw 'Registry release "$packageId" failed checksum verification';
+			throw new InternalError('Registry release "$packageId" failed checksum verification');
 		ensureDirectory(Path.directory(destination));
 		var temporary = destination + '.extract-${Std.int(Date.now().getTime())}';
 		ensureDirectory(temporary);
@@ -53,10 +54,10 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 			arguments = command == "unzip" ? ["-q", archive, "-d", temporary] : ["-xzf", archive, "-C", temporary],
 			status = ProcessRunner.run(command, arguments, temporary, new Map());
 		if (status != 0)
-			throw 'Could not extract registry release "$packageId"';
+			throw new InternalError('Could not extract registry release "$packageId"');
 		var sourceRoot = findManifestRoot(temporary);
 		if (sourceRoot == null)
-			throw 'Registry release "$packageId" does not contain haxeon.json';
+			throw new InternalError('Registry release "$packageId" does not contain haxeon.json');
 		FileSystem.rename(sourceRoot, destination);
 		if (sourceRoot != temporary)
 			FileSystem.deleteDirectory(temporary);
@@ -66,7 +67,7 @@ class RegistrySourceAcquirer implements SourceAcquirer {
 	function validateChecksum(root:String, expected:String, packageId:PackageId):Void {
 		var marker = Path.join([root, ".haxeon-checksum"]);
 		if (!FileSystem.exists(marker) || StringTools.trim(File.getContent(marker)) != expected)
-			throw 'Registry source "$packageId" failed checksum verification';
+			throw new InternalError('Registry source "$packageId" failed checksum verification');
 	}
 
 	function findManifestRoot(root:String):Null<String> {

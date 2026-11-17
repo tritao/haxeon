@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 
 /** Canonical value definitions and uses shared by verification and lowering. */
@@ -148,6 +149,6 @@ class IrOperands {
 				Intrinsic(_, _, arguments): arguments[index];
 			case CallClosure(_, receiver, arguments),
 				MethodCall(_, receiver, _, arguments, _): index == 0 ? receiver : arguments[index - 1];
-			default: throw "IrOperands.at: no input " + index;
+			default: throw new InternalError("IrOperands.at: no input " + index);
 		};
 }

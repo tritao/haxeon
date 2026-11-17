@@ -2,6 +2,7 @@ package compiler.tools;
 
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
+import compiler.core.InternalError;
 import compiler.tools.CompilerRequest.CompileSessionMode;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
 import sys.io.File;
@@ -56,10 +57,10 @@ class CompilerArguments {
 				xmlOutput = value(argument, "--xml=");
 			else if (argument == "--xml") {
 				if (index >= arguments.length)
-					throw 'Compiler option "--xml" requires a value';
+					throw new InternalError('Compiler option "--xml" requires a value');
 				xmlOutput = arguments[index++];
 				if (xmlOutput.length == 0)
-					throw 'Compiler option "--xml" requires a value';
+					throw new InternalError('Compiler option "--xml" requires a value');
 			} else if (StringTools.startsWith(argument, "--entry="))
 				entry = value(argument, "--entry=");
 			else if (StringTools.startsWith(argument, "--ir-output="))
@@ -102,7 +103,7 @@ class CompilerArguments {
 				session = switch value(argument, "--session=") {
 					case "reuse": CompileSessionMode.Reuse;
 					case "fresh": CompileSessionMode.Fresh;
-					case other: throw 'Compiler option "--session=" takes reuse or fresh, not "$other"';
+					case other: throw new InternalError('Compiler option "--session=" takes reuse or fresh, not "$other"');
 				};
 			else if (argument == "--live")
 				live = true;
@@ -125,51 +126,51 @@ class CompilerArguments {
 			else if (StringTools.startsWith(argument, "--export="))
 				exports.push(value(argument, "--export="));
 			else if (StringTools.startsWith(argument, "--"))
-				throw 'Unknown compiler option "$argument"';
+				throw new InternalError('Unknown compiler option "$argument"');
 			else
 				paths.push(argument);
 		}
 		if ((ffiHeader == null) != (ffiLibrary == null))
-			throw "--ffi-header and --ffi-library must be provided together";
+			throw new InternalError("--ffi-header and --ffi-library must be provided together");
 		if (roots.length == 0)
 			roots.push("src");
 		if (paths.length == 0)
-			throw "Haxeon compiler requires an explicit source manifest";
+			throw new InternalError("Haxeon compiler requires an explicit source manifest");
 		var backend = BackendTargets.parse(target);
 		if (backend == Wasm64)
-			throw 'Compiler target "wasm64" is not implemented yet; use --target=wasm32 or --target=wasm-gc';
+			throw new InternalError('Compiler target "wasm64" is not implemented yet; use --target=wasm32 or --target=wasm-gc');
 		if (backend == null)
-			throw 'Unsupported compiler target "$target"';
+			throw new InternalError('Unsupported compiler target "$target"');
 		var wasm = BackendTargets.isWasm(backend);
 		if ((importMemory || memoryBase != 0) && !wasm)
-			throw "Wasm memory options require --target=wasm32 or --target=wasm-gc";
+			throw new InternalError("Wasm memory options require --target=wasm32 or --target=wasm-gc");
 		if (live && backend != HashLink)
-			throw "--live requires --target=hl";
+			throw new InternalError("--live requires --target=hl");
 		if (baseline != null && !live)
-			throw "--baseline requires --live";
+			throw new InternalError("--baseline requires --live");
 		if ((baselineOutput != null || entryIdOutput != null) && backend != HashLink)
-			throw "--baseline-output and --entry-id-output require --target=hl";
+			throw new InternalError("--baseline-output and --entry-id-output require --target=hl");
 		if (buildMode != "release" && buildMode != "development")
-			throw 'Unsupported compiler build mode "$buildMode"';
+			throw new InternalError('Unsupported compiler build mode "$buildMode"');
 		if (live && buildModeExplicit && buildMode != "development")
-			throw "--live requires development build mode";
+			throw new InternalError("--live requires development build mode");
 		if (live) buildMode = "development";
 		if ((wasmMemoryStats || wasmGcStress) && backend != Wasm32)
-			throw "Wasm allocator options require --target=wasm32";
+			throw new InternalError("Wasm allocator options require --target=wasm32");
 		if (wasmGcAllocationCount && backend != WasmGc)
-			throw "--wasm-gc-allocation-count requires --target=wasm-gc";
+			throw new InternalError("--wasm-gc-allocation-count requires --target=wasm-gc");
 		if (wasmRuntimeNeutral && backend != Wasm32)
-			throw "--wasm-runtime-neutral requires --target=wasm32";
+			throw new InternalError("--wasm-runtime-neutral requires --target=wasm32");
 		if (exports.length != 0 && !wasm)
-			throw "Function exports require a Wasm32 or Wasm GC target";
+			throw new InternalError("Function exports require a Wasm32 or Wasm GC target");
 		if (memoryContract != null && !wasm)
-			throw "--wasm-memory-contract requires --target=wasm32 or --target=wasm-gc";
+			throw new InternalError("--wasm-memory-contract requires --target=wasm32 or --target=wasm-gc");
 		if (sharedMemory && (!importMemory || memoryContract == null))
-			throw "--wasm-shared-memory requires imported memory and a bounded memory contract";
+			throw new InternalError("--wasm-shared-memory requires imported memory and a bounded memory contract");
 		if (memoryContract != null && !importMemory)
-			throw "--wasm-memory-contract requires --wasm-import-memory";
+			throw new InternalError("--wasm-memory-contract requires --wasm-import-memory");
 		if (memoryContract != null && memoryBase != 0)
-			throw "--wasm-memory-contract and --wasm-memory-base are mutually exclusive";
+			throw new InternalError("--wasm-memory-contract and --wasm-memory-base are mutually exclusive");
 		return {
 			target: target,
 			buildMode: buildMode,
@@ -208,14 +209,14 @@ class CompilerArguments {
 	static function value(argument:String, prefix:String):String {
 		var result = argument.substring(prefix.length, argument.length);
 		if (result.length == 0)
-			throw 'Compiler option "$prefix" requires a value';
+			throw new InternalError('Compiler option "$prefix" requires a value');
 		return result;
 	}
 
 	static function packageRoot(value:String):PackageSourceRoot {
 		var separator = value.indexOf("=");
 		if (separator <= 0 || separator == value.length - 1)
-			throw 'Invalid package source root "$value"; expected NAME=PATH';
+			throw new InternalError('Invalid package source root "$value"; expected NAME=PATH');
 		return {packageName: value.substr(0, separator), path: value.substr(separator + 1)};
 	}
 
@@ -224,7 +225,7 @@ class CompilerArguments {
 		for (index in 0...value.length) {
 			var digit = value.charCodeAt(index) - 48;
 			if (digit < 0 || digit > 9)
-				throw 'Invalid function index "$value"';
+				throw new InternalError('Invalid function index "$value"');
 			result = result * 10 + digit;
 		}
 		return result;
@@ -234,11 +235,11 @@ class CompilerArguments {
 		var separator = value.indexOf("=");
 		var name = separator < 0 ? value : value.substr(0, separator);
 		if (name.length == 0)
-			throw 'Compiler option "--define=" requires a non-empty name';
+			throw new InternalError('Compiler option "--define=" requires a non-empty name');
 		for (index in 0...name.length) {
 			var code = name.charCodeAt(index);
 			if (code == 32 || code == 9 || code == 10 || code == 13)
-				throw 'Invalid conditional define name "$name"';
+				throw new InternalError('Invalid conditional define name "$name"');
 		}
 		return value;
 	}

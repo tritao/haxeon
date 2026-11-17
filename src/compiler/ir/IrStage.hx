@@ -162,7 +162,7 @@ class IrAssemblyStageList {
 				IrStageHooks.after(stage, assembly.functions, context);
 				watches = watches || stage.prunePoint;
 			}
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			// A pass that throws ends the run, and the watch with it: the next compile on this thread must not inherit it.
 			if (watches)
 				IrEntryPrune.watching(null);

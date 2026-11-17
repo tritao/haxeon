@@ -1,5 +1,6 @@
 package compiler.ir.cfg;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrType;
 import compiler.ir.cfg.Cfg;
 
@@ -7,9 +8,9 @@ import compiler.ir.cfg.Cfg;
 class CfgVerifier {
 	public static function verify(fn:CfgFunction):Void {
 		if (fn.blocks.length == 0)
-			throw 'CFG function ${fn.name} has no entry block';
+			throw new InternalError('CFG function ${fn.name} has no entry block');
 		if (fn.valueCount < 0)
-			throw 'CFG function ${fn.name} has a negative value count';
+			throw new InternalError('CFG function ${fn.name} has a negative value count');
 		var blocks:Map<Int, CfgBlock> = [],
 			defined:Array<Int> = [for (_ in 0...fn.valueCount) 0],
 			available:Array<Int> = [for (_ in 0...fn.valueCount) 0],
@@ -17,15 +18,15 @@ class CfgVerifier {
 		for (i in 0...fn.blocks.length) {
 			var block = fn.blocks[i];
 			if (block.id != i || blocks.exists(block.id))
-				throw 'Invalid CFG block ${block.id} in ${fn.name}';
+				throw new InternalError('Invalid CFG block ${block.id} in ${fn.name}');
 			blocks.set(block.id, block);
 		}
 		for (argument in fn.arguments) {
 			if (arguments.exists(argument.name))
-				throw 'Duplicate CFG argument "${argument.name}"';
+				throw new InternalError('Duplicate CFG argument "${argument.name}"');
 			arguments.set(argument.name, true);
 			if (!fn.localTypes.exists(argument.name) || !sameType(fn.localTypes.get(argument.name), argument.type))
-				throw 'Wrong CFG type for argument "${argument.name}"';
+				throw new InternalError('Wrong CFG type for argument "${argument.name}"');
 		}
 		for (block in fn.blocks)
 			verifyBlock(fn, block, blocks, defined, available);
@@ -38,10 +39,10 @@ class CfgVerifier {
 				continue;
 			reachable.set(id, true);
 			if (!blocks.exists(id))
-				throw 'Unknown CFG block $id in ${fn.name}';
+				throw new InternalError('Unknown CFG block $id in ${fn.name}');
 			var block = blocks.get(id), terminator = block.terminator;
 			if (terminator == null)
-				throw 'Reachable CFG block $id in ${fn.name} has no terminator';
+				throw new InternalError('Reachable CFG block $id in ${fn.name} has no terminator');
 			for (located in block.instructions)
 				switch located.value {
 					case BeginTry(catchBlock, afterBlock, _):
@@ -74,7 +75,7 @@ class CfgVerifier {
 				case ConstInt(out, _):
 					switch out.type {
 						case I32, I64:
-						default: throw 'CFG integer constant ${out.id} must produce I32 or I64';
+						default: throw new InternalError('CFG integer constant ${out.id} must produce I32 or I64');
 					}
 					define(out, defined, available, block.id);
 				case ConstFloat(out, _):
@@ -85,7 +86,7 @@ class CfgVerifier {
 						case F32: false;
 						default: true;
 					}))
-						throw 'CFG float constant ${out.id} must produce F32 or F64';
+						throw new InternalError('CFG float constant ${out.id} must produce F32 or F64');
 					define(out, defined, available, block.id);
 				case ConstString(out, _):
 					expect(out, Bytes);
@@ -93,10 +94,10 @@ class CfgVerifier {
 				case StaticDataAddress(out, bytes):
 					expect(out, I32);
 					if (bytes.length == 0 || (bytes.length & 3) != 0)
-						throw "CFG static data must contain complete 32-bit words";
+						throw new InternalError("CFG static data must contain complete 32-bit words");
 					for (byte in bytes)
 						if (byte < 0 || byte > 255)
-							throw "CFG static data contains a value outside the byte range";
+							throw new InternalError("CFG static data contains a value outside the byte range");
 					define(out, defined, available, block.id);
 				case PointerOffset(out, pointer, byteOffset):
 					require(pointer, available, block.id);
@@ -109,20 +110,20 @@ class CfgVerifier {
 					require(pointer, available, block.id);
 					expect(pointer, RawPtr);
 					if (size != 1 && size != 2 && size != 4 && size != 8)
-						throw 'Unsupported CFG memory load size $size';
+						throw new InternalError('Unsupported CFG memory load size $size');
 					define(out, defined, available, block.id);
 				case MemoryStore(pointer, value, size):
 					require(pointer, available, block.id);
 					require(value, available, block.id);
 					expect(pointer, RawPtr);
 					if (size != 1 && size != 2 && size != 4 && size != 8)
-						throw 'Unsupported CFG memory store size $size';
+						throw new InternalError('Unsupported CFG memory store size $size');
 				case ConstBool(out, _):
 					expect(out, Bool);
 					define(out, defined, available, block.id);
 				case ConstNull(out):
 					if (!isReference(out.type))
-						throw 'CFG null constant ${out.id} has non-reference type ${out.type} in block ${block.id}';
+						throw new InternalError('CFG null constant ${out.id} has non-reference type ${out.type} in block ${block.id}');
 					define(out, defined, available, block.id);
 				case TypeValue(out, _):
 					expect(out, TypeRef);
@@ -134,7 +135,7 @@ class CfgVerifier {
 						default: true;
 					}) && !(IrTypeTools.nullableElement(out.type) != null
 						&& sameType(IrTypeTools.nullableElement(out.type), value.type)))
-						throw 'CFG dynamic conversion ${out.id} must produce Dyn or the nullable of its input';
+						throw new InternalError('CFG dynamic conversion ${out.id} must produce Dyn or the nullable of its input');
 					define(out, defined, available, block.id);
 				case IntToFloat(out, value):
 					require(value, available, block.id);
@@ -166,12 +167,12 @@ class CfgVerifier {
 						case F64: true;
 						default: false;
 					}))))
-						throw "CFG Float-to-Float conversion requires F64/F32 or F32/F64 types";
+						throw new InternalError("CFG Float-to-Float conversion requires F64/F32 or F32/F64 types");
 					define(out, defined, available, block.id);
 				case SafeCast(out, value):
 					require(value, available, block.id);
 					if (!IrTypeTools.isDynamic(value.type))
-						throw 'CFG safe cast source ${value.id} must be Dyn or a nullable primitive';
+						throw new InternalError('CFG safe cast source ${value.id} must be Dyn or a nullable primitive');
 					define(out, defined, available, block.id);
 				case BeginTry(catchBlock, afterBlock, _):
 					targetBlock(catchBlock, blocks);
@@ -184,12 +185,12 @@ class CfgVerifier {
 				case LoadLocal(out, name):
 					var type = local(fn, name);
 					if (!sameType(out.type, type))
-						throw 'Wrong CFG load type for local "$name"';
+						throw new InternalError('Wrong CFG load type for local "$name"');
 					define(out, defined, available, block.id);
 				case StoreLocal(name, value):
 					require(value, available, block.id);
 					if (!sameType(value.type, local(fn, name)))
-						throw 'Wrong CFG store type for local "$name"';
+						throw new InternalError('Wrong CFG store type for local "$name"');
 				case GlobalGet(out, _):
 					define(out, defined, available, block.id);
 				case GlobalSet(_, value):
@@ -201,7 +202,7 @@ class CfgVerifier {
 						|| !sameType(a.type, b.type)
 						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32)
 						&& !sameType(a.type, F64)))
-						throw "CFG arithmetic requires matching numeric values";
+						throw new InternalError("CFG arithmetic requires matching numeric values");
 					define(out, defined, available, block.id);
 				case Mod(out, a, b):
 					require(a, available, block.id);
@@ -213,7 +214,7 @@ class CfgVerifier {
 						case I64: false;
 						default: true;
 					})))
-						throw "CFG modulo requires matching integer values";
+						throw new InternalError("CFG modulo requires matching integer values");
 					define(out, defined, available, block.id);
 				case BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b):
 					require(a, available, block.id);
@@ -225,7 +226,7 @@ class CfgVerifier {
 						case I64: false;
 						default: true;
 					})))
-						throw "CFG bitwise operation requires matching integer values";
+						throw new InternalError("CFG bitwise operation requires matching integer values");
 					define(out, defined, available, block.id);
 				case ShiftLeft(out, a, b), ShiftRight(out, a, b), UnsignedShiftRight(out, a, b):
 					require(a, available, block.id);
@@ -240,7 +241,7 @@ class CfgVerifier {
 						case I32: false;
 						default: true;
 					}))
-						throw "CFG shift requires an Int or Int64 value and an Int count";
+						throw new InternalError("CFG shift requires an Int or Int64 value and an Int count");
 					define(out, defined, available, block.id);
 				case Less(out, a, b), LessEqual(out, a, b):
 					require(a, available, block.id);
@@ -259,7 +260,7 @@ class CfgVerifier {
 						case F64: false;
 						default: true;
 					})))
-						throw "CFG ordered comparison requires matching numeric values";
+						throw new InternalError("CFG ordered comparison requires matching numeric values");
 					define(out, defined, available, block.id);
 				case Equal(out, a, b):
 					require(a, available, block.id);
@@ -269,7 +270,7 @@ class CfgVerifier {
 						|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32)
 						&& !sameType(a.type, F64) && !sameType(a.type, Bool)
 						&& !isReference(a.type)))
-						throw 'CFG equality requires matching primitive or reference values';
+						throw new InternalError('CFG equality requires matching primitive or reference values');
 					define(out, defined, available, block.id);
 				case Call(out, _, arguments), CNativeCall(out, _, arguments):
 					for (argument in arguments)
@@ -277,40 +278,42 @@ class CfgVerifier {
 					define(out, defined, available, block.id);
 				case Intrinsic(out, operation, arguments):
 					if (arguments.length != 1)
-						throw "CFG enum Dynamic intrinsic requires one argument";
+						throw new InternalError("CFG enum Dynamic intrinsic requires one argument");
 					require(arguments[0], available, block.id);
 					switch operation {
 						case EnumDynamicBox(type):
 							switch type {
 								case Enum(_):
-								default: throw "CFG enum Dynamic box requires an enum type";
+								default: throw new InternalError("CFG enum Dynamic box requires an enum type");
 							}
 							if (!sameType(arguments[0].type, type)
-								|| !sameType(out.type, Dyn)) throw "Invalid CFG enum Dynamic box signature";
+								|| !sameType(out.type, Dyn))
+								throw new InternalError("Invalid CFG enum Dynamic box signature");
 						case EnumDynamicView(type):
 							switch type {
 								case Enum(_):
-								default: throw "CFG enum Dynamic view requires an enum type";
+								default: throw new InternalError("CFG enum Dynamic view requires an enum type");
 							}
 							if (!sameType(arguments[0].type, Array(Dyn))
-								|| !sameType(out.type, Array(Dyn))) throw "Invalid CFG enum Dynamic view signature";
+								|| !sameType(out.type, Array(Dyn)))
+								throw new InternalError("Invalid CFG enum Dynamic view signature");
 						case EnumTagBox(_),
-							EnumTagUnbox(_): throw "Enum tag adapters are introduced after CFG lowering";
+							EnumTagUnbox(_): throw new InternalError("Enum tag adapters are introduced after CFG lowering");
 						case InlineEnumBox(_),
-							InlineEnumUnbox(_): throw "Inline enum adapters are introduced after CFG lowering";
+							InlineEnumUnbox(_): throw new InternalError("Inline enum adapters are introduced after CFG lowering");
 					}
 					define(out, defined, available, block.id);
 				case StaticClosure(out, _):
 					switch out.type {
 						case Function(_, _):
-						default: throw 'CFG static closure must produce a function';
+						default: throw new InternalError('CFG static closure must produce a function');
 					}
 					define(out, defined, available, block.id);
 				case InstanceClosure(out, _, receiver):
 					require(receiver, available, block.id);
 					switch out.type {
 						case Function(_, _):
-						default: throw 'CFG instance closure must produce a function';
+						default: throw new InternalError('CFG instance closure must produce a function');
 					}
 					define(out, defined, available, block.id);
 				case CallClosure(out, closure, arguments):
@@ -319,35 +322,35 @@ class CfgVerifier {
 						case Dyn:
 							// A call through a Dynamic value: the arguments and the result are Dynamic too.
 							if (!sameType(out.type, Dyn))
-								throw 'CFG dynamic closure call must produce a Dynamic value';
+								throw new InternalError('CFG dynamic closure call must produce a Dynamic value');
 							for (argument in arguments) {
 								require(argument, available, block.id);
 								if (!IrTypeTools.compatible(Dyn, argument.type))
-									throw 'CFG dynamic closure call has a non-Dynamic argument';
+									throw new InternalError('CFG dynamic closure call has a non-Dynamic argument');
 							}
 						case Function(argumentTypes, result):
 							if (argumentTypes.length != arguments.length || !sameType(out.type, result))
-								throw 'CFG closure call has the wrong signature';
+								throw new InternalError('CFG closure call has the wrong signature');
 							for (i in 0...arguments.length) {
 								require(arguments[i], available, block.id);
 								if (!sameType(arguments[i].type, argumentTypes[i]))
-									throw 'CFG closure call has the wrong argument type';
+									throw new InternalError('CFG closure call has the wrong argument type');
 							}
-						default: throw 'CFG closure call requires a function value';
+						default: throw new InternalError('CFG closure call requires a function value');
 					}
 					define(out, defined, available, block.id);
 				case Upcast(out, value):
 					require(value, available, block.id);
 					switch [value.type, out.type] {
 						case [Obj(_), Obj(_)]:
-						default: throw 'CFG upcast requires object values';
+						default: throw new InternalError('CFG upcast requires object values');
 					}
 					define(out, defined, available, block.id);
 				case ToVirtual(out, value):
 					require(value, available, block.id);
 					switch out.type {
 						case Virtual(_):
-						default: throw 'CFG virtual conversion must produce a virtual value';
+						default: throw new InternalError('CFG virtual conversion must produce a virtual value');
 					}
 					define(out, defined, available, block.id);
 				case MethodCall(out, object, _, arguments, _):
@@ -358,7 +361,7 @@ class CfgVerifier {
 				case NewObject(out, _) | ValueInit(out):
 					switch out.type {
 						case Obj(_):
-						default: throw 'CFG object allocation must produce an object';
+						default: throw new InternalError('CFG object allocation must produce an object');
 					}
 					define(out, defined, available, block.id);
 				case FieldGet(out, object, _):
@@ -373,8 +376,9 @@ class CfgVerifier {
 					expect(index, I32);
 					switch array.type {
 						case Array(element):
-							if (!sameType(out.type, element)) throw 'CFG array read has the wrong element type';
-						default: throw 'CFG array read requires an Array value';
+							if (!sameType(out.type, element))
+								throw new InternalError('CFG array read has the wrong element type');
+						default: throw new InternalError('CFG array read requires an Array value');
 					}
 					define(out, defined, available, block.id);
 				case ArraySet(array, index, value):
@@ -385,14 +389,14 @@ class CfgVerifier {
 					switch array.type {
 						case Array(element):
 							if (!sameType(value.type, element))
-								throw 'CFG array write value ${value.id} has type ${value.type}, expected $element';
-						default: throw 'CFG array write requires an Array value';
+								throw new InternalError('CFG array write value ${value.id} has type ${value.type}, expected $element');
+						default: throw new InternalError('CFG array write requires an Array value');
 					}
 				case ArraySize(out, array):
 					require(array, available, block.id);
 					switch array.type {
 						case Array(_):
-						default: throw 'CFG array size requires an Array value';
+						default: throw new InternalError('CFG array size requires an Array value');
 					}
 					expect(out, I32);
 					define(out, defined, available, block.id);
@@ -400,14 +404,14 @@ class CfgVerifier {
 					require(array, available, block.id);
 					switch array.type {
 						case Array(element): expect(out, Iterator(element));
-						default: throw 'CFG iterator creation requires an Array value';
+						default: throw new InternalError('CFG iterator creation requires an Array value');
 					}
 					define(out, defined, available, block.id);
 				case IteratorHasNext(out, iterator):
 					require(iterator, available, block.id);
 					switch iterator.type {
 						case Iterator(_):
-						default: throw 'CFG hasNext requires an Iterator value';
+						default: throw new InternalError('CFG hasNext requires an Iterator value');
 					}
 					expect(out, Bool);
 					define(out, defined, available, block.id);
@@ -415,18 +419,18 @@ class CfgVerifier {
 					require(iterator, available, block.id);
 					switch iterator.type {
 						case Iterator(element): expect(out, element);
-						default: throw 'CFG next requires an Iterator value';
+						default: throw new InternalError('CFG next requires an Iterator value');
 					}
 					if ((switch (out.type) {
 						case Void: true;
 						default: false;
 					}))
-						throw 'CFG iterator next cannot produce Void';
+						throw new InternalError('CFG iterator next cannot produce Void');
 					define(out, defined, available, block.id);
 				case MakeEnum(out, _, _, arguments):
 					switch out.type {
 						case Enum(_):
-						default: throw 'CFG enum construction must produce an enum value';
+						default: throw new InternalError('CFG enum construction must produce an enum value');
 					}
 					for (argument in arguments)
 						require(argument, available, block.id);
@@ -435,14 +439,14 @@ class CfgVerifier {
 					expect(out, I32);
 					switch value.type {
 						case Enum(_):
-						default: throw 'CFG enum index requires an enum value';
+						default: throw new InternalError('CFG enum index requires an enum value');
 					}
 					require(value, available, block.id);
 					define(out, defined, available, block.id);
 				case EnumField(out, value, _, _):
 					switch value.type {
 						case Enum(_):
-						default: throw 'CFG enum field requires an enum value';
+						default: throw new InternalError('CFG enum field requires an enum value');
 					}
 					require(value, available, block.id);
 					define(out, defined, available, block.id);
@@ -453,13 +457,13 @@ class CfgVerifier {
 				case Return(value):
 					require(value, available, block.id);
 					if (!sameType(value.type, fn.result))
-						throw 'Wrong CFG return type in ${fn.name}';
+						throw new InternalError('Wrong CFG return type in ${fn.name}');
 				case Throw(value), Rethrow(value):
 					require(value, available, block.id);
 					expect(value, Dyn);
 				case Jump(target):
 					if (target == block.id)
-						throw 'CFG block ${block.id} in ${fn.name} has a degenerate self-loop';
+						throw new InternalError('CFG block ${block.id} in ${fn.name} has a degenerate self-loop');
 					targetBlock(target, blocks);
 				case Branch(condition, yes, no):
 					require(condition, available, block.id);
@@ -470,7 +474,7 @@ class CfgVerifier {
 					require(value, available, block.id);
 					expect(value, I32);
 					if (targets.length == 0)
-						throw 'CFG switch in block ${block.id} of ${fn.name} has no targets';
+						throw new InternalError('CFG switch in block ${block.id} of ${fn.name} has no targets');
 					for (target in targets)
 						targetBlock(target, blocks);
 					targetBlock(otherwise, blocks);
@@ -479,20 +483,20 @@ class CfgVerifier {
 
 	static function local(fn:CfgFunction, name:String):IrType {
 		if (!fn.localTypes.exists(name))
-			throw 'Unknown CFG local "$name"';
+			throw new InternalError('Unknown CFG local "$name"');
 		return fn.localTypes.get(name);
 	}
 
 	static function targetBlock(id:Int, blocks:Map<Int, CfgBlock>):Void
 		if (!blocks.exists(id))
-			throw 'Unknown CFG block $id';
+			throw new InternalError('Unknown CFG block $id');
 
 	static function define(value:CfgValue, global:Array<Int>, available:Array<Int>, blockId:Int):Void {
 		var id:Int = value.id;
 		if (id < 0 || id >= global.length)
-			throw 'CFG value ${value.id} is outside the declared value range';
+			throw new InternalError('CFG value ${value.id} is outside the declared value range');
 		if (global[id] != 0)
-			throw 'Duplicate CFG value ${value.id}';
+			throw new InternalError('Duplicate CFG value ${value.id}');
 		global[id] = 1;
 		available[id] = blockId + 1;
 	}
@@ -500,12 +504,12 @@ class CfgVerifier {
 	static function require(value:CfgValue, available:Array<Int>, blockId:Int):Void {
 		var id:Int = value.id;
 		if (id < 0 || id >= available.length || available[id] != blockId + 1)
-			throw 'CFG value ${value.id} is used outside its defining block or before definition in block $blockId';
+			throw new InternalError('CFG value ${value.id} is used outside its defining block or before definition in block $blockId');
 	}
 
 	static function expect(value:CfgValue, type:IrType):Void
 		if (!sameType(value.type, type))
-			throw 'CFG value ${value.id} has the wrong type';
+			throw new InternalError('CFG value ${value.id} has the wrong type');
 
 	static function sameType(left:IrType, right:IrType):Bool
 		return switch left {

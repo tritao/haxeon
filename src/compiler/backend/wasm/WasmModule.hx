@@ -6,6 +6,7 @@ import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmSubtype;
 import compiler.backend.wasm.WasmTypes.WasmTypeGroup;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 
 typedef WasmDataSegment = {
@@ -72,7 +73,7 @@ class WasmModule {
 	public var runtimeTypeIds:Null<WasmTypeIdPlan>;
 
 	public function runtimeTypeId(type:compiler.ir.Ir.IrType):Int {
-		if (runtimeTypeIds == null) throw "Wasm module has no runtime type ID plan";
+		if (runtimeTypeIds == null) throw new InternalError("Wasm module has no runtime type ID plan");
 		return runtimeTypeIds.id(type);
 	}
 
@@ -156,7 +157,7 @@ class WasmModule {
 	public function typeAt(index:Int):WasmSubtype {
 		flatten();
 		if (index < 0 || index >= flatTypes.length)
-			throw 'Unknown Wasm type index $index';
+			throw new InternalError('Unknown Wasm type index $index');
 		return flatTypes[index];
 	}
 
@@ -187,7 +188,7 @@ class WasmModule {
 	public function functionTypeAt(typeIndex:Int):WasmFunctionType {
 		return switch typeAt(typeIndex).composite {
 			case Func(type): type;
-			default: throw 'Wasm type index $typeIndex does not identify a function type';
+			default: throw new InternalError('Wasm type index $typeIndex does not identify a function type');
 		};
 	}
 
@@ -199,7 +200,7 @@ class WasmModule {
 	public function addImport(module:String, name:String, type:WasmFunctionType):Int {
 		// Imports take the first function indices, so one added now would renumber the defined functions.
 		if (functions.length != 0)
-			throw 'Wasm import $module.$name added after defined functions';
+			throw new InternalError('Wasm import $module.$name added after defined functions');
 		imports.push({module: module, name: name, type: type});
 		return imports.length - 1;
 	}
@@ -209,19 +210,19 @@ class WasmModule {
 
 	public function functionType(index:Int):WasmFunctionType {
 		if (index < 0 || index >= functionCount())
-			throw 'Unknown Wasm function index $index';
+			throw new InternalError('Unknown Wasm function index $index');
 		return index < imports.length ? imports[index].type : functions[index - imports.length].type;
 	}
 
 	public function functionAt(index:Int):WasmFunction {
 		if (index < imports.length || index >= functionCount())
-			throw 'Wasm function index $index is not a defined function';
+			throw new InternalError('Wasm function index $index is not a defined function');
 		return functions[index - imports.length];
 	}
 
 	public function setFunction(index:Int, fn:WasmFunction):Void {
 		if (index < imports.length || index >= functionCount())
-			throw 'Wasm function index $index is not a defined function';
+			throw new InternalError('Wasm function index $index is not a defined function');
 		functions[index - imports.length] = fn;
 	}
 

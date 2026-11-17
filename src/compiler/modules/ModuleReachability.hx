@@ -3,6 +3,7 @@ package compiler.modules;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.CancellationToken;
+import compiler.core.InternalError;
 
 /** Incrementally discovers and validates the source-module closure rooted at an entry module. */
 class ModuleReachability {
@@ -15,7 +16,7 @@ class ModuleReachability {
 	/** `roots` are modules compiled with every entry (Compiler.addRootModule); missing ones are skipped. */
 	public function new(modules:Map<String, ModuleState>, entryModule:String, ?roots:Array<String>) {
 		if (!modules.exists(entryModule))
-			throw 'Missing entry module "$entryModule"';
+			throw new InternalError('Missing entry module "$entryModule"');
 		this.modules = modules;
 		pending = [entryModule];
 		if (roots != null)
@@ -55,7 +56,7 @@ class ModuleReachability {
 			if (token != null)
 				token.check();
 			if (!modules.exists(name))
-				throw 'Reachable module "$name" disappeared during validation';
+				throw new InternalError('Reachable module "$name" disappeared during validation');
 			var state = modules.get(name);
 			for (dependency in state.dependencies)
 				if (!modules.exists(dependency)) {

@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -69,7 +70,7 @@ class EnumStringDescriptors {
 								}
 								var declaration = enums.get(name);
 								if (declaration == null)
-									throw 'Missing enum declaration "$name"';
+									throw new InternalError('Missing enum declaration "$name"');
 								for (item in declaration.cases)
 									tags.push(item.name);
 								EnumTagField;

@@ -1,6 +1,7 @@
 package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrPhiInput;
 
 /** Captures phi operands before any destination is overwritten on an edge. */
@@ -23,7 +24,7 @@ class WasmPhiLower {
 	static function requiredLocal(values:Map<Int, Int>, valueId:Int):Int {
 		var local = values.get(valueId);
 		if (local == null)
-			throw 'Missing Wasm local for value $valueId';
+			throw new InternalError('Missing Wasm local for value $valueId');
 		return local;
 	}
 

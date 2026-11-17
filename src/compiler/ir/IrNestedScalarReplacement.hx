@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
@@ -198,7 +199,7 @@ class IrNestedScalarReplacement {
 		}
 		var copiedHome:Null<IrBlock> = null;
 		for (block in copies) if (block.id == home.id) copiedHome = block;
-		if (copiedHome == null) throw "Missing nested scalar replacement block";
+		if (copiedHome == null) throw new InternalError("Missing nested scalar replacement block");
 		var copiedPosition = IrScalarReplacement.allocationPosition(copiedHome, root);
 		if (copiedPosition < 0) return nextValue;
 		var copiedGraph = new IrGraph(new IrFunction("nested-scalar-replacement", [], Void, copies, Ordinary)),

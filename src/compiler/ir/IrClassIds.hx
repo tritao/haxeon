@@ -1,5 +1,7 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
+
 /**
  * Dense class ids for the interface dispatch tables (docs/design/INTERFACE_VALUES.md). The ids are persistent state of a live session:
  *
@@ -36,7 +38,7 @@ class IrClassIds {
 		for (name in classes) {
 			var id = state.ids.get(name);
 			if (id == null)
-				throw 'Class "$name" has no id';
+				throw new InternalError('Class "$name" has no id');
 			result.set(name, id);
 		}
 		return result;

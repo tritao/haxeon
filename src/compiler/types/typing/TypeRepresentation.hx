@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.NativeLayout;
 import compiler.runtime.PlatformAbi;
@@ -865,7 +866,7 @@ class TypeRepresentation {
 
 	static function requiredMapValue<T>(source:Map<String, T>, name:String):T {
 		if (!source.exists(name))
-			throw 'Missing map entry "$name"';
+			throw new InternalError('Missing map entry "$name"');
 		return source.get(name);
 	}
 }

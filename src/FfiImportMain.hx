@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import compiler.ffi.CHeaderImporter;
 import compiler.ffi.CxxHeaderImporter;
 import compiler.ffi.CxxProjection;
@@ -77,7 +78,7 @@ class FfiImportMain {
 				var mapping = arg.substring(arg.indexOf("=") + 1),
 					separator = mapping.indexOf("=");
 				if (separator <= 0 || separator == mapping.length - 1)
-					throw 'Invalid --cxx-owned mapping "$mapping"; expected <factory>=<release>';
+					throw new InternalError('Invalid --cxx-owned mapping "$mapping"; expected <factory>=<release>');
 				cxxOwnership.set(mapping.substring(0, separator), mapping.substr(separator + 1));
 			} else if (StringTools.startsWith(arg, "--cxx-thunks="))
 				cxxThunksPath = arg.substring(arg.indexOf("=") + 1);
@@ -98,44 +99,44 @@ class FfiImportMain {
 			else if (StringTools.startsWith(arg, "--exclude-header="))
 				excludedHeaders.push(arg.substring(17));
 			else if (StringTools.startsWith(arg, "--"))
-				throw 'Unknown FFI import option "$arg"';
+				throw new InternalError('Unknown FFI import option "$arg"');
 			else
 				paths.push(arg);
 		if (paths.length == 0 && manifest != null)
 			paths.push(manifest.header);
 		if (manifest != null && manifest.config.cxxThunks && cxxThunksPath == null) {
 			if (output.length == 0)
-				throw "FFI manifest cxxThunks requires --output so the generated source path can be derived";
+				throw new InternalError("FFI manifest cxxThunks requires --output so the generated source path can be derived");
 			cxxThunksPath = Path.withoutExtension(output) + "-thunks.cpp";
 		}
 		if (language != "c" && language != "c++")
-			throw 'Unsupported FFI language "$language"';
+			throw new InternalError('Unsupported FFI language "$language"');
 		if (profile != "default" && profile != "direct" && profile != "virtual")
-			throw 'Unsupported C++ FFI profile "$profile"';
+			throw new InternalError('Unsupported C++ FFI profile "$profile"');
 		if (language != "c++" && profile != "default")
-			throw "--cxx-profile requires --language=c++";
+			throw new InternalError("--cxx-profile requires --language=c++");
 		if (profile == "direct" && (cxxVirtual || cxxThunksPath != null))
-			throw 'C++ profile "direct" forbids virtual dispatch and generated C++ thunks';
+			throw new InternalError('C++ profile "direct" forbids virtual dispatch and generated C++ thunks');
 		if (profile == "virtual")
 			cxxVirtual = true;
 		if (cxxSelections.length != 0 && language != "c++")
-			throw "--cxx-select requires --language=c++";
+			throw new InternalError("--cxx-select requires --language=c++");
 		if (cxxOwnership.keys().hasNext() && language != "c++")
-			throw "--cxx-owned requires --language=c++";
+			throw new InternalError("--cxx-owned requires --language=c++");
 		if (haxeOutputDir != null && language != "c++")
-			throw "--haxe-output-dir requires --language=c++";
+			throw new InternalError("--haxe-output-dir requires --language=c++");
 		if (cxxThunksPath != null && language != "c++")
-			throw "--cxx-thunks requires --language=c++";
+			throw new InternalError("--cxx-thunks requires --language=c++");
 		if (haxeOutputDir != null && library == null)
-			throw "--haxe-output-dir requires --library so generated wrappers can call the HXI interface";
+			throw new InternalError("--haxe-output-dir requires --library so generated wrappers can call the HXI interface");
 		if (manifest != null && manifest.config.projection && haxeOutputDir == null)
-			throw "FFI manifest projection requires --haxe-output-dir";
+			throw new InternalError("FFI manifest projection requires --haxe-output-dir");
 		if (haxeSourceManifestPath != null && haxeOutputDir == null)
-			throw "--haxe-source-manifest requires --haxe-output-dir";
+			throw new InternalError("--haxe-source-manifest requires --haxe-output-dir");
 		if (language == "c++" && clang == "clang")
 			clang = "clang++";
 		if (target.length == 0 || output.length == 0 || paths.length != 1)
-			throw "Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>";
+			throw new InternalError("Usage: haxeon ffi import [--manifest=<file>] --target=<triple> --output=<file> [--language=c|c++] [--cxx-profile=default|direct|virtual] [--std=<standard>] [--clang=<path>] [--cxx-trivial-values] [--cxx-lifetimes] [--cxx-virtual] [--cxx-thunks=<file>] [--cxx-owned=<factory>=<release>] [--cxx-select=<qualified-declaration>] [--library=<name>] [--interface=<name>] [--haxe-output-dir=<directory>] [--haxe-source-manifest=<file>] [--depends=<interface>] [--include=<dir>] [--define=<name[=value]>] [--compile-commands=<path>] [--source-label=<path>] [--exclude-header=<path>] <header>");
 		var cxxResult = language == "c++" ? CxxHeaderImporter.importHeader(paths[0], target, includes, clang, library,
 			interfaceName, dependencies,
 			excludedHeaders, standard, defines, compileCommands, trivialValues, cxxLifetimes, cxxVirtual,
@@ -151,7 +152,7 @@ class FfiImportMain {
 			// --cxx-thunks is accepted only with --language=c++ (checked above), so the C++ import ran.
 			var cxx = cxxResult;
 			if (cxx == null)
-				throw "--cxx-thunks requires --language=c++";
+				throw new InternalError("--cxx-thunks requires --language=c++");
 			var directory = Path.directory(cxxThunksPath);
 			if (directory.length > 0 && !FileSystem.exists(directory))
 				FileSystem.createDirectory(directory);
@@ -161,7 +162,7 @@ class FfiImportMain {
 			// --haxe-out is accepted only with --language=c++ (checked above), so the C++ import ran.
 			var cxx = cxxResult;
 			if (cxx == null)
-				throw "--haxe-out requires --language=c++";
+				throw new InternalError("--haxe-out requires --language=c++");
 			ensureDirectory(haxeOutputDir);
 			var projectionFiles:Array<String> = [];
 			for (projection in CxxProjection.sources(cxx.model, cxx.hxi, null, cxx.plans)) {

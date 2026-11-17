@@ -1,5 +1,6 @@
 package tools;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxeon.ProfileSpan;
 import runtime.LiveRefusal;
@@ -31,7 +32,7 @@ class LiveHost {
 	static function main():Void {
 		var args = Sys.args();
 		if (args.length != 3)
-			throw "Usage: LiveHost <module.hl> <entry> <arguments-json>";
+			throw new InternalError("Usage: LiveHost <module.hl> <entry> <arguments-json>");
 		var path = args[0], entry = args[1], arguments = args[2];
 		var stamp = readStamp(path);
 		var description = readDescription(path);
@@ -175,7 +176,7 @@ class LiveHost {
 			var status = Runtime.callInt(module, functionId(description, entry + ".close"));
 			if (status != 0)
 				Sys.exit(status);
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			try
 				Runtime.callInt(module, functionId(description, entry + ".close"))
 			catch (_:Dynamic) {}
@@ -189,10 +190,11 @@ class LiveHost {
 			entry:String,
 			arguments:String):Null<LoadedModule> {
 		ProfileSpan.begin("live.reload");
-		var replacement = try reloadModule(current, previous, next, bytes, entry, arguments) catch (error:Dynamic) {
-			ProfileSpan.end("live.reload");
-			throw error;
-		}
+		var replacement = try reloadModule(current, previous, next, bytes, entry,
+			arguments) catch (error:haxe.Exception) {
+				ProfileSpan.end("live.reload");
+				throw error;
+			}
 		ProfileSpan.end("live.reload");
 		return replacement;
 	}
@@ -401,6 +403,6 @@ class LiveHost {
 		for (item in description.identities)
 			if (item.name == name)
 				return item.id;
-		throw 'Missing live entry point "$name"';
+		throw new InternalError('Missing live entry point "$name"');
 	}
 }

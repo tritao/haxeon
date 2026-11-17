@@ -75,7 +75,7 @@ class AnalysisTransaction {
 				nonExceptionThrows: frontend.typedProgram.nonExceptionThrows,
 				moduleNamespaceUses: namespaceUses
 			};
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			var failedDiagnostics:Map<String, Array<Diagnostic>> = [];
 			for (name => state in candidate.modules)
 				failedDiagnostics.set(name, state.diagnostics.copy());

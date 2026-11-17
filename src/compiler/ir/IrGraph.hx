@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 
 /** Reachable normal and trap-entry edges, with immediate dominators. */
@@ -18,10 +19,10 @@ class IrGraph {
 
 	public function new(fn:IrFunction) {
 		if (fn.blocks.length == 0)
-			throw "IR function has no entry block";
+			throw new InternalError("IR function has no entry block");
 		for (block in fn.blocks) {
 			if (blocks.exists(block.id))
-				throw 'Duplicate IR block ${block.id}';
+				throw new InternalError('Duplicate IR block ${block.id}');
 			blocks.set(block.id, block);
 		}
 		visit(fn.blocks[0].id, []);
@@ -58,7 +59,7 @@ class IrGraph {
 
 	public function block(id:Int):IrBlock {
 		if (!blocks.exists(id))
-			throw 'Unknown IR block $id';
+			throw new InternalError('Unknown IR block $id');
 		return blocks.get(id);
 	}
 
@@ -88,11 +89,11 @@ class IrGraph {
 
 	function prepareVisit(id:Int, seen:Map<Int, Bool>):Void {
 		if (!blocks.exists(id))
-			throw 'Unknown IR block $id';
+			throw new InternalError('Unknown IR block $id');
 		seen.set(id, true);
 		var block = blocks.get(id), next:Array<Int> = [];
 		if (block.terminator == null)
-			throw 'Reachable IR block $id has no terminator';
+			throw new InternalError('Reachable IR block $id has no terminator');
 		switch block.terminator.value {
 			case Jump(target):
 				next.push(target);
@@ -109,7 +110,7 @@ class IrGraph {
 			switch instruction.value {
 				case BeginTry(handler, after, _):
 					if (!blocks.exists(after))
-						throw 'Unknown IR block $after';
+						throw new InternalError('Unknown IR block $after');
 					if (next.indexOf(handler) < 0)
 						next.push(handler);
 				default:
@@ -129,13 +130,13 @@ class IrGraph {
 
 	static function requiredInt(values:Map<Int, Int>, key:Int):Int {
 		if (!values.exists(key))
-			throw 'Missing graph index $key';
+			throw new InternalError('Missing graph index $key');
 		return values.get(key);
 	}
 
 	static function requiredSuccessors(values:Map<Int, Array<Int>>, key:Int):Array<Int> {
 		if (!values.exists(key))
-			throw 'Missing graph successors $key';
+			throw new InternalError('Missing graph successors $key');
 		return values.get(key);
 	}
 

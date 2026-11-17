@@ -1,5 +1,6 @@
 package editor.lsp;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 
 /** One open LSP document with monotonically versioned text and position conversion. */
@@ -42,7 +43,7 @@ class LspDocument {
 		if (version <= this.version)
 			return false;
 		if (changes.length == 0)
-			throw "LSP document change batch is empty";
+			throw new InternalError("LSP document change batch is empty");
 		var candidate = source;
 		for (change in changes) {
 			var text = stringField(change, "text"),
@@ -56,14 +57,14 @@ class LspDocument {
 					startOffset = view.offset(start.line, start.character),
 					endOffset = view.offset(end.line, end.character);
 				if (endOffset < startOffset)
-					throw "LSP document change range is reversed";
+					throw new InternalError("LSP document change range is reversed");
 				var rawLength:Dynamic = Reflect.field(change, "rangeLength");
 				if (rawLength != null) {
 					if (!Std.isOfType(rawLength, Int) || rawLength < 0)
-						throw 'Field "rangeLength" must be a non-negative integer';
+						throw new InternalError('Field "rangeLength" must be a non-negative integer');
 					var replaced = view.snapshot.slice(startOffset, endOffset);
 					if (rawLength != utf16Length(replaced, 0, replaced.length))
-						throw "LSP document change rangeLength does not match the replaced text";
+						throw new InternalError("LSP document change rangeLength does not match the replaced text");
 				}
 				candidate = view.snapshot.slice(0, startOffset) + text + view.snapshot.slice(endOffset,
 					view.snapshot.bytes.length);
@@ -78,18 +79,18 @@ class LspDocument {
 	static function positionField(value:Dynamic, name:String):{line:Int, character:Int} {
 		var position:Dynamic = Reflect.field(value, name);
 		if (position == null)
-			throw 'Missing field "$name"';
+			throw new InternalError('Missing field "$name"');
 		var line:Dynamic = Reflect.field(position, "line"),
 			character:Dynamic = Reflect.field(position, "character");
 		if (!Std.isOfType(line, Int) || !Std.isOfType(character, Int))
-			throw "LSP positions require integer line and character fields";
+			throw new InternalError("LSP positions require integer line and character fields");
 		return {line: cast line, character: cast character};
 	}
 
 	static function stringField(value:Dynamic, name:String):String {
 		var field:Dynamic = Reflect.field(value, name);
 		if (!Std.isOfType(field, String))
-			throw 'Field "$name" must be a string';
+			throw new InternalError('Field "$name" must be a string');
 		return cast field;
 	}
 
@@ -128,14 +129,14 @@ class DocumentStore {
 	public function replace(uri:String, version:Int, source:String):Null<LspDocument> {
 		var document = byUri.get(uri);
 		if (document == null)
-			throw 'Document is not open: $uri';
+			throw new InternalError('Document is not open: $uri');
 		return document.replace(version, source) ? document : null;
 	}
 
 	public function applyChanges(uri:String, version:Int, changes:Array<Dynamic>):Null<LspDocument> {
 		var document = byUri.get(uri);
 		if (document == null)
-			throw 'Document is not open: $uri';
+			throw new InternalError('Document is not open: $uri');
 		return document.applyChanges(version, changes) ? document : null;
 	}
 
@@ -149,7 +150,7 @@ class DocumentStore {
 	public function get(uri:String):LspDocument {
 		var document = byUri.get(uri);
 		if (document == null)
-			throw 'Document is not open: $uri';
+			throw new InternalError('Document is not open: $uri');
 		return document;
 	}
 

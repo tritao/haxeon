@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrType;
 import compiler.ir.IrValueLaneLayout.IrValueLaneShape;
@@ -31,21 +32,21 @@ class IrValueArrayLayout {
 			case Nullable(Obj(value)): hasValidity = false;
 				storage = element;
 				value;
-			case Nullable(Enum(_)): throw "Nullable enums must use their canonical Enum IR type";
+			case Nullable(Enum(_)): throw new InternalError("Nullable enums must use their canonical Enum IR type");
 			case Enum(value):
 				var resolved = enums == null ? null : IrInlineEnumStorage.resolve(enums, objects, value);
-				if (resolved == null) throw 'Enum "$value" has no inline storage';
+				if (resolved == null) throw new InternalError('Enum "$value" has no inline storage');
 				// Enum null is tag zero, not an additional optional wrapper or validity bit.
 				hasValidity = false;
 				storage = resolved;
 				switch resolved {
 					case Obj(name): name;
-					default: throw "Invalid enum value record";
+					default: throw new InternalError("Invalid enum value record");
 				};
-			default: throw 'A value array requires a struct element';
+			default: throw new InternalError('A value array requires a struct element');
 		};
 		var object = objects.get(name);
-		if (object == null || !object.isValue) throw 'Array element "$name" is not a struct';
+		if (object == null || !object.isValue) throw new InternalError('Array element "$name" is not a struct');
 		lanes = new IrValueLaneLayout(objects, pointerBits, target).shape(storage);
 	}
 
@@ -57,7 +58,7 @@ class IrValueArrayLayout {
 		var payload = validityWordOffset(capacity);
 		if (!hasValidity) return payload;
 		var validity = Math.fceil(capacity * 1.0 / lanes.scalarWordBits), total = payload * 1.0 + validity;
-		if (total > 0x7fffffff) throw 'Value array scalar lane is too large';
+		if (total > 0x7fffffff) throw new InternalError('Value array scalar lane is too large');
 		return Std.int(total);
 	}
 

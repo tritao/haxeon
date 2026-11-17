@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.core.InternalError;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrProgramAssembler;
 import compiler.ir.IrFunction;
@@ -259,7 +260,7 @@ class HlModuleAssembler {
 			result.runtimeNatives = state.runtimeNatives.copy();
 		else if (state.initialized)
 			// Import indices are part of the published layout; guessing can patch the wrong slots.
-			throw "Legacy assembler state lacks native-import ordering; rebuild the baseline";
+			throw new InternalError("Legacy assembler state lacks native-import ordering; rebuild the baseline");
 		result.dispatchNatives = state.dispatchNatives == null ? null : state.dispatchNatives.copy();
 		if (state.retiredFields != null)
 			for (name in state.retiredFields)
@@ -279,7 +280,7 @@ class HlModuleAssembler {
 			&& state.publishedGlobals > result.symbols.globals.length
 			|| (!state.initialized && state.revision != 0)
 			|| (state.initialized && state.revision == 0))
-			throw "Invalid HashLink assembler baseline";
+			throw new InternalError("Invalid HashLink assembler baseline");
 		result.initialized = state.initialized;
 		result.revision = state.revision;
 		result.publishedInts = state.publishedInts;
@@ -771,7 +772,7 @@ class HlModuleAssembler {
 		var reload = switch decision {
 			case Patch: false;
 			case ReloadDomain(_): true;
-			case Reject(diagnostics): throw diagnostics.join("; ");
+			case Reject(diagnostics): throw new InternalError(diagnostics.join("; "));
 		};
 		var guards:Array<{name:String, description:String}> = [];
 		if (initialized && !reload) {
@@ -900,11 +901,11 @@ class HlModuleAssembler {
 			for (index in publishedSlots...cache.slots.length) {
 				var name = cache.slots[index], slot = layout.get(name);
 				if (slot == null)
-					throw 'Added function $name has no slot';
+					throw new InternalError('Added function $name has no slot');
 				addedFunctions.push({slot: slot, name: name});
 			}
 		if (livePatching == (loweredCache != null))
-			throw 'a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}';
+			throw new InternalError('a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}');
 		var liveCache = loweredCache;
 		if (livePatching) {
 			if (!reuseLowered)

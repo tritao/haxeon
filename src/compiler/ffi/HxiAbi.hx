@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiType;
@@ -66,7 +67,7 @@ class HxiAbi {
 			case "x86_64" | "amd64" | "aarch64" | "arm64" | "riscv64" | "wasm64": 64;
 			case "portable32": 32;
 			case "portable64": 64;
-			default: throw 'Unsupported HXI target architecture "$architecture"';
+			default: throw new InternalError('Unsupported HXI target architecture "$architecture"');
 		}
 		var windows = this.target.indexOf("windows") >= 0 || this.target.indexOf("mingw") >= 0
 			|| this.target.indexOf("msvc") >= 0;
@@ -89,7 +90,7 @@ class HxiAbi {
 		if (cachedFunctions != null)
 			return cachedFunctions;
 		if (model == null)
-			throw "A target-only HXI ABI has no function declarations";
+			throw new InternalError("A target-only HXI ABI has no function declarations");
 		cachedFunctions = HxiNativeSignature.lower(model, this, declarations);
 		return cachedFunctions;
 	}
@@ -178,7 +179,7 @@ class HxiAbi {
 				for (value in values)
 					mask = haxe.Int64.or(mask, value.value);
 			default:
-				throw 'Not a native flags declaration "$name"';
+				throw new InternalError('Not a native flags declaration "$name"');
 		}
 		flagMasks.set(name, mask);
 		return mask;
@@ -196,7 +197,7 @@ class HxiAbi {
 		var result = switch type {
 			case Primitive("void"):
 				if (!allowVoid)
-					throw "Void has no value ABI";
+					throw new InternalError("Void has no value ABI");
 				VoidValue;
 			case Primitive("bool32"): Boolean32Value;
 			case Primitive(name): classifyPrimitive(name);
@@ -207,32 +208,32 @@ class HxiAbi {
 						structure);
 					case CallbackValue(name, arguments, result, _): CallbackValue(name, arguments, result, true);
 					case Utf8Value(_): Utf8Value(true);
-					case _: throw "Nullable ABI value must be a pointer";
+					case _: throw new InternalError("Nullable ABI value must be a pointer");
 				}
 			case Const(element): classify(element, allowVoid);
-			case Array(_, _): throw "C arrays cannot be passed by value";
+			case Array(_, _): throw new InternalError("C arrays cannot be passed by value");
 			case Named(name):
 				var declaration = declarations.get(name);
 				if (declaration == null)
-					throw 'Unknown HXI type "$name"';
+					throw new InternalError('Unknown HXI type "$name"');
 				switch declaration {
 					case Alias(_, target, _): classify(target, allowVoid);
 					case Handle(handleName, representation, _, _):
 						switch classify(representation, allowVoid) {
 							case IntegerValue(32, Unsigned): HandleValue(handleName);
-							case _: throw 'Handle HXI type "$name" requires an unsigned 32-bit representation';
+							case _: throw new InternalError('Handle HXI type "$name" requires an unsigned 32-bit representation');
 						}
 					case Enumeration(_, representation, _, _, _):
 						switch classify(representation, allowVoid) {
 							case IntegerValue(bits, sign): EnumerationValue(name, bits, sign);
-							case _: throw 'Enum HXI type "$name" does not have an integer representation';
+							case _: throw new InternalError('Enum HXI type "$name" does not have an integer representation');
 						}
 					case Callback(_, parameters, result, _, _):
 						CallbackValue(name, [for (parameter in parameters) classify(parameter.type)],
 							classify(result, true), false);
 					case Structure(_, size, align, _, _): AggregateValue(name, size, align);
-					case Opaque(_, _): throw 'Opaque HXI type "$name" cannot be passed by value';
-					case _: throw 'HXI declaration "$name" is not a type';
+					case Opaque(_, _): throw new InternalError('Opaque HXI type "$name" cannot be passed by value');
+					case _: throw new InternalError('HXI declaration "$name" is not a type');
 				}
 		};
 		cache.set(key, result);
@@ -292,7 +293,7 @@ class HxiAbi {
 			case "f32": FloatValue(32);
 			case "f64": FloatValue(64);
 			case "utf8": Utf8Value(false);
-			default: throw 'Unsupported primitive HXI type "$name"';
+			default: throw new InternalError('Unsupported primitive HXI type "$name"');
 		};
 
 	static function nameOf(declaration:HxiDeclaration):String

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrValueLaneLayout.IrValueLaneShape;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
@@ -43,7 +44,7 @@ class IrInlineEnumLayout {
 		if (classificationObjects != null) {
 			var values = [for (object in classificationObjects) if (object.isValue) object.name => true];
 			for (object in objects) if (object.isValue && !values.exists(object.name))
-				throw 'Missing canonical value object "${object.name}" for inline enum classification';
+				throw new InternalError('Missing canonical value object "${object.name}" for inline enum classification');
 		}
 		declarations = [for (declaration in enums) declaration.name => declaration];
 		this.objects = [for (object in objects) object.name => object];
@@ -174,7 +175,7 @@ class IrInlineEnumLayout {
 		// The frontend supplies the independently calculated canonical C layouts; never
 		// try to reconstruct them from target-specific offsets or erase their padding.
 		if (canonical && object.nativeLayout != null && object.nativeLayout.target != CANONICAL_ABI)
-			throw 'Inline enum classification requires the canonical $CANONICAL_ABI layout for "${object.name}"';
+			throw new InternalError('Inline enum classification requires the canonical $CANONICAL_ABI layout for "${object.name}"');
 		var existing = valueCopies.get(object.name);
 		if (existing != null) return existing;
 		var name = object.name;

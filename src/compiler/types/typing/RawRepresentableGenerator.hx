@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.types.InlineConstantEvaluator;
@@ -47,7 +48,7 @@ class RawRepresentableGenerator {
 
 	public static function request(session:TypingSession, owner:String, method:String, span:SourceSpan):String {
 		if (method != "rawValue" && method != "fromRaw" && method != "toString")
-			throw 'Unknown synthesized raw member "$method"';
+			throw new InternalError('Unknown synthesized raw member "$method"');
 		var helper = name(owner, method);
 		session.output.requests.add(RawRepresentableHelper(helper, {
 			owner: owner,
@@ -71,7 +72,7 @@ class RawRepresentableGenerator {
 		for (value in declaration.values) {
 			var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
 			if (constant == null)
-				throw "Nonconstant raw value after conformance validation";
+				throw new InternalError("Nonconstant raw value after conformance validation");
 			var key = Std.string(constant.expression);
 			if (seen.exists(key))
 				continue;
@@ -104,7 +105,7 @@ class RawRepresentableGenerator {
 			var request = session.programOutput.requests.rawRepresentables.get(helper),
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
-				throw 'Missing RawRepresentable declaration "${request.owner}"';
+				throw new InternalError('Missing RawRepresentable declaration "${request.owner}"');
 			var raw = typer.lowerType(declaration.underlying, declaration.span),
 				nominal:CompilerType = TAbstract(declaration.name, [], raw),
 				span = declaration.span,
@@ -131,12 +132,12 @@ class RawRepresentableGenerator {
 				for (value in declaration.values) {
 					var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
 					if (constant == null)
-						throw "Nonconstant raw value after conformance validation";
+						throw new InternalError("Nonconstant raw value after conformance validation");
 					switch raw {
 						case TInt:
 							var code = switch constant.expression {
 								case TIntLiteral(value): value;
-								default: throw "Noninteger raw constant";
+								default: throw new InternalError("Noninteger raw constant");
 							};
 							if (seen.exists(code))
 								continue;

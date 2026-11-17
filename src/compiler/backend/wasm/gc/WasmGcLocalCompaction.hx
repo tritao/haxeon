@@ -2,6 +2,7 @@ package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.core.InternalError;
 
 /** Remove local round trips and unused local slots after GC function lowering. */
 class WasmGcLocalCompaction {
@@ -33,7 +34,7 @@ class WasmGcLocalCompaction {
 				return index;
 			var result = indices.get(index);
 			if (result == null)
-				throw 'Missing Wasm local $index during compaction';
+				throw new InternalError('Missing Wasm local $index during compaction');
 			return result;
 		}
 		return {body: [for (instruction in current)

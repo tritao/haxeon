@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -26,7 +27,7 @@ class GenericOwnerErasure {
 					previous = requests.get(name);
 				if (previous != null && (!Type.enumEq(previous.result, signature.result)
 					|| !sameTypes(previous.arguments, signature.arguments)))
-					throw 'Conflicting erased generic operation "$name"';
+					throw new InternalError('Conflicting erased generic operation "$name"');
 				requests.set(name, signature);
 			default:
 		}
@@ -41,7 +42,7 @@ class GenericOwnerErasure {
 					case Dyn: false;
 					default: true;
 				}))
-					throw 'Invalid erased generic operation "$name"';
+					throw new InternalError('Invalid erased generic operation "$name"');
 			var owner = parts[0],
 				operation = parts[1],
 				member = parts[2],
@@ -69,7 +70,8 @@ class GenericOwnerErasure {
 						builder.fieldSet(target, member, convert(builder, arguments[0], field.type, byName));
 						builder.returnValue(builder.constVoid());
 					case "call" if (method != null):
-						if (method.arguments.length != arguments.length + 1) throw 'Incompatible erased method "$name"';
+						if (method.arguments.length != arguments.length + 1)
+							throw new InternalError('Incompatible erased method "$name"');
 						var adapted = [for (index in 0...arguments.length) convert(builder, arguments[index],
 							method.arguments[index + 1].type, byName)],
 							result = builder.methodCall(target, member, adapted, method.result);
@@ -77,7 +79,7 @@ class GenericOwnerErasure {
 							case Void: true;
 							default: false;
 						}) ? result : convert(builder, result, signature.result, byName));
-					default: throw 'Invalid erased generic operation "$name"';
+					default: throw new InternalError('Invalid erased generic operation "$name"');
 				}
 				builder.select(next);
 			}
@@ -100,7 +102,8 @@ class GenericOwnerErasure {
 		names.sort(Reflect.compare);
 		for (name in names) {
 			var parts = name.substr(TYPE_TEST_PREFIX.length).split(":"), exact = parts[0] == "exact";
-			if (parts.length != 2 || (!exact && parts[0] != "instance")) throw 'Invalid generic type test "$name"';
+			if (parts.length != 2
+				|| (!exact && parts[0] != "instance")) throw new InternalError('Invalid generic type test "$name"');
 			var owner = parts[1],
 				candidates = [for (object in objects) if (facts.genericOwnerOrigin(object.name) == owner) object.name];
 			candidates.sort(Reflect.compare);

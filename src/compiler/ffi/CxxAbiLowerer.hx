@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.CxxModel.CxxAlias;
 import compiler.ffi.CxxModel.CxxEnum;
 import compiler.ffi.CxxModel.CxxFunction;
@@ -247,16 +248,16 @@ class CxxAbiLowerer {
 			case CxxFunctionPointer(_, _, _):
 				var callbackName = callbackNames.get(typeKey(type));
 				if (callbackName == null)
-					throw "CXX021 missing lowered callback declaration";
+					throw new InternalError("CXX021 missing lowered callback declaration");
 				Named(callbackName);
 			case CxxStringView: Primitive("utf8");
 			case CxxByteSpan(_): Pointer(Primitive("u8"));
 			case CxxNamed(name):
 				if (!records.exists(name) && !enums.exists(name) && !aliases.exists(name))
-					throw 'CXX012 unknown type "$name"';
+					throw new InternalError('CXX012 unknown type "$name"');
 				Named(hxiName(name));
-			case CxxRValueReference(_): throw "CXX001 rvalue references are unsupported by CXX_ABI_V1";
-			case CxxUnsupported(raw, reason): throw 'CXX009 unsupported C++ type "$raw": $reason';
+			case CxxRValueReference(_): throw new InternalError("CXX001 rvalue references are unsupported by CXX_ABI_V1");
+			case CxxUnsupported(raw, reason): throw new InternalError('CXX009 unsupported C++ type "$raw": $reason');
 		};
 	}
 
@@ -265,7 +266,7 @@ class CxxAbiLowerer {
 			callbackNames:Map<String, String>):HxiDeclaration {
 		var functionPointer = switch callback.type {
 			case CxxFunctionPointer(parameters, result, _): {parameters: parameters, result: result};
-			case _: throw "CXX021 expected a C++ function pointer callback";
+			case _: throw new InternalError("CXX021 expected a C++ function pointer callback");
 		};
 		var parameters:Array<HxiModel.HxiParameter> = [];
 		for (index in 0...functionPointer.parameters.length)

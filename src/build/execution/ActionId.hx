@@ -1,11 +1,13 @@
 package build.execution;
 
+import compiler.core.InternalError;
+
 class ActionId {
 	public final value:String;
 
 	public function new(value:String) {
 		if (value == null || value.length == 0)
-			throw "ActionId cannot be empty";
+			throw new InternalError("ActionId cannot be empty");
 		this.value = value;
 	}
 

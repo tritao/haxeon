@@ -5,6 +5,7 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmReflectionTable;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrProgram;
 
@@ -33,7 +34,7 @@ class WasmGcReflection {
 		if (size == 0)
 			return null;
 		if (plan.staticDataTypeIndex < 0)
-			throw "Wasm GC reflection table has no planned array type";
+			throw new InternalError("Wasm GC reflection table has no planned array type");
 		var bytes = haxe.io.Bytes.alloc(size);
 		module.data.push({offset: 0, bytes: bytes, passive: true, censusCategory: "reflection"});
 		var global = module.globals.length;
@@ -63,7 +64,7 @@ class WasmGcReflection {
 			return null;
 		var table = globals.get(TABLE_GLOBAL);
 		if (table == null)
-			throw "Wasm GC reflection has no table global";
+			throw new InternalError("Wasm GC reflection has no table global");
 		var entry = functions.get(ENTRY_FUNCTION);
 		if (entry == null) {
 			entry = addEntryLookup(module, plan, table,

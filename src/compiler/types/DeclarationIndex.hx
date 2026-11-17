@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
 import compiler.syntax.Ast;
 import compiler.core.Diagnostic;
@@ -321,7 +322,7 @@ class DeclarationIndex {
 	public function declaredFieldType(owner:String, field:AstField):AstType {
 		var type = field.type;
 		if (type == null)
-			throw 'The type of unannotated field "$owner.${field.name}" is read before the typer gives it';
+			throw new InternalError('The type of unannotated field "$owner.${field.name}" is read before the typer gives it');
 		return type;
 	}
 
@@ -523,7 +524,7 @@ class DeclarationIndex {
 						};
 					} else {
 						if (!enums.exists(name))
-							throw 'Missing nominal declaration "$name"';
+							throw new InternalError('Missing nominal declaration "$name"');
 						var found = enums.get(name);
 						declaration = {
 							typeParameters: found.typeParameters,
@@ -745,7 +746,7 @@ class DeclarationIndex {
 				default:
 					resolved = resolveInner(alias.type, alias.span, resolving, substitutions);
 			}
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			// A failed resolution must leave the index as it found it: the next one starts from these counters.
 			if (opened) {
 				openDepth--;
@@ -946,7 +947,7 @@ class DeclarationIndex {
 	function validateCycles():Void {
 		for (name in aliases.keys()) {
 			if (!aliases.exists(name))
-				throw 'Alias "$name" disappeared during cycle validation';
+				throw new InternalError('Alias "$name" disappeared during cycle validation');
 			var alias = aliases.get(name),
 				substitutions:Map<String, CompilerType> = [];
 			for (parameter in alias.typeParameters)
@@ -956,7 +957,7 @@ class DeclarationIndex {
 		for (name in classes.keys()) {
 			visitClass(name, []);
 			if (!classes.exists(name))
-				throw 'Class "$name" disappeared during cycle validation';
+				throw new InternalError('Class "$name" disappeared during cycle validation');
 			var decl = classes.get(name),
 				substitutions:Map<String, CompilerType> = [];
 			for (parameter in decl.typeParameters)
@@ -976,7 +977,7 @@ class DeclarationIndex {
 	function validateInterfaceInstantiations():Void {
 		for (name in interfaces.keys()) {
 			if (!interfaces.exists(name))
-				throw 'Interface "$name" disappeared during inheritance validation';
+				throw new InternalError('Interface "$name" disappeared during inheritance validation');
 			var decl = interfaces.get(name);
 			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(NominalKind.Interface, decl.name, [
 				for (parameter in decl.typeParameters)
@@ -985,7 +986,7 @@ class DeclarationIndex {
 		}
 		for (name in classes.keys()) {
 			if (!classes.exists(name))
-				throw 'Class "$name" disappeared during inheritance validation';
+				throw new InternalError('Class "$name" disappeared during inheritance validation');
 			var decl = classes.get(name);
 			validateInterfaceSet(inheritance.inheritedInterfaces(TInstance(NominalKind.Class, decl.name, [
 				for (parameter in decl.typeParameters)
@@ -1289,7 +1290,7 @@ class DeclarationIndex {
 	static function requiredNominalName(type:CompilerType):String {
 		var name = nominalName(type);
 		if (name == null)
-			throw "Expected nominal inheritance type";
+			throw new InternalError("Expected nominal inheritance type");
 		return name;
 	}
 
@@ -1337,7 +1338,7 @@ class DeclarationIndex {
 		if (program.functions.length > 0)
 			return program.functions[0].span;
 		if (emptySpan == null)
-			throw "Cannot index an empty program";
+			throw new InternalError("Cannot index an empty program");
 		return emptySpan;
 	}
 

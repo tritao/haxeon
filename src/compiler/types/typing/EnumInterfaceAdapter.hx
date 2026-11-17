@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
@@ -39,14 +40,14 @@ class EnumInterfaceAdapter {
 
 	static function build(session:TypingSession, key:String):TypedClass {
 		var request = session.programOutput.requests.enumInterfaceAdapters.get(key);
-		if (request == null) throw 'Missing enum interface adapter "$key"';
+		if (request == null) throw new InternalError('Missing enum interface adapter "$key"');
 		var interfaceName = switch request.interfaceType {
 			case TInstance(NominalKind.Interface, name, _): name;
-			default: throw 'Invalid enum interface adapter contract "$key"';
+			default: throw new InternalError('Invalid enum interface adapter contract "$key"');
 		};
 		var enumName = switch request.type {
 			case TInstance(NominalKind.Enum, name, _): name;
-			default: throw 'Invalid enum interface adapter value "$key"';
+			default: throw new InternalError('Invalid enum interface adapter value "$key"');
 		};
 		// One adapter serves every conversion of the enum to the interface: it carries the enum's declaration span, not the first use's.
 		var ownerType:CompilerType = TInstance(NominalKind.Class, key, []),
@@ -71,10 +72,10 @@ class EnumInterfaceAdapter {
 		function addMethods(interfaceType:CompilerType):Void {
 			var name = switch interfaceType {
 				case TInstance(NominalKind.Interface, value, _): value;
-				default: throw "Invalid interface base";
+				default: throw new InternalError("Invalid interface base");
 			};
 			var declaration = session.interfaceDecls.get(name);
-			if (declaration == null) throw 'Missing interface "$name"';
+			if (declaration == null) throw new InternalError('Missing interface "$name"');
 			var substitutions = session.representation.nominalSubstitutions(interfaceType);
 			for (base in declaration.bases)
 				addMethods(session.declarations.resolve(base, declaration.span, substitutions));
@@ -82,13 +83,13 @@ class EnumInterfaceAdapter {
 				if (seen.exists(contract.name)) continue;
 				seen.set(contract.name, true);
 				var implementation = EnumConformanceMethods.method(session, request.type, contract.name);
-				if (implementation == null) throw 'Missing enum method "$enumName.${contract.name}"';
+				if (implementation == null) throw new InternalError('Missing enum method "$enumName.${contract.name}"');
 				var actualArguments = switch request.type {
 					case TInstance(_, _, arguments): arguments;
 					default: [];
 				};
 				var enumDeclaration = session.enumDecls.get(enumName), enumSubstitutions:Map<String, CompilerType> = [];
-				if (enumDeclaration == null) throw 'Missing enum declaration "$enumName"';
+				if (enumDeclaration == null) throw new InternalError('Missing enum declaration "$enumName"');
 				for (index in 0...enumDeclaration.typeParameters.length)
 					enumSubstitutions.set(enumDeclaration.typeParameters[index],
 						index < actualArguments.length ? actualArguments[index]

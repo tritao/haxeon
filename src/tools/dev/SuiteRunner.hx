@@ -1,5 +1,6 @@
 package tools.dev;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.Path;
 import haxeon.io.FileTree;
@@ -69,7 +70,7 @@ class SuiteRunner {
 		if (options.only.length > 0) {
 			for (name in options.only)
 				if (suites.filter(suite -> suite.name == name).length == 0)
-					throw 'Suite "$name" is not in mode ${options.mode}';
+					throw new InternalError('Suite "$name" is not in mode ${options.mode}');
 			suites = suites.filter(suite -> options.only.indexOf(suite.name) >= 0);
 		}
 		var stamp = DateTools.format(Date.now(), "%Y%m%d-%H%M%S"),

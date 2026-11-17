@@ -1,5 +1,7 @@
 package project;
 
+import compiler.core.InternalError;
+
 /** Selects the acquisition implementation appropriate for each package source. */
 class ProjectSourceAcquirer implements SourceAcquirer {
 	final path:PathSourceAcquirer;
@@ -24,6 +26,6 @@ class ProjectSourceAcquirer implements SourceAcquirer {
 			case PackageSource.Git(_, _): git.acquire(source, ownerRoot, packageId);
 			case PackageSource.Haxelib(_, _): haxelib.acquire(source, ownerRoot, packageId);
 			case PackageSource.Registry(_, _, _): registry.acquire(source, ownerRoot, packageId);
-			case _: throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} has no configured acquirer';
+			case _: throw new InternalError('Package "$packageId" source ${PackageSourceTools.describe(source)} has no configured acquirer');
 		};
 }

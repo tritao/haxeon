@@ -1,5 +1,6 @@
 package tools;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -112,6 +113,6 @@ class RuntimeLibrary {
 			return;
 		var lacking = missing(home);
 		if (lacking.length > 0)
-			throw describe(home, lacking);
+			throw new InternalError(describe(home, lacking));
 	}
 }

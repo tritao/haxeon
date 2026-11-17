@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstExpression;
@@ -83,7 +84,7 @@ class DiffIntrinsics {
 				var fields = maskedFields(session, declaration, name, span);
 				for (index in 0...fields.length)
 					if (fields[index].name == field) return IntegerLiteral(1 << index, span);
-				throw "Resolved key path field is absent from Diffable layout";
+				throw new InternalError("Resolved key path field is absent from Diffable layout");
 			case "all":
 				expectArguments(name, arguments, 1, span);
 				var declaration = classNamed(session, typeName(arguments[0], name, span), span);
@@ -176,7 +177,7 @@ class DiffIntrinsics {
 			switch current {
 				case TInstance(NominalKind.Class, name, arguments):
 					var declaration = session.classDecls.get(name);
-					if (declaration == null) throw 'Missing value type declaration "$name"';
+					if (declaration == null) throw new InternalError('Missing value type declaration "$name"');
 					var substitutions:Map<String, CompilerType> = [];
 					for (index in 0...declaration.typeParameters.length) {
 						var parameter = declaration.typeParameters[index],
@@ -192,7 +193,7 @@ class DiffIntrinsics {
 							field: field,
 							type: session.declarations.types.fieldType(name, field, substitutions)
 						});
-				default: throw 'Expected a class in value conformance traversal: $current';
+				default: throw new InternalError('Expected a class in value conformance traversal: $current');
 			}
 		}
 		collect(type);
@@ -205,7 +206,7 @@ class DiffIntrinsics {
 		return switch type {
 			case TInstance(NominalKind.Class, name, arguments):
 				var declaration = session.classDecls.get(name);
-				if (declaration == null) throw 'Missing value type declaration "$name"';
+				if (declaration == null) throw new InternalError('Missing value type declaration "$name"');
 				var found:Null<AstFunction> = null;
 				for (method in declaration.methods) if (method.name == methodName) {
 					found = method;

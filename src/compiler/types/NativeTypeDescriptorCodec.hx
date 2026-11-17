@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.InternalError;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationArgument;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationData;
 import compiler.types.NativeTypeDescriptor.NativeTypeAnnotationValue;
@@ -50,10 +51,10 @@ class NativeTypeDescriptorCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != MAGIC)
-				throw "Invalid native type descriptor artifact";
+				throw new InternalError("Invalid native type descriptor artifact");
 			var version = input.readByte();
 			if (version != FORMAT_VERSION)
-				throw 'Unsupported native type descriptor artifact version $version';
+				throw new InternalError('Unsupported native type descriptor artifact version $version');
 			var result:Array<NativeTypeDescriptorData> = [];
 			for (_ in 0...readCount(input)) {
 				var descriptor:NativeTypeDescriptorData = {
@@ -76,10 +77,10 @@ class NativeTypeDescriptorCodec {
 				result.push(descriptor);
 			}
 			if (input.position != bytes.length)
-				throw "Trailing native type descriptor artifact data";
+				throw new InternalError("Trailing native type descriptor artifact data");
 			return orderedDescriptors(result);
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated native type descriptor artifact";
+			throw new InternalError("Truncated native type descriptor artifact");
 		}
 	}
 
@@ -106,25 +107,25 @@ class NativeTypeDescriptorCodec {
 		});
 		for (index in 1...result.length)
 			if (result[index - 1].name == result[index].name && result[index - 1].type == result[index].type)
-				throw 'Duplicate native type descriptor "${result[index].name}" (${result[index].type})';
+				throw new InternalError('Duplicate native type descriptor "${result[index].name}" (${result[index].type})');
 		return result;
 	}
 
 	static function validateDescriptor(descriptor:NativeTypeDescriptorData):Void {
 		if (descriptor.version != NativeTypeDescriptor.VERSION)
-			throw 'Unsupported native type descriptor schema version ${descriptor.version}';
+			throw new InternalError('Unsupported native type descriptor schema version ${descriptor.version}');
 		if (descriptor.name.length == 0 || descriptor.type.length == 0)
-			throw "Native type descriptor name and type must be nonempty";
+			throw new InternalError("Native type descriptor name and type must be nonempty");
 		if (!NativeTypeDescriptor.validSourceKind(descriptor.sourceKind)
 			|| !NativeTypeDescriptor.canonicalInterfaces(descriptor.interfaces))
-			throw 'Native type descriptor has invalid source conformance facts for "${descriptor.name}"';
+			throw new InternalError('Native type descriptor has invalid source conformance facts for "${descriptor.name}"');
 		var expected = NativeTypeDescriptor.contentHash(descriptor.type, descriptor.name, descriptor.type,
 			descriptor.sourceKind, descriptor.interfaces,
 			descriptor.flat, descriptor.portable, descriptor.size, descriptor.alignment, descriptor.annotations,
 			descriptor.annotationValues,
 			descriptor.fields, descriptor.arguments);
 		if (descriptor.hash != expected)
-			throw 'Native type descriptor hash mismatch for "${descriptor.name}"';
+			throw new InternalError('Native type descriptor hash mismatch for "${descriptor.name}"');
 		validateAnnotationValues(descriptor.annotationValues);
 		validateNodes(descriptor.fields);
 		validateNodes(descriptor.arguments);
@@ -152,7 +153,7 @@ class NativeTypeDescriptorCodec {
 			case NullValue: descriptorDefault.type == "Null" && nullableDefaultType(node);
 		};
 		if (!valid)
-			throw 'Native type descriptor field "${node.name}" default does not match its semantic type';
+			throw new InternalError('Native type descriptor field "${node.name}" default does not match its semantic type');
 	}
 
 	static function validFloatDefault(node:NativeTypeDescriptorField, value:Float):Bool {
@@ -290,7 +291,7 @@ class NativeTypeDescriptorCodec {
 						case 2: StringValue(readString(input, limit));
 						case 3: BoolValue(readBool(input));
 						case 4: NullValue;
-						case _: throw "Invalid annotation constant tag in native type descriptor artifact";
+						case _: throw new InternalError("Invalid annotation constant tag in native type descriptor artifact");
 					};
 				arguments.push({name: argumentName, type: type, value: value});
 			}
@@ -303,17 +304,17 @@ class NativeTypeDescriptorCodec {
 	static function validateAnnotationValues(values:Array<NativeTypeAnnotationData>):Void {
 		for (annotation in values) {
 			if (annotation.name.length == 0)
-				throw "Native type annotation name must be nonempty";
+				throw new InternalError("Native type annotation name must be nonempty");
 			var names:Map<String, Bool> = [];
 			for (argument in annotation.arguments) {
 				if (argument.name.length == 0 || argument.type.length == 0)
-					throw "Native type annotation argument name and type must be nonempty";
+					throw new InternalError("Native type annotation argument name and type must be nonempty");
 				if (names.exists(argument.name))
-					throw 'Duplicate native type annotation argument "${argument.name}"';
+					throw new InternalError('Duplicate native type annotation argument "${argument.name}"');
 				names.set(argument.name, true);
 				switch argument.value {
 					case FloatValue(value) if (!Math.isFinite(value)):
-						throw 'Native type annotation "${annotation.name}" has a non-finite floating-point constant';
+						throw new InternalError('Native type annotation "${annotation.name}" has a non-finite floating-point constant');
 					case _:
 				}
 			}
@@ -422,12 +423,12 @@ class NativeTypeDescriptorCodec {
 	static function exactFloat32Decimal(value:Float):String {
 		var bitsValue = NativeTypeDescriptor.float32DefaultBits(value);
 		if (bitsValue == null)
-			throw "Non-finite Float32 descriptor defaults cannot be serialized";
+			throw new InternalError("Non-finite Float32 descriptor defaults cannot be serialized");
 		var bits:Int = cast bitsValue,
 			exponent = (bits >>> 23) & 0xff,
 			fraction = bits & 0x7fffff;
 		if (exponent == 0xff)
-			throw "Non-finite Float32 descriptor defaults cannot be serialized";
+			throw new InternalError("Non-finite Float32 descriptor defaults cannot be serialized");
 		var significand = exponent == 0 ? fraction : 0x800000 | fraction;
 		if (significand == 0)
 			return "0";
@@ -503,7 +504,7 @@ class NativeTypeDescriptorCodec {
 				case 2: StringValue(readString(input, limit));
 				case 3: BoolValue(readBool(input));
 				case 4: NullValue;
-				case _: throw "Invalid default constant tag in native type descriptor artifact";
+				case _: throw new InternalError("Invalid default constant tag in native type descriptor artifact");
 			};
 		return {type: type, value: value};
 	}
@@ -530,7 +531,7 @@ class NativeTypeDescriptorCodec {
 	static function readString(input:BytesInput, limit:Int):String {
 		var length = readCount(input);
 		if (length > limit - input.position)
-			throw "Truncated native type descriptor artifact";
+			throw new InternalError("Truncated native type descriptor artifact");
 		return input.readString(length);
 	}
 
@@ -547,7 +548,7 @@ class NativeTypeDescriptorCodec {
 		return switch input.readByte() {
 			case 0: null;
 			case 1: input.readInt32();
-			case _: throw "Invalid nullable integer in native type descriptor artifact";
+			case _: throw new InternalError("Invalid nullable integer in native type descriptor artifact");
 		};
 
 	static function writeBool(output:BytesOutput, value:Bool):Void
@@ -557,23 +558,23 @@ class NativeTypeDescriptorCodec {
 		return switch input.readByte() {
 			case 0: false;
 			case 1: true;
-			case _: throw "Invalid boolean in native type descriptor artifact";
+			case _: throw new InternalError("Invalid boolean in native type descriptor artifact");
 		};
 
 	static function writeCount(output:BytesOutput, value:Int):Void {
 		if (value < 0 || value > MAX_ITEMS)
-			throw 'Native type descriptor item count $value is out of range';
+			throw new InternalError('Native type descriptor item count $value is out of range');
 		output.writeInt32(value);
 	}
 
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > MAX_ITEMS)
-			throw 'Native type descriptor item count $count is out of range';
+			throw new InternalError('Native type descriptor item count $count is out of range');
 		return count;
 	}
 
 	static function checkDepth(depth:Int):Void
 		if (depth > MAX_DEPTH)
-			throw 'Native type descriptor nesting exceeds $MAX_DEPTH';
+			throw new InternalError('Native type descriptor nesting exceeds $MAX_DEPTH');
 }

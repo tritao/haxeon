@@ -1,5 +1,6 @@
 package compiler.formatter;
 
+import compiler.core.InternalError;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import haxe.Json;
 import haxe.io.Path;
@@ -61,7 +62,7 @@ class ProjectFormat {
 		try
 			raw = Json.parse(File.getContent(manifest))
 		catch (error:Dynamic)
-			throw '$manifest: not valid JSON: $error';
+			throw new InternalError('$manifest: not valid JSON: $error');
 		var section:Dynamic = Reflect.field(raw, "format");
 		if (section == null)
 			return null;
@@ -71,21 +72,21 @@ class ProjectFormat {
 	public static function parse(section:Dynamic, origin:String):FormatConfig {
 		if (section == null || !Reflect.isObject(section) || Std.isOfType(section, String)
 			|| Std.isOfType(section, Array))
-			throw '$origin: "format" must be an object';
+			throw new InternalError('$origin: "format" must be an object');
 		var spaces = false, indentWidth = 4, lineWidth = 120;
 		for (key in Reflect.fields(section)) {
 			var value:Dynamic = Reflect.field(section, key);
 			switch key {
 				case "indent":
 					if (value != "tabs" && value != "spaces")
-						throw '$origin: format.indent must be "tabs" or "spaces"';
+						throw new InternalError('$origin: format.indent must be "tabs" or "spaces"');
 					spaces = value == "spaces";
 				case "indentWidth":
 					indentWidth = positive(value, origin, key);
 				case "lineWidth":
 					lineWidth = positive(value, origin, key);
 				case _:
-					throw '$origin: unknown format setting "$key" (known: indent, indentWidth, lineWidth)';
+					throw new InternalError('$origin: unknown format setting "$key" (known: indent, indentWidth, lineWidth)');
 			}
 		}
 		var config = FormatConfigTools.make(indentWidth, spaces);
@@ -95,7 +96,7 @@ class ProjectFormat {
 
 	static function positive(value:Dynamic, origin:String, key:String):Int {
 		if (!Std.isOfType(value, Int) || (value:Int) < 1)
-			throw '$origin: format.$key must be a whole number of at least 1';
+			throw new InternalError('$origin: format.$key must be a whole number of at least 1');
 		return value;
 	}
 }

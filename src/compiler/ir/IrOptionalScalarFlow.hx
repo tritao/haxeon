@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
@@ -573,7 +574,7 @@ class IrOptionalScalarFlow {
 		function component(id:Int):Array<IrValue> {
 			var result = components.get(id);
 			if (result == null)
-				throw 'Missing optional scalar components for $id';
+				throw new InternalError('Missing optional scalar components for $id');
 			return result;
 		}
 		function allocate(value:IrValue):Void {
@@ -668,7 +669,7 @@ class IrOptionalScalarFlow {
 			for (i in 0...shape.length)
 				if (shape[i].isPresence == presence && IrOptionalValueFlow.samePath(shape[i].path, path))
 					return i;
-			throw 'Missing optional scalar slot ${path.join(".")}';
+			throw new InternalError('Missing optional scalar slot ${path.join(".")}');
 		}
 		function storeSlot(block:IrBlock, holder:IrValue, name:String, index:Int, value:IrValue,
 				from:Located<IrInstruction>):Void {
@@ -703,7 +704,7 @@ class IrOptionalScalarFlow {
 		function field(type:IrType, name:String):IrObjectField {
 			var owner = switch type {
 				case Obj(value): value;
-				default: throw "Invalid value field owner";
+				default: throw new InternalError("Invalid value field owner");
 			};
 			while (owner != null) {
 				var object = objects.get(owner);
@@ -714,7 +715,7 @@ class IrOptionalScalarFlow {
 						return candidate;
 				owner = object.base;
 			}
-			throw 'Missing value field $name';
+			throw new InternalError('Missing value field $name');
 		}
 		function aliasValue(block:IrBlock, source:IrValue, from:Located<IrInstruction>):IrValue {
 			var a:OptionalAlias = cast alias.get(source.id),
@@ -723,7 +724,7 @@ class IrOptionalScalarFlow {
 				var result = new IrValue(next++, "$optional-alias-copy", Obj(name)),
 					object = objects.get(name);
 				if (object == null)
-					throw 'Missing optional alias value "$name"';
+					throw new InternalError('Missing optional alias value "$name"');
 				add(block, ValueInit(result), from);
 				for (entry in object.fields) {
 					var pathField = path.concat([entry.name]),
@@ -747,7 +748,7 @@ class IrOptionalScalarFlow {
 			}
 			return switch source.type {
 				case Obj(name): build(name, a.path);
-				default: throw "Invalid optional alias value";
+				default: throw new InternalError("Invalid optional alias value");
 			};
 		}
 		function readValue(block:IrBlock, source:IrValue, name:String, output:Array<IrValue>,

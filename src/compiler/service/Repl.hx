@@ -2,6 +2,7 @@ package compiler.service;
 
 import compiler.Compiler;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
+import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import haxe.io.Bytes;
 
@@ -23,7 +24,7 @@ class Repl {
 		var result = BackendArtifacts.hashLink(compiler.compileExpressionInt(expression).artifact),
 			stableId = result.functionIds.get("main");
 		if (stableId == null)
-			throw "REPL compilation did not produce a stable entry function";
+			throw new InternalError("REPL compilation did not produce a stable entry function");
 		return {bytes: HlWriter.encode(result.module).flatten(), identity: result.runtimeIdentity, stableId: stableId};
 	}
 }

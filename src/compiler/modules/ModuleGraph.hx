@@ -1,5 +1,7 @@
 package compiler.modules;
 
+import compiler.core.InternalError;
+
 /** Directed module-dependency graph used for deterministic invalidation. */
 class ModuleGraph {
 	final reverse:Map<String, Array<String>> = [];
@@ -58,7 +60,7 @@ class ModuleGraph {
 			if (!states.exists(name))
 				continue;
 			if (!indegree.exists(name))
-				throw 'Missing initialization indegree for module "$name"';
+				throw new InternalError('Missing initialization indegree for module "$name"');
 			var state = states.get(name);
 			for (dependency in state.dependencies)
 				if (known.exists(dependency) && outgoing.exists(dependency)) {
@@ -80,10 +82,10 @@ class ModuleGraph {
 			emitted.set(name, true);
 			result.push(name);
 			if (!outgoing.exists(name))
-				throw 'Missing initialization dependents for module "$name"';
+				throw new InternalError('Missing initialization dependents for module "$name"');
 			for (dependent in outgoing.get(name)) {
 				if (!indegree.exists(dependent))
-					throw 'Missing initialization indegree for dependent module "$dependent"';
+					throw new InternalError('Missing initialization indegree for dependent module "$dependent"');
 				var next = indegree.get(dependent) - 1;
 				indegree.set(dependent, next);
 				if (next == 0)

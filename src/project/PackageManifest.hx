@@ -1,6 +1,7 @@
 package project;
 
 import build.Target;
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 
@@ -167,14 +168,14 @@ class PackageManifest {
 		try {
 			raw = Json.parse(content);
 		} catch (error:Dynamic) {
-			throw 'Could not parse $path: ${Std.string(error)}';
+			throw new InternalError('Could not parse $path: ${Std.string(error)}');
 		}
 		if (!isObject(raw))
-			throw '$path must contain a JSON object';
+			throw new InternalError('$path must contain a JSON object');
 		var rawVersion:Dynamic = Reflect.field(raw, "version"),
 			version = rawVersion == null ? 1 : Std.int(rawVersion);
 		if (version != 1)
-			throw 'Unsupported haxeon.json version "$rawVersion"';
+			throw new InternalError('Unsupported haxeon.json version "$rawVersion"');
 		var packageData:Dynamic = Reflect.field(raw, "package"),
 			packageName = packageData == null
 				? Path.withoutDirectory(Path.directory(path)) : requiredString(packageData, "name", path),
@@ -191,21 +192,21 @@ class PackageManifest {
 			compatibility = PackageCompatibility.parse(Reflect.field(raw, "compatibility"), path),
 			dependencies:Map<String, PackageDependency> = new Map();
 		if (packageName.length == 0)
-			throw '$path requires a non-empty package name';
+			throw new InternalError('$path requires a non-empty package name');
 		if (sourceRoots.length == 0)
-			throw '$path must list at least one path in "sourceRoots"';
+			throw new InternalError('$path must list at least one path in "sourceRoots"');
 		for (sourceRoot in unscopedSourceRoots)
 			if (sourceRoots.indexOf(sourceRoot) < 0)
-				throw '$path "unscopedSourceRoots" must name roots listed in "sourceRoots"';
+				throw new InternalError('$path "unscopedSourceRoots" must name roots listed in "sourceRoots"');
 		try {
 			Target.parse(target);
 		} catch (error:Dynamic) {
-			throw '$path has an invalid target "$target": ${Std.string(error)}';
+			throw new InternalError('$path has an invalid target "$target": ${Std.string(error)}');
 		}
 		var rawDependencies:Dynamic = Reflect.field(raw, "dependencies");
 		if (rawDependencies != null) {
 			if (!isObject(rawDependencies))
-				throw '$path "dependencies" must be an object';
+				throw new InternalError('$path "dependencies" must be an object');
 			var dependencyNames = Reflect.fields(rawDependencies);
 			dependencyNames.sort(Reflect.compare);
 			for (name in dependencyNames) {
@@ -218,7 +219,7 @@ class PackageManifest {
 			native:Null<NativeManifest> = null;
 		if (nativeData != null) {
 			if (!isObject(nativeData))
-				throw '$path "native" must be an object';
+				throw new InternalError('$path "native" must be an object');
 			var nativeSources = stringArray(nativeData, "sources", path, []),
 				includeDirs = stringArray(nativeData, "includeDirs", path, []),
 				standard = optionalNullableString(nativeData, "std", path),
@@ -227,22 +228,22 @@ class PackageManifest {
 				cmake:Null<NativeCMakeManifest> = null;
 			if (cmakeData != null) {
 				if (!isObject(cmakeData))
-					throw '$path "native.cmake" must be an object';
+					throw new InternalError('$path "native.cmake" must be an object');
 				var library = optionalNullableString(cmakeData, "library", '$path native.cmake'),
 					libraries = stringArray(cmakeData, "libraries", '$path native.cmake', []);
 				if (Reflect.hasField(cmakeData, "libraries")) {
 					if (library != null)
-						throw '$path native.cmake cannot combine "library" and "libraries"';
+						throw new InternalError('$path native.cmake cannot combine "library" and "libraries"');
 					if (libraries.length == 0)
-						throw '$path native.cmake "libraries" must not be empty';
+						throw new InternalError('$path native.cmake "libraries" must not be empty');
 				}
 				var names = library == null ? libraries : [library],
 					seen = new Map<String, Bool>();
 				for (name in names) {
 					if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
-						throw '$path native.cmake requires library names without path components';
+						throw new InternalError('$path native.cmake requires library names without path components');
 					if (seen.exists(name))
-						throw '$path native.cmake contains duplicate library "$name"';
+						throw new InternalError('$path native.cmake contains duplicate library "$name"');
 					seen.set(name, true);
 				}
 				cmake = new NativeCMakeManifest(requiredString(cmakeData, "source", '$path native.cmake'),
@@ -250,14 +251,14 @@ class PackageManifest {
 					stringArray(cmakeData, "inputs", '$path native.cmake', []), library, libraries);
 			}
 			if (nativeSources.length == 0 && cmake == null)
-				throw '$path "native" requires "sources" or "cmake"';
+				throw new InternalError('$path "native" requires "sources" or "cmake"');
 			if (nativeSources.length > 0 && cmake != null)
-				throw '$path "native" cannot combine "sources" and "cmake"';
+				throw new InternalError('$path "native" cannot combine "sources" and "cmake"');
 			for (supportedTarget in supportedTargets)
 				try {
 					Target.parse(supportedTarget);
 				} catch (error:Dynamic) {
-					throw '$path "native.targets" contains an invalid target "$supportedTarget": ${Std.string(error)}';
+					throw new InternalError('$path "native.targets" contains an invalid target "$supportedTarget": ${Std.string(error)}');
 				}
 			native = new NativeManifest(nativeSources, includeDirs, standard, cmake, supportedTargets);
 		}
@@ -265,12 +266,12 @@ class PackageManifest {
 			ffi:Null<FfiManifest> = null;
 		if (ffiData != null) {
 			if (!isObject(ffiData))
-				throw '$path "ffi" must be an object';
+				throw new InternalError('$path "ffi" must be an object');
 			var imports = stringArray(ffiData, "imports", path, []),
 				interfaces = stringArray(ffiData, "interfaces", path, []),
 				projections = stringArray(ffiData, "projections", path, []);
 			if (imports.length == 0 && interfaces.length == 0 && projections.length == 0)
-				throw '$path "ffi" requires "imports", "interfaces", or "projections"';
+				throw new InternalError('$path "ffi" requires "imports", "interfaces", or "projections"');
 			ffi = new FfiManifest(imports, interfaces, projections);
 		}
 		var android:Dynamic = Reflect.field(raw, "android"),
@@ -278,11 +279,11 @@ class PackageManifest {
 			androidAppLabel = "Haxeon";
 		if (android != null) {
 			if (!isObject(android))
-				throw '$path "android" must be an object';
+				throw new InternalError('$path "android" must be an object');
 			androidApplicationId = optionalString(android, "applicationId", androidApplicationId, path);
 			androidAppLabel = optionalString(android, "label", androidAppLabel, path);
 			if (!isAndroidApplicationId(androidApplicationId))
-				throw '$path "android.applicationId" must be a dotted Java package name, such as "org.example.game"';
+				throw new InternalError('$path "android.applicationId" must be a dotted Java package name, such as "org.example.game"');
 		}
 		return new PackageManifest(version, packageName, entry, legacySources, sourceRoots, unscopedSourceRoots,
 			scopeSourceRoots, workspace, target, defines,
@@ -315,11 +316,11 @@ class PackageManifest {
 		if (data == null)
 			return null;
 		if (!isObject(data))
-			throw '$path "instrument" must be an object';
+			throw new InternalError('$path "instrument" must be an object');
 		function section(name:String):Dynamic {
 			var value:Dynamic = Reflect.field(data, name);
 			if (value != null && !isObject(value))
-				throw '$path "instrument.$name" must be an object';
+				throw new InternalError('$path "instrument.$name" must be an object');
 			return value == null ? {} : value;
 		}
 		var haxe = section("haxe"),
@@ -328,10 +329,10 @@ class PackageManifest {
 			context = '$path instrument',
 			imports = optionalString(boundary, "imports", "blocking", context);
 		if (imports != "blocking" && imports != "none")
-			throw '$path "instrument.boundary.imports" must be "blocking" or "none"';
+			throw new InternalError('$path "instrument.boundary.imports" must be "blocking" or "none"');
 		var minCall:Dynamic = Reflect.field(data, "minCallMicros");
 		if (minCall != null && (!Std.isOfType(minCall, Float) || (minCall:Float) < 0 || (minCall:Float) > 4000000))
-			throw '$path "instrument.minCallMicros" must be a number from 0 to 4000000';
+			throw new InternalError('$path "instrument.minCallMicros" must be a number from 0 to 4000000');
 		return new InstrumentManifest(stringArray(haxe, "include", context, ["*"]),
 			stringArray(haxe, "exclude", context, []),
 			stringArray(native, "include", context, ["**"]), stringArray(native, "exclude", context, []), imports,
@@ -346,13 +347,13 @@ class PackageManifest {
 
 	static function requiredValueString(value:Dynamic, field:String, path:String):String {
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path requires a non-empty "$field" string';
+			throw new InternalError('$path requires a non-empty "$field" string');
 		return cast value;
 	}
 
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		if (!isObject(raw))
-			throw '$path must contain an object with a "$field" string';
+			throw new InternalError('$path must contain an object with a "$field" string');
 		return requiredValueString(Reflect.field(raw, field), field, path);
 	}
 
@@ -373,7 +374,7 @@ class PackageManifest {
 		if (value == null)
 			return fallback;
 		if (!Std.isOfType(value, Bool))
-			throw '$path "$field" must be a boolean';
+			throw new InternalError('$path "$field" must be a boolean');
 		return cast value;
 	}
 
@@ -382,7 +383,7 @@ class PackageManifest {
 		if (value == null)
 			return fallback.copy();
 		if (!Std.isOfType(value, Array))
-			throw '$path "$field" must be an array of strings';
+			throw new InternalError('$path "$field" must be an array of strings');
 		var result:Array<String> = [];
 		for (item in (cast value:Array<Dynamic>))
 			result.push(requiredValueString(item, field, '$path "$field"'));

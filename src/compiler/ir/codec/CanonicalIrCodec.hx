@@ -1,5 +1,6 @@
 package compiler.ir.codec;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrEnumCase;
 import compiler.ir.Ir.IrInterface;
@@ -56,10 +57,10 @@ class CanonicalIrCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != MAGIC)
-				throw "Invalid canonical Haxeon IR";
+				throw new InternalError("Invalid canonical Haxeon IR");
 			var version = input.readByte();
 			if (version != VERSION)
-				throw "Unsupported canonical Haxeon IR version";
+				throw new InternalError("Unsupported canonical Haxeon IR version");
 			var program = new IrProgram(IrTypeCodec.readString(input, bytes.length));
 			program.natives = readNatives(input, bytes.length);
 			program.cNatives = readCNatives(input, bytes.length);
@@ -69,11 +70,11 @@ class CanonicalIrCodec {
 			program.staticFields = readStaticFields(input, bytes.length);
 			program.functions = readFunctions(input, bytes.length);
 			if (input.position != bytes.length)
-				throw "Trailing canonical Haxeon IR data";
+				throw new InternalError("Trailing canonical Haxeon IR data");
 			IrVerifier.verify(program);
 			return program;
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated canonical Haxeon IR";
+			throw new InternalError("Truncated canonical Haxeon IR");
 		}
 	}
 
@@ -195,10 +196,10 @@ class CanonicalIrCodec {
 				arguments = readTypes(input, limit),
 				argumentModes:Array<IrCNativeArgumentMode> = [];
 			if (pointerNullable != 0 && pointerNullable != 1)
-				throw "Invalid canonical IR native nullability";
+				throw new InternalError("Invalid canonical IR native nullability");
 			var modeCount = readCount(input);
 			if (modeCount != arguments.length)
-				throw "Canonical IR C native argument mode count does not match its signature";
+				throw new InternalError("Canonical IR C native argument mode count does not match its signature");
 			for (_ in 0...modeCount)
 				argumentModes.push(switch input.readByte() {
 					case 0: Value;
@@ -212,7 +213,7 @@ class CanonicalIrCodec {
 					case 8: FixedInputOutput(input.readInt32(), input.readInt32(), readByteBool(input));
 					case 9: FixedInput(input.readInt32(), input.readInt32(), readByteBool(input));
 					case 10: FixedValue(input.readInt32(), input.readInt32(), readByteBool(input));
-					case _: throw "Invalid canonical IR C native argument mode";
+					case _: throw new InternalError("Invalid canonical IR C native argument mode");
 				});
 			result.push({
 				name: name,
@@ -395,10 +396,10 @@ class CanonicalIrCodec {
 				name = IrTypeCodec.readString(input, limit),
 				recursive = input.readByte();
 			if (recursive > 1)
-				throw "Invalid enum recursion flag";
+				throw new InternalError("Invalid enum recursion flag");
 			var hasStorage = input.readByte();
 			if (hasStorage > 1)
-				throw "Invalid inline enum storage flag";
+				throw new InternalError("Invalid inline enum storage flag");
 			var storage = hasStorage == 0 ? null : IrTypeCodec.readString(input, limit);
 			for (_ in 0...readCount(input))
 				cases.push({name: IrTypeCodec.readString(input, limit), params: readTypes(input, limit)});
@@ -441,7 +442,7 @@ class CanonicalIrCodec {
 		for (_ in 0...readCount(input)) {
 			var length = input.readInt32();
 			if (length < 0 || length > limit - input.position)
-				throw "Invalid canonical IR function length";
+				throw new InternalError("Invalid canonical IR function length");
 			result.push(IrFunctionStateCodec.decode(input.read(length)));
 		}
 		return result;
@@ -496,7 +497,7 @@ class CanonicalIrCodec {
 				alignment: input.readInt32(),
 				pointerFree: readByteBool(input)
 			};
-			default: throw "Invalid canonical IR fixed layout";
+			default: throw new InternalError("Invalid canonical IR fixed layout");
 		};
 	}
 
@@ -504,7 +505,7 @@ class CanonicalIrCodec {
 		return switch input.readByte() {
 			case 0: null;
 			case 1: IrTypeCodec.readString(input, limit);
-			default: throw "Invalid nullable canonical IR string";
+			default: throw new InternalError("Invalid nullable canonical IR string");
 		};
 	}
 
@@ -512,20 +513,20 @@ class CanonicalIrCodec {
 		return switch input.readByte() {
 			case 0: false;
 			case 1: true;
-			default: throw "Invalid canonical IR boolean";
+			default: throw new InternalError("Invalid canonical IR boolean");
 		};
 	}
 
 	static function writeCount(output:BytesOutput, count:Int):Void {
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Canonical IR collection is too large";
+			throw new InternalError("Canonical IR collection is too large");
 		output.writeInt32(count);
 	}
 
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Invalid canonical IR collection size";
+			throw new InternalError("Invalid canonical IR collection size");
 		return count;
 	}
 }

@@ -1,6 +1,7 @@
 package compiler.backend.wasm;
 
 import compiler.backend.Backend.BackendTarget;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrType;
 
 /** Representation selected below canonical Haxeon IR, never in the IR itself. */
@@ -50,7 +51,7 @@ class WasmTarget {
 				threads: false,
 				debugNames: debugNames
 			};
-			case HashLink: throw "HashLink is not a Wasm target";
+			case HashLink: throw new InternalError("HashLink is not a Wasm target");
 		};
 	}
 

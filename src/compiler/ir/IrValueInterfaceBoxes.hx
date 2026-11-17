@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -26,7 +27,7 @@ class IrValueInterfaceBoxes {
 			var existing = boxes.get(valueName);
 			if (existing != null) return existing;
 			var value = objectMap.get(valueName);
-			if (value == null || !value.isValue) throw 'Missing value layout "$valueName"';
+			if (value == null || !value.isValue) throw new InternalError('Missing value layout "$valueName"');
 			var boxName = BOX_PREFIX + valueName,
 				methods:Array<IrObjectMethod> = [],
 				contracts:Map<String, IrInterfaceMethod> = [],
@@ -37,7 +38,7 @@ class IrValueInterfaceBoxes {
 				if (visited.exists(name)) return;
 				visited.set(name, true);
 				var entry = interfaceMap.get(name);
-				if (entry == null) throw 'Missing interface "$name"';
+				if (entry == null) throw new InternalError('Missing interface "$name"');
 				for (base in entry.bases) collect(base);
 				for (method in entry.methods) contracts.set(method.name, method);
 			}
@@ -56,11 +57,12 @@ class IrValueInterfaceBoxes {
 			methodNames.sort(Reflect.compare);
 			for (methodName in methodNames) {
 				var contract = contracts.get(methodName);
-				if (contract == null) throw 'Missing interface contract "$methodName"';
+				if (contract == null) throw new InternalError('Missing interface contract "$methodName"');
 				var implementation:Null<IrFunction> = null;
 				for (method in value.methods) if (method.name == methodName) implementation =
 					functionMap.get(method.functionName);
-				if (implementation == null) throw 'Missing implementation of "$valueName.$methodName"';
+				if (implementation == null)
+					throw new InternalError('Missing implementation of "$valueName.$methodName"');
 				var wrapper = boxName + "." + methodName,
 					builder = new IrBuilder(),
 					receiver = builder.argument("this", Obj(boxName)),
@@ -68,7 +70,7 @@ class IrValueInterfaceBoxes {
 						contract.arguments[index])],
 					payload = builder.fieldGet(receiver, "value", Obj(valueName));
 				if (implementation.arguments.length != arguments.length + 1)
-					throw 'Invalid interface implementation "$valueName.$methodName"';
+					throw new InternalError('Invalid interface implementation "$valueName.$methodName"');
 				var adapted = [for (index in 0...arguments.length)
 					GenericOwnerErasure.convert(builder, arguments[index], implementation.arguments[index + 1].type,
 					objectMap)];

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.runtime.RuntimeType;
@@ -544,7 +545,7 @@ class IrProgramAssembler {
 		for (field in layout.fields)
 			if (field.name == fieldName)
 				return field;
-		throw 'Missing Flat field layout "${layout.target}:$fieldName"';
+		throw new InternalError('Missing Flat field layout "${layout.target}:$fieldName"');
 	}
 
 	static function isFlatRecordField(type:CompilerType, classes:Map<String, compiler.types.TypedAst.TypedClass>,
@@ -695,7 +696,7 @@ class IrProgramAssembler {
 			enums,
 			staticFields, cNatives, reflectableObjects), context).program;
 		if (assembled == null)
-			throw "IR assembly did not finish the program";
+			throw new InternalError("IR assembly did not finish the program");
 		return assembled;
 	}
 
@@ -931,16 +932,16 @@ class IrProgramAssembler {
 			var valueType = RuntimeType.mapValueType(mapName);
 			var isReferenceMap = StringTools.endsWith(mapName, "_ref");
 			if (valueType == null && !isReferenceMap)
-				throw 'Unknown compiler map ABI "$mapName"';
+				throw new InternalError('Unknown compiler map ABI "$mapName"');
 			var keyType = RuntimeType.mapKeyType(mapName);
 			if (keyType == null)
-				throw 'Unknown compiler map key ABI "$mapName"';
+				throw new InternalError('Unknown compiler map key ABI "$mapName"');
 			var mapType:IrType = Abstract(mapName);
 			var keyIrType = generator.lowerType(keyType);
 			var valueIrType:IrType = Dyn;
 			if (!isReferenceMap) {
 				if (valueType == null)
-					throw 'Unknown compiler map ABI "$mapName"';
+					throw new InternalError('Unknown compiler map ABI "$mapName"');
 				valueIrType = generator.lowerType(valueType);
 			}
 			program.natives.push({
@@ -1096,7 +1097,7 @@ class IrProgramAssembler {
 			if (entryPoint == null ? (fn.name == "main" || fn.name == "Main.main") : fn.name == entryPoint)
 				mainFunction = fn;
 		if (mainFunction == null)
-			throw 'IR program has no executable entry point "${entryPoint == null ? "main" : entryPoint}"';
+			throw new InternalError('IR program has no executable entry point "${entryPoint == null ? "main" : entryPoint}"');
 		var entry = new IrBuilder();
 		if (staticInitializers != null && staticInitializers.length > 0)
 			entry.call("__init", [], Void);

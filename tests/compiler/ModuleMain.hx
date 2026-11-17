@@ -3,6 +3,7 @@ import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.compilation.CompilerPublication.ReconnectDecision;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.hl.lower.HlLower;
 import compiler.hl.patch.HlPatchReader;
@@ -50,8 +51,8 @@ class ModuleMain {
 		try {
 			compiler.registerNative("late", "std", "sys_time", [], TFloat);
 			throw "late native registration was accepted";
-		} catch (error:String) {
-			if (error != "Native registrations are frozen after the first compilation")
+		} catch (error:InternalError) {
+			if (error.message != "Native registrations are frozen after the first compilation")
 				throw error;
 		}
 		var mathIndex = first.artifact.hashLink().functionIndices.get("Math.add"),
@@ -333,8 +334,8 @@ class ModuleMain {
 		try {
 			publicationCompiler.compile("Main");
 			throw "Compiler accepted a second build while publication was pending";
-		} catch (error:String) {
-			if (error.indexOf("is still pending") < 0)
+		} catch (error:InternalError) {
+			if (error.message.indexOf("is still pending") < 0)
 				throw error;
 		}
 		publicationCompiler.acknowledgePublication(publicationInitial.revision);
@@ -349,8 +350,8 @@ class ModuleMain {
 			try {
 				publicationCompiler.acknowledgePublication(unchangedPublication.revision);
 				throw "Unchanged build incorrectly accepted an acknowledgement";
-			} catch (error:String) {
-				if (error != "No publication is pending")
+			} catch (error:InternalError) {
+				if (error.message != "No publication is pending")
 					throw error;
 			}
 		}
@@ -386,8 +387,8 @@ class ModuleMain {
 		try {
 			publicationCompiler.exportIdentityState();
 			throw "Compiler persisted an unacknowledged candidate";
-		} catch (error:String) {
-			if (error.indexOf("Cannot persist pending publication") < 0)
+		} catch (error:InternalError) {
+			if (error.message.indexOf("Cannot persist pending publication") < 0)
 				throw error;
 		}
 		publicationCompiler.rejectPublication(rejectedPublication.revision);

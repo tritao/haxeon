@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstClass;
@@ -201,7 +202,7 @@ class KeyPathTyping {
 		return switch owner {
 			case TInstance(NominalKind.Class, className, _):
 				var declaration = session.classDecls.get(className);
-				if (declaration == null) throw 'Missing key path owner "$className"';
+				if (declaration == null) throw new InternalError('Missing key path owner "$className"');
 				var substitutions = session.representation.nominalSubstitutions(owner);
 				for (field in declaration.fields)
 					if (field.name == name)
@@ -218,7 +219,7 @@ class KeyPathTyping {
 						name, span);
 				fail('Type "${SemanticSignature.display(owner)}" has no stored field "$name"', span);
 				null;
-			default: throw "Expected nominal key path owner";
+			default: throw new InternalError("Expected nominal key path owner");
 		};
 	}
 

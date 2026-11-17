@@ -8,6 +8,7 @@ import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
+import compiler.core.InternalError;
 import compiler.core.IrPassMeter;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
@@ -182,7 +183,7 @@ class CompilerDriver {
 				File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
 			var typedProgram = compiler.lastTypedProgram;
 			if (typedProgram == null)
-				throw "Compiler completed without a typed program for descriptor emission";
+				throw new InternalError("Compiler completed without a typed program for descriptor emission");
 			File.saveBytes(request.output + ".descriptors",
 				NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
 			File.saveContent(request.output + ".descriptors.json",
@@ -226,7 +227,7 @@ class CompilerDriver {
 			]));
 			report("compiled " + Std.string(request.paths.length) + " source files -> " + request.output);
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			var status = compiler.publicationStatus();
 			if (status.hasPendingRevision && status.pendingRevision == result.revision)
 				compiler.rejectPublication(result.revision);
@@ -248,7 +249,7 @@ class CompilerDriver {
 		for (name in sorted) {
 			var state = session.modules.get(name);
 			if (state == null)
-				throw "Compiled module has no source: " + name;
+				throw new InternalError("Compiled module has no source: " + name);
 			// The identity table's text is generated from every other module during the compile; its file is the input.
 			var path = physicalPaths.get(state.source.path);
 			if (path == null)
@@ -271,12 +272,12 @@ class CompilerDriver {
 			if (fn.name == "main")
 				main = fn;
 		if (main == null)
-			throw 'Entry module "$entry" must define a top-level main():Void function';
+			throw new InternalError('Entry module "$entry" must define a top-level main():Void function');
 		if (main.arguments.length != 0 || main.result != compiler.ir.Ir.IrType.Void)
-			throw 'Entry function "main" must have signature main():Void';
+			throw new InternalError('Entry function "main" must have signature main():Void');
 		var id = BackendArtifacts.hashLink(result.artifact).functionIds.get("main");
 		if (id == null)
-			throw 'Entry function "main" has no stable ID';
+			throw new InternalError('Entry function "main" has no stable ID');
 		return id;
 	}
 
@@ -378,7 +379,7 @@ class CompilerDriver {
 			try {
 				FileSystem.rename(from, to);
 				return;
-			} catch (error:Dynamic) {
+			} catch (error:haxe.Exception) {
 				if (++attempt >= 50)
 					throw error;
 				Sys.sleep(0.01);

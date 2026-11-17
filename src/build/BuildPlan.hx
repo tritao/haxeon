@@ -1,6 +1,7 @@
 package build;
 
 import build.Artifact.ArtifactKind;
+import compiler.core.InternalError;
 
 /** Semantic artifact graph. No command lines or filesystem probes live here. */
 class BuildPlan {
@@ -18,16 +19,16 @@ class BuildPlan {
 		for (artifact in this.artifacts) {
 			var key = artifact.id.key();
 			if (byKey.exists(key))
-				throw 'Duplicate artifact in build plan: $key';
+				throw new InternalError('Duplicate artifact in build plan: $key');
 			byKey.set(key, artifact);
 		}
 		for (artifact in this.artifacts)
 			for (dependency in artifact.dependencies)
 				if (!byKey.exists(dependency.key()))
-					throw 'Artifact ${artifact.id} depends on missing artifact $dependency';
+					throw new InternalError('Artifact ${artifact.id} depends on missing artifact $dependency');
 		for (artifact in this.requested)
 			if (!byKey.exists(artifact.key()))
-				throw 'Requested artifact is missing from build plan: $artifact';
+				throw new InternalError('Requested artifact is missing from build plan: $artifact');
 		validateAcyclic();
 	}
 
@@ -86,11 +87,11 @@ class BuildPlan {
 			if (complete.exists(key))
 				return;
 			if (active.exists(key))
-				throw 'Build plan dependency cycle at $key';
+				throw new InternalError('Build plan dependency cycle at $key');
 			active.set(key, true);
 			var artifact = byKey.get(key);
 			if (artifact == null)
-				throw 'Build plan has no artifact $key';
+				throw new InternalError('Build plan has no artifact $key');
 			for (dependency in artifact.dependencies)
 				visit(dependency.key());
 			active.remove(key);

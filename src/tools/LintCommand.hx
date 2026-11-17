@@ -1,5 +1,6 @@
 package tools;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.formatter.ProjectFormat;
 import compiler.formatter.Formatter;
@@ -61,7 +62,7 @@ class LintCommand {
 				fix = true;
 			else if (argument == "--only") {
 				if (index >= arguments.length)
-					throw 'Option "--only" requires a rule: $RULES';
+					throw new InternalError('Option "--only" requires a rule: $RULES');
 				switch arguments[index++] {
 					case "unused-imports": checkOrder = false;
 					case "import-order": checkUnused = false;
@@ -69,29 +70,29 @@ class LintCommand {
 						checkUnused = false;
 						checkOrder = false;
 						typedRule = rule;
-					case other: throw 'Unknown lint rule "$other" (known: $RULES)';
+					case other: throw new InternalError('Unknown lint rule "$other" (known: $RULES)');
 				}
 			}
 				else if (argument == "--manifest") {
 				if (index >= arguments.length)
-					throw 'Option "--manifest" requires a value';
+					throw new InternalError('Option "--manifest" requires a value');
 				manifests.push(arguments[index++]);
 			} else if (StringTools.startsWith(argument, "-"))
-				throw 'Unknown lint option "$argument"';
+				throw new InternalError('Unknown lint option "$argument"');
 			else
 				paths.push(argument);
 		}
 		if (paths.length == 0)
-			throw "haxeon lint requires at least one file";
+			throw new InternalError("haxeon lint requires at least one file");
 		if (typedRule != null) {
 			if (fix)
-				throw switch typedRule {
+				throw new InternalError(switch typedRule {
 					case "unbound-local": 'Rule "unbound-local" has no fix: give each local it names a type';
 					case "throw-non-exception": 'Rule "throw-non-exception" has no fix: throw a haxe.Exception subclass at each throw it names';
 					default: 'Rule "module-namespace" has no fix: import each member it names, or write it in full';
-				};
+				});
 			if (typedRules == null)
-				throw 'Rule "$typedRule" needs the typed lint tool';
+				throw new InternalError('Rule "$typedRule" needs the typed lint tool');
 			return typedRules(typedRule, SourceFiles.expand(paths));
 		}
 		var command = new LintCommand();

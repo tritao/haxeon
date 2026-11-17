@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectTools;
@@ -223,7 +224,7 @@ class IrReachability {
 			switch type {
 				case Obj(name):
 					if (!present.exists(name))
-						throw 'trimmed tables: "$owner" names class "$name", which the module written for this build does not have';
+						throw new InternalError('trimmed tables: "$owner" names class "$name", which the module written for this build does not have');
 				case Array(element), Nullable(element), Iterator(element):
 					check(owner, element);
 				case Function(arguments, result):

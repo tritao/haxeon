@@ -1,5 +1,6 @@
 package tools.dev;
 
+import compiler.core.InternalError;
 import sys.io.File;
 
 /** One line of tests/suites.txt. */
@@ -42,20 +43,20 @@ class SuiteManifest {
 				continue;
 			var separator = text.indexOf(" -- ");
 			if (separator < 0)
-				throw '$path:$number: a suite line needs " -- " before its command';
+				throw new InternalError('$path:$number: a suite line needs " -- " before its command');
 			var command = StringTools.trim(text.substr(separator + 4)),
 				fields = ~/\s+/g.split(StringTools.trim(text.substr(0, separator)));
 			if (fields.length < 2 || command == "")
-				throw '$path:$number: expected <name> <groups> [options] -- <command>';
+				throw new InternalError('$path:$number: expected <name> <groups> [options] -- <command>');
 			var name = fields[0], groups = fields[1].split(",");
 			if (!~/^[a-z0-9][a-z0-9-]*$/.match(name))
-				throw '$path:$number: suite name "$name" must be lowercase letters, digits and dashes';
+				throw new InternalError('$path:$number: suite name "$name" must be lowercase letters, digits and dashes');
 			if (names.exists(name))
-				throw '$path:$number: duplicate suite "$name"';
+				throw new InternalError('$path:$number: duplicate suite "$name"');
 			names.set(name, true);
 			for (group in groups)
 				if (GROUPS.indexOf(group) < 0)
-					throw '$path:$number: unknown group "$group" (known: ${GROUPS.join(", ")})';
+					throw new InternalError('$path:$number: unknown group "$group" (known: ${GROUPS.join(", ")})');
 			var lane:Null<String> = null,
 				pool:Null<String> = null,
 				requires = [],
@@ -80,11 +81,11 @@ class SuiteManifest {
 					case "cli-launcher" if (equals < 0):
 						cliLauncher = true;
 					case _:
-						throw '$path:$number: unknown or malformed option "$option"';
+						throw new InternalError('$path:$number: unknown or malformed option "$option"');
 				}
 			}
 			if (lane != null && pool != null)
-				throw '$path:$number: a suite is in a lane or a pool, not both';
+				throw new InternalError('$path:$number: a suite is in a lane or a pool, not both');
 			suites.push({
 				name: name,
 				groups: groups,
@@ -110,7 +111,7 @@ class SuiteManifest {
 			case "wave": ["quick", "wave"];
 			case "ci": ["ci"];
 			case "full": GROUPS;
-			case _: throw 'Unknown test mode "$mode" (known: ${MODES.join(", ")})';
+			case _: throw new InternalError('Unknown test mode "$mode" (known: ${MODES.join(", ")})');
 		};
 		return [
 			for (suite in suites)
@@ -127,7 +128,7 @@ class SuiteManifest {
 				if (current != null)
 					closed.set(current, true);
 				if (value != null && closed.exists(value))
-					throw '$path:${suite.line}: the suites of $what "$value" must be listed together';
+					throw new InternalError('$path:${suite.line}: the suites of $what "$value" must be listed together');
 				current = value;
 			}
 		}

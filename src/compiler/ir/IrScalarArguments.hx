@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
@@ -239,14 +240,14 @@ class IrScalarArguments {
 		while (pending.length > 0) {
 			var name = pending.pop(), dependency = pinnedByName.get(name);
 			if (dependency == null)
-				throw 'Missing receiver-preserving clone "$name"';
+				throw new InternalError('Missing receiver-preserving clone "$name"');
 			discover(dependency);
 		}
 		for (fn in program.functions)
 			if (pinnedCandidates.exists(fn.name)) {
 				var clone = pinnedClones.get(fn.name);
 				if (clone == null)
-					throw 'Missing receiver-preserving clone for "${fn.name}"';
+					throw new InternalError('Missing receiver-preserving clone for "${fn.name}"');
 				if (needed.exists(clone.name))
 					rewritten.push(clone);
 			}
@@ -562,7 +563,7 @@ class IrScalarArguments {
 			}
 			var name = switch arg.type {
 				case Obj(name): name;
-				default: throw "Invalid scalar argument";
+				default: throw new InternalError("Invalid scalar argument");
 			};
 			prefix.push(new Located(ValueInit(arg), origin));
 			for (slot in slots(arg.type, objects)) {
@@ -716,7 +717,7 @@ class IrScalarArguments {
 					var target = pinned ? pinnedCandidates.get(name) : candidates.get(name),
 						expanded:Array<IrValue> = [];
 					if (target == null)
-						throw 'Missing scalar call target "$name"';
+						throw new InternalError('Missing scalar call target "$name"');
 					for (index in 0...arguments.length) {
 						var arg = arguments[index];
 						if (pinned && index == 0) {
@@ -762,7 +763,7 @@ class IrScalarArguments {
 						emitted.push(new Located(Call(ignored, targetName, expanded), located.provenance));
 						var typeName = switch out.type {
 							case Obj(value): value;
-							default: throw "Invalid scalar result";
+							default: throw new InternalError("Invalid scalar result");
 						};
 						emitted.push(new Located(ValueInit(out), located.provenance));
 						for (index in 0...returnSlots.length) {
@@ -813,14 +814,14 @@ class IrScalarArguments {
 	static function fieldOf(type:IrType, name:String, objects:Map<String, IrObject>):IrObjectField {
 		var objectName = switch type {
 			case Obj(value): value;
-			default: throw "Invalid scalar field owner";
+			default: throw new InternalError("Invalid scalar field owner");
 		};
 		var object = objects.get(objectName);
 		if (object != null)
 			for (field in object.fields)
 				if (field.name == name)
 					return field;
-		throw 'Missing scalar field $objectName.$name';
+		throw new InternalError('Missing scalar field $objectName.$name');
 	}
 
 	static function resolveMethod(type:IrType, method:String, objects:Map<String, IrObject>,

@@ -1,5 +1,6 @@
 package tools.dev;
 
+import compiler.core.InternalError;
 import haxe.io.Path;
 import tools.dev.ToolArtifacts.ToolRequest;
 
@@ -66,7 +67,7 @@ class DevCommand {
 		if (request == null)
 			return usage(2);
 		if (arguments.length != 0)
-			throw "tool-path takes one main class";
+			throw new InternalError("tool-path takes one main class");
 		Sys.println(new ToolArtifacts(home).resolve(request));
 		return 0;
 	}
@@ -85,13 +86,13 @@ class DevCommand {
 			switch argument {
 				case "--cp" | "--define":
 					if (arguments.length == 0)
-						throw 'Option "$argument" takes a value';
+						throw new InternalError('Option "$argument" takes a value');
 					var value = arguments.shift();
 					if (value == null)
-						throw 'Option "$argument" takes a value';
+						throw new InternalError('Option "$argument" takes a value');
 					(argument == "--cp" ? classPaths : defines).push(value);
 				case _ if (StringTools.startsWith(argument, "-")):
-					throw 'Unknown $command option: $argument';
+					throw new InternalError('Unknown $command option: $argument');
 				case _:
 					return {main: argument, classPaths: classPaths, defines: defines};
 			}
@@ -115,19 +116,19 @@ class DevCommand {
 					list = true;
 				case "--jobs" | "--only":
 					if (index >= arguments.length)
-						throw 'Option "$argument" takes a value';
+						throw new InternalError('Option "$argument" takes a value');
 					var value = arguments[index++];
 					if (argument == "--jobs") {
 						jobs = Std.parseInt(value);
 						if (jobs == null || jobs < 1)
-							throw "--jobs takes a whole number of at least 1";
+							throw new InternalError("--jobs takes a whole number of at least 1");
 					} else
 						only = only.concat(value.split(",").filter(name -> name != ""));
 				case _ if (StringTools.startsWith(argument, "-")):
-					throw 'Unknown test option: $argument';
+					throw new InternalError('Unknown test option: $argument');
 				case _:
 					if (mode != null)
-						throw "test takes one mode";
+						throw new InternalError("test takes one mode");
 					mode = argument;
 			}
 		}
@@ -146,7 +147,7 @@ class DevCommand {
 	/** The CMake build of the VM. It publishes the VM by rename, so the process running this command can rebuild it. */
 	static function native(arguments:Array<String>, home:String):Int {
 		if (arguments.length > 1)
-			throw "native takes at most a preset";
+			throw new InternalError("native takes at most a preset");
 		var environment = new build.BuildEnvironment(home, Path.join([home, "out"]));
 		return build.HaxeonBuild.buildNative(environment, arguments.length == 1 ? arguments[0] : null);
 	}
@@ -154,7 +155,7 @@ class DevCommand {
 	/** The bootstrap needs the pinned Haxe for its seed, so it runs under it: `build.HaxeonBuild bootstrap` or `bootstrap-self`. */
 	static function bootstrap(arguments:Array<String>, home:String):Int {
 		if (arguments.length > 1 || (arguments.length == 1 && arguments[0] != "--self"))
-			throw "bootstrap takes only --self";
+			throw new InternalError("bootstrap takes only --self");
 		var pinnedHaxe = Path.join([home, ".tools", "haxe", Sys.systemName() == "Windows" ? "haxe.exe" : "haxe"]);
 		return Sys.command(pinnedHaxe, [
 			"--cwd",

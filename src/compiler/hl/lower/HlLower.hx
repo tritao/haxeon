@@ -1,5 +1,6 @@
 package compiler.hl.lower;
 
+import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrFunction;
@@ -235,10 +236,10 @@ class HlLower {
 			cNatives.set(native.name, native);
 			var arity = native.arguments.length;
 			if (arity > 16)
-				throw 'Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"';
+				throw new InternalError('Ordinary C calls support at most 16 arguments, got $arity for "${native.name}"');
 			if ((isNativePointer(native.result) || isManagedPointerBytes(native) || isUtf8Result(native))
 				&& native.pointerOwnership == "unspecified")
-				throw 'Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution';
+				throw new InternalError('Ordinary C pointer result "${native.name}" requires @borrowed or @owned metadata before execution');
 		}
 		for (native in discoverCDispatchNatives(program))
 			cDispatchNatives.push(native);
@@ -417,7 +418,7 @@ class HlLower {
 					remainingInterfaces.push(interfaceDecl);
 			}
 			if (!progressed)
-				throw 'Unable to order interface bases';
+				throw new InternalError('Unable to order interface bases');
 			pendingInterfaces = remainingInterfaces;
 		}
 		var pending = program.objects.copy();
@@ -445,7 +446,7 @@ class HlLower {
 					remaining.push(object);
 			}
 			if (!progressed)
-				throw 'Unable to order object metadata dependencies';
+				throw new InternalError('Unable to order object metadata dependencies');
 			pending = remaining;
 		}
 		for (field in program.staticFields)
@@ -502,10 +503,10 @@ class HlLower {
 						entries.set(fn.name, entry);
 						requests = null;
 					}
-				} catch (error:String) {
-					throw 'HashLink lowering failed for ${fn.name}: $error';
+				} catch (error:InternalError) {
+					throw new InternalError('HashLink lowering failed for ${fn.name}: ${error.message}', error.span);
 				} catch (missing:HlMissingEntity) {
-					throw 'HashLink lowering failed for ${fn.name}: $missing';
+					throw new InternalError('HashLink lowering failed for ${fn.name}: ${missing.message}');
 				}
 			}
 		}
@@ -590,12 +591,12 @@ class HlLower {
 		for (fn in program.functions) {
 			var lowered = this.lowered.get(fn.name);
 			if (lowered == null)
-				throw '--check-reuse: no lowering was recorded for ${fn.name}';
+				throw new InternalError('--check-reuse: no lowering was recorded for ${fn.name}');
 			var linked = compiler.hl.incremental.HlLink.link(lowered, environment, functionIndices, view);
 			if (linked.fn == null)
-				throw '--check-reuse: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}';
+				throw new InternalError('--check-reuse: linking ${fn.name} against the tables it was lowered with failed: ${linked.reason}');
 			if (linked.fn != lowered.fn)
-				throw '--check-reuse: linking ${fn.name} against the tables it was lowered with moved its indices';
+				throw new InternalError('--check-reuse: linking ${fn.name} against the tables it was lowered with moved its indices');
 		}
 
 		sameReplayTable("the integer", symbols.ints, environment.ints);
@@ -607,10 +608,10 @@ class HlLower {
 
 	static function sameReplayTable<T>(what:String, expected:Array<T>, actual:Array<T>):Void {
 		if (expected.length != actual.length)
-			throw '--check-reuse: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}';
+			throw new InternalError('--check-reuse: replaying the requests made $what table of ${actual.length} entries, lowering made ${expected.length}');
 		for (index in 0...expected.length)
 			if (Std.string(expected[index]) != Std.string(actual[index]))
-				throw '--check-reuse: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}';
+				throw new InternalError('--check-reuse: replaying the requests made $what ${index} different from lowering\'s: ${Std.string(actual[index])} and ${Std.string(expected[index])}');
 	}
 
 	/**
@@ -634,15 +635,15 @@ class HlLower {
 			// Only an object type or field the program no longer holds excuses it: a removed lambda whose code stored closures still run
 			// keeps its old code on purpose, and there is nothing to compare it with. Lowering must have added nothing before it failed.
 			if (sizes() != before)
-				throw '--check-reuse: lowering kept function ${fn.name} added symbols (ints, floats, strings, types, globals $before -> ${sizes()}) before failing: $missing';
+				throw new InternalError('--check-reuse: lowering kept function ${fn.name} added symbols (ints, floats, strings, types, globals $before -> ${sizes()}) before failing: $missing');
 			skippedKept.push('${fn.name} ($missing)');
 			return;
 		}
 		if (sizes() != before)
-			throw '--check-reuse: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals $before -> ${sizes()})';
+			throw new InternalError('--check-reuse: kept function ${fn.name} added symbols when lowered again (ints, floats, strings, types, globals $before -> ${sizes()})');
 		var difference = compiler.hl.HlFunctionEquality.difference(kept, fresh);
 		if (difference != null)
-			throw '--check-reuse: kept function ${fn.name} lowers to other code than its cached lowering: $difference';
+			throw new InternalError('--check-reuse: kept function ${fn.name} lowers to other code than its cached lowering: $difference');
 	}
 
 	function cachedFunctionIdentity(fn:IrFunction):compiler.hl.HlCode.HlFunctionIdentity {
@@ -736,10 +737,10 @@ class HlLower {
 					|| !IrTypeIdentity.same(native.result, result)
 					|| native.library != nativeLibrary
 					|| native.symbol != nativeSymbol)
-					throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';
+					throw new InternalError('Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result');
 				for (index in 0...arguments.length)
 					if (Std.string(native.arguments[index]) != Std.string(arguments[index]))
-						throw 'Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result';
+						throw new InternalError('Conflicting HashLink runtime native signature for "$name": ${native.arguments} -> ${native.result}, expected $arguments -> $result');
 				return;
 			}
 		natives.push({
@@ -923,7 +924,7 @@ class HlLower {
 				switch instruction.value {
 					case Phi(_, _):
 					case ClassId(_, _):
-						throw 'internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which HashLink does not have yet';
+						throw new InternalError('internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which HashLink does not have yet');
 					case ConstVoid(output):
 						defineRegister(output, registers, registerTypes);
 					case ConstInt(output, value):
@@ -1015,14 +1016,14 @@ class HlLower {
 								requireRegister(value, registers)));
 					case BeginTry(catchBlock, _, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
-							throw 'Try block $block.id has no catch value in block $catchBlock';
+							throw new InternalError('Try block $block.id has no catch value in block $catchBlock');
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
 						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock',
 							preserveExceptionStack));
 					case EndTry(catchBlock, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
-							throw 'Try block $block.id ends with unknown handler block $catchBlock';
+							throw new InternalError('Try block $block.id ends with unknown handler block $catchBlock');
 						instructions.push(HlInstruction.EndTrap(requireRegister(catchValues.get(catchBlock), registers),
 							preserveExceptionStack));
 					case Catch(_):
@@ -1098,7 +1099,7 @@ class HlLower {
 							registers, registerTypes,
 							instructions);
 					case Intrinsic(_, _, _):
-						throw "Unlowered IR intrinsic reached HashLink";
+						throw new InternalError("Unlowered IR intrinsic reached HashLink");
 					case Call(output, functionName, arguments):
 						if (functionName == compiler.ir.IrReceiverCheck.NAME
 							&& nonNull.has(block.id, instructionIndex)) {
@@ -1152,15 +1153,15 @@ class HlLower {
 					case CNativeCall(output, functionName, arguments):
 						var native = cNatives.get(functionName);
 						if (native == null)
-							throw 'Unknown ordinary C function "$functionName"';
+							throw new InternalError('Unknown ordinary C function "$functionName"');
 						for (type in native.arguments)
 							if (unsupportedCDispatchArgument(type))
-								throw 'Ordinary C function "$functionName" uses an unsupported executable argument type $type';
+								throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable argument type $type');
 						if ((switch (native.result) {
 							case Void: false;
 							default: true;
 						}) && unsupportedCDispatchResult(native.result))
-							throw 'Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}';
+							throw new InternalError('Ordinary C function "$functionName" uses an unsupported executable result type ${native.result}');
 						var callArguments = [
 							temporaryRegister(IrType.RawPtr, registerTypes),
 							temporaryRegister(IrType.RawPtr, registerTypes),
@@ -1419,7 +1420,7 @@ class HlLower {
 			}
 			var terminator = block.terminator;
 			if (terminator == null)
-				throw 'Reachable IR block ${block.id} has no terminator';
+				throw new InternalError('Reachable IR block ${block.id} has no terminator');
 			var terminatorStart = instructions.length;
 			switch terminator.value {
 				case Unreachable:
@@ -1459,7 +1460,7 @@ class HlLower {
 						instructions.push(HlInstruction.Jump('block_$target'));
 				case Branch(condition, yes, no):
 					if (edgeMoves(edges, block.id, yes) != null || edgeMoves(edges, block.id, no) != null)
-						throw "Phi elimination requires split critical edges";
+						throw new InternalError("Phi elimination requires split critical edges");
 					if (yes == fallsThroughTo && no != fallsThroughTo)
 						// The taken side is written next: jump to the other side on the complement, and fall through.
 						instructions.push(fusedComparison != null ? complementJump(fusedComparison, 'block_$no',
@@ -1476,7 +1477,7 @@ class HlLower {
 				case Switch(value, targets, otherwise):
 					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
 						if (edgeMoves(edges, block.id, target) != null)
-							throw "Phi elimination requires split critical edges";
+							throw new InternalError("Phi elimination requires split critical edges");
 					// HashLink's jump table takes only forward offsets: a target laid out before this block is reached through a
 					// jump placed after the table. Values outside it fall through to the jump to `otherwise`.
 					var stubs:Array<{label:String, target:Int}> = [], entries:Array<String> = [];
@@ -1864,7 +1865,7 @@ class HlLower {
 				target) : HlInstruction.JumpSignedGreater(left, right, target);
 			case JumpNull(value, _): HlInstruction.JumpNotNull(value, target);
 			case JumpEqual(left, right, _): HlInstruction.JumpNotEqual(left, right, target);
-			default: throw "Not a comparison jump";
+			default: throw new InternalError("Not a comparison jump");
 		};
 
 	static function isArray(type:IrType):Bool
@@ -1885,7 +1886,7 @@ class HlLower {
 			case JumpSignedLessOrEqual(left, right, _): HlInstruction.JumpSignedLessOrEqual(left, right, target);
 			case JumpNull(value, _): HlInstruction.JumpNull(value, target);
 			case JumpEqual(left, right, _): HlInstruction.JumpEqual(left, right, target);
-			default: throw "Not a comparison jump";
+			default: throw new InternalError("Not a comparison jump");
 		};
 
 	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool,
@@ -1996,7 +1997,7 @@ class HlLower {
 			registerTypes:Array<Int>, access:(Int, Int) -> HlInstruction):Void {
 		var elementShift = rawArrayShift(array.type);
 		if (elementShift == null)
-			throw "Inline array access requires an Int or Float array";
+			throw new InternalError("Inline array access requires an Int or Float array");
 		var arrayRegister = requireRegister(array, registers),
 			indexRegister = requireRegister(index, registers),
 			key = '${array.id}:${index.id}';
@@ -2034,10 +2035,10 @@ class HlLower {
 			registerTypes:Array<Int>):Bool {
 		if (compiler.ir.IrScalarWordBits.matches(name)) {
 			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name, arguments[0].type, output.type))
-				throw "Invalid scalar word transport signature";
+				throw new InternalError("Invalid scalar word transport signature");
 			var scalar = name == compiler.ir.IrScalarWordBits.PACK ? arguments[0].type : output.type;
 			if (compiler.ir.IrVerifier.sameType(scalar, IrType.Abstract("native_callback")))
-				throw "HashLink callbacks belong in the reference lane";
+				throw new InternalError("HashLink callbacks belong in the reference lane");
 			instructions.push(HlInstruction.UnsafeCast(defineRegister(output, registers, registerTypes),
 				requireRegister(arguments[0], registers)));
 			return true;
@@ -2188,7 +2189,7 @@ class HlLower {
 
 	function requireRegister(value:IrValue, registers:Map<Int, Int>):Int {
 		if (!registers.exists(value.id))
-			throw 'IR value ${value.id} is used before definition';
+			throw new InternalError('IR value ${value.id} is used before definition');
 		return registers.get(value.id);
 	}
 
@@ -2301,21 +2302,21 @@ class HlLower {
 	function requireEnumConstructor(typeName:String, type:IrType, constructor:Int):Int {
 		var name = switch type {
 			case Enum(value): value;
-			default: throw 'IR value is not an enum';
+			default: throw new InternalError('IR value is not an enum');
 		};
 		if (name != typeName)
-			throw 'IR enum constructor type mismatch';
+			throw new InternalError('IR enum constructor type mismatch');
 		if (!enumTypeIndices.exists(name))
-			throw 'Unknown IR enum "$name"';
+			throw new InternalError('Unknown IR enum "$name"');
 		if (constructor < 0)
-			throw 'Invalid IR enum constructor $constructor';
+			throw new InternalError('Invalid IR enum constructor $constructor');
 		return constructor;
 	}
 
 	function requireObjectField(object:IrValue, name:String):Int {
 		var typeName = switch object.type {
 			case Obj(value): value;
-			default: throw 'IR value ${object.id} is not an object';
+			default: throw new InternalError('IR value ${object.id} is not an object');
 		};
 		return requireObjectFieldByType(typeName, name);
 	}
@@ -2350,7 +2351,7 @@ class HlLower {
 		}
 		var index = symbols.objectFieldIndex(owner, name);
 		if (index == null)
-			throw 'IR field "$owner.$name" has no slot in its HashLink type';
+			throw new InternalError('IR field "$owner.$name" has no slot in its HashLink type');
 		var resolved:Int = index;
 		if (byName == null) {
 			byName = [];
@@ -2489,7 +2490,7 @@ class HlLower {
 				if (requests != null)
 					requests.push(InterfaceSlot(value, name, slot));
 				return slot;
-			default: throw 'IR value ${value.id} is not an object';
+			default: throw new InternalError('IR value ${value.id} is not an object');
 		};
 		var slot = symbols.requireObjectMethodIndex(typeName, name);
 		if (requests != null)
@@ -2541,13 +2542,13 @@ class HlLower {
 
 	function addFunctionName(name:String, index:Int):Void {
 		if (functionIndices.exists(name))
-			throw 'Duplicate IR function "$name"';
+			throw new InternalError('Duplicate IR function "$name"');
 		functionIndices.set(name, index);
 	}
 
 	function requireFunction(name:String):Int {
 		if (!functionIndices.exists(name))
-			throw 'Unknown IR function "$name"';
+			throw new InternalError('Unknown IR function "$name"');
 		var index = functionIndices.get(name);
 		if (requests != null)
 			requests.push(FunctionRef(name, index));

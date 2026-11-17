@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 
 /** Resolves instantiated class and interface inheritance through one canonical traversal. */
@@ -87,7 +88,7 @@ class NominalInheritance {
 	static function bind(parameters:Array<String>, arguments:Array<CompilerType>,
 			result:Map<String, CompilerType>):Void {
 		if (parameters.length != arguments.length)
-			throw "Nominal type argument arity mismatch";
+			throw new InternalError("Nominal type argument arity mismatch");
 		for (index in 0...arguments.length)
 			result.set(parameters[index], arguments[index]);
 	}

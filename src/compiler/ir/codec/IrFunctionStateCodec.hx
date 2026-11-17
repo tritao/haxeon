@@ -1,5 +1,6 @@
 package compiler.ir.codec;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrTerminator;
@@ -170,19 +171,19 @@ class IrFunctionStateCodec {
 		// A fingerprint describes whatever the compiler holds, including functions still being built; only persisted state must be
 		// complete.
 		if (identified && fn.blocks.length == 0 || fn.blocks.length > MAX_BLOCKS)
-			throw "Invalid IR function block count";
+			throw new InternalError("Invalid IR function block count");
 		var blocks:Map<Int, Bool> = [];
 		output.writeInt32(fn.blocks.length);
 		for (block in fn.blocks) {
 			var blockId:Int = block.id;
 			if (blockId < 0 || blocks.exists(blockId))
-				throw "Duplicate or invalid IR block ID";
+				throw new InternalError("Duplicate or invalid IR block ID");
 			blocks.set(blockId, true);
 			output.writeInt32(blockId);
 		}
 		for (block in fn.blocks) {
 			if (block.instructions.length > MAX_INSTRUCTIONS)
-				throw "Too many IR instructions";
+				throw new InternalError("Too many IR instructions");
 			output.writeInt32(block.instructions.length);
 			for (instruction in block.instructions) {
 				writeBytes(output, IrInstructionCodec.encode(instruction.value, erase));
@@ -211,16 +212,16 @@ class IrFunctionStateCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "IRF")
-				throw "Invalid IR function state";
+				throw new InternalError("Invalid IR function state");
 			var version = input.readByte();
 			if (version != VERSION)
-				throw "Unsupported IR function state version";
+				throw new InternalError("Unsupported IR function state version");
 			var valuesArray = IrValueTableCodec.decode(readBytes(input, bytes.length)),
 				values = IrValueTableCodec.byId(valuesArray),
 				name = IrTypeCodec.readString(input, bytes.length),
 				argumentCount = input.readInt32();
 			if (argumentCount < 0 || argumentCount > IrValueTableCodec.MAX_VALUES)
-				throw "Invalid IR function argument count";
+				throw new InternalError("Invalid IR function argument count");
 			var arguments = [for (_ in 0...argumentCount) IrValueTableCodec.readReference(input, values)],
 				result = IrTypeCodec.readType(input, bytes.length, 0),
 				debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
@@ -239,7 +240,7 @@ class IrFunctionStateCodec {
 				case 15:
 					var present = input.readByte();
 					if (present != 0 && present != 1)
-						throw "Invalid optional scalar origin";
+						throw new InternalError("Invalid optional scalar origin");
 					OptionalScalar(present == 0 ? null : IrTypeCodec.readString(input, bytes.length));
 				case 17: NullableScalarArguments;
 				case 19: WasmClosureRestore;
@@ -247,29 +248,29 @@ class IrFunctionStateCodec {
 				case 22:
 					var namespace = input.readInt32();
 					if (namespace < 0)
-						throw "Invalid value-array slot namespace";
+						throw new InternalError("Invalid value-array slot namespace");
 					ValueArraySlot(namespace, IrTypeCodec.readType(input, bytes.length, 0),
 						readSlotOperation(input, bytes.length));
 				case 23:
 					var flag = input.readByte();
 					if (flag != 0 && flag != 1)
-						throw "Invalid enum equality role";
+						throw new InternalError("Invalid enum equality role");
 					EnumEquality(flag == 1);
 				case 24: EnumDynamicUnbox(IrTypeCodec.readType(input, bytes.length, 0));
 				case 25:
 					var type = IrTypeCodec.readType(input, bytes.length, 0), flag = input.readByte();
 					if (flag != 0 && flag != 1)
-						throw "Invalid enum tag adapter role";
+						throw new InternalError("Invalid enum tag adapter role");
 					EnumTagAdapter(type, flag == 1);
 				case 26:
 					var subject = compiler.ir.TypeKey.fromPersisted(IrTypeCodec.readString(input, bytes.length));
 					Provider(subject, cast IrTypeCodec.readString(input, bytes.length));
-				default: throw "Invalid IR function kind";
+				default: throw new InternalError("Invalid IR function kind");
 			};
 			if (version >= 3) {
 				var bindingCount = input.readInt32();
 				if (bindingCount < 0 || bindingCount > IrValueTableCodec.MAX_VALUES)
-					throw "Invalid IR debug binding count";
+					throw new InternalError("Invalid IR debug binding count");
 				for (_ in 0...bindingCount) {
 					var identity = version >= 4 ? IrTypeCodec.readString(input, bytes.length) : "",
 						name = IrTypeCodec.readString(input, bytes.length),
@@ -293,19 +294,19 @@ class IrFunctionStateCodec {
 			}
 			var blockCount = input.readInt32();
 			if (blockCount <= 0 || blockCount > MAX_BLOCKS)
-				throw "Invalid IR function block count";
+				throw new InternalError("Invalid IR function block count");
 			var blocks:Array<IrBlock> = [], blockIds:Map<Int, Bool> = [];
 			for (_ in 0...blockCount) {
 				var id = input.readInt32();
 				if (id < 0 || blockIds.exists(id))
-					throw "Duplicate or invalid IR block ID";
+					throw new InternalError("Duplicate or invalid IR block ID");
 				blockIds.set(id, true);
 				blocks.push(new IrBlock(id));
 			}
 			for (block in blocks) {
 				var instructionCount = input.readInt32();
 				if (instructionCount < 0 || instructionCount > MAX_INSTRUCTIONS)
-					throw "Invalid IR instruction count";
+					throw new InternalError("Invalid IR instruction count");
 				for (_ in 0...instructionCount) {
 					var instruction = IrInstructionCodec.decode(readBytes(input, bytes.length), values),
 						provenance = version >= 2 ? readProvenance(input, bytes.length,
@@ -323,13 +324,13 @@ class IrFunctionStateCodec {
 					version >= 2 ? readProvenance(input, bytes.length,
 					version) : SourceProvenance.generated("legacy-ir-cache"));
 				if (terminatorInput.position != terminatorBytes.length)
-					throw "Trailing IR terminator data";
+					throw new InternalError("Trailing IR terminator data");
 			}
 			if (input.position != bytes.length)
-				throw "Trailing IR function state data";
+				throw new InternalError("Trailing IR function state data");
 			return new IrFunction(name, arguments, result, blocks, kind, debugBindings, inlineHint, retention);
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated IR function state";
+			throw new InternalError("Truncated IR function state");
 		}
 	}
 
@@ -358,14 +359,14 @@ class IrFunctionStateCodec {
 	static function readProvenance(input:BytesInput, limit:Int, version:Int):SourceProvenance {
 		var hasLocation = input.readByte();
 		if (hasLocation != 0 && hasLocation != 1)
-			throw "Invalid IR provenance location flag";
+			throw new InternalError("Invalid IR provenance location flag");
 		var location:Null<SourceLocation> = null;
 		if (hasLocation == 1)
 			location = versionedLocation(input, limit, version);
 		var origin:SourceOrigin = switch input.readByte() {
 			case 0: UserSource;
 			case 1: CompilerGenerated(IrTypeCodec.readString(input, limit));
-			default: throw "Invalid IR provenance origin";
+			default: throw new InternalError("Invalid IR provenance origin");
 		};
 		return new SourceProvenance(location, origin);
 	}
@@ -473,7 +474,7 @@ class IrFunctionStateCodec {
 		if (values.exists(id)) {
 			var previous = values.get(id);
 			if (previous.name != value.name || Std.string(previous.type) != Std.string(value.type))
-				throw "Conflicting IR value identity";
+				throw new InternalError("Conflicting IR value identity");
 		}
 		values.set(id, value);
 	}
@@ -487,7 +488,7 @@ class IrFunctionStateCodec {
 	static function readSlotPath(input:BytesInput, limit:Int):Array<String> {
 		var count = input.readInt32();
 		if (count < 0 || count > Std.int((limit - input.position) / 4))
-			throw "Invalid value-array slot path";
+			throw new InternalError("Invalid value-array slot path");
 		return [for (_ in 0...count) IrTypeCodec.readString(input, limit)];
 	}
 
@@ -518,7 +519,7 @@ class IrFunctionStateCodec {
 	static function readSlotBool(input:BytesInput):Bool {
 		var value = input.readByte();
 		if (value != 0 && value != 1)
-			throw "Invalid value-array slot flag";
+			throw new InternalError("Invalid value-array slot flag");
 		return value == 1;
 	}
 
@@ -528,14 +529,14 @@ class IrFunctionStateCodec {
 			case 0, 1:
 				var slot = input.readInt32();
 				if (slot < 0)
-					throw "Invalid value-array slot";
+					throw new InternalError("Invalid value-array slot");
 				var path = readSlotPath(input, limit),
 					carrier = readSlotBool(input);
 				tag == 0 ? Read(slot, path, carrier) : Write(slot, path, carrier);
 			case 2: Check(readSlotPath(input, limit), readSlotBool(input));
 			case 3: OptionalWrite(readSlotPath(input, limit), IrTypeCodec.readType(input, limit, 0));
 			case 4: RequireScalar(IrTypeCodec.readType(input, limit, 0));
-			default: throw "Invalid value-array slot operation";
+			default: throw new InternalError("Invalid value-array slot operation");
 		};
 	}
 
@@ -549,7 +550,7 @@ class IrFunctionStateCodec {
 
 	static function readSized(input:BytesInput, totalLength:Int, length:Int):Bytes {
 		if (length < 0 || length > 0x10000000 || length > totalLength - input.position)
-			throw "Invalid IR function section length";
+			throw new InternalError("Invalid IR function section length");
 		return input.read(length);
 	}
 }

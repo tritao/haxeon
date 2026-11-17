@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.IrProgramIndex;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -101,7 +102,7 @@ private class StructuredEmission {
 			depth++;
 			index--;
 		}
-		throw 'No enclosing frame for a branch in ${structurer.functionName}';
+		throw new InternalError('No enclosing frame for a branch in ${structurer.functionName}');
 	}
 }
 
@@ -122,12 +123,12 @@ class WasmFunctionLower {
 	}
 
 	static function requiredLocal(locals:Map<Int, Int>, valueId:Int):Int {
-		if (!locals.exists(valueId)) throw 'Unknown Wasm local for value $valueId';
+		if (!locals.exists(valueId)) throw new InternalError('Unknown Wasm local for value $valueId');
 		return locals.get(valueId);
 	}
 
 	static function requiredBlockIndex(blocks:Map<Int, Int>, blockId:Int):Int {
-		if (!blocks.exists(blockId)) throw 'Unknown Wasm block $blockId';
+		if (!blocks.exists(blockId)) throw new InternalError('Unknown Wasm block $blockId');
 		return blocks.get(blockId);
 	}
 
@@ -400,7 +401,7 @@ class WasmFunctionLower {
 						state.strings,
 						state.methods,
 						state.closureTypes);
-					if (block.terminator == null) throw 'Reachable block $blockId has no terminator';
+					if (block.terminator == null) throw new InternalError('Reachable block $blockId has no terminator');
 					switch block.terminator.value {
 						case Unreachable:
 							body.push(Unreachable);
@@ -808,7 +809,7 @@ class WasmFunctionLower {
 						dispatchIndex);
 			}
 		}
-		if (block.terminator == null) throw 'Missing terminator in Wasm block ${block.id}';
+		if (block.terminator == null) throw new InternalError('Missing terminator in Wasm block ${block.id}');
 		switch block.terminator.value {
 			case Unreachable:
 				body.push(Unreachable);
@@ -897,12 +898,14 @@ class WasmFunctionLower {
 		]);
 
 	function requiredPendingExceptionFlag():Int {
-		if (context.pendingExceptionFlag == null) throw "Runtime-neutral exception flag was not initialized";
+		if (context.pendingExceptionFlag == null)
+			throw new InternalError("Runtime-neutral exception flag was not initialized");
 		return context.pendingExceptionFlag;
 	}
 
 	function requiredPendingExceptionValue():Int {
-		if (context.pendingExceptionValue == null) throw "Runtime-neutral exception payload was not initialized";
+		if (context.pendingExceptionValue == null)
+			throw new InternalError("Runtime-neutral exception payload was not initialized");
 		return context.pendingExceptionValue;
 	}
 
@@ -941,7 +944,7 @@ class WasmFunctionLower {
 		switch instruction {
 			case Phi(_, _):
 			case ClassId(_, _):
-				throw 'internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which Wasm does not have yet';
+				throw new InternalError('internal error: ClassId is lowered by the interface dispatch (docs/design/INTERFACE_VALUES.md), which Wasm does not have yet');
 			case PointerOffset(output, pointer, byteOffset):
 				emit(body,
 					[
@@ -967,7 +970,7 @@ class WasmFunctionLower {
 							case 4:
 								[I32Load(0)];
 							default:
-								throw 'Unsupported Wasm raw memory load size $size';
+								throw new InternalError('Unsupported Wasm raw memory load size $size');
 						};
 				};
 				emit(body,
@@ -990,7 +993,7 @@ class WasmFunctionLower {
 							case 4:
 								[I32Store(0)];
 							default:
-								throw 'Unsupported Wasm raw memory store size $size';
+								throw new InternalError('Unsupported Wasm raw memory store size $size');
 						};
 				};
 				emit(body,
@@ -1042,7 +1045,7 @@ class WasmFunctionLower {
 								LocalSet(requiredLocal(values, output.id))
 							]);
 					case Function(_, _) if (context.representation.model.closureCastName(output.type) != null):
-						throw 'Missing reachable Wasm32 closure cast helper for ${Std.string(output.type)}';
+						throw new InternalError('Missing reachable Wasm32 closure cast helper for ${Std.string(output.type)}');
 					case I32, F64 if ((switch (value.type) {
 						case Dyn:
 							true;
@@ -1111,7 +1114,8 @@ class WasmFunctionLower {
 						]);
 				}
 			case BeginTry(catchBlock, _, _):
-				if (exceptionState == null) throw 'Wasm exception lowering has no active exception state';
+				if (exceptionState == null)
+					throw new InternalError('Wasm exception lowering has no active exception state');
 				var saved = requiredLocal(exceptionState.saved, catchBlock),
 					target = requiredBlockIndex(exceptionState.blocks,
 						catchBlock);
@@ -1123,25 +1127,27 @@ class WasmFunctionLower {
 						LocalSet(exceptionState.handler)
 					]);
 			case EndTry(catchBlock, _):
-				if (exceptionState == null) throw 'Wasm exception lowering has no active exception state';
+				if (exceptionState == null)
+					throw new InternalError('Wasm exception lowering has no active exception state');
 				var saved = requiredLocal(exceptionState.saved, catchBlock);
 				emit(body, [LocalGet(saved), LocalSet(exceptionState.handler)]);
 			case Catch(output):
-				if (exceptionState == null) throw 'Wasm exception lowering has no active exception state';
+				if (exceptionState == null)
+					throw new InternalError('Wasm exception lowering has no active exception state');
 				emit(body, [LocalGet(exceptionState.exception), LocalSet(requiredLocal(values, output.id))]);
 			case GlobalGet(output, name):
 				var global = globals.get(name);
-				if (global == null) throw 'Wasm global "$name" is not declared';
+				if (global == null) throw new InternalError('Wasm global "$name" is not declared');
 				emit(body, [GlobalGet(global), LocalSet(requiredLocal(values, output.id))]);
 			case GlobalSet(name, value):
 				var global = globals.get(name);
-				if (global == null) throw 'Wasm global "$name" is not declared';
+				if (global == null) throw new InternalError('Wasm global "$name" is not declared');
 				emit(body, [LocalGet(requiredLocal(values, value.id)), GlobalSet(global)]);
 			case StaticClosure(output, name):
 				var functionIndex = functions.get(name);
-				if (functionIndex == null) throw 'Wasm closure target "$name" is not emitted';
+				if (functionIndex == null) throw new InternalError('Wasm closure target "$name" is not emitted');
 				var tableSlot = context.tableSlots.get(name);
-				if (tableSlot == null) throw 'Wasm closure target "$name" has no stable table slot';
+				if (tableSlot == null) throw new InternalError('Wasm closure target "$name" has no stable table slot');
 				var calls = context.representation.calls,
 					represented = calls == null ? UseDefault : calls.staticClosure(name,
 						output.type,
@@ -1149,15 +1155,16 @@ class WasmFunctionLower {
 						requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
 					var descriptor = context.representation.model.staticClosureDescriptor(name, output.type);
-					if (descriptor == null) throw 'Missing static closure descriptor for $name';
+					if (descriptor == null) throw new InternalError('Missing static closure descriptor for $name');
 					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case CallClosure(output, closure, arguments):
 				var typeInfo = closureTypes.get(Std.string(closure.type));
-				if (typeInfo == null) throw 'Wasm closure type ${Std.string(closure.type)} has no indirect signature';
+				if (typeInfo == null)
+					throw new InternalError('Wasm closure type ${Std.string(closure.type)} has no indirect signature');
 				var model = context.representation.model;
 				if (model.hasScalarClosure(closure.type)) {
-					if (typeInfo.instanceType == null) throw "Scalar closure has no instance ABI";
+					if (typeInfo.instanceType == null) throw new InternalError("Scalar closure has no instance ABI");
 					emit(body,
 						model.scalarClosureCall(closure.type, typeInfo.staticType, typeInfo.instanceType,
 						requiredLocal(values,
@@ -1231,9 +1238,11 @@ class WasmFunctionLower {
 				}
 			case InstanceClosure(output, name, receiver):
 				var functionIndex = functions.get(name);
-				if (functionIndex == null) throw 'Wasm instance closure target "$name" is not emitted';
+				if (functionIndex == null)
+					throw new InternalError('Wasm instance closure target "$name" is not emitted');
 				var tableSlot = context.tableSlots.get(name);
-				if (tableSlot == null) throw 'Wasm instance closure target "$name" has no stable table slot';
+				if (tableSlot == null)
+					throw new InternalError('Wasm instance closure target "$name" has no stable table slot');
 				var calls = context.representation.calls,
 					represented = calls == null ? UseDefault : calls.instanceClosure(name,
 						output.type,
@@ -1244,7 +1253,7 @@ class WasmFunctionLower {
 					var signature:Null<Int> = name == WasmDynamicCalls.VARARGS_TARGET
 						? -1 : context.representation.model.closureSignatureId(output.type);
 					if (signature == null)
-						throw "Missing Wasm32 closure signatures";
+						throw new InternalError("Missing Wasm32 closure signatures");
 					emit(body,
 						[
 							I32Const(WasmLayout.CLOSURE_SIZE),
@@ -1409,19 +1418,21 @@ class WasmFunctionLower {
 							for (_ in targets) body.push(End);
 						}
 					default:
-						throw 'Wasm method call requires an object or virtual receiver';
+						throw new InternalError('Wasm method call requires an object or virtual receiver');
 				}
 			case ConstString(output, value):
 				var represented = context.representation.values.constantString(value,
 					requiredLocal(values, output.id), strings);
 				if (emitIfHandled(body, represented)) {} else {
 					var pointer = strings.get(value);
-					if (pointer == null) throw 'Wasm string literal was not placed in a data segment';
+					if (pointer == null)
+						throw new InternalError('Wasm string literal was not placed in a data segment');
 					emit(body, [I32Const(pointer), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case StaticDataAddress(output, bytes):
 				var address = context.staticDataAddresses.get(WasmModuleSupport.staticDataKey(bytes));
-				if (address == null) throw "Wasm static data address was not placed in the data section";
+				if (address == null)
+					throw new InternalError("Wasm static data address was not placed in the data section");
 				emit(body, [I32Const(address), LocalSet(requiredLocal(values, output.id))]);
 			case MakeEnum(output, _, constructor, _) if (switch output.type {
 				case EnumTag(_):
@@ -1502,7 +1513,7 @@ class WasmFunctionLower {
 						case Enum(name):
 							name;
 						default:
-							throw 'Wasm enum field access requires an enum value, got ${Std.string(value.type)}';
+							throw new InternalError('Wasm enum field access requires an enum value, got ${Std.string(value.type)}');
 					};
 					var fieldLayout = layout.enumField(enumType, constructor, field);
 					emit(body,
@@ -1873,7 +1884,7 @@ class WasmFunctionLower {
 					requiredLocal(values, left.id),
 					requiredLocal(values, right.id)));
 			case Intrinsic(_, _, _):
-				throw "Unlowered IR intrinsic reached Wasm";
+				throw new InternalError("Unlowered IR intrinsic reached Wasm");
 			case Call(output, name, arguments):
 				var model = context.representation.model;
 				if (name == "__dynamic_equal"
@@ -1903,7 +1914,8 @@ class WasmFunctionLower {
 				}
 				if (compiler.ir.IrScalarWordBits.matches(name)) {
 					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,
-						arguments[0].type, output.type)) throw "Invalid scalar word transport signature";
+						arguments[0].type, output.type))
+						throw new InternalError("Invalid scalar word transport signature");
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 					if (!((switch output.type {
 						case I32, EnumTag(_):
@@ -1947,7 +1959,7 @@ class WasmFunctionLower {
 				}
 				if (model.hasScalarCall(name)) {
 					var index = functions.get(name);
-					if (index == null) throw 'Missing scalar Wasm function "$name"';
+					if (index == null) throw new InternalError('Missing scalar Wasm function "$name"');
 					emit(body, model.scalarCall(name, output, arguments, (switch (output.type) {
 						case Void:
 							true;
@@ -2056,7 +2068,7 @@ class WasmFunctionLower {
 								if (projectionIndex != null) functionIndex = projectionIndex;
 							}
 							if (functionIndex == null)
-								throw 'Wasm call to unsupported native or missing function "$name"';
+								throw new InternalError('Wasm call to unsupported native or missing function "$name"');
 							body.push(Call(functionIndex));
 							if ((switch (output.type) {
 								case Void:
@@ -2070,9 +2082,11 @@ class WasmFunctionLower {
 			case CNativeCall(output, name, arguments):
 				var native:Null<IrCNative> = null;
 				for (candidate in context.program.cNatives) if (candidate.name == name) native = candidate;
-				if (native == null) throw 'Wasm C native call "$name" has no declared import contract';
+				if (native == null)
+					throw new InternalError('Wasm C native call "$name" has no declared import contract');
 				var importIndex = functions.get(name);
-				if (importIndex == null) throw 'Wasm C native call "$name" has no declared import contract';
+				if (importIndex == null)
+					throw new InternalError('Wasm C native call "$name" has no declared import contract');
 				var pointerLengthImportIndex = -1, pointerReleaseImportIndex = -1;
 				if (((switch (native.result) {
 					case ManagedBytes:
@@ -2117,7 +2131,7 @@ class WasmFunctionLower {
 					pointerReleaseImportIndex);
 				if (emitIfHandled(body, represented)) {} else {
 					var bytesDataPointer = functions.get("__haxeon_bytes_data_pointer");
-					if (bytesDataPointer == null) throw "Wasm byte data pointer helper is missing";
+					if (bytesDataPointer == null) throw new InternalError("Wasm byte data pointer helper is missing");
 					for (argument in arguments) nativeArgument(body, argument, values, bytesDataPointer);
 					body.push(Call(importIndex));
 					if ((switch (output.type) {
@@ -2146,7 +2160,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw "Invalid haxe.Int64.ofInt Wasm native signature";
+			})) throw new InternalError("Invalid haxe.Int64.ofInt Wasm native signature");
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I64ExtendI32S);
 			body.push(LocalSet(requiredLocal(values, output.id)));
@@ -2163,7 +2177,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw "Invalid haxe.Int64.fromFloat Wasm native signature";
+			})) throw new InternalError("Invalid haxe.Int64.fromFloat Wasm native signature");
 			// HashLink's C cast is undefined outside the Int64 range; Wasm saturates instead of trapping.
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I64TruncSatF64S);
@@ -2176,7 +2190,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw "Invalid haxe.Int64.toInt Wasm native signature";
+			})) throw new InternalError("Invalid haxe.Int64.toInt Wasm native signature");
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I32WrapI64);
 			body.push(LocalSet(requiredLocal(values, output.id)));
@@ -2188,7 +2202,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw "Invalid haxe.Int64.compare Wasm native signature";
+			})) throw new InternalError("Invalid haxe.Int64.compare Wasm native signature");
 			var outputLocal = requiredLocal(values,
 				output.id),
 				leftLocal = requiredLocal(values, arguments[0].id),
@@ -2220,7 +2234,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw 'Invalid $name Wasm native signature';
+			})) throw new InternalError('Invalid $name Wasm native signature');
 			var valueLocal = requiredLocal(values,
 				arguments[0].id),
 				shiftLocal = requiredLocal(values, arguments[1].id),
@@ -2283,7 +2297,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw 'Invalid $name Wasm native signature';
+			})) throw new InternalError('Invalid $name Wasm native signature');
 			var dividend = requiredLocal(values, arguments[0].id),
 				divisor = requiredLocal(values, arguments[1].id),
 				result = requiredLocal(values, output.id),
@@ -2313,7 +2327,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw "Invalid haxe.Int64.neg Wasm native signature";
+			})) throw new InternalError("Invalid haxe.Int64.neg Wasm native signature");
 			body.push(I64Const(0));
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I64Sub);
@@ -2326,7 +2340,7 @@ class WasmFunctionLower {
 					false;
 				default:
 					true;
-			})) throw "Invalid haxe.Int64.make Wasm native signature";
+			})) throw new InternalError("Invalid haxe.Int64.make Wasm native signature");
 			body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 			body.push(I64ExtendI32S);
 			body.push(I64Const(32));
@@ -2343,7 +2357,7 @@ class WasmFunctionLower {
 				false;
 			default:
 				true;
-		})) throw 'Invalid $name Wasm native signature';
+		})) throw new InternalError('Invalid $name Wasm native signature');
 		body.push(LocalGet(requiredLocal(values, arguments[0].id)));
 		body.push(LocalGet(requiredLocal(values, arguments[1].id)));
 		body.push(operation);
@@ -2370,14 +2384,14 @@ class WasmFunctionLower {
 				case Obj(name):
 					layout.field(name, fieldName);
 				default:
-					throw 'Wasm field access requires an object reference, got ${Std.string(object.type)}';
+					throw new InternalError('Wasm field access requires an object reference, got ${Std.string(object.type)}');
 			};
 
 	static function arrayElement(array:IrValue):IrType return switch array.type {
 		case Array(element):
 			element;
 		default:
-			throw 'Wasm array access requires an Array reference, got ${Std.string(array.type)}';
+			throw new InternalError('Wasm array access requires an Array reference, got ${Std.string(array.type)}');
 	};
 
 	static function load(type:IrType, offset:Int):WasmInstruction return switch type {
@@ -2523,7 +2537,7 @@ class WasmFunctionLower {
 				var functionIndex = functions.get(functionName), targetFunction = index.func(functionName);
 				if (functionIndex != null) {
 					if (targetFunction == null)
-						throw 'Wasm interface target "$functionName" has no Haxe function signature';
+						throw new InternalError('Wasm interface target "$functionName" has no Haxe function signature');
 					result.push({
 						typeName: object.name,
 						functionIndex: functionIndex,
@@ -2556,7 +2570,7 @@ class WasmFunctionLower {
 				var functionIndex = functions.get(functionName), targetFunction = index.func(functionName);
 				if (functionIndex != null) {
 					if (targetFunction == null)
-						throw 'Wasm class target "$functionName" has no Haxe function signature';
+						throw new InternalError('Wasm class target "$functionName" has no Haxe function signature');
 					result.push({
 						typeName: object.name,
 						functionIndex: functionIndex,
@@ -2846,7 +2860,7 @@ class WasmFunctionLower {
 				case [I64, I32]:
 					[I32WrapI64];
 				default:
-					throw 'Unsupported dynamic number conversion from $source to $target';
+					throw new InternalError('Unsupported dynamic number conversion from $source to $target');
 			};
 			instructions = instructions.concat([
 				LocalGet(value),

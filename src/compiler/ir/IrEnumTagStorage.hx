@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 
 /** Nominal I32 storage is available only when the entire enum has no payload. */
@@ -49,7 +50,7 @@ class IrEnumTagStorage {
 	public static function request(program:IrProgram, name:String):{box:String, unbox:String} {
 		var symbols = adapterNames(program).get(name);
 		if (symbols == null)
-			throw 'Unknown enum tag adapter type "$name"';
+			throw new InternalError('Unknown enum tag adapter type "$name"');
 		var box = symbols.box, unbox = symbols.unbox;
 		var foundBox = false, foundUnbox = false;
 		for (fn in program.functions)
@@ -87,7 +88,7 @@ class IrEnumTagStorage {
 	/** Only these adapters materialize the nominal boxed carrier at an escape. */
 	public static function adapters(declaration:IrEnum, boxName:String, unboxName:String):Array<IrFunction> {
 		if (!eligible(declaration))
-			throw 'Cannot tag-store enum "${declaration.name}" with payloads';
+			throw new InternalError('Cannot tag-store enum "${declaration.name}" with payloads');
 		var name = declaration.name,
 			storage:IrType = EnumTag(name),
 			box = new IrBuilder(),
@@ -139,9 +140,9 @@ class IrEnumTagStorage {
 			switch type {
 				case EnumTag(name):
 					if (!tags.exists(name))
-						throw 'IR tag storage requires a payload-free enum "$name"';
+						throw new InternalError('IR tag storage requires a payload-free enum "$name"');
 				case Nullable(EnumTag(_)):
-					throw "IR enum tag nullability must use tag zero";
+					throw new InternalError("IR enum tag nullability must use tag zero");
 				case Array(inner), Iterator(inner), Nullable(inner):
 					check(inner);
 				case Function(arguments, result):
@@ -192,12 +193,12 @@ class IrEnumTagStorage {
 							check(type);
 						case ToDyn(_, value):
 							switch value.type {
-								case EnumTag(_): throw "IR enum tag Dynamic escape requires a box adapter";
+								case EnumTag(_): throw new InternalError("IR enum tag Dynamic escape requires a box adapter");
 								default:
 							};
 						case SafeCast(output, _):
 							switch output.type {
-								case EnumTag(_): throw "IR enum tag Dynamic cast requires an unbox adapter";
+								case EnumTag(_): throw new InternalError("IR enum tag Dynamic cast requires an unbox adapter");
 								default:
 							};
 						default:

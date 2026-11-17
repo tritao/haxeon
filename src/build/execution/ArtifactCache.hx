@@ -1,5 +1,6 @@
 package build.execution;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
@@ -58,7 +59,7 @@ class ArtifactCache {
 				if (!FileSystem.exists(source)
 					|| FileSystem.isDirectory(source)
 					|| Sha256.make(File.getBytes(source)).toHex() != cached.checksum)
-					throw "invalid cached output";
+					throw new InternalError("invalid cached output");
 				var temp = action.outputs[index] + '.haxeon-cache-${Std.int(Date.now().getTime())}-$index';
 				Directories.ensure(Path.directory(temp));
 				File.copy(source, temp);
@@ -68,7 +69,7 @@ class ArtifactCache {
 				var output = action.outputs[index];
 				if (FileSystem.exists(output))
 					if (FileSystem.isDirectory(output))
-						throw "cannot replace directory output";
+						throw new InternalError("cannot replace directory output");
 					else
 						FileSystem.deleteFile(output);
 				FileSystem.rename(temporary[index], output);
@@ -151,7 +152,7 @@ class ArtifactCache {
 		for (shift in [6, 3, 0])
 			digits.add((mode >> shift) & 7);
 		if (Sys.command("chmod", [digits.toString(), path]) != 0)
-			throw 'Could not restore permissions for $path';
+			throw new InternalError('Could not restore permissions for $path');
 	}
 
 }

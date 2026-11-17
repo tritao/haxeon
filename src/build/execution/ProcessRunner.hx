@@ -1,5 +1,6 @@
 package build.execution;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -63,7 +64,7 @@ class ProcessRunner {
 		} catch (error:Dynamic) {
 			restore(previousDirectory, oldEnvironment);
 			launchMutex.release();
-			throw 'Could not start $command: ${Std.string(error)}';
+			throw new InternalError('Could not start $command: ${Std.string(error)}');
 		}
 		restore(previousDirectory, oldEnvironment);
 		launchMutex.release();
@@ -86,7 +87,7 @@ class ProcessRunner {
 		return status == null ? 1 : status;
 		#else
 		var previousDirectory = Sys.getCwd(), oldEnvironment = new Map<String, Null<String>>(), status = 1;
-		var failure:Dynamic = null;
+		var failure:Null<haxe.Exception> = null;
 		try {
 			if (cwd != null
 				&& cwd != ""
@@ -106,7 +107,7 @@ class ProcessRunner {
 				status = process.exitCode();
 				process.close();
 			}
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			failure = error;
 		}
 		for (key in oldEnvironment.keys()) {
@@ -276,7 +277,7 @@ class ProcessRunner {
 				return candidate;
 			} catch (_:Dynamic) {
 				if (!FileSystem.exists(candidate))
-					throw 'Could not create process wave directory $candidate';
+					throw new InternalError('Could not create process wave directory $candidate');
 			}
 		}
 		return parent;

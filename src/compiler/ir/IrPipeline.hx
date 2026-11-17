@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrStage.IrAssemblyStage;
@@ -232,7 +233,7 @@ class IrPipeline {
 	static function reachabilityReport(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		var reflectionInput = assembly.reflectionInput;
 		if (reflectionInput == null)
-			throw "The reachability report needs the enum dispatch input";
+			throw new InternalError("The reachability report needs the enum dispatch input");
 		reflectionInput.functions = assembly.functions;
 		IrReachabilityReport.report("after enum dispatch (the 3a prune point)", reflectionInput);
 		return assembly;
@@ -327,7 +328,7 @@ class IrPipeline {
 	/** Choose source enum storage before optional-flow and reflection helpers choose their ABI. */
 	static function enumSpecializations(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
 		if (context.canonicalObjects == null)
-			throw "Inline enum lowering requires canonical objects";
+			throw new InternalError("Inline enum lowering requires canonical objects");
 		var entryPoint = context.entryPoint,
 			objects = assembly.objects,
 			interfaces = assembly.interfaces,
@@ -515,7 +516,7 @@ class IrPipeline {
 	static function inliner(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var cache = context.inlineCache;
 		if (cache == null)
-			throw "The inliner stage needs the session's inline cache";
+			throw new InternalError("The inliner stage needs the session's inline cache");
 		context.inlinerChanged = IrInliner.run(program, cache, context.profile, context.options,
 			context.instrumentScope);
 		return program;
@@ -525,7 +526,7 @@ class IrPipeline {
 	static function verifier(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var memo = context.verifyMemo;
 		if (memo == null)
-			throw "The verifier stage needs the session's verify memo";
+			throw new InternalError("The verifier stage needs the session's verify memo");
 		IrVerifier.verifyReusing(program, memo);
 		return program;
 	}
@@ -534,11 +535,11 @@ class IrPipeline {
 	static function verifierCheck(program:IrProgram, context:IrPipelineContext):IrProgram {
 		try
 			IrVerifier.verify(program)
-		catch (error:String)
-			throw '--check-reuse: verification skipped a function that fails in full: $error';
+		catch (error:InternalError)
+			throw new InternalError('--check-reuse: verification skipped a function that fails in full: ${error.message}');
 		var providerProblem = IrProviders.check(program.functions);
 		if (providerProblem != null)
-			throw '--check-reuse: $providerProblem';
+			throw new InternalError('--check-reuse: $providerProblem');
 		return program;
 	}
 }

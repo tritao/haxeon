@@ -11,6 +11,7 @@ import build.Artifact.ArtifactKind.NativeSharedLibrary;
 import build.Artifact.ArtifactKind.NativeStaticLibrary;
 import build.Artifact.ArtifactKind.WasmModule;
 import build.NativeArtifactDemand.NativeArtifactDemand;
+import compiler.core.InternalError;
 import project.ResolvedProject;
 
 /** Pure entry points for producing the first logical build graphs. */
@@ -82,7 +83,7 @@ class BuildPlanner {
 				for (ffi in thunkImports) {
 					var thunkObject = thunkObjects.get(ffi.config.name);
 					if (thunkObject == null)
-						throw 'Missing generated thunk object for FFI import ${ffi.config.name}';
+						throw new InternalError('Missing generated thunk object for FFI import ${ffi.config.name}');
 					var ffiLibraryId = new ArtifactId(resolvedPackage.name, FfiNativeSharedLibrary, target,
 						ffi.config.name),
 						ffiDependencies = baseObjects.concat([thunkObject]);

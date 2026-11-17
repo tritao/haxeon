@@ -1,5 +1,6 @@
 package compiler.hl;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlFunction.HlDebugLocation;
 import compiler.hl.HlFunction.HlInstruction;
@@ -73,7 +74,7 @@ class HlWriter {
 			destination = File.write(temporary, true);
 		try {
 			module.writeTo(destination);
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			destination.close();
 			sys.FileSystem.deleteFile(temporary);
 			throw error;
@@ -352,7 +353,7 @@ class HlWriter {
 		writeUnsignedIndex(code.debugSections.length);
 		for (section in code.debugSections) {
 			if (section.kind <= 0 || section.version <= 0 || section.flags < 0)
-				throw "Invalid HLB debug section header";
+				throw new InternalError("Invalid HLB debug section header");
 			writeUnsignedIndex(section.kind);
 			writeUnsignedIndex(section.version);
 			writeUnsignedIndex(section.flags);
@@ -393,7 +394,7 @@ class HlWriter {
 		var previousPath = "";
 		for (group in groups) {
 			if (group.stableId < 0 || seenFunctions.exists(group.stableId))
-				throw "Invalid HLB opcode source-span function";
+				throw new InternalError("Invalid HLB opcode source-span function");
 			seenFunctions.set(group.stableId, true);
 			for (location in group.locations) {
 				var validRange = location.start == -1 && location.end == -1 || location.start >= 0
@@ -407,7 +408,7 @@ class HlWriter {
 					&& location.endColumn < location.column
 					|| location.flags < 0
 					|| !validRange)
-					throw "Invalid HLB opcode source span";
+					throw new InternalError("Invalid HLB opcode source span");
 				if (location.path != previousPath) {
 					previousPath = location.path;
 					var fileIndex = fileIndices.get(previousPath);
@@ -479,7 +480,7 @@ class HlWriter {
 		writer.writeUnsignedIndex(ordered.length);
 		for (snapshot in ordered) {
 			if (snapshot.sourceHash == 0 || seen.exists(snapshot.sourceHash))
-				throw "Invalid HLB source snapshot";
+				throw new InternalError("Invalid HLB source snapshot");
 			seen.set(snapshot.sourceHash, snapshot.content);
 			writer.output.writeInt32(snapshot.sourceHash);
 			writer.writeUnsignedIndex(snapshot.content.length);
@@ -500,7 +501,7 @@ class HlWriter {
 		for (value in strings) {
 			for (index in 0...value.length)
 				if (value.charCodeAt(index) == 0)
-					throw "HashLink String cannot contain NUL; use Bytes for binary data";
+					throw new InternalError("HashLink String cannot contain NUL; use Bytes for binary data");
 			var bytes = HaxeBytes.ofString(value);
 			encoded.push(bytes);
 			lengths.push(bytes.length);
@@ -527,7 +528,7 @@ class HlWriter {
 				output.writeByte(kind);
 			case Parameterized(kind, parameter):
 				if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
-					throw 'Unsupported parameterized HashLink type $kind';
+					throw new InternalError('Unsupported parameterized HashLink type $kind');
 				output.writeByte(kind);
 				writeIndex(parameter);
 			case Abstract(name):
@@ -535,7 +536,7 @@ class HlWriter {
 				writeIndex(name);
 			case Function(arguments, result), Method(arguments, result):
 				if (arguments.length > 255)
-					throw "HL function types support at most 255 arguments";
+					throw new InternalError("HL function types support at most 255 arguments");
 				output.writeByte(type.match(Method(_, _)) ? HlType.Method : HlType.Fun);
 				output.writeByte(arguments.length);
 				for (argument in arguments)
@@ -736,7 +737,7 @@ class HlWriter {
 			return debugFileIndices.get(path);
 		var index = debugFiles.length;
 		if (index > 0x7FFF)
-			throw "Too many HashLink debug files";
+			throw new InternalError("Too many HashLink debug files");
 		debugFiles.push(path);
 		debugFileIndices.set(path, index);
 		return index;
@@ -754,9 +755,9 @@ class HlWriter {
 		while (index < located.length) {
 			var location:HlDebugLocation = located[index];
 			if (location.line > 0x1FFFFF)
-				throw 'Debug line ${location.line} exceeds the HashLink format limit';
+				throw new InternalError('Debug line ${location.line} exceeds the HashLink format limit');
 			if (!debugFileIndices.exists(location.path))
-				throw 'Missing HashLink debug file index for "${location.path}"';
+				throw new InternalError('Missing HashLink debug file index for "${location.path}"');
 			var file = debugFileIndices.get(location.path);
 			if (file != currentFile) {
 				output.writeByte(((file >> 8) << 1) | 1);
@@ -1225,7 +1226,7 @@ class HlWriter {
 
 	static function requireLabel(labels:Map<String, Int>, target:String):Int {
 		if (!labels.exists(target))
-			throw 'Unknown HashLink jump label "$target"';
+			throw new InternalError('Unknown HashLink jump label "$target"');
 		return labels.get(target);
 	}
 
@@ -1237,7 +1238,7 @@ class HlWriter {
 
 	function writeUnsignedIndex(value:Int):Void {
 		if (value < 0)
-			throw 'Expected unsigned index, got $value';
+			throw new InternalError('Expected unsigned index, got $value');
 		writeIndex(value);
 	}
 
@@ -1256,7 +1257,7 @@ class HlWriter {
 			output.writeByte((magnitude >> 8) & 0xFF);
 			output.writeByte(magnitude & 0xFF);
 		} else {
-			throw 'HL index is out of range: $value';
+			throw new InternalError('HL index is out of range: $value');
 		}
 	}
 }

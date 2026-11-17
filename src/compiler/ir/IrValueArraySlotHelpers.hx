@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction.IrValueArraySlotOperation;
@@ -57,7 +58,7 @@ class IrValueArraySlotHelpers {
 		for (index in 0...checks.length)
 			if (checks[index].includeSelf == includeSelf
 				&& samePath(checks[index].path, path)) return checks[index].name;
-		if (built) throw "Value lane place checks must be requested before generating helpers";
+		if (built) throw new InternalError("Value lane place checks must be requested before generating helpers");
 		var symbol = nextName();
 		checks.push({name: symbol, path: path.copy(), includeSelf: includeSelf});
 		return symbol;
@@ -67,11 +68,11 @@ class IrValueArraySlotHelpers {
 	public function optionalSetter(path:Array<String>, type:IrType):String {
 		var presence = slot(path, true), payload = slot(path, false, true);
 		if (!Type.enumEq(shape.slots[presence].type, Bool) || !Type.enumEq(shape.slots[payload].type, type))
-			throw 'Wrong optional scalar lane type for ${path.join(".")}';
+			throw new InternalError('Wrong optional scalar lane type for ${path.join(".")}');
 		for (index in 0...optionalWrites.length)
 			if (samePath(optionalWrites[index].path, path) && IrVerifier.sameType(optionalWrites[index].type, type))
 				return optionalWrites[index].name;
-		if (built) throw "Optional lane writes must be requested before generating helpers";
+		if (built) throw new InternalError("Optional lane writes must be requested before generating helpers");
 		var symbol = nextName();
 		optionalWrites.push({name: symbol, path: path.copy(), type: type});
 		return symbol;
@@ -81,11 +82,11 @@ class IrValueArraySlotHelpers {
 	public function requireScalar(type:IrType):String {
 		switch type {
 			case I32, I64, F32, F64, Bool:
-			default: throw 'Invalid optional scalar payload $type';
+			default: throw new InternalError('Invalid optional scalar payload $type');
 		}
 		for (index in 0...scalarChecks.length)
 			if (IrVerifier.sameType(scalarChecks[index].type, type)) return scalarChecks[index].name;
-		if (built) throw "Optional scalar checks must be requested before generating helpers";
+		if (built) throw new InternalError("Optional scalar checks must be requested before generating helpers");
 		var symbol = nextName();
 		scalarChecks.push({name: symbol, type: type});
 		return symbol;
@@ -111,10 +112,10 @@ class IrValueArraySlotHelpers {
 				break;
 			}
 			if (!same) continue;
-			if (found >= 0) throw 'Ambiguous value lane path ${path.join(".")}';
+			if (found >= 0) throw new InternalError('Ambiguous value lane path ${path.join(".")}');
 			found = index;
 		}
-		if (found < 0) throw 'Missing value lane path ${path.join(".")}';
+		if (found < 0) throw new InternalError('Missing value lane path ${path.join(".")}');
 		return found;
 	}
 
@@ -128,13 +129,13 @@ class IrValueArraySlotHelpers {
 			var sourceIndex = slot(sourcePath, targetSlot.isPresence, targetSlot.nullablePayload),
 				sourceSlot = shape.slots[sourceIndex];
 			if (!compatibleSlots(sourceSlot, targetSlot))
-				throw 'Incompatible value lane projections ${source.join(".")} and ${target.join(".")}';
+				throw new InternalError('Incompatible value lane projections ${source.join(".")} and ${target.join(".")}');
 			result.push({source: sourceIndex, target: targetIndex, type: targetSlot.type});
 		}
 		var sourceCount = 0;
 		for (candidate in shape.slots) if (isPrefix(source, candidate.path, true)) sourceCount++;
 		if (sourceCount != result.length)
-			throw 'Incompatible value lane projections ${source.join(".")} and ${target.join(".")}';
+			throw new InternalError('Incompatible value lane projections ${source.join(".")} and ${target.join(".")}');
 		return result;
 	}
 
@@ -247,7 +248,7 @@ class IrValueArraySlotHelpers {
 
 	/** Call after `functions()`, which collects precisely the native operations those functions use. */
 	public function natives():Array<IrNative> {
-		if (!built) throw "Value lane helpers must be generated before collecting natives";
+		if (!built) throw new InternalError("Value lane helpers must be generated before collecting natives");
 		var result = access.natives();
 		if (checks.length > 0) result.push({
 			name: "__value_array_validate",
@@ -266,7 +267,7 @@ class IrValueArraySlotHelpers {
 	}
 
 	function checkSlot(slot:Int):Void {
-		if (slot < 0 || slot >= shape.slots.length) throw 'Invalid value lane slot $slot';
+		if (slot < 0 || slot >= shape.slots.length) throw new InternalError('Invalid value lane slot $slot');
 	}
 
 }

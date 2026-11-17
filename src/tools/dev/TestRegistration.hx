@@ -1,5 +1,6 @@
 package tools.dev;
 
+import compiler.core.InternalError;
 import haxe.io.Path;
 import sys.FileSystem;
 import sys.io.File;
@@ -181,10 +182,10 @@ class TestRegistration {
 				continue;
 			var space = ~/\s/;
 			if (!space.match(line) || StringTools.trim(space.matchedRight()) == "")
-				throw 'tests/unregistered.txt:$number: expected <path> <reason>';
+				throw new InternalError('tests/unregistered.txt:$number: expected <path> <reason>');
 			var path = space.matchedLeft();
 			if (result.exists(path))
-				throw 'tests/unregistered.txt:$number: $path is listed twice';
+				throw new InternalError('tests/unregistered.txt:$number: $path is listed twice');
 			result.set(path, StringTools.trim(space.matchedRight()));
 		}
 		return result;

@@ -1,5 +1,6 @@
 package tools;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import project.ResolvedProject;
@@ -31,7 +32,7 @@ class WatchRun {
 			profiling:Null<WatchProfiling>, rebuild:WatchChange->Null<ResolvedProject>,
 			?session:build.BuildSession):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
-			throw "haxeon run --watch currently requires Linux, macOS or Windows";
+			throw new InternalError("haxeon run --watch currently requires Linux, macOS or Windows");
 		var project = initial,
 			baseline = snapshot(project),
 			logPath = output + ".watch.log",
@@ -122,7 +123,7 @@ class WatchRun {
 				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
 				logOffset = 0;
 			}
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			if (watcher != null)
 				watcher.close();
 			stop(process);
@@ -243,7 +244,7 @@ class WatchRun {
 			try {
 				File.saveContent(path, "");
 				return;
-			} catch (error:Dynamic) {
+			} catch (error:haxe.Exception) {
 				if (Sys.time() > deadline)
 					throw error;
 				Sys.sleep(0.1);
@@ -278,7 +279,7 @@ class WatchRun {
 				profile.startRecorder();
 			Sys.println('haxeon: running $output' + (profile == null ? "" : ' (profiling to ${profile.capture})'));
 			return process;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			Sys.setCwd(previous);
 			throw error;
 		}
@@ -301,7 +302,7 @@ class WatchRun {
 			input.seek(offset, sys.io.FileSeek.SeekBegin);
 			Sys.stdout().writeString(input.readString(size - offset));
 			Sys.stdout().flush();
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			input.close();
 			throw error;
 		}

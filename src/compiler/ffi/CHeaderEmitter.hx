@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
 
@@ -7,16 +8,16 @@ import compiler.ir.Ir.IrType;
 class CHeaderEmitter {
 	public static function emit(natives:Array<IrNative>, library:String):String {
 		if (library.length == 0)
-			throw "FFI library cannot be empty";
+			throw new InternalError("FFI library cannot be empty");
 		var selected = [for (native in natives) if (native.library == library) native];
 		if (selected.length == 0)
-			throw 'No typed native declarations found for FFI library "$library"';
+			throw new InternalError('No typed native declarations found for FFI library "$library"');
 		selected.sort(function(left, right) return Reflect.compare(left.symbol, right.symbol));
 		var seen:Map<String, String> = [], canonical:Array<String> = [];
 		for (native in selected) {
 			var signature = signature(native);
 			if (seen.exists(native.symbol) && seen.get(native.symbol) != signature)
-				throw 'Conflicting FFI declarations for "$library.${native.symbol}"';
+				throw new InternalError('Conflicting FFI declarations for "$library.${native.symbol}"');
 			seen.set(native.symbol, signature);
 			canonical.push(signature);
 		}
@@ -71,7 +72,7 @@ class CHeaderEmitter {
 			case TypeRef: "hl_type *";
 			case Array(_): "varray *";
 			case Function(_, _): "vclosure *";
-			default: throw 'Unsupported FFI C type ${typeName(type)}';
+			default: throw new InternalError('Unsupported FFI C type ${typeName(type)}');
 		};
 
 	static function hlType(type:IrType):String
@@ -89,7 +90,7 @@ class CHeaderEmitter {
 			case TypeRef: "_TYPE";
 			case Array(element): '_ARR(${hlType(element)})';
 			case Function(arguments, result): '_FUN(${hlType(result)}, ${hlArguments(arguments)})';
-			default: throw 'Unsupported FFI HashLink type ${typeName(type)}';
+			default: throw new InternalError('Unsupported FFI HashLink type ${typeName(type)}');
 		};
 
 	static function typeName(type:IrType):String

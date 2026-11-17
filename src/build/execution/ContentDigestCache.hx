@@ -65,7 +65,7 @@ class ContentDigestCache {
 			hashes++;
 			entries.set(key, {signature: signature, digest: digest, hashedAt: hashedAt});
 			return release(digest);
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			#if (target.threaded && !eval)
 			mutex.release();
 			#end

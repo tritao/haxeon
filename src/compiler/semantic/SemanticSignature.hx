@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.InternalError;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
@@ -66,7 +67,7 @@ class SemanticSignature {
 					case NominalKind.Interface: "interface";
 					case NominalKind.Enum: "enum";
 					case NominalKind.NativeValue: "native-value";
-					default: throw 'Unknown nominal kind $kind';
+					default: throw new InternalError('Unknown nominal kind $kind');
 				};
 				'$prefix:$name<${[for (argument in arguments) type(argument)].join(",")}>';
 			case TNull: "null";

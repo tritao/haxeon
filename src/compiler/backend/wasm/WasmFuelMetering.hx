@@ -4,6 +4,7 @@ import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
+import compiler.core.InternalError;
 
 private enum FuelControl {
 	FuelBlock;
@@ -66,7 +67,7 @@ class WasmFuelMetering {
 						result.push(Call(fuelFunction));
 					result.push(Br(defaultDepth));
 				case Try(_) | TryTable(_, _) | Catch(_) | Throw(_):
-					throw 'Runtime-neutral Wasm lowering left an exception instruction: ${Std.string(instruction)}';
+					throw new InternalError('Runtime-neutral Wasm lowering left an exception instruction: ${Std.string(instruction)}');
 				case Block(_):
 					result.push(instruction);
 					controls.push(FuelBlock);
@@ -79,14 +80,14 @@ class WasmFuelMetering {
 				case End:
 					result.push(instruction);
 					if (controls.length == 0)
-						throw "Runtime-neutral fuel metering found an unmatched Wasm end";
+						throw new InternalError("Runtime-neutral fuel metering found an unmatched Wasm end");
 					controls.pop();
 				case instruction:
 					result.push(instruction);
 			}
 		}
 		if (controls.length != 0)
-			throw "Runtime-neutral fuel metering found unterminated Wasm control flow";
+			throw new InternalError("Runtime-neutral fuel metering found unterminated Wasm control flow");
 		return result;
 	}
 

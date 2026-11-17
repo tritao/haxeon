@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.syntax.Ast.AstEnumParameter;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -64,10 +65,10 @@ class EnumRuntimeRepresentations {
 	public function declaration(index:Int):TypedEnum {
 		var type = session.programOutput.enumType(index), origin = switch type {
 			case TInstance(_, name, _): name;
-			default: throw "Invalid enum request";
+			default: throw new InternalError("Invalid enum request");
 		};
 		var source = session.enumDecls.get(origin);
-		if (source == null) throw 'Missing enum declaration "$origin"';
+		if (source == null) throw new InternalError('Missing enum declaration "$origin"');
 		var arguments = switch type {
 			case TInstance(_, _, arguments): arguments;
 			default: [];

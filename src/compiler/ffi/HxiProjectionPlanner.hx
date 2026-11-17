@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiModel.HxiDeclaration;
@@ -87,7 +88,7 @@ class HxiProjectionPlanner {
 				case Function(name, parameters, result, _, _, _, _, _):
 					var signature = signatures.get(name);
 					if (signature == null)
-						throw 'Missing native signature for HXI function "$name"';
+						throw new InternalError('Missing native signature for HXI function "$name"');
 					functions.push(projectFunction(source, name, parameters, result, signature, profile, abi));
 				case Alias(_, _, _) | Constant(_, _, _):
 			}
@@ -124,7 +125,7 @@ class HxiProjectionPlanner {
 				case OutputValue(value) | InOutValue(value):
 					var projected = HxiHaxeEmitter.project(value, false, profile);
 					if (projected == null)
-						throw 'Unsupported projected output type for "${parameter.name}" in "$nativeName"';
+						throw new InternalError('Unsupported projected output type for "${parameter.name}" in "$nativeName"');
 					outputs.push({
 						parameter: parameter.name,
 						type: projected.haxeType,
@@ -143,7 +144,7 @@ class HxiProjectionPlanner {
 				case OutputArray(element, _):
 					var projected = HxiHaxeEmitter.project(element, false, profile);
 					if (projected == null)
-						throw 'Unsupported projected output-array element for "${parameter.name}" in "$nativeName"';
+						throw new InternalError('Unsupported projected output-array element for "${parameter.name}" in "$nativeName"');
 					outputs.push({
 						parameter: parameter.name,
 						type: 'Array<${projected.haxeType}>',

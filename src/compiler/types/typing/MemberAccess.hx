@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.ModuleFields;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
@@ -46,7 +47,7 @@ class MemberAccess {
 		var owner:Null<String> = className, seen:Map<String, Bool> = [];
 		while (owner != null) {
 			if (seen.exists(owner))
-				throw 'Cyclic class hierarchy while resolving "$className.$name"';
+				throw new InternalError('Cyclic class hierarchy while resolving "$className.$name"');
 			seen.set(owner, true);
 			var declaration = session.classDecls.get(owner);
 			if (declaration == null)
@@ -198,7 +199,7 @@ class MemberAccess {
 			var result = read();
 			context.privateAccessDepth--;
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			context.privateAccessDepth--;
 			throw error;
 		}
@@ -226,7 +227,7 @@ class MemberAccess {
 		var current = caller, seen:Map<String, Bool> = [];
 		while (current != null) {
 			if (seen.exists(current))
-				throw 'Cyclic class hierarchy while checking access from "$caller"';
+				throw new InternalError('Cyclic class hierarchy while checking access from "$caller"');
 			seen.set(current, true);
 			if (current == owner)
 				return true;

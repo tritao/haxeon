@@ -2,6 +2,7 @@ package compiler.compilation;
 
 import compiler.Compiler;
 import compiler.core.AllocationMeter;
+import compiler.core.InternalError;
 import compiler.ffi.FfiRegistry;
 import compiler.modules.ModuleGraph;
 import compiler.modules.ModuleState;
@@ -124,7 +125,7 @@ class CompilationContext {
 		if (option == null || option == "0")
 			return null;
 		if (option != "1")
-			throw "haxeon-instrument must be 0 or 1";
+			throw new InternalError("haxeon-instrument must be 0 or 1");
 		return new compiler.ir.IrInstrumentation.IrInstrumentationScope(compiler.ir.IrInstrumentation
 			.IrInstrumentationScope.patterns(defines.get("haxeon-instrument-include")),
 			compiler.ir.IrInstrumentation.IrInstrumentationScope

@@ -7,6 +7,7 @@ import compiler.compilation.CompilerPublication.ReconnectReason;
 import compiler.core.CancellationError;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
@@ -153,7 +154,7 @@ class LanguageServiceProtocol {
 								replacement:edit.replacement
 						}];
 				default:
-					throw 'Unknown language-service method "$method"';
+					throw new InternalError('Unknown language-service method "$method"');
 			}
 			token.check();
 			finishRequest(requestKey);
@@ -197,14 +198,14 @@ class LanguageServiceProtocol {
 	static function requiredString(request:Dynamic, name:String):String {
 		var value:Dynamic = Reflect.field(request, name);
 		if (value == null || !Std.isOfType(value, String))
-			throw 'Request field "$name" must be a string';
+			throw new InternalError('Request field "$name" must be a string');
 		return cast value;
 	}
 
 	static function requiredInt(request:Dynamic, name:String):Int {
 		var value:Dynamic = Reflect.field(request, name);
 		if (value == null || !Std.isOfType(value, Int))
-			throw 'Request field "$name" must be an integer';
+			throw new InternalError('Request field "$name" must be an integer');
 		return cast value;
 	}
 

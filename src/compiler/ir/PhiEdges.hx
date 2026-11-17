@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -106,7 +107,7 @@ class PhiEdges {
 
 	static function edgeId(edges:Map<String, Int>, key:String):Int {
 		if (!edges.exists(key))
-			throw 'Missing phi edge $key';
+			throw new InternalError('Missing phi edge $key');
 		return edges.get(key);
 	}
 }

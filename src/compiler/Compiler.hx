@@ -1,5 +1,6 @@
 package compiler;
 
+import compiler.core.InternalError;
 import compiler.syntax.Ast;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -290,10 +291,10 @@ class Compiler {
 				? new HlModuleAssembler(identity.stableIds) : HlAssemblerStateCodec.decode(assemblerState);
 			for (name => id in identity.stableIds)
 				if (assembler.cache.stableIds.get(name) != id)
-					throw "Assembler stable identities do not match compiler state";
+					throw new InternalError("Assembler stable identities do not match compiler state");
 			for (name => id in assembler.cache.stableIds)
 				if (identity.stableIds.get(name) != id)
-					throw "Assembler stable identities do not match compiler state";
+					throw new InternalError("Assembler stable identities do not match compiler state");
 			state = new SessionState(new TypeRegistry(identity.typeState),
 				new GenericSpecializationRegistry(identity.specializationState), new HashLinkBackendSession(assembler));
 			state.publishedAbi = identity.publishedAbi;
@@ -381,7 +382,7 @@ class Compiler {
 			result:CompilerType,
 			?generatedFunctionDependencies:Array<String>):Void {
 		if (state.compiledOnce)
-			throw "Native registrations are frozen after the first compilation";
+			throw new InternalError("Native registrations are frozen after the first compilation");
 		natives.registerNative(name, library, symbol, arguments, result, generatedFunctionDependencies);
 	}
 
@@ -392,14 +393,14 @@ class Compiler {
 	/** Parse and register one immutable target-specific ABI interface before compilation. */
 	public function addFfiInterface(path:String, source:String):Void {
 		if (state.compiledOnce)
-			throw "FFI interfaces are frozen after the first compilation";
+			throw new InternalError("FFI interfaces are frozen after the first compilation");
 		ffi.registerInterface(path, source);
 	}
 
 	/** Register Haxe-only naming policy without changing the generated ABI model. */
 	public function addFfiProjection(path:String, source:String):Void {
 		if (state.compiledOnce)
-			throw "FFI projections are frozen after the first compilation";
+			throw new InternalError("FFI projections are frozen after the first compilation");
 		ffi.registerProjection(path, source);
 	}
 
@@ -465,7 +466,7 @@ class Compiler {
 	public function compact(entryModule:String):CompileResult {
 		var hashLink = state.backend.hashLink();
 		if (hashLink == null)
-			throw "Compacting a module is a HashLink operation";
+			throw new InternalError("Compacting a module is a HashLink operation");
 		var result = new CompilationTransaction(this, entryModule, null, hashLink.compacting()).run();
 		rememberCompile(entryModule, result);
 		return result;
@@ -500,7 +501,7 @@ class Compiler {
 	public function refreshLoadedSource(name:String, source:String):Void {
 		var state = modules.get(name);
 		if (state == null)
-			throw 'Cannot refresh unloaded module "$name"';
+			throw new InternalError('Cannot refresh unloaded module "$name"');
 		if (state.loadedText != source) {
 			state.update(new SourceFile(state.source.path, source, state.source.isStandardLibrarySource));
 			sourceGeneration++;
@@ -796,7 +797,7 @@ class Compiler {
 			if (interfaceTarget == null)
 				interfaceTarget = model.target;
 			else if (interfaceTarget != model.target)
-				throw 'Native layout queries require one HXI target, found "$interfaceTarget" and "${model.target}"';
+				throw new InternalError('Native layout queries require one HXI target, found "$interfaceTarget" and "${model.target}"');
 		}
 		if (interfaceTarget != null)
 			return interfaceTarget;

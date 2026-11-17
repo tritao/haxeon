@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGraph;
@@ -60,7 +61,7 @@ class WasmCfgAnalysis {
 			if (requiredSuccessors(graph.successors, id).length == 0)
 				exits.set(id, true);
 		if (!exits.keys().hasNext())
-			throw 'CFG ${functionName} has no exit block';
+			throw new InternalError('CFG ${functionName} has no exit block');
 		var wordCount = (graph.order.length + 31) >> 5,
 			all = fullBitSet(wordCount),
 			sets:Map<Int, Array<Int>> = [];
@@ -159,7 +160,7 @@ class WasmCfgAnalysis {
 			do {
 				var popped = traversal.stack.pop();
 				if (popped == null)
-					throw "Strongly connected component stack emptied before its root";
+					throw new InternalError("Strongly connected component stack emptied before its root");
 				member = popped;
 				traversal.onStack.remove(member);
 				members.push(member);
@@ -256,19 +257,19 @@ class WasmCfgAnalysis {
 
 	static function requiredSuccessors(source:Map<Int, Array<Int>>, block:Int):Array<Int> {
 		if (!source.exists(block))
-			throw 'CFG is missing adjacency for block $block';
+			throw new InternalError('CFG is missing adjacency for block $block');
 		return source.get(block);
 	}
 
 	static function requiredBitSet(source:Map<Int, Array<Int>>, block:Int):Array<Int> {
 		if (!source.exists(block))
-			throw 'CFG is missing dominance set for block $block';
+			throw new InternalError('CFG is missing dominance set for block $block');
 		return source.get(block);
 	}
 
 	static function requiredIndex(source:Map<Int, Int>, block:Int):Int {
 		if (!source.exists(block))
-			throw 'CFG is missing index for block $block';
+			throw new InternalError('CFG is missing index for block $block');
 		return source.get(block);
 	}
 }

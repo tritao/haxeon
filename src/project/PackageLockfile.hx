@@ -1,5 +1,6 @@
 package project;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import sys.FileSystem;
 import sys.io.File;
@@ -25,11 +26,11 @@ class PackageLockEntry {
 		return switch source {
 			case PackageSource.Git(url, _):
 				if (resolvedRevision == null || resolvedRevision.length == 0)
-					throw 'Lockfile entry "${id.name}" is missing its resolved Git revision';
+					throw new InternalError('Lockfile entry "${id.name}" is missing its resolved Git revision');
 				PackageSource.Git(url, resolvedRevision);
 			case PackageSource.Registry(registry, name, _):
 				if (resolvedRevision == null || resolvedRevision.length == 0)
-					throw 'Lockfile entry "${id.name}" is missing its resolved registry version';
+					throw new InternalError('Lockfile entry "${id.name}" is missing its resolved registry version');
 				PackageSource.Registry(registry, name, resolvedRevision);
 			case _: source;
 		};
@@ -49,7 +50,7 @@ class PackageLockfile {
 		byName = new Map();
 		for (entry in this.entries) {
 			if (byName.exists(entry.id.name))
-				throw 'Duplicate package in lockfile: ${entry.id.name}';
+				throw new InternalError('Duplicate package in lockfile: ${entry.id.name}');
 			byName.set(entry.id.name, entry);
 		}
 	}
@@ -59,7 +60,7 @@ class PackageLockfile {
 
 	public function validateGraph(actual:PackageLockfile):Void {
 		if (entries.length != actual.entries.length)
-			throw "haxeon.lock does not describe the resolved package graph";
+			throw new InternalError("haxeon.lock does not describe the resolved package graph");
 		for (expected in entries) {
 			var resolved = actual.get(expected.id.name);
 			if (resolved == null
@@ -67,7 +68,7 @@ class PackageLockfile {
 				|| expected.resolvedRevision != resolved.resolvedRevision
 				|| expected.checksum != resolved.checksum
 				|| !sameDependencies(expected.dependencies, resolved.dependencies))
-				throw 'haxeon.lock entry for "${expected.id.name}" does not match the resolved package graph';
+				throw new InternalError('haxeon.lock entry for "${expected.id.name}" does not match the resolved package graph');
 		}
 	}
 
@@ -100,20 +101,20 @@ class PackageLockfile {
 		try {
 			raw = Json.parse(content);
 		} catch (error:Dynamic) {
-			throw 'Could not parse $path: ${Std.string(error)}';
+			throw new InternalError('Could not parse $path: ${Std.string(error)}');
 		}
 		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw '$path must contain a JSON object';
+			throw new InternalError('$path must contain a JSON object');
 		var version:Dynamic = Reflect.field(raw, "version");
 		if (version == null || Std.int(version) != VERSION)
-			throw '$path has unsupported lockfile version "$version"';
+			throw new InternalError('$path has unsupported lockfile version "$version"');
 		var packages:Dynamic = Reflect.field(raw, "packages");
 		if (!Std.isOfType(packages, Array))
-			throw '$path "packages" must be an array';
+			throw new InternalError('$path "packages" must be an array');
 		var entries:Array<PackageLockEntry> = [];
 		for (rawPackage in (cast packages:Array<Dynamic>)) {
 			if (rawPackage == null || !Reflect.isObject(rawPackage) || Std.isOfType(rawPackage, Array))
-				throw '$path contains an invalid package entry';
+				throw new InternalError('$path contains an invalid package entry');
 			var name = requiredString(rawPackage, "name", path),
 				source = PackageSourceCodec.parse(Reflect.field(rawPackage, "source"), name, '$path package "$name"'),
 				resolvedRevision = optionalString(rawPackage, "resolvedRevision"),
@@ -128,7 +129,7 @@ class PackageLockfile {
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path requires a non-empty "$field" string';
+			throw new InternalError('$path requires a non-empty "$field" string');
 		return cast value;
 	}
 
@@ -137,7 +138,7 @@ class PackageLockfile {
 		if (value == null)
 			return null;
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw 'Lockfile field "$field" must be a non-empty string';
+			throw new InternalError('Lockfile field "$field" must be a non-empty string');
 		return cast value;
 	}
 
@@ -146,11 +147,11 @@ class PackageLockfile {
 		if (value == null)
 			return [];
 		if (!Std.isOfType(value, Array))
-			throw '$path "$field" must be an array of strings';
+			throw new InternalError('$path "$field" must be an array of strings');
 		var result:Array<String> = [];
 		for (item in (cast value:Array<Dynamic>)) {
 			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
-				throw '$path "$field" must contain only non-empty strings';
+				throw new InternalError('$path "$field" must contain only non-empty strings');
 			result.push(cast item);
 		}
 		result.sort(Reflect.compare);

@@ -1,5 +1,6 @@
 package compiler.runtime;
 
+import compiler.core.InternalError;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 
@@ -57,7 +58,7 @@ class RuntimeType {
 	public static function requireArrayName(element:CompilerType):String {
 		var name = arrayName(element);
 		if (name == null)
-			throw 'Unsupported compiler array ABI for $element';
+			throw new InternalError('Unsupported compiler array ABI for $element');
 		return name;
 	}
 
@@ -101,7 +102,7 @@ class RuntimeType {
 	public static function requireMapName(key:CompilerType, value:CompilerType):String {
 		var name = mapName(key, value);
 		if (name == null)
-			throw 'Unsupported compiler map ABI for ${key} -> ${value}';
+			throw new InternalError('Unsupported compiler map ABI for ${key} -> ${value}');
 		return name;
 	}
 

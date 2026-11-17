@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineEnumLayout.IrInlineEnumCaseShape;
 import compiler.ir.IrInlineEnumLayout.IrInlineEnumShape;
@@ -23,12 +24,12 @@ class IrInlineEnumCaseAccess {
 	public function construct(builder:IrBuilder, constructor:Int, arguments:Array<IrValue>):IrValue {
 		var entry = getCase(constructor);
 		if (arguments.length != entry.parameters.length)
-			throw "Wrong inline enum constructor arity";
+			throw new InternalError("Wrong inline enum constructor arity");
 		var result = nullValue(builder);
 		builder.fieldSet(result, "tag", builder.constInt(constructor + 1));
 		for (index in 0...arguments.length) {
 			if (!IrVerifier.sameType(arguments[index].type, entry.parameters[index]))
-				throw "Wrong inline enum payload type";
+				throw new InternalError("Wrong inline enum payload type");
 			write(builder, result, entry, [Std.string(index)], arguments[index]);
 		}
 		return result;
@@ -49,7 +50,7 @@ class IrInlineEnumCaseAccess {
 	public function field(builder:IrBuilder, value:IrValue, constructor:Int, index:Int):IrValue {
 		var entry = getCase(constructor);
 		if (index < 0 || index >= entry.parameters.length)
-			throw "Invalid inline enum payload index";
+			throw new InternalError("Invalid inline enum payload index");
 		return read(builder, value, entry, [Std.string(index)], entry.parameters[index]);
 	}
 
@@ -139,7 +140,7 @@ class IrInlineEnumCaseAccess {
 
 	function getCase(index:Int):IrInlineEnumCaseShape {
 		if (index < 0 || index >= shape.cases.length)
-			throw "Invalid inline enum case";
+			throw new InternalError("Invalid inline enum case");
 		return shape.cases[index];
 	}
 
@@ -158,7 +159,7 @@ class IrInlineEnumCaseAccess {
 			if (same)
 				return candidate;
 		}
-		throw 'Missing inline enum payload slot ${path.join(".")}';
+		throw new InternalError('Missing inline enum payload slot ${path.join(".")}');
 	}
 
 	function isValue(type:IrType):Bool
@@ -171,7 +172,7 @@ class IrInlineEnumCaseAccess {
 	function requireObject(name:String):IrObject {
 		var object = objects.get(name);
 		if (object == null || !object.isValue)
-			throw 'Missing inline enum payload value "$name"';
+			throw new InternalError('Missing inline enum payload value "$name"');
 		return object;
 	}
 

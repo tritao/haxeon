@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
@@ -137,7 +138,7 @@ class IrFunction {
 			?result:IrType, ?name:String,
 			?kind:IrFunctionKind):IrFunction {
 		if (blocks.length == 0 && this.blocks.length > 0)
-			throw 'DEBUG empty withBlocks on ';
+			throw new InternalError('DEBUG empty withBlocks on ');
 		return new IrFunction(name == null ? this.name : name, arguments == null ? this.arguments : arguments,
 			result == null ? this.result : result, blocks,
 			kind == null ? this.kind : kind, bindings == null ? debugBindings : bindings, inlineHint, retention);

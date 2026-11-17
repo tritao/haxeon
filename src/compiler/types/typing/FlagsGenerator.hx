@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceSpan;
@@ -40,7 +41,7 @@ class FlagsGenerator {
 			case "contains": {arguments: [value, value], result: TBool};
 			case "insert", "remove", "$or", "$and": {arguments: [value, value], result: value};
 			case "toString": {arguments: [value], result: TString};
-			default: throw 'Unknown Flags member "$method"';
+			default: throw new InternalError('Unknown Flags member "$method"');
 		};
 	}
 
@@ -109,7 +110,7 @@ class FlagsGenerator {
 			var request = session.programOutput.requests.flags.get(name),
 				declaration = session.enumAbstractDecls.get(request.owner);
 			if (declaration == null || !conforms(session, declaration))
-				throw 'Missing Flags declaration "${request.owner}"';
+				throw new InternalError('Missing Flags declaration "${request.owner}"');
 			var span = declaration.span,
 				method = request.method,
 				info = signature(request.owner, method),
@@ -157,7 +158,7 @@ class FlagsGenerator {
 				case "fromRaw":
 					var mask = session.flagsMasks.get(request.owner);
 					if (mask == null)
-						throw "Flags mask was not validated";
+						throw new InternalError("Flags mask was not validated");
 					statements.push(TIf(not(equal(binary(TBitAnd(bits, integer(~mask))), integer(0))),
 						[TThrow(text('Unknown bits in ${request.owner}.fromRaw'), span)], [], span));
 					result = wrap(bits);
@@ -187,10 +188,10 @@ class FlagsGenerator {
 					}
 					result = expression(TAdd(expression(TLocal("text"), TString), text("]")), TString);
 				default:
-					throw 'Unknown Flags helper "$method"';
+					throw new InternalError('Unknown Flags helper "$method"');
 			}
 			if (result == null)
-				throw "Missing Flags helper result";
+				throw new InternalError("Missing Flags helper result");
 			statements.push(TReturn(result, span));
 			var fn:TypedFunction = {
 				name: name, role: ProviderFunction(TAbstract(request.owner, [], TInt),

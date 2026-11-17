@@ -1,5 +1,6 @@
 package compiler.ir.codec;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrIntrinsic;
 import compiler.ir.Ir.IrType;
@@ -95,19 +96,19 @@ class IrInstructionCodec {
 		try {
 			var magic = input.readString(3), version = input.readByte();
 			if (magic != "IRI" || version < 1 || version > VERSION)
-				throw "Invalid IR instruction state";
+				throw new InternalError("Invalid IR instruction state");
 			var result = read(input, bytes.length, values);
 			if (input.position != bytes.length)
-				throw "Trailing IR instruction state data";
+				throw new InternalError("Trailing IR instruction state data");
 			return result;
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated IR instruction state";
-		} catch (error:String) {
-			if (StringTools.startsWith(error, "Invalid IR") || error == "Unknown IR instruction")
+			throw new InternalError("Truncated IR instruction state");
+		} catch (error:InternalError) {
+			if (StringTools.startsWith(error.message, "Invalid IR") || error.message == "Unknown IR instruction")
 				throw error;
-			throw "Invalid IR instruction operands";
+			throw new InternalError("Invalid IR instruction operands");
 		} catch (_:Dynamic) {
-			throw "Invalid IR instruction operands";
+			throw new InternalError("Invalid IR instruction operands");
 		}
 	}
 
@@ -330,11 +331,11 @@ class IrInstructionCodec {
 	public static function read(input:BytesInput, totalLength:Int, values:Map<Int, IrValue>):IrInstruction {
 		var name = readString(input, totalLength);
 		if (!CONSTRUCTORS.exists(name))
-			throw "Unknown IR instruction";
+			throw new InternalError("Unknown IR instruction");
 		var count = input.readInt32();
 		function arity(expected:Int):Void
 			if (count != expected)
-				throw "Invalid IR instruction operand count";
+				throw new InternalError("Invalid IR instruction operand count");
 		return switch name {
 			case "Phi":
 				arity(2);
@@ -468,7 +469,7 @@ class IrInstructionCodec {
 					case 3: EnumTagUnbox(type);
 					case 4: InlineEnumBox(type);
 					case 5: InlineEnumUnbox(type);
-					default: throw "Invalid IR intrinsic";
+					default: throw new InternalError("Invalid IR intrinsic");
 				};
 				Intrinsic(value, operation, readValues(input, values));
 			case "CNativeCall":
@@ -540,13 +541,13 @@ class IrInstructionCodec {
 			case "EnumField":
 				arity(4);
 				EnumField(readValue(input, values), readValue(input, values), readInt(input), readInt(input));
-			default: throw "Unknown IR instruction";
+			default: throw new InternalError("Unknown IR instruction");
 		};
 	}
 
 	static function expectTag(input:BytesInput, expected:Int):Void
 		if (input.readByte() != expected)
-			throw "Invalid IR instruction operand tag";
+			throw new InternalError("Invalid IR instruction operand tag");
 
 	static function readValue(input:BytesInput, values:Map<Int, IrValue>):IrValue {
 		expectTag(input, 0);
@@ -567,7 +568,7 @@ class IrInstructionCodec {
 		expectTag(input, 3);
 		var value = input.readByte();
 		if (value != 0 && value != 1)
-			throw "Invalid IR boolean operand";
+			throw new InternalError("Invalid IR boolean operand");
 		return value == 1;
 	}
 
@@ -580,7 +581,7 @@ class IrInstructionCodec {
 		expectTag(input, 8);
 		var count = input.readInt32();
 		if (count <= 0 || count > total || count > 0x100000)
-			throw "Invalid IR byte array";
+			throw new InternalError("Invalid IR byte array");
 		return [for (_ in 0...count) input.readByte()];
 	}
 
@@ -588,7 +589,7 @@ class IrInstructionCodec {
 		expectTag(input, 5);
 		var count = input.readInt32();
 		if (count < 0 || count > 0x100000)
-			throw "Invalid IR operand array";
+			throw new InternalError("Invalid IR operand array");
 		return [for (_ in 0...count) readValue(input, values)];
 	}
 
@@ -601,13 +602,13 @@ class IrInstructionCodec {
 		expectTag(input, 5);
 		var count = input.readInt32();
 		if (count < 0 || count > 0x100000)
-			throw "Invalid IR operand array";
+			throw new InternalError("Invalid IR operand array");
 		var result = [];
 		for (_ in 0...count) {
 			expectTag(input, 7);
 			var block = input.readInt32();
 			if (block < 0)
-				throw "Invalid IR block reference";
+				throw new InternalError("Invalid IR block reference");
 			result.push({block: block, value: IrValueTableCodec.readReference(input, values)});
 		}
 		return result;
@@ -649,12 +650,12 @@ class IrInstructionCodec {
 
 	static function writeBytes(output:BytesOutput, values:Array<Int>):Void {
 		if (values.length == 0 || values.length > 0x100000)
-			throw "Invalid IR byte array";
+			throw new InternalError("Invalid IR byte array");
 		output.writeByte(8);
 		output.writeInt32(values.length);
 		for (value in values) {
 			if (value < 0 || value > 255)
-				throw "Invalid IR byte value";
+				throw new InternalError("Invalid IR byte value");
 			output.writeByte(value);
 		}
 	}
@@ -666,7 +667,7 @@ class IrInstructionCodec {
 
 	static function writeValues(output:BytesOutput, values:Array<IrValue>):Void {
 		if (values.length > 0x100000)
-			throw "Invalid IR operand array";
+			throw new InternalError("Invalid IR operand array");
 		output.writeByte(5);
 		output.writeInt32(values.length);
 		for (value in values)
@@ -675,7 +676,7 @@ class IrInstructionCodec {
 
 	static function writePhiInputs(output:BytesOutput, inputs:Array<compiler.ir.Ir.IrPhiInput>):Void {
 		if (inputs.length > 0x100000)
-			throw "Invalid IR operand array";
+			throw new InternalError("Invalid IR operand array");
 		output.writeByte(5);
 		output.writeInt32(inputs.length);
 		for (input in inputs) {
@@ -707,23 +708,23 @@ class IrInstructionCodec {
 			case 3:
 				var value = input.readByte();
 				if (value != 0 && value != 1)
-					throw "Invalid IR boolean operand";
+					throw new InternalError("Invalid IR boolean operand");
 				value == 1;
 			case 4: readString(input, totalLength);
 			case 5:
 				var count = input.readInt32();
 				if (count < 0 || count > 0x100000)
-					throw "Invalid IR operand array";
+					throw new InternalError("Invalid IR operand array");
 				[for (_ in 0...count) readOperand(input, totalLength, values)];
 			case 6: IrTypeCodec.readType(input, totalLength, 0);
 			case 7: {block: input.readInt32(), value: IrValueTableCodec.readReference(input, values)};
-			default: throw "Invalid IR instruction operand tag";
+			default: throw new InternalError("Invalid IR instruction operand tag");
 		};
 
 	static function writeString(output:BytesOutput, value:String):Void {
 		var bytes = HaxeBytes.ofString(value);
 		if (bytes.length > 0x100000)
-			throw "Invalid IR instruction string";
+			throw new InternalError("Invalid IR instruction string");
 		output.writeInt32(bytes.length);
 		output.write(bytes);
 	}
@@ -731,7 +732,7 @@ class IrInstructionCodec {
 	static function readString(input:BytesInput, totalLength:Int):String {
 		var length = input.readInt32();
 		if (length < 0 || length > 0x100000 || length > totalLength - input.position)
-			throw "Invalid IR instruction string";
+			throw new InternalError("Invalid IR instruction string");
 		return input.readString(length);
 	}
 }

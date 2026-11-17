@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
@@ -399,7 +400,7 @@ class IrScalarClosures {
 								result = map(out),
 								name = switch out.type {
 									case Obj(value): value;
-									default: throw "Invalid scalar closure result";
+									default: throw new InternalError("Invalid scalar closure result");
 								};
 							rewritten.instructions.push(new Located(CallClosure(ignored, map(closure), expanded),
 								located.provenance));
@@ -475,7 +476,7 @@ class IrScalarClosures {
 			closure = b.argument("closure", Dyn),
 			probeType:IrType = switch erasedType(callable) {
 				case Function(args, result): Function([Obj(environment)].concat(args), result);
-				default: throw "Expected erased closure";
+				default: throw new InternalError("Expected erased closure");
 			},
 				probe = b.staticClosure(wrapper, probeType),
 				found = b.call(receiverQuery("$scalar-closure:receiver:signature:" + suffix, Dyn, probeType), [
@@ -498,7 +499,7 @@ class IrScalarClosures {
 					case Function(_, _): true;
 					default: false;
 				}))
-					throw "Nullable scalar closure erasure requires a function";
+					throw new InternalError("Nullable scalar closure erasure requires a function");
 				var innerErasure = ensureErasure(inner),
 					suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
 					maker = "$scalar-closure:erase-nullable:" + suffix,
@@ -522,7 +523,7 @@ class IrScalarClosures {
 				return result;
 			case Function(_, _):
 			default:
-				throw "Scalar closure erasure requires a function";
+				throw new InternalError("Scalar closure erasure requires a function");
 		}
 		var suffix = haxe.crypto.Sha256.encode(signature).substr(0, 32),
 			environment = "$scalar-closure:environment:" + suffix,
@@ -536,7 +537,7 @@ class IrScalarClosures {
 		ensureRestoration(type);
 		var logical = switch type {
 			case Function(arguments, result): {arguments: arguments, result: result};
-			default: throw "Scalar closure erasure requires a function";
+			default: throw new InternalError("Scalar closure erasure requires a function");
 		};
 		var body = new IrBuilder(),
 			receiver = body.argument("receiver", Obj(environment)),
@@ -577,7 +578,7 @@ class IrScalarClosures {
 			restoredWrapper = IrScalarArguments.PREFIX + "$scalar-closure:restored-call:" + suffix,
 			probeType:IrType = switch mapType(type) {
 				case Function(args, result): Function([Obj(restoredEnvironment)].concat(args), result);
-				default: throw "Expected scalar closure";
+				default: throw new InternalError("Expected scalar closure");
 			},
 				probe = make.staticClosure(restoredWrapper, probeType),
 				found = make.call(receiverQuery("$scalar-closure:receiver:typed:" + suffix, mapType(type), probeType), [
@@ -613,7 +614,7 @@ class IrScalarClosures {
 		return switch type {
 			case Function(arguments, _): Function([for (_ in arguments) Dyn], Dyn);
 			case Nullable(inner): Nullable(erasedType(inner));
-			default: throw "Scalar closure erasure requires a function";
+			default: throw new InternalError("Scalar closure erasure requires a function");
 		};
 
 	/** A function arriving from Dynamic keeps its boxed ABI behind one scalar-call adapter. */
@@ -628,7 +629,7 @@ class IrScalarClosures {
 					case Function(_, _): true;
 					default: false;
 				}))
-					throw "Nullable scalar closure restoration requires a function";
+					throw new InternalError("Nullable scalar closure restoration requires a function");
 				var innerMaker = ensureRestoration(inner),
 					maker = "$scalar-closure:restore-nullable:" + haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
 					b = new IrBuilder(),
@@ -645,7 +646,7 @@ class IrScalarClosures {
 				return maker;
 			case Function(_, _):
 			default:
-				throw "Scalar closure restoration requires a function";
+				throw new InternalError("Scalar closure restoration requires a function");
 		}
 		var suffix = haxe.crypto.Sha256.encode(signatureKey).substr(0, 32),
 			environment = "$scalar-closure:restored-environment:" + suffix,
@@ -654,7 +655,7 @@ class IrScalarClosures {
 			scalarOwn = candidates.exists(signatureKey),
 			logical = switch type {
 				case Function(arguments, result): {arguments: arguments, result: result};
-				default: throw "Scalar closure restoration requires a function";
+				default: throw new InternalError("Scalar closure restoration requires a function");
 			};
 		restorations.set(signatureKey, maker);
 		ensureErasure(type);
@@ -677,7 +678,7 @@ class IrScalarClosures {
 			}
 			var name = switch argument {
 				case Obj(value): value;
-				default: throw "Invalid scalar closure argument";
+				default: throw new InternalError("Invalid scalar closure argument");
 			}, record = call.valueInit(name);
 			for (slot in slots(argument)) {
 				var scalar = call.argument('argument$index.' + slot.path.join("."), mapType(slot.type)),
@@ -749,7 +750,7 @@ class IrScalarClosures {
 			erasedWrapper = "$scalar-closure:erased-call:" + suffix,
 			probeType:IrType = switch erasedType(type) {
 				case Function(args, result): Function([Obj(erasedEnvironment)].concat(args), result);
-				default: throw "Expected erased closure";
+				default: throw new InternalError("Expected erased closure");
 			},
 				probe = make.staticClosure(erasedWrapper, probeType),
 				found = make.call(receiverQuery("$scalar-closure:receiver:erased:" + suffix, Dyn, probeType), [
@@ -782,13 +783,13 @@ class IrScalarClosures {
 	function fieldOf(type:IrType, name:String):IrObjectField {
 		var objectName = switch type {
 			case Obj(value): value;
-			default: throw "Invalid scalar closure field owner";
+			default: throw new InternalError("Invalid scalar closure field owner");
 		}, object = objects.get(objectName);
 		if (object != null)
 			for (field in object.fields)
 				if (field.name == name)
 					return field;
-		throw 'Missing scalar closure field $objectName.$name';
+		throw new InternalError('Missing scalar closure field $objectName.$name');
 	}
 
 	static function functionType(type:IrType):Null<IrType>

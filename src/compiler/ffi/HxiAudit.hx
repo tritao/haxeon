@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.HxiModel;
 import compiler.ffi.HxiWriter;
 
@@ -23,9 +24,9 @@ class HxiAudit {
 			?dependencies:Array<String>, ?excludedHeaders:Array<String>,
 			?dependencyInterfaces:Array<HxiInterface>):HxiAuditReport {
 		if (targets.length < 2)
-			throw "FFI audit requires at least two targets";
+			throw new InternalError("FFI audit requires at least two targets");
 		if (profile != null && profile != "portable-abi64" && profile != "portable-abi32")
-			throw 'Unknown FFI audit profile "$profile"';
+			throw new InternalError('Unknown FFI audit profile "$profile"');
 		var issues:Array<HxiAuditIssue> = [],
 			baseline:Null<String> = null,
 			identical = true;
@@ -72,7 +73,7 @@ class HxiAudit {
 			dependencies, excludedHeaders),
 			label = sourceLabel == null ? header : sourceLabel;
 		if (profile != "portable-abi64" && profile != "portable-abi32")
-			throw 'Unknown FFI audit profile "$profile"';
+			throw new InternalError('Unknown FFI audit profile "$profile"');
 		return HxiWriter.write(model, generatedHeader(label, profile), profile);
 	}
 

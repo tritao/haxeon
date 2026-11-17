@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.Ir.IrInterface;
 import compiler.ir.Ir.IrEnum;
@@ -43,7 +44,7 @@ class IrVerifier {
 						default: false;
 					};
 					if (invalid)
-						throw 'IR verification failed for ${fn.name}: ordinary array operation on inline value lanes';
+						throw new InternalError('IR verification failed for ${fn.name}: ordinary array operation on inline value lanes');
 				}
 	}
 
@@ -54,7 +55,7 @@ class IrVerifier {
 				for (located in block.instructions)
 					switch located.value {
 						case Intrinsic(_, InlineEnumBox(_) | InlineEnumUnbox(_) | EnumTagBox(_) | EnumTagUnbox(_), _):
-							throw 'IR verification failed for ${fn.name}: unresolved typed enum conversion';
+							throw new InternalError('IR verification failed for ${fn.name}: unresolved typed enum conversion');
 						default:
 					}
 	}
@@ -87,7 +88,7 @@ class IrVerifier {
 		function check(type:IrType, where:String):Void {
 			var name = forbidden(type);
 			if (name != null)
-				throw 'IR inline enum "$name" retains nominal value storage in $where';
+				throw new InternalError('IR inline enum "$name" retains nominal value storage in $where');
 		}
 		// The hot checks build their message only when they fail: `check(type, 'operand ${fn.name}')` concatenated a string for every
 		// operand of every instruction, passing or not.
@@ -297,7 +298,7 @@ class IrVerifier {
 				case ClosureCast(target):
 					var key = Std.string(target);
 					if (closureCasts.exists(key))
-						throw 'Duplicate closure cast for $key';
+						throw new InternalError('Duplicate closure cast for $key');
 					closureCasts.set(key, fn.name);
 				default:
 			}
@@ -319,13 +320,13 @@ class IrVerifier {
 		var enums:Map<String, IrEnum> = [];
 		for (object in program.objects) {
 			if (objects.exists(object.name))
-				throw 'Duplicate IR object "${object.name}"';
+				throw new InternalError('Duplicate IR object "${object.name}"');
 			for (field in object.fields)
 				if (field.scalarStorage != null && !validScalarStorage(field.type, field.scalarStorage))
-					throw 'Invalid scalar storage for "${object.name}.${field.name}"';
+					throw new InternalError('Invalid scalar storage for "${object.name}.${field.name}"');
 				else if (field.nullableScalarStorage != null
 					&& !validNullableScalarStorage(field.type, field.nullableScalarStorage))
-					throw 'Invalid nullable scalar storage for "${object.name}.${field.name}"';
+					throw new InternalError('Invalid nullable scalar storage for "${object.name}.${field.name}"');
 			objects.set(object.name, object);
 		}
 		var receiverArguments:Map<String, Bool> = [
@@ -337,9 +338,9 @@ class IrVerifier {
 				var name = object.name + ".new",
 					signature = signatures.get(name);
 				if (signature != null && !sameType(signature.result, Obj(object.name)))
-					throw 'IR value constructor "$name" must return its value';
+					throw new InternalError('IR value constructor "$name" must return its value');
 				if (signature != null && receiverArguments.exists(name))
-					throw 'IR value constructor "$name" must not take a receiver';
+					throw new InternalError('IR value constructor "$name" must not take a receiver');
 			}
 		// A method slot has one physical signature, its topmost declaration's. An override in it with another one is handed
 		// values it does not expect when called through the slot (IrOverrideBridges gives such overrides a bridge). Calls are
@@ -350,7 +351,7 @@ class IrVerifier {
 					var own = signatures.get(method.functionName),
 						slot = slotSignature(objects, object.base, method.name, signatures);
 					if (own != null && slot != null && !sameSlotSignature(own, slot))
-						throw 'IR override "${method.functionName}" of slot "${method.name}" takes ${own.arguments.slice(1)} and returns ${own.result}, but the slot takes ${slot.arguments.slice(1)} and returns ${slot.result}';
+						throw new InternalError('IR override "${method.functionName}" of slot "${method.name}" takes ${own.arguments.slice(1)} and returns ${own.result}, but the slot takes ${slot.arguments.slice(1)} and returns ${slot.result}');
 				}
 		// Private enum records and values containing opaque references need logical escape adapters.
 		for (object in program.objects)
@@ -372,13 +373,13 @@ class IrVerifier {
 		}
 		for (interfaceDecl in program.interfaces) {
 			if (interfaces.exists(interfaceDecl.name))
-				throw 'Duplicate IR interface "${interfaceDecl.name}"';
+				throw new InternalError('Duplicate IR interface "${interfaceDecl.name}"');
 			interfaces.set(interfaceDecl.name, interfaceDecl);
 		}
 		var objectTable = IrObjectTable.of(objects);
 		for (enumDecl in program.enums) {
 			if (enums.exists(enumDecl.name))
-				throw 'Duplicate IR enum "${enumDecl.name}"';
+				throw new InternalError('Duplicate IR enum "${enumDecl.name}"');
 			IrInlineEnumStorage.validate(enumDecl, objectTable);
 			enums.set(enumDecl.name, enumDecl);
 		}
@@ -387,7 +388,7 @@ class IrVerifier {
 		var globals:Map<String, IrType> = [];
 		for (field in program.staticFields) {
 			if (globals.exists(field.name))
-				throw 'Duplicate IR static field "${field.name}"';
+				throw new InternalError('Duplicate IR static field "${field.name}"');
 			globals.set(field.name, field.type);
 		}
 		// Carrier results are permitted only for an actual reference leaf in a lane array.
@@ -398,18 +399,18 @@ class IrVerifier {
 				case EnumTagAdapter(type, box):
 					switch type {
 						case EnumTag(_):
-						default: throw "Enum tag adapter requires a tag type";
+						default: throw new InternalError("Enum tag adapter requires a tag type");
 					}
 					if (fn.arguments.length != 1
 						|| !sameType(fn.arguments[0].type, box ? type : Dyn)
 						|| !sameType(fn.result, box ? Dyn : type))
-						throw "Invalid enum tag adapter signature";
+						throw new InternalError("Invalid enum tag adapter signature");
 				case ValueArraySlot(namespace, _, operation):
 					if (namespace < 0)
-						throw "Invalid value-array slot namespace";
+						throw new InternalError("Invalid value-array slot namespace");
 					switch operation {
 						case Read(slot, _, _), Write(slot, _, _):
-							if (slot < 0) throw "Invalid value-array slot";
+							if (slot < 0) throw new InternalError("Invalid value-array slot");
 						default:
 					}
 				default:
@@ -426,7 +427,7 @@ class IrVerifier {
 				case Enum(name), Nullable(Enum(name)):
 					var resolved = IrInlineEnumStorage.resolve(program.enums, objectTable, name);
 					if (resolved == null)
-						throw "Lane carrier accessor requires inline enum storage";
+						throw new InternalError("Lane carrier accessor requires inline enum storage");
 					resolved;
 				default: access.element;
 			};
@@ -440,11 +441,11 @@ class IrVerifier {
 				|| !sameType(fn.arguments[1].type, I32)
 				|| (access.write ? !IrValueLaneReference.isCarrier(fn.arguments[2].type)
 				|| !sameType(fn.result, Void) : !IrValueLaneReference.isCarrier(fn.result)))
-				throw "Invalid lane carrier accessor signature";
+				throw new InternalError("Invalid lane carrier accessor signature");
 			carrierSlots.set(fn.name, access.write);
 		}
 		if (!signatures.exists(program.entryPoint))
-			throw 'Unknown IR entry point "${program.entryPoint}"';
+			throw new InternalError('Unknown IR entry point "${program.entryPoint}"');
 		if (memo != null) {
 			memo.attach([
 				"signatures" => k -> signatures.get(k),
@@ -495,10 +496,10 @@ class IrVerifier {
 						tables.carrierSlots, tables.physicalValues, tables.closureCasts);
 					if (memo != null)
 						memo.accept(fn);
-				} catch (error:String) {
+				} catch (error:InternalError) {
 					if (memo != null)
 						memo.abandon();
-					throw 'IR verification failed for ${fn.name}: $error';
+					throw new InternalError('IR verification failed for ${fn.name}: ${error.message}', error.span);
 				}
 			}
 	}
@@ -526,14 +527,14 @@ class IrVerifier {
 
 	static function verifyCNative(native:IrCNative):Void {
 		if (native.argumentModes == null || native.argumentModes.length != native.arguments.length)
-			throw 'C native "${native.name}" has mismatched argument ABI metadata';
+			throw new InternalError('C native "${native.name}" has mismatched argument ABI metadata');
 		if (native.pointerSize != null && native.pointerSize != 4 && native.pointerSize != 8)
-			throw 'C native "${native.name}" has invalid pointer-size metadata';
+			throw new InternalError('C native "${native.name}" has invalid pointer-size metadata');
 		if (native.fixedResult != null && ((switch (native.result) {
 			case ManagedBytes: false;
 			default: true;
 		}) || !validAggregateLayout(native.fixedResult.size, native.fixedResult.alignment)))
-			throw 'C native "${native.name}" has invalid fixed aggregate result metadata';
+			throw new InternalError('C native "${native.name}" has invalid fixed aggregate result metadata');
 		for (index in 0...native.argumentModes.length)
 			switch native.argumentModes[index] {
 				case BytesInput(lengthArgument):
@@ -544,7 +545,7 @@ class IrVerifier {
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !validByteInputCount(native.arguments[lengthArgument]))
-						throw 'C native "${native.name}" has invalid byte-buffer argument metadata';
+						throw new InternalError('C native "${native.name}" has invalid byte-buffer argument metadata');
 				case BytesInputOutput(lengthArgument):
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
@@ -553,7 +554,7 @@ class IrVerifier {
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !validByteInputCount(native.arguments[lengthArgument]))
-						throw 'C native "${native.name}" has invalid mutable byte-buffer argument metadata';
+						throw new InternalError('C native "${native.name}" has invalid mutable byte-buffer argument metadata');
 				case BytesOutput(sizeArgument):
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
@@ -565,20 +566,20 @@ class IrVerifier {
 						case ManagedBytes: false;
 						default: true;
 					}))
-						throw 'C native "${native.name}" has invalid output-buffer argument metadata';
+						throw new InternalError('C native "${native.name}" has invalid output-buffer argument metadata');
 				case BytesSize:
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
 						default: true;
 					}))
-						throw 'C native "${native.name}" has invalid output-buffer size metadata';
+						throw new InternalError('C native "${native.name}" has invalid output-buffer size metadata');
 				case FixedInput(size, alignment, _) | FixedValue(size, alignment, _) | FixedOutput(size, alignment,
 					_) | FixedInputOutput(size, alignment, _):
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
 						default: true;
 					}) || !validAggregateLayout(size, alignment))
-						throw 'C native "${native.name}" has invalid fixed output layout metadata';
+						throw new InternalError('C native "${native.name}" has invalid fixed output layout metadata');
 				case Value | Output | InputOutput:
 			}
 	}
@@ -607,17 +608,17 @@ class IrVerifier {
 			scalarFunctions:IrVerifyTable<Bool>, carrierSlots:IrVerifyTable<Bool>, physicalValues:IrVerifyTable<Bool>,
 			closureCasts:IrVerifyTable<String>):Void {
 		if (IrHlScalarRef.element(fn.result) != null)
-			throw "A scalar stack reference cannot be returned";
+			throw new InternalError("A scalar stack reference cannot be returned");
 		if (IrValueLaneReference.isCarrier(fn.result)
 			&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name) == false))
-			throw "A value lane reference cannot be returned";
+			throw new InternalError("A value lane reference cannot be returned");
 		for (arg in fn.arguments)
 			if (IrHlScalarRef.element(arg.type) != null && !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX))
-				throw "A scalar stack reference cannot cross an ordinary function boundary";
+				throw new InternalError("A scalar stack reference cannot cross an ordinary function boundary");
 			else if (IrValueLaneReference.isCarrier(arg.type)
 				&& !StringTools.startsWith(fn.name, IrScalarArguments.PREFIX)
 				&& !(carrierSlots.exists(fn.name) && carrierSlots.get(fn.name) == true))
-				throw "A value lane reference cannot cross an ordinary function boundary";
+				throw new InternalError("A value lane reference cannot cross an ordinary function boundary");
 		var graph = new IrGraph(fn), values = scratchValues;
 		values.reset();
 		// Lane and scalar stack references are rare. A function whose arguments and outputs have none of those types has no operand of
@@ -646,11 +647,11 @@ class IrVerifier {
 				switch instruction {
 					case Phi(_, _):
 						if (ordinary)
-							throw "IR phis must precede ordinary instructions";
+							throw new InternalError("IR phis must precede ordinary instructions");
 					case BeginTry(_, _, _):
 						ordinary = true;
 						if (position != block.instructions.length - 1)
-							throw "IR trap entry must end its block";
+							throw new InternalError("IR trap entry must end its block");
 					default:
 						ordinary = true;
 				}
@@ -671,18 +672,18 @@ class IrVerifier {
 					case Phi(out, inputs):
 						var expected = graph.predecessors.get(id);
 						if (expected == null || inputs.length != expected.length)
-							throw 'Phi ${out.id} does not cover every predecessor';
+							throw new InternalError('Phi ${out.id} does not cover every predecessor');
 						for (position in 0...inputs.length) {
 							var input = inputs[position], repeated = false;
 							for (earlier in 0...position)
 								if (inputs[earlier].block == input.block)
 									repeated = true;
 							if (expected.indexOf(input.block) < 0 || repeated)
-								throw 'Invalid phi predecessor ${input.block}';
+								throw new InternalError('Invalid phi predecessor ${input.block}');
 							verifyUse(input.value, input.block, graph.block(input.block).instructions.length, values,
 								graph);
 							if (!sameType(input.value.type, out.type))
-								throw 'Wrong phi input type for ${out.id}';
+								throw new InternalError('Wrong phi input type for ${out.id}');
 						}
 					default:
 				}
@@ -690,37 +691,37 @@ class IrVerifier {
 			}
 			var terminator = block.terminator;
 			if (terminator == null)
-				throw 'Reachable IR block $id has no terminator';
+				throw new InternalError('Reachable IR block $id has no terminator');
 			switch terminator.value {
 				case Unreachable:
 				// No value and no successor: nothing to check beyond the block ending here.
 				case Return(value):
 					verifyUse(value, id, block.instructions.length, values, graph);
 					if (!sameType(value.type, fn.result))
-						throw 'Wrong return type in ${fn.name}';
+						throw new InternalError('Wrong return type in ${fn.name}');
 				case Throw(value), Rethrow(value):
 					verifyUse(value, id, block.instructions.length, values, graph);
 					if ((switch (value.type) {
 						case Dyn: false;
 						default: true;
 					}))
-						throw "IR throw value is not Dyn";
+						throw new InternalError("IR throw value is not Dyn");
 				case Branch(condition, _, _):
 					verifyUse(condition, id, block.instructions.length, values, graph);
 					if ((switch (condition.type) {
 						case Bool: false;
 						default: true;
 					}))
-						throw "IR branch condition is not Bool";
+						throw new InternalError("IR branch condition is not Bool");
 				case Switch(value, targets, _):
 					verifyUse(value, id, block.instructions.length, values, graph);
 					if ((switch (value.type) {
 						case I32: false;
 						default: true;
 					}))
-						throw "IR switch value is not I32";
+						throw new InternalError("IR switch value is not I32");
 					if (targets.length == 0)
-						throw "IR switch has no targets";
+						throw new InternalError("IR switch has no targets");
 				case Jump(_):
 			}
 		}
@@ -857,7 +858,7 @@ class IrVerifier {
 				&& !IrValueLaneReference.isCarrier(value.type)
 				&& requiresLogicalValueAdapter(value.type, physicalValues)
 				&& !isGeneratedClosureAdapterValue(fn, value, signatures)):
-				throw "Inline value storage requires a logical Dynamic adapter";
+				throw new InternalError("Inline value storage requires a logical Dynamic adapter");
 			case SafeCast(output, value)
 				if (sameType(output.type, Dyn)
 				&& !IrValueLaneReference.isCarrier(value.type)
@@ -866,19 +867,19 @@ class IrVerifier {
 				&& !IrValueLaneReference.isCarrier(output.type)
 				&& requiresLogicalValueAdapter(output.type, physicalValues)
 				&& !isGeneratedClosureAdapterCast(fn, output, value, signatures, closureCasts)):
-				throw "Inline value storage requires a logical cast adapter";
+				throw new InternalError("Inline value storage requires a logical cast adapter");
 			default:
 		}
 
 		switch instruction {
 			case StaticClosure(output, name), InstanceClosure(output, name, _)
 				if (IrScalarArguments.isPrivateClosureType(output.type) && !scalarFunctions.exists(name)):
-				throw "A scalar closure must target a verified scalar function";
+				throw new InternalError("A scalar closure must target a verified scalar function");
 			case ToDyn(_, value) if (IrScalarArguments.isPrivateClosureType(value.type)):
-				throw "A scalar closure cannot cross a Dynamic boundary without an adapter";
+				throw new InternalError("A scalar closure cannot cross a Dynamic boundary without an adapter");
 			case SafeCast(output, value) if (IrScalarArguments.isPrivateClosureType(output.type)
 				|| IrScalarArguments.isPrivateClosureType(value.type)):
-				throw "A scalar closure cannot cross a cast boundary without an adapter";
+				throw new InternalError("A scalar closure cannot cross a cast boundary without an adapter");
 			default:
 		}
 		var output = IrOperands.output(instruction);
@@ -889,7 +890,7 @@ class IrVerifier {
 				case Call(_, name,
 					_) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && carrierSlots.get(name) == false):
 				default:
-					throw "Only a value lane operation can create a lane reference";
+					throw new InternalError("Only a value lane operation can create a lane reference");
 			}
 		if (lanes)
 			for (inputIndex in 0...IrOperands.count(instruction)) {
@@ -911,14 +912,14 @@ class IrVerifier {
 						case Call(_, name,
 							args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
 						default:
-							throw "A value lane reference cannot escape its operation";
+							throw new InternalError("A value lane reference cannot escape its operation");
 					}
 			}
 		if (output != null && IrHlScalarRef.element(output.type) != null)
 			switch instruction {
 				case Call(_, name, _) if (name == IrHlScalarRef.ADDRESS):
 				default:
-					throw "Only a scalar address operation can create a stack reference";
+					throw new InternalError("Only a scalar address operation can create a stack reference");
 			}
 		if (scalarRefs)
 			for (inputIndex in 0...IrOperands.count(instruction)) {
@@ -931,14 +932,14 @@ class IrVerifier {
 						case Call(_, name, _) if (scalarFunctions.exists(name)):
 						case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
 						default:
-							throw "A scalar stack reference cannot escape its call";
+							throw new InternalError("A scalar stack reference cannot escape its call");
 					}
 			}
 		switch instruction {
 			case Phi(_, inputs):
 				for (input in inputs)
 					if (IrHlScalarRef.element(input.value.type) != null)
-						throw "A scalar stack reference cannot be merged";
+						throw new InternalError("A scalar stack reference cannot be merged");
 			default:
 		}
 	}
@@ -958,11 +959,11 @@ class IrVerifier {
 	static function verifyUse(value:IrValue, block:Int, position:Int, values:IrVerifyValues, graph:IrGraph):Void {
 		require(values, value);
 		if (!values.exists(value.id))
-			throw 'Unknown IR definition ${value.id}';
+			throw new InternalError('Unknown IR definition ${value.id}');
 		var definitionBlock = values.blockOf(value.id),
 			definitionPosition = values.positionOf(value.id);
 		if (definitionBlock == block ? definitionPosition >= position : !graph.dominates(definitionBlock, block))
-			throw 'IR value ${value.id} does not dominate its use in block $block';
+			throw new InternalError('IR value ${value.id} does not dominate its use in block $block');
 	}
 
 	static function verifyInstruction(instruction:IrInstruction, values:IrVerifyValues,
@@ -976,7 +977,7 @@ class IrVerifier {
 			case ConstInt(out, _):
 				switch out.type {
 					case I32, I64:
-					default: throw 'IR integer constant ${out.id} must produce I32 or I64';
+					default: throw new InternalError('IR integer constant ${out.id} must produce I32 or I64');
 				}
 			case ConstFloat(out, _):
 				if ((switch (out.type) {
@@ -986,16 +987,16 @@ class IrVerifier {
 					case F32: false;
 					default: true;
 				}))
-					throw 'IR float constant ${out.id} must produce F32 or F64';
+					throw new InternalError('IR float constant ${out.id} must produce F32 or F64');
 			case ConstString(out, _):
 				expect(out, Bytes);
 			case StaticDataAddress(out, bytes):
 				expect(out, I32);
 				if (bytes.length == 0 || (bytes.length & 3) != 0)
-					throw "IR static data must contain complete 32-bit words";
+					throw new InternalError("IR static data must contain complete 32-bit words");
 				for (byte in bytes)
 					if (byte < 0 || byte > 255)
-						throw "IR static data contains a value outside the byte range";
+						throw new InternalError("IR static data contains a value outside the byte range");
 			case PointerOffset(out, pointer, byteOffset):
 				require(values, pointer);
 				require(values, byteOffset);
@@ -1006,13 +1007,13 @@ class IrVerifier {
 				require(values, pointer);
 				expect(pointer, RawPtr);
 				if (size != 1 && size != 2 && size != 4 && size != 8)
-					throw 'Unsupported IR memory load size $size';
+					throw new InternalError('Unsupported IR memory load size $size');
 			case MemoryStore(pointer, value, size):
 				require(values, pointer);
 				require(values, value);
 				expect(pointer, RawPtr);
 				if (size != 1 && size != 2 && size != 4 && size != 8)
-					throw 'Unsupported IR memory store size $size';
+					throw new InternalError('Unsupported IR memory store size $size');
 			case ConstBool(out, _):
 				expect(out, Bool);
 			case ConstNull(out):
@@ -1020,14 +1021,14 @@ class IrVerifier {
 					case Obj(name) if (StringTools.startsWith(name, IrInlineEnumLayout.VALUE_PREFIX)):
 						var declaration = enums.get(name.substr(IrInlineEnumLayout.VALUE_PREFIX.length));
 						if (declaration != null && declaration.inlineStorage == name)
-							throw "IR inline enum null must use a tag-zero packet";
+							throw new InternalError("IR inline enum null must use a tag-zero packet");
 					default:
 				}
 				if (!isReference(out.type) && !(switch out.type {
 					case EnumTag(_): true;
 					default: false;
 				}))
-					throw 'IR null constant must produce a reference value';
+					throw new InternalError('IR null constant must produce a reference value');
 			case TypeValue(out, _):
 				expect(out, TypeRef);
 			case ToDyn(out, value):
@@ -1037,7 +1038,7 @@ class IrVerifier {
 					case Dyn: false;
 					default: true;
 				}) && !(nullableOf(out.type) != null && sameType(nullableOf(out.type), value.type)))
-					throw 'IR dynamic conversion must produce Dyn or the nullable of its input';
+					throw new InternalError('IR dynamic conversion must produce Dyn or the nullable of its input');
 			case IntToFloat(out, value):
 				require(values, value);
 				if ((switch (value.type) {
@@ -1047,7 +1048,7 @@ class IrVerifier {
 					case F64: false;
 					default: true;
 				}))
-					throw "IR Int-to-Float conversion requires I32 input and F64 output";
+					throw new InternalError("IR Int-to-Float conversion requires I32 input and F64 output");
 			case IntToInt64(out, value):
 				require(values, value);
 				if ((switch (value.type) {
@@ -1057,7 +1058,7 @@ class IrVerifier {
 					case I64: false;
 					default: true;
 				}))
-					throw "IR Int-to-Int64 conversion requires I32 input and I64 output";
+					throw new InternalError("IR Int-to-Int64 conversion requires I32 input and I64 output");
 			case FloatToInt(out, value):
 				require(values, value);
 				if ((switch (value.type) {
@@ -1067,7 +1068,7 @@ class IrVerifier {
 					case I32: false;
 					default: true;
 				}))
-					throw "IR Float-to-Int conversion requires F64 input and I32 output";
+					throw new InternalError("IR Float-to-Int conversion requires F64 input and I32 output");
 			case FloatToFloat(out, value):
 				require(values, value);
 				if (!(((switch (value.type) {
@@ -1083,11 +1084,11 @@ class IrVerifier {
 					case F64: true;
 					default: false;
 				}))))
-					throw "IR Float-to-Float conversion requires F64/F32 or F32/F64 types";
+					throw new InternalError("IR Float-to-Float conversion requires F64/F32 or F32/F64 types");
 			case SafeCast(out, value):
 				require(values, value);
 				if (!IrTypeTools.isDynamic(value.type))
-					throw 'IR safe cast source must be Dyn or a nullable primitive';
+					throw new InternalError('IR safe cast source must be Dyn or a nullable primitive');
 			case BeginTry(catchBlock, afterBlock, _):
 			case EndTry(_, _):
 			case Catch(out):
@@ -1095,26 +1096,26 @@ class IrVerifier {
 					case Dyn: false;
 					default: true;
 				}))
-					throw 'IR catch value must be Dyn';
+					throw new InternalError('IR catch value must be Dyn');
 			case GlobalGet(out, name):
 				if (!globals.exists(name))
-					throw 'Unknown IR static field "$name"';
+					throw new InternalError('Unknown IR static field "$name"');
 				var type = globals.get(name);
 				if (!sameType(out.type, type))
-					throw 'Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(out.type)})';
+					throw new InternalError('Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(out.type)})');
 			case GlobalSet(name, value):
 				if (!globals.exists(name))
-					throw 'Unknown IR static field "$name"';
+					throw new InternalError('Unknown IR static field "$name"');
 				var type = globals.get(name);
 				if (!sameType(value.type, type))
-					throw 'Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(value.type)})';
+					throw new InternalError('Mismatched IR static field "$name" (declared=${Std.string(type)}, actual=${Std.string(value.type)})');
 				require(values, value);
 			case Add(out, a, b), Sub(out, a, b), Mul(out, a, b), Div(out, a, b):
 				if (!sameType(out.type, a.type)
 					|| !sameType(a.type, b.type)
 					|| (!sameType(a.type, I32) && !sameType(a.type, I64) && !sameType(a.type, F32)
 					&& !sameType(a.type, F64)))
-					throw "IR arithmetic requires matching numeric values";
+					throw new InternalError("IR arithmetic requires matching numeric values");
 				require(values, a);
 				require(values, b);
 			case Mod(out, a, b):
@@ -1125,7 +1126,7 @@ class IrVerifier {
 					case I64: false;
 					default: true;
 				})))
-					throw "IR modulo requires matching integer values";
+					throw new InternalError("IR modulo requires matching integer values");
 				require(values, a);
 				require(values, b);
 			case BitAnd(out, a, b), BitXor(out, a, b), BitOr(out, a, b):
@@ -1136,7 +1137,7 @@ class IrVerifier {
 					case I64: false;
 					default: true;
 				})))
-					throw "IR bitwise operation requires matching integer values";
+					throw new InternalError("IR bitwise operation requires matching integer values");
 				require(values, a);
 				require(values, b);
 			case ShiftLeft(out, a, b), ShiftRight(out, a, b), UnsignedShiftRight(out, a, b):
@@ -1150,7 +1151,7 @@ class IrVerifier {
 					case I32: false;
 					default: true;
 				}))
-					throw "IR shift requires an Int or Int64 value and an Int count";
+					throw new InternalError("IR shift requires an Int or Int64 value and an Int count");
 				require(values, a);
 				require(values, b);
 			case Less(out, a, b), LessEqual(out, a, b):
@@ -1168,7 +1169,7 @@ class IrVerifier {
 					case F64: false;
 					default: true;
 				})))
-					throw 'IR ordered comparison requires matching numeric values';
+					throw new InternalError('IR ordered comparison requires matching numeric values');
 				require(values, a);
 				require(values, b);
 			case Equal(out, a, b):
@@ -1182,97 +1183,102 @@ class IrVerifier {
 						case EnumTag(_): true;
 						default: false;
 					})))
-						throw 'IR equality requires matching primitive or reference values';
+						throw new InternalError('IR equality requires matching primitive or reference values');
 			case Intrinsic(out, operation, args):
 				if (args.length != 1)
-					throw "IR enum Dynamic intrinsic requires one argument";
+					throw new InternalError("IR enum Dynamic intrinsic requires one argument");
 				require(values, args[0]);
 				switch operation {
 					case EnumDynamicBox(type):
 						switch type {
 							case Enum(_):
-							default: throw "IR enum Dynamic box requires an enum type";
+							default: throw new InternalError("IR enum Dynamic box requires an enum type");
 						}
 						if (!sameType(args[0].type, type)
-							|| !sameType(out.type, Dyn)) throw "Invalid IR enum Dynamic box signature";
+							|| !sameType(out.type, Dyn))
+							throw new InternalError("Invalid IR enum Dynamic box signature");
 					case EnumDynamicView(type):
 						switch type {
 							case Enum(_):
-							default: throw "IR enum Dynamic view requires an enum type";
+							default: throw new InternalError("IR enum Dynamic view requires an enum type");
 						}
 						if (!sameType(args[0].type, Array(Dyn))
-							|| !sameType(out.type, Array(Dyn))) throw "Invalid IR enum Dynamic view signature";
+							|| !sameType(out.type, Array(Dyn)))
+							throw new InternalError("Invalid IR enum Dynamic view signature");
 					case EnumTagBox(type):
 						switch type {
 							case EnumTag(_):
-							default: throw "IR enum tag box requires a tag type";
+							default: throw new InternalError("IR enum tag box requires a tag type");
 						}
 						if (!sameType(args[0].type, type)
-							|| !sameType(out.type, Dyn)) throw "Invalid IR enum tag box signature";
+							|| !sameType(out.type, Dyn)) throw new InternalError("Invalid IR enum tag box signature");
 					case EnumTagUnbox(type):
 						switch type {
 							case EnumTag(_):
-							default: throw "IR enum tag unbox requires a tag type";
+							default: throw new InternalError("IR enum tag unbox requires a tag type");
 						}
 						if (!sameType(args[0].type, Dyn)
-							|| !sameType(out.type, type)) throw "Invalid IR enum tag unbox signature";
+							|| !sameType(out.type, type))
+							throw new InternalError("Invalid IR enum tag unbox signature");
 					case InlineEnumBox(type):
 						var storage = inlineEnumStorage(type, enums);
 						if (!sameType(args[0].type, storage)
-							|| !sameType(out.type, Dyn)) throw "Invalid IR inline enum box signature";
+							|| !sameType(out.type, Dyn))
+							throw new InternalError("Invalid IR inline enum box signature");
 					case InlineEnumUnbox(type):
 						var storage = inlineEnumStorage(type, enums);
 						if (!sameType(args[0].type, Dyn)
-							|| !sameType(out.type, storage)) throw "Invalid IR inline enum unbox signature";
+							|| !sameType(out.type, storage))
+							throw new InternalError("Invalid IR inline enum unbox signature");
 				}
 			case Call(out, name, args), CNativeCall(out, name, args):
 				if (name == IrArrayFactory.NAME) {
 					switch instruction {
-						case CNativeCall(_, _, _): throw "Array factory is not a C native";
+						case CNativeCall(_, _, _): throw new InternalError("Array factory is not a C native");
 						default:
 					}
 					if (args.length != 1 || !sameType(args[0].type, I32) || !(switch out.type {
 						case Array(_): true;
 						default: false;
 					}))
-						throw "Invalid typed array factory signature";
+						throw new InternalError("Invalid typed array factory signature");
 					require(values, args[0]);
 					return;
 				}
 				if (IrScalarWordBits.matches(name)) {
 					switch instruction {
-						case CNativeCall(_, _, _): throw "Scalar word transport is not a C native";
+						case CNativeCall(_, _, _): throw new InternalError("Scalar word transport is not a C native");
 						default:
 					}
 					if (args.length != 1 || !IrScalarWordBits.valid(name, args[0].type, out.type))
-						throw "Invalid scalar word transport signature";
+						throw new InternalError("Invalid scalar word transport signature");
 					require(values, args[0]);
 					return;
 				}
 				if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK) {
 					switch instruction {
-						case CNativeCall(_, _, _): throw "A lane reference cast is not a C native";
+						case CNativeCall(_, _, _): throw new InternalError("A lane reference cast is not a C native");
 						default:
 					}
 					if (args.length != 1)
-						throw 'Wrong lane reference cast arity';
+						throw new InternalError('Wrong lane reference cast arity');
 					require(values, args[0]);
 					if (name == IrValueLaneReference.PACK ? !IrValueLaneReference.isCarrier(out.type)
 						|| !IrValueLaneReference.canCarry(args[0].type) : !IrValueLaneReference.isCarrier(args[0].type)
 						|| !IrValueLaneReference.canCarry(out.type))
-						throw 'Invalid lane reference cast';
+						throw new InternalError('Invalid lane reference cast');
 					return;
 				}
 				if (name == IrReferenceIdentity.NAME) {
 					switch instruction {
-						case CNativeCall(_, _, _): throw "Reference identity is not a C native";
+						case CNativeCall(_, _, _): throw new InternalError("Reference identity is not a C native");
 						default:
 					}
 					if (args.length != 2 || (switch out.type {
 						case Bool: false;
 						default: true;
 					}))
-						throw "Invalid reference identity signature";
+						throw new InternalError("Invalid reference identity signature");
 					for (arg in args) {
 						require(values, arg);
 						var valid = switch arg.type {
@@ -1284,13 +1290,13 @@ class IrVerifier {
 							default: false;
 						};
 						if (!valid)
-							throw 'Reference identity requires class or interface references, got ${Std.string(arg.type)}';
+							throw new InternalError('Reference identity requires class or interface references, got ${Std.string(arg.type)}');
 					}
 					return;
 				}
 				if (name == IrReceiverCheck.NAME) {
 					switch instruction {
-						case CNativeCall(_, _, _): throw "A receiver check is not a C native";
+						case CNativeCall(_, _, _): throw new InternalError("A receiver check is not a C native");
 						default:
 					}
 					if (args.length != 1 || (switch (out.type) {
@@ -1300,18 +1306,19 @@ class IrVerifier {
 						case EnumTag(_): true;
 						default: false;
 					})))
-						throw "Invalid receiver check";
+						throw new InternalError("Invalid receiver check");
 					require(values, args[0]);
 					return;
 				}
 				if (name == IrHlScalarRef.ADDRESS || name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE) {
 					switch instruction {
-						case CNativeCall(_, _, _): throw "A scalar reference intrinsic is not a C native";
+						case CNativeCall(_, _,
+							_): throw new InternalError("A scalar reference intrinsic is not a C native");
 						default:
 					}
 					var expected = name == IrHlScalarRef.STORE ? 2 : 1;
 					if (args.length != expected)
-						throw 'Wrong scalar reference intrinsic arity for $name';
+						throw new InternalError('Wrong scalar reference intrinsic arity for $name');
 					for (arg in args)
 						require(values, arg);
 					var element = IrHlScalarRef.element(name == IrHlScalarRef.ADDRESS ? out.type : args[0].type);
@@ -1327,109 +1334,109 @@ class IrVerifier {
 						case Void: false;
 						default: true;
 					})))
-						throw 'Invalid scalar reference intrinsic type for $name';
+						throw new InternalError('Invalid scalar reference intrinsic type for $name');
 					return;
 				}
 				var signature = signatures.get(name);
 				if (signature == null)
-					throw 'Unknown IR call "$name"';
+					throw new InternalError('Unknown IR call "$name"');
 				if (args.length != signature.arguments.length)
-					throw 'Wrong IR argument count for "$name"';
+					throw new InternalError('Wrong IR argument count for "$name"');
 				for (i in 0...args.length) {
 					require(values, args[i]);
 					if (!compatible(args[i].type, signature.arguments[i], objects, interfaces))
-						throw 'Wrong IR argument type for "$name" at argument $i: got ${args[i].type}, expected ${signature.arguments[i]}';
+						throw new InternalError('Wrong IR argument type for "$name" at argument $i: got ${args[i].type}, expected ${signature.arguments[i]}');
 				}
 				if (!sameType(out.type, signature.result) && !trustedNativeResult(name, out.type, signature.result))
-					throw 'Wrong IR result type for "$name"';
+					throw new InternalError('Wrong IR result type for "$name"');
 			case StaticClosure(out, name):
 				var signature = signatures.get(name);
 				if (signature == null)
-					throw 'Unknown IR closure target "$name"';
+					throw new InternalError('Unknown IR closure target "$name"');
 				if (!sameType(out.type, Function(signature.arguments, signature.result)))
-					throw 'Wrong IR closure type for "$name"';
+					throw new InternalError('Wrong IR closure type for "$name"');
 			case InstanceClosure(out, name, receiver):
 				var signature = signatures.get(name);
 				if (signature == null)
-					throw 'Unknown or receiver-less IR closure target "$name"';
+					throw new InternalError('Unknown or receiver-less IR closure target "$name"');
 				if (signature.arguments.length == 0)
-					throw 'Unknown or receiver-less IR closure target "$name"';
+					throw new InternalError('Unknown or receiver-less IR closure target "$name"');
 				require(values, receiver);
 				if (!compatible(receiver.type, signature.arguments[0], objects, interfaces))
-					throw 'Wrong IR instance closure receiver type';
+					throw new InternalError('Wrong IR instance closure receiver type');
 				var closureType:IrType = Function(signature.arguments.slice(1), signature.result);
 				if (!sameType(out.type, closureType))
-					throw 'Wrong IR instance closure type for "$name"';
+					throw new InternalError('Wrong IR instance closure type for "$name"');
 			case CallClosure(out, closure, args) if (sameType(closure.type, Dyn)):
 				// A call through a Dynamic value: the arguments and the result are Dynamic too.
 				require(values, closure);
 				for (argument in args) {
 					require(values, argument);
 					if (!IrTypeTools.compatible(Dyn, argument.type))
-						throw 'IR dynamic closure call argument must be Dynamic';
+						throw new InternalError('IR dynamic closure call argument must be Dynamic');
 				}
 				if (!sameType(out.type, Dyn))
-					throw 'IR dynamic closure call must produce a Dynamic value';
+					throw new InternalError('IR dynamic closure call must produce a Dynamic value');
 			case CallClosure(out, closure, args):
 				require(values, closure);
 				var functionType = switch closure.type {
 					case Function(arguments, result): {arguments: arguments, result: result};
-					default: throw 'IR closure value ${closure.id} is not callable';
+					default: throw new InternalError('IR closure value ${closure.id} is not callable');
 				};
 				if (args.length != functionType.arguments.length)
-					throw 'Wrong IR closure argument count';
+					throw new InternalError('Wrong IR closure argument count');
 				for (i in 0...args.length) {
 					require(values, args[i]);
 					if (!sameType(args[i].type, functionType.arguments[i]))
-						throw 'Wrong IR closure argument type';
+						throw new InternalError('Wrong IR closure argument type');
 				}
 				if (!sameType(out.type, functionType.result))
-					throw 'Wrong IR closure result type';
+					throw new InternalError('Wrong IR closure result type');
 			case Upcast(out, value):
 				require(values, value);
 				switch out.type {
 					case Obj(_) if (compatible(value.type, out.type, objects, interfaces)
 						&& !sameType(value.type, out.type)):
-					default: throw 'IR upcast from ${value.type} to ${out.type} is not to a base class';
+					default: throw new InternalError('IR upcast from ${value.type} to ${out.type} is not to a base class');
 				}
 			case ClassId(out, value):
 				require(values, value);
 				if (!sameType(out.type, I32))
-					throw 'IR class id must be an I32, not ${out.type}';
+					throw new InternalError('IR class id must be an I32, not ${out.type}');
 				switch value.type {
 					case Obj(_), Virtual(_):
-					default: throw 'IR class id of ${value.type} is not of an object or an interface value';
+					default: throw new InternalError('IR class id of ${value.type} is not of an object or an interface value');
 				}
 			case ToVirtual(out, value):
 				require(values, value);
 				switch out.type {
 					case Virtual(_):
-					default: throw 'IR virtual conversion must produce a virtual value';
+					default: throw new InternalError('IR virtual conversion must produce a virtual value');
 				}
 			case MethodCall(out, object, methodName, args, _):
 				var signature = methodSignature(object.type, methodName, signatures, objects, interfaces);
 				if (signature == null || signature.arguments.length != args.length + 1)
-					throw 'Unknown or mismatched IR method "$methodName"';
+					throw new InternalError('Unknown or mismatched IR method "$methodName"');
 				if (!compatible(object.type, signature.arguments[0], objects, interfaces))
-					throw 'Wrong IR method receiver type for "$methodName": got ${object.type}, expected ${signature.arguments[0]}';
+					throw new InternalError('Wrong IR method receiver type for "$methodName": got ${object.type}, expected ${signature.arguments[0]}');
 				for (i in 0...args.length) {
 					require(values, args[i]);
 					if (!compatible(args[i].type, signature.arguments[i + 1], objects, interfaces))
-						throw 'Wrong IR method argument type for "$methodName" at argument ${i + 1}: got ${args[i].type}, expected ${signature.arguments[i + 1]}';
+						throw new InternalError('Wrong IR method argument type for "$methodName" at argument ${i + 1}: got ${args[i].type}, expected ${signature.arguments[i + 1]}');
 				}
 				if (!sameType(out.type, signature.result))
-					throw 'Wrong IR method result type for "$methodName": got ${out.type}, expected ${signature.result}';
+					throw new InternalError('Wrong IR method result type for "$methodName": got ${out.type}, expected ${signature.result}');
 			case NewObject(out, typeName):
 				var object:IrObject = objects.get(typeName);
 				if (object == null || !isObjectType(out.type, typeName))
-					throw 'Unknown or mismatched IR object "$typeName"';
+					throw new InternalError('Unknown or mismatched IR object "$typeName"');
 				if (object.isValue)
-					throw 'IR object allocation cannot initialize value "$typeName"';
+					throw new InternalError('IR object allocation cannot initialize value "$typeName"');
 			case ValueInit(out):
 				var typeName = compiler.ir.IrTypeTools.valueObjectName(out.type);
 				var object = objects.get(typeName);
 				if (object == null || !object.isValue || !isObjectType(out.type, typeName))
-					throw 'Unknown or mismatched IR value "$typeName"';
+					throw new InternalError('Unknown or mismatched IR value "$typeName"');
 			case FieldGet(out, object, fieldName):
 				if (fieldName == IrReceiverCheck.CHECK_FIELD) {
 					requireObject(object, values, objects);
@@ -1438,15 +1445,15 @@ class IrVerifier {
 					var objectType = requireObject(object, values, objects),
 						field = findField(objectType, fieldName, objects);
 					if (field == null || !sameType(out.type, field.type))
-						throw 'Unknown or mismatched IR field "${objectType.name}.$fieldName": output=${out.type}, declared=${field == null ? "missing" : Std.string(field.type)}';
+						throw new InternalError('Unknown or mismatched IR field "${objectType.name}.$fieldName": output=${out.type}, declared=${field == null ? "missing" : Std.string(field.type)}');
 				}
 			case FieldSet(object, fieldName, value):
 				var objectType = requireObject(object, values, objects),
 					field = findField(objectType, fieldName, objects);
 				if (field == null)
-					throw 'Unknown IR field "${objectType.name}.$fieldName"';
+					throw new InternalError('Unknown IR field "${objectType.name}.$fieldName"');
 				if (!sameType(field.type, value.type))
-					throw 'Mismatched IR field "${objectType.name}.$fieldName": got ${value.type}, expected ${field.type}';
+					throw new InternalError('Mismatched IR field "${objectType.name}.$fieldName": got ${value.type}, expected ${field.type}');
 				require(values, value);
 			case ArrayGet(out, array, index):
 				require(values, array);
@@ -1454,8 +1461,9 @@ class IrVerifier {
 				expect(index, I32);
 				switch array.type {
 					case Array(element):
-						if (!sameType(out.type, element)) throw 'IR array read has the wrong element type';
-					default: throw 'IR array read requires an Array value';
+						if (!sameType(out.type, element))
+							throw new InternalError('IR array read has the wrong element type');
+					default: throw new InternalError('IR array read requires an Array value');
 				}
 			case ArraySet(array, index, value):
 				require(values, array);
@@ -1464,78 +1472,79 @@ class IrVerifier {
 				expect(index, I32);
 				switch array.type {
 					case Array(element):
-						if (!sameType(value.type, element)) throw 'IR array write has the wrong element type';
-					default: throw 'IR array write requires an Array value';
+						if (!sameType(value.type, element))
+							throw new InternalError('IR array write has the wrong element type');
+					default: throw new InternalError('IR array write requires an Array value');
 				}
 			case ArraySize(out, array):
 				require(values, array);
 				switch array.type {
 					case Array(_):
-					default: throw 'IR array size requires an Array value';
+					default: throw new InternalError('IR array size requires an Array value');
 				}
 				expect(out, I32);
 			case IteratorNew(out, array):
 				require(values, array);
 				switch array.type {
 					case Array(element): expect(out, Iterator(element));
-					default: throw 'IR iterator creation requires an Array value';
+					default: throw new InternalError('IR iterator creation requires an Array value');
 				}
 			case IteratorHasNext(out, iterator):
 				require(values, iterator);
 				switch iterator.type {
 					case Iterator(_):
-					default: throw 'IR hasNext requires an Iterator value';
+					default: throw new InternalError('IR hasNext requires an Iterator value');
 				}
 				expect(out, Bool);
 			case IteratorNext(out, iterator):
 				require(values, iterator);
 				switch iterator.type {
 					case Iterator(element): expect(out, element);
-					default: throw 'IR next requires an Iterator value';
+					default: throw new InternalError('IR next requires an Iterator value');
 				}
 				if ((switch (out.type) {
 					case Void: true;
 					default: false;
 				}))
-					throw 'IR iterator next cannot produce Void';
+					throw new InternalError('IR iterator next cannot produce Void');
 			case MakeEnum(out, typeName, constructor, arguments):
 				if (!isEnumType(out.type, typeName, enums))
-					throw 'Unknown or mismatched IR enum "$typeName"';
+					throw new InternalError('Unknown or mismatched IR enum "$typeName"');
 				var enumDecl = enums.get(typeName);
 				if (enumDecl == null)
-					throw 'Invalid IR enum constructor "$typeName"';
+					throw new InternalError('Invalid IR enum constructor "$typeName"');
 				if (constructor < 0 || constructor >= enumDecl.cases.length)
-					throw 'Invalid IR enum constructor "$typeName"';
+					throw new InternalError('Invalid IR enum constructor "$typeName"');
 				var constructorDecl = enumDecl.cases[constructor];
 				if (constructorDecl.params.length != arguments.length)
-					throw 'Invalid IR enum constructor "$typeName"';
+					throw new InternalError('Invalid IR enum constructor "$typeName"');
 				for (i in 0...arguments.length) {
 					require(values, arguments[i]);
 					if (!sameType(arguments[i].type, constructorDecl.params[i]))
-						throw 'Wrong IR enum payload type for "$typeName"';
+						throw new InternalError('Wrong IR enum payload type for "$typeName"');
 				}
 			case EnumIndex(out, value):
 				expect(out, I32);
 				require(values, value);
 				switch value.type {
 					case Enum(_), EnumTag(_):
-					default: throw 'IR enum index requires an enum value';
+					default: throw new InternalError('IR enum index requires an enum value');
 				}
 			case EnumField(out, value, constructor, field):
 				require(values, value);
 				var typeName = switch value.type {
 					case Enum(name): name;
-					default: throw 'IR enum field requires an enum value';
+					default: throw new InternalError('IR enum field requires an enum value');
 				};
 				var enumDecl = enums.get(typeName);
 				if (enumDecl == null)
-					throw 'Invalid IR enum field constructor';
+					throw new InternalError('Invalid IR enum field constructor');
 				if (constructor < 0 || constructor >= enumDecl.cases.length)
-					throw 'Invalid IR enum field constructor';
+					throw new InternalError('Invalid IR enum field constructor');
 				var constructorDecl = enumDecl.cases[constructor];
 				if (field < 0 || field >= constructorDecl.params.length
 					|| !sameType(out.type, constructorDecl.params[field]))
-					throw 'Invalid IR enum field';
+					throw new InternalError('Invalid IR enum field');
 		}
 
 	static function requireObject(value:IrValue, values:IrVerifyValues, objects:IrVerifyTable<IrObject>):IrObject {
@@ -1544,9 +1553,9 @@ class IrVerifier {
 			case Obj(name):
 				var object = objects.get(name);
 				if (object == null)
-					throw 'Unknown IR object "$name"';
+					throw new InternalError('Unknown IR object "$name"');
 				object;
-			default: throw 'IR value ${value.id} is not an object';
+			default: throw new InternalError('IR value ${value.id} is not an object');
 		};
 	}
 
@@ -1559,11 +1568,11 @@ class IrVerifier {
 	static function inlineEnumStorage(type:IrType, enums:IrVerifyTable<IrEnum>):IrType {
 		var name = switch type {
 			case Enum(name): name;
-			default: throw "IR inline enum intrinsic requires a nominal enum type";
+			default: throw new InternalError("IR inline enum intrinsic requires a nominal enum type");
 		};
 		var declaration = enums.get(name);
 		if (declaration == null || declaration.inlineStorage == null)
-			throw "IR inline enum intrinsic requires declared inline storage";
+			throw new InternalError("IR inline enum intrinsic requires declared inline storage");
 		return Obj(declaration.inlineStorage);
 	}
 
@@ -1689,9 +1698,9 @@ class IrVerifier {
 			case Obj(name):
 				var object = objects.get(name);
 				if (object == null)
-					throw 'Unknown IR object "$name"';
+					throw new InternalError('Unknown IR object "$name"');
 				object;
-			default: throw "IR method receiver is not an object";
+			default: throw new InternalError("IR method receiver is not an object");
 		};
 	}
 
@@ -1699,7 +1708,7 @@ class IrVerifier {
 			name:String, arguments:Array<IrType>,
 			result:IrType, kind:IrFunctionKind = Ordinary):Void {
 		if (map.exists(name))
-			throw 'Duplicate IR function "$name"';
+			throw new InternalError('Duplicate IR function "$name"');
 		map.set(name, {arguments: arguments, result: result, kind: kind});
 	}
 
@@ -1708,14 +1717,14 @@ class IrVerifier {
 
 	static function require(values:IrVerifyValues, value:IrValue):Void {
 		if (!values.exists(value.id))
-			throw 'IR value ${value.id} is used before definition';
+			throw new InternalError('IR value ${value.id} is used before definition');
 		if (!sameType(values.get(value.id), value.type))
-			throw 'IR value ${value.id} disagrees with its definition type';
+			throw new InternalError('IR value ${value.id} disagrees with its definition type');
 	}
 
 	static function expect(value:IrValue, type:IrType):Void {
 		if (!sameType(value.type, type))
-			throw 'IR value ${value.id} has the wrong type';
+			throw new InternalError('IR value ${value.id} has the wrong type');
 	}
 
 	public static function sameType(left:IrType, right:IrType):Bool
@@ -1899,9 +1908,9 @@ class IrVerifyValues {
 	public function define(value:IrValue, block:Int, position:Int):Void {
 		var id = value.id;
 		if (id < 0)
-			throw 'Invalid IR value id $id';
+			throw new InternalError('Invalid IR value id $id');
 		if (exists(id))
-			throw 'Duplicate IR value $id';
+			throw new InternalError('Duplicate IR value $id');
 		while (types.length <= id) {
 			types.push(null);
 			blocks.push(0);

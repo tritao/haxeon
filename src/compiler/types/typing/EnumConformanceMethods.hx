@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
@@ -46,9 +47,9 @@ class EnumConformanceMethods {
 			pending.sort(Reflect.compare);
 			for (key in pending) {
 				var requested = session.programOutput.requests.enumMethods.get(key);
-				if (requested == null) throw 'Missing enum method request "$key"';
+				if (requested == null) throw new InternalError('Missing enum method request "$key"');
 				var implementation = method(session, requested.type, requested.method);
-				if (implementation == null) throw 'Missing enum method implementation "$key"';
+				if (implementation == null) throw new InternalError('Missing enum method implementation "$key"');
 				generated.set(key, typeMethod(session, typer, requested.type, implementation, requested.origin));
 			}
 		}
@@ -62,7 +63,7 @@ class EnumConformanceMethods {
 		return switch type {
 			case TInstance(NominalKind.Enum, owner, arguments):
 				var declaration = session.enumDecls.get(owner), substitutions:Map<String, CompilerType> = [];
-				if (declaration == null) throw 'Missing enum declaration "$owner"';
+				if (declaration == null) throw new InternalError('Missing enum declaration "$owner"');
 				for (index in 0...declaration.typeParameters.length)
 					substitutions.set(declaration.typeParameters[index], index < arguments.length ? arguments[index]
 						: TTypeParameter(owner, declaration.typeParameters[index]));
@@ -75,7 +76,7 @@ class EnumConformanceMethods {
 						arguments:typed.arguments, result:typed.result, statements:typed.statements,
 						cells:typed.cells, cellCaptures:typed.cellCaptures, span:typed.span
 				};
-			default: throw 'Invalid enum conformance method receiver "$type"';
+			default: throw new InternalError('Invalid enum conformance method receiver "$type"');
 		};
 	}
 }

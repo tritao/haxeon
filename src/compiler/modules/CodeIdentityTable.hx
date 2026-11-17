@@ -1,6 +1,7 @@
 package compiler.modules;
 
 import compiler.compilation.CompilationContext;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import haxe.crypto.Sha256;
 import sys.FileSystem;
@@ -59,7 +60,7 @@ class CodeIdentityTable {
 		for (name in members) {
 			var state = modules.get(name);
 			if (state == null)
-				throw 'Missing module "$name" while writing the identity graph';
+				throw new InternalError('Missing module "$name" while writing the identity graph');
 			var imports = [for (dependency in state.dependencies) if (computed.exists(dependency)) dependency];
 			imports.sort(Reflect.compare);
 			lines.push(name + "\t" + imports.join(","));
@@ -71,7 +72,7 @@ class CodeIdentityTable {
 	public static function render(template:String, identities:Map<String, String>):String {
 		var begin = template.indexOf(BEGIN), end = template.indexOf(END);
 		if (begin < 0 || end < begin)
-			throw 'Module "$MODULE" has no identity markers';
+			throw new InternalError('Module "$MODULE" has no identity markers');
 		var names = [for (name in identities.keys()) name];
 		names.sort(Reflect.compare);
 		var lines = new StringBuf();
@@ -96,7 +97,7 @@ class CodeIdentityTable {
 			var targets:Array<String> = [];
 			var state = modules.get(name);
 			if (state == null)
-				throw 'Missing module "$name" while building the identity graph';
+				throw new InternalError('Missing module "$name" while building the identity graph');
 			for (dependency in state.dependencies)
 				if (known.exists(dependency) && targets.indexOf(dependency) < 0)
 					targets.push(dependency);
@@ -124,7 +125,7 @@ class CodeIdentityTable {
 				var top = frames.length - 1, current = frames[top];
 				var targets = edges.get(current);
 				if (targets == null)
-					throw 'Missing module edges for "$current"';
+					throw new InternalError('Missing module edges for "$current"');
 				if (cursors[top] < targets.length) {
 					var next = targets[cursors[top]++];
 					if (!index.exists(next)) {
@@ -189,25 +190,25 @@ class CodeIdentityTable {
 
 	static function requiredState(source:Map<String, ModuleState>, name:String):ModuleState {
 		if (!source.exists(name))
-			throw 'Identity graph is missing module "$name"';
+			throw new InternalError('Identity graph is missing module "$name"');
 		return source.get(name);
 	}
 
 	static function requiredEdges(source:Map<String, Array<String>>, name:String):Array<String> {
 		if (!source.exists(name))
-			throw 'Identity graph is missing edges for "$name"';
+			throw new InternalError('Identity graph is missing edges for "$name"');
 		return source.get(name);
 	}
 
 	static function requiredIdentity(source:Map<String, String>, name:String):String {
 		if (!source.exists(name))
-			throw 'Identity graph is missing completed dependency "$name"';
+			throw new InternalError('Identity graph is missing completed dependency "$name"');
 		return source.get(name);
 	}
 
 	static function requiredIndex(source:Map<String, Int>, name:String):Int {
 		if (!source.exists(name))
-			throw 'Identity graph is missing an index for "$name"';
+			throw new InternalError('Identity graph is missing an index for "$name"');
 		return source.get(name);
 	}
 

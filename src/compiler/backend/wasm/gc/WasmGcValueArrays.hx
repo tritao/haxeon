@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
@@ -62,7 +63,7 @@ class WasmGcValueArrays {
 		}
 		for (native in program.natives) if (used.exists(native.name) && supports(native.symbol)) {
 			if (compiler.backend.wasm.WasmValueLaneRuntime.bind(functions, native)) continue;
-			if (plan.valueArrayWrapperTypeIndex < 0) throw "Missing Wasm GC value-array type plan";
+			if (plan.valueArrayWrapperTypeIndex < 0) throw new InternalError("Missing Wasm GC value-array type plan");
 			var fn = switch native.symbol {
 				case "__value_array_alloc": allocate(plan, native, throws);
 				case "__value_array_set_bridge": setBridge(plan, native, throws);
@@ -81,7 +82,7 @@ class WasmGcValueArrays {
 					"__value_array_read_callback", "__value_array_write_callback",
 					"__value_array_clear_scalar": WasmGcScalarArrayAccess.build(plan, native, throws,
 					accessors.get(native.name));
-				default: throw 'Unknown Wasm GC value-array native ${native.symbol}';
+				default: throw new InternalError('Unknown Wasm GC value-array native ${native.symbol}');
 			};
 			if (native.symbol != "__value_array_alloc" && native.symbol != "__value_array_retype") {
 				var prefix = resolveForward(plan, 0);
@@ -147,7 +148,8 @@ class WasmGcValueArrays {
 	/** A checked view of an already-inline array retains the original wrapper and checks its complete layout. */
 	static function retype(module:WasmModule, plan:WasmGcTypePlan, native:IrNative, throws:Bool,
 			allocator:Int):WasmFunction {
-		if (native.arguments.length != 9 || allocator < 0) throw "Invalid Wasm GC value-array retype";
+		if (native.arguments.length != 9
+			|| allocator < 0) throw new InternalError("Invalid Wasm GC value-array retype");
 		var w = plan.valueArrayWrapperTypeIndex,
 			base = plan.arrayType(plan.arrayElementTypes()[0]),
 			marker = plan.valueArrayForwardLaneTypeIndex,
@@ -423,7 +425,7 @@ class WasmGcValueArrays {
 
 	/** Grow both lanes before publishing either one so allocation failure leaves aliases unchanged. */
 	public static function replaceCapacity(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
-		if (native.arguments.length != 3) throw "Invalid Wasm GC value-array ensure";
+		if (native.arguments.length != 3) throw new InternalError("Invalid Wasm GC value-array ensure");
 		var w = plan.valueArrayWrapperTypeIndex,
 			l32 = plan.valueArrayI32LaneTypeIndex,
 			l64 = plan.valueArrayI64LaneTypeIndex,
@@ -717,7 +719,8 @@ class WasmGcValueArrays {
 	}
 
 	static function validityOperation(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
-		if (native.arguments.length != 2) throw 'Invalid Wasm GC value-array validity operation ${native.symbol}';
+		if (native.arguments.length != 2)
+			throw new InternalError('Invalid Wasm GC value-array validity operation ${native.symbol}');
 		var wrapper = plan.valueArrayWrapperTypeIndex,
 			lane32 = plan.valueArrayI32LaneTypeIndex,
 			lane64 = plan.valueArrayI64LaneTypeIndex;
@@ -765,7 +768,7 @@ class WasmGcValueArrays {
 	}
 
 	public static function allocate(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
-		if (native.arguments.length != 6) throw "Invalid Wasm GC value-array allocator";
+		if (native.arguments.length != 6) throw new InternalError("Invalid Wasm GC value-array allocator");
 		var error = failure(throws),
 			data = 9,
 			references = 10,
@@ -925,7 +928,7 @@ class WasmGcValueArrays {
 	}
 
 	static function setBridge(plan:WasmGcTypePlan, native:IrNative, throws:Bool):WasmFunction {
-		if (native.arguments.length != 4) throw "Invalid Wasm GC value-array bridge";
+		if (native.arguments.length != 4) throw new InternalError("Invalid Wasm GC value-array bridge");
 		var body:Array<WasmInstruction> = [
 			LocalGet(1),
 			RefIsNull,
@@ -951,7 +954,8 @@ class WasmGcValueArrays {
 
 	static function referenceSlot(plan:WasmGcTypePlan, native:IrNative, throws:Bool, write:Bool,
 			clear:Bool):WasmFunction {
-		if (native.arguments.length != (write && !clear ? 4 : 3)) throw "Invalid Wasm GC value-array reference access";
+		if (native.arguments.length != (write && !clear ? 4 : 3))
+			throw new InternalError("Invalid Wasm GC value-array reference access");
 		var wrapper = plan.valueArrayWrapperTypeIndex,
 			lane = plan.valueArrayReferenceLaneTypeIndex,
 			laneLocal = native.arguments.length,

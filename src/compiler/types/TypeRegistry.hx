@@ -1,5 +1,6 @@
 package compiler.types;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -146,7 +147,7 @@ class TypeRegistry {
 		output.writeInt32(names.length);
 		for (name in names) {
 			if (!ids.exists(name))
-				throw 'Missing stable type ID for "$name"';
+				throw new InternalError('Missing stable type ID for "$name"');
 			var value = Bytes.ofString(name);
 			output.writeInt32(ids.get(name));
 			output.writeInt32(value.length);
@@ -160,25 +161,25 @@ class TypeRegistry {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != MAGIC || input.readByte() != VERSION)
-				throw "Invalid type identity state";
+				throw new InternalError("Invalid type identity state");
 			var count = input.readInt32();
 			if (count < 0 || count > 0x100000)
-				throw "Invalid type identity count";
+				throw new InternalError("Invalid type identity count");
 			for (_ in 0...count) {
 				var id = input.readInt32(), length = input.readInt32();
 				if (id <= 0 || length < 0 || length > 0x100000)
-					throw "Invalid type identity entry";
+					throw new InternalError("Invalid type identity entry");
 				var name = input.readString(length);
 				if (ids.exists(name))
-					throw "Duplicate type identity name";
+					throw new InternalError("Duplicate type identity name");
 				ids.set(name, id);
 				if (id >= nextId)
 					nextId = id + 1;
 			}
 			if (input.position != state.length)
-				throw "Trailing type identity data";
+				throw new InternalError("Trailing type identity data");
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated type identity state";
+			throw new InternalError("Truncated type identity state");
 		}
 	}
 

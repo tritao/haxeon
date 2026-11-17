@@ -3,6 +3,7 @@ package compiler.backend.wasm.linear;
 import compiler.backend.wasm.EnumStringDescriptors;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmModule.WasmModule;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrType;
 
 private typedef LinearEnumStringCase = {
@@ -110,7 +111,7 @@ class WasmLinearEnumStringTable {
 	static function requiredString(strings:Map<String, Int>, name:String):Int {
 		var result = strings.get(name);
 		if (result == null)
-			throw 'Missing enum string "$name"';
+			throw new InternalError('Missing enum string "$name"');
 		return result;
 	}
 }

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -20,7 +21,7 @@ class IrNullableScalarFields {
 		for (name in names) {
 			var helper = helpers.get(name);
 			if (helper == null)
-				throw 'Missing nullable scalar helper "$name"';
+				throw new InternalError('Missing nullable scalar helper "$name"');
 			rewritten.push(helper);
 		}
 		return rewritten;
@@ -72,14 +73,14 @@ class IrNullableScalarFields {
 		var element = switch type {
 			case Nullable(I32): I32;
 			case Nullable(I64): I64;
-			default: throw 'Invalid nullable scalar field type $type';
+			default: throw new InternalError('Invalid nullable scalar field type $type');
 		};
 		var bits = (switch (element) {
 			case I64: true;
 			default: false;
 		}) ? 64 : 32, width = storage.size * 8;
 		if (width <= 0 || width >= bits)
-			throw 'Invalid nullable scalar width $width for $type';
+			throw new InternalError('Invalid nullable scalar width $width for $type');
 		var name = '$' + 'nullable-scalar-normalize:' + bits + ':' + width + ':' + storage.signed;
 		if (helpers.exists(name))
 			return name;

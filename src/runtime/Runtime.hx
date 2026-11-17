@@ -247,7 +247,7 @@ class Runtime {
 			if (!tryDispose(module) && retirementBacklog.indexOf(module) < 0)
 				retirementBacklog.push(module);
 			retirementMutex.release();
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			retirementMutex.release();
 			throw error;
 		}
@@ -273,7 +273,7 @@ class Runtime {
 			write += RuntimeNative.retry_failed_retirements();
 			retirementMutex.release();
 			return write;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			retirementMutex.release();
 			throw error;
 		}
@@ -300,7 +300,7 @@ class Runtime {
 			}];
 			retirementMutex.release();
 			return descriptions.length == 0 ? "no module in the backlog" : descriptions.join("; ");
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			retirementMutex.release();
 			throw error;
 		}
@@ -345,10 +345,10 @@ class Runtime {
 				callVoid(module, release)
 			catch (error:Dynamic)
 				hookFailed(false, Std.string(error));
-		var failed = false, failure:Dynamic = null;
+		var failed = false, failure:Null<haxe.Exception> = null;
 		try
 			patchSet(module, patch)
-		catch (error:Dynamic) {
+		catch (error:haxe.Exception) {
 			failed = true;
 			failure = error;
 		}

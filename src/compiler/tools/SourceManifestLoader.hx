@@ -1,6 +1,7 @@
 package compiler.tools;
 
 import compiler.Compiler;
+import compiler.core.InternalError;
 import compiler.tools.CompilerRequest.PackageSourceRoot;
 import sys.FileSystem;
 import sys.io.File;
@@ -27,7 +28,7 @@ class SourceManifestLoader {
 				if (source != null)
 					compiler.update(locate(path, resolvedRoots, resolvedPackages), source);
 			} catch (error:Dynamic) {
-				throw "Could not load compiler source " + path + ": " + Std.string(error);
+				throw new InternalError("Could not load compiler source " + path + ": " + Std.string(error));
 			}
 	}
 

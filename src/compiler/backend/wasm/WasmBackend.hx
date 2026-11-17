@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import compiler.backend.Backend;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.IrNullableErasure;
 import compiler.ir.IrPipelineContext;
@@ -80,18 +81,18 @@ class WasmBackend implements Backend {
 			options:BackendOptions):WasmPatchArtifact {
 		switch [previous.target, options.target] {
 			case [HashLink, HashLink] | [Wasm32, Wasm32] | [Wasm64, Wasm64] | [WasmGc, WasmGc]:
-			default: throw "Wasm patch cannot change the runtime target";
+			default: throw new InternalError("Wasm patch cannot change the runtime target");
 		}
 		var abi = compiler.abi.RuntimeAbi.describe(IrNullableErasure.run(program)),
 			decision = compiler.abi.PatchPlanner.plan(previous.abi, abi);
 		switch decision {
 			case Patch:
 			default:
-				throw 'Wasm patch rejected by semantic ABI: ${Std.string(decision)}';
+				throw new InternalError('Wasm patch rejected by semantic ABI: ${Std.string(decision)}');
 		}
 		var result = compileInternal(program, developmentOptions(options), changed);
 		if (!result.runtimeTypeIds.compatibleWith(previous.runtimeTypeIds))
-			throw "Wasm patch rejected by runtime type identity: live type IDs changed";
+			throw new InternalError("Wasm patch rejected by runtime type identity: live type IDs changed");
 		return {
 			bytes: result.artifact.bytes,
 			manifest: WasmPatch.manifest(program, changed),
@@ -132,6 +133,6 @@ class WasmBackend implements Backend {
 			return WasmGcModuleBuilder.compile(program, options, patchChanged, scalarAccessors.accesses);
 		if (target.referenceModel == Linear32)
 			return WasmLinearModuleBuilder.compile(program, options, patchChanged, target);
-		throw "Wasm backend target " + Std.string(options.target) + " is not implemented yet";
+		throw new InternalError("Wasm backend target " + Std.string(options.target) + " is not implemented yet");
 	}
 }

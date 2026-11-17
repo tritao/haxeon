@@ -67,7 +67,7 @@ class RuntimeDomain {
 		try {
 			plugin.activate();
 			candidate.activation = GenerationActive;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			if (!tryDisposeInactive(candidate))
 				fail('Initial candidate disposal failed after ${Std.string(error)}: $lastCleanupError');
 			throw error;
@@ -95,7 +95,7 @@ class RuntimeDomain {
 		try {
 			if (Std.isOfType(previous.plugin, ReloadablePlugin))
 				state = copyState(cast(previous.plugin, ReloadablePlugin).saveState());
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			tryDisposeInactive(candidate);
 			throw error;
 		}
@@ -112,7 +112,7 @@ class RuntimeDomain {
 			candidate.activation = GenerationActive;
 			if (state != null && Std.isOfType(plugin, ReloadablePlugin))
 				cast(plugin, ReloadablePlugin).restoreState(state);
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			if (!deactivateForRetirement(candidate)) {
 				retirementBacklog.push(candidate);
 				fail('Candidate cleanup failed after ${Std.string(error)}: $lastCleanupError');

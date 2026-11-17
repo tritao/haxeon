@@ -1,5 +1,6 @@
 package profiler;
 
+import compiler.core.InternalError;
 import haxe.Int64;
 import haxe.io.Bytes;
 import haxe.io.FPHelper;
@@ -64,7 +65,7 @@ class HldiReader {
 
 	function require(length:Int):Void {
 		if (length < 0 || length > remaining())
-			throw 'Truncated HLDI payload at $position (need $length, have ${remaining()})';
+			throw new InternalError('Truncated HLDI payload at $position (need $length, have ${remaining()})');
 	}
 }
 
@@ -72,7 +73,7 @@ class HldiCodec {
 	public static function metadata(bytes:Bytes):HldiMetadata {
 		var input = new HldiReader(bytes), schema = input.u32();
 		if (schema < 1 || schema > 4)
-			throw 'Unsupported HLDI metadata schema $schema';
+			throw new InternalError('Unsupported HLDI metadata schema $schema');
 		var moduleCount = count(input, "modules"), symbols = [], revisions = new Map<String, Int>();
 		for (_ in 0...moduleCount) {
 			var moduleId = input.u64(),
@@ -95,7 +96,7 @@ class HldiCodec {
 						size = input.u32(),
 						name = input.take(count(input, "symbol name bytes")).toString();
 					if (size <= 0)
-						throw 'Invalid empty HLDI symbol $name';
+						throw new InternalError('Invalid empty HLDI symbol $name');
 					var lines:Array<HldiSourceLine> = [];
 					if (schema >= 2)
 						for (_ in 0...count(input, "source lines")) {
@@ -110,9 +111,9 @@ class HldiCodec {
 								|| fileId < 0
 								|| fileId >= files.length
 								|| line <= 0)
-								throw 'Invalid source mapping for $name';
+								throw new InternalError('Invalid source mapping for $name');
 							if (lines.length != 0 && haxe.Int32.ucompare(jitOffset, lines[lines.length - 1].offset) < 0)
-								throw 'Unsorted source mapping for $name';
+								throw new InternalError('Unsorted source mapping for $name');
 							lines.push(new HldiSourceLine(jitOffset, endOffset, opcodeIndex, opcode, files[fileId],
 								line));
 						}
@@ -123,7 +124,7 @@ class HldiCodec {
 			}
 		}
 		if (input.remaining() != 0)
-			throw 'Trailing HLDI metadata bytes: ${input.remaining()}';
+			throw new InternalError('Trailing HLDI metadata bytes: ${input.remaining()}');
 		symbols.sort((left, right) -> Int64.ucompare(left.start, right.start));
 		return new HldiMetadata(schema, symbols, revisions);
 	}
@@ -131,7 +132,7 @@ class HldiCodec {
 	static function count(input:HldiReader, what:String):Int {
 		var value = input.u32();
 		if (value < 0 || value > 10000000)
-			throw 'Invalid HLDI $what count $value';
+			throw new InternalError('Invalid HLDI $what count $value');
 		return value;
 	}
 }
@@ -247,7 +248,7 @@ class HldiFrames {
 	public static function threads(payload:Bytes):Array<{id:Int, name:String}> {
 		var input = new HldiReader(payload), count = input.u32(), result = [];
 		if (count < 0 || count > 1000000)
-			throw 'Invalid HLDI thread count $count';
+			throw new InternalError('Invalid HLDI thread count $count');
 		for (_ in 0...count) {
 			var id = input.u32();
 			result.push({id: id, name: input.take(input.u32()).toString()});
@@ -273,13 +274,13 @@ class HldiFrames {
 		input.u32();
 		// The runtime pushes one chunk's records at a time; a larger length is malformed, not an allocation to make.
 		if (rawLength < 0 || rawLength > MAX_DATA_LENGTH)
-			throw 'Invalid HLDI data frame length $rawLength';
+			throw new InternalError('Invalid HLDI data frame length $rawLength');
 		var records;
 		if (flags & DATA_COMPRESSED != 0)
 			records = Lz4.decompressBlock(payload, 16, payload.length - 16, rawLength);
 		else {
 			if (payload.length - 16 != rawLength)
-				throw "HLDI data frame length does not match its payload";
+				throw new InternalError("HLDI data frame length does not match its payload");
 			records = payload.sub(16, rawLength);
 		}
 		return new HldiDataFrame(threadId, flags, rawLength, records);
@@ -322,7 +323,7 @@ class HldiFrames {
 					result.push(new HldiRecord(KIND_SAMPLE, flags, time, sampleThread, frames,
 						[for (_ in 0...frames) input.u64()], empty));
 				default:
-					throw 'Unknown HLDI record kind $kind';
+					throw new InternalError('Unknown HLDI record kind $kind');
 			}
 		}
 		return result;
@@ -330,7 +331,7 @@ class HldiFrames {
 
 	static function padded(length:Int):Int {
 		if (length < 0)
-			throw 'Invalid HLDI record length $length';
+			throw new InternalError('Invalid HLDI record length $length');
 		return (length + 7) & ~7;
 	}
 }

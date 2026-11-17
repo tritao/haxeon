@@ -8,6 +8,7 @@ import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import project.FfiManifest.ResolvedFfiImport;
 import project.ResolvedPackage;
@@ -57,7 +58,7 @@ class FfiProvider {
 		var architecture = switch target.arch {
 			case TargetArch.X64: "x86_64";
 			case TargetArch.Arm64: target.os == TargetOs.MacOS ? "arm64" : "aarch64";
-			case _: throw 'FFI imports do not support target architecture ${Target.archName(target.arch)}';
+			case _: throw new InternalError('FFI imports do not support target architecture ${Target.archName(target.arch)}');
 		};
 		return switch target.os {
 			case TargetOs.Linux: architecture + "-linux-gnu";
@@ -68,7 +69,7 @@ class FfiProvider {
 					case _: architecture + "-w64-windows-gnu";
 				}
 			case TargetOs.Android: architecture + "-linux-android";
-			case _: throw 'FFI imports do not support target ${target.toString()}';
+			case _: throw new InternalError('FFI imports do not support target ${target.toString()}');
 		};
 	}
 }

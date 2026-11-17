@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrReachability;
 import compiler.ir.Ir.IrProgram;
@@ -445,7 +446,7 @@ class WasmLinearRuntime {
 				if (native.arguments.length != 1
 					|| !compiler.ir.IrVerifier.sameType(native.arguments[0], Dyn)
 					|| !compiler.ir.IrVerifier.sameType(native.result, Bool))
-					throw "Invalid Wasm32 enum kind query signature";
+					throw new InternalError("Invalid Wasm32 enum kind query signature");
 				var ids = [for (declaration in program.enums) module.runtimeTypeId(Enum(declaration.name))];
 				ids.sort((left, right) -> left < right ? -1 : left > right ? 1 : 0);
 				var body:Array<WasmInstruction> = ids.length == 0 ? [] : [
@@ -1592,7 +1593,7 @@ class WasmLinearRuntime {
 	else if (StringTools.endsWith(mapName,
 		"_bytes")) Bytes;
 	else if (StringTools.endsWith(mapName, "_ref")) Dyn;
-	else throw 'Unknown Wasm map value ABI "$mapName"';
+	else throw new InternalError('Unknown Wasm map value ABI "$mapName"');
 
 	public static function mapEntrySize(valueType:IrType):Int
 		return (switch (valueType) {
@@ -1680,7 +1681,7 @@ class WasmLinearRuntime {
 			case "clear": addMapClear(module, name);
 			case "copy": addMapCopy(module, name, mapName, entrySize, allocator);
 			case "size": addMapSize(module, name);
-			default: throw 'Unknown Wasm map operation "$operation"';
+			default: throw new InternalError('Unknown Wasm map operation "$operation"');
 		};
 	}
 
@@ -3899,7 +3900,7 @@ class WasmLinearRuntime {
 		var integerString = context.functions.get("__haxeon_i32_to_string"),
 			int64String = context.functions.get("__haxeon_i64_to_string");
 		if (integerString == null || int64String == null)
-			throw "Dynamic string numeric formatters were not registered";
+			throw new InternalError("Dynamic string numeric formatters were not registered");
 		context.module.setFunction(dynamicString,
 			WasmLinearRuntime.dynamicString(context.module, "__std_string", context.strings, context.program,
 			integerString, int64String, floatString,
@@ -4100,7 +4101,7 @@ class WasmLinearRuntime {
 			case "__math_floor": [F64Floor];
 			case "__math_ceil": [F64Ceil];
 			case "__math_round": [F64Const(0.5), F64Add, F64Floor];
-			default: throw 'Unknown rounding native $symbol';
+			default: throw new InternalError('Unknown rounding native $symbol');
 		};
 		return module.addFunction(WasmFunctionBuilder.fromRaw(name, {parameters: [F64], results: [I32]}, [],
 			[LocalGet(0)].concat(rounding).concat([
@@ -4356,7 +4357,7 @@ class WasmLinearRuntime {
 	static function requiredStringOffset(strings:Map<String, Int>, value:String):Int {
 		var offset = strings.get(value);
 		if (offset == null)
-			throw 'Missing Wasm string data for "$value"';
+			throw new InternalError('Missing Wasm string data for "$value"');
 		return offset;
 	}
 

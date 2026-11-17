@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
@@ -165,7 +166,7 @@ class WasmEncoder {
 			writeU32(body, module.memoryMin == null ? 0 : module.memoryMin);
 			if (module.sharedMemory) {
 				if (module.memoryMax == null)
-					throw "Shared memory requires a maximum";
+					throw new InternalError("Shared memory requires a maximum");
 				writeU32(body, module.memoryMax);
 			}
 		}

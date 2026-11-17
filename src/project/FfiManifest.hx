@@ -1,5 +1,6 @@
 package project;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -74,14 +75,14 @@ class FfiImportManifest {
 		try {
 			raw = Json.parse(content);
 		} catch (error:Dynamic) {
-			throw 'Could not parse FFI manifest $path: ${Std.string(error)}';
+			throw new InternalError('Could not parse FFI manifest $path: ${Std.string(error)}');
 		}
 		if (!isObject(raw))
-			throw '$path must contain a JSON object';
+			throw new InternalError('$path must contain a JSON object');
 		var rawVersion:Dynamic = Reflect.field(raw, "version"),
 			version = rawVersion == null ? 1 : Std.int(rawVersion);
 		if (version != 1)
-			throw 'Unsupported FFI manifest version "$rawVersion" in $path';
+			throw new InternalError('Unsupported FFI manifest version "$rawVersion" in $path');
 		var name = requiredString(raw, "name", path),
 			language = optionalString(raw, "language", "c", path),
 			profile = optionalString(raw, "profile", "default", path),
@@ -105,22 +106,22 @@ class FfiImportManifest {
 			cxxOwnership = stringMap(raw, "cxxOwnership", path),
 			projection = optionalBool(raw, "projection", false, path);
 		if (language != "c" && language != "c++")
-			throw '$path has unsupported FFI language "$language"';
+			throw new InternalError('$path has unsupported FFI language "$language"');
 		if (profile != "default" && profile != "direct" && profile != "virtual")
-			throw '$path has unsupported C++ FFI profile "$profile"';
+			throw new InternalError('$path has unsupported C++ FFI profile "$profile"');
 		if (name.indexOf("/") >= 0 || name.indexOf("\\") >= 0 || name == "." || name == "..")
-			throw '$path "name" must be a single path-safe artifact name';
+			throw new InternalError('$path "name" must be a single path-safe artifact name');
 		if (language != "c++"
 			&& (profile != "default" || cxxSelections.length != 0 || trivialValues || lifetimes || virtualDispatch
 			|| cxxThunks
 			|| cxxOwnership.keys().hasNext()))
-			throw '$path uses C++ options but language is "$language"';
+			throw new InternalError('$path uses C++ options but language is "$language"');
 		if (profile == "direct" && (virtualDispatch || cxxThunks))
-			throw '$path C++ profile "direct" cannot enable "cxxVirtual" or "cxxThunks"';
+			throw new InternalError('$path C++ profile "direct" cannot enable "cxxVirtual" or "cxxThunks"');
 		if (projection && library == null)
-			throw '$path enables "projection" but has no "library"';
+			throw new InternalError('$path enables "projection" but has no "library"');
 		if (cxxThunks && library == null)
-			throw '$path enables "cxxThunks" but has no "library"';
+			throw new InternalError('$path enables "cxxThunks" but has no "library"');
 		return new FfiImportManifest(version, name, language, profile, header, target, standard, clang, includes,
 			defines, compileCommands, library,
 			interfaceName, dependencies, excludedHeaders, sourceLabel, cxxSelections, trivialValues, lifetimes,
@@ -143,7 +144,7 @@ class FfiImportManifest {
 	static function resolveFile(base:String, value:String, manifestPath:String, kind:String):String {
 		var path = Path.normalize(Path.isAbsolute(value) ? value : Path.join([base, value]));
 		if (!FileSystem.exists(path) || FileSystem.isDirectory(path))
-			throw MissingPath.describe('$manifestPath $kind', path);
+			throw new InternalError(MissingPath.describe('$manifestPath $kind', path));
 		return FileSystem.fullPath(path);
 	}
 
@@ -152,7 +153,7 @@ class FfiImportManifest {
 		for (value in values) {
 			var path = Path.normalize(Path.isAbsolute(value) ? value : Path.join([base, value]));
 			if (!FileSystem.exists(path) || !FileSystem.isDirectory(path))
-				throw MissingPath.describe('$manifestPath include directory', path);
+				throw new InternalError(MissingPath.describe('$manifestPath include directory', path));
 			result.push(FileSystem.fullPath(path));
 		}
 		result.sort(Reflect.compare);
@@ -173,7 +174,7 @@ class FfiImportManifest {
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value = nullableString(raw, field, path);
 		if (value == null || value.length == 0)
-			throw '$path requires a non-empty "$field" string';
+			throw new InternalError('$path requires a non-empty "$field" string');
 		return value;
 	}
 
@@ -182,7 +183,7 @@ class FfiImportManifest {
 			return null;
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!Std.isOfType(value, String))
-			throw '$path "$field" must be a string';
+			throw new InternalError('$path "$field" must be a string');
 		return cast value;
 	}
 
@@ -196,11 +197,11 @@ class FfiImportManifest {
 			return [];
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!Std.isOfType(value, Array))
-			throw '$path "$field" must be an array of strings';
+			throw new InternalError('$path "$field" must be an array of strings');
 		var result:Array<String> = [];
 		for (item in (cast value:Array<Dynamic>)) {
 			if (!Std.isOfType(item, String) || (cast item:String).length == 0)
-				throw '$path "$field" must contain non-empty strings';
+				throw new InternalError('$path "$field" must contain non-empty strings');
 			result.push(cast item);
 		}
 		return result;
@@ -212,11 +213,11 @@ class FfiImportManifest {
 			return result;
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!isObject(value))
-			throw '$path "$field" must be an object mapping C++ declarations to release functions';
+			throw new InternalError('$path "$field" must be an object mapping C++ declarations to release functions');
 		for (key in Reflect.fields(value)) {
 			var release:Dynamic = Reflect.field(value, key);
 			if (key.length == 0 || !Std.isOfType(release, String) || (cast release:String).length == 0)
-				throw '$path "$field" must map non-empty declaration names to non-empty release function names';
+				throw new InternalError('$path "$field" must map non-empty declaration names to non-empty release function names');
 			result.set(key, cast release);
 		}
 		return result;
@@ -227,7 +228,7 @@ class FfiImportManifest {
 			return fallback;
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!Std.isOfType(value, Bool))
-			throw '$path "$field" must be a boolean';
+			throw new InternalError('$path "$field" must be a boolean');
 		return cast value;
 	}
 }

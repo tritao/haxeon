@@ -1,5 +1,6 @@
 package editor.lsp;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import sys.thread.Condition;
 import sys.thread.Lock;
@@ -33,9 +34,9 @@ class LspDispatcher {
 
 	public function new(protocol:LspProtocol, emit:String->Void, capacity:Int = 64, debounceMs:Int = 150) {
 		if (capacity < 1)
-			throw "LSP dispatcher capacity must be positive";
+			throw new InternalError("LSP dispatcher capacity must be positive");
 		if (debounceMs < 0)
-			throw "LSP diagnostic debounce must not be negative";
+			throw new InternalError("LSP diagnostic debounce must not be negative");
 		this.protocol = protocol;
 		this.emit = emit;
 		this.capacity = capacity;

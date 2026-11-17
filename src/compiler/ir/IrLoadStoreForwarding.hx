@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
@@ -268,7 +269,7 @@ class IrLoadStoreForwarding {
 							// Every field access of a plain object was given a key above.
 							var fields = byObject.get(object.id),
 								found = fields == null ? null : fields.get(field),
-								key = found == null ? throw 'No field key for $field' : found;
+								key = found == null ? throw new InternalError('No field key for $field') : found;
 							if (!after.present[key]) {
 								after.present[key] = true;
 								after.values[key] = out;

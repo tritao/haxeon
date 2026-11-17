@@ -2,6 +2,7 @@ package build;
 
 import build.Target.TargetAbi;
 import build.Target.TargetArch;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import sys.FileSystem;
 
@@ -88,7 +89,7 @@ class ToolchainInfo {
 			case TargetArch.Arm64: "aarch64-linux-android21";
 			case TargetArch.X64: "x86_64-linux-android21";
 			case TargetArch.X86: "i686-linux-android21";
-			case _: throw "Android requires an x86, x86_64, or arm64 architecture";
+			case _: throw new InternalError("Android requires an x86, x86_64, or arm64 architecture");
 		};
 		var bin = ndk == null || ndk == "" ? "" : Path.join([ndk, "toolchains", "llvm", "prebuilt", hostTag, "bin"]),
 			compiler = bin == "" ? "clang" : Path.join([bin, "clang"]),

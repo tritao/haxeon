@@ -4,6 +4,7 @@ import compiler.backend.Backend;
 import compiler.backend.Backend.BackendOptions;
 import compiler.backend.Backend.BackendResult;
 import compiler.backend.Backend.BackendTarget;
+import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.hl.incremental.HlPlainBuild;
 import compiler.ir.Ir.IrProgram;
@@ -18,7 +19,7 @@ class HlBackend implements Backend {
 
 	public function compile(program:IrProgram, options:BackendOptions):BackendResult {
 		if (options.target != HashLink)
-			throw 'HashLink backend received target ${options.target}';
+			throw new InternalError('HashLink backend received target ${options.target}');
 		// A standalone backend can receive semantic IR, without the frontend's lowering of array allocation.
 		program = compiler.ir.IrArrayFactory.physical(program);
 		var assembly = HlPlainBuild.assemble(program, options.developmentMetadata != false);

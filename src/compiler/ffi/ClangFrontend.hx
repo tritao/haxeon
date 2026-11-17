@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.ClangInvocation.ClangInvocationOptions;
 import compiler.ffi.ClangRecordLayouts.RecordLayout;
 import compiler.ffi.ClangVtableLayouts.VtableLayout;
@@ -33,7 +34,7 @@ class ClangFrontend {
 			]),
 				ProcessOutputCapture.defaultDiagnosticLimit);
 		if (astProcess.exitCode != 0)
-			throw 'Clang could not import ${options.header}:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}';
+			throw new InternalError('Clang could not import ${options.header}:\n${diagnostics(astProcess.stderr, astProcess.stderrTruncated)}');
 		var ast = Json.parse(astProcess.stdout),
 			layoutInput = options.language == "c++" ? cxxLayoutProbe(options.header, ast,
 				options.includes) : options.header,
@@ -45,7 +46,7 @@ class ClangFrontend {
 				"-fsyntax-only",
 				layoutInput
 			]), null);
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			if (options.language == "c++" && layoutInput != options.header)
 				FileSystem.deleteFile(layoutInput);
 			throw error;
@@ -53,7 +54,7 @@ class ClangFrontend {
 		if (options.language == "c++" && layoutInput != options.header)
 			FileSystem.deleteFile(layoutInput);
 		if (layoutProcess.exitCode != 0)
-			throw 'Clang could not calculate layouts for ${options.header}:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}';
+			throw new InternalError('Clang could not calculate layouts for ${options.header}:\n${diagnostics(layoutProcess.stderr, layoutProcess.stderrTruncated)}');
 		var vtableText = options.language == "c++" && itaniumTarget(options.target) ? cxxVtableDump(options, ast) : "";
 		return {
 			ast: ast,
@@ -76,7 +77,7 @@ class ClangFrontend {
 					"-o",
 					platformNullDevice()
 				]), null);
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			if (FileSystem.exists(probePath))
 				FileSystem.deleteFile(probePath);
 			throw error;

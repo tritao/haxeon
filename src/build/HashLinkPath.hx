@@ -1,5 +1,6 @@
 package build;
 
+import compiler.core.InternalError;
 import haxe.io.Path;
 import sys.io.File;
 
@@ -12,7 +13,7 @@ class HashLinkPath {
 			if (fields.length == 2 && fields[0] == preset && fields[1] != "")
 				return Path.join([home, StringTools.trim(fields[1])]);
 		}
-		throw 'Missing HashLink output path for $preset';
+		throw new InternalError('Missing HashLink output path for $preset');
 	}
 
 	public static function executable(home:String, name:String = "hl"):String

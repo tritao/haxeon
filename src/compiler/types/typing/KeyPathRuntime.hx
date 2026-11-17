@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.types.KeyPathType;
@@ -33,7 +34,7 @@ class KeyPathRuntime {
 		for (name in pending) {
 			emitted.set(name, true);
 			var definition = session.keyPaths.definitions.get(name);
-			if (definition == null) throw 'Missing key path definition "$name"';
+			if (definition == null) throw new InternalError('Missing key path definition "$name"');
 			var span = definition.span,
 				pathType = TKeyPath(definition.root, definition.value, definition.writable),
 				cacheName = cacheOwner(definition),
@@ -160,7 +161,7 @@ class KeyPathRuntime {
 	static function cacheOwner(definition:KeyPathDefinition):String {
 		var rootName = switch definition.root {
 			case TInstance(_, name, _): name;
-			default: throw "Invalid key path root";
+			default: throw new InternalError("Invalid key path root");
 		};
 		return rootName + ".$keypaths$" + Sha256.encode(SemanticSignature.type(definition.root)).substr(0, 16);
 	}

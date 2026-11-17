@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Source.SourceSpan;
@@ -50,14 +51,14 @@ class ValueEqualityGenerator {
 			for (name in pending) {
 				var requested = session.programOutput.requests.valueEqualities.get(name);
 				if (requested == null)
-					throw 'Missing value equality request "$name"';
+					throw new InternalError('Missing value equality request "$name"');
 				// Helpers can originate in a lambda after its typing context has already been popped.
 				var owner = compiler.core.QualifiedName.parent(requested.origin),
 					context = session.enterBody(requested.origin, null, owner == null ? "$value-equality" : owner);
 				try {
 					generated.set(name, compareFunction(session, requested, compare));
 					session.leaveBody(context);
-				} catch (error:Dynamic) {
+				} catch (error:haxe.Exception) {
 					session.leaveBody(context);
 					throw error;
 				}
@@ -96,7 +97,7 @@ class ValueEqualityGenerator {
 				if (session.relations.isStruct(type) && DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(className);
 				if (declaration == null)
-					throw 'Missing value type declaration "$className"';
+					throw new InternalError('Missing value type declaration "$className"');
 				requests.add(ValueEqualityHelper(name, {type: type, origin: root.origin, span: root.span}));
 				if (DiffIntrinsics.conformanceMethod(session, type, "equals") == null) {
 					for (entry in DiffIntrinsics.conformanceFields(session, type)) {
@@ -205,7 +206,7 @@ class ValueEqualityGenerator {
 				&& DeclaredConformance.has(session, type, "Equatable")):
 				var declaration = session.classDecls.get(name);
 				if (declaration == null)
-					throw 'Missing value type declaration "$name"';
+					throw new InternalError('Missing value type declaration "$name"');
 				var custom = DiffIntrinsics.conformanceMethod(session, type, "equals");
 				if (custom != null) {
 					// Dynamic dispatch can borrow an existing box. A handwritten struct
@@ -233,7 +234,7 @@ class ValueEqualityGenerator {
 					statements.push(TReturn(new TypedExpression(TBoolLiteral(true), TBool, span), span));
 				}
 			default:
-				throw 'Invalid value equality request for "$type"';
+				throw new InternalError('Invalid value equality request for "$type"');
 		}
 		return {
 			name: equalsName(type),

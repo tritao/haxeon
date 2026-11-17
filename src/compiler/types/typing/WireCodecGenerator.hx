@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceFile;
@@ -155,7 +156,7 @@ class WireCodecGenerator {
 				case TMap(TInstance(NominalKind.Enum, _, _), _):
 					var mapKey = switch type {
 						case TMap(keyType, _): keyType;
-						default: throw "Enum comparator requires an enum map key";
+						default: throw new InternalError("Enum comparator requires an enum map key");
 					};
 					enumComparatorTypes.set(typeKey(mapKey), mapKey);
 				default:
@@ -183,7 +184,7 @@ class WireCodecGenerator {
 			var enumType = enumComparatorTypes.get(key),
 				enumName = switch enumType {
 					case TInstance(NominalKind.Enum, name, _): name;
-					default: throw "Enum comparator requires an enum map key";
+					default: throw new InternalError("Enum comparator requires an enum map key");
 				};
 			result.push(enumComparator(enumType, requiredEnum(enumsByName, enumName, shared.span), shared));
 		}
@@ -300,11 +301,11 @@ class WireCodecGenerator {
 			BodyTyper.fail("E1024", 'Anonymous record "$type" requires a @:wire typedef', span);
 		var sourceFields = switch alias.type {
 			case AnonymousType(fields): fields;
-			default: throw "Wire alias must be anonymous";
+			default: throw new InternalError("Wire alias must be anonymous");
 		};
 		var resolvedFields = switch type {
 			case TAnonymous(_, fields): fields;
-			default: throw "Wire type must be anonymous";
+			default: throw new InternalError("Wire type must be anonymous");
 		};
 		var result:Array<WireField> = [], ids:Map<Int, String> = [];
 		for (source in sourceFields) {
@@ -313,7 +314,7 @@ class WireCodecGenerator {
 				if (candidate.name == source.name)
 					resolved = candidate;
 			if (resolved == null)
-				throw 'Missing resolved wire field ${source.name}';
+				throw new InternalError('Missing resolved wire field ${source.name}');
 			var field:TypedField = {
 				name: source.name,
 				metadata: source.metadata,
@@ -437,7 +438,7 @@ class WireCodecGenerator {
 			if (ids.exists(id)) {
 				var previous = ids.get(id);
 				if (previous == null)
-					throw 'Missing MessagePack record field for @:id($id)';
+					throw new InternalError('Missing MessagePack record field for @:id($id)');
 				BodyTyper.fail("E1024",
 					'MessagePack record fields "${declaration.name}.${previous.name}" and "${declaration.name}.${field.name}" use duplicate @:id($id)',
 					field.span);
@@ -455,7 +456,7 @@ class WireCodecGenerator {
 			case TInstance(NominalKind.Class, name, _): serializableFields(session, requiredClass(classes, name, span),
 				span);
 			case TAnonymous(_, _): anonymousWireFields(session, type, span);
-			default: throw 'No wire record fields for "$type"';
+			default: throw new InternalError('No wire record fields for "$type"');
 		};
 
 	function fieldId(declaration:TypedClass, field:TypedField):Int {
@@ -494,7 +495,7 @@ class WireCodecGenerator {
 			if (ids.exists(id)) {
 				var previous = ids.get(id);
 				if (previous == null)
-					throw 'Missing MessagePack enum constructor for @:id($id)';
+					throw new InternalError('Missing MessagePack enum constructor for @:id($id)');
 				BodyTyper.fail("E1024",
 					'MessagePack enum "${declaration.name}" constructors "${previous.name}" and "${caseDecl.name}" use duplicate @:id($id)',
 					caseDecl.span);
@@ -604,7 +605,7 @@ class WireCodecGenerator {
 					type,
 					type
 				], TInt, []), span);
-			default: throw 'No MessagePack map key comparator for "$type"';
+			default: throw new InternalError('No MessagePack map key comparator for "$type"');
 		};
 
 	function valueEncoder(session:TypingSession, type:CompilerType, classes:Map<String, TypedClass>,
@@ -767,7 +768,7 @@ class WireCodecGenerator {
 			default:
 				var methodName = primitiveMethod(type);
 				if (methodName == null)
-					throw 'No MessagePack encoder for "$type"';
+					throw new InternalError('No MessagePack encoder for "$type"');
 				[expressionStatement(method(writer, methodName, [value], TVoid, span), span)];
 		};
 	}
@@ -853,7 +854,7 @@ class WireCodecGenerator {
 				for (index in 0...fields.length) {
 					var wireField = fields[index].field;
 					if (initialized.exists(wireField.name))
-						throw 'Wire decoder initializes "${name}.${wireField.name}" twice';
+						throw new InternalError('Wire decoder initializes "${name}.${wireField.name}" twice');
 					initialized.set(wireField.name, true);
 					var storedType = wireField.type;
 					if (declaration != null) {
@@ -865,7 +866,7 @@ class WireCodecGenerator {
 								break;
 							}
 						if (!found)
-							throw 'Wire decoder has no field "${name}.${wireField.name}"';
+							throw new InternalError('Wire decoder has no field "${name}.${wireField.name}"');
 					}
 					var decoded = nullableValueField(session, wireField)
 						? new TypedExpression(TCast(local(fieldLocal(index), TNullable(wireField.type), request.span)),
@@ -880,7 +881,7 @@ class WireCodecGenerator {
 				if (declaration != null)
 					for (field in declaration.fields)
 						if (!field.isStatic && !initialized.exists(field.name))
-							throw 'Wire decoder does not initialize "${name}.${field.name}"';
+							throw new InternalError('Wire decoder does not initialize "${name}.${field.name}"');
 				statements.push(TReturn(new TypedExpression(TObjectLiteral(name, objectFields, false), type,
 					request.span), request.span));
 			case TArray(element):
@@ -923,7 +924,7 @@ class WireCodecGenerator {
 			default:
 				var methodName = primitiveReadMethod(type);
 				if (methodName == null)
-					throw 'No MessagePack decoder for "$type"';
+					throw new InternalError('No MessagePack decoder for "$type"');
 				statements.push(TReturn(method(reader, methodName, [], type, request.span), request.span));
 		}
 		return generatedFunction(valueDecodeName(type), [{name: "reader", type: readerType}], type, statements, request,
@@ -1118,7 +1119,7 @@ class WireCodecGenerator {
 			case TLocal(name): TAssign(name, value, span);
 			case TIndex(array, index): TIndexAssign(array, index, value, span);
 			case TMapGet(map, key): TMapAssign(map, key, value, span);
-			default: throw "MessagePack decoder target must be a local, array index, or map entry";
+			default: throw new InternalError("MessagePack decoder target must be a local, array index, or map entry");
 		};
 
 	function decodeValueExpression(session:TypingSession, classes:Map<String, TypedClass>, enums:Map<String, TypedEnum>,
@@ -1131,7 +1132,7 @@ class WireCodecGenerator {
 			default:
 				var methodName = primitiveReadMethod(type);
 				if (methodName == null)
-					throw 'No MessagePack decoder for "$type"';
+					throw new InternalError('No MessagePack decoder for "$type"');
 				method(reader, methodName, [], type, span);
 		};
 	}
@@ -1147,7 +1148,7 @@ class WireCodecGenerator {
 			case TNullable(_): nullValue(type, span);
 			case TArray(element): new TypedExpression(TNewArray(element, intLiteral(0, span)), type, span);
 			case TMap(key, value): new TypedExpression(TNewMap(key, value), type, span);
-			default: throw 'No MessagePack default for "$type"';
+			default: throw new InternalError('No MessagePack default for "$type"');
 		};
 
 	function missingFieldSentinel(type:CompilerType, span:SourceSpan):TypedExpression
@@ -1272,7 +1273,7 @@ class WireCodecGenerator {
 	function mapKeyMethod(type:CompilerType, writing:Bool):String {
 		var methodName = writing ? primitiveMethod(type) : primitiveReadMethod(type);
 		if (methodName == null)
-			throw 'No MessagePack map key method for "$type"';
+			throw new InternalError('No MessagePack map key method for "$type"');
 		return methodName;
 	}
 
@@ -1295,11 +1296,11 @@ class WireCodecGenerator {
 					case TString: "map_string_";
 					case TInt: "map_int_";
 					case TInstance(NominalKind.Enum, _, _): "map_enum_" + typeSegment(typeKey(key));
-					default: throw 'No MessagePack map key for "$key"';
+					default: throw new InternalError('No MessagePack map key for "$key"');
 				}) + typeSegment(typeKey(value));
 			case TInstance(NominalKind.Class, name, _): "class_" + nominalKey(name);
 			case TInstance(NominalKind.Enum, name, _): "enum_" + nominalKey(name);
-			default: throw 'No MessagePack codec key for "$type"';
+			default: throw new InternalError('No MessagePack codec key for "$type"');
 		};
 
 	static function typeSegment(key:String):String
@@ -1386,7 +1387,7 @@ class WireCodecGenerator {
 	function receiverTypeName(type:CompilerType):String
 		return switch type {
 			case TInstance(_, name, _): name;
-			default: throw 'MessagePack method receiver must be a nominal class, got "$type"';
+			default: throw new InternalError('MessagePack method receiver must be a nominal class, got "$type"');
 		};
 
 	function expressionStatement(expression:TypedExpression, span:SourceSpan):TypedStatement

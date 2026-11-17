@@ -1,6 +1,7 @@
 package compiler.modules;
 
 import compiler.core.Diagnostic;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.ir.IrFunction;
 import compiler.semantic.SemanticModel;
@@ -141,7 +142,7 @@ class ModuleState {
 	public function parsedAst():AstProgram {
 		var result = ast;
 		if (result == null)
-			throw 'Module "$name" has not been parsed';
+			throw new InternalError('Module "$name" has not been parsed');
 		return result;
 	}
 

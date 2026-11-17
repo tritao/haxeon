@@ -1,5 +1,6 @@
 package compiler.hl;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode.HlTypeDef;
 import haxe.io.BytesInput;
 
@@ -30,7 +31,7 @@ class HlBytecodeInput {
 	public static function unsigned(input:BytesInput, format:String):Int {
 		var value = index(input);
 		if (value < 0)
-			throw 'Negative unsigned $format index';
+			throw new InternalError('Negative unsigned $format index');
 		return value;
 	}
 
@@ -40,7 +41,7 @@ class HlBytecodeInput {
 	 */
 	public static function operands(input:BytesInput, opcode:Int, arity:Int, format:String):Array<Int>
 		return switch arity {
-			case HlOpcodeSchema.UNSUPPORTED: throw 'Unsupported $format opcode $opcode';
+			case HlOpcodeSchema.UNSUPPORTED: throw new InternalError('Unsupported $format opcode $opcode');
 			case HlOpcodeSchema.SWITCH_ARITY:
 				var register = index(input), count = operandCount(input, format), result = [register, count];
 				for (_ in 0...count)
@@ -61,7 +62,7 @@ class HlBytecodeInput {
 	static function operandCount(input:BytesInput, format:String):Int {
 		var count = unsigned(input, format);
 		if (count > MAX_OPERAND_COUNT)
-			throw "Invalid variable operand count";
+			throw new InternalError("Invalid variable operand count");
 		return count;
 	}
 
@@ -122,7 +123,7 @@ class HlBytecodeInput {
 		for (_ in 0...count) {
 			var length = unsigned(input, format);
 			if (offset + length >= size || data.get(offset + length) != 0)
-				throw 'Invalid $format string table';
+				throw new InternalError('Invalid $format string table');
 			result.push(data.getString(offset, length));
 			offset += length + 1;
 		}

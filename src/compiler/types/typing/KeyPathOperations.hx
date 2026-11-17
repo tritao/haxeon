@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.types.Type.CompilerType;
@@ -175,7 +176,7 @@ class KeyPathOperations {
 					default: new TypedExpression(TCast(value), inner.type, span);
 				};
 				storePlace(session, inner, assigned, span);
-			default: throw "Unsupported key path root place";
+			default: throw new InternalError("Unsupported key path root place");
 		};
 
 	static function copyFields(session:TypingSession, place:TypedExpression, value:TypedExpression,

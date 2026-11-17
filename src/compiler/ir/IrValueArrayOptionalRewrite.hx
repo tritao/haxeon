@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -22,7 +23,7 @@ class IrValueArrayOptionalRewrite {
 			components:IrValueArrayOptionalComponents):IrFunction {
 		var name = switch element {
 			case Nullable(Obj(value)): value;
-			default: throw "Expected a nullable struct element";
+			default: throw new InternalError("Expected a nullable struct element");
 		}, arrayType:IrType = Array(element), wrapperType = components.wrapperType(),
 			reads:Map<Int, OptionalArrayAccess> = [], boxes:Map<Int, OptionalBox> = [],
 			unboxes:Map<Int, IrValue> = [], writes:Map<Int, IrValue> = [], anyReads:Map<Int, OptionalArrayAccess> = [],
@@ -38,19 +39,19 @@ class IrValueArrayOptionalRewrite {
 		function readAt(id:Int):OptionalArrayAccess {
 			var value = reads.get(id);
 			if (value == null)
-				throw 'Missing optional array read $id';
+				throw new InternalError('Missing optional array read $id');
 			return value;
 		}
 		function boxAt(id:Int):OptionalBox {
 			var value = boxes.get(id);
 			if (value == null)
-				throw 'Missing optional array box $id';
+				throw new InternalError('Missing optional array box $id');
 			return value;
 		}
 		function unboxed(id:Int):IrValue {
 			var value = unboxes.get(id);
 			if (value == null)
-				throw 'Missing optional array unbox $id';
+				throw new InternalError('Missing optional array unbox $id');
 			return value;
 		}
 		for (argument in fn.arguments)
@@ -176,7 +177,7 @@ class IrValueArrayOptionalRewrite {
 						&& uses.get(args[args.length - 1].id) == 1):
 						var conversion = dynamicValues.get(args[args.length - 1].id);
 						if (conversion == null)
-							throw "Missing optional dynamic array conversion";
+							throw new InternalError("Missing optional dynamic array conversion");
 						var box = boxes.get(conversion.boxed);
 						if (box != null
 							&& uses.get(conversion.boxed) == 1
@@ -209,7 +210,7 @@ class IrValueArrayOptionalRewrite {
 						if (rawReads.exists(out.id)) {
 							var source = rawReads.get(out.id);
 							if (source == null)
-								throw "Missing raw optional array read";
+								throw new InternalError("Missing raw optional array read");
 							id = source;
 						}
 						var read = readAt(id);
@@ -217,7 +218,7 @@ class IrValueArrayOptionalRewrite {
 							case "get": components.getName();
 							case "pop": components.popName();
 							case "shift": components.shiftName();
-							default: throw "Invalid optional array read";
+							default: throw new InternalError("Invalid optional array read");
 						};
 						instruction = Call(unboxed(id), helper, args);
 					case SafeCast(out, _) if (unboxes.exists(out.id) && castSources.exists(out.id)):
@@ -249,7 +250,7 @@ class IrValueArrayOptionalRewrite {
 							case "push": components.pushName();
 							case "insert": components.insertName();
 							case "unshift": components.unshiftName();
-							default: throw "Invalid nullable array operation";
+							default: throw new InternalError("Invalid nullable array operation");
 						};
 						instruction = Call(out, helper, arguments);
 					default:

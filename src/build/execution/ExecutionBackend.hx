@@ -1,6 +1,7 @@
 package build.execution;
 
 import build.execution.ActionResult.ExecutionResult;
+import compiler.core.InternalError;
 
 /** Replaceable execution boundary; build semantics stop at ExecutionPlan. */
 interface ExecutionBackend {
@@ -14,6 +15,6 @@ class ExecutionBackendFactory {
 		var requested = ProcessRunner.environmentValue("HAXEON_EXECUTOR");
 		if (requested == null || requested == "" || requested == "native")
 			return new Executor(environment, jobs, print, session == null ? null : session.digests);
-		throw 'Unknown Haxeon executor backend "$requested"; available backends: native';
+		throw new InternalError('Unknown Haxeon executor backend "$requested"; available backends: native');
 	}
 }

@@ -1,5 +1,6 @@
 package profiler;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import profiler.HldiCodec.HldiReader;
 import profiler.HldiTypes.HldiFrame;
@@ -45,14 +46,14 @@ class HldiClient {
 
 	public function new(host:String, port:Int, timeoutSeconds:Float = 5.0, ?token:String) {
 		if (port <= 0 || port > 65535)
-			throw 'Invalid HLDI port $port';
+			throw new InternalError('Invalid HLDI port $port');
 		socket = new Socket();
 		socket.setTimeout(timeoutSeconds);
 		socket.connect(new Host(host), port);
 		var bytes = readExact(16);
 		if (bytes.getString(0, 4) != "HLDI") {
 			close();
-			throw "Endpoint did not send an HLDI greeting";
+			throw new InternalError("Endpoint did not send an HLDI greeting");
 		}
 		var input = new HldiReader(bytes),
 			magic = input.take(4),
@@ -60,19 +61,19 @@ class HldiClient {
 			capabilities = input.u16();
 		if (version != 2) {
 			close();
-			throw 'Unsupported HLDI version $version';
+			throw new InternalError('Unsupported HLDI version $version');
 		}
 		hello = new HldiHello(version, capabilities, input.u32(), input.u32());
 		if (capabilities & CAP_AUTH_REQUIRED != 0) {
 			if (token == null || token.length == 0) {
 				close();
-				throw "HLDI endpoint requires authentication";
+				throw new InternalError("HLDI endpoint requires authentication");
 			}
 			try
 				requestService(SERVICE_CONTROL, CONTROL_AUTHENTICATE, Bytes.ofString(token))
 			catch (error:Dynamic) {
 				close();
-				throw "HLDI authentication failed";
+				throw new InternalError("HLDI authentication failed");
 			}
 		}
 	}
@@ -83,13 +84,13 @@ class HldiClient {
 	/** Starts a session. The runtime then pushes frames, beginning with the session and metadata frames. */
 	public function start(sources:Int, sampleRate:Int, allocationInterval:Int = 0, poolMiB:Int = 0):HldiStatus {
 		if (sources <= 0 || sources > 7)
-			throw 'Invalid profiler sources $sources';
+			throw new InternalError('Invalid profiler sources $sources');
 		if (sampleRate <= 0)
-			throw 'Invalid profiler sample rate $sampleRate';
+			throw new InternalError('Invalid profiler sample rate $sampleRate');
 		if (allocationInterval < 0)
-			throw 'Invalid allocation sampling interval $allocationInterval';
+			throw new InternalError('Invalid allocation sampling interval $allocationInterval');
 		if (poolMiB < 0)
-			throw 'Invalid profiler pool size $poolMiB';
+			throw new InternalError('Invalid profiler pool size $poolMiB');
 		var payload = Bytes.alloc(16);
 		put32(payload, 0, sources);
 		put32(payload, 4, sampleRate);
@@ -107,12 +108,12 @@ class HldiClient {
 		if (pushed.length != 0)
 			return pushed.shift();
 		if (closed)
-			throw "HLDI client is closed";
+			throw new InternalError("HLDI client is closed");
 		if (Socket.select([socket], [], [], timeoutSeconds).read.length == 0)
 			return null;
 		var frame = readFrame();
 		if (frame.flags & FLAG_PUSH == 0)
-			throw "Unexpected HLDI response";
+			throw new InternalError("Unexpected HLDI response");
 		return new HldiFrame(frame.type, frame.flags, frame.payload);
 	}
 
@@ -140,7 +141,7 @@ class HldiClient {
 
 	function requestService(service:Int, type:Int, payload:Bytes):Bytes {
 		if (closed)
-			throw "HLDI client is closed";
+			throw new InternalError("HLDI client is closed");
 		var id = nextRequestId++, header = Bytes.alloc(16);
 		header.set(0, service);
 		header.set(1, type);
@@ -159,9 +160,9 @@ class HldiClient {
 			}
 			if (frame.service != service || frame.type != type || frame.requestId != id
 				|| frame.flags & FLAG_RESPONSE == 0)
-				throw 'Mismatched HLDI response for request $id';
+				throw new InternalError('Mismatched HLDI response for request $id');
 			if (frame.flags & FLAG_ERROR != 0)
-				throw 'HLDI request $id failed';
+				throw new InternalError('HLDI request $id failed');
 			return frame.payload;
 		}
 	}
@@ -181,7 +182,7 @@ class HldiClient {
 			length = reply.u32();
 		reply.u32();
 		if (length < 0 || length > MAX_REPLY)
-			throw 'Invalid HLDI frame length $length';
+			throw new InternalError('Invalid HLDI frame length $length');
 		return {
 			service: service,
 			type: type,
@@ -196,7 +197,7 @@ class HldiClient {
 		while (position < length) {
 			var count = socket.input.readBytes(result, position, length - position);
 			if (count <= 0)
-				throw "HLDI connection closed";
+				throw new InternalError("HLDI connection closed");
 			position += count;
 		}
 		return result;
@@ -204,7 +205,7 @@ class HldiClient {
 
 	static function decodeStatus(bytes:Bytes):HldiStatus {
 		if (bytes.length != 32)
-			throw 'Invalid HLDI status length ${bytes.length}';
+			throw new InternalError('Invalid HLDI status length ${bytes.length}');
 		var input = new HldiReader(bytes);
 		var active = input.u32() != 0,
 			sources = input.u32(),

@@ -1,5 +1,7 @@
 package build.execution;
 
+import compiler.core.InternalError;
+
 enum ActionKind {
 	Process(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>);
 	Compiler(command:String, arguments:Array<String>, cwd:String, environment:Map<String, String>, invoke:Void->Int);
@@ -46,7 +48,7 @@ class ExecutionAction {
 		this.directoryOutputs.sort(Reflect.compare);
 		for (directory in this.directoryOutputs)
 			if (this.outputs.indexOf(directory) < 0)
-				throw 'Directory output $directory is not a declared action output';
+				throw new InternalError('Directory output $directory is not a declared action output');
 		this.description = description;
 		this.action = action;
 		this.fingerprintDependencies = fingerprintDependencies;

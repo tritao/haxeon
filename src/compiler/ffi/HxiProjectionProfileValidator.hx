@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameterDirection;
@@ -315,7 +316,7 @@ class HxiProjectionProfileValidator {
 			path:String):HxiResultErrorProjection {
 		var policy = values.get(name);
 		if (policy == null)
-			throw 'Invalid Haxe projection profile "$path": resultPolicies.$name must provide a policy';
+			throw new InternalError('Invalid Haxe projection profile "$path": resultPolicies.$name must provide a policy');
 		return policy;
 	}
 }

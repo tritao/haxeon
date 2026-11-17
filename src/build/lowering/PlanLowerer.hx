@@ -11,6 +11,7 @@ import build.native.NativeSourcesProvider;
 import build.provider.CompilerProvider;
 import build.provider.FfiProvider;
 import build.provider.RuntimeProvider;
+import compiler.core.InternalError;
 
 /** Orchestrates provider lowering without owning provider-specific commands. */
 class PlanLowerer {
@@ -33,7 +34,8 @@ class PlanLowerer {
 						imports = resolvedPackage == null
 							? [] : [for (ffi in resolvedPackage.ffiImports) if (ffi.config.name == name) ffi];
 					if (resolvedPackage == null || imports.length != 1)
-						throw "No resolved FFI import " + name + " for package " + artifact.id.packageId;
+						throw new InternalError("No resolved FFI import " + name + " for package "
+							+ artifact.id.packageId);
 					var output = context.layout.ffiInterfacePath(resolvedPackage.name, name),
 						actionId = new ActionId("ffi-import:" + artifact.id.key());
 					actions.push(FfiProvider.action(resolvedPackage, imports[0], context, actionId, output));
@@ -64,7 +66,7 @@ class PlanLowerer {
 						for (dependency in artifact.dependencies) {
 							var loweredDependency = artifactActions.get(dependency.key());
 							if (loweredDependency == null)
-								throw 'No lowered action for required artifact $dependency';
+								throw new InternalError('No lowered action for required artifact $dependency');
 							if (dependency.kind == ArtifactKind.FfiInterface)
 								dependencies = dependencies.concat(loweredDependency);
 						}
@@ -81,10 +83,10 @@ class PlanLowerer {
 							&& artifact.id.kind != ArtifactKind.NativeStaticLibrary
 							&& artifact.id.kind != ArtifactKind.NativeSharedLibrary
 							&& artifact.id.kind != ArtifactKind.FfiNativeSharedLibrary)
-							throw 'No build provider is registered for artifact ${artifact.id}';
+							throw new InternalError('No build provider is registered for artifact ${artifact.id}');
 				}
 		} else if (actions.length == 0)
-			throw 'No build provider is registered for artifacts in this plan';
+			throw new InternalError('No build provider is registered for artifacts in this plan');
 		// Shared CMake trees are requested by every package that builds the same (source, target).
 		return new ExecutionPlan(context.sharedNative ? ActionMerge.dedupe(actions) : actions);
 	}

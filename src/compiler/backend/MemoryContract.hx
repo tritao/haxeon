@@ -1,5 +1,6 @@
 package compiler.backend;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
 import sys.io.File;
@@ -27,7 +28,7 @@ class MemoryContractCodec {
 		try {
 			parsed = haxe.Json.parse(File.getContent(path));
 		} catch (error:Dynamic) {
-			throw 'Invalid Wasm memory contract "$path": $error';
+			throw new InternalError('Invalid Wasm memory contract "$path": $error');
 		}
 		var result:MemoryContract = {
 			name: requiredString(parsed, "name"),
@@ -46,25 +47,25 @@ class MemoryContractCodec {
 
 	public static function validate(contract:MemoryContract):Void {
 		if (contract.name != "nativekit-haxeon-linear-memory")
-			throw 'Unsupported Wasm memory contract name "${contract.name}"';
+			throw new InternalError('Unsupported Wasm memory contract name "${contract.name}"');
 		if (contract.version != CURRENT_VERSION)
-			throw 'Unsupported Wasm memory contract version ${contract.version}';
+			throw new InternalError('Unsupported Wasm memory contract version ${contract.version}');
 		if (contract.addressModel != "wasm32")
-			throw 'Unsupported Wasm memory address model "${contract.addressModel}"';
+			throw new InternalError('Unsupported Wasm memory address model "${contract.addressModel}"');
 		if (contract.pageSize != 65536)
-			throw 'Wasm memory contract page size must be 65536, got ${contract.pageSize}';
+			throw new InternalError('Wasm memory contract page size must be 65536, got ${contract.pageSize}');
 		if (contract.hostBase != 0 || contract.hostBase % 8 != 0 || contract.hostLimit % 8 != 0
 			|| contract.guestBase % 8 != 0 || contract.guestLimit % 8 != 0)
-			throw "Wasm memory contract boundaries must be non-negative 8-byte aligned values";
+			throw new InternalError("Wasm memory contract boundaries must be non-negative 8-byte aligned values");
 		if (contract.hostBase >= contract.hostLimit
 			|| contract.hostLimit != contract.guestBase
 			|| contract.guestBase >= contract.guestLimit
 			|| contract.guestLimit != contract.memorySize)
-			throw "Wasm memory contract partitions are not contiguous and ordered";
+			throw new InternalError("Wasm memory contract partitions are not contiguous and ordered");
 		if (contract.hostLimit % contract.pageSize != 0
 			|| contract.guestBase % contract.pageSize != 0
 			|| contract.guestLimit % contract.pageSize != 0)
-			throw "Wasm memory contract boundaries must be Wasm-page aligned";
+			throw new InternalError("Wasm memory contract boundaries must be Wasm-page aligned");
 	}
 
 	/** Binary payload embedded in the guest Wasm custom section. */
@@ -86,17 +87,17 @@ class MemoryContractCodec {
 	static function requiredString(value:Dynamic, field:String):String {
 		var result:Dynamic = value == null ? null : Reflect.field(value, field);
 		if (result == null || !Std.isOfType(result, String) || result.length == 0)
-			throw 'Wasm memory contract field "$field" must be a non-empty string';
+			throw new InternalError('Wasm memory contract field "$field" must be a non-empty string');
 		return result;
 	}
 
 	static function requiredInt(value:Dynamic, field:String):Int {
 		var raw:Dynamic = value == null ? null : Reflect.field(value, field);
 		if (raw == null)
-			throw 'Wasm memory contract field "$field" is required';
+			throw new InternalError('Wasm memory contract field "$field" is required');
 		var result = Std.int(raw);
 		if (result < 0 || raw != result)
-			throw 'Wasm memory contract field "$field" must be a non-negative integer';
+			throw new InternalError('Wasm memory contract field "$field" must be a non-negative integer');
 		return result;
 	}
 }

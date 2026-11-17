@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
 
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -172,31 +173,31 @@ class BodyTyper implements BodyTyping {
 
 	static function requiredExpression(value:Null<TypedExpression>):TypedExpression {
 		if (value == null)
-			throw "Expected typed expression";
+			throw new InternalError("Expected typed expression");
 		return value;
 	}
 
 	static function requiredString(value:Null<String>):String {
 		if (value == null)
-			throw "Expected string";
+			throw new InternalError("Expected string");
 		return value;
 	}
 
 	static function requiredStrings(value:Null<Array<String>>):Array<String> {
 		if (value == null)
-			throw "Expected string array";
+			throw new InternalError("Expected string array");
 		return value;
 	}
 
 	static function requiredType(value:Null<CompilerType>):CompilerType {
 		if (value == null)
-			throw "Expected semantic type";
+			throw new InternalError("Expected semantic type");
 		return value;
 	}
 
 	static function requiredFunction(value:Null<AstFunction>):AstFunction {
 		if (value == null)
-			throw "Expected function declaration";
+			throw new InternalError("Expected function declaration");
 		return value;
 	}
 
@@ -511,7 +512,7 @@ class BodyTyper implements BodyTyping {
 		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
 		try
 			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
-		catch (error:Dynamic) {
+		catch (error:haxe.Exception) {
 			session.monomorphs.discard(frame);
 			throw error;
 		}
@@ -546,7 +547,7 @@ class BodyTyper implements BodyTyping {
 					'Cannot infer the type of $field: nothing in its initializer fixes ${unfixed.origin}; annotate it',
 					span);
 			typed = coerce(value, value.type, isStatic ? 'static $field' : field, "E1002");
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			session.monomorphs.discard(frame);
 			throw error;
 		}
@@ -697,28 +698,28 @@ class BodyTyper implements BodyTyping {
 					try {
 						for (typed in typeStatements([inner], scope, result))
 							output.push(typed);
-					} catch (error:Dynamic) {
+					} catch (error:haxe.Exception) {
 						session.currentContext.privateAccessDepth--;
 						throw error;
 					}
 					session.currentContext.privateAccessDepth--;
 				case ErrorStatement(_):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case UninitializedDeclaration(_, _, _):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case VarDeclaration(_, _, _, _):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case ScopedDeclaration(name, declared, initializer, span):
 					var declaration = VarDeclaration(name, declared, initializer, span);
 					var typed = statementTyper.typeSimpleStatement(declaration, scope, result, statements,
 						statementIndex);
 					if (typed == null)
-						throw "Scoped declaration was not typed";
+						throw new InternalError("Scoped declaration was not typed");
 					for (item in typed)
 						output.push(item);
 					var boundType = scope.resolveDeclared(name);
 					if (boundType == null)
-						throw "Scoped binding was not declared";
+						throw new InternalError("Scoped binding was not declared");
 					// A no-return initializer never registers cleanup and has no value to dispatch on.
 					if ((switch boundType {
 						case TNever: true;
@@ -742,20 +743,20 @@ class BodyTyper implements BodyTyping {
 					};
 					output.push(TDefer(typeStatements(cleanup, new Scope(scope), result), span, true));
 				case Return(expression, span):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case ReturnVoid(span):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case Throw(expression, span):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case Try(tryBranch, catches, span):
 					output.push(statementTyper.typeTry(tryBranch, catches, span, scope, result));
 				case Defer(body, span):
 					validateDeferredControl(body, 0);
 					output.push(TDefer(typeStatements(body, new Scope(scope), result), span, false));
 				case Break(span):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case Continue(span):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 				case Increment(name, delta, span):
 					output.push(statementTyper.typeIncrement(name, delta, span, scope));
 				case Assignment(name, expression, span):
@@ -777,7 +778,7 @@ class BodyTyper implements BodyTyping {
 					output.push(statementTyper.typeSwitch(expression, cases, defaultBranch, hasDefault, span, scope,
 						result));
 				case Expression(expression, span):
-					throw "Simple statement was not dispatched";
+					throw new InternalError("Simple statement was not dispatched");
 			}
 		}
 		return output;
@@ -1648,7 +1649,7 @@ class BodyTyper implements BodyTyping {
 				: 'path:${path}:${objectPath}:array-length:${predicate.arrayLength}';
 		var value = predicate.value;
 		if (value == null)
-			throw "Equality payload predicate has no value";
+			throw new InternalError("Equality payload predicate has no value");
 		return path.length == 0
 			&& objectPath.length == 0 ? Std.string(constantPatternKey(value))
 			: 'path:${path}:${objectPath}:${Std.string(constantPatternKey(value))}';
@@ -2204,7 +2205,7 @@ class BodyTyper implements BodyTyping {
 			var value = typeExpression(expression, new Scope(), expected);
 			initializer = coerce(value, expected == null ? value.type : expected, 'inline field "$owner.$name"',
 				"E1002");
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			leaveBody(body);
 			throw error;
 		}
@@ -2522,7 +2523,7 @@ class BodyTyper implements BodyTyping {
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;
 			return typed;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			leaveBody(body);
 			defaultArgumentCaller = previousCaller;
 			throw error;
@@ -2555,7 +2556,7 @@ class BodyTyper implements BodyTyping {
 	public static function inheritanceName(type:AstType):String
 		return switch type {
 			case NamedType(name), AppliedType(name, _): name;
-			default: throw "Inheritance requires a nominal type";
+			default: throw new InternalError("Inheritance requires a nominal type");
 		};
 
 	function satisfiesDisposable(actual:CompilerType, contract:CompilerType):Bool {
@@ -2941,7 +2942,7 @@ class BodyTyper implements BodyTyping {
 
 	static function requiredMapValue<T>(source:Map<String, T>, name:String):T {
 		if (!source.exists(name))
-			throw 'Missing map entry "$name"';
+			throw new InternalError('Missing map entry "$name"');
 		return source.get(name);
 	}
 

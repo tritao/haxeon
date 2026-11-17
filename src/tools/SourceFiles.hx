@@ -1,5 +1,6 @@
 package tools;
 
+import compiler.core.InternalError;
 import haxe.io.Path;
 import sys.FileSystem;
 
@@ -13,7 +14,7 @@ class SourceFiles {
 		var files:Array<String> = [];
 		for (path in paths) {
 			if (!FileSystem.exists(path))
-				throw 'Source file not found: $path';
+				throw new InternalError('Source file not found: $path');
 			if (FileSystem.isDirectory(path))
 				collect(path, files);
 			else
@@ -25,9 +26,9 @@ class SourceFiles {
 	/** Throws unless `path` is a readable file; for options that name one file, such as a manifest. */
 	public static function requireFile(path:String):String {
 		if (!FileSystem.exists(path))
-			throw 'File not found: $path';
+			throw new InternalError('File not found: $path');
 		if (FileSystem.isDirectory(path))
-			throw 'Expected a file but found a directory: $path';
+			throw new InternalError('Expected a file but found a directory: $path');
 		return path;
 	}
 

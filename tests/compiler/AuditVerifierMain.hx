@@ -1,5 +1,6 @@
 import compiler.Frontend;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
@@ -55,8 +56,8 @@ class AuditVerifierMain {
 				var rejected = false;
 				try
 					IrVerifier.verifyValueArraysLowered(make(operation, element, true))
-				catch (error:String) {
-					if (error.indexOf("ordinary array operation on inline value lanes") < 0)
+				catch (error:InternalError) {
+					if (error.message.indexOf("ordinary array operation on inline value lanes") < 0)
 						throw error;
 					rejected = true;
 				}
@@ -71,8 +72,8 @@ class AuditVerifierMain {
 	static function rejected(program:IrProgram, expected:String):Void {
 		try {
 			IrVerifier.verify(program);
-		} catch (error:String) {
-			if (error.indexOf(expected) >= 0)
+		} catch (error:InternalError) {
+			if (error.message.indexOf(expected) >= 0)
 				return;
 			throw error;
 		}
@@ -93,8 +94,8 @@ class AuditVerifierMain {
 	static function rejectedFunctions(program:IrProgram, names:Map<String, Bool>, expected:String):Void {
 		try {
 			IrVerifier.verifyFunctions(program, names);
-		} catch (error:String) {
-			if (error.indexOf(expected) >= 0)
+		} catch (error:InternalError) {
+			if (error.message.indexOf(expected) >= 0)
 				return;
 			throw error;
 		}
@@ -238,8 +239,8 @@ class AuditVerifierMain {
 		var dispatchRejected = false;
 		try
 			compiler.ir.IrEnumDynamicDispatch.rewrite(intrinsicProgram.functions)
-		catch (error:String) {
-			if (error.indexOf("Invalid enum Dynamic box signature") < 0)
+		catch (error:InternalError) {
+			if (error.message.indexOf("Invalid enum Dynamic box signature") < 0)
 				throw error;
 			dispatchRejected = true;
 		}
@@ -273,8 +274,8 @@ class AuditVerifierMain {
 		var tagLoweringRejected = false;
 		try
 			compiler.ir.IrEnumTagLowering.escapes(invalidTag)
-		catch (error:String) {
-			if (error.indexOf("Invalid enum tag box signature") < 0)
+		catch (error:InternalError) {
+			if (error.message.indexOf("Invalid enum tag box signature") < 0)
 				throw error;
 			tagLoweringRejected = true;
 		}

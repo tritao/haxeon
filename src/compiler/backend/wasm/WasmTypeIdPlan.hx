@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrOperands;
 import compiler.ir.IrTypeIdentity;
@@ -51,7 +52,7 @@ class WasmTypeIdPlan {
 
 	public function id(type:IrType):Int {
 		var key = IrTypeIdentity.text(type), result = ids.get(key);
-		if (result == null) throw 'Wasm runtime type was not planned: $key';
+		if (result == null) throw new InternalError('Wasm runtime type was not planned: $key');
 		return result;
 	}
 

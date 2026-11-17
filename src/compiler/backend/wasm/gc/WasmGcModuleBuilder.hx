@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.IrReachability;
 import compiler.backend.wasm.WasmScalarClosureEscapes;
 import compiler.backend.wasm.WasmValueLayout;
@@ -51,14 +52,14 @@ class WasmGcModuleBuilder {
 			contract = options.memoryContract,
 			memoryBase = contract == null ? (options.memoryBase == null ? 0 : options.memoryBase) : contract.guestBase;
 		if (options.wasmMemoryStats == true)
-			throw "Wasm GC lowering does not export linear-memory allocator statistics";
+			throw new InternalError("Wasm GC lowering does not export linear-memory allocator statistics");
 		if (contract != null) {
 			if (!importMemory)
-				throw "A Wasm memory contract requires imported memory";
+				throw new InternalError("A Wasm memory contract requires imported memory");
 			MemoryContractCodec.validate(contract);
 		}
 		if (memoryBase < 0 || (memoryBase & 7) != 0)
-			throw 'Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase';
+			throw new InternalError('Wasm memory base must be a non-negative 8-byte-aligned value, got $memoryBase');
 		var originalProgram = program;
 		var exports = WasmModuleSupport.exportedFunctions(program, options.exports == null ? [] : options.exports),
 			boundaryPlan = new WasmScalarAbi(program, exports, true),
@@ -164,7 +165,7 @@ class WasmGcModuleBuilder {
 		module.sharedMemory = options.sharedMemory == true;
 		if (module.sharedMemory) {
 			if (!importMemory || contract == null)
-				throw "Shared Wasm memory requires imported memory and a bounded contract";
+				throw new InternalError("Shared Wasm memory requires imported memory and a bounded contract");
 			module.memoryMax = WasmModuleSupport.memoryPages(contract.memorySize);
 		}
 		// Static data lives in an immutable GC array rather than linear memory, so a module
@@ -287,11 +288,11 @@ class WasmGcModuleBuilder {
 					switch located.value {
 						case Call(_, name, arguments) if (StringTools.startsWith(name, "$wasm:closure-receiver:")):
 							if (arguments.length != 2 || !markers.exists(arguments[1].id))
-								throw 'Missing static closure marker for $name';
+								throw new InternalError('Missing static closure marker for $name');
 							var target = markers.get(arguments[1].id),
 								existing = gcContext.closureProbeQueryTargets.get(name);
 							if (existing != null && existing != target)
-								throw 'Conflicting closure adapter markers for $name';
+								throw new InternalError('Conflicting closure adapter markers for $name');
 							gcContext.closureProbeQueryTargets.set(name, target);
 							gcContext.closureProbeTargets.set(target, true);
 						default:
@@ -317,7 +318,7 @@ class WasmGcModuleBuilder {
 									&& arguments.length == 2
 									&& arguments[1].id == input.id):
 								default:
-									throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
+									throw new InternalError('Closure adapter marker escapes its receiver query in ${fn.name}');
 							}
 							uses.set(input.id, (uses.exists(input.id) ? uses.get(input.id) : 0) + 1);
 						}
@@ -325,15 +326,15 @@ class WasmGcModuleBuilder {
 					switch block.terminator.value {
 						case Return(value) | Throw(value)
 							| Rethrow(value) if (value != null && markers.exists(value.id)):
-							throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
+							throw new InternalError('Closure adapter marker escapes its receiver query in ${fn.name}');
 						case Branch(condition, _, _), Switch(condition, _, _) if (markers.exists(condition.id)):
-							throw 'Closure adapter marker escapes its receiver query in ${fn.name}';
+							throw new InternalError('Closure adapter marker escapes its receiver query in ${fn.name}');
 						default:
 					}
 			}
 			for (id in markers.keys())
 				if (uses.get(id) != 1)
-					throw 'Closure adapter marker is not used exactly once in ${fn.name}';
+					throw new InternalError('Closure adapter marker is not used exactly once in ${fn.name}');
 		}
 		if (reflectionTable != null)
 			WasmReflectionTable.fill(reflectionTable.bytes, program, tableSlots, plan.runtimeTypeIds);
@@ -364,7 +365,7 @@ class WasmGcModuleBuilder {
 					gcContext.methods, closureTypes, tableSlots, exceptionTag, [], program, representation,
 					staticData.addresses));
 			} catch (error:Dynamic) {
-				throw 'Wasm GC lowering failed in ${fn.name}: ${Std.string(error)}';
+				throw new InternalError('Wasm GC lowering failed in ${fn.name}: ${Std.string(error)}');
 			}
 		}
 		compiler.backend.wasm.WasmTypedInterfaceTables.lower(module, functions, tableSlots, plan.objectRootTypeIndex);
@@ -381,7 +382,7 @@ class WasmGcModuleBuilder {
 			});
 		var entry = functions.get(preferredEntry);
 		if (entry == null)
-			throw 'Wasm GC entry point $preferredEntry was not emitted';
+			throw new InternalError('Wasm GC entry point $preferredEntry was not emitted');
 		var init = WasmModuleSupport.hasFunction(program, "__init") ? functions.get("__init") : null;
 		var startInit:Null<Array<WasmInstruction>> = staticDataInit;
 		if (reflectionTable != null)
@@ -391,7 +392,7 @@ class WasmGcModuleBuilder {
 		for (exported in exportedFunctions) {
 			var exportIndex = functions.get(exportAdapters.exists(exported) ? exportAdapters.get(exported) : exported);
 			if (exportIndex == null)
-				throw 'Wasm GC export "$exported" is not a reachable function';
+				throw new InternalError('Wasm GC export "$exported" is not a reachable function');
 			module.exports.push({name: exported, functionIndex: exportIndex});
 		}
 		// Chrome's currently shipped Wasm EH implementation accepts the legacy
@@ -446,7 +447,7 @@ class WasmGcModuleBuilder {
 		if (staticData.segments.length == 0)
 			return null;
 		if (plan.staticDataTypeIndex < 0)
-			throw "Wasm GC static data has no planned array type";
+			throw new InternalError("Wasm GC static data has no planned array type");
 		var blob = haxe.io.Bytes.alloc(staticData.end);
 		for (segment in staticData.segments)
 			blob.blit(segment.offset, segment.bytes, 0, segment.bytes.length);
@@ -486,19 +487,19 @@ class WasmGcModuleBuilder {
 			usedCNatives = reachableGcCNatives(program, reachable);
 		for (native in program.natives)
 			if (usedNatives.exists(native.name) && !isSupportedGcNative(program, native.name)) {
-				throw 'Wasm GC lowering does not support runtime native "${native.name}" yet';
+				throw new InternalError('Wasm GC lowering does not support runtime native "${native.name}" yet');
 			}
 		for (native in program.cNatives)
 			if (usedCNatives.exists(native.name)) {
 				if (directCNatives.exists(native.name) && isGcPointerRelease(program, native))
-					throw 'Wasm GC native release function "${native.name}" is callable only by owned pointer or byte-result cleanup';
+					throw new InternalError('Wasm GC native release function "${native.name}" is callable only by owned pointer or byte-result cleanup');
 				if (isGcPointerRelease(program, native))
 					validateGcPointerReleaseImport(native);
 				else
 					validateGcCNative(native);
 				if (WasmModuleSupport.isGcNativePointerType(native.result) && native.pointerOwnership == "owned") {
 					if (native.pointerRelease == null)
-						throw 'Wasm GC C native "${native.name}" is missing its owned pointer release symbol';
+						throw new InternalError('Wasm GC C native "${native.name}" is missing its owned pointer release symbol');
 					validateGcPointerRelease(native, requiredCNativeBySymbol(program, native.pointerRelease));
 				}
 				if ((switch (native.result) {
@@ -510,7 +511,7 @@ class WasmGcModuleBuilder {
 					validateGcPointerLength(native, lengthNative);
 					if (native.pointerOwnership == "owned") {
 						if (native.pointerRelease == null)
-							throw 'Wasm GC C native "${native.name}" is missing its owned pointer release symbol';
+							throw new InternalError('Wasm GC C native "${native.name}" is missing its owned pointer release symbol');
 						validateGcPointerRelease(native, requiredCNativeBySymbol(program, native.pointerRelease));
 					}
 				}
@@ -568,7 +569,7 @@ class WasmGcModuleBuilder {
 						case MethodCall(_, receiver, _, _,
 							_) if (isObjectReference(receiver.type) || isVirtualReference(receiver.type)):
 						default:
-							throw 'Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet';
+							throw new InternalError('Wasm GC lowering does not support instruction ${Std.string(located.value)} in "${fn.name}" yet');
 					}
 		}
 	}
@@ -835,7 +836,7 @@ class WasmGcModuleBuilder {
 						[for (index in 0...arguments.length) index]),
 						body = switch bodyResult {
 					case Handled(instructions): instructions;
-					case UseDefault: throw 'Wasm GC runtime native "${native.name}" has no wrapper implementation';
+					case UseDefault: throw new InternalError('Wasm GC runtime native "${native.name}" has no wrapper implementation');
 				};
 				if ((switch (native.result) {
 					case Void: false;
@@ -950,9 +951,9 @@ class WasmGcModuleBuilder {
 
 	static function validateGcCNative(native:IrCNative):Void {
 		if (native.argumentModes.length != native.arguments.length)
-			throw 'Wasm GC C native "${native.name}" has invalid argument ABI metadata';
+			throw new InternalError('Wasm GC C native "${native.name}" has invalid argument ABI metadata');
 		if (native.pointerSize != null && native.pointerSize != 4)
-			throw 'Wasm GC C native "${native.name}" requires a 32-bit HXI pointer ABI for Wasm linear scratch addresses';
+			throw new InternalError('Wasm GC C native "${native.name}" requires a 32-bit HXI pointer ABI for Wasm linear scratch addresses');
 		if (native.fixedResult != null
 			&& (!native.fixedResult.pointerFree
 			|| native.fixedResult.size <= 0
@@ -960,14 +961,14 @@ class WasmGcModuleBuilder {
 			|| native.fixedResult.alignment <= 0
 			|| native.fixedResult.alignment > 0x10000
 			|| (native.fixedResult.alignment & (native.fixedResult.alignment - 1)) != 0))
-			throw 'Wasm GC C native "${native.name}" requires a pointer-free fixed aggregate result layout';
+			throw new InternalError('Wasm GC C native "${native.name}" requires a pointer-free fixed aggregate result layout');
 		for (index in 0...native.arguments.length)
 			switch native.argumentModes[index] {
 				case Value:
 					try
 						gcCNativeValueType(native.arguments[index])
 					catch (error:Dynamic)
-						throw 'Wasm GC C native "${native.name}" value argument $index is unsupported: $error';
+						throw new InternalError('Wasm GC C native "${native.name}" value argument $index is unsupported: $error');
 				case BytesInput(lengthArgument):
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
@@ -976,7 +977,7 @@ class WasmGcModuleBuilder {
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
-						throw 'Wasm GC C native "${native.name}" requires byte input with an integer length';
+						throw new InternalError('Wasm GC C native "${native.name}" requires byte input with an integer length');
 				case BytesInputOutput(lengthArgument):
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
@@ -985,7 +986,7 @@ class WasmGcModuleBuilder {
 						|| lengthArgument < 0
 						|| lengthArgument >= native.arguments.length
 						|| !compiler.ir.IrVerifier.validByteInputCount(native.arguments[lengthArgument]))
-						throw 'Wasm GC C native "${native.name}" requires mutable byte input with an integer length';
+						throw new InternalError('Wasm GC C native "${native.name}" requires mutable byte input with an integer length');
 				case BytesOutput(sizeArgument):
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
@@ -1001,13 +1002,13 @@ class WasmGcModuleBuilder {
 						case BytesSize: false;
 						default: true;
 					}))
-						throw 'Wasm GC C native "${native.name}" requires a GC byte size pointer for output buffers';
+						throw new InternalError('Wasm GC C native "${native.name}" requires a GC byte size pointer for output buffers');
 				case BytesSize:
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
 						default: true;
 					}))
-						throw 'Wasm GC C native "${native.name}" requires a GC byte view for output size pointers';
+						throw new InternalError('Wasm GC C native "${native.name}" requires a GC byte view for output size pointers');
 				case FixedInput(size, alignment, _) | FixedValue(size, alignment, _) | FixedOutput(size, alignment,
 					_) | FixedInputOutput(size, alignment, _):
 					if ((switch (native.arguments[index]) {
@@ -1019,13 +1020,13 @@ class WasmGcModuleBuilder {
 						|| alignment <= 0
 						|| alignment > 0x10000
 						|| (alignment & (alignment - 1)) != 0)
-						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer with a valid fixed aggregate layout';
+						throw new InternalError('Wasm GC C native "${native.name}" requires a managed byte buffer with a valid fixed aggregate layout');
 				case Output | InputOutput:
 					if ((switch (native.arguments[index]) {
 						case ManagedBytes: false;
 						default: true;
 					}))
-						throw 'Wasm GC C native "${native.name}" requires a managed byte buffer for scalar output pointers';
+						throw new InternalError('Wasm GC C native "${native.name}" requires a managed byte buffer for scalar output pointers');
 			}
 		switch native.result {
 			case Void:
@@ -1035,15 +1036,15 @@ class WasmGcModuleBuilder {
 			case ManagedBytes if (native.fixedResult != null):
 			case ManagedBytes if (native.pointerLength != null):
 				if (native.pointerOwnership != "borrowed" && native.pointerOwnership != "owned")
-					throw 'Wasm GC C native "${native.name}" requires borrowed or owned pointer metadata';
+					throw new InternalError('Wasm GC C native "${native.name}" requires borrowed or owned pointer metadata');
 			case Abstract("native_pointer")
 				if (native.pointerLength == null
 				&& (native.pointerOwnership == "borrowed"
 				|| (native.pointerOwnership == "owned" && native.pointerRelease != null))):
 			case Abstract("native_pointer"):
-				throw 'Wasm GC C native "${native.name}" requires borrowed or releasable owned opaque pointer metadata';
+				throw new InternalError('Wasm GC C native "${native.name}" requires borrowed or releasable owned opaque pointer metadata');
 			case _:
-				throw 'Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}';
+				throw new InternalError('Wasm GC C native "${native.name}" has unsupported result type ${Std.string(native.result)}');
 		}
 	}
 
@@ -1067,7 +1068,7 @@ class WasmGcModuleBuilder {
 								if (candidate.name == name)
 									native = candidate;
 							if (native == null)
-								throw 'Wasm GC map projection "$name" has no runtime declaration';
+								throw new InternalError('Wasm GC map projection "$name" has no runtime declaration');
 							var projectionName = WasmGcMaps.projectionName(name, output.type);
 							if (!functions.exists(projectionName))
 								functions.set(projectionName,
@@ -1084,7 +1085,7 @@ class WasmGcModuleBuilder {
 			case I32: false;
 			default: true;
 		}) || pointer.arguments.length != length.arguments.length)
-			throw 'Wasm GC C native "${pointer.name}" has an incompatible byte-result length import';
+			throw new InternalError('Wasm GC C native "${pointer.name}" has an incompatible byte-result length import');
 		for (index in 0...pointer.arguments.length)
 			if (!Type.enumEq(pointer.arguments[index], length.arguments[index])
 				|| (switch (pointer.argumentModes[index]) {
@@ -1094,7 +1095,7 @@ class WasmGcModuleBuilder {
 				case Value: false;
 				default: true;
 			}))
-				throw 'Wasm GC C native "${pointer.name}" requires scalar value arguments for its byte-result length import';
+				throw new InternalError('Wasm GC C native "${pointer.name}" requires scalar value arguments for its byte-result length import');
 	}
 
 	static function validateGcPointerRelease(pointer:IrCNative, release:IrCNative):Void {
@@ -1110,7 +1111,7 @@ class WasmGcModuleBuilder {
 			case Value: false;
 			default: true;
 		}))
-			throw 'Wasm GC C native "${pointer.name}" requires a void release import accepting one raw native pointer';
+			throw new InternalError('Wasm GC C native "${pointer.name}" requires a void release import accepting one raw native pointer');
 	}
 
 	static function validateGcPointerReleaseImport(release:IrCNative):Void {
@@ -1124,7 +1125,7 @@ class WasmGcModuleBuilder {
 			case Value: false;
 			default: true;
 		}))
-			throw 'Wasm GC C release import "${release.name}" must accept one raw native pointer and return void';
+			throw new InternalError('Wasm GC C release import "${release.name}" must accept one raw native pointer and return void');
 	}
 
 	static function isGcNativePointerArgument(type:IrType):Bool
@@ -1141,7 +1142,7 @@ class WasmGcModuleBuilder {
 			case F64: F64;
 			case Abstract("native_pointer"): I32;
 			case Abstract("native_callback"): I32;
-			case _: throw 'Wasm GC C ABI supports scalar arguments only, got ${Std.string(type)}';
+			case _: throw new InternalError('Wasm GC C ABI supports scalar arguments only, got ${Std.string(type)}');
 		};
 
 	static function addGcCNativeImports(module:WasmModule, functions:Map<String, Int>, program:IrProgram,
@@ -1277,7 +1278,7 @@ class WasmGcModuleBuilder {
 		for (native in program.cNatives)
 			if (native.symbol == symbol)
 				return native;
-		throw 'Wasm GC byte result references missing length import "$symbol"';
+		throw new InternalError('Wasm GC byte result references missing length import "$symbol"');
 	}
 
 	static function collectGcClosureTypes(module:WasmModule, plan:WasmGcTypePlan,
@@ -1304,7 +1305,7 @@ class WasmGcModuleBuilder {
 			includeInstance:Bool):Void {
 		var arguments = switch closureType {
 			case Function(args, _): args;
-			default: throw 'Wasm GC closure has a non-function type ${Std.string(closureType)}';
+			default: throw new InternalError('Wasm GC closure has a non-function type ${Std.string(closureType)}');
 		}, resultType:IrType = switch closureType {
 			case Function(_, result): result;
 			default: Void;
@@ -1322,7 +1323,7 @@ class WasmGcModuleBuilder {
 			if (existing.instanceType == null)
 				existing.instanceType = instanceType;
 			else if (existing.instanceType != instanceType)
-				throw 'Wasm GC closure signature ${Std.string(closureType)} has conflicting instance call types';
+				throw new InternalError('Wasm GC closure signature ${Std.string(closureType)} has conflicting instance call types');
 		}
 	}
 
@@ -1344,16 +1345,16 @@ class WasmGcModuleBuilder {
 		for (targetName in names) {
 			var target = findFunction(program, targetName);
 			if (target == null || target.arguments.length == 0)
-				throw 'Wasm GC instance closure target "$targetName" has no receiver parameter';
+				throw new InternalError('Wasm GC instance closure target "$targetName" has no receiver parameter');
 			var receiverType:Null<String> = switch target.arguments[0].type {
 				case Obj(name): name;
 				case Dyn | Virtual(_): null;
-				default: throw 'Wasm GC instance closure target "$targetName" has unsupported receiver type ${Std.string(target.arguments[0].type)}';
+				default: throw new InternalError('Wasm GC instance closure target "$targetName" has unsupported receiver type ${Std.string(target.arguments[0].type)}');
 			}, thunkName = gcClosureThunkName(targetName), functionIndex = functions.get(targetName);
 			if (functionIndex == null)
-				throw 'Wasm GC instance closure target "$targetName" is not reachable';
+				throw new InternalError('Wasm GC instance closure target "$targetName" is not reachable');
 			if (functions.exists(thunkName))
-				throw 'Wasm GC closure thunk name collides with function "$thunkName"';
+				throw new InternalError('Wasm GC closure thunk name collides with function "$thunkName"');
 			var scalar = plan.scalarSignatures.get(targetName),
 				parameters = [Ref({nullable: true, heap: Any})]
 					.concat([for (argument in target.arguments.slice(1)) plan.valueType(argument.type)]),
@@ -1440,7 +1441,7 @@ class WasmGcModuleBuilder {
 			var release = requiredCNativeBySymbol(program, symbol),
 				functionIndex = functions.get(release.name);
 			if (functionIndex == null)
-				throw 'Wasm GC has no imported release function "$symbol"';
+				throw new InternalError('Wasm GC has no imported release function "$symbol"');
 			result.set(symbol, functionIndex);
 		}
 		return result;

@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.ffi.CxxModel.CxxFunction;
 import compiler.ffi.CxxModel.CxxMethod;
 import compiler.ffi.CxxModel.CxxModel;
@@ -25,7 +26,7 @@ class CxxProjection {
 	public static function sources(model:CxxModel, hxi:HxiInterface, ?profile:HxiProjectionProfile,
 			?nativePlans:Array<HxiFunctionAbi>):Array<CxxProjectionSource> {
 		if (hxi.library == null)
-			throw "CXX200 C++ Haxe projection requires an HXI library";
+			throw new InternalError("CXX200 C++ Haxe projection requires an HXI library");
 		var classNames = projectedClassNames(model),
 			abi = HxiAbi.forInterface(hxi),
 			availablePlans = nativePlans == null ? abi.functions() : nativePlans,
@@ -42,7 +43,7 @@ class CxxProjection {
 						var recordName = pointerRecord(functionModel.result),
 							typeName = classNames.get(recordName);
 						if (typeName == null)
-							throw 'CXX205 owned C++ result ${functionModel.qualifiedName} refers to an unprojected record $recordName';
+							throw new InternalError('CXX205 owned C++ result ${functionModel.qualifiedName} refers to an unprojected record $recordName');
 						ownedRecords.set(functionModel.qualifiedName, typeName);
 					case _:
 				}
@@ -169,7 +170,7 @@ class CxxProjection {
 				continue;
 			var plan = method.loweredName == null ? null : plans.get(method.loweredName);
 			if (plan == null)
-				throw 'CXX201 missing lowered call plan for ${method.qualifiedName}';
+				throw new InternalError('CXX201 missing lowered call plan for ${method.qualifiedName}');
 			var index = indices.get(method.name);
 			if (index == null)
 				index = 0;
@@ -187,10 +188,10 @@ class CxxProjection {
 					parameterIndex, method.qualifiedName);
 			}
 			if (argumentCursor != plan.arguments.length)
-				throw 'CXX201 native parameter expansion mismatch for ${method.qualifiedName}';
+				throw new InternalError('CXX201 native parameter expansion mismatch for ${method.qualifiedName}');
 			var result = HxiHaxeEmitter.project(plan.result, true, profile);
 			if (result == null)
-				throw 'CXX201 unsupported Haxe projection for ${method.qualifiedName} result';
+				throw new InternalError('CXX201 unsupported Haxe projection for ${method.qualifiedName} result');
 			var publicFunction = HxiHaxeEmitter.projectedFunctionName(method.loweredName, profile),
 				callArguments = (method.isStatic ? [] : ["nativeHandle()"]).concat(calls),
 				staticModifier = method.isStatic ? " static" : "";
@@ -230,16 +231,16 @@ class CxxProjection {
 		var constructors = [for (method in methods) if (method.isConstructor) method],
 			destructors = [for (method in methods) if (method.isDestructor) method];
 		if (constructors.length != 0 && destructors.length == 0)
-			throw 'CXX203 lifetime projection for ${record.qualifiedName} requires an explicit destructor';
+			throw new InternalError('CXX203 lifetime projection for ${record.qualifiedName} requires an explicit destructor');
 		if (destructors.length != 0) {
 			var destructor = destructors[0],
 				destructorPlan = destructor.loweredName == null ? null : plans.get(destructor.loweredName);
 			if (destructorPlan == null)
-				throw 'CXX201 missing lowered destructor call plan for ${destructor.qualifiedName}';
+				throw new InternalError('CXX201 missing lowered destructor call plan for ${destructor.qualifiedName}');
 			switch destructorPlan.dispatch {
 				case CxxDestructor:
 				case _:
-					throw 'CXX204 destructor ${destructor.qualifiedName} has an invalid native dispatch plan';
+					throw new InternalError('CXX204 destructor ${destructor.qualifiedName} has an invalid native dispatch plan');
 			}
 			var destructorFunction = HxiHaxeEmitter.projectedFunctionName(destructor.loweredName, profile);
 			output.add('\tpublic function close():Void {\n');
@@ -255,11 +256,11 @@ class CxxProjection {
 			var constructor = constructors[index],
 				constructorPlan = constructor.loweredName == null ? null : plans.get(constructor.loweredName);
 			if (constructorPlan == null)
-				throw 'CXX201 missing lowered constructor call plan for ${constructor.qualifiedName}';
+				throw new InternalError('CXX201 missing lowered constructor call plan for ${constructor.qualifiedName}');
 			switch constructorPlan.dispatch {
 				case CxxConstructor:
 				case _:
-					throw 'CXX204 constructor ${constructor.qualifiedName} has an invalid native dispatch plan';
+					throw new InternalError('CXX204 constructor ${constructor.qualifiedName} has an invalid native dispatch plan');
 			}
 			var constructorArguments:Array<String> = [],
 				constructorCalls:Array<String> = [];
@@ -267,7 +268,7 @@ class CxxProjection {
 				var argument = constructorPlan.arguments[parameterIndex + 1],
 					projected = HxiHaxeEmitter.project(argument, false, profile);
 				if (projected == null)
-					throw 'CXX201 unsupported Haxe projection for ${constructor.qualifiedName} parameter ${parameterIndex + 1}';
+					throw new InternalError('CXX201 unsupported Haxe projection for ${constructor.qualifiedName} parameter ${parameterIndex + 1}');
 				var argumentName = identifier(constructor.parameters[parameterIndex].name)
 					? constructor.parameters[parameterIndex].name : 'arg$parameterIndex';
 				constructorArguments.push('$argumentName:${projected.haxeType}');
@@ -317,7 +318,7 @@ class CxxProjection {
 				continue;
 			var plan = functionModel.loweredName == null ? null : plans.get(functionModel.loweredName);
 			if (plan == null)
-				throw 'CXX201 missing lowered call plan for ${functionModel.qualifiedName}';
+				throw new InternalError('CXX201 missing lowered call plan for ${functionModel.qualifiedName}');
 			var index = indices.get(functionModel.name);
 			if (index == null)
 				index = 0;
@@ -335,13 +336,13 @@ class CxxProjection {
 					profile, parameterIndex, functionModel.qualifiedName);
 			}
 			if (argumentCursor != plan.arguments.length)
-				throw 'CXX201 native parameter expansion mismatch for ${functionModel.qualifiedName}';
+				throw new InternalError('CXX201 native parameter expansion mismatch for ${functionModel.qualifiedName}');
 			var ownedRecordType = ownedRecords.get(functionModel.qualifiedName),
 				result = ownedRecordType == null ? HxiHaxeEmitter.project(plan.result, true, profile) : null,
 				resultType = ownedRecordType == null ? result == null
 					? null : result.haxeType : "Owned" + ownedRecordType;
 			if (resultType == null)
-				throw 'CXX201 unsupported Haxe projection for ${functionModel.qualifiedName} result';
+				throw new InternalError('CXX201 unsupported Haxe projection for ${functionModel.qualifiedName} result');
 			var nativeName = HxiHaxeEmitter.projectedFunctionName(functionModel.loweredName, profile);
 			output.add('\tpublic static function $functionName(${arguments.join(", ")}):$resultType {\n');
 			for (line in setup)
@@ -392,7 +393,7 @@ class CxxProjection {
 			if (stringValue == null || stringValue.haxeType != "String" || lengthValue == null
 				|| lengthValue.haxeType != "Int"
 				&& lengthValue.haxeType != "haxe.Int64")
-				throw 'CXX201 unsupported Haxe std::string_view projection for $owner parameter ${index + 1}';
+				throw new InternalError('CXX201 unsupported Haxe std::string_view projection for $owner parameter ${index + 1}');
 			arguments.push('$argumentName:String');
 			var bytesName = '__cxx_${argumentName}_bytes_$index';
 			setup.push('var $bytesName = haxe.io.Bytes.ofString($argumentName);');
@@ -409,7 +410,7 @@ class CxxProjection {
 				|| lengthValue == null
 				|| lengthValue.haxeType != "Int"
 				&& lengthValue.haxeType != "haxe.Int64")
-				throw 'CXX201 unsupported Haxe std::span projection for $owner parameter ${index + 1}';
+				throw new InternalError('CXX201 unsupported Haxe std::span projection for $owner parameter ${index + 1}');
 			arguments.push('$argumentName:haxe.io.Bytes');
 			calls.push(argumentName);
 			calls.push(lengthValue.haxeType == "haxe.Int64"
@@ -418,7 +419,7 @@ class CxxProjection {
 		}
 		var projected = HxiHaxeEmitter.project(nativeArguments[cursor], false, profile);
 		if (projected == null)
-			throw 'CXX201 unsupported Haxe projection for $owner parameter ${index + 1}';
+			throw new InternalError('CXX201 unsupported Haxe projection for $owner parameter ${index + 1}');
 		arguments.push('$argumentName:${projected.haxeType}');
 		calls.push(argumentName);
 		return cursor + 1;
@@ -446,7 +447,7 @@ class CxxProjection {
 			var typeName = counts.get(record.name) == 1 ? record.name : pascalQualifiedName(record.qualifiedName);
 			validateTypeName(typeName, record);
 			if (Lambda.exists([for (other in result.keys()) result.get(other)], value -> value == typeName))
-				throw 'CXX202 projected class name collision for ${record.qualifiedName}: "$typeName"';
+				throw new InternalError('CXX202 projected class name collision for ${record.qualifiedName}: "$typeName"');
 			result.set(record.qualifiedName, typeName);
 		}
 		return result;
@@ -463,17 +464,17 @@ class CxxProjection {
 	static function validateTypeName(name:String, record:CxxRecord):Void {
 		if (!identifier(name) || name == "Bool" || name == "Float" || name == "Int" || name == "String"
 			|| name == "Void")
-			throw 'CXX202 invalid projected class name "$name" for ${record.qualifiedName}';
+			throw new InternalError('CXX202 invalid projected class name "$name" for ${record.qualifiedName}');
 	}
 
 	static function validateMethodName(name:String, method:CxxMethod):Void
 		if (!identifier(name) || name == "fromNative" || name == "nativeHandle" || name == "isClosed"
 			|| name == "close")
-			throw 'CXX202 invalid projected method name "$name" for ${method.qualifiedName}';
+			throw new InternalError('CXX202 invalid projected method name "$name" for ${method.qualifiedName}');
 
 	static function validateFunctionName(name:String, functionModel:CxxFunction):Void
 		if (!identifier(name))
-			throw 'CXX202 invalid projected function name "$name" for ${functionModel.qualifiedName}';
+			throw new InternalError('CXX202 invalid projected function name "$name" for ${functionModel.qualifiedName}');
 
 	static function identifier(value:String):Bool {
 		if (value == null || value.length == 0)

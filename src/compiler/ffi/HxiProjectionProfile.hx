@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import haxe.Json;
 
 typedef HxiResultErrorProjection = {
@@ -83,11 +84,11 @@ class HxiProjectionProfile {
 		try {
 			value = Json.parse(source);
 		} catch (error:Dynamic) {
-			throw 'Invalid Haxe projection profile "$path": ${Std.string(error)}';
+			throw new InternalError('Invalid Haxe projection profile "$path": ${Std.string(error)}');
 		}
 
 		if (value == null || !Reflect.isObject(value) || Std.isOfType(value, Array))
-			throw 'Invalid Haxe projection profile "$path": expected a JSON object';
+			throw new InternalError('Invalid Haxe projection profile "$path": expected a JSON object');
 
 		var interfaceName = requiredString(value, "interface", path),
 			packageName = optionalString(value, "package", path),
@@ -114,7 +115,7 @@ class HxiProjectionProfile {
 		if (Reflect.hasField(value, "modules")) {
 			var modules = Reflect.field(value, "modules");
 			if (modules == null || !Reflect.isObject(modules) || Std.isOfType(modules, Array))
-				throw 'Invalid Haxe projection profile "$path": "modules" must be an object';
+				throw new InternalError('Invalid Haxe projection profile "$path": "modules" must be an object');
 			var configuredFunctions = moduleString(modules, "functions", path),
 				configuredTypes = moduleString(modules, "types", path),
 				configuredConstants = moduleString(modules, "constants", path);
@@ -140,7 +141,7 @@ class HxiProjectionProfile {
 			return null;
 		var result = Reflect.field(value, field);
 		if (!Std.isOfType(result, String) || result.length == 0)
-			throw 'Invalid Haxe projection profile "$path": "modules.$field" must be a non-empty string';
+			throw new InternalError('Invalid Haxe projection profile "$path": "modules.$field" must be a non-empty string');
 		return result;
 	}
 
@@ -149,12 +150,12 @@ class HxiProjectionProfile {
 			return [];
 		var raw = Reflect.field(value, field);
 		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw 'Invalid Haxe projection profile "$path": "$field" must be an object';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$field" must be an object');
 		var result:Map<String, HxiResultErrorProjection> = [];
 		for (resultType in Reflect.fields(raw)) {
 			var item = Reflect.field(raw, resultType);
 			if (item == null || !Reflect.isObject(item) || Std.isOfType(item, Array))
-				throw 'Invalid Haxe projection profile "$path": "$field.$resultType" must be an object';
+				throw new InternalError('Invalid Haxe projection profile "$path": "$field.$resultType" must be an object');
 			var policyPath = '$field.$resultType',
 				successValue = requiredPolicyString(item, "successValue", policyPath, path),
 				diagnosticFunction = optionalPolicyString(item, "diagnosticFunction", policyPath, path),
@@ -173,7 +174,7 @@ class HxiProjectionProfile {
 	static function requiredPolicyString(value:Dynamic, field:String, policyPath:String, path:String):String {
 		var result = optionalPolicyString(value, field, policyPath, path);
 		if (result == null || result.length == 0)
-			throw 'Invalid Haxe projection profile "$path": "$policyPath.$field" is required';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$policyPath.$field" is required');
 		return result;
 	}
 
@@ -182,7 +183,7 @@ class HxiProjectionProfile {
 			return null;
 		var result = Reflect.field(value, field);
 		if (!Std.isOfType(result, String))
-			throw 'Invalid Haxe projection profile "$path": "$policyPath.$field" must be a string';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$policyPath.$field" must be a string');
 		return result;
 	}
 
@@ -193,7 +194,7 @@ class HxiProjectionProfile {
 
 	static function validateCase(value:String):String {
 		if (value != "preserve" && value != "camel")
-			throw 'Invalid Haxe projection case "$value"; expected "preserve" or "camel"';
+			throw new InternalError('Invalid Haxe projection case "$value"; expected "preserve" or "camel"');
 		return value;
 	}
 
@@ -208,7 +209,7 @@ class HxiProjectionProfile {
 	static function requiredString(value:Dynamic, field:String, path:String):String {
 		var result = optionalString(value, field, path);
 		if (result == null || result.length == 0)
-			throw 'Invalid Haxe projection profile "$path": "$field" is required';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$field" is required');
 		return result;
 	}
 
@@ -219,7 +220,7 @@ class HxiProjectionProfile {
 		if (result == null)
 			return null;
 		if (!Std.isOfType(result, String))
-			throw 'Invalid Haxe projection profile "$path": "$field" must be a string';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$field" must be a string');
 		return result;
 	}
 
@@ -228,11 +229,11 @@ class HxiProjectionProfile {
 			return [];
 		var raw = Reflect.field(value, field);
 		if (!Std.isOfType(raw, Array))
-			throw 'Invalid Haxe projection profile "$path": "$field" must be an array';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$field" must be an array');
 		var items:Array<Dynamic> = cast raw, result:Array<String> = [];
 		for (item in items) {
 			if (!Std.isOfType(item, String))
-				throw 'Invalid Haxe projection profile "$path": "$field" must contain only strings';
+				throw new InternalError('Invalid Haxe projection profile "$path": "$field" must contain only strings');
 			result.push(item);
 		}
 		return result;
@@ -243,12 +244,12 @@ class HxiProjectionProfile {
 			return [];
 		var raw = Reflect.field(value, field);
 		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw 'Invalid Haxe projection profile "$path": "$field" must be an object';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$field" must be an object');
 		var result:Map<String, String> = [];
 		for (key in Reflect.fields(raw)) {
 			var item = Reflect.field(raw, key);
 			if (!Std.isOfType(item, String))
-				throw 'Invalid Haxe projection profile "$path": "$field.$key" must be a string';
+				throw new InternalError('Invalid Haxe projection profile "$path": "$field.$key" must be a string');
 			result.set(key, item);
 		}
 		return result;
@@ -259,7 +260,7 @@ class HxiProjectionProfile {
 			return [];
 		var raw = Reflect.field(value, field);
 		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw 'Invalid Haxe projection profile "$path": "$field" must be an object';
+			throw new InternalError('Invalid Haxe projection profile "$path": "$field" must be an object');
 		var result:Map<String, Map<String, String>> = [];
 		for (key in Reflect.fields(raw)) {
 			var item = Reflect.field(raw, key), wrapper:Dynamic = {};

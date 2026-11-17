@@ -1,15 +1,11 @@
 package runtime;
 
 /** Stable runtime failure status paired with human-readable context. */
-class RuntimeError {
+class RuntimeError extends haxe.Exception {
 	public final status:RuntimeStatus;
-	public final message:String;
 
 	public function new(status:RuntimeStatus, message:String) {
+		super(message);
 		this.status = status;
-		this.message = message;
 	}
-
-	public function toString():String
-		return message;
 }

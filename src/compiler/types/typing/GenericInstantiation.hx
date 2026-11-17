@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
 import compiler.syntax.Ast.AstFunction;
@@ -169,7 +170,7 @@ class GenericInstantiation {
 		if (receiver != null) {
 			var receiverType = representationReceiver;
 			if (receiverType == null)
-				throw "Generic receiver representation was not resolved";
+				throw new InternalError("Generic receiver representation was not resolved");
 			typed.unshift(session.representation.boundaryCast(receiver, receiverType));
 		}
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
@@ -312,13 +313,13 @@ class GenericInstantiation {
 
 	static function requiredMapValue<T>(source:Map<String, T>, name:String):T {
 		if (!source.exists(name))
-			throw 'Missing map entry "$name"';
+			throw new InternalError('Missing map entry "$name"');
 		return source.get(name);
 	}
 
 	static function requiredString(value:Null<String>):String {
 		if (value == null)
-			throw "Expected string";
+			throw new InternalError("Expected string");
 		return value;
 	}
 

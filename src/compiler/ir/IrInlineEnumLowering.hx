@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -21,7 +22,7 @@ class IrInlineEnumLowering {
 		function storage(name:String):compiler.ir.IrInlineEnumLayout.IrInlineEnumShape {
 			var shape = planner.shape(name);
 			if (shape == null)
-				throw 'Missing selected inline enum storage "$name"';
+				throw new InternalError('Missing selected inline enum storage "$name"');
 			return shape;
 		}
 		var selectedStorage:Map<String, String> = [];
@@ -304,9 +305,9 @@ class IrInlineEnumLowering {
 								default:
 							}
 						case ToDyn(_, value) if (inlineEnum(value.type)):
-							throw "Eligible enum unexpectedly escapes to Dynamic";
+							throw new InternalError("Eligible enum unexpectedly escapes to Dynamic");
 						case SafeCast(output, _) if (inlineEnum(output.type)):
-							throw "Eligible enum unexpectedly enters from Dynamic";
+							throw new InternalError("Eligible enum unexpectedly enters from Dynamic");
 						case SafeCast(output, _) if (switch output.type {
 							case Array(_), Iterator(_): true;
 							default: false;
@@ -340,7 +341,8 @@ class IrInlineEnumLowering {
 							};
 							if (!supported
 								&& (containsMapped(value.type) || (output != null && containsMapped(output.type))))
-								throw 'Unsupported inline enum escape passed eligibility: ' + Std.string(located.value);
+								throw new InternalError('Unsupported inline enum escape passed eligibility: '
+									+ Std.string(located.value));
 						case TypeValue(out, type):
 							var callable = eligibility.callableDescriptors.get(fn.name);
 							instruction = TypeValue(use(out),
@@ -356,7 +358,7 @@ class IrInlineEnumLowering {
 						case Return(value): Return(use(value));
 						case Throw(value):
 							if (containsMapped(value.type))
-								throw 'Unsupported inline enum throw passed eligibility';
+								throw new InternalError('Unsupported inline enum throw passed eligibility');
 							Throw(use(value));
 						case Rethrow(value): Rethrow(use(value));
 						case Jump(id): Jump(id);

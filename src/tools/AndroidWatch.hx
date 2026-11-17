@@ -3,6 +3,7 @@ package tools;
 import build.BuildSession;
 import build.HaxeonProjectBuild;
 import build.Target;
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.BytesOutput;
@@ -37,7 +38,7 @@ class AndroidWatch {
 			jobs:Int, selfHosted:Bool, session:Null<BuildSession>, adb:String, device:String):Int {
 		var port = Std.string(PATCH_PORT);
 		if (Sys.command(adb, ["-s", device, "forward", 'tcp:$port', 'tcp:$port']) != 0)
-			throw 'Could not forward the patch port $port to $device';
+			throw new InternalError('Could not forward the patch port $port to $device');
 		var files = WatchRun.snapshot(project), watcher = WatchRun.openWatcher(project, files);
 		Sys.println('Watching ${project.rootPackage.name} for edits; each is sent to $device (Ctrl-C stops)');
 		while (true) {
@@ -75,7 +76,7 @@ class AndroidWatch {
 			defines:Array<String>, jobs:Int, selfHosted:Bool, session:Null<BuildSession>):Null<AndroidEdit> {
 		var baseline = module + ".hcs", output = editPath(module);
 		if (!FileSystem.exists(baseline))
-			throw 'No Android baseline at $baseline: build and install the app first';
+			throw new InternalError('No Android baseline at $baseline: build and install the app first');
 		// What the last edit left would describe this one if it changed nothing.
 		for (suffix in [
 			"",
@@ -160,7 +161,7 @@ class AndroidWatch {
 			var status = socket.input.readInt32(), revision = socket.input.readInt32();
 			socket.close();
 			return {status: status, revision: revision};
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			socket.close();
 			throw error;
 		}

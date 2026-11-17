@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -158,7 +159,7 @@ class IrValueArrayBridge {
 				[for (leaf in empty) {
 					var actual = [for (item in live) if (item.slot == leaf.slot) item.value],
 						actualActive = [for (item in active) if (item.slot == leaf.slot) item.value];
-					if (actual.length != 1) throw "Incomplete dynamic value-array snapshot";
+					if (actual.length != 1) throw new InternalError("Incomplete dynamic value-array snapshot");
 					{
 						slot:leaf.slot,
 							value:b.phi(leaf.value.type, [
@@ -266,7 +267,7 @@ class IrValueArrayBridge {
 	function requireObject(name:String):IrObject {
 		var object = objects.get(name);
 		if (object == null)
-			throw 'Missing value array object "$name"';
+			throw new InternalError('Missing value array object "$name"');
 		return object;
 	}
 

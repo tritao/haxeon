@@ -1,5 +1,6 @@
 package compiler.types.typing;
 
+import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
@@ -77,7 +78,7 @@ class ExpressionTyper {
 				var value:TypedExpression;
 				try
 					value = bodyTyper.typeExpression(inner, scope, expectedType, inferDynamicLambdaResult)
-				catch (error:Dynamic) {
+				catch (error:haxe.Exception) {
 					session.currentContext.privateAccessDepth--;
 					throw error;
 				}
@@ -206,7 +207,7 @@ class ExpressionTyper {
 			case SizeOf: layout.size;
 			case AlignOf: layout.align;
 			case OffsetOf: 0;
-			case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
+			case TypeInfo: throw new InternalError("typeInfo was dispatched before scalar layout query handling");
 		};
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
@@ -248,7 +249,7 @@ class ExpressionTyper {
 				if (found == null)
 					fail("E1022", 'Record "$name" has no field "$field"', span);
 				cast found;
-			case TypeInfo: throw "typeInfo was dispatched before scalar layout query handling";
+			case TypeInfo: throw new InternalError("typeInfo was dispatched before scalar layout query handling");
 		};
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
@@ -1222,7 +1223,7 @@ class ExpressionTyper {
 			typedValues.push(typedValue);
 		}
 		if (elementType == null)
-			throw "Array element type was not resolved";
+			throw new InternalError("Array element type was not resolved");
 		// Decide storage before coercing any element: a later Float or nullable value can widen it.
 		typedValues = [for (value in typedValues) bodyTyper.coerce(value, elementType, "array element", "E1003")];
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
@@ -1348,7 +1349,7 @@ class ExpressionTyper {
 						"Array comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (keyType == null)
-			throw "Array comprehension item type was not resolved";
+			throw new InternalError("Array comprehension item type was not resolved");
 		loopScope.define(keyName, keyType, span);
 		if (valueName != null)
 			switch originalIterable.type {
@@ -1479,7 +1480,7 @@ class ExpressionTyper {
 						"Map comprehension requires an iterable or an iterator with hasNext():Bool and next()", span);
 		}
 		if (itemType == null)
-			throw "Map comprehension item type was not resolved";
+			throw new InternalError("Map comprehension item type was not resolved");
 		loopScope.define(keyName, itemType, span);
 		if (valueName != null)
 			switch originalIterable.type {
@@ -2195,7 +2196,7 @@ class ExpressionTyper {
 			case Unreachable(span): new TypedExpression(TUnreachable, TNever, span);
 			case EmptyExpression(span): new TypedExpression(TVoidLiteral, TVoid, span);
 			case ErrorExpression(span): new TypedExpression(TNullLiteral, TDynamic, span);
-			default: throw "ExpressionTyper.typeLiteral requires a literal expression";
+			default: throw new InternalError("ExpressionTyper.typeLiteral requires a literal expression");
 		};
 
 	/**
@@ -2394,7 +2395,7 @@ class ExpressionTyper {
 			case 0: TBitAnd(left, right);
 			case 1: TBitXor(left, right);
 			case 2: TBitOr(left, right);
-			default: throw "Unknown bitwise operation";
+			default: throw new InternalError("Unknown bitwise operation");
 		};
 		return new TypedExpression(expression, operandType, span);
 	}

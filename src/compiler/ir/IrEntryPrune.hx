@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrTypeAwareWalk.IrClassDependencies;
 import compiler.ir.IrTypeAwareWalk.IrWalkResult;
@@ -38,11 +39,11 @@ class IrPruneWatch {
 
 	public function noteLookup(pass:String, name:String):Void
 		if (functions.exists(name))
-			throw 'early prune: pass "$pass" looked up function "$name", which the prune removed';
+			throw new InternalError('early prune: pass "$pass" looked up function "$name", which the prune removed');
 
 	public function noteMethodLookup(className:String, method:String):Void
 		if (methods.exists(className + "\u0001" + method))
-			throw 'early prune: a lookup of method "$method" visited class "$className", whose entry the prune removed';
+			throw new InternalError('early prune: a lookup of method "$method" visited class "$className", whose entry the prune removed');
 }
 
 class IrEntryPrune {
@@ -129,7 +130,7 @@ class IrEntryPrune {
 			present.set(fn.name, true);
 		function require(caller:String, callee:String):Void
 			if (removed.exists(callee) && !present.exists(callee))
-				throw 'early prune: after "$pass", "$caller" calls "$callee", which the prune removed';
+				throw new InternalError('early prune: after "$pass", "$caller" calls "$callee", which the prune removed');
 		for (fn in functions)
 			for (block in fn.blocks)
 				for (located in block.instructions)

@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -158,14 +159,14 @@ class WasmLinearDynamicArrays {
 	function string(value:String):Int {
 		var offset = context.strings.get(value);
 		if (offset == null)
-			throw 'Linear Wasm dynamic array runtime string "$value" was not registered';
+			throw new InternalError('Linear Wasm dynamic array runtime string "$value" was not registered');
 		return offset;
 	}
 
 	function concrete(name:String):Int {
 		var index = context.functions.get(name);
 		if (index == null)
-			throw 'Linear Wasm dynamic array runtime requires "$name"';
+			throw new InternalError('Linear Wasm dynamic array runtime requires "$name"');
 		return index;
 	}
 
@@ -196,7 +197,7 @@ class WasmLinearDynamicArrays {
 			case "__array_splice_any": addStorageOperation(name, "splice", [I32, I32, I32], [I32]);
 			case "__array_reverse_any": addStorageOperation(name, "reverse", [I32], []);
 			case "__array_resize_any": addResize(name);
-			default: throw 'Unknown dynamic array operation "$name"';
+			default: throw new InternalError('Unknown dynamic array operation "$name"');
 		};
 
 	// Shared emission helpers.
@@ -304,7 +305,7 @@ class WasmLinearDynamicArrays {
 					var pendingFlag = context.pendingExceptionFlag,
 						pendingValue = context.pendingExceptionValue;
 					if (pendingFlag == null || pendingValue == null)
-						throw "Runtime-neutral exception globals were not initialized";
+						throw new InternalError("Runtime-neutral exception globals were not initialized");
 					builder.localGet(message);
 					builder.emit(GlobalSet(pendingValue));
 					builder.i32Const(1);
@@ -1092,7 +1093,7 @@ class WasmLinearDynamicArrays {
 			]);
 			else if (operation == "unshift") builder.emitAll([I32Const(0), LocalSet(at)]);
 			else {
-				if (position == null) throw "Positioned array insertion requires an index";
+				if (position == null) throw new InternalError("Positioned array insertion requires an index");
 				builder.emitAll([LocalGet(position), LocalSet(at)]);
 			}
 			builder.emitAll([

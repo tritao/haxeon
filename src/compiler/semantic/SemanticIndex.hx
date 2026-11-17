@@ -1,5 +1,6 @@
 package compiler.semantic;
 
+import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceSpan;
 import compiler.modules.ModulePath;
@@ -108,7 +109,7 @@ class SemanticIndex {
 		keys.sort(Reflect.compare);
 		for (key in keys) {
 			if (!declarations.symbols.exists(key))
-				throw 'Missing semantic declaration "$key"';
+				throw new InternalError('Missing semantic declaration "$key"');
 			var declaration = declarations.symbols.get(key),
 				id = new SemanticSymbolId(module, declaration.id);
 			symbols.set(id, {

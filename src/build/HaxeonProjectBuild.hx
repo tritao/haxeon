@@ -7,6 +7,7 @@ import build.execution.ExecutionPlan;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
 import build.native.NativeCache;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import project.ResolvedProject;
 
@@ -52,7 +53,7 @@ class HaxeonProjectBuild {
 			?session:BuildSession, developmentMetadata:Bool = true, ?target:Target, ?baseline:String):Int {
 		var buildTarget = target == null ? Target.detectHost() : target;
 		if (!buildTarget.isWasm() && !buildTarget.isAndroid() && !buildTarget.equals(Target.detectHost()))
-			throw 'The structured build supports the host, wasm32 and android targets, not "$buildTarget"';
+			throw new InternalError('The structured build supports the host, wasm32 and android targets, not "$buildTarget"');
 		var timings = new BuildTimings();
 		timings.add("resolve", resolutionMs);
 		if (instrument)
@@ -112,7 +113,7 @@ class HaxeonProjectBuild {
 				case Process(_, _, _, _):
 			}
 		if (actions.length == 0)
-			throw "Build plan has no compiler action";
+			throw new InternalError("Build plan has no compiler action");
 		return new ExecutionPlan(actions);
 	}
 }

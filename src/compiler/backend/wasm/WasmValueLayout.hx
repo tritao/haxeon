@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrProgram;
@@ -29,7 +30,7 @@ class WasmValueLayout {
 
 	/** Leaves are in declaration order and contain the complete path from the value root. */
 	public function leaves(type:IrType):Array<IrInlineValueSlot> {
-		if (!isValue(type)) throw 'Not a Wasm GC value type: $type';
+		if (!isValue(type)) throw new InternalError('Not a Wasm GC value type: $type');
 		return layout.slots(type);
 	}
 
@@ -63,16 +64,17 @@ class WasmValueLayout {
 		for (part in slot.path) {
 			var name = switch type {
 				case Obj(value): value;
-				default: throw 'Invalid native value path ${slot.path.join(".")}';
+				default: throw new InternalError('Invalid native value path ${slot.path.join(".")}');
 			},
 				object = objects.get(name), found:Null<IrObjectField> = null;
 			if (object != null) for (candidate in object.fields) if (candidate.name == part) found = candidate;
-			if (found == null || found.nativeLayout == null) throw 'Missing native layout for "$name.$part"';
+			if (found == null
+				|| found.nativeLayout == null) throw new InternalError('Missing native layout for "$name.$part"');
 			leaf = found.nativeLayout;
 			offset += leaf.offset;
 			type = found.type;
 		}
-		if (leaf == null) throw "Missing native value leaf";
+		if (leaf == null) throw new InternalError("Missing native value leaf");
 		return {offset: offset, size: leaf.size, alignment: leaf.alignment, signed: leaf.signed, inlineRecord: false};
 	}
 

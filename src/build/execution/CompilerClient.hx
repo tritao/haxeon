@@ -1,5 +1,6 @@
 package build.execution;
 
+import compiler.core.InternalError;
 import compiler.tools.CompilerServerProtocol;
 import haxe.SysTools;
 import haxe.crypto.Sha256;
@@ -60,7 +61,7 @@ class CompilerClient {
 			if (profilePort != null
 				&& (Std.parseInt(profilePort) == null || Std.parseInt(profilePort) < 1
 				|| Std.parseInt(profilePort) > 65535))
-				throw "HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535";
+				throw new InternalError("HAXEON_COMPILER_PROFILE_PORT must be a TCP port from 1 to 65535");
 			var directory = preparedSessionDirectory();
 			// Changes to the compiler, runtime sources, or launch environment select a new worker.
 			// The worker program depends only on the compiler, so every project shares one artifact; each
@@ -76,7 +77,7 @@ class CompilerClient {
 				ensureArtifact(command, compilerSource, workerArtifact, home, "compiler.tools.CompilerServer");
 				if (Sys.systemName() == "Windows") {
 					if (startWindowsWorker(home, hashlink, workerArtifact, statePath, logPath, profilePort) != 0)
-						throw "Could not start compiler worker";
+						throw new InternalError("Could not start compiler worker");
 				} else {
 					var libraryVariable = Sys.systemName() == "Mac" ? "DYLD_LIBRARY_PATH" : "LD_LIBRARY_PATH",
 						libraryPath = [
@@ -114,7 +115,7 @@ class CompilerClient {
 								+ " &"
 						]);
 					if (status != 0)
-						throw "Could not start compiler worker";
+						throw new InternalError("Could not start compiler worker");
 				}
 				var deadline = Sys.time() + 30;
 				while (connection == null && Sys.time() < deadline) {
@@ -122,7 +123,7 @@ class CompilerClient {
 					connection = connect(statePath);
 				}
 				if (connection == null)
-					throw "Compiler worker did not become ready; see " + logPath;
+					throw new InternalError("Compiler worker did not become ready; see " + logPath);
 			}
 			retireWorkers(directory, version, key);
 			markUsed(statePath);
@@ -251,10 +252,10 @@ class CompilerClient {
 					]), home,
 						new Map());
 				if (compileStatus != 0)
-					throw "Could not compile " + mainClass;
+					throw new InternalError("Could not compile " + mainClass);
 				FileSystem.rename(temporary, artifact);
 			}
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			#if (target.threaded && !eval)
 			artifactMutex.release();
 			#end
@@ -312,7 +313,7 @@ class CompilerClient {
 			artifact:String;
 		try {
 			if (!FileSystem.exists(hashlink))
-				throw "missing " + hashlink;
+				throw new InternalError("missing " + hashlink);
 			var directory = preparedSessionDirectory(),
 				identity = new ExecutionAction(new ActionId("compiler-one-shot-v1"), [],
 					build.CompilerSources.roots(compilerSource).concat([Path.join([
@@ -369,7 +370,7 @@ class CompilerClient {
 		FileSystem.createDirectory(directory);
 		if (Sys.systemName() != "Windows") {
 			if (Sys.command("chmod", ["700", directory]) != 0)
-				throw "Could not make the compiler session directory private";
+				throw new InternalError("Could not make the compiler session directory private");
 		} else if (configured != null && configured.length > 0) {
 			// The default under %LOCALAPPDATA% is private already; a configured directory may be shared, so keep only
 			// this user's access, as chmod 700 does.
@@ -381,7 +382,7 @@ class CompilerClient {
 				user + ":(OI)(CI)F",
 				"/q"
 			]) != 0)
-				throw "Could not make the compiler session directory private";
+				throw new InternalError("Could not make the compiler session directory private");
 		}
 		return directory;
 	}
@@ -513,7 +514,7 @@ class CompilerClient {
 			var text = bytes.toString();
 			input.close();
 			return text;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			input.close();
 			throw error;
 		}

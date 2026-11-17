@@ -1,5 +1,6 @@
 package project;
 
+import compiler.core.InternalError;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -9,19 +10,19 @@ import sys.io.File;
 class RegistryPublisher {
 	public static function publish(manifestPath:String, registry:String, version:String, registryRoot:String):String {
 		if (!isExactVersion(version))
-			throw 'Registry publication requires an exact SemVer version, got "$version"';
+			throw new InternalError('Registry publication requires an exact SemVer version, got "$version"');
 		var absoluteManifest = Path.normalize(Path.isAbsolute(manifestPath) ? manifestPath : Path.join([
 			Sys.getCwd(),
 			manifestPath
 		]));
 		if (!FileSystem.exists(absoluteManifest))
-			throw 'Project file not found: $absoluteManifest';
+			throw new InternalError('Project file not found: $absoluteManifest');
 		var packageRoot = Path.directory(absoluteManifest),
 			manifest = PackageManifest.parse(absoluteManifest, File.getContent(absoluteManifest)),
 			registryDirectory = Path.join([registryRoot, Sha256.encode(registry)]),
 			destination = Path.join([registryDirectory, manifest.packageName, version]);
 		if (FileSystem.exists(destination))
-			throw 'Registry release "${manifest.packageName}@$version" is already published and immutable';
+			throw new InternalError('Registry release "${manifest.packageName}@$version" is already published and immutable');
 		copyTree(packageRoot, destination, "");
 		var checksum = checksumTree(destination);
 		File.saveContent(Path.join([destination, ".haxeon-checksum"]), checksum + "\n");

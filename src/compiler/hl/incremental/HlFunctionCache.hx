@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.core.InternalError;
 import compiler.hl.HlFunction;
 import compiler.hl.HlWriter;
 import compiler.ir.IrFunction;
@@ -99,13 +100,13 @@ class HlFunctionCache {
 
 	public static function fromState(state:HlFunctionCacheState):HlFunctionCache {
 		if (state.nextStableId < 0x10000 || state.nextStableId >= INIT_STABLE_ID)
-			throw "Invalid next stable function ID";
+			throw new InternalError("Invalid next stable function ID");
 		var result = new HlFunctionCache(),
 			names:Map<String, Bool> = [],
 			ids:Map<Int, Bool> = [];
 		for (entry in state.stableIds) {
 			if (entry.name.length == 0 || names.exists(entry.name) || ids.exists(entry.id))
-				throw "Invalid stable function identity state";
+				throw new InternalError("Invalid stable function identity state");
 			validateStableId(entry.name, entry.id);
 			names.set(entry.name, true);
 			ids.set(entry.id, true);
@@ -114,29 +115,29 @@ class HlFunctionCache {
 		for (slot in 0...state.slots.length) {
 			var name = state.slots[slot];
 			if (!names.exists(name) || result.userSlots.exists(name))
-				throw "Invalid function slot state";
+				throw new InternalError("Invalid function slot state");
 			result.slots.push(name);
 			result.userSlots.set(name, slot);
 		}
 		for (entry in state.functions) {
 			if (!result.userSlots.exists(entry.name) || result.functions.exists(entry.name))
-				throw "Invalid cached function state";
+				throw new InternalError("Invalid cached function state");
 			var fn = compiler.ir.codec.IrFunctionStateCodec.decode(entry.bytes);
 			if (fn.name != entry.name)
-				throw "Cached function name mismatch";
+				throw new InternalError("Cached function name mismatch");
 			result.functions.set(entry.name, fn);
 		}
 		for (entry in state.signatures) {
 			if (!result.functions.exists(entry.name) || result.signatures.exists(entry.name))
-				throw "Invalid function signature state";
+				throw new InternalError("Invalid function signature state");
 			var fn = result.functions.get(entry.name);
 			if (entry.signature != signature(fn))
-				throw "Cached function signature mismatch";
+				throw new InternalError("Cached function signature mismatch");
 			result.signatures.set(entry.name, entry.signature);
 		}
 		for (name in result.slots)
 			if (!result.functions.exists(name) || !result.signatures.exists(name))
-				throw "Incomplete function cache state";
+				throw new InternalError("Incomplete function cache state");
 		result.nextStableId = state.nextStableId;
 		return result;
 	}
@@ -150,7 +151,7 @@ class HlFunctionCache {
 						stableIds.set(fn.name, INIT_STABLE_ID);
 					else {
 						if (nextStableId >= INIT_STABLE_ID)
-							throw "Stable function ID space exhausted";
+							throw new InternalError("Stable function ID space exhausted");
 						stableIds.set(fn.name, nextStableId++);
 					}
 				}
@@ -175,7 +176,7 @@ class HlFunctionCache {
 		var sources:Map<String, Bool> = [for (entry in moved) entry.from => true];
 		for (entry in moved)
 			if (!sources.exists(entry.to) && (userSlots.exists(entry.to) || stableIds.exists(entry.to)))
-				throw 'Cannot rename function ${entry.from} to ${entry.to}, which exists';
+				throw new InternalError('Cannot rename function ${entry.from} to ${entry.to}, which exists');
 		var slotsOf:Map<String, Int> = [],
 			idsOf:Map<String, Int> = [],
 			bodies:Map<String, IrFunction> = [],
@@ -213,9 +214,9 @@ class HlFunctionCache {
 	/** Gives function `name`, which the cache has, the code `fn`, with the same signature (an adapter, say). */
 	public function replaceBody(name:String, fn:IrFunction):Void {
 		if (!functions.exists(name))
-			throw 'Cannot replace the code of unknown function $name';
+			throw new InternalError('Cannot replace the code of unknown function $name');
 		if (signature(fn) != signatures.get(name))
-			throw 'The new code of $name has another signature';
+			throw new InternalError('The new code of $name has another signature');
 		functions.set(name, fn);
 	}
 
@@ -245,7 +246,7 @@ class HlFunctionCache {
 	static function validateStableId(name:String, id:Int):Void {
 		if (id < 0 || id > MAX_STABLE_ID || (id == INIT_STABLE_ID && name != "__init")
 			|| (name == "__init" && id != INIT_STABLE_ID))
-			throw 'Invalid stable function ID for "$name"';
+			throw new InternalError('Invalid stable function ID for "$name"');
 	}
 
 	public function ordered():Array<IrFunction>

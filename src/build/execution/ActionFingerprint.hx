@@ -1,5 +1,6 @@
 package build.execution;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.crypto.Sha256;
 import haxe.io.Path;
@@ -76,7 +77,7 @@ class ActionFingerprint {
 				var rows:Array<Array<String>> = Json.parse(File.getContent(path));
 				for (row in rows) {
 					if (row.length != 3)
-						throw "Invalid compiler input row";
+						throw new InternalError("Invalid compiler input row");
 					fields.add("module:" + row[0]);
 					if (!Path.isAbsolute(row[1])) {
 						// Generated FFI modules have virtual paths; their interface/projection files are declared inputs.

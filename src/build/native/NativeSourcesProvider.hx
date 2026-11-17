@@ -6,6 +6,7 @@ import build.lowering.LoweringContext;
 import build.execution.ActionId;
 import build.execution.ExecutionAction;
 import build.execution.ExecutionAction.ActionKind;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import project.ResolvedPackage;
 
@@ -40,7 +41,7 @@ class NativeSourcesProvider {
 							case ArtifactKind.FfiInterface:
 								new ActionId('ffi-import:${dependency.key()}');
 							case _:
-								throw 'Native object ${artifact.id} has unsupported dependency $dependency';
+								throw new InternalError('Native object ${artifact.id} has unsupported dependency $dependency');
 						}];
 				if (ffiName == null)
 					inputs = inputs.concat(NativeDependencyScanner.dependencies(source, includeDirs));
@@ -50,7 +51,7 @@ class NativeSourcesProvider {
 							if (candidate.config.name == ffiName) candidate
 					];
 					if (ffi.length != 1)
-						throw 'Native object ${artifact.id} refers to missing FFI import $ffiName';
+						throw new InternalError('Native object ${artifact.id} refers to missing FFI import $ffiName');
 					inputs = inputs.concat([ffi[0].header]).concat(ffi[0].includes);
 				}
 				var cxx = artifact.details.get("language") == "c++" || toolchain.isCxxSource(source),
@@ -103,7 +104,7 @@ class NativeSourcesProvider {
 	static function objectPathOf(objectPaths:Map<String, String>, key:String):String {
 		var path = objectPaths.get(key);
 		if (path == null)
-			throw 'Native library dependency $key has no object file';
+			throw new InternalError('Native library dependency $key has no object file');
 		return path;
 	}
 }

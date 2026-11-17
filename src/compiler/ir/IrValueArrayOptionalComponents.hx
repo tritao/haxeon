@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -19,7 +20,7 @@ class IrValueArrayOptionalComponents {
 	public function new(objects:IrObjectTable, element:IrType, helpers:IrValueArraySlotHelpers) {
 		var name = switch element {
 			case Nullable(Obj(value)): value;
-			default: throw "Expected a nullable struct element";
+			default: throw new InternalError("Expected a nullable struct element");
 		};
 		this.element = element;
 		this.wrapper = Obj(IrOptionalScalarFlow.wrapperName(name));
@@ -60,7 +61,7 @@ class IrValueArrayOptionalComponents {
 			index = get.argument("index", I32),
 			wrapperName = switch wrapper {
 				case Obj(value): value;
-				default: throw "Invalid optional wrapper";
+				default: throw new InternalError("Invalid optional wrapper");
 			};
 		get.call(helpers.checker([], false), [array, index], Void);
 		var result = get.valueInit(wrapperName);

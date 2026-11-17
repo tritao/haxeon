@@ -2,6 +2,7 @@ package tools.dev;
 
 import build.HashLinkPath;
 import build.execution.ContentDigest;
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -73,14 +74,14 @@ class ToolArtifacts {
 				result.push(StringTools.trim(line.substr(4)));
 		}
 		if (result.length == 0)
-			throw '${Path.join([home, "common.hxml"])} lists no class path';
+			throw new InternalError('${Path.join([home, "common.hxml"])} lists no class path');
 		return result;
 	}
 
 	public function haxe():String {
 		var path = Path.join([home, ".tools", "haxe", "haxe" + (Sys.systemName() == "Windows" ? ".exe" : "")]);
 		if (!FileSystem.exists(path))
-			throw 'Missing pinned Haxe compiler: $path; run scripts/bootstrap-tools.sh first';
+			throw new InternalError('Missing pinned Haxe compiler: $path; run scripts/bootstrap-tools.sh first');
 		return path;
 	}
 
@@ -96,7 +97,7 @@ class ToolArtifacts {
 		for (root in roots) {
 			var absolute = absolutePath(root);
 			if (!FileSystem.exists(absolute) || !FileSystem.isDirectory(absolute))
-				throw 'Class path is not a directory: $root';
+				throw new InternalError('Class path is not a directory: $root');
 			text.add('root $root\n');
 			digestTree(absolute, "", text);
 		}
@@ -139,7 +140,7 @@ class ToolArtifacts {
 		var status = runForwardingToStderr(haxe(), arguments);
 		if (status != 0 || !FileSystem.exists(temporary)) {
 			removeQuietly(temporary);
-			throw 'Building ${request.main} with the pinned Haxe failed (exit $status)';
+			throw new InternalError('Building ${request.main} with the pinned Haxe failed (exit $status)');
 		}
 		if (FileSystem.exists(output)) // Another caller built the same inputs meanwhile; its file is equivalent.
 			removeQuietly(temporary);
@@ -209,7 +210,7 @@ class ToolArtifacts {
 
 	static function validateMain(main:String):Void {
 		if (!~/^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)*$/.match(main))
-			throw 'Not a main class path: "$main"';
+			throw new InternalError('Not a main class path: "$main"');
 	}
 
 	static function compareNames(a:String, b:String):Int
@@ -223,7 +224,7 @@ class ToolArtifacts {
 			FileSystem.createDirectory(path)
 		catch (_:Dynamic)
 			if (!FileSystem.exists(path))
-			throw 'Could not create $path';
+			throw new InternalError('Could not create $path');
 	}
 
 	static function removeQuietly(path:String):Void {

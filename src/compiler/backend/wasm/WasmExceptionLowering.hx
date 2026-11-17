@@ -5,6 +5,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmCatchClause;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.InternalError;
 
 /** Rewrites the old structured catch form to the standardized try_table encoding. */
 class WasmExceptionLowering {
@@ -14,7 +15,7 @@ class WasmExceptionLowering {
 			return;
 		var tagParameters = module.functionTypeAt(tagType).parameters;
 		if (tagParameters.length != 1)
-			throw "Wasm try_table lowering currently requires one exception payload value";
+			throw new InternalError("Wasm try_table lowering currently requires one exception payload value");
 		var payloadType = tagParameters[0];
 		for (index in 0...module.functions.length) {
 			var functionIndex = module.imports.length + index,
@@ -39,7 +40,7 @@ class WasmExceptionLowering {
 								nestedControls++;
 							case Catch(_) if (nestedControls == 0):
 								if (catchIndex >= 0)
-									throw "Wasm exception lowering does not support multiple catch clauses in one try";
+									throw new InternalError("Wasm exception lowering does not support multiple catch clauses in one try");
 								catchIndex = candidate;
 							case End:
 								if (nestedControls == 0) {
@@ -53,10 +54,10 @@ class WasmExceptionLowering {
 							break;
 					}
 					if (catchIndex < 0 || endIndex < 0)
-						throw "Wasm exception lowering found a try without a matching catch and end";
+						throw new InternalError("Wasm exception lowering found a try without a matching catch and end");
 					var tag = switch instructions[catchIndex] {
 						case Catch(value): value;
-						default: throw "Wasm exception lowering lost a catch tag";
+						default: throw new InternalError("Wasm exception lowering lost a catch tag");
 					}, protectedBody = lowerSequence(instructions.slice(index + 1, catchIndex),
 						payloadType),
 						catchBody = lowerSequence(instructions.slice(catchIndex + 1, endIndex), payloadType);
@@ -76,7 +77,7 @@ class WasmExceptionLowering {
 					result.push(End);
 					index = endIndex + 1;
 				case Catch(_):
-					throw "Wasm exception lowering found a catch without a matching try";
+					throw new InternalError("Wasm exception lowering found a catch without a matching try");
 				case TryTable(resultType, catches):
 					result.push(TryTable(resultType, catches.copy()));
 					index++;

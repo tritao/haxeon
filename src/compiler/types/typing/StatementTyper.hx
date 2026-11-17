@@ -2,6 +2,7 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
@@ -364,7 +365,7 @@ class StatementTyper {
 					instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
 				if (instanceField != null) {
 					if (thisType == null)
-						throw 'Missing "this" type for field "$name"';
+						throw new InternalError('Missing "this" type for field "$name"');
 					PropertyWriteRules.rejectInstanceMutation(session, thisType, name, span);
 					var assignedValue = bodyTyper.typeExpression(expression, scope, instanceField),
 						value = bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002");

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -111,7 +112,7 @@ class IrNullableScalarFlow {
 			case I32, I64: ConstInt(value, 0);
 			case F32, F64: ConstFloat(value, 0);
 			case Bool: ConstBool(value, false);
-			default: throw 'Invalid nullable scalar payload ${value.type}';
+			default: throw new InternalError('Invalid nullable scalar payload ${value.type}');
 		};
 
 	static function rewriteFunction(fn:IrFunction, checks:Map<String, IrType>, functions:Map<String, IrFunction>,
@@ -229,7 +230,7 @@ class IrNullableScalarFlow {
 		function required(value:IrValue):NullableScalarParts {
 			var result = parts.get(value.id);
 			if (result == null)
-				throw 'Missing nullable scalar components for ${value.id}';
+				throw new InternalError('Missing nullable scalar components for ${value.id}');
 			return result;
 		}
 		var arguments:Array<IrValue> = [];

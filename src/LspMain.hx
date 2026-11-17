@@ -1,3 +1,4 @@
+import compiler.core.InternalError;
 import editor.lsp.LspDispatcher;
 import editor.lsp.LspProtocol;
 import haxe.io.Bytes;
@@ -11,7 +12,7 @@ class LspMain {
 	/** Serves one client on standard input and output until it exits. */
 	public static function run(arguments:Array<String>):Int {
 		if (arguments.length != 0)
-			throw 'Unexpected lsp argument "${arguments[0]}"';
+			throw new InternalError('Unexpected lsp argument "${arguments[0]}"');
 		compiler.service.LanguageService.useHaxeonRoot();
 		if (Sys.systemName() == "Windows")
 			binaryStdio();

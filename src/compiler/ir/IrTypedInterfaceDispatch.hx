@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
@@ -85,10 +86,10 @@ class IrTypedInterfaceDispatch {
 			var previous = requests.get(name);
 			if (previous != null && (!IrVerifier.sameType(previous.result, signature.result)
 				|| previous.arguments.length != signature.arguments.length))
-				throw 'Conflicting typed interface dispatch "$name"';
+				throw new InternalError('Conflicting typed interface dispatch "$name"');
 			if (previous != null) for (index in 0...signature.arguments.length)
 				if (!IrVerifier.sameType(previous.arguments[index], signature.arguments[index]))
-				throw 'Conflicting typed interface dispatch "$name"';
+				throw new InternalError('Conflicting typed interface dispatch "$name"');
 			requests.set(name, signature);
 		}
 		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
@@ -100,7 +101,7 @@ class IrTypedInterfaceDispatch {
 						arguments: [receiver.type].concat(arguments),
 						result: result
 					});
-					default: throw 'Invalid typed interface method reference "$name"';
+					default: throw new InternalError('Invalid typed interface method reference "$name"');
 				}
 			default:
 		}
@@ -159,18 +160,18 @@ class IrTypedInterfaceDispatch {
 		for (name in names) {
 			var parts = name.substr(PREFIX.length).split(":"), signature = requests.get(name);
 			if (parts.length != 3 || signature == null
-				|| signature.arguments.length == 0) throw 'Invalid typed interface dispatch "$name"';
+				|| signature.arguments.length == 0) throw new InternalError('Invalid typed interface dispatch "$name"');
 			var interfaceName = parts[0], method = parts[1], receiverType = signature.arguments[0];
 			if (!IrVerifier.sameType(receiverType, Virtual(interfaceName)))
-				throw 'Invalid typed interface receiver for "$name"';
+				throw new InternalError('Invalid typed interface receiver for "$name"');
 			var existing = byFunction.get(name);
 			if (existing != null) {
 				if (!IrVerifier.sameType(existing.result, signature.result)
 					|| existing.arguments.length != signature.arguments.length)
-					throw 'Conflicting typed interface dispatch "$name"';
+					throw new InternalError('Conflicting typed interface dispatch "$name"');
 				for (index in 0...signature.arguments.length)
 					if (!IrVerifier.sameType(existing.arguments[index].type, signature.arguments[index]))
-						throw 'Conflicting typed interface dispatch "$name"';
+						throw new InternalError('Conflicting typed interface dispatch "$name"');
 			}
 			var candidates =
 				[for (object in objects) if (!object.isValue && implementsInterface(object, interfaceName)) object];
@@ -237,7 +238,7 @@ class IrTypedInterfaceDispatch {
 			if (existing == null) functions.push(generated);
 			else {
 				var index = functionIndices.get(name);
-				if (index == null) throw 'Missing typed interface dispatcher index "$name"';
+				if (index == null) throw new InternalError('Missing typed interface dispatcher index "$name"');
 				functions[index] = generated;
 			}
 		}

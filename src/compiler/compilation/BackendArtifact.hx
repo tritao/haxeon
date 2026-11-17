@@ -1,5 +1,6 @@
 package compiler.compilation;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode;
 import haxe.io.Bytes;
 
@@ -38,13 +39,13 @@ class BackendArtifacts {
 	public static function hashLink(artifact:BackendArtifact):HlArtifact
 		return switch artifact {
 			case HashLinkBuild(build): build;
-			case WasmBuild(_): throw "The build emitted a Wasm module, not a HashLink module";
+			case WasmBuild(_): throw new InternalError("The build emitted a Wasm module, not a HashLink module");
 		};
 
 	/** The Wasm artifact; a build by another backend is an error. */
 	public static function wasm(artifact:BackendArtifact):WasmArtifact
 		return switch artifact {
 			case WasmBuild(build): build;
-			case HashLinkBuild(_): throw "The build emitted a HashLink module, not a Wasm module";
+			case HashLinkBuild(_): throw new InternalError("The build emitted a HashLink module, not a Wasm module");
 		};
 }

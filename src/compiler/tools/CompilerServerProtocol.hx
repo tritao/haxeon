@@ -1,5 +1,6 @@
 package compiler.tools;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Bytes;
 import haxe.io.Input;
@@ -102,21 +103,21 @@ class CompilerServerProtocol {
 	public static function readRequest(input:Input, token:String):CompilerServerRequest {
 		var length = input.readInt32();
 		if (length <= 0 || length > MAX_REQUEST_BYTES)
-			throw "Invalid compiler request length";
+			throw new InternalError("Invalid compiler request length");
 		var value:Dynamic = Json.parse(input.readString(length));
 		if (value.token != token)
-			throw "Invalid compiler session token";
+			throw new InternalError("Invalid compiler session token");
 		if (value.shutdown == true)
 			return Shutdown;
 		if (value.ping == true)
 			return Ping;
 		var items:Null<Array<Dynamic>> = value.arguments;
 		if (items == null)
-			throw "Invalid compiler request: no arguments";
+			throw new InternalError("Invalid compiler request: no arguments");
 		var arguments:Array<String> = [];
 		for (item in items) {
 			if (!Std.isOfType(item, String))
-				throw "Invalid compiler request: an argument is not a string";
+				throw new InternalError("Invalid compiler request: an argument is not a string");
 			arguments.push(item);
 		}
 		return value.background == true ? Background(arguments) : Compile(arguments);
@@ -137,6 +138,6 @@ class CompilerServerProtocol {
 			return Status(value.status);
 		if (value.message != null)
 			return Message(Std.string(value.message));
-		throw "Invalid compiler response";
+		throw new InternalError("Invalid compiler response");
 	}
 }

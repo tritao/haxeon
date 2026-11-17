@@ -7,6 +7,7 @@ import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
 
@@ -48,7 +49,7 @@ class WasmGcMaps {
 					StructGet(mapType, 0),
 					Return
 				]));
-			default: throw 'Unknown Wasm GC map operation "$operation"';
+			default: throw new InternalError('Unknown Wasm GC map operation "$operation"');
 		};
 	}
 
@@ -63,7 +64,7 @@ class WasmGcMaps {
 			mapReference = Ref({nullable: true, heap: Type(mapType)}),
 			keys = operation == "keys";
 		if (operation != "keys" && operation != "values")
-			throw 'Wasm GC native ${native.name} is not a map projection';
+			throw new InternalError('Wasm GC native ${native.name} is not a map projection');
 		return addProjection(module, projectionName(native.name, outputType), plan, map, mapType, mapReference,
 			outputType, keys);
 	}
@@ -850,7 +851,7 @@ class WasmGcMaps {
 			outputType:IrType, keys:Bool):Int {
 		var element = switch outputType {
 			case Array(element): element;
-			default: throw 'Wasm GC map projection $name must return an array';
+			default: throw new InternalError('Wasm GC map projection $name must return an array');
 		}, sourceElement = keys ? map.keyType : map.valueType, array = plan.arrayType(element),
 			storage = plan.arrayStorageType(element), sourceArray = plan.arrayType(sourceElement),
 			sourceStorage = plan.arrayStorageType(sourceElement), mapField = keys ? 2 : 3,
@@ -883,7 +884,7 @@ class WasmGcMaps {
 		} else {
 			var targetReference = switch plan.valueType(element) {
 				case Ref(reference): reference;
-				default: throw 'Wasm GC map projection $name changes between incompatible storage types';
+				default: throw new InternalError('Wasm GC map projection $name changes between incompatible storage types');
 			};
 			body = body.concat([
 				I32Const(0),
@@ -1046,7 +1047,7 @@ class WasmGcMaps {
 			case Ref(reference):
 				body.push(RefNull(reference.heap));
 			case F32:
-				throw 'Unsupported f32 Wasm GC map element $element';
+				throw new InternalError('Unsupported f32 Wasm GC map element $element');
 		}
 		body.push(ArraySet(storageType));
 	}

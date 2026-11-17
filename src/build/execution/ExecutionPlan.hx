@@ -1,5 +1,7 @@
 package build.execution;
 
+import compiler.core.InternalError;
+
 class ExecutionPlan {
 	public final actions:Array<ExecutionAction>;
 
@@ -10,13 +12,13 @@ class ExecutionPlan {
 		byKey = new Map();
 		for (action in supplied) {
 			if (byKey.exists(action.id.key()))
-				throw 'Duplicate execution action: ${action.id}';
+				throw new InternalError('Duplicate execution action: ${action.id}');
 			byKey.set(action.id.key(), action);
 		}
 		for (action in supplied)
 			for (dependency in action.dependencies)
 				if (!byKey.exists(dependency.key()))
-					throw 'Action ${action.id} depends on missing action $dependency';
+					throw new InternalError('Action ${action.id} depends on missing action $dependency');
 		this.actions = topologicalOrder(supplied);
 	}
 
@@ -56,7 +58,7 @@ class ExecutionPlan {
 		while (pending.iterator().hasNext()) {
 			var ready = [for (action in pending) if (dependenciesEmitted(action, emitted)) action];
 			if (ready.length == 0)
-				throw "Execution plan contains a dependency cycle";
+				throw new InternalError("Execution plan contains a dependency cycle");
 			ready.sort((left, right) -> Reflect.compare(left.id.key(), right.id.key()));
 			for (action in ready) {
 				result.push(action);

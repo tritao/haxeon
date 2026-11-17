@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -274,7 +275,7 @@ class IrBuilder {
 
 	public function terminate(value:IrTerminator):Void {
 		if (current.terminator != null)
-			throw 'IR block ${current.id} already has a terminator';
+			throw new InternalError('IR block ${current.id} already has a terminator');
 		current.terminator = new Located(value, SourceProvenance.generated("ir-builder"));
 	}
 
@@ -302,7 +303,7 @@ class IrBuilder {
 
 	function emit(instruction:IrInstruction):Void {
 		if (isTerminated())
-			throw "Cannot emit after terminator";
+			throw new InternalError("Cannot emit after terminator");
 		current.instructions.push(new Located(instruction, SourceProvenance.generated("ir-builder")));
 	}
 

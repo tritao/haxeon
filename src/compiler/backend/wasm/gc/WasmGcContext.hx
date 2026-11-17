@@ -6,6 +6,7 @@ import compiler.backend.wasm.WasmTypes.WasmHeapType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.gc.WasmGcTypePlan;
+import compiler.core.InternalError;
 
 /** Module-lifetime configuration and indices for native Wasm GC lowering. */
 class WasmGcContext {
@@ -69,7 +70,7 @@ class WasmGcContext {
 		var entry = enumTagAdapters.get(name),
 			result = entry == null ? null : (box ? entry.box : entry.unbox);
 		if (result == null)
-			throw 'Missing enum tag adapter for $name';
+			throw new InternalError('Missing enum tag adapter for $name');
 		return result;
 	}
 

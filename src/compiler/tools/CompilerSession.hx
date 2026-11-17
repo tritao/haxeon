@@ -3,6 +3,7 @@ package compiler.tools;
 import compiler.Compiler;
 import compiler.backend.Backend.BackendTarget;
 import compiler.backend.BackendTargets;
+import compiler.core.InternalError;
 import compiler.ffi.FfiRegistry.FfiConfiguration;
 import compiler.ffi.FfiRegistry.FfiInterfaceSource;
 import compiler.ffi.FfiRegistry.FfiProjectionSource;
@@ -258,7 +259,7 @@ class CompilerSession {
 	public function writeBaseline(path:String):Void {
 		var active = compiler;
 		if (active == null)
-			throw "No compiler to write a baseline from";
+			throw new InternalError("No compiler to write a baseline from");
 		var state = active.exportIdentityState();
 		File.saveBytes(path, state);
 		writtenBaseline = digest(state);
@@ -355,7 +356,7 @@ class CompilerSession {
 		// fullPath is null for a path that does not exist (a source list that names a deleted file).
 		var key = FileSystem.fullPath(path);
 		if (key == null)
-			throw 'Source file does not exist: $path';
+			throw new InternalError('Source file does not exist: $path');
 		var cached = requestSources.get(key);
 		if (cached != null)
 			return cached;
@@ -369,7 +370,7 @@ class CompilerSession {
 			}
 			text = confirmed;
 		}
-		throw 'Source changed while being read: $path';
+		throw new InternalError('Source changed while being read: $path');
 	}
 
 	function readChanged(path:String):Null<String>

@@ -1,5 +1,6 @@
 package compiler.hl.persistence;
 
+import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolTable;
 import compiler.hl.incremental.HlSymbolTable.HlNamedIndex;
 import compiler.hl.incremental.HlSymbolTable.HlNamedSlots;
@@ -36,7 +37,7 @@ class HlSymbolStateCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "HSS" || input.readByte() != 1)
-				throw "Invalid HashLink symbol state";
+				throw new InternalError("Invalid HashLink symbol state");
 			var ints = readInts(input),
 				strings = readStrings(input, bytes.length),
 				floats = readFloats(input),
@@ -49,7 +50,7 @@ class HlSymbolStateCodec {
 				objectMethods = readNested(input, bytes.length),
 				interfaceMethods = readNested(input, bytes.length);
 			if (input.position != bytes.length)
-				throw "Trailing HashLink symbol state data";
+				throw new InternalError("Trailing HashLink symbol state data");
 			validateRange(typeIndices, types.length, "type");
 			validateRange(globalIndices, globals.length, "global");
 			validateRange(objectIndices, types.length, "object");
@@ -66,7 +67,7 @@ class HlSymbolStateCodec {
 				interfaceMethodIndices: interfaceMethods
 			};
 		} catch (error:haxe.io.Eof)
-			throw "Truncated HashLink symbol state";
+			throw new InternalError("Truncated HashLink symbol state");
 	}
 
 	public static function restore(bytes:Bytes):HlSymbolTable
@@ -112,7 +113,7 @@ class HlSymbolStateCodec {
 		for (_ in 0...readCount(input)) {
 			var name = readString(input, total), index = input.readInt32();
 			if (name.length == 0 || index < 0 || seen.exists(name))
-				throw "Invalid HashLink named index";
+				throw new InternalError("Invalid HashLink named index");
 			seen.set(name, true);
 			result.push({name: name, index: index});
 		}
@@ -132,7 +133,7 @@ class HlSymbolStateCodec {
 		for (_ in 0...readCount(input)) {
 			var name = readString(input, total);
 			if (name.length == 0 || seen.exists(name))
-				throw "Invalid HashLink slot owner";
+				throw new InternalError("Invalid HashLink slot owner");
 			seen.set(name, true);
 			result.push({name: name, slots: readMap(input, total)});
 		}
@@ -142,11 +143,11 @@ class HlSymbolStateCodec {
 	static function validateRange(values:Array<HlNamedIndex>, limit:Int, kind:String):Void
 		for (entry in values)
 			if (entry.index >= limit)
-				throw 'Invalid HashLink $kind index';
+				throw new InternalError('Invalid HashLink $kind index');
 
 	static function writeBytes(out:BytesOutput, bytes:Bytes):Void {
 		if (bytes.length > MAX_BYTES)
-			throw "HashLink symbol section is too large";
+			throw new InternalError("HashLink symbol section is too large");
 		out.writeInt32(bytes.length);
 		out.write(bytes);
 	}
@@ -154,7 +155,7 @@ class HlSymbolStateCodec {
 	static function readBytes(input:BytesInput, total:Int):Bytes {
 		var length = input.readInt32();
 		if (length < 0 || length > MAX_BYTES || length > total - input.position)
-			throw "Invalid HashLink symbol section";
+			throw new InternalError("Invalid HashLink symbol section");
 		return input.read(length);
 	}
 
@@ -168,14 +169,14 @@ class HlSymbolStateCodec {
 
 	static function writeCount(out:BytesOutput, count:Int):Void {
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Too many HashLink symbols";
+			throw new InternalError("Too many HashLink symbols");
 		out.writeInt32(count);
 	}
 
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Invalid HashLink symbol count";
+			throw new InternalError("Invalid HashLink symbol count");
 		return count;
 	}
 }

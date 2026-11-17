@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.types.typing.EnumRuntimeType;
 
@@ -58,7 +59,7 @@ class IrEnumRuntimeSpecializations {
 		var index = 0;
 		while (index < pending.length) {
 			var name = pending[index++], declaration = declarations.get(name);
-			if (declaration == null) throw 'Missing concrete enum declaration "$name"';
+			if (declaration == null) throw new InternalError('Missing concrete enum declaration "$name"');
 			for (constructor in declaration.cases) for (parameter in constructor.params) visit(parameter);
 		}
 		return [for (declaration in enums) if (EnumRuntimeType.declaration(declaration.name) == declaration.name

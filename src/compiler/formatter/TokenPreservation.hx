@@ -10,11 +10,12 @@ private typedef PreservedToken = {
 	final text:String;
 }
 
-private class TokenizationFailure {
+private class TokenizationFailure extends haxe.Exception {
 	public final prefix:Array<PreservedToken>;
 	public final diagnostic:String;
 
 	public function new(prefix:Array<PreservedToken>, diagnostic:String) {
+		super(diagnostic);
 		this.prefix = prefix;
 		this.diagnostic = diagnostic;
 	}
@@ -109,12 +110,7 @@ class TokenPreservation {
 }
 
 /** Kept distinct from an ordinary --check formatting difference. */
-class TokenMismatch {
-	public final message:String;
-
+class TokenMismatch extends haxe.Exception {
 	public function new(message:String)
-		this.message = message;
-
-	public function toString():String
-		return message;
+		super(message);
 }

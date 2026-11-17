@@ -1,5 +1,7 @@
 package project;
 
+import compiler.core.InternalError;
+
 /** Shared JSON representation for manifest and lockfile package sources. */
 class PackageSourceCodec {
 	public static function encode(source:PackageSource):Dynamic
@@ -13,7 +15,7 @@ class PackageSourceCodec {
 
 	public static function parse(raw:Dynamic, name:String, path:String):PackageSource {
 		if (raw == null || !Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw '$path must be an object with a package source';
+			throw new InternalError('$path must be an object with a package source');
 		var pathValue:Dynamic = Reflect.field(raw, "path"),
 			workspaceValue:Dynamic = Reflect.field(raw, "workspace"),
 			gitValue:Dynamic = Reflect.field(raw, "git"),
@@ -23,7 +25,7 @@ class PackageSourceCodec {
 				+ (registryValue == null ? 0 : 1)
 				+ (haxelibValue == null ? 0 : 1);
 		if (count != 1)
-			throw '$path must declare exactly one package source';
+			throw new InternalError('$path must declare exactly one package source');
 		if (pathValue != null)
 			return PackageSource.Path(requiredString(pathValue, "path", path));
 		if (workspaceValue != null)
@@ -56,7 +58,7 @@ class PackageSourceCodec {
 
 	static function requiredString(value:Dynamic, field:String, path:String):String {
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path requires a non-empty "$field" string';
+			throw new InternalError('$path requires a non-empty "$field" string');
 		return cast value;
 	}
 }

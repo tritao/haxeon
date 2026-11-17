@@ -1,4 +1,5 @@
 import Type as HaxeType;
+import compiler.core.InternalError;
 import compiler.hl.HlCode;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
@@ -229,7 +230,7 @@ class PatchOpcodeTests {
 		var haxeRejected = false, nativeRejected = false;
 		try {
 			HlPatchReader.decode(bytes);
-		} catch (error:String) {
+		} catch (error:InternalError) {
 			haxeRejected = true;
 		}
 		try {
@@ -573,7 +574,7 @@ class PatchOpcodeTests {
 		var bare = false;
 		try {
 			stringsPatch(0, 1, 1, code -> code.constants.pop());
-		} catch (error:String) {
+		} catch (error:InternalError) {
 			bare = true;
 		}
 		if (!bare)

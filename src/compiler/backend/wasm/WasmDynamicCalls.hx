@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
@@ -215,7 +216,7 @@ class WasmDynamicCalls {
 				params = a;
 				result = r;
 			default:
-				throw "Invalid varargs adapter";
+				throw new InternalError("Invalid varargs adapter");
 		}
 		var values = [for (i in 0...params.length) b.argument("argument" + i, params[i])];
 		var array = b.call("__array_alloc_ref", [b.constInt(values.length)], Array(Dyn));
@@ -249,7 +250,7 @@ class WasmDynamicCalls {
 				params = a;
 				result = r;
 			default:
-				throw "Invalid closure signature";
+				throw new InternalError("Invalid closure signature");
 		}
 		var args = [for (i in 0...params.length) b.argument("argument" + i, params[i])];
 		var missing = b.createBlock(), present = b.createBlock();

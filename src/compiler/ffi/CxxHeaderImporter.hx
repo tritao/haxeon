@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.ClangAstTools;
@@ -197,8 +198,9 @@ private class CxxAstBuilder {
 					missing.push(name);
 			if (missing.length > 0) {
 				missing.sort(Reflect.compare);
-				throw "CXX019 " + sourcePath + ": selected C++ declarations require unavailable type dependencies: "
-					+ missing.join(", ");
+				throw new InternalError("CXX019 " + sourcePath
+					+ ": selected C++ declarations require unavailable type dependencies: "
+					+ missing.join(", "));
 			}
 			selectedRecords = [];
 			for (record in records)

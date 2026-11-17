@@ -1,6 +1,7 @@
 package project;
 
 import build.execution.ProcessRunner;
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -23,11 +24,11 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 				if (!FileSystem.exists(destination))
 					publishArchive(name, version, destination, packageId);
 				else if (!FileSystem.isDirectory(destination))
-					throw 'Haxelib cache entry for "$packageId" is not a directory: $destination';
+					throw new InternalError('Haxelib cache entry for "$packageId" is not a directory: $destination');
 				adaptIfNeeded(destination, name, version, packageId);
 				new AcquiredSource(FileSystem.fullPath(destination), source, version);
 			case _:
-				throw 'Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the Haxelib acquirer';
+				throw new InternalError('Package "$packageId" source ${PackageSourceTools.describe(source)} is not supported by the Haxelib acquirer');
 		};
 
 	function publishArchive(name:String, version:String, destination:String, packageId:PackageId):Void {
@@ -35,20 +36,20 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 		if (!FileSystem.exists(archive))
 			archive = Path.join([archiveRoot, '$name-$version.tar.gz']);
 		if (!FileSystem.exists(archive))
-			throw 'Haxelib package "$name@$version" is not in the Haxeon cache; place its archive at $archive or publish its source directory';
+			throw new InternalError('Haxelib package "$name@$version" is not in the Haxeon cache; place its archive at $archive or publish its source directory');
 		ensureDirectory(Path.directory(destination));
 		var temporary = destination + '.extract-${Std.int(Date.now().getTime())}';
 		if (FileSystem.exists(temporary))
-			throw 'Temporary Haxelib extraction already exists: $temporary';
+			throw new InternalError('Temporary Haxelib extraction already exists: $temporary');
 		ensureDirectory(temporary);
 		var command = StringTools.endsWith(archive, ".zip") ? "unzip" : "tar",
 			arguments = command == "unzip" ? ["-q", archive, "-d", temporary] : ["-xzf", archive, "-C", temporary],
 			status = ProcessRunner.run(command, arguments, temporary, new Map());
 		if (status != 0)
-			throw 'Could not extract Haxelib package "$packageId" from $archive';
+			throw new InternalError('Could not extract Haxelib package "$packageId" from $archive');
 		var sourceRoot = findManifestRoot(temporary);
 		if (sourceRoot == null)
-			throw 'Haxelib archive $archive does not contain haxelib.json';
+			throw new InternalError('Haxelib archive $archive does not contain haxelib.json');
 		FileSystem.rename(sourceRoot, destination);
 		if (sourceRoot != temporary)
 			FileSystem.deleteDirectory(temporary);
@@ -60,32 +61,32 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 			return;
 		var haxelibPath = Path.join([root, "haxelib.json"]);
 		if (!FileSystem.exists(haxelibPath))
-			throw 'Haxelib cache entry for "$packageId" has neither haxeon.json nor haxelib.json: $root';
+			throw new InternalError('Haxelib cache entry for "$packageId" has neither haxeon.json nor haxelib.json: $root');
 		var raw:Dynamic;
 		try {
 			raw = Json.parse(File.getContent(haxelibPath));
 		} catch (error:Dynamic) {
-			throw 'Could not parse $haxelibPath: ${Std.string(error)}';
+			throw new InternalError('Could not parse $haxelibPath: ${Std.string(error)}');
 		}
 		if (!Reflect.isObject(raw) || Std.isOfType(raw, Array))
-			throw '$haxelibPath must contain a JSON object';
+			throw new InternalError('$haxelibPath must contain a JSON object');
 		for (field in ["extraParams", "compilerParams", "hxml", "macro"])
 			if (hasNonEmptyValue(raw, field))
-				throw 'Haxelib package "$packageId" uses unsupported compiler setting "$field"; translate it into Haxeon manifest metadata explicitly';
+				throw new InternalError('Haxelib package "$packageId" uses unsupported compiler setting "$field"; translate it into Haxeon manifest metadata explicitly');
 		var declaredName = requiredString(raw, "name", haxelibPath),
 			declaredVersion = requiredString(raw, "version", haxelibPath);
 		if (declaredName != name || declaredVersion != version)
-			throw 'Haxelib cache entry "$packageId" metadata names $declaredName@$declaredVersion';
+			throw new InternalError('Haxelib cache entry "$packageId" metadata names $declaredName@$declaredVersion');
 		var classPath = optionalString(raw, "classPath", "src", haxelibPath),
 			dependencies:Dynamic = {},
 			rawDependencies:Dynamic = Reflect.field(raw, "dependencies");
 		if (rawDependencies != null) {
 			if (!Reflect.isObject(rawDependencies) || Std.isOfType(rawDependencies, Array))
-				throw '$haxelibPath "dependencies" must be an object';
+				throw new InternalError('$haxelibPath "dependencies" must be an object');
 			for (dependencyName in Reflect.fields(rawDependencies)) {
 				var dependencyVersion:Dynamic = Reflect.field(rawDependencies, dependencyName);
 				if (!Std.isOfType(dependencyVersion, String) || (cast dependencyVersion:String).length == 0)
-					throw '$haxelibPath dependency "$dependencyName" must have an exact version for reproducible import';
+					throw new InternalError('$haxelibPath dependency "$dependencyName" must have an exact version for reproducible import');
 				Reflect.setField(dependencies, dependencyName, {
 					haxelib: dependencyName,
 					version: cast dependencyVersion
@@ -126,7 +127,7 @@ class HaxelibSourceAcquirer implements SourceAcquirer {
 	static function requiredString(raw:Dynamic, field:String, path:String):String {
 		var value:Dynamic = Reflect.field(raw, field);
 		if (!Std.isOfType(value, String) || (cast value:String).length == 0)
-			throw '$path requires a non-empty "$field" string';
+			throw new InternalError('$path requires a non-empty "$field" string');
 		return cast value;
 	}
 

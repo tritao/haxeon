@@ -1,6 +1,7 @@
 package project;
 
 import build.Target;
+import compiler.core.InternalError;
 import haxe.io.Path;
 import project.FfiManifest.FfiImportManifest;
 import project.FfiManifest.ResolvedFfiImport;
@@ -20,7 +21,7 @@ class PackageResolver {
 	public function resolve(manifestPath:String, ?lockfile:PackageLockfile, locked:Bool = false,
 			?target:Target):ResolvedProject {
 		if (locked && lockfile == null)
-			throw "haxeon.lock is required for --locked resolution";
+			throw new InternalError("haxeon.lock is required for --locked resolution");
 		var absoluteManifest = canonicalExistingFile(manifestPath, 'Project file not found: $manifestPath'),
 			projectRoot = Path.directory(absoluteManifest),
 			rootManifest = PackageManifest.parse(absoluteManifest, File.getContent(absoluteManifest)),
@@ -39,13 +40,13 @@ class PackageResolver {
 				rootManifest.packageName),
 				workspaceManifestPath = Path.join([workspaceRoot, MANIFEST_NAME]);
 			if (!FileSystem.exists(workspaceManifestPath))
-				throw 'Workspace member "$workspacePath" has no $MANIFEST_NAME at $workspaceManifestPath';
+				throw new InternalError('Workspace member "$workspacePath" has no $MANIFEST_NAME at $workspaceManifestPath');
 			var workspaceManifest = PackageManifest.parse(workspaceManifestPath,
 				File.getContent(workspaceManifestPath));
 			if (workspaceManifest.packageName == rootManifest.packageName)
-				throw 'Workspace member "$workspacePath" duplicates root package "${rootManifest.packageName}"';
+				throw new InternalError('Workspace member "$workspacePath" duplicates root package "${rootManifest.packageName}"');
 			if (workspaceMembers.exists(workspaceManifest.packageName))
-				throw 'Duplicate workspace package "${workspaceManifest.packageName}"';
+				throw new InternalError('Duplicate workspace package "${workspaceManifest.packageName}"');
 			workspaceMembers.set(workspaceManifest.packageName, {
 				root: workspaceRoot,
 				path: Path.normalize(workspacePath)
@@ -58,7 +59,7 @@ class PackageResolver {
 				manifestFile = manifestOverride == null ? Path.join([resolvedRoot, MANIFEST_NAME]) : manifestOverride,
 				resolvedManifest = canonicalExistingFile(manifestFile, 'Project file not found: $manifestFile');
 			if (active.exists(resolvedRoot))
-				throw 'Package dependency cycle reaches "$resolvedRoot"';
+				throw new InternalError('Package dependency cycle reaches "$resolvedRoot"');
 			var existing = visited.get(resolvedRoot);
 			if (existing != null)
 				return existing;
@@ -68,7 +69,7 @@ class PackageResolver {
 			if (acquired.compatibility != null)
 				acquired.compatibility.validate(manifest.packageName, requestedTarget);
 			if (priorRoot != null && priorRoot != resolvedRoot)
-				throw 'Duplicate package name "${manifest.packageName}" in $priorRoot and $resolvedRoot';
+				throw new InternalError('Duplicate package name "${manifest.packageName}" in $priorRoot and $resolvedRoot');
 			nameToRoot.set(manifest.packageName, resolvedRoot);
 			active.set(resolvedRoot, true);
 
@@ -124,11 +125,11 @@ class PackageResolver {
 			for (dependencyName in dependencyNames) {
 				var dependency = manifest.dependencies.get(dependencyName);
 				if (dependency == null)
-					throw 'Package "${manifest.packageName}" dependency "$dependencyName" is missing source metadata';
+					throw new InternalError('Package "${manifest.packageName}" dependency "$dependencyName" is missing source metadata');
 				var lockEntry = locked ? lockfile.get(dependency.id.name) : null,
 					workspaceMember = workspaceMembers.get(dependency.id.name);
 				if (locked && lockEntry == null)
-					throw 'haxeon.lock has no entry for dependency "${dependency.id.name}"';
+					throw new InternalError('haxeon.lock has no entry for dependency "${dependency.id.name}"');
 				var resolvedSource:PackageSource,
 					acquiredDependency:AcquiredSource,
 					requestedSource:PackageSource;
@@ -136,18 +137,18 @@ class PackageResolver {
 					resolvedSource = PackageSource.Workspace(workspaceMember.path);
 					requestedSource = resolvedSource;
 					if (locked && lockEntry != null && !PackageSourceCodec.equal(lockEntry.source, resolvedSource))
-						throw 'haxeon.lock workspace source for "${dependency.id.name}" does not match the workspace';
+						throw new InternalError('haxeon.lock workspace source for "${dependency.id.name}" does not match the workspace');
 					acquiredDependency = new AcquiredSource(workspaceMember.root, resolvedSource);
 				} else {
 					if (locked && lockEntry != null && !PackageSourceCodec.equal(lockEntry.source, dependency.source))
-						throw 'haxeon.lock source for "${dependency.id.name}" disagrees with the manifest';
+						throw new InternalError('haxeon.lock source for "${dependency.id.name}" disagrees with the manifest');
 					resolvedSource = lockEntry == null ? dependency.source : lockEntry.resolvedSource();
 					requestedSource = dependency.source;
 					acquiredDependency = sourceAcquirer.acquire(resolvedSource, resolvedRoot, dependency.id);
 				}
 				var resolved = resolvePackage(acquiredDependency, requestedSource);
 				if (resolved.name != dependencyName)
-					throw 'Package "${manifest.packageName}" declares dependency "$dependencyName" but ${resolved.root}/$MANIFEST_NAME names package "${resolved.name}"';
+					throw new InternalError('Package "${manifest.packageName}" declares dependency "$dependencyName" but ${resolved.root}/$MANIFEST_NAME names package "${resolved.name}"');
 				resolvedDependencies.push(resolved.name);
 			}
 			active.remove(resolvedRoot);
@@ -183,14 +184,14 @@ class PackageResolver {
 	static function canonicalExistingFile(path:String, message:String):String {
 		var absolute = Path.normalize(Path.isAbsolute(path) ? path : Path.join([Sys.getCwd(), path]));
 		if (!FileSystem.exists(absolute) || FileSystem.isDirectory(absolute))
-			throw message;
+			throw new InternalError(message);
 		return FileSystem.fullPath(absolute);
 	}
 
 	static function resolveDirectory(root:String, relative:String, kind:String, packageName:String):String {
 		var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
 		if (!FileSystem.exists(path) || !FileSystem.isDirectory(path))
-			throw MissingPath.describe('Package "$packageName" $kind', path);
+			throw new InternalError(MissingPath.describe('Package "$packageName" $kind', path));
 		return FileSystem.fullPath(path);
 	}
 
@@ -199,7 +200,7 @@ class PackageResolver {
 		for (relative in paths) {
 			var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
 			if (!FileSystem.exists(path) || FileSystem.isDirectory(path))
-				throw MissingPath.describe('Package "$packageName" $kind', path);
+				throw new InternalError(MissingPath.describe('Package "$packageName" $kind', path));
 			result.push(FileSystem.fullPath(path));
 		}
 		result.sort(Reflect.compare);
@@ -209,7 +210,7 @@ class PackageResolver {
 	static function resolveInput(root:String, relative:String, kind:String, packageName:String):String {
 		var path = Path.normalize(Path.isAbsolute(relative) ? relative : Path.join([root, relative]));
 		if (!FileSystem.exists(path))
-			throw MissingPath.describe('Package "$packageName" $kind', path);
+			throw new InternalError(MissingPath.describe('Package "$packageName" $kind', path));
 		return FileSystem.fullPath(path);
 	}
 

@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrBlock;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.Ir.IrProgram;
@@ -234,7 +235,7 @@ class WasmGcRoots {
 
 	static function requiredIndex(indices:Map<Int, Int>, valueId:Int):Int {
 		if (!indices.exists(valueId))
-			throw 'Missing Wasm GC-root index for value $valueId';
+			throw new InternalError('Missing Wasm GC-root index for value $valueId');
 		return indices.get(valueId);
 	}
 }

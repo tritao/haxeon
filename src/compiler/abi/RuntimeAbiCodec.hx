@@ -1,6 +1,7 @@
 package compiler.abi;
 
 import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -33,10 +34,10 @@ class RuntimeAbiCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != MAGIC)
-				throw "Invalid runtime ABI state";
+				throw new InternalError("Invalid runtime ABI state");
 			var version = input.readByte();
 			if (version != 1 && version != VERSION)
-				throw "Unsupported runtime ABI state version";
+				throw new InternalError("Unsupported runtime ABI state version");
 			var functions = readMap(input, bytes.length),
 				objects = readMap(input, bytes.length),
 				interfaces = readMap(input, bytes.length),
@@ -44,7 +45,7 @@ class RuntimeAbiCodec {
 				globals = readMap(input, bytes.length), // Version 1 predates positional fingerprints; the planner then treats every group as renumbered.
 				positional = version == 1 || input.readByte() == 0 ? null : readMap(input, bytes.length);
 			if (input.position != bytes.length)
-				throw "Trailing runtime ABI state data";
+				throw new InternalError("Trailing runtime ABI state data");
 			return {
 				functions: functions,
 				objects: objects,
@@ -54,7 +55,7 @@ class RuntimeAbiCodec {
 				positional: positional
 			};
 		} catch (error:haxe.io.Eof) {
-			throw "Truncated runtime ABI state";
+			throw new InternalError("Truncated runtime ABI state");
 		}
 	}
 
@@ -71,12 +72,12 @@ class RuntimeAbiCodec {
 	static function readMap(input:BytesInput, totalLength:Int):Map<String, String> {
 		var count = input.readInt32(), result:Map<String, String> = [];
 		if (count < 0 || count > MAX_ENTRIES)
-			throw "Invalid runtime ABI entry count";
+			throw new InternalError("Invalid runtime ABI entry count");
 		for (_ in 0...count) {
 			var name = readString(input, totalLength),
 				value = readString(input, totalLength);
 			if (result.exists(name))
-				throw "Duplicate runtime ABI name";
+				throw new InternalError("Duplicate runtime ABI name");
 			result.set(name, value);
 		}
 		return result;
@@ -91,7 +92,7 @@ class RuntimeAbiCodec {
 	static function readString(input:BytesInput, totalLength:Int):String {
 		var length = input.readInt32();
 		if (length < 0 || length > MAX_STRING_BYTES || length > totalLength - input.position)
-			throw "Invalid runtime ABI string";
+			throw new InternalError("Invalid runtime ABI string");
 		return input.readString(length);
 	}
 }

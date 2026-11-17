@@ -2,6 +2,7 @@ package editor.lsp;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.modules.ModulePath;
 import compiler.core.CancellationError;
 import compiler.core.CancellationToken;
@@ -12,13 +13,12 @@ import editor.lsp.DocumentStore.LspDocument;
 import editor.lsp.ProjectWorkspace;
 import haxe.Json;
 
-private class LspRequestError {
+private class LspRequestError extends haxe.Exception {
 	public final code:Int;
-	public final message:String;
 
 	public function new(code:Int, message:String) {
+		super(message);
 		this.code = code;
-		this.message = message;
 	}
 }
 
@@ -372,7 +372,7 @@ class LspProtocol {
 			rawArguments:Dynamic = Reflect.field(params, "arguments"),
 			arguments:Array<Dynamic> = rawArguments == null ? [] : cast rawArguments;
 		if (!Std.isOfType(arguments, Array))
-			throw 'Field "arguments" must be an array';
+			throw new InternalError('Field "arguments" must be an array');
 		if (!StringTools.startsWith(command, "haxeon.profiler."))
 			throw new LspRequestError(-32602, 'Unsupported command "$command"');
 		return profiler.execute(command, arguments);
@@ -1208,7 +1208,7 @@ class LspProtocol {
 			var result = query(token);
 			removeRequest(key);
 			return [response(id, result)];
-		} catch (failure:Dynamic) {
+		} catch (failure:haxe.Exception) {
 			removeRequest(key);
 			throw failure;
 		}
@@ -1298,7 +1298,7 @@ class LspProtocol {
 			return open;
 		var state = service.compiler.modules.get(ModulePath.fromFile(path));
 		if (state == null)
-			throw 'Unknown source path: $path';
+			throw new InternalError('Unknown source path: $path');
 		return new LspDocument(documents.uri(diskPath), diskPath, state.revision, state.source.text);
 	}
 
@@ -1396,7 +1396,7 @@ class LspProtocol {
 				case "semanticTokens": "workspace/semanticTokens/refresh";
 				case "diagnostic": "workspace/diagnostic/refresh";
 				case "inlayHint": "workspace/inlayHint/refresh";
-				default: throw 'Unknown refresh feature "$feature"';
+				default: throw new InternalError('Unknown refresh feature "$feature"');
 			};
 		refreshPending.set(feature, id);
 		refreshByRequest.set(id, feature);
@@ -1550,21 +1550,21 @@ class LspProtocol {
 	static function required(value:Dynamic, name:String):Dynamic {
 		var field = Reflect.field(value, name);
 		if (field == null)
-			throw 'Missing field "$name"';
+			throw new InternalError('Missing field "$name"');
 		return field;
 	}
 
 	static function requiredString(value:Dynamic, name:String):String {
 		var field = required(value, name);
 		if (!Std.isOfType(field, String))
-			throw 'Field "$name" must be a string';
+			throw new InternalError('Field "$name" must be a string');
 		return cast field;
 	}
 
 	static function requiredInt(value:Dynamic, name:String):Int {
 		var field = required(value, name);
 		if (!Std.isOfType(field, Int))
-			throw 'Field "$name" must be an integer';
+			throw new InternalError('Field "$name" must be an integer');
 		return cast field;
 	}
 

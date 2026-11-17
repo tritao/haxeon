@@ -1,5 +1,6 @@
 package profiler;
 
+import compiler.core.InternalError;
 import haxe.Int64;
 import haxe.Timer;
 import haxe.io.Bytes;
@@ -323,7 +324,7 @@ class ProfilerSession {
 	**/
 	public function start(sampleRate:Int = 1000, allocationInterval:Int = 0, ?sources:Int):Void {
 		if (state == Closed)
-			throw "Profiler session is closed";
+			throw new InternalError("Profiler session is closed");
 		if (state == Running)
 			pause();
 		this.sampleRate = sampleRate;
@@ -349,11 +350,11 @@ class ProfilerSession {
 				if (frame != null)
 					handle(frame);
 				if (endSeen)
-					throw "The runtime ended the profiling session before it started";
+					throw new InternalError("The runtime ended the profiling session before it started");
 				if (Timer.stamp() > deadline)
-					throw "The runtime did not push symbol metadata";
+					throw new InternalError("The runtime did not push symbol metadata");
 			}
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			lastError = Std.string(error);
 			state = Failed;
 			// The runtime's session is stopped, and the capture file closed incomplete; the capture stays requested, so the
@@ -378,7 +379,7 @@ class ProfilerSession {
 		try {
 			updateStatus(client.stop());
 			drainQueued();
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			lastError = Std.string(error);
 			state = Failed;
 			throw error;
@@ -403,10 +404,10 @@ class ProfilerSession {
 				frame = client.nextFrame(0.0);
 			}
 			if (endSeen)
-				throw "The runtime ended the profiling session";
+				throw new InternalError("The runtime ended the profiling session");
 			lastError = null;
 			return records;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			lastError = Std.string(error);
 			state = Failed;
 			throw error;
@@ -452,7 +453,7 @@ class ProfilerSession {
 	**/
 	public function startCapture(path:String):Void {
 		if (capturePath != null)
-			throw "Profiler capture is already active";
+			throw new InternalError("Profiler capture is already active");
 		capturePath = path;
 		if (state != Running)
 			return;

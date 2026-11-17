@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 
 /** Stable source coordinates retained independently of a compiler source snapshot. */
@@ -20,7 +21,7 @@ class SourceLocation {
 		if (path == null || start < 0 || end < start || line < 1 || column < 1 || this.endLine < line
 			|| this.endColumn < 1 || this.endLine == line
 			&& this.endColumn < column)
-			throw "Invalid source location";
+			throw new InternalError("Invalid source location");
 		this.path = path;
 		this.start = start;
 		this.end = end;
@@ -54,7 +55,7 @@ class SourceProvenance {
 		if (location == null)
 			switch origin {
 				case UserSource:
-					throw "User-source provenance requires a location";
+					throw new InternalError("User-source provenance requires a location");
 				case CompilerGenerated(_):
 			}
 		this.location = location;
@@ -76,7 +77,7 @@ class Located<T> {
 
 	public function new(value:T, provenance:SourceProvenance) {
 		if (provenance == null)
-			throw "Located operation requires provenance";
+			throw new InternalError("Located operation requires provenance");
 		this.value = value;
 		this.provenance = provenance;
 	}

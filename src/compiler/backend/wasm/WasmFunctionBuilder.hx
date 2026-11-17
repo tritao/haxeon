@@ -6,6 +6,7 @@ import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.InternalError;
 
 /** A function-local index. It remains a lightweight abstract over Wasm's integer index. */
 abstract WasmLocalRef(Int) from Int to Int {
@@ -62,7 +63,7 @@ class WasmFunctionBuilder {
 	/** Name a parameter, whose index precedes the builder-owned locals. */
 	public function parameter(name:String, index:Int):WasmLocalRef {
 		if (index < 0 || index >= type.parameters.length)
-			throw 'Parameter index $index is outside function ${this.name}';
+			throw new InternalError('Parameter index $index is outside function ${this.name}');
 		return rememberLocal(name, new WasmLocalRef(index));
 	}
 
@@ -75,7 +76,7 @@ class WasmFunctionBuilder {
 
 	function rememberLocal(name:String, local:WasmLocalRef):WasmLocalRef {
 		if (localNames.exists(name))
-			throw 'Duplicate local name "$name" in ${this.name}';
+			throw new InternalError('Duplicate local name "$name" in ${this.name}');
 		localNames.set(name, local);
 		return local;
 	}
@@ -175,7 +176,7 @@ class WasmFunctionBuilder {
 	/** Return when the selected i32 local is not aligned to a power-of-two byte size. */
 	public function returnIfNotAligned(local:WasmLocalRef, alignment:Int):Void {
 		if (alignment <= 0 || (alignment & (alignment - 1)) != 0)
-			throw 'Alignment must be a positive power of two, got $alignment';
+			throw new InternalError('Alignment must be a positive power of two, got $alignment');
 		localGet(local);
 		i32Const(alignment - 1);
 		emit(I32And);

@@ -1,5 +1,6 @@
 package compiler.modules;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
 import sys.FileSystem;
 import sys.io.File;
@@ -24,7 +25,7 @@ class ModuleSourceLoader {
 	public function addRoot(path:String):Void {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
-			throw 'Source root "$path" is not a directory';
+			throw new InternalError('Source root "$path" is not a directory');
 		addRootMapping(normalized, null, false);
 	}
 
@@ -32,7 +33,7 @@ class ModuleSourceLoader {
 	public function addStandardLibraryRoot(path:String):Void {
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
-			throw 'Standard library source root "$path" is not a directory';
+			throw new InternalError('Standard library source root "$path" is not a directory');
 		addRootMapping(normalized, null, true);
 	}
 
@@ -51,10 +52,10 @@ class ModuleSourceLoader {
 
 	public function addPackageRoot(packageName:String, path:String):Void {
 		if (packageName == null || packageName.length == 0)
-			throw "Package source root requires a package name";
+			throw new InternalError("Package source root requires a package name");
 		var normalized = normalizeRoot(path);
 		if (!FileSystem.exists(normalized) || !FileSystem.isDirectory(normalized))
-			throw 'Package source root "$path" is not a directory';
+			throw new InternalError('Package source root "$path" is not a directory');
 		addRootMapping(normalized, packageName, false);
 	}
 
@@ -104,7 +105,7 @@ class ModuleSourceLoader {
 				continue;
 			// The standard library overrides Haxe's std by design, so a second copy beside it is not a second root.
 			if (found != null && found.path != path && !found.standard && !root.isStandardLibrary)
-				throw 'Module "$name" is in two source roots: ${found.path} and $path';
+				throw new InternalError('Module "$name" is in two source roots: ${found.path} and $path');
 			if (found == null)
 				found = {path: path, text: text, standard: root.isStandardLibrary};
 		}

@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
@@ -181,7 +182,7 @@ class IrGenerator {
 	function specializedMapOwner(key:CompilerType, value:CompilerType):String {
 		var owner = facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(TMap(key, value)));
 		if (owner == null)
-			throw 'Missing specialized generic map owner for $key -> $value';
+			throw new InternalError('Missing specialized generic map owner for $key -> $value');
 		return owner;
 	}
 
@@ -296,8 +297,8 @@ class IrGenerator {
 			};
 			return new IrFunction(built.name, built.arguments, built.result, built.blocks, kind, built.debugBindings,
 				fn.isInline == true, retention);
-		} catch (error:String) {
-			throw 'CFG generation failed for ${fn.name}: $error';
+		} catch (error:InternalError) {
+			throw new InternalError('CFG generation failed for ${fn.name}: ${error.message}', error.span);
 		}
 	}
 
@@ -315,7 +316,7 @@ class IrGenerator {
 			var cfg = generateFunctionCfg(fn);
 			scratch = outer;
 			return cfg;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			scratch = outer;
 			throw error;
 		}
@@ -366,7 +367,7 @@ class IrGenerator {
 			}))
 				builder.returnVoid();
 			else
-				throw 'Function ${fn.name} does not return on every path';
+				throw new InternalError('Function ${fn.name} does not return on every path');
 		}
 		return new CfgFunction(fn.name, arguments,
 			scratch.valueConstructor == null ? lowerType(fn.result) : Obj(scratch.valueConstructor), builder.blocks,
@@ -386,7 +387,7 @@ class IrGenerator {
 					builder.fieldSet(cell, "value", value);
 					builder.store("$cell:" + name, cell);
 				default:
-					throw 'Invalid storage cell for "$name"';
+					throw new InternalError('Invalid storage cell for "$name"');
 			}
 	}
 
@@ -398,7 +399,7 @@ class IrGenerator {
 		scratch.loweringScopedDisposal = scopedDisposal;
 		try
 			lowerStatements(body, builder, localTypes, span.end)
-		catch (error:Dynamic) {
+		catch (error:haxe.Exception) {
 			scratch.loweringScopedDisposal = previous;
 			throw error;
 		}
@@ -499,7 +500,7 @@ class IrGenerator {
 					if (cellType != null)
 						switch cellType {
 							case Obj(cellClass): builder.store("$cell:" + name, builder.newObject(cellClass));
-							default: throw "Invalid exception cell type";
+							default: throw new InternalError("Invalid exception cell type");
 						}
 				case TVar(name, initializer, span):
 					builder.debugLocal(name, span, scopeEnd);
@@ -514,7 +515,7 @@ class IrGenerator {
 					if (arrayPlace != null && simpleArrayValuePath(arrayPlace)) {
 						var inner = switch initializer.expression {
 							case TCall(_, [value]): value;
-							default: throw "Invalid array place binding";
+							default: throw new InternalError("Invalid array place binding");
 						};
 						initializeLocal(name, lowerArrayValueReceiver(inner, arrayPlace, builder, localTypes), builder,
 							localTypes);
@@ -594,7 +595,7 @@ class IrGenerator {
 								},
 									rootClass = switch valueType {
 								case TInstance(NominalKind.Class, className, _): className;
-								default: throw "Array value place requires a struct element";
+								default: throw new InternalError("Array value place requires a struct element");
 							},
 								rootObjectType = Obj(rootClass),
 								rootCompilerType = valueType;
@@ -682,18 +683,18 @@ class IrGenerator {
 							var field = flatFieldAtPath(projection.recordName, projection.path.concat([name])),
 								layout = field.field.nativeLayout;
 							if (layout == null)
-								throw 'Missing Flat field layout for "${field.field.name}"';
+								throw new InternalError('Missing Flat field layout for "${field.field.name}"');
 							var operands = lowerOperands([projection.pointer, value], builder, localTypes);
 							if (!builder.isTerminated()) {
 								var address = flatFieldPointer(operands[0], field.offset, builder);
 								if (layout.inlineRecord) {
 									var nested = flatObjectName(field.field.type);
 									if (nested == null)
-										throw 'Flat inline field "${field.field.name}" has no Flat value type';
+										throw new InternalError('Flat inline field "${field.field.name}" has no Flat value type');
 									lowerFlatValueStore(nested, address, operands[1], builder, []);
 								} else {
 									if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
-										throw 'Unsupported scalar field width ${layout.size} in Flat value "${projection.recordName}"';
+										throw new InternalError('Unsupported scalar field width ${layout.size} in Flat value "${projection.recordName}"');
 									builder.memoryStore(address, operands[1], layout.size);
 								}
 							}
@@ -714,7 +715,7 @@ class IrGenerator {
 				case TMapAssign(map, key, value, _):
 					var mapType = switch map.type {
 						case TMap(keyType, valueType): {key: keyType, value: valueType};
-						default: throw "Map assignment requires a map value";
+						default: throw new InternalError("Map assignment requires a map value");
 					};
 					var operands = lowerOperands([map, key, value], builder, localTypes);
 					if (!builder.isTerminated())
@@ -838,7 +839,7 @@ class IrGenerator {
 						builder.markUnreachable();
 				case TBreak(_):
 					if (loops.length == 0)
-						throw "break outside loop";
+						throw new InternalError("break outside loop");
 					var loop = loops[loops.length - 1];
 					emitExitCleanups(builder, localTypes, loops.length, loop.trapDepth);
 					if (builder.isTerminated())
@@ -848,7 +849,7 @@ class IrGenerator {
 					builder.jump(loop.continueBlock);
 				case TContinue(_):
 					if (loops.length == 0)
-						throw "continue outside loop";
+						throw new InternalError("continue outside loop");
 					var loop = loops[loops.length - 1];
 					emitExitCleanups(builder, localTypes, loops.length, loop.trapDepth);
 					if (builder.isTerminated())
@@ -990,7 +991,7 @@ class IrGenerator {
 						case TIterator(element): lowerType(element);
 						case TRange: I32;
 						case TMap(key, _): lowerType(key);
-						default: throw 'For-in iterable is not an array';
+						default: throw new InternalError('For-in iterable is not an array');
 					};
 					// `a...b` counts directly instead of materializing an Array<Int>.
 					var rangeEnd:Null<TypedExpression> = null,
@@ -1391,7 +1392,7 @@ class IrGenerator {
 	function boxMapValue(builder:CfgBuilder, value:CfgValue, valueType:CompilerType):CfgValue {
 		var element = switch mapValueBox(valueType) {
 			case TArray(element): element;
-			default: throw 'Map value ${valueType} is not boxed';
+			default: throw new InternalError('Map value ${valueType} is not boxed');
 		};
 		var box = lowerArrayAllocation(builder, element, builder.constInt(1));
 		elementSet(builder, box, builder.constInt(0), value);
@@ -1402,7 +1403,7 @@ class IrGenerator {
 		var array = abiBoundaryCast(builder, stored, lowerType(box));
 		var elementType = switch box {
 			case TArray(element): lowerType(element);
-			default: throw 'Map value box $box is not an array';
+			default: throw new InternalError('Map value box $box is not an array');
 		};
 		var value = elementGet(builder, array, builder.constInt(0), elementType);
 		return sameIrType(value.type, target) ? value : abiBoundaryCast(builder, value, target);
@@ -1417,7 +1418,7 @@ class IrGenerator {
 
 	function requireMapEnumName(type:CompilerType):String
 		return switch mapEnumName(type) {
-			case null: throw "Expected an enum map key";
+			case null: throw new InternalError("Expected an enum map key");
 			case name: name;
 		};
 
@@ -1444,7 +1445,7 @@ class IrGenerator {
 			runtimeName = compiler.types.typing.EnumRuntimeType.name(keyType),
 			enumConstructorCount = facts.enumConstructorCounts.get(enumName);
 		if (enumConstructorCount == null || enumConstructorCount == 0)
-			throw 'Missing non-empty enum layout for map key "$enumName"';
+			throw new InternalError('Missing non-empty enum layout for map key "$enumName"');
 		var sourceKeyType = lowerType(keyType),
 			rawArray = specialized ? lowerSpecializedMapCall(builder, map, "keys", [], keyType, valueType,
 				nativeKeyArrayType) : builder.call(RuntimeType.mapNative(keyType, valueType, "keys"), [map],
@@ -1549,7 +1550,7 @@ class IrGenerator {
 			return checkedCast(builder, value, target);
 		if (referenceCastType(value.type) && referenceCastType(target))
 			return checkedCast(builder, builder.toDyn(value), target);
-		throw 'Unsupported ABI boundary cast from ${value.type} to $target';
+		throw new InternalError('Unsupported ABI boundary cast from ${value.type} to $target');
 	}
 
 	function referenceResultCast(builder:CfgBuilder, value:CfgValue, target:IrType):CfgValue {
@@ -1868,7 +1869,7 @@ class IrGenerator {
 	function optionalFieldOwner(type:IrType, field:String):String {
 		var name = switch type {
 			case Obj(value): value;
-			default: throw 'Optional field owner must be an object';
+			default: throw new InternalError('Optional field owner must be an object');
 		};
 		while (name != null) {
 			var object = inlineValueObjects.get(name);
@@ -1879,7 +1880,7 @@ class IrGenerator {
 					return name;
 			name = object.base;
 		}
-		throw 'Unknown optional field "$field"';
+		throw new InternalError('Unknown optional field "$field"');
 	}
 
 	function optionalPlaceGetter(place:OptionalFieldPlace, declaring:String, requested:IrType):String {
@@ -1888,22 +1889,22 @@ class IrGenerator {
 		var owner = inlineValueObjects.get(declaring),
 			type:Null<IrType> = null;
 		if (owner == null)
-			throw 'Missing optional field owner "$declaring"';
+			throw new InternalError('Missing optional field owner "$declaring"');
 		for (field in owner.fields)
 			if (field.name == place.field)
 				type = field.type;
 		for (part in place.path) {
 			var name = switch type {
 				case Obj(value), Nullable(Obj(value)): value;
-				default: throw 'Invalid optional place path';
+				default: throw new InternalError('Invalid optional place path');
 			}, object = inlineValueObjects.get(name), next:Null<IrType> = null;
 			if (object == null)
-				throw 'Missing optional place value "$name"';
+				throw new InternalError('Missing optional place value "$name"');
 			for (field in object.fields)
 				if (field.name == part)
 					next = field.type;
 			if (next == null)
-				throw 'Missing optional place field "$name.$part"';
+				throw new InternalError('Missing optional place field "$name.$part"');
 			type = next;
 		}
 		return switch [type, requested] {
@@ -1925,12 +1926,12 @@ class IrGenerator {
 		var declaring = inlineValueObjects.get(optionalFieldOwner(owner.type, place.field)),
 			fieldType:Null<IrType> = null;
 		if (declaring == null)
-			throw 'Missing optional field owner';
+			throw new InternalError('Missing optional field owner');
 		for (field in declaring.fields)
 			if (field.name == place.field)
 				fieldType = field.type;
 		if (fieldType == null)
-			throw 'Missing optional field "${place.field}"';
+			throw new InternalError('Missing optional field "${place.field}"');
 		var path:Array<String> = [];
 		for (index in 0...place.path.length + 1) {
 			switch fieldType {
@@ -1951,15 +1952,15 @@ class IrGenerator {
 			if (index < place.path.length) {
 				var name = switch fieldType {
 					case Obj(value): value;
-					default: throw "Invalid optional field path";
+					default: throw new InternalError("Invalid optional field path");
 				}, object = inlineValueObjects.get(name), component = place.path[index], next:Null<IrType> = null;
 				if (object == null || !object.isValue)
-					throw 'Invalid optional value path through "$name"';
+					throw new InternalError('Invalid optional value path through "$name"');
 				for (field in object.fields)
 					if (field.name == component)
 						next = field.type;
 				if (next == null)
-					throw 'Unknown optional value field "$name.$component"';
+					throw new InternalError('Unknown optional value field "$name.$component"');
 				path.push(component);
 				fieldType = next;
 			}
@@ -1969,12 +1970,12 @@ class IrGenerator {
 
 	function flatFieldAtPath(recordName:String, path:Array<String>):{offset:Int, field:IrObjectField} {
 		if (path.length == 0)
-			throw 'Empty Flat field path for "$recordName"';
+			throw new InternalError('Empty Flat field path for "$recordName"');
 		var currentName = recordName, offset = 0, selected:Null<IrObjectField> = null;
 		for (index in 0...path.length) {
 			var object = flatValueObjects.get(currentName);
 			if (object == null)
-				throw 'Missing Flat value layout for "$currentName"';
+				throw new InternalError('Missing Flat value layout for "$currentName"');
 			var field:Null<IrObjectField> = null;
 			for (candidate in object.fields)
 				if (candidate.name == path[index]) {
@@ -1982,23 +1983,23 @@ class IrGenerator {
 					break;
 				}
 			if (field == null)
-				throw 'Missing Flat field "$currentName.${path[index]}"';
+				throw new InternalError('Missing Flat field "$currentName.${path[index]}"');
 			var layout = field.nativeLayout;
 			if (layout == null)
-				throw 'Missing Flat field layout for "$currentName.${field.name}"';
+				throw new InternalError('Missing Flat field layout for "$currentName.${field.name}"');
 			offset += layout.offset;
 			selected = field;
 			if (index + 1 < path.length) {
 				if (!layout.inlineRecord)
-					throw 'Flat field path traverses non-record field "$currentName.${field.name}"';
+					throw new InternalError('Flat field path traverses non-record field "$currentName.${field.name}"');
 				var nested = flatObjectName(field.type);
 				if (nested == null)
-					throw 'Flat inline field "$currentName.${field.name}" has no Flat value type';
+					throw new InternalError('Flat inline field "$currentName.${field.name}" has no Flat value type');
 				currentName = nested;
 			}
 		}
 		if (selected == null)
-			throw 'Empty Flat field path for "$recordName"';
+			throw new InternalError('Empty Flat field path for "$recordName"');
 		return {offset: offset, field: selected};
 	}
 
@@ -2007,25 +2008,25 @@ class IrGenerator {
 
 	function lowerFlatValueLoad(name:String, pointer:CfgValue, builder:CfgBuilder, visiting:Array<String>):CfgValue {
 		if (visiting.indexOf(name) >= 0)
-			throw 'Recursive Flat value layout while loading "$name"';
+			throw new InternalError('Recursive Flat value layout while loading "$name"');
 		var object = flatValueObjects.get(name);
 		if (object == null)
-			throw 'Missing Flat value layout for "$name"';
+			throw new InternalError('Missing Flat value layout for "$name"');
 		var result = builder.valueInit(name),
 			nextVisiting = visiting.concat([name]);
 		for (field in object.fields) {
 			var layout = field.nativeLayout;
 			if (layout == null)
-				throw 'Missing Flat field layout for "$name.${field.name}"';
+				throw new InternalError('Missing Flat field layout for "$name.${field.name}"');
 			var fieldPointer = flatFieldPointer(pointer, layout.offset, builder),
 				value = if (layout.inlineRecord) {
 					var nested = flatObjectName(field.type);
 					if (nested == null)
-						throw 'Flat inline field "$name.${field.name}" has no Flat value type';
+						throw new InternalError('Flat inline field "$name.${field.name}" has no Flat value type');
 					lowerFlatValueLoad(nested, fieldPointer, builder, nextVisiting);
 				} else {
 				if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
-					throw 'Unsupported scalar field width ${layout.size} in Flat value "$name.${field.name}"';
+					throw new InternalError('Unsupported scalar field width ${layout.size} in Flat value "$name.${field.name}"');
 				builder.memoryLoad(fieldPointer, field.type, layout.size, layout.signed);
 			};
 			builder.fieldSet(result, field.name, value);
@@ -2036,25 +2037,25 @@ class IrGenerator {
 	function lowerFlatValueStore(name:String, pointer:CfgValue, value:CfgValue, builder:CfgBuilder,
 			visiting:Array<String>):Void {
 		if (visiting.indexOf(name) >= 0)
-			throw 'Recursive Flat value layout while storing "$name"';
+			throw new InternalError('Recursive Flat value layout while storing "$name"');
 		var object = flatValueObjects.get(name);
 		if (object == null)
-			throw 'Missing Flat value layout for "$name"';
+			throw new InternalError('Missing Flat value layout for "$name"');
 		var nextVisiting = visiting.concat([name]);
 		for (field in object.fields) {
 			var layout = field.nativeLayout;
 			if (layout == null)
-				throw 'Missing Flat field layout for "$name.${field.name}"';
+				throw new InternalError('Missing Flat field layout for "$name.${field.name}"');
 			var fieldPointer = flatFieldPointer(pointer, layout.offset, builder),
 				fieldValue = builder.fieldGet(value, field.name, field.type);
 			if (layout.inlineRecord) {
 				var nested = flatObjectName(field.type);
 				if (nested == null)
-					throw 'Flat inline field "$name.${field.name}" has no Flat value type';
+					throw new InternalError('Flat inline field "$name.${field.name}" has no Flat value type');
 				lowerFlatValueStore(nested, fieldPointer, fieldValue, builder, nextVisiting);
 			} else {
 				if (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8)
-					throw 'Unsupported scalar field width ${layout.size} in Flat value "$name.${field.name}"';
+					throw new InternalError('Unsupported scalar field width ${layout.size} in Flat value "$name.${field.name}"');
 				builder.memoryStore(fieldPointer, fieldValue, layout.size);
 			}
 		}
@@ -2066,7 +2067,7 @@ class IrGenerator {
 			var result = lowerExpressionAt(expression, builder, localTypes);
 			builder.restoreSource(previous);
 			return result;
-		} catch (error:Dynamic) {
+		} catch (error:haxe.Exception) {
 			builder.restoreSource(previous);
 			throw error;
 		}
@@ -2178,7 +2179,7 @@ class IrGenerator {
 			var node = chain[index], previous = builder.enterSource(node.span);
 			try {
 				value = lowerArithmeticStep(node, value, arithmeticOperands(node)[1], builder, localTypes);
-			} catch (error:Dynamic) {
+			} catch (error:haxe.Exception) {
 				builder.restoreSource(previous);
 				throw error;
 			}
@@ -2235,7 +2236,7 @@ class IrGenerator {
 			case TShiftLeft(_, _): builder.shiftLeft(values[0], values[1]);
 			case TShiftRight(_, _): builder.shiftRight(values[0], values[1]);
 			case TUnsignedShiftRight(_, _): builder.unsignedShiftRight(values[0], values[1]);
-			default: throw 'Not an arithmetic operator: ${node.expression}';
+			default: throw new InternalError('Not an arithmetic operator: ${node.expression}');
 		};
 	}
 
@@ -2262,7 +2263,7 @@ class IrGenerator {
 			case TEnumField(value, constructor,
 				field): builder.enumField(lowerExpression(value, builder, localTypes), constructor, field,
 				lowerType(expression.type));
-			case TNullLiteral: throw 'Uncoerced null literal typed as ${expression.type} at ${expression.span.file.path}:${expression.span.start}';
+			case TNullLiteral: throw new InternalError('Uncoerced null literal typed as ${expression.type} at ${expression.span.file.path}:${expression.span.start}');
 			case TVoidLiteral: builder.constVoid();
 			case TUnreachable:
 				var placeholder = unreachableValue(lowerType(expression.type), builder);
@@ -2272,7 +2273,7 @@ class IrGenerator {
 				// Calls have no no-return marker in IR. Keep their declared result so
 				// surrounding operands can be lowered; statement context seals the CFG.
 				lowerExpression(value, builder, localTypes);
-			case TClassRef(_): throw "Class references are only valid for static members";
+			case TClassRef(_): throw new InternalError("Class references are only valid for static members");
 			case TStaticField(name, field): builder.globalGet(name + "." + field, lowerType(expression.type));
 			case TNullableWrap(value):
 				switch value.expression {
@@ -2405,7 +2406,7 @@ class IrGenerator {
 				switch value.type {
 					case TInt, TInt64: builder.sub(builder.constInt(0, lowerType(value.type)), typed);
 					case TFloat: builder.sub(builder.constFloat(0.0), typed);
-					default: throw 'Cannot lower numeric negation for ${value.type}';
+					default: throw new InternalError('Cannot lower numeric negation for ${value.type}');
 				}
 			case TLess(a, b):
 				var values = lowerOperands([a, b], builder, localTypes);
@@ -2419,7 +2420,7 @@ class IrGenerator {
 			case TEqual(a, b) if (nullableFieldComparedWithNull(a, b) != null):
 				var field = nullableFieldComparedWithNull(a, b);
 				if (field == null)
-					throw "Missing nullable field comparison";
+					throw new InternalError("Missing nullable field comparison");
 				var place = optionalFieldPlace(field.owner), present:CfgValue;
 				if (place == null) {
 					var owner = lowerExpression(field.owner, builder, localTypes);
@@ -2475,23 +2476,23 @@ class IrGenerator {
 			case TCall("$rawptr.load", [pointer, size, signed]):
 				var width = switch size.expression {
 					case TIntLiteral(value): value;
-					default: throw "RawPtr.load width must be constant";
+					default: throw new InternalError("RawPtr.load width must be constant");
 				}, isSigned = switch signed.expression {
 					case TBoolLiteral(value): value;
-					default: throw "RawPtr.load signedness must be constant";
+					default: throw new InternalError("RawPtr.load signedness must be constant");
 				};
 				builder.memoryLoad(lowerExpression(pointer, builder, localTypes), lowerType(expression.type), width,
 					isSigned);
 			case TCall("$optional-cell-local", [marker]):
 				var name = switch marker.expression {
 					case TLocal(value): value;
-					default: throw "Invalid local cell place";
+					default: throw new InternalError("Invalid local cell place");
 				}, type = lowerType(expression.type);
 				builder.load('$' + 'cell:$name', type);
 			case TCall("$optional-cell-captured", [marker]):
 				var name = switch marker.expression {
 					case TLocal(value): value;
-					default: throw "Invalid captured cell place";
+					default: throw new InternalError("Invalid captured cell place");
 				}, owner = requireLocalType(localTypes, "this", 'Captured cell "$name" has no environment');
 				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
 			case TCall("$value.place", [value]):
@@ -2499,12 +2500,12 @@ class IrGenerator {
 			case TCall("$rawptr.load.flat", [pointer]), TCall("$rawptr.ref.flat", [pointer]):
 				var name = flatValueObjectName(expression.type);
 				if (name == null)
-					throw 'RawPtr flat load lost its concrete value record type: ${expression.type}';
+					throw new InternalError('RawPtr flat load lost its concrete value record type: ${expression.type}');
 				lowerFlatValueLoad(name, lowerExpression(pointer, builder, localTypes), builder, []);
 			case TCall("$rawptr.store", [pointer, value, size]):
 				var width = switch size.expression {
 					case TIntLiteral(value): value;
-					default: throw "RawPtr.store width must be constant";
+					default: throw new InternalError("RawPtr.store width must be constant");
 				};
 				{
 					var operands = lowerOperands([pointer, value], builder, localTypes);
@@ -2514,14 +2515,14 @@ class IrGenerator {
 			case TCall("$rawptr.store.flat", [pointer, value]):
 				var name = flatValueObjectName(value.type);
 				if (name == null)
-					throw 'RawPtr flat store lost its concrete value record type: ${value.type}';
+					throw new InternalError('RawPtr flat store lost its concrete value record type: ${value.type}');
 				var operands = lowerOperands([pointer, value], builder, localTypes);
 				lowerFlatValueStore(name, operands[0], operands[1], builder, []);
 				builder.constVoid();
 			case TCall("$rawptr.offset", [pointer, count, stride]):
 				var elementSize = switch stride.expression {
 					case TIntLiteral(value): value;
-					default: throw "RawPtr.offset stride must be constant";
+					default: throw new InternalError("RawPtr.offset stride must be constant");
 				}, operands = lowerOperands([pointer, count], builder, localTypes);
 				builder.pointerOffset(operands[0], builder.mul(operands[1], builder.constInt(elementSize)));
 			case TCall("$rawptr.byteOffset", [pointer, count]):
@@ -2537,7 +2538,7 @@ class IrGenerator {
 				[argument]) if (profile.nativeStringFastPaths && stringifiedPrimitive(argument) != null):
 				var primitive = stringifiedPrimitive(argument);
 				if (primitive == null)
-					throw "The Std.string fast path lost its primitive operand";
+					throw new InternalError("The Std.string fast path lost its primitive operand");
 				builder.call((switch (primitive.type) {
 					case TInt: true;
 					default: false;
@@ -2551,7 +2552,7 @@ class IrGenerator {
 				builder.call(IrReferenceIdentity.NAME, operands, Bool);
 			case TCall(intrinsic, args) if (intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type"):
 				if (args.length != 2)
-					throw "Runtime type test requires value and type operands";
+					throw new InternalError("Runtime type test requires value and type operands");
 				var input = lowerExpression(args[0], builder, localTypes),
 					origin = switch args[1].type {
 						case TInstance(NominalKind.Class, name, _) if (facts.genericClasses.exists(name)): name;
@@ -2570,7 +2571,7 @@ class IrGenerator {
 				&& optionalFieldPlace(args[0]) != null):
 				var place = optionalFieldPlace(args[0]);
 				if (place == null)
-					throw "Missing optional generic receiver";
+					throw new InternalError("Missing optional generic receiver");
 				var owner = prepareOptionalFieldPlace(place, builder, localTypes),
 					arguments = lowerOperands(args.slice(1), builder, localTypes),
 					declaring = optionalFieldOwner(owner.type, place.field),
@@ -2593,7 +2594,7 @@ class IrGenerator {
 					case TArray(element): RuntimeType.arrayNative(element, operation);
 					case TMap(key, value) if (!customMap): RuntimeType.mapNative(key, value, operation);
 					case TMap(_, _): "";
-					default: throw "Collection operation requires an Array or Map receiver";
+					default: throw new InternalError("Collection operation requires an Array or Map receiver");
 				};
 				var operands:Array<TypedExpression> = [receiver];
 				for (argument in args)
@@ -2761,7 +2762,7 @@ class IrGenerator {
 					default: false;
 				}))) builder.floatToFloat(source,
 					target);
-				else throw 'Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}';
+				else throw new InternalError('Unsupported cast from ${source.type} to $target at ${expression.span.file.path}:${expression.span.start}');
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var subjectName = '$' + 'switch-expression-subject:${expression.span.start}',
 					resultName = '$' + 'switch-expression-result:${expression.span.start}',
@@ -3051,11 +3052,11 @@ class IrGenerator {
 					builder.load(objectName, objectType);
 				}
 			case TTuple(_):
-				throw 'A tuple is only a switch subject, at ${expression.span.file.path}:${expression.span.start}';
+				throw new InternalError('A tuple is only a switch subject, at ${expression.span.file.path}:${expression.span.start}');
 			case TArrayLiteral(values):
 				var element = switch expression.type {
 					case TArray(element): element;
-					default: throw "Array literal requires an array type";
+					default: throw new InternalError("Array literal requires an array type");
 				}, arrayType:IrType = Array(lowerType(element)), array = lowerArrayAllocation(builder, element,
 					builder.constInt(values.length)),
 					arrayName = '$' + 'array-literal:${expression.span.start}:${array.id}';
@@ -3069,7 +3070,7 @@ class IrGenerator {
 			case TMapLiteral(entries):
 				var types = switch expression.type {
 					case TMap(key, value): {key: key, value: value};
-					default: throw "Map literal requires a map type";
+					default: throw new InternalError("Map literal requires a map type");
 				}, resultType = lowerType(expression.type), map = lowerMapAllocation(builder, types.key, types.value,
 					resultType), mapName = '$' + 'map-literal:${expression.span.start}:${map.id}';
 				localTypes.set(mapName, resultType);
@@ -3098,12 +3099,12 @@ class IrGenerator {
 					case TArray(element): element;
 					case TIterator(element): element;
 					case TRange: TInt;
-					default: throw "Array comprehension requires an array or iterator iterable";
+					default: throw new InternalError("Array comprehension requires an array or iterator iterable");
 				} : mapTypes.key,
 					inputType:IrType = iterator ? lowerType(iterable.type) : Array(lowerType(keyType)),
 					resultElement = switch expression.type {
 					case TArray(element): element;
-					default: throw "Array comprehension requires an array result";
+					default: throw new InternalError("Array comprehension requires an array result");
 				},
 					resultType:IrType = Array(lowerType(resultElement));
 				localTypes.set(inputName, inputType);
@@ -3233,12 +3234,12 @@ class IrGenerator {
 					case TArray(element): element;
 					case TIterator(element): element;
 					case TRange: TInt;
-					default: throw "Map comprehension requires an array or iterator iterable";
+					default: throw new InternalError("Map comprehension requires an array or iterator iterable");
 				} : sourceMapTypes.key,
 					inputType:IrType = iterator ? lowerType(iterable.type) : Array(lowerType(itemType)),
 					resultTypes:MapTypes = switch expression.type {
 					case TMap(mapKey, mapValue): {key: mapKey, value: mapValue};
-					default: throw "Map comprehension requires a map result";
+					default: throw new InternalError("Map comprehension requires a map result");
 				},
 					resultType = lowerType(expression.type);
 				localTypes.set(inputName, inputType);
@@ -3508,7 +3509,7 @@ class IrGenerator {
 					if (layout == null
 						|| layout.inlineRecord
 						|| (layout.size != 1 && layout.size != 2 && layout.size != 4 && layout.size != 8))
-						throw 'Unsupported Flat increment field "${projection.recordName}.${name}"';
+						throw new InternalError('Unsupported Flat increment field "${projection.recordName}.${name}"');
 					var pointer = lowerExpression(projection.pointer, builder, localTypes),
 						address = flatFieldPointer(pointer, field.offset, builder),
 						oldValue = builder.memoryLoad(address, field.field.type, layout.size, layout.signed),
@@ -3538,7 +3539,7 @@ class IrGenerator {
 			case TMapGet(map, key):
 				var mapType = switch map.type {
 					case TMap(keyType, valueType): {key: keyType, value: valueType};
-					default: throw "Map read requires a map value";
+					default: throw new InternalError("Map read requires a map value");
 				};
 				var operands = lowerOperands([map, key], builder, localTypes);
 				lowerMapGet(builder, localTypes, operands[0], operands[1], mapType.key, mapType.value, expression.type);
@@ -3562,19 +3563,19 @@ class IrGenerator {
 			case TArrayPush(array, value):
 				var element = switch array.type {
 					case TArray(valueType): valueType;
-					default: throw "Array.push requires an array value";
+					default: throw new InternalError("Array.push requires an array value");
 				}, operands = lowerOperands([array, value], builder, localTypes);
 				lowerArrayNativeCall(builder, element, "push", operands, I32);
 			case TArrayUnshift(array, value):
 				var element = switch array.type {
 					case TArray(valueType): valueType;
-					default: throw "Array.unshift requires an array value";
+					default: throw new InternalError("Array.unshift requires an array value");
 				}, operands = lowerOperands([array, value], builder, localTypes);
 				lowerArrayNativeCall(builder, element, "unshift", operands, I32);
 			case TArrayPop(array):
 				var element = switch array.type {
 					case TArray(valueType): valueType;
-					default: throw "Array.pop requires an array value";
+					default: throw new InternalError("Array.pop requires an array value");
 				}, resultType = lowerType(element), loweredArray = lowerExpression(array, builder, localTypes);
 				lowerArrayNativeCall(builder, element, "pop", [loweredArray], resultType);
 			case TArraySort(array, comparator): lowerArraySort(array, comparator, expression.span, builder, localTypes);
@@ -3596,7 +3597,7 @@ class IrGenerator {
 			localTypes:Map<String, IrType>):CfgValue {
 		var element = switch array.type {
 			case TArray(value): value;
-			default: throw "Array.sort requires an array";
+			default: throw new InternalError("Array.sort requires an array");
 		};
 		var elementType = lowerType(element),
 			comparatorType = lowerType(comparator.type),
@@ -3604,7 +3605,7 @@ class IrGenerator {
 		var arrayType:IrType = Array(elementType);
 		var comparatorArguments = switch comparatorType {
 			case Function(arguments, _): arguments;
-			default: throw "Array.sort comparator must be a function";
+			default: throw new InternalError("Array.sort comparator must be a function");
 		};
 		function local(role:String, type:IrType):String {
 			var name = '$' + 'sort-$role:$suffix';
@@ -3792,7 +3793,7 @@ class IrGenerator {
 
 	function requireLocalType(localTypes:Map<String, IrType>, name:String, message:String):IrType {
 		if (!localTypes.exists(name))
-			throw message;
+			throw new InternalError(message);
 		return localTypes.get(name);
 	}
 
@@ -3884,7 +3885,7 @@ class IrGenerator {
 				} else {
 					var value = elementPattern.value;
 					if (value == null)
-						throw "Array switch pattern has neither a binding nor a value";
+						throw new InternalError("Array switch pattern has neither a binding nor a value");
 					var expected = lowerExpression(value, builder, localTypes),
 						matches = if (isNullExpression(value)) builder.equal(elementValue,
 							builder.constNull(elementType));
@@ -4117,7 +4118,7 @@ class IrGenerator {
 			else {
 				var predicateValue = predicate.value;
 				if (predicateValue == null)
-					throw "Equality payload predicate has no value";
+					throw new InternalError("Equality payload predicate has no value");
 				var expected = lowerExpression(predicateValue, builder, localTypes);
 				if (isStringPatternType(predicate.type))
 					builder.call("__string_equal", [field, expected], Bool);
@@ -4309,7 +4310,7 @@ class IrGenerator {
 		};
 		return switch unwrapped.type {
 			case TArray(_): unwrapped;
-			default: throw 'Iterator source must be an Array, got ${unwrapped.type}';
+			default: throw new InternalError('Iterator source must be an Array, got ${unwrapped.type}');
 		};
 	}
 
@@ -4379,7 +4380,7 @@ class IrGenerator {
 	public function lowerType(type:CompilerType):IrType
 		return switch type {
 			// The typer replaces every type variable before a body leaves it (Monomorphs).
-			case TMonomorph(cell): throw 'Internal error: the type of ${cell.origin} reached IR generation unresolved';
+			case TMonomorph(cell): throw new InternalError('Internal error: the type of ${cell.origin} reached IR generation unresolved');
 			case TAbstract(declaration, _, _) if (isRawPointer(declaration)): RawPtr;
 			case TAbstract(_, _, representation): lowerType(representation);
 			case TInt: I32;
@@ -4396,10 +4397,11 @@ class IrGenerator {
 			case THlBytes: RawPtr;
 			case TDynamic: Dyn;
 			case TNativeAbstract(name): Abstract(name);
-			case TNever: throw "Never must be coerced before lowering";
+			case TNever: throw new InternalError("Never must be coerced before lowering");
 			case TRange: Array(I32);
 			case TVoid: Void;
-			case TTypeParameter(owner, name): throw 'Unsubstituted type parameter "$owner.$name" reached IR lowering';
+			case TTypeParameter(owner,
+				name): throw new InternalError('Unsubstituted type parameter "$owner.$name" reached IR lowering');
 			case TInstance(kind, name, arguments):
 				switch kind {
 					case NominalKind.Class:
@@ -4410,8 +4412,8 @@ class IrGenerator {
 							&& isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
 					case NominalKind.Enum: Enum(compiler.types.typing.EnumRuntimeType.name(type));
-					case NominalKind.NativeValue: throw 'Native value record "$name" cannot be lowered as a managed value';
-					default: throw 'Unknown nominal kind $kind';
+					case NominalKind.NativeValue: throw new InternalError('Native value record "$name" cannot be lowered as a managed value');
+					default: throw new InternalError('Unknown nominal kind $kind');
 				}
 			case TMap(key, value) if (isSpecializedMap(key, value)):
 				Obj(specializedMapOwner(key, value));
@@ -4453,7 +4455,7 @@ class IrGenerator {
 	function erasedOwnerOperation(type:CompilerType, operation:String, member:String):String
 		return switch type {
 			case TInstance(NominalKind.Class, name, _): '$' + 'generic-erased:$name:$operation:$member';
-			default: throw "Erased generic operation requires a class owner";
+			default: throw new InternalError("Erased generic operation requires a class owner");
 		};
 
 	function directBaseMethod(name:String, localTypes:Map<String, IrType>):Bool {
@@ -4902,7 +4904,7 @@ class IrGenerator {
 			localTypes:Map<String, IrType>):CfgValue {
 		var inner = switch left.type {
 			case Nullable(value): value;
-			default: throw "Expected nullable scalar";
+			default: throw new InternalError("Expected nullable scalar");
 		}, id = scratch.arrayValuePlaceSerial++, resultName = '$' + 'nullable-equality:$id',
 			leftName = '$' + 'nullable-equality-left:$id', rightName = '$'
 			+ 'nullable-equality-right:$id', absent = builder.createBlock(), present = builder.createBlock(),

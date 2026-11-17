@@ -1,5 +1,6 @@
 package build;
 
+import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
 import sys.FileSystem;
@@ -69,27 +70,27 @@ class WorkspaceManifest {
 		var absolute = Path.normalize(FileSystem.fullPath(path)),
 			root = Path.directory(absolute),
 			document:Dynamic = try Json.parse(File.getContent(absolute)) catch (error:Dynamic)
-				throw 'Invalid workspace file $absolute: $error';
+				throw new InternalError('Invalid workspace file $absolute: $error');
 		if (Reflect.field(document, "version") != 1)
-			throw 'Workspace file $absolute must declare "version": 1';
+			throw new InternalError('Workspace file $absolute must declare "version": 1');
 		var buildDir:Null<String> = Reflect.field(document, "buildDir"),
 			entries:Null<Array<Dynamic>> = Reflect.field(document, "projects");
 		if (entries == null || entries.length == 0)
-			throw 'Workspace file $absolute must list at least one project';
+			throw new InternalError('Workspace file $absolute must list at least one project');
 		var projects:Array<WorkspaceProject> = [],
 			seen = new Map<String, Bool>();
 		for (entry in entries) {
 			var relative:Null<String> = Reflect.field(entry, "path");
 			if (relative == null || relative.length == 0)
-				throw 'Every project in $absolute needs a "path"';
+				throw new InternalError('Every project in $absolute needs a "path"');
 			var manifestPath = Path.normalize(Path.join([root, relative])),
 				declaredName:Null<String> = Reflect.field(entry, "name"),
 				name = declaredName == null ? defaultName(relative) : declaredName,
 				tags:Null<Array<String>> = Reflect.field(entry, "tags");
 			if (!FileSystem.exists(manifestPath))
-				throw 'Workspace project "$name" not found: $manifestPath';
+				throw new InternalError('Workspace project "$name" not found: $manifestPath');
 			if (seen.exists(name))
-				throw 'Duplicate workspace project name "$name"';
+				throw new InternalError('Duplicate workspace project name "$name"');
 			seen.set(name, true);
 			var cache:Null<Bool> = Reflect.field(entry, "cache"),
 				inputs:Null<Array<String>> = Reflect.field(entry, "inputs"),
@@ -97,7 +98,7 @@ class WorkspaceManifest {
 				projectDirectory = Path.directory(manifestPath);
 			// Read as a number, not an Int: a JSON 1.5 must be refused, not truncated to 1 on the way in.
 			if (declaredShards != null && (declaredShards != Math.floor(declaredShards) || declaredShards < 1))
-				throw 'Workspace project "$name": "shards" must be a whole number of at least 1';
+				throw new InternalError('Workspace project "$name": "shards" must be a whole number of at least 1');
 			projects.push(new WorkspaceProject(name, manifestPath, tags == null ? [] : tags, cache != false,
 				inputs == null ? [] : [for (input in inputs) Path.normalize(Path.join([
 					projectDirectory,

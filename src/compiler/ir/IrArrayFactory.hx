@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 
@@ -79,17 +80,17 @@ class IrArrayFactory {
 				switch located.value {
 					case Call(out, NAME, arguments):
 						if (arguments.length != 1)
-							throw "Invalid array factory arguments";
+							throw new InternalError("Invalid array factory arguments");
 						var element = switch out.type {
 							case Array(element): element;
-							default: throw "Array factory must return an array";
+							default: throw new InternalError("Array factory must return an array");
 						};
 						changed = true;
 						switch element {
 							case I32:
 								target.instructions.push(new Located(Call(out, "__array_alloc_i32", arguments),
 									located.provenance));
-							case EnumTag(_): throw "Tag array factory was not consumed by lane selection";
+							case EnumTag(_): throw new InternalError("Tag array factory was not consumed by lane selection");
 							default:
 								typed = true;
 								var descriptor = new IrValue(next++, "$array-element", TypeRef),

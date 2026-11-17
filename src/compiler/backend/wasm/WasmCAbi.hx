@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrCNative;
 
 /** One scalar of the C signature descriptor, and how it moves between a register and memory. */
@@ -73,7 +74,7 @@ class WasmCAbi {
 			signature = signature.substr(0, convention);
 		var split = topLevel(signature, ">");
 		if (split.length != 2)
-			throw 'C native "${native.name}" has an invalid signature "${native.signature}"';
+			throw new InternalError('C native "${native.name}" has an invalid signature "${native.signature}"');
 		var argumentDescriptors = split[0].length == 0 ? [] : topLevel(split[0], ","),
 			plain:Array<Null<WasmCScalar>> = [for (_ in native.arguments) null],
 			unconverted = [for (_ in native.arguments) false],
@@ -90,7 +91,7 @@ class WasmCAbi {
 		if (!adjusted)
 			return new WasmCAbi(plain, null, false, unconverted, false);
 		if (argumentDescriptors.length != native.arguments.length)
-			throw 'C native "${native.name}" signature has ${argumentDescriptors.length} arguments, not ${native.arguments.length}';
+			throw new InternalError('C native "${native.name}" signature has ${argumentDescriptors.length} arguments, not ${native.arguments.length}');
 		var directArguments = [for (index in 0...argumentDescriptors.length)
 			switch native.argumentModes[index] {
 				case FixedValue(_, _, _):

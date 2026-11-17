@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.CxxModel.CxxAlias;
 import compiler.ffi.CxxModel.CxxEnum;
@@ -111,7 +112,7 @@ class CxxSubsetValidator {
 			var position = diagnostic.span.file.lineColumnAt(diagnostic.span.start);
 			'${diagnostic.code} ${diagnostic.span.file.path}:${position.line}:${position.column}: ${diagnostic.message}';
 		}];
-		throw lines.join("\n");
+		throw new InternalError(lines.join("\n"));
 	}
 
 	static function validateOwnership(model:CxxModel, ownership:Map<String, String>, diagnostics:Array<CxxDiagnostic>,

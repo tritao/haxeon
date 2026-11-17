@@ -1,5 +1,7 @@
 package compiler.hl;
 
+import compiler.core.InternalError;
+
 /** In-memory representation of one complete HashLink bytecode module. */
 class HlCode {
 	public static inline final VERSION = 8;
@@ -75,7 +77,7 @@ class HlDebugSection {
 			return stored;
 		var encode = produce;
 		if (encode == null)
-			throw "Debug section has no payload";
+			throw new InternalError("Debug section has no payload");
 		return encode(cache);
 	}
 }

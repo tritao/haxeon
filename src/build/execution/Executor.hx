@@ -3,6 +3,7 @@ package build.execution;
 import build.BuildEnvironment;
 import build.execution.ActionResult.ExecutionResult;
 import build.execution.ExecutionAction.ActionKind;
+import compiler.core.InternalError;
 #if (target.threaded && !eval)
 import sys.thread.Lock;
 import sys.thread.Mutex;
@@ -75,7 +76,7 @@ class Executor implements ExecutionBackend {
 			var ready = [for (action in pending) if (dependenciesSucceeded(action, completed)) action];
 			ready.sort((left, right) -> Reflect.compare(left.id.key(), right.id.key()));
 			if (ready.length == 0 && pending.iterator().hasNext())
-				throw "Execution plan has unresolved dependencies";
+				throw new InternalError("Execution plan has unresolved dependencies");
 			if (ready.length == 0)
 				break;
 			var wave = ready.slice(0, workerCount),
@@ -155,7 +156,7 @@ class Executor implements ExecutionBackend {
 			for (action in wave) {
 				var result = waveResults.get(action.id.key());
 				if (result == null)
-					throw 'Action ${action.id} finished its wave without a result';
+					throw new InternalError('Action ${action.id} finished its wave without a result');
 				completed.set(action.id.key(), result);
 				results.push(result);
 				pending.remove(action.id.key());
@@ -261,7 +262,7 @@ class Executor implements ExecutionBackend {
 			}
 			if (running == 0) {
 				if (pending.iterator().hasNext())
-					throw "Execution plan has unresolved dependencies";
+					throw new InternalError("Execution plan has unresolved dependencies");
 				break;
 			}
 			signal.wait();
@@ -393,7 +394,7 @@ class Executor implements ExecutionBackend {
 	static function requireOutputs(action:ExecutionAction):Void {
 		for (output in action.outputs)
 			if (!action.outputExists(output))
-				throw 'Action ${action.id} did not produce required output $output';
+				throw new InternalError('Action ${action.id} did not produce required output $output');
 	}
 
 	/**

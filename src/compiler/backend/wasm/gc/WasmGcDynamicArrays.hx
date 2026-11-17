@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
@@ -234,7 +235,7 @@ class WasmGcDynamicArrays {
 			case "__array_resize_any":
 				resize(0, 1);
 			default:
-				throw 'Unknown Wasm GC dynamic array operation "${native.name}"';
+				throw new InternalError('Unknown Wasm GC dynamic array operation "${native.name}"');
 		}
 		if (result >= 0)
 			body.push(LocalGet(result));
@@ -252,7 +253,7 @@ class WasmGcDynamicArrays {
 	static function handled(result:WasmLoweringResult):Array<WasmInstruction>
 		return switch result {
 			case Handled(instructions): instructions;
-			case UseDefault: throw "Wasm GC representation declined a dynamic array operation";
+			case UseDefault: throw new InternalError("Wasm GC representation declined a dynamic array operation");
 		};
 
 	inline function typeId(type:IrType):Int
@@ -334,7 +335,7 @@ class WasmGcDynamicArrays {
 			case UseDefault:
 				var index = functions.get(name);
 				if (index == null)
-					throw 'Wasm GC dynamic array helper has no lowering or function for "$name"';
+					throw new InternalError('Wasm GC dynamic array helper has no lowering or function for "$name"');
 				for (local in argumentLocals)
 					body.push(LocalGet(local));
 				body.push(Call(index));
@@ -499,7 +500,7 @@ class WasmGcDynamicArrays {
 			case [I32, F64]: [F64ConvertI32S];
 			case [I64, F64]: [F64ConvertI64S];
 			case [F64, F64]: [];
-			default: throw 'Unsupported Wasm GC dynamic array conversion from $box to $element';
+			default: throw new InternalError('Unsupported Wasm GC dynamic array conversion from $box to $element');
 		};
 		return load.concat(convert);
 	}

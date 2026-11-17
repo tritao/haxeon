@@ -1,5 +1,6 @@
 package compiler.backend.wasm.gc;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.backend.wasm.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmModule.WasmFunction;
@@ -20,7 +21,8 @@ class WasmGcScalarArrayAccess {
 			variableWidth = integer || suffix == "ptr" || suffix == "type" || clear,
 			expected = spec != null ? 2 + (write && !clear ? 1 : 0) : 3 + (variableWidth ? 1 : 0)
 				+ (write && !clear ? 1 : 0) + (!write && integer ? 1 : 0);
-		if (native.arguments.length != expected) throw 'Invalid Wasm GC scalar access: ${native.name}';
+		if (native.arguments.length != expected)
+			throw new InternalError('Invalid Wasm GC scalar access: ${native.name}');
 		var b = new WasmFunctionBuilder(native.name, plan.wasmFunctionType(native.arguments, native.result)),
 			w = plan.valueArrayWrapperTypeIndex,
 			wrapper = b.local("wrapper", Ref({nullable: true, heap: Type(w)})),
@@ -90,7 +92,7 @@ class WasmGcScalarArrayAccess {
 				case "i64": [];
 				case "f32": [F32DemoteF64, I32ReinterpretF32, I64ExtendI32U];
 				case "f64": [I64ReinterpretF64];
-				default: throw 'Invalid scalar write $suffix';
+				default: throw new InternalError('Invalid scalar write $suffix');
 			});
 			b.emit(LocalSet(bits));
 		}
@@ -142,7 +144,7 @@ class WasmGcScalarArrayAccess {
 				case "i64": [];
 				case "f32": [I32WrapI64, F32ReinterpretI32, F64PromoteF32];
 				case "f64": [F64ReinterpretI64];
-				default: throw 'Invalid scalar read $suffix';
+				default: throw new InternalError('Invalid scalar read $suffix');
 			});
 		}
 		b.emit(Return);

@@ -1,6 +1,7 @@
 package compiler.abi;
 
 import compiler.abi.PatchPlanner.AbiChange;
+import compiler.core.InternalError;
 
 /** Language-neutral code and entity identity for one ABI incompatibility. */
 typedef AbiChangeRecord = {
@@ -36,9 +37,9 @@ class AbiChangeSchema {
 
 	public static function decode(version:Int, record:AbiChangeRecord):AbiChange {
 		if (version != VERSION)
-			throw 'Unsupported ABI change schema version $version';
+			throw new InternalError('Unsupported ABI change schema version $version');
 		if (record == null || record.entityId == null)
-			throw "Invalid ABI change record";
+			throw new InternalError("Invalid ABI change record");
 		return switch record.code {
 			case "function_added": requireKind(record, "function", FunctionAdded(record.entityId));
 			case "function_removed": requireKind(record, "function", FunctionRemoved(record.entityId));
@@ -62,13 +63,13 @@ class AbiChangeSchema {
 			case "generated_functions_renumbered": requireKind(record, "generated_function_group",
 				GeneratedFunctionsRenumbered(record.entityId));
 			case "assembly_layout_changed": requireKind(record, "module", AssemblyLayoutChanged(record.entityId));
-			case unknown: throw 'Unknown ABI change code "$unknown"';
+			case unknown: throw new InternalError('Unknown ABI change code "$unknown"');
 		};
 	}
 
 	static function requireKind(record:AbiChangeRecord, expected:String, result:AbiChange):AbiChange {
 		if (record.entityKind != expected)
-			throw 'ABI change ${record.code} requires entity kind "$expected"';
+			throw new InternalError('ABI change ${record.code} requires entity kind "$expected"');
 		return result;
 	}
 

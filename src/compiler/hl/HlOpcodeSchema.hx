@@ -1,5 +1,7 @@
 package compiler.hl;
 
+import compiler.core.InternalError;
+
 /** Operand shapes for the HashLink instructions emitted by this compiler. */
 class HlOpcodeSchema {
 	public static inline final VARIABLE_ARITY = -1;
@@ -97,21 +99,21 @@ class HlOpcodeSchema {
 		var expected = arity(opcode);
 		if (expected == SWITCH_ARITY) {
 			if (operands.length < 3 || operands[1] < 1 || operands.length != operands[1] + 3)
-				throw 'Invalid switch operands';
+				throw new InternalError('Invalid switch operands');
 			for (index in 2...operands.length - 1)
 				if (operands[index] < 0)
-					throw 'A switch target is before the switch';
+					throw new InternalError('A switch target is before the switch');
 			return;
 		}
 		if (expected == UNSUPPORTED)
-			throw 'Unsupported patch opcode $opcode';
+			throw new InternalError('Unsupported patch opcode $opcode');
 		if (expected == VARIABLE_ARITY) {
 			if (operands.length <= VARIABLE_COUNT_OPERAND)
-				throw 'Missing variable operand count for opcode $opcode';
+				throw new InternalError('Missing variable operand count for opcode $opcode');
 			var count = operands[VARIABLE_COUNT_OPERAND];
 			if (count < 0 || count > 0x1000000 || operands.length != VARIABLE_COUNT_OPERAND + 1 + count)
-				throw 'Invalid variable operands for opcode $opcode';
+				throw new InternalError('Invalid variable operands for opcode $opcode');
 		} else if (operands.length != expected)
-			throw 'Opcode $opcode expects $expected operands, got ${operands.length}';
+			throw new InternalError('Opcode $opcode expects $expected operands, got ${operands.length}');
 	}
 }

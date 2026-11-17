@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -92,7 +93,7 @@ class ProgramFacts {
 		}
 		function flag(value:Null<Bool>):String {
 			if (value == null)
-				throw "Missing Boolean fact while computing pipeline inputs";
+				throw new InternalError("Missing Boolean fact while computing pipeline inputs");
 			return value ? "1" : "0";
 		}
 		function text(value:Null<String>):String
@@ -117,7 +118,7 @@ class ProgramFacts {
 		section("observableFieldBits", [for (key in observableFieldBits.keys()) key], key -> {
 			var bits = observableFieldBits.get(key);
 			if (bits == null)
-				throw 'Missing Observable field facts for "$key"';
+				throw new InternalError('Missing Observable field facts for "$key"');
 			var names = [for (name in bits.keys()) name];
 			names.sort(Reflect.compare);
 			[for (name in names) name + ":" + bits.get(name)].join(";");

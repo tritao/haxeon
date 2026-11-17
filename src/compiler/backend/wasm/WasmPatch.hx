@@ -3,6 +3,7 @@ package compiler.backend.wasm;
 import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
+import compiler.core.InternalError;
 import compiler.ir.IrFunction;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.codec.IrTypeCodec;
@@ -62,7 +63,7 @@ class WasmPatch {
 		if (selected != null)
 			for (name in selected.keys())
 				if (!byName.exists(name))
-					throw 'Unknown changed Wasm function "$name"';
+					throw new InternalError('Unknown changed Wasm function "$name"');
 		var output = new BytesOutput();
 		output.bigEndian = false;
 		output.writeString("HWP");
@@ -98,18 +99,18 @@ class WasmPatch {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		if (input.readString(3) != "HWP" || input.readByte() != VERSION)
-			throw "Invalid Wasm patch manifest";
+			throw new InternalError("Invalid Wasm patch manifest");
 		var result:Array<WasmFunctionIdentity> = [];
 		for (_ in 0...readCount(input, bytes.length)) {
 			var name = IrTypeCodec.readString(input, bytes.length),
 				id = input.readInt32(),
 				signature = IrTypeCodec.readString(input, bytes.length);
 			if (id != stableId(name))
-				throw 'Invalid stable ID for Wasm patch function "$name"';
+				throw new InternalError('Invalid stable ID for Wasm patch function "$name"');
 			result.push({name: name, stableId: id, signature: signature});
 		}
 		if (input.position != bytes.length)
-			throw "Trailing Wasm patch manifest data";
+			throw new InternalError("Trailing Wasm patch manifest data");
 		return result;
 	}
 
@@ -117,18 +118,18 @@ class WasmPatch {
 		var input = new BytesInput(bytes);
 		input.bigEndian = false;
 		if (input.readString(3) != "HWT" || input.readByte() != VERSION)
-			throw "Invalid Wasm table manifest";
+			throw new InternalError("Invalid Wasm table manifest");
 		var result:Array<WasmTableIdentity> = [];
 		for (_ in 0...readCount(input, bytes.length)) {
 			var name = IrTypeCodec.readString(input, bytes.length),
 				id = input.readInt32(),
 				slot = input.readInt32();
 			if (id != stableId(name) || slot < 0)
-				throw 'Invalid Wasm table identity for "$name"';
+				throw new InternalError('Invalid Wasm table identity for "$name"');
 			result.push({name: name, stableId: id, slot: slot});
 		}
 		if (input.position != bytes.length)
-			throw "Trailing Wasm table manifest data";
+			throw new InternalError("Trailing Wasm table manifest data");
 		return result;
 	}
 
@@ -138,7 +139,7 @@ class WasmPatch {
 	static function requiredSlot(slots:Map<String, Int>, name:String):Int {
 		var slot = slots.get(name);
 		if (slot == null)
-			throw 'Missing Wasm table slot for "$name"';
+			throw new InternalError('Missing Wasm table slot for "$name"');
 		return slot;
 	}
 
@@ -158,7 +159,7 @@ class WasmPatch {
 	static function readCount(input:BytesInput, limit:Int):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > 0x100000 || input.position > limit)
-			throw "Invalid Wasm patch manifest count";
+			throw new InternalError("Invalid Wasm patch manifest count");
 		return count;
 	}
 }

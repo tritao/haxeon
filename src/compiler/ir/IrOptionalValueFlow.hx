@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
@@ -92,7 +93,7 @@ class IrOptionalValueFlow {
 			var value = builder.valueInit(valueName),
 				object = objects.get(valueName);
 			if (object == null)
-				throw 'Unknown optional value "$valueName"';
+				throw new InternalError('Unknown optional value "$valueName"');
 			for (field in object.fields) {
 				var fieldPath = path.concat([field.name]);
 				if (isOptionalValue(field.type, objects)) {
@@ -126,7 +127,7 @@ class IrOptionalValueFlow {
 								}
 							}
 							if (!found)
-								throw 'Missing optional value slot ${fieldPath.join(".")}';
+								throw new InternalError('Missing optional value slot ${fieldPath.join(".")}');
 					}
 			}
 			return value;
@@ -197,7 +198,7 @@ class IrOptionalValueFlow {
 	static function findField(objects:Map<String, IrObject>, type:IrType, field:String):IrObjectField {
 		var name = switch type {
 			case Obj(value): value;
-			default: throw "Invalid optional value field";
+			default: throw new InternalError("Invalid optional value field");
 		};
 		while (name != null) {
 			var object = objects.get(name);
@@ -208,7 +209,7 @@ class IrOptionalValueFlow {
 					return candidate;
 			name = object.base;
 		}
-		throw 'Missing optional value field "$field"';
+		throw new InternalError('Missing optional value field "$field"');
 	}
 
 	static function copyOptional(builder:IrBuilder, value:IrValue, name:String, objects:Map<String, IrObject>):IrValue {
@@ -234,7 +235,7 @@ class IrOptionalValueFlow {
 	static function copyValue(builder:IrBuilder, source:IrValue, name:String, objects:Map<String, IrObject>):IrValue {
 		var object = objects.get(name);
 		if (object == null || !object.isValue)
-			throw 'Unknown optional value "$name"';
+			throw new InternalError('Unknown optional value "$name"');
 		var copy = builder.valueInit(name);
 		for (field in object.fields) {
 			var value = builder.fieldGet(source, field.name, field.type);

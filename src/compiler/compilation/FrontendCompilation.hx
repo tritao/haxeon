@@ -2,6 +2,7 @@ package compiler.compilation;
 
 import compiler.core.AllocationMeter;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.runtime.PlatformAbi;
 import compiler.ir.Ir.IrCNative;
 import compiler.ir.Ir.IrEnum;
@@ -426,7 +427,7 @@ class FrontendCompilation {
 				if (RuntimeDependencyTracker.changesRepresentation(dependency.target)) {
 					var representationModule = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
 					if (representationModule == null || names.indexOf(representationModule) < 0)
-						throw 'Representation module "${dependency.target}" must be seeded but is not in the program (needed by "${dependency.functionName}")';
+						throw new InternalError('Representation module "${dependency.target}" must be seeded but is not in the program (needed by "${dependency.functionName}")');
 				}
 			context.state.semanticProgram = semantic;
 		} catch (error:CompileError) {
@@ -810,8 +811,8 @@ class FrontendCompilation {
 							&& dependency.target == change.declaration
 							&& !build.typedByName.exists(owner)
 							&& !build.typedUnits.exists(owner))
-							throw '--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
-								+ 'but "$owner", which read it, kept the body typed against the old one';
+							throw new InternalError('--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
+								+ 'but "$owner", which read it, kept the body typed against the old one');
 			}
 	}
 
@@ -1014,10 +1015,10 @@ class FrontendCompilation {
 					checkCancelled(build.token);
 					var fn = state.typedFunctions.get(functionName);
 					if (fn == null)
-						throw 'Pending IR function "$functionName" has no typed function';
+						throw new InternalError('Pending IR function "$functionName" has no typed function');
 					state.irFunctions.set(functionName, generator.generateFunction(fn));
 					if (!state.typedSourceRevisions.exists(functionName))
-						throw 'Pending IR function "$functionName" has no typed source revision';
+						throw new InternalError('Pending IR function "$functionName" has no typed source revision');
 					state.irSourceRevisions.set(functionName, state.typedSourceRevisions.get(functionName));
 					var version = state.irVersions.exists(functionName) ? state.irVersions.get(functionName) + 1 : 1;
 					state.irVersions.set(functionName, version);
@@ -1136,13 +1137,13 @@ class FrontendCompilation {
 		var cached:Array<IrFunction> = [];
 		for (functionName in cachedNames) {
 			if (!owners.exists(functionName))
-				throw 'Cached function "$functionName" has no source owner';
+				throw new InternalError('Cached function "$functionName" has no source owner');
 			var owner = owners.get(functionName);
 			if (!modules.exists(owner))
-				throw 'Cached function "$functionName" has no source module';
+				throw new InternalError('Cached function "$functionName" has no source module');
 			var functions = modules.get(owner).irFunctions;
 			if (!functions.exists(functionName))
-				throw 'Cached function "$functionName" has no IR body';
+				throw new InternalError('Cached function "$functionName" has no IR body');
 			cached.push(functions.get(functionName));
 		}
 		build.cached = cached;
@@ -1150,10 +1151,10 @@ class FrontendCompilation {
 			for (functionName in cachedNames) {
 				var holder = modules.get(owners.get(functionName));
 				if (holder == null)
-					throw '--check-reuse: cached function "$functionName" has no owning module';
+					throw new InternalError('--check-reuse: cached function "$functionName" has no owning module');
 				var held = holder.irFunctions.get(functionName);
 				if (compiler.ir.IrSourceRehash.of(held, currentHashes) != held)
-					throw '--check-reuse: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one';
+					throw new InternalError('--check-reuse: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one');
 			}
 		dropUnusedKeyPathFields(build.typedNew, cached);
 	}
@@ -1179,7 +1180,7 @@ class FrontendCompilation {
 		for (native in IrProgramAssembler.nativesFrom(generator, typedNew)) {
 			for (existing in irNatives)
 				if (existing.name == native.name)
-					throw 'Native "${native.name}" is declared more than once';
+					throw new InternalError('Native "${native.name}" is declared more than once');
 			irNatives.push(native);
 		}
 		build.irNatives = irNatives;
@@ -1223,7 +1224,7 @@ class FrontendCompilation {
 						&& method.functionName == IrProgramAssembler.anonymousStringName(object.name)) {
 						var printer = printers.get(method.functionName);
 						if (printer == null)
-							throw 'Anonymous structure "${object.name}" has no generated __string';
+							throw new InternalError('Anonymous structure "${object.name}" has no generated __string');
 						build.cached.push(printer);
 					}
 		}
@@ -1274,7 +1275,7 @@ class FrontendCompilation {
 					if (object.isValue && object.nativeLayout != null) {
 						var canonical = canonicalObjectCache.get(object.name);
 						if (canonical == null)
-							throw 'Missing canonical layout for "${object.name}"';
+							throw new InternalError('Missing canonical layout for "${object.name}"');
 						canonical;
 					} else object;
 				}], context.options, meter);
@@ -1318,7 +1319,7 @@ class FrontendCompilation {
 			if (reusedPipeline != null) {
 				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
 				if (difference != null)
-					throw '--check-reuse: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)';
+					throw new InternalError('--check-reuse: the final IR reused for equal pipeline inputs differs from a fresh run ($difference)');
 			}
 			// The prune ran early: after the last pass nothing may call what it removed (`IrEntryPrune`).
 			if (checkingReuse)
@@ -1522,7 +1523,7 @@ class FrontendCompilation {
 			return null;
 		// A source declaration removed by this edit is not a generated class, even though it is absent from the new program.
 		if (previousSemantic == null)
-			throw "Internal error: previous typed program has no semantic program";
+			throw new InternalError("Internal error: previous typed program has no semantic program");
 		var previouslyDeclared:Map<String, Bool> = [for (entry in previousSemantic.program.classes) entry.name => true];
 		var known:Map<String, Bool> = [
 			for (entry in previous.classes)
@@ -1631,7 +1632,7 @@ class FrontendCompilation {
 		while (pending.length > 0) {
 			var name = pending.pop(), fn = functions.get(name);
 			if (fn == null)
-				throw 'Missing function $name during inline enum reflection reachability';
+				throw new InternalError('Missing function $name during inline enum reflection reachability');
 			for (argument in fn.arguments)
 				visitType(argument.type);
 			visitType(fn.result);
@@ -1760,7 +1761,7 @@ class FrontendCompilation {
 							case Call(_, callee, _) if (!held.exists(callee)):
 								for (prefix in helperPrefixes)
 									if (StringTools.startsWith(callee, prefix))
-										throw 'generated helper "$callee" is called by "$cached" but the program holds no such function';
+										throw new InternalError('generated helper "$callee" is called by "$cached" but the program holds no such function');
 							default:
 						}
 			}
@@ -2023,7 +2024,7 @@ class FrontendCompilation {
 		var named = LambdaName.is(fn.name),
 			kind = fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Lambda;
 		if (named != kind || (kind && fn.origin == null))
-			throw 'Typed function "${fn.name}" disagrees about being a lambda: named like one: $named, origin kind lambda: $kind, origin: ${fn.origin}';
+			throw new InternalError('Typed function "${fn.name}" disagrees about being a lambda: named like one: $named, origin kind lambda: $kind, origin: ${fn.origin}');
 	}
 
 	static function resolveFunctionModule(fn:compiler.types.TypedAst.TypedFunction, owners:Map<String, String>,
@@ -2031,11 +2032,11 @@ class FrontendCompilation {
 		if (owners.exists(fn.name))
 			return owners.get(fn.name);
 		if (visiting.exists(fn.name))
-			throw 'Cyclic generated-function ownership involving "${fn.name}"';
+			throw new InternalError('Cyclic generated-function ownership involving "${fn.name}"');
 		visiting.set(fn.name, true);
 		var origin = fn.origin;
 		if (origin == null)
-			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
+			throw new InternalError('No source module owns typed function "${fn.name}" (origin: ${fn.origin})');
 		var module:String;
 		if (owners.exists(origin))
 			module = owners.get(origin);
@@ -2044,7 +2045,7 @@ class FrontendCompilation {
 		else if (typedByName.exists(origin))
 			module = resolveFunctionModule(typedByName.get(origin), owners, typedByName, visiting);
 		else
-			throw 'No source module owns typed function "${fn.name}" (origin: ${fn.origin})';
+			throw new InternalError('No source module owns typed function "${fn.name}" (origin: ${fn.origin})');
 		owners.set(fn.name, module);
 		visiting.remove(fn.name);
 		return module;
@@ -2100,7 +2101,7 @@ class FrontendCompilation {
 				continue;
 			var target = context.moduleAnalyzer.loadSourceModuleDependency(dependency.target);
 			if (target == null)
-				throw 'Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module';
+				throw new InternalError('Typed runtime dependency "${dependency.target}" from "${dependency.functionName}" has no source module');
 			if (names.indexOf(target) >= 0)
 				continue;
 			var fn = typedByName.get(dependency.functionName),
@@ -2117,7 +2118,7 @@ class FrontendCompilation {
 			else
 				owner = initializerModule(dependency.functionName, owners);
 			if (owner == null)
-				throw 'Typed runtime dependency from unknown function "${dependency.functionName}"';
+				throw new InternalError('Typed runtime dependency from unknown function "${dependency.functionName}"');
 			var state = context.state.writableState(owner, rollbackModules);
 			if (state.dependencies.indexOf(target) < 0) {
 				context.frontendRestarts.push('${dependency.functionName} needs $target');

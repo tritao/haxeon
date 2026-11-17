@@ -1,5 +1,6 @@
 package compiler.hl.incremental;
 
+import compiler.core.InternalError;
 import compiler.hl.HlFunction;
 import compiler.hl.HlFunction.HlInstruction;
 import compiler.hl.incremental.HlSymbolRequest.HlRemap;
@@ -51,7 +52,7 @@ class HlLink {
 	static function index(map:Map<Int, Int>, from:Int, what:String):Int {
 		var to = map.get(from);
 		if (to == null)
-			throw 'HashLink link: $what index $from was not requested while the function was lowered';
+			throw new InternalError('HashLink link: $what index $from was not requested while the function was lowered');
 		return to;
 	}
 

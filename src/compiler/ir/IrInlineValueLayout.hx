@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.Ir.IrScalarStorage;
@@ -46,10 +47,10 @@ class IrInlineValueLayout {
 				append(Obj(name), path, visiting, null, null, null, result);
 			case Obj(name) if (isValue(name)):
 				if (visiting.indexOf(name) >= 0)
-					throw 'Value layout contains a by-value cycle at "$name"';
+					throw new InternalError('Value layout contains a by-value cycle at "$name"');
 				var object = objects.get(name), next = visiting.concat([name]);
 				if (object == null)
-					throw 'Missing value object "$name"';
+					throw new InternalError('Missing value object "$name"');
 				for (field in object.fields)
 					append(field.type, path.concat([field.name]), next, field.nativeLayout,
 						IrFieldStorage.scalar(field), field.nullableScalarStorage, result);

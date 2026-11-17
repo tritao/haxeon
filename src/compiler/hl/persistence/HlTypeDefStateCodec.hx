@@ -1,5 +1,6 @@
 package compiler.hl.persistence;
 
+import compiler.core.InternalError;
 import compiler.hl.HlCode.HlEnumConstructor;
 import compiler.hl.HlCode.HlObjectField;
 import compiler.hl.HlCode.HlObjectMethod;
@@ -28,19 +29,19 @@ class HlTypeDefStateCodec {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "HTD" || input.readByte() != 3)
-				throw "Invalid HashLink type state";
+				throw new InternalError("Invalid HashLink type state");
 			var result = readList(input, stringCount, globalCount);
 			if (input.position != bytes.length)
-				throw "Trailing HashLink type state data";
+				throw new InternalError("Trailing HashLink type state data");
 			validateReferences(result, stringCount, globalCount);
 			return result;
 		} catch (error:haxe.io.Eof)
-			throw "Truncated HashLink type state";
+			throw new InternalError("Truncated HashLink type state");
 	}
 
 	static function writeList(output:BytesOutput, types:Array<HlTypeDef>):Void {
 		if (types.length > MAX_ITEMS)
-			throw "Too many HashLink types";
+			throw new InternalError("Too many HashLink types");
 		output.writeInt32(types.length);
 		for (type in types)
 			switch type {
@@ -126,7 +127,7 @@ class HlTypeDefStateCodec {
 				case 0:
 					var kind = input.readByte();
 					if (kind > 23)
-						throw "Invalid HashLink simple type";
+						throw new InternalError("Invalid HashLink simple type");
 					Simple(cast kind);
 				case 1: Abstract(input.readInt32());
 				case 2: Function(readInts(input), input.readInt32());
@@ -173,7 +174,7 @@ class HlTypeDefStateCodec {
 				case 6: Parameterized(cast input.readByte(), input.readInt32());
 				case 8: EnumTag(input.readInt32(), readInts(input));
 				case 9: Method(readInts(input), input.readInt32());
-				default: throw "Unknown HashLink type state tag";
+				default: throw new InternalError("Unknown HashLink type state tag");
 			});
 		return result;
 	}
@@ -186,21 +187,21 @@ class HlTypeDefStateCodec {
 					switch types[boxedType] {
 						case Enum(_, _, constructors):
 							if (constructors.length != cacheGlobals.length)
-								throw "Invalid HashLink enum tag case count";
+								throw new InternalError("Invalid HashLink enum tag case count");
 							for (i in 0...constructors.length)
 								if (constructors[i].params.length != 0)
-									throw "HashLink enum tag has payloads";
-						default: throw "Invalid HashLink enum tag boxed type";
+									throw new InternalError("HashLink enum tag has payloads");
+						default: throw new InternalError("Invalid HashLink enum tag boxed type");
 					}
 					for (global in cacheGlobals)
 						if (global < 0 || global >= globals)
-							throw "Invalid HashLink enum tag cache global";
+							throw new InternalError("Invalid HashLink enum tag cache global");
 				case Simple(kind):
 					if (kind == HlType.Ref || kind == HlType.Null || kind == HlType.Packed)
-						throw "Parameterized HashLink type stored without its parameter";
+						throw new InternalError("Parameterized HashLink type stored without its parameter");
 				case Parameterized(kind, parameter):
 					if (kind != HlType.Ref && kind != HlType.Null && kind != HlType.Packed)
-						throw "Invalid parameterized HashLink type";
+						throw new InternalError("Invalid parameterized HashLink type");
 					validateTypeReference(parameter, types.length);
 				case Abstract(name):
 					validateStringReference(name, strings);
@@ -213,7 +214,7 @@ class HlTypeDefStateCodec {
 					if (base >= 0)
 						validateTypeReference(base, types.length);
 					if (global < 0 || global > globals)
-						throw "Invalid HashLink object global";
+						throw new InternalError("Invalid HashLink object global");
 					for (field in fields) {
 						validateStringReference(field.name, strings);
 						validateTypeReference(field.type, types.length);
@@ -222,15 +223,15 @@ class HlTypeDefStateCodec {
 						validateStringReference(method.name, strings);
 						if (method.functionIndex < 0 || method.prototype < 0
 							&& method.prototype != compiler.hl.HlCode.TYPED_METHOD_PROTOTYPE)
-							throw "Invalid HashLink object method";
+							throw new InternalError("Invalid HashLink object method");
 					}
 					for (binding in bindings)
 						if (binding < 0)
-							throw "Invalid HashLink object binding";
+							throw new InternalError("Invalid HashLink object binding");
 				case Structure(name, global, fields, methods, bindings):
 					validateStringReference(name, strings);
 					if (global < 0 || global > globals)
-						throw "Invalid HashLink structure global";
+						throw new InternalError("Invalid HashLink structure global");
 					for (field in fields) {
 						validateStringReference(field.name, strings);
 						validateTypeReference(field.type, types.length);
@@ -238,11 +239,11 @@ class HlTypeDefStateCodec {
 					for (method in methods) {
 						validateStringReference(method.name, strings);
 						if (method.functionIndex < 0 || method.prototype < 0)
-							throw "Invalid HashLink structure method";
+							throw new InternalError("Invalid HashLink structure method");
 					}
 					for (binding in bindings)
 						if (binding < 0)
-							throw "Invalid HashLink structure binding";
+							throw new InternalError("Invalid HashLink structure binding");
 				case Virtual(name, fields):
 					validateStringReference(name, strings);
 					for (field in fields) {
@@ -252,7 +253,7 @@ class HlTypeDefStateCodec {
 				case Enum(name, global, constructors):
 					validateStringReference(name, strings);
 					if (global < 0)
-						throw "Invalid HashLink enum global";
+						throw new InternalError("Invalid HashLink enum global");
 					for (constructor in constructors) {
 						validateStringReference(constructor.name, strings);
 						for (parameter in constructor.params)
@@ -263,17 +264,17 @@ class HlTypeDefStateCodec {
 
 	static function validateStringReference(index:Int, count:Int):Void {
 		if (index < 0 || index >= count)
-			throw "Invalid HashLink type string reference";
+			throw new InternalError("Invalid HashLink type string reference");
 	}
 
 	static function validateTypeReference(index:Int, count:Int):Void {
 		if (index < 0 || index >= count)
-			throw "Invalid HashLink type reference";
+			throw new InternalError("Invalid HashLink type reference");
 	}
 
 	static function writeInts(output:BytesOutput, values:Array<Int>):Void {
 		if (values.length > MAX_ITEMS)
-			throw "Too many HashLink type references";
+			throw new InternalError("Too many HashLink type references");
 		output.writeInt32(values.length);
 		for (value in values)
 			output.writeInt32(value);
@@ -285,7 +286,7 @@ class HlTypeDefStateCodec {
 	static function readCount(input:BytesInput):Int {
 		var count = input.readInt32();
 		if (count < 0 || count > MAX_ITEMS)
-			throw "Invalid HashLink type item count";
+			throw new InternalError("Invalid HashLink type item count");
 		return count;
 	}
 }

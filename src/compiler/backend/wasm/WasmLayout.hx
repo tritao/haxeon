@@ -1,5 +1,6 @@
 package compiler.backend.wasm;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.Ir.IrObjectNativeLayout;
@@ -139,7 +140,7 @@ class WasmLayout {
 
 	public function object(name:String):WasmObjectLayout {
 		if (!objects.exists(name))
-			throw 'Unknown Wasm object layout "$name"';
+			throw new InternalError('Unknown Wasm object layout "$name"');
 		return objects.get(name);
 	}
 
@@ -147,12 +148,12 @@ class WasmLayout {
 		for (field in object(objectName).fields)
 			if (field.name == fieldName)
 				return field;
-		throw 'Unknown field "$objectName.$fieldName" in Wasm layout';
+		throw new InternalError('Unknown field "$objectName.$fieldName" in Wasm layout');
 	}
 
 	public function enumType(name:String):WasmEnumLayout {
 		if (!enums.exists(name))
-			throw 'Unknown Wasm enum layout "$name"';
+			throw new InternalError('Unknown Wasm enum layout "$name"');
 		return enums.get(name);
 	}
 
@@ -177,7 +178,7 @@ class WasmLayout {
 		if (objects.exists(object.name))
 			return objects.get(object.name);
 		if (visiting.indexOf(object.name) >= 0)
-			throw 'Cyclic Wasm object inheritance at "${object.name}"';
+			throw new InternalError('Cyclic Wasm object inheritance at "${object.name}"');
 		var nextVisiting = visiting.copy();
 		nextVisiting.push(object.name);
 		var nativeLayout = object.nativeLayout;
@@ -185,7 +186,7 @@ class WasmLayout {
 			var fields:Array<WasmFieldLayout> = [for (field in object.fields) {
 				var native = field.nativeLayout;
 				if (native == null)
-					throw 'Flat Wasm object "${object.name}" is missing native field layout "${field.name}"';
+					throw new InternalError('Flat Wasm object "${object.name}" is missing native field layout "${field.name}"');
 				{
 					name:field.name,
 						offset:FLAT_HEADER_SIZE + native.offset,
@@ -209,7 +210,7 @@ class WasmLayout {
 				if (candidate.name == object.base)
 					baseDecl = candidate;
 			if (baseDecl == null)
-				throw 'Unknown Wasm base object "${object.base}" for "${object.name}"';
+				throw new InternalError('Unknown Wasm base object "${object.base}" for "${object.name}"');
 			var base = buildObjectLayout(baseDecl, nextVisiting);
 			fields = base.fields.copy();
 			offset = base.size;
@@ -225,12 +226,12 @@ class WasmLayout {
 			if (valueObject != null && valueObject.isValue) {
 				var shape = inlineLayout(valueObject.name, []), slots = valueLayout.leaves(field.type);
 				if (slots.length != shape.slots.length || physical.length != slots.length)
-					throw 'Mismatched inline value layout "${object.name}.${field.name}"';
+					throw new InternalError('Mismatched inline value layout "${object.name}.${field.name}"');
 				offset = align(offset, shape.alignment);
 				for (index in 0...slots.length) {
 					var part = physical[index], slot = slots[index], placement = shape.slots[index];
 					if (slot.path.join(".") != placement.path.join(".") || slot.isPresence != placement.presence)
-						throw 'Mismatched inline value path "${object.name}.${part.name}"';
+						throw new InternalError('Mismatched inline value path "${object.name}.${part.name}"');
 					fields.push({
 						name: part.name,
 						offset: offset + placement.offset,
@@ -268,15 +269,15 @@ class WasmLayout {
 
 	/** Scalar fields use their declared width; nested Flat records retain all C offsets and padding. */
 	function inlineLayout(name:String, visiting:Array<String>):WasmInlineLayout {
-		if (visiting.indexOf(name) >= 0) throw 'Cyclic inline Wasm value "$name"';
+		if (visiting.indexOf(name) >= 0) throw new InternalError('Cyclic inline Wasm value "$name"');
 		var object = logicalObjects.get(name);
-		if (object == null || !object.isValue) throw 'Missing inline Wasm value "$name"';
+		if (object == null || !object.isValue) throw new InternalError('Missing inline Wasm value "$name"');
 		var nativeLayout = object.nativeLayout;
 		if (nativeLayout != null) {
 			var slots:Array<WasmInlineSlot> = [];
 			for (slot in valueLayout.leaves(Obj(name))) {
 				var native = valueLayout.nativeLeaf(Obj(name), slot);
-				if (native == null) throw 'Missing native leaf for "$name"';
+				if (native == null) throw new InternalError('Missing native leaf for "$name"');
 				slots.push({
 					path: slot.path,
 					presence: slot.isPresence,
@@ -318,7 +319,7 @@ class WasmLayout {
 				var storage = compiler.ir.IrFieldStorage.scalar(field),
 					size = storage == null ? sizeOf(field.type) : storage.size,
 					alignment = size > 8 ? 8 : size;
-				if (alignment < 1) throw 'Invalid inline field "$name.${field.name}"';
+				if (alignment < 1) throw new InternalError('Invalid inline field "$name.${field.name}"');
 				offset = align(offset, alignment);
 				if (alignment > maximum) maximum = alignment;
 				slots.push({
@@ -337,10 +338,10 @@ class WasmLayout {
 	public function enumField(typeName:String, constructor:Int, field:Int):{type:IrType, offset:Int} {
 		var layout = enumType(typeName);
 		if (constructor < 0 || constructor >= layout.cases.length)
-			throw 'Unknown constructor $constructor in Wasm enum layout "$typeName"';
+			throw new InternalError('Unknown constructor $constructor in Wasm enum layout "$typeName"');
 		var params = layout.cases[constructor];
 		if (field < 0 || field >= params.length)
-			throw 'Unknown field $field in Wasm enum constructor $constructor of "$typeName"';
+			throw new InternalError('Unknown field $field in Wasm enum constructor $constructor of "$typeName"');
 		var offset = HEADER_SIZE + 4;
 		for (index in 0...field)
 			offset = align(offset, alignmentOf(params[index])) + sizeOf(params[index]);

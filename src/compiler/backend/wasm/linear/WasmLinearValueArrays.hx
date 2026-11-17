@@ -1,5 +1,6 @@
 package compiler.backend.wasm.linear;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
@@ -88,7 +89,7 @@ class WasmLinearValueArrays {
 
 	static function retype(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative,
 			allocator:Int, failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.arguments.length != 9 || allocator < 0) throw "Invalid Wasm32 value-array retype";
+		if (native.arguments.length != 9 || allocator < 0) throw new InternalError("Invalid Wasm32 value-array retype");
 		var b = new WasmFunctionBuilder(native.name, {parameters: [for (_ in native.arguments) I32], results: [I32]}),
 			resolved = b.local("resolved", I32),
 			index = b.local("index", I32),
@@ -265,7 +266,7 @@ class WasmLinearValueArrays {
 			integer = suffix == "i32" || suffix == "i64",
 			variableWidth = integer || suffix == "ptr" || suffix == "type" || suffix == "clear";
 		var expected = 3 + (variableWidth ? 1 : 0) + (write && !clear ? 1 : 0) + (!write && integer ? 1 : 0);
-		if (native.arguments.length != expected) throw 'Invalid Wasm32 value-array access $symbol';
+		if (native.arguments.length != expected) throw new InternalError('Invalid Wasm32 value-array access $symbol');
 		var results:Array<WasmValueType> = (switch (native.result) {
 			case Void: true;
 			default: false;
@@ -401,7 +402,7 @@ class WasmLinearValueArrays {
 					case "i64": [];
 					case "f32": [F32DemoteF64, I32ReinterpretF32, I64ExtendI32U];
 					case "f64": [I64ReinterpretF64];
-					default: throw 'Unsupported Wasm32 value-array scalar $suffix';
+					default: throw new InternalError('Unsupported Wasm32 value-array scalar $suffix');
 				});
 				builder.localSet(bits);
 			}
@@ -452,7 +453,7 @@ class WasmLinearValueArrays {
 				case "i64": [];
 				case "f32": [I32WrapI64, F32ReinterpretI32, F64PromoteF32];
 				case "f64": [F64ReinterpretI64];
-				default: throw 'Unsupported Wasm32 value-array scalar $suffix';
+				default: throw new InternalError('Unsupported Wasm32 value-array scalar $suffix');
 			});
 		}
 		builder.return_();
@@ -489,7 +490,7 @@ class WasmLinearValueArrays {
 
 	public static function replaceCapacity(native:IrNative,
 			allocator:Int, failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.arguments.length != 3 || allocator < 0) throw "Invalid Wasm32 value-array growth";
+		if (native.arguments.length != 3 || allocator < 0) throw new InternalError("Invalid Wasm32 value-array growth");
 		var b = new WasmFunctionBuilder(native.name, {parameters: [I32, I32, I32], results: []}),
 			oldCapacity = b.local("old-capacity", I32),
 			capacity = b.local("capacity", I32),
@@ -672,7 +673,8 @@ class WasmLinearValueArrays {
 
 	public static function allocate(module:compiler.backend.wasm.WasmModule.WasmModule, native:IrNative,
 			allocator:Int, failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.arguments.length != 6 || allocator < 0) throw "Invalid Wasm32 value-array allocator";
+		if (native.arguments.length != 6
+			|| allocator < 0) throw new InternalError("Invalid Wasm32 value-array allocator");
 		var b = new WasmFunctionBuilder(native.name, {parameters: [I32, I32, I32, I32, I32, I32], results: [I32]}),
 			capacity = b.local("capacity", I32),
 			scalarBytes = b.local("scalar-bytes", I32),
@@ -847,7 +849,7 @@ class WasmLinearValueArrays {
 
 	static function setBridge(native:IrNative,
 			failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.arguments.length != 4) throw "Invalid Wasm32 value-array bridge";
+		if (native.arguments.length != 4) throw new InternalError("Invalid Wasm32 value-array bridge");
 		var b = new WasmFunctionBuilder(native.name, {parameters: [I32, I32, I32, I32], results: []});
 		b.emitAll([
 			LocalGet(0),
@@ -890,7 +892,8 @@ class WasmLinearValueArrays {
 
 	static function buildValidity(native:IrNative,
 			failure:WasmLinearFailure):compiler.backend.wasm.WasmModule.WasmFunction {
-		if (native.arguments.length != 2) throw 'Invalid Wasm32 value-array validity operation ${native.symbol}';
+		if (native.arguments.length != 2)
+			throw new InternalError('Invalid Wasm32 value-array validity operation ${native.symbol}');
 		var builder = new WasmFunctionBuilder(native.name, {parameters: [I32, I32], results: (switch (native.result) {
 			case Void: true;
 			default: false;

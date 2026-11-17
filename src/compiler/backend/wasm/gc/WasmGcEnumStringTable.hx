@@ -1,6 +1,7 @@
 package compiler.backend.wasm.gc;
 
 import compiler.backend.wasm.EnumStringDescriptors;
+import compiler.core.InternalError;
 
 /** Passive data for the shared GC enum formatter; offsets in metadata are array indices. */
 class WasmGcEnumStringTable {
@@ -37,7 +38,7 @@ class WasmGcEnumStringTable {
 			var group = groups[index], groupAt = 4 + index * 3;
 			var matcher = matchers.get(group.name);
 			if (matcher == null)
-				throw 'Missing enum string matcher for ${group.name}';
+				throw new InternalError('Missing enum string matcher for ${group.name}');
 			data[groupAt] = matcher;
 			data[groupAt + 1] = group.cases.length;
 			data[groupAt + 2] = data.length;
@@ -55,7 +56,7 @@ class WasmGcEnumStringTable {
 					continue;
 				var groupAccessors = accessors.get(group.name);
 				if (groupAccessors == null || groupAccessors[caseIndex] < 0)
-					throw 'Missing enum string accessor for ${group.name} case $caseIndex';
+					throw new InternalError('Missing enum string accessor for ${group.name} case $caseIndex');
 				data[itemAt + 2] = groupAccessors[caseIndex];
 				var existing = descriptors.get(item.descriptor);
 				if (existing != null) {

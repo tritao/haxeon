@@ -2,6 +2,7 @@ package compiler.types;
 
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
+import compiler.core.InternalError;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
 
@@ -33,7 +34,7 @@ class AbstractConversionGraph {
 		for (name in declarations.abstractNames()) {
 			var decl = declarations.abstractDeclaration(name);
 			if (decl == null)
-				throw 'Abstract declaration "$name" disappeared during conversion indexing';
+				throw new InternalError('Abstract declaration "$name" disappeared during conversion indexing');
 			var substitutions = abstractSubstitutions(decl.name, decl.typeParameters),
 				owner = abstractNode(decl.name, [for (index in 0...decl.typeParameters.length) '$' + '$index']);
 			spans.set(owner, decl.span);
@@ -255,11 +256,11 @@ class AbstractConversionGraph {
 			var names = [for (name in declarations.abstractNames()) name];
 			names.sort(Reflect.compare);
 			if (names.length == 0)
-				throw message;
+				throw new InternalError(message);
 			var name = names[0];
 			var declaration = declarations.abstractDeclaration(name);
 			if (declaration == null)
-				throw message;
+				throw new InternalError(message);
 			span = declaration.span;
 		}
 		throw new CompileError(new Diagnostic("E1007", message, span));

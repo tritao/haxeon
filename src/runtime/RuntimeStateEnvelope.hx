@@ -1,5 +1,6 @@
 package runtime;
 
+import compiler.core.InternalError;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 import haxe.io.BytesOutput;
@@ -28,16 +29,16 @@ class RuntimeStateEnvelope {
 		input.bigEndian = false;
 		try {
 			if (input.readString(3) != "RST" || input.readByte() != VERSION)
-				throw "Unsupported runtime state envelope";
+				throw new InternalError("Unsupported runtime state envelope");
 			var length = input.readInt32();
 			if (length < 0 || length > bytes.length - input.position)
-				throw "Invalid runtime state payload length";
+				throw new InternalError("Invalid runtime state payload length");
 			var result = new RuntimeStateEnvelope(input.readString(length));
 			if (input.position != bytes.length)
-				throw "Trailing runtime state data";
+				throw new InternalError("Trailing runtime state data");
 			return result;
 		} catch (_:haxe.io.Eof) {
-			throw "Truncated runtime state envelope";
+			throw new InternalError("Truncated runtime state envelope");
 		}
 	}
 }

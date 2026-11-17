@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.SourceProvenance.Located;
 import compiler.types.typing.EnumRuntimeType;
@@ -42,11 +43,13 @@ class IrEnumDynamicDispatch {
 				for (located in block.instructions) switch located.value {
 				case Intrinsic(output, EnumDynamicBox(type), arguments):
 					if (!isEnum(type) || arguments.length != 1 || !IrVerifier.sameType(arguments[0].type, type)
-						|| !IrVerifier.sameType(output.type, Dyn)) throw "Invalid enum Dynamic box signature";
+						|| !IrVerifier.sameType(output.type, Dyn))
+						throw new InternalError("Invalid enum Dynamic box signature");
 					boxes.set(register(type), true);
 				case Intrinsic(output, EnumDynamicView(type), arguments):
 					if (!isEnum(type) || arguments.length != 1 || !IrVerifier.sameType(arguments[0].type, Array(Dyn))
-						|| !IrVerifier.sameType(output.type, Array(Dyn))) throw "Invalid enum Dynamic view signature";
+						|| !IrVerifier.sameType(output.type, Array(Dyn)))
+						throw new InternalError("Invalid enum Dynamic view signature");
 					views.set(register(type), true);
 				case Call(_, "__dynamic_equal", _): needsEqual = true;
 				case Call(_, REFLECT, _): needsReflect = true;

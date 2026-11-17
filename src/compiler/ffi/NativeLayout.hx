@@ -1,5 +1,6 @@
 package compiler.ffi;
 
+import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiType;
@@ -96,7 +97,7 @@ class NativeLayout {
 			case TAbstract(_, _, representation): fieldType(representation);
 			case TInstance(NominalKind.NativeValue, name, _): Named(name);
 			case TInstance(NominalKind.Class, name, []): Named(name);
-			case _: throw 'Type $type is not an unmanaged native field type';
+			case _: throw new InternalError('Type $type is not an unmanaged native field type');
 		};
 
 	public static function nestedDeclaration(name:String, layout:TypedNativeLayout, span:SourceSpan):HxiDeclaration
@@ -116,7 +117,7 @@ class NativeLayout {
 		for (field in fields) {
 			var hxiType = fieldType(field.type), layout = abi.layout(hxiType);
 			if (layout == null || layout.size <= 0 || layout.align <= 0)
-				throw 'Field "${field.name}" in native record "$name" has no fixed C layout';
+				throw new InternalError('Field "${field.name}" in native record "$name" has no fixed C layout');
 			cursor = alignUp(cursor, layout.align);
 			placed.push({
 				name: field.name,
@@ -125,7 +126,7 @@ class NativeLayout {
 				alignment: layout.align
 			});
 			if (cursor > 0x7FFFFFFF - layout.size)
-				throw 'Native record "$name" exceeds the supported layout size';
+				throw new InternalError('Native record "$name" exceeds the supported layout size');
 			cursor += layout.size;
 			recordAlignment = Std.int(Math.max(recordAlignment, layout.align));
 		}
@@ -143,7 +144,7 @@ class NativeLayout {
 			return value;
 		var padding = alignment - remainder;
 		if (value > 0x7FFFFFFF - padding)
-			throw "Native record layout exceeds the supported size";
+			throw new InternalError("Native record layout exceeds the supported size");
 		return value + padding;
 	}
 }

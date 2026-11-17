@@ -1,5 +1,6 @@
 package compiler.ir.cfg;
 
+import compiler.core.InternalError;
 import compiler.ir.cfg.Cfg;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrIntrinsic;
@@ -109,7 +110,7 @@ class CfgBuilder {
 	/** Attach a forward edge after both branch bodies have been lowered. */
 	public function jumpFrom(source:CfgBlock, target:CfgBlock):Void {
 		if (source.terminator != null)
-			throw 'CFG block ${source.id} already has a terminator';
+			throw new InternalError('CFG block ${source.id} already has a terminator');
 		var anchor = source.instructions.length == 0
 			? provenance.location : source.instructions[source.instructions.length - 1].provenance.location;
 		source.terminator = new Located(Jump(target.id),
@@ -165,14 +166,14 @@ class CfgBuilder {
 	public function endTry():Void {
 		var trap = activeTraps.pop();
 		if (trap == null)
-			throw "No active try block";
+			throw new InternalError("No active try block");
 		emit(EndTry(trap.id, trap.preserveExceptionStack));
 	}
 
 	/** Forget a trap after all paths in the current block have terminated. */
 	public function discardTry():Void {
 		if (activeTraps.length == 0)
-			throw "No active try block";
+			throw new InternalError("No active try block");
 		activeTraps.pop();
 	}
 
@@ -191,7 +192,7 @@ class CfgBuilder {
 	/** Close a portion of the lexical trap stack on a single exit edge. */
 	public function closeTrapsBetween(from:Int, depth:Int):Void {
 		if (depth < 0 || depth > from || from > activeTraps.length)
-			throw 'Invalid trap depth $depth';
+			throw new InternalError('Invalid trap depth $depth');
 		var index = from;
 		while (index > depth) {
 			index--;
@@ -459,7 +460,7 @@ class CfgBuilder {
 	public function iteratorNew(array:CfgValue):CfgValue {
 		var element = switch array.type {
 			case Array(element): element;
-			default: throw "Iterator creation requires an Array value";
+			default: throw new InternalError("Iterator creation requires an Array value");
 		};
 		var out = temporary(Iterator(element));
 		emit(IteratorNew(out, array));
@@ -522,13 +523,13 @@ class CfgBuilder {
 
 	function emit(value:CfgInstruction):Void {
 		if (isTerminated())
-			throw "Cannot emit after CFG terminator";
+			throw new InternalError("Cannot emit after CFG terminator");
 		current.instructions.push(new Located(value, provenance));
 	}
 
 	function terminate(value:CfgTerminator):Void {
 		if (isTerminated())
-			throw 'CFG block ${current.id} already has a terminator';
+			throw new InternalError('CFG block ${current.id} already has a terminator');
 		current.terminator = new Located(value, provenance);
 	}
 }
