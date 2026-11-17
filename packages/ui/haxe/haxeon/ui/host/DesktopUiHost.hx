@@ -172,11 +172,58 @@ class DesktopUiHost {
 				if (NativeKit.nk_window_set_icons(window, pixels, images) != Result.Ok)
 					throw "Window icons failed: " + NativeKit.nk_last_error();
 			}
+			// The outer bounds in logical pixels, which a later run can pass back as the placement.
+			var readPlacement = function():Null<WindowPlacement> {
+				var position = NativeKit.nk_window_get_position(window);
+				var size = NativeKit.nk_window_get_size(window);
+				if (position.status != Result.Ok || size.status != Result.Ok) return null;
+				// The size is the client area's; the bounds set on the next run are the outer frame's.
+				var width = size.out_width, height = size.out_height;
+				var frame = NativeKit.nk_window_get_frame_extents(window);
+				if (frame.status == Result.Ok) {
+					width += frame.out_extents.get_left() + frame.out_extents.get_right();
+					height += frame.out_extents.get_top() + frame.out_extents.get_bottom();
+				}
+				return new WindowPlacement(position.out_x, position.out_y, width, height, false);
+			};
+			// Whether the bounds, set on this window as they are, would overlap a connected monitor. A monitor the
+			// window was on may since have been disconnected. When the monitors cannot be listed, the answer is yes.
+			var onSomeMonitor = function(bounds:WindowPlacement):Bool {
+				var scale = NativeKit.nk_window_get_scale(window);
+				var monitors = Bytes.alloc(16 * 4);
+				var count = Bytes.alloc(4);
+				count.setInt32(0, 16);
+				if (scale.status != Result.Ok || NativeKit.nk_monitor_list(monitors, count) != Result.Ok) return true;
+				for (index in 0...count.getInt32(0)) {
+					var geometry = NativeKit.nk_monitor_get_geometry(new MonitorHandle(monitors.getInt32(index * 4)));
+					if (geometry.status != Result.Ok) continue;
+					var monitor = geometry.out_geometry;
+					// Windows reports monitors at the system scale and a window's bounds at the window's own scale.
+					var toWindow = Sys.systemName() == "Windows" ? monitor.get_scale_x() / scale.out_scale : 1.0;
+					if (bounds.x < (monitor.get_x() + monitor.get_width()) * toWindow
+						&& monitor.get_x() * toWindow < bounds.x + bounds.width
+						&& bounds.y < (monitor.get_y() + monitor.get_height()) * toWindow
+						&& monitor.get_y() * toWindow < bounds.y + bounds.height)
+						return true;
+				}
+				return false;
+			};
 			// A saved placement is applied while the window is still hidden (Windows), so it opens there without a jump.
-			// A placement that cannot be applied is ignored: the window keeps the place the system gave it.
+			// A placement that cannot be applied, or lies on no monitor, is ignored: the window keeps the place the
+			// system gave it. The placement was saved at the scale of the monitor the window was on, while the bounds
+			// are set at the scale of the monitor the system chose; moving there can change the scale, so the bounds
+			// are set once more at the new one.
 			var placement = options.placement;
-			if (placement != null && placement.width > 0 && placement.height > 0)
+			if (placement != null && placement.width > 0 && placement.height > 0 && onSomeMonitor(placement)) {
+				var scale = NativeKit.nk_window_get_scale(window);
 				NativeKit.nk_window_set_bounds(window, placement.x, placement.y, placement.width, placement.height);
+				var moved = NativeKit.nk_window_get_scale(window);
+				if (scale.status == Result.Ok && moved.status == Result.Ok && moved.out_scale != scale.out_scale)
+					NativeKit.nk_window_set_bounds(window, placement.x, placement.y, placement.width, placement.height);
+			}
+			// The bounds a maximized window restores to are the last ones read while it was not maximized, first
+			// the ones it opens with, so a window maximized from the start still has a placement to save.
+			var restoredPlacement = readPlacement();
 			if (deferShowForIcon && NativeKit.nk_window_show(window, true) != Result.Ok)
 				throw "Window show failed: " + NativeKit.nk_last_error();
 			if (placement != null && placement.maximized)
@@ -289,8 +336,6 @@ class DesktopUiHost {
 				var state = NativeKit.nk_window_get_state(window);
 				return state.status == Result.Ok && state.out_state.get_flags().contains(WindowStateFlags.Active);
 			};
-			// The bounds a maximized window restores to are the last ones read while it was not maximized.
-			var restoredPlacement:Null<WindowPlacement> = options.placement;
 			hostContext.windowPlacement = function():Null<WindowPlacement> {
 				var state = NativeKit.nk_window_get_state(window);
 				if (state.status != Result.Ok) return null;
@@ -300,18 +345,8 @@ class DesktopUiHost {
 				var last = restoredPlacement;
 				if (flags.contains(WindowStateFlags.Maximized))
 					return last == null ? null : new WindowPlacement(last.x, last.y, last.width, last.height, true);
-				var position = NativeKit.nk_window_get_position(window);
-				var size = NativeKit.nk_window_get_size(window);
-				if (position.status != Result.Ok || size.status != Result.Ok) return null;
-				// The size is the client area's; the bounds set on the next run are the outer frame's.
-				var width = size.out_width, height = size.out_height;
-				var frame = NativeKit.nk_window_get_frame_extents(window);
-				if (frame.status == Result.Ok) {
-					width += frame.out_extents.get_left() + frame.out_extents.get_right();
-					height += frame.out_extents.get_top() + frame.out_extents.get_bottom();
-				}
-				var current = new WindowPlacement(position.out_x, position.out_y, width, height, false);
-				restoredPlacement = current;
+				var current = readPlacement();
+				if (current != null) restoredPlacement = current;
 				return current;
 			};
 			var liveRuntime = new UiHostRuntime(session, hostContext, window, surface,
