@@ -343,7 +343,7 @@ class Parser {
 		var methods:Array<AstFunction> = [];
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata();
-			var isStatic = false, isInline = false;
+			var isStatic = false, isInline = false, isPublic:Null<Bool> = null;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline)
 				|| check(TokenKind.Static)) {
 				if (match(TokenKind.Static))
@@ -351,12 +351,12 @@ class Parser {
 				else if (match(TokenKind.Inline))
 					isInline = true;
 				else
-					advance();
+					isPublic = advance().kind == TokenKind.Public;
 			}
 			var functionStart = consume(TokenKind.Function).span,
 				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
 			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata,
-				isInline));
+				isInline, isPublic));
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {

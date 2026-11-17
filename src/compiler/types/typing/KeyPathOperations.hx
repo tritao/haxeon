@@ -51,9 +51,14 @@ class KeyPathOperations {
 					"key path root"),
 					definition = KeyPathTyping.known(session, receiver);
 				if (definition != null) {
-					for (entry in definition.fields)
-						target = bodyTyper.typedMemberWithFlow(target, entry.field.name, span, scope);
-					target;
+					// The path's fields were checked where the path was formed, which may be another class.
+					var root = target;
+					MemberAccess.allowed(session, () -> {
+						var place = root;
+						for (entry in definition.fields)
+							place = bodyTyper.typedMemberWithFlow(place, entry.field.name, span, scope);
+						place;
+					});
 				} else {
 					new AnonymousTypeRegistry(session).register(receiver.type);
 					new TypedExpression(TClosureCall(new TypedExpression(TField(receiver, "$get"),
@@ -76,9 +81,14 @@ class KeyPathOperations {
 				if (!TypeRelations.equals(target.type, root)) target = session.representation.boundaryCast(target,
 					root);
 				if (definition != null) {
-					for (index in 0...definition.fields.length - 1)
-						target = bodyTyper.typedMemberWithFlow(target, definition.fields[index].field.name, span,
-							scope);
+					var root = target;
+					target = MemberAccess.allowed(session, () -> {
+						var place = root;
+						for (index in 0...definition.fields.length - 1)
+							place = bodyTyper.typedMemberWithFlow(place, definition.fields[index].field.name, span,
+								scope);
+						place;
+					});
 					ValuePlaceRules.requireWritable(session, target, span);
 					var last = definition.fields[definition.fields.length - 1],
 						assigned = bodyTyper.coerce(bodyTyper.typeExpression(arguments[1], scope, value), value,

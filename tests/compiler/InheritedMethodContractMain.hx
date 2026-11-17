@@ -66,7 +66,14 @@ class InheritedMethodContractMain {
 		// Explicit visibility changes are signature changes, not just body edits.
 		warm.update("Base.hx", base.split("public function connector").join("private function connector"));
 		warm.update("Child.hx", child('private function connector(name:String):Int return 42;'));
-		warm.compile("Main", null, false);
+		// main now calls a private method from outside its class, which Haxe rejects (PrivateAccessMain).
+		try {
+			warm.compile("Main", null, false);
+			throw "A call to a method made private was accepted";
+		} catch (error:CompileError) {
+			if (error.diagnostic.code != "E1030")
+				throw error;
+		}
 		warm.update("Base.hx", base);
 		reject(warm);
 		var generic = new Compiler();

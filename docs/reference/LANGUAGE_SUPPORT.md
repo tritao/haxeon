@@ -71,6 +71,13 @@ The current subset includes:
   effect cannot silently replace a type the current package declares: using that name is `E1029`, reported at the use, and
   naming the import (`import pack.Module.Type;`) or the module's own declaration settles it. `import pack.Module as M;` is a
   namespace: the module's types are `M.Type` and none come in by their bare names (stock Haxe rejects this form).
+- `private` as in Haxe: a member written without `public` is private to its class and its subclasses (an interface's
+  members, an extern class's and those of a class with `@:publicFields` are public), and `@:allow`, `@:access` and
+  `@:privateAccess` grant access as Haxe does. Reaching a private field, method or constructor elsewhere is `E1030`, with
+  Haxe's message (`Cannot access private field secret`, `Cannot access private constructor of Item`), and so is a `for`
+  loop over a class whose `iterator()` is private. An override written without a modifier keeps the overridden method's
+  visibility, and a class without a constructor of its own is constructed through its base's, as in Haxe. A private
+  module-level variable is visible in its own module.
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import
   one (`import pack.Settings.hits;`) or write its full path (`pack.Settings.hits`). As an extension stock Haxe rejects, they
   can also be reached through the module's name (`Settings.hits`, `Settings.record()` with `import pack.Settings;`). When the

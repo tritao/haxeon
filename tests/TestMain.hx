@@ -658,12 +658,12 @@ class TestMain {
 			'Cannot infer the key type of this empty map: nothing after it fixes it; give it a type');
 		expectCompileError('class Invalid { static final value; } function main():Int { return 0; }',
 			'Field "value" requires a type or initializer');
-		Frontend.compile('class Constants { static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
-		Frontend.compile('class Constants { static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
-		Frontend.compile('class InferredCallValue { public static function make():Int return 0; } class InferredCallField { static final count = InferredCallValue.make(); } function main():Int return InferredCallField.count;');
-		Frontend.compile('class InferredCallBase { public static function inherited():Int return 1; } class InferredCallDerived extends InferredCallBase {} class InferredCallInheritedField { static final count = InferredCallDerived.inherited(); } function main():Int return InferredCallInheritedField.count;');
+		Frontend.compile('class Constants { public static final integer = 4 * 10 + 2; static final fraction = 4 / 2; static final bits = (1 << 5) | 10; } function main():Int return Constants.integer;');
+		Frontend.compile('class Constants { public static final names = ["a", "b"]; } function main():Int return Constants.names.length;');
+		Frontend.compile('class InferredCallValue { public static function make():Int return 0; } class InferredCallField { public static final count = InferredCallValue.make(); } function main():Int return InferredCallField.count;');
+		Frontend.compile('class InferredCallBase { public static function inherited():Int return 1; } class InferredCallDerived extends InferredCallBase {} class InferredCallInheritedField { public static final count = InferredCallDerived.inherited(); } function main():Int return InferredCallInheritedField.count;');
 		Frontend.compile('enum Value { Number(value:Int); Empty; } function main():Int { var bits = 1; bits |= 2; bits &= 3; bits ^= 1; bits *= 4; bits %= 5; var fraction = 8.0; fraction /= 2; var recovered = try 1 catch (_:Dynamic) 2; var input:Value = Number(2); var selected = switch input { case Number(1) | Number(2): 3; case _: 0; }; var flat = [for (left in [1, 2]) for (right in [3, 4]) left + right]; return bits + recovered + selected + flat.length + (flat.contains(6) ? 1 : 0); }');
-		Frontend.compile("class Defaults { static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
+		Frontend.compile("class Defaults { public static final integer = -1; static final fraction = -0.5; static final prefix = '$' + 'abstract-' + 'result'; } function main():Int { return Defaults.integer; }");
 		Frontend.compile('class Base { public static inline final WIDTH = 220; } class Derived { public static inline final WIDTH = Base.WIDTH; } function main():Int return Derived.WIDTH;');
 		var inlineTyped = Typer.type(new Parser(new Lexer(new SourceFile("inline-constant.hx",
 			'class Constants { public static inline final BASE:Int = 16; public static inline final TOTAL:Int = BASE + 4; } function main():Int return Constants.TOTAL;'))
@@ -1184,8 +1184,8 @@ class TestMain {
 			"function size(value:haxe.io.Bytes):Int return 0;")).tokenize()).parseProgram();
 		Typer.typeLibrary(platformType);
 		Sys.println("PASS: nested module and platform type names resolve canonically");
-		Frontend.compile("class InferredConstructor { final value:Int; public function new(value) { this.value = value; } } function main():Int return new InferredConstructor(42).value;");
-		Frontend.compile("class InferredConditionalConstructor { final values:Array<Int>; public function new(?values) { this.values = values == null ? [] : values; } } function main():Int return new InferredConditionalConstructor([42]).values[0];");
+		Frontend.compile("class InferredConstructor { public final value:Int; public function new(value) { this.value = value; } } function main():Int return new InferredConstructor(42).value;");
+		Frontend.compile("class InferredConditionalConstructor { public final values:Array<Int>; public function new(?values) { this.values = values == null ? [] : values; } } function main():Int return new InferredConditionalConstructor([42]).values[0];");
 		Frontend.compile("class InferredCalls { public function new() {} function target(value:Int):Int return value; public function forward(value):Int return this.target(value); } function main():Int return new InferredCalls().forward(42);");
 		Frontend.compile("class OptionalConstructor { public function new(?value:String) {} } function main():Int { new OptionalConstructor(); return 42; }");
 		var voidEntryCompiler = new Compiler();

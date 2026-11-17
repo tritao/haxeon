@@ -55,7 +55,7 @@ class DiffIntrinsics {
 						fail("E1025",
 							'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable',
 							field.span);
-					var fieldValue = Member(Variable(value, span), field.name, span),
+					var fieldValue = synthesized(Member(Variable(value, span), field.name, span), span),
 						fieldHash = Call("haxeon.Hashing.hash", [fieldValue], span),
 						mixed = Add(Mul(Variable(hash, span), IntegerLiteral(31, span), span), fieldHash, span);
 					statements.push(Assignment(hash, mixed, span));
@@ -105,7 +105,7 @@ class DiffIntrinsics {
 					result = hold(session, "copy-result", span),
 					statements:Array<AstStatement> = [
 						VarDeclaration(source, null, arguments[0], span),
-						VarDeclaration(result, null, New(declaration.name, [], span), span)
+						VarDeclaration(result, null, synthesized(New(declaration.name, [], span), span), span)
 					];
 				for (entry in conformanceFields(session, type)) {
 					var field = entry.field;
@@ -113,8 +113,8 @@ class DiffIntrinsics {
 						fail("E1009",
 							'$name cannot copy immutable field "${field.name}" of "${compiler.semantic.SemanticSignature.display(type)}"',
 							span);
-					statements.push(FieldAssignment(Variable(result, span), field.name,
-						Member(Variable(source, span), field.name, span), span));
+					statements.push(synthesizedStatement(FieldAssignment(Variable(result, span), field.name,
+						Member(Variable(source, span), field.name, span), span), span));
 				}
 				return BlockExpression(statements, Variable(result, span), span);
 			case "mask":
@@ -154,8 +154,8 @@ class DiffIntrinsics {
 						fail("E1009", '$name cannot assign immutable field "${field.name}" of "${declaration.name}"',
 							span);
 					statements.push(If(differs(before, after, field.name, span), [
-						FieldAssignment(Variable(target, span), field.name,
-							Member(Variable(after, span), field.name, span), span),
+						synthesizedStatement(FieldAssignment(Variable(target, span), field.name,
+							Member(Variable(after, span), field.name, span), span), span),
 						Assignment(mask, BitOr(Variable(mask, span), IntegerLiteral(1 << index, span), span), span)
 					], [], span));
 				}
@@ -304,7 +304,9 @@ class DiffIntrinsics {
 				span);
 
 	static function differs(left:String, right:String, field:String, span:SourceSpan):AstExpression
-		return NotEqual(Member(Variable(left, span), field, span), Member(Variable(right, span), field, span), span);
+		return synthesized(NotEqual(Member(Variable(left, span), field, span),
+			Member(Variable(right, span), field, span), span),
+			span);
 
 	/** A temporary named by its place and its ordinal in the function being typed, so the same source gives the same name in any session. */
 	static function hold(session:TypingSession, purpose:String, span:SourceSpan):String
@@ -313,4 +315,16 @@ class DiffIntrinsics {
 	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void
 		BodyTyper.fail(code, message, span);
+
+	/**
+	 * An access this expansion makes to a member of the value's own class, which may be private: the conformance reads and writes
+	 * every stored field, as the class's own code would (`MemberAccess`). The caller's arguments are bound to locals before, so they
+	 * keep the caller's access.
+	 */
+	static function synthesized(expression:AstExpression, span:SourceSpan):AstExpression
+		return PrivateAccessExpression(expression, span);
+
+	static function synthesizedStatement(statement:AstStatement, span:SourceSpan):AstStatement
+		return PrivateAccessStatement(statement, span);
+
 }

@@ -34,8 +34,10 @@ class EnumAbstractValues {
 		session.constants.enumAbstractConstantOwner = declaration.name;
 		try {
 			var storage = typer.lowerType(declaration.underlying, declaration.span);
-			var expression = typer.coerce(typer.typeExpression(value.value, new Scope(), storage), storage,
-				'enum abstract value "$key"', "E1002");
+			// The initializer is the abstract's own code, typed where a value is first used, which may be another class.
+			var expression = MemberAccess.allowed(session,
+				() -> typer.coerce(typer.typeExpression(value.value, new Scope(),
+				storage), storage, 'enum abstract value "$key"', "E1002"));
 			session.constants.enumAbstractConstantOwner = previous;
 			session.constants.enumAbstractConstantsInProgress.remove(key);
 			session.constants.enumAbstractConstants.set(key, expression);

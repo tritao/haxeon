@@ -1,6 +1,9 @@
 package compiler.types.typing;
 
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
+import compiler.semantic.ModuleFields;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.syntax.Ast;
 
@@ -19,6 +22,9 @@ typedef DeclaredMember = {
 
 	/** Its visibility as written: true for `public`, false for `private`, null with no modifier. */
 	final isPublic:Null<Bool>;
+
+	/** Where it is declared: a module-level variable is visible to its whole module, which is its source file. */
+	final declaredIn:SourceSpan;
 
 	final ownerMetadata:Array<AstMetadata>;
 	final metadata:Null<Array<AstMetadata>>;
@@ -101,6 +107,7 @@ class MemberAccess {
 			owner: declaration.name,
 			name: field.name,
 			isPublic: field.isPublic,
+			declaredIn: field.span,
 			ownerMetadata: declaration.metadata,
 			metadata: field.metadata
 		}, span);
@@ -116,14 +123,86 @@ class MemberAccess {
 		require(session, {
 			owner: owner,
 			name: name,
-			isPublic: declared.isPublic,
+			isPublic: declared.isPublic == null && declared.isOverride == true ? overriddenVisibility(session, owner,
+				name) : declared.isPublic,
+			declaredIn: declared.span,
 			ownerMetadata: ownerMetadata(session, owner),
 			metadata: declared.metadata
 		}, span);
 	}
 
-	/** Requires that `member` may be reached from the code being typed. Visibility is not enforced yet: every member may. */
-	static function require(session:TypingSession, member:DeclaredMember, span:SourceSpan):Void {}
+	/**
+	 * Requires that `member` may be reached from the code being typed (`E1030`, worded as Haxe words it): it is public, or the code
+	 * may reach a private member of its owner (`canAccess`), or it is a module-level variable read in its own module.
+	 */
+	static function require(session:TypingSession, member:DeclaredMember, span:SourceSpan):Void {
+		if (isPublic(session, member)
+			|| canAccess(session, member.owner, member.ownerMetadata, member.name, member.metadata)
+			|| StringTools.endsWith(member.owner, ModuleFields.storageName(""))
+			&& span.file.path == member.declaredIn.file.path)
+			return;
+		throw new CompileError(new Diagnostic("E1030", member.name == "new"
+			? 'Cannot access private constructor of ${member.owner}' : 'Cannot access private field ${member.name}',
+			span));
+	}
+
+	/**
+	 * Whether `member` is public, by Haxe's rule: as written, or with no modifier, when its owner is an interface, an extern
+	 * class, or a class with `@:publicFields`; a class's or abstract's member is private otherwise.
+	 */
+	static function isPublic(session:TypingSession, member:DeclaredMember):Bool {
+		if (member.isPublic != null)
+			return member.isPublic;
+		if (session.interfaceDecls.exists(member.owner))
+			return true;
+		var classDecl = session.classDecls.get(member.owner);
+		if (classDecl != null && classDecl.isExtern == true)
+			return true;
+		var abstractDecl = session.declarations.abstractDeclaration(member.owner);
+		if (abstractDecl != null && abstractDecl.isExtern == true)
+			return true;
+		for (entry in member.ownerMetadata)
+			if (entry.name == "publicFields")
+				return true;
+		return false;
+	}
+
+	/**
+	 * An override written without a modifier has the visibility of the method it overrides, as in Haxe. One that overrides
+	 * nothing is a broken declaration, which the inherited-method check reports (`E1020`); it is not reported again here.
+	 */
+	static function overriddenVisibility(session:TypingSession, owner:String, name:String):Bool {
+		var classDecl = session.classDecls.get(owner);
+		var current = classDecl == null || classDecl.base == null ? null : baseName(classDecl.base),
+			seen:Map<String, Bool> = [];
+		while (current != null && !seen.exists(current)) {
+			seen.set(current, true);
+			var declared = session.signatures.get(current + "." + name);
+			if (declared != null && (declared.isPublic != null || declared.isOverride != true))
+				return declared.isPublic == true;
+			var base = session.classDecls.get(current);
+			current = base == null || base.base == null ? null : baseName(base.base);
+		}
+		return true;
+	}
+
+	/**
+	 * Types `read` without requiring access again: it reaches members that source named where they were already allowed (a known
+	 * key path's fields, read where the path is used), or that belong to the declaration being typed (an enum abstract value's
+	 * initializer, typed where a value is first used). Not for code the user wrote here.
+	 */
+	public static function allowed<T>(session:TypingSession, read:() -> T):T {
+		var context = session.currentContext;
+		context.privateAccessDepth++;
+		try {
+			var result = read();
+			context.privateAccessDepth--;
+			return result;
+		} catch (error:Dynamic) {
+			context.privateAccessDepth--;
+			throw error;
+		}
+	}
 
 	static function ownerMetadata(session:TypingSession, owner:String):Array<AstMetadata> {
 		var classDecl = session.classDecls.get(owner);

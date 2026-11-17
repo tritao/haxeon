@@ -116,9 +116,11 @@ class ImplicitConstructors {
 			forwarded.push(Variable(argument.name, span));
 		}
 		var statements:Array<AstStatement> = [Expression(Call("super", forwarded, span), span)];
+		// Haxe constructs a class without a constructor of its own through its base's, whatever that one's visibility.
 		return {
 			name: "new",
 			isStatic: false,
+			isPublic: true,
 			metadata: [],
 			arguments: arguments,
 			result: VoidType,

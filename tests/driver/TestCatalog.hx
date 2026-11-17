@@ -111,6 +111,7 @@ class TestCatalog {
 		"SignatureMetadataMain",
 		"LspFileUriMain",
 		"ReadOnlyPropertyMain",
+		"PrivateAccessMain",
 		"FinalLocalMain",
 		"GenericStructuralMain",
 		"ValueEqualityIncrementalMain",

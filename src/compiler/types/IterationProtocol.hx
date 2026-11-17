@@ -216,6 +216,9 @@ class IterationProtocol {
 				var signature = session.signatures.get(found.owner + "." + name);
 				if (signature == null)
 					throw new CompileError(new Diagnostic("E1007", 'Missing iteration method signature "$name"', span));
+				// A loop calls the iterable's methods as source would, and reaches a private one only where source could (Haxe
+				// reports a private `iterator()` at the iterated expression).
+				compiler.types.typing.MemberAccess.method(session, found.owner, name, span);
 				var physical = session.representation.resolveMethodResult(receiver.type, found.owner,
 					signature).physical;
 				expression = session.representation.boundaryCast(new TypedExpression(TMethodCall(receiver,
