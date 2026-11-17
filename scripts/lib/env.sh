@@ -6,7 +6,7 @@
 #   haxeon_export_library_path [DIR...] # put out/, the HashLink directory and DIRs on the library path
 #   haxeon_timeout SECONDS COMMAND...   # run COMMAND, stopped after SECONDS, like GNU timeout (macOS has none)
 #   haxeon_shared_library NAME          # the file a CMake shared library NAME builds to here: libNAME.so, libNAME.dylib, NAME.dll
-#   haxeon_cc_libhl [--hdll] OUT SRC... # build a test program (or HashLink library) against libhl: cc, or cl on Windows
+#   haxeon_native_test NAME            # the path of a GC or JIT test helper the native build made (tests/native)
 #
 # haxeon_root is the repository root and haxeon_haxe the pinned Haxe, wherever the sourcing script lives. haxeon_suite_out is where a
 # test writes the files it reads back: HAXEON_SUITE_OUT, the directory of its own the suite runner gives each suite, else out/ (a run by
@@ -89,67 +89,19 @@ haxeon_shared_library() {
 	esac
 }
 
-# Builds C sources against this checkout's VM into OUTPUT: a program that hosts the VM itself, linked with the static VM core
-# (libhl.a, libhl.lib with MSVC: everything in hl but main.c), or with --hdll a HashLink library for hl to load, which takes
-# the VM's API from the executable that loads it. cc on Linux and macOS; on Windows MSVC's cl, which the VM is built with (the
-# shell's MinGW cannot link it; the Windows job sets up MSVC's environment). CFLAGS adds compiler flags for cc; the library
-# directory is HL_GC_TEST_LIBRARY_DIR or the checkout's HashLink directory.
-haxeon_cc_libhl() {
-	local hdll= output library source sources=()
-	if [[ $1 == --hdll ]]; then
-		hdll=1
-		shift
+# The path of a GC or JIT test helper the native build made (tests/native/CMakeLists.txt): a program (gc_owner_pages) or a
+# HashLink library (jitbox.hdll), in native-tests beside the HashLink directory, HL_GC_TEST_LIBRARY_DIR or the checkout's.
+haxeon_native_test() {
+	local library directory path
+	library=${HL_GC_TEST_LIBRARY_DIR:-$("$haxeon_root/scripts/hashlink-path.sh")} || exit 1
+	directory=$(cd "$library/.." && pwd)/native-tests
+	path=$directory/$1
+	if [[ $1 != *.hdll && -f $path.exe ]]; then
+		path=$path.exe
 	fi
-	output=$1
-	shift
-	library=${HL_GC_TEST_LIBRARY_DIR:-$("$haxeon_root/scripts/hashlink-path.sh")}
-	case "$(uname -s)" in
-	MINGW* | MSYS* | CYGWIN*)
-		for source in "$@"; do
-			sources+=("$(cygpath -w "$source")")
-		done
-		# A library links hl.lib, the executable's import library; a program links the static core and what it needs.
-		local libraries flags
-		if [[ -n $hdll ]]; then
-			flags=(-LD)
-			libraries=(hl.lib)
-		else
-			# LIBHL_STATIC: the program defines the VM's functions itself rather than importing them from a DLL. It links the static
-			# core's objects, so it takes their C runtime: the DLL one (-MD), or its debug variant in a Debug build (-MDd).
-			flags=(-DLIBHL_STATIC -MD)
-			if grep -qs '^CMAKE_BUILD_TYPE:STRING=Debug$' "$library/../CMakeCache.txt"; then
-				flags=(-DLIBHL_STATIC -MDd)
-			fi
-			libraries=(libhl.lib ws2_32.lib user32.lib winmm.lib dbghelp.lib advapi32.lib bcrypt.lib)
-		fi
-		# cl writes its diagnostics to standard output, with a line per file: show them only when the build fails.
-		local log status=0
-		log=$(MSYS2_ARG_CONV_EXCL='*' cl -nologo -O2 "${flags[@]}" -I"$(cygpath -w "$haxeon_root/vendor/hashlink/src")" \
-			"${sources[@]}" -Fo"$(cygpath -w "$(dirname "$output")")\\" -Fe"$(cygpath -w "$output")" -link \
-			-LIBPATH:"$(cygpath -w "$library")" "${libraries[@]}") || status=$?
-		if [[ $status != 0 ]]; then
-			printf '%s\n' "$log" >&2
-			return "$status"
-		fi
-		;;
-	Darwin)
-		if [[ -n $hdll ]]; then
-			# shellcheck disable=SC2086 # CFLAGS holds several flags
-			"${CC:-cc}" ${CFLAGS:-} -shared -fPIC -Wl,-undefined,dynamic_lookup -I"$haxeon_root/vendor/hashlink/src" "$@" -o "$output"
-		else
-			# shellcheck disable=SC2086
-			"${CC:-cc}" ${CFLAGS:-} -I"$haxeon_root/vendor/hashlink/src" "$@" -L"$library" -lhl -lm -ldl -lpthread -o "$output"
-		fi
-		;;
-	*)
-		if [[ -n $hdll ]]; then
-			# shellcheck disable=SC2086 # CFLAGS holds several flags
-			"${CC:-cc}" ${CFLAGS:-} -shared -fPIC -I"$haxeon_root/vendor/hashlink/src" "$@" -o "$output"
-		else
-			# The program exports the VM's API, as hl does, to the libraries it loads.
-			# shellcheck disable=SC2086
-			"${CC:-cc}" ${CFLAGS:-} -rdynamic -I"$haxeon_root/vendor/hashlink/src" "$@" -L"$library" -lhl -lm -ldl -lpthread -o "$output"
-		fi
-		;;
-	esac
+	if [[ ! -f $path ]]; then
+		echo "missing native test helper $path; build the native runtime first (scripts/build-native.sh)" >&2
+		exit 1
+	fi
+	printf '%s\n' "$path"
 }

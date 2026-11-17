@@ -5,10 +5,10 @@ source "$root/scripts/lib/env.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-allocation.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-haxeon_cc_libhl "$work/guards" "$root/tests/native/gc_allocation_paths.c"
+guards=$(haxeon_native_test gc_allocation_paths)
 for mode in 0 1; do
 	HL_GC_ALLOC_FAST=$mode PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" DYLD_LIBRARY_PATH="$library${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}" \
-		"$work/guards" "$work/census-$mode.json"
+		"$guards" "$work/census-$mode.json"
 	python3 - "$work/census-$mode.json" <<'PY'
 import json,sys
 with open(sys.argv[1]) as file:

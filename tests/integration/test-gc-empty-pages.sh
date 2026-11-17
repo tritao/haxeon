@@ -5,8 +5,8 @@ source "$root/scripts/lib/env.sh"
 work=$(mktemp -d "${TMPDIR:-/tmp}/haxeon-gc-empty.XXXXXX")
 trap 'rm -rf "$work"' EXIT
 library=${HL_GC_TEST_LIBRARY_DIR:-$("$root/scripts/hashlink-path.sh")}
-haxeon_cc_libhl "$work/guards" "$root/tests/native/gc_empty_pages.c"
+guards=$(haxeon_native_test gc_empty_pages)
 for mode in 0 1; do
- HL_GC_KEEP_EMPTY=$mode HL_GC_EMPTY_BUDGET=4194304 PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" "$mode"
+ HL_GC_KEEP_EMPTY=$mode HL_GC_EMPTY_BUDGET=4194304 PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$guards" "$mode"
 done
-HL_GC_KEEP_EMPTY=1 HL_GC_EMPTY_BUDGET=0 PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$work/guards" 0
+HL_GC_KEEP_EMPTY=1 HL_GC_EMPTY_BUDGET=0 PATH="$library:$PATH" LD_LIBRARY_PATH="$library${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}" "$guards" 0
