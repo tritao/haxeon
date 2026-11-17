@@ -209,10 +209,13 @@ class UiContext {
 		submittedStyleSheet = null;
 		hitTestIds = [];
 		disposed = false;
+		// The verification build lays out a throwaway copy of the tree: focus it asks for there (a widget that takes focus when
+		// first laid out) must not move the real focus, or the compared trees differ by something no frame did.
 		buildContext.setFocusRequester(function(id) {
-			return focusWidget(id);
+			return !verifying && focusWidget(id);
 		});
 		buildContext.setDeferredFocusRequester(function(id) {
+			if (verifying) return;
 			ensureLive();
 			pendingFocus = id;
 			pendingFocusLabel = buildContext.deferredFocusLabel;
@@ -305,7 +308,12 @@ class UiContext {
 	/** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
 	public function submit(view:View, frame:LayoutFrame):RenderNode {
 		var build = function() return view;
+		var focusBefore = focus.focusedId;
 		var result = submitInternal(frame, null, build);
+		// Focus moved during this frame: the nodes take on their focused state in the next one, so this frame's tree is
+		// not yet what a rebuild would give. The check waits for the following frame.
+		if (focus.focusedId != focusBefore)
+			return result;
 		return maybeVerifyRetention(build, frame, result);
 	}
 
