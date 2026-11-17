@@ -51,7 +51,8 @@ class ScopedEscapeChecker extends BindingWalker {
 				rejectDirect(key, "stored in a map");
 				rejectDirect(item, "stored in a map");
 				leaveScope(scope);
-			case Cast(inner, NamedType("Dynamic"), _): rejectDirect(inner, "converted to Dynamic");
+			case Cast(inner, NamedType("Dynamic"), _), CheckType(inner, NamedType("Dynamic"), _):
+				rejectDirect(inner, "converted to Dynamic");
 			default:
 		}
 		super.expression(value);
@@ -75,7 +76,7 @@ class ScopedEscapeChecker extends BindingWalker {
 			case Conditional(_, yes, no, _):
 				rejectDirect(yes, operation);
 				rejectDirect(no, operation);
-			case Cast(inner, _, _): rejectDirect(inner, operation);
+			case Cast(inner, _, _), CheckType(inner, _, _): rejectDirect(inner, operation);
 			case BlockExpression(statements, result, _):
 				var scope = enterScope();
 				for (statement in statements) this.statement(statement);

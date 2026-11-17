@@ -78,7 +78,11 @@ class BodyTyper implements BodyTyping {
 	public function new(externals:Null<Map<String, {arguments:Array<CompilerType>, result:CompilerType}>>,
 			specializations:Null<GenericSpecializationRegistry>, ?nativeAbiTarget:String) {
 		this.session = new TypingSession(externals, specializations, nativeAbiTarget);
-		this.conversionResolver = new ConversionResolver(session);
+		// A `@:to` function is called as the abstract's other instance methods are, in the body being typed.
+		this.conversionResolver = new ConversionResolver(session,
+			(receiver, method, span) -> callResolver.typeAbstractAccessorCall(receiver, method, [], span,
+			context.scope ?? new Scope()));
+		session.representation.useConversions(conversionResolver);
 		this.inlineConstantResolver = new InlineConstantResolver(session, this);
 		this.anonymousTypeRegistry = new AnonymousTypeRegistry(session);
 		this.closureTyper = new ClosureTyper(session, this);
@@ -863,6 +867,7 @@ class BodyTyper implements BodyTyping {
 				scope).type : scope.resolve(name);
 			case Member(_, _, _): typeExpression(expression, scope).type;
 			case Cast(_, target, castSpan): target == null ? null : lowerType(target, castSpan);
+			case CheckType(_, type, checkSpan): lowerType(type, checkSpan);
 			default: null;
 		};
 	}

@@ -92,6 +92,12 @@ The current subset includes:
   abstract stores nothing but its underlying value, so its variables must be such properties (`Cannot declare member
   variable in abstract`, `Member property accessors must be get/set or never`, `Method get_length required by property
   length is missing`, in Haxe's words). A static variable of an abstract is not supported yet.
+- An abstract's implicit conversions, as Haxe casts them: through the expected abstract's `from` conversions, else the
+  value's abstract's `to` conversions, a `@:from` or `@:to` function before a `from` or `to` type. Where the other side
+  is not an abstract (Int, Float, a class), the value meets the conversion's type as Haxe unifies it, so an Int meets a
+  Float and a class its base class or interface (`var r:Root = 81` with `abstract Root(Float) from Float`); one abstract
+  never converts to another through a third type. `(value : Type)` converts as an assignment does, calling a `@:to`;
+  Haxeon reads any other `(value : Type)` as `cast(value, Type)` still, which Haxe would check.
 - Every instance method and constructor of an abstract is typed, as in Haxe, whether or not anything calls it, so an error
   in one nothing calls is reported. Its code is still each call's specialization. A generic static method of an abstract
   is typed only where it is called (with its type arguments), as a generic function is.

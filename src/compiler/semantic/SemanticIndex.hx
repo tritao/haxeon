@@ -546,7 +546,7 @@ class SemanticIndex {
 				indexRecoveredExpression(left);
 				indexRecoveredExpression(right);
 			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
-				PostfixIncrement(value, _, _):
+				CheckType(value, _, _), PostfixIncrement(value, _, _):
 				indexRecoveredExpression(value);
 			case Conditional(predicate, yes, no, _):
 				indexRecoveredExpression(predicate);

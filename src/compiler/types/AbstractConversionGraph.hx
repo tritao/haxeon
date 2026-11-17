@@ -5,6 +5,22 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.semantic.SemanticSignature;
 import compiler.types.Type.CompilerType;
+import compiler.types.Type.NominalKind;
+
+/** How a value becomes another type by an abstract's implicit conversion (`AbstractConversionGraph.route`). */
+enum AbstractConversionRoute {
+	/** The expected abstract's `@:from` function `name`, called with the value converted to its `argument`. */
+	FromFunction(name:String, argument:CompilerType);
+
+	/** A type the expected abstract is declared `from`: the value converted to `declared` is the abstract. */
+	FromType(declared:CompilerType);
+
+	/** The value's abstract's `@:to` method `method`, whose `result` converts to the expected type. */
+	ToFunction(method:String, result:CompilerType);
+
+	/** A type the value's abstract is declared `to`: the abstract is a `declared`, which converts to the expected type. */
+	ToType(declared:CompilerType);
+}
 
 private typedef ConversionEdge = {
 	final source:String;
@@ -75,90 +91,105 @@ class AbstractConversionGraph {
 	}
 
 	public function allows(actual:CompilerType, expected:CompilerType):Bool
-		return switch expected {
-			case TAbstract(name, arguments, _): declaredFrom(actual, name, arguments);
-			default:
-				switch actual {
-					case TAbstract(name, arguments, _): declaredTo(name, arguments, expected);
-					default: false;
-				}
+		return route(actual, expected) != null;
+
+	/**
+	 * How a value of `actual` becomes an `expected` by an abstract's implicit conversion, as Haxe casts it: through the expected
+	 * abstract's `from` conversions, else the actual abstract's `to` conversions. Of each, a `@:from` or `@:to` function first, one
+	 * whose type is the value's before one the value unifies with, then a `from` or `to` type. Null when there is none.
+	 *
+	 * The value meets a conversion's type as Haxe unifies it there: the same type, or, when the other side of the conversion is
+	 * not itself an abstract (Haxe's core types and classes are not), Int as a Float and a class as its base class or interface.
+	 * So `var r:Root = 81` converts through `from Float`, but one abstract never through another.
+	 */
+	public function route(actual:CompilerType, expected:CompilerType):Null<AbstractConversionRoute> {
+		var from = switch expected {
+			case TAbstract(name, arguments, _): routeFrom(actual, name, arguments);
+			default: null;
 		};
+		return from != null ? from : switch actual {
+			case TAbstract(name, arguments, _): routeTo(name, arguments, expected);
+			default: null;
+		};
+	}
 
 	/** The representation is an expected source only when a type-level `from` explicitly accepts it. */
 	public function expectedRepresentation(expected:CompilerType):Null<CompilerType> {
 		return switch expected {
 			case TAbstract(name, arguments, representation):
-				declaredTypeFrom(representation, name, arguments) ? representation : null;
+				switch routeFrom(representation, name, arguments) {
+					case FromType(declared) if (TypeRelations.equals(declared, representation)): representation;
+					default: null;
+				}
 			default: null;
 		};
 	}
 
-	/** A representation conversion declared with `to`, excluding conversion methods. */
-	public function allowsDirectTo(actual:CompilerType, expected:CompilerType):Bool
-		return switch actual {
-			case TAbstract(name, arguments, _):
-				var decl = declarations.abstractDeclaration(name);
-				if (decl == null) return false;
-				var substitutions = appliedSubstitutions(decl.typeParameters, arguments), found = false;
-				for (type in decl.toTypes)
-					if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions))) found =
-						true;
-				found;
+	function routeFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Null<AbstractConversionRoute> {
+		var decl = declarations.abstractDeclaration(name);
+		if (decl == null)
+			return null;
+		var substitutions = appliedSubstitutions(decl.typeParameters, arguments),
+			transitive = !isAbstract(actual);
+		for (exact in [true, false])
+			for (method in decl.methods)
+				if (method.isStatic && method.arguments.length == 1 && hasMetadata(method, "from")) {
+					var argument = declarations.resolve(method.arguments[0].type, method.span, substitutions);
+					if (meets(actual, argument, !exact && transitive))
+						return FromFunction(name + "." + method.name, argument);
+				}
+		for (exact in [true, false])
+			for (type in decl.fromTypes) {
+				var declared = declarations.resolve(type, decl.span, substitutions);
+				if (meets(actual, declared, !exact && transitive))
+					return FromType(declared);
+			}
+		return null;
+	}
+
+	function routeTo(name:String, arguments:Array<CompilerType>, expected:CompilerType):Null<AbstractConversionRoute> {
+		var decl = declarations.abstractDeclaration(name);
+		if (decl == null)
+			return null;
+		var substitutions = appliedSubstitutions(decl.typeParameters, arguments),
+			transitive = !isAbstract(expected);
+		for (exact in [true, false])
+			for (method in decl.methods)
+				if (!method.isStatic && method.arguments.length == 0 && hasMetadata(method, "to")) {
+					var result = declarations.types.resultType(method, substitutions);
+					if (meets(result, expected, !exact && transitive))
+						return ToFunction(method.name, result);
+				}
+		for (exact in [true, false])
+			for (type in decl.toTypes) {
+				var declared = declarations.resolve(type, decl.span, substitutions);
+				if (meets(declared, expected, !exact && transitive))
+					return ToType(declared);
+			}
+		return null;
+	}
+
+	/** Whether a value of `actual` is a `target`: the same type, or, when `widening`, Int as a Float or a class as its base. */
+	function meets(actual:CompilerType, target:CompilerType, widening:Bool):Bool
+		return TypeRelations.equals(actual, target)
+			|| widening && (actual.match(TInt) && target.match(TFloat) || isNominal(actual) && isNominal(target)
+			&& declarations.inheritance.reaches(actual, target));
+
+	static function isAbstract(type:CompilerType):Bool
+		return type.match(TAbstract(_, _, _));
+
+	static function isNominal(type:CompilerType):Bool
+		return switch type {
+			case TInstance(NominalKind.Class | NominalKind.Interface, _, _): true;
 			default: false;
 		};
 
-	function declaredFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Bool {
-		if (declaredTypeFrom(actual, name, arguments)) return true;
-		var decl = declarations.abstractDeclaration(name);
-		if (decl == null)
-			return false;
-		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
-		for (method in decl.methods) {
-			var metadata = method.metadata;
-			if (metadata == null || !method.isStatic || method.arguments.length != 1)
-				continue;
+	static function hasMetadata(method:compiler.syntax.Ast.AstFunction, name:String):Bool {
+		var metadata = method.metadata;
+		if (metadata != null)
 			for (entry in metadata)
-				if (entry.name == "from"
-					&& acceptsFromArgument(actual,
-					declarations.resolve(method.arguments[0].type, method.span, substitutions)))
+				if (entry.name == name)
 					return true;
-		}
-		return false;
-	}
-
-	function declaredTypeFrom(actual:CompilerType, name:String, arguments:Array<CompilerType>):Bool {
-		var decl = declarations.abstractDeclaration(name);
-		if (decl == null) return false;
-		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
-		for (type in decl.fromTypes)
-			if (TypeRelations.equals(actual, declarations.resolve(type, decl.span, substitutions))) return true;
-		return false;
-	}
-
-	/** Numeric widening is allowed before a @:from call, without chaining abstract conversions. */
-	public static function acceptsFromArgument(actual:CompilerType, expected:CompilerType):Bool
-		return TypeRelations.equals(actual, expected) || (switch [actual, expected] {
-			case [TInt, TFloat]: true;
-			default: false;
-		});
-
-	function declaredTo(name:String, arguments:Array<CompilerType>, expected:CompilerType):Bool {
-		var decl = declarations.abstractDeclaration(name);
-		if (decl == null)
-			return false;
-		var substitutions = appliedSubstitutions(decl.typeParameters, arguments);
-		for (type in decl.toTypes)
-			if (TypeRelations.equals(expected, declarations.resolve(type, decl.span, substitutions)))
-				return true;
-		for (method in decl.methods) {
-			var metadata = method.metadata;
-			if (metadata == null || method.isStatic || method.arguments.length != 0)
-				continue;
-			for (entry in metadata)
-				if (entry.name == "to"
-					&& TypeRelations.equals(expected, declarations.types.resultType(method, substitutions)))
-					return true;
-		}
 		return false;
 	}
 

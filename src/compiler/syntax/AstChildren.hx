@@ -19,7 +19,7 @@ class AstChildren {
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _),
 				NewMap(_, _, _), Lambda(_, _, _, _):
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
-				NewArray(_, value, _),
+				CheckType(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _):
 				visitor.visitChild(value);
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
@@ -107,7 +107,7 @@ class AstChildren {
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _),
 				NewMap(_, _, _), Lambda(_, _, _, _): [];
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
-				NewArray(_, value, _),
+				CheckType(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _): [value];
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
 				BitOr(a, b, _), ShiftLeft(a, b, _),

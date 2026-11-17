@@ -831,7 +831,8 @@ class CallResolver {
 
 	/**
 	 * A call of the accessor `accessor` (`get_x`, `set_x`) of an abstract's property on `receiver`, a value of the abstract, with
-	 * `arguments` typed already. The property's visibility was checked (`AbstractProperties.accessor`), not the accessor's.
+	 * `arguments` typed already. The property's visibility was checked (`AbstractProperties.accessor`), not the accessor's. A
+	 * `@:to` function, which the conversion calls wherever it is private, is called the same way.
 	 */
 	public function typeAbstractAccessorCall(receiver:TypedExpression, accessor:String,
 			arguments:Array<TypedExpression>,

@@ -128,6 +128,9 @@ class DependencyScanner {
 				if (type != null)
 					scanAnnotation(type, dependencies, typeParameters);
 				scanExpression(value, dependencies, typeParameters);
+			case CheckType(value, type, _):
+				scanAnnotation(type, dependencies, typeParameters);
+				scanExpression(value, dependencies, typeParameters);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies, typeParameters);
 				for (switchCase in cases) {

@@ -21,8 +21,14 @@ import compiler.types.TypedAst.TypedStatement;
 class ConversionResolver {
 	final session:TypingSession;
 
-	public function new(session:TypingSession)
+	/** Calls the abstract instance method named on a value of the abstract: a `@:to` function's call (`CallResolver`). */
+	final abstractMethodCall:(receiver:TypedExpression, method:String, span:SourceSpan) -> TypedExpression;
+
+	public function new(session:TypingSession,
+			abstractMethodCall:(receiver:TypedExpression, method:String, span:SourceSpan) -> TypedExpression) {
 		this.session = session;
+		this.abstractMethodCall = abstractMethodCall;
+	}
 
 	/** A Never value takes the expected type; a block's value is its result, so the result takes it too. */
 	static function neverAs(value:TypedExpression, expected:CompilerType):TypedExpression
@@ -105,7 +111,7 @@ class ConversionResolver {
 	 */
 	function widensTo(actual:CompilerType, target:CompilerType):Bool
 		return session.relations.isAssignable(actual, target) || switch session.relations.conversion(actual, target) {
-			case IntToFloat, AbstractIntToFloat, IntToInt64, WrapNullable, UnwrapNullable: true;
+			case IntToFloat, IntToInt64, WrapNullable, UnwrapNullable: true;
 			default: false;
 		};
 
@@ -224,8 +230,6 @@ class ConversionResolver {
 			case Identity: ValueCopy.bind(session, value, expected);
 			case IntToFloat:
 				new TypedExpression(TIntToFloat(value), TFloat, value.span);
-			case AbstractIntToFloat:
-				new TypedExpression(TIntToFloat(coerce(value, TInt, context, code)), TFloat, value.span);
 			case IntToInt64:
 				new TypedExpression(TIntToInt64(value), TInt64, value.span);
 			case FromDynamic:
@@ -233,10 +237,7 @@ class ConversionResolver {
 			case ReferenceCast:
 				adaptFunction(value, expected, value.span);
 			case AbstractCast:
-				var conversion = abstractFromFunction(value.type, expected);
-				conversion == null ? session.representation.boundaryCast(value,
-					expected) : new TypedExpression(TCall(conversion.name,
-					[coerce(value, conversion.argument, context, code)]), expected, value.span);
+				abstractCast(value, expected, context, code);
 			case ToDynamic:
 				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
 				var owned = ValueCopy.bind(session, value, value.type), enumType = EnumDynamicBox.enumType(value.type);
@@ -488,34 +489,25 @@ class ConversionResolver {
 			expected, span);
 	}
 
-	function abstractFromFunction(actual:CompilerType, expected:CompilerType):Null<{name:String,
-		argument:CompilerType}> {
-		return switch expected {
-			case TAbstract(name, arguments, _):
-				var declaration = session.declarations.abstracts.get(name);
-				if (declaration == null)
-					return null;
-				var substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
-					arguments);
-				for (exact in [true, false])
-					for (method in declaration.methods) {
-						if (!method.isStatic || method.arguments.length != 1)
-							continue;
-						var metadata = method.metadata;
-						if (metadata == null)
-							continue;
-						var isFrom = false;
-						for (entry in metadata)
-							if (entry.name == "from")
-								isFrom = true;
-						var argument = session.declarations.resolve(method.arguments[0].type, method.span,
-							substitutions);
-						if (isFrom && (exact ? TypeRelations.equals(actual,
-							argument) : compiler.types.AbstractConversionGraph.acceptsFromArgument(actual, argument)))
-							return {name: name + "." + method.name, argument: argument};
-					}
-				null;
-			default: null;
+	/** `value` as an `expected` by an abstract's implicit conversion: the route `AbstractConversionGraph.route` finds. */
+	function abstractCast(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+		var route = session.declarations.conversions.route(value.type, expected);
+		return switch route {
+			case FromFunction(name, argument):
+				new TypedExpression(TCall(name, [coerce(value, argument, context, code)]), expected, value.span);
+			// A value of the very type the abstract converts from or to is the abstract's as it is.
+			case FromType(declared):
+				var converted = TypeRelations.equals(value.type, declared) ? value : coerce(value, declared, context,
+					code);
+				session.representation.boundaryCast(converted, expected);
+			case ToFunction(method, _):
+				var call = abstractMethodCall(value, method, value.span);
+				coerce(call, expected, context, code);
+			case ToType(declared):
+				var converted = session.representation.boundaryCast(value, declared);
+				TypeRelations.equals(declared, expected) ? converted : coerce(converted, expected, context, code);
+			case null:
+				throw new InternalError("An abstract cast has no conversion route");
 		};
 	}
 

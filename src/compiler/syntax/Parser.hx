@@ -2108,7 +2108,7 @@ class Parser {
 				if (match(TokenKind.Colon)) {
 					var target = parseType(),
 						end = consume(TokenKind.RightParen).span;
-					grouped = Cast(grouped, target, start.merge(end));
+					grouped = CheckType(grouped, target, start.merge(end));
 				} else
 					consume(TokenKind.RightParen);
 				return parsePostfix(grouped);
@@ -2143,7 +2143,7 @@ class Parser {
 			var grouped = parseExpression();
 			consume(TokenKind.Colon);
 			var target = parseType(), end = consume(TokenKind.RightParen).span;
-			return parsePostfix(Cast(grouped, target, start.merge(end)));
+			return parsePostfix(CheckType(grouped, target, start.merge(end)));
 		}
 		if (match(TokenKind.This)) {
 			var start = previous().span, end = start, name = "this";
@@ -3110,7 +3110,8 @@ class Parser {
 				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
 				PostfixIncrement(_, _, span), Lambda(_, _, _, span), And(_, _, span), Or(_, _, span),
 				Conditional(_, _, _, span), BlockExpression(_, _, span),
-				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), Capture(_, _, span): span;
+				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
+				Capture(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),
 				ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;

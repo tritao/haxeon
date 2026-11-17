@@ -9,7 +9,6 @@ import compiler.types.Type.NominalKind;
 enum ConversionPlan {
 	Identity;
 	IntToFloat;
-	AbstractIntToFloat;
 	IntToInt64;
 	FromDynamic;
 	AbstractCast;
@@ -88,8 +87,6 @@ class TypeRelations {
 			return WrapNullable;
 		if (abstractConversion(actual, expected))
 			return AbstractCast;
-		if (abstractIntToFloat(actual, expected))
-			return AbstractIntToFloat;
 		// Reading a nullable number as the number is a conversion toward an expected type, never part of assignability: a
 		// conditional or array literal mixing Null<Int> and Int stays Null<Int>, so its null is kept.
 		switch actual {
@@ -181,8 +178,6 @@ class TypeRelations {
 			default:
 		}
 		if (abstractConversion(actual, expected))
-			return true;
-		if (abstractIntToFloat(actual, expected))
 			return true;
 		return switch expected {
 			case TDynamic: true;
@@ -840,10 +835,4 @@ class TypeRelations {
 	function abstractConversion(actual:CompilerType, expected:CompilerType):Bool {
 		return declarations.conversions.allows(actual, expected);
 	}
-
-	function abstractIntToFloat(actual:CompilerType, expected:CompilerType):Bool
-		return switch [actual, expected] {
-			case [TAbstract(_, _, TInt), TFloat]: declarations.conversions.allowsDirectTo(actual, TInt);
-			default: false;
-		};
 }

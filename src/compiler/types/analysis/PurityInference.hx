@@ -694,8 +694,8 @@ private class PurityWalker {
 				NotEqual(left, right, _),
 				And(left, right, _), Or(left, right, _), Range(left, right, _),
 				Index(left, right, _): expression(left) && expression(right);
-			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), NewArray(_, value, _),
-				Capture(_, value, _): expression(value);
+			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), CheckType(value, _, _),
+				NewArray(_, value, _), Capture(_, value, _): expression(value);
 			case Conditional(test, yes, no, _): expression(test) && expression(yes) && expression(no);
 			case BlockExpression(body, result, _):
 				scoped(() -> {

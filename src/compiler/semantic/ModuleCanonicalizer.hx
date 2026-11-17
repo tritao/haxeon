@@ -584,6 +584,8 @@ class ModuleCanonicalizer {
 			case Cast(value, target, s):
 				Cast(canonicalExpression(value, module, entry, locals, aliases), canonicalOptionalType(target, aliases),
 					s);
+			case CheckType(value, type, s):
+				CheckType(canonicalExpression(value, module, entry, locals, aliases), canonicalType(type, aliases), s);
 			case SwitchExpression(subject, cases, fallback, s):
 				SwitchExpression(canonicalExpression(subject, module, entry, locals, aliases),
 					[for (switchCase in cases)

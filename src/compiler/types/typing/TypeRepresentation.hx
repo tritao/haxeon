@@ -74,14 +74,17 @@ class TypeRepresentation {
 	static inline var MAX_OWNER_TYPE_NODES:Int = 4096;
 	final session:TypingSession;
 	final enumBodyUses:Map<String, Bool> = [];
-	final conversions:ConversionResolver;
+	/** The body typer's conversions, which adapt a function value (`useConversions`). */
+	var conversions:Null<ConversionResolver> = null;
 	final ownerRequests:Map<String, GenericOwnerRepresentation> = [];
 	final ownerAliases:Map<String, String> = [];
 
-	public function new(session:TypingSession) {
+	public function new(session:TypingSession)
 		this.session = session;
-		conversions = new ConversionResolver(session);
-	}
+
+	/** Adapts function values with `resolver`, the conversions of the body typer this representation's session belongs to. */
+	public function useConversions(resolver:ConversionResolver):Void
+		conversions = resolver;
 
 	public function semanticType(type:AstType, ?span:SourceSpan, ?substitutions:Map<String, CompilerType>):CompilerType
 		return session.declarations.resolve(type, span, substitutions);
@@ -615,13 +618,20 @@ class TypeRepresentation {
 		return result;
 	}
 
+	function requiredConversions():ConversionResolver {
+		var resolver = conversions;
+		if (resolver == null)
+			throw new InternalError("A function value is adapted before the body typer's conversions are bound");
+		return resolver;
+	}
+
 	/** Apply the ABI cast required to cross from a physical to semantic type. */
 	public function boundaryCast(value:TypedExpression, target:CompilerType, ?owner:CompilerType):TypedExpression {
 		if (TypeRelations.equals(value.type, target))
 			return value;
 		rejectMapStorageChange(value, target, owner);
 		if (ConversionResolver.functionSignaturesDiffer(value.type, target))
-			return conversions.adaptFunction(value, target, value.span);
+			return requiredConversions().adaptFunction(value, target, value.span);
 		return new TypedExpression(TAbiCast(value), target, value.span, value.stableFlowValue);
 	}
 

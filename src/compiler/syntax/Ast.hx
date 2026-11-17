@@ -244,6 +244,9 @@ enum AstExpression {
 
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 	Cast(expression:AstExpression, target:Null<AstType>, span:SourceSpan);
+
+	/** `(expression : type)`: the value as a `type`, as an assignment to one converts it (an abstract's `@:to`, `@:from`). */
+	CheckType(expression:AstExpression, type:AstType, span:SourceSpan);
 	SwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
 		defaultExpression:Null<AstExpression>, span:SourceSpan);
 	ObjectLiteral(fields:Array<AstObjectField>, span:SourceSpan);
