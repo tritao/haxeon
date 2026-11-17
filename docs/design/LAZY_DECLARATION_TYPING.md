@@ -236,8 +236,15 @@ declaration on a difference.
 - Census of arguments only call sites fixed (`SignatureInference.collectCallConstraints`), over `src/`, `stdlib/`,
   `packages/` and the test programs: `CfgBuilder.temporary(type)`, `IrVerifier.verifyInstruction(signatures)` and
   `IrVerifier.methodSignature(signatures)`, now annotated. The test mains' embedded programs needed none.
-- Warm builds do not seed function signatures yet: a function a warm build does not type again is typed for its signature
-  alone when a typed unit reads it. Its result equals the previous build's, by the invalidation rule, but costs a typing.
+- Warm builds seed function signatures (after slice 4): each module keeps the signature its unannotated functions were last
+  typed with (`ModuleState.inferredSignatures`, from `DeclarationTypeTable.typedSignatures`), and a warm build gives them to
+  the functions it does not select (`seedFunctions`), whether or not it reuses the semantic program. A selected function
+  the build does not type (a generic one nothing read) loses its entry. A seed whose shape does not match the function's
+  unannotated parts is an internal error: the function changed without being selected. With `--check-reuse`, the first
+  read of a seeded signature types the body again and fails, naming the function, on a difference. On a 3,400-line
+  program of unannotated methods, a warm edit of one body typed in 346-407 ms instead of 526-634 ms (2.49 M allocations
+  instead of 3.94 M); on the self-compile, whose functions are nearly all annotated, the typing pass allocates 5.5 M
+  instead of 5.8 M.
 
 ## Error recovery and the language service
 

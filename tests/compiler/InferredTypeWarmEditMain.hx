@@ -22,6 +22,7 @@ class InferredTypeWarmEditMain {
 		public static function scale() return 2;
 		public static function count() return 4;
 		public static function take(x) return x * 2;
+		public static function wrap<T>(x:T) return [x];
 	}";
 
 	static final otherSource = "class Other { public static var x = 1; }";
@@ -88,6 +89,22 @@ class InferredTypeWarmEditMain {
 			files -> files.set("Lib.hx", StringTools.replace(libSource, "x * 2;", "x * 2.5;")));
 		edit(failures, "a comprehension field's element type changes",
 			files -> files.set("Middle.hx", StringTools.replace(middleSource, "i * 2]", "i * 0.5]")));
+		// The readers' edits leave the unannotated functions they read alone: the warm build gives those the signatures the earlier
+		// build typed them with, and `--check-reuse` types them again to compare.
+		edit(failures, "a reader of unannotated functions of another module changes",
+			files -> files.set("Main.hx", StringTools.replace(mainSource, "var taken = Lib.take(3);",
+			"var taken = Lib.take(4);")));
+		// Typed while a reader exists, then edited while none does, the function is selected but not typed: its earlier signature
+		// must not be given to it when a reader comes back.
+		final reading = StringTools.replace(mainSource, "var taken = Lib.take(3);",
+			"var taken = Lib.take(3) + Lib.wrap(1)[0];");
+		final wrapped = StringTools.replace(libSource, "return [x];", "return x;");
+		edit(failures,
+			"an unannotated generic function changes its result while nothing reads it, then a reader comes back",
+			files -> files.set("Main.hx", reading), files -> {
+				files.set("Main.hx", mainSource);
+				files.set("Lib.hx", wrapped);
+			}, files -> files.set("Main.hx", StringTools.replace(reading, "Lib.wrap(1)[0]", "Lib.wrap(1)")));
 		breakThenFix(failures, "an edit makes two fields need each other's type, the next removes the cycle",
 			files -> files.set("Other.hx", "class Other { public static var x = Middle.y + 1; }"),
 			files -> files.set("Other.hx", "class Other { public static var x = 1.5; }"));
@@ -117,22 +134,22 @@ class InferredTypeWarmEditMain {
 	}
 
 	/**
-	 * Builds the program, applies `change` (then `again`, if given, as a second warm build) in the same session and builds again; the
-	 * warm module must be the fresh one's bytes.
+	 * Builds the program, applies `change` (then `again` and `third`, if given, each as a further warm build) in the same session and
+	 * builds again; each warm module must be the fresh one's bytes.
 	 */
 	static function edit(failures:Array<String>, label:String, change:Map<String, String>->Void,
-			?again:Map<String, String>->Void):Void {
+			?again:Map<String, String>->Void, ?third:Map<String, String>->Void):Void {
 		// A command-line build keeps no semantic index, so the readers of a declaration are known only from what typing recorded.
 		for (indexSemantics in [true, false])
-			editBuilds(failures, label + (indexSemantics ? "" : " (no semantic index)"), change, again, indexSemantics);
+			editBuilds(failures, label + (indexSemantics ? "" : " (no semantic index)"),
+				[for (step in [change, again, third]) if (step != null) step], indexSemantics);
 	}
 
-	static function editBuilds(failures:Array<String>, label:String, change:Map<String, String>->Void,
-			again:Null<Map<String, String>->Void>, indexSemantics:Bool):Void {
+	static function editBuilds(failures:Array<String>, label:String, steps:Array<Map<String, String>->Void>,
+			indexSemantics:Bool):Void {
 		try {
 			var files = initialSources(), compiler = newCompiler(files);
 			compiler.compile("Main", null, indexSemantics);
-			var steps = again == null ? [change] : [change, again];
 			for (step in steps) {
 				step(files);
 				for (path => text in files)

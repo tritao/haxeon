@@ -6,6 +6,16 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
 
 /**
+ * The parts of an unannotated function's signature its body gives it, in the function's own and its owner's type parameters: an
+ * entry for each argument, null where the argument is annotated, and the result, null where it is annotated. Argument types are as
+ * callers see them (`Null<T>` for an optional argument). A warm build keeps them per module (`ModuleState.inferredSignatures`).
+ */
+typedef InferredSignature = {
+	final arguments:Array<Null<CompilerType>>;
+	final result:Null<CompilerType>;
+}
+
+/**
  * The types of declarations, resolved: the one query every reader of a field's type or a function's signature goes through
  * (docs/design/LAZY_DECLARATION_TYPING.md). An annotated declaration resolves its annotation; an unannotated one gets the type
  * its initializer or body gives it. It lives below the typer so that DeclarationIndex, TypeRelations, StructProperties and

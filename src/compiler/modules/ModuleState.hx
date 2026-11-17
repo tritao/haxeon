@@ -8,6 +8,7 @@ import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Token;
+import compiler.types.DeclarationTypes.InferredSignature;
 import compiler.types.TypedAst.TypedFunction;
 
 /** Artifact boundary at which a dependent declaration observes a change. */
@@ -82,6 +83,13 @@ class ModuleState {
 	 * a declaration whose type changed had every such reader typed again.
 	 */
 	public var declarationTypeDigests:Map<String, String> = [];
+
+	/**
+	 * The signature each unannotated function of the module was given by its body when it was last typed, by its key
+	 * (`DeclarationTypeTable.functionKey`): a warm build gives it to the functions it does not type again, instead of typing their
+	 * bodies to read their signatures (`DeclarationTypeTable.seedFunctions`).
+	 */
+	public var inferredSignatures:Map<String, InferredSignature> = [];
 
 	/**
 	 * Typing warnings by the source function or field initializer that raised them (see TypingWarnings). A body typed again
@@ -208,6 +216,7 @@ class ModuleState {
 		result.instanceInitializerFingerprints = copyMap(instanceInitializerFingerprints);
 		result.bodyFingerprints = copyMap(bodyFingerprints);
 		result.declarationTypeDigests = copyMap(declarationTypeDigests);
+		result.inferredSignatures = copyMap(inferredSignatures);
 		result.typedFunctions = copyMap(typedFunctions);
 		result.typedSourceRevisions = copyMap(typedSourceRevisions);
 		result.purityQueries = copyNestedMap(purityQueries);

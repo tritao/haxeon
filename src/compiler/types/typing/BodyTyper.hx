@@ -370,7 +370,7 @@ class BodyTyper implements BodyTyping {
 	 * frame; an unannotated argument with a default has the default's type.
 	 */
 	function provisionalSignature(fn:AstFunction, name:String,
-			substitutions:Null<Map<String, CompilerType>>):DeclarationTypeTable.InferredSignature {
+			substitutions:Null<Map<String, CompilerType>>):compiler.types.DeclarationTypes.InferredSignature {
 		var arguments:Array<Null<CompilerType>> = [];
 		for (argument in fn.arguments)
 			if (!compiler.syntax.AstFunctions.isInferred(argument.type))
@@ -424,7 +424,7 @@ class BodyTyper implements BodyTyping {
 
 	/** The settled signature of the unannotated function `fn`: its unannotated parts, with their type variables replaced. */
 	static function settledSignature(fn:AstFunction, argumentTypes:Array<CompilerType>,
-			result:CompilerType):DeclarationTypeTable.InferredSignature
+			result:CompilerType):compiler.types.DeclarationTypes.InferredSignature
 		return {
 			arguments: [
 				for (index in 0...fn.arguments.length)

@@ -32,6 +32,16 @@ import compiler.types.TypedAst.TypedStatement;
 import compiler.types.analysis.Scope;
 import compiler.types.typing.TypingMetrics.MeasuredTypedProgram;
 
+/**
+ * The signatures of unannotated functions an earlier build typed (`ModuleState.inferredSignatures`), which a warm build gives the
+ * functions it does not type again (`DeclarationTypeTable.seedFunctions`); with `check` (`--check-reuse`), each is typed again on its
+ * first read and compared.
+ */
+typedef PreviousSignatures = {
+	final signatures:Map<String, compiler.types.DeclarationTypes.InferredSignature>;
+	final check:Bool;
+}
+
 /** Coordinates the program-level typing phases and their lifecycle transitions. */
 class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	final bodyTyper:BodyTyper;
@@ -62,9 +72,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	public function typeProgramMeasured(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>,
 			?cachedMetadata:TypedProgram, ?facts:compiler.semantic.ProgramFacts,
-			?retained:RetainedFromPrevious):MeasuredTypedProgram {
+			?retained:RetainedFromPrevious, ?previousSignatures:PreviousSignatures):MeasuredTypedProgram {
 		try {
-			var typed = typeProgramPhases(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retained);
+			var typed = typeProgramPhases(semantic, selected, requireMain, entryPoint, cachedMetadata, facts, retained,
+				previousSignatures);
 			session.failIfRecovered([]);
 			return typed;
 		} catch (error:CompileError) {
@@ -77,12 +88,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	function typeProgramPhases(semantic:SemanticProgram, selected:Null<Map<String, Bool>>, requireMain:Bool,
 			entryPoint:Null<String>, cachedMetadata:Null<TypedProgram>, facts:Null<compiler.semantic.ProgramFacts>,
-			retained:Null<RetainedFromPrevious>):MeasuredTypedProgram {
+			retained:Null<RetainedFromPrevious>, previousSignatures:Null<PreviousSignatures>):MeasuredTypedProgram {
 		var allocationAtStart = AllocationMeter.sample();
 		var startedAt = Sys.time() * 1000.0;
 		semantic.lifecycle.requireAtLeast(SignatureTyped);
 		selectedBodies = selected;
 		session.bindSemantic(semantic, bodyTyper.defaultValueType, this);
+		if (previousSignatures != null && selected != null)
+			requiredTypes().seedFunctions(previousSignatures.signatures, selected, previousSignatures.check);
 		var refreshing:Map<String, Bool> = [];
 		if (cachedMetadata != null) {
 			bindCachedNativeLayouts(cachedMetadata.classes);
@@ -516,6 +529,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			inlineConstantDependencies: session.programOutput.records.inlineConstantDependencies,
 			declarationTypeReads: session.programOutput.records.declarationTypeReads,
 			typedUnits: session.programOutput.records.typedUnits,
+			inferredSignatures: requiredTypes().typedSignatures(),
 			defaultArgumentSources: session.programOutput.records.defaultArgumentSources,
 			noReturnQueries: session.programOutput.records.noReturnQueries,
 			keyPathUses: session.programOutput.records.keyPathUses,

@@ -148,6 +148,9 @@ private class FrontendBuild {
 	public var inlineConstantDependencies:Map<String, Map<String, Bool>>;
 	public var declarationTypeReads:Map<String, Map<String, Bool>>;
 	public var typedUnits:Map<String, Bool>;
+
+	/** The signatures of the unannotated functions this build typed, by key, which `publishInferredSignatures` keeps. */
+	public var inferredSignatures:Map<String, compiler.types.DeclarationTypes.InferredSignature> = [];
 	public var defaultArgumentSources:Map<String, Map<String, compiler.core.Source.SourceFile>>;
 
 	// Publication of the typed program, pruning and IR generation.
@@ -405,7 +408,10 @@ class FrontendCompilation {
 				semanticAssembly.facts, build.lowerToIr,
 				retainedFromPrevious(context, names, selected, build.lowerToIr,
 				[for (classDecl in canonicalProgram.classes) classDecl.name => true],
-				previousSemantic), context.options.reverseTypingOrder);
+				previousSemantic), context.options.reverseTypingOrder, {
+					signatures: previousSignatures(context, names),
+					check: context.options.checkReuse
+				});
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;
@@ -421,6 +427,7 @@ class FrontendCompilation {
 			build.inlineConstantDependencies = typedResult.inlineConstantDependencies;
 			build.declarationTypeReads = typedResult.declarationTypeReads;
 			build.typedUnits = typedResult.typedUnits;
+			build.inferredSignatures = typedResult.inferredSignatures;
 			build.defaultArgumentSources = typedResult.defaultArgumentSources;
 			// A module that changes a representation is in the program before anything is typed (see `seedRepresentationModules`),
 			// so typing cannot have used a representation without it. If one is reported missing, a module was left out of the
@@ -720,6 +727,7 @@ class FrontendCompilation {
 		}
 		publishInitializerReads(build);
 		publishDeclarationTypeDigests(build);
+		publishInferredSignatures(build);
 		var objectCache = context.state.objectCache;
 		for (object in build.currentObjects)
 			objectCache.set(object.name, object);
@@ -816,6 +824,51 @@ class FrontendCompilation {
 							throw new InternalError('--check-reuse: "${change.declaration}" changed type from ${change.before} to ${change.after}, '
 								+ 'but "$owner", which read it, kept the body typed against the old one');
 			}
+	}
+
+	/**
+	 * The signatures of the unannotated functions of the build's modules that earlier builds typed (`ModuleState.inferredSignatures`):
+	 * the typer gives them to the functions it does not type again.
+	 */
+	static function previousSignatures(context:CompilationContext,
+			names:Array<String>):Map<String, compiler.types.DeclarationTypes.InferredSignature> {
+		var result:Map<String, compiler.types.DeclarationTypes.InferredSignature> = [];
+		for (name in names) {
+			var state = context.state.modules.get(name);
+			if (state != null)
+				for (key => signature in state.inferredSignatures)
+					result.set(key, signature);
+		}
+		return result;
+	}
+
+	/**
+	 * Keeps the signature of each unannotated function this build typed in its module, for the next build to seed. A function this
+	 * build selected but did not type (a generic one nothing read) loses its entry, which its edit may have made wrong.
+	 */
+	static function publishInferredSignatures(build:FrontendBuild):Void {
+		var context = build.context,
+			owners = build.semanticAssembly.owners,
+			selected = build.semanticAssembly.selected;
+		for (name in build.names) {
+			var state = context.state.modules.get(name);
+			if (state == null)
+				continue;
+			var stale = [
+				for (key in state.inferredSignatures.keys())
+					if (selected.exists(key) && !build.inferredSignatures.exists(key)) key
+			];
+			if (stale.length > 0) {
+				var writable = context.state.writableState(name, build.rollbackModules);
+				for (key in stale)
+					writable.inferredSignatures.remove(key);
+			}
+		}
+		for (key => signature in build.inferredSignatures) {
+			var module = owners.get(key);
+			if (module != null && context.state.modules.exists(module))
+				context.state.writableState(module, build.rollbackModules).inferredSignatures.set(key, signature);
+		}
 	}
 
 	static function publishIndex(build:FrontendBuild):Void {

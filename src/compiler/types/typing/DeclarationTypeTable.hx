@@ -29,16 +29,6 @@ typedef FieldInitializerUnit = {
 	final output:Null<TypingOutput>;
 }
 
-/**
- * The parts of an unannotated function's signature its body gives it, in the function's own and its owner's type parameters: an
- * entry for each argument, null where the argument is annotated, and the result, null where it is annotated. Argument types are as
- * callers see them (`Null<T>` for an optional argument).
- */
-typedef InferredSignature = {
-	final arguments:Array<Null<CompilerType>>;
-	final result:Null<CompilerType>;
-}
-
 /** An unannotated function's body typed for its signature (`DeclarationTyping.typeInferredFunction`). */
 typedef InferredFunction = {
 	final typed:TypedFunction;
@@ -194,6 +184,12 @@ class DeclarationTypeTable implements DeclarationTypes {
 	/** The function each inferred key names, for its span in a cycle diagnostic. */
 	final inferredFunctions:Map<String, AstFunction> = [];
 
+	/** The functions whose signature an earlier build gave (`seedFunctions`), until `--check-reuse` has typed them again. */
+	final seeded:Map<String, Bool> = [];
+
+	/** Whether a seeded signature is checked against its body typed again, on its first read (`--check-reuse`). */
+	var checkingSeeds = false;
+
 	public function new(declared:DeclaredTypes, semantic:SemanticProgram,
 			defaultValueType:Null<AstExpression->Null<CompilerType>>, ?recordRead:String->Void, ?session:TypingSession,
 			?typing:DeclarationTyping) {
@@ -293,10 +289,53 @@ class DeclarationTypeTable implements DeclarationTypes {
 		if (!fields.exists(key))
 			fields.set(key, Known(type));
 
-	/** Gives the unannotated function `key`, which this build does not type again, the signature an earlier build gave it. */
-	public function seedFunction(key:String, signature:InferredSignature):Void
-		if (!functions.exists(key))
+	/**
+	 * Gives the unannotated functions this build does not type again the signatures an earlier build gave them
+	 * (`ModuleState.inferredSignatures`): each is unchanged and, by the invalidation rule, so is every type its body read
+	 * (docs/design/LAZY_DECLARATION_TYPING.md, "Warm builds: reused declarations"). An entry for a key that is no inferred function
+	 * of this program (since annotated or removed) is not used. With `check` (`--check-reuse`), the first read of a seeded signature
+	 * types the body again and fails, naming the function, when the signature differs.
+	 */
+	public function seedFunctions(previous:Map<String, InferredSignature>, selected:Map<String, Bool>,
+			check:Bool):Void {
+		checkingSeeds = check;
+		for (key => signature in previous) {
+			var fn = inferredFunctions.get(key);
+			if (fn == null || selected.exists(key) || functions.exists(key))
+				continue;
+			if (!hasShapeOf(fn, signature))
+				throw 'Function "$key" is seeded with a signature of another shape: its source changed, but it was not selected';
 			functions.set(key, Known(signature));
+			seeded.set(key, true);
+		}
+	}
+
+	/** Whether `signature` has an entry exactly where `fn` leaves its signature to its body. */
+	static function hasShapeOf(fn:AstFunction, signature:InferredSignature):Bool {
+		if (signature.arguments.length != fn.arguments.length
+			|| (signature.result != null) != AstFunctions.isInferred(fn.result))
+			return false;
+		for (index in 0...fn.arguments.length)
+			if ((signature.arguments[index] != null) != AstFunctions.isInferred(fn.arguments[index].type))
+				return false;
+		return true;
+	}
+
+	/**
+	 * The signatures of the unannotated functions whose bodies this build typed, by key, which the next build seeds the ones it does
+	 * not type again with; not the seeded ones, nor those that failed.
+	 */
+	public function typedSignatures():Map<String, InferredSignature> {
+		var result:Map<String, InferredSignature> = [];
+		for (key => state in functions)
+			if (!seeded.exists(key))
+				switch state {
+					case Typed(unit): result.set(key, unit.signature);
+					case Known(signature): result.set(key, signature);
+					case InProgress(_), Failed:
+				}
+		return result;
+	}
 
 	/**
 	 * `field`'s initializer typed in its own unit, for its slot in `ProgramTyper.typeClass`: typed now when it is annotated (with
@@ -444,7 +483,10 @@ class DeclarationTypeTable implements DeclarationTypes {
 	function functionSignature(fn:AstFunction, key:String):Null<InferredSignature>
 		return switch functions.get(key) {
 			case Typed(unit): unit.signature;
-			case Known(signature): signature;
+			case Known(signature):
+				if (checkingSeeds && seeded.exists(key))
+					checkSeed(fn, key, signature);
+				signature;
 			case Failed: null;
 			case InProgress(provisional):
 				if (forcing[forcing.length - 1] != key) {
@@ -459,6 +501,30 @@ class DeclarationTypeTable implements DeclarationTypes {
 				forceFunction(fn, key);
 				functionSignature(fn, key);
 		};
+
+	/**
+	 * `--check-reuse`: types the body of the seeded function `key` again, for its signature alone, and fails when the signature
+	 * differs from `signature`, the one the earlier build gave it, which a reader of this build was about to be typed against.
+	 */
+	function checkSeed(fn:AstFunction, key:String, signature:InferredSignature):Void {
+		seeded.remove(key);
+		functions.remove(key);
+		forceFunction(fn, key);
+		var typed = switch functions.get(key) {
+			case Known(fresh): fresh;
+			case state: throw '--check-reuse: the seeded function "$key" typed again as $state';
+		};
+		if (signatureDigest(typed) != signatureDigest(signature))
+			throw '--check-reuse: the signature an earlier build gave "$key", ${signatureDigest(signature)}, differs from its body\'s, '
+				+ signatureDigest(typed);
+	}
+
+	static function signatureDigest(signature:InferredSignature):String
+		return [
+			for (argument in signature.arguments)
+				argument == null ? "_" : compiler.semantic.SemanticSignature.type(argument)
+		].join(",")
+			+ "->" + (signature.result == null ? "_" : compiler.semantic.SemanticSignature.type(signature.result));
 
 	/**
 	 * The unannotated function `fn` typed in its own unit, for its slot in `ProgramTyper`, which calls this only where it types the
