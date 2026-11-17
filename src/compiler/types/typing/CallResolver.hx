@@ -850,8 +850,16 @@ class CallResolver {
 			scope:Scope):Null<TypedExpression> {
 		var thisType = scope.resolve("this"),
 			callableFieldType = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
-		if (callableFieldType == null)
-			return null;
+		if (callableFieldType == null) {
+			// A static field of the class (or a base) that holds a function (`static var twice:Int->Int`), called by its bare name:
+			// read the field, then call what it holds as any function value is called, as the qualified form `C.twice(4)` is.
+			var owner = session.currentContext.lexicalOwner,
+				staticField = owner == null ? null : bodyTyper.findStaticFieldNullable(owner, name);
+			if (staticField == null)
+				return null;
+			var qualified = staticField.owner + "." + name;
+			return typeClosureCall(Variable(qualified, span), arguments, span, scope, qualified);
+		}
 		var fieldCallable = typeExpressionValue(Variable(name, span), scope);
 		return switch fieldCallable.type {
 			case TFunction(argumentTypes, result, _):
