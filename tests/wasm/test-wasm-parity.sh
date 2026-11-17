@@ -18,6 +18,9 @@ export TZ=Asia/Kolkata
 cases=(objects arrays enums closures dynamic exceptions strings)
 # One list drives compilation and execution for every target and inline setting.
 inline_cases=(
+	generic-erased-enum-tag
+	generic-erased-enum-inline
+	generic-erased-enum-nominal
 	observable-switch-cfg
 	wire-nested-value
 	readonly-array-context

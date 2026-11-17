@@ -28,12 +28,14 @@ class IrPipeline {
 	/** From the generated functions to the finished program (`IrProgramAssembler.assemble`). */
 	public static final assembly:IrAssemblyStageList = new IrAssemblyStageList("assembly", [
 		new IrAssemblyStage("constant-branches", constantBranches),
+		// Erased dispatch can reach a specialized body that the original callers do not name.
+		// Expose those targets before the walk filters typed enum/value conversions.
+		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects).measured(),
 		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(pruning),
 		new IrAssemblyStage("enum-dynamic-dispatch-input", enumDynamicDispatchInput).when(hasObjects),
 		new IrAssemblyStage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects).measured(),
 		new IrAssemblyStage("reachability-report", reachabilityReport).when(reportsReachability),
 		new IrAssemblyStage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects).measured(),
-		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects).measured(),
 		new IrAssemblyStage("override-bridges", overrideBridges).when(hasObjects).measured(),
 		new IrAssemblyStage("entry-prune", entryPrune).when(pruning).prunes(),
 		new IrAssemblyStage("value-interface-boxes", valueInterfaceBoxes).when(hasInterfaces).measured().checksPrune(),

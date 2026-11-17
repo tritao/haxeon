@@ -60,13 +60,15 @@ more, never miscompiles. Refine to construction sites only if the diagnostic num
 ## Where it runs (step 3)
 
 ENUM_PASS_PHASE_ORDER puts reachability first (phase 1), but the enum providers do not exist then: `IrEnumDynamicDispatch.rewrite`
-(`IrProgramAssembler`, before generic owner erasure) synthesizes them from all enums present.
+(`IrProgramAssembler`) synthesizes them from the reached enum operations. Generic-owner erasure runs before the first
+walk: its dispatchers can reach specialized bodies that the original callers never name. Those bodies must participate
+in enum/value conversion selection before their representations change.
 
 - **3a**: the sequence is **walk → dispatch(created, used) → walk**. `IrEnumDynamicDispatch.rewrite` and
   `IrEnumRuntimeSpecializations.materialize` take the created set and the used operations as parameters instead of reading "all enums in the
   program"; no reachability call appears inside the enum code and there is no hidden global. The second walk is the same function
-  (`IrReachability`), rerun on the grown program; it is not a second walker. The prune happens after the second walk, before generic owner
-  erasure, boxes, scalar rewrites and inlining, so everything after sees the reachable program. Dispatchers are built from reachable
+  (`IrReachability`), rerun on the grown program; it is not a second walker. The prune happens after the second walk, before
+  boxes, scalar rewrites and inlining, so everything after sees the reachable program. Dispatchers are built from reachable
   providers only.
 - **3b** (later): move provider generation to demand, driven by typed operations, so one walk before everything is enough (phase 1).
   3b removes the first walk without changing the dispatch's signature beyond its input. It depends on a1's producers.
