@@ -73,6 +73,8 @@ driver-default                   quick,ci    -- scripts/test-driver.sh {jobs}
 # Example callers are outside the compiler and UI fixture roots; final-prop API ports must check the app too.
 ui-showcase                      quick       -- env -u HAXEON_COMPILER_HL bash packages/ui/tools/test-showcase-builds.sh
 example-builds                   quick       -- python3 tests/integration/check-example-builds.py
+# The checked-in compiler loads on this VM; a removed runtime native would break `haxeon build --self-hosted` unnoticed.
+bootstrap-loads                  quick       -- bash tests/integration/test-bootstrap-loads.sh
 # Adds the warm-edit rebuilds and the reuse comparisons.
 driver-checked                   wave        -- scripts/test-driver.sh {jobs} --check-reuse
 # Compiles each program's live build again in a compile server of its own, which must write the same bytes.
