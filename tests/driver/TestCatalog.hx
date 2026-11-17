@@ -314,6 +314,7 @@ class TestCatalog {
 		"ByteSinkMain",
 		"InlinerCycleMain",
 		"HlWriterCacheMain",
+		"HlTrapRegionMain",
 		"FieldInitializerEditMain",
 		"CodeIdentityMain",
 		"IdentityPathMain",

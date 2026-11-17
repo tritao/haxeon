@@ -372,6 +372,55 @@ class HlValidator {
 					requireRegister(fn, register);
 			}
 		}
+		validateTrapRegions(fn, labels);
+	}
+
+	/**
+	 * The HashLink JIT takes a trap to be active from its `Trap` to its handler in instruction order: it keeps the registers a
+	 * try writes for the catch while it emits that range, and pops the trap when it reaches the handler. So every instruction
+	 * that can run while a trap is active lies between the two. This walks what runs from each `Trap` until the `EndTrap` that
+	 * closes it (inner traps counted; an inner handler runs with the outer trap still active). The fork's loader checks the
+	 * same (`hl_validate_trap_regions` in vendor/hashlink/src/code.c).
+	 */
+	static function validateTrapRegions(fn:HlFunction, labels:Map<String, Int>):Void {
+		for (position in 0...fn.opcodes.length)
+			switch fn.opcodes[position] {
+				case Trap(_, target, _):
+					var handler = labels.get(target);
+					if (handler <= position)
+						throw 'Trap handler "$target" is not after its trap in function ${fn.functionIndex}';
+					var depthAt:Map<Int, Int> = [], work:Array<Int> = [], depths:Array<Int> = [];
+					function reach(at:Int, depth:Int):Void {
+						if (at <= position || at >= handler)
+							throw 'Instruction $at runs inside the trap at $position but is not between it and its handler "$target" '
+								+ 'in function ${fn.functionIndex}';
+						if (!depthAt.exists(at)) {
+							depthAt.set(at, depth);
+							work.push(at);
+							depths.push(depth);
+						}
+					}
+					reach(position + 1, 0);
+					while (work.length > 0) {
+						var at = work.pop(), depth = depths.pop(), instruction = fn.opcodes[at];
+						switch instruction {
+							case Return(_), Throw(_), Rethrow(_):
+							case Jump(next):
+								reach(labels.get(next), depth);
+							case Trap(_, inner, _):
+								reach(labels.get(inner), depth);
+								reach(at + 1, depth + 1);
+							case EndTrap(_, _):
+								if (depth > 0)
+									reach(at + 1, depth - 1);
+							default:
+								for (next in HlWriter.jumpTargets(instruction))
+									reach(labels.get(next), depth);
+								reach(at + 1, depth);
+						}
+					}
+				default:
+			}
 	}
 
 	public static function collectLabels(fn:HlFunction):Map<String, Int> {
