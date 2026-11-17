@@ -64,9 +64,16 @@ class AndroidBuild {
 		}
 	}
 
+	/** One source file, whose directory is its source root, so `demo/Main.hx` is the module `Main`. */
 	static function singleSources(sourcePath:String):AndroidSources {
 		var source = FileSystem.fullPath(sourcePath);
-		return {sources: [source], roots: [], entry: ModulePath.fromFile(source), defines: [], packageRoots: []};
+		return {
+			sources: [source],
+			roots: [Path.directory(source)],
+			entry: ModulePath.fromFile(Path.withoutDirectory(source)),
+			defines: [],
+			packageRoots: []
+		};
 	}
 
 	static function projectSources(projectPath:String):AndroidSources {
