@@ -613,11 +613,8 @@ class CallResolver {
 		return false;
 	}
 
-	public function findMethod(className:String, name:String):Null<SemanticMethodInfo> {
-		var results:Array<SemanticMethodInfo> = [];
-		findMethods(className, name, results);
-		return results.length == 0 ? null : results[0];
-	}
+	public function findMethod(className:String, name:String):Null<SemanticMethodInfo>
+		return MemberAccess.methodInfo(session, className, name);
 
 	/**
 	 * `dynamicValue.method(arguments)`: the method is looked up by name when the program runs and called with its
@@ -706,6 +703,7 @@ class CallResolver {
 				method = session.signatures.get(methodKey);
 			if (method == null)
 				fail("E1007", 'Missing signature for method "$methodKey"', span);
+			MemberAccess.method(session, methodInfo.owner, name, span);
 			if (BodyTyper.functionTypeParameters(method).length > 0) {
 				var prepared = typeGenericCallArguments(method, arguments, scope, span);
 				return genericInstantiation.specialize(methodKey, method, prepared.arguments, span, scope,
@@ -727,6 +725,7 @@ class CallResolver {
 		}
 		if (methodInfo == null || methodInfo.isStatic)
 			fail("E1007", 'Unknown instance method "$className.$name"', span);
+		MemberAccess.method(session, methodInfo.owner, name, span);
 		var methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
 			substitutions = session.representation.nominalSubstitutions(methodOwnerType),
 			methodKey = methodInfo.owner + "." + name,
@@ -800,6 +799,7 @@ class CallResolver {
 				method = candidate;
 		if (method == null)
 			fail("E1007", 'Unknown abstract method "$abstractName.$name"', span);
+		MemberAccess.method(session, abstractName, name, span);
 		var methodKey = abstractName + "." + name,
 			signature = requiredMapValue(session.signatures, methodKey),
 			substitutions = session.representation.typeParameterSubstitutions(declaration.typeParameters,
@@ -968,6 +968,10 @@ class CallResolver {
 
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):TypedExpression {
+		// A static method of a class or abstract by its qualified name (`C.m()`, or `m()` inside C); module functions have no info.
+		var calledMethod = session.methodInfo.get(name);
+		if (calledMethod != null)
+			MemberAccess.method(session, calledMethod.owner, name.substr(name.lastIndexOf(".") + 1), span);
 		var hasSignature = session.signatures.exists(name);
 		if (hasSignature && BodyTyper.functionTypeParameters(requiredMapValue(session.signatures, name)).length > 0) {
 			var signature = requiredMapValue(session.signatures, name),
@@ -1051,6 +1055,7 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null)
 			fail("E1007", 'Missing signature for method "$methodKey"', span);
+		MemberAccess.method(session, methodInfo.owner, name, span);
 		if (BodyTyper.functionTypeParameters(method).length > 0) {
 			var receiver:Null<TypedExpression> = null;
 			if (!methodInfo.isStatic) {
@@ -1418,6 +1423,7 @@ class CallResolver {
 			fail("E1008",
 				'Constructor "$resolvedBase" expects ${resolvedExpected.length} arguments, got ${arguments.length}',
 				span);
+		MemberAccess.method(session, resolvedBase, "new", span);
 		var semanticArguments = hasConstructor ? typeDeclaredCallArguments(arguments,
 			requiredMapValue(session.signatures, constructorName), scope,
 			constructorName, span, substitutions) : typeCallArguments(arguments, resolvedExpected, scope,
@@ -1450,6 +1456,7 @@ class CallResolver {
 			method = session.signatures.get(methodKey);
 		if (method == null || method.isExtern == true)
 			fail("E1007", 'Missing body for base method "$methodKey"', span);
+		MemberAccess.method(session, methodInfo.owner, name, span);
 		if (BodyTyper.functionTypeParameters(method).length > 0)
 			fail("E1016", 'super.$name() cannot call a generic method yet', span);
 		var receiver = typeExpressionValue(Variable("this", span), scope),
@@ -1918,25 +1925,6 @@ class CallResolver {
 		for (key => value in source)
 			result.set(key, value);
 		return result;
-	}
-
-	function findMethods(className:String, name:String, results:Array<SemanticMethodInfo>):Void {
-		if (results.length > 0)
-			return;
-		var key = className + "." + name;
-		if (session.methodInfo.exists(key)) {
-			results.push(requiredMapValue(session.methodInfo, key));
-			return;
-		}
-		if (session.classDecls.exists(className)) {
-			var base = requiredMapValue(session.classDecls, className).base;
-			if (base != null)
-				findMethods(BodyTyper.inheritanceName(base), name, results);
-			return;
-		}
-		if (session.interfaceDecls.exists(className))
-			for (base in requiredMapValue(session.interfaceDecls, className).bases)
-				findMethods(BodyTyper.inheritanceName(base), name, results);
 	}
 
 	public function typeStringMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
@@ -2571,6 +2559,7 @@ class CallResolver {
 	public function typeConstruction(typeName:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, hasExplicitTypeArguments:Bool):TypedExpression {
+		MemberAccess.method(session, typeName, "new", span);
 		if (session.declarations.abstracts.exists(typeName))
 			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope);
 		if (hasExplicitTypeArguments) {

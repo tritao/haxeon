@@ -1657,7 +1657,13 @@ class BodyTyper implements BodyTyping {
 					span);
 			else if (session.signatures.exists(functionName)) {
 				var fn = requiredMapValue(session.signatures, functionName),
-					types = argumentTypesOf(fn);
+					types = argumentTypesOf(fn),
+					methodInfo = session.methodInfo.get(functionName);
+				// A static method value of a class or abstract (`C.m`); a module function has no method info.
+				if (methodInfo != null)
+					MemberAccess.method(session, methodInfo.owner,
+						functionName.substr(functionName.lastIndexOf(".") + 1),
+						span);
 				// A function value is the dispatch entry when the function has one: a call through it may omit an argument.
 				new TypedExpression(TFunctionRef(DefaultArguments.hasDispatchEntry(fn.arguments, types,
 					session.relations) ? DefaultArguments.dispatchName(functionName) : functionName),
@@ -2126,6 +2132,7 @@ class BodyTyper implements BodyTyping {
 							return EnumAbstractValues.typed(this, abstractDecl, value, span);
 				}
 				var staticField = findStaticField(className, name, span);
+				MemberAccess.field(session, staticField.owner, name, true, span);
 				var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
 				return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name),
 					staticField.type, span) : inlineValue;
@@ -2157,8 +2164,15 @@ class BodyTyper implements BodyTyping {
 				session.runtimeDependencyTracker.record(session.currentContext.name, module);
 			return new TypedExpression(TCall(platformField.get, [typedObject]), platformField.type, span);
 		}
+		var nominalOwner = switch typedObject.type {
+			case TInstance(Class, className, _): className;
+			default: null;
+		};
 		var getter = instancePropertyAccessor(typedObject.type, name, true);
 		if (getter != null) {
+			// A property is reached by its own visibility, not its accessor's (`get_x` is usually private).
+			if (nominalOwner != null)
+				MemberAccess.field(session, nominalOwner, name, false, span);
 			var method = requiredMapValue(session.signatures, getter);
 			var methodInfo = session.methodInfo.get(getter),
 				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
@@ -2175,6 +2189,7 @@ class BodyTyper implements BodyTyping {
 			if (resolvedMethodInfo != null && !resolvedMethodInfo.isStatic) {
 				var methodKey = resolvedMethodInfo.owner + "." + name,
 					method = requiredMapValue(session.signatures, methodKey);
+				MemberAccess.method(session, resolvedMethodInfo.owner, name, span);
 				if (session.relations.isValueClass(typedObject.type)
 					&& !session.isPureCall(methodKey)
 					&& !session.isReadOnlyReceiver(methodKey))
@@ -2193,6 +2208,8 @@ class BodyTyper implements BodyTyping {
 					TFunction(arguments, result, FunctionTypes.ofArguments(method.arguments)), span);
 			}
 		}
+		if (nominalOwner != null)
+			MemberAccess.field(session, nominalOwner, name, false, span);
 		var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
 			stableFlowValue = isStableFlowReceiver(typedObject) && isFinalInstanceField(typedObject.type, name);
 		return session.representation.boundaryCast(new TypedExpression(TField(typedObject, name),
@@ -2282,17 +2299,11 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {
-		if (!session.classDecls.exists(className))
-			return null;
-		var classDecl = requiredMapValue(session.classDecls, className);
-		for (field in classDecl.fields)
-			if (field.name == name && field.isStatic)
-				return {
-					owner: className,
-					type: session.declarations.types.fieldType(className, field, context.typeSubstitutions)
-				};
-		var base = classDecl.base;
-		return base == null ? null : findStaticFieldNullable(inheritanceName(base), name);
+		var found = MemberAccess.classField(session, className, name, true);
+		return found == null ? null : {
+			owner: found.declaration.name,
+			type: session.declarations.types.fieldType(found.declaration.name, found.field, context.typeSubstitutions)
+		};
 	}
 
 	public function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void {

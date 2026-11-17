@@ -21,90 +21,21 @@ class PropertyWriteRules {
 	public static function rejectStaticMutation(session:TypingSession, owner:String, name:String, span:SourceSpan):Void
 		check(session, owner, name, true, span);
 
+	/** A write to the field `name` of `owner` or its base classes: the source reaches it, and its property may be written here. */
 	static function check(session:TypingSession, owner:Null<String>, name:String, isStatic:Bool, span:SourceSpan):Void {
-		var seen:Map<String, Bool> = [];
-		while (owner != null) {
-			if (seen.exists(owner))
-				throw 'Cyclic class hierarchy while resolving property "$owner.$name"';
-			seen.set(owner, true);
-			var declaration = session.classDecls.get(owner);
-			if (declaration == null)
-				return;
-			for (field in declaration.fields)
-				if (field.name == name && field.isStatic == isStatic) {
-					if (!canWrite(session, declaration, field))
-						throw new CompileError(new Diagnostic("E1024", 'Property "$owner.$name" cannot be written here',
-							span));
-					return;
-				}
-			owner = declaration.base == null ? null : baseName(declaration.base);
-		}
+		var found = owner == null ? null : MemberAccess.classField(session, owner, name, isStatic);
+		if (found == null)
+			return;
+		MemberAccess.requireField(session, found.declaration, found.field, span);
+		if (!canWrite(session, found.declaration, found.field))
+			throw new CompileError(new Diagnostic("E1024",
+				'Property "${found.declaration.name}.$name" cannot be written here',
+				span));
 	}
 
 	public static function canWrite(session:TypingSession, declaration:AstClass, field:AstField):Bool
 		return field.writeAccess != NullAccess || canAccess(session, declaration, field);
 
-	public static function canAccess(session:TypingSession, declaration:AstClass, field:AstField):Bool {
-		if (session.currentContext.privateAccessDepth > 0)
-			return true;
-		var owner = declaration.name;
-		var caller = session.currentContext.lexicalOwner;
-		var current = caller, seen:Map<String, Bool> = [];
-		while (current != null) {
-			if (seen.exists(current))
-				throw 'Cyclic class hierarchy while checking access from "$caller"';
-			seen.set(current, true);
-			if (current == owner)
-				return true;
-			var declaration = session.classDecls.get(current);
-			current = declaration == null || declaration.base == null ? null : baseName(declaration.base);
-		}
-		return caller != null
-			&& (grants(declaration.metadata, "allow", caller, session.currentContext.sourceFunctionName)
-			|| grants(field.metadata, "allow", caller, session.currentContext.sourceFunctionName)
-			|| hasAccess(session, caller, owner, field.name));
-	}
-
-	static function hasAccess(session:TypingSession, caller:String, owner:String, field:String):Bool {
-		var declaration = session.classDecls.get(caller);
-		if (declaration == null)
-			return false;
-		if (grants(declaration.metadata, "access", owner, owner + "." + field))
-			return true;
-		for (method in declaration.methods) {
-			var name = method.name.indexOf(".") >= 0 ? method.name : caller + "." + method.name;
-			if (name == session.currentContext.sourceFunctionName
-				&& method.metadata != null
-				&& grants(method.metadata, "access", owner, owner + "." + field))
-				return true;
-		}
-		return false;
-	}
-
-	static function grants(metadata:Array<AstMetadata>, kind:String, caller:String, functionName:String):Bool {
-		for (entry in metadata)
-			if (entry.name == kind)
-				for (argument in entry.arguments) {
-					var path = expressionPath(argument);
-					if (path != null
-						&& (caller == path || functionName == path || StringTools.startsWith(caller, path + ".")))
-						return true;
-				}
-		return false;
-	}
-
-	static function expressionPath(expression:AstExpression):Null<String>
-		return switch expression {
-			case Variable(name, _): name;
-			case Member(object, name, _):
-				var prefix = expressionPath(object);
-				prefix == null ? null : prefix + "." + name;
-			default: null;
-		};
-
-	static function baseName(type:AstType):Null<String>
-		return switch type {
-			case NamedType(name), AppliedType(name, _): name;
-			default: null;
-		};
+	public static function canAccess(session:TypingSession, declaration:AstClass, field:AstField):Bool
+		return MemberAccess.canAccess(session, declaration.name, declaration.metadata, field.name, field.metadata);
 }
