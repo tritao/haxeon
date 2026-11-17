@@ -344,20 +344,23 @@ class Parser {
 		var methods:Array<AstFunction> = [];
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata();
-			var isStatic = false, isInline = false, isPublic:Null<Bool> = null;
+			var isStatic = false, isInline = false, isPublic:Null<Bool> = null, isExternMember = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Inline)
-				|| check(TokenKind.Static)) {
+				|| check(TokenKind.Static) || isExternModifier()) {
 				if (match(TokenKind.Static))
 					isStatic = true;
 				else if (match(TokenKind.Inline))
 					isInline = true;
-				else
+				else if (isExternModifier()) {
+					isExternMember = true;
+					advance();
+				} else
 					isPublic = advance().kind == TokenKind.Public;
 			}
 			var functionStart = consume(TokenKind.Function).span,
 				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, methodMetadata,
-				isInline, isPublic));
+			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
+				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic));
 		}
 		var end = consume(TokenKind.RightBrace).span;
 		return {
@@ -855,11 +858,16 @@ class Parser {
 					skipMacroFunction();
 					continue;
 				}
-				var isStatic = false, isInline = false, isFinal = false, isOverride = false;
+				var isStatic = false, isInline = false, isFinal = false, isOverride = false, isExternMember = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
 					if (current().kind == TokenKind.Identifier && current().text == "override") {
 						isOverride = true;
+						advance();
+						continue;
+					}
+					if (isExternModifier()) {
+						isExternMember = true;
 						advance();
 						continue;
 					}
@@ -883,8 +891,9 @@ class Parser {
 				if (match(TokenKind.Function)) {
 					var functionStart = previous().span,
 						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
-					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic, isExtern, memberMetadata,
-						isInline, isPublic, isOverride));
+					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
+						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, isPublic,
+						isOverride));
 				} else
 					fields.push(parseField(memberMetadata, isPublic, isStatic, isInline, isFinal));
 			} catch (error:CompileError) {
@@ -958,6 +967,17 @@ class Parser {
 			span: fieldStart.merge(end)
 		};
 	}
+
+	/** `extern` among a member's modifiers. */
+	inline function isExternModifier():Bool
+		return current().kind == TokenKind.Identifier && current().text == "extern";
+
+	/**
+	 * Whether a method has no body: every method of an extern type, and, as in Haxe, an `extern` member that is not inline (a
+	 * native, `@:hlNative(...) static extern function f():Int;`). An `extern inline` member has a body, which is always inlined.
+	 */
+	static function externBody(externType:Bool, externMember:Bool, isInline:Bool):Bool
+		return externType || externMember && !isInline;
 
 	inline function isMacroModifier():Bool
 		return check(TokenKind.Identifier) && current().text == "macro";

@@ -56,27 +56,20 @@ enum StackItem {
 /**
 	A call-stack snapshot, innermost frame first, as on Haxe's HashLink target: each frame is a
 	`FilePos(Method(className, method), file, line)`, or a `Module(symbol)` for a frame whose symbol does not name a method.
+	As in Haxe, it is an abstract over its items: `stack[i]`, `stack.length`, and an `Array<StackItem>` where a stack is
+	expected.
 **/
-class CallStack {
-	public var length(get, never):Int;
-
-	final items:Array<StackItem>;
-
-	public function new(?items:Array<StackItem>) {
-		this.items = items == null ? [] : items;
-	}
-
-	function get_length():Int
-		return items.length;
-
+@:forward(length)
+@:arrayAccess
+abstract CallStack(Array<StackItem>) from Array<StackItem> {
 	/**
 		The frames calling the function that calls this one (Haxe's `CallStack.callStack()`), without the program's entry.
 		This function's own frame, the stack's first, is left out; it must stay a frame of its own, which its loop sees to:
 		the inliner splices only straight-line bodies, and inlined, the caller's frame would read this file's position.
 	**/
-	public static function callStack():CallStack {
+	public static function callStack():Array<StackItem> {
 		var symbols = nativeCallStack();
-		return new CallStack([for (index in 1...symbols.length - 1) frame(symbols[index])]);
+		return [for (index in 1...symbols.length - 1) frame(symbols[index])];
 	}
 
 	/**
@@ -99,7 +92,7 @@ class CallStack {
 	}
 
 	/** The frames of the last exception thrown, from the throw outwards. */
-	public static function exceptionStack(?fullStack:Bool = false):CallStack
+	public static function exceptionStack(?fullStack:Bool = false):Array<StackItem>
 		return frames(nativeExceptionStack(), 0);
 
 	/** The frames of the last throw, or else the frames now on the stack, taken for an exception to name later. */
@@ -113,7 +106,7 @@ class CallStack {
 	/** `\nCalled from <item>` for each item, as Haxe prints a stack. */
 	public static function toString(stack:CallStack):String {
 		var buffer = new StringBuf();
-		for (item in stack.items) {
+		for (item in stack.asArray()) {
 			buffer.add("\nCalled from ");
 			itemToString(buffer, item);
 		}
@@ -121,12 +114,8 @@ class CallStack {
 	}
 
 	/** The frames `symbols` names from `start` on, without the program's entry (the last), as Haxe's HL std reads them. */
-	static function frames(symbols:Array<String>, start:Int):CallStack {
-		var items:Array<StackItem> = [];
-		for (index in start...symbols.length - 1)
-			items.push(frame(symbols[index]));
-		return new CallStack(items);
-	}
+	static function frames(symbols:Array<String>, start:Int):Array<StackItem>
+		return [for (index in start...symbols.length - 1) frame(symbols[index])];
 
 	/** A HashLink frame symbol, `Class.method(file:line)`, as a stack item. */
 	static function frame(symbol:String):StackItem {
@@ -174,14 +163,15 @@ class CallStack {
 		}
 	}
 
+	/** The stack's items, the array it is. */
 	public function asArray():Array<StackItem>
-		return items;
+		return this;
 
 	public function iterator():Iterator<StackItem>
-		return items.iterator();
+		return this.iterator();
 
 	public function copy():CallStack
-		return new CallStack(items.copy());
+		return this.copy();
 
 	/**
 		This stack without its frames from the first run it shares with `stack` on: what a chained exception's stack adds to
@@ -190,7 +180,8 @@ class CallStack {
 	@:noCompletion public function subtract(stack:CallStack):CallStack {
 		var startIndex = -1,
 			i = -1,
-			other = stack.items;
+			items = this,
+			other = stack.asArray();
 		while (++i < items.length) {
 			for (j in 0...other.length) {
 				if (equalItems(items[i], other[j])) {
@@ -205,7 +196,7 @@ class CallStack {
 			if (startIndex >= 0)
 				break;
 		}
-		return startIndex >= 0 ? new CallStack(items.slice(0, startIndex)) : this;
+		return startIndex >= 0 ? items.slice(0, startIndex) : items;
 	}
 
 	static function equalItems(left:Null<StackItem>, right:Null<StackItem>):Bool {

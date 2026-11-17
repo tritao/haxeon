@@ -176,6 +176,8 @@ in_background run_case exception-catch-wrapping 0
 in_background run_case exception-throw-null 0
 in_background run_case exception-details 0
 in_background run_case throw-type-check 0
+in_background run_case callstack-abstract 0
+in_background run_case abstract-module-members 0
 in_background run_case switch-null-coverage 0
 in_background run_case switch-guarded-catch-all 0
 in_background run_case switch-bool 0

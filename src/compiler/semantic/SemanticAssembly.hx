@@ -320,6 +320,14 @@ class SemanticAssembly {
 				classStart = classes.length,
 				functionStart = functions.length,
 				programFunctionStart = programFunctions.length;
+			// The module's functions and variables are named before any of its declarations is, so an abstract's or enum's
+			// methods reach them as a class's do. Module-level variables (static fields of the module's class, see
+			// ModuleFields) are named as the functions are.
+			for (fn in ast.functions)
+				locals.set(fn.name, true);
+			if (ast.fields != null)
+				for (field in ast.fields)
+					locals.set(field.name, true);
 			for (interfaceDecl in ast.interfaces)
 				interfaces.push(ModuleCanonicalizer.canonicalInterface(interfaceDecl, aliases, ast.packageName,
 					name, entryModule, locals));
@@ -345,12 +353,6 @@ class SemanticAssembly {
 					LambdaCollector.collect(method.statements, qualified, name, generatedByModule);
 				}
 			}
-			for (fn in ast.functions)
-				locals.set(fn.name, true);
-			// Module-level variables (static fields of the module's class, see ModuleFields) are named as the functions are.
-			if (ast.fields != null)
-				for (field in ast.fields)
-					locals.set(field.name, true);
 			var canonicalFunctions:Array<AstFunction>;
 			if (state.canonicalRevision == state.revision && state.canonicalEntry == entryModule
 				&& state.canonicalAliasKey == aliasKey) {
