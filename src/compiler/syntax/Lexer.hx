@@ -19,6 +19,12 @@ class Lexer {
 			operatorTables.value = table;
 		}
 		operators = table;
+		var nameTable = nameTables.value;
+		if (nameTable == null) {
+			nameTable = new NameTable();
+			nameTables.value = nameTable;
+		}
+		this.names = nameTable;
 		this.file = file;
 		this.source = source == null || source == file.text ? file.bytes : haxe.io.Bytes.ofString(source);
 	}
@@ -119,7 +125,7 @@ class Lexer {
 				position++;
 				while (position < source.length && isIdentifierPart(source.get(position)))
 					position++;
-				var value = text(start, position);
+				var value = names.intern(source, start, position);
 				tokens.push(new Token(keyword(value), value, file.span(start, position)));
 				continue;
 			}
@@ -343,6 +349,11 @@ class Lexer {
 	static final operatorTables = new sys.thread.Tls<Null<Map<Int, String>>>();
 
 	final operators:Map<Int, String>;
+
+	@:processWide("one table of identifier names per thread: a name's text never changes, and only its own thread uses a table")
+	static final nameTables = new sys.thread.Tls<Null<NameTable>>();
+
+	final names:NameTable;
 
 	/** The text of an operator token, shared by every token with the same bytes; longer texts are read as usual. */
 	function operatorText(start:Int, end:Int):String {
