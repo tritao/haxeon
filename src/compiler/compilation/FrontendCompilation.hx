@@ -284,6 +284,15 @@ class FrontendCompilation {
 	}
 
 	/** The reachable modules and the classes in initialization order: the cached reachability when nothing it read changed. */
+	/** Threads that parse modules ahead of the graph walk. */
+	static inline final PARSE_THREADS = 8;
+
+	static function sortedModuleNames(modules:Map<String, ModuleState>):Array<String> {
+		var names = [for (name in modules.keys()) name];
+		names.sort(Reflect.compare);
+		return names;
+	}
+
 	static function resolveGraph(build:FrontendBuild, pendingBody:Null<Map<String, Bool>>,
 			pendingSignatures:Null<Map<String, Bool>>, pendingStructural:Null<Map<String, Bool>>):Void {
 		var context = build.context,
@@ -297,6 +306,9 @@ class FrontendCompilation {
 		build.bodyChanged = bodyChanged;
 		build.signatureChanged = signatureChanged;
 		build.structuralChanged = structuralChanged;
+		// The graph walk parses what it reaches one module at a time; parse every module that needs it first, on several threads.
+		context.moduleAnalyzer.prefetchParses([for (name in sortedModuleNames(modules)) modules.get(name)],
+			PARSE_THREADS);
 		var names:Array<String> = [],
 			initializationClasses:Array<String> = [],
 			cachedReachability = context.state.cachedReachability(entryModule),

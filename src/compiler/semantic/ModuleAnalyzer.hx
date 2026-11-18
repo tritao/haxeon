@@ -393,6 +393,39 @@ class ModuleAnalyzer {
 		var cached = lookupParses.get(state.name);
 		if (cached != null && cached.source == state.source)
 			return cached;
+		return parseText(state);
+	}
+
+	/**
+	 * Parses every module of `states` that has neither a syntax tree nor a parse of its current source, on `threads` threads, into
+	 * the cache `parse` reads first. Parsing a module reads only its own source and the defines, and the results are kept in the
+	 * modules' order, so the program is the same whatever the scheduling. A module whose parse fails is left to `parse`, which
+	 * parses it again and reports the error as it always does.
+	 */
+	public function prefetchParses(states:Array<ModuleState>, threads:Int):Void {
+		var pending = [
+			for (state in states)
+				if (state.ast == null
+				&& !(lookupParses.exists(state.name) && lookupParses.get(state.name).source == state.source)) state
+		];
+		var parsed:Array<Null<LookupParse>> = [];
+		parsed.resize(pending.length);
+		for (index in 0...pending.length)
+			parsed[index] = null;
+		compiler.core.Parallel.forEach(pending.length, threads, function(index) {
+			try
+				parsed[index] = parseText(pending[index])
+			catch (_:haxe.Exception) {}
+		});
+		for (index in 0...pending.length) {
+			var result = parsed[index];
+			if (result != null)
+				lookupParses.set(pending[index].name, result);
+		}
+	}
+
+	/** The parse of `state`'s current source, which reads nothing but the source and the defines. */
+	function parseText(state:ModuleState):LookupParse {
 		var conditional = ConditionalCompilation.process(state.source, defines),
 			tokens = new Lexer(state.source, conditional.text).tokenize(),
 			program = new Parser(tokens).parseProgram();

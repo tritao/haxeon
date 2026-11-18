@@ -13,6 +13,12 @@ class Lexer {
 	var position:Int = 0;
 
 	public function new(file:SourceFile, ?source:String) {
+		var table = operatorTables.value;
+		if (table == null) {
+			table = [];
+			operatorTables.value = table;
+		}
+		operators = table;
 		this.file = file;
 		this.source = source == null || source == file.text ? file.bytes : haxe.io.Bytes.ofString(source);
 	}
@@ -329,9 +335,14 @@ class Lexer {
 	inline function text(start:Int, end:Int):String
 		return source.getString(start, end - start);
 
-	/** Operator and punctuation texts, by their bytes packed into an Int: they are few and repeat in every file. */
-	@:processWide("interned operator texts: the text of a lexeme never changes")
-	static final operators:Map<Int, String> = [];
+	/**
+	 * Operator and punctuation texts, by their bytes packed into an Int: they are few and repeat in every file. One table per
+	 * thread, so files lexed on several threads at once never write a shared map.
+	 */
+	@:processWide("one table of operator texts per thread: the text of a lexeme never changes, and only its own thread uses a table")
+	static final operatorTables = new sys.thread.Tls<Null<Map<Int, String>>>();
+
+	final operators:Map<Int, String>;
 
 	/** The text of an operator token, shared by every token with the same bytes; longer texts are read as usual. */
 	function operatorText(start:Int, end:Int):String {
