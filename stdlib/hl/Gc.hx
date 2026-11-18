@@ -42,6 +42,10 @@ extern class Gc {
 	/** Fraction of the heap that may be allocated between collections (default 0.2, clamped to 0.05...4). */
 	@:hlNative("std", "gc_set_mark_threshold") public static function setMarkThreshold(fraction:Float):Void;
 	@:hlNative("std", "gc_get_mark_threshold") public static function markThreshold():Float;
+	/** The least allocation between two major collections, in bytes. A short process with a large live heap collects far
+		less often with a larger one, for that much more peak memory. */
+	@:hlNative("std", "gc_set_min_trigger") public static function setMinTrigger(bytes:Float):Void;
+	@:hlNative("std", "gc_get_min_trigger") public static function minTrigger():Float;
 	/** Writes a heap dump to `fileName`, as Haxe's hl.Gc.dumpMemory. */
 	@:hlNative("haxeon_runtime",
 		"__gc_dump_memory") public static function dumpMemory(fileName:String = "hlmemory.dump"):Void;
@@ -60,6 +64,7 @@ extern class Gc {
  */
 class Gc {
 	static var threshold = 0.2;
+	static var trigger = 64.0 * 1024 * 1024;
 
 	public static function totalAllocated():Float
 		return 0.0;
@@ -102,6 +107,13 @@ class Gc {
 
 	public static function markThreshold():Float
 		return threshold;
+
+	/** Remembered so a read returns what was set; it has no effect. */
+	public static function setMinTrigger(bytes:Float):Void
+		trigger = bytes < 0 ? 0 : bytes;
+
+	public static function minTrigger():Float
+		return trigger;
 
 	public static function dumpMemory(fileName:String = "hlmemory.dump"):Void {}
 

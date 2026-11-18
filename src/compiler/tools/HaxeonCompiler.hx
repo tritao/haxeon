@@ -5,6 +5,7 @@ import compiler.core.Diagnostic.CompileError;
 /** Normal command-line entry point for Haxeon compilation. */
 class HaxeonCompiler {
 	public static function main():Void {
+		ProcessMemory.oneShotCompile();
 		var request = CompilerArguments.parse(Sys.args());
 		try {
 			CompilerDriver.compile(request, Sys.println);
