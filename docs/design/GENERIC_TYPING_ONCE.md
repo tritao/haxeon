@@ -1,6 +1,6 @@
 # Typing generic code once (design note)
 
-Status: stage 1 in progress (2026-11-18); stage 2 is a proposed plan entry. This is the TODO.md follow-up "generic code
+Status: stage 1 landed (2026-11-18); stage 2 is a proposed plan entry. This is the TODO.md follow-up "generic code
 is typed twice". It belongs with step 2.5 ([LAZY_DECLARATION_TYPING.md](LAZY_DECLARATION_TYPING.md)) and step 2.6
 ([STRUCTURE_VALUES.md](STRUCTURE_VALUES.md)).
 
@@ -107,6 +107,27 @@ changes who types a unit first, not what it contains. 1b adds a dropped unit and
 
 What stage 1 leaves typed twice, until stage 2: a generic body's own-parameter typing (paths 2, 3 and 1b's field units)
 next to its code typings (paths 6 to 8), and the specializations at type parameters (path 5) met inside them.
+
+### As built (stage 1)
+
+- 1a: `ProgramTyper.checkAbstractMember` types a member of a non-generic abstract through
+  `GenericInstantiation.typeMemberBody`, which requests the specialization exactly as `specialize` names it and types it
+  with `TypingSession.typeSharedUnit(unused)`: into an output of its own, merged only where a call records its use.
+  Whichever of the check and the first call comes first types it, and the other reuses it. A generic abstract's members
+  are still checked in a check unit.
+- 1b: `ProgramTyper.ownParameterFieldType` types every unannotated field of a generic class with its own parameters. An
+  error there is the field's error, reported as Haxe reports it: `var r = { var f = (x:T) -> Std.int(x); 0; }` was
+  accepted, since its erased type `Int` mentions no `Dynamic`, and is now rejected
+  (`tests/differential/generic-field-own-parameters-error`). `mentionsDynamic` is deleted.
+- 1c is not done. A generic body's own-parameter typing (paths 2 and 3) already happens once per body: the check of an
+  unannotated generic body reads its signature from the table, which types it once.
+- Output is byte-identical for the test programs that build (669), the self-compile and the UI showcase. Before stage 1
+  (`4d119532e`) and after it, with the same sources: the typing phase allocates 49.047 M objects instead of 49.031 M on
+  the self-compile, and 18.79 M instead of 18.63 M (-0.9%, 653 MB instead of 650 MB) on the showcase. Typing time, the
+  median of three interleaved runs on a machine with a load of about 8: self-compile 8.55 s against 8.20 s, showcase
+  3.28 s against 3.16 s. Both differences are within noise. The showcase gains less than the 18% that paths 1 to 5 cost,
+  because most of its 3,815 abstract members are never called. For those, the check unit was the only typing, and
+  still is.
 
 ## Stage 2: elaboration as a pass (proposed plan entry)
 

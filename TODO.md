@@ -105,13 +105,15 @@ regular recursive generic enums are in the next section.
   the self-hosted compiler by marking a function inferred where the signature
   table holds it too. Why it failed is not fully understood; object identity
   across `SemanticProgram.replaceBodies` is the suspect.
-- **Generic code is typed twice.** Step 2.5 types a generic class's field
-  initializer again with its parameters when its type mentions Dynamic
-  (`ProgramTyper.mentionsDynamic`, slice 3), and types a generic function's
-  body a second time for its signature only (slice 4, `a612f7495`, and
-  `5999d81e4`). Type it once, with the code's own type parameters, and erase
-  at lowering. This was the root of the regression fixed in `60f3e8afd`; it
-  belongs with step 2.6 ([STRUCTURE_VALUES.md](docs/design/STRUCTURE_VALUES.md)).
+- **Generic code is typed twice.** A generic body is typed once with its own
+  type parameters (diagnostics, the declaration's type) and again for each
+  representation it is code for (erased, or per specialization), because the
+  typer elaborates the representation (boxing, `TToDynamic`/`TAbiCast`,
+  `TCopy`, layout constants, helper choice) while it types. Stage 1 of
+  [GENERIC_TYPING_ONCE.md](docs/design/GENERIC_TYPING_ONCE.md) removed the
+  repeats that were the same typing and the `mentionsDynamic` heuristic. The
+  rest waits for stage 2: elaboration as a pass after typing, which crosses
+  into erased-generic lowering (step 2.6).
 - **CLI usage errors are `InternalError`.** An unknown option or a missing
   argument (`HaxeonCli`, `LintCommand`) throws
   `compiler.core.InternalError` since `24db87fe1`. Add a `UsageError` so a

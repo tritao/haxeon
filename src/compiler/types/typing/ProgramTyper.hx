@@ -1239,20 +1239,21 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			type,
 			initializerLabel(classDecl, field));
 		var fieldType = type == null ? initializer.type : type;
-		// A generic class's initializers are typed with its type parameters erased to Dynamic, as its methods are, so a Dynamic in
-		// the type may stand for one: the type in the class's own parameters is then what typing it with them gives.
-		if (type == null && classDecl.typeParameters.length > 0 && mentionsDynamic(fieldType))
-			fieldType = genericFieldType(classDecl, field, expression, fieldType);
+		// A generic class's initializers are code typed with its type parameters erased to Dynamic, as its methods are. An
+		// unannotated field's type is its initializer's typed with the class's own parameters, always.
+		if (type == null && classDecl.typeParameters.length > 0)
+			fieldType = ownParameterFieldType(classDecl, field, expression, fieldType);
 		bodyTyper.leaveBody(context);
 		return {initializer: initializer, warnings: context.warnings, type: fieldType};
 	}
 
 	/**
 	 * The type of unannotated `field` of generic `classDecl` in the class's own type parameters, as Haxe types it: its initializer
-	 * typed again with them, in a unit whose output is dropped (only the erased typing, `erased`, is code). The two must agree once
-	 * the parameters are erased, and a structure cannot mention them; otherwise the field needs an annotation.
+	 * typed with them, in a unit whose output is dropped (the erased typing, `erased`, is the code until erasure is a pass after
+	 * typing, docs/design/GENERIC_TYPING_ONCE.md). The two must agree once the parameters are erased, and a structure cannot
+	 * mention them; otherwise the field needs an annotation.
 	 */
-	function genericFieldType(classDecl:AstClass, field:compiler.syntax.Ast.AstField,
+	function ownParameterFieldType(classDecl:AstClass, field:compiler.syntax.Ast.AstField,
 			expression:compiler.syntax.Ast.AstExpression, erased:CompilerType):CompilerType {
 		var substitutions = BodyTyper.declarationTypeSubstitutions(classDecl.name, classDecl.typeParameters),
 			mark = session.checkpoint(),
@@ -1270,8 +1271,11 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				field.span, _ -> {}).type;
 			bodyTyper.leaveBody(context);
 			session.endDeclarationUnit(begun);
-		} catch (_:CompileError) {
+		} catch (error:CompileError) {
+			// The initializer is wrong in the class's own parameters (`Std.int(x)` of a `T`), as Haxe reports it, though erasing
+			// them hid it.
 			session.rewind(mark);
+			throw error;
 		}
 		var type = lifted;
 		if (type == null || structureMentionsParameter(type)
@@ -1484,28 +1488,6 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (!substitutions.exists(parameter))
 				substitutions.set(parameter, TTypeParameter(key, parameter));
 		return substitutions;
-	}
-
-	/** Whether `type` mentions Dynamic; `visiting` holds the structures being walked, so a recursive one is entered once. */
-	static function mentionsDynamic(type:CompilerType,
-			?visiting:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
-		var seen = visiting == null ? [] : visiting;
-		return switch type {
-			case TDynamic: true;
-			case TNullable(element), TArray(element), TIterator(element): mentionsDynamic(element, seen);
-			case TMap(key, value), TKeyPath(key, value, _): mentionsDynamic(key, seen) || mentionsDynamic(value, seen);
-			case TFunction(arguments, result, _):
-				mentionsDynamic(result, seen) || Lambda.exists(arguments, argument -> mentionsDynamic(argument, seen));
-			case TInstance(_, _, arguments), TAbstract(_, arguments, _):
-				Lambda.exists(arguments, argument -> mentionsDynamic(argument, seen));
-			case TAnonymous(_, fields):
-				if (seen.indexOf(fields) >= 0) false;
-				else {
-					seen.push(fields);
-					Lambda.exists(fields, field -> mentionsDynamic(field.type, seen));
-				}
-			default: false;
-		};
 	}
 
 	function typeModuleFunctions(functions:Array<AstFunction>, selected:Null<Map<String, Bool>>,
