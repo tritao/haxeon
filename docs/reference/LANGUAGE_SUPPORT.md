@@ -98,8 +98,11 @@ The current subset includes:
   written through the abstract (`Counter.count`, `pack.Counter.count`) and bare in its methods. Haxe keeps them in the
   abstract's implementation class; Haxeon in a hidden class of the module (`AbstractStatics`), which goes where the abstract
   is declared among the module's classes, so they initialize in Haxe's order (below), and a class whose initializers
-  reach one of the abstract's statics or static methods initializes after them. A static property with an accessor
-  (`static var x(get, never)`) is not supported yet.
+  reach one of the abstract's statics or static methods initializes after them.
+- Static properties with accessors, of a class or an abstract (`static var count(get, set):Int` with `static function
+  get_count()`), as in Haxe: a read calls `get_count` and a write `set_count` wherever source names the property
+  (`Counter.count`, bare in its own type, `count += 1`, `count++`); inside its own accessor an `@:isVar` property is its
+  variable. A `never` side cannot be accessed and a missing accessor is reported, in Haxe's words.
 - An abstract's implicit conversions, as Haxe casts them: through the expected abstract's `from` conversions, else the
   value's abstract's `to` conversions, a `@:from` or `@:to` function before a `from` or `to` type. Where the other side
   is not an abstract (Int, Float, a class), the value meets the conversion's type as Haxe unifies it, so an Int meets a

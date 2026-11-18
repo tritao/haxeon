@@ -192,6 +192,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 							rejectNativeBinding(method, abstractDecl.name + "." + method.name);
 			for (abstractDecl in program.abstracts)
 				AbstractProperties.validate(session, abstractDecl);
+			for (classDecl in program.classes)
+				if (classDecl.isExtern != true)
+					StaticProperties.validate(session, classDecl);
 		}
 		for (native in typedNatives)
 			switch native.convention {

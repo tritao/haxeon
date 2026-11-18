@@ -18,8 +18,11 @@ class PropertyWriteRules {
 		check(session, owner, name, false, span);
 	}
 
-	public static function rejectStaticMutation(session:TypingSession, owner:String, name:String, span:SourceSpan):Void
+	public static function rejectStaticMutation(session:TypingSession, owner:String, name:String,
+			span:SourceSpan):Void {
+		StaticProperties.requireAccess(session, owner, name, false, span);
 		check(session, owner, name, true, span);
+	}
 
 	/** A write to the field `name` of `owner` or its base classes: the source reaches it, and its property may be written here. */
 	static function check(session:TypingSession, owner:Null<String>, name:String, isStatic:Bool, span:SourceSpan):Void {
@@ -29,7 +32,7 @@ class PropertyWriteRules {
 		MemberAccess.requireField(session, found.declaration, found.field, span);
 		if (!canWrite(session, found.declaration, found.field))
 			throw new CompileError(new Diagnostic("E1024",
-				'Property "${found.declaration.name}.$name" cannot be written here',
+				'Property "${compiler.semantic.AbstractStatics.displayOwner(found.declaration.name)}.$name" cannot be written here',
 				span));
 	}
 

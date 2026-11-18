@@ -2056,6 +2056,9 @@ class ExpressionTyper {
 			span);
 
 	public function postfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope):TypedExpression {
+		// A static property is read and written through its accessors.
+		if (isStaticProperty(target, scope))
+			return rewrittenPostfixIncrement(target, delta, span, scope);
 		var typedTarget = bodyTyper.typeExpression(target, scope);
 		if (sameType(typedTarget.type, TDynamic) || isNullableNumber(storedType(target, typedTarget, scope)))
 			return rewrittenPostfixIncrement(target, delta, span, scope);
@@ -2133,6 +2136,41 @@ class ExpressionTyper {
 			case TNullable(TInt | TFloat): true;
 			default: false;
 		};
+
+	/** Whether `target` names a static property with an accessor (`StaticProperties`): `count`, `Counter.count`. */
+	function isStaticProperty(target:AstExpression, scope:Scope):Bool {
+		var place:Null<{owner:Null<String>, field:String}> = switch target {
+			case Variable(name, _) if (name.indexOf(".") < 0):
+				scope.resolve(name) != null ? null : {owner: session.currentContext.lexicalOwner, field: name};
+			case Variable(name, variableSpan):
+				var dot = name.lastIndexOf(".");
+				{
+					owner:classReference(Variable(name.substring(0, dot), variableSpan), scope),
+						field:name.substring(dot + 1)
+				};
+			case Member(object = Variable(_, _), field, _): {owner: classReference(object, scope), field: field};
+			default: null;
+		};
+		if (place == null || place.owner == null)
+			return false;
+		var found = bodyTyper.findStaticFieldNullable(place.owner, place.field);
+		return found != null && (StaticProperties.accessor(session, found.owner, place.field, true) != null
+			|| StaticProperties.accessor(session, found.owner, place.field, false) != null);
+	}
+
+	/** The class `object` names (`Counter`, `pack.Counter`), or null when it names a value or nothing. */
+	function classReference(object:AstExpression, scope:Scope):Null<String> {
+		var mark = session.checkpoint();
+		try
+			return switch bodyTyper.typeExpression(object, scope).expression {
+				case TClassRef(className): className;
+				default: null;
+			}
+				catch (_:CompileError) {
+			session.rewind(mark);
+			return null;
+		}
+	}
 
 	/** Whether `object.field` names a property of an abstract (`AbstractProperties`); `object` may name no value at all. */
 	function isAbstractProperty(object:AstExpression, field:String, scope:Scope):Bool {

@@ -17,8 +17,7 @@ typedef AbstractProperty = {
 /**
  * An abstract's properties, `var length(get, never):Int`: an abstract stores nothing but its underlying value, so, as in Haxe, a
  * property is only its accessors. A read calls `get_length` and a write `set_length` on the abstract value; `never` forbids the
- * access. Only instance properties for now: a static property with an accessor is not supported yet (a static variable is
- * stored in the abstract's storage class, `AbstractStatics`).
+ * access. A static variable or property is its storage class's (`AbstractStatics`, `StaticProperties`).
  */
 class AbstractProperties {
 	/** The instance property `name` of the abstract `type` is a value of, or null. */
@@ -64,7 +63,7 @@ class AbstractProperties {
 	 * Where `name` is written in `span`, an access of it: the end of a read's expression (`stack.length`), or the name after the
 	 * receiver in a write's statement (`stack.length = 0`); `span` itself for a bare name (`length` in the abstract's methods).
 	 */
-	static function nameSpan(span:SourceSpan, name:String, read:Bool):SourceSpan {
+	public static function nameSpan(span:SourceSpan, name:String, read:Bool):SourceSpan {
 		var size = haxe.io.Bytes.ofString(name).length;
 		if (read)
 			return span.end - size >= span.start && span.file.slice(span.end - size, span.end) == name
@@ -79,10 +78,9 @@ class AbstractProperties {
 	/** Haxe's checks of an abstract's variables (typeloadFields), in Haxe's words. */
 	public static function validate(session:TypingSession, declaration:AstAbstract):Void {
 		for (field in declaration.fields) {
-			// A static with storage is its storage class's (`AbstractStatics`); one left here has an accessor.
+			// A static is its storage class's (`AbstractStatics`).
 			if (field.isStatic)
-				fail("E1021", 'Static property "${declaration.name}.${field.name}" of an abstract is not supported yet',
-					field.span);
+				continue;
 			if (field.readAccess == null)
 				fail("E1002", "Cannot declare member variable in abstract", field.span);
 			if (!isAccessor(field.readAccess, GetAccess) || !isAccessor(field.writeAccess, SetAccess))

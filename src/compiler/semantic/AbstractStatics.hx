@@ -29,12 +29,12 @@ class AbstractStatics {
 	public static function displayOwner(className:String):String
 		return abstractOf(className) ?? className;
 
-	/** Whether `field` of an abstract is a static variable with storage: a static property with an accessor is not one. */
+	/**
+	 * Whether `field` of an abstract is a static variable, which its storage class keeps: a stored one, or a property whose
+	 * accessors are the abstract's static methods (`StaticProperties`).
+	 */
 	public static function isStored(field:AstField):Bool
-		return field.isStatic && isStorage(field.readAccess) && isStorage(field.writeAccess);
-
-	static function isStorage(access:Null<compiler.syntax.Ast.AstFieldAccess>):Bool
-		return access != GetAccess && access != SetAccess;
+		return field.isStatic;
 
 	/**
 	 * `program` with each abstract's stored statics moved to its storage class, which goes among the module's classes where the

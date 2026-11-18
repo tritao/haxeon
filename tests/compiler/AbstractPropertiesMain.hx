@@ -34,9 +34,12 @@ class AbstractPropertiesMain {
 			STACK
 			+ "public var length(get, never):Int; function get_length() return 0; public function clear():Void length = 0; }",
 			"var stack:Stack = [1]; stack.clear();", "This expression cannot be accessed for writing");
-		expectError("a static property",
-			STACK + "public static var count(get, never):Int; static function get_count() return 0; }", "",
-			'Static property "Stack.count" of an abstract is not supported yet');
+		expectError("a write of a never static property",
+			STACK + "public static var count(get, never):Int; static function get_count() return 0; }",
+			"Stack.count = 1;",
+			"This expression cannot be accessed for writing");
+		expectError("a static property without its getter", STACK + "public static var count(get, never):Int; }", "",
+			"Method get_count required by property count is missing");
 		expectError("a write of a static final", STACK + "public static final step:Int = 2; }", "Stack.step = 3;",
 			'Final static field "Stack.step" cannot be assigned');
 		expectError("a private static", STACK + "static var hidden:Int = 2; }", "var read = Stack.hidden;",

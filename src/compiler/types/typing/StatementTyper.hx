@@ -297,7 +297,10 @@ class StatementTyper {
 				staticField:Null<StaticFieldInfo> = null;
 			if (owner != null)
 				staticField = bodyTyper.findStaticFieldNullable(owner, fieldName);
-			if (staticField != null && ExpressionTyper.isNullableNumber(staticField.type)) {
+			// A nullable number reads null as 0, and a property calls its accessors: both are `target = target + 1`.
+			if (staticField != null && (ExpressionTyper.isNullableNumber(staticField.type)
+				|| StaticProperties.accessor(session, staticField.owner, fieldName, true) != null
+				|| StaticProperties.accessor(session, staticField.owner, fieldName, false) != null)) {
 				var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
 				return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
 			}
@@ -393,8 +396,7 @@ class StatementTyper {
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, name, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
-				refineStaticStore(scope, staticField.owner, name, assignedValue.type, staticField.type);
-				return TStaticFieldAssign(staticField.owner, name, value, span);
+				return staticStore(staticField.owner, name, value, assignedValue.type, staticField.type, span, scope);
 			}
 			var assignedValue = bodyTyper.typeExpression(expression, scope, expected),
 				value = bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002"),
@@ -437,8 +439,7 @@ class StatementTyper {
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
-				refineStaticStore(scope, staticField.owner, fieldName, assignedValue.type, staticField.type);
-				TStaticFieldAssign(staticField.owner, fieldName, value, span);
+				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
@@ -548,8 +549,7 @@ class StatementTyper {
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
 					value = bodyTyper.coerce(assignedValue, staticField.type, 'field "$fieldName"', "E1002");
-				refineStaticStore(scope, staticField.owner, fieldName, assignedValue.type, staticField.type);
-				TStaticFieldAssign(staticField.owner, fieldName, value, span);
+				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
@@ -579,6 +579,16 @@ class StatementTyper {
 				}
 				statement;
 		};
+	}
+
+	/** A store of `value` to the static `name` of `owner`: a call of its setter where it is a property (`StaticProperties`). */
+	function staticStore(owner:String, name:String, value:TypedExpression, assigned:CompilerType, stored:CompilerType,
+			span:SourceSpan, scope:Scope):TypedStatement {
+		var setterCall = StaticProperties.write(session, bodyTyper, owner, name, value, span, scope);
+		if (setterCall != null)
+			return TExpression(setterCall, span);
+		refineStaticStore(scope, owner, name, assigned, stored);
+		return TStaticFieldAssign(owner, name, value, span);
 	}
 
 	/** A store to a static field replaces what earlier null checks said about it, and about anything reached through it. */

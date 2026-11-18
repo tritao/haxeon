@@ -1901,6 +1901,9 @@ class BodyTyper implements BodyTyping {
 	/** A read of a static field, with any branch-local null refinement applied. */
 	function staticFieldValue(owner:String, name:String, type:CompilerType, span:SourceSpan,
 			scope:Scope):TypedExpression {
+		var property = StaticProperties.read(session, this, owner, name, type, span, scope);
+		if (property != null)
+			return property;
 		var field = new TypedExpression(TStaticField(owner, name), type, span),
 			path = FlowAnalysis.accessPath(field),
 			refined = path == null ? null : scope.resolveExpression(path);
@@ -2101,6 +2104,10 @@ class BodyTyper implements BodyTyping {
 				}
 				var staticField = findStaticField(className, name, span);
 				MemberAccess.field(session, staticField.owner, name, true, span);
+				var property = StaticProperties.read(session, this, staticField.owner, name, staticField.type, span,
+					null);
+				if (property != null)
+					return property;
 				var inlineValue = inlineStaticFieldExpression(staticField.owner, name, span);
 				return inlineValue == null ? new TypedExpression(TStaticField(staticField.owner, name),
 					staticField.type, span) : inlineValue;

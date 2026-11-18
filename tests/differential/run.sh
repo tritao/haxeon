@@ -190,6 +190,10 @@ in_background run_compile_failure abstract-from-to-not-chained
 # An abstract's static variables, in Haxe's initialization order (AbstractStatics).
 in_background run_case abstract-statics 0
 in_background run_compile_failure abstract-static-private
+# Static properties with accessors, of a class and of an abstract (StaticProperties).
+in_background run_case static-properties 0
+in_background run_compile_failure static-property-never-write
+in_background run_compile_failure static-property-missing-accessor
 # @:hlNative on a function with a body binds the native; the body is typed and never runs.
 in_background run_case hlnative-body 0
 in_background run_compile_failure hlnative-body-error

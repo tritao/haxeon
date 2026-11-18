@@ -2,6 +2,7 @@ package compiler.semantic;
 
 import compiler.modules.ModuleState;
 import compiler.semantic.SemanticSignature;
+import compiler.syntax.Ast.AstFieldAccess;
 import compiler.types.TypeRegistry;
 import compiler.types.TypeRegistry.TypeCompatibility;
 
@@ -200,8 +201,15 @@ class ModuleChangeAnalyzer {
 				if (field.isStatic) {
 					staticFields.set(fieldName, initializer);
 					if (!state.staticFieldFingerprints.exists(fieldName)
-						|| state.staticFieldFingerprints.get(fieldName) != initializer)
+						|| state.staticFieldFingerprints.get(fieldName) != initializer) {
 						structuralChanged.set('static:$fieldName', true);
+						// An unannotated accessor takes the property's type (`AccessorSignatures`), so its signature changes with
+						// the property's declaration; a read or write of the property calls it (`StaticProperties`).
+						if (field.readAccess == GetAccess)
+							signatureChanged.set(className + ".get_" + field.name, true);
+						if (field.writeAccess == SetAccess)
+							signatureChanged.set(className + ".set_" + field.name, true);
+					}
 				} else {
 					instanceInitializers.set(fieldName, initializer);
 					if (!state.instanceInitializerFingerprints.exists(fieldName)
