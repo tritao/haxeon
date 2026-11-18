@@ -80,6 +80,7 @@ committed; status is `done`, `active` or `queued`. The declaration model it rest
 | Documentation cleanup into `docs/history/` | a1 | `a1-internals` | done (2026-11-12) |
 | §13 reachability walk over declared providers, pruning before the passes, one frontend pass | dev-c5 | `warm-rebuild-reuse` | queued; waits on the §13 design decisions |
 | Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/design/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
+| M2 framework commit (interface, view, opaque step, check mode; step 1 of the order below), then the (a) ports of step 2 | haxeon-e4 | `main` | active (claimed 2026-11-18) |
 | Cold-build performance and the measure and gate scripts (`scripts/measure-cold.sh`, `scripts/gate.sh`) | dev-c5 | `warm-rebuild-reuse` | active |
 | The provider model itself (`IrFunctionKind`, `ProviderOperation`, the provider table and its checks); a1 adds families to it, changes to the model go through dev-c5 | dev-c5 | `warm-rebuild-reuse` | active |
 | HashLink allocator refill path: word-at-a-time scan of the mark bitmap in `flush_free_list` (fixed-class pages), then the TLAB run size; both measured with `scripts/measure-cold.sh` | dev-c5 | `haxeon/flush-word-scan` in `vendor/hashlink` (off 875bc1d25) | active (claimed 2026-11-11) |
@@ -151,6 +152,27 @@ The two builds differ in 625 retyped functions out of about 34 000, and no pass 
 with a temporary per instruction plus a name map of all functions (`IrCheckedDynamicCasts.rewrite` builds `known` from every
 function name); I have not profiled it. If it is one shared helper (instruction iteration), fixing it is a day of work and removes
 most of those 17M before any pass is ported.
+
+## Edit time on the compiler's own sources (2026-11-18)
+
+A Haxeon-built compile server (release) compiling the compiler: cold 19.2 s, no-op 1.3 s (IR and module reused), a one-string edit
+in `Lexer.hx` 6.7 to 7.3 s with 5 functions retyped. CPU samples of that edit: the assembly stages take 40%, the target stages 26%,
+the HashLink backend 18% (already incremental), typing 5%. The passes rerun over all ~8,200 functions; per stage, in seconds:
+
+| stage | s | stage | s | stage | s |
+|---|---|---|---|---|---|
+| inlineEnums | 0.58 | entryPrune | 0.23 | enumSpecializations | 0.13 |
+| verifier | 0.30 | enumDynamicDispatch | 0.20 | genericOwnerErasure | 0.12 |
+| runtimeSurface | 0.29 | closedEnumTagAbi | 0.19 | assemblyEnumTagEscapes | 0.12 |
+| valueArrayRewrite | 0.28 | enumTagLowering | 0.18 | enumTagEscapes | 0.09 |
+| inliner | 0.25 | scalarArguments | 0.18 | valueDynamicDispatch | 0.08 |
+| dispatchWalk | 0.25 | nullableScalarFlow | 0.14 | valuePhiScalarization | 0.08 |
+| | | scalarClosures | 0.14 | the rest | under 0.08 each |
+
+No stage dominates, so the gain comes from the framework applied to many passes, not from one port: an edit should rerun each
+pass on the changed functions and the cone its summary reaches, and reuse the rest. The first no-op after a cold build also
+reran everything, because a warm build lists one fewer anonymous type (`reused: none (environment: reflectable
+-$anon:{bytes:Bytes,tag:Int})`); that is a typer fix, handed to its owner.
 
 ## Classes
 
