@@ -12,7 +12,7 @@ import haxeon.ui.core.WidgetId;
 import haxeon.ui.theme.Theme;
 
 @:access(haxeon.ui.core.BuildContext)
-@:access(haxeon.ui.core.BuildContext.SelfUpdatingBuild)
+@:access(haxeon.ui.core.SelfUpdatingBuild)
 class ReactivePruneSmoke {
 	static function install(context:BuildContext, source:Signal<Int>, id:Int):SelfUpdatingBuild {
 		var capture = new Dependencies(true);

@@ -51,6 +51,7 @@ class RenderPassDesc {
 	}
 
 	@:allow(haxeon.gpu.Renderer)
+	@:allow(haxeon.gpu.Batch)
 	function nativeValue():nkgpu_render_pass_desc {
 		var value = new nkgpu_render_pass_desc();
 		value.set_struct_size(nkgpu_render_pass_desc.size());

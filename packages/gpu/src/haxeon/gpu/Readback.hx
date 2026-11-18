@@ -123,6 +123,7 @@ class ReadbackInfo {
 		this.height = height;
 	}
 
+	@:allow(haxeon.gpu.Readback)
 	static function fromNative(value:nkgpu_readback_info):ReadbackInfo
 		return new ReadbackInfo(value.get_state(), value.get_size(), value.get_row_pitch(),
 			value.get_width(), value.get_height());

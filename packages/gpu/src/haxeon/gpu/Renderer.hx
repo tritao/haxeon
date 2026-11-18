@@ -317,30 +317,35 @@ class Renderer {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(Buffer, Image, Sampler, Shader, Pipeline, Readback, Timestamp, Batch, CommandBuffer, Uniforms,
-		SurfaceFrame)
+	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.Pipeline,
+		haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch, haxeon.gpu.CommandBuffer, haxeon.gpu.Uniforms,
+		haxeon.gpu.SurfaceFrame)
 	function ensureFrame():Void {
 		ensureLive();
 		if (!frameActive)
 			throw BindingError.invalidState("Renderer.ensureFrame", "GPU operation requires an active frame");
 	}
 
-	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Timestamp, Batch,
-		CommandBuffer, Uniforms, SurfaceFrame)
+	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.ShaderBuilder,
+		haxeon.gpu.Pipeline, haxeon.gpu.PipelineBuilder, haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch,
+		haxeon.gpu.CommandBuffer, haxeon.gpu.Uniforms, haxeon.gpu.SurfaceFrame)
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("Renderer.ensureLive", "GPU renderer has been disposed");
 	}
 
-	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Timestamp, Batch,
-		Uniforms, SurfaceFrame)
+	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.ShaderBuilder,
+		haxeon.gpu.Pipeline, haxeon.gpu.PipelineBuilder, haxeon.gpu.Readback, haxeon.gpu.Timestamp, haxeon.gpu.Batch,
+		haxeon.gpu.Uniforms, haxeon.gpu.SurfaceFrame)
 	function registerResource(release:Void->Void):haxeon.platform.DisposalRegistration {
 		ensureLive();
 		return resources.register(release);
 	}
 
-	@:allow(Buffer, Image, Sampler, Shader, ShaderBuilder, Pipeline, PipelineBuilder, Readback, Batch,
-		Uniforms, SurfaceFrame)
+	@:allow(haxeon.gpu.Buffer, haxeon.gpu.Image, haxeon.gpu.Sampler, haxeon.gpu.Shader, haxeon.gpu.ShaderBuilder,
+		haxeon.gpu.Pipeline, haxeon.gpu.PipelineBuilder, haxeon.gpu.Readback, haxeon.gpu.Batch,
+		haxeon.gpu.Uniforms, haxeon.gpu.SurfaceFrame)
+	@:allow(haxeon.gpu.Timestamp)
 	function ensureResourceOperation():Void {
 		ensureLive();
 		if (frameActive)

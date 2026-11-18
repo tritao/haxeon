@@ -133,7 +133,8 @@ class Buffer {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(CommandBuffer, Renderer)
+	@:allow(haxeon.gpu.CommandBuffer, haxeon.gpu.Renderer)
+	@:allow(haxeon.gpu.Readback)
 	function rendererOwner():Renderer
 		return renderer;
 

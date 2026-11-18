@@ -119,7 +119,7 @@ class Image {
 	public function isDisposed():Bool
 		return disposed;
 
-	@:allow(CommandBuffer, Renderer, Readback)
+	@:allow(haxeon.gpu.CommandBuffer, haxeon.gpu.Renderer, haxeon.gpu.Readback)
 	function rendererOwner():Renderer
 		return renderer;
 

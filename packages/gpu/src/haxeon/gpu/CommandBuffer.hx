@@ -35,6 +35,7 @@ class CommandBuffer {
 		return length;
 
 	@:allow(haxeon.gpu.Renderer)
+	@:allow(haxeon.gpu.Batch)
 	function ensureRenderer(owner:Renderer):Void {
 		if (renderer != owner)
 			throw BindingError.invalidArgument("CommandBuffer.ensureRenderer",

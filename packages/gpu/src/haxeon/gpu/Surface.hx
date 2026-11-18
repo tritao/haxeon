@@ -102,6 +102,7 @@ class Surface {
 	function windowOwner():Window
 		return window;
 
+	@:allow(haxeon.gpu.SurfaceFrame)
 	function ensureLive():Void {
 		if (disposed)
 			throw BindingError.disposed("Surface.ensureLive", "GPU surface has been disposed");

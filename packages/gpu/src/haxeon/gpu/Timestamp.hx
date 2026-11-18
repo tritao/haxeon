@@ -103,6 +103,7 @@ class TimestampInfo {
 		this.nanoseconds = nanoseconds;
 	}
 
+	@:allow(haxeon.gpu.Timestamp)
 	static function fromNative(value:nkgpu_timestamp_info):TimestampInfo
 		return new TimestampInfo(value.get_state(), value.get_nanoseconds());
 }

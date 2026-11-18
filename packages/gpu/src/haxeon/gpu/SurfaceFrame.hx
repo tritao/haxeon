@@ -23,6 +23,7 @@ class SurfaceFrame {
 	final target:Dynamic;
 	var finished:Bool = false;
 
+	@:allow(haxeon.gpu.Surface)
 	function new(surface:Surface, value:Dynamic, target:Dynamic) {
 		this.surface = surface;
 		this.value = value;

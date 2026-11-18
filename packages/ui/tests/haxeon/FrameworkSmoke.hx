@@ -259,6 +259,8 @@ import haxeon.ui.host.UiHostRuntime;
 import haxeon.ui.host.UiApplication;
 import haxeon.ui.host.UiHostPendingResources;
 
+@:access(haxeon.ui.core.TextInputBridge)
+@:access(haxeon.platform.event.EventPump)
 class FrameworkSmoke {
 	@:access(haxeon.ui.core.UiContext) static function decorationNormalizationValid(fonts:FontCollection):Bool {
 		var session = LayoutSession.create();
