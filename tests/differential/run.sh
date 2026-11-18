@@ -329,6 +329,10 @@ in_background run_compile_failure structure-open-literal-returned
 in_background run_compile_failure structure-declared-no-gain
 in_background run_compile_failure generic-enum-constructor-mixed-arguments
 in_background run_compile_failure tuple-switch-missing-case
+# A tuple switch statement may leave values of its first decided Int or String element unmatched, as Haxe's matcher allows.
+in_background run_case tuple-switch-statement-open 0
+in_background run_compile_failure tuple-switch-statement-later-gap
+in_background run_compile_failure tuple-switch-statement-constructor-gap
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure switch-bool-missing

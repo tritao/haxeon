@@ -51,7 +51,7 @@ class TupleSwitch {
 	 * switch's unreachable fallback, which throws.
 	 */
 	public static function unmatched(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
-			arms:Array<TypedSwitchArm>):Null<String> {
+			arms:Array<TypedSwitchArm>, statement:Bool = false):Null<String> {
 		var rows:Array<Array<TypedSwitchArrayElement>> = [];
 		for (arm in arms)
 			if (arm.guard == null) {
@@ -60,19 +60,26 @@ class TupleSwitch {
 					return null;
 				rows.push(pattern.elements);
 			}
-		var witness = missing(session, bodyTyper, types, rows, 0);
+		var witness = missing(session, bodyTyper, types, rows, 0, statement);
 		return witness == null ? null : '[${witness.join(", ")}]';
 	}
 
 	static function missing(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
-			rows:Array<Array<TypedSwitchArrayElement>>, column:Int):Null<Array<String>> {
+			rows:Array<Array<TypedSwitchArrayElement>>, column:Int, statement:Bool):Null<Array<String>> {
 		if (column == types.length)
 			return rows.length > 0 ? null : [];
 		var type = types[column],
 			values = finiteValues(session, bodyTyper, type),
 			wildcards = [for (row in rows) if (row[column].isCatchAll) row];
+		if (statement && values == null && wildcards.length < rows.length) {
+			var named = statementColumn(session, bodyTyper, types, rows, column);
+			if (named != null)
+				return named.witness;
+		}
 		if (values == null || wildcards.length == rows.length) {
-			var rest = missing(session, bodyTyper, types, wildcards, column + 1);
+			// A column every row leaves open is no decision: the next one is still the statement's first.
+			var rest = missing(session, bodyTyper, types, wildcards, column + 1,
+				statement && wildcards.length == rows.length);
 			return rest == null ? null : ["_"].concat(rest);
 		}
 		for (value in values) {
@@ -82,7 +89,7 @@ class TupleSwitch {
 					&& matches(bodyTyper, row[column], value))
 					row
 			],
-				rest = missing(session, bodyTyper, types, full, column + 1);
+				rest = missing(session, bodyTyper, types, full, column + 1, false);
 			if (rest == null)
 				continue;
 			if (value.constructorIndex >= 0) {
@@ -98,6 +105,39 @@ class TupleSwitch {
 			return [value.name].concat(rest);
 		}
 		return null;
+	}
+
+	/**
+	 * The first column a statement decides on, when its type has infinitely many values (Int, String), as Haxe's matcher reads it
+	 * (`matcher.ml`, `Toplevel`): the values its cases name must each be covered by the rows that match them, but a value no case
+	 * names need not be, so such a tuple runs no case. A later column, and any column of a switch used as a value, must be
+	 * covered. Null when a case's pattern there is no constant, for which the column is checked as a value's.
+	 */
+	static function statementColumn(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
+			rows:Array<Array<TypedSwitchArrayElement>>, column:Int):Null<{witness:Null<Array<String>>}> {
+		var keys:Array<String> = [];
+		for (row in rows) {
+			var element = row[column];
+			if (element.isCatchAll)
+				continue;
+			var key = element.value == null
+				|| element.predicates.length > 0 ? null : valueKey(bodyTyper, element.value);
+			if (key == null)
+				return null;
+			if (keys.indexOf(key) < 0)
+				keys.push(key);
+		}
+		for (key in keys) {
+			var matching = [
+				for (row in rows)
+					if (row[column].isCatchAll || valueKey(bodyTyper, row[column].value) == key)
+					row
+			],
+				rest = missing(session, bodyTyper, types, matching, column + 1, false);
+			if (rest != null)
+				return {witness: [key.substr(key.indexOf(":") + 1)].concat(rest)};
+		}
+		return {witness: null};
 	}
 
 	static function finiteValues(session:TypingSession, bodyTyper:BodyTyping,

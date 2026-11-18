@@ -955,13 +955,15 @@ class StatementTyper {
 			});
 		}
 		if (tupleTypes != null && !hasDefault) {
-			var unmatched = TupleSwitch.unmatched(session, bodyTyper, tupleTypes,
-				[for (typedCase in typedCases) typedCase.arm]);
+			var arms = [for (typedCase in typedCases) typedCase.arm],
+				unmatched = TupleSwitch.unmatched(session, bodyTyper, tupleTypes, arms, true);
 			if (unmatched == null)
-				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes,
-					[for (typedCase in typedCases) typedCase.arm]);
+				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes, arms);
 			if (unmatched != null)
 				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
+			// A statement may leave values of an Int or String element unmatched, as in Haxe: such a tuple runs no case.
+			if (TupleSwitch.unmatched(session, bodyTyper, tupleTypes, arms) != null)
+				hasDefault = true;
 		}
 		if (BodyTyper.isEnum(typedExpression.type) && !hasDefault && !seenCases.exists("$catchall")) {
 			var enumName = Std.string(BodyTyper.enumName(typedExpression.type));

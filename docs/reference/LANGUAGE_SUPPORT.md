@@ -17,6 +17,10 @@ The current subset includes:
   not match `null`, as one over a `Null<Enum>` need not: a null its arms leave throws "Null access" (Haxe 4.3.7 on
   HashLink leaves it unmatched and goes on past the switch). A value pattern matches a nullable enum abstract argument
   by name (`case Maybe(A):`), and naming every value there covers the constructor, as naming every constructor does.
+- A tuple switch (`switch [a, b]`) without a default covers every tuple when it is used as a value. As a statement it follows
+  Haxe's matcher: the first element it decides on may leave values of an Int or String unmatched (such a tuple runs no case),
+  but the values its cases name must each be covered in the later elements, and an enum or Bool element must be covered
+  constructor by constructor (`E1021` names a missing tuple, `[1, Circle]`).
 - A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
   and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
   default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`
