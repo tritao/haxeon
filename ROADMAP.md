@@ -6,7 +6,7 @@ oracle only; it is not part of a normal build.
 
 This file tracks the compiler, runtime and editor gates toward converting the Pragtical editor. Language features are
 planned in [docs/design/LANGUAGE_ROADMAP.md](docs/design/LANGUAGE_ROADMAP.md). What the language supports, and the ordinary Haxe it
-does not yet compile, is in [docs/reference/LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md). Status as of 2026-11-15.
+does not yet compile, is in [docs/reference/LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md). Status as of 2026-11-18.
 
 ## Architecture
 
@@ -45,7 +45,9 @@ What the Wasm backends cover is in [docs/reference/WASM_BACKEND.md](docs/referen
   `Type.getClass`/`getClassName`.
 - [~] Typed storage for the standard reference maps and nullable-element arrays, and inline `Null<T>` through the callable
   ABI ([LANGUAGE_ROADMAP.md](docs/design/LANGUAGE_ROADMAP.md#order), items 7 and 8).
-- [ ] Width subtyping for anonymous structures (needs a design document).
+- [ ] Width subtyping for anonymous structures. Designed in [STRUCTURE_VALUES.md](docs/design/STRUCTURE_VALUES.md)
+  (architecture plan step 2.6); an object literal's structure stays open while its unit is typed (`5598a3dfc`), but a
+  wider structure where a narrower one is expected is still rejected.
 
 ### B. Incremental compiler service
 
@@ -78,7 +80,9 @@ served over LSP (`scripts/haxeon-lsp`) and the JSON-lines protocol.
 
 - [~] Navigation follows compiler symbol identity for locals, members and imported functions; full type-aware navigation
   remains.
-- [~] Editing recovers through last-good snapshots; true partial parsing of incomplete code remains.
+- [~] Editing recovers through last-good snapshots; true partial parsing of incomplete code remains. A type error now
+  drops only its function body, and the rest of the module keeps its typed information (`7baff2763`); inside the failed
+  body the service still falls back to syntax.
 
 ### E. Self-hosting and release
 
@@ -87,7 +91,7 @@ byte-identical; CI checks that the sources build themselves to a fixed point (`s
 is checked in and refreshed by `bootstrap-compiler.sh`; `bootstrap-compiler.sh --self` says whether it is still that fixed
 point, which no CI step requires.
 
-- [~] The differential suite compares official Haxe and Haxeon on ten paired programs (`tests/differential`); collections,
+- [~] The differential suite compares official Haxe and Haxeon on 92 paired programs (`tests/differential`); collections,
   diagnostics and reload classification need more coverage.
 
 ### F. UI library

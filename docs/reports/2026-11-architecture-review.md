@@ -314,7 +314,10 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   delete the matching look-ahead walker each time. Each case gets a differential test against Haxe. Effort L, high
   risk.
 - **2.4 Error recovery.** The typer records the diagnostic, produces an error-typed node and continues. Then delete
-  the language service's approximate typer. Effort L.
+  the language service's approximate typer. Effort L. Recovery landed on 2026-11-17 (`7baff2763`): a function body or
+  field initializer that fails is dropped and typing continues, with one diagnostic per failed body. Deleting the
+  approximate typer remains: a failed body has no typed information, so the language service still falls back to syntax
+  inside it. Typing the parser's repaired syntax with the real typer is recommended, not yet decided.
 - **2.5 Lazy declaration typing** (added 2026-11-17, design in
   [LAZY_DECLARATION_TYPING.md](../design/LAZY_DECLARATION_TYPING.md)). An unannotated field's type and an unannotated
   function's return and argument types are those of its typed initializer or body, typed once, on demand, in its own
@@ -324,7 +327,9 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   types syntactic. Six slices: the query, byte-identical; invalidation; fields; returns and arguments; deletion; early
   cutoff with ADR 0003 M4. Gate: differential tests against Haxe 4.3.7, warm-edit tests for inferred types, and
   `--reverse-typing-order` byte-identical. Effort L, high risk. Slices 1 to 5 landed on 2026-11-17 (`SignatureInference` and
-  `FieldInference` are deleted); slice 6 waits for M4.
+  `FieldInference` are deleted); slice 6 waits for M4. Commits: slice 1 `0c85b037c`, `eb9ed3b52`; slice 2 `6a653ad61`;
+  slice 3 `efdaf6da1`; slice 4 `a612f7495`, with the fix `60f3e8afd` and warm seeding `bb45eba08`; slice 5 `c64394dd5`,
+  `9791f07f5`, `6c8da8ebc`, `5999d81e4`, `ce0f9ab00`.
 - **2.6 Open anonymous types and structure values** (added 2026-11-18, design in
   [STRUCTURE_VALUES.md](../design/STRUCTURE_VALUES.md)). An object literal's structure stays open while its unit is
   typed and gains the optional fields of the structures it meets, as in Haxe; it is closed and named when the unit's
@@ -335,16 +340,20 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   the reverted copy-based widening of `c618c16d8`. Two tracks: representation (haxeon-e4: census, `Structure(S)`,
   dispatchers, erased owners) and typing (open literals, then the deletion), joined by the relations slice. Gate:
   differential tests against Haxe 4.3.7, `--reverse-typing-order` byte-identical, warm and live structure edits, the
-  self-compile no slower than noise and nbody within 3%. Effort L, high risk.
+  self-compile no slower than noise and nbody within 3%. Effort L, high risk. The design and the user's decisions are
+  recorded (`2b28b4c8e`, `6232eb09c`). Slice 0, the revert, landed on 2026-11-17 (`65810ae26`), and slice 5, open literal structures, on
+  2026-11-18 (`5598a3dfc`). The representation track (haxeon-e4) and slice 6 are in progress.
 
 ### Phase 3: service
 
 - **3.1 `project.CompilerInputs.of(project, layout)`** consumed by build and LSP; the LSP resolves with the lockfile
-  in no-network mode. Effort M.
+  in no-network mode. Effort M. Landed on 2026-11-17 (`7a495d9c9`).
 - **3.2 Remove the legacy CLI path.** Delete `HaxeonCli.loadConfig`; route wasm32 and Android through the structured
-  build. Depends on 1.5. Effort M.
+  build. Depends on 1.5. Effort M. Landed on 2026-11-17: wasm32 in `f2e1ac922`, Android in `ce88bb128`
+  ([ANDROID_BUILD.md](../design/ANDROID_BUILD.md)).
 - **3.3 Shared protocol types.** One module of typed request and response definitions used by `CompilerClient` and
-  `CompilerServer`. Effort S. The single service process per project follows later, after 1.6, with its own design.
+  `CompilerServer`. Effort S. Landed on 2026-11-17 (`2326504cc`, `CompilerServerProtocol`). The single service process
+  per project follows later, after 1.6, with its own design.
 
 ### Phase 4: `packages/ui`
 

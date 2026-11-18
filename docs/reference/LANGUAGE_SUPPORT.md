@@ -56,7 +56,9 @@ The current subset includes:
   module's in declaration order, after the classes their static initialization reaches (a base class, and the classes
   whose statics, static methods or constructors it uses). A static read before its initializer runs reads its default
   (`0`, `false`, `null`), and initializers that read each other in a cycle compile, as in Haxe.
-- Exceptions
+- Exceptions. `haxe.Exception`'s `details()` and `stack`, and `haxe.CallStack`, print Haxe's HashLink format, except
+  that a static method's frame names its class in the `$Class` form, a lambda's frame has another name, and inlined
+  frames differ.
 - Simple `typedef` aliases and generics, including typedefs of anonymous structures that refer to themselves
   (`typedef Tree = {children:Array<Tree>}`), directly, through `Null<>`, in pairs, or per generic instantiation.
 - A generic class or interface with a concrete type argument is accepted where the same type with `Dynamic` is expected
@@ -175,6 +177,8 @@ HashLink):
   return type.
 - A lowercase name in a pattern that is also a function or variable in scope is read as that value instead of capturing
   (`case Box(size):` beside a function `size`). Haxe captures; rename the binding.
+- Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
+  Reported on 2026-11-17 (not verified on current main).
 
 Stricter than Haxe:
 
@@ -188,6 +192,8 @@ value stays null), and a warning can point out a surprising case.
   instance as key) have no Haxeon equivalent yet; one is planned.
 - A statement after a `try` whose every branch returns is `E1012` (unreachable); Haxe accepts it. This one does not meet
   the rule, so it is due to become a warning.
+- A duplicate switch case is `E1020` ("Duplicate switch case"); Haxe warns that the case is unused and compiles. This
+  one does not meet the rule either.
 
 An unannotated field's type is its initializer's, and an unannotated function's result and arguments are what its body
 gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must

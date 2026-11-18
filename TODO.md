@@ -89,6 +89,71 @@ Longer-term direction is in `ROADMAP.md`.
   It reads plain JSON, never `sokol-shdc`'s YAML. Writing shaders in Haxeon
   itself is a deferred plan in [docs/design/SHADERS.md](docs/design/SHADERS.md).
 
+## Compiler follow-ups
+
+Open items from the architecture plan's typer and service steps
+(`docs/reports/2026-11-architecture-review.md`, phases 2 and 3).
+The repeated type test after `__exception_matches` and typed payloads for
+regular recursive generic enums are in the next section.
+
+- **An interface met through an inherited inferred method is not re-checked.**
+  When a class implements an interface through a method it inherits, and that
+  method's inferred signature changes, a warm build does not check the
+  implementation again. Untested; left over from step 2.5
+  ([LAZY_DECLARATION_TYPING.md](docs/design/LAZY_DECLARATION_TYPING.md)).
+- **Root cause of `ce0f9ab00`.** That commit fixed a failure seen only under
+  the self-hosted compiler by marking a function inferred where the signature
+  table holds it too. Why it failed is not fully understood; object identity
+  across `SemanticProgram.replaceBodies` is the suspect.
+- **Generic code is typed twice.** Step 2.5 types a generic class's field
+  initializer again with its parameters when its type mentions Dynamic
+  (`ProgramTyper.mentionsDynamic`, slice 3), and types a generic function's
+  body a second time for its signature only (slice 4, `a612f7495`, and
+  `5999d81e4`). Type it once, with the code's own type parameters, and erase
+  at lowering. This was the root of the regression fixed in `60f3e8afd`; it
+  belongs with step 2.6 ([STRUCTURE_VALUES.md](docs/design/STRUCTURE_VALUES.md)).
+- **CLI usage errors are `InternalError`.** An unknown option or a missing
+  argument (`HaxeonCli`, `LintCommand`) throws
+  `compiler.core.InternalError` since `24db87fe1`. Add a `UsageError` so a
+  user's mistake is not reported as a compiler failure.
+- **`haxe.io.Error.Blocked` became `InternalError("Blocked")`.** `24db87fe1`
+  changed `ProcessOutputCapture.read`. Blocked is a control-flow signal, not a
+  failure: throw the enum value again.
+- **Lint rules cannot type many stdlib modules.** `LintMain` types each file
+  through the language service, which fails on many stdlib modules with
+  "Duplicate type name". Run the typed rules (`unbound-local`,
+  `throw-non-exception`) on the build's own compilation instead.
+- **`@:pure` is written by hand on `haxe.Exception`.** Its constructor and its
+  caching `stack` getter carry it (`stdlib/haxe/Exception.hx`, `0db84ca90`).
+  Natives should declare their effects, so purity inference derives this.
+- **Android: a body patch after a domain reload crashes.** The app gets SIGSEGV
+  in `hl_alloc_obj` under `string_from_f64`. The patch bytes are the same as
+  the old build path's, so the cause is in the host or runtime, not in
+  `ce88bb128`. Not filed.
+- **Android: a rejected edit leaves the server session ahead of the device.**
+  The next edit is correct but cold. A refusal that reports the device's
+  revision, as `LiveRefusal` does for the desktop host, would let the session
+  take the edit back ([ANDROID_BUILD.md](docs/design/ANDROID_BUILD.md)).
+- **`test-dap-hot-reload.sh` cannot run here.** It is rewritten
+  (`tests/integration/test-dap-hot-reload.sh`) but needs haxelib and neko, and
+  the vendor Makefile no longer links, so it stays in `tests/unregistered.txt`.
+  It relies on dap-cli 0.3.0's undocumented `__dapCliInitialBreakpoints`.
+- **A shared helper's owning module is its first requester's.** `ff7e29aac`
+  gave a helper its subject's span, but its origin is still the first unit
+  that asked for it. Fixing it needs the invalidation work in
+  [HELPER_OWNERSHIP.md](docs/design/HELPER_OWNERSHIP.md) (ADR 0003 M4).
+- **Delete the language service's approximate typer (step 2.4, last piece).**
+  Since `7baff2763` a failed body is dropped and the rest is typed, but a
+  failed body has no typed information, so completion inside the function
+  being edited, and in a module that does not parse, still uses the syntax
+  fallback. Recommended: type the parser's repaired syntax with the real
+  typer. Not yet decided.
+
+### Known differences from Haxe still open
+
+The Haxe code Haxeon rejects or runs differently is listed in
+[LANGUAGE_SUPPORT.md](docs/reference/LANGUAGE_SUPPORT.md#not-yet-supported).
+
 ## Generated code, HashLink and Wasm (haxeon-e4's lane)
 
 Planned in this order unless noted. Timings so far were taken on a loaded
