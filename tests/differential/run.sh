@@ -345,12 +345,18 @@ in_background run_case structure-patterns 0
 in_background run_compile_failure structure-pattern-missing-constructor
 in_background run_compile_failure structure-pattern-value-missing
 in_background run_compile_failure structure-pattern-unknown-field
+# `case null` beside structure patterns; a switch of `_`, names and `null` over any value.
+in_background run_case structure-null-case 0
+in_background run_compile_failure structure-pattern-null-missing
 # Extractor patterns match as nested switches (src/compiler/types/typing/ExtractorPatterns.hx).
 in_background run_case extractor-patterns 0
 in_background run_compile_failure extractor-pattern-value-missing
 in_background run_compile_failure extractor-pattern-missing-constructor
-# A whole-case extractor on a tuple switch reads no value (Haxe's `_` there is the tuple).
+# A whole-case extractor on a tuple switch reads no value; an element's does (extractor-nested).
 in_background run_compile_failure extractor-tuple-whole
+# Extractors nested in a pattern match under it, sharing their evaluation as Haxe does.
+in_background run_case extractor-nested 0
+in_background run_compile_failure extractor-nested-missing
 # Indexing a Dynamic value reads and writes the array it holds (haxeon.DynamicOps.index, setIndex).
 in_background run_case dynamic-index 0
 in_background run_compile_failure dynamic-index-string-key

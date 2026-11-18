@@ -1660,32 +1660,49 @@ class ExpressionTyper {
 			defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		// Extractor cases match as nested switches (`ExtractorPatterns`).
-		if (ExtractorPatterns.present([for (switchCase in cases) switchCase.value]))
+		if (ExtractorPatterns.present([for (switchCase in cases) switchCase.value])) {
+			for (capture in ExtractorPatterns.captures([for (switchCase in cases) switchCase.value]))
+				bodyTyper.rejectMatchPatternVariable(capture);
 			return bodyTyper.typeExpression(ExtractorPatterns.rewriteExpression(expression, cases, defaultExpression,
 				span),
 				scope, expectedType);
+		}
 		// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
 		if (StructurePatterns.present([for (switchCase in cases) switchCase.value])) {
-			var rewritten = StructurePatterns.rewrite(expression, [for (switchCase in cases) switchCase.value], span),
-				switchExpression = SwitchExpression(rewritten.subject, [for (index in 0...cases.length)
-					{
-						value:rewritten.values[index],
-							guard:cases[index].guard,
-							result:cases[index].result,
-							span:cases[index].span
-					}], defaultExpression, span);
-			return bodyTyper.typeExpression(rewritten.temporary == null ? switchExpression : BlockExpression([
-				rewritten.temporary
-			], switchExpression, span), scope, expectedType);
+			var rewrite = StructurePatterns.rewriteExpression(expression, cases, defaultExpression, span);
+			var typed:TypedExpression;
+			bodyTyper.enterStructureSwitch(span, rewrite.columns);
+			try
+				typed = bodyTyper.typeExpression(rewrite.rewritten, scope, expectedType)
+			catch (error:haxe.Exception) {
+				bodyTyper.leaveStructureSwitch();
+				throw error;
+			}
+			bodyTyper.leaveStructureSwitch();
+			return typed;
 		}
 		var tupleElements = TupleSwitch.subjectElements(expression),
 			typedSubject = tupleElements == null ? bodyTyper.typeExpression(expression,
 				scope) : TupleSwitch.typeSubject(bodyTyper, tupleElements, span, scope),
 			tupleTypes = TupleSwitch.elementTypes(typedSubject),
 			constantType = bodyTyper.switchConstantType(typedSubject.type);
+		var wholeValue = false;
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedSubject.type)
-			&& !BodyTyper.isEnum(typedSubject.type))
-			fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedSubject.span);
+			&& !BodyTyper.isEnum(typedSubject.type)) {
+			if (!TupleSwitch.wholeValueCases([for (switchCase in cases) switchCase.value]))
+				fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedSubject.span);
+			// `_`, names and `null` match any value: as the tuple of that one value (`TupleSwitch.wholeValueCases`).
+			typedSubject = TupleSwitch.wholeValue(typedSubject);
+			wholeValue = true;
+			tupleTypes = TupleSwitch.elementTypes(typedSubject);
+			cases = [for (switchCase in cases)
+				{
+					value:TupleSwitch.wholeValuePattern(switchCase.value),
+						guard:switchCase.guard,
+						result:switchCase.result,
+						span:switchCase.span
+				}];
+		}
 		var typedCases:Array<TypedSwitchExpressionCase> = [],
 			deferredCaseResults:Map<Int, {expression:AstExpression, scope:Scope}> = [],
 			deferredDefault:Null<{expression:AstExpression, scope:Scope}> = null,
@@ -1826,7 +1843,8 @@ class ExpressionTyper {
 				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes,
 					[for (typedCase in typedCases) typedCase.arm]);
 			if (unmatched != null)
-				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
+				fail("E1021", TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
+					span);
 		} else if (typedDefault == null && !seenCases.exists("$catchall")) {
 			// A switch over Bool covers `true` and `false`; one over Null<Bool> need not match null (it reads as false).
 			if (isBoolSwitch(typedSubject.type)) {

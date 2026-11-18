@@ -85,6 +85,10 @@ interface BodyTyping {
 
 	// Switch rules, shared by statement switches and switch expressions.
 	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchCasePattern;
+	function rejectMatchPatternVariable(span:SourceSpan):Void;
+	function enterStructureSwitch(span:SourceSpan, columns:Array<String>):Void;
+	function leaveStructureSwitch():Void;
+	function structureSwitchColumns(span:SourceSpan):Null<Array<String>>;
 	function switchTuplePattern(value:AstExpression, elementTypes:Array<CompilerType>, caseSpan:SourceSpan,
 			scope:Scope):SwitchCasePattern;
 

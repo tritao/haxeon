@@ -612,6 +612,13 @@ class TestMain {
 			'Enum abstract switch is missing values: B');
 		expectCompileError('function pick(n:Null<Float>):Int return switch n { case 1.5: 1; default: 0; }; function main():Int return pick(null);',
 			'Switch requires an Int, String, Bool, array, or enum value');
+		// E1021 names the missing case as the switch wrote it: a tuple, a structure of the fields its patterns read, or one value.
+		expectCompileError('enum E { A; B; } function main():Int { var a = A, b = B; return switch [a, b] { case [A, _]: 1; case [B, A]: 2; }; }',
+			'Tuple switch is missing cases: [B, B]');
+		expectCompileError('enum E { A; B; } function main():Int { var item = {e: A, n: 1, at: {e: B}}; return switch item { case {e: A, at: {e: _}}: 1; case {e: B, at: {e: A}}: 2; }; }',
+			'Structure switch is missing cases: {e: B, at: {e: B}}');
+		expectCompileError('class P { public function new() {} } function main():Int { var p:Null<P> = new P(); return switch p { case null: 1; }; }',
+			'Switch is missing cases: _');
 		// A capture still matches its pattern, so it neither ends the switch nor binds outside it.
 		expectCompileError('enum E { A(value:Int); B; } function main():Int { var e = A(1); return switch e { case all = A(_): 1; }; }',
 			'Enum switch is missing cases: B');

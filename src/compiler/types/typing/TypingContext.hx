@@ -52,6 +52,9 @@ class TypingContext {
 
 	public var loopDepth:Int = 0;
 
+	/** The switches with structure patterns being typed, by span, with the fields their tuples read (`StructurePatterns`). */
+	public final structureSwitches:Array<{span:compiler.core.Source.SourceSpan, columns:Array<String>}> = [];
+
 	/** The patterns of `value.match(pattern)` being typed, which bind no names (`BodyTyper.declarePatternName`). */
 	public final postfixMatchPatterns:Array<compiler.core.Source.SourceSpan> = [];
 

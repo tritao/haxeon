@@ -29,6 +29,36 @@ class TupleSwitch {
 			default: null;
 		};
 
+	/**
+	 * Whether a switch over a value with no constants of its own (a structure, a class instance, a function) can match it: Haxe
+	 * accepts one whose cases are `_`, names, captures of those, or `null`. It matches as the tuple switch of that one value
+	 * (`wholeValue`, `wholeValuePattern`), so its cases bind and cover as a tuple's element does.
+	 */
+	public static function wholeValueCases(values:Array<AstExpression>):Bool {
+		for (value in values)
+			if (!isWholeValuePattern(value))
+				return false;
+		return true;
+	}
+
+	static function isWholeValuePattern(value:AstExpression):Bool
+		return switch value {
+			case Variable(name, _):
+				var first = name.charCodeAt(0);
+				name.indexOf(".") < 0 && first != null && (first == "_".code || first >= "a".code && first <= "z".code);
+			case Capture(_, inner, _): isWholeValuePattern(inner);
+			case NullLiteral(_): true;
+			default: false;
+		};
+
+	/** The one-element tuple of a switch's subject (`wholeValueCases`). */
+	public static function wholeValue(subject:TypedExpression):TypedExpression
+		return new TypedExpression(TTuple([subject]), TVoid, subject.span);
+
+	/** A case of a switch matched as `wholeValue`: the pattern of that one element. */
+	public static function wholeValuePattern(value:AstExpression):AstExpression
+		return ArrayLiteral([value], compiler.syntax.Parser.expressionSpan(value));
+
 	/** The tuple subject: each element typed on its own, in source order, as Haxe evaluates them. */
 	public static function typeSubject(bodyTyper:BodyTyping, values:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):TypedExpression
@@ -51,7 +81,7 @@ class TupleSwitch {
 	 * switch's unreachable fallback, which throws.
 	 */
 	public static function unmatched(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
-			arms:Array<TypedSwitchArm>, statement:Bool = false):Null<String> {
+			arms:Array<TypedSwitchArm>, statement:Bool = false):Null<Array<String>> {
 		var rows:Array<Array<TypedSwitchArrayElement>> = [];
 		for (arm in arms)
 			if (arm.guard == null) {
@@ -60,8 +90,51 @@ class TupleSwitch {
 					return null;
 				rows.push(pattern.elements);
 			}
-		var witness = missing(session, bodyTyper, types, rows, 0, statement);
-		return witness == null ? null : '[${witness.join(", ")}]';
+		return missing(session, bodyTyper, types, rows, 0, statement);
+	}
+
+	/**
+	 * E1021's message for the tuple `witness` no case matches (`unmatched`): of a tuple switch, `[Square, _]`; of a switch with
+	 * structure patterns, whose tuple reads the fields at `columns` (`StructurePatterns`), `{shape: Square}`; or of a switch
+	 * matched as its whole value (`wholeValueCases`), `_`.
+	 */
+	public static function missingCases(witness:Array<String>, columns:Null<Array<String>>, wholeValue:Bool):String {
+		if (wholeValue)
+			return 'Switch is missing cases: ${witness[0]}';
+		if (columns != null)
+			return 'Structure switch is missing cases: ${structureWitness(witness, columns)}';
+		return 'Tuple switch is missing cases: [${witness.join(", ")}]';
+	}
+
+	/** The structure pattern of a tuple witness whose elements are the fields at `columns` ("" the subject, "a.b" a nested field). */
+	static function structureWitness(witness:Array<String>, columns:Array<String>):String {
+		var fields:Array<{path:String, value:String}> = [];
+		for (index in 0...columns.length)
+			if (columns[index] != "")
+				fields.push({path: columns[index], value: witness[index]});
+		return fields.length == 0 ? "_" : structureFields(fields, "");
+	}
+
+	static function structureFields(fields:Array<{path:String, value:String}>, prefix:String):String {
+		var names:Array<String> = [], parts:Array<String> = [];
+		for (field in fields)
+			if (field.path.indexOf(prefix) == 0) {
+				var rest = field.path.substr(prefix.length), dot = rest.indexOf(".");
+				var name = dot < 0 ? rest : rest.substr(0, dot);
+				if (names.indexOf(name) < 0)
+					names.push(name);
+			}
+		for (name in names) {
+			var path = prefix + name, nested = [for (field in fields) if (field.path.indexOf(path + ".") == 0) field];
+			// A field matched by its own fields reads as their structure; one captured as a whole as its pattern.
+			if (nested.length > 0)
+				parts.push('$name: ${structureFields(nested, path + ".")}');
+			else
+				for (field in fields)
+					if (field.path == path)
+						parts.push('$name: ${field.value}');
+		}
+		return '{${parts.join(", ")}}';
 	}
 
 	static function missing(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,

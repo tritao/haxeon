@@ -25,13 +25,20 @@ The current subset includes:
   fields it names, each against its own pattern (a constant, an enum pattern, a capture, `_`, or a nested structure,
   `{at: {x: 1}}`), and `p = {x: 0}` or `{at: inner = {y: 1}}` captures the value or a field. Their coverage is a tuple
   switch's over the fields the cases name (above): an enum field is covered constructor by constructor, an Int field only
-  by `_` (or, in a statement, not at all). A case of such a switch is a structure pattern, a capture or `_`; a constant
-  case (`case null:`) is not supported beside them.
+  by `_` (or, in a statement, not at all). A case of such a switch is a structure pattern, a capture, `_` or `null`:
+  `case null:` matches a null subject before any field is read (the first case that matches null runs: `null`, `_` or a
+  name). `E1021` names a missing case as a structure of the fields the cases read (`{shape: Square}`).
+- A switch over any other value (a class instance, a structure, a function) whose cases are only `_`, names, captures of
+  them, or `null`, as Haxe allows (`switch point { case null: ...; case p: ... }`).
 - Extractor patterns, `case expression => pattern:`, as Haxe matches them: `expression`, in which `_` is the value
   (`_.length => 3`, `parse(_) => Some(value)`), is evaluated only when no earlier case matched, once for a run of cases
   that share it, and its value must match `pattern`; `name = expression => pattern` also binds the value. The cases after
-  them match the value itself again. Coverage is that of each run's value (an enum constructor by constructor). In a tuple
-  switch, as in Haxe, an extractor cannot read the whole tuple (`case _.length => 2:` there is `E1019`).
+  them match the value itself again. Coverage is that of each run's value (an enum constructor by constructor). An
+  extractor may stand inside another pattern, where `_` is the part it replaces: an enum argument (`Some(_.length => 3)`),
+  an array or tuple element (`[_ * 2 => 4, _]`), a structure field (`{name: _.length => 3}`) or a `.match` pattern. Such a
+  case matches its outer pattern first; consecutive cases that differ only in the extractor's pattern evaluate it once, as
+  Haxe does, and one whose pattern cannot fail (`_.length => n`) covers what the outer pattern covers. In a tuple switch,
+  as in Haxe, an extractor reads an element, never the whole tuple (`case _.length => 2:` there is `E1019`).
 - A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
   and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
   default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`
@@ -224,8 +231,6 @@ silently falling back to dynamic behavior.
 Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
 HashLink):
 
-- An extractor pattern inside another pattern (`case Some(_.length => 3):`, `case {name: _.length => 3}:`): an extractor is a
-  whole case only.
 - A function type with a rest parameter written out (`(...values:Int)->Int`), and an arrow lambda's rest parameter
   (`(...values:Int) -> values.length`), which Haxe also rejects.
 - Width subtyping between structures: a structure with more fields where one with fewer is expected

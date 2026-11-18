@@ -902,9 +902,23 @@ class StatementTyper {
 				scope) : TupleSwitch.typeSubject(bodyTyper, tupleElements, span, scope),
 			tupleTypes = TupleSwitch.elementTypes(typedExpression),
 			constantType = bodyTyper.switchConstantType(typedExpression.type);
+		var wholeValue = false;
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedExpression.type)
-			&& !BodyTyper.isEnum(typedExpression.type))
-			fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedExpression.span);
+			&& !BodyTyper.isEnum(typedExpression.type)) {
+			if (!TupleSwitch.wholeValueCases([for (switchCase in cases) switchCase.value]))
+				fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedExpression.span);
+			// `_`, names and `null` match any value: as the tuple of that one value (`TupleSwitch.wholeValueCases`).
+			typedExpression = TupleSwitch.wholeValue(typedExpression);
+			wholeValue = true;
+			tupleTypes = TupleSwitch.elementTypes(typedExpression);
+			cases = [for (switchCase in cases)
+				{
+					value:TupleSwitch.wholeValuePattern(switchCase.value),
+						guard:switchCase.guard,
+						statements:switchCase.statements,
+						span:switchCase.span
+				}];
+		}
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
 			seenCases:Map<String, Bool> = [];
@@ -970,7 +984,8 @@ class StatementTyper {
 			if (unmatched == null)
 				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes, arms);
 			if (unmatched != null)
-				fail("E1021", 'Tuple switch is missing cases: $unmatched', span);
+				fail("E1021", TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
+					span);
 			// A statement may leave values of an Int or String element unmatched, as in Haxe: such a tuple runs no case.
 			if (TupleSwitch.unmatched(session, bodyTyper, tupleTypes, arms) != null)
 				hasDefault = true;

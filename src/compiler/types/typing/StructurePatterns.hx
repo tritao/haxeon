@@ -5,14 +5,22 @@ import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.AstSwitchCase;
+import compiler.syntax.Ast.AstSwitchExpressionCase;
 
 /** A switch whose structure patterns were rewritten: `subject` is the tuple of the fields they read, `values` the cases' patterns. */
 typedef StructureSwitch = {
-	/** The declaration of the variable that holds the subject, when the subject is not one already. */
-	final temporary:Null<AstStatement>;
-
 	final subject:AstExpression;
 	final values:Array<AstExpression>;
+
+	/** The field path each element of the tuple reads ("" the subject itself, "a.b" `subject.a.b`), for E1021's message. */
+	final columns:Array<String>;
+}
+
+/** A switch with structure patterns as the switches that match it: `statements` or `expression`, and the tuple's `columns`. */
+typedef StructureRewrite<T> = {
+	final rewritten:T;
+	final columns:Array<String>;
 }
 
 /**
@@ -22,6 +30,10 @@ typedef StructureSwitch = {
  * whole subject or of a field (`case p = {x: 0}:`, `case {a: inner = {b: 1}}:`) is a column of its own, which it binds. The
  * tuple switch then gives each field pattern its own type and the exhaustiveness rules of a tuple (`TupleSwitch`): a field of an
  * enum type is covered constructor by constructor, an Int field only by `_`.
+ *
+ * `case null:` beside them matches a null subject, which has no fields to read: the switch first tests the subject for null and
+ * runs the first case that matches null (`null`, `_` or a name), and otherwise matches the fields of the cases that are not
+ * `null`.
  */
 class StructurePatterns {
 	/** Whether a case of the switch is a structure pattern: an object literal, whole or captured. */
@@ -39,9 +51,131 @@ class StructurePatterns {
 			default: false;
 		};
 
-	/** The tuple switch of a switch over `subject` with the case patterns `values`, some of them structure patterns. */
-	public static function rewrite(subject:AstExpression, values:Array<AstExpression>,
-			span:SourceSpan):StructureSwitch {
+	/** The switch statement of `subject` with `cases`, some of them structure patterns, as the switches that match it. */
+	public static function rewriteStatement(subject:AstExpression, cases:Array<AstSwitchCase>,
+			defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan):StructureRewrite<Array<AstStatement>> {
+		var held = hold(subject, span),
+			fieldCases = [for (switchCase in cases) if (!isNullPattern(switchCase.value)) switchCase],
+			tuple = rewrite(held.value, [for (switchCase in fieldCases) switchCase.value], span);
+		var fieldSwitch = Switch(tuple.subject, [for (index in 0...fieldCases.length)
+			{
+				value:tuple.values[index],
+					guard:fieldCases[index].guard,
+					statements:fieldCases[index].statements,
+					span:fieldCases[index].span
+			}], defaultBranch, hasDefault, span),
+				statements:Array<AstStatement> = held.temporary == null ? [] : [held.temporary];
+		if (fieldCases.length == cases.length)
+			statements.push(fieldSwitch);
+		else {
+			var nullCases:Array<AstSwitchCase> = [], covered = false;
+			for (switchCase in cases)
+				if (matchesNull(switchCase.value)) {
+					covered = switchCase.guard == null;
+					nullCases.push({
+						value: covered ? openNull(switchCase.value) : switchCase.value,
+						guard: switchCase.guard,
+						statements: switchCase.statements,
+						span: switchCase.span
+					});
+					if (covered)
+						break;
+				}
+			// A null no case matches reaches the default, or else reads the fields it has not, as Haxe's matcher does.
+			var nullSwitch = Switch(held.value, nullCases, covered ? [] : hasDefault ? defaultBranch : [fieldSwitch],
+				!covered, nullSpan([for (switchCase in cases) switchCase.value]));
+			statements.push(If(Equal(held.value, NullLiteral(span), span), [nullSwitch], [fieldSwitch], span));
+		}
+		return {rewritten: statements, columns: tuple.columns};
+	}
+
+	/** The switch expression of `subject` with `cases`, some of them structure patterns, as the switches that match it. */
+	public static function rewriteExpression(subject:AstExpression, cases:Array<AstSwitchExpressionCase>,
+			fallback:Null<AstExpression>, span:SourceSpan):StructureRewrite<AstExpression> {
+		var held = hold(subject, span),
+			fieldCases = [for (switchCase in cases) if (!isNullPattern(switchCase.value)) switchCase],
+			tuple = rewrite(held.value, [for (switchCase in fieldCases) switchCase.value], span);
+		var fieldSwitch = SwitchExpression(tuple.subject, [for (index in 0...fieldCases.length)
+			{
+				value:tuple.values[index],
+					guard:fieldCases[index].guard,
+					result:fieldCases[index].result,
+					span:fieldCases[index].span
+			}], fallback, span),
+				result = fieldSwitch;
+		if (fieldCases.length != cases.length) {
+			var nullCases:Array<AstSwitchExpressionCase> = [], covered = false;
+			for (switchCase in cases)
+				if (matchesNull(switchCase.value)) {
+					covered = switchCase.guard == null;
+					nullCases.push({
+						value: covered ? openNull(switchCase.value) : switchCase.value,
+						guard: switchCase.guard,
+						result: switchCase.result,
+						span: switchCase.span
+					});
+					if (covered)
+						break;
+				}
+			// A null no case matches reaches the default, or else reads the fields it has not, as Haxe's matcher does.
+			var nullSwitch = SwitchExpression(held.value, nullCases,
+				covered ? null : fallback == null ? fieldSwitch : fallback,
+				nullSpan([for (switchCase in cases) switchCase.value]));
+			result = Conditional(Equal(held.value, NullLiteral(span), span), nullSwitch, fieldSwitch, span);
+		}
+		return {
+			rewritten: held.temporary == null ? result : BlockExpression([held.temporary], result, span),
+			columns: tuple.columns
+		};
+	}
+
+	/** `case null:`, or a capture of it. */
+	static function isNullPattern(value:AstExpression):Bool
+		return switch value {
+			case NullLiteral(_): true;
+			case Capture(_, inner, _): isNullPattern(inner);
+			default: false;
+		};
+
+	/** Whether a case matches a null subject: `null`, `_`, a name, or a capture of one of them. */
+	static function matchesNull(value:AstExpression):Bool
+		return switch value {
+			case NullLiteral(_): true;
+			case Variable(name, _): name.indexOf(".") < 0;
+			case Capture(_, inner, _): matchesNull(inner);
+			default: false;
+		};
+
+	/** A case that matches a null subject as `_`, which a subject known to be null always matches. */
+	static function openNull(value:AstExpression):AstExpression
+		return switch value {
+			case NullLiteral(span): Variable("_", span);
+			case Capture(name, inner, span): Capture(name, openNull(inner), span);
+			default: value;
+		};
+
+	/** The span of the switch that matches a null subject: the first `case null:`'s, which names what lowering keeps for it. */
+	static function nullSpan(values:Array<AstExpression>):SourceSpan {
+		for (value in values)
+			if (isNullPattern(value))
+				return patternSpan(value);
+		throw new compiler.core.InternalError("A structure switch lost its null case");
+	}
+
+	/** The subject as a variable: itself when it is a local, else one the rewritten switch declares. */
+	static function hold(subject:AstExpression, span:SourceSpan):{temporary:Null<AstStatement>,
+		value:AstExpression} return switch subject {
+			case Variable(name, _) if (name != "this"):
+				{temporary: null, value: subject};
+			default:
+				var name = "__haxeon_structure" + span.start;
+				{
+					temporary:VarDeclaration(name, null, subject, span), value:Variable(name, span)
+				};
+		};
+
+	/** The tuple switch of a switch over `holder` (a variable) with the case patterns `values`, some of them structure patterns. */
+	static function rewrite(holder:AstExpression, values:Array<AstExpression>, span:SourceSpan):StructureSwitch {
 		var columns:Array<String> = [],
 			rows:Array<Map<String, AstExpression>> = [],
 			fieldSpans:Map<String, SourceSpan> = [];
@@ -50,21 +184,11 @@ class StructurePatterns {
 			collect(value, "", row, columns, true, fieldSpans);
 			rows.push(row);
 		}
-		var temporary:Null<AstStatement> = null,
-			holder = subject;
-		switch subject {
-			case Variable(name, _) if (name != "this"):
-			default:
-				var name = "__haxeon_structure" + span.start;
-				temporary = VarDeclaration(name, null, subject, span);
-				holder = Variable(name, span);
-		}
 		// Cases that name no field still match through a tuple: one of the subject itself.
 		if (columns.length == 0)
 			columns.push("");
 		var elements = [for (column in columns) read(holder, column, fieldSpans, span)];
 		return {
-			temporary: temporary,
 			subject: ArrayLiteral(elements, span),
 			values: [
 				for (index in 0...values.length)
@@ -73,7 +197,8 @@ class StructurePatterns {
 							rows[index].exists(column) ? rows[index].get(column) : Variable("_",
 							patternSpan(values[index]))
 					], patternSpan(values[index]))
-			]
+			],
+			columns: columns
 		};
 	}
 
@@ -104,7 +229,7 @@ class StructurePatterns {
 			default:
 				if (root)
 					throw new CompileError(new Diagnostic("E1019",
-						"A switch with structure patterns matches structures, captures or _ in each case",
+						"A switch with structure patterns matches structures, captures, _ or null in each case",
 						patternSpan(pattern)));
 				set(path, pattern, row, columns);
 		}

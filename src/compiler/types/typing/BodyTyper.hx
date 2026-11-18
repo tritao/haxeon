@@ -819,23 +819,26 @@ class BodyTyper implements BodyTyping {
 				case Switch(expression, cases, defaultBranch, hasDefault, span)
 					if (ExtractorPatterns.present([for (switchCase in cases) switchCase.value])):
 					// Extractor cases match as nested switches (`ExtractorPatterns`).
+					for (capture in ExtractorPatterns.captures([for (switchCase in cases) switchCase.value]))
+						rejectMatchPatternVariable(capture);
 					for (typed in typeStatements(ExtractorPatterns.rewriteStatement(expression, cases, defaultBranch,
 						hasDefault, span), scope, result))
 						output.push(typed);
 				case Switch(expression, cases, defaultBranch, hasDefault, span)
 					if (StructurePatterns.present([for (switchCase in cases) switchCase.value])):
 					// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
-					var rewritten = StructurePatterns.rewrite(expression, [for (switchCase in cases) switchCase.value],
-						span),
-						statements:Array<AstStatement> = rewritten.temporary == null ? [] : [rewritten.temporary];
-					statements.push(Switch(rewritten.subject, [for (index in 0...cases.length)
-						{
-							value:rewritten.values[index],
-								guard:cases[index].guard,
-								statements:cases[index].statements,
-								span:cases[index].span
-						}], defaultBranch, hasDefault, span));
-					for (typed in typeStatements(statements, scope, result))
+					var rewrite = StructurePatterns.rewriteStatement(expression, cases, defaultBranch, hasDefault,
+						span);
+					var typedStatements:Array<TypedStatement>;
+					enterStructureSwitch(span, rewrite.columns);
+					try
+						typedStatements = typeStatements(rewrite.rewritten, scope, result)
+					catch (error:haxe.Exception) {
+						leaveStructureSwitch();
+						throw error;
+					}
+					leaveStructureSwitch();
+					for (typed in typedStatements)
 						output.push(typed);
 				case Switch(expression, cases, defaultBranch, hasDefault, span):
 					output.push(statementTyper.typeSwitch(expression, cases, defaultBranch, hasDefault, span, scope,
@@ -1288,11 +1291,31 @@ class BodyTyper implements BodyTyping {
 	 * name it bound would be out of scope where it could be read.
 	 */
 	function declarePatternName(name:String, type:CompilerType, span:SourceSpan, scope:Scope):Void {
+		rejectMatchPatternVariable(span);
+		scope.define(name, type, span);
+		bindCell(name, span, scope, type);
+	}
+
+	/** Enters the switch at `span` rewritten from structure patterns, whose tuple reads the fields at `columns`, until `leave`. */
+	public function enterStructureSwitch(span:SourceSpan, columns:Array<String>):Void
+		context.structureSwitches.push({span: span, columns: columns});
+
+	public function leaveStructureSwitch():Void
+		context.structureSwitches.pop();
+
+	/** The fields the tuple of the switch at `span` reads, when it was rewritten from structure patterns. */
+	public function structureSwitchColumns(span:SourceSpan):Null<Array<String>> {
+		for (entry in context.structureSwitches)
+			if (entry.span == span)
+				return entry.columns;
+		return null;
+	}
+
+	/** Fails when `span`, a name a pattern binds, is in the pattern of `value.match(pattern)`. */
+	public function rejectMatchPatternVariable(span:SourceSpan):Void {
 		for (pattern in context.postfixMatchPatterns)
 			if (pattern.file == span.file && pattern.start <= span.start && span.end <= pattern.end)
 				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
-		scope.define(name, type, span);
-		bindCell(name, span, scope, type);
 	}
 
 	/** Declares a name a pattern binds to the enum payload at `index`. */

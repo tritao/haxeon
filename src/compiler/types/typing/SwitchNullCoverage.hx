@@ -73,7 +73,7 @@ class SwitchNullCoverage {
 
 	/** A tuple no arm matches because one of its positions is a null nothing matches (`[B(_), null]`), or null. */
 	public static function tupleWitness(session:TypingSession, bodyTyper:BodyTyping, types:Array<CompilerType>,
-			arms:Array<TypedSwitchArm>):Null<String> {
+			arms:Array<TypedSwitchArm>):Null<Array<String>> {
 		var rows:Array<NullRow> = [];
 		for (arm in arms) {
 			var pattern = arm.arrayPattern;
@@ -87,8 +87,7 @@ class SwitchNullCoverage {
 				}],
 					guarded: arm.guard != null});
 		}
-		var witness = missing(session, bodyTyper, rows, types.length, true);
-		return witness == null ? null : '[${witness.join(", ")}]';
+		return missing(session, bodyTyper, rows, types.length, true);
 	}
 
 	/** A value no arm of a switch over `type` matches because a null below the subject is matched by nothing (`C(null)`). */
