@@ -50,6 +50,8 @@ The current subset includes:
 - Capture patterns: `name = pattern` matches what `pattern` matches and binds the matched value, as a whole case
   (`case moving = Fast | Slow:`), an enum payload (`case Group(lead = Circle(_), _):`), an array element
   (`case [first = 1, _]:`) or the pattern of `value.match(...)`. Over alternatives it binds whichever one matched.
+- A lowercase name in a pattern captures, as in Haxe, even where a function, local, static or field of that name is in
+  scope (`case Box(size):` beside a function `size`): inside the case the name is the captured value.
 - Array iteration and comprehensions
 - Static initialization runs in Haxe's order: every class's `static function __init__()` first, then the static
   initializers, class by class, each class's in declaration order. Classes go module by module in path order, each
@@ -198,8 +200,6 @@ HashLink):
   class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
-- A lowercase name in a pattern that is also a function or variable in scope is read as that value instead of capturing
-  (`case Box(size):` beside a function `size`). Haxe captures; rename the binding.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 
@@ -246,7 +246,7 @@ annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's 
   the class's initializers are compiled with the parameters erased, so the type is read from typing it with them.
 
 Planned with these rules: a way to silence `W1001`, per project or per expression, for code that relies on the defaults
-on purpose; and fixing the pattern capture that reads a function or variable of the same name (above).
+on purpose.
 
 ## C header import
 
