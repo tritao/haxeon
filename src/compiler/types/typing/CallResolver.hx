@@ -862,7 +862,9 @@ class CallResolver {
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical,
 				span),
-			castCall = session.representation.boundaryCast(call, methodResult.semantic);
+			castCall = session.representation.memberResultBoundary(call, methodResult, methodOwnerType,
+				methodInfo.owner,
+				method);
 		if (scope != null)
 			session.invalidateCallEffects(methodKey, scope);
 		return session.isNoReturnCall(methodKey) ? new TypedExpression(TNoReturn(castCall), TNever,
@@ -1315,7 +1317,8 @@ class CallResolver {
 			methodResult = session.representation.resolveMethodResult(methodOwnerType, methodInfo.owner, method),
 			call = new TypedExpression(TMethodCall(receiver, methodKey, physicalArguments), methodResult.physical,
 				span);
-		return applyCallEffect(session.representation.boundaryCast(call, methodResult.semantic), methodKey, scope);
+		return applyCallEffect(session.representation.memberResultBoundary(call, methodResult, methodOwnerType,
+			methodInfo.owner, method), methodKey, scope);
 	}
 
 	public function typeNamedCall(name:String, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
@@ -1696,7 +1699,8 @@ class CallResolver {
 			call = new TypedExpression(TCall(physicalOwner == null ? methodKey : physicalOwner.name + "." + name,
 				[receiver].concat(physicalArguments)),
 				methodResult.physical, span);
-		return applyCallEffect(session.representation.boundaryCast(call, methodResult.semantic), methodKey, scope);
+		return applyCallEffect(session.representation.memberResultBoundary(call, methodResult, methodOwnerType,
+			methodInfo.owner, method), methodKey, scope);
 	}
 
 	public function typeRuntimeDataCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,

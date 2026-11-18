@@ -2212,7 +2212,7 @@ class BodyTyper implements BodyTyping {
 				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
 				methodResult = session.representation.resolveMethodResult(typedObject.type, owner, method),
 				call = new TypedExpression(TMethodCall(typedObject, getter, []), methodResult.physical, span);
-			return session.representation.boundaryCast(call, methodResult.semantic);
+			return session.representation.memberResultBoundary(call, methodResult, typedObject.type, owner, method);
 		}
 		var owner = switch typedObject.type {
 			case TInstance(Class, className, _), TInstance(Interface, className, _): className;
@@ -2246,9 +2246,8 @@ class BodyTyper implements BodyTyping {
 			MemberAccess.field(session, nominalOwner, name, false, span);
 		var fieldRepresentation = session.representation.resolveField(typedObject.type, name, span),
 			stableFlowValue = isStableFlowReceiver(typedObject) && isFinalInstanceField(typedObject.type, name);
-		return session.representation.boundaryCast(new TypedExpression(TField(typedObject, name),
-			fieldRepresentation.physical, span, stableFlowValue),
-			fieldRepresentation.semantic);
+		return session.representation.memberFieldBoundary(new TypedExpression(TField(typedObject, name),
+			fieldRepresentation.physical, span, stableFlowValue), fieldRepresentation, typedObject.type, name);
 	}
 
 	static function isStableFlowReceiver(value:TypedExpression):Bool

@@ -785,6 +785,81 @@ class TypeRepresentation {
 	}
 
 	/** Resolve a class/interface field with both semantic and physical types. */
+	/**
+	 * The read of the field `name` of a value of `receiver`, typed `representation.physical`, as its semantic type: `boundaryCast`,
+	 * and where that makes a cast from an erased owner's storage, the cast says which declared type it stands for
+	 * (`TypedExpression.parameterSource`: the field's type in its class's own parameters, and the receiver's substitutions).
+	 */
+	public function memberFieldBoundary(value:TypedExpression, representation:TypeRepresentationResult,
+			receiver:CompilerType, name:String):TypedExpression {
+		var made = boundaryCast(value, representation.semantic);
+		if (made == value)
+			return made;
+		var owner = fieldOwner(receiver, name);
+		if (owner == null)
+			return made;
+		var declaration = requiredMapValue(session.classDecls, owner);
+		for (field in declaration.fields)
+			if (field.name == name && !field.isStatic)
+				return withMemberSource(made, session.declarations.types.fieldType(owner, field,
+					ownParameters(owner, declaration.typeParameters)), receiver, owner);
+		return made;
+	}
+
+	/**
+	 * The result of a call of `method`, declared by `owner`, on a value of `receiver`, typed `representation.physical`, as its
+	 * semantic type: `boundaryCast`, and where that makes a cast from an erased owner's result, the cast says which declared type
+	 * it stands for, as `memberFieldBoundary` does for a field.
+	 */
+	public function memberResultBoundary(call:TypedExpression, representation:TypeRepresentationResult,
+			receiver:CompilerType, owner:String, method:AstFunction):TypedExpression {
+		var made = boundaryCast(call, representation.semantic);
+		if (made == call)
+			return made;
+		var declaration = session.classDecls.get(owner);
+		if (declaration == null)
+			return made;
+		return withMemberSource(made, session.declarations.types.resultType(method,
+			ownParameters(owner, declaration.typeParameters)), receiver, owner);
+	}
+
+	/** `made` with its declared type `declared` as its parameter source, when that mentions a type parameter of `owner`. */
+	function withMemberSource(made:TypedExpression, declared:CompilerType, receiver:CompilerType,
+			owner:String):TypedExpression {
+		if (!mentionsTypeParameter(declared))
+			return made;
+		return new TypedExpression(made.expression, made.type, made.span, made.stableFlowValue, made.mapKeySource,
+			made.storageType, made.semanticReference, {
+				source: declared,
+				target: made.type,
+				substitutions: nominalSubstitutions(projectNominal(receiver, owner))
+			});
+	}
+
+	/** Each of `parameters` of `owner` as itself. */
+	static function ownParameters(owner:String, parameters:Array<String>):Map<String, CompilerType>
+		return [for (parameter in parameters) parameter => TTypeParameter(owner, parameter)];
+
+	/** The class that declares the instance field `name` of `receiver`: its class, or the nearest base that has it. */
+	function fieldOwner(receiver:CompilerType, name:String):Null<String> {
+		var current = receiver;
+		while (true) {
+			var className = switch current {
+				case TInstance(Class, className, _): className;
+				default: return null;
+			};
+			var declaration = session.classDecls.get(className);
+			if (declaration == null)
+				return null;
+			for (field in declaration.fields)
+				if (field.name == name && !field.isStatic)
+					return className;
+			if (declaration.base == null)
+				return null;
+			current = session.declarations.resolve(declaration.base, declaration.span, nominalSubstitutions(current));
+		}
+	}
+
 	public function resolveField(type:CompilerType, name:String, span:SourceSpan):TypeRepresentationResult {
 		var semantic = fieldType(type, name, span),
 			physical = physicalFieldType(type, name, span);
