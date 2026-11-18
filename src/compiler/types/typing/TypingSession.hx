@@ -111,14 +111,16 @@ class TypingSession {
 
 	/**
 	 * Types the shared unit `name` with `type`, into an output of its own when a unit is being typed. Call `useSharedUnit` first:
-	 * the shared unit's output is merged where its first user in declaration order used it, whichever body typed it.
+	 * the shared unit's output is merged where its first user in declaration order used it, whichever body typed it. With
+	 * `checkOnly`, the unit is typed for its errors alone (`beginCheckUnit`): a specialization for type parameters of a body
+	 * being checked, which no program code can call.
 	 */
-	public function typeSharedUnit(name:String, type:() -> Void):Void {
-		if (output == programOutput) {
+	public function typeSharedUnit(name:String, type:() -> Void, checkOnly:Bool = false):Void {
+		if (output == programOutput && !checkOnly) {
 			type();
 			return;
 		}
-		var unit = new TypingOutput(true, bodyContexts.length);
+		var unit = new TypingOutput(true, bodyContexts.length, checkOnly);
 		sharedOutputs.set(name, unit);
 		outputs.push(output);
 		output = unit;

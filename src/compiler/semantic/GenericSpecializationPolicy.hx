@@ -43,8 +43,13 @@ class GenericSpecializationPolicy {
 		return shared(semantic);
 	}
 
+	/**
+	 * Select a function's type parameter's representation. `receiver` is the underlying type of the abstract whose instance
+	 * method `fn` is, the value its body reads as `this`: like an argument's type, a parameter nested in it (`{first:A,
+	 * second:B}`, `Array<T>`) is part of the value's layout, so the body is specialized for it exactly.
+	 */
 	public static function decide(fn:AstFunction, parameter:String, semantic:CompilerType,
-			requiresLayoutSpecialization:Null<CompilerType->Bool> = null):SpecializationDecision {
+			requiresLayoutSpecialization:Null<CompilerType->Bool> = null, ?receiver:AstType):SpecializationDecision {
 		// A body typed for its signature in its own type parameters (an unannotated generic declaration's, which
 		// `DeclarationTypeTable` types) calls with one of them: it has no runtime shape, and is kept as it is.
 		switch semantic {
@@ -66,6 +71,8 @@ class GenericSpecializationPolicy {
 			if (containsNested(argument.type, parameter, false))
 				return {representation: semantic, policy: "layout"};
 		if (containsNested(fn.result, parameter, false))
+			return {representation: semantic, policy: "layout"};
+		if (receiver != null && containsNested(receiver, parameter, false))
 			return {representation: semantic, policy: "layout"};
 		return shared(semantic);
 	}

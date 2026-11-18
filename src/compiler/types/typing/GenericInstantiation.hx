@@ -143,8 +143,10 @@ class GenericInstantiation {
 				constantPolicies.push("keypath:" + index + "=" + definition.name);
 			}
 		}
-		var genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments,
-			(callee, calleeSubstitutions) -> bodyTyper.argumentTypesOf(callee, calleeSubstitutions)),
+		var abstractDeclaration = receiver == null || owner == null ? null : session.declarations.abstracts.get(owner),
+			genericCall = session.representation.resolveGenericCall(fn, substitutions, semanticArguments,
+				(callee, calleeSubstitutions) -> bodyTyper.argumentTypesOf(callee, calleeSubstitutions),
+				abstractDeclaration == null ? null : abstractDeclaration.underlying),
 			genericRepresentation = genericCall.representation,
 			representationSubstitutions = genericRepresentation.substitutions,
 			specializationPolicies = genericRepresentation.policies.concat(constantPolicies),
@@ -163,14 +165,20 @@ class GenericInstantiation {
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))
 				? abstractReceiverType(requiredString(owner),
 				representationSubstitutions) : receiver.type;
-		// Each specialization's body is typed once, as a shared unit of its own.
+		// Each specialization's body is typed once, as a shared unit of its own. One for type parameters is met only where a
+		// generic body is checked with its type parameters as themselves: it is checked as well, and is no code of the program.
 		session.useSharedUnit(specialization.name);
 		if (!session.emittedGenericBodies.exists(specialization.name)) {
 			session.emittedGenericBodies.set(specialization.name, true);
-			var bodyStatic = receiver == null ? isStatic : true, bodyReceiver = representationReceiver;
+			var bodyStatic = receiver == null ? isStatic : true,
+				bodyReceiver = representationReceiver,
+				forParameters = false;
+			for (argument in representationArguments)
+				if (session.representation.containsTypeParameter(argument, []))
+					forParameters = true;
 			session.typeSharedUnit(specialization.name,
 				() -> session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, bodyStatic,
-				representationSubstitutions, specialization.name, bodyReceiver)));
+				representationSubstitutions, specialization.name, bodyReceiver)), forParameters);
 		}
 		if (receiver != null) {
 			var receiverType = representationReceiver;

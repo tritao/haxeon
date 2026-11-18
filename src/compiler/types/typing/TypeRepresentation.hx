@@ -193,15 +193,15 @@ class TypeRepresentation {
 	 * Select the physical substitutions for a generic function body. This is
 	 * the only typing service entry point that applies shape specialization.
 	 */
-	public function genericFunction(fn:AstFunction,
-			semanticSubstitutions:Map<String, CompilerType>):GenericRepresentationResult {
+	public function genericFunction(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>,
+			?receiver:AstType):GenericRepresentationResult {
 		var substitutions = copyMap(semanticSubstitutions),
 			policies:Array<String> = [];
 		for (parameter in functionTypeParameters(fn)) {
 			var semantic = requiredMapValue(semanticSubstitutions, parameter),
 				decision = GenericSpecializationPolicy.decide(fn, parameter, semantic,
 					type -> requiresLayoutSpecialization(type)
-					|| functionUsesGenericEnum(fn, parameter));
+					|| functionUsesGenericEnum(fn, parameter), receiver);
 			substitutions.set(parameter, decision.representation);
 			policies.push(decision.policy);
 		}
@@ -582,11 +582,14 @@ class TypeRepresentation {
 			case _: false;
 		};
 
-	/** Resolve and adapt one generic call across its shared-body ABI boundary. */
+	/**
+	 * Resolve and adapt one generic call across its shared-body ABI boundary. `receiver` is the underlying type of the abstract
+	 * whose instance method `fn` is (`GenericSpecializationPolicy.decide`).
+	 */
 	public function resolveGenericCall(fn:AstFunction, semanticSubstitutions:Map<String, CompilerType>,
 			arguments:Array<TypedExpression>,
-			argumentTypesOf:GenericArgumentTypesResolver):GenericCallRepresentationResult {
-		var representation = genericFunction(fn, semanticSubstitutions),
+			argumentTypesOf:GenericArgumentTypesResolver, ?receiver:AstType):GenericCallRepresentationResult {
+		var representation = genericFunction(fn, semanticSubstitutions, receiver),
 			argumentTypes = argumentTypesOf(fn, representation.substitutions),
 			result:TypeRepresentationResult = {
 				semantic: session.declarations.types.resultType(fn, semanticSubstitutions),
