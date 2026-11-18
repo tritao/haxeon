@@ -96,11 +96,11 @@ class IrProgramAssembler {
 	/**
 	 * The boot functions: `__init` runs every class's `__init__`, then the static field initializers, in bounded parts, in the
 	 * order Haxe runs them (`StaticInitializationOrder`). `classOrder` names the classes in module order; without it the typed
-	 * program's order is used.
+	 * program's order is used. Each class the order reaches in a loop is Haxe's warning, added to `warnings` when given.
 	 */
 	public static function staticInitializersFrom(generator:IrGenerator, typed:TypedProgram,
 			classOrder:Null<Array<String>>,
-			program:Array<IrFunction>):Array<IrFunction> {
+			program:Array<IrFunction>, ?warnings:Array<compiler.core.Diagnostic>):Array<IrFunction> {
 		var probes:Map<String, IrFunction> = [];
 		for (classDecl in typed.classes)
 			for (field in classDecl.fields) {
@@ -112,13 +112,17 @@ class IrProgramAssembler {
 					], field.span));
 				}
 			}
-		var classes = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program),
+		var initialization = StaticInitializationOrder.of(orderedClasses(typed.classes, classOrder), probes, program),
+			classes = initialization.order,
 			defined:Map<String, Bool> = [for (fn in program) fn.name => true],
 			inits = [
 				for (classDecl in classes)
 					if (defined.exists(StaticInitializationOrder.initFunction(classDecl.name)))
 					StaticInitializationOrder.initFunction(classDecl.name)
 			];
+		if (warnings != null)
+			for (classDecl in initialization.loops)
+				warnings.push(StaticInitializationOrder.loopWarning(classDecl));
 		var statements:Array<TypedStatement> = [],
 			spans:Array<compiler.core.Source.SourceSpan> = [];
 		for (classDecl in classes)

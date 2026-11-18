@@ -96,6 +96,12 @@ class ModuleState {
 	 * replaces its entry; one an incremental compile reuses keeps it.
 	 */
 	public var typingWarnings:Map<String, Array<Diagnostic>> = [];
+
+	/**
+	 * Warnings about the whole program raised after typing, at this module's declarations (the static initialization order's
+	 * loops): every build that generates the program replaces them (`TypingWarnings.publishGeneration`).
+	 */
+	public var generationWarnings:Array<Diagnostic> = [];
 	public var typedFunctions:Map<String, TypedFunction> = [];
 	public var typedSourceRevisions:Map<String, Int> = [];
 
@@ -205,6 +211,7 @@ class ModuleState {
 		result.semanticDependencies = copyDependencyMap(semanticDependencies);
 		result.diagnostics = diagnostics.copy();
 		result.typingWarnings = [for (key => warnings in typingWarnings) key => warnings.copy()];
+		result.generationWarnings = generationWarnings.copy();
 		result.signatureFingerprints = copyMap(signatureFingerprints);
 		result.interfaceFingerprints = copyMap(interfaceFingerprints);
 		result.aliasFingerprints = copyMap(aliasFingerprints);

@@ -235,6 +235,7 @@ class TestCatalog {
 		"ImplicitConstructorMain",
 		"ClosureEffectsMain",
 		"TypingWarningsMain",
+		"StaticInitLoopWarningMain",
 		"EnumVisibilityMain",
 		"EnumImportOrderMain",
 		"ExpectedEnumContextMain",

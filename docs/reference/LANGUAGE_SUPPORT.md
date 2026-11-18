@@ -55,7 +55,8 @@ The current subset includes:
   initializers, class by class, each class's in declaration order. Classes go module by module in path order, each
   module's in declaration order, after the classes their static initialization reaches (a base class, and the classes
   whose statics, static methods or constructors it uses). A static read before its initializer runs reads its default
-  (`0`, `false`, `null`), and initializers that read each other in a cycle compile, as in Haxe.
+  (`0`, `false`, `null`), and initializers that read each other in a cycle compile, as in Haxe. Such a cycle warns as
+  Haxe does (`W1002`, "maybe loop in static generation of A", at the class), once per class where Haxe repeats it.
 - Exceptions. `haxe.Exception`'s `details()` and `stack`, and `haxe.CallStack`, print Haxe's HashLink format, except
   that a static method's frame names its class in the `$Class` form, a lambda's frame has another name, and inlined
   frames differ.

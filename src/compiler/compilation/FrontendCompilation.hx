@@ -1324,11 +1324,13 @@ class FrontendCompilation {
 		build.interfaces = IrProgramAssembler.interfacesFrom(generator, typedNew);
 		build.enums = IrProgramAssembler.enumsFrom(generator, typedNew);
 		build.staticFields = IrProgramAssembler.staticFieldsFrom(generator, typedNew);
+		var generationWarnings:Array<compiler.core.Diagnostic> = [];
 		build.initializers = [
 			for (fn in IrProgramAssembler.staticInitializersFrom(generator, typedNew, build.initializationClasses,
-				build.cached))
+				build.cached, generationWarnings))
 				compiler.ir.IrSourceRehash.of(fn, currentHashes)
 		].concat(liveInitializers);
+		TypingWarnings.publishGeneration(context, build.names, generationWarnings, build.rollbackModules);
 		// The printers made with the objects (`context.state.anonymousStrings`), for every structure the program has.
 		if (printsStructures(context)) {
 			var printers = context.state.anonymousStrings;

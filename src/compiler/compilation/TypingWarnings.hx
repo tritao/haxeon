@@ -60,7 +60,7 @@ class TypingWarnings {
 			if (byKey != null)
 				for (key => warnings in byKey)
 					next.set(key, warnings);
-			var warnings = unique(next),
+			var warnings = unique(next).concat(state.generationWarnings),
 				errors = [for (diagnostic in state.diagnostics) if (!isWarning(diagnostic)) diagnostic];
 			// Nothing typed again or deleted, and the diagnostics already list these warnings: leave the module as it is.
 			if (byKey == null
@@ -71,6 +71,36 @@ class TypingWarnings {
 			state = context.state.writableState(name, rollbackModules);
 			state.typingWarnings = next;
 			state.diagnostics = errors.concat(warnings);
+		}
+	}
+
+	/**
+	 * The warnings generating the whole program raised (`warnings`), each into the module that declares where it is: they
+	 * replace that module's earlier ones, and a module with none left drops its own.
+	 */
+	public static function publishGeneration(context:CompilationContext, names:Array<String>,
+			warnings:Array<Diagnostic>,
+			rollbackModules:Map<String, ModuleState>):Void {
+		var byPath:Map<String, Array<Diagnostic>> = [];
+		for (warning in warnings) {
+			var list = byPath.get(warning.span.file.path);
+			if (list == null)
+				byPath.set(warning.span.file.path, list = []);
+			list.push(warning);
+		}
+		for (name in names) {
+			var state = context.state.modules.get(name);
+			if (state == null)
+				continue;
+			var next = byPath.get(state.source.path);
+			next = next == null ? [] : unique(["" => next]);
+			if (equalWarnings(state.generationWarnings, next))
+				continue;
+			var previous = state.generationWarnings;
+			state = context.state.writableState(name, rollbackModules);
+			state.diagnostics =
+				[for (diagnostic in state.diagnostics) if (previous.indexOf(diagnostic) < 0) diagnostic].concat(next);
+			state.generationWarnings = next;
 		}
 	}
 
@@ -107,6 +137,19 @@ class TypingWarnings {
 			}
 		result.sort((left, right) -> left.span.start - right.span.start);
 		return result;
+	}
+
+	/** The same warnings, raised again: the same code and message at the same place. */
+	static function equalWarnings(left:Array<Diagnostic>, right:Array<Diagnostic>):Bool {
+		if (left.length != right.length)
+			return false;
+		for (index in 0...left.length) {
+			var a = left[index], b = right[index];
+			if (a.code != b.code || a.message != b.message || a.span.file.path != b.span.file.path
+				|| a.span.start != b.span.start || a.span.end != b.span.end)
+				return false;
+		}
+		return true;
 	}
 
 	static function isWarning(diagnostic:Diagnostic):Bool

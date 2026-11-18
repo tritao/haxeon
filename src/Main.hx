@@ -28,6 +28,9 @@ class Main {
 		var compiler = newCompiler(plain, directory, options);
 		compiler.update(sourcePath, File.getContent(sourcePath), module);
 		var result = compiler.compile(module);
+		// Warnings go to stderr, as `haxeon build` reports them (CompilerDriver).
+		for (warning in compiler.warnings(result.moduleNames))
+			Sys.stderr().writeString(warning.format() + "\n");
 		File.saveBytes(outputPath,
 			HlWriter.encode(BackendArtifacts.hashLink(result.artifact).module, null, options.checkReuse).flatten());
 		Sys.println('compiled $sourcePath -> $outputPath');

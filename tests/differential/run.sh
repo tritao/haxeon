@@ -108,6 +108,35 @@ run_compile_failure() {
 	echo "PASS: $name official and realtime compilers both reject invalid source"
 }
 
+# Compile warnings of one kind: the line and message of each, once, from both compilers. Haxe prints
+# `Main.hx:77: lines 77-79 : Warning : (WStaticInitOrder) Warning : maybe loop ...`, as often as it reaches it; Haxeon
+# `tests/differential/x.realtime.hx:77:1: W1002: maybe loop ...`, once, naming a type of the file's module `x.realtime` as
+# `x.Type` (the file name's first part reads as a package). The program's run is compared by run_case.
+run_warning_case() {
+	local name=$1
+	local message=$2
+	local official_dir
+	official_dir=$(mktemp -d "$out_dir/official-warning.XXXXXX")
+	trap 'rm -rf "$official_dir"' RETURN
+	cp "$root_dir/tests/differential/$name.official.hx" "$official_dir/Main.hx"
+	local official_warnings realtime_warnings
+	official_warnings=$(cd "$official_dir" && "$haxe" -cp . -main Main -hl "$out_dir/$name.warning.official.hl" 2>&1 |
+		sed -n "s/^Main\.hx:\([0-9]*\):.*Warning : \($message.*\)$/\1 \2/p" | sort -u)
+	realtime_warnings=$(realtime_compile "tests/differential/$name.realtime.hx" "$out_dir/$name.warning.realtime.hl" 2>&1 >/dev/null |
+		sed -n "s/^tests\/differential\/$name\.realtime\.hx:\([0-9]*\):[0-9]*: W[0-9]*: \($message.*\)$/\1 \2/p" |
+		sed "s/ $name\./ /" | sort -u)
+	if [[ -z "$official_warnings" ]]; then
+		echo "$name: the reference printed no \"$message\" warning" >&2
+		exit 1
+	fi
+	if [[ "$official_warnings" != "$realtime_warnings" ]]; then
+		echo "$name: warnings differ" >&2
+		diff -u <(echo "$official_warnings") <(echo "$realtime_warnings") >&2 || true
+		exit 1
+	fi
+	echo "PASS: $name official and realtime compilers warn alike ($(echo "$official_warnings" | wc -l) warnings)"
+}
+
 # A known divergence: a program stock Haxe compiles and runs (exit 0) that Haxeon rejects until the step named beside the case lands
 # (each is listed in docs/reference/LANGUAGE_SUPPORT.md). The check fails once Haxeon compiles it, so the case moves to run_case.
 run_known_divergence() {
@@ -139,7 +168,7 @@ run_known_divergence() {
 pids=()
 logs=()
 in_background() {
-	local log="$out_dir/$2.run.log"
+	local log="$out_dir/$2.$1.log"
 	("$@") >"$log" 2>&1 &
 	pids+=($!)
 	logs+=("$log")
@@ -205,6 +234,11 @@ in_background run_compile_failure type-check-downcast
 # Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0
 in_background run_case static-init-order-reach 0
+# A loop in that order warns as Haxe does ("maybe loop in static generation of"), at the class.
+in_background run_warning_case static-init-order "maybe loop in static generation"
+in_background run_warning_case static-init-order-reach "maybe loop in static generation"
+in_background run_case static-init-order-loop 0
+in_background run_warning_case static-init-order-loop "maybe loop in static generation"
 in_background run_case switch-null-coverage 0
 in_background run_case switch-guarded-catch-all 0
 in_background run_case switch-bool 0

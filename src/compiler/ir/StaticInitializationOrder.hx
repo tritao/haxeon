@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.core.Diagnostic;
 import compiler.semantic.AbstractStatics;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleFields;
@@ -15,8 +16,9 @@ import compiler.types.TypedAst.TypedExpression;
  * - A class comes after the classes its static initialization reaches: its base class, and every class whose static field,
  *   static method or constructor its `__init__` and static initializers use, following the initializers of those fields, the
  *   bodies of those methods and constructors, and the lambdas written in them (not instance methods). A static initialized
- *   with a function expression is followed only from where it is read. A class already being placed is skipped, so a cycle keeps the order the walk found
- *   (Haxe warns "maybe loop in static generation").
+ *   with a function expression is followed only from where it is read. A class already being placed is skipped, so a cycle keeps
+ *   the order the walk found; reaching it from another class's walk is Haxe's "maybe loop in static generation" warning
+ *   (`loops`).
  * - Every class's `__init__` runs first, in that order; then every class's static initializers, in that order, each class's in
  *   declaration order. Nothing is reordered by what an initializer reads: one that reads a static set later reads its default
  *   value (0, false or null), as in Haxe.
@@ -40,6 +42,15 @@ class StaticInitializationOrder {
 		return Reflect.compare(leftName, rightName);
 	}
 
+	/**
+	 * W1002, Haxe's warning (WStaticInitOrder) for a class its static initialization order reaches in a loop, at the class's
+	 * declaration: its statics may be read before they are set.
+	 */
+	public static function loopWarning(classDecl:TypedClass):Diagnostic
+		return new Diagnostic("W1002",
+			"maybe loop in static generation of " + AbstractStatics.displayOwner(classDecl.name),
+			classDecl.span, Warning);
+
 	/** The name of the `__init__` function of `className`. */
 	public static inline function initFunction(className:String):String
 		return className + ".__init__";
@@ -58,8 +69,15 @@ class StaticInitializationOrder {
 	final initializers:Map<String, IrFunction>;
 	final functions:Map<String, IrFunction>;
 	final placing:Map<String, Bool> = [];
+	final placed:Map<String, Bool> = [];
 	final walked:Map<String, Bool> = [];
 	final order:Array<TypedClass> = [];
+
+	/** The classes being placed, innermost last: Haxe's `p`, the class whose walk reaches the others. */
+	final generating:Array<String> = [];
+
+	/** Each class reached while it was being placed, from another class's walk, in the order the walk reached it. */
+	final loops:Array<TypedClass> = [];
 
 	/**
 	 * `classes` in the order static initialization runs in. `classes` is in module order (`compareModules`, declaration order
@@ -67,11 +85,14 @@ class StaticInitializationOrder {
 	 * initializer, and `program` the program's functions.
 	 */
 	public static function of(classes:Array<TypedClass>, initializers:Map<String, IrFunction>,
-			program:Array<IrFunction>):Array<TypedClass> {
+			program:Array<IrFunction>):{
+				order:Array<TypedClass>,
+				loops:Array<TypedClass>
+			} {
 		var walk = new StaticInitializationOrder(classes, initializers, program);
 		for (classDecl in classes)
 			walk.place(classDecl.name);
-		return walk.order;
+		return {order: walk.order, loops: walk.loops};
 	}
 
 	function new(classList:Array<TypedClass>, initializers:Map<String, IrFunction>, program:Array<IrFunction>) {
@@ -93,24 +114,39 @@ class StaticInitializationOrder {
 		}
 	}
 
-	/** Haxe's `loop`: place `name` after what its static initialization reaches. */
+	/**
+	 * Haxe's `loop`: place `name` after what its static initialization reaches. A class still being placed is not placed again;
+	 * reached from another class's walk (Haxe's `loop_class`, which skips the class itself) it is a loop.
+	 */
 	function place(name:String):Void {
 		var classDecl = classes.get(name);
-		if (classDecl == null || placing.exists(name))
+		if (classDecl == null)
 			return;
+		if (placing.exists(name)) {
+			if (!placed.exists(name) && generating[generating.length - 1] != name)
+				loops.push(classDecl);
+			return;
+		}
 		placing.set(name, true);
+		generating.push(name);
 		if (classDecl.base != null)
 			place(classDecl.base);
 		walkMember(initFunction(name));
 		// Haxe walks a class's statics in name order (a map keyed by name), which decides the order of what they reach.
-		// A static whose initializer is a function expression is not walked from here, only where something reads it.
+		// A static whose initializer is a function expression is not walked from here, only where something reads it. Haxe's
+		// `walk_class` walks them without marking them walked, so a read from elsewhere walks one again, once, from there.
 		var statics = [
 			for (field in classDecl.fields)
 				if (field.isStatic && !isFunctionExpression(field.initializer)) field.name
 		];
 		statics.sort(Reflect.compare);
-		for (field in statics)
-			walkMember(name + "." + field);
+		for (field in statics) {
+			var initializer = initializers.get(name + "." + field);
+			if (initializer != null)
+				walk(initializer);
+		}
+		generating.pop();
+		placed.set(name, true);
 		order.push(classDecl);
 	}
 
