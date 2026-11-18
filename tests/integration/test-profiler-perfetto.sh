@@ -50,4 +50,12 @@ jq -e '
   any(.traceEvents[]; .cat == "hl.sample" and (.args.stack | contains("+0x"))) and
   any(.traceEvents[]; .cat == "hl.alloc" and (.args.estimated_bytes > 0))
 ' "$output_file" >/dev/null
-echo "PASS: Perfetto export contains counters, threads, native frames, and allocation sites"
+# An allocation sample carries the Haxe frames that allocated, not only the allocator: Main.main builds every chunk.
+if [[ -z ${1:-} ]]; then
+  jq -e 'any(.traceEvents[]; .cat == "hl.alloc" and (.args.stack | contains("Main.main")))' "$output_file" >/dev/null
+  # report --alloc ranks those bytes by function.
+  "$profiler_tool" report --alloc "$capture" > "$scratch/alloc-report.txt"
+  grep -q "^ranking estimated allocated bytes" "$scratch/alloc-report.txt"
+  grep -q "Main.main" "$scratch/alloc-report.txt"
+fi
+echo "PASS: Perfetto export contains counters, threads, native frames, and allocation sites with their Haxe frames"

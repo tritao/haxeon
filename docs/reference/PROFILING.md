@@ -418,7 +418,7 @@ belong to `report`. The `report` and `export` subcommands read both HLPC v1
 and v2 captures:
 
 ```sh
-hlprof-live report [--top N] [--lines] [--all|--waiting] [--start-ms N] [--end-ms N] CAPTURE
+hlprof-live report [--top N] [--lines] [--all|--waiting|--alloc] [--start-ms N] [--end-ms N] CAPTURE
 hlprof-live export --format folded [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] CAPTURE
 hlprof-live export --format perfetto [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
 hlprof-live export --format pftrace [--process-name NAME] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
@@ -431,6 +431,13 @@ code. It ranks only the samples of running threads, and its first line counts
 how many were running and how many waiting in a system call; `--all` ranks
 both, `--waiting` only the waiting ones. Exports keep every sample unless
 given `--cpu` or `--waiting`.
+
+`report --alloc` ranks allocation instead, from a capture recorded with the
+`alloc` source. Each sample stands for `--alloc-interval` allocations and
+carries the allocator's caller and the Haxe frames above it, so the report
+weights functions by the bytes their samples stand for: self is the innermost
+Haxe function on the stack, total counts each function once per sample. The
+Perfetto export has the same stacks on its `hl.alloc` events.
 
 `--start-ms` and `--end-ms` select the part of the capture received in that
 window, in milliseconds since the recorder started. `pftrace` is the native
@@ -526,9 +533,9 @@ To profile incremental compiler edits, pass `--profile-output` to the project
 benchmark. It starts a dedicated worker with a diagnostics port, warms that
 worker before attaching, and captures the edit loop. The normal worker launch
 is unchanged. Sampling adds overhead, so use an unprofiled run for latency
-comparisons. HashLink's allocation samples currently identify the native
-allocator rather than Haxe allocation call sites; the compiler's per-phase
-allocation counters remain the better source for allocation totals.
+comparisons. For where the compiler allocates, record with
+`--sources alloc` and read it with `report --alloc`; the compiler's per-phase
+allocation counters (`HL_GC_PROFILE=1`) give exact totals.
 
 ```sh
 python3 scripts/benchmark-incremental-project.py \
