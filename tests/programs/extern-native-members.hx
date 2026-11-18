@@ -1,13 +1,14 @@
 // A body-less `extern` method with @:hlNative is a native in a class or abstract that is not extern itself (Haxe on HashLink
-// leaves such a method unimplemented; its std binds natives on methods with bodies, which Haxeon rejects).
+// leaves such a method unimplemented). The native is Haxeon's runtime square root, which HashLink and both Wasm runtimes
+// provide: HashLink's std math_sqrt has no Wasm counterpart.
 class Natives {
-	@:hlNative("std", "math_sqrt") public static extern function sqrt(value:Float):Float;
+	@:hlNative("haxeon_runtime", "__math_sqrt") public static extern function sqrt(value:Float):Float;
 }
 
 abstract Root(Float) from Float {
 	public var value(get, never):Float;
 
-	@:hlNative("std", "math_sqrt") static extern function nativeSqrt(value:Float):Float;
+	@:hlNative("haxeon_runtime", "__math_sqrt") static extern function nativeSqrt(value:Float):Float;
 
 	function get_value():Float
 		return nativeSqrt(this);
