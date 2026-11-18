@@ -727,7 +727,8 @@ class ExpressionTyper {
 			case TStringLiteral(value): StringValue(value);
 			case TBoolLiteral(value): BoolValue(value);
 			case TNullLiteral: NullValue;
-			case TNullableWrap(value), TAbiCast(value): annotationConstant(value, annotation);
+			case TNullableWrap(value), TAbiCast(value),
+				TParameterConversion(value, _): annotationConstant(value, annotation);
 			case TNegate(value):
 				switch value.expression {
 					case TIntLiteral(integer): IntValue(-integer);
@@ -2722,7 +2723,7 @@ class ExpressionTyper {
 			default: false;
 		}) || switch expression.expression {
 			case TNullLiteral: true;
-			case TNullableWrap(value), TCast(value): isNullOperand(value);
+			case TNullableWrap(value), TCast(value), TParameterConversion(value, _): isNullOperand(value);
 			default: false;
 		};
 
@@ -3062,7 +3063,8 @@ class ExpressionTyper {
 	function isPureCallExpression(call:TypedExpression):Bool
 		return switch call.expression {
 			case TCall(name, _), TCNativeCall(name, _), TMethodCall(_, name, _): session.isPureCall(name);
-			case TCast(inner), TAbiCast(inner), TNoReturn(inner): isPureCallExpression(inner);
+			case TCast(inner), TAbiCast(inner), TParameterConversion(inner, _),
+				TNoReturn(inner): isPureCallExpression(inner);
 			default: false;
 		};
 

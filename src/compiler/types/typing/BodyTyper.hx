@@ -216,8 +216,9 @@ class BodyTyper implements BodyTyping {
 			?substitutions:Map<String, CompilerType>, ?specializedName:String,
 			?abstractReceiver:CompilerType, ?physicalOwner:String,
 			?ownerTypeArguments:Array<CompilerType>,
-			?inference:DeclarationTypeTable.FunctionInference):TypedFunction {
+			?inference:DeclarationTypeTable.FunctionInference, ?elaboration:GenericElaboration):TypedFunction {
 		compiler.types.analysis.ScopedEscapeChecker.check(fn.arguments, fn.statements);
+		var elaborationMark = elaboration == null ? null : session.closureConversion.mark();
 		var functionName = specializedName == null
 			? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
 		// The declaration the query knows: the prologue below makes a copy of it.
@@ -327,6 +328,16 @@ class BodyTyper implements BodyTyping {
 		}) && !ControlFlow.returnsOnEveryPath(statements,
 			function(type, cases) return this.exhaustiveSwitch(type, cases)))
 			fail("E1006", 'Function ${fn.name} does not return on every path', fn.span);
+		// Typed with its own type parameters, the body is made into the code of the representation asked for, in its context.
+		if (elaboration != null) {
+			statements = elaboration.statements(statements);
+			arguments = [for (argument in arguments) {
+				name:argument.name, type:elaboration.type(argument.type)
+			}];
+			result = elaboration.type(result);
+			if (elaborationMark != null)
+				session.closureConversion.mapTypesSince(elaborationMark, elaboration);
+		}
 		var typeArguments:Null<Array<CompilerType>> = ownerTypeArguments,
 			typeParameters = fn.typeParameters;
 		if (specializedName != null && typeParameters != null) {
@@ -365,15 +376,32 @@ class BodyTyper implements BodyTyping {
 		for (name in context.storage.cells.keys()) {
 			if (context.storage.types.exists(name) && context.storage.kinds.exists(name))
 				session.closureConversion.addCell(requiredMapValue(context.storage.cells, name),
-					session.monomorphs.settled(requiredMapValue(context.storage.types, name)),
+					elaborated(elaboration, session.monomorphs.settled(requiredMapValue(context.storage.types, name))),
 					requiredMapValue(context.storage.kinds, name));
 		}
-		if (resultFunction.dispatchEntry != null)
-			session.closureConversion.addFunction(dispatchEntry(resultFunction, fn,
-				physicalOwner == null ? owner : physicalOwner, substitutions));
+		if (resultFunction.dispatchEntry != null) {
+			var entry = dispatchEntry(resultFunction, fn, physicalOwner == null ? owner : physicalOwner, substitutions);
+			session.closureConversion.addFunction(elaboration == null ? entry : elaboration.typedFunction(entry));
+		}
 		leaveBody(functionContext);
 		return resultFunction;
 	}
+
+	/** `value` crossing to `target`, of substituted types, as `TypeRepresentation.boundaryCast` makes it (`GenericElaboration`). */
+	public function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression
+		return session.representation.boundaryCast(value, target);
+
+	/** `operation` on `arguments`, of substituted types, with the helper the types ask for (`GenericElaboration`). */
+	public function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation,
+			arguments:Array<TypedExpression>,
+			span:SourceSpan):TypedExpression
+		return switch operation {
+			case Equality(name): callResolver.equalityCall(name, arguments[0], arguments[1], span);
+			case ArraySearch(name): callResolver.arraySearch(name, arguments[0], arguments[1], span, true);
+		};
+
+	static function elaborated(elaboration:Null<GenericElaboration>, type:CompilerType):CompilerType
+		return elaboration == null ? type : elaboration.type(type);
 
 	/**
 	 * The signature a read of the unannotated function `fn` gets while its body is typed: a type variable for each unannotated
@@ -1489,14 +1517,16 @@ class BodyTyper implements BodyTyping {
 			case TBoolLiteral(v): 'bool:$v';
 			case TEnumLiteral(name, index): enumPatternKey(name, index, predicates);
 			case TNullLiteral: "null";
-			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): switchCaseKey(inner, predicates);
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner),
+				TParameterConversion(inner, _): switchCaseKey(inner, predicates);
 			default: null;
 		};
 
 	public static function enumLiteral(value:TypedExpression):Null<{name:String, index:Int}>
 		return switch value.expression {
 			case TEnumLiteral(name, index): {name: name, index: index};
-			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): enumLiteral(inner);
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner),
+				TParameterConversion(inner, _): enumLiteral(inner);
 			default: null;
 		};
 
@@ -1513,7 +1543,7 @@ class BodyTyper implements BodyTyping {
 			case TEnumLiteral(name, index): 'enum:$name:$index';
 			case TNullLiteral: "null";
 			case TNullableWrap(inner): constantPatternKey(inner);
-			case TCast(inner), TAbiCast(inner): constantPatternKey(inner);
+			case TCast(inner), TAbiCast(inner), TParameterConversion(inner, _): constantPatternKey(inner);
 			default: null;
 		};
 
@@ -2224,7 +2254,7 @@ class BodyTyper implements BodyTyping {
 	static function isStableFlowReceiver(value:TypedExpression):Bool
 		return switch value.expression {
 			case TLocal(_), TCaptured(_): true;
-			case TCast(inner), TAbiCast(inner): isStableFlowReceiver(inner);
+			case TCast(inner), TAbiCast(inner), TParameterConversion(inner, _): isStableFlowReceiver(inner);
 			case TField(_, _) if (value.stableFlowValue): true;
 			default: false;
 		};
@@ -2406,7 +2436,8 @@ class BodyTyper implements BodyTyping {
 		return switch value.expression {
 			case TLocal(name), TCellLocal(name, _), TCaptured(name),
 				TCellCaptured(name, _): this.context.scopedBindings.get(name);
-			case TCopy(inner, _), TNullableWrap(inner), TCast(inner), TAbiCast(inner): scopedSource(inner);
+			case TCopy(inner, _), TNullableWrap(inner), TCast(inner), TAbiCast(inner),
+				TParameterConversion(inner, _): scopedSource(inner);
 			default: null;
 		};
 	}

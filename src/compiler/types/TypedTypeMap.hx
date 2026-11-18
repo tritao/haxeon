@@ -116,8 +116,15 @@ class TypedTypeMap {
 		return new TypedExpression(expression, type, item.span, item.stableFlowValue,
 			item.mapKeySource == null ? null : this.expression(item.mapKeySource),
 			item.storageType == null ? null : map(item.storageType),
-			item.semanticReference);
+			item.semanticReference, parameterSource(item.parameterSource));
 	}
+
+	function parameterSource(source:Null<TypedParameterSource>):Null<TypedParameterSource>
+		return source == null ? null : {
+			source: map(source.source),
+			target: map(source.target),
+			substitutions: source.substitutions
+		};
 
 	/**
 	 * The values of an object literal whose record has `recordFields`: a value written before its field turned optional (a literal's
@@ -207,6 +214,8 @@ class TypedTypeMap {
 			case TThrowExpression(value): TThrowExpression(expression(value));
 			case TNoReturn(value): TNoReturn(expression(value));
 			case TCast(value): TCast(expression(value));
+			case TParameterConversion(value, conversion): TParameterConversion(expression(value), conversion);
+			case TParameterOperation(operation, arguments): TParameterOperation(operation, expressions(arguments));
 			case TAbiCast(value): TAbiCast(expression(value));
 			case TSwitchExpression(subject, cases, defaultExpression): TSwitchExpression(expression(subject),
 				[for (switchCase in cases)

@@ -46,7 +46,8 @@ class InlineConstantEvaluator {
 					case InlineConstantValue.Integer(number): InlineConstantValue.Integer(number);
 					default: null;
 				}
-			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): evaluateValue(inner);
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner),
+				TParameterConversion(inner, _): evaluateValue(inner);
 			case TAdd(left, right): add(evaluateValue(left), evaluateValue(right));
 			case TSub(left, right): numericBinary(evaluateValue(left), evaluateValue(right), 1);
 			case TMul(left, right): numericBinary(evaluateValue(left), evaluateValue(right), 2);

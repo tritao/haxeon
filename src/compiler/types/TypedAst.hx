@@ -19,9 +19,15 @@ class TypedExpression {
 	/** Declared storage type for a captured value whose flow type may be narrowed. */
 	public final storageType:Null<CompilerType>;
 
+	/**
+	 * On a boundary the elaboration pass made (`GenericElaboration`), the conversion it stands for in the body's own type
+	 * parameters; null on every other node.
+	 */
+	public final parameterSource:Null<TypedParameterSource>;
+
 	public function new(expression, type, span, stableFlowValue:Bool = false, ?mapKeySource:TypedExpression,
 			?storageType:CompilerType,
-			?semanticReference:String) {
+			?semanticReference:String, ?parameterSource:TypedParameterSource) {
 		this.expression = expression;
 		this.type = type;
 		this.span = span;
@@ -29,7 +35,37 @@ class TypedExpression {
 		this.mapKeySource = mapKeySource;
 		this.storageType = storageType;
 		this.semanticReference = semanticReference;
+		this.parameterSource = parameterSource;
 	}
+}
+
+/**
+ * The semantic side of a boundary between a type parameter and another type: `source` converted to `target`, both as the body's
+ * own typing has them (`T` to `Dynamic`, `Dynamic` to `T`, `T` to its bound), and the substitution the boundary was made for.
+ * Lowering reads it where the physical conversion alone loses what the value is (docs/design/GENERIC_TYPING_ONCE.md, stage 2).
+ */
+typedef TypedParameterSource = {
+	final source:CompilerType;
+	final target:CompilerType;
+	final substitutions:Map<String, CompilerType>;
+}
+
+/** Which operation a `TParameterOperation` stands for; the elaboration pass chooses its helper for the substituted types. */
+enum ParameterOperation {
+	/** An equality intrinsic, by name (`Equality.equals`, `Equality.sameForChange`, `Hashing.keyEquals`). */
+	Equality(name:String);
+
+	/** `Array.indexOf`, `contains` or `remove`, by name, of a value in an array. */
+	ArraySearch(name:String);
+}
+
+/** Which conversion a `TParameterConversion` stands for; the elaboration pass makes it for the substituted types. */
+enum ParameterConversionKind {
+	/** A value converted to an expected type (`ConversionResolver.coerce`). */
+	Coerce;
+
+	/** A value crossing between its physical and semantic type (`TypeRepresentation.boundaryCast`). */
+	Boundary;
 }
 
 /** Type-checked expression operations consumed by IR generation. */
@@ -88,6 +124,19 @@ enum TypedExpressionKind {
 	TNoReturn(expression:TypedExpression);
 	TCast(expression:TypedExpression);
 	TAbiCast(expression:TypedExpression);
+
+	/**
+	 * A conversion of `value` to this node's type where either mentions a type parameter of the body: what it is physically
+	 * depends on the representation, so the typer records it and the elaboration pass makes it (`GenericElaboration`). No
+	 * node of this kind is left after typing.
+	 */
+	TParameterConversion(value:TypedExpression, kind:ParameterConversionKind);
+
+	/**
+	 * An operation on values whose type mentions a type parameter of the body, whose helper depends on the representation:
+	 * the elaboration pass chooses it (`GenericElaboration`). No node of this kind is left after typing.
+	 */
+	TParameterOperation(operation:ParameterOperation, arguments:Array<TypedExpression>);
 	TSwitchExpression(expression:TypedExpression, cases:Array<TypedSwitchExpressionCase>,
 		defaultExpression:Null<TypedExpression>);
 	TObjectLiteral(name:String, fields:Array<TypedObjectField>, isDynamic:Bool);

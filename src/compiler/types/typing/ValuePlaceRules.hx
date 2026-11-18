@@ -27,7 +27,7 @@ class ValuePlaceRules {
 					throw new CompileError(new Diagnostic("E1027",
 						'Cannot mutate a struct inside Observable field "$name"; copy the value, mutate it, and assign it back',
 						span));
-			case TCast(value), TAbiCast(value):
+			case TCast(value), TAbiCast(value), TParameterConversion(value, _):
 				if (session.relations.isValueClass(value.type) || session.relations.isNullableValueClass(value.type))
 					rejectObservableMutation(session, value, span);
 			default:
@@ -41,7 +41,7 @@ class ValuePlaceRules {
 			case TField(parent, name):
 				FinalFieldRules.rejectInstanceMutation(session, parent, name, span);
 				requireWritable(session, parent, span);
-			case TCast(value), TAbiCast(value):
+			case TCast(value), TAbiCast(value), TParameterConversion(value, _):
 				if (session.relations.isValueClass(value.type) || session.relations.isNullableValueClass(value.type))
 					checkPlace(session, value, span);
 				else

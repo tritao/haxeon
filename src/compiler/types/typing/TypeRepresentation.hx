@@ -454,6 +454,60 @@ class TypeRepresentation {
 			default: false;
 		};
 
+	/** Whether `type` mentions a type parameter; `containsTypeParameter` without allocating where no structure is met. */
+	public static function mentionsTypeParameter(type:CompilerType):Bool
+		return switch type {
+			case TTypeParameter(_, _): true;
+			case TInt, TInt64, TBool, TFloat, TString, TBytes, THlBytes, TDynamic, TNull, TVoid, TNever: false;
+			case TInstance(_, _, arguments): anyMentions(arguments);
+			case TAbstract(_, arguments, representation): anyMentions(arguments)
+				|| mentionsTypeParameter(representation);
+			case TNullable(inner), TArray(inner), TIterator(inner): mentionsTypeParameter(inner);
+			case TMap(key, value): mentionsTypeParameter(key) || mentionsTypeParameter(value);
+			case TKeyPath(root, value, _): mentionsTypeParameter(root) || mentionsTypeParameter(value);
+			case TFunction(arguments, result, _): anyMentions(arguments) || mentionsTypeParameter(result);
+			case TAnonymous(_, _): structureMentions(type, []);
+			default: false;
+		};
+
+	static function anyMentions(types:Array<CompilerType>):Bool {
+		for (type in types)
+			if (mentionsTypeParameter(type))
+				return true;
+		return false;
+	}
+
+	static function structureMentions(type:CompilerType,
+			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool
+		return switch type {
+			case TTypeParameter(_, _): true;
+			case TInstance(_, _, arguments): anyStructureMentions(arguments, explored);
+			case TAbstract(_, arguments, representation): anyStructureMentions(arguments, explored)
+				|| structureMentions(representation, explored);
+			case TNullable(inner), TArray(inner), TIterator(inner): structureMentions(inner, explored);
+			case TMap(key, value): structureMentions(key, explored) || structureMentions(value, explored);
+			case TKeyPath(root, value, _): structureMentions(root, explored) || structureMentions(value, explored);
+			case TFunction(arguments, result, _): anyStructureMentions(arguments, explored)
+				|| structureMentions(result, explored);
+			case TAnonymous(_, fields):
+				var found = false;
+				if (explored.indexOf(fields) < 0) {
+					explored.push(fields);
+					for (field in fields)
+						if (structureMentions(field.type, explored)) found = true;
+				}
+				found;
+			default: false;
+		};
+
+	static function anyStructureMentions(types:Array<CompilerType>,
+			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
+		for (type in types)
+			if (structureMentions(type, explored))
+				return true;
+		return false;
+	}
+
 	function anyTypeParameter(types:Array<CompilerType>,
 			explored:Array<Array<compiler.types.Type.AnonymousField>>):Bool {
 		for (type in types)
@@ -630,6 +684,10 @@ class TypeRepresentation {
 	public function boundaryCast(value:TypedExpression, target:CompilerType, ?owner:CompilerType):TypedExpression {
 		if (TypeRelations.equals(value.type, target))
 			return value;
+		// Between a type parameter and its physical type, the cast is the representation's: the elaboration pass makes it.
+		if (mentionsTypeParameter(value.type) || mentionsTypeParameter(target))
+			return new TypedExpression(TParameterConversion(value, Boundary), target, value.span,
+				value.stableFlowValue);
 		rejectMapStorageChange(value, target, owner);
 		if (ConversionResolver.functionSignaturesDiffer(value.type, target))
 			return requiredConversions().adaptFunction(value, target, value.span);

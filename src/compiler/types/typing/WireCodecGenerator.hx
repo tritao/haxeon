@@ -1174,7 +1174,8 @@ class WireCodecGenerator {
 		return switch expression.expression {
 			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TBoolLiteral(_), TNullLiteral,
 				TEnumLiteral(_, _): true;
-			case TNullableWrap(value), TCast(value), TAbiCast(value), TIntToFloat(value), TIntToInt64(value),
+			case TNullableWrap(value), TCast(value), TAbiCast(value), TParameterConversion(value, _),
+				TIntToFloat(value), TIntToInt64(value),
 				TFloatToInt(value):
 				isWireDefaultExpression(value);
 			case TEnumConstruct(_, _, arguments):

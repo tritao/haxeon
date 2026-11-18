@@ -97,7 +97,8 @@ class TypeRelations {
 		if (!isAssignable(actual, expected))
 			return Incompatible;
 		switch actual {
-			case TNullable(element) if (acceptsNull(expected) && isAssignable(element, expected)):
+			case TNullable(element) if ((acceptsNull(expected) || isTypeParameter(expected))
+				&& isAssignable(element, expected)):
 				return UnwrapNullable;
 			default:
 		}
@@ -172,8 +173,9 @@ class TypeRelations {
 		}) && acceptsNull(expected))
 			return true;
 		switch actual {
+			// `Null<T>` is a `T`, as Haxe unifies them: what reading a null gives depends on what `T` stands for.
 			case TNullable(element):
-				if (acceptsNull(expected) && isAssignable(element, expected))
+				if ((acceptsNull(expected) || isTypeParameter(expected)) && isAssignable(element, expected))
 					return true;
 			default:
 		}
@@ -796,6 +798,12 @@ class TypeRelations {
 		};
 
 	/** Reference types hold null, except value classes and structs: their values are copied into their storage. */
+	static function isTypeParameter(type:CompilerType):Bool
+		return switch type {
+			case TTypeParameter(_, _): true;
+			default: false;
+		};
+
 	function acceptsNull(type:CompilerType):Bool
 		return isReference(type) && !isValueClass(type);
 

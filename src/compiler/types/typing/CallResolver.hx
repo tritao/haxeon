@@ -1020,6 +1020,77 @@ class CallResolver {
 		};
 	}
 
+	/**
+	 * `left` compared with `right`, already converted to `left`'s type, by the equality intrinsic `name` (`Equality.equals`,
+	 * `Equality.sameForChange` or `Hashing.keyEquals`), with the helper their type asks for.
+	 */
+	public function equalityCall(name:String, left:TypedExpression, right:TypedExpression,
+			span:SourceSpan):TypedExpression {
+		var mapKeyEquality = name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals";
+		if ((name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange") && (switch left.type {
+			case TTypeParameter(_, _) | TDynamic: true;
+			default: false;
+		}))
+			return new TypedExpression(TCall("$reactive.changeEquals", [left, right]), TBool, span);
+		if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
+			fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Hashable"), span);
+		if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
+			&& isFloatingMapKey(left.type))
+			return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
+		if ((switch (left.type) {
+			case TDynamic: true;
+			default: false;
+		}))
+			return new TypedExpression(TCall("__dynamic_equal", [
+				left,
+				bodyTyper.coerce(right, TDynamic, "dynamic equality operand", "E1002")
+			]), TBool, span);
+		var explicitEquality = name == "Equality.equals" || name == "haxeon.Equality.equals";
+		if (explicitEquality && !DeclaredConformance.supportsEquality(session, left.type))
+			fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Equatable"), span);
+		if (explicitEquality) {
+			// A plain abstract compares as its representation, as its == does.
+			var leftValue = DeclaredConformance.abstractEqualityOperand(session, left),
+				rightValue = DeclaredConformance.abstractEqualityOperand(session, right);
+			if (leftValue != null && rightValue != null) {
+				left = leftValue;
+				right = rightValue;
+			}
+		}
+		if (!explicitEquality && !mapKeyEquality && DeclaredConformance.usesIdentityEquality(left.type))
+			return new TypedExpression(TEqual(left, right), TBool, span);
+		var structType = switch left.type {
+			case TNullable(element) if (session.relations.isStruct(element)): element;
+			default: left.type;
+		};
+		var typeParameter = switch left.type {
+			case TTypeParameter(_, _): true;
+			default: false;
+		};
+		if (session.relations.isStruct(structType) && !DeclaredConformance.supportsEquality(session, structType))
+			fail("E1025",
+				'Struct "${compiler.semantic.SemanticSignature.display(structType)}" does not conform to Equatable',
+				span);
+		var enumType = switch left.type {
+			case TInstance(NominalKind.Enum, _, _): true;
+			case TNullable(TInstance(NominalKind.Enum, _, _)): true;
+			default: false;
+		};
+		if (enumType) {
+			if (!DeclaredConformance.supportsEquality(session, left.type))
+				fail("E1025",
+					'Enum "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Equatable',
+					span);
+			var keyed = EnumEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
+		}
+		if (DeclaredConformance.usesEquality(session, left.type) && !typeParameter) {
+			var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
+		}
+		return new TypedExpression(TEqual(left, right), TBool, span);
+	}
+
 	public function typeClosureCall(callee:AstExpression, arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
 			callableName:Null<String> = null,
 			invalidateAllExpressions:Bool = true, ?expectedType:CompilerType):TypedExpression {
@@ -1690,69 +1761,10 @@ class CallResolver {
 			var left = typeExpressionValue(arguments[0], scope),
 				right = bodyTyper.coerce(bodyTyper.typeExpression(arguments[1], scope, left.type), left.type,
 					"structural equality operand", "E1002");
-			var mapKeyEquality = name == "Hashing.keyEquals" || name == "haxeon.Hashing.keyEquals";
-			if ((name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange") && (switch left.type {
-				case TTypeParameter(_, _) | TDynamic: true;
-				default: false;
-			}))
-				return new TypedExpression(TCall("$reactive.changeEquals", [left, right]), TBool, span);
-			if (mapKeyEquality && !DeclaredConformance.supportsHash(session, left.type))
-				fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Hashable"), span);
-			if ((mapKeyEquality || name == "Equality.sameForChange" || name == "haxeon.Equality.sameForChange")
-				&& isFloatingMapKey(left.type))
-				return new TypedExpression(TCall("$map.floatKeyEquals", [left, right]), TBool, span);
-			if ((switch (left.type) {
-				case TDynamic: true;
-				default: false;
-			}))
-				return new TypedExpression(TCall("__dynamic_equal", [
-					left,
-					bodyTyper.coerce(right, TDynamic, "dynamic equality operand", "E1002")
-				]), TBool, span);
-			var explicitEquality = name == "Equality.equals" || name == "haxeon.Equality.equals";
-			if (explicitEquality && !DeclaredConformance.supportsEquality(session, left.type))
-				fail("E1025", DeclaredConformance.capabilityError(session, left.type, "Equatable"), span);
-			if (explicitEquality) {
-				// A plain abstract compares as its representation, as its == does.
-				var leftValue = DeclaredConformance.abstractEqualityOperand(session, left),
-					rightValue = DeclaredConformance.abstractEqualityOperand(session, right);
-				if (leftValue != null && rightValue != null) {
-					left = leftValue;
-					right = rightValue;
-				}
-			}
-			if (!explicitEquality && !mapKeyEquality && DeclaredConformance.usesIdentityEquality(left.type))
-				return new TypedExpression(TEqual(left, right), TBool, span);
-			var structType = switch left.type {
-				case TNullable(element) if (session.relations.isStruct(element)): element;
-				default: left.type;
-			};
-			var typeParameter = switch left.type {
-				case TTypeParameter(_, _): true;
-				default: false;
-			};
-			if (session.relations.isStruct(structType) && !DeclaredConformance.supportsEquality(session, structType))
-				fail("E1025",
-					'Struct "${compiler.semantic.SemanticSignature.display(structType)}" does not conform to Equatable',
-					span);
-			var enumType = switch left.type {
-				case TInstance(NominalKind.Enum, _, _): true;
-				case TNullable(TInstance(NominalKind.Enum, _, _)): true;
-				default: false;
-			};
-			if (enumType) {
-				if (!DeclaredConformance.supportsEquality(session, left.type))
-					fail("E1025",
-						'Enum "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Equatable',
-						span);
-				var keyed = EnumEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
-			}
-			if (DeclaredConformance.usesEquality(session, left.type) && !typeParameter) {
-				var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
-			}
-			return new TypedExpression(TEqual(left, right), TBool, span);
+			// On a type parameter's value, which equality applies is the representation's: the elaboration pass chooses it.
+			if (TypeRepresentation.mentionsTypeParameter(left.type))
+				return new TypedExpression(TParameterOperation(Equality(name), [left, right]), TBool, span);
+			return equalityCall(name, left, right, span);
 		}
 		if (name == "Hashing.hash" || name == "haxeon.Hashing.hash") {
 			if (arguments.length != 1)
@@ -2203,6 +2215,32 @@ class CallResolver {
 			default: false;
 		};
 
+	/**
+	 * `Array.indexOf`, `contains` or `remove` (`name`) of `value`, of the element type, in `receiver`; with `request`, the
+	 * element's equality helper is requested here.
+	 */
+	public function arraySearch(name:String, receiver:TypedExpression, value:TypedExpression, span:SourceSpan,
+			request:Bool):TypedExpression {
+		var element = switch receiver.type {
+			case TArray(element): element;
+			default: throw new InternalError("An array search on a value that is no array");
+		};
+		if (request)
+			requestArrayValueEquality(element, span);
+		if (name == "remove")
+			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
+		var base = switch element {
+			case TNullable(inner): inner;
+			default: element;
+		};
+		var index = new TypedExpression(TCollectionCall(receiver,
+			(session.relations.isValueClass(base)
+			|| isEnumValue(base)
+			|| isDynamicType(base)) ? "value_index_of" : "index_of", [value]), TInt, span);
+		return name == "indexOf" ? index : new TypedExpression(TLessEqual(new TypedExpression(TIntLiteral(0), TInt,
+			span), index), TBool, span);
+	}
+
 	function requestArrayValueEquality(element:CompilerType, span:SourceSpan):Void {
 		var value = switch element {
 			case TNullable(inner): inner;
@@ -2346,11 +2384,15 @@ class CallResolver {
 		if (name == "remove") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.remove expects one argument", span);
-			requestArrayValueEquality(element, span);
+			var deferred = TypeRepresentation.mentionsTypeParameter(element);
+			if (!deferred)
+				requestArrayValueEquality(element, span);
 			var value = comparedValue != null ? comparedValue
 				: bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
 				"E1002");
-			return new TypedExpression(TCollectionCall(receiver, "remove", [value]), TBool, span);
+			// On a type parameter's element, the equality the search uses is the representation's: the elaboration pass chooses it.
+			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("remove"), [receiver, value]),
+				TBool, span) : arraySearch("remove", receiver, value, span, false);
 		}
 		if (name == "insert") {
 			if (arguments.length != 2)
@@ -2422,38 +2464,28 @@ class CallResolver {
 			}
 			if (arguments.length != 1)
 				fail("E1008", "Array.indexOf expects one argument", span);
-			requestArrayValueEquality(element, span);
+			var deferred = TypeRepresentation.mentionsTypeParameter(element);
+			if (!deferred)
+				requestArrayValueEquality(element, span);
 			var value = comparedValue != null ? comparedValue
 				: bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
 				"E1002");
-			var base = switch element {
-				case TNullable(inner): inner;
-				default: element;
-			};
-			return new TypedExpression(TCollectionCall(receiver,
-				(session.relations.isValueClass(base)
-				|| isEnumValue(base)
-				|| isDynamicType(base)) ? "value_index_of" : "index_of", [value]),
-				TInt, span);
+			// On a type parameter's element, the equality the search uses is the representation's: the elaboration pass chooses it.
+			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("indexOf"), [receiver, value]),
+				TInt, span) : arraySearch("indexOf", receiver, value, span, false);
 		}
 		if (name == "contains") {
 			if (arguments.length != 1)
 				fail("E1008", "Array.contains expects one argument", span);
-			requestArrayValueEquality(element, span);
+			var deferred = TypeRepresentation.mentionsTypeParameter(element);
+			if (!deferred)
+				requestArrayValueEquality(element, span);
 			var value = comparedValue != null ? comparedValue
 				: bodyTyper.coerce(typeExpressionValue(arguments[0], scope, element), element, "array element",
-				"E1002"),
-				base = switch element {
-					case TNullable(inner): inner;
-					default: element;
-				},
-					index = new TypedExpression(TCollectionCall(receiver,
-					(session.relations.isValueClass(base)
-					|| isEnumValue(base)
-					|| isDynamicType(base)) ? "value_index_of" : "index_of", [value]),
-					TInt, span),
-					zero = new TypedExpression(TIntLiteral(0), TInt, span);
-			return new TypedExpression(TLessEqual(zero, index), TBool, span);
+				"E1002");
+			// On a type parameter's element, the equality the search uses is the representation's: the elaboration pass chooses it.
+			return deferred ? new TypedExpression(TParameterOperation(ArraySearch("contains"), [receiver, value]),
+				TBool, span) : arraySearch("contains", receiver, value, span, false);
 		}
 		var library = typeLibraryArrayMethod(receiver, name, arguments, span, scope);
 		if (library != null)

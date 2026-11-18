@@ -11,6 +11,7 @@ typedef CompileOptionsInit = {
 	final ?reverseTypingOrder:Bool;
 	final ?parseThreads:Int;
 	final ?keepSession:Bool;
+	final ?elaborateGenerics:Bool;
 }
 
 /**
@@ -62,6 +63,14 @@ class CompileOptions {
 	 */
 	public final keepSession:Bool;
 
+	/**
+	 * Make a generic class's erased code from its methods' own-parameter typing, passed through the elaboration pass
+	 * (`GenericElaboration`), instead of typing each body again with its parameters erased. Output must not change: the test
+	 * driver builds programs both ways and compares the bytes (docs/design/GENERIC_TYPING_ONCE.md, stage 2). For the tests
+	 * that check so, until the pass replaces the second typing.
+	 */
+	public final elaborateGenerics:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -72,6 +81,7 @@ class CompileOptions {
 		reverseTypingOrder = init != null && init.reverseTypingOrder == true;
 		parseThreads = init == null || init.parseThreads == null || init.parseThreads < 1 ? 1 : init.parseThreads;
 		keepSession = init == null || init.keepSession != false;
+		elaborateGenerics = init != null && init.elaborateGenerics == true;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -85,7 +95,8 @@ class CompileOptions {
 			wasmLegacyExceptions: wasmLegacyExceptions,
 			reverseTypingOrder: reverseTypingOrder,
 			parseThreads: parseThreads,
-			keepSession: keepSession
+			keepSession: keepSession,
+			elaborateGenerics: elaborateGenerics
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -109,6 +120,8 @@ class CompileOptions {
 			flags.push(PARSE_THREADS + parseThreads);
 		if (!keepSession)
 			flags.push(NO_KEEP_SESSION);
+		if (elaborateGenerics)
+			flags.push("--elaborate-generics");
 		return flags;
 	}
 
@@ -130,7 +143,7 @@ class CompileOptions {
 		return switch argument {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
-				"--wasm-legacy-exceptions", "--reverse-typing-order": true;
+				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
@@ -146,7 +159,8 @@ class CompileOptions {
 			wasmLegacyExceptions: arguments.indexOf("--wasm-legacy-exceptions") >= 0,
 			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0,
 			parseThreads: threadsFrom(arguments),
-			keepSession: arguments.indexOf(NO_KEEP_SESSION) < 0
+			keepSession: arguments.indexOf(NO_KEEP_SESSION) < 0,
+			elaborateGenerics: arguments.indexOf("--elaborate-generics") >= 0
 		});
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

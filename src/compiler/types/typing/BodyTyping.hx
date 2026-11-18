@@ -52,7 +52,8 @@ interface BodyTyping {
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false,
 			?substitutions:Map<String, CompilerType>,
 			?specializedName:String, ?abstractReceiver:CompilerType, ?physicalOwner:String,
-			?ownerTypeArguments:Array<CompilerType>, ?inference:DeclarationTypeTable.FunctionInference):TypedFunction;
+			?ownerTypeArguments:Array<CompilerType>, ?inference:DeclarationTypeTable.FunctionInference,
+			?elaboration:GenericElaboration):TypedFunction;
 	function argumentTypesOf(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
 	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
 			declarationName:String):TypedExpression;

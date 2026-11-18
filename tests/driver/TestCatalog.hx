@@ -73,6 +73,7 @@ class TestCatalog {
 		"LazyFieldTypingMain",
 		"LazyFunctionTypingMain",
 		"OpenLiteralStructureMain",
+		"GenericElaborationMain",
 		"WasmBackendSessionMain",
 		"PackedValuePatchMain",
 		"IrVerifyMemoMain",

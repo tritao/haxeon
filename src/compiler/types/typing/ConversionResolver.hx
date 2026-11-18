@@ -122,6 +122,12 @@ class ConversionResolver {
 			default: false;
 		}))
 			return neverAs(value, expected);
+		// Where a type parameter is on either side, what the conversion is physically depends on what the parameter stands for:
+		// it is recorded, and the elaboration pass makes it for each representation (`GenericElaboration`).
+		if (mentionsTypeParameter(value.type, expected) && !isNullIntoNullable(value.type, expected)
+			&& !session.relations.conversion(value.type, expected).match(Incompatible))
+			return new TypedExpression(TParameterConversion(value, Coerce), expected, value.span,
+				value.stableFlowValue);
 		if ((switch (value.type) {
 			case TDynamic: true;
 			default: false;
@@ -294,6 +300,13 @@ class ConversionResolver {
 				? 'the type of field "${origin.declaration}"' : 'the result of "${origin.declaration}"';
 		return '$spelled has no field ${missing[0]}; the structure comes from a literal in "${origin.declaration}", which closed its type; annotate $annotate';
 	}
+
+	/** A null literal made a nullable's null, which is the same for every representation. */
+	static function isNullIntoNullable(actual:CompilerType, expected:CompilerType):Bool
+		return actual.match(TNull) && expected.match(TNullable(_));
+
+	static function mentionsTypeParameter(actual:CompilerType, expected:CompilerType):Bool
+		return TypeRepresentation.mentionsTypeParameter(actual) || TypeRepresentation.mentionsTypeParameter(expected);
 
 	static function nonNullable(type:CompilerType):CompilerType
 		return switch type {

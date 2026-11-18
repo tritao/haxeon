@@ -40,7 +40,7 @@ class KeyPathTyping {
 		return switch value.expression {
 			case TCall(name,
 				_) if (StringTools.startsWith(name, LITERAL_PREFIX)): session.keyPaths.definitions.get(name);
-			case TCast(inner), TAbiCast(inner):
+			case TCast(inner), TAbiCast(inner), TParameterConversion(inner, _):
 				var definition = known(session, inner);
 				switch value.type {
 					case TKeyPath(root, fieldType, _) if (definition != null

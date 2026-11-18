@@ -67,6 +67,7 @@ class FlowAnalysis {
 			case TCopy(value, _), TEnumIndex(value), TEnumField(value, _, _), TNullableWrap(value), TIntToFloat(value),
 				TIntToInt64(value),
 				TFloatToInt(value), TToDynamic(value), TNegate(value), TNot(value), TCast(value), TAbiCast(value),
+				TParameterConversion(value, _),
 				TToInterface(value, _),
 				TArrayLength(value), TStringLength(value), TStringFromCharCode(value), TNewArray(_, value),
 				TMethodRef(value, _), TField(value, _):
@@ -266,7 +267,7 @@ class FlowAnalysis {
 					};
 				parent == null || literalIndex == null ? null : 'array-entry:$parent:$literalIndex';
 			case TMapGet(map, key): mapEntryPath(map, key);
-			case TCast(value), TAbiCast(value), TToDynamic(value): accessPath(value);
+			case TCast(value), TAbiCast(value), TToDynamic(value), TParameterConversion(value, _): accessPath(value);
 			default: null;
 		};
 
@@ -275,7 +276,8 @@ class FlowAnalysis {
 			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _):
 				var source = scope.mapKeySource(name);
 				source == null ? expression.mapKeySource : source;
-			case TCast(value), TAbiCast(value), TToDynamic(value): mapKeySource(value, scope);
+			case TCast(value), TAbiCast(value), TToDynamic(value),
+				TParameterConversion(value, _): mapKeySource(value, scope);
 			default: expression.mapKeySource;
 		};
 	}
@@ -283,7 +285,7 @@ class FlowAnalysis {
 	static function isNullValue(expression:TypedExpression):Bool
 		return switch expression.expression {
 			case TNullLiteral: true;
-			case TNullableWrap(value): isNullValue(value);
+			case TNullableWrap(value), TParameterConversion(value, _): isNullValue(value);
 			default: false;
 		};
 }

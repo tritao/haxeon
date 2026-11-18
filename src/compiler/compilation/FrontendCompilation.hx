@@ -424,7 +424,7 @@ class FrontendCompilation {
 				previousSemantic), context.options.reverseTypingOrder, {
 					signatures: previousSignatures(context, names),
 					check: context.options.checkReuse
-				});
+				}, context.options.elaborateGenerics);
 			build.allocationAfterProgramTyping = AllocationMeter.sample();
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;

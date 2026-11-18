@@ -169,5 +169,55 @@ haxeon-e4 reviewed this stage. Its conditions are the contract:
 5. **Order.** Items 1 to 3 now, in parallel with haxeon-e4's slice 2a (`IrType.Structure`). Items 4 and 5 start only
    after the naming (3) and the boundary contract (2) are agreed.
 
+Points 3 and 4, as haxeon-e4 proposed them (2026-11-18), are the contract for items 4 and 5:
+
+- **Naming.** One module, `compiler.semantic.GeneratedNames`, shared by the typer, the elaboration pass and the IR, owns
+  every generated generic name and its predicate: `specialization(base, policy, arguments)` (today's
+  `$generic:Owner.method[layout]<…>`), `erasedOperation(owner, operation, member)` and `erasedDispatch(...)` (today's
+  `$generic-erased:Owner:get|set|call:member` and `$generic-erased-dispatch:`), and `isSpecialization`,
+  `isErasedOperation` and the like, which replace the `startsWith(name, "$generic:")` checks in `IrOptionalFieldStorage`,
+  `IrValueArrayPlaceMethods`, `IrGenerator`, `WasmFlattenValueFields`, `SemanticAssembly` and `SemanticIndex`. Its first
+  step is a pure move: the same text, byte-identical, with IR call targets through `IrSymbol.of`. ADR 0003 M3 later
+  replaces the text by a structured identity behind the same functions.
+- **Lambda names** stay a content hash, because live patching aligns functions by name (`LambdaAlignment`,
+  `PositionalName`), but the hash covers the semantic types (the own parameters, unsubstituted), not the physical ones:
+  `$lambda:<owner>.<member>#<index>@<semantic hash>` for the own-parameter body, and `[<representation key>]` after it for
+  an elaborated body, the key being the argument part of `GeneratedNames.specialization`. Before the switch, check what
+  `LambdaAlignment` and the patch planner match on. The change renames lambdas once for live sessions.
+
 Items 1 to 3 are typer-local: the typer records the semantic decision and the pass produces today's nodes from it, so
 output stays byte-identical. They go to the service lane.
+
+### As built (stage 2, first piece)
+
+- **The pass.** `GenericElaboration` (a `TypedTypeMap`) replaces the owner's type parameters by a representation's
+  substitutions and makes each recorded decision for the substituted types. It runs inside `BodyTyper.typeFunction`, in
+  the body's context before it is left, so a helper or adapter the decision asks for is named and requested as typing
+  the body again would. It also elaborates the closures the body made and its cell types.
+- **The test.** `--elaborate-generics` (`CompileOptions.elaborateGenerics`) makes a generic class's erased methods
+  (path 7) from their own-parameter typing passed through the pass. The test driver builds every program with and without
+  it in the warm-edit builds (`--check-reuse`) and requires the same bytes; `elaborationKnownDifferences` in
+  `tests/driver/TestRunner.hx` names each program that still differs and the item that fixes it. A name there that no
+  longer differs fails. `tests/compiler/GenericElaborationMain.hx` checks the bytes and the boundary's source type across
+  warm rebuilds. Paths 6 and 8 are not under the option yet.
+- **Item 1, boundaries.** Where either side mentions a type parameter, `ConversionResolver.coerce` and
+  `TypeRepresentation.boundaryCast` return `TParameterConversion(value, Coerce | Boundary)` instead of a physical node (a
+  null literal made a nullable's null excepted). The pass makes the conversion with the same function at the substituted
+  types, and sets `TypedExpression.parameterSource` (the unsubstituted source and target, and the substitutions) on the
+  node it makes. Analyses that looked through `TCast`/`TAbiCast` also look through it. `IrGenerator` throws if one
+  reaches it.
+- **Item 3, first helpers.** `Equality.equals`, `Equality.sameForChange` and `Hashing.keyEquals` on a type parameter's
+  value, and `Array.indexOf`, `contains` and `remove` on an array of one, are `TParameterOperation`s the pass resolves
+  (`CallResolver.equalityCall`, `CallResolver.arraySearch`).
+- **`Null<T>` is a `T`**, as Haxe unifies them (`TypeRelations`). Own-parameter typing rejected `return values.shift()`
+  in a method returning `T`, which the erased typing and Haxe accept.
+- Without the option, programs, the self-compile and the UI showcase on HashLink, Wasm32 and Wasm GC are byte-identical
+  to the previous commit's. With it, 666 of the 670 test programs that build are identical. The rest wait for item 4: a
+  lambda's name hashes its types (`structural-iteration`), and a nested generic call in a body typed with its own
+  parameters names a specialization at those parameters (`haxeon.reactive.Derived`, which also keeps the UI showcase
+  from building with the option).
+- Typing, against the previous commit on the same sources: the self-compile allocates 50.12 M objects instead of
+  49.83 M (+0.6%, the conversions recorded in check units), the UI showcase 18.625 M instead of 18.624 M. Typing time is
+  within noise on a loaded machine (self-compile 4.5 to 5.2 s, showcase 1.8 to 2.2 s, both builds).
+- Left: item 2 (layout constants and raw-pointer forms) and the rest of item 3 (string conversion, hashing) show only in
+  specializations, so they come with putting paths 6 and 8 under the option.

@@ -264,6 +264,26 @@ class TestRunner {
 					status: 1,
 					output: 'a build of $source that types its bodies in reverse order (--reverse-typing-order) differs from one in declaration order\n'
 				};
+			// A generic class's erased code made from its own-parameter typing by the elaboration pass must be the code typing it again
+			// with its parameters erased gives (docs/design/GENERIC_TYPING_ONCE.md, stage 2).
+			var elaborated = build(worker, original, Path.join([directory, "elaborated-0.hl"]), "fresh",
+				["--elaborate-generics"]);
+			log.add(elaborated.output);
+			var same = elaborated.status == 0
+				&& File.getBytes(Path.join([directory, "warm-0.hl"]))
+				.compare(File.getBytes(Path.join([directory, "elaborated-0.hl"]))) == 0,
+				note = elaborationKnownDifferences.get(run.test.name);
+			if (!same && note == null)
+				return {
+					status: 1,
+					output: 'a build of $source whose generic code is elaborated (--elaborate-generics) '
+						+ (elaborated.status == 0 ? 'differs from one that types it again\n' : 'fails\n')
+				};
+			if (same && note != null)
+				return {
+					status: 1,
+					output: '$source is marked as differing when its generic code is elaborated ($note), but it no longer does: remove the marker\n'
+				};
 			File.saveBytes(output, File.getBytes(Path.join([directory, 'warm-${edits.length}.hl'])));
 			return {status: 0, output: 'compiled $source (warm edit rebuilds) -> $output\n'};
 		});
@@ -290,6 +310,18 @@ class TestRunner {
 	 * marker cannot outlive its cause. Nothing else is allowed to fail; do not add a name without a note that explains it.
 	 */
 	static final warmEditKnownFailures:Map<String, String> = [];
+
+	/**
+	 * Programs whose build with `--elaborate-generics` still differs from the plain build, or fails, by name, with the stage 2 item
+	 * of docs/design/GENERIC_TYPING_ONCE.md that fixes each. A name here must still differ: the build fails once it does not.
+	 */
+	static final elaborationKnownDifferences:Map<String, String> = [
+		"structural-iteration" => "item 4: a lambda's name hashes its types",
+		"reactive-derived-cycle" => "item 4: a nested generic call is specialized at the class's own parameter",
+		"reactive-effect-failure-recovery"
+			=> "item 4: a nested generic call is specialized at the class's own parameter",
+		"wasm-observable-tracking" => "item 4: a nested generic call is specialized at the class's own parameter"
+	];
 
 	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */
 	static function knownWarmFailure(run:ProgramRun, compilation:CommandResult):Null<{passed:Bool, output:String}> {

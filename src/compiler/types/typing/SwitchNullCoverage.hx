@@ -302,7 +302,8 @@ class SwitchNullCoverage {
 	static function valueKey(bodyTyper:BodyTyping, value:TypedExpression):Null<String>
 		return switch value.expression {
 			case TBoolLiteral(literal): 'bool:$literal';
-			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): valueKey(bodyTyper, inner);
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner),
+				TParameterConversion(inner, _): valueKey(bodyTyper, inner);
 			default: bodyTyper.switchCaseKey(value, []);
 		};
 
@@ -311,7 +312,8 @@ class SwitchNullCoverage {
 			case TBoolLiteral(literal): '$literal';
 			case TIntLiteral(literal): '$literal';
 			case TStringLiteral(literal): '"$literal"';
-			case TNullableWrap(inner), TCast(inner), TAbiCast(inner): display(inner, key);
+			case TNullableWrap(inner), TCast(inner), TAbiCast(inner),
+				TParameterConversion(inner, _): display(inner, key);
 			default: key;
 		};
 }

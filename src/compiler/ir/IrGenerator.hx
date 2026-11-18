@@ -2228,6 +2228,8 @@ class IrGenerator {
 
 	function lowerExpressionAt(expression:TypedExpression, builder:CfgBuilder, localTypes:Map<String, IrType>):CfgValue
 		return switch expression.expression {
+			case TParameterConversion(_, _), TParameterOperation(_, _):
+				throw new InternalError("A type parameter's conversion or operation reached IR generation without being elaborated");
 			case TCopy(value, layout):
 				switch expression.type {
 					case TNullable(_):
