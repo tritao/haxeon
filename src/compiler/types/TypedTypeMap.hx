@@ -106,11 +106,23 @@ class TypedTypeMap {
 			case TExpression(value, span): TExpression(expression(value), span);
 		};
 
-	public function expression(item:TypedExpression):TypedExpression
-		return new TypedExpression(kind(item.expression), map(item.type), item.span, item.stableFlowValue,
-			item.mapKeySource == null ? null : expression(item.mapKeySource),
+	public function expression(item:TypedExpression):TypedExpression {
+		var type = map(item.type), expression = switch [item.expression, type] {
+			// An object literal's record is its structure's, named when the structure closes (`MonomorphFrames`).
+			case [TObjectLiteral(_, fields, false), TAnonymous(name, _)]: TObjectLiteral(name, objectFields(fields),
+				false);
+			default: kind(item.expression);
+		};
+		return new TypedExpression(expression, type, item.span, item.stableFlowValue,
+			item.mapKeySource == null ? null : this.expression(item.mapKeySource),
 			item.storageType == null ? null : map(item.storageType),
 			item.semanticReference);
+	}
+
+	function objectFields(fields:Array<TypedObjectField>):Array<TypedObjectField>
+		return [for (field in fields) {
+			name:field.name, value:expression(field.value)
+		}];
 
 	function switchArm(arm:TypedSwitchArm):TypedSwitchArm
 		return {
@@ -182,10 +194,7 @@ class TypedTypeMap {
 				{
 						arm:switchArm(switchCase.arm), result:expression(switchCase.result)
 					}], optional(defaultExpression));
-			case TObjectLiteral(name, fields, isDynamic): TObjectLiteral(name, [for (field in fields)
-				{
-						name:field.name, value:expression(field.value)
-					}], isDynamic);
+			case TObjectLiteral(name, fields, isDynamic): TObjectLiteral(name, objectFields(fields), isDynamic);
 			case TArrayLiteral(values): TArrayLiteral(expressions(values));
 			case TTuple(values): TTuple(expressions(values));
 			case TMapLiteral(entries): TMapLiteral([for (entry in entries) {

@@ -115,8 +115,8 @@ class DeclaredConformance {
 	public static function requireMapRuntime(session:TypingSession, key:CompilerType, value:CompilerType,
 			span:SourceSpan):Void
 		session.monomorphs.whenKnown(TMap(key, value), function() {
-			var knownKey = compiler.types.Monomorphs.resolve(key),
-				knownValue = compiler.types.Monomorphs.resolve(value);
+			var knownKey = session.monomorphs.settled(key),
+				knownValue = session.monomorphs.settled(value);
 			requestHashableMapKey(session, knownKey, span);
 			if (session.mapName(knownKey, knownValue) == null)
 				BodyTyper.fail("E1016", "This map key/value type has no compiler-owned runtime ABI", span);

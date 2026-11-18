@@ -227,6 +227,7 @@ class BodyTyper implements BodyTyping {
 			// The body's frame holds the signature's type variables, so it is begun before anything reads the signature.
 			functionContext = enterBody(functionName, substitutions, null, null);
 			frame = session.monomorphs.begin(session.closureConversion.mark());
+			frame.declaration = functionName;
 			inference.provisional(provisionalSignature(declaration, functionName, substitutions));
 		}
 		var argumentTypes = argumentTypesOf(declaration, substitutions);
@@ -298,8 +299,14 @@ class BodyTyper implements BodyTyping {
 					name:argument.name, type:map.type(argument.type)
 				}];
 			}
-			result = compiler.types.Monomorphs.resolve(result);
-			inference.settle(settledSignature(declaration, argumentTypes, result));
+			result = session.monomorphs.settled(result);
+			var signature = settledSignature(declaration, argumentTypes, result);
+			for (argument in signature.arguments)
+				if (argument != null)
+					session.monomorphs.recordDeclarationType(monomorphs, argument);
+			if (signature.result != null)
+				session.monomorphs.recordDeclarationType(monomorphs, signature.result);
+			inference.settle(signature);
 			for (index in 0...arguments.length)
 				if (compiler.ffi.NativeLayout.containsUnsupportedRuntimeValueType(arguments[index].type))
 					fail("E1022",
@@ -359,7 +366,7 @@ class BodyTyper implements BodyTyping {
 		for (name in context.storage.cells.keys()) {
 			if (context.storage.types.exists(name) && context.storage.kinds.exists(name))
 				session.closureConversion.addCell(requiredMapValue(context.storage.cells, name),
-					compiler.types.Monomorphs.resolve(requiredMapValue(context.storage.types, name)),
+					session.monomorphs.settled(requiredMapValue(context.storage.types, name)),
 					requiredMapValue(context.storage.kinds, name));
 		}
 		if (resultFunction.dispatchEntry != null)
@@ -428,16 +435,16 @@ class BodyTyper implements BodyTyping {
 		return 'the type of argument "$argument" of function "$functionName"';
 
 	/** The settled signature of the unannotated function `fn`: its unannotated parts, with their type variables replaced. */
-	static function settledSignature(fn:AstFunction, argumentTypes:Array<CompilerType>,
+	function settledSignature(fn:AstFunction, argumentTypes:Array<CompilerType>,
 			result:CompilerType):compiler.types.DeclarationTypes.InferredSignature
 		return {
 			arguments: [
 				for (index in 0...fn.arguments.length)
 					compiler.syntax.AstFunctions.isInferred(fn.arguments[index].type)
-					? compiler.types.Monomorphs.resolve(argumentTypes[index]) : null
+					? session.monomorphs.settled(argumentTypes[index]) : null
 			],
 			result: compiler.syntax.AstFunctions.isInferred(fn.result)
-				? compiler.types.Monomorphs.resolve(result) : null
+				? session.monomorphs.settled(result) : null
 		};
 
 	/**
@@ -537,6 +544,8 @@ class BodyTyper implements BodyTyping {
 		var frame = session.monomorphs.begin(session.closureConversion.mark()),
 			field = 'field "$owner.$name"',
 			typed:TypedExpression;
+		frame.declaration = '$owner.$name';
+		frame.declarationIsField = true;
 		try {
 			var self = requiredType(session.monomorphs.create('the type of $field', span));
 			provisional(self);
@@ -556,8 +565,9 @@ class BodyTyper implements BodyTyping {
 			session.monomorphs.discard(frame);
 			throw error;
 		}
-		var map = settleFrame(frame);
-		return map == null ? typed : map.expression(typed);
+		var map = settleFrame(frame), settled = map == null ? typed : map.expression(typed);
+		session.monomorphs.recordDeclarationType(frame, settled.type);
+		return settled;
 	}
 
 	/**
@@ -568,7 +578,7 @@ class BodyTyper implements BodyTyping {
 	 */
 	function settleFrame(frame:MonomorphFrame):Null<compiler.types.TypedTypeMap> {
 		session.monomorphs.end(frame);
-		if (frame.cells.length == 0)
+		if (frame.cells.length == 0 && frame.literals.length == 0)
 			return null;
 		var unfixed:Null<compiler.types.Type.MonomorphCell> = null;
 		for (cell in frame.cells) {
@@ -586,11 +596,14 @@ class BodyTyper implements BodyTyping {
 				session.output.records.unboundLocals.push({name: localName, span: localSpan, what: cell.origin});
 			compiler.types.Monomorphs.unify(TMonomorph(cell), TDynamic);
 		}
+		// The literals' structures close once their fields' type variables are settled: each is named after its final fields.
+		session.monomorphs.closeFrame(frame);
 		if (unfixed != null)
 			fail("E1003", 'Cannot infer ${unfixed.origin}: nothing after it fixes it; give it a type', unfixed.span);
 		for (check in frame.deferred)
 			check();
-		var map = new compiler.types.TypedTypeMap(compiler.types.Monomorphs.resolve);
+		var map = new compiler.types.TypedTypeMap(frame.literals.length == 0
+			? compiler.types.Monomorphs.resolve : session.monomorphs.settled);
 		session.closureConversion.mapTypesSince(frame.conversionMark, map);
 		for (key in frame.lambdaKeys)
 			session.mapCachedLambda(key, map);

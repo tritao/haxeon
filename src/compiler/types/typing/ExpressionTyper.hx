@@ -1151,7 +1151,8 @@ class ExpressionTyper {
 			for (field in expectedFields)
 				if (!field.optional && !seen.exists(field.name))
 					fail("E1002", 'Missing object field "${field.name}"', span);
-		var resolvedResult:CompilerType;
+		var resolvedResult:CompilerType,
+			isDynamic = objectExpected == null && isDynamicExpectation(expectedType);
 		if (objectExpected == null) {
 			var inferred:Array<AnonymousField> = [for (field in typedFields)
 				{
@@ -1161,20 +1162,33 @@ class ExpressionTyper {
 						isFinal:false
 				}];
 			inferred.sort(function(left, right) return Reflect.compare(left.name, right.name));
-			resolvedResult = TAnonymous(anonymousTypeName(inferred), inferred);
+			// Without an expected structure, the literal's structure stays open while its unit is typed, gaining the optional fields of
+			// the structures it meets; it is named and registered when it closes (MonomorphFrames).
+			var open = isDynamic ? null : session.monomorphs.openStructure(inferred, span);
+			resolvedResult = if (open != null) open;
+			else if (isDynamic && mentionsOpenField(inferred)) {
+				// A dynamic object holding a literal's open structure has no record to name: its fields are dynamic.
+				TDynamic;
+			} else TAnonymous(anonymousTypeName(inferred), inferred);
 		} else
 			resolvedResult = objectExpected;
 		var typeName = switch resolvedResult {
 			case TAnonymous(name, _): name;
 			default: "";
 		};
-		var isDynamic = objectExpected == null && isDynamicExpectation(expectedType);
 		// Targets without native dynamic objects (Wasm) allocate the stdlib's dynamic object class.
 		if (isDynamic)
 			session.runtimeDependencyTracker.record(session.currentContext.name, PlatformAbi.DYNAMIC_OBJECT_CLASS);
 		anonymousTypeRegistry.register(resolvedResult);
 		return new TypedExpression(TObjectLiteral(typeName, typedFields, isDynamic),
 			isDynamic ? TDynamic : resolvedResult, span);
+	}
+
+	function mentionsOpenField(fields:Array<AnonymousField>):Bool {
+		for (field in fields)
+			if (session.monomorphs.mentionsOpen(field.type))
+				return true;
+		return false;
 	}
 
 	static function isDynamicExpectation(type:Null<CompilerType>):Bool

@@ -220,7 +220,7 @@ class TypingSession {
 		return output.shared && output.baseDepth >= 2 ? null : bodyContexts[output.shared ? 1 : output.baseDepth].name;
 
 	/** The type variables of the bodies being typed; see `Monomorphs`. */
-	public final monomorphs = new MonomorphFrames();
+	public final monomorphs:MonomorphFrames;
 
 	/**
 	 * Numbering of the names each body generates, and the lambdas typed so far: the unit's. A default argument is typed inside
@@ -317,6 +317,8 @@ class TypingSession {
 		this.externals = externals == null ? [] : externals;
 		this.genericSpecializations = specializations == null ? new GenericSpecializationRegistry() : specializations;
 		this.nativeAbiTarget = nativeAbiTarget == null ? "portable-abi64" : nativeAbiTarget;
+		var anonymousTypes = new AnonymousTypeRegistry(this);
+		this.monomorphs = new MonomorphFrames(anonymousTypes.register);
 		this.representation = new TypeRepresentation(this);
 		this.enumRepresentations = new EnumRuntimeRepresentations(this);
 	}

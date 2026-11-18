@@ -942,6 +942,9 @@ class DeclarationIndex {
 				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + typeKey(root) + "," + typeKey(value) + ">";
 			case TFunction(arguments,
 				result, _): '(${[for (argument in arguments) typeKey(argument)].join(",")})->${typeKey(result)}';
+			// An object literal's open structure, while its unit is typed: by the fields it has now (a lambda's capture identity).
+			case TAnonymous(name,
+				_) if (Monomorphs.isOpenStructureName(name)): compiler.semantic.SemanticSignature.provisionalType(type);
 			case TAnonymous(name, _): name;
 			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : typeKey(cell.bound);
 		};

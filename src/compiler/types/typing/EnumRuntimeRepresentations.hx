@@ -23,9 +23,11 @@ class EnumRuntimeRepresentations {
 	public function discover(type:CompilerType, ?seen:Array<Array<compiler.types.Type.AnonymousField>>):Void {
 		switch type {
 			case TInstance(NominalKind.Enum, _, arguments):
-				// An argument a type variable still holds open is known when the body is typed (`Some(null)`, `None`).
-				if (arguments.length > 0 && compiler.types.Monomorphs.containsUnbound(type))
-					session.monomorphs.whenKnown(type, () -> discover(compiler.types.Monomorphs.resolve(type)));
+				// An argument a type variable or an open literal structure still holds open is known when the body is typed (`Some(null)`,
+				// `None`, `Some({a: 1})`).
+				if (arguments.length > 0
+					&& (compiler.types.Monomorphs.containsUnbound(type) || session.monomorphs.mentionsOpen(type)))
+					session.monomorphs.whenKnown(type, () -> discover(session.monomorphs.settled(type)));
 				else if (arguments.length > 0) {
 					type = compiler.types.Monomorphs.resolve(type);
 					if (!session.representation.containsTypeParameter(type, []))

@@ -15,6 +15,16 @@ import compiler.types.Type.MonomorphCell;
  * (`BodyTyper.settleFrame`).
  */
 class Monomorphs {
+	/**
+	 * The prefix of the provisional name an object literal's structure has while its unit is typed and it can still gain optional
+	 * fields (`MonomorphFrames.openStructure`). The name is replaced when the unit's frame is settled and never leaves the typer.
+	 */
+	public static final OPEN_STRUCTURE_PREFIX = "$anon:open:";
+
+	/** Whether `name` is the provisional name of an object literal's open structure. */
+	public static function isOpenStructureName(name:String):Bool
+		return StringTools.startsWith(name, OPEN_STRUCTURE_PREFIX);
+
 	/** The type `type` stands for: a filled type variable's type, followed through chains, or `type` itself. */
 	public static function follow(type:CompilerType):CompilerType {
 		var current = type;
@@ -183,6 +193,24 @@ class Monomorphs {
 			case TAbstract(name, arguments, representation): TAbstract(name,
 				[for (argument in arguments) resolveWithin(argument,
 				anonymous)], resolveWithin(representation, anonymous));
+			// An open literal structure is one object for all its aliases: its own fields are resolved in place, so a field it gains
+			// later is seen through every alias.
+			case TAnonymous(name, fields) if (isOpenStructureName(name)):
+				for (entry in anonymous)
+					if (entry.from == fields)
+						return entry.to;
+				anonymous.push({from: fields, to: type});
+				for (index in 0...fields.length) {
+					var field = fields[index];
+					if (containsWithin(field.type, null))
+						fields[index] = {
+							name: field.name,
+							type: resolveWithin(field.type, anonymous),
+							optional: field.optional,
+							isFinal: field.isFinal
+						};
+				}
+				type;
 			case TAnonymous(name, fields):
 				if (!anonymousContains(fields, []))
 					type;
@@ -270,6 +298,12 @@ class Monomorphs {
 	static function occurs(cell:MonomorphCell, type:CompilerType):Bool
 		return switch follow(type) {
 			case TMonomorph(other): other == cell;
+			// An open literal structure is filled in place, so `x.push({items: x})` must not make it contain itself.
+			case TAnonymous(name, fields) if (isOpenStructureName(name)):
+				for (field in fields)
+					if (occurs(cell, field.type))
+						return true;
+				false;
 			case TNullable(element), TArray(element), TIterator(element): occurs(cell, element);
 			case TMap(key, value): occurs(cell, key) || occurs(cell, value);
 			case TFunction(arguments, result, _):

@@ -133,6 +133,8 @@ class ConversionResolver {
 					value.stableFlowValue,
 					value.mapKeySource, value.storageType, value.semanticReference);
 		}
+		// An object literal's open structure meeting a structure gains the optional fields it lacks, in place (MonomorphFrames).
+		session.monomorphs.gain(value.type, expected);
 		if ((switch (value.type) {
 			case TNever: true;
 			default: false;
@@ -270,12 +272,52 @@ class ConversionResolver {
 			case UnwrapNullableDefault:
 				nullableWithDefault(value, expected, context, code);
 			case Incompatible:
+				var closed = closedLiteralMismatch(value.type, expected);
 				fail(code,
-					'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
+					closed
+					?? 'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
 					value.span);
 				value;
 		};
 	}
+
+	/**
+	 * Why a structure that comes from an object literal of another unit does not convert to `expected`, when gaining optional fields
+	 * would have made it convert: the literal's structure closed with the unit of the unannotated declaration that returned or held
+	 * it, so it no longer gains fields, where Haxe keeps it open (docs/design/STRUCTURE_VALUES.md, decision 3). Null otherwise.
+	 */
+	function closedLiteralMismatch(actual:CompilerType, expected:CompilerType):Null<String> {
+		var actualFields = ExpressionTyper.anonymousFields(nonNullable(actual)),
+			expectedFields = ExpressionTyper.anonymousFields(nonNullable(expected));
+		if (actualFields == null || expectedFields == null)
+			return null;
+		var origin = session.monomorphs.literalOrigin(actualFields);
+		if (origin == null)
+			return null;
+		var missing:Array<String> = [];
+		for (field in expectedFields) {
+			var own = ExpressionTyper.anonymousField(actualFields, field.name);
+			if (own == null) {
+				if (!field.optional)
+					return null;
+				missing.push(field.name);
+			} else if (own.optional != field.optional || !TypeRelations.equals(own.type, field.type))
+				return null;
+		}
+		if (missing.length == 0 || actualFields.length + missing.length != expectedFields.length)
+			return null;
+		var spelled =
+			'{${[for (field in actualFields) (field.optional ? "?" : "") + field.name + " : " + SemanticSignature.display(field.type)].join(", ")}}',
+			annotate = origin.isField
+				? 'the type of field "${origin.declaration}"' : 'the result of "${origin.declaration}"';
+		return '$spelled has no field ${missing[0]}; the structure comes from a literal in "${origin.declaration}", which closed its type; annotate $annotate';
+	}
+
+	static function nonNullable(type:CompilerType):CompilerType
+		return switch type {
+			case TNullable(element): nonNullable(element);
+			default: type;
+		};
 
 	static function anonymousTarget(type:CompilerType):Null<CompilerType>
 		return switch type {

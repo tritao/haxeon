@@ -36,14 +36,27 @@ class SemanticSignature {
 	@:processWide("a diagnostic count that tests read as a difference; never part of an output")
 	public static var anonymousSpellings = 0;
 
-	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>):String {
+	static function anonymousFields(fields:Array<compiler.types.Type.AnonymousField>, provisional:Bool = false):String {
 		anonymousSpellings++;
 		var ordered = fields.copy();
 		ordered.sort(function(left, right) return Reflect.compare(left.name, right.name));
-		return '{${[for (field in ordered) (field.optional ? "?" : "") + (field.isFinal ? "final " : "") + field.name + ":" + type(field.type)].join(",")}}';
+		return '{${[for (field in ordered) (field.optional ? "?" : "") + (field.isFinal ? "final " : "") + field.name + ":" + spell(field.type, provisional)].join(",")}}';
 	}
 
 	public static function type(semanticType:CompilerType):String
+		return spell(semanticType, false);
+
+	/**
+	 * `type`, except that an object literal's open structure is spelled by the fields it has now, as its name would be if it gained no
+	 * more: for an identity made while its unit is typed and kept with what the unit makes (a lambda's captures), never for a key
+	 * another unit shares, which `type` refuses to spell from an open structure.
+	 */
+	public static function provisionalType(semanticType:CompilerType):String
+		return spell(semanticType, true);
+
+	static function spell(semanticType:CompilerType, provisional:Bool):String {
+		function each(types:Array<CompilerType>):String
+			return [for (part in types) spell(part, provisional)].join(",");
 		return switch semanticType {
 			case TInt: "Int";
 			case TInt64: "haxe.Int64";
@@ -59,8 +72,7 @@ class SemanticSignature {
 			case TRange: "Range";
 			case TVoid: "Void";
 			case TTypeParameter(owner, name): 'type-parameter:$owner:$name';
-			case TAbstract(name, arguments,
-				_): 'abstract:$name<${[for (argument in arguments) type(argument)].join(",")}>';
+			case TAbstract(name, arguments, _): 'abstract:$name<${each(arguments)}>';
 			case TInstance(kind, name, arguments):
 				var prefix = switch kind {
 					case NominalKind.Class: "class";
@@ -69,20 +81,28 @@ class SemanticSignature {
 					case NominalKind.NativeValue: "native-value";
 					default: throw new InternalError('Unknown nominal kind $kind');
 				};
-				'$prefix:$name<${[for (argument in arguments) type(argument)].join(",")}>';
+				'$prefix:$name<${each(arguments)}>';
 			case TNull: "null";
-			case TNullable(element): 'Null<${type(element)}>';
-			case TArray(element): 'Array<${type(element)}>';
-			case TIterator(element): 'Iterator<${type(element)}>';
-			case TMap(key, value): 'Map<${type(key)},${type(value)}>';
+			case TNullable(element): 'Null<${spell(element, provisional)}>';
+			case TArray(element): 'Array<${spell(element, provisional)}>';
+			case TIterator(element): 'Iterator<${spell(element, provisional)}>';
+			case TMap(key, value): 'Map<${each([key, value])}>';
 			case TKeyPath(root, value,
-				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + type(root) + "," + type(value) + ">";
+				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + each([root, value]) + ">";
 			case TFunction(arguments, result,
-				optional): '(${[for (index in 0...arguments.length) optionalMark(optional, index) + type(arguments[index])].join(",")})->${type(result)}';
+				optional): '(${[for (index in 0...arguments.length) optionalMark(optional, index) + spell(arguments[index], provisional)].join(",")})->${spell(result, provisional)}';
+			// An open literal structure has no name yet: nothing spelled from one may outlive its unit (MonomorphFrames).
+			case TAnonymous(name, fields) if (compiler.types.Monomorphs.isOpenStructureName(name)):
+				if (!provisional)
+					throw new InternalError('An open literal structure ($name) was spelled before its unit closed it');
+				'$' + 'anon:' + anonymousFields([for (field in fields) {
+					name:field.name, type:field.type, optional:field.optional, isFinal:false
+				}], true);
 			case TAnonymous(name, _): name;
 			// A filled type variable is spelled as its type, so keys made while it is in a type match the ones made after.
-			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : type(cell.bound);
+			case TMonomorph(cell): cell.bound == null ? 'unknown:${cell.origin}' : spell(cell.bound, provisional);
 		};
+	}
 
 	/** A source-level spelling for diagnostics; unlike `type`, this omits compiler-only nominal prefixes. */
 	public static function display(semanticType:CompilerType):String
@@ -112,7 +132,9 @@ class SemanticSignature {
 				writable): (writable ? "WritableKeyPath<" : "KeyPath<") + display(root) + "," + display(value) + ">";
 			case TFunction(arguments, result,
 				optional): '(${[for (index in 0...arguments.length) optionalMark(optional, index) + display(arguments[index])].join(",")})->${display(result)}';
-			case TAnonymous(name, _): name;
+			case TAnonymous(name, fields): compiler.types.Monomorphs.isOpenStructureName(name) ? '$' + 'anon:{'
+				+ [for (field in fields)(field.optional ? "?" : "") + field.name + ":" + display(field.type)].join(",")
+				+ "}" : name;
 			case TMonomorph(cell): cell.bound == null ? "Unknown" : display(cell.bound);
 		};
 

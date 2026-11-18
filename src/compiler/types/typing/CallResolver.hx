@@ -1306,7 +1306,8 @@ class CallResolver {
 		while (typedArguments.length < expected.length)
 			typedArguments.push(new TypedExpression(TNullLiteral, TNull, span));
 		typedArguments = coerceArguments(typedArguments, expected, name);
-		var resultType:CompilerType = enumCase.aliasType ?? compiler.types.Monomorphs.resolve(instance);
+		// The constructed enum's storage is named after its type arguments, so a literal's structure among them closes here.
+		var resultType:CompilerType = enumCase.aliasType ?? session.monomorphs.closeReached(instance);
 		if (enumCase.aliasType == null && enumInstanceOf(enumCase, expectedType) != null)
 			resultType = expectedType;
 		for (index in 0...typedArguments.length)
@@ -2150,7 +2151,7 @@ class CallResolver {
 		};
 		// An element still to be fixed (`var list = []`) is checked once the push that fixes it has been typed.
 		session.monomorphs.whenKnown(element, function() {
-			if (RuntimeType.arrayName(compiler.types.Monomorphs.resolve(element)) == null)
+			if (RuntimeType.arrayName(session.monomorphs.settled(element)) == null)
 				fail("E1016", "This array element type has no compiler-owned runtime ABI", span);
 		});
 		// A comparison with an element still to be fixed fixes it from the value compared, as Haxe unifies the two, before

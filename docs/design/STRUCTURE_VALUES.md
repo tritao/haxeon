@@ -1,7 +1,8 @@
 # Structure values: open anonymous types and width subtyping (design note)
 
-Status: proposed, no code yet (2026-11-17). Architecture plan step 2.6
-(`../reports/2026-11-architecture-review.md`), approved as a step by the user on 2026-11-18; this note is its design.
+Status: in progress; slice 0 and slice 5 (open literal structures) have landed, see "As built (slice 5)".
+Architecture plan step 2.6 (`../reports/2026-11-architecture-review.md`), approved as a step by the user on 2026-11-18;
+this note is its design.
 Follows 2.3 (type variables) and runs beside 2.5 ([LAZY_DECLARATION_TYPING.md](LAZY_DECLARATION_TYPING.md)), with
 which it shares `BodyTyper`. Its representation half applies the model of [INTERFACE_VALUES.md](INTERFACE_VALUES.md)
 to structures, and the dispatchers of erased generic owners
@@ -265,6 +266,48 @@ would take the hash lookup.
 - **Where there is no frame** (a generated helper), a literal closes at once, as today. After 2.5, every declaration
   unit has a frame.
 
+### As built (slice 5)
+
+- `MonomorphFrames.openStructure` gives a literal typed without an expected structure (and not as `Dynamic`) the type
+  `TAnonymous("$anon:open:<n>", fields)`, an `OpenStructure` owned by the innermost frame (`MonomorphFrame.literals`).
+  Where no frame is open (a generated helper), the literal is named at once, as before. Nothing registers an open
+  structure: `AnonymousTypeRegistry` skips the provisional names.
+- `Monomorphs.resolve` resolves an open structure's own field types in place and returns the same type, so every alias
+  keeps sharing its `fields` array; `Monomorphs.occurs` looks into it, so `x.push({items: x})` does not make it contain
+  itself.
+- `ConversionResolver.coerce` calls `MonomorphFrames.gain(value.type, expected)` after the type-variable fill. It walks
+  both types together (nullable, `Array`, `Iterator`, `Map`, a class's or enum's type arguments, a structure's common
+  fields, function arguments the other way and results), adds to each open structure of the innermost frame the optional
+  fields it lacks, unifies the type variables of common fields, and then pins every open structure it met against another
+  structure (`OpenStructure.pinned`). A pinned structure gains no more fields: its value is already a record of the other
+  structure's fields, and a record standing for a structure with fewer fields waits for views (slice 4). So a narrower use
+  before a gaining one, and two uses with different optional fields, are the known divergence
+  `structure-open-literal-two-uses`. A later use that wants a gained field with another type is the usual mismatch.
+- `BodyTyper.settleFrame` settles the type variables, then `MonomorphFrames.closeFrame` closes the frame's literals in the
+  order they were written: field types resolved and nested open structures closed first, in place, then the name from the
+  final fields (`SemanticSignature.anonymousTypeName`) and the registration, in the unit being typed. The frame's
+  `TypedTypeMap` is `MonomorphFrames.settled` (type variables resolved, provisional names replaced by the closed types)
+  when the frame wrote a literal. `TypedTypeMap` renames a `TObjectLiteral` from its mapped type. The signature, cell and
+  deferred-check reads after the settle go through `settled` too.
+- A type that leaves the unit before its end closes the structures it reaches at once (`MonomorphFrames.closeReached`):
+  an enum constructor's type arguments, which name its storage (`Some({a: 1})`). Generic calls need nothing: their
+  specialization keys erase structures.
+- The verifier is `SemanticSignature.type`, which throws an `InternalError` when it meets a provisional name: every
+  helper name, specialization key, cache key and fingerprint is spelled through it. `SemanticSignature.display` spells an
+  open structure from its fields, and `DeclarationIndex.typeKey`, which names a lambda after its captures, spells it by
+  the fields it has at that point (`SemanticSignature.provisionalType`), which the source fixes.
+- Decision 3: an unannotated declaration's frame (`MonomorphFrame.declaration`) records, after settling, which closed
+  literal structures its type reaches (`recordDeclarationType`, by `fields` identity). A conversion from such a structure
+  that adding optional fields would have made valid reports
+  `{name : String} has no field debug; the structure comes from a literal in "Main.config", which closed its type; annotate the type of field "Main.config"`
+  (`annotate the result of "Lib.make"` for a function), in both typing orders (`OpenLiteralStructureMain`). Haxe 4.3.7
+  rejects the function case too (a returned literal is closed when the function's body is typed, `{ name : String } has
+  no field debug`); only the field case is a Haxeon-only error. A warm build that reuses the declaration's type without
+  typing it gives the plain mismatch message.
+- A dynamic object literal holding an open structure (`{inner: literal}` as `Dynamic`) is not named: its fields are dynamic.
+- Self-compile (a frozen copy of the sources): byte-identical output to the compiler before the slice. Nothing in the
+  compiler relies on a literal gaining a field while `localExpectedTypes` types literals in a later use's context.
+
 ### Why it is deterministic
 
 No open structure outlives its unit, so another unit only ever sees closed structures (2.5 semantics 2). Inside the
@@ -460,8 +503,9 @@ Compile-error fixtures (both reject): var `Int` to `Float`, var `Child` to `Pare
 structure to one with an extra optional field, an extra field in a literal against an expected type, a contravariance
 violation, a class's private field, a `(get,set)` property, a method for a var field, `values.push(1)` as `Array<Float>`.
 
-Haxeon-only error (Haxe accepts; message and position checked, listed in `LANGUAGE_SUPPORT.md`): a literal returned
-from an unannotated function gaining an optional field in another unit (decision 3).
+Haxeon-only error (Haxe accepts; message and position checked, listed in `LANGUAGE_SUPPORT.md`): a literal held by an
+unannotated field gaining an optional field in another unit (decision 3). A literal returned from an unannotated function
+is closed in Haxe too, so that case is a compile failure in both (`structure-open-literal-returned`).
 
 Order: every fixture and the self-compile with `--reverse-typing-order`, byte-identical.
 

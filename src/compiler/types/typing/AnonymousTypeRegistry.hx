@@ -12,6 +12,8 @@ class AnonymousTypeRegistry {
 	/** Attributes every anonymous type `type` reaches to the unit being typed, whether or not it was registered before. */
 	function recordUses(type:CompilerType, seen:Map<String, Bool>):Void
 		switch type {
+			// An open literal structure is registered when it is closed, under its final name (`MonomorphFrames`).
+			case TAnonymous(name, _) if (compiler.types.Monomorphs.isOpenStructureName(name)):
 			case TAnonymous(name, fields):
 				if (seen.exists(name))
 					return;
@@ -48,6 +50,7 @@ class AnonymousTypeRegistry {
 
 	function discover(type:CompilerType):Void
 		switch type {
+			case TAnonymous(name, _) if (compiler.types.Monomorphs.isOpenStructureName(name)):
 			case TAnonymous(name, fields):
 				if (session.anonymousTypes.exists(name))
 					return;

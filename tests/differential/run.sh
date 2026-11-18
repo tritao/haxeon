@@ -227,6 +227,14 @@ in_background run_known_divergence anonymous-width-subtyping
 in_background run_compile_failure anonymous-width-missing-field
 in_background run_compile_failure anonymous-width-final-to-var
 in_background run_compile_failure anonymous-width-var-to-final
+# An object literal's structure stays open while its unit is typed and gains the optional fields of the structures it meets
+# (docs/design/STRUCTURE_VALUES.md, slice 5). Gaining from two structures, or after a narrower use, needs width (slice 4).
+in_background run_case structure-open-literal 0
+in_background run_known_divergence structure-open-literal-two-uses
+in_background run_compile_failure structure-open-literal-conflicting-field
+in_background run_compile_failure structure-open-literal-required-field
+in_background run_compile_failure structure-open-literal-returned
+in_background run_compile_failure structure-declared-no-gain
 in_background run_compile_failure generic-enum-constructor-mixed-arguments
 in_background run_compile_failure tuple-switch-missing-case
 in_background run_compile_failure tuple-switch-nested-null-missing

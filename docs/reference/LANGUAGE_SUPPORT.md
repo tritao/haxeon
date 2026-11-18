@@ -164,7 +164,10 @@ HashLink):
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
   lowered as views of one object, so the narrower value is the same object (`docs/design/STRUCTURE_VALUES.md`, step 4);
-  the differential case `anonymous-width-subtyping` records it.
+  the differential case `anonymous-width-subtyping` records it. The same holds for an object literal once it has met one
+  structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
+  after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
+  as in Haxe (`structure-open-literal`).
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
   class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.
@@ -202,6 +205,13 @@ annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's 
   (`function c() return d() + 1; function d() return c();`), or a field and a function. Haxe types them as `Dynamic` or,
   when one of them fixes the type, as that type. The error is on the first of them in declaration order and names the
   others; annotating one of them is enough. A function that calls itself is typed as in Haxe.
+- An object literal's structure gains optional fields only while the function or initializer that wrote it is typed
+  (docs/design/STRUCTURE_VALUES.md, decision 3). A literal held by an unannotated field and used elsewhere as a structure
+  with more optional fields, `static var config = {name: "x"};` read as `{name:String, ?debug:Bool}`, is an error:
+  `{name : String} has no field debug; the structure comes from a literal in "Main.config", which closed its type;
+  annotate the type of field "Main.config"`. Haxe keeps the field's structure open, so which use adds a field depends on
+  the order it types functions in. A literal returned by an unannotated function gets the same message (`annotate the
+  result of ...`); Haxe rejects that one too.
 - A field of a value struct or a native value record without a type (`E1022`): its type is part of the layout.
 - In a generic class, an initializer whose type the class's type parameters cannot express (a structure mentioning one):
   the class's initializers are compiled with the parameters erased, so the type is read from typing it with them.
