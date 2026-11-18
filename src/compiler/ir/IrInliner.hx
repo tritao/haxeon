@@ -207,6 +207,9 @@ class IrInliner {
 	 */
 	final ids:Map<String, Int> = [];
 
+	/** The function id of each call target by `IrSymbol.id`, -1 for a symbol that names no function here. */
+	final idsBySymbol:Array<Int> = [];
+
 	final functions:Array<IrFunction> = [];
 	final done:Array<Null<IrFunction>> = [];
 	final dependenciesOf:Array<Null<Array<IrFunction>>> = [];
@@ -282,6 +285,10 @@ class IrInliner {
 		var names = [for (name in byName.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
+			var symbol = IrSymbol.of(name);
+			while (idsBySymbol.length <= symbol.id)
+				idsBySymbol.push(-1);
+			idsBySymbol[symbol.id] = functions.length;
 			ids.set(name, functions.length);
 			functions.push(byName.get(name));
 			done.push(null);
@@ -336,8 +343,8 @@ class IrInliner {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, callee, _):
-							var target = ids.get(callee.name);
-							if (target != null)
+							var target = functionId(callee);
+							if (target >= 0)
 								targets.push(target);
 						case MethodCall(_, receiver, method, _, _):
 							var callee = resolveMethod(receiver, method),
@@ -541,6 +548,9 @@ class IrInliner {
 		}
 	}
 
+	function functionId(symbol:IrSymbol):Int
+		return symbol.id < idsBySymbol.length ? idsBySymbol[symbol.id] : -1;
+
 	function inlinedVersionOf(name:String):Null<IrFunction> {
 		var id = ids.get(name);
 		return id == null ? null : inlinedVersion(id);
@@ -660,18 +670,19 @@ class IrInliner {
 
 	/** The function a call resolves to when it can be inlined, else null. */
 	function calleeOf(instruction:IrInstruction):Null<IrFunction> {
-		var target:Null<String> = null, actuals:Array<IrValue> = null;
+		var id = -1, actuals:Array<IrValue> = null;
 		switch instruction {
-			case Call(_, functionName, arguments):
-				target = functionName.name;
+			case Call(_, target, arguments):
+				id = functionId(target);
 				actuals = arguments;
 			case MethodCall(_, object, methodName, arguments, _):
-				target = resolveMethod(object, methodName);
+				var target = resolveMethod(object, methodName), known = target == null ? null : ids.get(target);
+				if (known != null)
+					id = known;
 				actuals = [object].concat(arguments);
 			default:
 		}
-		var id = target == null ? null : ids.get(target);
-		if (id == null)
+		if (id < 0)
 			return null;
 		var original = functions[id];
 		if (frames.length > 0)
