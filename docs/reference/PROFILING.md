@@ -418,7 +418,7 @@ belong to `report`. The `report` and `export` subcommands read both HLPC v1
 and v2 captures:
 
 ```sh
-hlprof-live report [--top N] [--lines] [--all|--waiting|--alloc] [--start-ms N] [--end-ms N] CAPTURE
+hlprof-live report [--top N] [--lines] [--all|--waiting|--alloc [--types]] [--start-ms N] [--end-ms N] CAPTURE
 hlprof-live export --format folded [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] CAPTURE
 hlprof-live export --format perfetto [--lines] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
 hlprof-live export --format pftrace [--process-name NAME] [--cpu|--waiting] [--start-ms N] [--end-ms N] --output FILE CAPTURE
@@ -436,8 +436,11 @@ given `--cpu` or `--waiting`.
 `alloc` source. Each sample stands for `--alloc-interval` allocations and
 carries the allocator's caller and the Haxe frames above it, so the report
 weights functions by the bytes their samples stand for: self is the innermost
-Haxe function on the stack, total counts each function once per sample. The
-Perfetto export has the same stacks on its `hl.alloc` events.
+Haxe function on the stack, total counts each function once per sample. With
+`--types` it ranks the allocated types instead: a class or enum by name, other
+storage by kind (`array` for array storage, `bytes` for untyped buffers such as
+`Int` array storage and string characters, `raw` for untyped runtime storage).
+The Perfetto export has the same stacks and the type on its `hl.alloc` events.
 
 `--start-ms` and `--end-ms` select the part of the capture received in that
 window, in milliseconds since the recorder started. `pftrace` is the native

@@ -57,5 +57,11 @@ if [[ -z ${1:-} ]]; then
   "$profiler_tool" report --alloc "$capture" > "$scratch/alloc-report.txt"
   grep -q "^ranking estimated allocated bytes" "$scratch/alloc-report.txt"
   grep -q "Main.main" "$scratch/alloc-report.txt"
+  # report --alloc --types ranks the allocated types: the program builds Strings and arrays of them.
+  "$profiler_tool" report --alloc --types "$capture" > "$scratch/alloc-types.txt"
+  grep -q "^ranking allocated types" "$scratch/alloc-types.txt"
+  grep -qw "String" "$scratch/alloc-types.txt"
+  grep -qw "array" "$scratch/alloc-types.txt"
+  jq -e 'any(.traceEvents[]; .cat == "hl.alloc" and .args.type == "String")' "$output_file" >/dev/null
 fi
 echo "PASS: Perfetto export contains counters, threads, native frames, and allocation sites with their Haxe frames"
