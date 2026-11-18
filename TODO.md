@@ -102,15 +102,26 @@ regular recursive generic enums are in the next section.
   the self-hosted compiler by marking a function inferred where the signature
   table holds it too. Why it failed is not fully understood; object identity
   across `SemanticProgram.replaceBodies` is the suspect.
-- **Generic code is typed twice.** A generic body is typed once with its own
-  type parameters (diagnostics, the declaration's type) and again for each
-  representation it is code for (erased, or per specialization), because the
-  typer elaborates the representation (boxing, `TToDynamic`/`TAbiCast`,
-  `TCopy`, layout constants, helper choice) while it types. Stage 1 of
+- **Generic code is typed twice** (plan step 2.7). A generic body is typed
+  once with its own type parameters (diagnostics, the declaration's type)
+  and again for each representation it is code for (erased, or per
+  specialization), because the typer elaborates the representation
+  (boxing, `TToDynamic`/`TAbiCast`, `TCopy`, layout constants, helper
+  choice) while it types. Stage 1 of
   [GENERIC_TYPING_ONCE.md](docs/design/GENERIC_TYPING_ONCE.md) removed the
-  repeats that were the same typing and the `mentionsDynamic` heuristic. The
-  rest waits for stage 2: elaboration as a pass after typing, which crosses
-  into erased-generic lowering (step 2.6).
+  repeats that were the same typing and the `mentionsDynamic` heuristic.
+  Stage 2, elaboration as a pass after typing, is approved (2026-11-18)
+  under haxeon-e4's contract in that note. Service lane, in order:
+  1. Stage 2 items 1 to 3: boundaries, layout constants and helper choice
+     for a type parameter recorded by the typer and inserted by the pass,
+     byte-identical, with the equivalence test made permanent.
+  2. Finish step 2.4: type the parser's repaired syntax with the real typer,
+     then delete the language service's approximate typer (the item below).
+  3. The Android reload crash (below).
+
+  Items 4 and 5 (nested generic calls and structured lambda names, then the
+  pass replacing paths 6 to 8) wait until the naming function and the
+  boundary contract are agreed with haxeon-e4.
 - **CLI usage errors are `InternalError`.** An unknown option or a missing
   argument (`HaxeonCli`, `LintCommand`) throws
   `compiler.core.InternalError` since `24db87fe1`. Add a `UsageError` so a
@@ -128,7 +139,7 @@ regular recursive generic enums are in the next section.
 - **Android: a body patch after a domain reload crashes.** The app gets SIGSEGV
   in `hl_alloc_obj` under `string_from_f64`. The patch bytes are the same as
   the old build path's, so the cause is in the host or runtime, not in
-  `ce88bb128`. Not filed.
+  `ce88bb128`. Queued for the service lane after step 2.4.
 - **Android: a rejected edit leaves the server session ahead of the device.**
   The next edit is correct but cold. A refusal that reports the device's
   revision, as `LiveRefusal` does for the desktop host, would let the session
@@ -145,8 +156,9 @@ regular recursive generic enums are in the next section.
   Since `7baff2763` a failed body is dropped and the rest is typed, but a
   failed body has no typed information, so completion inside the function
   being edited, and in a module that does not parse, still uses the syntax
-  fallback. Recommended: type the parser's repaired syntax with the real
-  typer. Not yet decided.
+  fallback. Decided (2026-11-18): type the parser's repaired syntax with the
+  real typer. Queued for the service lane after stage 2 items 1 to 3 of
+  step 2.7.
 
 ### Known differences from Haxe still open
 

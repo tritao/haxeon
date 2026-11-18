@@ -66,6 +66,7 @@ Language:
 - [STRUCTURE_VALUES.md](design/STRUCTURE_VALUES.md): open anonymous types, width subtyping, structures as
   the object itself (plan step 2.6).
 - [VALUE_CONSTRUCTOR_DESTINATION.md](design/VALUE_CONSTRUCTOR_DESTINATION.md): value constructors that return their value.
+- [ERROR_MODEL.md](design/ERROR_MODEL.md): `Result` and error enums for expected failures, exceptions for bugs.
 - [PURITY.md](design/PURITY.md), [SCOPED_PLACES.md](design/SCOPED_PLACES.md), [SHADERS.md](design/SHADERS.md): deferred.
 
 Compiler (ADR 0003 and its follow-ups):
@@ -82,7 +83,7 @@ Compiler (ADR 0003 and its follow-ups):
 - [LAZY_DECLARATION_TYPING.md](design/LAZY_DECLARATION_TYPING.md): unannotated declaration types typed on demand
   (plan step 2.5).
 - [GENERIC_TYPING_ONCE.md](design/GENERIC_TYPING_ONCE.md): typing a generic body once; elaboration per representation
-  as a pass (proposed).
+  as a pass (plan step 2.7).
 
 Runtime and tools:
 

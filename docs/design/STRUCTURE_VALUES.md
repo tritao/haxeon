@@ -1,6 +1,6 @@
 # Structure values: open anonymous types and width subtyping (design note)
 
-Status: in progress; slices 0, 5 (open literal structures) and 6 (`localExpectedTypes` deleted) have landed, see "As built".
+Status: in progress; decisions 1 to 5 taken by the user; slices 0, 5 (open literal structures) and 6 (`localExpectedTypes` deleted) have landed, see "As built".
 Architecture plan step 2.6 (`../reports/2026-11-architecture-review.md`), approved as a step by the user on 2026-11-18;
 this note is its design.
 Follows 2.3 (type variables) and runs beside 2.5 ([LAZY_DECLARATION_TYPING.md](LAZY_DECLARATION_TYPING.md)), with
@@ -89,7 +89,7 @@ The rules, as far as they matter here:
 
 ## Semantics for Haxeon
 
-Haxeon takes every rule above, with two departures, both of which keep a program's types independent of typing order
+Haxeon takes every rule above, with one departure, which keeps a program's types independent of typing order
 (the reason 2.5 gives for its own):
 
 1. **A literal's type closes at the end of its unit.** An open structure belongs to the type-variable frame of the
@@ -99,8 +99,9 @@ Haxeon takes every rule above, with two departures, both of which keep a program
    that conversion at the caller:
    `{name : String} has no field optional; the structure comes from a literal in "Main.make", which closed its type; annotate the result of "Main.make"`.
    See decision 3.
-2. **Structures as `Map` keys stay structural** (`STRUCTS.md`, `Hashable` on structures). This step does not change
-   it; see decision 5.
+
+A structure used as a `Map` key compares by identity, as in Haxe (decision 5). Today's structural hashing of structures
+(`STRUCTS.md`) is removed by slice 4a.
 
 Everything else is Haxe's, including width subtyping of var fields, which is unsound in Haxe too (a narrower value
 written into an `Array<{a:Int}>` that aliases an `Array<{a:Int, b:Int}>` is later read through the wider type). A read
@@ -495,6 +496,7 @@ that change HashLink positions or lowering also run the ci-tier debug-metadata a
 | 2a | `IrType.Structure(S)`; structure slots physically `dyn` / root reference / pointer; reads and writes unguarded through an unchecked cast; `HlInstruction.GetType`; `==` as a pointer compare. | Same semantics; bytes change | haxeon-e4 (IR, HL); Wasm owner | `ir/{Ir, IrGenerator (lowerType), IrBuilder, IrVerifier, IrTypeIdentity, codec/*}`, `hl/{HlFunction, HlWriter, lower/HlLower, incremental/HlSymbolTable}`, `backend/wasm/{WasmFunctionLower, gc/WasmGcRepresentation, linear/WasmLinearRepresentation}` |
 | 2b | `IrShapeDispatch`: dispatchers as provider rows, the guarded fast path, refinement after a guard, the by-name arm. | Same semantics | haxeon-e4 | new `ir/IrShapeDispatch`, `IrPipeline`, `core/Provides`, `REACHABILITY_WALK` hooks, the three backends' exact test |
 | 3 | Erased generic owners on `IrShapeDispatch`: exact-class arms, inlined own-specialization arm. | Faster; same semantics | haxeon-e4 | `ir/GenericOwnerErasure`, `IrGenerator.erasedOwnerOperation` |
+| 4a | Census of maps and sets keyed by a structure; move those users to declared value types; then structure keys compare by identity (decision 5). | `Map` keys match Haxe | any | `STRUCTS.md` `Hashable` on structures, the users the census finds |
 | 4 | Relations: width, depth, optional, access kinds, `Array` and function variance, common fields, class and interface to structure, `Dynamic` to structure as a retype; `StructureView`; parser for `function` and property fields in structures and `var` in interfaces. Deletes `dynamicStructure`, E1016's structure case, `anonymousReadOnlyWidening`. | Accepts Haxe's programs; differential tests | typer (coordinate with haxeon-7b) | `types/TypeRelations`, `typing/{ConversionResolver, ExpressionTyper, CallResolver, DeclarationIndex}`, `syntax/Parser` |
 | 5 | Open literal structures: frame-owned, gaining optional fields in `coerce`, closed and named in `settleFrame`, registered at closing; `TObjectLiteral` name from its type; the verifier; the cross-unit diagnostic. | Accepts Haxe's open-literal programs | typer (haxeon-7b's files) | `typing/{BodyTyper (settleFrame), MonomorphFrames, ExpressionTyper (typeObjectLiteral), ConversionResolver, AnonymousTypeRegistry}`, `types/{Monomorphs, TypedTypeMap, TypedAst}` |
 | 6 | The census build without `localExpectedTypes`, the fixes it asks for, then the deletion. | `values.push(1)` as `Array<Float>` rejected | typer | `typing/{BodyTyper, StatementTyper, TypingContext}`, `types/{Type (MonomorphCell.hint), Monomorphs}` |
@@ -560,19 +562,15 @@ on HashLink and both Wasm targets, before and after slices 2a, 2b and 3.
    default, and a field of the wrong type fails when it is read, as a `Dynamic` field read does.
 3. **A literal's structure gaining optional fields from another unit** is an error that asks for an annotation. This
    matches step 2.5, which closes a declaration's type at the end of its unit.
+4. **Optional fields a literal never wrote.** Reflection and printing treat an optional field whose value is `null` as
+   absent, as in Haxe. The one difference left: Haxe shows a field explicitly set to `null`, and Haxeon does not.
+   Tracking presence exactly would cost a flag per optional field on every write, for a reflection-only case. Slice 7.
+5. **Structures as `Map` keys** compare by identity, as in Haxe. Structures are references, and references compare by
+   identity. Value equality and hashing come only from a declared value type (`Equatable`/`Hashable`, `STRUCTS.md`).
+   Hashing by fields would otherwise have to go through the dispatcher once a structure slot can hold a class instance
+   or a wider record. This is slice 4a: a census of structure-keyed maps and sets, then moving those users to declared
+   value types. 4a lands before slice 4, and ideally before 2a.
 
-## Open decisions (recommendations, waiting for the user)
-
-4. **Optional fields a literal never wrote.** Recommended: reflection and printing treat an optional field whose value
-   is `null` as absent, as in Haxe. The one difference left: Haxe shows a field explicitly set to `null`, and Haxeon
-   would not. Tracking presence exactly would cost a flag per optional field on every write, for a reflection-only
-   case.
-5. **Structures as `Map` keys.** Recommended (revised): identity, as in Haxe. Structures are references, and
-   references compare by identity. Value equality and hashing would come only from a declared value type
-   (`Equatable`/`Hashable`, `STRUCTS.md`). This also removes a representation problem haxeon-e4 raised: once a
-   structure slot can hold a class instance or a wider record, hashing by fields would have to go through the
-   dispatcher. It would be a slice of its own, 4a: a census of structure-keyed maps and sets, then moving those users
-   to declared value types. 4a lands before slice 4, and ideally before 2a.
 
 ## Review by haxeon-e4 (HashLink and IR owner, 2026-11-18)
 

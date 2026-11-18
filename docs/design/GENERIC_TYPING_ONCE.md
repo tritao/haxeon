@@ -1,6 +1,7 @@
 # Typing generic code once (design note)
 
-Status: stage 1 landed (2026-11-18); stage 2 is a proposed plan entry. This is the TODO.md follow-up "generic code
+Status: stage 1 landed (2026-11-18); stage 2 approved by the user on 2026-11-18 (plan step 2.7), items 1 to 3 in
+progress. This is the TODO.md follow-up "generic code
 is typed twice". It belongs with step 2.5 ([LAZY_DECLARATION_TYPING.md](LAZY_DECLARATION_TYPING.md)) and step 2.6
 ([STRUCTURE_VALUES.md](STRUCTURE_VALUES.md)).
 
@@ -129,10 +130,10 @@ next to its code typings (paths 6 to 8), and the specializations at type paramet
   because most of its 3,815 abstract members are never called. For those, the check unit was the only typing, and
   still is.
 
-## Stage 2: elaboration as a pass (proposed plan entry)
+## Stage 2: elaboration as a pass
 
-Not started. This stage crosses into erased-generic lowering (`GenericOwnerErasure`, `IrExactTypeFacts`, the HashLink
-lowering), so it is sequenced with step 2.6 and its owner. The proposed steps are:
+Approved by the user on 2026-11-18. This stage crosses into erased-generic lowering (`GenericOwnerErasure`,
+`IrExactTypeFacts`, the HashLink lowering), so it is sequenced with step 2.6 and its owner, haxeon-e4. The steps are:
 
 1. The typer stops emitting `TToDynamic`, `TAbiCast` and `TCopy` for a type parameter. It records the semantic
    conversion (`T` to `Dynamic`, `T` to its bound), and the elaboration pass inserts the physical node per
@@ -145,3 +146,28 @@ lowering), so it is sequenced with step 2.6 and its owner. The proposed steps ar
    `typeSharedUnit(checkOnly)` and `TypingOutput.checkOnly` are deleted.
 
 Each item is gated on byte-identical programs and self-compile output, as stage 1 is.
+
+### Contract with the IR lane
+
+haxeon-e4 reviewed this stage. Its conditions are the contract:
+
+1. **Placement and output.** The pass runs on the typed AST, before `IrGenerator`. Its output for a representation is
+   exactly today's typed code (the output of paths 6, 7 and 8), so `IrGenerator`, `GenericOwnerErasure`,
+   `IrExactTypeFacts` and the HashLink and Wasm lowering see the same input. The equivalence ("elaborated at the erased
+   representation equals path 7's typing", and likewise for each specialization) is a permanent test, not a local
+   probe.
+2. **Boundaries keep their source type.** Every boundary the pass inserts carries its semantic source type (`T`, its
+   substitution, the bound), as a field on the node or in a side table, not only the physical `TToDynamic` or
+   `TAbiCast`. `GenericOwnerErasure`'s fast path (a `Box<Int>` read through `Box<Dynamic>`), exact-type facts at erased
+   boundaries and 2.6 slice 8 use it.
+3. **One naming function.** Owner and specialization names (`$generic-erased:Owner:get|set|call:member`,
+   `GenericOwnerErasure.isOperation` and `DISPATCH_PREFIX`) come from one function both lanes share. A change to it is
+   agreed with haxeon-e4 first.
+4. **Structured lambda names.** A lambda is named by its owner, member, index and representation, not by a hash of
+   types, to fit `IrSymbol` ([IR_SYMBOLS.md](IR_SYMBOLS.md)) and ADR 0003 M3. This is decided with haxeon-e4 before
+   item 4 lands, so names change once.
+5. **Order.** Items 1 to 3 now, in parallel with haxeon-e4's slice 2a (`IrType.Structure`). Items 4 and 5 start only
+   after the naming (3) and the boundary contract (2) are agreed.
+
+Items 1 to 3 are typer-local: the typer records the semantic decision and the pass produces today's nodes from it, so
+output stays byte-identical. They go to the service lane.

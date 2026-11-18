@@ -300,7 +300,8 @@ In order; each step unblocks the next.
 
 ### Phase 2: typer
 
-Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2.6 runs beside 2.5 (see its note).
+Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2.6 runs beside 2.5 (see its note), and
+2.7 beside 2.6.
 
 - **2.1 Callback wiring.** Replace the 42 callback typedefs and forwarding closures with one narrow interface held by
   each sub-typer. Pure refactor. Effort M.
@@ -317,7 +318,8 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   the language service's approximate typer. Effort L. Recovery landed on 2026-11-17 (`7baff2763`): a function body or
   field initializer that fails is dropped and typing continues, with one diagnostic per failed body. Deleting the
   approximate typer remains: a failed body has no typed information, so the language service still falls back to syntax
-  inside it. Typing the parser's repaired syntax with the real typer is recommended, not yet decided.
+  inside it. Typing the parser's repaired syntax with the real typer is decided (2026-11-18) and queued for the service
+  lane after 2.7's stage 2 items 1 to 3.
 - **2.5 Lazy declaration typing** (added 2026-11-17, design in
   [LAZY_DECLARATION_TYPING.md](../design/LAZY_DECLARATION_TYPING.md)). An unannotated field's type and an unannotated
   function's return and argument types are those of its typed initializer or body, typed once, on demand, in its own
@@ -343,7 +345,20 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   self-compile no slower than noise and nbody within 3%. Effort L, high risk. The design and the user's decisions are
   recorded (`2b28b4c8e`, `6232eb09c`). Slice 0, the revert, landed on 2026-11-17 (`65810ae26`), and slice 5, open literal structures, on
   2026-11-18 (`5598a3dfc`, with `f9a9c84e5`), then slice 6, which deletes `localExpectedTypes`. The representation track
-  (haxeon-e4) is in progress; slice 4 (relations) waits for its dispatchers.
+  (haxeon-e4) is in progress; slice 4 (relations) waits for its dispatchers. Decisions 4 and 5 were taken on
+  2026-11-18: a `null` optional field reads as absent in reflection, and a structure used as a `Map` key compares by
+  identity (slice 4a).
+- **2.7 Typing generic code once** (added 2026-11-18, design in
+  [GENERIC_TYPING_ONCE.md](../design/GENERIC_TYPING_ONCE.md)). A generic body is typed once with its own parameters,
+  and each representation's code (erased, specialized, owner specialization) is produced from that typing by an
+  elaboration pass instead of typing the body again. Stage 1, typer only, landed on 2026-11-18 (design
+  `9e1a245d4`; `a4e4ac0dd`, `0e4c8286a`). Stage 2, the elaboration pass, was approved by the user on 2026-11-18 under
+  haxeon-e4's contract: the pass runs on the typed AST before `IrGenerator` and its output is today's typed code, checked
+  by a permanent equivalence test; every inserted boundary keeps its semantic source type; owner and specialization
+  names come from one function shared with the IR lane; lambdas get structured names. Items 1 to 3 (boundaries, layout
+  constants, helper choice; byte-identical) go to the service lane now, beside 2.6 slice 2a. Items 4 and 5 (nested
+  calls and lambda names, then the pass replacing paths 6 to 8 and deleting check units) wait until the naming and the
+  boundary contract are agreed with haxeon-e4. Effort L, high risk.
 
 ### Phase 3: service
 
