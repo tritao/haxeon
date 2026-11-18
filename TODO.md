@@ -1,7 +1,7 @@
 # Haxeon follow-ups
 
-Concrete gaps found while compiling Materia. Longer-term direction is in
-`ROADMAP.md`.
+Concrete gaps found while compiling Materia and while matching stock Haxe.
+Longer-term direction is in `ROADMAP.md`.
 
 - **Enum abstracts lose their type when lowered.**
   `DeclarationIndex.resolveNamedType` resolves an enum abstract to its
@@ -15,8 +15,32 @@ Concrete gaps found while compiling Materia. Longer-term direction is in
   share a value name. Keep enum abstracts as `TAbstract`, like other
   abstracts, and resolve bare values from the expected type; then remove the
   package heuristic.
-- **`Type.getClassName` and `Type.getClass` are missing** from the standard
-  library (`E1007: Unknown function "Type.getClassName"`).
+- **Most of Haxe's `Type` API is missing.** Haxeon has 2 of its 20
+  functions, `Type.enumIndex` and `Type.enumEq`, as compiler intrinsics
+  (`E1007: Unknown function "Type.getClassName"` for the rest). Haxe
+  libraries that serialize, log or load plugins need the others. In phases:
+  1. `enumConstructor` and `enumParameters`, which need only the enum value,
+     like the two that exist.
+  2. Classes and enums as runtime values, `Class<T>` and `Enum<T>`, on
+     HashLink, wasm32 and wasm-gc, with `getClass`, `getEnum`,
+     `getSuperClass`, `getClassName`, `getEnumName`, `getInstanceFields`,
+     `getClassFields`, `getEnumConstructs`, `allEnums` and `typeof`. Write a
+     design note first and agree it with the typer lane: it shares the
+     runtime type representation with structure values (architecture step
+     2.6, `docs/design/STRUCTURE_VALUES.md`).
+  3. `resolveClass`, `resolveEnum`, `createInstance`,
+     `createEmptyInstance`, `createEnum` and `createEnumIndex`, once a port
+     needs them. A type named only by a string defeats pruning, so this
+     needs `@:keep` and Haxe's dead-code rules.
+- **`trace` with several values prints differently from Haxe.**
+  `trace(a, b, c)` prints `2, 1, 1`; Haxe prints `2,1,1`.
+- **Warm builds still track subclasses' reads of base-class statics.**
+  Statics are no longer inherited (`f1e69062`), so a base class adding or
+  changing a static cannot change a name in its subclasses. The dependency
+  edges that link them can go, so such an edit no longer retypes them.
+- **Unused imports in `src/compiler/Compiler.hx` and
+  `src/compiler/semantic/ModuleCanonicalizer.hx`.** `haxeon lint --only
+  unused-imports` lists them. They predate the current work.
 - **No event signal type in the standard library.** Applications hand-roll
   listener lists. (`haxeon.reactive.Signal<T>` is a reactive value, not an
   event; pick a name that does not clash.) Add a general synchronous event type:
