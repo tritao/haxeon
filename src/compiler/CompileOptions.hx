@@ -9,6 +9,7 @@ typedef CompileOptionsInit = {
 	final ?checkReuse:Bool;
 	final ?wasmLegacyExceptions:Bool;
 	final ?reverseTypingOrder:Bool;
+	final ?parseThreads:Int;
 }
 
 /**
@@ -47,6 +48,12 @@ class CompileOptions {
 	 */
 	public final reverseTypingOrder:Bool;
 
+	/**
+	 * Threads that parse the modules ahead of the graph walk (`ModuleAnalyzer.prefetchParses`). 1, the default, parses each module
+	 * as the walk reaches it. Changes no output, so `key` leaves it out.
+	 */
+	public final parseThreads:Int;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -55,6 +62,7 @@ class CompileOptions {
 		checkReuse = init != null && init.checkReuse == true;
 		wasmLegacyExceptions = init != null && init.wasmLegacyExceptions == true;
 		reverseTypingOrder = init != null && init.reverseTypingOrder == true;
+		parseThreads = init == null || init.parseThreads == null || init.parseThreads < 1 ? 1 : init.parseThreads;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -66,7 +74,8 @@ class CompileOptions {
 			earlyPrune: earlyPrune,
 			checkReuse: checkReuse,
 			wasmLegacyExceptions: wasmLegacyExceptions,
-			reverseTypingOrder: reverseTypingOrder
+			reverseTypingOrder: reverseTypingOrder,
+			parseThreads: parseThreads
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -86,12 +95,19 @@ class CompileOptions {
 			flags.push("--wasm-legacy-exceptions");
 		if (reverseTypingOrder)
 			flags.push("--reverse-typing-order");
+		if (parseThreads > 1)
+			flags.push(PARSE_THREADS + parseThreads);
 		return flags;
 	}
 
-	/** One spelling of the options, for a session's identity and a cached result's key: the flags, or "" for the defaults. */
+	static inline final PARSE_THREADS = "--parse-threads=";
+
+	/**
+	 * One spelling of the options that change what a compile makes, for a session's identity and a cached result's key: their flags,
+	 * or "" for the defaults. How many threads parse is left out.
+	 */
 	public function key():String
-		return arguments().join(" ");
+		return [for (flag in arguments()) if (!StringTools.startsWith(flag, PARSE_THREADS)) flag].join(" ");
 
 	/** Whether `argument` is one of the flags `arguments` writes. */
 	public static function isFlag(argument:String):Bool
@@ -99,7 +115,7 @@ class CompileOptions {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order": true;
-			default: false;
+			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -111,6 +127,19 @@ class CompileOptions {
 			earlyPrune: arguments.indexOf("--no-early-prune") < 0,
 			checkReuse: arguments.indexOf("--check-reuse") >= 0,
 			wasmLegacyExceptions: arguments.indexOf("--wasm-legacy-exceptions") >= 0,
-			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0
+			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0,
+			parseThreads: threadsFrom(arguments)
 		});
+
+	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */
+	static function threadsFrom(arguments:Array<String>):Int {
+		var threads = 1;
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, PARSE_THREADS)) {
+				var value = Std.parseInt(argument.substr(PARSE_THREADS.length));
+				if (value != null && value > 0)
+					threads = value;
+			}
+		return threads;
+	}
 }

@@ -284,9 +284,6 @@ class FrontendCompilation {
 	}
 
 	/** The reachable modules and the classes in initialization order: the cached reachability when nothing it read changed. */
-	/** Threads that parse modules ahead of the graph walk. */
-	static inline final PARSE_THREADS = 8;
-
 	static function sortedModuleNames(modules:Map<String, ModuleState>):Array<String> {
 		var names = [for (name in modules.keys()) name];
 		names.sort(Reflect.compare);
@@ -306,9 +303,11 @@ class FrontendCompilation {
 		build.bodyChanged = bodyChanged;
 		build.signatureChanged = signatureChanged;
 		build.structuralChanged = structuralChanged;
-		// The graph walk parses what it reaches one module at a time; parse every module that needs it first, on several threads.
-		context.moduleAnalyzer.prefetchParses([for (name in sortedModuleNames(modules)) modules.get(name)],
-			PARSE_THREADS);
+		// The graph walk parses what it reaches one module at a time; with `--parse-threads`, every module that needs it is parsed first,
+		// on that many threads.
+		if (context.options.parseThreads > 1)
+			context.moduleAnalyzer.prefetchParses([for (name in sortedModuleNames(modules)) modules.get(name)],
+				context.options.parseThreads);
 		var names:Array<String> = [],
 			initializationClasses:Array<String> = [],
 			cachedReachability = context.state.cachedReachability(entryModule),
