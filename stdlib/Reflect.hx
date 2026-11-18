@@ -202,6 +202,11 @@ class Reflect {
 			var text:String = object;
 			return runtime.StringMethods.field(text, field);
 		}
+		// An array's length is a field of it in Haxe (`json.items.length`), as a String's is.
+		if (field == "length" && Std.isOfType(object, Array)) {
+			var array:Array<Dynamic> = object;
+			return array.length;
+		}
 		return reflectField(object, field);
 	}
 

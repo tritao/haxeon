@@ -343,6 +343,9 @@ in_background run_compile_failure structure-pattern-unknown-field
 in_background run_case extractor-patterns 0
 in_background run_compile_failure extractor-pattern-value-missing
 in_background run_compile_failure extractor-pattern-missing-constructor
+# Indexing a Dynamic value reads and writes the array it holds (haxeon.DynamicOps.index, setIndex).
+in_background run_case dynamic-index 0
+in_background run_compile_failure dynamic-index-string-key
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure switch-bool-missing

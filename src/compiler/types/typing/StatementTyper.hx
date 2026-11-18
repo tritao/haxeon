@@ -515,6 +515,16 @@ class StatementTyper {
 		var typedArray = BodyTyper.unwrapNullable(bodyTyper.typeExpression(array, scope)),
 			typedIndex = bodyTyper.typeExpression(offset, scope);
 		return switch typedArray.type {
+			case TDynamic:
+				// `dynamicValue[i] = v`: stored when the program runs, as Haxe/HL stores into the array the value holds.
+				var index = bodyTyper.dynamicIndex(typedIndex),
+					assignedValue = bodyTyper.typeExpression(expression, scope),
+					value = bodyTyper.coerce(stored(assigned, assignedValue, assignedValue), TDynamic, "array element",
+						"E1002");
+				scope.invalidateExpressionNamespace("array-entry:");
+				session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+				TExpression(new TypedExpression(TCall("haxeon.DynamicOps.setIndex", [typedArray, index, value]), TVoid,
+					span), span);
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
 				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", "E1002");

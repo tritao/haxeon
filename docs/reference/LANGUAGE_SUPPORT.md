@@ -155,6 +155,12 @@ The current subset includes:
   only the full path names the variable, so the extension never changes code Haxe accepts. `haxeon lint --only
   module-namespace` names each use of it, for code that must also compile with Haxe.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
+- Indexing a `Dynamic` value (`json.items[0]`, `value[i] = v`, `value[i] += 1`, `value[i]++`), as Haxe does on HashLink:
+  the index is an Int, a read gives the element of the array the value holds as Dynamic, or null past its end, and a
+  write stores there, growing the array. A null value is a null access, and a negative index or a value that holds no array
+  fails. `value.length` of an array is its length. Unlike HashLink, which turns the array into one of Dynamic elements, an
+  array keeps its element type: a write past its end fills the gap with the type's default (`0` where Haxe gives `null`),
+  and a value of another type cannot be stored in it.
 - Static extensions, as in Haxe 4.3.7: `using pack.Tools;` (a module, whose types and module-level functions it brings, or
   one type, `using pack.Tools.Extra;`) and `@:using(pack.Tools)` on a class, enum or abstract make `value.name(arguments)`
   call `Tools.name(value, arguments)` where the value's type has no member `name`. The order is Haxe's: the value's own
@@ -208,7 +214,6 @@ silently falling back to dynamic behavior.
 Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
 HashLink):
 
-- Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
 - An extractor pattern inside another pattern (`case Some(_.length => 3):`, `case {name: _.length => 3}:`): an extractor is a
   whole case only.
 - Rest parameters (`function sum(...values:Int)`).

@@ -34,6 +34,7 @@ interface BodyTyping {
 			result:Null<CompilerType>):Array<TypedStatement>;
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;
 	function functionResultType(fn:AstFunction, span:SourceSpan):CompilerType;
+	function dynamicIndex(index:TypedExpression):TypedExpression;
 	function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType;
 	function exhaustiveSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool;
 

@@ -2845,6 +2845,10 @@ class BodyTyper implements BodyTyping {
 		return parameters;
 	}
 
+	/** The index of a `Dynamic` value, which must be an Int as Haxe requires (`d["key"]` is an error there too). */
+	public function dynamicIndex(index:TypedExpression):TypedExpression
+		return coerce(ConversionResolver.plainValue(index, this), TInt, "array index", "E1014");
+
 	public function arrayElementType(type:CompilerType, span:SourceSpan):CompilerType
 		return switch type {
 			case TArray(element): element;

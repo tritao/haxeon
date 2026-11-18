@@ -1601,6 +1601,11 @@ class ExpressionTyper {
 		if (forwardedArray != null)
 			typedArray = session.representation.boundaryCast(typedArray, forwardedArray);
 		return switch typedArray.type {
+			case TDynamic:
+				// `dynamicValue[i]`: read when the program runs, as Haxe/HL reads the array the value holds.
+				session.runtimeDependencyTracker.record(session.currentContext.name, "haxeon.DynamicOps");
+				new TypedExpression(TCall("haxeon.DynamicOps.index", [typedArray, bodyTyper.dynamicIndex(typedIndex)]),
+					TDynamic, span);
 			case TMap(key, value):
 				DeclaredConformance.requireMapRuntime(session, key, value, span);
 				var typedKey = bodyTyper.coerce(typedIndex, key, "map key", "E1002"),
@@ -2235,7 +2240,8 @@ class ExpressionTyper {
 	function rewrittenPostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan, scope:Scope,
 			stabilize:Bool = false):TypedExpression {
 		var bindings:Array<AstStatement> = [];
-		if (stabilize) {
+		// An element's array and index are evaluated once, as for `values[i] += 1`.
+		if (stabilize || target.match(Index(_, _, _))) {
 			var stable = AssignmentTarget.stabilize(target, span, _ -> span);
 			target = stable.target;
 			bindings = stable.bindings;
@@ -2246,6 +2252,7 @@ class ExpressionTyper {
 			store = switch target {
 				case Variable(name, _): Assignment(name, updated, span);
 				case Member(object, field, _): FieldAssignment(object, field, updated, span);
+				case Index(array, offset, _): IndexAssignment(array, offset, updated, span);
 				default:
 					fail("E1018", "Postfix increment target is not assignable", span);
 					Assignment("", updated, span);

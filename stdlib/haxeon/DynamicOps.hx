@@ -64,6 +64,26 @@ class DynamicOps {
 		return order != UNORDERED && order <= 0;
 	}
 
+	/**
+		`value[index]` on a Dynamic value, as Haxe reads it on HashLink: the element of the array `value` holds, or null past its
+		end (a negative index fails, as a typed read does). A null value is a null access; any other value than an array fails
+		as the cast to an array does.
+	**/
+	public static function index(value:Dynamic, index:Int):Dynamic {
+		if (value == null)
+			throw "Null access";
+		var array:Array<Dynamic> = value;
+		return index >= array.length ? null : array[index];
+	}
+
+	/** `value[index] = element` on a Dynamic value: stored in the array `value` holds, which grows to reach `index`. */
+	public static function setIndex(value:Dynamic, index:Int, element:Dynamic):Void {
+		if (value == null)
+			throw "Null access";
+		var array:Array<Dynamic> = value;
+		array[index] = element;
+	}
+
 	static function bothInts(left:Dynamic, right:Dynamic):Bool
 		return Std.isOfType(left, Int) && Std.isOfType(right, Int);
 
