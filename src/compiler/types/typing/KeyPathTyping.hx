@@ -154,7 +154,7 @@ class KeyPathTyping {
 			// One definition serves every use of the path and its accessors are kept from build to build, so their place cannot be a use
 			// (the last one typed would win) or a declaration (it moves when text above it changes, while a build that does not type
 			// the path again keeps the old place). It is compiler-owned code: a generated span in the first field's file, at a fixed offset.
-			span: fields.length > 0 ? new compiler.core.Source.SourceSpan(fields[0].field.span.file, 0, 0, false, null,
+			span: fields.length > 0 ? compiler.core.Source.SourceSpan.generatedIn(fields[0].field.span.file, 0, 0,
 				"key-path") : span,
 			origin: origin
 		});

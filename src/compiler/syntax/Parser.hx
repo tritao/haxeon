@@ -2237,7 +2237,7 @@ class Parser {
 				name += "." + part.text;
 				end = part.span;
 			}
-			var referenceSpan = new SourceSpan(start.file, start.start, end.end, false);
+			var referenceSpan = new SourceSpan(start.file, start.start, end.end);
 			var expression:AstExpression = Variable(name, referenceSpan);
 			return parsePostfix(expression);
 		}
@@ -2281,14 +2281,15 @@ class Parser {
 				name += "." + part.text;
 				end = part.span;
 			}
-			var referenceSpan = new SourceSpan(start.file, start.start, end.end, name.indexOf(".") < 0);
+			var referenceSpan = SourceSpan.reference(start.file, start.start, end.end, name.indexOf(".") < 0);
 			var expression:AstExpression = Variable(name, referenceSpan);
 			if (match(TokenKind.LeftParen)) {
 				var arguments = StringTools.endsWith(name, ".match")
 					? parseMatchPattern(name) : parseCallArguments(name);
 				var end = consume(TokenKind.RightParen).span;
 				expression = Call(name, arguments,
-					new SourceSpan(referenceSpan.file, referenceSpan.start, end.end, referenceSpan.isBareReference));
+					SourceSpan.reference(referenceSpan.file, referenceSpan.start, end.end,
+					referenceSpan.isBareReference));
 			}
 			return parsePostfix(expression);
 		}
@@ -2790,7 +2791,7 @@ class Parser {
 				var end = consume(TokenKind.RightParen).span;
 				expression = switch expression {
 					case Variable(name, start): Call(name, arguments,
-						new SourceSpan(start.file, start.start, end.end, start.isBareReference));
+						SourceSpan.reference(start.file, start.start, end.end, start.isBareReference));
 					default: ClosureCall(expression, arguments, expressionSpan(expression).merge(end));
 				};
 				continue;

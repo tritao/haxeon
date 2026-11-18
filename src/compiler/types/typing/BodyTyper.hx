@@ -1557,7 +1557,7 @@ class BodyTyper implements BodyTyping {
 		var size = span.file.utf8LengthAt(span.start, name);
 		if (size < 0 || span.start + size > span.end)
 			return span;
-		return span.start + size == span.end ? span : new SourceSpan(span.file, span.start, span.start + size,
+		return span.start + size == span.end ? span : SourceSpan.reference(span.file, span.start, span.start + size,
 			span.isBareReference, span.referenceName);
 	}
 

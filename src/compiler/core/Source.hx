@@ -184,36 +184,89 @@ class SourceFile {
 		return hash;
 }
 
-/** Half-open UTF-8 byte range within a single {@link SourceFile}. */
+/**
+ * Half-open UTF-8 byte range within a single {@link SourceFile}. Most spans are only that; the parser's reference spans
+ * also carry what was written at the reference ({@link ReferenceSpan}).
+ */
 class SourceSpan {
 	public final file:SourceFile;
 	public final start:Int;
 	public final end:Int;
 
 	/** Parser-recorded qualification for a variable or named call reference. */
-	public final isBareReference:Bool;
+	public var isBareReference(get, never):Bool;
 
 	/** Original reference path before module or import expansion; introduced package roots are not value bindings. */
-	public final referenceName:Null<String>;
+	public var referenceName(get, never):Null<String>;
 
 	/** Compiler-owned syntax has no user source snapshot. */
-	public final generatedReason:Null<String>;
+	public var generatedReason(get, never):Null<String>;
 
-	public function new(file:SourceFile, start:Int, end:Int, isBareReference:Bool = false, ?referenceName:String,
-			?generatedReason:String) {
-		this.generatedReason = generatedReason;
+	public function new(file:SourceFile, start:Int, end:Int) {
 		this.file = file;
 		this.start = start;
 		this.end = end;
-		this.isBareReference = isBareReference;
-		this.referenceName = referenceName;
 	}
 
-	public static function generated(reason:String):SourceSpan
-		return new SourceSpan(new SourceFile("<generated:" + reason + ">", ""), 0, 0, false, null, reason);
+	/** A span of a reference: a plain span unless the reference is bare or has a name recorded. */
+	public static function reference(file:SourceFile, start:Int, end:Int, isBareReference:Bool,
+			?referenceName:String):SourceSpan
+		return isBareReference || referenceName != null ? new ReferenceSpan(file, start, end, isBareReference,
+			referenceName) : new SourceSpan(file, start, end);
 
-	public function merge(other:SourceSpan):SourceSpan
-		return new SourceSpan(file, start < other.start ? start : other.start, end > other.end ? end : other.end, false,
-			null,
-			generatedReason == other.generatedReason ? generatedReason : null);
+	function get_isBareReference():Bool
+		return false;
+
+	function get_referenceName():Null<String>
+		return null;
+
+	function get_generatedReason():Null<String>
+		return null;
+
+	public static function generated(reason:String):SourceSpan
+		return new GeneratedSpan(new SourceFile("<generated:" + reason + ">", ""), 0, 0, reason);
+
+	/** A span of compiler-owned code placed in `file`, made for `reason`. */
+	public static function generatedIn(file:SourceFile, start:Int, end:Int, reason:String):SourceSpan
+		return new GeneratedSpan(file, start, end, reason);
+
+	/** The range covering both spans, in this one's file; it stays generated only when both were, for the same reason. */
+	public function merge(other:SourceSpan):SourceSpan {
+		var start = this.start < other.start ? this.start : other.start,
+			end = this.end > other.end ? this.end : other.end,
+			reason = generatedReason;
+		return reason != null && reason == other.generatedReason ? new GeneratedSpan(file, start, end,
+			reason) : new SourceSpan(file, start, end);
+	}
+}
+
+/** A span of compiler-owned syntax, with the reason it was made. */
+class GeneratedSpan extends SourceSpan {
+	final reason:String;
+
+	public function new(file:SourceFile, start:Int, end:Int, reason:String) {
+		super(file, start, end);
+		this.reason = reason;
+	}
+
+	override function get_generatedReason():Null<String>
+		return reason;
+}
+
+/** A reference's span, with what the parser and the canonicalizer recorded about the reference. */
+class ReferenceSpan extends SourceSpan {
+	final bare:Bool;
+	final written:Null<String>;
+
+	public function new(file:SourceFile, start:Int, end:Int, bare:Bool, written:Null<String>) {
+		super(file, start, end);
+		this.bare = bare;
+		this.written = written;
+	}
+
+	override function get_isBareReference():Bool
+		return bare;
+
+	override function get_referenceName():Null<String>
+		return written;
 }
