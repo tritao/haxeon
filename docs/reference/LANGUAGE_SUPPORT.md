@@ -104,8 +104,10 @@ The current subset includes:
   value's abstract's `to` conversions, a `@:from` or `@:to` function before a `from` or `to` type. Where the other side
   is not an abstract (Int, Float, a class), the value meets the conversion's type as Haxe unifies it, so an Int meets a
   Float and a class its base class or interface (`var r:Root = 81` with `abstract Root(Float) from Float`); one abstract
-  never converts to another through a third type. `(value : Type)` converts as an assignment does, calling a `@:to`;
-  Haxeon reads any other `(value : Type)` as `cast(value, Type)` still, which Haxe would check.
+  never converts to another through a third type.
+- `(value : Type)` is Haxe's type check: the value is typed with `Type` expected (`([] : Array<Int>)`, `(null : Null<Foo>)`),
+  must unify with it as an assignment does (`("a" : Int)` and `(base : Derived)` are errors), converts implicitly (an Int to a
+  Float, an abstract through a `@:to` or `@:from`), and the expression has `Type`. `cast` and `cast(value, Type)` cast.
 - Every instance method and constructor of an abstract is typed, as in Haxe, whether or not anything calls it, so an error
   in one nothing calls is reported. Its code is still each call's specialization. A generic static method of an abstract
   is typed only where it is called (with its type arguments), as a generic function is.

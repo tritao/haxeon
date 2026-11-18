@@ -88,7 +88,7 @@ class StaticInitOrderMain {
 		// The first probe has no reads; later probes must not reuse its cached references.
 		compiler = new Compiler();
 		compiler.update("catalog/Category.hx",
-			'package catalog; enum abstract Category(String) { var Welding = "Welding"; }');
+			'package catalog; enum abstract Category(String) to String { var Welding = "Welding"; }');
 		compiler.update("catalog/Catalog.hx",
 			'package catalog; import catalog.Category; import browser.Browser; class Catalog { public static function seed():Int return Browser.seed; public static final categories:Array<Category> = [Welding]; }');
 		compiler.update("browser/Browser.hx",

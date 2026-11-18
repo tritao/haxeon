@@ -194,6 +194,10 @@ in_background run_compile_failure abstract-static-private
 in_background run_case hlnative-body 0
 in_background run_compile_failure hlnative-body-error
 in_background run_case abstract-module-members 0
+# `(value : Type)` is Haxe's type check: the value unifies with the type and converts to it; it never casts.
+in_background run_case type-check 0
+in_background run_compile_failure type-check-mismatch
+in_background run_compile_failure type-check-downcast
 # Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0
 in_background run_case static-init-order-reach 0

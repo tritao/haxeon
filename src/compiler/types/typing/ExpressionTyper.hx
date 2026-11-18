@@ -1945,14 +1945,13 @@ class ExpressionTyper {
 		};
 
 	public function typeCast(value:AstExpression, target:Null<AstType>, span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, ?typed:TypedExpression):TypedExpression {
+			expectedType:Null<CompilerType>):TypedExpression {
 		// An untyped cast with nothing to take a type from (an element of `cast [for (x in xs) cast f(x)]`) is Dynamic: its
 		// value goes wherever Dynamic goes, as Haxe's unknown type does there.
 		var targetType = target == null ? (expectedType == null ? TDynamic : expectedType) : bodyTyper.lowerType(target,
 			span);
 		// An explicit type ascription guides its operand; an untyped cast separates source inference from its destination.
-		var typedValue = typed != null ? typed : bodyTyper.typeExpression(value, scope,
-			target == null ? null : targetType);
+		var typedValue = bodyTyper.typeExpression(value, scope, target == null ? null : targetType);
 		// A value that never arrives (a `throw`) has every type, as Haxe's Never: `(throw e : Int)` and `cast (throw e)` are that
 		// expression, typed as the target, as any other coercion of Never makes it.
 		if (typedValue.type.match(TNever))
@@ -1970,15 +1969,14 @@ class ExpressionTyper {
 	}
 
 	/**
-	 * `(value : type)`: the value converted to `type` as Haxe unifies it, through an abstract's `@:to` or `@:from` where it is
-	 * one. Haxeon reads any other as the cast `cast(value, type)` still, which Haxe would check (LANGUAGE_SUPPORT.md).
+	 * `(value : type)`, Haxe's type check: the value is typed with `type` expected (`([] : Array<Int>)`), must unify with it as an
+	 * assignment does, converts implicitly (an Int to a Float, an abstract through its `@:to` or `@:from`), and the expression has
+	 * `type`. Unlike `cast(value, type)` it never casts: `(base : Derived)` is an error.
 	 */
 	function typeCheckType(value:AstExpression, type:AstType, span:SourceSpan, scope:Scope):TypedExpression {
 		var targetType = bodyTyper.lowerType(type, span),
 			typedValue = bodyTyper.typeExpression(value, scope, targetType);
-		if (session.relations.conversion(typedValue.type, targetType).match(AbstractCast))
-			return bodyTyper.coerce(typedValue, targetType, "type check", "E1003");
-		return typeCast(value, type, span, scope, null, typedValue);
+		return bodyTyper.coerce(typedValue, targetType, "type check", "E1003");
 	}
 
 	/** Give each null-producing arm a concrete type without discarding its evaluation. */
