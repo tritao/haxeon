@@ -248,9 +248,15 @@ errors. Static methods on `extern class` and static or instance methods on
 underlying representation as native argument zero. So does an `extern` method
 without a body in a class or abstract that is not extern itself
 (`@:hlNative("std", "math_sqrt") static extern function sqrt(v:Float):Float;`),
-which Haxe leaves unimplemented on HashLink. Haxe also binds `@:hlNative` on a
-method with a body, ignoring the body; Haxeon rejects that (`E1021`), since
-the body would otherwise look like it runs.
+which Haxe leaves unimplemented on HashLink. A function with `@:hlNative` and a
+body is the native too, as Haxe compiles it on HashLink: the body is typed (its
+errors are reported) but never runs. That holds for a class's static method, a
+module-level function and an abstract's static or instance method; a class's
+instance method is not supported (`E1021`; Haxe leaves it null). Haxeon binds
+`@:hlNative` on Wasm as well, as it binds an extern's (the Wasm runtime
+provides `haxeon_runtime`'s natives), so the body is not a Wasm fallback: code
+that needs one there selects it with `#if wasm`. `@:cNative` still binds only
+an extern function (`E1021` names a body, which would run instead).
 
 An extern class or abstract can provide a default library for all its methods.
 The method name is used as the native symbol unless the method carries its own

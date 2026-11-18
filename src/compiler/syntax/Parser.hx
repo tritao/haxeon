@@ -767,7 +767,10 @@ class Parser {
 			isStatic: isStatic,
 			isPublic: isPublic,
 			isOverride: isOverride,
-			isExtern: isExtern,
+			// A function with `@:hlNative` is the native, as Haxe compiles it on HashLink: an extern one, whose body (if it has one)
+			// is typed but never runs (`ProgramTyper.checkNativeBoundBodies`). Haxeon binds it on Wasm too, as it binds an extern's
+			// `@:hlNative` there (the Wasm runtime provides `haxeon_runtime`'s natives).
+			isExtern: isExtern || hasMetadataNamed(metadata, "hlNative"),
 			isInline: isInline,
 			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
@@ -777,6 +780,14 @@ class Parser {
 			statements: statements,
 			span: start.merge(end)
 		};
+	}
+
+	static function hasMetadataNamed(metadata:Null<Array<compiler.syntax.Ast.AstMetadata>>, name:String):Bool {
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == name)
+					return true;
+		return false;
 	}
 
 	function synchronizeStatement(bodyStart:Int, statementStart:Int):Void {

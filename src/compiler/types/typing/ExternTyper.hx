@@ -27,7 +27,8 @@ class ExternTyper {
 	public function typeExtern(fn:AstFunction, ?externalName:String, ?receiverType:CompilerType, ?defaultLibrary:String,
 			?resultOverride:CompilerType,
 			allowStubBody:Bool = false):TypedNative {
-		if (fn.statements.length != 0 && !allowStubBody)
+		// A function `@:hlNative` binds keeps its body, which is only checked (`AstFunctions.bindingNative`).
+		if (fn.statements.length != 0 && !allowStubBody && !compiler.syntax.AstFunctions.hasMetadata(fn, "hlNative"))
 			fail("E1021", 'Extern function "${fn.name}" cannot have a body', fn.span);
 		var binding:Null<compiler.syntax.Ast.AstMetadata> = null,
 			cBinding:Null<compiler.syntax.Ast.AstMetadata> = null;

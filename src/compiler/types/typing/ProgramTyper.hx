@@ -175,8 +175,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					}
 			}
 		if (cachedMetadata == null) {
-			// A native binding replaces a function's body, so only an extern function can carry one;
-			// on any other function the body would silently run instead of the native.
+			// A C native binding replaces a function's body, so only an extern function can carry one; on any other function the
+			// body would silently run instead of the native. (`@:hlNative` with a body binds the native, as in Haxe.)
 			for (fn in program.functions)
 				if (fn.isExtern != true)
 					rejectNativeBinding(fn, fn.name);
@@ -339,6 +339,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			moduleFunctions = typeModuleFunctions(program.functions, selected, functionUnits);
 			abstractFunctions = typeAbstractFunctions(program.abstracts, selected, abstractUnits);
 		}
+		checkNativeBoundBodies(program, selected);
 		session.mergeUnits(classUnits.concat(functionUnits).concat(abstractUnits));
 		for (fn in moduleFunctions)
 			typedFunctions.push(fn);
@@ -1385,13 +1386,49 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		// A constructor is checked as each construction types it (`CallResolver.typeAbstractConstruction`).
 		var isConstructor = fn.name == "new",
 			body = isConstructor ? AbstractConstructorNormalizer.normalize(fn, abstractDecl.underlying) : fn;
+		checkBody(key, () -> typeAbstractBodyUnspecialized(abstractDecl, body, key),
+			isConstructor ? error -> AbstractConstructorNormalizer.constructorError(error, key) : null);
+	}
+
+	/**
+	 * Types a body for its errors alone (`TypingSession.beginCheckUnit`): its unit is dropped, and an error is recorded, passed
+	 * through `reword` when given, and typing goes on.
+	 */
+	function checkBody(key:String, type:() -> TypedFunction, ?reword:CompileError->CompileError):Void {
 		var mark = session.checkpoint(), unit = session.beginCheckUnit();
 		try {
-			signatureOnly(key, () -> typeAbstractBodyUnspecialized(abstractDecl, body, key));
+			signatureOnly(key, type);
 			session.endUnit(unit);
 		} catch (error:CompileError) {
-			session.recover(mark, isConstructor ? AbstractConstructorNormalizer.constructorError(error, key) : error);
+			session.recover(mark, reword == null ? error : reword(error));
 		}
+	}
+
+	/**
+	 * Checks the body of each function bound to a native by `@:hlNative` (`AstFunctions.bindingNative`): Haxe types it, though
+	 * HashLink calls the native, so its errors are reported here and the native is the function's code.
+	 */
+	function checkNativeBoundBodies(program:compiler.syntax.Ast.AstProgram, selected:Null<Map<String, Bool>>):Void {
+		function bound(fn:AstFunction, key:String):Bool
+			return fn.isExtern == true && fn.statements.length > 0 && AstFunctions.hasMetadata(fn, "hlNative")
+				&& (selected == null || selected.exists(key));
+		for (fn in program.functions)
+			if (bound(fn, fn.name))
+				checkBody(fn.name, () -> bodyTyper.typeFunction(AstFunctions.withBody(fn)));
+		for (classDecl in program.classes)
+			for (method in classDecl.methods) {
+				var key = classDecl.name + "." + method.name;
+				if (method.isStatic && bound(method, key))
+					checkBody(key, () -> bodyTyper.typeFunction(AstFunctions.withBody(method), classDecl.name, true));
+			}
+		for (abstractDecl in program.abstracts)
+			for (method in abstractDecl.methods) {
+				var key = abstractDecl.name + "." + method.name;
+				if (bound(method, key))
+					checkBody(key, () -> method.isStatic ? bodyTyper.typeFunction(AstFunctions.withBody(method),
+						abstractDecl.name, true) : typeAbstractBodyUnspecialized(abstractDecl,
+						AstFunctions.withBody(method), key));
+			}
 	}
 
 	/**
@@ -2029,7 +2066,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	static function rejectNativeBinding(fn:compiler.syntax.Ast.AstFunction, name:String):Void {
 		if (fn.metadata != null)
 			for (entry in fn.metadata)
-				if (entry.name == "hlNative" || entry.name == "cNative")
+				if (entry.name == "cNative")
 					BodyTyper.fail("E1021",
 						'@:${entry.name} binds only an extern function; "$name" has a body, which would run instead',
 						entry.span);

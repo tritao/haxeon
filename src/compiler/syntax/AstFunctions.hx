@@ -20,13 +20,13 @@ class AstFunctions {
 			typeParameters:Null<Array<String>>,
 			typeConstraints:Null<Array<AstTypeConstraint>>, arguments:Array<AstArgument>, result:AstType,
 			statements:Array<AstStatement>,
-			span:SourceSpan):AstFunction
+			span:SourceSpan, ?isExtern:Bool):AstFunction
 		return {
 			isOverride: fn.isOverride,
 			name: name,
 			isStatic: isStatic,
 			isPublic: fn.isPublic,
-			isExtern: fn.isExtern,
+			isExtern: isExtern ?? fn.isExtern,
 			isInline: fn.isInline,
 			metadata: metadata,
 			typeParameters: typeParameters,
@@ -59,6 +59,21 @@ class AstFunctions {
 	public static inline function withResult(fn:AstFunction, result:AstType):AstFunction
 		return copy(fn, fn.name, fn.isStatic, fn.metadata, fn.typeParameters, fn.typeConstraints, fn.arguments, result,
 			fn.statements, fn.span);
+
+	/** `fn` as a function whose body is typed: the body of one `@:hlNative` binds (an extern with a body), which is checked. */
+	public static function withBody(fn:AstFunction):AstFunction
+		return fn.isExtern != true ? fn : copy(fn, fn.name, fn.isStatic, fn.metadata, fn.typeParameters,
+			fn.typeConstraints, fn.arguments, fn.result, fn.statements, fn.span, false);
+
+	/** Whether `fn` carries the metadata `name` (`hlNative` for `@:hlNative`). */
+	public static function hasMetadata(fn:AstFunction, name:String):Bool {
+		var metadata = fn.metadata;
+		if (metadata != null)
+			for (entry in metadata)
+				if (entry.name == name)
+					return true;
+		return false;
+	}
 
 	/** Whether the source leaves part of `fn`'s signature to inference: its result or an argument has no type. */
 	public static function leavesSignatureToInference(fn:AstFunction):Bool {

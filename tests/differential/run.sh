@@ -188,6 +188,9 @@ in_background run_compile_failure abstract-from-to-not-chained
 # An abstract's static variables, in Haxe's initialization order (AbstractStatics).
 in_background run_case abstract-statics 0
 in_background run_compile_failure abstract-static-private
+# @:hlNative on a function with a body binds the native; the body is typed and never runs.
+in_background run_case hlnative-body 0
+in_background run_compile_failure hlnative-body-error
 in_background run_case abstract-module-members 0
 # Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0

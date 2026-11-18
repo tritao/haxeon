@@ -721,9 +721,13 @@ class TestMain {
 		Frontend.compile('class Valid { public static final value = "count: " + 1; public static final rest = Other.F % 2; } '
 			+ 'class Other { public static final F = 3.5; } '
 			+ 'function main():Int { var text:String = Valid.value; var rest:Float = Valid.rest; return 0; }');
-		// A native binding on a function with a body would silently run the body instead.
+		// `@:hlNative` binds a function with a body to the native, as Haxe does on HashLink; a class's instance method is not bound
+		// (Haxe leaves it null there).
 		expectCompileError('class Lock { public function new() {} @:hlNative("std", "mutex_acquire") public function acquire():Void {} } function main():Int return 0;',
-			'@:hlNative binds only an extern function; "Lock.acquire" has a body, which would run instead');
+			'Extern instance method "Lock.acquire" is not supported yet');
+		// A C native binding on a function with a body would silently run the body instead.
+		expectCompileError('class Lock { @:cNative("c", "acquire", "v()") public static function acquire():Void {} } function main():Int return 0;',
+			'@:cNative binds only an extern function; "Lock.acquire" has a body, which would run instead');
 		// Operator initializers may name static fields: qualified, bare in the owning class, or across classes.
 		Frontend.compile('class Units { public static final RADIAN = Other.F / 180; public static final TURN = RADIAN * 360; '
 			+ 'public static final COUNT = Other.N + 1; public static final BACK = -Other.N; public static final HALF = Other.N / 2; '
