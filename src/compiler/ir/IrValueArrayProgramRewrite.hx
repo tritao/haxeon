@@ -427,7 +427,8 @@ class IrValueArrayProgramRewrite {
 						default: false;
 					})): var dynamicView = new IrValue(next++, "$value-array-dynamic-view", Array(Dyn));
 					target.instructions.push(new Located(SafeCast(dynamicView, input), located.provenance));
-					target.instructions.push(new Located(Call(out, retype, [dynamicView]), located.provenance));
+					target.instructions.push(new Located(Call(out, IrSymbol.of(retype), [dynamicView]),
+						located.provenance));
 					changed = true;
 					default:
 						target.instructions.push(located);
@@ -458,13 +459,16 @@ class IrValueArrayProgramRewrite {
 			case Call(_, name, args) if (args.length > 0 && (switch args[0].type {
 				case Array(Dyn): true;
 				default: false;
-			}) && (name == "__array_push_ref" || name == "__array_unshift_ref" || name == "__array_insert_ref"
-				|| name == "__array_reverse_ref"
-				|| name == "__array_resize_ref" || name == "__array_copy_ref" || name == "__array_slice_ref"
-				|| name == "__array_splice_ref"
-				|| name == "__array_concat_ref" || name == "__array_pop_ref" || name == "__array_shift_ref"
-				|| name == "__array_index_of_ref"
-				|| name == "__array_remove_ref")): 3;
+			}) && (name.name == "__array_push_ref" || name.name == "__array_unshift_ref"
+				|| name.name == "__array_insert_ref"
+				|| name.name == "__array_reverse_ref"
+				|| name.name == "__array_resize_ref" || name.name == "__array_copy_ref"
+				|| name.name == "__array_slice_ref"
+				|| name.name == "__array_splice_ref"
+				|| name.name == "__array_concat_ref" || name.name == "__array_pop_ref"
+				|| name.name == "__array_shift_ref"
+				|| name.name == "__array_index_of_ref"
+				|| name.name == "__array_remove_ref")): 3;
 			default: 0;
 		};
 	}
@@ -489,7 +493,7 @@ class IrValueArrayProgramRewrite {
 					target.terminator = block.terminator;
 				}
 				var instruction = switch located.value {
-					case ArrayGet(out, array, index): Call(out, "__array_get_any", [array, index]);
+					case ArrayGet(out, array, index): Call(out, IrSymbol.of("__array_get_any"), [array, index]);
 					case ArraySet(array, index, value):
 						if (next < 0) {
 							next = 0;
@@ -503,9 +507,10 @@ class IrValueArrayProgramRewrite {
 										next = output.id + 1;
 								}
 						}
-						Call(new IrValue(next++, "$dynamic-array-write", Void), "__array_set_any",
+						Call(new IrValue(next++, "$dynamic-array-write", Void), IrSymbol.of("__array_set_any"),
 							[array, index, value]);
-					case Call(out, name, args): Call(out, name.substr(0, name.length - 3) + "any", args);
+					case Call(out, name, args): Call(out,
+						IrSymbol.of(name.name.substr(0, name.name.length - 3) + "any"), args);
 					default: throw new InternalError("Dynamic array classifier disagrees with its rewrite");
 				};
 				target.instructions.push(new Located(instruction, located.provenance));
@@ -529,12 +534,12 @@ class IrValueArrayProgramRewrite {
 			for (located in block.instructions) {
 				var instruction = switch located.value {
 					case Call(out, name, arguments)
-						if ((name == IrArrayFactory.NAME || name == "__array_alloc_ref")
+						if ((name.name == IrArrayFactory.NAME || name.name == "__array_alloc_ref")
 						&& IrVerifier.sameType(out.type, arrayType)):
 						if (arguments.length != 1)
 							throw new InternalError("Invalid array factory arguments");
 						changed = true;
-						Call(out, allocator, arguments);
+						Call(out, IrSymbol.of(allocator), arguments);
 					default: located.value;
 				};
 				target.instructions.push(new Located(instruction, located.provenance));

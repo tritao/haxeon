@@ -69,10 +69,10 @@ class IrValueConstructors {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, child, _) if (child != name && constructors.exists(child)):
-							var nested = prepare(child);
+						case Call(_, child, _) if (child.name != name && constructors.exists(child.name)):
+							var nested = prepare(child.name);
 							if (nested != null)
-								children.set(child, nested);
+								children.set(child.name, nested);
 						default:
 					}
 			var result = expandStraightLine(fn, children), count = 0;
@@ -96,7 +96,7 @@ class IrValueConstructors {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, name, _) if (name != fn.name && constructors.exists(name)):
+					case Call(_, name, _) if (name.name != fn.name && constructors.exists(name.name)):
 						found = true;
 					default:
 				}
@@ -127,8 +127,8 @@ class IrValueConstructors {
 			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;
 			for (i in 0...block.instructions.length)
 				switch block.instructions[i].value {
-					case Call(_, name, args) if (constructors.exists(name) && name != fn.name):
-						var target:IrFunction = cast constructors.get(name);
+					case Call(_, name, args) if (constructors.exists(name.name) && name.name != fn.name):
+						var target:IrFunction = cast constructors.get(name.name);
 						if (args.length == target.arguments.length) {
 							position = i;
 							callee = target;
@@ -156,8 +156,8 @@ class IrValueConstructors {
 		var next = -1;
 		return IrFunctionRewrite.instructions(fn, function(located) {
 			return switch located.value {
-				case Call(out, name, args) if (constructors.exists(name) && name != fn.name):
-					var callee:IrFunction = cast constructors.get(name),
+				case Call(out, name, args) if (constructors.exists(name.name) && name.name != fn.name):
+					var callee:IrFunction = cast constructors.get(name.name),
 						single:IrBlock = callee.blocks[0],
 						returned = straightLineResult(callee, args.length);
 					if (returned == null) null;

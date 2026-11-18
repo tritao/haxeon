@@ -336,7 +336,7 @@ class IrInliner {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, callee, _):
-							var target = ids.get(callee);
+							var target = ids.get(callee.name);
 							if (target != null)
 								targets.push(target);
 						case MethodCall(_, receiver, method, _, _):
@@ -663,7 +663,7 @@ class IrInliner {
 		var target:Null<String> = null, actuals:Array<IrValue> = null;
 		switch instruction {
 			case Call(_, functionName, arguments):
-				target = functionName;
+				target = functionName.name;
 				actuals = arguments;
 			case MethodCall(_, object, methodName, arguments, _):
 				target = resolveMethod(object, methodName);
@@ -914,7 +914,8 @@ class IrInliner {
 			copies:Array<Located<IrInstruction>> = [];
 		if (needsReceiverCheck(call.value)) {
 			var checked = new IrValue(nextValue++, "$receiver-check", Void);
-			copies.push(new Located(Call(checked, IrReceiverCheck.NAME, [resolve(actuals[0], substitutions)]),
+			copies.push(new Located(Call(checked, IrSymbol.of(IrReceiverCheck.NAME),
+				[resolve(actuals[0], substitutions)]),
 				call.provenance));
 		}
 		nextValue = bindArguments(callee, [for (actual in actuals) resolve(actual, substitutions)], values, copies,
@@ -1062,7 +1063,7 @@ class IrInliner {
 		} : checkReceiver;
 		if (mustCheck) {
 			var checked = new IrValue(nextValue++, "$receiver-check", Void);
-			upcasts.push(new Located(Call(checked, IrReceiverCheck.NAME, [actuals[0]]), call.provenance));
+			upcasts.push(new Located(Call(checked, IrSymbol.of(IrReceiverCheck.NAME), [actuals[0]]), call.provenance));
 		}
 		nextValue = bindArguments(callee, actuals, values, upcasts, call.provenance, nextValue);
 		// Every definition first, so phis and back edges can refer to values defined later in block order.

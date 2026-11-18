@@ -46,7 +46,7 @@ class InlinerCycleMain {
 					for (located in block.instructions)
 						switch located.value {
 							case Call(_, callee, _):
-								result.push(callee);
+								result.push(callee.name);
 							default:
 						}
 		return result;

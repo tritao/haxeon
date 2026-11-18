@@ -126,9 +126,9 @@ class IrOptionalScalarFlow {
 			for (located in block.instructions)
 				switch located.value {
 					case StaticClosure(out, name):
-						result.set(out.id, {name: name, receiver: null});
+						result.set(out.id, {name: name.name, receiver: null});
 					case InstanceClosure(out, name, receiver):
-						result.set(out.id, {name: name, receiver: receiver});
+						result.set(out.id, {name: name.name, receiver: receiver});
 					default:
 				}
 		return result;
@@ -222,10 +222,11 @@ class IrOptionalScalarFlow {
 					case CompilerGenerated(reason) if (reason == IrGenerator.ArrayValuePlaceReason):
 						switch located.value {
 							case ArrayGet(out, _, _) if (optional(out.type) != null): places.set(out.id, true);
-							case Call(out, "__array_get_any", args) if (args.length == 2 && switch args[0].type {
-								case Array(element): optional(element) != null;
-								default: false;
-							}): places.set(out.id, true);
+							case Call(out, callTarget, args) if (callTarget.name == "__array_get_any"
+								&& args.length == 2 && switch args[0].type {
+									case Array(element): optional(element) != null;
+									default: false;
+								}): places.set(out.id, true);
 							default:
 						}
 					default:
@@ -508,12 +509,12 @@ class IrOptionalScalarFlow {
 					case Equal(_, left, right) if ((values.exists(left.id) && nulls.exists(right.id))
 						|| (values.exists(right.id) && nulls.exists(left.id))):
 					case Call(out, name, args)
-						if (IrOptionalValueFlow.isCopyName(name)
+						if (IrOptionalValueFlow.isCopyName(name.name)
 						&& values.exists(out.id)
 						&& args.length == 1
 						&& values.exists(args[0].id)):
-					case Call(_, name, args) if (candidates.exists(name) || hasAlias(args, alias)):
-						if (!canPassAliases(name, args, alias))
+					case Call(_, name, args) if (candidates.exists(name.name) || hasAlias(args, alias)):
+						if (!canPassAliases(name.name, args, alias))
 							return false;
 					case CallClosure(_, closure, args)
 						if (bindings.exists(closure.id)
@@ -791,13 +792,13 @@ class IrOptionalScalarFlow {
 			var name = types.get(value.id),
 				packed = aggregate(block, name, partsAt(block, value.id, from), from),
 				result = new IrValue(next++, "$optional-boxed", value.type);
-			add(block, Call(result, IrOptionalValueFlow.boxName(name), [packed]), from);
+			add(block, Call(result, IrSymbol.of(IrOptionalValueFlow.boxName(name)), [packed]), from);
 			return result;
 		}
 		function unbox(block:IrBlock, value:IrValue, output:IrValue, from:Located<IrInstruction>):Void {
 			var name = types.get(output.id),
 				packed = new IrValue(next++, "$optional-unboxed", Obj(wrapper(name).name));
-			add(block, Call(packed, IrOptionalValueFlow.unboxName(name), [value]), from);
+			add(block, Call(packed, IrSymbol.of(IrOptionalValueFlow.unboxName(name)), [value]), from);
 			var parts = component(output.id);
 			for (i in 0...parts.length)
 				add(block, FieldGet(parts[i], packed, "$slot" + i), from);
@@ -811,12 +812,12 @@ class IrOptionalScalarFlow {
 			if (components.exists(out.id)) {
 				var valueName = types.get(out.id),
 					result = new IrValue(next++, "$optional-result", Obj(wrapper(valueName).name));
-				add(block, Call(result, PREFIX + name, expanded), from);
+				add(block, Call(result, IrSymbol.of(PREFIX + name), expanded), from);
 				var parts = component(out.id);
 				for (i in 0...parts.length)
 					add(block, FieldGet(parts[i], result, "$slot" + i), from);
 			} else
-				add(block, Call(out, PREFIX + name, expanded), from);
+				add(block, Call(out, IrSymbol.of(PREFIX + name), expanded), from);
 		}
 		var blocks:Array<IrBlock> = [],
 			pendingReads:Map<Int, Array<Located<IrInstruction>>> = [],
@@ -943,7 +944,7 @@ class IrOptionalScalarFlow {
 						add(target, ConstBool(no, false), located);
 						add(target, Equal(out, partsAt(target, value.id, located)[0], no), located);
 					case Call(out, name, arguments)
-						if (IrOptionalValueFlow.isCopyName(name)
+						if (IrOptionalValueFlow.isCopyName(name.name)
 						&& components.exists(out.id)
 						&& arguments.length == 1
 						&& components.exists(arguments[0].id)):
@@ -960,19 +961,20 @@ class IrOptionalScalarFlow {
 								alias.exists(argument.id) ? aliasValue(target, argument, located) : argument
 						];
 						emitCall(target, out, binding.name, actual, located);
-					case Call(out, name, arguments) if (candidates.exists(name)):
+					case Call(out, name, arguments) if (candidates.exists(name.name)):
 						var actual = [
 							for (argument in arguments)
 								alias.exists(argument.id) ? aliasValue(target, argument, located) : argument
 						];
-						emitCall(target, out, name, actual, located);
+						emitCall(target, out, name.name, actual, located);
 					case MethodCall(out, receiver, name, arguments, _) if (!alias.exists(receiver.id)
 						&& hasCandidateMethod(exact, receiver, name)):
 						// Method arguments have already been evaluated; preserve the null error at the original call.
 						if (!exact.exists(receiver.id))
 							switch receiver.type {
 								case Obj(typeName): add(target,
-									Call(new IrValue(next++, "$optional-receiver-check", Void), receiverCheck(typeName),
+									Call(new IrValue(next++, "$optional-receiver-check", Void),
+									IrSymbol.of(receiverCheck(typeName)),
 									[receiver]), located);
 								default:
 							}
@@ -1013,10 +1015,10 @@ class IrOptionalScalarFlow {
 						];
 						if (components.exists(out.id)) {
 							var output = new IrValue(next++, "$optional-boundary-result", out.type);
-							add(target, Call(output, binding.name, boxed), located);
+							add(target, Call(output, IrSymbol.of(binding.name), boxed), located);
 							unbox(target, output, out, located);
 						} else
-							add(target, Call(out, binding.name, boxed), located);
+							add(target, Call(out, IrSymbol.of(binding.name), boxed), located);
 					case CallClosure(out, closure,
 						arguments) if (bindings.exists(closure.id) && hasAlias(arguments, alias)):
 						var binding:OptionalClosure = cast bindings.get(closure.id),
@@ -1028,10 +1030,10 @@ class IrOptionalScalarFlow {
 						];
 						if (components.exists(out.id)) {
 							var output = new IrValue(next++, "$optional-boundary-result", out.type);
-							add(target, Call(output, binding.name, actual), located);
+							add(target, Call(output, IrSymbol.of(binding.name), actual), located);
 							unbox(target, output, out, located);
 						} else
-							add(target, Call(out, binding.name, actual), located);
+							add(target, Call(out, IrSymbol.of(binding.name), actual), located);
 					case MethodCall(out, receiver, name, arguments,
 						terminalReceiver) if (!alias.exists(receiver.id) && hasAlias(arguments, alias)):
 						var actual = [

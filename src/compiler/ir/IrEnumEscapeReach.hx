@@ -61,9 +61,9 @@ class IrEnumEscapeReach {
 							}
 							environments.push(receiver.type);
 						case Call(_, name, arguments)
-							if (StringTools.startsWith(name, "__map_")
-							&& StringTools.contains(name, "_ref_")
-							&& StringTools.endsWith(name, "_set")
+							if (StringTools.startsWith(name.name, "__map_")
+							&& StringTools.contains(name.name, "_ref_")
+							&& StringTools.endsWith(name.name, "_set")
 							&& arguments.length >= 3):
 							var contents = mapContents.get(arguments[0].type);
 							if (contents == null) {

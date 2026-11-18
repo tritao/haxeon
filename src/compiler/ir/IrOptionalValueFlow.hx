@@ -44,12 +44,12 @@ class IrOptionalValueFlow {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, name, _) if (StringTools.startsWith(name, COPY_PREFIX)):
-							needed.set(name.substr(COPY_PREFIX.length), true);
-						case Call(_, name, _) if (StringTools.startsWith(name, BOX_PREFIX)):
-							boxes.set(name.substr(BOX_PREFIX.length), true);
-						case Call(_, name, _) if (StringTools.startsWith(name, UNBOX_PREFIX)):
-							unboxes.set(name.substr(UNBOX_PREFIX.length), true);
+						case Call(_, name, _) if (StringTools.startsWith(name.name, COPY_PREFIX)):
+							needed.set(name.name.substr(COPY_PREFIX.length), true);
+						case Call(_, name, _) if (StringTools.startsWith(name.name, BOX_PREFIX)):
+							boxes.set(name.name.substr(BOX_PREFIX.length), true);
+						case Call(_, name, _) if (StringTools.startsWith(name.name, UNBOX_PREFIX)):
+							unboxes.set(name.name.substr(UNBOX_PREFIX.length), true);
 						default:
 					}
 		var names = [for (name in needed.keys()) name];

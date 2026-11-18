@@ -125,8 +125,9 @@ class WasmLinearDynamicArrays {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, "__array_check_cast" | "__array_alloc_typed_ref",
-							arguments) if (arguments.length == 2):
+						case Call(_, callTarget,
+							arguments) if ((callTarget.name == "__array_check_cast"
+							|| callTarget.name == "__array_alloc_typed_ref") && arguments.length == 2):
 							var type = typeValues.get(arguments[1].id);
 							if (type != null && !seen.exists(IrTypeIdentity.text(type))) {
 								seen.set(IrTypeIdentity.text(type), true);

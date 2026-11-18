@@ -53,27 +53,30 @@ class IrCheckedDynamicCasts {
 						&& (checkObjects || (checkValueObjects && declarations.get(name).isValue))):
 						var declaration = declarations.get(name);
 						if (declaration == null) throw new InternalError('Missing cast target "$name"');
-						[new Located(Call(out, helperFor(out.type, out.type, name, !declaration.isValue), [input]),
+						[new Located(Call(out, IrSymbol.of(helperFor(out.type, out.type, name, !declaration.isValue)),
+							[input]),
 							located.provenance)];
 					case Nullable(Obj(name)) if (checkValueObjects && declarations.exists(name)
 						&& declarations.get(name).isValue):
-						[new Located(Call(out, helperFor(out.type, Obj(name), name, true), [input]),
+						[new Located(Call(out, IrSymbol.of(helperFor(out.type, Obj(name), name, true)), [input]),
 							located.provenance)];
 					case RawPtr:
-						[new Located(Call(out, helperFor(out.type, out.type, "hl.Bytes", true), [input]),
+						[new Located(Call(out, IrSymbol.of(helperFor(out.type, out.type, "hl.Bytes", true)), [input]),
 							located.provenance)];
 					case Function(_, _) if (checkFunctionCasts):
-						[new Located(Call(out, helperFor(out.type, out.type, Std.string(out.type), false), [input]),
+						[new Located(Call(out, IrSymbol.of(helperFor(out.type, out.type, Std.string(out.type), false)),
+							[input]),
 							located.provenance)];
 					case Nullable(Function(_, _)) if (checkFunctionCasts):
 						var inner = switch out.type {
 							case Nullable(value): value;
 							default: throw new InternalError("Invalid nullable function cast");
 						};
-						[new Located(Call(out, helperFor(out.type, inner, Std.string(inner), true), [input]),
+						[new Located(Call(out, IrSymbol.of(helperFor(out.type, inner, Std.string(inner), true)),
+							[input]),
 							located.provenance)];
 					case Virtual(name):
-						[new Located(Call(out, helperFor(out.type, out.type, name, true), [input]),
+						[new Located(Call(out, IrSymbol.of(helperFor(out.type, out.type, name, true)), [input]),
 							located.provenance)];
 					default: null;
 				}

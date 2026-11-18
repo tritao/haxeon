@@ -115,12 +115,12 @@ class IrClosedEnumTagAbi {
 						case ToVirtual(_, input):
 							escape(input.type);
 						case Call(_, name, args):
-							var native = natives.get(name);
+							var native = natives.get(name.name);
 							if (native != null) {
 								for (argument in args)
 									escape(argument.type);
 							} else {
-								var target = functions.get(name);
+								var target = functions.get(name.name);
 								if (target != null)
 									for (index in 0...args.length)
 										if (index < target.arguments.length && switch target.arguments[index].type {

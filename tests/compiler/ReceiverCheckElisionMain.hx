@@ -17,7 +17,7 @@ class ReceiverCheckElisionMain {
 	static function checks(fn:IrFunction):Int {
 		var n = 0;
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case Call(_, name, _) if (name == IrReceiverCheck.NAME): n++;
+			case Call(_, name, _) if (name.name == IrReceiverCheck.NAME): n++;
 			default:
 		}
 		return n;

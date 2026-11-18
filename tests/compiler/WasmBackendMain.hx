@@ -39,6 +39,7 @@ import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrInterpreter;
 import compiler.ir.IrReachability;
+import compiler.ir.IrSymbol;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.CanonicalIrCodec;
@@ -1393,9 +1394,9 @@ class WasmBackendMain {
 				result: Bytes
 			}
 		]);
-		block.instructions.push(new Located(Call(wide, "haxe.Int64.make", [high, low]), provenance));
+		block.instructions.push(new Located(Call(wide, IrSymbol.of("haxe.Int64.make"), [high, low]), provenance));
 		block.instructions.push(new Located(ToDyn(boxed, wide), provenance));
-		block.instructions.push(new Located(Call(text, "__std_string", [boxed]), provenance));
+		block.instructions.push(new Located(Call(text, IrSymbol.of("__std_string"), [boxed]), provenance));
 		block.terminator = new Located(Return(text), provenance);
 		program.functions.push(new IrFunction("stringifyInt64", [high, low], Bytes, [block], Ordinary));
 		return program;

@@ -104,7 +104,7 @@ class IrConstantBranches {
 				case ConstBool(output, value) if (output.id == id):
 					return value ? 1 : 0;
 				case Call(output, name, _) if (output.id == id):
-					return constants.exists(name) ? (constants.get(name) ? 1 : 0) : -1;
+					return constants.exists(name.name) ? (constants.get(name.name) ? 1 : 0) : -1;
 				case Equal(output, left, right) if (output.id == id):
 					if (depth > 0 || left.type != Bool || right.type != Bool)
 						return -1;

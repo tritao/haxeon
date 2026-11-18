@@ -237,7 +237,8 @@ class IrInlineEnumLowering {
 											var raw = fresh(Dyn);
 											copy.instructions.push(new Located(GlobalGet(raw,
 												globalLeaf(name, field.name)), origin));
-											copy.instructions.push(new Located(Call(leaf, IrValueLaneReference.PACK,
+											copy.instructions
+												.push(new Located(Call(leaf, IrSymbol.of(IrValueLaneReference.PACK),
 												[raw]), origin));
 										} else
 											copy.instructions.push(new Located(GlobalGet(leaf,
@@ -258,7 +259,8 @@ class IrInlineEnumLowering {
 											located.provenance));
 										if (IrValueLaneReference.isCarrier(field.type)) {
 											var raw = fresh(Dyn);
-											copy.instructions.push(new Located(Call(raw, IrValueLaneReference.UNPACK,
+											copy.instructions
+												.push(new Located(Call(raw, IrSymbol.of(IrValueLaneReference.UNPACK),
 												[leaf]), located.provenance));
 											leaf = raw;
 										}
@@ -274,25 +276,28 @@ class IrInlineEnumLowering {
 						case MakeEnum(output, name, constructor, args) if (planner.shape(name) != null):
 							var name = helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'construct:$name:$constructor',
 								name, constructor, -1);
-							instruction = Call(use(output), name, [for (argument in args) use(argument)]);
+							instruction = Call(use(output), IrSymbol.of(name), [for (argument in args) use(argument)]);
 						case ConstNull(output):
 							switch output.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'null:$name', name, -2, -1), []);
+									IrSymbol.of(helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'null:$name', name, -2,
+									-1)), []);
 								default:
 							}
 						case EnumField(output, value, constructor, field):
 							switch value.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'field:$name:$constructor:$field',
+									IrSymbol.of(helper(IrInlineEnumCaseAccess.HELPER_PREFIX
+									+ 'field:$name:$constructor:$field',
 									name, constructor,
-									field), [use(value)]);
+									field)), [use(value)]);
 								default:
 							}
 						case EnumIndex(output, value):
 							switch value.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'index:$name', name, -1, -2),
+									IrSymbol.of(helper(IrInlineEnumCaseAccess.HELPER_PREFIX + 'index:$name', name, -1,
+									-2)),
 									[use(value)]);
 								default:
 							}
@@ -300,7 +305,8 @@ class IrInlineEnumLowering {
 							var operand = nulls.exists(left.id) ? right : left;
 							switch operand.type {
 								case Enum(name) if (planner.shape(name) != null): instruction = Call(use(output),
-									helper(IrInlineEnumCaseAccess.HELPER_PREFIX + "is-null:" + name, name, -1, -3),
+									IrSymbol.of(helper(IrInlineEnumCaseAccess.HELPER_PREFIX + "is-null:" + name, name,
+									-1, -3)),
 									[use(operand)]);
 								default:
 							}
@@ -394,7 +400,7 @@ class IrInlineEnumLowering {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, name, _):
-							calls.set(name, true);
+							calls.set(name.name, true);
 						default:
 					}
 		var existing = [for (native in result.natives) native.name => true];

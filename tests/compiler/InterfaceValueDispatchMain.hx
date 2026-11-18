@@ -81,9 +81,9 @@ class InterfaceValueDispatchMain {
 		}
 		for (block in rewritten[3].blocks) for (located in block.instructions) switch located.value {
 			case MethodCall(_, _, "plain", _, _): methods++;
-			case Call(_, name, _) if (StringTools.startsWith(name, IrTypedInterfaceDispatch.PREFIX)): calls++;
+			case Call(_, name, _) if (StringTools.startsWith(name.name, IrTypedInterfaceDispatch.PREFIX)): calls++;
 			case InstanceClosure(_, name,
-				_) if (StringTools.startsWith(name, IrTypedInterfaceDispatch.PREFIX)): closures++;
+				_) if (StringTools.startsWith(name.name, IrTypedInterfaceDispatch.PREFIX)): closures++;
 			default:
 		}
 		if (oldMethods != 3 || methods != 1 || calls != 2
@@ -140,7 +140,8 @@ class InterfaceValueDispatchMain {
 			for (block in fn.blocks) for (located in block.instructions)
 			switch located.value {
 			case Call(_, name,
-				_) if (name == "Owner.read" || name == "Owner.accept" || IrTypedInterfaceDispatch.isAdapterEntry(name))
+				_) if (name.name == "Owner.read" || name.name == "Owner.accept"
+				|| IrTypedInterfaceDispatch.isAdapterEntry(name.name))
 				: throw "Regeneration retained a removed implementation";
 			default:
 		}

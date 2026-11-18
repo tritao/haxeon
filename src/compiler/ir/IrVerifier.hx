@@ -35,7 +35,8 @@ class IrVerifier {
 					var invalid = switch located.value {
 						case ArrayGet(_, array, _) | ArraySet(array, _, _) | IteratorNew(_,
 							array): laneArray(array.type);
-						case Call(_, name, arguments) if (ordinaryRef(name) || ordinaryRefNatives.exists(name)):
+						case Call(_, name,
+							arguments) if (ordinaryRef(name.name) || ordinaryRefNatives.exists(name.name)):
 							var found = false;
 							for (argument in arguments)
 								if (laneArray(argument.type))
@@ -188,9 +189,9 @@ class IrVerifier {
 				if (instruction != null)
 					switch instruction {
 						case Call(out, callee, arguments):
-							var symbol = nativeSymbols.get(callee);
+							var symbol = nativeSymbols.get(callee.name);
 							if (symbol == null)
-								symbol = callee;
+								symbol = callee.name;
 							if (arguments.length > 1 && arguments[1].id == value.id) {
 								if (symbol == "__value_array_alloc" || symbol == "__value_array_retype"
 									|| symbol == "__array_alloc_typed_ref")
@@ -823,7 +824,7 @@ class IrVerifier {
 				switch located.value {
 					case InstanceClosure(output, name,
 						receiver) if (output.id == value.id && receiver.id == fn.arguments[0].id):
-						var adapter = signatures.get(name);
+						var adapter = signatures.get(name.name);
 						if (adapter == null
 							|| adapter.arguments.length != targetArguments.length + 1
 							|| !sameType(adapter.arguments[0], Dyn)
@@ -874,7 +875,7 @@ class IrVerifier {
 
 		switch instruction {
 			case StaticClosure(output, name), InstanceClosure(output, name, _)
-				if (IrScalarArguments.isPrivateClosureType(output.type) && !scalarFunctions.exists(name)):
+				if (IrScalarArguments.isPrivateClosureType(output.type) && !scalarFunctions.exists(name.name)):
 				throw new InternalError("A scalar closure must target a verified scalar function");
 			case ToDyn(_, value) if (IrScalarArguments.isPrivateClosureType(value.type)):
 				throw new InternalError("A scalar closure cannot cross a Dynamic boundary without an adapter");
@@ -886,10 +887,12 @@ class IrVerifier {
 		var output = IrOperands.output(instruction);
 		if (output != null && IrValueLaneReference.isCarrier(output.type))
 			switch instruction {
-				case Call(_, name, _) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.READ):
+				case Call(_, name,
+					_) if (name.name == IrValueLaneReference.PACK || name.name == IrValueLaneReference.READ):
 				case ConstNull(_), FieldGet(_, _, _), Phi(_, _):
 				case Call(_, name,
-					_) if (name == IrHlScalarRef.LOAD || carrierSlots.exists(name) && carrierSlots.get(name) == false):
+					_) if (name.name == IrHlScalarRef.LOAD || carrierSlots.exists(name.name)
+					&& carrierSlots.get(name.name) == false):
 				default:
 					throw new InternalError("Only a value lane operation can create a lane reference");
 			}
@@ -900,25 +903,26 @@ class IrVerifier {
 					switch instruction {
 						case FieldSet(_, _, value) if (value.id == input.id):
 						case Phi(_, _):
-						case Call(_, name, _) if (scalarFunctions.exists(name) || carrierSlots.exists(name)
-							&& carrierSlots.get(name) == true):
+						case Call(_, name, _) if (scalarFunctions.exists(name.name) || carrierSlots.exists(name.name)
+							&& carrierSlots.get(name.name) == true):
 						case Call(_, name, args)
-							if ((name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
-							|| (name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
+							if ((name.name == IrHlScalarRef.STORE && args.length == 2 && args[1].id == input.id)
+							|| (name.name == IrHlScalarRef.ADDRESS && args.length == 1 && args[0].id == input.id)):
 						case CallClosure(_, closure, args)
 							if (IrScalarArguments.isPrivateClosureType(closure.type)
 							&& scalarClosureArgument(closure.type, args, input)):
-						case Call(_, name, args) if (name == IrValueLaneReference.UNPACK && args.length == 1
+						case Call(_, name, args) if (name.name == IrValueLaneReference.UNPACK && args.length == 1
 							&& args[0].id == input.id):
 						case Call(_, name,
-							args) if (name == IrValueLaneReference.WRITE && args.length == 4 && args[3].id == input.id):
+							args) if (name.name == IrValueLaneReference.WRITE && args.length == 4
+							&& args[3].id == input.id):
 						default:
 							throw new InternalError("A value lane reference cannot escape its operation");
 					}
 			}
 		if (output != null && IrHlScalarRef.element(output.type) != null)
 			switch instruction {
-				case Call(_, name, _) if (name == IrHlScalarRef.ADDRESS):
+				case Call(_, name, _) if (name.name == IrHlScalarRef.ADDRESS):
 				default:
 					throw new InternalError("Only a scalar address operation can create a stack reference");
 			}
@@ -927,10 +931,11 @@ class IrVerifier {
 				var input = IrOperands.at(instruction, inputIndex);
 				if (IrHlScalarRef.element(input.type) != null)
 					switch instruction {
-						case Call(_, name, args) if ((name == IrHlScalarRef.LOAD || name == IrHlScalarRef.STORE)
+						case Call(_, name,
+							args) if ((name.name == IrHlScalarRef.LOAD || name.name == IrHlScalarRef.STORE)
 							&& args.length > 0
 							&& args[0].id == input.id):
-						case Call(_, name, _) if (scalarFunctions.exists(name)):
+						case Call(_, name, _) if (scalarFunctions.exists(name.name)):
 						case CallClosure(_, closure, args) if (scalarClosureArgument(closure.type, args, input)):
 						default:
 							throw new InternalError("A scalar stack reference cannot escape its call");
@@ -1232,7 +1237,18 @@ class IrVerifier {
 							|| !sameType(out.type, storage))
 							throw new InternalError("Invalid IR inline enum unbox signature");
 				}
-			case Call(out, name, args), CNativeCall(out, name, args):
+			case Call(_, _, _), CNativeCall(_, _, _):
+				// A call names its target with a symbol and a C native with its name; both are verified by name.
+				var out:IrValue, name:String, args:Array<IrValue>;
+				switch instruction {
+					case Call(callOut, target, callArgs): out = callOut;
+						name = target.name;
+						args = callArgs;
+					case CNativeCall(callOut, nativeName, callArgs): out = callOut;
+						name = nativeName;
+						args = callArgs;
+					default: throw new InternalError("Unreachable");
+				}
 				if (name == IrArrayFactory.NAME) {
 					switch instruction {
 						case CNativeCall(_, _, _): throw new InternalError("Array factory is not a C native");
@@ -1351,13 +1367,13 @@ class IrVerifier {
 				if (!sameType(out.type, signature.result) && !trustedNativeResult(name, out.type, signature.result))
 					throw new InternalError('Wrong IR result type for "$name"');
 			case StaticClosure(out, name):
-				var signature = signatures.get(name);
+				var signature = signatures.get(name.name);
 				if (signature == null)
 					throw new InternalError('Unknown IR closure target "$name"');
 				if (!sameType(out.type, Function(signature.arguments, signature.result)))
 					throw new InternalError('Wrong IR closure type for "$name"');
 			case InstanceClosure(out, name, receiver):
-				var signature = signatures.get(name);
+				var signature = signatures.get(name.name);
 				if (signature == null)
 					throw new InternalError('Unknown or receiver-less IR closure target "$name"');
 				if (signature.arguments.length == 0)

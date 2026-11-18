@@ -32,13 +32,15 @@ class IrValueArrayRangeRewrite {
 					consumed = 1;
 				switch located.value {
 					case Call(out, name, args)
-						if ((name == "__array_copy_ref" || name == "__array_slice_ref" || name == "__array_concat_ref")
+						if ((name.name == "__array_copy_ref" || name.name == "__array_slice_ref"
+						|| name.name == "__array_concat_ref")
 						&& Type.enumEq(out.type, arrayType)):
 						output = out;
 						arguments = args;
-						operation = rangeOperation(name);
+						operation = rangeOperation(name.name);
 					case Call(raw, name, args)
-						if ((name == "__array_copy_any" || name == "__array_slice_any" || name == "__array_concat_any")
+						if ((name.name == "__array_copy_any" || name.name == "__array_slice_any"
+						|| name.name == "__array_concat_any")
 						&& args.length > 0 && Type.enumEq(args[0].type, arrayType)
 						&& index + 2 < block.instructions.length):
 						switch [block.instructions[index + 1].value, block.instructions[index + 2].value] {
@@ -49,7 +51,7 @@ class IrValueArrayRangeRewrite {
 									throw new InternalError("Checked array range intermediate escapes");
 								output = out;
 								arguments = args;
-								operation = rangeOperation(name);
+								operation = rangeOperation(name.name);
 								consumed = 3;
 							default:
 						}
@@ -61,7 +63,8 @@ class IrValueArrayRangeRewrite {
 					if (arguments.length != arity || !Type.enumEq(arguments[0].type, arrayType)
 						|| (operation == "concat" && !Type.enumEq(arguments[1].type, arrayType)))
 						throw new InternalError('Invalid inline array $operation operands');
-					replacement.instructions.push(new Located(Call(output, factory.rangeNativeName(operation),
+					replacement.instructions
+						.push(new Located(Call(output, IrSymbol.of(factory.rangeNativeName(operation)),
 						arguments), located.provenance));
 					changed = true;
 				}

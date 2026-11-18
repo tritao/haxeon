@@ -41,7 +41,8 @@ class IrNullableScalarFields {
 						if (field != null && field.nullableScalarStorage != null) {
 							var helper = helperFor(field.type, field.nullableScalarStorage);
 							var normalized = new IrValue(next++, "$nullable-scalar", field.type);
-							copy.instructions.push(new Located(Call(normalized, helper, [value]), located.provenance));
+							copy.instructions.push(new Located(Call(normalized, IrSymbol.of(helper), [value]),
+								located.provenance));
 							instruction = FieldSet(owner, name, normalized);
 							rewrittenInstruction = true;
 							changed = true;

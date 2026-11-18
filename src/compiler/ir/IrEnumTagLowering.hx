@@ -152,9 +152,11 @@ class IrEnumTagLowering {
 			return changes(value.type);
 		function nonOutputChanges(instruction:IrInstruction):Bool {
 			switch instruction {
-				case Call(_, name, _) if (tagEqualities.exists(name)):
+				case Call(_, name, _) if (tagEqualities.exists(name.name)):
 					return true;
-				case Call(_, name, _) | CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
+				case Call(_, target, _) if (nativeWrappers.exists(target.name)):
+					return true;
+				case CNativeCall(_, name, _) if (nativeWrappers.exists(name)):
 					return true;
 				case TypeValue(_, type):
 					switch type {
@@ -225,7 +227,7 @@ class IrEnumTagLowering {
 						}
 						var instruction = IrInliner.remap(located.value, use, id -> id);
 						switch located.value {
-							case Call(output, name, arguments) if (tagEqualities.exists(name)):
+							case Call(output, name, arguments) if (tagEqualities.exists(name.name)):
 								instruction = Equal(use(output), use(arguments[0]), use(arguments[1]));
 							case Equal(output, left, right)
 								if (indexTags.exists(left.id)
@@ -234,12 +236,14 @@ class IrEnumTagLowering {
 								instruction = Equal(use(output), indexTags.get(left.id), indexTags.get(right.id));
 								replacedIndices.set(left.id, true);
 								replacedIndices.set(right.id, true);
-							case Call(output, name, arguments) | CNativeCall(output, name,
-								arguments) if (nativeWrappers.exists(name)):
-								instruction = Call(use(output), nativeWrappers.get(name),
+							case Call(output, target, arguments) if (nativeWrappers.exists(target.name)):
+								instruction = Call(use(output), IrSymbol.of(nativeWrappers.get(target.name)),
 									[for (argument in arguments) use(argument)]);
-							case Call(output, name, arguments) if (dynamicUnboxes.exists(name)):
-								if (!IrVerifier.sameType(dynamicUnboxes.get(name), output.type))
+							case CNativeCall(output, name, arguments) if (nativeWrappers.exists(name)):
+								instruction = Call(use(output), IrSymbol.of(nativeWrappers.get(name)),
+									[for (argument in arguments) use(argument)]);
+							case Call(output, name, arguments) if (dynamicUnboxes.exists(name.name)):
+								if (!IrVerifier.sameType(dynamicUnboxes.get(name.name), output.type))
 									throw new InternalError("Malformed enum unbox signature");
 								switch use(output).type {
 									case EnumTag(enumName): instruction = Intrinsic(use(output),
@@ -326,7 +330,7 @@ class IrEnumTagLowering {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _):
-							retained.set(name, true);
+							retained.set(name.name, true);
 						default:
 					}
 		}
@@ -594,7 +598,7 @@ class IrEnumTagLowering {
 				}
 				var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
 				required.set(name, true);
-				rewritten.push(new Located(Call(boxed, boxNames.get(name), [value]),
+				rewritten.push(new Located(Call(boxed, IrSymbol.of(boxNames.get(name)), [value]),
 					currentBlock.instructions[position].provenance));
 				boxed;
 				default: value;
@@ -620,7 +624,7 @@ class IrEnumTagLowering {
 									throw new InternalError("Expected tag");
 							};
 							required.set(name, true);
-							Call(output, boxNames.get(name), [value]);
+							Call(output, IrSymbol.of(boxNames.get(name)), [value]);
 						case SafeCast(output, value) if (isTag(output)):
 							markChanged();
 							changed = true;
@@ -631,7 +635,7 @@ class IrEnumTagLowering {
 									throw new InternalError("Expected tag");
 							};
 							required.set(name, true);
-							Call(output, unboxNames.get(name), [value]);
+							Call(output, IrSymbol.of(unboxNames.get(name)), [value]);
 						case Intrinsic(output, EnumTagBox(EnumTag(name)), arguments):
 							if (!boxNames.exists(name)
 								|| arguments.length != 1
@@ -641,7 +645,7 @@ class IrEnumTagLowering {
 							markChanged();
 							changed = true;
 							required.set(name, true);
-							Call(output, boxNames.get(name), arguments);
+							Call(output, IrSymbol.of(boxNames.get(name)), arguments);
 						case Intrinsic(output, EnumTagUnbox(EnumTag(name)), arguments):
 							if (!unboxNames.exists(name)
 								|| arguments.length != 1
@@ -651,11 +655,11 @@ class IrEnumTagLowering {
 							markChanged();
 							changed = true;
 							required.set(name, true);
-							Call(output, unboxNames.get(name), arguments);
+							Call(output, IrSymbol.of(unboxNames.get(name)), arguments);
 						case Call(output, name, arguments):
 							var tagArgument = hasTag(arguments);
 							if (!tagArgument && !isTag(output)) located.value else {
-								var adapter = adapterEnums.get(name);
+								var adapter = adapterEnums.get(name.name);
 								if (adapter != null) {
 									required.set(adapter, true);
 									located.value;
@@ -664,10 +668,10 @@ class IrEnumTagLowering {
 										else {
 										// Lane primitives consume tags directly in the subsequent array rewrite.
 										var lane = arguments.length > 0 && (switch arguments[0].type {
-											case Array(EnumTag(_)): IrArrayRuntimeNatives.isStorage(name);
+											case Array(EnumTag(_)): IrArrayRuntimeNatives.isStorage(name.name);
 											default: false;
 										});
-										var expected = lane ? null : signature(name);
+										var expected = lane ? null : signature(name.name);
 										if (!needsArguments(arguments, expected))
 											located.value
 												else {

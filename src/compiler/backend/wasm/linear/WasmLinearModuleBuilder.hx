@@ -341,7 +341,7 @@ class WasmLinearModuleBuilder {
 					for (located in block.instructions)
 						switch located.value {
 							case StaticClosure(output, name):
-								var key = WasmLinearClosureAdapters.staticDescriptorKey(name, output.type);
+								var key = WasmLinearClosureAdapters.staticDescriptorKey(name.name, output.type);
 								if (!staticClosureDescriptors.exists(key)) {
 									var offset = WasmModuleSupport.align(nextData, 8),
 										bytes = haxe.io.Bytes.alloc(WasmLayout.STATIC_CLOSURE_SIZE);
@@ -353,7 +353,7 @@ class WasmLinearModuleBuilder {
 										censusCategory: "closure descriptors"
 									});
 									staticClosureDescriptors.set(key, offset);
-									staticClosureRecords.set(key, {name: name, bytes: bytes});
+									staticClosureRecords.set(key, {name: name.name, bytes: bytes});
 									nextData = offset + WasmLayout.STATIC_CLOSURE_SIZE;
 								}
 							default:

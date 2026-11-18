@@ -187,9 +187,9 @@ class InlineRequestModelMain {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, "opaque_box", _):
+						case Call(_, callTarget, _) if (callTarget.name == "opaque_box"):
 							wasmBoxes++;
-						case Call(_, "opaque_unbox", _):
+						case Call(_, callTarget, _) if (callTarget.name == "opaque_unbox"):
 							wasmUnboxes++;
 						default:
 					}
@@ -291,7 +291,7 @@ class InlineRequestModelMain {
 				for (instruction in block.instructions)
 					switch instruction.value {
 						case Call(_, name, _):
-							calls.push(name);
+							calls.push(name.name);
 						default:
 					}
 		if (calls.join(",") != "opaque_box,opaque_unbox")
@@ -429,7 +429,7 @@ class InlineRequestModelMain {
 		].concat(nominalProviders);
 		IrEnumTagLowering.escapes(nominal);
 		switch nominal.functions[0].blocks[0].instructions[0].value {
-			case Call(_, name, _) if (name == expectedName):
+			case Call(_, name, _) if (name.name == expectedName):
 			default:
 				throw "Inline enum request selected a provider for the wrong nominal enum";
 		}

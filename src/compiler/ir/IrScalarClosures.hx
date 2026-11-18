@@ -63,7 +63,8 @@ class IrScalarClosures {
 						case Phi(_, inputs):
 							for (input in inputs)
 								use(input.value);
-						case Call(_, "__closure_is_of_type", arguments) if (arguments.length == 2):
+						case Call(_, callTarget,
+							arguments) if (callTarget.name == "__closure_is_of_type" && (arguments.length == 2)):
 							signatureQueries.set(arguments[1].id, true);
 						default:
 					}
@@ -329,30 +330,30 @@ class IrScalarClosures {
 			var rewritten = new IrBlock(block.id);
 			for (located in block.instructions)
 				switch located.value {
-					case Call(out, "__closure_is_of_type", arguments)
-						if (arguments.length == 2
+					case Call(out, callTarget, arguments)
+						if (callTarget.name == "__closure_is_of_type" && arguments.length == 2
 						&& typeValues.exists(arguments[1].id)
 						&& needsBoundaryAdapter(typeValues.get(arguments[1].id))):
 						rewritten.instructions.push(new Located(Call(map(out),
-							ensureSignatureCheck(typeValues.get(arguments[1].id)), [map(arguments[0])]),
+							IrSymbol.of(ensureSignatureCheck(typeValues.get(arguments[1].id))), [map(arguments[0])]),
 							located.provenance));
 					case ToDyn(out, input) if (needsBoundaryAdapter(input.type)):
 						var erasure = ensureErasure(input.type),
 							boxed = new IrValue(next++, "$scalar-closure:erased", erasedType(input.type));
-						rewritten.instructions.push(new Located(Call(boxed, erasure.maker, [map(input)]),
+						rewritten.instructions.push(new Located(Call(boxed, IrSymbol.of(erasure.maker), [map(input)]),
 							located.provenance));
 						rewritten.instructions.push(new Located(ToDyn(map(out), boxed), located.provenance));
 					case SafeCast(out, input) if ((switch (input.type) {
 						case Dyn: true;
 						default: false;
 					}) && needsBoundaryAdapter(out.type)): rewritten.instructions.push(new Located(Call(map(out),
-						ensureRestoration(out.type), [map(input)]), located.provenance));
+						IrSymbol.of(ensureRestoration(out.type)), [map(input)]), located.provenance));
 					case StaticClosure(out, name) if (candidates.exists(key(out.type))):
 						rewritten.instructions.push(new Located(StaticClosure(map(out),
-							IrScalarArguments.PREFIX + name), located.provenance));
+							IrSymbol.of(IrScalarArguments.PREFIX + name)), located.provenance));
 					case InstanceClosure(out, name, receiver) if (candidates.exists(key(out.type))):
 						rewritten.instructions.push(new Located(InstanceClosure(map(out),
-							IrScalarArguments.PREFIX + name, map(receiver)), located.provenance));
+							IrSymbol.of(IrScalarArguments.PREFIX + name), map(receiver)), located.provenance));
 					case CallClosure(out, closure, arguments) if (candidates.exists(key(closure.type))):
 						var expanded:Array<IrValue> = [];
 						for (argument in arguments) {
@@ -387,7 +388,8 @@ class IrScalarClosures {
 								default: ConstNull(zero);
 							};
 							rewritten.instructions.push(new Located(initial, located.provenance));
-							rewritten.instructions.push(new Located(Call(reference, IrHlScalarRef.ADDRESS, [zero]),
+							rewritten.instructions
+								.push(new Located(Call(reference, IrSymbol.of(IrHlScalarRef.ADDRESS), [zero]),
 								located.provenance));
 							references.push(reference);
 							expanded.push(reference);
@@ -410,7 +412,7 @@ class IrScalarClosures {
 									leaf = new IrValue(next++, "$scalar-closure:result", mapType(slot.type)),
 									current = result,
 									logical = out.type;
-								rewritten.instructions.push(new Located(Call(leaf, IrHlScalarRef.LOAD,
+								rewritten.instructions.push(new Located(Call(leaf, IrSymbol.of(IrHlScalarRef.LOAD),
 									[references[index]]), located.provenance));
 								for (position in 0...slot.path.length - 1) {
 									var part = slot.path[position],

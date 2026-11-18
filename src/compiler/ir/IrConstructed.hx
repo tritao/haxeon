@@ -52,7 +52,7 @@ class IrConstructed {
 	public static function constructedBy(instruction:IrInstruction, nativeResults:Map<String, String>):Null<String>
 		return switch instruction {
 			case NewObject(_, typeName): typeName;
-			case Call(_, target, _): nativeResults.get(target);
+			case Call(_, target, _): nativeResults.get(target.name);
 			default: null;
 		};
 }

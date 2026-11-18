@@ -55,7 +55,7 @@ class ScalarClosureSelectionMain {
 			for (block in p.functions[2].blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case StaticClosure(_, name) if (name == "$scalar-arguments:callee"):
+						case StaticClosure(_, name) if (name.name == "$scalar-arguments:callee"):
 							redirected = true;
 						default:
 					}

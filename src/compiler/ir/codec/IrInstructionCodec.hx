@@ -225,7 +225,7 @@ class IrInstructionCodec {
 			case Call(value, name, arguments):
 				begin(output, "Call", 3);
 				writeValue(output, value);
-				writeName(output, name, erase);
+				writeName(output, name.name, erase);
 				writeValues(output, arguments);
 			case Intrinsic(value, operation, arguments):
 				begin(output, "Intrinsic", 4);
@@ -259,11 +259,11 @@ class IrInstructionCodec {
 			case StaticClosure(value, name):
 				begin(output, "StaticClosure", 2);
 				writeValue(output, value);
-				writeName(output, name, erase);
+				writeName(output, name.name, erase);
 			case InstanceClosure(value, name, receiver):
 				begin(output, "InstanceClosure", 3);
 				writeValue(output, value);
-				writeName(output, name, erase);
+				writeName(output, name.name, erase);
 				writeValue(output, receiver);
 			case CallClosure(value, closure, arguments):
 				begin(output, "CallClosure", 3);
@@ -456,7 +456,7 @@ class IrInstructionCodec {
 				Equal(readValue(input, values), readValue(input, values), readValue(input, values));
 			case "Call":
 				arity(3);
-				Call(readValue(input, values), readText(input, totalLength), readValues(input, values));
+				Call(readValue(input, values), IrSymbol.of(readText(input, totalLength)), readValues(input, values));
 			case "Intrinsic":
 				arity(4);
 				var value = readValue(input, values),
@@ -477,10 +477,11 @@ class IrInstructionCodec {
 				CNativeCall(readValue(input, values), readText(input, totalLength), readValues(input, values));
 			case "StaticClosure":
 				arity(2);
-				StaticClosure(readValue(input, values), readText(input, totalLength));
+				StaticClosure(readValue(input, values), IrSymbol.of(readText(input, totalLength)));
 			case "InstanceClosure":
 				arity(3);
-				InstanceClosure(readValue(input, values), readText(input, totalLength), readValue(input, values));
+				InstanceClosure(readValue(input, values), IrSymbol.of(readText(input, totalLength)),
+					readValue(input, values));
 			case "CallClosure":
 				arity(3);
 				CallClosure(readValue(input, values), readValue(input, values), readValues(input, values));

@@ -1,6 +1,7 @@
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrFunction.IrValueArraySlotOperation;
+import compiler.ir.IrSymbol;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateCodec;
@@ -354,11 +355,11 @@ class IrStateEqualityMain {
 				]
 			},
 			{
-				original: Call(v, "name", [v, w]),
+				original: Call(v, IrSymbol.of("name"), [v, w]),
 				changed: [
-					Call(new IrValue(2, "changed", Bytes), "name", [v, w]),
-					Call(v, "changed", [v, w]),
-					Call(v, "name", [w, v])
+					Call(new IrValue(2, "changed", Bytes), IrSymbol.of("name"), [v, w]),
+					Call(v, IrSymbol.of("changed"), [v, w]),
+					Call(v, IrSymbol.of("name"), [w, v])
 				]
 			},
 			{
@@ -370,18 +371,18 @@ class IrStateEqualityMain {
 				]
 			},
 			{
-				original: StaticClosure(v, "name"),
+				original: StaticClosure(v, IrSymbol.of("name")),
 				changed: [
-					StaticClosure(new IrValue(2, "changed", Bytes), "name"),
-					StaticClosure(v, "changed")
+					StaticClosure(new IrValue(2, "changed", Bytes), IrSymbol.of("name")),
+					StaticClosure(v, IrSymbol.of("changed"))
 				]
 			},
 			{
-				original: InstanceClosure(v, "name", v),
+				original: InstanceClosure(v, IrSymbol.of("name"), v),
 				changed: [
-					InstanceClosure(new IrValue(2, "changed", Bytes), "name", v),
-					InstanceClosure(v, "changed", v),
-					InstanceClosure(v, "name", new IrValue(2, "changed", Bytes))
+					InstanceClosure(new IrValue(2, "changed", Bytes), IrSymbol.of("name"), v),
+					InstanceClosure(v, IrSymbol.of("changed"), v),
+					InstanceClosure(v, IrSymbol.of("name"), new IrValue(2, "changed", Bytes))
 				]
 			},
 			{

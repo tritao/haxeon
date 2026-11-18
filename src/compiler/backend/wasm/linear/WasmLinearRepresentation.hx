@@ -64,8 +64,8 @@ class WasmLinearRepresentation implements WasmValueRepresentation implements Was
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(out, name, _) if (scalarAbi.signatures.exists(name)):
-							var signature = scalarAbi.signatures.get(name);
+						case Call(out, name, _) if (scalarAbi.signatures.exists(name.name)):
+							var signature = scalarAbi.signatures.get(name.name);
 							if (signature.mutatesReceiver || scalarAbi.isValue(signature.result))
 								reserveScalarResults(out, scalarAbi.resultTypes(signature));
 						case MethodCall(out, receiver, method, _,

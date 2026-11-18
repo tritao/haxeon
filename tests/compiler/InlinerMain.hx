@@ -504,7 +504,7 @@ function main():Int return stay(1);
 			for (located in block.instructions)
 				switch located.value {
 					case Call(_, name, _):
-						names.push(name);
+						names.push(name.name);
 					case MethodCall(_, _, name, _, _):
 						names.push(name);
 					default:

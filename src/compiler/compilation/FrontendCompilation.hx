@@ -1874,9 +1874,9 @@ class FrontendCompilation {
 				for (block in body.blocks)
 					for (instruction in block.instructions)
 						switch instruction.value {
-							case Call(_, callee, _) if (!held.exists(callee)):
+							case Call(_, callee, _) if (!held.exists(callee.name)):
 								for (prefix in helperPrefixes)
-									if (StringTools.startsWith(callee, prefix))
+									if (StringTools.startsWith(callee.name, prefix))
 										throw new InternalError('generated helper "$callee" is called by "$cached" but the program holds no such function');
 							default:
 						}
@@ -1923,16 +1923,17 @@ class FrontendCompilation {
 				for (block in body.blocks)
 					for (instruction in block.instructions)
 						switch instruction.value {
-							case Call(_, callee, _) if (holders.exists(callee) && !invalidated.exists(callee)):
-								result.set(callee, true);
-								var dependencyOwner = holders.get(callee).name;
+							case Call(_, callee,
+								_) if (holders.exists(callee.name) && !invalidated.exists(callee.name)):
+								result.set(callee.name, true);
+								var dependencyOwner = holders.get(callee.name).name;
 								if (!reachable.exists(dependencyOwner)) {
 									reachable.set(dependencyOwner, true);
 									names.push(dependencyOwner);
 								}
-								if (!kept.exists(callee)) {
-									kept.set(callee, true);
-									pending.push(callee);
+								if (!kept.exists(callee.name)) {
+									kept.set(callee.name, true);
+									pending.push(callee.name);
 								}
 							default:
 						}
@@ -1948,16 +1949,16 @@ class FrontendCompilation {
 			for (block in body.blocks)
 				for (instruction in block.instructions)
 					switch instruction.value {
-						case Call(_, callee, _) if (holders.exists(callee)):
-							result.set(callee, true);
-							var dependencyOwner = holders.get(callee).name;
+						case Call(_, callee, _) if (holders.exists(callee.name)):
+							result.set(callee.name, true);
+							var dependencyOwner = holders.get(callee.name).name;
 							if (!reachable.exists(dependencyOwner)) {
 								reachable.set(dependencyOwner, true);
 								names.push(dependencyOwner);
 							}
-							if (!kept.exists(callee)) {
-								kept.set(callee, true);
-								pending.push(callee);
+							if (!kept.exists(callee.name)) {
+								kept.set(callee.name, true);
+								pending.push(callee.name);
 							}
 						default:
 					}

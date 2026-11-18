@@ -180,7 +180,7 @@ class WasmModuleSupport {
 							case CNativeCall(_, name, _):
 								result.set(name, true);
 							case Call(_, name, _):
-								var host = hostCNative(program, name);
+								var host = hostCNative(program, name.name);
 								if (host != null)
 									result.set(host.name, true);
 							default:
@@ -290,7 +290,7 @@ class WasmModuleSupport {
 								default:
 							}
 						case InstanceClosure(output, name, _):
-							var target = IrProgramIndex.of(program).func(name);
+							var target = IrProgramIndex.of(program).func(name.name);
 							if (target == null || target.arguments.length == 0)
 								throw new InternalError('Wasm instance closure target "$name" has no receiver');
 							var closureArguments = switch output.type {

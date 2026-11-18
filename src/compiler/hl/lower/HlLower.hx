@@ -905,8 +905,8 @@ class HlLower {
 								Equal(output, _, _) if (output.id == condition.id):
 								fusedCondition = condition.id;
 							case Call(output, name, arguments) if (output.id == condition.id && arguments.length == 2
-								&& (name == compiler.ir.IrExactTypeFacts.TEST
-								|| name == compiler.ir.IrReferenceIdentity.NAME)):
+								&& (name.name == compiler.ir.IrExactTypeFacts.TEST
+								|| name.name == compiler.ir.IrReferenceIdentity.NAME)):
 								fusedCondition = condition.id;
 							default:
 						}
@@ -1121,7 +1121,7 @@ class HlLower {
 					case Intrinsic(_, _, _):
 						throw new InternalError("Unlowered IR intrinsic reached HashLink");
 					case Call(output, functionName, arguments) if (output.id == fusedCondition
-						&& functionName == compiler.ir.IrReferenceIdentity.NAME):
+						&& functionName.name == compiler.ir.IrReferenceIdentity.NAME):
 						// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
 						var pointers = identityPointers(arguments, instructions, registers, registerTypes);
 						fusedComparison = comparisonJump(2, false, false, pointers[0], pointers[1], null);
@@ -1132,15 +1132,15 @@ class HlLower {
 						fusedComparison = comparisonJump(2, false, false, actual,
 							requireRegister(arguments[1], registers), null);
 					case Call(output, functionName, arguments):
-						if (functionName == compiler.ir.IrReceiverCheck.NAME
+						if (functionName.name == compiler.ir.IrReceiverCheck.NAME
 							&& nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
-						} else if (!lowerRuntimeFastPath(output, functionName, arguments, instructions, registers,
+						} else if (!lowerRuntimeFastPath(output, functionName.name, arguments, instructions, registers,
 							registerTypes)) {
 							var destination = defineRegister(output, registers, registerTypes);
-							var functionIndex = requireFunction(functionName);
+							var functionIndex = requireFunction(functionName.name);
 							var args = [for (argument in arguments) requireRegister(argument, registers)];
-							if (StringTools.startsWith(functionName, "$scalar-closure:receiver:"))
+							if (StringTools.startsWith(functionName.name, "$scalar-closure:receiver:"))
 								for (index in 0...arguments.length)
 									switch arguments[index].type {
 										case Function(_, _):
@@ -1254,10 +1254,10 @@ class HlLower {
 								dynamicResult));
 					case StaticClosure(output, functionName):
 						instructions.push(HlInstruction.StaticClosure(defineRegister(output, registers, registerTypes),
-							requireFunction(functionName)));
+							requireFunction(functionName.name)));
 					case InstanceClosure(output, functionName, receiver):
 						instructions.push(HlInstruction.InstanceClosure(defineRegister(output, registers,
-							registerTypes), requireFunction(functionName),
+							registerTypes), requireFunction(functionName.name),
 							requireRegister(receiver, registers)));
 					case CallClosure(output, closure, arguments):
 						instructions.push(HlInstruction.NullCheck(requireRegister(closure, registers)));

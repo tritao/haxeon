@@ -1,4 +1,5 @@
 package compiler.backend.wasm;
+import compiler.ir.IrSymbol;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
@@ -195,22 +196,25 @@ class WasmScalarClosureEscapes {
 			var rewritten = new IrBlock(block.id);
 			for (located in block.instructions)
 				switch located.value {
-					case Call(out, "__closure_is_of_type", arguments)
-						if (arguments.length == 2 && typeValues.exists(arguments[1].id)
+					case Call(out, callTarget, arguments)
+						if (callTarget.name == "__closure_is_of_type" && arguments.length == 2
+						&& typeValues.exists(arguments[1].id)
 						&& needsAdapter(typeValues.get(arguments[1].id))):
 						rewritten.instructions.push(new Located(Call(out,
-							signatureCheck(typeValues.get(arguments[1].id)), [arguments[0]]),
+							IrSymbol.of(signatureCheck(typeValues.get(arguments[1].id))), [arguments[0]]),
 							located.provenance));
 						changed = true;
 					case ToDyn(out, input) if (needsAdapter(input.type)):
 						var maker = adapter(input.type);
-						rewritten.instructions.push(new Located(Call(out, maker, [input]), located.provenance));
+						rewritten.instructions.push(new Located(Call(out, IrSymbol.of(maker), [input]),
+							located.provenance));
 						changed = true;
 					case SafeCast(out, input) if ((switch (input.type) {
 						case Dyn: true;
 						default: false;
 					}) && needsAdapter(out.type)): var maker = restoration(out.type);
-					rewritten.instructions.push(new Located(Call(out, maker, [input]), located.provenance));
+					rewritten.instructions.push(new Located(Call(out, IrSymbol.of(maker), [input]),
+						located.provenance));
 					changed = true;
 					default:
 						rewritten.instructions.push(located);

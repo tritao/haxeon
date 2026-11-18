@@ -1149,17 +1149,17 @@ class WasmFunctionLower {
 				if (global == null) throw new InternalError('Wasm global "$name" is not declared');
 				emit(body, [LocalGet(requiredLocal(values, value.id)), GlobalSet(global)]);
 			case StaticClosure(output, name):
-				var functionIndex = functions.get(name);
+				var functionIndex = functions.get(name.name);
 				if (functionIndex == null) throw new InternalError('Wasm closure target "$name" is not emitted');
-				var tableSlot = context.tableSlots.get(name);
+				var tableSlot = context.tableSlots.get(name.name);
 				if (tableSlot == null) throw new InternalError('Wasm closure target "$name" has no stable table slot');
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.staticClosure(name,
+					represented = calls == null ? UseDefault : calls.staticClosure(name.name,
 						output.type,
 						context.tableSlots,
 						requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
-					var descriptor = context.representation.model.staticClosureDescriptor(name, output.type);
+					var descriptor = context.representation.model.staticClosureDescriptor(name.name, output.type);
 					if (descriptor == null) throw new InternalError('Missing static closure descriptor for $name');
 					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
 				}
@@ -1242,20 +1242,20 @@ class WasmFunctionLower {
 					body.push(End);
 				}
 			case InstanceClosure(output, name, receiver):
-				var functionIndex = functions.get(name);
+				var functionIndex = functions.get(name.name);
 				if (functionIndex == null)
 					throw new InternalError('Wasm instance closure target "$name" is not emitted');
-				var tableSlot = context.tableSlots.get(name);
+				var tableSlot = context.tableSlots.get(name.name);
 				if (tableSlot == null)
 					throw new InternalError('Wasm instance closure target "$name" has no stable table slot');
 				var calls = context.representation.calls,
-					represented = calls == null ? UseDefault : calls.instanceClosure(name,
+					represented = calls == null ? UseDefault : calls.instanceClosure(name.name,
 						output.type,
 						context.tableSlots,
 						requiredLocal(values, receiver.id),
 						requiredLocal(values, output.id));
 				if (emitIfHandled(body, represented)) {} else {
-					var signature:Null<Int> = name == WasmDynamicCalls.VARARGS_TARGET
+					var signature:Null<Int> = name.name == WasmDynamicCalls.VARARGS_TARGET
 						? -1 : context.representation.model.closureSignatureId(output.type);
 					if (signature == null)
 						throw new InternalError("Missing Wasm32 closure signatures");
@@ -1892,7 +1892,7 @@ class WasmFunctionLower {
 				throw new InternalError("Unlowered IR intrinsic reached Wasm");
 			case Call(output, name, arguments):
 				var model = context.representation.model;
-				if (name == "__dynamic_equal"
+				if (name.name == "__dynamic_equal"
 					&& arguments.length == 2
 					&& (nullValues.exists(arguments[0].id) || nullValues.exists(arguments[1].id))) {
 					var other = nullValues.exists(arguments[0].id) ? arguments[1] : arguments[0],
@@ -1903,12 +1903,12 @@ class WasmFunctionLower {
 						return;
 					}
 				}
-				if (name == compiler.ir.IrReferenceIdentity.NAME) {
+				if (name.name == compiler.ir.IrReferenceIdentity.NAME) {
 					emit(body, model.referenceIdentity([for (argument in arguments) requiredLocal(values, argument.id)],
 						requiredLocal(values, output.id)));
 					return;
 				}
-				if (name == compiler.ir.IrReceiverCheck.NAME) {
+				if (name.name == compiler.ir.IrReceiverCheck.NAME) {
 					var check:Array<WasmInstruction> = [
 						LocalGet(requiredLocal(values, arguments[0].id)),
 						model.nullTest(arguments[0].type),
@@ -1917,8 +1917,8 @@ class WasmFunctionLower {
 					if (!knownNonNull) emit(body, check.concat(trapOrThrow(1)).concat([End]));
 					return;
 				}
-				if (compiler.ir.IrScalarWordBits.matches(name)) {
-					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name,
+				if (compiler.ir.IrScalarWordBits.matches(name.name)) {
+					if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name.name,
 						arguments[0].type, output.type))
 						throw new InternalError("Invalid scalar word transport signature");
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
@@ -1932,23 +1932,24 @@ class WasmFunctionLower {
 							true;
 						default:
 							false;
-					}))) body.push(name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
+					}))) body.push(name.name == compiler.ir.IrScalarWordBits.PACK ? I64ExtendI32U : I32WrapI64);
 					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
-				if (name == compiler.ir.IrValueLaneReference.PACK || name == compiler.ir.IrValueLaneReference.UNPACK) {
+				if (name.name == compiler.ir.IrValueLaneReference.PACK
+					|| name.name == compiler.ir.IrValueLaneReference.UNPACK) {
 					body.push(LocalGet(requiredLocal(values, arguments[0].id)));
-					emit(body, model.referenceLane(name == compiler.ir.IrValueLaneReference.PACK
+					emit(body, model.referenceLane(name.name == compiler.ir.IrValueLaneReference.PACK
 						? arguments[0].type : output.type,
-						name == compiler.ir.IrValueLaneReference.UNPACK));
+						name.name == compiler.ir.IrValueLaneReference.UNPACK));
 					body.push(LocalSet(requiredLocal(values, output.id)));
 					return;
 				}
-				if (name == compiler.backend.wasm.WasmScalarAbi.RETURN_MARKER) {
+				if (name.name == compiler.backend.wasm.WasmScalarAbi.RETURN_MARKER) {
 					for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
 					return;
 				}
-				if (name == compiler.backend.wasm.WasmScalarAbi.RETHROW_MARKER) {
+				if (name.name == compiler.backend.wasm.WasmScalarAbi.RETHROW_MARKER) {
 					body.push(LocalGet(requiredLocal(values, arguments[1].id)));
 					body.push(If(null));
 					if (context.runtimeNeutral && context.exceptionState != null) emitNeutralThrow(body,
@@ -1962,10 +1963,10 @@ class WasmFunctionLower {
 					body.push(End);
 					return;
 				}
-				if (model.hasScalarCall(name)) {
-					var index = functions.get(name);
+				if (model.hasScalarCall(name.name)) {
+					var index = functions.get(name.name);
 					if (index == null) throw new InternalError('Missing scalar Wasm function "$name"');
-					emit(body, model.scalarCall(name, output, arguments, (switch (output.type) {
+					emit(body, model.scalarCall(name.name, output, arguments, (switch (output.type) {
 						case Void:
 							true;
 						default:
@@ -1974,7 +1975,7 @@ class WasmFunctionLower {
 						output.id), [for (argument in arguments) requiredLocal(values, argument.id)], index));
 					return;
 				}
-				var host = WasmModuleSupport.hostCNative(context.program, name);
+				var host = WasmModuleSupport.hostCNative(context.program, name.name);
 				if (host != null) lowerInstruction(body,
 					CNativeCall(output, host.name, arguments),
 					values,
@@ -1986,8 +1987,8 @@ class WasmFunctionLower {
 					methods,
 					closureTypes);
 				else {
-					var runtimeName = name;
-					for (native in context.program.natives) if (native.name == name) runtimeName = native.symbol;
+					var runtimeName = name.name;
+					for (native in context.program.natives) if (native.name == name.name) runtimeName = native.symbol;
 					if (runtimeName == "__value_iterator_new") {
 						lowerInstruction(body,
 							IteratorNew(output, arguments[0]),
@@ -2052,24 +2053,25 @@ class WasmFunctionLower {
 						outputLocal,
 						[for (argument in arguments) requiredLocal(values, argument.id)]);
 					if (emitIfHandled(body, represented)) {} else {
-						var fallback = context.representation.model.runtimeCallFallback(StringTools.startsWith(name,
-							"$wasm:closure-receiver:") ? name : runtimeName,
+						var fallback =
+							context.representation.model.runtimeCallFallback(StringTools.startsWith(name.name,
+							"$wasm:closure-receiver:") ? name.name : runtimeName,
 							output,
 							arguments,
 							outputLocal,
 							[for (argument in arguments) requiredLocal(values, argument.id)]);
 						if (!emitIfHandled(body, fallback)
-							&& !lowerInt64Native(body, output, name, arguments, values)) {
+							&& !lowerInt64Native(body, output, name.name, arguments, values)) {
 							for (argument in arguments) body.push(LocalGet(requiredLocal(values, argument.id)));
-							var functionIndex = functions.get(name);
-							var mapParts = WasmModuleSupport.mapNativeParts(name);
+							var functionIndex = functions.get(name.name);
+							var mapParts = WasmModuleSupport.mapNativeParts(name.name);
 							if (mapParts != null && (switch (output.type) {
 								case Void:
 									false;
 								default:
 									true;
 							}) && (mapParts.operation == "keys" || mapParts.operation == "values")) {
-								var projectionIndex = functions.get(WasmGcMaps.projectionName(name, output.type));
+								var projectionIndex = functions.get(WasmGcMaps.projectionName(name.name, output.type));
 								if (projectionIndex != null) functionIndex = projectionIndex;
 							}
 							if (functionIndex == null)

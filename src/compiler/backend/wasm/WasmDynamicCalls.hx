@@ -1,4 +1,5 @@
 package compiler.backend.wasm;
+import compiler.ir.IrSymbol;
 
 import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
@@ -69,13 +70,13 @@ class WasmDynamicCalls {
 							default: false;
 						}): targets.set(Std.string(out.type), out.type);
 						copy.instructions.push(ins);
-						case Call(out, name, args) if (makers.exists(name)):
+						case Call(out, name, args) if (makers.exists(name.name)):
 							varargs = true;
 							var capture = temp(Obj(CAPTURE)),
 								closure = temp(callbackType());
 							emit(NewObject(capture, CAPTURE));
 							emit(FieldSet(capture, "callback", args[0]));
-							emit(InstanceClosure(closure, VARARGS_TARGET, capture));
+							emit(InstanceClosure(closure, IrSymbol.of(VARARGS_TARGET), capture));
 							emit(ToDyn(out, closure));
 						case CallClosure(out, closure, args):
 							var dynamicCall = (switch (closure.type) {
@@ -102,7 +103,7 @@ class WasmDynamicCalls {
 								callee = temp(Dyn);
 								emit(ToDyn(callee, closure));
 							}
-							emit(Call(out, helpers.get(key).name, [callee].concat(args)));
+							emit(Call(out, IrSymbol.of(helpers.get(key).name), [callee].concat(args)));
 						default:
 							copy.instructions.push(ins);
 					}

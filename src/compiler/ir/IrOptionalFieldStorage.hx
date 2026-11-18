@@ -136,13 +136,13 @@ class IrOptionalFieldStorage {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, name, _):
-							var request = methodRequest(name);
-							if (request != null && !generated.exists(name)) {
-								generated.set(name, true);
+							var request = methodRequest(name.name);
+							if (request != null && !generated.exists(name.name)) {
+								generated.set(name.name, true);
 								var original = originals.get(request.method);
 								if (original == null)
 									throw new InternalError('Missing value method "${request.method}" for optional field');
-								all.push(specializeMethod(name, request, original));
+								all.push(specializeMethod(name.name, request, original));
 							}
 						default:
 					}
@@ -183,7 +183,8 @@ class IrOptionalFieldStorage {
 			var block = fn.blocks[blockIndex], target = new IrBlock(block.id);
 			if (blockIndex == 0)
 				target.instructions
-					.push(new Located(Call(receiver, getterFor(plan, request.path, receiver.type), [owner]),
+					.push(new Located(Call(receiver, IrSymbol.of(getterFor(plan, request.path, receiver.type)),
+					[owner]),
 					compiler.ir.SourceProvenance.generated("optional-method-receiver")));
 			for (located in block.instructions) {
 				var instruction = located.value, handled = false;
@@ -192,7 +193,7 @@ class IrOptionalFieldStorage {
 						var nested = nestedPhysicalField(object.type, field),
 							path = aliases.get(object.id).concat(nested == null ? [field] : nested.path);
 						instruction = nested == null
-							&& isComposite(out.type) ? Call(out, getterFor(plan, path, out.type),
+							&& isComposite(out.type) ? Call(out, IrSymbol.of(getterFor(plan, path, out.type)),
 							[owner]) : FieldGet(out, owner, physical(plan, path, nested != null && nested.presence));
 						handled = true;
 					case FieldSet(object, field, value) if (aliases.exists(object.id)):
@@ -202,7 +203,7 @@ class IrOptionalFieldStorage {
 						next = actual.next;
 						if (nested == null && isComposite(value.type)) {
 							var unused = new IrValue(next++, "$optional-place-write", Void);
-							instruction = Call(unused, placeSetterName(plan.owner, plan.field, path), [
+							instruction = Call(unused, IrSymbol.of(placeSetterName(plan.owner, plan.field, path)), [
 								owner,
 								actual.value
 							]);
@@ -219,10 +220,11 @@ class IrOptionalFieldStorage {
 							args.push(actual.value);
 						}
 						instruction = Call(out,
-							placeMethodName(plan.owner, plan.field, aliases.get(object.id), resolved), args);
+							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliases.get(object.id), resolved)),
+							args);
 						handled = true;
 					case Call(out, called, arguments)
-						if (StringTools.startsWith(called, "$generic:") && arguments.length > 0
+						if (StringTools.startsWith(called.name, "$generic:") && arguments.length > 0
 						&& aliases.exists(arguments[0].id)):
 						var args:Array<IrValue> = [owner];
 						for (argument in arguments.slice(1)) {
@@ -231,7 +233,8 @@ class IrOptionalFieldStorage {
 							args.push(actual.value);
 						}
 						instruction = Call(out,
-							placeMethodName(plan.owner, plan.field, aliases.get(arguments[0].id), called), args);
+							IrSymbol.of(placeMethodName(plan.owner, plan.field, aliases.get(arguments[0].id),
+							called.name)), args);
 						handled = true;
 					default:
 				}
@@ -289,7 +292,7 @@ class IrOptionalFieldStorage {
 		if (path == null)
 			return {value: value, next: next};
 		var result = new IrValue(next++, "$optional-place-value", value.type);
-		target.instructions.push(new Located(Call(result, getterFor(plan, path, value.type), [owner]),
+		target.instructions.push(new Located(Call(result, IrSymbol.of(getterFor(plan, path, value.type)), [owner]),
 			located.provenance));
 		return {value: result, next: next};
 	}
@@ -425,8 +428,8 @@ class IrOptionalFieldStorage {
 			for (located in block.instructions) {
 				var instruction = located.value, rewrittenInstruction = false;
 				switch instruction {
-					case Call(out, name, arguments) if (StringTools.startsWith(name, COPY_PREFIX)):
-						var fields:Array<String> = haxe.Json.parse(name.substr(COPY_PREFIX.length));
+					case Call(out, name, arguments) if (StringTools.startsWith(name.name, COPY_PREFIX)):
+						var fields:Array<String> = haxe.Json.parse(name.name.substr(COPY_PREFIX.length));
 						if (fields.length != 4 || arguments.length != 2 || (switch (out.type) {
 							case Void: false;
 							default: true;
@@ -474,7 +477,7 @@ class IrOptionalFieldStorage {
 								replacement.instructions.push(new Located(Upcast(receiver, object),
 									located.provenance));
 							}
-							instruction = Call(out, accessorName(plan, false), [receiver]);
+							instruction = Call(out, IrSymbol.of(accessorName(plan, false)), [receiver]);
 							rewrittenInstruction = true;
 							changed = true;
 						}
@@ -488,7 +491,7 @@ class IrOptionalFieldStorage {
 									located.provenance));
 							}
 							var unused = new IrValue(next++, "$optional-field-write", Void);
-							instruction = Call(unused, accessorName(plan, true), [receiver, value]);
+							instruction = Call(unused, IrSymbol.of(accessorName(plan, true)), [receiver, value]);
 							rewrittenInstruction = true;
 							changed = true;
 						}
@@ -507,7 +510,7 @@ class IrOptionalFieldStorage {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, name, _) if (StringTools.startsWith(name, COPY_PREFIX)):
+					case Call(_, name, _) if (StringTools.startsWith(name.name, COPY_PREFIX)):
 						return true;
 					case FieldGet(_, owner, name), FieldSet(owner, name, _):
 						if (find(owner.type, name) != null)

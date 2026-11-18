@@ -3,6 +3,7 @@ import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrNonNullFacts;
 import compiler.ir.IrReceiverCheck;
+import compiler.ir.IrSymbol;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 
@@ -168,7 +169,7 @@ class NonNullFactsMain {
 		for (instruction in [
 			new Located(NewObject(fresh, "Box"), provenance), new Located(FieldGet(first, fresh, "value"), provenance),
 			new Located(FieldGet(second, receiver, "value"), provenance),
-			new Located(Call(done, IrReceiverCheck.NAME, [receiver]), provenance)
+			new Located(Call(done, IrSymbol.of(IrReceiverCheck.NAME), [receiver]), provenance)
 		])
 			block.instructions.push(instruction);
 		block.terminator = new Located(Return(second), provenance);

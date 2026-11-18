@@ -1016,7 +1016,7 @@ class SemanticAssembly {
 							case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): name;
 							default: null;
 						};
-						var origin = target == null ? null : genericOrigin(target);
+						var origin = target == null ? null : genericOrigin((target == null ? null : target.name));
 						if (origin == null)
 							continue;
 						if (seen.exists(origin))

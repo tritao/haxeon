@@ -141,7 +141,7 @@ class IrBuilder {
 
 	public function call(name:String, args:Array<IrValue>, result:IrType):IrValue {
 		var out = temporary(result);
-		emit(Call(out, name, args));
+		emit(Call(out, IrSymbol.of(name), args));
 		return out;
 	}
 
@@ -165,7 +165,7 @@ class IrBuilder {
 
 	public function staticClosure(name:String, type:IrType):IrValue {
 		var out = temporary(type);
-		emit(StaticClosure(out, name));
+		emit(StaticClosure(out, IrSymbol.of(name)));
 		return out;
 	}
 
@@ -177,7 +177,7 @@ class IrBuilder {
 
 	public function instanceClosure(name:String, receiver:IrValue, type:IrType):IrValue {
 		var out = temporary(type);
-		emit(InstanceClosure(out, name, receiver));
+		emit(InstanceClosure(out, IrSymbol.of(name), receiver));
 		return out;
 	}
 

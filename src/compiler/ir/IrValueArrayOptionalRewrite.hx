@@ -81,8 +81,9 @@ class IrValueArrayOptionalRewrite {
 							index: index,
 							operation: "get"
 						});
-					case Call(value, "__array_get_any",
-						args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
+					case Call(value, callTarget,
+						args) if (callTarget.name == "__array_get_any" && args.length == 2
+						&& Type.enumEq(args[0].type, arrayType)):
 						anyReads.set(value.id, {
 							block: block.id,
 							position: position,
@@ -91,9 +92,9 @@ class IrValueArrayOptionalRewrite {
 							operation: "get"
 						});
 					case Call(value, nativeName, args)
-						if ((nativeName == "__array_pop_ref" || nativeName == "__array_shift_ref"
-						|| nativeName == "__array_pop_any"
-						|| nativeName == "__array_shift_any")
+						if ((nativeName.name == "__array_pop_ref" || nativeName.name == "__array_shift_ref"
+						|| nativeName.name == "__array_pop_any"
+						|| nativeName.name == "__array_shift_any")
 						&& args.length == 1
 						&& Type.enumEq(args[0].type, arrayType)):
 						var read:OptionalArrayAccess = {
@@ -101,14 +102,14 @@ class IrValueArrayOptionalRewrite {
 							position: position,
 							array: args[0],
 							index: null,
-							operation: nativeName.indexOf("pop") >= 0 ? "pop" : "shift"
+							operation: nativeName.name.indexOf("pop") >= 0 ? "pop" : "shift"
 						};
 						if (Type.enumEq(value.type, element))
 							reads.set(value.id, read);
 						else
 							anyReads.set(value.id, read);
 					case Call(value, helper, args)
-						if (helper == IrOptionalValueFlow.boxName(name)
+						if (helper.name == IrOptionalValueFlow.boxName(name)
 						&& args.length == 1
 						&& Type.enumEq(value.type, element)
 						&& Type.enumEq(args[0].type, wrapperType)):
@@ -143,7 +144,7 @@ class IrValueArrayOptionalRewrite {
 			for (position in 0...block.instructions.length)
 				switch block.instructions[position].value {
 					case Call(out, helper, args)
-						if (helper == IrOptionalValueFlow.unboxName(name)
+						if (helper.name == IrOptionalValueFlow.unboxName(name)
 						&& args.length == 1
 						&& reads.exists(args[0].id)
 						&& Type.enumEq(out.type, wrapperType)
@@ -162,7 +163,7 @@ class IrValueArrayOptionalRewrite {
 							&& privateWrapper(fn, box.wrapper, block.id, box.position, value.id))
 							writes.set(value.id, box.wrapper);
 					case Call(out, nativeName, args)
-						if (mutation(nativeName, args, out, arrayType) != null
+						if (mutation(nativeName.name, args, out, arrayType) != null
 						&& boxes.exists(args[args.length - 1].id)
 						&& uses.get(args[args.length - 1].id) == 1):
 						var value = args[args.length - 1],
@@ -172,7 +173,7 @@ class IrValueArrayOptionalRewrite {
 							&& privateWrapper(fn, box.wrapper, block.id, box.position, value.id))
 							writes.set(value.id, box.wrapper);
 					case Call(out, nativeName, args)
-						if (mutation(nativeName, args, out, arrayType) != null
+						if (mutation(nativeName.name, args, out, arrayType) != null
 						&& dynamicValues.exists(args[args.length - 1].id)
 						&& uses.get(args[args.length - 1].id) == 1):
 						var conversion = dynamicValues.get(args[args.length - 1].id);
@@ -200,12 +201,12 @@ class IrValueArrayOptionalRewrite {
 				var instruction = located.value, omit = false;
 				switch instruction {
 					case ArrayGet(out, array, index) if (unboxes.exists(out.id)):
-						instruction = Call(unboxed(out.id), components.getName(), [array, index]);
+						instruction = Call(unboxed(out.id), IrSymbol.of(components.getName()), [array, index]);
 					case Call(out, nativeName, args)
 						if ((rawReads.exists(out.id) || unboxes.exists(out.id))
-						&& (nativeName == "__array_get_any" || nativeName == "__array_pop_ref"
-						|| nativeName == "__array_shift_ref"
-						|| nativeName == "__array_pop_any" || nativeName == "__array_shift_any")):
+						&& (nativeName.name == "__array_get_any" || nativeName.name == "__array_pop_ref"
+						|| nativeName.name == "__array_shift_ref"
+						|| nativeName.name == "__array_pop_any" || nativeName.name == "__array_shift_any")):
 						var id = out.id;
 						if (rawReads.exists(out.id)) {
 							var source = rawReads.get(out.id);
@@ -220,28 +221,29 @@ class IrValueArrayOptionalRewrite {
 							case "shift": components.shiftName();
 							default: throw new InternalError("Invalid optional array read");
 						};
-						instruction = Call(unboxed(id), helper, args);
+						instruction = Call(unboxed(id), IrSymbol.of(helper), args);
 					case SafeCast(out, _) if (unboxes.exists(out.id) && castSources.exists(out.id)):
 						omit = true;
-					case Call(_, helper, args) if (helper == IrOptionalValueFlow.unboxName(name)
+					case Call(_, helper, args) if (helper.name == IrOptionalValueFlow.unboxName(name)
 						&& args.length == 1
 						&& unboxes.exists(args[0].id)):
 						omit = true;
-					case Call(out, helper, _) if (helper == IrOptionalValueFlow.boxName(name)
+					case Call(out, helper, _) if (helper.name == IrOptionalValueFlow.boxName(name)
 						&& (writes.exists(out.id) || dynamicBoxes.exists(out.id))):
 						omit = true;
 					case ToDyn(out, _) if (dynamicWrites.exists(out.id)):
 						omit = true;
 					case ArraySet(array, index, value) if (writes.exists(value.id)):
-						instruction = Call(new IrValue(next++, "$optional-array-write", Void), components.setName(), [
-							array,
-							index,
-							writes.get(value.id)
-						]);
+						instruction = Call(new IrValue(next++, "$optional-array-write", Void),
+							IrSymbol.of(components.setName()), [
+								array,
+								index,
+								writes.get(value.id)
+							]);
 					case Call(out, nativeName, args)
-						if (mutation(nativeName, args, out, arrayType) != null
+						if (mutation(nativeName.name, args, out, arrayType) != null
 						&& (writes.exists(args[args.length - 1].id) || dynamicWrites.exists(args[args.length - 1].id))):
-						var kind = mutation(nativeName, args, out, arrayType),
+						var kind = mutation(nativeName.name, args, out, arrayType),
 							value = args[args.length - 1],
 							wrapper = writes.exists(value.id) ? writes.get(value.id) : dynamicWrites.get(value.id),
 							arguments = args.slice(0, args.length - 1).concat([wrapper]);
@@ -252,7 +254,7 @@ class IrValueArrayOptionalRewrite {
 							case "unshift": components.unshiftName();
 							default: throw new InternalError("Invalid nullable array operation");
 						};
-						instruction = Call(out, helper, arguments);
+						instruction = Call(out, IrSymbol.of(helper), arguments);
 					default:
 				}
 				if (!omit)

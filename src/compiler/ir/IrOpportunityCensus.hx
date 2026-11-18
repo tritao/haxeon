@@ -111,7 +111,7 @@ class IrOpportunityCensus {
 				var recursive = false;
 				for (located in fn.blocks[0].instructions)
 					switch located.value {
-						case Call(_, name, _) if (name == fn.name):
+						case Call(_, name, _) if (name.name == fn.name):
 							recursive = true;
 						case BeginTry(_, _, _), EndTry(_, _), Catch(_):
 							recursive = true;
@@ -195,7 +195,7 @@ class IrOpportunityCensus {
 							case 2: count(22);
 							default:
 						}
-					case Call(_, name, _) if (GenericOwnerErasure.isOperation(name)):
+					case Call(_, name, _) if (GenericOwnerErasure.isOperation(name.name)):
 						count(23);
 					default:
 				}
@@ -205,7 +205,8 @@ class IrOpportunityCensus {
 						if (key == lastStore)
 							count(16);
 						lastStore = key;
-					case Call(_, name, _) if (smallFunctions != null && name != fn.name && smallFunctions.exists(name)):
+					case Call(_, name,
+						_) if (smallFunctions != null && name.name != fn.name && smallFunctions.exists(name.name)):
 						count(17);
 						lastStore = null;
 					default:
@@ -227,7 +228,7 @@ class IrOpportunityCensus {
 						default:
 					}
 				switch instruction {
-					case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
+					case Call(_, name, arguments) if (name.name == IrReceiverCheck.NAME && arguments.length == 1):
 						switch bounds.definition(arguments[0].id) {
 							case NewObject(_, _), ValueInit(_), StaticClosure(_, _),
 								InstanceClosure(_, _, _): count(14);
@@ -254,7 +255,7 @@ class IrOpportunityCensus {
 						if (localUses(fn, out))
 							count(6);
 						allocations.push(allocationInfo(fn, out, objects, allowInline));
-					case Call(out, name, _) if (StringTools.startsWith(name, "__array_alloc_")):
+					case Call(out, name, _) if (StringTools.startsWith(name.name, "__array_alloc_")):
 						count(5);
 						if (localUses(fn, out))
 							count(6);
@@ -398,7 +399,7 @@ class IrOpportunityCensus {
 								ConstString(_, _): initialized = block.id;
 							default: return false;
 						}
-					case Call(_, name, _) if (pureCalls.exists(name)):
+					case Call(_, name, _) if (pureCalls.exists(name.name)):
 					case Call(_, _, _), CNativeCall(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _),
 						MemoryStore(_, _, _), BeginTry(_, _, _),
 						EndTry(_, _), Catch(_):

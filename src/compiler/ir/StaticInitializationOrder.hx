@@ -182,7 +182,7 @@ class StaticInitializationOrder {
 					case NewObject(_, typeName):
 						place(typeName);
 					case Call(_, callee, _), StaticClosure(_, callee):
-						reference(callee);
+						reference(callee.name);
 					case _:
 				}
 	}

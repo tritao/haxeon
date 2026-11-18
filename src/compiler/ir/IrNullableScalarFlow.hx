@@ -171,8 +171,8 @@ class IrNullableScalarFlow {
 								for (input in inputs)
 									reject(input.value);
 							}
-						case Call(_, name, args) if (functions.exists(name)):
-							var called = functions.get(name),
+						case Call(_, name, args) if (functions.exists(name.name)):
+							var called = functions.get(name.name),
 								eligible = args.length == called.arguments.length;
 							if (eligible)
 								for (index in 0...args.length)
@@ -182,7 +182,7 @@ class IrNullableScalarFlow {
 							if (!eligible)
 								for (arg in args)
 									reject(arg);
-						case Call(_, "__dynamic_equal", args) if (args.length == 2
+						case Call(_, callTarget, args) if (callTarget.name == "__dynamic_equal" && args.length == 2
 							&& Type.enumEq(args[0].type, args[1].type)
 							&& inner(args[0].type) != null):
 							if (!candidates.exists(args[0].id) || !candidates.exists(args[1].id))
@@ -248,8 +248,8 @@ class IrNullableScalarFlow {
 			for (located in block.instructions) {
 				var instruction = located.value;
 				switch instruction {
-					case Call(out, name, args) if (functions.exists(name)):
-						var called = functions.get(name),
+					case Call(out, name, args) if (functions.exists(name.name)):
+						var called = functions.get(name.name),
 							use = args.length == called.arguments.length;
 						if (use)
 							for (index in 0...args.length)
@@ -264,19 +264,21 @@ class IrNullableScalarFlow {
 									expanded.push(part.payload);
 								} else
 									expanded.push(args[index]);
-							target.instructions.push(new Located(Call(out, specializationName(name), expanded),
+							target.instructions
+								.push(new Located(Call(out, IrSymbol.of(specializationName(name.name)), expanded),
 								located.provenance));
 						} else
 							target.instructions.push(located);
-					case Call(out, "__dynamic_equal", args)
-						if (args.length == 2 && parts.exists(args[0].id) && parts.exists(args[1].id)
+					case Call(out, callTarget, args)
+						if (callTarget.name == "__dynamic_equal" && args.length == 2 && parts.exists(args[0].id)
+						&& parts.exists(args[1].id)
 						&& Type.enumEq(args[0].type, args[1].type)):
 						var left = required(args[0]),
 							right = required(args[1]),
 							type = inner(args[0].type),
 							name = EQUAL_PREFIX + IrTypeIdentity.text(type);
 						checks.set(name, type);
-						target.instructions.push(new Located(Call(out, name, [
+						target.instructions.push(new Located(Call(out, IrSymbol.of(name), [
 							left.present,
 							left.payload,
 							right.present,
@@ -304,7 +306,7 @@ class IrNullableScalarFlow {
 						var part = required(value),
 							name = PREFIX + Std.string(out.type);
 						checks.set(name, out.type);
-						target.instructions.push(new Located(Call(out, name, [part.present, part.payload]),
+						target.instructions.push(new Located(Call(out, IrSymbol.of(name), [part.present, part.payload]),
 							located.provenance));
 					case Equal(out, left, right) if ((parts.exists(left.id) && nulls.exists(right.id))
 						|| (parts.exists(right.id) && nulls.exists(left.id))):

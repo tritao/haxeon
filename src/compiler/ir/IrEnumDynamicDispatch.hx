@@ -51,8 +51,8 @@ class IrEnumDynamicDispatch {
 						|| !IrVerifier.sameType(output.type, Array(Dyn)))
 						throw new InternalError("Invalid enum Dynamic view signature");
 					views.set(register(type), true);
-				case Call(_, "__dynamic_equal", _): needsEqual = true;
-				case Call(_, REFLECT, _): needsReflect = true;
+				case Call(_, callTarget, _) if (callTarget.name == "__dynamic_equal"): needsEqual = true;
+				case Call(_, callTarget, _) if (callTarget.name == REFLECT): needsReflect = true;
 				default:
 			}
 		}
@@ -141,11 +141,14 @@ class IrEnumDynamicDispatch {
 			rewritten.push(IrFunctionRewrite.instructions(fn, function(located) {
 				return switch located.value {
 					case Intrinsic(output, EnumDynamicBox(type), arguments):
-						[new Located(Call(output, boxNames.get(key(type)), arguments), located.provenance)];
+						[new Located(Call(output, IrSymbol.of(boxNames.get(key(type))), arguments),
+							located.provenance)];
 					case Intrinsic(output, EnumDynamicView(type), arguments):
-						[new Located(Call(output, viewNames.get(key(type)), arguments), located.provenance)];
-					case Call(output, "__dynamic_equal", arguments) if (names.length > 0):
-						[new Located(Call(output, EQUAL, arguments), located.provenance)];
+						[new Located(Call(output, IrSymbol.of(viewNames.get(key(type))), arguments),
+							located.provenance)];
+					case Call(output, callTarget,
+						arguments) if (callTarget.name == "__dynamic_equal" && (names.length > 0)):
+						[new Located(Call(output, IrSymbol.of(EQUAL), arguments), located.provenance)];
 					case SafeCast(output, input) if (IrVerifier.sameType(input.type, Dyn) && isEnum(output.type)):
 						var id = key(output.type), helper = unboxNames.get(id);
 						if (helper == null) {
@@ -153,16 +156,17 @@ class IrEnumDynamicDispatch {
 							unboxNames.set(id, helper);
 						}
 						unboxes.set(helper, output.type);
-						[new Located(Call(output, helper, [input]), located.provenance)];
+						[new Located(Call(output, IrSymbol.of(helper), [input]), located.provenance)];
 					case Call(output, name,
-						arguments) if (names.length > 0 && (name == "__std_is_of_type" || name == "__std_is_exact_type")
+						arguments) if (names.length > 0
+						&& (name.name == "__std_is_of_type" || name.name == "__std_is_exact_type")
 						&& arguments.length == 2 && types.exists(arguments[1].id)
 						&& isEnum(types.get(arguments[1].id))):
 						var type = types.get(arguments[1].id),
-							exact = name == "__std_is_exact_type",
+							exact = name.name == "__std_is_exact_type",
 							helper = typeTestName(type, exact);
 						typeTests.set(helper, {type: type, exact: exact});
-						[new Located(Call(output, helper, [arguments[0]]), located.provenance)];
+						[new Located(Call(output, IrSymbol.of(helper), [arguments[0]]), located.provenance)];
 					default: null;
 				};
 			}));
@@ -197,7 +201,7 @@ class IrEnumDynamicDispatch {
 		for (name in roots) mark(name);
 		function scan(fn:IrFunction):Void {
 			for (block in fn.blocks) for (located in block.instructions) switch located.value {
-				case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): mark(name);
+				case Call(_, name, _), StaticClosure(_, name), InstanceClosure(_, name, _): mark(name.name);
 				default:
 			}
 		}

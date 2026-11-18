@@ -3,6 +3,7 @@ import compiler.ir.IrArrayFactory;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrEnumEscapeReach;
 import compiler.ir.IrFunction;
+import compiler.ir.IrSymbol;
 
 /** Both enum storage decisions consume the same reference, container and capture reach. */
 @:access(compiler.ir.IrBuilder)
@@ -33,7 +34,7 @@ class EnumEscapeReachMain {
 			receiver = builder.argument("receiver", Obj("Capture")),
 			closure = builder.temporary(Function([], Void)),
 			map = builder.argument("map", Abstract("probe-map"));
-		builder.emit(InstanceClosure(closure, "capture", receiver));
+		builder.emit(InstanceClosure(closure, IrSymbol.of("capture"), receiver));
 		builder.call("__map_string_ref_set", [map, builder.constString("key"), builder.constNull(EnumTag("Tag"))],
 			Void);
 		builder.returnValue(builder.constVoid());
@@ -121,7 +122,7 @@ class EnumEscapeReachMain {
 		for (block in program.functions[0].blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, "__array_user_extension", arguments):
+					case Call(_, callTarget, arguments) if (callTarget.name == "__array_user_extension"):
 						adapted = compiler.ir.IrVerifier.sameType(arguments[1].type, Dyn);
 					default:
 				}
@@ -149,9 +150,9 @@ class EnumEscapeReachMain {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(out, "__array_alloc_i32", arguments):
+						case Call(out, callTarget, arguments) if (callTarget.name == "__array_alloc_i32"):
 							found = arguments.length == 1 && compiler.ir.IrVerifier.sameType(out.type, Array(I32));
-						case Call(_, IrArrayFactory.NAME, _):
+						case Call(_, callTarget, _) if (callTarget.name == IrArrayFactory.NAME):
 							throw "Logical factory survived allocation emission";
 						case TypeValue(_, _), ToDyn(_, _), SafeCast(_, _):
 							throw "Closed tag allocation acquired a descriptor or erase/cast";

@@ -66,11 +66,11 @@ class WasmRuntimeAbi {
 			case ConstString(_, _): StringOperation;
 			case CNativeCall(_, _, _): NativeCall;
 			case BeginTry(_, _, _), EndTry(_, _): Catch;
-			case Call(_, name, _) if (StringTools.startsWith(name, "__array_alloc_")): AllocateArray;
-			case Call(_, name, _) if (StringTools.startsWith(name, "__array_")): Allocate;
-			case Call(_, name, _) if (StringTools.startsWith(name, "__map_")): MapOperation;
-			case Call(_, name, _) if (StringTools.startsWith(name, "__string_")): StringOperation;
-			case Call(_, "__haxeon_alloc", _): Allocate;
+			case Call(_, name, _) if (StringTools.startsWith(name.name, "__array_alloc_")): AllocateArray;
+			case Call(_, name, _) if (StringTools.startsWith(name.name, "__array_")): Allocate;
+			case Call(_, name, _) if (StringTools.startsWith(name.name, "__map_")): MapOperation;
+			case Call(_, name, _) if (StringTools.startsWith(name.name, "__string_")): StringOperation;
+			case Call(_, callTarget, _) if (callTarget.name == "__haxeon_alloc"): Allocate;
 			default: null;
 		};
 }

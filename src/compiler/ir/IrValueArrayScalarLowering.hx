@@ -24,9 +24,9 @@ class IrValueArrayScalarLowering {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, name, args) if (name != fn.name
-						&& helpers.exists(name)
-						&& helpers.get(name).arguments.length == args.length):
+					case Call(_, name, args) if (name.name != fn.name
+						&& helpers.exists(name.name)
+						&& helpers.get(name.name).arguments.length == args.length):
 						found = true;
 					default:
 				}
@@ -60,8 +60,8 @@ class IrValueArrayScalarLowering {
 			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;
 			for (i in 0...block.instructions.length)
 				switch block.instructions[i].value {
-					case Call(_, name, args) if (name != fn.name && helpers.exists(name)):
-						var candidate = helpers.get(name);
+					case Call(_, name, args) if (name.name != fn.name && helpers.exists(name.name)):
+						var candidate = helpers.get(name.name);
 						if (candidate.arguments.length == args.length) {
 							position = i;
 							callee = candidate;

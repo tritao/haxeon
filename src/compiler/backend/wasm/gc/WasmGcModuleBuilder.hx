@@ -279,20 +279,20 @@ class WasmGcModuleBuilder {
 				for (located in block.instructions)
 					switch located.value {
 						case StaticClosure(output, target):
-							markers.set(output.id, target);
+							markers.set(output.id, target.name);
 						default:
 					}
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, name, arguments) if (StringTools.startsWith(name, "$wasm:closure-receiver:")):
+						case Call(_, name, arguments) if (StringTools.startsWith(name.name, "$wasm:closure-receiver:")):
 							if (arguments.length != 2 || !markers.exists(arguments[1].id))
 								throw new InternalError('Missing static closure marker for $name');
 							var target = markers.get(arguments[1].id),
-								existing = gcContext.closureProbeQueryTargets.get(name);
+								existing = gcContext.closureProbeQueryTargets.get(name.name);
 							if (existing != null && existing != target)
 								throw new InternalError('Conflicting closure adapter markers for $name');
-							gcContext.closureProbeQueryTargets.set(name, target);
+							gcContext.closureProbeQueryTargets.set(name.name, target);
 							gcContext.closureProbeTargets.set(target, true);
 						default:
 					}
@@ -303,8 +303,8 @@ class WasmGcModuleBuilder {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case StaticClosure(output, target) if (gcContext.closureProbeTargets.exists(target)):
-							markers.set(output.id, target);
+						case StaticClosure(output, target) if (gcContext.closureProbeTargets.exists(target.name)):
+							markers.set(output.id, target.name);
 						default:
 					}
 			for (block in fn.blocks) {
@@ -313,7 +313,7 @@ class WasmGcModuleBuilder {
 						if (markers.exists(input.id)) {
 							switch located.value {
 								case Call(_, name, arguments)
-									if (gcContext.closureProbeQueryTargets.get(name) == markers.get(input.id)
+									if (gcContext.closureProbeQueryTargets.get(name.name) == markers.get(input.id)
 									&& arguments.length == 2
 									&& arguments[1].id == input.id):
 								default:
@@ -545,20 +545,20 @@ class WasmGcModuleBuilder {
 							MemoryStore(_, _, _):
 						case ToDyn(_, _), SafeCast(_, _), ToVirtual(_, _), Upcast(_, _):
 						case Call(_, name, _)
-							if (name == WasmScalarAbi.RETURN_MARKER
-							|| name == WasmScalarAbi.RETHROW_MARKER
-							|| name == compiler.ir.IrReceiverCheck.NAME
-							|| name == compiler.ir.IrReferenceIdentity.NAME
-							|| compiler.ir.IrScalarWordBits.matches(name)
-							|| name == compiler.ir.IrValueLaneReference.PACK
-							|| name == compiler.ir.IrValueLaneReference.UNPACK
-							|| declaredFunctions.exists(name)
-							|| isSupportedGcNative(program, name)):
+							if (name.name == WasmScalarAbi.RETURN_MARKER
+							|| name.name == WasmScalarAbi.RETHROW_MARKER
+							|| name.name == compiler.ir.IrReceiverCheck.NAME
+							|| name.name == compiler.ir.IrReferenceIdentity.NAME
+							|| compiler.ir.IrScalarWordBits.matches(name.name)
+							|| name.name == compiler.ir.IrValueLaneReference.PACK
+							|| name.name == compiler.ir.IrValueLaneReference.UNPACK
+							|| declaredFunctions.exists(name.name)
+							|| isSupportedGcNative(program, name.name)):
 						case CNativeCall(_, name, _) if (declaredCNatives.exists(name)):
 						case StaticClosure(_,
-							name) if (declaredFunctions.exists(name) || isSupportedGcNative(program, name)):
+							name) if (declaredFunctions.exists(name.name) || isSupportedGcNative(program, name.name)):
 						case InstanceClosure(_, name, receiver)
-							if (declaredFunctions.exists(name)
+							if (declaredFunctions.exists(name.name)
 							&& (isObjectReference(receiver.type) || isVirtualReference(receiver.type)
 							|| (switch (receiver.type) {
 								case Dyn: true;
@@ -793,7 +793,7 @@ class WasmGcModuleBuilder {
 				for (instruction in block.instructions)
 					switch instruction.value {
 						case StaticClosure(_, name):
-							addressed.set(name, true);
+							addressed.set(name.name, true);
 						default:
 					}
 		for (native in program.natives)
@@ -1060,15 +1060,15 @@ class WasmGcModuleBuilder {
 						case Call(output, name, _) if ((switch (output.type) {
 							case Void: false;
 							default: true;
-						})): var parts = WasmModuleSupport.mapNativeParts(name);
+						})): var parts = WasmModuleSupport.mapNativeParts(name.name);
 						if (parts != null && (parts.operation == "keys" || parts.operation == "values")) {
 							var native:Null<IrNative> = null;
 							for (candidate in program.natives)
-								if (candidate.name == name)
+								if (candidate.name == name.name)
 									native = candidate;
 							if (native == null)
 								throw new InternalError('Wasm GC map projection "$name" has no runtime declaration');
-							var projectionName = WasmGcMaps.projectionName(name, output.type);
+							var projectionName = WasmGcMaps.projectionName(name.name, output.type);
 							if (!functions.exists(projectionName))
 								functions.set(projectionName,
 									WasmGcMaps.addProjectionForCall(module, plan, native, parts.mapName,
@@ -1336,7 +1336,7 @@ class WasmGcModuleBuilder {
 					for (located in block.instructions)
 						switch located.value {
 							case InstanceClosure(_, target, _):
-								targets.set(target, true);
+								targets.set(target.name, true);
 							default:
 						}
 		var names = [for (name in targets.keys()) name];
@@ -1412,7 +1412,8 @@ class WasmGcModuleBuilder {
 					for (located in block.instructions)
 						switch located.value {
 							case Call(_, name,
-								arguments) if (runtimeNativeSymbol(program, name) == "native_pointer_owned_from_slot"):
+								arguments) if (runtimeNativeSymbol(program, name.name)
+								== "native_pointer_owned_from_slot"):
 								if (arguments.length == 7) {
 									var release = strings.get(arguments[5].id);
 									if (release != null && release != "")

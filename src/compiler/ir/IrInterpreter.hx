@@ -249,18 +249,18 @@ class IrInterpreter {
 				if (cursor.position >= cursor.values.values.length)
 					throw "Iterator has no next value";
 				cursor.values.values[cursor.position++];
-			case Call(_, name, arguments) if (name == IrHlScalarRef.ADDRESS):
+			case Call(_, name, arguments) if (name.name == IrHlScalarRef.ADDRESS):
 				new InterpScalarRef(values, arguments[0].id);
-			case Call(_, name, arguments) if (name == IrHlScalarRef.LOAD):
+			case Call(_, name, arguments) if (name.name == IrHlScalarRef.LOAD):
 				var reference:InterpScalarRef = cast value(values, arguments[0]);
 				reference.values.get(reference.id);
-			case Call(_, name, arguments) if (name == IrHlScalarRef.STORE):
+			case Call(_, name, arguments) if (name.name == IrHlScalarRef.STORE):
 				var reference:InterpScalarRef = cast value(values, arguments[0]);
 				reference.values.set(reference.id, value(values, arguments[1]));
 				null;
-			case Call(_, name, arguments) if (name == IrReferenceIdentity.NAME):
+			case Call(_, name, arguments) if (name.name == IrReferenceIdentity.NAME):
 				value(values, arguments[0]) == value(values, arguments[1]);
-			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME):
+			case Call(_, name, arguments) if (name.name == IrReceiverCheck.NAME):
 				switch arguments[0].type {
 					case EnumTag(_):
 						var tag:Int = value(values, arguments[0]);
@@ -270,16 +270,17 @@ class IrInterpreter {
 				}
 				null;
 			case Call(output, name, arguments)
-				if (IrScalarWordBits.matches(name)
+				if (IrScalarWordBits.matches(name.name)
 				&& arguments.length == 1
-				&& IrScalarWordBits.valid(name, arguments[0].type, output.type)):
+				&& IrScalarWordBits.valid(name.name, arguments[0].type, output.type)):
 				switch [arguments[0].type, output.type] {
 					case [EnumTag(_), I32] | [I32, EnumTag(_)]: value(values, arguments[0]);
 					default: throw "IR interpreter cannot execute native scalar word transport";
 				};
-			case Call(_, name, arguments) if (name == IrValueLaneReference.PACK || name == IrValueLaneReference.UNPACK):
+			case Call(_, name,
+				arguments) if (name.name == IrValueLaneReference.PACK || name.name == IrValueLaneReference.UNPACK):
 				value(values, arguments[0]);
-			case Call(output, IrArrayFactory.NAME, arguments):
+			case Call(output, callTarget, arguments) if (callTarget.name == IrArrayFactory.NAME):
 				var element = switch output.type {
 					case Array(element): element;
 					default: throw "Invalid array factory result";
@@ -303,11 +304,11 @@ class IrInterpreter {
 				else cast(actual, InterpEnum).constructor + 1;
 			case Call(output, name, arguments):
 				var args = [for (argument in arguments) value(values, argument)];
-				if (functions.exists(name)) execute(functions.get(name), args);
+				if (functions.exists(name.name)) execute(functions.get(name.name), args);
 				else {
-					var result = executeNative(name, args);
-					if (StringTools.startsWith(name, "__array_alloc_")
-						&& name != "__array_alloc_typed_ref"
+					var result = executeNative(name.name, args);
+					if (StringTools.startsWith(name.name, "__array_alloc_")
+						&& name.name != "__array_alloc_typed_ref"
 						&& Std.isOfType(result, InterpArray))
 						switch output.type {
 							case Array(element):
@@ -318,9 +319,9 @@ class IrInterpreter {
 							default:
 						}
 					if (arguments.length > 0
-						&& (StringTools.startsWith(name, "__array_copy_")
-						|| StringTools.startsWith(name, "__array_slice_")
-						|| StringTools.startsWith(name, "__array_concat_")))
+						&& (StringTools.startsWith(name.name, "__array_copy_")
+						|| StringTools.startsWith(name.name, "__array_slice_")
+						|| StringTools.startsWith(name.name, "__array_concat_")))
 						switch arguments[0].type {
 							case Array(element): copyArrayRangeValues(interpArray(result), element);
 							default:
@@ -329,9 +330,10 @@ class IrInterpreter {
 				}
 			case CNativeCall(_, name, _):
 				throw 'IR interpreter cannot execute ordinary C native "$name" without a host binding';
-			case StaticClosure(out, name): new InterpClosure(functions.get(name), null, out.type, null,
-				functions.exists(name) ? null : name);
-			case InstanceClosure(out, name, receiver): new InterpClosure(functions.get(name), value(values, receiver),
+			case StaticClosure(out, name): new InterpClosure(functions.get(name.name), null, out.type, null,
+				functions.exists(name.name) ? null : name.name);
+			case InstanceClosure(out, name, receiver): new InterpClosure(functions.get(name.name),
+				value(values, receiver),
 				out.type);
 			case CallClosure(_, closure, arguments):
 				var callable:InterpClosure = cast value(values, closure),

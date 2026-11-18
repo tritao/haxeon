@@ -5,6 +5,7 @@ import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrHlScalarRef;
+import compiler.ir.IrSymbol;
 import compiler.ir.IrVerifier;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
@@ -22,9 +23,9 @@ class AuditVerifierMain {
 				case "get": ArrayGet(out, array, index);
 				case "set": ArraySet(array, index, value);
 				case "iterator": IteratorNew(new IrValue(1001, "iterator", Iterator(element)), array);
-				case "push": Call(new IrValue(1002, "length", I32), "__array_push_ref", [array, value]);
-				case "alias": Call(new IrValue(1002, "length", I32), "$aliased-push", [array, value]);
-				case "concat-second": Call(new IrValue(1003, "array", Array(Dyn)), "__array_concat_ref", [
+				case "push": Call(new IrValue(1002, "length", I32), IrSymbol.of("__array_push_ref"), [array, value]);
+				case "alias": Call(new IrValue(1002, "length", I32), IrSymbol.of("$aliased-push"), [array, value]);
+				case "concat-second": Call(new IrValue(1003, "array", Array(Dyn)), IrSymbol.of("__array_concat_ref"), [
 					builder.argument("dynamic", Array(Dyn)),
 					array
 				]);

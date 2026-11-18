@@ -24,52 +24,58 @@ class IrValueArrayElementRewrite {
 				switch instruction {
 					case IteratorNew(out, array) if (Type.enumEq(array.type, arrayType)):
 						helpers.useIterator();
-						instruction = Call(out, helpers.iteratorNewName(), [array]);
+						instruction = Call(out, IrSymbol.of(helpers.iteratorNewName()), [array]);
 						changed = true;
 					case IteratorNext(out, iterator) if (Type.enumEq(iterator.type, Iterator(element))):
 						if (!Type.enumEq(out.type, helpers.storage))
 							throw new InternalError('Wrong inline array iterator type ${out.type}');
 						helpers.useIterator();
-						instruction = Call(out, helpers.iteratorNextName(), [iterator]);
+						instruction = Call(out, IrSymbol.of(helpers.iteratorNextName()), [iterator]);
 						changed = true;
 					case ArrayGet(out, array, index) if (Type.enumEq(array.type, arrayType)):
 						if (!Type.enumEq(out.type, helpers.storage))
 							throw new InternalError('Wrong inline array read type ${out.type}');
-						instruction = Call(out, helpers.getName(), [array, index]);
+						instruction = Call(out, IrSymbol.of(helpers.getName()), [array, index]);
 						changed = true;
 					case ArraySet(array, index, value) if (Type.enumEq(array.type, arrayType)):
 						if (!Type.enumEq(value.type, helpers.storage))
 							throw new InternalError('Wrong inline array write type ${value.type}');
-						instruction = Call(new IrValue(next++, "$array-element-write", Void), helpers.setName(), [
-							array,
-							index,
-							value
-						]);
+						instruction = Call(new IrValue(next++, "$array-element-write", Void),
+							IrSymbol.of(helpers.setName()), [
+								array,
+								index,
+								value
+							]);
 						changed = true;
-					case Call(out, "__array_push_ref",
-						arguments) if (arguments.length == 2 && Type.enumEq(arguments[0].type, arrayType)):
+					case Call(out, callTarget,
+						arguments) if (callTarget.name == "__array_push_ref" && arguments.length == 2
+						&& Type.enumEq(arguments[0].type, arrayType)):
 						if (!Type.enumEq(arguments[1].type, helpers.storage) || (switch (out.type) {
 							case I32: false;
 							default: true;
 						})) throw new InternalError("Wrong inline array push type");
-						instruction = Call(out, helpers.pushName(), arguments);
+						instruction = Call(out, IrSymbol.of(helpers.pushName()), arguments);
 						changed = true;
-					case Call(out, "__array_unshift_ref",
-						arguments) if (arguments.length == 2 && Type.enumEq(arguments[0].type, arrayType)):
+					case Call(out, callTarget,
+						arguments) if (callTarget.name == "__array_unshift_ref" && arguments.length == 2
+						&& Type.enumEq(arguments[0].type, arrayType)):
 						if (!Type.enumEq(arguments[1].type, helpers.storage) || (switch (out.type) {
 							case I32: false;
 							default: true;
 						})) throw new InternalError("Wrong inline array unshift type");
-						instruction = Call(out, helpers.unshiftName(), arguments);
+						instruction = Call(out, IrSymbol.of(helpers.unshiftName()), arguments);
 						changed = true;
-					case Call(out, name, arguments) if ((name == "__array_pop_ref" || name == "__array_shift_ref")
+					case Call(out, name,
+						arguments) if ((name.name == "__array_pop_ref" || name.name == "__array_shift_ref")
 						&& arguments.length == 1 && Type.enumEq(arguments[0].type, arrayType)
 						&& Type.enumEq(out.type, helpers.storage)):
-						instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(),
+						instruction = Call(out,
+							IrSymbol.of(name.name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName()),
 							arguments);
 						changed = true;
-					case Call(out, "__array_insert_ref",
-						arguments) if (arguments.length == 3 && Type.enumEq(arguments[0].type, arrayType)):
+					case Call(out, callTarget,
+						arguments) if (callTarget.name == "__array_insert_ref" && arguments.length == 3
+						&& Type.enumEq(arguments[0].type, arrayType)):
 						if (!Type.enumEq(arguments[2].type, helpers.storage) || (switch (arguments[1].type) {
 							case I32: false;
 							default: true;
@@ -78,10 +84,11 @@ class IrValueArrayElementRewrite {
 							default: true;
 						}))
 							throw new InternalError("Wrong inline array insert type");
-						instruction = Call(out, helpers.insertName(), arguments);
+						instruction = Call(out, IrSymbol.of(helpers.insertName()), arguments);
 						changed = true;
-					case Call(out, "__array_resize_ref" | "__array_resize_any",
-						arguments) if (arguments.length == 2 && Type.enumEq(arguments[0].type, arrayType)):
+					case Call(out, callTarget,
+						arguments) if ((callTarget.name == "__array_resize_ref" || callTarget.name
+						== "__array_resize_any") && arguments.length == 2 && Type.enumEq(arguments[0].type, arrayType)):
 						if ((switch (arguments[1].type) {
 							case I32: false;
 							default: true;
@@ -89,18 +96,21 @@ class IrValueArrayElementRewrite {
 							case Void: false;
 							default: true;
 						})) throw new InternalError("Wrong inline array resize type");
-						instruction = Call(out, "__value_array_resize", arguments);
+						instruction = Call(out, IrSymbol.of("__value_array_resize"), arguments);
 						changed = true;
-					case Call(out, "__array_reverse_ref" | "__array_reverse_any",
-						arguments) if (arguments.length == 1 && Type.enumEq(arguments[0].type, arrayType)):
+					case Call(out, callTarget,
+						arguments)
+						if ((callTarget.name == "__array_reverse_ref" || callTarget.name == "__array_reverse_any")
+						&& arguments.length == 1 && Type.enumEq(arguments[0].type, arrayType)):
 						if ((switch (out.type) {
 							case Void: false;
 							default: true;
 						})) throw new InternalError("Wrong inline array reverse type");
-						instruction = Call(out, "__value_array_reverse", arguments);
+						instruction = Call(out, IrSymbol.of("__value_array_reverse"), arguments);
 						changed = true;
-					case Call(out, "__array_splice_ref",
-						arguments) if (arguments.length == 3 && Type.enumEq(arguments[0].type, arrayType)):
+					case Call(out, callTarget,
+						arguments) if (callTarget.name == "__array_splice_ref" && arguments.length == 3
+						&& Type.enumEq(arguments[0].type, arrayType)):
 						if ((switch (arguments[1].type) {
 							case I32: false;
 							default: true;
@@ -109,7 +119,7 @@ class IrValueArrayElementRewrite {
 							default: true;
 						}) || !Type.enumEq(out.type, arrayType))
 							throw new InternalError("Wrong inline array splice type");
-						instruction = Call(out, IrValueArrayElements.spliceNativeName(element), arguments);
+						instruction = Call(out, IrSymbol.of(IrValueArrayElements.spliceNativeName(element)), arguments);
 						changed = true;
 					default:
 				}
@@ -144,7 +154,7 @@ class IrValueArrayElementRewrite {
 			while (position < block.instructions.length) {
 				var located = block.instructions[position], instruction = located.value;
 				switch instruction {
-					case Call(raw, name, args) if ((name == "__array_pop_ref" || name == "__array_shift_ref")
+					case Call(raw, name, args) if ((name.name == "__array_pop_ref" || name.name == "__array_shift_ref")
 						&& args.length == 1 && Type.enumEq(args[0].type, arrayType) && (switch (raw.type) {
 							case Dyn: true;
 							default: false;
@@ -154,26 +164,29 @@ class IrValueArrayElementRewrite {
 					switch block.instructions[position + 1].value {
 						case SafeCast(out, source) if (source.id == raw.id && Type.enumEq(out.type, helpers.storage)
 							&& uses.get(raw.id) == 1):
-							instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(),
+							instruction = Call(out,
+								IrSymbol.of(name.name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName()),
 								args);
 							removed.set(raw.id, true);
 							position++;
 							changed = true;
 						case Call(out, conversion, [source]) if (source.id == raw.id
 							&& Type.enumEq(out.type, helpers.storage) && uses.get(raw.id) == 1
-							&& (StringTools.startsWith(conversion, IrCheckedDynamicCasts.PREFIX)
-							|| StringTools.startsWith(conversion, IrValueInterfaceBoxes.UNBOX_PREFIX)
-							|| (tagUnboxes.exists(conversion)
-							&& IrVerifier.sameType(element, tagUnboxes.get(conversion))))):
-							instruction = Call(out, name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName(),
+							&& (StringTools.startsWith(conversion.name, IrCheckedDynamicCasts.PREFIX)
+							|| StringTools.startsWith(conversion.name, IrValueInterfaceBoxes.UNBOX_PREFIX)
+							|| (tagUnboxes.exists(conversion.name)
+							&& IrVerifier.sameType(element, tagUnboxes.get(conversion.name))))):
+							instruction = Call(out,
+								IrSymbol.of(name.name == "__array_pop_ref" ? helpers.popName() : helpers.shiftName()),
 								args);
 							removed.set(raw.id, true);
 							position++;
 							changed = true;
 						default: throw new InternalError('Invalid checked value array removal conversion in ${fn.name}: ${block.instructions[position + 1].value}');
 					}
-					case Call(raw, "__array_splice_any",
-						args) if (args.length == 3 && Type.enumEq(args[0].type, arrayType)):
+					case Call(raw, callTarget,
+						args) if (callTarget.name == "__array_splice_any" && args.length == 3
+						&& Type.enumEq(args[0].type, arrayType)):
 						if (position + 2 >= block.instructions.length)
 							throw new InternalError("Missing checked nullable array splice conversion");
 						switch [block.instructions[position + 1].value, block.instructions[position + 2].value] {
@@ -186,7 +199,7 @@ class IrValueArrayElementRewrite {
 								case I32: true;
 								default: false;
 							}) && uses.get(raw.id) == 1 && uses.get(boxed.id) == 1): instruction = Call(out,
-								IrValueArrayElements.spliceNativeName(element), args);
+								IrSymbol.of(IrValueArrayElements.spliceNativeName(element)), args);
 							removed.set(raw.id, true);
 							removed.set(boxed.id, true);
 							position += 2;

@@ -1,4 +1,5 @@
 package compiler.backend.wasm.gc;
+import compiler.ir.IrSymbol;
 
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
@@ -57,7 +58,7 @@ class WasmGcValueArrayAccessors {
 
 	function hasAccess(fn:IrFunction):Bool {
 		for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case Call(_, name, _) if (natives.exists(name)): return true;
+			case Call(_, name, _) if (natives.exists(name.name)): return true;
 			default:
 		}
 		return false;
@@ -78,14 +79,14 @@ class WasmGcValueArrayAccessors {
 				var instruction = located.value;
 				switch instruction {
 					case Call(output, name, arguments):
-						var native = natives.get(name);
+						var native = natives.get(name.name);
 						if (native != null) {
 							var specialized = specialize(native, arguments, constants);
 							if (specialized != null) {
 								var operands = arguments.slice(0, 2);
 								if (StringTools.startsWith(native.symbol, "__value_array_write_"))
 									operands.push(arguments[arguments.length - 1]);
-								instruction = Call(output, specialized, operands);
+								instruction = Call(output, IrSymbol.of(specialized), operands);
 								changed = true;
 							}
 						}

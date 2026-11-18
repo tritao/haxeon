@@ -33,7 +33,7 @@ class IrExactTypeFacts {
 				switch block.terminator.value {
 					case Branch(condition, yes, no) if (yes != no):
 						switch definitions.get(condition.id) {
-							case Call(_, name, arguments) if (name == TEST && arguments.length == 2):
+							case Call(_, name, arguments) if (name.name == TEST && arguments.length == 2):
 								switch definitions.get(arguments[1].id) {
 									case TypeValue(_, Obj(type)):
 										var entries = graph.predecessorsOf(yes);
@@ -61,7 +61,7 @@ class IrExactTypeFacts {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, name, _) if (name == TEST):
+						case Call(_, name, _) if (name.name == TEST):
 							tests = true;
 						default:
 					}
@@ -74,8 +74,9 @@ class IrExactTypeFacts {
 				var copy = new IrBlock(block.id);
 				for (located in block.instructions)
 					switch located.value {
-						case Call(output, name, arguments) if (name == TEST):
-							copy.instructions.push(new Located(Call(output, "__std_is_exact_type", arguments),
+						case Call(output, name, arguments) if (name.name == TEST):
+							copy.instructions
+								.push(new Located(Call(output, IrSymbol.of("__std_is_exact_type"), arguments),
 								located.provenance));
 						default:
 							copy.instructions.push(located);

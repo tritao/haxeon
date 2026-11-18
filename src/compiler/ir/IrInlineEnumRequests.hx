@@ -52,7 +52,7 @@ class IrInlineEnumRequests {
 				|| !IrVerifier.sameType(arguments[0].type, provider.arguments[0].type)
 				|| !IrVerifier.sameType(output.type, provider.result))
 				throw new InternalError('Invalid inline enum provider signature for $name');
-			return Call(output, name, arguments);
+			return Call(output, IrSymbol.of(name), arguments);
 		}
 		var result:Null<Array<IrFunction>> = null;
 		for (functionIndex in 0...functions.length) {

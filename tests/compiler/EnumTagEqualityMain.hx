@@ -35,7 +35,7 @@ class EnumTagEqualityMain {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, name, arguments) if ((switch kinds.get(name) {
+						case Call(_, name, arguments) if ((switch kinds.get(name.name) {
 							case EnumEquality(_), Provider(_, _): true;
 							default: false;
 						})):

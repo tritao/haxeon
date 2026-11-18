@@ -96,7 +96,7 @@ class StaticNullCheckReuseMain {
 		var read = byName(valueChecked).get("readA"), boxed = false, typedHelper = false;
 		for (block in read.blocks) for (located in block.instructions) switch located.value {
 			case ToDyn(_, _): boxed = true;
-			case Call(_, name, args) if (StringTools.startsWith(name, "$static$nonnull$value$")
+			case Call(_, name, args) if (StringTools.startsWith(name.name, "$static$nonnull$value$")
 				&& Type.enumEq(args[0].type, Obj("Box"))):
 				typedHelper = true;
 			default:
@@ -122,7 +122,7 @@ class StaticNullCheckReuseMain {
 			checked = byName(IrStaticNullChecks.run([init], [referenceObject])).get("__init");
 		var checks:Array<String> = [];
 		for (block in checked.blocks) for (located in block.instructions) switch located.value {
-			case Call(_, name, _) if (StringTools.startsWith(name, "__static$nonnull$")): checks.push(name);
+			case Call(_, name, _) if (StringTools.startsWith(name.name, "__static$nonnull$")): checks.push(name.name);
 			default:
 		}
 		expect(checks.join(",") == "__static$nonnull$S.src,__static$nonnull$S.dst",

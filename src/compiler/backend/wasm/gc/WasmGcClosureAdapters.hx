@@ -99,7 +99,7 @@ class WasmGcClosureAdapters {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case InstanceClosure(output, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):
+							case InstanceClosure(output, name, _) if (name.name == WasmDynamicCalls.VARARGS_TARGET):
 								adapters.types.set(-1, output.type);
 								created.set(-1, true);
 							case StaticClosure(output, _) | InstanceClosure(output, _, _):

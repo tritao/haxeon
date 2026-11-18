@@ -1,4 +1,5 @@
 package compiler.backend.wasm.linear;
+import compiler.ir.IrSymbol;
 
 import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
@@ -96,7 +97,7 @@ class WasmLinearClosureAdapters {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case InstanceClosure(_, name, _) if (name == WasmDynamicCalls.VARARGS_TARGET):
+						case InstanceClosure(_, name, _) if (name.name == WasmDynamicCalls.VARARGS_TARGET):
 						case StaticClosure(output, _) | InstanceClosure(output, _, _):
 							noteType(output.type);
 							if (reachable.exists(fn.name) && !scalarClosures.exists(IrTypeIdentity.text(output.type)))
@@ -204,13 +205,15 @@ class WasmLinearClosureAdapters {
 				var target = new IrBlock(block.id);
 				for (located in block.instructions)
 					switch located.value {
-						case Call(out, "__closure_is_of_type",
-							arguments) if (arguments.length == 2 && types.exists(arguments[1].id)):
+						case Call(out, callTarget,
+							arguments) if (callTarget.name == "__closure_is_of_type" && arguments.length == 2
+							&& types.exists(arguments[1].id)):
 							var type = types.get(arguments[1].id),
 								name = "$wasm:closure-type-check:"
 									+ haxe.crypto.Sha256.encode(IrTypeIdentity.text(type)).substr(0, 32);
 							helpers.set(name, type);
-							target.instructions.push(new Located(IrInstruction.Call(out, name, [arguments[0]]),
+							target.instructions
+								.push(new Located(IrInstruction.Call(out, IrSymbol.of(name), [arguments[0]]),
 								located.provenance));
 							changed = true;
 						default:

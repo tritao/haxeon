@@ -124,10 +124,10 @@ enum IrInstruction {
 	Less(output:IrValue, left:IrValue, right:IrValue);
 	LessEqual(output:IrValue, left:IrValue, right:IrValue);
 	Equal(output:IrValue, left:IrValue, right:IrValue);
-	Call(output:IrValue, functionName:String, arguments:Array<IrValue>);
+	Call(output:IrValue, target:IrSymbol, arguments:Array<IrValue>);
 	CNativeCall(output:IrValue, functionName:String, arguments:Array<IrValue>);
-	StaticClosure(output:IrValue, functionName:String);
-	InstanceClosure(output:IrValue, functionName:String, receiver:IrValue);
+	StaticClosure(output:IrValue, target:IrSymbol);
+	InstanceClosure(output:IrValue, target:IrSymbol, receiver:IrValue);
 	CallClosure(output:IrValue, closure:IrValue, arguments:Array<IrValue>);
 	ToVirtual(output:IrValue, value:IrValue);
 

@@ -16,7 +16,7 @@ class InlineConfigurationMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case Call(_, "Main.helper", _):
+							case Call(_, callTarget, _) if (callTarget.name == "Main.helper"):
 								count++;
 							default:
 						}

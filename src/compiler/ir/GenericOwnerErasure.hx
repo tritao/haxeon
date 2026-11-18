@@ -29,13 +29,13 @@ class GenericOwnerErasure {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
 			switch instruction.value {
-			case Call(output, name, arguments) if (StringTools.startsWith(name, PREFIX)):
+			case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
 				var signature = {arguments: [for (argument in arguments) argument.type], result: output.type},
-					previous = requests.get(name);
+					previous = requests.get(name.name);
 				if (previous != null && (!Type.enumEq(previous.result, signature.result)
 					|| !sameTypes(previous.arguments, signature.arguments)))
 					throw new InternalError('Conflicting erased generic operation "$name"');
-				requests.set(name, signature);
+				requests.set(name.name, signature);
 			default:
 		}
 		var byName = [for (object in objects) object.name => object],
@@ -156,7 +156,8 @@ class GenericOwnerErasure {
 		var requests:Map<String, Bool> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
 			switch instruction.value {
-			case Call(_, name, _) if (StringTools.startsWith(name, TYPE_TEST_PREFIX)): requests.set(name, true);
+			case Call(_, name, _) if (StringTools.startsWith(name.name, TYPE_TEST_PREFIX)): requests.set(name.name,
+				true);
 			default:
 		}
 		var names = [for (name in requests.keys()) name];

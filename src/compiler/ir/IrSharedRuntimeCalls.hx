@@ -56,8 +56,9 @@ class IrSharedRuntimeCalls {
 		var result = program.copy();
 		result.functions = [for (fn in program.functions)
 			isHelper(fn.name) ? fn : IrFunctionRewrite.instructions(fn, located -> switch located.value {
-				case Call(output, name, arguments) if (shared.exists(name)):
-					[new Located(IrInstruction.Call(output, helper(name, arguments, output.type), arguments),
+				case Call(output, name, arguments) if (shared.exists(name.name)):
+					[new Located(IrInstruction.Call(output, IrSymbol.of(helper(name.name, arguments, output.type)),
+						arguments),
 						located.provenance)];
 				default: null;
 			})];

@@ -321,13 +321,13 @@ class IrReachabilityWalk {
 						construct(made, pending);
 					switch located.value {
 						case Call(_, target, _):
-							used.set(target, true);
-							pending.push(target);
+							used.set(target.name, true);
+							pending.push(target.name);
 						case StaticClosure(_, target):
-							used.set(target, true);
-							pending.push(target);
+							used.set(target.name, true);
+							pending.push(target.name);
 						case InstanceClosure(_, target, _):
-							pending.push(target);
+							pending.push(target.name);
 						// Dynamic iterators read through the Array<Dynamic> element reader.
 						case IteratorNext(output, _) if ((switch (output.type) {
 							case Dyn: true;
@@ -429,9 +429,9 @@ class IrReachabilityWalk {
 			for (located in block.instructions)
 				switch located.value {
 					case Call(_, name, _):
-						into.set(name, true);
+						into.set(name.name, true);
 					case StaticClosure(_, name):
-						into.set(name, true);
+						into.set(name.name, true);
 					// Dynamic iterators read through the Array<Dynamic> element reader.
 					case IteratorNext(output, _) if ((switch (output.type) {
 						case Dyn: true;

@@ -137,11 +137,12 @@ class ObjectReflection {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, target, _) if (!names.exists(target) && !StringTools.startsWith(target, "__")
-							&& !StringTools.startsWith(target, OPTIONAL_PREFIX)):
-							if (HELPER_CALLEES.indexOf(target) < 0)
+						case Call(_, target,
+							_) if (!names.exists(target.name) && !StringTools.startsWith(target.name, "__")
+							&& !StringTools.startsWith(target.name, OPTIONAL_PREFIX)):
+							if (HELPER_CALLEES.indexOf(target.name) < 0)
 								throw new InternalError('reflection helper "${fn.name}" calls "$target", which is not one of its declared dependencies (ObjectReflection.HELPER_CALLEES)');
-							emitted.set(target, true);
+							emitted.set(target.name, true);
 						default:
 					}
 		var expected = expectedCallees(used, symbol);

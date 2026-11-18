@@ -8,15 +8,18 @@ names throughout. This note replaces those names with interned symbols that carr
 
 ## Decisions
 
-1. **A reference is an `IrSymbol`:** a final class with `id:Int` and `name:String`, made only by a symbol table, one per
-   name. Two references to the same function are the same object, so they compare by identity and index arrays by `id`.
-   The name is the symbol's rendered identity today; M3 replaces it with a structured identity (kind, owner, member, type
-   arguments) without changing the id or any pass that only uses the id.
-2. **The compilation session owns the table** (`IrSymbols`). IR outlives a single compile (the inline cache, incremental
-   reuse, the function state codec), so ids must hold for the session. Not a process-wide table, which would be shared
-   mutable state, and not one per program, which would break reused IR.
-3. **Builders reach the table through what they already hold:** the generator's facts, `IrPipelineContext.symbols` for
-   passes, `IrProgram.symbols` for code that works on a program. No thread-local or static "current table".
+1. **A reference is an `IrSymbol`:** a final class with `id:Int` and `name:String`, one per name, made only by
+   `IrSymbol.of`. Two references to the same function are the same object, so they compare by identity and index arrays
+   by `id`; `toString` gives the name, so messages that print an instruction still read. The name is the symbol's
+   rendered identity today; M3 replaces it with a structured identity (kind, owner, member, type arguments) without
+   changing ids or any pass that only uses them.
+2. **The table is process-wide and only grows** (`@:processWide`, under a lock). One object per name has to hold for
+   every piece of IR that can meet in a program: the session's caches, decoded IR, IR that tests and tools build without a
+   session. With a table per session or per program, IR from two tables would mix and identity would silently fail. A name
+   always denotes the same symbol, so sharing the table between compiles carries no state from one into the other.
+3. **Ids never order output.** They are given in the order names are first seen in the process, so a server's ids differ
+   from a one-shot compile's. Tables are indexed by id; anything written is iterated in program order. Building a call
+   needs nothing but `IrSymbol.of(name)`, so no table is threaded through the builders.
 4. **A symbol exists before its definition.** A call may name a runtime native or a helper a later pass generates;
    interning the name gives it an id either way. The program finds a definition by symbol id (`functionOf(symbol)`), an
    array.
@@ -29,9 +32,8 @@ names throughout. This note replaces those names with interned symbols that carr
 
 ## Migration
 
-1. **Table.** `IrSymbols` and `IrSymbol`; the session creates the table and hands it to the generator, the pipeline
-   context and the program.
-2. **Payloads.** `Call`, `StaticClosure` and `InstanceClosure` carry an `IrSymbol`. Creation sites intern, matches read
+1. **Table.** `IrSymbol` and its process-wide interning.
+2. **Payloads.** `Call`, `StaticClosure` and `InstanceClosure` carry an `IrSymbol`. Creation sites intern with `IrSymbol.of`, matches read
    `name` or compare a well-known symbol. This step changes no behaviour: the codec writes names, and the compiler
    compiling itself must write the same bytes. It is the large step (about 1,500 sites in about 90 files), done in one
    change because the payload type cannot be half changed.

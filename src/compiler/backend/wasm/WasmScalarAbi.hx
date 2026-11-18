@@ -1,4 +1,5 @@
 package compiler.backend.wasm;
+import compiler.ir.IrSymbol;
 
 import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmValueLayout;
@@ -346,11 +347,11 @@ class WasmScalarAbi {
 					for (located in block.instructions)
 						switch located.value {
 							case StaticClosure(out, name):
-								if (noteClosure(out.type, candidates) && !directClones.exists(name))
+								if (noteClosure(out.type, candidates) && !directClones.exists(name.name))
 									excluded.set(closureKey(out.type), true);
 							case InstanceClosure(out, name, receiver):
 								if (noteClosure(out.type, candidates)
-									&& (values.isValue(receiver.type) || !directClones.exists(name)))
+									&& (values.isValue(receiver.type) || !directClones.exists(name.name)))
 									excluded.set(closureKey(out.type), true);
 							case CallClosure(_, closure, arguments):
 								if ((switch (closure.type) {
@@ -441,11 +442,11 @@ class WasmScalarAbi {
 		return switch instruction {
 			case ToDyn(_, input) if (planningBoundaries && input.id == value.id): true;
 			case Call(_, name, arguments):
-				var target = originals.get(name),
+				var target = originals.get(name.name),
 					expected:Null<Array<IrType>> = target == null ? null : [for (arg in target.arguments) arg.type];
 				if (expected == null)
 					for (native in program.natives)
-						if (native.name == name)
+						if (native.name == name.name)
 							expected = native.arguments;
 				if (expected == null) false;
 				else {
@@ -604,7 +605,7 @@ class WasmScalarAbi {
 							if (declared == null || !values.isValue(declared.type))
 								return false;
 						}
-					case Call(_, name, arguments) if (candidates.exists(name) && arguments.length > 0
+					case Call(_, name, arguments) if (candidates.exists(name.name) && arguments.length > 0
 						&& aliases.exists(arguments[0].id)):
 						for (argument in arguments.slice(1))
 							if (aliases.exists(argument.id))
@@ -663,7 +664,7 @@ class WasmScalarAbi {
 					case FieldGet(_, owner, _), FieldSet(owner, _, _) if (aliases.exists(owner.id)):
 					case ValueInit(out) if (values.isValue(out.type)):
 					case Call(_, name,
-						args) if (candidates.exists(name) && args.length > 0 && aliases.exists(args[0].id)):
+						args) if (candidates.exists(name.name) && args.length > 0 && aliases.exists(args[0].id)):
 					case MethodCall(_, owner, method, _, _) if (aliases.exists(owner.id)):
 						var target = resolveMethod(owner.type, method);
 						if (target == null || !candidates.exists(target))
@@ -709,7 +710,7 @@ class WasmScalarAbi {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, name, _) if (throwing.exists(name)):
+					case Call(_, name, _) if (throwing.exists(name.name)):
 						return true;
 					case MethodCall(_, receiver, method, _, _):
 						var target = values.isValue(receiver.type) ? resolveMethod(receiver.type, method) : null;
@@ -767,7 +768,7 @@ class WasmScalarAbi {
 									var declared = lookupField(owner.type, field);
 									declared != null && values.isValue(declared.type);
 								}
-							case Call(_, name, arguments) if (methodClones.exists(name) && arguments.length > 0
+							case Call(_, name, arguments) if (methodClones.exists(name.name) && arguments.length > 0
 								&& arguments[0].id == input.id):
 								var unique = true;
 								for (argument in arguments.slice(1))
@@ -885,7 +886,7 @@ class WasmScalarAbi {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(out, name, arguments) if (name == RETHROW_MARKER):
+						case Call(out, name, arguments) if (name.name == RETHROW_MARKER):
 							if ((switch (out.type) {
 								case Void: false;
 								default: true;
@@ -932,8 +933,8 @@ class WasmScalarAbi {
 									throw new InternalError('Wrong scalar closure argument $index in ${fn.name}');
 							if (values.isValue(signature.result))
 								handles.set(out.id, resultTypes(signature));
-						case Call(out, name, arguments) if (signatures.exists(name)):
-							var signature = signatures.get(name);
+						case Call(out, name, arguments) if (signatures.exists(name.name)):
+							var signature = signatures.get(name.name);
 							if (signature == null)
 								throw new InternalError('Missing scalar function "$name"');
 							var expected = expandedTypes(signature.arguments);
@@ -945,7 +946,7 @@ class WasmScalarAbi {
 									throw new InternalError('Wrong scalar call argument $index for "$name": got ${arguments[index].type}, expected ${expected[index]}');
 							if (signature.mutatesReceiver || values.isValue(signature.result))
 								handles.set(out.id, resultTypes(signature));
-						case Call(out, name, arguments) if (name == RETURN_MARKER):
+						case Call(out, name, arguments) if (name.name == RETURN_MARKER):
 							if (own == null || (switch (out.type) {
 								case Void: false;
 								default: true;
@@ -1048,24 +1049,27 @@ class WasmScalarAbi {
 			for (located in block.instructions)
 				switch located.value {
 					case StaticClosure(out, name) if (scalarClosures.exists(IrTypeIdentity.text(out.type))):
-						replacement.instructions.push(new Located(StaticClosure(out, directClones.get(name)),
+						replacement.instructions
+							.push(new Located(StaticClosure(out, IrSymbol.of(directClones.get(name.name))),
 							located.provenance));
 					case InstanceClosure(out, name, receiver) if (scalarClosures.exists(IrTypeIdentity.text(out.type))):
-						replacement.instructions.push(new Located(InstanceClosure(out, directClones.get(name),
+						replacement.instructions
+							.push(new Located(InstanceClosure(out, IrSymbol.of(directClones.get(name.name)),
 							receiver), located.provenance));
 					case CallClosure(out, closure,
 						originalArgs) if (scalarClosures.exists(IrTypeIdentity.text(closure.type))):
 						next = expandClosureCall(replacement, located, out, closure, originalArgs, next);
-					case Call(out, name, originalArgs) if (directClones.exists(name)):
-						next = expandCall(replacement, located, out, directClones.get(name), originalArgs, next);
-					case Call(out, name, originalArgs) if (methodClones.exists(name)):
-						if (receiverSafe.exists(name)
+					case Call(out, name, originalArgs) if (directClones.exists(name.name)):
+						next = expandCall(replacement, located, out, directClones.get(name.name), originalArgs, next);
+					case Call(out, name, originalArgs) if (methodClones.exists(name.name)):
+						if (receiverSafe.exists(name.name)
 							|| (originalArgs.length > 0 && isolated.exists(originalArgs[0].id)))
-							next = expandCall(replacement, located, out, methodClones.get(name), originalArgs, next);
+							next = expandCall(replacement, located, out, methodClones.get(name.name), originalArgs,
+								next);
 						else
 							replacement.instructions.push(located);
-					case Call(out, name, originalArgs) if (signatures.exists(name)):
-						next = expandCall(replacement, located, out, name, originalArgs, next);
+					case Call(out, name, originalArgs) if (signatures.exists(name.name)):
+						next = expandCall(replacement, located, out, name.name, originalArgs, next);
 					case MethodCall(out, receiver, method, originalArgs,
 						_) if (scalarVirtuals.exists(virtualKey(receiver.type, method))):
 						next = expandVirtualCall(replacement, located, out, receiver, method, originalArgs, next);
@@ -1113,7 +1117,7 @@ class WasmScalarAbi {
 							parts.push(thrown);
 						}
 						var marker = new IrValue(next++, "$wasm-gc-return", Void);
-						replacement.instructions.push(new Located(Call(marker, RETURN_MARKER, parts),
+						replacement.instructions.push(new Located(Call(marker, IrSymbol.of(RETURN_MARKER), parts),
 							terminator.provenance));
 						terminator = new Located(Return(marker), terminator.provenance);
 					default:
@@ -1216,13 +1220,13 @@ class WasmScalarAbi {
 			}
 		}
 		if (!callee.mutatesReceiver && !values.isValue(callee.result)) {
-			block.instructions.push(new Located(Call(out, name, expanded), origin.provenance));
+			block.instructions.push(new Located(Call(out, IrSymbol.of(name), expanded), origin.provenance));
 			return next;
 		}
 		var handleType = callee.mutatesReceiver ? callee.arguments[0] : out.type,
 			handle = new IrValue(next++, "$wasm-gc-result", handleType),
 			index = 0;
-		block.instructions.push(new Located(Call(handle, name, expanded), origin.provenance));
+		block.instructions.push(new Located(Call(handle, IrSymbol.of(name), expanded), origin.provenance));
 		if (callee.mutatesReceiver)
 			for (slot in values.leaves(callee.arguments[0])) {
 				var scalar = new IrValue(next++, "$wasm-gc-receiver-field", slot.type);
@@ -1242,7 +1246,8 @@ class WasmScalarAbi {
 				RESULT_FIELD_PREFIX + (index + resultCount)), origin.provenance));
 			block.instructions.push(new Located(FieldGet(thrown, handle,
 				RESULT_FIELD_PREFIX + (index + resultCount + 1)), origin.provenance));
-			block.instructions.push(new Located(Call(check, RETHROW_MARKER, [exception, thrown]), origin.provenance));
+			block.instructions.push(new Located(Call(check, IrSymbol.of(RETHROW_MARKER), [exception, thrown]),
+				origin.provenance));
 		}
 		if (values.isValue(callee.result)) {
 			block.instructions.push(new Located(ValueInit(out), origin.provenance));

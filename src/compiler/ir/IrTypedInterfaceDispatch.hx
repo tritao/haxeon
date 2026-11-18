@@ -53,18 +53,20 @@ class IrTypedInterfaceDispatch {
 							for (argument in arguments) if (isValue(argument.type)) carriesValue = true;
 							if (!carriesValue) null;
 							else [new Located(Call(output,
-								callName(name, method, [for (argument in arguments) argument.type], output.type),
+								IrSymbol.of(callName(name, method, [for (argument in arguments) argument.type],
+								output.type)),
 								[receiver].concat(arguments)),
 								located.provenance)];
 						default: null;
 					}
-				case InstanceClosure(output, name, receiver) if (!StringTools.startsWith(name, PREFIX)):
-					var separator = name.lastIndexOf(".");
+				case InstanceClosure(output, target, receiver) if (!StringTools.startsWith(target.name, PREFIX)):
+					var name = target.name, separator = name.lastIndexOf(".");
 					if (separator < 0 || !contracts.exists(name.substr(0, separator))) null;
 					else switch [receiver.type, output.type] {
 						case [Virtual(owner), Function(arguments, result)] if (valueSignature(arguments, result)):
-							[new Located(InstanceClosure(output, callName(owner, name.substr(separator + 1), arguments,
-								result), receiver), located.provenance)];
+							[new Located(InstanceClosure(output,
+								IrSymbol.of(callName(owner, name.substr(separator + 1), arguments,
+								result)), receiver), located.provenance)];
 						default: null;
 					}
 				default: null;
@@ -93,11 +95,11 @@ class IrTypedInterfaceDispatch {
 			requests.set(name, signature);
 		}
 		for (fn in functions) for (block in fn.blocks) for (located in block.instructions) switch located.value {
-			case Call(output, name, arguments) if (StringTools.startsWith(name, PREFIX)):
-				request(name, {arguments: [for (argument in arguments) argument.type], result: output.type});
-			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name, PREFIX)):
+			case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
+				request(name.name, {arguments: [for (argument in arguments) argument.type], result: output.type});
+			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
 				switch output.type {
-					case Function(arguments, result): request(name, {
+					case Function(arguments, result): request(name.name, {
 						arguments: [receiver.type].concat(arguments),
 						result: result
 					});

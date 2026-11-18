@@ -678,48 +678,50 @@ class IrProgramAssembler {
 				for (instruction in block.instructions)
 					switch instruction.value {
 						case Call(_, name, _):
-							if (name == "haxe.Int64.toInt")
+							if (name.name == "haxe.Int64.toInt")
 								needsInt64ToInt = true;
-							if (name == "__exception_matches")
+							if (name.name == "__exception_matches")
 								needsExceptionRuntime = true;
-							if (name == "__std_is_of_type")
+							if (name.name == "__std_is_of_type")
 								needsTypeTestRuntime = true;
-							if (name == "__closure_is_of_type")
+							if (name.name == "__closure_is_of_type")
 								needsClosureTypeTestRuntime = true;
-							if (name == "__dynamic_equal")
+							if (name.name == "__dynamic_equal")
 								needsDynamicEquality = true;
-							if (name == "__dynamic_object_type_id")
+							if (name.name == "__dynamic_object_type_id")
 								needsDynamicObjectTypeId = true;
-							if (name == "__std_is_exact_type")
+							if (name.name == "__std_is_exact_type")
 								needsExactTypeTestRuntime = true;
-							if (name == IrExactTypeFacts.TEST)
+							if (name.name == IrExactTypeFacts.TEST)
 								needsObjectExactTypeTest = true;
-							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
+							if (name.name == "__reflect_dynamic_object" || name.name == "__reflect_set_field")
 								needsDynamicObjectRuntime = true;
-							if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
+							if (name.name == IrArrayFactory.NAME || StringTools.startsWith(name.name, "__array_"))
 								needsArrayRuntime = true;
-							if (name == "__array_alloc_typed_ref")
+							if (name.name == "__array_alloc_typed_ref")
 								needsTypedRefArrayRuntime = true;
-							if (name == "__array_check_cast")
+							if (name.name == "__array_check_cast")
 								needsArrayCastRuntime = true;
-							if (StringTools.startsWith(name, "__array_") && StringTools.endsWith(name, "_any"))
+							if (StringTools.startsWith(name.name, "__array_")
+								&& StringTools.endsWith(name.name, "_any"))
 								needsAnyArrayRuntime = true;
-							if (name == "__string_concat" || name == "__string_length" || name == "__string_equal"
-								|| name == "__string_index_of"
-								|| name == "__string_char_at" || name == "__string_char_code_at"
-								|| name == "__string_from_char_code"
-								|| name == "__string_substring" || name == "__string_to_lower_case"
-								|| name == "__string_to_upper_case")
+							if (name.name == "__string_concat" || name.name == "__string_length"
+								|| name.name == "__string_equal"
+								|| name.name == "__string_index_of"
+								|| name.name == "__string_char_at" || name.name == "__string_char_code_at"
+								|| name.name == "__string_from_char_code"
+								|| name.name == "__string_substring" || name.name == "__string_to_lower_case"
+								|| name.name == "__string_to_upper_case")
 								needsStringRuntime = true;
-							if (name == "__string_from_int"
-								|| name == "__string_from_f64"
-								|| StringTools.startsWith(name, "__string_concat")
-								&& name != "__string_concat")
-								stringFastPathNames.set(name, true);
-							if (StringTools.startsWith(name, "__map_")) {
-								var operationStart = lastSeparatorCode(name, 95);
+							if (name.name == "__string_from_int"
+								|| name.name == "__string_from_f64"
+								|| StringTools.startsWith(name.name, "__string_concat")
+								&& name.name != "__string_concat")
+								stringFastPathNames.set(name.name, true);
+							if (StringTools.startsWith(name.name, "__map_")) {
+								var operationStart = lastSeparatorCode(name.name, 95);
 								if (operationStart > 0)
-									mapRuntimeNames.set(name.substring(2, operationStart), true);
+									mapRuntimeNames.set(name.name.substring(2, operationStart), true);
 							}
 						// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
 						case IteratorNext(output, _) if (IrTypeTools.isDynamic(output.type)):
@@ -745,8 +747,8 @@ class IrProgramAssembler {
 			for (block in fn.blocks)
 				for (index in 0...block.instructions.length)
 					switch block.instructions[index].value {
-						case Call(output, name, arguments) if (cNativeNames.exists(name)):
-							block.instructions[index] = new Located(CNativeCall(output, name, arguments),
+						case Call(output, name, arguments) if (cNativeNames.exists(name.name)):
+							block.instructions[index] = new Located(CNativeCall(output, name.name, arguments),
 								block.instructions[index].provenance);
 						case _:
 					}

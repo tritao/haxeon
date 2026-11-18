@@ -113,7 +113,7 @@ class IrStaticNullChecks {
 							IteratorNew(_, value), MethodCall(_, value, _, _, _), EnumIndex(_, value),
 							EnumField(_, value, _, _): [value];
 						// The copy reads the source before it writes the destination, even when both are null statics.
-						case Call(_, name, arguments) if (IrOptionalFieldStorage.isCopyName(name)
+						case Call(_, name, arguments) if (IrOptionalFieldStorage.isCopyName(name.name)
 							&& arguments.length == 2): [
 								arguments[1],
 								arguments[0]
@@ -162,7 +162,7 @@ class IrStaticNullChecks {
 								copy.instructions.push(new Located(ToDyn(actual, receiver), instruction.provenance));
 							}
 							var unused = new IrValue(nextId++, "staticCheck", Void);
-							copy.instructions.push(new Located(Call(unused, helperName, [actual]),
+							copy.instructions.push(new Located(Call(unused, IrSymbol.of(helperName), [actual]),
 								instruction.provenance));
 						}
 					copy.instructions.push(instruction);

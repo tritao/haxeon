@@ -66,7 +66,7 @@ class IrValueDynamicDispatch {
 				register(fn.name.substr(EQUALITY_PREFIX.length), fn.arguments[0].type);
 		for (fn in functions) if (unreached == null || !unreached.exists(fn.name)) for (block in fn.blocks)
 			for (located in block.instructions) switch located.value {
-			case Call(_, "__dynamic_equal", _): needsEqual = true;
+			case Call(_, callTarget, _) if (callTarget.name == "__dynamic_equal"): needsEqual = true;
 			default:
 		}
 		// A reflected value need not appear in any explicit Dynamic conversion.
@@ -78,8 +78,8 @@ class IrValueDynamicDispatch {
 		suffixes.sort(Reflect.compare);
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
 			return switch located.value {
-				case Call(output, "__dynamic_equal", arguments) if (suffixes.length > 0)
-					: [new Located(Call(output, EQUAL, arguments), located.provenance)];
+				case Call(output, target, arguments) if (target.name == "__dynamic_equal" && suffixes.length > 0)
+					: [new Located(Call(output, IrSymbol.of(EQUAL), arguments), located.provenance)];
 				default: null;
 			};
 		var rewritten:Array<IrFunction> = [for (fn in functions) IrFunctionRewrite.instructions(fn, replacement)];

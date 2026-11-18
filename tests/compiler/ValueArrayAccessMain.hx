@@ -103,7 +103,7 @@ class ValueArrayAccessMain {
 				for (block in fn.blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case Call(_, compiler.ir.IrArrayFactory.NAME, _):
+							case Call(_, callTarget, _) if (callTarget.name == compiler.ir.IrArrayFactory.NAME):
 								hasTypedAllocation = true;
 							default:
 						}
@@ -1970,22 +1970,22 @@ class ValueArrayAccessMain {
 							case ValueInit(out) if (Type.enumEq(out.type, Obj(pairWrapperName))):
 								throw "Nullable array mutations must not allocate component wrappers";
 							case Call(_, name,
-								_) if (name == compiler.ir.IrScalarArguments.PREFIX + rewrittenArgument.name):
+								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + rewrittenArgument.name):
 								scalarArgumentCall = true;
 							case Call(_, name,
-								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.getName()):
+								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.getName()):
 								scalarElementGet = true;
 							case Call(_, name,
-								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.setName()):
+								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.setName()):
 								scalarElementSet = true;
 							case Call(_, name,
-								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.pushName()):
+								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.pushName()):
 								scalarElementPush = true;
 							case Call(_, name,
-								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.insertName()):
+								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.insertName()):
 								scalarElementInsert = true;
 							case Call(_, name,
-								_) if (name == compiler.ir.IrScalarArguments.PREFIX + pairElements.unshiftName()):
+								_) if (name.name == compiler.ir.IrScalarArguments.PREFIX + pairElements.unshiftName()):
 								scalarElementUnshift = true;
 							default:
 						}
@@ -2271,7 +2271,8 @@ class ValueArrayAccessMain {
 							for (block in fn.blocks)
 								for (located in block.instructions)
 									switch located.value {
-										case Call(_, name, _) if (StringTools.startsWith(name, "$value-array:native-")):
+										case Call(_, name,
+											_) if (StringTools.startsWith(name.name, "$value-array:native-")):
 											rangeCalls++;
 										default:
 									}
@@ -2723,6 +2724,14 @@ class ValueArrayAccessMain {
 					throw 'Nullable frontend inline array returned ${nullableResult.status}: ${nullableResult.error}';
 			}
 			var nullableElementType:IrType = Nullable(Obj("OptionalElement"));
+			var dynamicArrayAccess = [
+				"__array_get_any", "__array_set_any", "__array_copy_any", "__array_slice_any", "__array_concat_any",
+				"__array_splice_any", "__array_resize_any", "__array_reverse_any", "__array_splice_ref",
+				"__array_resize_ref",
+				"__array_reverse_ref", "__array_push_any", "__array_unshift_any", "__array_insert_any",
+				"__array_push_ref",
+				"__array_unshift_ref", "__array_insert_ref"
+			];
 			for (nullableElementProgram in [nullableElementFrontend, nullableElementChecked]) {
 				compiler.ir.IrValueArrayProgramRewrite.rewrite(nullableElementProgram, nullableElementType, 64,
 					HashLink);
@@ -2746,18 +2755,12 @@ class ValueArrayAccessMain {
 										|| Type.enumEq(out.type, Obj("$optional-components:OptionalElement"))):
 										throw "Nullable array elements must stay scalar";
 									case Call(_, name, _)
-										if (name == compiler.ir.IrOptionalValueFlow.boxName("OptionalElement")
-										|| name == compiler.ir.IrOptionalValueFlow.unboxName("OptionalElement")):
+										if (name.name == compiler.ir.IrOptionalValueFlow.boxName("OptionalElement")
+										|| name.name == compiler.ir.IrOptionalValueFlow.unboxName("OptionalElement")):
 										throw "Nullable array elements must not cross a boxed boundary";
-									case Call(_,
-										"__array_get_any" | "__array_set_any" | "__array_copy_any" | "__array_slice_any"
-										| "__array_concat_any" | "__array_splice_any" | "__array_resize_any"
-										| "__array_reverse_any" | "__array_splice_ref" | "__array_resize_ref"
-										| "__array_reverse_ref" | "__array_push_any" | "__array_unshift_any"
-										| "__array_insert_any" | "__array_push_ref" | "__array_unshift_ref"
-										| "__array_insert_ref",
-										args)
-										if (args.length > 0 && Type.enumEq(args[0].type, Array(nullableElementType))):
+									case Call(_, target, args)
+										if (dynamicArrayAccess.indexOf(target.name) >= 0 && args.length > 0
+										&& Type.enumEq(args[0].type, Array(nullableElementType))):
 										throw "Typed nullable arrays must not use dynamic access";
 									case ArrayGet(_, array, _),
 										ArraySet(array, _, _) if (Type.enumEq(array.type, Array(nullableElementType))):

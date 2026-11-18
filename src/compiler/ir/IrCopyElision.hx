@@ -233,7 +233,7 @@ class IrCopyElision {
 										var found = false;
 										for (argument in 0...arguments.length)
 											if (tainted.exists(arguments[argument].id)
-												&& resultDependsOnParameter(callee, argument, visiting, depth + 1))
+												&& resultDependsOnParameter(callee.name, argument, visiting, depth + 1))
 												found = true;
 										found;
 									case MethodCall(_, receiver, method, arguments, _):
@@ -319,7 +319,7 @@ class IrCopyElision {
 			if (position < from || position >= to)
 				continue;
 			switch instruction {
-				case Call(_, name, _) if (name == IrReceiverCheck.NAME || name == IrReferenceIdentity.NAME):
+				case Call(_, name, _) if (name.name == IrReceiverCheck.NAME || name.name == IrReferenceIdentity.NAME):
 				case Call(_, _, _), MethodCall(_, _, _, _, _), CallClosure(_, _, _), CNativeCall(_, _, _),
 					ArraySet(_, _, _), GlobalSet(_, _),
 					MemoryStore(_, _, _), IteratorNext(_, _), BeginTry(_, _, _), EndTry(_, _), Catch(_):
@@ -355,8 +355,8 @@ class IrCopyElision {
 	function calleeOf(instruction:IrInstruction, argument:Int):Null<{name:String, parameter:Int}> {
 		switch instruction {
 			case Call(_, name, _):
-				return byName.exists(name) ? {
-					name: name, parameter: argument
+				return byName.exists(name.name) ? {
+					name: name.name, parameter: argument
 				} : null;
 			case MethodCall(_, receiver, method, _, _):
 				var target = valueMethod(receiver, method);
@@ -404,7 +404,7 @@ class IrCopyElision {
 					case Call(_, callee, arguments):
 						for (position in 0...arguments.length)
 							if (arguments[position].id == parameter.id
-								&& !readsOnly(callee, position, visiting, depth + 1))
+								&& !readsOnly(callee.name, position, visiting, depth + 1))
 								ok = false;
 					case MethodCall(_, receiver, method, arguments, _):
 						var target = valueMethod(receiver, method);
@@ -472,16 +472,16 @@ class IrCopyElision {
 						CallClosure(_, _, _):
 						ok = false;
 					case Call(_, callee, arguments):
-						var target = byName.get(callee);
+						var target = byName.get(callee.name);
 						var constructor = target != null
 							&& (switch target.result {
 								case Void: true;
 								default: false;
 							})
-								&& StringTools.endsWith(callee, ".new")
+								&& StringTools.endsWith(callee.name, ".new")
 								&& arguments.length > 0
 								&& fresh.exists(arguments[0].id);
-						if (!storesNothing(callee, constructor, visiting, depth + 1))
+						if (!storesNothing(callee.name, constructor, visiting, depth + 1))
 							ok = false;
 					case MethodCall(_, receiverValue, method, _, _):
 						var target = valueMethod(receiverValue, method);

@@ -320,11 +320,11 @@ private class IrTypeAwareWalkState {
 			create(Obj(made));
 		switch instruction {
 			case Call(_, target, _):
-				callTarget(target);
+				callTarget(target.name);
 			case StaticClosure(_, target):
-				callTarget(target);
+				callTarget(target.name);
 			case InstanceClosure(_, target, _):
-				reach(target, false);
+				reach(target.name, false);
 			case MakeEnum(_, typeName, _, _):
 				create(Enum(typeName));
 			case ToDyn(_, value):

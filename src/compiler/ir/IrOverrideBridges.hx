@@ -86,7 +86,8 @@ class IrOverrideBridges {
 							adapters.set(name, callAdapter(name, receiver.type, method, argumentTypes, output.type,
 								slot, rewrittenByName));
 						[
-							new Located(Call(output, name, [receiver].concat(arguments)), located.provenance)
+							new Located(Call(output, IrSymbol.of(name), [receiver].concat(arguments)),
+								located.provenance)
 						];
 					}
 				default: null;

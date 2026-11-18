@@ -209,18 +209,20 @@ class IrValueInterfaceBoxes {
 		}
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
 			return switch located.value {
-				case Call(out, "__dynamic_object_type_id", arguments) if (current.name != TYPE_ID):
+				case Call(out, callTarget,
+					arguments) if (callTarget.name == "__dynamic_object_type_id" && (current.name != TYPE_ID)):
 					needsTypeId = true;
-					[new Located(Call(out, TYPE_ID, arguments), located.provenance)];
+					[new Located(Call(out, IrSymbol.of(TYPE_ID), arguments), located.provenance)];
 				case Call(out, intrinsic,
-					arguments) if ((intrinsic == "__std_is_of_type" || intrinsic == "__std_is_exact_type")
+					arguments) if ((intrinsic.name == "__std_is_of_type" || intrinsic.name == "__std_is_exact_type")
 					&& arguments.length == 2 && types().exists(arguments[1].id)):
 					var object = switch types().get(arguments[1].id) {
 						case Obj(name): objectMap.get(name);
 						default: null;
 					};
 					if (object == null || !object.isValue || object.interfaces.length == 0) null;
-					else [new Located(Call(out, typeTestFor(object.name, intrinsic == "__std_is_exact_type"),
+					else [new Located(Call(out,
+						IrSymbol.of(typeTestFor(object.name, intrinsic.name == "__std_is_exact_type")),
 						[arguments[0]]), located.provenance)];
 				case ToVirtual(out, input):
 					var object = switch input.type {
@@ -242,7 +244,8 @@ class IrValueInterfaceBoxes {
 						default: null;
 					};
 					if (interfaceName != null && interfaceMap.exists(interfaceName))
-						[new Located(Call(out, interfaceCastFor(interfaceName), [input]), located.provenance)];
+						[new Located(Call(out, IrSymbol.of(interfaceCastFor(interfaceName)), [input]),
+							located.provenance)];
 					else {
 						var object = switch [out.type, input.type] {
 							case [Obj(name), Virtual(_) | Dyn]: objectMap.get(name);
@@ -258,7 +261,7 @@ class IrValueInterfaceBoxes {
 								erased = new IrValue(freshId(), "$interface-erased", Dyn);
 								instructions.push(new Located(ToDyn(erased, input), located.provenance));
 							}
-							instructions.push(new Located(Call(out, unboxFor(object.name), [erased]),
+							instructions.push(new Located(Call(out, IrSymbol.of(unboxFor(object.name)), [erased]),
 								located.provenance));
 							instructions;
 						}

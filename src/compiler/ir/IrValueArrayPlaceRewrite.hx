@@ -22,8 +22,9 @@ class IrValueArrayPlaceRewrite {
 					case ArrayGet(out, array,
 						_) if (Type.enumEq(array.type, arrayType) && Type.enumEq(out.type, element)):
 						result.set(out.id, true);
-					case Call(out, "__array_get_any",
-						args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
+					case Call(out, callTarget,
+						args) if (callTarget.name == "__array_get_any" && args.length == 2
+						&& Type.enumEq(args[0].type, arrayType)):
 						raw.set(out.id, true);
 					default:
 				}
@@ -70,7 +71,8 @@ class IrValueArrayPlaceRewrite {
 					if (!Type.enumEq(array.type, arrayType)
 						|| !Type.enumEq(value.type, element)) throw new InternalError("Invalid array place root");
 					aliases.set(value.id, {array: array, index: index, path: []});
-				case Call(value, "__array_get_any", args) if (args.length == 2 && Type.enumEq(args[0].type, arrayType)):
+				case Call(value, callTarget, args) if (callTarget.name == "__array_get_any"
+					&& (args.length == 2 && Type.enumEq(args[0].type, arrayType))):
 					switch located.provenance.origin {
 						case CompilerGenerated(reason) if (reason == IrGenerator.ArrayValuePlaceReason):
 							raw.set(value.id, {array: args[0], index: args[1], path: []});
@@ -114,21 +116,27 @@ class IrValueArrayPlaceRewrite {
 			for (located in block.instructions) {
 				var instruction = located.value, handled = false, omit = false;
 				switch instruction {
-					case Call(out, "__array_get_any", _) if (raw.exists(out.id)):
+					case Call(out, callTarget, _) if (callTarget.name == "__array_get_any" && (raw.exists(out.id))):
 						var place = raw.get(out.id);
 						if (place == null) throw new InternalError("Missing checked array place");
 						var check = new IrValue(next++, "$array-place-check", Void);
-						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
+						instruction = Call(check, IrSymbol.of(helpers.checker(place.path, true)), [
+							place.array,
+							place.index
+						]);
 						handled = true;
 					case ArrayGet(out, _, _) if (roots.exists(out.id)):
 						var place = requiredPlace(out.id), check = new IrValue(next++, "$array-place-check", Void);
-						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
+						instruction = Call(check, IrSymbol.of(helpers.checker(place.path, true)), [
+							place.array,
+							place.index
+						]);
 						handled = true;
 					case FieldGet(out, owner, field) if (aliases.exists(owner.id)):
 						var place = requiredPlace(owner.id),
 							path = place.path.concat([field]),
 							check = new IrValue(next++, "$array-place-check", Void);
-						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [
+						target.instructions.push(new Located(Call(check, IrSymbol.of(helpers.checker(path, false)), [
 							place.array,
 							place.index
 						]), located.provenance));
@@ -136,7 +144,7 @@ class IrValueArrayPlaceRewrite {
 						else {
 							var getter = isNullableScalar(out.type) ? methods.scalarGetter(out.type,
 								path) : helpers.getter(helpers.slot(path));
-							instruction = Call(out, getter, [place.array, place.index]);
+							instruction = Call(out, IrSymbol.of(getter), [place.array, place.index]);
 						}
 						handled = true;
 					case FieldSet(owner, field, value) if (aliases.exists(owner.id)):
@@ -145,13 +153,13 @@ class IrValueArrayPlaceRewrite {
 							check = new IrValue(next++, "$array-place-check", Void);
 						if (aliases.exists(value.id))
 							throw new InternalError("Aliased place write requires component specialization");
-						target.instructions.push(new Located(Call(check, helpers.checker(path, false), [
+						target.instructions.push(new Located(Call(check, IrSymbol.of(helpers.checker(path, false)), [
 							place.array,
 							place.index
 						]), located.provenance));
 						var setter = isValue(value.type) || isNullableScalar(value.type)
 							? methods.valueSetter(value.type, path) : helpers.setter(helpers.slot(path));
-						instruction = Call(new IrValue(next++, "$array-place-write", Void), setter, [
+						instruction = Call(new IrValue(next++, "$array-place-write", Void), IrSymbol.of(setter), [
 							place.array,
 							place.index,
 							value
@@ -169,7 +177,8 @@ class IrValueArrayPlaceRewrite {
 							present = new IrValue(next++, "$array-place-present", Bool),
 							no = new IrValue(next++, "$array-place-false", Bool);
 						target.instructions
-							.push(new Located(Call(present, helpers.getter(helpers.slot(place.path, true)), [
+							.push(new Located(Call(present, IrSymbol.of(helpers.getter(helpers.slot(place.path, true))),
+							[
 								place.array,
 								place.index
 							]), located.provenance));
@@ -178,13 +187,16 @@ class IrValueArrayPlaceRewrite {
 						handled = true;
 					case SafeCast(out, value) if (aliases.exists(value.id) && aliases.exists(out.id)):
 						var place = requiredPlace(value.id), check = new IrValue(next++, "$array-place-check", Void);
-						instruction = Call(check, helpers.checker(place.path, true), [place.array, place.index]);
+						instruction = Call(check, IrSymbol.of(helpers.checker(place.path, true)), [
+							place.array,
+							place.index
+						]);
 						handled = true;
 					case MethodCall(out, owner, method, arguments, _) if (aliases.exists(owner.id)):
 						for (argument in arguments) if (aliases.exists(argument.id))
 							throw new InternalError("Array place argument requires component specialization");
 						var place = requiredPlace(owner.id), name = methods.method(owner.type, method, place.path);
-						instruction = Call(out, name, [place.array, place.index].concat(arguments));
+						instruction = Call(out, IrSymbol.of(name), [place.array, place.index].concat(arguments));
 						handled = true;
 					case ArraySet(array, index, value) if (aliases.exists(value.id)):
 						var place = requiredPlace(value.id);
@@ -192,8 +204,9 @@ class IrValueArrayPlaceRewrite {
 							throw new InternalError("Array place writeback changed its destination");
 						omit = true;
 						handled = true;
-					case Call(_, "__array_set_any",
-						arguments) if (arguments.length == 3 && aliases.exists(arguments[2].id)):
+					case Call(_, callTarget,
+						arguments) if (callTarget.name == "__array_set_any" && arguments.length == 3
+						&& aliases.exists(arguments[2].id)):
 						var place = requiredPlace(arguments[2].id);
 						if (place.path.length != 0 || place.array.id != arguments[0].id
 							|| place.index.id != arguments[1].id)

@@ -2125,7 +2125,7 @@ class TestMain {
 			for (instruction in block.instructions)
 				switch instruction.value {
 					case compiler.ir.Ir.IrInstruction.Call(output, name,
-						arguments) if (name.indexOf("$generic:Main.identity") == 0):
+						arguments) if (name.name.indexOf("$generic:Main.identity") == 0):
 						if (output.type == IrType.Dyn && arguments.length == 1 && arguments[0].type == IrType.Dyn)
 							dynamicCallFound = true;
 						if (output.type == IrType.I32 && arguments.length == 1 && arguments[0].type == IrType.I32)

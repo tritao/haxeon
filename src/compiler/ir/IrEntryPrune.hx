@@ -136,7 +136,7 @@ class IrEntryPrune {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, target, _), StaticClosure(_, target), InstanceClosure(_, target, _):
-							require(fn.name, target);
+							require(fn.name, target.name);
 						default:
 					}
 	}

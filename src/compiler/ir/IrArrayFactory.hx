@@ -18,7 +18,7 @@ class IrArrayFactory {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, NAME, _):
+						case Call(_, callTarget, _) if (callTarget.name == NAME):
 							pending = true;
 						default:
 					}
@@ -56,7 +56,7 @@ class IrArrayFactory {
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, NAME, _):
+					case Call(_, callTarget, _) if (callTarget.name == NAME):
 						requested = true;
 					default:
 				}
@@ -78,7 +78,7 @@ class IrArrayFactory {
 			var target = new IrBlock(block.id);
 			for (located in block.instructions)
 				switch located.value {
-					case Call(out, NAME, arguments):
+					case Call(out, callTarget, arguments) if (callTarget.name == NAME):
 						if (arguments.length != 1)
 							throw new InternalError("Invalid array factory arguments");
 						var element = switch out.type {
@@ -88,7 +88,8 @@ class IrArrayFactory {
 						changed = true;
 						switch element {
 							case I32:
-								target.instructions.push(new Located(Call(out, "__array_alloc_i32", arguments),
+								target.instructions
+									.push(new Located(Call(out, IrSymbol.of("__array_alloc_i32"), arguments),
 									located.provenance));
 							case EnumTag(_): throw new InternalError("Tag array factory was not consumed by lane selection");
 							default:
@@ -98,7 +99,7 @@ class IrArrayFactory {
 									erased = new IrValue(next++, "$array-erased", Dyn);
 								target.instructions.push(new Located(TypeValue(descriptor, element),
 									located.provenance));
-								target.instructions.push(new Located(Call(raw, "__array_alloc_typed_ref", [
+								target.instructions.push(new Located(Call(raw, IrSymbol.of("__array_alloc_typed_ref"), [
 									arguments[0],
 									descriptor
 								]), located.provenance));

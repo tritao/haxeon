@@ -253,11 +253,11 @@ private class Walker {
 							}
 						case InstanceClosure(_, functionName, _):
 							found(IrAllocationReport.Alloc, "closure " + functionName);
-							reach(functionName);
+							reach(functionName.name);
 						case StaticClosure(_, functionName):
 							found(IrAllocationReport.Unknown,
 								"static closure " + functionName + " (allocation not checked)");
-							reach(functionName);
+							reach(functionName.name);
 						case ToVirtual(_, _):
 							found(IrAllocationReport.Unknown, "virtual wrapper (allocation not checked)");
 						case IteratorNew(_, _):
@@ -269,10 +269,10 @@ private class Walker {
 						case CNativeCall(_, functionName, _):
 							found(IrAllocationReport.Unknown, "C native " + functionName);
 						case Call(_, functionName, _):
-							if (byName.exists(functionName))
-								reach(functionName);
+							if (byName.exists(functionName.name))
+								reach(functionName.name);
 							else {
-								var native = IrAllocationReport.classifyNative(functionName);
+								var native = IrAllocationReport.classifyNative(functionName.name);
 								if (native != null)
 									found(native.kind, native.what);
 							}

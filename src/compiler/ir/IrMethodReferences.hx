@@ -37,13 +37,13 @@ class IrMethodReferences {
 		var requests:Map<String, {receiver:IrType, closure:IrType}> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
 			switch instruction.value {
-			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name, PREFIX)):
-				var previous = requests.get(name);
+			case InstanceClosure(output, name, receiver) if (StringTools.startsWith(name.name, PREFIX)):
+				var previous = requests.get(name.name);
 				if (previous != null
 					&& (!IrVerifier.sameType(previous.receiver, receiver.type)
 					|| !IrVerifier.sameType(previous.closure, output.type)))
 					throw new InternalError('Conflicting method reference "$name"');
-				requests.set(name, {receiver: receiver.type, closure: output.type});
+				requests.set(name.name, {receiver: receiver.type, closure: output.type});
 			default:
 		}
 		var byName = [for (object in objects) object.name => object],

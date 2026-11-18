@@ -598,7 +598,7 @@ class SsaBuilder {
 					emit(target, Equal(result, resolve(a), resolve(b)), provenance);
 				case Call(out, name, args):
 					var result = define(out);
-					emit(target, Call(result, name, [for (arg in args) resolve(arg)]), provenance);
+					emit(target, Call(result, IrSymbol.of(name), [for (arg in args) resolve(arg)]), provenance);
 				case Intrinsic(out, operation, args):
 					var result = define(out);
 					emit(target, Intrinsic(result, operation, [for (arg in args) resolve(arg)]), provenance);
@@ -607,10 +607,10 @@ class SsaBuilder {
 					emit(target, CNativeCall(result, name, [for (arg in args) resolve(arg)]), provenance);
 				case StaticClosure(out, name):
 					var result = define(out);
-					emit(target, StaticClosure(result, name), provenance);
+					emit(target, StaticClosure(result, IrSymbol.of(name)), provenance);
 				case InstanceClosure(out, name, receiver):
 					var result = define(out);
-					emit(target, InstanceClosure(result, name, resolve(receiver)), provenance);
+					emit(target, InstanceClosure(result, IrSymbol.of(name), resolve(receiver)), provenance);
 				case CallClosure(out, closure, args):
 					var result = define(out);
 					emit(target, CallClosure(result, resolve(closure), [for (arg in args) resolve(arg)]), provenance);

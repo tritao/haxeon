@@ -28,7 +28,7 @@ class IrNonNullFacts {
 
 	public static function checked(instruction:IrInstruction):Null<IrValue>
 		return switch instruction {
-			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1): arguments[0];
+			case Call(_, name, arguments) if (name.name == IrReceiverCheck.NAME && arguments.length == 1): arguments[0];
 			case FieldGet(_, v, _), FieldSet(v, _, _), MethodCall(_, v, _, _, _), InstanceClosure(_, _, v),
 				ArrayGet(_, v, _), ArraySet(v, _, _),
 				ArraySize(_, v), IteratorNew(_, v), IteratorHasNext(_, v), IteratorNext(_, v), EnumIndex(_, v),
@@ -110,7 +110,7 @@ private class NonNullFlow {
 			for (located in block.instructions)
 				switch located.value {
 					// An exact-class test holds only for a non-null object (IrExactTypeFacts).
-					case Call(out, name, arguments) if (name == IrExactTypeFacts.TEST && arguments.length == 2):
+					case Call(out, name, arguments) if (name.name == IrExactTypeFacts.TEST && arguments.length == 2):
 						testValue[out.id] = arguments[0].id;
 						testOnTrue[out.id] = true;
 					case Equal(out, left, right):
@@ -271,7 +271,7 @@ private class NonNullFlow {
 
 	static function isExplicitCheck(instruction:IrInstruction):Bool
 		return switch instruction {
-			case Call(_, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1): true;
+			case Call(_, name, arguments) if (name.name == IrReceiverCheck.NAME && arguments.length == 1): true;
 			case MethodCall(_, _, _, _, _): true;
 			default: false;
 		}

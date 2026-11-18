@@ -1,4 +1,5 @@
 package compiler.backend.wasm;
+import compiler.ir.IrSymbol;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
@@ -211,12 +212,13 @@ class WasmFlattenValueFields {
 							next = actual.next;
 							args.push(actual.value);
 						}
-						replacement.instructions.push(new Located(Call(out, requestMethod(place, target), args),
+						replacement.instructions
+							.push(new Located(Call(out, IrSymbol.of(requestMethod(place, target)), args),
 							located.provenance));
 					case Call(out, name, arguments)
 						if (arguments.length > 0
 						&& aliases.exists(arguments[0].id)
-						&& isPlaceMethod(aliases.get(arguments[0].id).typeName, name)):
+						&& isPlaceMethod(aliases.get(arguments[0].id).typeName, name.name)):
 						var place:FlattenedPlace = cast aliases.get(arguments[0].id);
 						var args:Array<IrValue> = [place.owner];
 						for (argument in arguments.slice(1)) {
@@ -224,12 +226,14 @@ class WasmFlattenValueFields {
 							next = actual.next;
 							args.push(actual.value);
 						}
-						replacement.instructions.push(new Located(Call(out, requestMethod(place, name), args),
+						replacement.instructions
+							.push(new Located(Call(out, IrSymbol.of(requestMethod(place, name.name)), args),
 							located.provenance));
 					case InstanceClosure(out, name, receiver) if (aliases.exists(receiver.id)):
 						var place = aliases.get(receiver.id);
-						if (isPlaceMethod(place.typeName, name))
-							replacement.instructions.push(new Located(InstanceClosure(out, requestMethod(place, name),
+						if (isPlaceMethod(place.typeName, name.name))
+							replacement.instructions
+								.push(new Located(InstanceClosure(out, IrSymbol.of(requestMethod(place, name.name)),
 								place.owner), located.provenance));
 						else {
 							var actual = materialize(receiver, aliases, replacement, located, next);

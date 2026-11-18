@@ -179,19 +179,23 @@ class IrInlineEnumEligibility {
 							descriptorUses.set(input.id,
 								(descriptorUses.exists(input.id) ? descriptorUses.get(input.id) : 0) + 1);
 							switch instruction {
-								case Call(_, "__closure_is_of_type",
-									arguments) if (arguments.length == 2 && arguments[1].id == input.id
+								case Call(_, callTarget,
+									arguments) if (callTarget.name == "__closure_is_of_type" && arguments.length == 2
+									&& arguments[1].id == input.id
 									&& supportsCallableEscape(descriptors.get(input.id))):
 									callableDescriptorUses.set(input.id, true);
-								case Call(_, "__std_is_exact_type" | "__std_is_of_type",
-									arguments) if (arguments.length == 2 && arguments[1].id == input.id
+								case Call(_, callTarget,
+									arguments) if ((callTarget.name == "__std_is_exact_type" || callTarget.name
+									== "__std_is_of_type") && arguments.length == 2 && arguments[1].id == input.id
 									&& isReferenceTypeDescriptor(descriptors.get(input.id))):
 									referenceTypeDescriptorUses.set(input.id, true);
-								case Call(_, "__array_alloc_typed_ref",
-									arguments) if (arguments.length == 2 && arguments[1].id == input.id):
+								case Call(_, callTarget,
+									arguments) if (callTarget.name == "__array_alloc_typed_ref" && arguments.length == 2
+									&& arguments[1].id == input.id):
 									arrayDescriptors.set(input.id, true);
-								case Call(_, "__std_is_exact_type" | "__std_is_of_type",
-									arguments) if (arguments.length == 2 && arguments[1].id == input.id
+								case Call(_, callTarget,
+									arguments) if ((callTarget.name == "__std_is_exact_type" || callTarget.name
+									== "__std_is_of_type") && arguments.length == 2 && arguments[1].id == input.id
 									&& logicalEnumDescriptorFunction(fn.name)
 									&& isSelectedEnumDescriptor(descriptors.get(input.id))):
 									logicalEnumDescriptorUses.set(input.id, true);
@@ -200,9 +204,9 @@ class IrInlineEnumEligibility {
 							}
 						}
 					switch instruction {
-						case Call(out, name, arguments) if (StringTools.startsWith(name, "__map_")
-							&& StringTools.contains(name, "_ref_")):
-							var operation = name.substr(name.lastIndexOf("_ref_") + 5);
+						case Call(out, name, arguments) if (StringTools.startsWith(name.name, "__map_")
+							&& StringTools.contains(name.name, "_ref_")):
+							var operation = name.name.substr(name.name.lastIndexOf("_ref_") + 5);
 							switch operation {
 								case "set" if (arguments.length >= 3):
 									// A map stores the value reference itself. Classes, arrays and iterators keep their own object layout;

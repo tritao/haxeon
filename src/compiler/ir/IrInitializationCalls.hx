@@ -89,11 +89,11 @@ class IrInitializationCalls {
 			for (instruction in block.instructions)
 				switch instruction.value {
 					case StaticClosure(out, callee), InstanceClosure(out, callee, _):
-						origins.set(out.id, [callee]);
+						origins.set(out.id, [callee.name]);
 					case GlobalGet(out, name) if (globals.exists(name)):
 						origins.set(out.id, globals.get(name).copy());
-					case Call(out, callee, _) if (returns.exists(callee)):
-						origins.set(out.id, returns.get(callee).copy());
+					case Call(out, callee, _) if (returns.exists(callee.name)):
+						origins.set(out.id, returns.get(callee.name).copy());
 					case MethodCall(out, receiver, method, _, _):
 						var found:Array<String> = [];
 						for (callee in methodTargets(receiver, method))
@@ -119,8 +119,8 @@ class IrInitializationCalls {
 			for (instruction in block.instructions)
 				switch instruction.value {
 					case Call(_, callee, arguments):
-						result.push(callee);
-						addCallbacks(callee, arguments, 0);
+						result.push(callee.name);
+						addCallbacks(callee.name, arguments, 0);
 					case CallClosure(_, closure, _):
 						if (closures.exists(closure.id))
 							result = result.concat(closures.get(closure.id));
@@ -199,7 +199,7 @@ class IrInitializationCalls {
 							found = true;
 					case Call(_, callee, arguments):
 						for (argument in 0...arguments.length)
-							if (aliases.exists(arguments[argument].id) && invokesArgument(callee, argument, seen))
+							if (aliases.exists(arguments[argument].id) && invokesArgument(callee.name, argument, seen))
 								found = true;
 					case MethodCall(_, receiver, method, arguments, _):
 						for (callee in methodTargets(receiver, method))

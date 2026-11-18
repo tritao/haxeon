@@ -53,9 +53,9 @@ class InlinerResolvedEnumCallMain {
 				for (block in program.functions[0].blocks)
 					for (located in block.instructions)
 						switch located.value {
-							case Call(_, "adapter", _):
+							case Call(_, callTarget, _) if (callTarget.name == "adapter"):
 								adapterCalls++;
-							case Call(_, "resolved_provider", arguments):
+							case Call(_, callTarget, arguments) if (callTarget.name == "resolved_provider"):
 								providerCalls++;
 								if (arguments.length != 1
 									|| arguments[0].id != callerInput.id

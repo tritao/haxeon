@@ -1,6 +1,7 @@
 import compiler.Frontend;
 import compiler.ir.Ir.IrInstruction;
 import compiler.ir.IrInterpreter;
+import compiler.ir.IrSymbol;
 import compiler.ir.SourceProvenance.Located;
 
 class EnumInterpreterTypeMain {
@@ -15,8 +16,8 @@ class EnumInterpreterTypeMain {
 		for (fn in program.functions) for (block in fn.blocks) for (index in 0...block.instructions.length) {
 			var instruction = block.instructions[index];
 			switch instruction.value {
-				case Call(out, "__std_is_of_type", args):
-					block.instructions[index] = new Located(Call(out, "__std_is_exact_type", args),
+				case Call(out, callTarget, args) if (callTarget.name == "__std_is_of_type"):
+					block.instructions[index] = new Located(Call(out, IrSymbol.of("__std_is_exact_type"), args),
 						instruction.provenance);
 					changed = true;
 				default:

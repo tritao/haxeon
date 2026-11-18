@@ -137,7 +137,7 @@ class IrInstrumentation {
 			for (block in fn.blocks)
 				for (located in block.instructions)
 					switch located.value {
-						case Call(_, name, _) if (isProbe(name)):
+						case Call(_, name, _) if (isProbe(name.name)):
 							probed = true;
 						case _:
 					}
@@ -150,9 +150,9 @@ class IrInstrumentation {
 				var copy = new IrBlock(block.id);
 				for (located in block.instructions)
 					switch located.value {
-						case Call(output, Depth, _):
+						case Call(output, callTarget, _) if (callTarget.name == Depth):
 							copy.instructions.push(new Located(ConstInt(output, 0), located.provenance));
-						case Call(_, name, _) if (isProbe(name)):
+						case Call(_, name, _) if (isProbe(name.name)):
 						case _:
 							copy.instructions.push(located);
 					}
@@ -202,7 +202,7 @@ class IrInstrumentation {
 					case BeginTry(catchBlock, _, _):
 						var depth = value(I32);
 						savedDepth.set(catchBlock, depth);
-						copy.instructions.push(op(Call(depth, Depth, [])));
+						copy.instructions.push(op(Call(depth, IrSymbol.of(Depth), [])));
 					case _:
 				}
 				copy.instructions.push(located);
@@ -217,14 +217,14 @@ class IrInstrumentation {
 					case Catch(_):
 						var depth = savedDepth.get(block.id);
 						if (depth != null)
-							block.instructions.insert(index + 1, op(Call(value(Void), Unwind, [depth])));
+							block.instructions.insert(index + 1, op(Call(value(Void), IrSymbol.of(Unwind), [depth])));
 						break;
 					case _:
 				}
 			if (covered && block.terminator != null)
 				switch block.terminator.value {
 					case Return(_):
-						block.instructions.push(op(Call(value(Void), Exit, [])));
+						block.instructions.push(op(Call(value(Void), IrSymbol.of(Exit), [])));
 					case _:
 				}
 		}
@@ -233,7 +233,7 @@ class IrInstrumentation {
 			while (firstOrdinary < entry.instructions.length
 				&& entry.instructions[firstOrdinary].value.match(Phi(_, _)))
 				firstOrdinary++;
-			entry.instructions.insert(firstOrdinary, op(Call(value(Void), Enter, [])));
+			entry.instructions.insert(firstOrdinary, op(Call(value(Void), IrSymbol.of(Enter), [])));
 		}
 		return fn.withBlocks(blocks);
 	}

@@ -85,7 +85,7 @@ class ValueLaneNativeSource {
 					case LessEqual(_, a, z): '${variable(a)} <= ${variable(z)}';
 					case Equal(_, a, z): '${variable(a)} == ${variable(z)}';
 					case Call(_, callee,
-						arguments): name(callee) + "(" + [for (arg in arguments) variable(arg)].join(", ") + ")";
+						arguments): name(callee.name) + "(" + [for (arg in arguments) variable(arg)].join(", ") + ")";
 					default: throw new InternalError('Unsupported lane runtime C instruction: ${item.value}');
 				};
 				if (expression != null)

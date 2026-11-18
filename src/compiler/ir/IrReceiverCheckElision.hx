@@ -10,7 +10,7 @@ class IrReceiverCheckElision {
 		for (block in fn.blocks) {
 			for (located in block.instructions)
 				switch located.value {
-					case Call(_, name, _) if (name == IrReceiverCheck.NAME): hasCheck = true;
+					case Call(_, name, _) if (name.name == IrReceiverCheck.NAME): hasCheck = true;
 					default:
 				}
 			if (hasCheck)
@@ -37,7 +37,7 @@ class IrReceiverCheckElision {
 		var facts = new IrNonNullFacts(fn);
 		return IrFunctionRewrite.dropInstructions(fn, function(block, index, located) {
 			return switch located.value {
-				case Call(output, name, arguments) if (name == IrReceiverCheck.NAME && arguments.length == 1):
+				case Call(output, name, arguments) if (name.name == IrReceiverCheck.NAME && arguments.length == 1):
 					!uses.exists(output.id) && facts.has(block.id, index);
 				default: false;
 			};
