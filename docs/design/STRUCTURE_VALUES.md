@@ -511,7 +511,7 @@ Order and parallelism:
 - Slice 4 needs 2b (a view must be a view before the typer accepts one) and 5 (the open-literal rule of the relation).
 - Slice 3 needs 2b only and is the one that pays back early on lru.
 - Slice 6 follows 5. Slice 7 follows 4.
-- Slice 8 needs 2b only. It replaces the bridge 9f2db038d used for interface variables: one mechanism for structures, interface variables and erased generics, so a monomorphic access runs at direct-field speed.
+- Slice 8 needs 2b and [INTERFACE_VALUES.md](INTERFACE_VALUES.md) (an interface value is the object itself on HashLink). The exact-class arm (`IrExactTypeFacts`, `__object_has_exact_type`) deliberately fails for a value behind an HL virtual, because the cast after it would be unsound. So while interface values are virtuals, every interface-variable access would miss the fast arm. Unwrapping the virtual in each access is the cost the interface-values design removes, so it is a prerequisite, not part of this slice. It replaces the bridge 9f2db038d used for interface variables: one mechanism for structures, interface variables and erased generics, so a monomorphic access runs at direct-field speed.
 
 ## Tests
 
