@@ -1379,9 +1379,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	}
 
 	/**
-	 * Checks the body of an abstract's instance method or constructor, which is typed per call (specialized), so an error in one
-	 * nothing calls is reported as Haxe reports it. The typing is for its errors alone: its unit is dropped, and the code is
-	 * what each call's specialization types.
+	 * Types the body of an abstract's instance method or constructor, which is typed per call (specialized), so an error in one
+	 * nothing calls is reported as Haxe reports it. A member of a non-generic abstract is typed once, as the one specialization
+	 * every call makes (`GenericInstantiation.typeMemberBody`), merged only if something calls it. Any other is typed for its
+	 * errors alone, with its type parameters as themselves, and its code is what each call's specialization types.
 	 */
 	function checkAbstractMember(abstractDecl:compiler.syntax.Ast.AstAbstract, fn:AstFunction, key:String):Void {
 		if (requiredTypes().isInferred(fn)) {
@@ -1392,8 +1393,19 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		// A constructor is checked as each construction types it (`CallResolver.typeAbstractConstruction`).
 		var isConstructor = fn.name == "new",
 			body = isConstructor ? AbstractConstructorNormalizer.normalize(fn, abstractDecl.underlying) : fn;
-		checkBody(key, () -> typeAbstractBodyUnspecialized(abstractDecl, body, key),
-			isConstructor ? error -> AbstractConstructorNormalizer.constructorError(error, key) : null);
+		function reword(error:CompileError):CompileError
+			return isConstructor ? AbstractConstructorNormalizer.constructorError(error, key) : error;
+		// A member of a non-generic abstract has one body, which every call specializes to: it is typed once, as that body.
+		if (abstractDecl.typeParameters.length == 0 && !BodyTyper.isGeneric(fn)) {
+			var mark = session.checkpoint();
+			try {
+				bodyTyper.genericInstantiation.typeMemberBody(key, body, abstractDecl.name, !isConstructor);
+			} catch (error:CompileError) {
+				session.recover(mark, reword(error));
+			}
+			return;
+		}
+		checkBody(key, () -> typeAbstractBodyUnspecialized(abstractDecl, body, key), isConstructor ? reword : null);
 	}
 
 	/**

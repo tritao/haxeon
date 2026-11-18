@@ -60,7 +60,7 @@ class BodyTyper implements BodyTyping {
 	final statementTyper:StatementTyper;
 	final conversionResolver:ConversionResolver;
 	final callResolver:CallResolver;
-	final genericInstantiation:GenericInstantiation;
+	public final genericInstantiation:GenericInstantiation;
 	final inlineConstantResolver:InlineConstantResolver;
 	final anonymousTypeRegistry:AnonymousTypeRegistry;
 	var defaultArgumentCaller:Null<String>;

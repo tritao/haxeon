@@ -165,21 +165,9 @@ class GenericInstantiation {
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))
 				? abstractReceiverType(requiredString(owner),
 				representationSubstitutions) : receiver.type;
-		// Each specialization's body is typed once, as a shared unit of its own. One for type parameters is met only where a
-		// generic body is checked with its type parameters as themselves: it is checked as well, and is no code of the program.
 		session.useSharedUnit(specialization.name);
-		if (!session.emittedGenericBodies.exists(specialization.name)) {
-			session.emittedGenericBodies.set(specialization.name, true);
-			var bodyStatic = receiver == null ? isStatic : true,
-				bodyReceiver = representationReceiver,
-				forParameters = false;
-			for (argument in representationArguments)
-				if (session.representation.containsTypeParameter(argument, []))
-					forParameters = true;
-			session.typeSharedUnit(specialization.name,
-				() -> session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, bodyStatic,
-				representationSubstitutions, specialization.name, bodyReceiver)), forParameters);
-		}
+		typeSpecializationBody(specialization.name, fn, owner, receiver == null ? isStatic : true,
+			representationReceiver, representationSubstitutions, representationArguments, false);
 		if (receiver != null) {
 			var receiverType = representationReceiver;
 			if (receiverType == null)
@@ -189,6 +177,44 @@ class GenericInstantiation {
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
 		session.invalidateCallEffects(baseName, scope);
 		return session.representation.boundaryCast(call, result);
+	}
+
+	/**
+	 * Types the body of the specialization `name` of `fn` once, as a shared unit of its own, unless it was typed already: the unit
+	 * is merged where its first user in declaration order used it (`TypingSession.useSharedUnit`). One for type parameters is met
+	 * only where a generic body is checked with its type parameters as themselves: it is checked as well, and is no code of the
+	 * program. With `unused`, no user has asked for it yet, so it is typed into an output of its own wherever typing is.
+	 */
+	function typeSpecializationBody(name:String, fn:AstFunction, owner:Null<String>, isStatic:Bool,
+			receiver:Null<CompilerType>, substitutions:Map<String, CompilerType>,
+			representationArguments:Array<CompilerType>, unused:Bool):Void {
+		if (session.emittedGenericBodies.exists(name))
+			return;
+		session.emittedGenericBodies.set(name, true);
+		var forParameters = false;
+		for (argument in representationArguments)
+			if (session.representation.containsTypeParameter(argument, []))
+				forParameters = true;
+		session.typeSharedUnit(name,
+			() -> session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, isStatic, substitutions, name,
+			receiver)), forParameters, unused);
+	}
+
+	/**
+	 * Types the one body of `fn`, a member of the non-generic abstract `owner` whose code is typed per call (an instance method, or
+	 * the constructor normalized, `instanceMember` false): the specialization every call without an iteration or key-path argument
+	 * makes, as `specialize` names it. It is typed once, here or by the first call, and reused by the other; a call records its use,
+	 * so a body nothing calls is typed for its errors and never merged.
+	 */
+	public function typeMemberBody(baseName:String, fn:AstFunction, owner:String, instanceMember:Bool):Void {
+		var underlying = instanceMember ? requiredMapValue(session.declarations.abstracts, owner).underlying : null,
+			representation = session.representation.genericFunction(fn, [], underlying),
+			specialization = session.genericSpecializations.request(baseName, [], representation.policies),
+			constants:Map<String, String> = [];
+		session.keyPaths.parameters.set(specialization.name, constants);
+		typeSpecializationBody(specialization.name, fn, owner, true,
+			instanceMember ? abstractReceiverType(owner, representation.substitutions) : null,
+			representation.substitutions, [], true);
 	}
 
 	/**

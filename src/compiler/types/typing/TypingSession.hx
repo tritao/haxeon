@@ -89,8 +89,8 @@ class TypingSession {
 		return pushUnit(new TypingOutput(false, bodyContexts.length));
 
 	/**
-	 * Starts typing a unit for its errors alone, into an output the caller drops: a body whose code is typed elsewhere (an abstract's
-	 * member, per specialization). A shared unit or a declaration's unit it types is the program's, as anywhere else.
+	 * Starts typing a unit for its errors alone, into an output the caller drops: a body whose code is typed elsewhere (a generic
+	 * abstract's member or a generic function, per specialization). A shared unit or a declaration's unit it types is the program's, as anywhere else.
 	 */
 	public function beginCheckUnit():TypingOutput
 		return pushUnit(new TypingOutput(false, bodyContexts.length, true));
@@ -116,10 +116,11 @@ class TypingSession {
 	 * Types the shared unit `name` with `type`, into an output of its own when a unit is being typed. Call `useSharedUnit` first:
 	 * the shared unit's output is merged where its first user in declaration order used it, whichever body typed it. With
 	 * `checkOnly`, the unit is typed for its errors alone (`beginCheckUnit`): a specialization for type parameters of a body
-	 * being checked, which no program code can call.
+	 * being checked, which no program code can call. With `unused`, no code has used it yet, so it is typed into an output of its
+	 * own even outside any unit: it is merged only if code uses it.
 	 */
-	public function typeSharedUnit(name:String, type:() -> Void, checkOnly:Bool = false):Void {
-		if (output == programOutput && !checkOnly) {
+	public function typeSharedUnit(name:String, type:() -> Void, checkOnly:Bool = false, unused:Bool = false):Void {
+		if (output == programOutput && !checkOnly && !unused) {
 			type();
 			return;
 		}
