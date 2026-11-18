@@ -2,7 +2,6 @@ package pages;
 
 import components.ShowcaseKit;
 
-import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.text.Text;
 
 

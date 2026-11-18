@@ -1,7 +1,6 @@
 package compiler.types;
 
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;
 
 /** Expression paired with its resolved semantic type and original source span. */

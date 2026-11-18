@@ -1,6 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.Point;
 
 /** Routed event shared by capture, target, and bubble handlers. */
 class UiEvent {

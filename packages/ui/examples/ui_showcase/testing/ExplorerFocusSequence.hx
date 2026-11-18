@@ -2,7 +2,6 @@ package testing;
 
 import haxeon.platform.input.TextEdit;
 
-import haxeon.ui.widgets.text.TextArea;
 import haxeon.ui.widgets.text.TextField;
 
 import UiExplorer;

@@ -1,7 +1,6 @@
 package compiler.backend.wasm.linear;
 
 import compiler.backend.wasm.WasmFunctionBuilder;
-import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmReflectionTable;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;

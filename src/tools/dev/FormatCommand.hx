@@ -5,15 +5,15 @@ import sys.FileSystem;
 import sys.io.Process;
 
 /**
- * `haxeon dev format [--check] [--changed | --range FROM..TO]`: formats the Haxe sources of this checkout with `haxeon fmt`, after sorting their
- * imports with `haxeon lint --only import-order`, or with `--check` reports what either would change. `scripts/format.sh`
+ * `haxeon dev format [--check] [--changed | --range FROM..TO]`: formats the Haxe sources of this checkout with `haxeon fmt`, after
+ * `haxeon lint --fix` removes their unused imports and sorts the rest, or with `--check` reports what either would change. `scripts/format.sh`
  * runs it. The style is each project's "format" setting in haxeon.json; this tree uses the default (tabs, 120 columns). A
  * file that must keep its layout (a test that names its lines) says so with `@formatter:off` on its first line.
  *
  * Every `.hx` file git tracks or would add is formatted, vendored code aside; with `--changed`, only those that differ from
  * the merge base with origin/main; with `--range`, only those the commits in `FROM..TO` change, which is what the pre-push hook
- * (scripts/hooks/pre-push) checks. `--check` exits 1 when a file is not formatted or its imports are out of order, and 2 when
- * a file cannot be formatted.
+ * (scripts/hooks/pre-push) checks. `--check` exits 1 when a file is not formatted, imports something it never uses or has its
+ * imports out of order, and 2 when a file cannot be formatted.
  */
 class FormatCommand {
 	public static function run(arguments:Array<String>, home:String):Int {
@@ -40,12 +40,12 @@ class FormatCommand {
 		var haxeon = Path.join([home, "scripts", "haxeon"]);
 		if (check) {
 			var ordered = batched(files,
-				batch -> Sys.command(haxeon, ["lint", "--only", "import-order"].concat(batch))),
+				batch -> Sys.command(haxeon, ["lint"].concat(batch))),
 				formatted = batched(files, batch -> Sys.command(haxeon, ["fmt", "--check"].concat(batch)));
 			return formatted > ordered ? formatted : ordered;
 		}
-		// Imports first, so the formatter lays out their final order.
-		var ordered = batched(files, batch -> quiet(haxeon, ["lint", "--fix", "--only", "import-order"].concat(batch)));
+		// Imports first, so the formatter lays out what remains of them in their final order.
+		var ordered = batched(files, batch -> quiet(haxeon, ["lint", "--fix"].concat(batch)));
 		return ordered != 0 ? ordered : batched(files, batch -> Sys.command(haxeon, ["fmt"].concat(batch)));
 	}
 

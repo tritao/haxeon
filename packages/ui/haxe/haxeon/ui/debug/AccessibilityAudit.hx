@@ -7,7 +7,6 @@ import haxeon.ui.widgets.controls.ProgressBar;
 import haxeon.ui.widgets.controls.Radio;
 import haxeon.ui.widgets.controls.Select;
 import haxeon.ui.widgets.controls.Slider;
-import haxeon.ui.widgets.controls.Tabs;
 import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.overlays.MenuItem;

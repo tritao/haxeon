@@ -1,11 +1,9 @@
 package haxeon.ui.semantics;
 
 import haxeon.platform.Surface;
-import haxeon.ui.NativeEnums;
 import nativekit.ffi.NativeKitConstants;
 import nativekit.ffi.NativeKitTypes;
 
-import haxeon.ui.Rect;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.AccessibilityAction as UiAccessibilityAction;

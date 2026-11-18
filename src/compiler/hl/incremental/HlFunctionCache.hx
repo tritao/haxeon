@@ -1,7 +1,6 @@
 package compiler.hl.incremental;
 
 import compiler.core.InternalError;
-import compiler.hl.HlFunction;
 import compiler.hl.HlWriter;
 import compiler.ir.IrFunction;
 import compiler.ir.codec.IrFunctionStateCodec;

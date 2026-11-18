@@ -6,7 +6,6 @@ import haxe.io.BytesOutput;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
 import compiler.backend.wasm.WasmTypes.WasmCatchClause;
 import compiler.backend.wasm.WasmTypes.WasmValueType;
-import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmRefType;
 import compiler.backend.wasm.WasmTypes.WasmHeapType;
 import compiler.backend.wasm.WasmTypes.WasmStorageType;

@@ -1,5 +1,4 @@
 import haxeon.platform.Runtime;
-import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 

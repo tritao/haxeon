@@ -8,7 +8,6 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticSignature;
-import compiler.types.FunctionTypes;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.TypeRelations;

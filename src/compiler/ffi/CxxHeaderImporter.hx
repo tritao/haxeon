@@ -2,7 +2,6 @@ package compiler.ffi;
 
 import compiler.core.InternalError;
 import compiler.core.Source.SourceFile;
-import compiler.core.Source.SourceSpan;
 import compiler.ffi.ClangAstTools;
 import compiler.ffi.ClangRecordLayouts.RecordLayout;
 import compiler.ffi.ClangVtableLayouts.VtableLayout;
@@ -20,7 +19,6 @@ import compiler.ffi.CxxModel.CxxSpanElement;
 import compiler.ffi.CxxModel.CxxType;
 import compiler.ffi.HxiAbi.HxiAbi;
 import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
-import haxe.Int64;
 import haxe.io.Path;
 import sys.FileSystem;
 

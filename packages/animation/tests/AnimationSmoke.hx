@@ -6,7 +6,6 @@ import haxeon.animation.rig.HumanBone;
 import haxeon.animation.rig.HumanBones;
 import haxeon.animation.rig.HumanPose;
 import haxeon.animation.rig.HumanoidRig;
-import haxeon.animation.rig.RigMapping;
 
 class AnimationSmoke {
 	static function check(ok:Bool, message:String):Void {

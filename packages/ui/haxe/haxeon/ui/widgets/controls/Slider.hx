@@ -1,6 +1,5 @@
 package haxeon.ui.widgets.controls;
 
-import haxeon.ui.Canvas;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
 import haxeon.ui.LayoutVisualKind;

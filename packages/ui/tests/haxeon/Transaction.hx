@@ -1,5 +1,4 @@
 import haxeon.platform.Runtime;
-import haxeon.platform.event.EventPump;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.ui.Paint.SolidPaint;
 import nativekit.ffi.NativeKitTypes.SurfaceOptions as NativeSurfaceOptions;

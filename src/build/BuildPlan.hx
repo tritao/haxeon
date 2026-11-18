@@ -1,6 +1,5 @@
 package build;
 
-import build.Artifact.ArtifactKind;
 import compiler.core.InternalError;
 
 /** Semantic artifact graph. No command lines or filesystem probes live here. */

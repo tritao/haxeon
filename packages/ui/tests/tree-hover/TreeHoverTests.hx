@@ -13,7 +13,6 @@ import haxeon.ui.widgets.collections.TreeView;
 import haxeon.ui.widgets.collections.TreeViewModel;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.layout.SizedBox;
-import haxeon.ui.widgets.text.Text;
 
 private class Files implements TreeViewModel {
 	public function new() {}

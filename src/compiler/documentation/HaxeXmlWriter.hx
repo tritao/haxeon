@@ -2,7 +2,6 @@ package compiler.documentation;
 
 import compiler.modules.ModuleState;
 import compiler.syntax.Ast;
-import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.documentation.Documentation.DocumentationComment;

@@ -38,9 +38,6 @@ Longer-term direction is in `ROADMAP.md`.
   Statics are no longer inherited (`f1e69062`), so a base class adding or
   changing a static cannot change a name in its subclasses. The dependency
   edges that link them can go, so such an edit no longer retypes them.
-- **Unused imports in `src/compiler/Compiler.hx` and
-  `src/compiler/semantic/ModuleCanonicalizer.hx`.** `haxeon lint --only
-  unused-imports` lists them. They predate the current work.
 - **No event signal type in the standard library.** Applications hand-roll
   listener lists. (`haxeon.reactive.Signal<T>` is a reactive value, not an
   event; pick a name that does not clash.) Add a general synchronous event type:

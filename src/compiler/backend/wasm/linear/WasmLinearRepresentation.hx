@@ -10,7 +10,6 @@ import compiler.ir.IrFunction;
 import compiler.backend.wasm.WasmScalarAbi;
 import compiler.backend.wasm.WasmScalarLocals;
 import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrCNativeArgumentMode;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmLayout.WasmFieldLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;

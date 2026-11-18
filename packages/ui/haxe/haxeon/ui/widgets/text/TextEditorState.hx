@@ -11,7 +11,6 @@ import haxeon.editor.TextOffsetMap;
 import haxeon.ui.Color;
 import haxeon.ui.FontCollection;
 import haxeon.ui.LayoutMeasureConstraints;
-import haxeon.ui.LayoutMeasureResult;
 import haxeon.ui.LayoutMeasuredContent;
 import haxeon.ui.LayoutRenderableContent;
 import haxeon.ui.ParagraphStyle;

@@ -8,7 +8,6 @@ import compiler.ffi.HxiNativeSignature.HxiFunctionAbi;
 import compiler.ffi.HxiProjectionProfile.HxiProjectionProfile;
 import compiler.ffi.HxiProjectionProfile.HxiResultErrorProjection;
 import compiler.ffi.HxiSemantics.HxiSemanticParameterKind;
-import compiler.ffi.HxiSemantics.HxiSemanticResultKind;
 
 typedef ProjectedEnumValue = {
 	final nativeName:String;

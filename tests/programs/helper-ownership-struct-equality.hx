@@ -1,5 +1,3 @@
-import haxeon.Hashing;
-
 // The equality helper of Pair is requested by an `==` in one function and by a map key (equality and hash) in another.
 struct Pair implements Hashable {
 	public var left:Int;

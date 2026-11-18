@@ -3,7 +3,6 @@ package compiler.backend.wasm.linear;
 import compiler.core.InternalError;
 import compiler.ir.IrReachability;
 import compiler.backend.Backend.BackendOptions;
-import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContract;
 import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.backend.wasm.WasmModuleSupport.WasmClosureTypes;

@@ -3,7 +3,6 @@ package compiler.backend.wasm.gc;
 import compiler.core.InternalError;
 import compiler.ir.IrTypeIdentity;
 import compiler.ir.IrReachability;
-import compiler.backend.wasm.WasmFlattenValueFields;
 import haxe.io.Bytes as HaxeBytes;
 import compiler.ir.Ir.IrType;
 import compiler.ir.Ir.IrValue;

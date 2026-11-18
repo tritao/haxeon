@@ -4,7 +4,6 @@ import compiler.core.InternalError;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrNative;
 import compiler.ir.Ir.IrType;
-import compiler.ir.IrValueLaneReference;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmLocal;
 import compiler.backend.wasm.WasmModule.WasmModule;

@@ -3,7 +3,6 @@ package compiler.hl.lower;
 import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
-import compiler.ir.IrScalarArguments;
 import compiler.ir.IrTypedInterfaceDispatch;
 import compiler.ir.IrVerifier;
 

@@ -3,7 +3,6 @@ package compiler.formatter;
 import compiler.formatter.Boundary.BreakLayout;
 import compiler.formatter.FormatConfig.FormatConfigTools;
 import compiler.formatter.FormatDoc.FormatDocTools;
-import compiler.formatter.FormatToken.FormatTokenTools;
 import compiler.formatter.UnwrappedLine.UnwrappedLineTools;
 import compiler.syntax.Token.TokenKind;
 

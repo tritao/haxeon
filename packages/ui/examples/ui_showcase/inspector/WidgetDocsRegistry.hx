@@ -3,25 +3,17 @@ package inspector;
 import haxeon.ui.Image;
 import haxeon.ui.LayoutVisualKind;
 
-import haxeon.ui.widgets.collections.ListView;
 import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.ComboBox;
 import haxeon.ui.widgets.controls.ProgressBar;
-import haxeon.ui.widgets.controls.ProgressMode;
 import haxeon.ui.widgets.controls.Radio;
-import haxeon.ui.widgets.controls.RadioGroup;
 import haxeon.ui.widgets.controls.Slider;
-import haxeon.ui.widgets.controls.Tabs;
-import haxeon.ui.widgets.controls.Toggle;
 import haxeon.ui.widgets.controls.Toolbar;
-import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.Row;
 import haxeon.ui.widgets.overlays.Dialog;
 import haxeon.ui.widgets.overlays.Menu;
 import haxeon.ui.widgets.overlays.MenuItem;
-import haxeon.ui.widgets.scroll.ScrollAxis;
-import haxeon.ui.widgets.scroll.ScrollView;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
 

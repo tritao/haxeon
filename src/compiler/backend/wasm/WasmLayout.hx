@@ -1,14 +1,12 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
+import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.Ir.IrObjectNativeLayout;
-import compiler.ir.Ir.IrEnum;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
-import compiler.ir.IrInlineValueLayout;
-import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 
 private typedef WasmInlineSlot = {
 	final path:Array<String>;

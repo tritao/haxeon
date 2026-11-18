@@ -12,7 +12,6 @@ import compiler.ir.IrReachability;
 import compiler.ir.IrFunction;
 import compiler.ir.SourceProvenance.Located;
 import compiler.backend.wasm.WasmLayout;
-import compiler.backend.wasm.WasmModuleSupport;
 import compiler.backend.wasm.WasmDynamicCalls;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;

@@ -1,7 +1,6 @@
 package compiler.hl.lower;
 
 import compiler.hl.HlCode.HlFunctionIdentity;
-import compiler.hl.HlFunction;
 import compiler.ir.IrFunction;
 import haxe.ds.ObjectMap;
 

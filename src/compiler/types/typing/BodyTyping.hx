@@ -2,7 +2,6 @@ package compiler.types.typing;
 
 import compiler.core.Source.SourceSpan;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
-import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;

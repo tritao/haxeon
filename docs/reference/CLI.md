@@ -83,8 +83,9 @@ import sharing its line with other code ends it, so groups stay where they are. 
 later import of a name wins, so a run where two imports make the same short name
 visible (module imports count every type the module declares), or with a package
 wildcard, keeps its order and is not reported. `--only unused-imports` or
-`--only import-order` checks one rule. `scripts/format.sh` sorts and formats the
-whole tree, and `scripts/format.sh --check` is the CI check.
+`--only import-order` checks one rule. `scripts/format.sh` removes unused imports,
+sorts the rest and formats the whole tree, and `scripts/format.sh --check`, which
+CI and the pre-push hook (`scripts/hooks/pre-push`) run, fails on any of the three.
 
 Those two rules read syntax only and run by default. The rule `unbound-local` needs
 types, so it is opt-in and runs only when `--only unbound-local` names it:

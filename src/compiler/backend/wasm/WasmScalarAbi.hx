@@ -1,12 +1,10 @@
 package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmModuleSupport;
-import compiler.backend.wasm.WasmScalarClosureEscapes;
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.core.InternalError;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
-import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.IrOperands;
 import compiler.ir.IrProgramIndex;
 import compiler.ir.IrReachability;

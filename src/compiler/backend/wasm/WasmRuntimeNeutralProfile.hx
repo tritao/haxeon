@@ -1,7 +1,6 @@
 package compiler.backend.wasm;
 
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
-import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmTypes.WasmValueType;

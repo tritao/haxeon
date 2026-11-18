@@ -1,6 +1,5 @@
 package haxeon.ui.theme;
 
-import haxeon.ui.widgets.text.Text;
 
 
 import haxeon.ui.Color;

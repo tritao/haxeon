@@ -1,5 +1,4 @@
 import haxeon.ui.LayoutAxis;
-import haxeon.ui.LayoutStyle;
 import haxeon.ui.core.EventDispatcher;
 import haxeon.ui.core.FocusManager;
 import haxeon.ui.core.RenderNode;

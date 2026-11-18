@@ -6,7 +6,6 @@ import compiler.backend.wasm.WasmScalarClosureEscapes;
 import compiler.backend.wasm.WasmValueLayout;
 import compiler.backend.wasm.WasmFlattenValueFields;
 import compiler.backend.Backend.BackendOptions;
-import compiler.backend.Backend.BackendResult;
 import compiler.backend.MemoryContract.MemoryContractCodec;
 import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;

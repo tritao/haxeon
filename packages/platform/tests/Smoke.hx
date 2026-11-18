@@ -1,13 +1,7 @@
 import haxeon.platform.Runtime;
-import haxeon.platform.Window;
-import haxeon.platform.async.Future;
 import haxeon.platform.async.Outcome;
 import haxeon.platform.async.Promise;
-import haxeon.platform.async.Requests;
-import haxeon.platform.event.EventPump;
-import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.input.TextInput;
 import haxeon.platform.internal.event.EventBytes;
 import nativekit.ffi.NativeKitTypes.FileDialogOptions as NativeFileDialogOptions;
 import nativekit.ffi.NativeKitTypes.TextInputState as NativeTextInputState;

@@ -1,6 +1,5 @@
 package pages;
 
-import haxeon.ui.Image;
 
 import UiExplorer;
 import haxeon.ui.Canvas;

@@ -2,7 +2,6 @@ package haxeon.ui.widgets.docking;
 
 import Observable;
 
-import haxeon.ui.docking.DockDropZone;
 import haxeon.ui.docking.DockWorkspaceModel;
 
 /** Shared tab-drag controller that translates pointer geometry into model docks. */

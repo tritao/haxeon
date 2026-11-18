@@ -8,7 +8,6 @@ import haxeon.ui.LayoutVisualKind;
 import haxeon.ui.component.ScopeView;
 import haxeon.ui.core.BuildContext;
 import haxeon.ui.core.RenderNode;
-import haxeon.ui.core.RenderScope;
 import haxeon.ui.core.StateStore;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.theme.Theme;

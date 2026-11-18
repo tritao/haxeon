@@ -4,7 +4,6 @@ import haxeon.platform.Runtime;
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.SurfaceFrameSubscription;
 import haxeon.platform.Window;
-import haxeon.platform.event.EventPump;
 import haxeon.platform.event.EventSubscription;
 import haxeon.platform.event.PlatformEvent;
 import haxeon.ui.FontCollection;

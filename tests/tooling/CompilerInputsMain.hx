@@ -3,7 +3,6 @@ import compiler.tools.CompilerArguments;
 import compiler.tools.CompilerDriver;
 import compiler.tools.CompilerSession;
 import haxe.Json;
-import haxe.io.Bytes;
 import sys.FileSystem;
 import sys.io.File;
 

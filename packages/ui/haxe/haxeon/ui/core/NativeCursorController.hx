@@ -1,6 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.NativeEnums;
 import nativekit.ffi.NativeKitTypes;
 import nativekit.ffi.NativeKitTypes.NativeCursorShape;
 

@@ -1,11 +1,8 @@
 package compiler.ffi;
 
 import compiler.ffi.HxiAbi.HxiAbi;
-import compiler.ffi.HxiAbi.HxiAbiValue;
 import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.HxiModel.HxiInterface;
-import compiler.ffi.HxiModel.HxiResultPolicy;
-import compiler.ffi.HxiSemantics.HxiSemanticFunction;
 import compiler.ffi.NativeCallPlan.NativeCallPlan;
 import compiler.ffi.NativeCallPlan.NativeDispatch;
 

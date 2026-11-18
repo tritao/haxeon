@@ -1,8 +1,6 @@
 package pages;
 
-import haxeon.ui.Paint;
 
-import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;

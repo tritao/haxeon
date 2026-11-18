@@ -3,7 +3,6 @@ import compiler.CompileOptions;
 import compiler.Compiler;
 import compiler.hl.HlWriter;
 import compiler.runtime.CompilerIntrinsics;
-import haxe.io.Bytes;
 
 /**
  * A plain build in a reused compiler session gives the bytes of a fresh build of the same sources, and when nothing the IR pipeline

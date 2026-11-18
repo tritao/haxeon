@@ -1,7 +1,6 @@
 package compiler.ir;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectFieldNativeLayout;
 import compiler.ir.Ir.IrScalarStorage;
 import compiler.ir.Ir.IrType;

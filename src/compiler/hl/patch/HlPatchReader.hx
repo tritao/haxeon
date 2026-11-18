@@ -8,7 +8,6 @@ import compiler.hl.HlType;
 import compiler.hl.patch.HlPatch.HlPatchAddedFunction;
 import compiler.hl.patch.HlPatch.HlPatchFunction;
 import compiler.hl.patch.HlPatch.HlPatchGlobal;
-import compiler.hl.patch.HlPatch.HlPatchInstruction;
 import haxe.io.Bytes;
 import haxe.io.BytesInput;
 

@@ -1,7 +1,6 @@
 package compiler.backend.wasm;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrBlock;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGraph;
 

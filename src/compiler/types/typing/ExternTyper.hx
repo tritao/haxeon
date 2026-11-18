@@ -4,7 +4,6 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.NativeLayout;
-import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Type.CompilerType;

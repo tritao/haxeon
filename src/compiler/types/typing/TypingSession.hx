@@ -10,7 +10,6 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.types.analysis.ClosureConversion;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
-import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedNativeLayout;
 import compiler.core.Source.SourceSpan;
 import compiler.types.analysis.Scope;

@@ -5,7 +5,6 @@ import compiler.core.Provides.ProviderOperation;
 import compiler.ir.Ir;
 import compiler.ir.IrInlineValueLayout.IrInlineValueSlot;
 import compiler.ir.SourceProvenance.Located;
-import compiler.types.typing.HashGenerator;
 
 private typedef OptionalAlias = {
 	final root:Int;

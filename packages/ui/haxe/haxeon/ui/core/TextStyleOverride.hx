@@ -6,7 +6,6 @@ import haxeon.ui.TextDirection;
 import haxeon.ui.TextStyle;
 import haxeon.ui.TextWrap;
 
-import haxeon.ui.widgets.text.Text;
 
 
 import haxeon.ui.Color;

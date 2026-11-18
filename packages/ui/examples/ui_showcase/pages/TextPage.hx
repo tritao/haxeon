@@ -1,7 +1,5 @@
 package pages;
 
-import haxeon.ui.widgets.controls.Select;
-import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;

@@ -1,6 +1,5 @@
 package haxeon.ui.core;
 
-import haxeon.ui.NativeEnums;
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.ui.debug.RenderCost;
 import haxeon.platform.Surface as PlatformSurface;

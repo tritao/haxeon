@@ -1,5 +1,3 @@
-import haxeon.platform.event.PlatformEvent;
-import haxeon.platform.internal.event.NativeEvent;
 import haxeon.ui.Paint.SolidPaint;
 import haxeon.ui.TextLayout.TextPosition;
 

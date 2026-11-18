@@ -2,7 +2,6 @@ package haxeon.ui.widgets.controls;
 import haxeon.ui.widgets.Icon;
 import haxeon.ui.widgets.text.MiddleEllipsisText;
 
-import haxeon.ui.Color;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutDirection;
 import haxeon.ui.LayoutStyle;
@@ -21,7 +20,6 @@ import haxeon.ui.semantics.AccessibilityRole;
 import haxeon.ui.semantics.AccessibilityState;
 import haxeon.ui.semantics.Semantics;
 import haxeon.ui.style.StyleProperty;
-import haxeon.ui.style.StyleResolver;
 import haxeon.ui.style.StyleState;
 import haxeon.ui.style.StyleTarget;
 import haxeon.ui.theme.TextRole;

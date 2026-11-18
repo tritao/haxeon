@@ -1,5 +1,3 @@
-import haxeon.ui.Paint;
-
 import pages.ControlsPage;
 import pages.DecorationsPage;
 import pages.EffectsPage;

@@ -2,8 +2,6 @@ package pages;
 
 import haxeon.ui.Insets;
 
-import haxeon.ui.widgets.controls.Tabs;
-import haxeon.ui.widgets.text.Text;
 
 
 import UiExplorer;

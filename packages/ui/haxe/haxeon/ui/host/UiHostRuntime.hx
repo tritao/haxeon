@@ -1,7 +1,6 @@
 package haxeon.ui.host;
 
 import haxeon.platform.Surface as PlatformSurface;
-import haxeon.platform.event.EventPump;
 
 import NativeKitUI.UiStatus;
 import haxeon.ProfileCounter;

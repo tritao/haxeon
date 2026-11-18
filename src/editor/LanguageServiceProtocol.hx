@@ -12,7 +12,6 @@ import compiler.hl.HlWriter;
 import compiler.service.LanguageService;
 import compiler.service.LanguageService.DocumentSymbol;
 import compiler.service.LanguageService.SymbolLocation;
-import compiler.service.LanguageService.TextEdit;
 import haxe.Json;
 import haxe.crypto.Base64;
 import sys.thread.Mutex;

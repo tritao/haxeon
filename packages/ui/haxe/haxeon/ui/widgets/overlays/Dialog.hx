@@ -1,7 +1,5 @@
 package haxeon.ui.widgets.overlays;
 
-import haxeon.ui.Color;
-import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAlignmentY;
 import haxeon.ui.LayoutAxis;

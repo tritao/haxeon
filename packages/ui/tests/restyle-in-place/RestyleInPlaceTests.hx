@@ -30,7 +30,6 @@ import haxeon.ui.widgets.controls.Button;
 import haxeon.ui.widgets.controls.Checkbox;
 import haxeon.ui.widgets.controls.IconButton;
 import haxeon.ui.widgets.controls.ProgressBar;
-import haxeon.ui.widgets.controls.ProgressMode;
 import haxeon.ui.widgets.controls.Radio;
 import haxeon.ui.widgets.controls.RadioGroup;
 import haxeon.ui.widgets.controls.RadioOption;

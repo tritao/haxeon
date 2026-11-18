@@ -1,7 +1,6 @@
 package compiler.semantic;
 
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.AstChildren;
 import compiler.syntax.AstFunctions;
 import compiler.syntax.Ast;
 import compiler.syntax.Ast.AstExpression;

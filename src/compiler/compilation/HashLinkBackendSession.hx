@@ -7,7 +7,6 @@ import compiler.abi.PatchPlanner;
 import compiler.abi.PatchPlanner.AbiChange;
 import compiler.abi.PatchPlanner.PatchDecision;
 import compiler.abi.RuntimeAbi;
-import compiler.abi.RuntimeAbi.RuntimeAbiDescriptor;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.hl.incremental.HlLoweredCache;

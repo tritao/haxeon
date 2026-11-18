@@ -4,7 +4,6 @@ import Observable;
 
 import haxeon.ui.LayoutSizing;
 
-import haxeon.ui.Canvas;
 import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentX;

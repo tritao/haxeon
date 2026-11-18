@@ -9,7 +9,6 @@ import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
 import compiler.core.InternalError;
-import compiler.core.IrPassMeter;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;

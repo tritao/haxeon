@@ -1,6 +1,5 @@
 package haxeon.ui.widgets.controls;
 
-import haxeon.ui.Color;
 import haxeon.ui.Insets;
 import haxeon.ui.LayoutAlignmentX;
 import haxeon.ui.LayoutAlignmentY;

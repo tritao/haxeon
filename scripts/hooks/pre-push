@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
-# Refuses a push whose commits leave a Haxe file unformatted or its imports out of order, which CI's format check would
-# fail. Enable it in a checkout with `git config core.hooksPath scripts/hooks`; `git push --no-verify` skips it.
+# Refuses a push whose commits leave a Haxe file unformatted, with unused imports or with its imports out of order, which
+# CI's format check would fail. Enable it in a checkout with `git config core.hooksPath scripts/hooks`;
+# `git push --no-verify` skips it.
 #
 # It checks the files the pushed commits change, as they are in this working tree: run it from the tree you push. A push that
 # changes no Haxe file is not checked, nor one from a tree without a native build (a scratch worktree), which CI still checks.
@@ -23,6 +24,6 @@ while read -r local_ref local_sha remote_ref remote_sha; do
 	"$root/scripts/format.sh" --check --range "$base..$local_sha" || status=1
 done
 if [ "$status" -ne 0 ]; then
-	echo "pre-push: fix with scripts/format.sh --changed (or haxeon fmt / haxeon lint --fix --only import-order FILES)" >&2
+	echo "pre-push: fix with scripts/format.sh --changed (or haxeon fmt / haxeon lint --fix FILES)" >&2
 fi
 exit "$status"

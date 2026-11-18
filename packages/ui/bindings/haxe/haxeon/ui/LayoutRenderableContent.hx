@@ -2,7 +2,6 @@ package haxeon.ui;
 
 import haxeon.ui.Canvas;
 import haxeon.ui.DisplayList;
-import haxeon.ui.Rect;
 
 /** Paint callback for a retained custom layout content provider. */
 typedef LayoutContentPaint = (canvas:Canvas, geometry:ResolvedLayoutItem) -> Void;

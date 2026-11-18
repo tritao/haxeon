@@ -1,6 +1,5 @@
 package compiler.backend.wasm;
 
-import compiler.backend.wasm.WasmFlattenValueFields;
 import compiler.ir.Ir;
 import compiler.ir.IrFunction;
 import compiler.ir.IrOperands;

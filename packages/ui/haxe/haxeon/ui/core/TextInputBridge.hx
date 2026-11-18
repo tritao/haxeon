@@ -6,7 +6,6 @@ import haxeon.platform.input.TextInputState;
 
 import haxeon.ui.TextLayout.TextRangeRect;
 
-import haxeon.ui.widgets.text.Text;
 
 import haxeon.ui.Rect;
 import haxeon.ui.widgets.text.TextInputWindow;

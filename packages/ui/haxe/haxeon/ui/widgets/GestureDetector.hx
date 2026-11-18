@@ -7,7 +7,6 @@ import haxeon.ui.core.Key;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.View;
-import haxeon.ui.gestures.GestureArena;
 import haxeon.ui.gestures.GestureRecognizer;
 
 /** Attaches Haxe tap, double-tap, long-press, and drag recognizers to a child view. */

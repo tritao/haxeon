@@ -7,7 +7,6 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Monomorphs;
 import compiler.types.Type.CompilerType;
-import compiler.types.TypeRelations;
 
 /** A static function found as an extension of a value: `key` is its canonical name, `owner` what declares it. */
 typedef StaticExtension = {

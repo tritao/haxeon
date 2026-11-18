@@ -1,5 +1,4 @@
 package audiolab;
-import haxeon.ui.Renderer;
 
 import StringTools;
 import haxeon.ui.Canvas;

@@ -10,7 +10,6 @@ import haxeon.ui.widgets.text.Text;
 import haxeon.ui.core.RenderNode;
 import haxeon.ui.core.WidgetId;
 import haxeon.ui.semantics.Semantics;
-import haxeon.ui.style.CustomEffect;
 import haxeon.ui.style.EffectChain;
 import haxeon.ui.style.EffectKind;
 import haxeon.ui.style.InkOverflow;

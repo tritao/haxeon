@@ -3,7 +3,6 @@ package shell;
 import UiExplorer;
 import haxeon.ui.LayoutAxis;
 import haxeon.ui.LayoutStyle;
-import haxeon.ui.widgets.KeyedView;
 import haxeon.ui.widgets.layout.Column;
 import haxeon.ui.widgets.layout.StackChild;
 import haxeon.ui.widgets.overlays.Dialog;

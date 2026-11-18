@@ -6,7 +6,6 @@ import compiler.ir.IrProgramIndex;
 import compiler.ir.IrTypeIdentity;
 
 import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrEnumCase;
 import compiler.ir.Ir.IrObject;
 import compiler.ir.Ir.IrObjectField;
 import compiler.ir.Ir.IrProgram;

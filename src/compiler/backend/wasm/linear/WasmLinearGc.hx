@@ -1,7 +1,6 @@
 package compiler.backend.wasm.linear;
 
 import compiler.core.InternalError;
-import compiler.ir.Ir.IrProgram;
 import compiler.ir.Ir.IrType;
 import compiler.backend.wasm.WasmLayout;
 import compiler.backend.wasm.WasmTypes.WasmInstruction;
@@ -9,7 +8,6 @@ import compiler.backend.wasm.WasmTypes.WasmValueType;
 import compiler.backend.wasm.WasmTypes.WasmFunctionType;
 import compiler.backend.wasm.WasmModule.WasmFunction;
 import compiler.backend.wasm.WasmModule.WasmModule;
-import compiler.backend.wasm.WasmBackend;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmFunctionBuilder;
 import compiler.backend.wasm.WasmFunctionBuilder.WasmLocalRef;
 

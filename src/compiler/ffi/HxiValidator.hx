@@ -5,8 +5,6 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.ffi.HxiModel.HxiDeclaration;
-import compiler.ffi.HxiModel.HxiField;
-import compiler.ffi.HxiModel.HxiEnumValue;
 import compiler.ffi.HxiModel.HxiInterface;
 import compiler.ffi.HxiModel.HxiParameter;
 import compiler.ffi.HxiModel.HxiParameterDirection;

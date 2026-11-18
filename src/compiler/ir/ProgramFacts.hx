@@ -1,47 +1,11 @@
 package compiler.ir;
 
 import compiler.core.InternalError;
-import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
-import compiler.types.Type.CompilerType;
-import compiler.types.Type.NominalKind;
-import compiler.types.TypeRelations;
-import compiler.runtime.RuntimeType;
-import compiler.runtime.PlatformAbi;
-import compiler.types.typing.HashGenerator;
-import compiler.types.typing.ValueEqualityGenerator;
-import compiler.types.analysis.ControlFlow;
-import compiler.types.TypedAst.TypedExpression;
-import compiler.types.TypedAst.ValueCopyLayout;
+import compiler.ir.Ir.IrType;
 import compiler.types.TypedAst.TypedClass;
 import compiler.types.TypedAst.TypedEnum;
 import compiler.types.TypedAst.TypedInterface;
 import compiler.types.TypedAst.TypedProgram;
-import compiler.types.TypedAst.TypedFunction;
-import compiler.types.TypedAst.TypedStatement;
-import compiler.types.TypedAst.TypedSwitchCase;
-import compiler.types.TypedAst.TypedSwitchBinding;
-import compiler.types.TypedAst.TypedSwitchPredicate;
-import compiler.types.TypedAst.TypedSwitchArrayPattern;
-import compiler.types.TypedAst.TypedCaptureSource;
-import compiler.ir.cfg.Cfg.CfgFunction;
-import compiler.ir.cfg.Cfg.CfgBlock;
-import compiler.ir.cfg.Cfg.CfgValue;
-import compiler.ir.cfg.Cfg.CfgArgument;
-import compiler.ir.cfg.CfgBuilder;
-import compiler.ir.cfg.CfgLoopContext;
-import compiler.ir.cfg.SsaBuilder;
-import compiler.ir.cfg.CfgIteratorReplacement;
-import compiler.ir.IrBuilder;
-import compiler.ir.Ir.IrProgram;
-import compiler.ir.Ir.IrType;
-import compiler.ir.Ir.IrNative;
-import compiler.ir.Ir.IrCNative;
-import compiler.ir.Ir.IrObject;
-import compiler.ir.Ir.IrObjectField;
-import compiler.ir.Ir.IrObjectMethod;
-import compiler.ir.Ir.IrInterface;
-import compiler.ir.Ir.IrEnum;
-import compiler.ir.Ir.IrStaticField;
 
 /**
  * What the IR generator and the IR passes know about the whole typed program, derived from it once per build: enum layouts, which

@@ -40,7 +40,6 @@ import haxeon.ui.widgets.layout.Spacer;
 import haxeon.ui.widgets.scroll.ScrollAxis;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.scroll.ScrollView;
-import haxeon.ui.widgets.text.Text;
 
 /** Model-backed virtual tree with lazy visible-branch indexing and stable selection state. */
 class TreeView implements View {
