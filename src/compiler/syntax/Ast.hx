@@ -74,7 +74,15 @@ typedef AstField = {
 	final isStatic:Bool;
 	final isInline:Bool;
 	final isFinal:Bool;
+
+	/** From `var` (or the name), to the end: where a reference to the field points. */
 	final span:SourceSpan;
+
+	/**
+	 * From the field's first modifier, after its metadata, to the end: Haxe's position of the field, where it reports a field's
+	 * declaration errors ("Method get_x required by property x is missing"). Null where it is `span`.
+	 */
+	final ?declarationSpan:SourceSpan;
 }
 
 /** Parsed class declaration and its unresolved inheritance relationships. */

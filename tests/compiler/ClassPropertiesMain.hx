@@ -30,8 +30,12 @@ class ClassPropertiesMain {
 		expectError("a missing getter", "class Item { public var area(get, never):Int; public function new() {} } ",
 			"var item = new Item(); var value:Int = item.area;",
 			"Method get_area required by property area is missing");
-		expectError("a missing setter", "class Item { public var area(never, set):Int; public function new() {} } ", "",
-			"Method set_area required by property area is missing");
+		// At the field's first modifier, after its metadata, as Haxe reports it.
+		expectError("a missing setter",
+			"class Item { @:keep public var area(never, set):Int; public function new() {} } ", "",
+			"Method set_area required by property area is missing", "public var area");
+		expectError("a missing static getter", "class Item { static public var count(get, null):Int; } ", "",
+			"Method get_count required by property count is missing", "static public var count");
 		// Inside its own accessor a property is its variable, which a property with only accessors does not have.
 		expectError("an accessor reading a property without storage",
 			"class Item { public var area(get, never):Int; public function new() {} function get_area() return area + 1; } ",

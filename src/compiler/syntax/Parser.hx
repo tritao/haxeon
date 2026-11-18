@@ -886,6 +886,8 @@ class Parser {
 					skipMacroFunction();
 					continue;
 				}
+				// Haxe's position of a field starts at its first modifier, after its metadata.
+				var modifierStart = current().span;
 				var isStatic = false, isInline = false, isFinal = false, isOverride = false, isExternMember = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
@@ -923,7 +925,7 @@ class Parser {
 						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, isPublic,
 						isOverride));
 				} else
-					fields.push(parseField(memberMetadata, isPublic, isStatic, isInline, isFinal));
+					fields.push(parseField(memberMetadata, isPublic, isStatic, isInline, isFinal, null, modifierStart));
 			} catch (error:CompileError) {
 				if (!recovering)
 					throw error;
@@ -953,7 +955,7 @@ class Parser {
 	 * and the initializer, at least one of the last two.
 	 */
 	function parseField(memberMetadata:Array<compiler.syntax.Ast.AstMetadata>, isPublic:Null<Bool>, isStatic:Bool,
-			isInline:Bool, isFinal:Bool, ?start:SourceSpan):AstField {
+			isInline:Bool, isFinal:Bool, ?start:SourceSpan, ?declarationStart:SourceSpan):AstField {
 		var fieldStart = start == null ? current().span : start;
 		match(TokenKind.Var);
 		var fieldName = consume(TokenKind.Identifier).text;
@@ -992,7 +994,8 @@ class Parser {
 			isStatic: isStatic,
 			isInline: isInline,
 			isFinal: isFinal,
-			span: fieldStart.merge(end)
+			span: fieldStart.merge(end),
+			declarationSpan: declarationStart == null ? null : declarationStart.merge(end)
 		};
 	}
 

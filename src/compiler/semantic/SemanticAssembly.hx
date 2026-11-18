@@ -474,7 +474,8 @@ class SemanticAssembly {
 						isStatic: field.isStatic,
 						isInline: field.isInline,
 						isFinal: field.isFinal,
-						span: field.span
+						span: field.span,
+						declarationSpan: field.declarationSpan
 					});
 				}
 				classes.push({

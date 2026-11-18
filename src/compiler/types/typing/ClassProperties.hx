@@ -163,7 +163,8 @@ class ClassProperties {
 						declared = declaresInstanceMethod(session, declaration, name);
 					if (!declared)
 						throw new CompileError(new Diagnostic("E1002",
-							'Method $name required by property ${field.name} is missing', field.span));
+							'Method $name required by property ${field.name} is missing',
+							field.declarationSpan ?? field.span));
 				}
 	}
 
