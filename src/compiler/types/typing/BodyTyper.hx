@@ -789,6 +789,12 @@ class BodyTyper implements BodyTyping {
 				case ForIn(name, valueName, iterable, body, span):
 					output.push(statementTyper.typeForIn(name, valueName, iterable, body, span, scope, result));
 				case Switch(expression, cases, defaultBranch, hasDefault, span)
+					if (ExtractorPatterns.present([for (switchCase in cases) switchCase.value])):
+					// Extractor cases match as nested switches (`ExtractorPatterns`).
+					for (typed in typeStatements(ExtractorPatterns.rewriteStatement(expression, cases, defaultBranch,
+						hasDefault, span), scope, result))
+						output.push(typed);
+				case Switch(expression, cases, defaultBranch, hasDefault, span)
 					if (StructurePatterns.present([for (switchCase in cases) switchCase.value])):
 					// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
 					var rewritten = StructurePatterns.rewrite(expression, [for (switchCase in cases) switchCase.value],

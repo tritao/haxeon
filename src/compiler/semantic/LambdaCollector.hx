@@ -115,6 +115,9 @@ class LambdaCollector {
 				collect([store], functionName, module, generatedByModule);
 			case ThrowExpression(value, _), Capture(_, value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case Extractor(expression, pattern, _):
+				collectLambdaExpression(expression, functionName, module, generatedByModule);
+				collectLambdaExpression(pattern, functionName, module, generatedByModule);
 			case Cast(value, _, _), CheckType(value, _, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case SwitchExpression(subject, cases, fallback, _):

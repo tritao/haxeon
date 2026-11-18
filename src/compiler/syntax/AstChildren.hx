@@ -24,6 +24,9 @@ class AstChildren {
 				CheckType(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _):
 				visitor.visitChild(value);
+			case Extractor(expression, pattern, _):
+				visitor.visitChild(expression);
+				visitor.visitChild(pattern);
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
 				BitOr(a, b, _), ShiftLeft(a, b, _),
 				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _),
@@ -112,6 +115,7 @@ class AstChildren {
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
 				CheckType(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _): [value];
+			case Extractor(expression, pattern, _): [expression, pattern];
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
 				BitOr(a, b, _), ShiftLeft(a, b, _),
 				ShiftRight(a, b, _), UnsignedShiftRight(a, b, _), Less(a, b, _), LessEqual(a, b, _), Greater(a, b, _),

@@ -27,6 +27,10 @@ The current subset includes:
   switch's over the fields the cases name (above): an enum field is covered constructor by constructor, an Int field only
   by `_` (or, in a statement, not at all). A case of such a switch is a structure pattern, a capture or `_`; a constant
   case (`case null:`) is not supported beside them.
+- Extractor patterns, `case expression => pattern:`, as Haxe matches them: `expression`, in which `_` is the value
+  (`_.length => 3`, `parse(_) => Some(value)`), is evaluated only when no earlier case matched, once for a run of cases
+  that share it, and its value must match `pattern`; `name = expression => pattern` also binds the value. The cases after
+  them match the value itself again. Coverage is that of each run's value (an enum constructor by constructor).
 - A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
   and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
   default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`
@@ -205,7 +209,8 @@ Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11
 HashLink):
 
 - Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
-- Extractor patterns (`case parse(_) => value:`, `case _.length => 3:`).
+- An extractor pattern inside another pattern (`case Some(_.length => 3):`, `case {name: _.length => 3}:`): an extractor is a
+  whole case only.
 - Rest parameters (`function sum(...values:Int)`).
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures

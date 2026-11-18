@@ -245,6 +245,9 @@ class SemanticDependencyCollector {
 				scanNativeLayoutQueryStatements(result, owner, [store], aliases);
 			case Cast(value, _, _), CheckType(value, _, _), Capture(_, value, _):
 				scanNativeLayoutQueryExpression(result, owner, value, aliases);
+			case Extractor(expression, pattern, _):
+				scanNativeLayoutQueryExpression(result, owner, expression, aliases);
+				scanNativeLayoutQueryExpression(result, owner, pattern, aliases);
 			case SwitchExpression(subject, cases, fallback, _):
 				scanNativeLayoutQueryExpression(result, owner, subject, aliases);
 				for (switchCase in cases) {
@@ -453,6 +456,9 @@ class SemanticDependencyCollector {
 				scanCalls(store, calls, aliases);
 			case ThrowExpression(value, _), Capture(_, value, _):
 				scanCallExpression(value, calls, aliases);
+			case Extractor(expression, pattern, _):
+				scanCallExpression(expression, calls, aliases);
+				scanCallExpression(pattern, calls, aliases);
 			case Cast(value, _, _), CheckType(value, _, _):
 				scanCallExpression(value, calls, aliases);
 			case SwitchExpression(subject, cases, fallback, _):

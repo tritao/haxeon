@@ -124,6 +124,9 @@ class ExpressionTyper {
 			case Capture(_, _, span):
 				fail("E1019", "A capture `name = pattern` binds only where the pattern itself is matched", span);
 				null;
+			case Extractor(_, _, span):
+				fail("E1019", "An extractor `expression => pattern` matches only as a switch case", span);
+				null;
 			case Cast(value, target, span): typeCast(value, target, span, scope, expectedType);
 			case CheckType(value, type, span): typeCheckType(value, type, span, scope);
 			case PostfixIncrement(target, delta, span): postfixIncrement(target, delta, span, scope);
@@ -1647,6 +1650,11 @@ class ExpressionTyper {
 	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		// Extractor cases match as nested switches (`ExtractorPatterns`).
+		if (ExtractorPatterns.present([for (switchCase in cases) switchCase.value]))
+			return bodyTyper.typeExpression(ExtractorPatterns.rewriteExpression(expression, cases, defaultExpression,
+				span),
+				scope, expectedType);
 		// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
 		if (StructurePatterns.present([for (switchCase in cases) switchCase.value])) {
 			var rewritten = StructurePatterns.rewrite(expression, [for (switchCase in cases) switchCase.value], span),

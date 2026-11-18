@@ -696,6 +696,7 @@ private class PurityWalker {
 				Index(left, right, _): expression(left) && expression(right);
 			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), CheckType(value, _, _),
 				NewArray(_, value, _), Capture(_, value, _): expression(value);
+			case Extractor(source, pattern, _): expression(source) && expression(pattern);
 			case Conditional(test, yes, no, _): expression(test) && expression(yes) && expression(no);
 			case AssignmentValue(store, _): statement(store);
 			case BlockExpression(body, result, _):
@@ -1059,6 +1060,8 @@ private class PurityWalker {
 				declare(name);
 			case Capture(name, inner, _):
 				declare(name);
+				bindPattern(inner);
+			case Extractor(_, inner, _):
 				bindPattern(inner);
 			case Call(_, arguments, _):
 				for (argument in arguments)

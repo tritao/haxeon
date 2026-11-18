@@ -258,6 +258,12 @@ enum AstExpression {
 	/** The switch pattern `name = pattern`: matches what `pattern` matches and binds the matched value to `name`. Only valid in a case. */
 	Capture(name:String, pattern:AstExpression, span:SourceSpan);
 
+	/**
+	 * The switch pattern `expression => pattern`: `expression`, where `_` is the value being matched, must match `pattern`
+	 * (`case _.length => 3:`, `case parse(_) => value:`). Only valid in a case.
+	 */
+	Extractor(expression:AstExpression, pattern:AstExpression, span:SourceSpan);
+
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 	Cast(expression:AstExpression, target:Null<AstType>, span:SourceSpan);
 

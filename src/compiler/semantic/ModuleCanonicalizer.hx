@@ -603,6 +603,9 @@ class ModuleCanonicalizer {
 				s);
 			case Capture(name, pattern, s): Capture(name, canonicalExpression(pattern, module, entry, locals, aliases),
 				s);
+			case Extractor(expression, pattern, s):
+				Extractor(canonicalExpression(expression, module, entry, locals, aliases),
+					canonicalExpression(pattern, module, entry, locals, aliases), s);
 			case Cast(value, target, s):
 				Cast(canonicalExpression(value, module, entry, locals, aliases), canonicalOptionalType(target, aliases),
 					s);

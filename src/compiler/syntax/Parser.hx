@@ -1644,6 +1644,13 @@ class Parser {
 			expression = Conditional(expression, whenTrue, whenFalse,
 				expressionSpan(expression).merge(expressionSpan(whenFalse)));
 		}
+		// `expression => pattern` in a case: an extractor, matching what `expression` gives for the value (`_`) against `pattern`.
+		if (patternDepth > 0 && check(TokenKind.Assign) && peekKind(1) == TokenKind.Greater) {
+			advance();
+			advance();
+			var pattern = parseExpression();
+			return Extractor(expression, pattern, expressionSpan(expression).merge(expressionSpan(pattern)));
+		}
 		if (check(TokenKind.Assign) && peekKind(1) != TokenKind.Greater) {
 			advance();
 			var value = parseExpression(),
@@ -2590,6 +2597,8 @@ class Parser {
 				expandCallPattern(name, arguments, span);
 			case Capture(name, inner, span):
 				[for (alternative in expandPatternAlternatives(inner)) Capture(name, alternative, span)];
+			case Extractor(expression, inner, span):
+				[for (alternative in expandPatternAlternatives(inner)) Extractor(expression, alternative, span)];
 			case _: [pattern];
 		};
 
@@ -3150,7 +3159,7 @@ class Parser {
 				PostfixIncrement(_, _, span), AssignmentValue(_, span), Lambda(_, _, _, span), And(_, _, span),
 				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
-				Capture(_, _, span): span;
+				Capture(_, _, span), Extractor(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),
 				ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;

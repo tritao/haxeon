@@ -338,6 +338,10 @@ in_background run_case structure-patterns 0
 in_background run_compile_failure structure-pattern-missing-constructor
 in_background run_compile_failure structure-pattern-value-missing
 in_background run_compile_failure structure-pattern-unknown-field
+# Extractor patterns match as nested switches (src/compiler/types/typing/ExtractorPatterns.hx).
+in_background run_case extractor-patterns 0
+in_background run_compile_failure extractor-pattern-value-missing
+in_background run_compile_failure extractor-pattern-missing-constructor
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure switch-bool-missing

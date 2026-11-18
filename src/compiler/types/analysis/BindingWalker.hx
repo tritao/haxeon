@@ -331,6 +331,8 @@ class BindingWalker implements AstChildVisitor {
 			case Capture(name, inner, captureSpan):
 				declare(name, captureSpan, Pattern);
 				bindPattern(inner, span);
+			case Extractor(_, inner, _):
+				bindPattern(inner, span);
 			case Call(_, arguments, _), ArrayLiteral(arguments, _):
 				for (argument in arguments)
 					bindPattern(argument, span);

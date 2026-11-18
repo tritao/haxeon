@@ -126,6 +126,9 @@ class DependencyScanner {
 				scanStatement(store, dependencies, typeParameters);
 			case ThrowExpression(value, _), Capture(_, value, _):
 				scanExpression(value, dependencies, typeParameters);
+			case Extractor(expression, pattern, _):
+				scanExpression(expression, dependencies, typeParameters);
+				scanExpression(pattern, dependencies, typeParameters);
 			case Cast(value, type, _):
 				if (type != null)
 					scanAnnotation(type, dependencies, typeParameters);
