@@ -4,6 +4,7 @@ import compiler.Compiler;
 import compiler.Compiler.AnalysisResult;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic;
+import compiler.core.InternalError;
 import compiler.modules.ModuleState;
 import compiler.types.typing.TypingFailure;
 
@@ -39,7 +40,10 @@ class AnalysisTransaction {
 		try {
 			var context = new CompilationContext(compiler, candidate);
 			var frontend = FrontendCompilation.run(context, entryModule, token, snapshot.modules, startedAt, false);
-			candidate.lastTypedProgram = frontend.typedProgram;
+			var typed = frontend.typedProgram;
+			if (typed == null)
+				throw new InternalError("An analysis keeps its typed program");
+			candidate.lastTypedProgram = typed;
 			for (name in frontend.moduleNames) {
 				var state:ModuleState = candidate.modules.get(name);
 				if (state.lastGoodRevision != state.revision) {
@@ -71,8 +75,8 @@ class AnalysisTransaction {
 				retyped: frontend.retyped,
 				diagnosticModules: diagnosticModules,
 				elapsedMs: Sys.time() * 1000.0 - startedAt,
-				unboundLocals: frontend.typedProgram.unboundLocals,
-				nonExceptionThrows: frontend.typedProgram.nonExceptionThrows,
+				unboundLocals: typed.unboundLocals,
+				nonExceptionThrows: typed.nonExceptionThrows,
 				moduleNamespaceUses: namespaceUses
 			};
 		} catch (error:haxe.Exception) {

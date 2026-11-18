@@ -68,6 +68,9 @@ typedef CompileResult = {
 	final reloadReasons:Array<AbiChange>;
 
 	/** The modules of the compiled program (every module the frontend reached), sorted by name. */
+	/** The native type descriptors of the typed program, for the `.descriptors` files beside the module. */
+	final nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>;
+
 	final moduleNames:Array<String>;
 
 	/** No runtime publication is required; revision stays at the acknowledged baseline. */
@@ -658,6 +661,7 @@ class Compiler {
 					requiresReload: false,
 					reloadReasons: [],
 					moduleNames: cached.moduleNames,
+					nativeTypeDescriptors: cached.nativeTypeDescriptors,
 					unchanged: true,
 					baseRevision: cached.revision,
 					revision: cached.revision,

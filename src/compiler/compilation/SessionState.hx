@@ -78,6 +78,39 @@ class SessionState {
 	public var reachabilityCache(default, null):Map<String, ReachabilityCache> = [];
 	public var declarationOwners(default, null):DeclarationOwners = new DeclarationOwners();
 
+	/**
+	 * Releases what only a next build would reuse, for a compile that keeps no session (`CompileOptions.keepSession`), before its
+	 * backend: the modules' tokens, syntax trees, semantic models, typed and IR bodies and canonical declarations, the pipeline
+	 * snapshot, the typed and semantic programs and the caches. Diagnostics and warnings stay. The modules are changed in place, even
+	 * where the state they were copied from shares them: such a compile never returns to that state.
+	 */
+	public function releaseRetained():Void {
+		for (state in modules) {
+			state.tokens = [];
+			state.ast = null;
+			state.recoveredAst = null;
+			state.recoveredTokens = [];
+			state.recoveredSemanticModel = null;
+			state.semanticModel = null;
+			state.lastGoodTokens = [];
+			state.lastGoodAst = null;
+			state.lastGoodSemanticModel = null;
+			state.typedFunctions = [];
+			state.irFunctions = [];
+			state.canonicalFunctions = [];
+			state.canonicalAllFunctions = [];
+		}
+		objectCache = [];
+		canonicalObjectCache = [];
+		anonymousStrings = [];
+		lastTypedProgram = null;
+		semanticProgram = null;
+		inlineCache = new IrInlineCache();
+		pipelineSnapshot = null;
+		verifyMemo = new IrVerifyMemo();
+		reachabilityCache = [];
+	}
+
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
 			backend:BackendSession) {
 		semanticWorkspace = new SemanticWorkspace(modules);

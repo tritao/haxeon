@@ -65,9 +65,18 @@ class CompilationPipeline {
 				&& reusedFrom.backend != null
 				&& reusedFrom.backendEnvironment == backendKey ? reusedFrom.backend : null,
 			checkingReuse = context.options.checkReuse,
-			backendReused = previousBackend != null && !checkingReuse,
-			backend = backendReused ? session.reuse(previousBackend,
-				irAssemblyDoneAt) : session.assemble(context, ir, regenerated, frontend.relocated, token);
+			backendReused = previousBackend != null && !checkingReuse;
+		if (typedNew == null)
+			throw new InternalError("Build frontend did not produce a typed program");
+		var nativeTypeDescriptors = typedNew.nativeTypeDescriptors;
+		// A compile that keeps no session needs only the final IR from here on.
+		if (!context.options.keepSession) {
+			frontend.typedProgram = null;
+			typedNew = null;
+			context.state.releaseRetained();
+		}
+		var backend = backendReused ? session.reuse(previousBackend,
+			irAssemblyDoneAt) : session.assemble(context, ir, regenerated, frontend.relocated, token);
 		if (previousBackend != null && checkingReuse) {
 			var difference = session.difference(previousBackend, backend);
 			if (difference != null)
@@ -127,6 +136,7 @@ class CompilationPipeline {
 			requiresReload: backend.requiresReload,
 			reloadReasons: reloadReasons,
 			moduleNames: names,
+			nativeTypeDescriptors: nativeTypeDescriptors,
 			unchanged: backend.unchanged
 				&& (publicationBaseline == null
 				|| (publicationBaseline.backendAvailable && publicationBaseline.revision == backend.revision)),

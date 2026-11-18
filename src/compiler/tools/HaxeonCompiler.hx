@@ -6,7 +6,8 @@ import compiler.core.Diagnostic.CompileError;
 class HaxeonCompiler {
 	public static function main():Void {
 		ProcessMemory.oneShotCompile();
-		var request = CompilerArguments.parse(Sys.args());
+		// One compile per process: nothing is kept for a next build.
+		var request = CompilerArguments.parse(Sys.args().concat([compiler.CompileOptions.NO_KEEP_SESSION]));
 		try {
 			CompilerDriver.compile(request, Sys.println);
 		} catch (failure:CompileError) {

@@ -10,6 +10,7 @@ typedef CompileOptionsInit = {
 	final ?wasmLegacyExceptions:Bool;
 	final ?reverseTypingOrder:Bool;
 	final ?parseThreads:Int;
+	final ?keepSession:Bool;
 }
 
 /**
@@ -54,6 +55,13 @@ class CompileOptions {
 	 */
 	public final parseThreads:Int;
 
+	/**
+	 * Keep what a next build in the same session would reuse: the modules' syntax trees, typed and IR bodies, the pipeline
+	 * snapshot, the caches. Off for a process that compiles once (`HaxeonCompiler`), which releases them before the backend and so
+	 * peaks lower. Changes no output, so `key` leaves it out.
+	 */
+	public final keepSession:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -63,6 +71,7 @@ class CompileOptions {
 		wasmLegacyExceptions = init != null && init.wasmLegacyExceptions == true;
 		reverseTypingOrder = init != null && init.reverseTypingOrder == true;
 		parseThreads = init == null || init.parseThreads == null || init.parseThreads < 1 ? 1 : init.parseThreads;
+		keepSession = init == null || init.keepSession != false;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -75,7 +84,8 @@ class CompileOptions {
 			checkReuse: checkReuse,
 			wasmLegacyExceptions: wasmLegacyExceptions,
 			reverseTypingOrder: reverseTypingOrder,
-			parseThreads: parseThreads
+			parseThreads: parseThreads,
+			keepSession: keepSession
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -97,17 +107,23 @@ class CompileOptions {
 			flags.push("--reverse-typing-order");
 		if (parseThreads > 1)
 			flags.push(PARSE_THREADS + parseThreads);
+		if (!keepSession)
+			flags.push(NO_KEEP_SESSION);
 		return flags;
 	}
 
 	static inline final PARSE_THREADS = "--parse-threads=";
+	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 
 	/**
 	 * One spelling of the options that change what a compile makes, for a session's identity and a cached result's key: their flags,
 	 * or "" for the defaults. How many threads parse is left out.
 	 */
 	public function key():String
-		return [for (flag in arguments()) if (!StringTools.startsWith(flag, PARSE_THREADS)) flag].join(" ");
+		return [
+			for (flag in arguments())
+				if (!StringTools.startsWith(flag, PARSE_THREADS) && flag != NO_KEEP_SESSION) flag
+		].join(" ");
 
 	/** Whether `argument` is one of the flags `arguments` writes. */
 	public static function isFlag(argument:String):Bool
@@ -115,6 +131,7 @@ class CompileOptions {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order": true;
+			case NO_KEEP_SESSION: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
 
@@ -128,7 +145,8 @@ class CompileOptions {
 			checkReuse: arguments.indexOf("--check-reuse") >= 0,
 			wasmLegacyExceptions: arguments.indexOf("--wasm-legacy-exceptions") >= 0,
 			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0,
-			parseThreads: threadsFrom(arguments)
+			parseThreads: threadsFrom(arguments),
+			keepSession: arguments.indexOf(NO_KEEP_SESSION) < 0
 		});
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

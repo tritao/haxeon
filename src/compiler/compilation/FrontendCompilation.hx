@@ -44,7 +44,8 @@ import compiler.compilation.PipelineSnapshot.PipelineInputs;
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
 	final moduleNames:Array<String>;
-	final typedProgram:TypedProgram;
+	/** Null once a compile that keeps no session (`CompileOptions.keepSession`) has released it before the backend. */
+	var typedProgram:Null<TypedProgram>;
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;

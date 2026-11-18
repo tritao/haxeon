@@ -180,13 +180,10 @@ class CompilerDriver {
 				File.saveContent(request.inputsOutput, inputsReport(compiler, result.moduleNames, request));
 			if (request.ffiHeader != null && request.ffiLibrary != null)
 				File.saveContent(request.ffiHeader, CHeaderEmitter.emit(result.ir.natives, request.ffiLibrary));
-			var typedProgram = compiler.lastTypedProgram;
-			if (typedProgram == null)
-				throw new InternalError("Compiler completed without a typed program for descriptor emission");
 			File.saveBytes(request.output + ".descriptors",
-				NativeTypeDescriptorCodec.encode(typedProgram.nativeTypeDescriptors));
+				NativeTypeDescriptorCodec.encode(result.nativeTypeDescriptors));
 			File.saveContent(request.output + ".descriptors.json",
-				NativeTypeDescriptorCodec.toJson(typedProgram.nativeTypeDescriptors));
+				NativeTypeDescriptorCodec.toJson(result.nativeTypeDescriptors));
 			// Every file a reload reads now belongs to the published revision; the marker is the host's licence to load them.
 			if (!isWasm)
 				File.saveContent(request.output + ".live.full",
