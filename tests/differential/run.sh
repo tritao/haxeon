@@ -229,6 +229,8 @@ in_background run_compile_failure static-property-missing-accessor
 in_background run_case instance-properties 0
 in_background run_case abstract-generic-structure 0
 in_background run_case constrained-type-parameter-members 0
+in_background run_compile_failure uncalled-generic-error
+in_background run_compile_failure uncalled-generic-method-error
 in_background run_compile_failure instance-property-never-write
 in_background run_compile_failure instance-property-never-read
 in_background run_compile_failure instance-property-missing-accessor

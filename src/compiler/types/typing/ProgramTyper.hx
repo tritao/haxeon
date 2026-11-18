@@ -1394,6 +1394,21 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	}
 
 	/**
+	 * Checks the body of a generic function, method or static of an abstract (`key`, of `owner`, whose type parameters are
+	 * `ownerParameters`), whose code is typed per call (specialized), so an error in one nothing calls is reported as Haxe
+	 * reports it: typed once with its type parameters as themselves, for its errors alone.
+	 */
+	function checkGeneric(key:String, fn:AstFunction, owner:Null<String>, ownerParameters:Array<String>):Void {
+		if (requiredTypes().isInferred(fn)) {
+			// An unannotated function's body is typed for its signature, which records its error.
+			requiredTypes().resultType(fn);
+			return;
+		}
+		checkBody(key, () -> bodyTyper.typeFunction(fn, owner, owner != null && fn.isStatic,
+			ownSubstitutions(owner == null ? key : owner, ownerParameters, key, fn)));
+	}
+
+	/**
 	 * Types a body for its errors alone (`TypingSession.beginCheckUnit`): its unit is dropped, and an error is recorded, passed
 	 * through `reword` when given, and typing goes on.
 	 */
@@ -1484,6 +1499,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			outputs:Array<Null<TypingOutput>> = [for (_ in functions) null];
 		for (index in typingOrder(functions.length)) {
 			var fn = functions[index];
+			if (fn.isExtern != true && BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
+				checkGeneric(fn.name, fn, null, []);
+				continue;
+			}
 			if (fn.isExtern != true && !BodyTyper.isGeneric(fn) && (selected == null || selected.exists(fn.name))) {
 				// An unannotated function is typed in its own unit when its signature is first needed, and kept for here.
 				if (requiredTypes().isInferred(fn)) {
@@ -1514,7 +1533,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	function typeAbstractFunctions(abstracts:Array<compiler.syntax.Ast.AstAbstract>, selected:Null<Map<String, Bool>>,
 			units:Array<TypingOutput>):Array<TypedFunction> {
 		var methods:Array<{owner:String, signature:AstFunction}> = [],
-			unspecialized:Array<{owner:compiler.syntax.Ast.AstAbstract, signature:AstFunction, name:String}> = [];
+			unspecialized:Array<{owner:compiler.syntax.Ast.AstAbstract, signature:AstFunction, name:String}> = [],
+			generic:Array<{owner:String, signature:AstFunction, name:String}> = [];
 		for (abstractDecl in abstracts)
 			for (method in abstractDecl.methods) {
 				var name = abstractDecl.name + "." + method.name;
@@ -1524,7 +1544,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				var signature = BodyTyper.requiredMapValue(session.signatures, name);
 				if (method.isStatic && !BodyTyper.isGeneric(signature))
 					methods.push({owner: abstractDecl.name, signature: signature});
-				else if (!method.isStatic)
+				else if (method.isStatic)
+					generic.push({owner: abstractDecl.name, signature: signature, name: name});
+				else
 					unspecialized.push({owner: abstractDecl, signature: signature, name: name});
 			}
 		var typed:Array<Null<TypedFunction>> = [for (_ in methods) null],
@@ -1549,6 +1571,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		}
 		for (index in typingOrder(unspecialized.length))
 			checkAbstractMember(unspecialized[index].owner, unspecialized[index].signature, unspecialized[index].name);
+		for (index in typingOrder(generic.length))
+			checkGeneric(generic[index].name, generic[index].signature, generic[index].owner, []);
 		for (unit in outputs)
 			if (unit != null)
 				units.push(unit);
@@ -1562,9 +1586,18 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			outputs:Array<Array<TypingOutput>> = [for (_ in classes)[]];
 		for (index in typingOrder(classes.length)) {
 			var declaration = byName.get(classes[index].name);
-			if (declaration != null)
+			if (declaration != null) {
 				methods[index] = typeClassMethods(declaration, classes[index].fields, selected, false,
 					session.representation.erasedNominalSubstitutions(declaration.name), null, outputs[index]);
+				if (declaration.isExtern != true
+					&& externTyper.nativeLibrary(declaration.name, declaration.metadata) == null)
+					for (method in declaration.methods) {
+						var key = declaration.name + "." + method.name;
+						if (BodyTyper.isGeneric(method) && method.isExtern != true
+							&& (selected == null || selected.exists(key)))
+							checkGeneric(key, method, declaration.name, declaration.typeParameters);
+					}
+			}
 		}
 		for (classUnits in outputs)
 			for (unit in classUnits)

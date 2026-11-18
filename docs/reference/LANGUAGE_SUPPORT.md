@@ -115,12 +115,13 @@ The current subset includes:
 - `(value : Type)` is Haxe's type check: the value is typed with `Type` expected (`([] : Array<Int>)`, `(null : Null<Foo>)`),
   must unify with it as an assignment does (`("a" : Int)` and `(base : Derived)` are errors), converts implicitly (an Int to a
   Float, an abstract through a `@:to` or `@:from`), and the expression has `Type`. `cast` and `cast(value, Type)` cast.
-- Every instance method and constructor of an abstract is typed, as in Haxe, whether or not anything calls it, so an error
-  in one nothing calls is reported. Its code is still each call's specialization. A generic static method of an abstract
-  is typed only where it is called (with its type arguments), as a generic function or method is, so an error in one
-  nothing calls goes unreported; Haxe types it once. Typing it with its type parameters as themselves waits for member
-  access through a parameter's constraints (`function measure<T:Measured>(value:T) return value.measure()`) and for
-  `sizeof<T>`, `alignof<T>`, `typeInfo<T>` and `RawPtr<T>` layouts to be left to the specialization.
+- Every function and method is typed, as in Haxe, whether or not anything calls it, so an error in one nothing calls is
+  reported: an instance method or constructor of an abstract, and a generic function or method (a class's, an abstract's
+  static one, a module-level one), which is typed once with its type parameters as themselves. Its code is still each
+  call's specialization. There a member of a value of a type parameter is its constraints', in the order written
+  (`function measure<T:Measured>(value:T) return value.measure()`, `T:Readable & Writable`), and `T has no field x` when
+  none has it; `sizeof<T>`, `alignof<T>`, `offsetof`, `typeInfo<T>` and `RawPtr<T>` layouts, and the members Haxeon
+  synthesizes for `T:Flags` and `T:RawRepresentable`, are left to each specialization, which checks them.
 - `new Box(values)` of a generic abstract infers its type arguments as Haxe does: from the constructor's arguments, a
   parameter they leave open (`new Box([])`) from the expected type (`var box:Box<Int> = new Box([])`).
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import

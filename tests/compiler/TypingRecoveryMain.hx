@@ -62,10 +62,10 @@ class TypingRecoveryMain {
 		"2:E1002", // Box.a
 		"4:E1005", // Box.c
 		"7:E1003", // Box.bad
+		"13:E1002", // identity, typed with T as itself; identity<Int>, typed for usesFirst and usesIdentity, is not reported again
 		"14:E1002", // first
 		"15:E1005", // second
 		"16:E1003", // third: a map nothing fixes
-		"13:E1002", // identity<Int>, typed for usesFirst, which fails with it; usesIdentity uses the same body and is not reported
 		"20:E1002", // main
 		"11:E1003" // Meters.parse
 	];
