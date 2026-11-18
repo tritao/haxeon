@@ -88,3 +88,90 @@ Longer-term direction is in `ROADMAP.md`.
 
   It reads plain JSON, never `sokol-shdc`'s YAML. Writing shaders in Haxeon
   itself is a deferred plan in [docs/design/SHADERS.md](docs/design/SHADERS.md).
+
+## Generated code, HashLink and Wasm (haxeon-e4's lane)
+
+Planned in this order unless noted. Timings so far were taken on a loaded
+machine; re-measure on a quiet one before acting on a ratio.
+
+- **Erased generic owners with a specialized receiver take the slow path.**
+  The inlined fast path (`8c18d84d2`) tests only the owner's own class, so
+  reading a `Box<Int>` (its own specialized class) through `Box<Dynamic>`
+  takes the full accessor: 15 ns against stock Haxe's 6 ns in
+  `benchmarks/structure-access`. Pick the fast path's class from the static
+  types at the call site, never from guessing the program's shapes.
+- **lru is still 12% behind stock** (272 ms against 242 ms; it was 316 ms).
+  Compare its hot functions with stock's (`haxeon dev hl-stat --dump`) and
+  fix what differs.
+- **Regular recursion in generic enums is erased.** `Tree<T> = Leaf(v:T) |
+  Node(l:Tree<T>, r:Tree<T>)` stores its recursive slots as `Dynamic`, so
+  every recursive read is a checked cast (and `IrGenerator.nestedEnumField`
+  casts back for nested patterns). Erase only non-regular recursion
+  (`E<T>` → `E<Array<T>>`, which never stops specializing); type a regular
+  slot with the specialized enum. Classify beside `EnumRecursion`, update
+  `docs/reference/GENERIC_SPECIALIZATION.md`, drop the nested-pattern cast,
+  add differential tests against Haxe (deep trees, nested patterns,
+  `Null<Tree>`, generic functions over `Tree<T>`, a non-regular case still
+  erased) and an enum binary-trees benchmark on HashLink and both Wasm
+  targets. Agreed with haxeon-b8.
+- **Plain class field reads and reads by name through `Dynamic` are slower
+  than stock** (2.5× and 2.3× in `benchmarks/structure-access`). Found so far:
+  arithmetic on `inline final` constants is not folded (stock folds
+  `COUNT - 1`), and a loop reloads a captured value, with its null check,
+  every iteration (no loop-invariant load hoisting). The by-name read is
+  every dispatcher's last arm.
+- **Structure values, the rest of the representation track**
+  (`docs/design/STRUCTURE_VALUES.md`): slice 2a, `IrType.Structure`,
+  physically `dyn` on HashLink, with development debug metadata keeping the
+  logical type; then slice 2b, the guards, gated on the self-compile staying
+  within noise and nbody within 3% (if missed, first skip `OGetType`'s null
+  test in the JIT after a null check). The guard-miss counter comes with 2b.
+  In 2a, make the exact object test an IR instruction: today
+  `__object_has_exact_type` is a runtime call that passes recognize by name
+  (`IrExactTypeFacts.TEST`).
+- **A catch clause repeats its type test.** Each clause calls
+  `__exception_matches`, then a `SafeCast` that checks again. An unchecked
+  cast after a successful match drops the second check, as
+  `IrExactTypeFacts` does for erased owners.
+- **The Wasm targets call a runtime function for the exact object test** and
+  keep their checked casts after it. Lower it inline (a type id compare on
+  Wasm32, `ref.test` on Wasm GC) and use `IrExactTypeFacts` there too.
+- **Register allocation uses conservative live ranges.** Each register's range
+  is the hull of its live points; exact live intervals would let more values
+  share a register.
+- **Code size, smaller items:** `OIncr`/`ODecr` for `+= 1` (stock uses them),
+  shorter anonymous-structure names, and a size-aware inlining budget.
+- **Compressed debug sections** (decided, ADR 0003 §12): an LZ4 HC flag on
+  debug sections, function identities first (1.15 MB to about 234 KB on the
+  compile server), compressed by a runtime native over the fork's vendored
+  `lz4.c` so both compiler builds write the same bytes.
+- **Hand-built test programs declare runtime natives themselves.** A pass
+  that starts calling a new runtime function breaks them
+  (`IteratorTypeDescriptorMain`, fixed in `aefdb62c5`). Give
+  `IrProgramAssembler`'s native registration one entry point,
+  `ensureRuntimeNatives(program)`, and use it from those tests too.
+- **The IR census is switched on by `HAXEON_IR_CENSUS=1`.** Behaviour switches
+  belong in `CompileOptions` with a CLI flag; convert it.
+- **The HashLink fork carries fixes upstream lacks:** a block that jumps to
+  its own start is a loop (`696b2c1`), catch slots (`56f9452`), referenced
+  registers in one stack home (`e289d5c`; upstream loses a callee's write
+  through a reference in a try) and trap-region validation (`621c7ed`).
+  Offer them upstream as patches, so merges stay easy. Waiting on the user's
+  go-ahead, since it is outward-facing.
+
+Held until other lanes finish: architecture plan §13 steps 4 (needs the
+typer's drain order) and 5 (live pruning), and the allocation work in
+`BindingWalker` and `CallResolver` (now on haxeon-7b's `MemberAccess`).
+
+Waiting on the user:
+
+- **Project tools:** packages that provide commands, pinned per project, like
+  .NET local tools (`dotnet tool restore`, `dotnet tool run`). The
+  content-addressed tool cache behind `haxeon dev tool-path` could be the
+  restore step. Needs a design note first: manifest shape, version
+  resolution, running package-provided code.
+- **`hl-stat` for users:** it answers "why is my module big or slow to load"
+  for anyone shipping a HashLink app, so it may belong in the user CLI (like
+  `haxeon heap`) rather than `haxeon dev`.
+- **A lint rule for shared mutable statics,** generalizing the compiler's
+  `CompilerStaticsMain` check.
