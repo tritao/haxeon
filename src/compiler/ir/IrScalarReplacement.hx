@@ -393,7 +393,7 @@ class IrScalarReplacement {
 				if (block == home) {
 					if (position <= allocation)
 						return false;
-				} else if (singleBlock || !graph.blocks.exists(block.id))
+				} else if (singleBlock || !graph.contains(block.id))
 					return false;
 				switch instruction {
 					case FieldGet(_, target, _) if (target.id == object.id):
@@ -423,18 +423,18 @@ class IrScalarReplacement {
 		for (id in graph.order)
 			frontier.set(id, []);
 		for (id in graph.order) {
-			var preds = graph.predecessors.get(id);
-			if (preds == null || preds.length < 2)
+			var preds = graph.predecessorsOf(id);
+			if (preds.length < 2)
 				continue;
 			for (pred in preds) {
 				var runner = pred, guard = 0;
-				while (graph.immediate.exists(runner) && runner != graph.immediate.get(id)
+				while (graph.isReachable(runner) && runner != graph.immediateDominator(id)
 					&& guard <= graph.order.length) {
 					var entries = frontier.get(runner);
 					if (entries.indexOf(id) < 0)
 						entries.push(id);
-					var parent = graph.immediate.get(runner);
-					if (parent == null || parent == runner)
+					var parent = graph.immediateDominator(runner);
+					if (parent < 0 || parent == runner)
 						break;
 					runner = parent;
 					guard++;
@@ -449,8 +449,8 @@ class IrScalarReplacement {
 		for (id in graph.order)
 			children.set(id, []);
 		for (id in graph.order) {
-			var parent = graph.immediate.get(id);
-			if (parent != null && parent != id)
+			var parent = graph.immediateDominator(id);
+			if (parent >= 0 && parent != id)
 				children.get(parent).push(id);
 		}
 		return children;
@@ -555,9 +555,9 @@ class IrScalarReplacement {
 			var pending:{blockId:Int, incoming:Map<String, IrValue>} = cast work.pop(),
 				blockId = pending.blockId,
 				incoming = pending.incoming;
-			var block = graph.blocks.get(blockId);
-			if (block == null)
+			if (!graph.contains(blockId))
 				throw new InternalError("Scalar replacement walked to an unknown block");
+			var block = graph.block(blockId);
 			var current:Map<String, IrValue> = [for (name => value in incoming) name => value];
 			if (phis.exists(blockId))
 				for (name => output in phis.get(blockId))
@@ -593,7 +593,7 @@ class IrScalarReplacement {
 					default:
 				}
 			}
-			for (successor in graph.successors.get(blockId))
+			for (successor in graph.successorsOf(blockId))
 				if (phis.exists(successor))
 					for (name => output in phis.get(successor)) {
 						var known = current.get(name);
@@ -679,7 +679,7 @@ class IrScalarReplacement {
 	/** Whether `id` can reach itself again, that is, whether it runs more than once per call. */
 	static function inLoop(graph:IrGraph, id:Int):Bool {
 		var seen:Map<Int, Bool> = [], work:Array<Int> = [];
-		for (successor in graph.successors.get(id))
+		for (successor in graph.successorsOf(id))
 			work.push(successor);
 		while (true) {
 			var current = work.pop();
@@ -690,7 +690,7 @@ class IrScalarReplacement {
 			if (seen.exists(current))
 				continue;
 			seen.set(current, true);
-			for (successor in graph.successors.get(current))
+			for (successor in graph.successorsOf(current))
 				work.push(successor);
 		}
 		return false;
@@ -701,8 +701,8 @@ class IrScalarReplacement {
 		while (guard <= graph.order.length) {
 			if (current == ancestor)
 				return true;
-			var parent = graph.immediate.get(current);
-			if (parent == null || parent == current)
+			var parent = graph.immediateDominator(current);
+			if (parent < 0 || parent == current)
 				return false;
 			current = parent;
 			guard++;

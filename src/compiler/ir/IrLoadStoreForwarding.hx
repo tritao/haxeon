@@ -227,8 +227,8 @@ class IrLoadStoreForwarding {
 			after = new FieldStates(count),
 			entry = fn.blocks[0].id;
 		function meet(id:Int, into:FieldStates):Void {
-			var predecessors = graph.predecessors.get(id);
-			if (id == entry || predecessors == null || predecessors.length == 0) {
+			var predecessors = graph.predecessorsOf(id);
+			if (id == entry || predecessors.length == 0) {
 				into.clear();
 				return;
 			}

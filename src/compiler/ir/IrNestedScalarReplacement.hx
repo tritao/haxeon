@@ -245,8 +245,7 @@ class IrNestedScalarReplacement {
 			var local = writes.get(handler.block);
 			if (local != null) for (position in local) if (position > handler.position) return false;
 			var seen:Map<Int, Bool> = [], pending:Array<Int> = [];
-			var successors = graph.successors.get(handler.block);
-			if (successors != null) for (next in successors) pending.push(next);
+			if (graph.isReachable(handler.block)) for (next in graph.successorsOf(handler.block)) pending.push(next);
 			while (true) {
 				var id = pending.pop();
 				if (id == null)
@@ -254,8 +253,7 @@ class IrNestedScalarReplacement {
 				if (id == home.id || seen.exists(id)) continue;
 				seen.set(id, true);
 				if (writes.exists(id)) return false;
-				var next = graph.successors.get(id);
-				if (next != null) for (target in next) pending.push(target);
+				if (graph.isReachable(id)) for (target in graph.successorsOf(id)) pending.push(target);
 			}
 		}
 		return true;
@@ -275,7 +273,7 @@ class IrNestedScalarReplacement {
 				for (input in IrOperands.inputs(instruction)) if (aliases.exists(input.id)) touches = true;
 				if (!touches) continue;
 				if (block == home ? position <= allocation : singleBlock
-					|| !graph.blocks.exists(block.id)) return false;
+					|| !graph.contains(block.id)) return false;
 				switch instruction {
 					case FieldGet(_, target, _) if (aliases.exists(target.id)):
 					case FieldSet(target, _, value) if (aliases.exists(target.id)):

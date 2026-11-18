@@ -163,8 +163,8 @@ class IrNonNullFacts {
 			while (changed) {
 				changed = false;
 				for (id in graph.order) {
-					var preds = graph.predecessors.get(id);
-					if (id != entry && preds != null && preds.length > 0) {
+					var preds = graph.predecessorsOf(id);
+					if (id != entry && preds.length > 0) {
 						before.loadEdge(outgoing.get(preds[0]), edgeFact(graph, preds[0], id, tests));
 						for (i in 1...preds.length)
 							before.intersectEdge(outgoing.get(preds[i]), edgeFact(graph, preds[i], id, tests));
@@ -264,7 +264,7 @@ class IrNonNullFacts {
 
 	/** The value an edge proves non-null (a null test failed, or an exact-class test held, on the way), or -1. */
 	static function edgeFact(graph:IrGraph, from:Int, to:Int, tests:Map<Int, NullTest>):Int {
-		if (!graph.blocks.exists(from))
+		if (!graph.contains(from))
 			return -1;
 		var term = graph.block(from).terminator;
 		if (term != null)
@@ -284,7 +284,7 @@ class IrNonNullFacts {
 		var known = outgoing.get(from);
 		if (known != null && known.exists(value))
 			return true;
-		if (!graph.blocks.exists(from))
+		if (!graph.contains(from))
 			return false;
 		var term = graph.block(from).terminator;
 		return term != null && (switch term.value {

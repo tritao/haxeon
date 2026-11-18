@@ -670,8 +670,9 @@ class IrVerifier {
 				}
 				switch instruction {
 					case Phi(out, inputs):
-						var expected = graph.predecessors.get(id);
-						if (expected == null || inputs.length != expected.length)
+						var expected = graph.predecessorsOf(id);
+						// A phi needs a predecessor to take each input from.
+						if (expected.length == 0 || inputs.length != expected.length)
 							throw new InternalError('Phi ${out.id} does not cover every predecessor');
 						for (position in 0...inputs.length) {
 							var input = inputs[position], repeated = false;

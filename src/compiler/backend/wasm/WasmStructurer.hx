@@ -49,10 +49,7 @@ class WasmStructurer {
 	function plan():Void {
 		var graph = analysis.graph, forwardEdges:Map<Int, Int> = [];
 		for (to in graph.order) {
-			var predecessors = graph.predecessors.get(to);
-			if (predecessors == null)
-				continue;
-			for (from in predecessors)
+			for (from in graph.predecessorsOf(to))
 				if (isBackEdge(from, to))
 					loopHeaders.set(to, true);
 				else
@@ -62,8 +59,8 @@ class WasmStructurer {
 		for (id in graph.order)
 			if (forwardEdges.exists(id) && forwardEdges.get(id) >= 2) {
 				mergeNodes.set(id, true);
-				var parent = graph.immediate.get(id);
-				if (parent == null || parent == id)
+				var parent = graph.immediateDominator(id);
+				if (parent < 0 || parent == id)
 					continue;
 				var siblings = mergeChildren.get(parent);
 				if (siblings == null) {

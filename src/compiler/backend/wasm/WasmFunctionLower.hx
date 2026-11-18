@@ -516,11 +516,11 @@ class WasmFunctionLower {
 					false;
 			})): if (diamondGraph == null) diamondGraph = new compiler.ir.IrGraph(context.irFunction);
 			var graph = diamondGraph;
-			var joinPreds = graph.predecessors.get(block.id);
+			var joinPreds = graph.predecessorsOf(block.id);
 			var first = graph.block(inputs[0].block), second = graph.block(inputs[1].block);
-			var pa = graph.predecessors.get(first.id), pb = graph.predecessors.get(second.id);
-			if (joinPreds == null || joinPreds.length != 2 || pa == null
-				|| pb == null || pa.length != 1 || pb.length != 1 || pa[0] != pb[0] || first.instructions.length != 1
+			var pa = graph.predecessorsOf(first.id), pb = graph.predecessorsOf(second.id);
+			if (joinPreds.length != 2 || pa.length != 1 || pb.length != 1 || pa[0] != pb[0]
+				|| first.instructions.length != 1
 				|| second.instructions.length != 1) return false;
 			// Locals, not fields: the call to graph.block below would end a null check on a field.
 			var firstTerminator = first.terminator, secondTerminator = second.terminator;

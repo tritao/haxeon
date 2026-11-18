@@ -31,7 +31,7 @@ class IrJumpThreading {
 		if (!candidate) return fn;
 		var graph = new IrGraph(fn), external:Map<Int, Bool> = [], bridges:Map<Int, JumpBridge> = [];
 		// Reachability analysis ignores dead blocks. Preserve any IDs that a dead edge or phi still mentions.
-		for (block in fn.blocks) if (!graph.immediate.exists(block.id)) {
+		for (block in fn.blocks) if (!graph.isReachable(block.id)) {
 			if (block.terminator != null) switch block.terminator.value {
 				case Jump(target): external.set(target, true);
 				case Branch(_, yes, no): external.set(yes, true);
@@ -47,17 +47,17 @@ class IrJumpThreading {
 			}
 		}
 		for (bridge in fn.blocks) {
-			// Read once: `graph.immediate` is a property, and a call would end what a test of `bridge.terminator` proved.
-			var bridgeTerminator = bridge.terminator, dominators = graph.immediate;
+			// Read once: a call would end what a test of `bridge.terminator` proved.
+			var bridgeTerminator = bridge.terminator, reachable = graph.isReachable(bridge.id);
 			if (bridge.id == fn.blocks[0].id || bridge.instructions.length != 0 || bridgeTerminator == null
-				|| !dominators.exists(bridge.id) || external.exists(bridge.id)) continue;
+				|| !reachable || external.exists(bridge.id)) continue;
 			var target = switch bridgeTerminator.value {
 				case Jump(id): id;
 				default: -1;
 			};
-			if (target < 0 || target == bridge.id || !graph.blocks.exists(target)) continue;
-			var predecessors = graph.predecessors.get(bridge.id);
-			if (predecessors == null || predecessors.length != 1 || predecessors[0] == bridge.id
+			if (target < 0 || target == bridge.id || !graph.contains(target)) continue;
+			var predecessors = graph.predecessorsOf(bridge.id);
+			if (predecessors.length != 1 || predecessors[0] == bridge.id
 				|| predecessors[0] == target) continue;
 			var term = graph.block(predecessors[0]).terminator;
 			if (term == null) continue;

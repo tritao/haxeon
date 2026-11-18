@@ -36,8 +36,8 @@ class IrExactTypeFacts {
 							case Call(_, name, arguments) if (name == TEST && arguments.length == 2):
 								switch definitions.get(arguments[1].id) {
 									case TypeValue(_, Obj(type)):
-										var entries = graph.predecessors.get(yes);
-										if (entries != null && entries.length == 1)
+										var entries = graph.predecessorsOf(yes);
+										if (entries.length == 1)
 											facts.push({block: yes, value: arguments[0].id, type: type});
 									default:
 								}

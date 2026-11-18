@@ -2,99 +2,155 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
+import haxe.ds.ReadOnlyArray;
 
-/** Reachable normal and trap-entry edges, with immediate dominators. */
+/**
+ * Reachable normal and trap-entry edges of one function, with immediate dominators.
+ *
+ * Block ids are small within a function (the IR hands them out from one past the largest), so every table here is an array
+ * indexed by id, sized once from the largest id: lookups neither hash nor box.
+ */
 class IrGraph {
-	public final blocks:Map<Int, IrBlock> = [];
-	public final predecessors:Map<Int, Array<Int>> = [];
-	public final successors:Map<Int, Array<Int>> = [];
-	public final order:Array<Int> = [];
+	static final noBlocks:ReadOnlyArray<Int> = ([]:Array<Int>);
 
-	/** Immediate dominators; computed the first time they are asked for, since most users of a graph only walk its edges. */
-	public var immediate(get, never):Map<Int, Int>;
+	/** The reachable blocks in reverse postorder, the entry first. */
+	public final order:ReadOnlyArray<Int>;
 
-	final dominators:Map<Int, Int> = [];
-	final rank:Map<Int, Int> = [];
-	var dominatorsComputed = false;
+	final blocks:Array<Null<IrBlock>>;
+	final successors:Array<Null<Array<Int>>>;
+	final predecessors:Array<Null<Array<Int>>>;
+	final reachable:Array<Bool>;
+
+	/** Immediate dominators by id, -1 for an unreachable block; computed the first time one is asked for. */
+	var dominators:Null<Array<Int>> = null;
 
 	public function new(fn:IrFunction) {
 		if (fn.blocks.length == 0)
 			throw new InternalError("IR function has no entry block");
+		var size = 0;
 		for (block in fn.blocks) {
-			if (blocks.exists(block.id))
+			if (block.id < 0)
+				throw new InternalError('Negative IR block id ${block.id}');
+			if (block.id >= size)
+				size = block.id + 1;
+		}
+		var blockTable:Array<Null<IrBlock>> = [],
+			successorTable:Array<Null<Array<Int>>> = [],
+			predecessorTable:Array<Null<Array<Int>>> = [],
+			reachableTable:Array<Bool> = [];
+		blockTable.resize(size);
+		successorTable.resize(size);
+		predecessorTable.resize(size);
+		reachableTable.resize(size);
+		for (index in 0...size) {
+			blockTable[index] = null;
+			successorTable[index] = null;
+			predecessorTable[index] = null;
+			reachableTable[index] = false;
+		}
+		blocks = blockTable;
+		successors = successorTable;
+		predecessors = predecessorTable;
+		reachable = reachableTable;
+		for (block in fn.blocks) {
+			if (blocks[block.id] != null)
 				throw new InternalError('Duplicate IR block ${block.id}');
-			blocks.set(block.id, block);
+			blocks[block.id] = block;
 		}
-		visit(fn.blocks[0].id, []);
-		order.reverse();
+		var postorder:Array<Int> = [];
+		visit(fn.blocks[0].id, postorder);
+		postorder.reverse();
+		order = postorder;
 	}
 
-	function get_immediate():Map<Int, Int> {
-		if (!dominatorsComputed) {
-			dominatorsComputed = true;
-			computeDominators();
-		}
-		return dominators;
-	}
-
-	function computeDominators():Void {
-		for (i in 0...order.length)
-			rank.set(order[i], i);
-		dominators.set(order[0], order[0]);
-		var changed = true;
-		while (changed) {
-			changed = false;
-			for (i in 1...order.length) {
-				var id = order[i], parent:Null<Int> = null;
-				for (pred in predecessors.get(id))
-					if (dominators.exists(pred))
-						parent = parent == null ? pred : intersect(parent, pred);
-				if (parent != null && (!dominators.exists(id) || dominators.get(id) != parent)) {
-					dominators.set(id, parent);
-					changed = true;
-				}
-			}
-		}
-	}
-
+	/** The block `id`; it must be one of the function's blocks. */
 	public function block(id:Int):IrBlock {
-		if (!blocks.exists(id))
+		var found = id >= 0 && id < blocks.length ? blocks[id] : null;
+		if (found == null)
 			throw new InternalError('Unknown IR block $id');
-		return blocks.get(id);
+		return found;
 	}
 
-	function visit(id:Int, seen:Map<Int, Bool>):Void {
-		if (seen.exists(id))
-			return;
-		prepareVisit(id, seen);
-		var stack:Array<{id:Int, next:Int}> = [{id: id, next: 0}];
+	/** Whether `id` is one of the function's blocks, reachable or not. */
+	public function contains(id:Int):Bool
+		return id >= 0 && id < blocks.length && blocks[id] != null;
+
+	/** Whether `id` is reached from the entry. */
+	public function isReachable(id:Int):Bool
+		return id >= 0 && id < reachable.length && reachable[id];
+
+	/** The blocks `id` can go to next, normal and trap-entry edges; `id` must be reachable. */
+	public function successorsOf(id:Int):ReadOnlyArray<Int> {
+		var found = id >= 0 && id < successors.length ? successors[id] : null;
+		if (found == null)
+			throw new InternalError('IR block $id is not reachable');
+		return found;
+	}
+
+	/** The reachable blocks that go to `id`, in the order the walk met them; empty for the entry and unreachable blocks. */
+	public function predecessorsOf(id:Int):ReadOnlyArray<Int> {
+		var found = id >= 0 && id < predecessors.length ? predecessors[id] : null;
+		return found == null ? noBlocks : found;
+	}
+
+	/** The immediate dominator of `id`, the entry for itself, or -1 when `id` is not reachable. */
+	public function immediateDominator(id:Int):Int {
+		var table = dominators;
+		if (table == null) {
+			table = computeDominators();
+			dominators = table;
+		}
+		return id >= 0 && id < table.length ? table[id] : -1;
+	}
+
+	public function dominates(definition:Int, use:Int):Bool {
+		if (!isReachable(use))
+			return false;
+		while (use != definition) {
+			var parent = immediateDominator(use);
+			if (parent == use)
+				return false;
+			use = parent;
+		}
+		return true;
+	}
+
+	/** Depth first from `entry`, recording each reachable block's edges and pushing it to `postorder` once it is done. */
+	function visit(entry:Int, postorder:Array<Int>):Void {
+		prepareVisit(entry);
+		var stack:Array<Int> = [entry], next:Array<Int> = [0];
 		while (stack.length > 0) {
-			var frame = stack[stack.length - 1],
-				next = requiredSuccessors(successors, frame.id);
-			if (frame.next < next.length) {
-				var target = next[frame.next++];
-				if (!predecessors.exists(target))
-					predecessors.set(target, []);
-				predecessors.get(target).push(frame.id);
-				if (!seen.exists(target)) {
-					prepareVisit(target, seen);
-					stack.push({id: target, next: 0});
+			var top = stack.length - 1, id = stack[top], edges = successorsOf(id);
+			if (next[top] < edges.length) {
+				var target = edges[next[top]];
+				next[top]++;
+				var into = predecessors[target];
+				if (into == null) {
+					into = [];
+					predecessors[target] = into;
+				}
+				into.push(id);
+				if (!reachable[target]) {
+					prepareVisit(target);
+					stack.push(target);
+					next.push(0);
 				}
 			} else {
-				order.push(frame.id);
+				postorder.push(id);
 				stack.pop();
+				next.pop();
 			}
 		}
 	}
 
-	function prepareVisit(id:Int, seen:Map<Int, Bool>):Void {
-		if (!blocks.exists(id))
-			throw new InternalError('Unknown IR block $id');
-		seen.set(id, true);
-		var block = blocks.get(id), next:Array<Int> = [];
-		if (block.terminator == null)
+	function prepareVisit(id:Int):Void {
+		var block = this.block(id);
+		reachable[id] = true;
+		var next:Array<Int> = [];
+		var terminator = block.terminator;
+		if (terminator == null)
 			throw new InternalError('Reachable IR block $id has no terminator');
-		switch block.terminator.value {
+		switch terminator.value {
 			case Jump(target):
 				next.push(target);
 			case Branch(_, yes, no):
@@ -109,46 +165,54 @@ class IrGraph {
 		for (instruction in block.instructions)
 			switch instruction.value {
 				case BeginTry(handler, after, _):
-					if (!blocks.exists(after))
+					if (!contains(after))
 						throw new InternalError('Unknown IR block $after');
 					if (next.indexOf(handler) < 0)
 						next.push(handler);
 				default:
 			}
-		successors.set(id, next);
+		for (target in next)
+			if (!contains(target))
+				throw new InternalError('Unknown IR block $target');
+		successors[id] = next;
 	}
 
-	function intersect(left:Int, right:Int):Int {
+	/** Immediate dominators by the iterative algorithm of Cooper, Harvey and Kennedy, over reverse postorder ranks. */
+	function computeDominators():Array<Int> {
+		var table:Array<Int> = [], rank:Array<Int> = [];
+		table.resize(blocks.length);
+		rank.resize(blocks.length);
+		for (index in 0...blocks.length) {
+			table[index] = -1;
+			rank[index] = -1;
+		}
+		for (index in 0...order.length)
+			rank[order[index]] = index;
+		table[order[0]] = order[0];
+		var changed = true;
+		while (changed) {
+			changed = false;
+			for (index in 1...order.length) {
+				var id = order[index], parent = -1;
+				for (pred in predecessorsOf(id))
+					if (table[pred] >= 0)
+						parent = parent < 0 ? pred : intersect(table, rank, parent, pred);
+				if (parent >= 0 && table[id] != parent) {
+					table[id] = parent;
+					changed = true;
+				}
+			}
+		}
+		return table;
+	}
+
+	static function intersect(table:Array<Int>, rank:Array<Int>, left:Int, right:Int):Int {
 		while (left != right) {
-			while (requiredInt(rank, left) > requiredInt(rank, right))
-				left = requiredInt(dominators, left);
-			while (requiredInt(rank, right) > requiredInt(rank, left))
-				right = requiredInt(dominators, right);
+			while (rank[left] > rank[right])
+				left = table[left];
+			while (rank[right] > rank[left])
+				right = table[right];
 		}
 		return left;
-	}
-
-	static function requiredInt(values:Map<Int, Int>, key:Int):Int {
-		if (!values.exists(key))
-			throw new InternalError('Missing graph index $key');
-		return values.get(key);
-	}
-
-	static function requiredSuccessors(values:Map<Int, Array<Int>>, key:Int):Array<Int> {
-		if (!values.exists(key))
-			throw new InternalError('Missing graph successors $key');
-		return values.get(key);
-	}
-
-	public function dominates(definition:Int, use:Int):Bool {
-		if (!immediate.exists(use))
-			return false;
-		while (use != definition) {
-			var parent = requiredInt(immediate, use);
-			if (parent == use)
-				return false;
-			use = parent;
-		}
-		return true;
 	}
 }

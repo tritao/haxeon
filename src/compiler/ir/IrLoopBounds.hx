@@ -36,7 +36,7 @@ class IrLoopBounds {
 			}
 		hasHandlers = handlers;
 		for (tail in graph.order)
-			for (header in graph.successors.get(tail))
+			for (header in graph.successorsOf(tail))
 				if (graph.dominates(header, tail)) {
 					var loop:Null<BoundsLoop> = null;
 					for (candidate in loops)
@@ -53,7 +53,7 @@ class IrLoopBounds {
 						if (id == null || loop.members.exists(id))
 							continue;
 						loop.members.set(id, true);
-						for (pred in graph.predecessors.get(id))
+						for (pred in graph.predecessorsOf(id))
 							pending.push(pred);
 					}
 				}
@@ -313,7 +313,7 @@ class IrLoopBounds {
 					after = true;
 			}
 			if (id != home)
-				for (predecessor in graph.predecessors.get(id))
+				for (predecessor in graph.predecessorsOf(id))
 					pending.push(predecessor);
 		}
 		return true;
