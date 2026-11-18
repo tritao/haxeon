@@ -77,6 +77,18 @@ endif()
 # Windows libraries link against.
 set_target_properties(hl PROPERTIES ENABLE_EXPORTS ON)
 
+# The main thread of a program that runs Haxe code gets the 8 MB stack Linux and macOS give it. Windows reserves only
+# what the executable's header asks for, 1 MB by default, and the compiler's recursion (typing an initializer forces the
+# fields it reads, each in a nested typing) overflows that on inputs the other platforms compile.
+function(haxeon_use_unix_main_stack target)
+  if(MSVC)
+    target_link_options(${target} PRIVATE /STACK:8388608)
+  elseif(WIN32)
+    target_link_options(${target} PRIVATE -Wl,--stack,8388608)
+  endif()
+endfunction()
+haxeon_use_unix_main_stack(hl)
+
 # Native builds consume the checked-in lane policy; ValueLaneRuntimeMain verifies it against the SSA generator.
 
 # The Haxeon runtime, compiled once. Its objects are part of hl, which resolves `haxeon_runtime` natives from itself
@@ -201,6 +213,7 @@ if(EXISTS "${HAXEON_PINNED_HAXE}")
     "HAXEON_CLI_BYTECODE=\"${HAXEON_CLI_BYTECODE}\""
   )
   set_target_properties(haxeon PROPERTIES ENABLE_EXPORTS ON C_STANDARD 11 C_STANDARD_REQUIRED ON)
+  haxeon_use_unix_main_stack(haxeon)
   # HashLink's main.c is compiled as hl compiles it.
   foreach(_property IN ITEMS COMPILE_DEFINITIONS COMPILE_OPTIONS)
     get_target_property(_value hl ${_property})
