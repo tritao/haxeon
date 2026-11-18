@@ -9,22 +9,23 @@ class MixedArrayLiteralMain {
 	static final prefix =
 		'class Base { public var value:Int=42; public function new() {} } class Child extends Base { public function new() super(); } ';
 	static final cases = [
-		'var d:Dynamic=[new Child()];var accepted=false;try {var a:Array<Base>=d;accepted=true;}catch(e:Dynamic){}return !accepted?42:1;',
-		'var d:Dynamic=[1,2.5];var a:Array<Float>=d;return a[0]+a[1]==3.5?42:1;',
-		'var a:Array<Dynamic>=[1,"hello",true,null]; return a[0]==1 && a[1]=="hello" && a[2]==true && a[3]==null ? 42 : 1;',
-		'var d:Dynamic=[1,"hello",true]; var a:Array<Dynamic>=d; return a[0]==1 && a[1]=="hello" && a[2]==true ? 42 : 1;',
-		'var a=[1,2.5]; return a[0]+a[1]==3.5 ? 42 : 1;',
-		'var a=[2.5,1]; return a[0]+a[1]==3.5 ? 42 : 1;',
-		'var a=[null,"hello"]; return a[0]==null && a[1]=="hello" ? 42 : 1;',
-		'var a=["hello",null]; return a[0]=="hello" && a[1]==null ? 42 : 1;',
-		'var a=[null,42]; var n=a[1]; return n==null ? 1 : n;',
-		'var a=[42,null]; var n=a[0]; return n==null ? 1 : n;',
-		'var a=[new Base(),new Child()]; return a[1].value;',
-		'var a=[new Child(),new Base()]; return a[0].value;',
-		'var a:Array<Dynamic>=[[1,"x"],true]; var inner:Array<Dynamic>=a[0]; return inner[1]=="x" && a[1]==true ? 42 : 1;',
-		'var n=1; var a=[n,(n=2)+0.5]; return a[0]==1.0 && a[1]==2.5 && n==2 ? 42 : 1;',
-		'var d:Dynamic=[]; var a:Array<Dynamic>=d; return a.length==0 ? 42 : 1;'
-	];
+		// As in Haxe, a literal written where Dynamic is expected is an Array<Dynamic>, so it reads as an Array<Base>.
+			'var d:Dynamic=[new Child()];var a:Array<Base>=d;return a[0].value;',
+			'var d:Dynamic=[1,2.5];var a:Array<Float>=d;return a[0]+a[1]==3.5?42:1;',
+			'var a:Array<Dynamic>=[1,"hello",true,null]; return a[0]==1 && a[1]=="hello" && a[2]==true && a[3]==null ? 42 : 1;',
+			'var d:Dynamic=[1,"hello",true]; var a:Array<Dynamic>=d; return a[0]==1 && a[1]=="hello" && a[2]==true ? 42 : 1;',
+			'var a=[1,2.5]; return a[0]+a[1]==3.5 ? 42 : 1;',
+			'var a=[2.5,1]; return a[0]+a[1]==3.5 ? 42 : 1;',
+			'var a=[null,"hello"]; return a[0]==null && a[1]=="hello" ? 42 : 1;',
+			'var a=["hello",null]; return a[0]=="hello" && a[1]==null ? 42 : 1;',
+			'var a=[null,42]; var n=a[1]; return n==null ? 1 : n;',
+			'var a=[42,null]; var n=a[0]; return n==null ? 1 : n;',
+			'var a=[new Base(),new Child()]; return a[1].value;',
+			'var a=[new Child(),new Base()]; return a[0].value;',
+			'var a:Array<Dynamic>=[[1,"x"],true]; var inner:Array<Dynamic>=a[0]; return inner[1]=="x" && a[1]==true ? 42 : 1;',
+			'var n=1; var a=[n,(n=2)+0.5]; return a[0]==1.0 && a[1]==2.5 && n==2 ? 42 : 1;',
+			'var d:Dynamic=[]; var a:Array<Dynamic>=d; return a.length==0 ? 42 : 1;'
+		];
 
 	/** A Dynamic element makes the array (or conditional) Dynamic, rather than requiring the Dynamic value to be the
 		other type. Host only: the Wasm backends cannot yet box an anonymous object as Dynamic. */

@@ -1224,8 +1224,8 @@ class ExpressionTyper {
 			DeclaredConformance.requireMapRuntime(session, expectedMap.key, expectedMap.value, span);
 			return new TypedExpression(TMapLiteral([]), TMap(expectedMap.key, expectedMap.value), span);
 		}
-		// In a Dynamic context the elements still decide the type, as they would anywhere else ([new Child()] is an
-		// Array<Child>, which does not convert to Array<Base>); only elements with no common type, or none, make it Dynamic.
+		// In a Dynamic context the literal is an Array<Dynamic>, its elements typed as Dynamic, as Haxe types it: on HashLink
+		// `var a:Dynamic = [1, 2]` holds Dynamic elements, so `a[4] = 5` leaves nulls and `a[0] = "x"` stores a String.
 		var dynamicContext = isDynamicExpectation(expectedType);
 		var expectedElement = dynamicContext ? null : arrayElementExpectation(expectedType);
 		if (values.length == 0 && expectedElement == null) {
@@ -1238,22 +1238,19 @@ class ExpressionTyper {
 				expectedElement = TDynamic;
 		}
 		var typedValues:Array<TypedExpression> = [],
-			elementType = dynamicContext && values.length == 0 ? TDynamic : expectedElement;
+			elementType = dynamicContext ? TDynamic : expectedElement;
 		for (value in values) {
 			var typedValue = bodyTyper.typeExpression(value, scope, (switch (elementType) {
 				case TNull: true;
 				default: false;
-			}) || dynamicContext ? null : elementType);
-			if (expectedElement == null) {
+			}) ? null : elementType);
+			if (expectedElement == null && !dynamicContext) {
 				var joined = elementType == null ? typedValue.type : commonConditionalType(elementType,
 					typedValue.type);
-				if (joined == null && dynamicContext)
-					joined = TDynamic;
 				if (joined == null)
 					fail("E1003", "Array elements have incompatible types; use Array<Dynamic> for a mixed-type array",
 						typedValue.span);
-				// Dynamic permits mixed storage, but homogeneous arrays keep their exact element contract.
-				elementType = joined == null ? TDynamic : joined;
+				elementType = joined;
 			}
 			typedValues.push(typedValue);
 		}

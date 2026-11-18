@@ -179,9 +179,10 @@ The current subset includes:
 - Indexing a `Dynamic` value (`json.items[0]`, `value[i] = v`, `value[i] += 1`, `value[i]++`), as Haxe does on HashLink:
   the index is an Int, a read gives the element of the array the value holds as Dynamic, or null past its end, and a
   write stores there, growing the array. A null value is a null access, and a negative index or a value that holds no array
-  fails. `value.length` of an array is its length. Unlike HashLink, which turns the array into one of Dynamic elements, an
-  array keeps its element type: a write past its end fills the gap with the type's default (`0` where Haxe gives `null`),
-  and a value of another type cannot be stored in it.
+  fails. `value.length` of an array is its length. As on HashLink, what a write can store is the array's: an array
+  literal written where Dynamic is expected (`var a:Dynamic = [1, 2]`) is an `Array<Dynamic>`, as Haxe types it, so a write
+  past its end leaves nulls and any value can be stored; a typed array behind Dynamic keeps its element type, so a write past
+  its end leaves the type's default (`0`) and a value of another type fails ("Can't cast String to i32" on both).
 - Static extensions, as in Haxe 4.3.7: `using pack.Tools;` (a module, whose types and module-level functions it brings, or
   one type, `using pack.Tools.Extra;`) and `@:using(pack.Tools)` on a class, enum or abstract make `value.name(arguments)`
   call `Tools.name(value, arguments)` where the value's type has no member `name`. The order is Haxe's: the value's own

@@ -50,7 +50,9 @@ function main():Int {
 		return 8;
 	// Shared reference layout does not permit mutable nominal array covariance.
 	rejected = false;
-	var children:Dynamic = [new Child()];
+	// A typed array (a literal written where Dynamic is expected is an Array<Dynamic>, as in Haxe).
+	var childArray:Array<Child> = [new Child()];
+	var children:Dynamic = childArray;
 	try {
 		var invalid:Array<Base> = children;
 	} catch (error:Dynamic) {
