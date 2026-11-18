@@ -2281,10 +2281,12 @@ class BodyTyper implements BodyTyping {
 	public function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope,
 			?expectedType:CompilerType):TypedExpression {
-		var receiver = unwrapNullable(typeExpression(object, scope));
+		var declared = typeExpression(object, scope), receiver = unwrapNullable(declared);
 		if (callResolver.isEnumMatch(receiver, name, arguments))
 			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
-		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType);
+		// A static extension may take the receiver as written, null included (`CallResolver.typeStaticExtensionCall`).
+		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType, true, null, true,
+			declared == receiver ? null : declared);
 	}
 
 	/** The type of a value of `fn`, whose arguments have `types`: the signature of its dispatch entry (`DefaultArguments`). */

@@ -33,6 +33,9 @@ typedef SemanticAssemblyResult = {
 	/** The purity and no-return answers the invalidation was decided against, for the typer to use as they are. */
 	final facts:ProgramFacts;
 
+	/** Where each module's `using` and each type's `@:using` find static extensions. */
+	final staticExtensions:StaticExtensionTable;
+
 	final aliasSetupMs:Float;
 	final canonicalizationMs:Float;
 	final contributionReuseMs:Float;
@@ -185,6 +188,7 @@ class SemanticAssembly {
 				}
 			}
 		}
+		var staticExtensions = StaticExtensionTable.build(modules, names);
 		var aliasesPreparedAt = Sys.time() * 1000.0;
 		for (name in names) {
 			var contributionStartedAt = Sys.time() * 1000.0;
@@ -770,6 +774,20 @@ class SemanticAssembly {
 				for (name => fn in modules.get(moduleName).typedFunctions)
 					if (fn.originKind == compiler.types.TypedAst.FunctionOriginKind.Helper && fn.origin != null)
 						helperOrigins.set(name, fn.origin);
+		// A call may resolve to a static extension without its body naming it (`text.trim()` after `using StringTools`). When the
+		// extensions a module's code sees change, every body of the module is typed again, and propagates as any retyped body does.
+		for (moduleName in names) {
+			var moduleState = modules.get(moduleName);
+			if (moduleState == null)
+				continue;
+			var key = staticExtensions.keyOfModule(moduleName);
+			if (moduleState.staticExtensionKey == key)
+				continue;
+			context.state.writableState(moduleName, rollbackModules).staticExtensionKey = key;
+			for (fn in functions)
+				if (owners.get(fn.name) == moduleName)
+					invalidate(invalid, invalidationReasons, fn.name, StaticExtensions, moduleName);
+		}
 		var genericCallers:Null<Map<String, Array<String>>> = null;
 		var work:Array<String> = [for (name in changedSignatures.keys()) name], workCursor = 0;
 		for (name in invalid.keys())
@@ -936,6 +954,7 @@ class SemanticAssembly {
 			canonicalProgram: canonicalProgram,
 			functions: functions,
 			owners: owners,
+			staticExtensions: staticExtensions,
 			generatedByModule: generatedByModule,
 			invalidated: invalidated,
 			selected: selected,

@@ -399,6 +399,7 @@ class FrontendCompilation {
 				semantic = previousSemantic.replaceBodies(canonicalProgram, selected);
 			else
 				semantic = SemanticProgram.analyze(canonicalProgram);
+			semantic.staticExtensions = semanticAssembly.staticExtensions;
 			build.allocationAfterAnalysis = AllocationMeter.sample();
 			build.analysisDoneAt = now();
 			var typedResult = Typer.typeAnalyzedMeasured(semantic, selected, context.natives.signatures(),

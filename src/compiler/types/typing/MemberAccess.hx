@@ -156,10 +156,23 @@ class MemberAccess {
 	 * `owner` is the declaring class, interface or abstract, as the method's lookup found it.
 	 */
 	public static function method(session:TypingSession, owner:String, name:String, span:SourceSpan):Void {
+		var member = declaredMethod(session, owner, name);
+		if (member != null)
+			require(session, member, span);
+	}
+
+	/**
+	 * Whether the code being typed may reach the method `name` that `owner` declares, as `method` requires, without reporting:
+	 * Haxe passes over a static extension it may not reach and tries the next (`static extensions`, `can_access`).
+	 */
+	public static function mayReachMethod(session:TypingSession, owner:String, name:String, span:SourceSpan):Bool {
+		var member = declaredMethod(session, owner, name);
+		return member == null || reachable(session, member, span);
+	}
+
+	static function declaredMethod(session:TypingSession, owner:String, name:String):Null<DeclaredMember> {
 		var declared = session.signatures.get(owner + "." + name);
-		if (declared == null)
-			return;
-		require(session, {
+		return declared == null ? null : {
 			owner: owner,
 			name: name,
 			isPublic: declared.isPublic == null && declared.isOverride == true ? overriddenVisibility(session, owner,
@@ -167,7 +180,7 @@ class MemberAccess {
 			declaredIn: declared.span,
 			ownerMetadata: ownerMetadata(session, owner),
 			metadata: declared.metadata
-		}, span);
+		};
 	}
 
 	/**
@@ -175,15 +188,18 @@ class MemberAccess {
 	 * may reach a private member of its owner (`canAccess`), or it is a module-level variable read in its own module.
 	 */
 	static function require(session:TypingSession, member:DeclaredMember, span:SourceSpan):Void {
-		if (isPublic(session, member)
-			|| canAccess(session, member.owner, member.ownerMetadata, member.name, member.metadata)
-			|| StringTools.endsWith(member.owner, ModuleFields.storageName(""))
-			&& span.file.path == member.declaredIn.file.path)
+		if (reachable(session, member, span))
 			return;
 		throw new CompileError(new Diagnostic("E1030", member.name == "new"
 			? 'Cannot access private constructor of ${member.owner}' : 'Cannot access private field ${member.name}',
 			span));
 	}
+
+	static function reachable(session:TypingSession, member:DeclaredMember, span:SourceSpan):Bool
+		return isPublic(session, member)
+			|| canAccess(session, member.owner, member.ownerMetadata, member.name, member.metadata)
+			|| StringTools.endsWith(member.owner, ModuleFields.storageName(""))
+			&& span.file.path == member.declaredIn.file.path;
 
 	/**
 	 * Whether `member` is public, by Haxe's rule: as written, or with no modifier, when its owner is an interface, an extern

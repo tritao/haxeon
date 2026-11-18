@@ -406,6 +406,12 @@ typedef AstImport = {
 	final alias:Null<String>;
 }
 
+/** One `using pack.Tools;` of a module: the static functions of what it names become extensions in the module (Haxe's order). */
+typedef AstUsing = {
+	final path:String;
+	final span:SourceSpan;
+}
+
 /** Complete parsed module, grouped by declaration kind for semantic indexing. */
 typedef AstProgram = {
 	final packageName:Null<String>;
@@ -423,4 +429,10 @@ typedef AstProgram = {
 	 * them static fields of the module's class, the class named like the module, so nothing after parsing sees this list.
 	 */
 	final ?fields:Array<AstField>;
+
+	/**
+	 * The module's `using` declarations in source order, as the parser reads them. Each is also among `imports`, as a `using`
+	 * imports what it names. SemanticAssembly resolves them into the program's StaticExtensionTable; a canonical program has none.
+	 */
+	final ?usings:Array<AstUsing>;
 }

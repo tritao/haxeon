@@ -38,13 +38,29 @@ realtime_compile() {
 	(cd "$root_dir" && run_hl "$root_dir/out:$hashlink_dir" "$HAXEON_MAIN_HL" "$1" "$2")
 }
 
+# The source Haxeon compiles for a case: the realtime file as it is, or, for a case whose source names its own module (`using
+# Main.Tools`, `@:using(Main.ShapeTools)`, which is how Haxe names a type of the file it is in), a copy named Main.hx as Haxe's is.
+realtime_case_source() {
+	local name=$1
+	local module=${2:-}
+	if [[ "$module" == main ]]; then
+		local realtime_dir
+		realtime_dir=$(mktemp -d "$out_dir/realtime.XXXXXX")
+		cp "$root_dir/tests/differential/$name.realtime.hx" "$realtime_dir/Main.hx"
+		echo "$realtime_dir/Main.hx"
+	else
+		echo "tests/differential/$name.realtime.hx"
+	fi
+}
+
 run_case() {
 	local name=$1
 	local expected_status=${2:-}
 	local reference_target=${3:-hl}
 	local official_source="$root_dir/tests/differential/$name.official.hx"
 	# Named from the repository root, where realtime_compile runs: `trace` prints the path a file is given by.
-	local realtime_source="tests/differential/$name.realtime.hx"
+	local realtime_source
+	realtime_source=$(realtime_case_source "$name" "${4:-}")
 	local official_output="$out_dir/$name.official.hl"
 	local realtime_output="$out_dir/$name.realtime.hl"
 	local official_dir
@@ -53,7 +69,7 @@ run_case() {
 	cp "$official_source" "$official_dir/Main.hx"
 
 	"$haxe" -cp "$official_dir" -main Main -hl "$official_output"
-	realtime_compile "tests/differential/$name.realtime.hx" "$realtime_output" >/dev/null
+	realtime_compile "$realtime_source" "$realtime_output" >/dev/null
 
 	set +e
 	local official_log="$out_dir/$name.official.log"
@@ -91,13 +107,14 @@ run_case() {
 
 run_compile_failure() {
 	local name=$1
-	local official_dir
+	local official_dir realtime_source
 	official_dir=$(mktemp -d "$out_dir/official-failure.XXXXXX")
 	cp "$root_dir/tests/differential/$name.official.hx" "$official_dir/Main.hx"
+	realtime_source=$(realtime_case_source "$name" "${2:-}")
 	set +e
 	"$haxe" -cp "$official_dir" -main Main -hl "$out_dir/$name.official.hl" >/dev/null 2>&1
 	local official_status=$?
-	realtime_compile "tests/differential/$name.realtime.hx" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
+	realtime_compile "$realtime_source" "$out_dir/$name.realtime.hl" >/dev/null 2>&1
 	local realtime_status=$?
 	set -e
 	rm -rf "$official_dir"
@@ -266,6 +283,13 @@ in_background run_case switch-nullable-enum-abstract 0
 in_background run_case pattern-capture-shadows-name 0
 # Haxe's Lambda over arrays and maps (stdlib/Lambda.hx).
 in_background run_case lambda-functions 0
+# Static extensions (`using`, `@:using`) in Haxe's order, after the value's own members (src/compiler/types/typing/StaticExtensions.hx).
+in_background run_case using-static-extensions 0 hl main
+in_background run_compile_failure using-private-static main
+in_background run_compile_failure using-base-statics main
+in_background run_compile_failure using-class-reference main
+in_background run_compile_failure using-extension-arguments main
+in_background run_compile_failure using-no-first-argument main
 # Unannotated fields take their initializer's type, typed on demand (docs/design/LAZY_DECLARATION_TYPING.md, slice 3).
 in_background run_case lazy-field-comprehension 0
 in_background run_case lazy-field-map-lambda 0

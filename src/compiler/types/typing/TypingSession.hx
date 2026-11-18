@@ -34,6 +34,9 @@ class TypingSession {
 	public var signatures:Map<String, AstFunction> = [];
 
 	public var methodInfo:Map<String, SemanticMethodInfo> = [];
+
+	/** The program's static extensions (`StaticExtensions`), from the program bound last. */
+	public var staticExtensions:compiler.semantic.StaticExtensionTable = compiler.semantic.StaticExtensionTable.empty();
 	public final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
 	public var classDecls:Map<String, compiler.syntax.Ast.AstClass> = [];
 	public var interfaceDecls:Map<String, compiler.syntax.Ast.AstInterface> = [];
@@ -362,6 +365,7 @@ class TypingSession {
 		relations = semantic.relations;
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;
+		staticExtensions = semantic.staticExtensions;
 		enumDecls = declarations.enums;
 		enumsByFile = null;
 		enumAbstractDecls = declarations.enumAbstracts;

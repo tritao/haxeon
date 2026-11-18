@@ -25,6 +25,7 @@ class AccessorSignatures {
 		return !changed ? program : {
 			packageName: program.packageName,
 			imports: program.imports,
+			usings: program.usings,
 			aliases: program.aliases,
 			enums: program.enums,
 			enumAbstracts: program.enumAbstracts,

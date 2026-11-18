@@ -80,6 +80,15 @@ class ModuleAnalyzer {
 				for (importedModule in importedModules)
 					dependencies.set(importedModule, true);
 		}
+		// A type's `@:using(pack.Tools)` names a module as a `using` does: its extensions are resolved from its declarations.
+		for (path in StaticExtensionTable.metadataPaths(ast)) {
+			var importedModules = importedSourceModules(path);
+			if (importedModules.length == 0)
+				dependencies.set(importModulePath(path), true);
+			else
+				for (importedModule in importedModules)
+					dependencies.set(importedModule, true);
+		}
 		for (fn in ast.functions)
 			for (statement in fn.statements)
 				DependencyScanner.scanStatement(statement, dependencies, fn.typeParameters);
@@ -393,6 +402,7 @@ class ModuleAnalyzer {
 				program = {
 					packageName: packageName,
 					imports: program.imports,
+					usings: program.usings,
 					aliases: program.aliases,
 					enums: program.enums,
 					enumAbstracts: program.enumAbstracts,

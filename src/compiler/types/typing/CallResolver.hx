@@ -31,6 +31,7 @@ import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypeRelations;
 import compiler.types.DeclarationIndex;
 import compiler.semantic.SemanticSignature;
+import compiler.semantic.StaticExtensionTable.StaticExtensionOwnerKind;
 
 typedef EnumConstructorInfo = {
 	?aliasType:CompilerType,
@@ -46,11 +47,13 @@ class CallResolver {
 	final session:TypingSession;
 	final genericInstantiation:GenericInstantiation;
 	final bodyTyper:BodyTyping;
+	final staticExtensions:StaticExtensions;
 
 	public function new(session:TypingSession, genericInstantiation:GenericInstantiation, bodyTyper:BodyTyping) {
 		this.session = session;
 		this.genericInstantiation = genericInstantiation;
 		this.bodyTyper = bodyTyper;
+		this.staticExtensions = new StaticExtensions(session, genericInstantiation);
 	}
 
 	public function coerceArguments(arguments:Array<TypedExpression>, expected:Array<CompilerType>,
@@ -183,10 +186,88 @@ class CallResolver {
 			], BoolLiteral(false, span), span), span), scope);
 	}
 
+	/**
+	 * `receiver.name(arguments)`: a member of the receiver's type, else a static extension (`StaticExtensions`), tried only once
+	 * the type has no member `name`, as in Haxe. `declaredReceiver` is the receiver as written when its type is nullable
+	 * (`receiver` is then its value): an extension whose first argument accepts null is passed it, null included.
+	 */
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
-			contextualGenericArguments:Bool = true):TypedExpression {
+			contextualGenericArguments:Bool = true, ?declaredReceiver:TypedExpression):TypedExpression {
+		try
+			return typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst, receiverName,
+				contextualGenericArguments)
+		catch (missing:MissingMember) {
+			// Only this call's own member is missing (not one called among its arguments), and only a value takes an extension:
+			// `Class.name()` names a static, as Haxe's `using` applies to values.
+			if (missing.span != span || receiver.expression.match(TClassRef(_)))
+				throw missing;
+			var extension = typeStaticExtensionCall(declaredReceiver == null ? receiver : declaredReceiver, receiver,
+				name,
+				arguments, span, scope, expectedType);
+			if (extension == null)
+				throw missing;
+			return extension;
+		}
+	}
+
+	/**
+	 * The call of the static extension `name` on `receiver` (`using`, `@:using`), as `Owner.name(receiver, arguments)`, or null
+	 * when none applies. `declared` is the receiver as written, `receiver` its non-null value: the extension is passed the first
+	 * when its first argument accepts null.
+	 */
+	function typeStaticExtensionCall(declared:TypedExpression, receiver:TypedExpression, name:String,
+			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):Null<TypedExpression> {
+		var extension = staticExtensions.find(declared.type, name, span);
+		if (extension == null && declared != receiver)
+			extension = staticExtensions.find(receiver.type, name, span);
+		if (extension == null)
+			return null;
+		var fn = extension.fn, key = extension.key;
+		if (extension.owner.kind != ModuleFunctions)
+			MemberAccess.method(session, extension.owner.name, name, span);
+		if (arguments.length + 1 > fn.arguments.length)
+			fail("E1008", 'Function "$key" expects ${fn.arguments.length - 1} arguments, got ${arguments.length}',
+				span);
+		var parameters = BodyTyper.functionTypeParameters(fn);
+		if (parameters.length > 0) {
+			var first = receiverFor(declared, receiver, null), preset:Map<String, CompilerType> = [];
+			// A Void expectation is a statement whose result is discarded, not a result of type Void.
+			if (expectedType != null && !sameType(expectedType, TVoid))
+				genericInstantiation.inferTypeParameters(fn.result, expectedType, parameters, preset, span);
+			var prepared = typeGenericCallArguments(fn, arguments, scope, span, [first], preset);
+			var info = session.methodInfo.get(key);
+			return genericInstantiation.specialize(key, fn, prepared.arguments, span, scope,
+				info == null ? null : info.owner, true, prepared.substitutions);
+		}
+		var first = receiverFor(declared, receiver, bodyTyper.argumentTypesOf(fn, [])[0]),
+			typed = typeDeclaredCallArguments(arguments, fn, scope, key, span, null, false, first);
+		return applyCallEffect(new TypedExpression(session.cNativeFunctions.exists(key) ? TCNativeCall(key,
+			typed) : TCall(key, typed), bodyTyper.functionResultType(fn, fn.span), span), key, scope);
+	}
+
+	/**
+	 * The receiver an extension is passed: as written where the first argument takes null (`Null<T>`, `Dynamic`, or a generic
+	 * one, whose type the receiver fixes), else its non-null value, as a member call reads it.
+	 */
+	function receiverFor(declared:TypedExpression, receiver:TypedExpression,
+			first:Null<CompilerType>):TypedExpression {
+		if (declared == receiver)
+			return receiver;
+		if (first == null)
+			return declared;
+		return switch first {
+			case TNullable(_), TDynamic, TNull: declared;
+			default: receiver;
+		};
+	}
+
+	function typeMemberCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
+			span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>, platformFirst:Bool, receiverName:Null<String>,
+			contextualGenericArguments:Bool):TypedExpression {
 		var synthesized = TypeParameterMembers.synthesizedMember(session, receiver, name);
 		if (synthesized != null) {
 			if (arguments.length != synthesized.arguments.length)
@@ -431,14 +512,18 @@ class CallResolver {
 	**/
 	public function typeDeclaredCallArguments(arguments:Array<AstExpression>, callee:AstFunction,
 			scope:Scope, name:String, span:SourceSpan,
-			?substitutions:Map<String, CompilerType>, virtualCall:Bool = false):Array<TypedExpression> {
-		var parameters = callee.arguments,
+			?substitutions:Map<String, CompilerType>, virtualCall:Bool = false,
+			?leading:TypedExpression):Array<TypedExpression> {
+		// `leading` is a first argument typed already: a static extension's receiver.
+		var offset = leading == null ? 0 : 1,
+			parameters = callee.arguments,
 			declared = bodyTyper.argumentTypesOf(callee, substitutions),
 			required = parameters.length;
-		while (required > 0 && AstPredicates.isOptionalArgument(parameters[required - 1]))
+		while (required > offset && AstPredicates.isOptionalArgument(parameters[required - 1]))
 			required--;
-		if (arguments.length < required || arguments.length > parameters.length) {
-			var expected = required == parameters.length ? '$required' : '$required to ${parameters.length}';
+		if (arguments.length + offset < required || arguments.length + offset > parameters.length) {
+			var expected = required == parameters.length
+				? '${required - offset}' : '${required - offset} to ${parameters.length - offset}';
 			fail("E1008", 'Function "$name" expects $expected arguments, got ${arguments.length}', span);
 		}
 		var typed:Array<TypedExpression> = [],
@@ -447,12 +532,14 @@ class CallResolver {
 					virtualCall ? DefaultArguments.dispatchType(parameters[index], declared[index],
 					session.relations) : declared[index]
 			];
+		if (leading != null)
+			typed.push(bodyTyper.coerce(leading, types[0], 'argument 1 to "$name"'));
 		for (i in 0...arguments.length) {
-			var supplied = types[i],
+			var supplied = types[i + offset],
 				value = bodyTyper.typeExpression(arguments[i], scope, supplied);
-			typed.push(bodyTyper.coerce(value, supplied, 'argument ${i + 1} to "$name"'));
+			typed.push(bodyTyper.coerce(value, supplied, 'argument ${i + 1 + offset} to "$name"'));
 		}
-		for (i in arguments.length...parameters.length) {
+		for (i in arguments.length + offset...parameters.length) {
 			var parameter = parameters[i],
 				expected = types[i],
 				defaultValue = parameter.defaultValue;
@@ -655,8 +742,11 @@ class CallResolver {
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
-		if (sameType(receiver.type, TDynamic))
-			return resolveDynamicMethodCall(receiver, name, arguments, span, scope);
+		if (sameType(receiver.type, TDynamic)) {
+			// A Dynamic value takes an extension whose first argument is Dynamic before its field is looked up at run time.
+			var extension = typeStaticExtensionCall(receiver, receiver, name, arguments, span, scope, expectedType);
+			return extension != null ? extension : resolveDynamicMethodCall(receiver, name, arguments, span, scope);
+		}
 		var enumMethod = EnumConformanceMethods.method(session, receiver.type, name);
 		if (enumMethod != null) {
 			if (name == "equals") {
@@ -704,7 +794,8 @@ class CallResolver {
 				null;
 		};
 		if (className == null)
-			fail("E1007", 'Cannot call method on non-object "${receiverName == null ? name : receiverName}"', span);
+			throw new MissingMember("E1007",
+				'Cannot call method on non-object "${receiverName == null ? name : receiverName}"', span);
 		var methodInfo = findMethod(className, name);
 		var classReference = switch receiver.expression {
 			case TClassRef(_):
@@ -738,7 +829,7 @@ class CallResolver {
 			}
 		}
 		if (methodInfo == null || methodInfo.isStatic)
-			fail("E1007", classReference
+			throw new MissingMember("E1007", classReference
 				? 'Unknown static method "$className.$name"' : 'Unknown instance method "$className.$name"', span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
 		var methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
@@ -813,7 +904,7 @@ class CallResolver {
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
 				method = candidate;
 		if (method == null)
-			fail("E1007", 'Unknown abstract method "$abstractName.$name"', span);
+			throw new MissingMember("E1007", 'Unknown abstract method "$abstractName.$name"', span);
 		MemberAccess.method(session, abstractName, name, span);
 		var methodKey = abstractName + "." + name,
 			signature = requiredMapValue(session.signatures, methodKey),
@@ -2048,7 +2139,7 @@ class CallResolver {
 				"String.split separator");
 			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
 		}
-		throw new CompileError(new Diagnostic("E1007", 'Unknown String method "$name"', span));
+		throw new MissingMember("E1007", 'Unknown String method "$name"', span);
 	}
 
 	/**
@@ -2360,7 +2451,7 @@ class CallResolver {
 		var library = typeLibraryArrayMethod(receiver, name, arguments, span, scope);
 		if (library != null)
 			return library;
-		throw new CompileError(new Diagnostic("E1007", 'Unknown array method "$name"', span));
+		throw new MissingMember("E1007", 'Unknown array method "$name"', span);
 	}
 
 	/** Choose a raw collection operation without changing the nominal element checked at the call site. */
@@ -2410,6 +2501,8 @@ class CallResolver {
 
 	public function typeIteratorMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan):TypedExpression {
+		if (name != "hasNext" && name != "next")
+			throw new MissingMember("E1007", 'Unknown Iterator method "$name"', span);
 		if (arguments.length != 0)
 			fail("E1008", 'Iterator.$name expects no arguments', span);
 		return switch name {
@@ -2420,7 +2513,7 @@ class CallResolver {
 					default: throw new InternalError("Not an iterator");
 				};
 				new TypedExpression(TCall("__iterator_next", [receiver]), element, span);
-			default: throw new CompileError(new Diagnostic("E1007", 'Unknown Iterator method "$name"', span));
+			default: throw new InternalError('Unknown Iterator method "$name"');
 		};
 	}
 
@@ -2498,6 +2591,8 @@ class CallResolver {
 				fail("E1008", "Map.size expects no arguments", span);
 			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
 		}
+		if (name != "exists" && name != "remove" && name != "get")
+			throw new MissingMember("E1007", 'Unknown map method "$name"', span);
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, mapType.key), mapType.key, "map key",
@@ -2515,7 +2610,7 @@ class CallResolver {
 					refined = entryPath == null ? null : scope.resolveExpression(entryPath);
 				new TypedExpression(TMapGet(receiver, key), refined == null ? nullableMapValue(mapType.value) : refined,
 					span);
-			default: throw new CompileError(new Diagnostic("E1007", 'Unknown map method "$name"', span));
+			default: throw new InternalError('Unknown map method "$name"');
 		};
 	}
 

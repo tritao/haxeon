@@ -147,6 +147,12 @@ class ModuleState {
 	public var canonicalAliasKey:String = "";
 	public var canonicalCalls:Map<String, Array<String>> = [];
 
+	/**
+	 * The key of the static extensions the module's bodies were typed with (`StaticExtensionTable.keyOfModule`): when it changes,
+	 * they are typed again, since a call may resolve to another extension.
+	 */
+	public var staticExtensionKey:String = "";
+
 	public function new(name, source) {
 		this.name = name;
 		this.source = source;
@@ -252,6 +258,7 @@ class ModuleState {
 		result.canonicalEntry = canonicalEntry;
 		result.canonicalAliasKey = canonicalAliasKey;
 		result.canonicalCalls = canonicalCalls;
+		result.staticExtensionKey = staticExtensionKey;
 		return result;
 	}
 

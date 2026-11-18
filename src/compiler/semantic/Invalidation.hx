@@ -10,6 +10,9 @@ enum abstract InvalidationKind(String) {
 	var GenericOrigin = "generic-origin";
 	var ModuleSemanticSnapshot = "module-semantic-snapshot";
 
+	/** The static extensions the module's calls may resolve to (`using`, `@:using`, or what their owners declare) changed. */
+	var StaticExtensions = "static-extensions";
+
 	/** A callee's purity or never-returns answer changed since this artifact was last typed,
 	 * though neither the artifact's own source nor its signature changed.
 	 */

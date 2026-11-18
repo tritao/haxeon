@@ -141,6 +141,16 @@ The current subset includes:
   only the full path names the variable, so the extension never changes code Haxe accepts. `haxeon lint --only
   module-namespace` names each use of it, for code that must also compile with Haxe.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
+- Static extensions, as in Haxe 4.3.7: `using pack.Tools;` (a module, whose types and module-level functions it brings, or
+  one type, `using pack.Tools.Extra;`) and `@:using(pack.Tools)` on a class, enum or abstract make `value.name(arguments)`
+  call `Tools.name(value, arguments)` where the value's type has no member `name`. The order is Haxe's: the value's own
+  members, then its type's `@:using` (a class's, then its base class's and interfaces'), then the module's `using`, the last
+  first; within a module the last type first and its module-level functions last. A static is passed over when it is
+  private to the calling code, `@:noUsing`, or its first argument does not take the value (an abstract's conversions count;
+  a `Dynamic` value meets only `Dynamic`). Generic extensions infer from the value (`using Lambda`, `StringTools`), a
+  `Null<T>` value is passed as it is where the first argument takes null, and a class named as a value (`Main.f()`) takes
+  no extension. Not yet: an extension read as a function value (`var f = text.trim;`), Haxe's global `haxe.EnumTools`
+  extensions, and `@:using` on a typedef.
 
 Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
 parameters or a result type that breaks the inherited contract, or explicitly make a public method private.
@@ -184,7 +194,6 @@ silently falling back to dynamic behavior.
 Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11-15 by compiling small programs on
 HashLink):
 
-- `using` static extensions: `using StringTools;` is a parse error.
 - Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
 - Structure patterns (`case {x: 0, y: y}:`) and extractor patterns (`case parse(_) => value:`).
 - Rest parameters (`function sum(...values:Int)`).

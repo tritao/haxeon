@@ -15,6 +15,7 @@ import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstImport;
+import compiler.syntax.Ast.AstUsing;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.NativeLayoutQueryKind;
@@ -151,12 +152,26 @@ class Parser {
 	}
 
 	public function parseProgram():AstProgram {
-		var packageName:Null<String> = null, imports:Array<AstImport> = [], importNames:Map<String, Bool> = [];
+		var packageName:Null<String> = null,
+			imports:Array<AstImport> = [],
+			importNames:Map<String, Bool> = [],
+			usings:Array<AstUsing> = [];
 		if (match(TokenKind.Package)) {
 			packageName = parseQualifiedName();
 			consume(TokenKind.Semicolon);
 		}
-		while (match(TokenKind.Import)) {
+		while (check(TokenKind.Import) || isUsingKeyword()) {
+			// `using pack.Tools;` imports what `import pack.Tools;` does and makes the static functions of its classes extensions.
+			if (isUsingKeyword()) {
+				var start = advance().span, path = parseImportPath();
+				if (StringTools.endsWith(path, ".*"))
+					fail(previous(), "A using names a module or type, not a package");
+				usings.push({path: path, span: new SourceSpan(start.file, start.start, previous().span.end)});
+				imports.push({path: path, alias: null});
+				consume(TokenKind.Semicolon);
+				continue;
+			}
+			advance();
 			var path = parseImportPath();
 			var alias:Null<String> = null;
 			if (check(TokenKind.Identifier) && current().text == "as") {
@@ -243,9 +258,14 @@ class Parser {
 			interfaces: interfaces,
 			classes: classes,
 			functions: functions,
-			fields: fields
+			fields: fields,
+			usings: usings
 		};
 	}
+
+	/** `using` before a dotted path: Haxe's keyword, an identifier to this lexer, so a variable may still be named `using`. */
+	function isUsingKeyword():Bool
+		return check(TokenKind.Identifier) && current().text == "using" && isNameToken(peekKind(1));
 
 	/** Parse a module or package import, including Haxe's trailing `.*`. */
 	function parseImportPath():String {

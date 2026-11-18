@@ -35,6 +35,13 @@ class SemanticProgram {
 	public final lifecycle:DeclarationLifecycle;
 	public final lifecycleMetrics:SemanticLifecycleMetrics;
 
+	/**
+	 * Where each module's `using` and each type's `@:using` find static extensions. The frontend sets it for each build from
+	 * SemanticAssembly, which resolves it from the modules' syntax (a canonical program keeps no `using`); a program typed on its
+	 * own has none.
+	 */
+	public var staticExtensions:StaticExtensionTable = StaticExtensionTable.empty();
+
 	public static function analyze(program:AstProgram):SemanticProgram {
 		return analyzeThrough(program, SignatureTyped);
 	}
@@ -122,6 +129,7 @@ class SemanticProgram {
 		var nextProgram:AstProgram = {
 			packageName: program.packageName,
 			imports: program.imports,
+			usings: program.usings,
 			aliases: program.aliases,
 			enums: current.enums,
 			enumAbstracts: program.enumAbstracts,

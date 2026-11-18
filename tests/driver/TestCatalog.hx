@@ -68,6 +68,7 @@ class TestCatalog {
 		"WarmRebuildReuseMain",
 		"StructuralWarmEditMain",
 		"InterfaceVariablesWarmEditMain",
+		"StaticExtensionsWarmEditMain",
 		"InferredTypeWarmEditMain",
 		"LazyFieldTypingMain",
 		"LazyFunctionTypingMain",
