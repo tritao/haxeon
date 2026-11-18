@@ -30,7 +30,8 @@ The current subset includes:
 - Extractor patterns, `case expression => pattern:`, as Haxe matches them: `expression`, in which `_` is the value
   (`_.length => 3`, `parse(_) => Some(value)`), is evaluated only when no earlier case matched, once for a run of cases
   that share it, and its value must match `pattern`; `name = expression => pattern` also binds the value. The cases after
-  them match the value itself again. Coverage is that of each run's value (an enum constructor by constructor).
+  them match the value itself again. Coverage is that of each run's value (an enum constructor by constructor). In a tuple
+  switch, as in Haxe, an extractor cannot read the whole tuple (`case _.length => 2:` there is `E1019`).
 - A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
   and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
   default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`

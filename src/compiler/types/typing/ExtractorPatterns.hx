@@ -1,5 +1,7 @@
 package compiler.types.typing;
 
+import compiler.core.Diagnostic;
+import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
@@ -28,6 +30,7 @@ class ExtractorPatterns {
 	/** The switch statement of `subject` with `cases`, its extractor cases matched as nested switches. */
 	public static function rewriteStatement(subject:AstExpression, cases:Array<AstSwitchCase>,
 			defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan):Array<AstStatement> {
+		rejectTupleExtractors(subject, [for (switchCase in cases) switchCase.value]);
 		var held = hold(subject, span), first = firstExtractor([for (switchCase in cases) switchCase.value]);
 		var group = groupEnd([for (switchCase in cases) switchCase.value], first),
 			extractor = requiredExtractor(cases[first].value),
@@ -69,6 +72,7 @@ class ExtractorPatterns {
 	/** The switch expression of `subject` with `cases`, its extractor cases matched as nested switches. */
 	public static function rewriteExpression(subject:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			fallback:Null<AstExpression>, span:SourceSpan):AstExpression {
+		rejectTupleExtractors(subject, [for (switchCase in cases) switchCase.value]);
 		var held = hold(subject, span), first = firstExtractor([for (switchCase in cases) switchCase.value]);
 		var group = groupEnd([for (switchCase in cases) switchCase.value], first),
 			extractor = requiredExtractor(cases[first].value),
@@ -100,6 +104,20 @@ class ExtractorPatterns {
 			patternSpan(cases[first].value)),
 			result = first == 0 ? matched : SwitchExpression(held.value, cases.slice(0, first), matched, span);
 		return held.declaration == null ? result : BlockExpression([held.declaration], result, span);
+	}
+
+	/**
+	 * In a tuple switch (`switch [a, b]`) `_` would be the tuple, which is no value, so Haxe rejects a whole-case extractor there;
+	 * an element's extractor (`case [_.length => 2, _]:`) reads that element.
+	 */
+	static function rejectTupleExtractors(subject:AstExpression, values:Array<AstExpression>):Void {
+		if (TupleSwitch.subjectElements(subject) == null)
+			return;
+		for (value in values)
+			if (extractorOf(value) != null)
+				throw new CompileError(new Diagnostic("E1019",
+					"An extractor cannot read a whole tuple, which is no value: extract from an element (`case [_.length => 2, _]:`)",
+					patternSpan(value)));
 	}
 
 	/** The subject as a variable: itself when it is a local, else one the rewritten switch declares. */
