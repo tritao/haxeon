@@ -85,20 +85,10 @@ class SessionState {
 	 * where the state they were copied from shares them: such a compile never returns to that state.
 	 */
 	public function releaseRetained():Void {
+		releaseSyntax();
 		for (state in modules) {
-			state.tokens = [];
-			state.ast = null;
-			state.recoveredAst = null;
-			state.recoveredTokens = [];
-			state.recoveredSemanticModel = null;
-			state.semanticModel = null;
-			state.lastGoodTokens = [];
-			state.lastGoodAst = null;
-			state.lastGoodSemanticModel = null;
 			state.typedFunctions = [];
 			state.irFunctions = [];
-			state.canonicalFunctions = [];
-			state.canonicalAllFunctions = [];
 		}
 		objectCache = [];
 		canonicalObjectCache = [];
@@ -110,6 +100,25 @@ class SessionState {
 		verifyMemo = new IrVerifyMemo();
 		reachabilityCache = [];
 	}
+
+	/**
+	 * Releases the modules' tokens, syntax trees, semantic models and canonical declarations, for a compile that keeps no session
+	 * once typing is done: the IR is assembled from the typed program. Changes the modules in place, as `releaseRetained` does.
+	 */
+	public function releaseSyntax():Void
+		for (state in modules) {
+			state.tokens = [];
+			state.ast = null;
+			state.recoveredAst = null;
+			state.recoveredTokens = [];
+			state.recoveredSemanticModel = null;
+			state.semanticModel = null;
+			state.lastGoodTokens = [];
+			state.lastGoodAst = null;
+			state.lastGoodSemanticModel = null;
+			state.canonicalFunctions = [];
+			state.canonicalAllFunctions = [];
+		}
 
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,
 			backend:BackendSession) {
