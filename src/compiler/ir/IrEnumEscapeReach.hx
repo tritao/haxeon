@@ -12,9 +12,9 @@ class IrEnumEscapeReach {
 	final declarations:Map<String, IrEnum>;
 	final functions:Map<String, IrFunction>;
 	final staticFieldsByOwner:Map<String, Array<IrStaticField>> = [];
-	final mapContents:Map<String, Array<IrType>> = [];
+	final mapContents = new IrTypeMap<Array<IrType>>();
 	final subclasses:Map<String, Array<IrObject>> = [];
-	final closureEnvironments:Map<String, Array<IrType>> = [];
+	final closureEnvironments = new IrTypeMap<Array<IrType>>();
 	final interfaceImplementers:Map<String, Array<IrObject>> = [];
 	final interfaceClosures:Map<String, Map<String, Bool>> = [];
 	final objectClosures:Map<String, Map<String, Bool>> = [];
@@ -54,11 +54,10 @@ class IrEnumEscapeReach {
 				for (located in block.instructions)
 					switch located.value {
 						case InstanceClosure(output, _, receiver):
-							var key = Std.string(output.type),
-								environments = closureEnvironments.get(key);
+							var environments = closureEnvironments.get(output.type);
 							if (environments == null) {
 								environments = [];
-								closureEnvironments.set(key, environments);
+								closureEnvironments.set(output.type, environments);
 							}
 							environments.push(receiver.type);
 						case Call(_, name, arguments)
@@ -66,11 +65,10 @@ class IrEnumEscapeReach {
 							&& StringTools.contains(name, "_ref_")
 							&& StringTools.endsWith(name, "_set")
 							&& arguments.length >= 3):
-							var key = Std.string(arguments[0].type),
-								contents = mapContents.get(key);
+							var contents = mapContents.get(arguments[0].type);
 							if (contents == null) {
 								contents = [];
-								mapContents.set(key, contents);
+								mapContents.set(arguments[0].type, contents);
 							}
 							contents.push(arguments[1].type);
 							contents.push(arguments[arguments.length - 1].type);
@@ -118,9 +116,9 @@ class IrEnumEscapeReach {
 	public function collect(roots:Array<IrType>, supportsCallableEscape:IrType->Bool):Map<String, Bool> {
 		var unsupported:Map<String, Bool> = [],
 			visited:Map<String, Bool> = [],
-			inspectedMaps:Map<String, Bool> = [], // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
-			// back to themselves, by identity text. Wrappers and primitives are not recorded: walking them again is cheap and finite.
-			referenceTypes:Map<String, Bool> = [],
+			inspectedMaps = new IrTypeMap<Bool>(), // What the reference walk has visited: named types by name; function and map types, the only other ones that can lead
+			// back to themselves, by structure. Wrappers and primitives are not recorded: walking them again is cheap and finite.
+			referenceTypes = new IrTypeMap<Bool>(),
 			referenceObjects:Map<String, Bool> = [],
 			referenceVirtuals:Map<String, Bool> = [],
 			valueTypes:Map<String, Bool> = [];
@@ -181,11 +179,10 @@ class IrEnumEscapeReach {
 				values(type, unsupported, valueTypes);
 			switch type {
 				case Abstract(_):
-					var key = IrTypeIdentity.text(type);
-					if (inspectedMaps.exists(key))
+					if (inspectedMaps.exists(type))
 						return;
-					inspectedMaps.set(key, true);
-					var contents = mapContents.get(key);
+					inspectedMaps.set(type, true);
+					var contents = mapContents.get(type);
 					if (contents != null)
 						for (content in contents)
 							inspect(content, true);
@@ -195,10 +192,9 @@ class IrEnumEscapeReach {
 		var walk:IrObject->Void = function(_) {},
 			referenceEnums:Map<String, Bool> = [];
 		function firstReference(type:IrType):Bool {
-			var key = IrTypeIdentity.text(type);
-			if (referenceTypes.exists(key))
+			if (referenceTypes.exists(type))
 				return false;
-			referenceTypes.set(key, true);
+			referenceTypes.set(type, true);
 			return true;
 		}
 		function walkReferences(type:IrType):Void {
@@ -234,7 +230,7 @@ class IrEnumEscapeReach {
 					for (argument in arguments)
 						walkReferences(argument);
 					walkReferences(result);
-					var environments = closureEnvironments.get(IrTypeIdentity.text(type));
+					var environments = closureEnvironments.get(type);
 					if (environments != null)
 						for (environment in environments)
 							walkReferences(environment);
@@ -251,11 +247,10 @@ class IrEnumEscapeReach {
 						for (object in implementers)
 							walk(object);
 				case Abstract(_):
-					var key = IrTypeIdentity.text(type);
-					if (referenceTypes.exists(key))
+					if (referenceTypes.exists(type))
 						return;
-					referenceTypes.set(key, true);
-					var contents = mapContents.get(key);
+					referenceTypes.set(type, true);
+					var contents = mapContents.get(type);
 					if (contents != null)
 						for (content in contents)
 							walkReferences(content);
