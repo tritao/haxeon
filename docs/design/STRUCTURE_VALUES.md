@@ -499,6 +499,7 @@ that change HashLink positions or lowering also run the ci-tier debug-metadata a
 | 5 | Open literal structures: frame-owned, gaining optional fields in `coerce`, closed and named in `settleFrame`, registered at closing; `TObjectLiteral` name from its type; the verifier; the cross-unit diagnostic. | Accepts Haxe's open-literal programs | typer (haxeon-7b's files) | `typing/{BodyTyper (settleFrame), MonomorphFrames, ExpressionTyper (typeObjectLiteral), ConversionResolver, AnonymousTypeRegistry}`, `types/{Monomorphs, TypedTypeMap, TypedAst}` |
 | 6 | The census build without `localExpectedTypes`, the fixes it asks for, then the deletion. | `values.push(1)` as `Array<Float>` rejected | typer | `typing/{BodyTyper, StatementTyper, TypingContext}`, `types/{Type (MonomorphCell.hint), Monomorphs}` |
 | 7 | Reflection and printing of unwritten optional fields (decision 4); `LANGUAGE_SUPPORT.md`, `SEMANTIC_TYPE_CONTRACT.md`, `STRUCTS.md` updated. | Reflection matches Haxe | any | `IrProgramAssembler.anonymousStringsFrom`, `ObjectReflection`, docs |
+| 8 | Interface field access on `IrShapeDispatch`: a read or write of an interface variable (`9f2db038d`) becomes a shape-dispatched field access, an exact-class arm reading the field inline with the dispatcher as fallback, instead of a virtual call to a hidden `$get_x`/`$set_x` accessor. Then delete those hidden accessors (`semantic/InterfaceFieldAccessors`) and their per-class methods. The interface's own `get_x`/`set_x` accessors stay. | Faster; same semantics; less code; adding an interface variable no longer adds methods to every implementing class | haxeon-e4 (IR), typer for the access typing | `ir/IrShapeDispatch`, `semantic/InterfaceFieldAccessors` (deleted), `typing/InterfaceProperties`, `IrGenerator` |
 
 Order and parallelism:
 
@@ -510,6 +511,7 @@ Order and parallelism:
 - Slice 4 needs 2b (a view must be a view before the typer accepts one) and 5 (the open-literal rule of the relation).
 - Slice 3 needs 2b only and is the one that pays back early on lru.
 - Slice 6 follows 5. Slice 7 follows 4.
+- Slice 8 needs 2b only. It replaces the bridge 9f2db038d used for interface variables: one mechanism for structures, interface variables and erased generics, so a monomorphic access runs at direct-field speed.
 
 ## Tests
 
