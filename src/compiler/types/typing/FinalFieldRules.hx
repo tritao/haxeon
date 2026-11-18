@@ -58,7 +58,9 @@ class FinalFieldRules {
 			return;
 		for (field in declaration.fields)
 			if (field.name == name && field.isStatic && field.isFinal)
-				fail("E1026", 'Final static field "$owner.$name" cannot be assigned', span);
+				fail("E1026",
+					'Final static field "${compiler.semantic.AbstractStatics.displayOwner(owner)}.$name" cannot be assigned',
+					span);
 	}
 
 	static function baseName(type:AstType):Null<String>

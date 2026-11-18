@@ -91,7 +91,13 @@ The current subset includes:
   from outside and from the abstract's own methods (`length`). Each access calls the accessor; `never` forbids it. An
   abstract stores nothing but its underlying value, so its variables must be such properties (`Cannot declare member
   variable in abstract`, `Member property accessors must be get/set or never`, `Method get_length required by property
-  length is missing`, in Haxe's words). A static variable of an abstract is not supported yet.
+  length is missing`, in Haxe's words).
+- Static variables and finals on an abstract (`static var count = 0`, `static final step = 2`, `static inline var`), read and
+  written through the abstract (`Counter.count`, `pack.Counter.count`) and bare in its methods. Haxe keeps them in the
+  abstract's implementation class; Haxeon in a hidden class of the module (`AbstractStatics`), which goes where the abstract
+  is declared among the module's classes, so they initialize in Haxe's order (below), and a class whose initializers
+  reach one of the abstract's statics or static methods initializes after them. A static property with an accessor
+  (`static var x(get, never)`) is not supported yet.
 - An abstract's implicit conversions, as Haxe casts them: through the expected abstract's `from` conversions, else the
   value's abstract's `to` conversions, a `@:from` or `@:to` function before a `from` or `to` type. Where the other side
   is not an abstract (Int, Float, a class), the value meets the conversion's type as Haxe unifies it, so an Int meets a

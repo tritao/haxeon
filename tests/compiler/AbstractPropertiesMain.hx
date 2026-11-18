@@ -3,8 +3,8 @@ import compiler.core.Diagnostic.CompileError;
 
 /**
  * An abstract's variables are properties whose accessors are get/set or never, as in Haxe, which words each error below the
- * same way (tests/differential/abstract-properties*.hx run the accepted forms against it). A static variable of an abstract is
- * not supported yet.
+ * same way (tests/differential/abstract-properties*.hx run the accepted forms against it). A static variable is stored in the
+ * abstract's storage class (tests/differential/abstract-stati*.hx); a static property with an accessor is not supported yet.
  */
 class AbstractPropertiesMain {
 	static final STACK = "abstract Stack(Array<Int>) from Array<Int> { ";
@@ -34,8 +34,15 @@ class AbstractPropertiesMain {
 			STACK
 			+ "public var length(get, never):Int; function get_length() return 0; public function clear():Void length = 0; }",
 			"var stack:Stack = [1]; stack.clear();", "This expression cannot be accessed for writing");
-		expectError("a static variable", STACK + "public static var count:Int = 0; }", "",
-			'Static variable "Stack.count" of an abstract is not supported yet');
+		expectError("a static property",
+			STACK + "public static var count(get, never):Int; static function get_count() return 0; }", "",
+			'Static property "Stack.count" of an abstract is not supported yet');
+		expectError("a write of a static final", STACK + "public static final step:Int = 2; }", "Stack.step = 3;",
+			'Final static field "Stack.step" cannot be assigned');
+		expectError("a private static", STACK + "static var hidden:Int = 2; }", "var read = Stack.hidden;",
+			"Cannot access private field hidden");
+		expectError("a missing static", STACK + "public static var count:Int = 0; }", "var read = Stack.missing;",
+			'Unknown static field "Stack.missing"');
 		Sys.println("PASS: an abstract's properties are checked as Haxe checks them");
 	}
 

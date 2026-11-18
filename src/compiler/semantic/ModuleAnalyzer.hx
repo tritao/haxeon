@@ -403,7 +403,7 @@ class ModuleAnalyzer {
 					fields: program.fields
 				};
 		}
-		program = ModuleFields.fold(program, state.name);
+		program = ModuleFields.fold(AbstractStatics.fold(program), state.name);
 		return new LookupParse(state.source, conditional.defines, tokens, program);
 	}
 

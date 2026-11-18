@@ -1,6 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.InternalError;
+import compiler.semantic.AbstractStatics;
 import compiler.types.typing.MonomorphFrames.MonomorphFrame;
 
 import compiler.types.TypedAst.TypedFunctionRole;
@@ -1831,7 +1832,11 @@ class BodyTyper implements BodyTyping {
 				new TypedExpression(TClassRef(abstractName), TInstance(NominalKind.Class, abstractName, []), span);
 			} else if (session.classDecls.exists(name) || PlatformAbi.isType(name))
 				new TypedExpression(TClassRef(name), TInstance(NominalKind.Class, name, []), span);
-			else {
+			else if (session.classDecls.exists(AbstractStatics.storageName(name))) {
+				// An abstract's statics, read through it (`Counter.count`), are its storage class's.
+				var storage = AbstractStatics.storageName(name);
+				new TypedExpression(TClassRef(storage), TInstance(NominalKind.Class, storage, []), span);
+			} else {
 				var owner = context.lexicalOwner,
 					staticField:Null<{owner:String, type:CompilerType}> = null;
 				if (owner != null)
@@ -1924,6 +1929,8 @@ class BodyTyper implements BodyTyping {
 						var abstractName = session.enumAbstractName(className);
 						if (abstractName != null)
 							className = abstractName;
+						else if (session.classDecls.exists(AbstractStatics.storageName(className)))
+							className = AbstractStatics.storageName(className);
 						if (session.classDecls.exists(className) || abstractName != null
 							|| PlatformAbi.isType(className)) {
 							var classObject = new TypedExpression(TClassRef(className),
@@ -2456,7 +2463,8 @@ class BodyTyper implements BodyTyping {
 		var result = findStaticFieldNullable(className, name);
 		if (result != null)
 			return result;
-		throw new CompileError(new Diagnostic("E1005", 'Unknown static field "$className.$name"', span));
+		throw new CompileError(new Diagnostic("E1005",
+			'Unknown static field "${AbstractStatics.displayOwner(className)}.$name"', span));
 	}
 
 	public function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}> {

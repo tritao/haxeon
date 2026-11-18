@@ -666,7 +666,8 @@ class TypingSession {
 	public function enterBody(name:String, ?typeSubstitutions:Map<String, CompilerType>, ?ownerOverride:String,
 			?sourceFunctionName:String):TypingContext {
 		var isLambda = compiler.semantic.LambdaName.is(name),
-			owner = ownerOverride != null ? ownerOverride : isLambda ? currentContext.lexicalOwner : parentPath(name),
+			owner = codeOwner(ownerOverride != null ? ownerOverride : isLambda
+				? currentContext.lexicalOwner : parentPath(name)),
 			source = sourceFunctionName != null ? sourceFunctionName : isLambda
 				? currentContext.sourceFunctionName : null,
 			body = new TypingContext(name, typeSubstitutions, owner, source);
@@ -698,6 +699,10 @@ class TypingSession {
 		if (StringTools.startsWith(body.name, DEFAULT_ARGUMENT_PREFIX))
 			defaultArgumentDepth--;
 	}
+
+	/** The declaration whose code a body of `owner` is: an abstract's, for its statics' storage class (`AbstractStatics`). */
+	static function codeOwner(owner:Null<String>):Null<String>
+		return compiler.semantic.AbstractStatics.abstractOf(owner) ?? owner;
 
 	static inline function parentPath(path:String):Null<String>
 		return compiler.core.QualifiedName.parent(path);

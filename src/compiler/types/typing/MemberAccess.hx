@@ -4,6 +4,7 @@ import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
+import compiler.semantic.AbstractStatics;
 import compiler.semantic.ModuleFields;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.syntax.Ast;
@@ -47,6 +48,9 @@ class MemberAccess {
 	 */
 	public static function classField(session:TypingSession, className:String, name:String,
 			isStatic:Bool):Null<DeclaredField> {
+		// An abstract's static variables are its storage class's (`AbstractStatics`).
+		if (isStatic && session.declarations.abstracts.exists(className))
+			className = AbstractStatics.storageName(className);
 		var owner:Null<String> = className, seen:Map<String, Bool> = [];
 		while (owner != null) {
 			if (seen.exists(owner))
@@ -115,13 +119,13 @@ class MemberAccess {
 	public static function requireField(session:TypingSession, declaration:AstClass, field:AstField,
 			span:SourceSpan):Void
 		require(session, {
-			owner: declaration.name,
+		// An abstract's static is reached as the abstract's member, where its storage class keeps it.
+		owner: AbstractStatics.abstractOf(declaration.name) ?? declaration.name,
 			name: field.name,
 			isPublic: field.isPublic,
 			declaredIn: field.span,
 			ownerMetadata: declaration.metadata,
-			metadata: field.metadata
-		}, span);
+			metadata: field.metadata}, span);
 
 	/** Source reaches the property `field` of abstract `declaration`: a read or write, which calls its accessor. */
 	public static function abstractProperty(session:TypingSession, declaration:AstAbstract,

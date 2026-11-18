@@ -185,6 +185,9 @@ in_background run_compile_failure abstract-uncalled-member-error
 # An abstract's from/to conversions unify as Haxe's do: Int meets Float, a class its base; one abstract never chains to another.
 in_background run_case abstract-from-to-widening 0
 in_background run_compile_failure abstract-from-to-not-chained
+# An abstract's static variables, in Haxe's initialization order (AbstractStatics).
+in_background run_case abstract-statics 0
+in_background run_compile_failure abstract-static-private
 in_background run_case abstract-module-members 0
 # Static initialization in Haxe's order (src/compiler/ir/StaticInitializationOrder.hx).
 in_background run_case static-init-order 0

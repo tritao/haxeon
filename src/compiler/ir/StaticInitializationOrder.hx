@@ -1,5 +1,6 @@
 package compiler.ir;
 
+import compiler.semantic.AbstractStatics;
 import compiler.semantic.LambdaName;
 import compiler.semantic.ModuleFields;
 import compiler.types.TypedAst.TypedClass;
@@ -155,10 +156,13 @@ class StaticInitializationOrder {
 			return;
 		var owner = memberOwners.get(callee);
 		if (owner == null && !LambdaName.is(callee)) {
-			// A module function (`pack.Mod.f`) is a member of its module, as its variables are: Haxe keeps both in one class.
+			// A module function (`pack.Mod.f`) is a member of its module, as its variables are: Haxe keeps both in one class. So is
+			// an abstract's static method (`pack.Counter.total`) of the abstract, whose statics its storage class keeps.
 			var dot = callee.lastIndexOf(".");
-			if (dot > 0)
-				owner = ModuleFields.storageName(callee.substr(0, dot));
+			if (dot > 0) {
+				var prefix = callee.substr(0, dot), statics = AbstractStatics.storageName(prefix);
+				owner = classes.exists(statics) ? statics : ModuleFields.storageName(prefix);
+			}
 		}
 		if (owner != null)
 			place(owner);

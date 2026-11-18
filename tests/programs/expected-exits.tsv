@@ -170,6 +170,7 @@ local-shadowing	42
 captured-shadowing	42
 module-function-shadowing	42
 abstract-sibling-call	42
+abstract-statics-module	42
 thread-lock	42
 thread-mutex	42
 thread-tls	42
