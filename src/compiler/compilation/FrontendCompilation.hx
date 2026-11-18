@@ -258,8 +258,10 @@ class FrontendCompilation {
 		collectCachedIr(build);
 		checkCancelled(token);
 		// A compile that keeps no session assembles the IR from the typed program alone; the syntax is no longer needed.
-		if (!context.options.keepSession)
+		if (!context.options.keepSession) {
 			context.state.releaseSyntax();
+			context.moduleAnalyzer.releaseLookupParses();
+		}
 		assembleTables(build);
 		runIrPipeline(build);
 		selectChangedFunctions(build);
