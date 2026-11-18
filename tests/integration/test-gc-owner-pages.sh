@@ -16,6 +16,10 @@ for mode in 0 1; do
 done
 # A partial word at the end of a registered stack is not a root.
 run "$(haxeon_native_test gc_stack_boundary)"
+# A thread's current allocation group owns what it allocates, on either allocation path.
+for mode in 0 1; do
+	HL_GC_ALLOC_FAST=$mode run "$(haxeon_native_test gc_alloc_groups)"
+done
 # Owned allocations come out of the thread's buffers through the inline entry.
 HL_GC_ALLOC_FAST=1 run "$(haxeon_native_test gc_owner_tlab)"
 # With the empty-page cache on, an owner's emptied pages stay cached until the owner is released.
@@ -26,4 +30,4 @@ if [ "$warnings" != 1 ]; then
 	cat "$work/classes.err" >&2
 	exit 1
 fi
-printf '%s\n' 'PASS: owners are counted from their pages, allocate from thread buffers, share pages past the class limit and give classes back'
+printf '%s\n' 'PASS: owners are counted from their pages, allocate from thread buffers, share pages past the class limit and give classes back; allocation groups own what they allocate'
