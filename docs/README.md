@@ -81,6 +81,8 @@ Compiler (ADR 0003 and its follow-ups):
 - [FRONTEND_RESTART.md](design/FRONTEND_RESTART.md): removing the frontend restart.
 - [LAZY_DECLARATION_TYPING.md](design/LAZY_DECLARATION_TYPING.md): unannotated declaration types typed on demand
   (plan step 2.5).
+- [GENERIC_TYPING_ONCE.md](design/GENERIC_TYPING_ONCE.md): typing a generic body once; elaboration per representation
+  as a pass (proposed).
 
 Runtime and tools:
 
