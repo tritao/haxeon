@@ -38,6 +38,15 @@ No single site is above 3%.
 4. **Interned types and symbols.** A type or symbol gets an id once per session; maps keyed by it become tables, and no
    key text is built per lookup. First `HlSymbolTable.internType`, then `SemanticSignature` in `IrGenerator.lowerType`,
    then `IrEnumEscapeReach` and `RuntimeAbi`. This is ADR 0003 M3's integer identities, done where the census says.
+   *Interned types.* `IrType` is an enum built with literals everywhere, so equal types are different values and cannot
+   carry an id. `IrTypeMap<V>` keys a table by a type's structure instead: it hashes a type by walking it (constructor,
+   name characters, children) and compares candidates with `IrTypeIdentity.same`, so a lookup builds no text and
+   allocates nothing; only an insertion grows the table. Keys that are text today become `IrTypeMap`s. Text identity
+   (`IrTypeIdentity.text` and `id`) stays where it is persisted or must be the same in both builds of the compiler:
+   symbol-state codecs, digests, runtime type discriminators. `HlSymbolTable` keeps its text-keyed `typeIndices`, which
+   it persists, and answers lookups through an `IrTypeMap` index over it that is part of its copy-on-write state and is
+   dropped when `renameTypes` rewrites the keys. A table of dense type ids (`IrTypeMap<Int>` handing out numbers) is the
+   next step once consumers want arrays indexed by type.
 5. **Packed small fields.** Flags and small enums in one `Int`, behind an `abstract` with inline accessors: free in both
    builds. Struct bitfields are language work (`STRUCTS.md`) the compiler would use only under ADR 0006.
 6. **The IR core in columns.** Instructions as rows of parallel `Int` columns (opcode, type id, operand range) with the

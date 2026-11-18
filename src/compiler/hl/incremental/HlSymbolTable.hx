@@ -3,6 +3,7 @@ package compiler.hl.incremental;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
+import compiler.ir.IrTypeMap;
 import compiler.abi.NameRewrite;
 import compiler.hl.HlCode.HlTypeDef;
 import compiler.hl.HlCode.HlVirtualField;
@@ -56,6 +57,13 @@ class HlSymbolTable {
 	var stringIndices:Map<String, Int> = [];
 	var floatIndices:Map<String, Int> = [];
 	var typeIndices:Map<String, Int> = [];
+
+	/**
+	 * `typeIndices` by the type's structure, so interning a type it already has builds no key text. It only learns facts
+	 * that hold for every table sharing `typeIndices` (an index never changes once given), so it belongs to this instance
+	 * alone and starts empty in a copy; `renameTypes` drops it with the keys it rewrites.
+	 */
+	var typeIndex = new IrTypeMap<Int>();
 	var globalIndices:Map<String, Int> = [];
 	var objectIndices:Map<String, Int> = [];
 	var objectMethodIndices:Map<String, Map<String, Int>> = [];
@@ -301,7 +309,15 @@ class HlSymbolTable {
 	}
 
 	public function internType(type:IrType):Int {
-		var key = typeKey(type);
+		var known = typeIndex.get(type);
+		if (known != null)
+			return known;
+		var index = internTypeByKey(type, typeKey(type));
+		typeIndex.set(type, index);
+		return index;
+	}
+
+	function internTypeByKey(type:IrType, key:String):Int {
 		if (typeIndices.exists(key))
 			return typeIndices.get(key);
 		ensureWritable();
@@ -636,6 +652,7 @@ class HlSymbolTable {
 			return;
 		ensureWritable();
 		typeIndices = rewrite.keys(typeIndices);
+		typeIndex = new IrTypeMap();
 		objectIndices = rewrite.keys(objectIndices);
 		var methods:Map<String, Map<String, Int>> = [];
 		for (name => slots in objectMethodIndices)
