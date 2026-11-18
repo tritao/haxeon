@@ -1540,7 +1540,7 @@ class FrontendCompilation {
 			// pass gives such a name an object later.
 			"reflectable:"
 				+ (reflectable == null
-				? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(",")),
+				? "-" : [for (name in reflectable) if (objectNames.exists(name)) name].join(";")),
 			"entry:" + entryPoint,
 			"generator:" + generator.facts.inputState(generator.profile)
 		].join("\n");

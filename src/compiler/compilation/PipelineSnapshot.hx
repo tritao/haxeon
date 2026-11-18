@@ -85,6 +85,22 @@ class PipelineSnapshot {
 	}
 
 	/** The label of the first line of two environment texts that differ. */
+	/** For two lists separated by ";" (names of types can hold commas), the first entry only one has (" +name" when added, " -name"
+		when removed), " order" when they hold the same entries, and nothing when either is not a list. */
+	static function listDifference(previous:String, next:String):String {
+		if (previous.indexOf(";") < 0 && next.indexOf(";") < 0)
+			return "";
+		var before:Map<String, Bool> = [for (entry in previous.split(";")) entry => true],
+			after:Map<String, Bool> = [for (entry in next.split(";")) entry => true];
+		for (entry in next.split(";"))
+			if (!before.exists(entry))
+				return ' +$entry';
+		for (entry in previous.split(";"))
+			if (!after.exists(entry))
+				return ' -$entry';
+		return " order";
+	}
+
 	static function firstDifference(previous:String, next:String):String {
 		var left = previous.split("\n"), right = next.split("\n");
 		for (index in 0...Std.int(Math.max(left.length, right.length))) {
@@ -96,7 +112,9 @@ class PipelineSnapshot {
 				var brace = label.indexOf("{");
 				if (end < 0 || (brace >= 0 && brace < end))
 					end = brace;
-				return end < 0 ? label.substr(0, 40) : label.substr(0, end);
+				if (end < 0)
+					return label.substr(0, 40);
+				return label.substr(0, end) + listDifference(a.substr(end + 1), b.substr(end + 1));
 			}
 		}
 		return "length";
