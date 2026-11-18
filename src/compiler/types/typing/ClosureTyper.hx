@@ -190,6 +190,14 @@ class ClosureTyper {
 			context = session.currentContext;
 		context.scope = typedBodyScope;
 		context.receiver = typedBodyScope.resolve("this");
+		// A result that is an empty type variable (a callback's `T`, `CallResolver.openResult`) is the body's, as an unannotated
+		// lambda's is: a statement body makes it Void, as in Haxe.
+		var openResult:Null<CompilerType> = null;
+		if (expectedFunction != null && !inferContextualResult
+			&& compiler.types.Monomorphs.isUnbound(expectedFunction.result)) {
+			openResult = expectedFunction.result;
+			inferContextualResult = true;
+		}
 		context.expectedReturnType = expectedFunction == null
 			|| inferContextualResult ? TVoid : expectedFunction.result;
 		context.contextualVoidLambda = expectedFunction != null && (switch (expectedFunction.result) {
@@ -226,6 +234,13 @@ class ClosureTyper {
 		else {
 			var contextualResult = context.inferredResult;
 			inferredResult = contextualResult == null ? CompilerType.TVoid : contextualResult;
+		}
+		var variable = openResult;
+		if (variable != null) {
+			if (inferredResult.match(TVoid))
+				compiler.types.Monomorphs.close(variable, TVoid);
+			else
+				compiler.types.Monomorphs.unify(inferredResult, variable);
 		}
 		context.expectedReturnType = inferredResult;
 		var lambdaCells = copyMap(context.storage.cells),

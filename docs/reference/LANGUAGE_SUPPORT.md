@@ -63,6 +63,9 @@ The current subset includes:
   checked against null first does not warn.
 - `Array.pop` and `shift` return `Null<T>`, null when the array is empty, as in Haxe.
 - Closures with generated environments and shared cells for mutable captures
+- Haxe's `Lambda` over arrays, maps and iterables, `flatten` and `flatMap` included. A callback's result that names a type
+  parameter nothing has fixed yet is a type variable its body fills, as in Haxe: `Lambda.flatMap(words, w -> w.split(""))`
+  returns an array as the `Iterable<S>` it declares, and a statement body makes it Void.
 - Arrays and compiler-owned primitive, string, and reference array operations
 - `Map` keyed by `String`, `Int`, an enum, or a struct that conforms to `Hashable`, holding primitive, reference or
   value-class values. A class or interface cannot be a key (classes cannot conform to `Hashable`), so there is no
@@ -240,11 +243,15 @@ HashLink):
   structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
   after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
   as in Haxe (`structure-open-literal`).
-- In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list`, `flatten` and `flatMap`, the file handles of `sys.io.File.read` and
+- In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
   class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
+- A generic call whose type argument is a type variable something after the call still fixes (`var values = [];
+  Lambda.count(values); values.push(1);`): `E1003`. Haxeon names and types a generic call's specialization when it types the
+  call, so it cannot follow a variable fixed later; one that only the argument's own value carries (`Lambda.empty([])`) is
+  Dynamic, as in Haxe. The differential case `lambda-unfixed-before-call` records it.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 

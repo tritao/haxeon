@@ -11,6 +11,7 @@ import compiler.syntax.AstFunctions;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
+import compiler.types.Monomorphs;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.analysis.Scope;
 
@@ -43,6 +44,7 @@ class GenericInstantiation {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+		settleTypeArguments(baseName, fn, arguments, substitutions, span);
 		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
 		for (parameter in [for (parameter in substitutions.keys()) parameter])
 			substitutions.set(parameter, session.monomorphs.closeReached(requiredMapValue(substitutions, parameter)));
@@ -102,6 +104,13 @@ class GenericInstantiation {
 			})
 				&& !mutableAliases.exists(compiler.types.analysis.BindingWalker.key(fn.arguments[index].name,
 				fn.arguments[index].span))) {
+				// The value's element meets the parameter's, as a coerced argument's type does: `Lambda.has([], 3)` makes `[]` an
+				// Array<Int>.
+				var iterates = IterationProtocol.name(expected) == "Iterable",
+					actualElement = IterationProtocol.element(session.declarations, argument.type, iterates),
+					expectedElement = IterationProtocol.element(session.declarations, expected, iterates);
+				if (actualElement != null && expectedElement != null)
+					Monomorphs.unify(actualElement, expectedElement);
 				if (!session.relations.isAssignable(argument.type, expected))
 					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
 				var hidden = "$iteration-argument:" + index,
@@ -177,6 +186,34 @@ class GenericInstantiation {
 		var call = new TypedExpression(TCall(specialization.name, typed), representationResult, span);
 		session.invalidateCallEffects(baseName, scope);
 		return session.representation.boundaryCast(call, result);
+	}
+
+	/**
+	 * A specialization is named and typed after its type arguments when the call is typed, so they must be known then. One that is
+	 * an empty type variable only an argument's own value carries (`Lambda.empty([])`, whose element type nothing else can fix) is
+	 * Dynamic already, as Haxe makes it, and settles here. One that something after the call could still fix (a local's, or one
+	 * the call's result carries) is an error: a specialization cannot follow it.
+	 */
+	function settleTypeArguments(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>,
+			substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
+		var result:Null<CompilerType> = switch fn.result {
+			case InferredType: null;
+			default: session.declarations.types.resultType(fn, substitutions);
+		};
+		for (parameter in substitutions.keys())
+			for (cell in Monomorphs.unboundCells(requiredMapValue(substitutions, parameter))) {
+				if (!Monomorphs.isUnbound(TMonomorph(cell)))
+					continue;
+				var carriers = [for (argument in arguments) if (Monomorphs.mentions(cell, argument.type)) argument];
+				if (result != null && !Monomorphs.mentions(cell, result) && carriers.length == 1
+					&& session.monomorphs.carriedOnlyBy(cell, carriers[0].span))
+					Monomorphs.unify(TMonomorph(cell), TDynamic);
+				else
+					fail("E1003",
+						'Cannot infer ${cell.origin} where it is passed to "$baseName": a generic call needs its type arguments'
+						+ ' when it is typed; give it a type',
+						cell.span);
+			}
 	}
 
 	/**

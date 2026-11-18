@@ -159,13 +159,36 @@ class MonomorphFrames {
 		return TMonomorph(cell);
 	}
 
+	/**
+	 * Whether nothing but the value written at `span` can carry the empty type variable `cell`: it was made in that expression (an
+	 * empty literal's element type), no local's type holds it, and no other type variable is filled with a type that mentions it.
+	 * Nothing after that value is used can then fill it, so it is Dynamic already, as settling its frame would make it.
+	 */
+	public function carriedOnlyBy(cell:MonomorphCell, span:SourceSpan):Bool {
+		if (cell.mustBeFixed || cell.localName != null || cell.span.file != span.file || cell.span.start < span.start
+			|| cell.span.end > span.end)
+			return false;
+		for (frame in frames)
+			for (other in frame.cells)
+				if (other != cell && other.bound != null && compiler.types.Monomorphs.mentions(cell, other.bound))
+					return false;
+		return true;
+	}
+
 	/** Whether a body is being typed, which can settle the type variables made in it. */
 	public function canCreate():Bool
 		return frames.length > 0;
 
-	/** Whether the innermost body has made a type variable: only then can a type it meets mention one. */
-	public function active():Bool
-		return frames.length > 0 && frames[frames.length - 1].cells.length > 0;
+	/**
+	 * Whether a body being typed has made a type variable: only then can a type met mention one. A lambda's body can meet one of
+	 * the body around it (a callback's result, `CallResolver.openResult`).
+	 */
+	public function active():Bool {
+		for (frame in frames)
+			if (frame.cells.length > 0)
+				return true;
+		return false;
+	}
 
 	/**
 	 * Runs `check` once the types it needs are known: now when `type` mentions no empty type variable, otherwise when the

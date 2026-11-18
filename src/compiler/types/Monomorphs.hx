@@ -21,6 +21,9 @@ class Monomorphs {
 	 */
 	public static final OPEN_STRUCTURE_PREFIX = "$anon:open:";
 
+	/** The prefix of the name of a structure named after its fields (`SemanticSignature.anonymousTypeName`). */
+	static final ANONYMOUS_PREFIX = "$anon:";
+
 	/** Whether `name` is the provisional name of an object literal's open structure. */
 	public static function isOpenStructureName(name:String):Bool
 		return StringTools.startsWith(name, OPEN_STRUCTURE_PREFIX);
@@ -153,7 +156,7 @@ class Monomorphs {
 		return contains(type) ? resolveWithin(type, []) : type;
 
 	static function resolveWithin(type:CompilerType,
-			anonymous:Array<{from:Array<AnonymousField>, to:CompilerType}>):CompilerType
+			anonymous:Array<{from:Array<AnonymousField>, to:CompilerType, reentered:Bool}>):CompilerType
 		return switch type {
 			case TMonomorph(cell):
 				var bound = cell.bound;
@@ -180,7 +183,7 @@ class Monomorphs {
 				for (entry in anonymous)
 					if (entry.from == fields)
 						return entry.to;
-				anonymous.push({from: fields, to: type});
+				anonymous.push({from: fields, to: type, reentered: false});
 				for (index in 0...fields.length) {
 					var field = fields[index];
 					if (containsWithin(field.type, null))
@@ -197,11 +200,14 @@ class Monomorphs {
 					type;
 				else {
 					for (entry in anonymous)
-						if (entry.from == fields)
+						if (entry.from == fields) {
+							entry.reentered = true;
 							return entry.to;
+						}
 					var resolvedFields:Array<AnonymousField> = [];
-					var result = TAnonymous(name, resolvedFields);
-					anonymous.push({from: fields, to: result});
+					var result = TAnonymous(name, resolvedFields),
+						entry = {from: fields, to: result, reentered: false};
+					anonymous.push(entry);
 					for (field in fields)
 						resolvedFields.push({
 							name: field.name,
@@ -209,7 +215,11 @@ class Monomorphs {
 							optional: field.optional,
 							isFinal: field.isFinal
 						});
-					result;
+					// A structure named after its fields (`Iterable<?>` resolved) is named after the resolved ones. One its own fields
+					// reach keeps its name, which they already hold.
+					!entry.reentered && StringTools.startsWith(name, ANONYMOUS_PREFIX)
+						? TAnonymous(compiler.semantic.SemanticSignature.anonymousTypeName(resolvedFields),
+						resolvedFields) : result;
 				}
 			default: type;
 		};
@@ -275,6 +285,44 @@ class Monomorphs {
 			case TNull, TVoid, TNever: true;
 			default: false;
 		};
+
+	/** Whether `type` mentions the type variable `cell`, through filled variables too. */
+	public static function mentions(cell:MonomorphCell, type:CompilerType):Bool
+		return occurs(cell, type);
+
+	/** The empty type variables `type` mentions, each once, in order. */
+	public static function unboundCells(type:CompilerType):Array<MonomorphCell> {
+		var found:Array<MonomorphCell> = [];
+		collectUnbound(resolve(type), found, []);
+		return found;
+	}
+
+	static function collectUnbound(type:CompilerType, found:Array<MonomorphCell>,
+			visiting:Array<Array<AnonymousField>>):Void
+		switch type {
+			case TMonomorph(cell):
+				if (found.indexOf(cell) < 0)
+					found.push(cell);
+			case TNullable(element), TArray(element), TIterator(element):
+				collectUnbound(element, found, visiting);
+			case TMap(key, value), TKeyPath(key, value, _):
+				collectUnbound(key, found, visiting);
+				collectUnbound(value, found, visiting);
+			case TFunction(arguments, result, _):
+				for (argument in arguments)
+					collectUnbound(argument, found, visiting);
+				collectUnbound(result, found, visiting);
+			case TInstance(_, _, arguments), TAbstract(_, arguments, _):
+				for (argument in arguments)
+					collectUnbound(argument, found, visiting);
+			case TAnonymous(_, fields):
+				if (visiting.indexOf(fields) < 0) {
+					visiting.push(fields);
+					for (field in fields)
+						collectUnbound(field.type, found, visiting);
+				}
+			default:
+		}
 
 	static function occurs(cell:MonomorphCell, type:CompilerType):Bool
 		return switch follow(type) {

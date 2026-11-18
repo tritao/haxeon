@@ -698,10 +698,30 @@ class CallResolver {
 						session.declarations.resolve(argument, span, substitutions)
 				];
 				CompilerType.TFunction(resolvedArguments,
-					mentionsUnbound(result, parameters, substitutions) ? TDynamic : session.declarations.resolve(result,
-					span, substitutions), FunctionTypes.canonical(optional));
+					mentionsUnbound(result, parameters, substitutions) ? openResult(result, span, parameters,
+					substitutions) : session.declarations.resolve(result, span, substitutions),
+					FunctionTypes.canonical(optional));
 			default: null;
 		};
+	}
+
+	/**
+	 * A callback's expected result that mentions type parameters nothing has fixed yet (`f:T->Iterable<S>`): each is a type variable
+	 * the callback's result fills, as in Haxe, so its body converts to the declared result (an Array to `Iterable<S>`) and the call
+	 * infers the parameter from it. Dynamic where no body is being typed, which could settle the variables.
+	 */
+	function openResult(result:AstType, span:SourceSpan, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>):CompilerType {
+		var open = copyMap(substitutions);
+		for (parameter in parameters)
+			if (!open.exists(parameter)) {
+				var variable = session.monomorphs.create('the type parameter "$parameter" of a callback\'s result',
+					span);
+				if (variable == null)
+					return TDynamic;
+				open.set(parameter, variable);
+			}
+		return session.declarations.resolve(result, span, open);
 	}
 
 	static function mentionsUnbound(type:AstType, parameters:Array<String>,

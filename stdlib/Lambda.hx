@@ -120,6 +120,24 @@ class Lambda {
 		return -1;
 	}
 
+	/** A new Array of the values of each iterable in `values`, in order. */
+	public static function flatten<T>(values:Iterable<Iterable<T>>):Array<T> {
+		var result = new Array<T>();
+		for (inner in values)
+			for (value in inner)
+				result.push(value);
+		return result;
+	}
+
+	/** A new Array of the values of `f` applied to each value, in order: `flatten(map(values, f))`. */
+	public static function flatMap<T, S>(values:Iterable<T>, f:(item:T) -> Iterable<S>):Array<S> {
+		var result = new Array<S>();
+		for (value in values)
+			for (mapped in f(value))
+				result.push(mapped);
+		return result;
+	}
+
 	/** A new Array of the values of `first`, then those of `second`. */
 	public static function concat<T>(first:Iterable<T>, second:Iterable<T>):Array<T> {
 		var result = new Array<T>();

@@ -109,6 +109,14 @@ class ConversionResolver {
 		// Where a value meets the type it must have, an empty type variable on either side takes the other's type.
 		if (session.monomorphs.active()) {
 			Monomorphs.unify(value.type, expected);
+			// A value that iterates meets an iteration structure element by element: an Array<String> fills `Iterable<?>`.
+			var protocol = IterationProtocol.name(Monomorphs.resolve(expected));
+			if (protocol != null) {
+				var actualElement = IterationProtocol.element(session.declarations, value.type, protocol == "Iterable"),
+					expectedElement = IterationProtocol.element(session.declarations, expected, protocol == "Iterable");
+				if (actualElement != null && expectedElement != null)
+					Monomorphs.unify(actualElement, expectedElement);
+			}
 			expected = Monomorphs.resolve(expected);
 			if (Monomorphs.contains(value.type))
 				value = new TypedExpression(value.expression, Monomorphs.resolve(value.type), value.span,

@@ -285,6 +285,10 @@ in_background run_case switch-nullable-enum-abstract 0
 in_background run_case pattern-capture-shadows-name 0
 # Haxe's Lambda over arrays and maps (stdlib/Lambda.hx).
 in_background run_case lambda-functions 0
+in_background run_case lambda-empty-literal 0
+in_background run_case lambda-flatten 0
+# A generic call's type argument a later statement fixes: Haxeon specializes the call when it types it.
+in_background run_known_divergence lambda-unfixed-before-call
 # `value.match(pattern)`: a switch with one case that binds no names, as in Haxe.
 in_background run_case enum-match 0
 in_background run_compile_failure enum-match-pattern-variable
