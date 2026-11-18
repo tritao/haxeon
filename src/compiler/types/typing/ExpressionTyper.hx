@@ -190,6 +190,8 @@ class ExpressionTyper {
 		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
 		if (kind == TypeInfo)
 			return typeNativeTypeInfo(resolved, span, scope);
+		if (deferredLayout(resolved))
+			return new TypedExpression(TIntLiteral(0), TInt, span);
 		var recordName:Null<String> = switch resolved {
 			case TInstance(NominalKind.NativeValue, name, _): name;
 			case TInstance(NominalKind.Class, name, _) if (isFlatStruct(name)): name;
@@ -213,6 +215,15 @@ class ExpressionTyper {
 		};
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
+
+	/**
+	 * Whether a layout query (`sizeof<T>()`, `alignof<T>()`, `offsetof`, `typeInfo<T>()`) is of a type parameter, whose layout is
+	 * each specialization's: a body is typed with its type parameters as themselves only to be checked (a generic function or an
+	 * abstract's member nothing calls) or for its signature, and no code comes from it, so the query gives a placeholder there
+	 * and is checked in each specialization.
+	 */
+	public static function deferredLayout(type:CompilerType):Bool
+		return type.match(TTypeParameter(_, _));
 
 	function isFlatStruct(name:String):Bool {
 		var declaration = session.classDecls.get(name);
@@ -256,15 +267,8 @@ class ExpressionTyper {
 		return new TypedExpression(TIntLiteral(size), TInt, span);
 	}
 
-	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
-		var name = descriptorRecordName(resolved);
-		if (name == null)
-			fail("E1022",
-				'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.display(resolved)}"',
-				span);
-		var descriptor = buildNativeTypeDescriptor(resolved);
-		if (descriptor == null)
-			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
+	/** The type of `typeInfo<T>()`'s value, a `haxeon.TypeInfo` descriptor. */
+	static function typeInfoType():CompilerType {
 		var annotationArgumentType:CompilerType = TAnonymous("$haxeon.TypeInfoAnnotationArgument.v3", [
 			{
 				name: "name",
@@ -481,8 +485,23 @@ class ExpressionTyper {
 					optional: false,
 					isFinal: true
 				}
-			],
-			descriptorType:CompilerType = TAnonymous("$haxeon.TypeInfo.v4", descriptorFields),
+			];
+		return TAnonymous("$haxeon.TypeInfo.v4", descriptorFields);
+	}
+
+	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
+		// A type parameter's descriptor is its specialization's: the body is only being checked (`deferredLayout`).
+		if (deferredLayout(resolved))
+			return new TypedExpression(TNullLiteral, typeInfoType(), span);
+		var name = descriptorRecordName(resolved);
+		if (name == null)
+			fail("E1022",
+				'typeInfo requires a struct or legacy C value record, got "${SemanticSignature.display(resolved)}"',
+				span);
+		var descriptor = buildNativeTypeDescriptor(resolved);
+		if (descriptor == null)
+			fail("E1022", 'Value "$name" has no source declaration for typeInfo', span);
+		var descriptorType = typeInfoType(),
 			descriptorExpression = ObjectLiteral([
 				objectField("version", IntegerLiteral(descriptor.version, span), span),
 				objectField("name", StringLiteral(descriptor.name, span), span),

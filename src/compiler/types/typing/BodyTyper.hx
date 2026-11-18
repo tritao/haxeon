@@ -2088,7 +2088,7 @@ class BodyTyper implements BodyTyping {
 		if (name == "ref") {
 			var pointee = rawPointerPointeeType(typedObject.type);
 			if (pointee != null) {
-				if (flatRawPointerPointee(typedObject.type) == null)
+				if (flatRawPointerPointee(typedObject.type) == null && !ExpressionTyper.deferredLayout(pointee))
 					fail("E1022",
 						'RawPtr.ref requires a Flat struct pointee; "$pointee" has no writable Flat field layout',
 						span);
