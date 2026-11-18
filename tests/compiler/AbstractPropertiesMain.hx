@@ -43,15 +43,32 @@ class AbstractPropertiesMain {
 			"Cannot access private field hidden");
 		expectError("a missing static", STACK + "public static var count:Int = 0; }", "var read = Stack.missing;",
 			'Unknown static field "Stack.missing"');
+		// Each access error is at the property's name, where Haxe reports it, not at the receiver.
+		var getter = STACK + "public var length(get, never):Int; function get_length() return 0; }";
+		expectError("the place of a write", getter, "var stack:Stack = [1]; stack.length = 2;",
+			"This expression cannot be accessed for writing", "length = 2");
+		expectError("the place of a compound write", getter, "var stack:Stack = [1]; stack.length += 2;",
+			"This expression cannot be accessed for writing", "length += 2");
+		expectError("the place of a read",
+			STACK + "public var length(never, set):Int; function set_length(value:Int) return value; }",
+			"var stack:Stack = [1]; var length:Int = stack.length;", "This expression cannot be accessed for reading",
+			"length;");
+		expectError("the place of a private read",
+			STACK + "var length(get, never):Int; function get_length() return 0; }",
+			"var stack:Stack = [1]; var count:Int = stack.length;", "Cannot access private field length", "length;");
 		Sys.println("PASS: an abstract's properties are checked as Haxe checks them");
 	}
 
-	static function expectError(label:String, declarations:String, body:String, message:String):Void {
+	/** Expects `message`, at the first occurrence of `at` in the source when it is given. */
+	static function expectError(label:String, declarations:String, body:String, message:String, ?at:String):Void {
+		var source = declarations + ' function main():Int { $body return 0; }';
 		try {
-			Frontend.compile(declarations + ' function main():Int { $body return 0; }');
+			Frontend.compile(source);
 		} catch (error:CompileError) {
 			if (error.diagnostic.message != message)
 				throw '$label: expected "$message", got ${error.diagnostic.format()}';
+			if (at != null && error.diagnostic.span.start != source.indexOf(at))
+				throw '$label: expected the error at "$at" (${source.indexOf(at)}), got ${error.diagnostic.format()}';
 			return;
 		}
 		throw '$label: the source was expected not to compile';

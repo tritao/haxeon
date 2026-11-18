@@ -45,15 +45,35 @@ class AbstractProperties {
 			session.representation.typeParameterSubstitutions(property.declaration.typeParameters, arguments));
 	}
 
-	/** The accessor a read (`get_x`) or write (`set_x`) of `property` calls, after checking that source may reach it. */
+	/**
+	 * The accessor a read (`get_x`) or write (`set_x`) of `property` calls, after checking that source may reach it. Its errors are
+	 * at the property's name, as Haxe reports them (`length` in `stack.length = 0`).
+	 */
 	public static function accessor(session:TypingSession, property:AbstractProperty, read:Bool,
 			span:SourceSpan):String {
+		span = nameSpan(span, property.field.name, read);
 		MemberAccess.abstractProperty(session, property.declaration, property.field, span);
 		var access = read ? property.field.readAccess : property.field.writeAccess;
 		if (access != (read ? GetAccess : SetAccess))
 			throw new CompileError(new Diagnostic("E1024",
 				'This expression cannot be accessed for ${read ? "reading" : "writing"}', span));
 		return (read ? "get_" : "set_") + property.field.name;
+	}
+
+	/**
+	 * Where `name` is written in `span`, an access of it: the end of a read's expression (`stack.length`), or the name after the
+	 * receiver in a write's statement (`stack.length = 0`); `span` itself for a bare name (`length` in the abstract's methods).
+	 */
+	static function nameSpan(span:SourceSpan, name:String, read:Bool):SourceSpan {
+		var size = haxe.io.Bytes.ofString(name).length;
+		if (read)
+			return span.end - size >= span.start && span.file.slice(span.end - size, span.end) == name
+				? new SourceSpan(span.file, span.end - size, span.end) : span;
+		var text = span.file.slice(span.start, span.end), dot = text.indexOf("." + name);
+		if (dot < 0)
+			return span;
+		var start = span.start + haxe.io.Bytes.ofString(text.substr(0, dot + 1)).length;
+		return new SourceSpan(span.file, start, start + size);
 	}
 
 	/** Haxe's checks of an abstract's variables (typeloadFields), in Haxe's words. */
