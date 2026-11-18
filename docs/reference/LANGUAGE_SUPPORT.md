@@ -195,7 +195,7 @@ HashLink):
   structure: its record is that structure's, so it gains no field from a second structure with other optional fields, nor
   after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
   as in Haxe (`structure-open-literal`).
-- In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.fold`, the file handles of `sys.io.File.read` and
+- In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list`, `flatten` and `flatMap`, the file handles of `sys.io.File.read` and
   `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
   class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the

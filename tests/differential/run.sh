@@ -264,6 +264,8 @@ in_background run_case switch-bool 0
 in_background run_case switch-nullable-enum-abstract 0
 # A lowercase name in a pattern captures even where a function or variable of that name is in scope.
 in_background run_case pattern-capture-shadows-name 0
+# Haxe's Lambda over arrays and maps (stdlib/Lambda.hx).
+in_background run_case lambda-functions 0
 # Unannotated fields take their initializer's type, typed on demand (docs/design/LAZY_DECLARATION_TYPING.md, slice 3).
 in_background run_case lazy-field-comprehension 0
 in_background run_case lazy-field-map-lambda 0
