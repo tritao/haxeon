@@ -333,6 +333,11 @@ in_background run_compile_failure tuple-switch-missing-case
 in_background run_case tuple-switch-statement-open 0
 in_background run_compile_failure tuple-switch-statement-later-gap
 in_background run_compile_failure tuple-switch-statement-constructor-gap
+# Structure patterns match as the tuple switch of the fields they name (src/compiler/types/typing/StructurePatterns.hx).
+in_background run_case structure-patterns 0
+in_background run_compile_failure structure-pattern-missing-constructor
+in_background run_compile_failure structure-pattern-value-missing
+in_background run_compile_failure structure-pattern-unknown-field
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure switch-bool-missing

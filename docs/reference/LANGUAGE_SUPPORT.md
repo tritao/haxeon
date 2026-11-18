@@ -21,6 +21,12 @@ The current subset includes:
   Haxe's matcher: the first element it decides on may leave values of an Int or String unmatched (such a tuple runs no case),
   but the values its cases name must each be covered in the later elements, and an enum or Bool element must be covered
   constructor by constructor (`E1021` names a missing tuple, `[1, Circle]`).
+- Structure patterns, `case {x: 0, y: y}:`, on a structure or a class instance, as Haxe matches them: a case matches the
+  fields it names, each against its own pattern (a constant, an enum pattern, a capture, `_`, or a nested structure,
+  `{at: {x: 1}}`), and `p = {x: 0}` or `{at: inner = {y: 1}}` captures the value or a field. Their coverage is a tuple
+  switch's over the fields the cases name (above): an enum field is covered constructor by constructor, an Int field only
+  by `_` (or, in a statement, not at all). A case of such a switch is a structure pattern, a capture or `_`; a constant
+  case (`case null:`) is not supported beside them.
 - A switch over `Bool` without a default covers `true` and `false` (`E1021` names the missing one), as a statement too,
   and lowers to a branch on the value. One over `Null<Bool>` need not match `null`: a null reaches `case null`, the
   default or an unguarded catch-all when the switch has one, and otherwise reads as `false`, as Haxe's `if (subject)`
@@ -199,7 +205,7 @@ Haxe that stock Haxe 4.3.7 compiles and runs but Haxeon rejects (checked 2026-11
 HashLink):
 
 - Indexing a `Dynamic` value, such as a parsed JSON array (`json.items[0]`): `E1015`. Convert it to a typed array first.
-- Structure patterns (`case {x: 0, y: y}:`) and extractor patterns (`case parse(_) => value:`).
+- Extractor patterns (`case parse(_) => value:`, `case _.length => 3:`).
 - Rest parameters (`function sum(...values:Int)`).
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures

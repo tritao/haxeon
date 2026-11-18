@@ -1647,6 +1647,20 @@ class ExpressionTyper {
 	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
+		if (StructurePatterns.present([for (switchCase in cases) switchCase.value])) {
+			var rewritten = StructurePatterns.rewrite(expression, [for (switchCase in cases) switchCase.value], span),
+				switchExpression = SwitchExpression(rewritten.subject, [for (index in 0...cases.length)
+					{
+						value:rewritten.values[index],
+							guard:cases[index].guard,
+							result:cases[index].result,
+							span:cases[index].span
+					}], defaultExpression, span);
+			return bodyTyper.typeExpression(rewritten.temporary == null ? switchExpression : BlockExpression([
+				rewritten.temporary
+			], switchExpression, span), scope, expectedType);
+		}
 		var tupleElements = TupleSwitch.subjectElements(expression),
 			typedSubject = tupleElements == null ? bodyTyper.typeExpression(expression,
 				scope) : TupleSwitch.typeSubject(bodyTyper, tupleElements, span, scope),
