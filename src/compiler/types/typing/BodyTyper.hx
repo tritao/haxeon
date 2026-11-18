@@ -1524,11 +1524,11 @@ class BodyTyper implements BodyTyping {
 	/** Dotted assignment syntax carries the statement span; each receiver still needs its own source range. */
 	@:allow(compiler.types.typing.CallResolver)
 	static function referencePrefixSpan(name:String, span:SourceSpan):SourceSpan {
-		var size = haxe.io.Bytes.ofString(name).length;
-		return span.start + size <= span.end
-			&& span.file.slice(span.start,
-			span.start + size) == name ? new SourceSpan(span.file, span.start, span.start + size, span.isBareReference,
-			span.referenceName) : span;
+		var size = span.file.utf8LengthAt(span.start, name);
+		if (size < 0 || span.start + size > span.end)
+			return span;
+		return span.start + size == span.end ? span : new SourceSpan(span.file, span.start, span.start + size,
+			span.isBareReference, span.referenceName);
 	}
 
 	public function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,

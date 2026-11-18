@@ -509,11 +509,17 @@ class Scope {
 	}
 
 	function resolveLocal(name:String):Null<ScopeValue> {
-		var own = definitions;
-		if (own != null && own.values.exists(name))
-			return own.values.get(name);
-		var outer = parent;
-		return outer == null ? null : outer.resolveLocal(name);
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var own = scope.definitions;
+			if (own != null) {
+				var found = own.values.get(name);
+				if (found != null)
+					return found;
+			}
+			scope = scope.parent;
+		}
+		return null;
 	}
 
 	function resolveById(id:String):Null<ScopeValue> {

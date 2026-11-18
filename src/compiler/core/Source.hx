@@ -34,6 +34,26 @@ class SourceFile {
 	public function span(start:Int, end:Int):SourceSpan
 		return new SourceSpan(this, start, end);
 
+	/**
+	 * The length in bytes of `text` when the source holds exactly it at byte `offset`, or -1 when it does not. Compares in place:
+	 * an identifier, which is ASCII nearly always, costs no allocation.
+	 */
+	public function utf8LengthAt(offset:Int, text:String):Int {
+		var length = text.length;
+		for (index in 0...length)
+			if (StringTools.fastCodeAt(text, index) >= 0x80) {
+				var encoded = haxe.io.Bytes.ofString(text);
+				return offset + encoded.length <= bytes.length
+					&& bytes.sub(offset, encoded.length).compare(encoded) == 0 ? encoded.length : -1;
+			}
+		if (offset < 0 || offset + length > bytes.length)
+			return -1;
+		for (index in 0...length)
+			if (bytes.get(offset + index) != StringTools.fastCodeAt(text, index))
+				return -1;
+		return length;
+	}
+
 	public function slice(start:Int, end:Int):String {
 		if (start < 0 || end < start || end > bytes.length)
 			throw new InternalError('Source range $start...$end is outside "$path"');
