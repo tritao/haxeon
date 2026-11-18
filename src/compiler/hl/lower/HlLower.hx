@@ -766,10 +766,12 @@ class HlLower {
 
 	function lowerFunction(fn:IrFunction):HlFunction {
 		var nonNull = new compiler.ir.IrNonNullFacts(fn, true), exactTypes = new compiler.ir.IrExactTypeFacts(fn);
-		var registers:Map<Int, Int> = [];
+		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
+		// definition), whether the value is a null constant, and how many operands read it.
+		var registers:Array<Int> = [];
 		var registerTypes:Array<Int> = [];
 		var catchValues:Map<Int, IrValue> = [];
-		var nullValues:Map<Int, Bool> = [];
+		var nullValues:Array<Bool> = [];
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
 		for (block in fn.blocks)
@@ -779,14 +781,23 @@ class HlLower {
 					defineRegister(output, registers, registerTypes);
 				switch instruction.value {
 					case ConstNull(value):
-						nullValues.set(value.id, true);
+						while (nullValues.length <= value.id)
+							nullValues.push(false);
+						nullValues[value.id] = true;
 					case _:
 				}
 			}
 		var scalarOptionals = new HlScalarValueLocals(fn, view, type -> temporaryRegister(type, registerTypes));
-		var uses:Map<Int, Int> = [];
-		function countUse(value:IrValue):Void
-			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
+		var uses:Array<Int> = [];
+		function countUse(value:IrValue):Void {
+			while (uses.length <= value.id)
+				uses.push(0);
+			uses[value.id]++;
+		}
+		function usedOnce(value:IrValue):Bool
+			return value.id < uses.length && uses[value.id] == 1;
+		function isNullConstant(value:IrValue):Bool
+			return value.id < nullValues.length && nullValues[value.id];
 		for (block in fn.blocks) {
 			for (instruction in block.instructions) {
 				for (inputIndex in 0...compiler.ir.IrOperands.count(instruction.value)) {
@@ -813,7 +824,7 @@ class HlLower {
 		for (block in fn.blocks)
 			for (index in 0...block.instructions.length - 1)
 				switch block.instructions[index].value {
-					case ToDyn(boxed, value) if (isArray(value.type) && uses.get(boxed.id) == 1):
+					case ToDyn(boxed, value) if (isArray(value.type) && usedOnce(boxed)):
 						switch block.instructions[index + 1].value {
 							case SafeCast(output, source) if (source.id == boxed.id && isArray(output.type)):
 								arrayRecasts.set(output.id, value);
@@ -888,7 +899,7 @@ class HlLower {
 			if (block.terminator != null && block.instructions.length > 0)
 				switch block.terminator.value {
 					case Branch(condition, _,
-						_) if (uses.get(condition.id) == 1 && !bindingsByValue.exists(condition.id)):
+						_) if (usedOnce(condition) && !bindingsByValue.exists(condition.id)):
 						switch block.instructions[block.instructions.length - 1].value {
 							case Less(output, _, _), LessEqual(output, _, _),
 								Equal(output, _, _) if (output.id == condition.id):
@@ -1096,7 +1107,7 @@ class HlLower {
 						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers),
 							requireRegister(right, registers), null);
 					case Equal(output, left, right) if (output.id == fusedCondition):
-						fusedComparison = comparisonJump(2, nullValues.exists(left.id), nullValues.exists(right.id),
+						fusedComparison = comparisonJump(2, isNullConstant(left), isNullConstant(right),
 							requireRegister(left, registers),
 							requireRegister(right, registers), null);
 					case Less(output, left, right):
@@ -1104,7 +1115,7 @@ class HlLower {
 					case LessEqual(output, left, right):
 						lowerComparison(output, left, right, 1, false, false, registers, registerTypes, instructions);
 					case Equal(output, left, right):
-						lowerComparison(output, left, right, 2, nullValues.exists(left.id), nullValues.exists(right.id),
+						lowerComparison(output, left, right, 2, isNullConstant(left), isNullConstant(right),
 							registers, registerTypes,
 							instructions);
 					case Intrinsic(_, _, _):
@@ -1214,7 +1225,7 @@ class HlLower {
 						}
 						for (argument in arguments) {
 							var boxed = temporaryRegister(IrType.Dyn, registerTypes);
-							if (nullValues.exists(argument.id))
+							if (isNullConstant(argument))
 								instructions.push(HlInstruction.LoadNull(boxed));
 							else
 								instructions.push(HlInstruction.ToDyn(boxed, requireRegister(argument, registers)));
@@ -1800,7 +1811,7 @@ class HlLower {
 		return targets == null ? null : targets.get(to);
 	}
 
-	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Map<Int, Int>,
+	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Array<Int>,
 			registerTypes:Array<Int>,
 			instructions:Array<HlInstruction>):Array<{
 				value:IrValue,
@@ -1910,7 +1921,7 @@ class HlLower {
 		};
 
 	function lowerComparison(output:IrValue, left:IrValue, right:IrValue, operation:Int, leftNull:Bool, rightNull:Bool,
-			registers:Map<Int, Int>,
+			registers:Array<Int>,
 			registerTypes:Array<Int>, instructions:Array<HlInstruction>):Void {
 		var destination = defineRegister(output, registers, registerTypes);
 		var leftReg = requireRegister(left, registers),
@@ -1925,11 +1936,13 @@ class HlLower {
 		instructions.push(HlInstruction.Label(endLabel));
 	}
 
-	function defineRegister(value:IrValue, registers:Map<Int, Int>, types:Array<Int>):Int {
-		if (registers.exists(value.id))
-			return registers.get(value.id);
+	function defineRegister(value:IrValue, registers:Array<Int>, types:Array<Int>):Int {
+		if (value.id < registers.length && registers[value.id] >= 0)
+			return registers[value.id];
 		var index = types.length;
-		registers.set(value.id, index);
+		while (registers.length <= value.id)
+			registers.push(-1);
+		registers[value.id] = index;
 		types.push(internType(value.type));
 		return index;
 	}
@@ -2013,7 +2026,7 @@ class HlLower {
 	 * so reading a removed element still raises.
 	 */
 	function lowerRawArrayAccess(array:IrValue, index:IrValue, operation:String, writes:Bool,
-			instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+			instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>, access:(Int, Int) -> HlInstruction):Void {
 		var elementShift = rawArrayShift(array.type);
 		if (elementShift == null)
@@ -2051,7 +2064,7 @@ class HlLower {
 
 	/** Inline the common case; the existing native keeps allocation and error behavior on slow paths. */
 	/** The two references a reference-identity test compares, as raw pointers: a virtual is compared by the object it wraps. */
-	function identityPointers(arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+	function identityPointers(arguments:Array<IrValue>, instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Array<Int> {
 		var pointers:Array<Int> = [];
 		for (arg in arguments) {
@@ -2071,7 +2084,7 @@ class HlLower {
 	}
 
 	function lowerRuntimeFastPath(output:IrValue, name:String, arguments:Array<IrValue>,
-			instructions:Array<HlInstruction>, registers:Map<Int, Int>,
+			instructions:Array<HlInstruction>, registers:Array<Int>,
 			registerTypes:Array<Int>):Bool {
 		if (compiler.ir.IrScalarWordBits.matches(name)) {
 			if (arguments.length != 1 || !compiler.ir.IrScalarWordBits.valid(name, arguments[0].type, output.type))
@@ -2230,10 +2243,11 @@ class HlLower {
 	static function instructionOutput(instruction:IrInstruction):Null<IrValue>
 		return compiler.ir.IrOperands.output(instruction);
 
-	function requireRegister(value:IrValue, registers:Map<Int, Int>):Int {
-		if (!registers.exists(value.id))
+	function requireRegister(value:IrValue, registers:Array<Int>):Int {
+		var register = value.id >= 0 && value.id < registers.length ? registers[value.id] : -1;
+		if (register < 0)
 			throw new InternalError('IR value ${value.id} is used before definition');
-		return registers.get(value.id);
+		return register;
 	}
 
 	static function isAggregateResult(native:IrCNative):Bool
