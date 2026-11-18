@@ -3286,6 +3286,10 @@ class BodyTyper implements BodyTyping {
 		return null;
 	}
 
+	/** Generates the `Dynamic` to structure copies requested and not in `generated` yet (`DynamicStructureGenerator`). */
+	public function generateDynamicStructures(generated:Map<String, TypedFunction>):Array<TypedFunction>
+		return DynamicStructureGenerator.generate(session, conversionResolver, generated);
+
 	function registerAnonymousTypes(type:CompilerType):Void
 		anonymousTypeRegistry.register(type);
 

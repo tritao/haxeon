@@ -312,10 +312,6 @@ class TypingSession {
 			programOutput.counters.mapLambda(key, map);
 	}
 
-	/** Structural conversion helpers already emitted for each origin and target shape. */
-	public final dynamicStructureConversions:Map<String, Bool> = [];
-
-
 	public final bodyContexts:Array<TypingContext> = [outsideBodies()];
 
 	/** The resolutions of what declarations hold outside their bodies (`SyntaxResolutions`). */

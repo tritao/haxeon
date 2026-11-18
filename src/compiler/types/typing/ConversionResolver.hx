@@ -376,117 +376,115 @@ class ConversionResolver {
 			default: null;
 		};
 
-	/** Dynamic records have no nominal $anon identity. Check and copy their fields at the boundary. */
+	/**
+	 * Dynamic records have no nominal $anon identity. Check and copy their fields at the boundary, in the one helper of the target
+	 * type (`DynamicStructureGenerator`).
+	 */
 	function dynamicStructure(value:TypedExpression, expected:CompilerType):TypedExpression {
 		var target = structuralCopyTarget(expected);
 		if (target == null)
 			throw new InternalError("Expected anonymous conversion target");
-		var name = switch target {
-			case TAnonymous(name, _): name;
-			default: compiler.semantic.SemanticSignature.type(target);
-		};
-		var origin = session.currentContext.name, span = value.span;
-		var helper = compiler.core.GlobalNames.of("$dynamic-structure:" + origin + ":" + name);
-		if (session.dynamicStructureConversions.get(helper) == true)
+		// Cyclic Dynamic input cannot be copied without an identity table, so a target that contains itself is rejected.
+		if (containsItself(target, []))
 			fail("E1016",
 				"Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly",
-				span);
-		if (!session.dynamicStructureConversions.exists(helper)) {
-			// Reject recursive copies: cyclic Dynamic input cannot be copied without an identity table.
-			session.dynamicStructureConversions.set(helper, true);
-			session.runtimeDependencyTracker.record(origin, "Reflect");
-			new AnonymousTypeRegistry(session).register(target);
-			var source = new TypedExpression(TLocal("source"), TDynamic, span);
-			var statements:Array<TypedStatement> = [];
-			var isNull = new TypedExpression(TEqual(source,
-				coerce(new TypedExpression(TNullLiteral, TNull, span), TDynamic, "null comparison")), TBool, span);
-			statements.push(TIf(isNull, [
-				TReturn(coerce(new TypedExpression(TNullLiteral, TNull, span), target, "null structure"), span)
-			], [], span));
-			var output:Array<compiler.types.TypedAst.TypedObjectField> = [];
-			var result:TypedExpression;
-			switch target {
-				case TAnonymous(_, fields):
-					for (field in fields) {
-						var key = new TypedExpression(TStringLiteral(field.name), TString, span);
-						if (!field.optional) {
-							var present = new TypedExpression(TCall("Reflect.hasField", [source, key]), TBool, span);
-							var message =
-								new TypedExpression(TStringLiteral('Missing required field "${field.name}" in dynamic structure conversion'),
-								TString, span);
-							statements.push(TIf(new TypedExpression(TNot(present), TBool, span),
-								[TThrow(coerce(message, TDynamic, "conversion error"), span)], [], span));
-						}
-						var fieldLocal = "$field:" + field.name;
-						statements.push(TVar(fieldLocal,
-							new TypedExpression(TCall("Reflect.field", [source, key]), TDynamic, span), span));
-						var read = new TypedExpression(TLocal(fieldLocal), TDynamic, span);
-						var matches = dynamicFieldMatches(read, field.type);
-						if (matches != null) {
-							var message =
-								new TypedExpression(TStringLiteral('Invalid type for field "${field.name}" in dynamic structure conversion'),
-								TString, span);
-							statements.push(TIf(new TypedExpression(TNot(matches), TBool, span),
-								[TThrow(coerce(message, TDynamic, "conversion error"), span)], [], span));
-						}
-						output.push({
-							name: field.name,
-							value: structuralCopyTarget(field.type) != null ? dynamicStructure(read,
-								field.type) : coerce(read, field.type, 'dynamic field "${field.name}"')
-						});
-					}
-					result = new TypedExpression(TObjectLiteral(name, output, false), target, span);
-				case TArray(element):
-					var matches = dynamicFieldMatches(source, target);
-					if (matches == null)
-						throw new InternalError("Missing array conversion check");
-					var message =
-						new TypedExpression(TStringLiteral("Expected an array in dynamic structure conversion"),
-						TString, span);
-					statements.push(TIf(new TypedExpression(TNot(matches), TBool, span),
-						[TThrow(coerce(message, TDynamic, "conversion error"), span)], [],
-						span));
-					var array = new TypedExpression(TLocal("items"), TArray(TDynamic), span);
-					var copied = new TypedExpression(TLocal("copied"), target, span);
-					statements.push(TVar("items", new TypedExpression(TCast(source), TArray(TDynamic), span), span));
-					statements.push(TVar("copied", new TypedExpression(TArrayLiteral([]), target, span), span));
-					var item = dynamicStructure(new TypedExpression(TLocal("item"), TDynamic, span), element);
-					statements.push(TForIn("item", null, array,
-						[TExpression(new TypedExpression(TArrayPush(copied, item), TInt, span), span)], span));
-					result = copied;
-				default:
-					throw new InternalError("Unsupported structural copy target");
-			}
-			statements.push(TReturn(result, span));
-			// One helper per converting function and target: the origin details the operation, so two functions that convert to
-			// the same structure serve two provider rows, not one row twice (`IrProviders.check`).
-			var operation = compiler.core.Provides.ProviderOperations
-				.detailed(compiler.core.Provides.ProviderOperation.DynamicStructure,
-				origin);
-			session.closureConversion.addFunction({
-				name: helper, role: ProviderFunction(target, operation),
-				origin: origin,
-				originKind: compiler.types.TypedAst.FunctionOriginKind.Helper,
-				owner: null,
-				isStatic: true,
-				isConstructor: false,
-				arguments: [
-					{
-						name: "source",
-						type: TDynamic
-					}
-				],
-				result: target,
-				statements: statements,
-				cells: [],
-				cellCaptures: [],
-				span: span
-			});
-			session.dynamicStructureConversions.set(helper, false);
-		}
-		var converted = new TypedExpression(TCall(helper, [value]), target, value.span);
+				value.span);
+		var origin = session.currentContext.name;
+		session.runtimeDependencyTracker.record(origin, "Reflect");
+		new AnonymousTypeRegistry(session).register(target);
+		var converted =
+			new TypedExpression(TCall(DynamicStructureGenerator.request(session, target, origin, value.span),
+			[value]), target, value.span);
 		return TypeRelations.equals(target, expected) ? converted : new TypedExpression(TCast(converted), expected,
 			value.span);
+	}
+
+	/** Whether copying `type` copies a structure of a type it is already copying (`open`, by name). */
+	static function containsItself(type:CompilerType, open:Array<String>):Bool
+		return switch type {
+			case TAnonymous(name, fields):
+				if (open.indexOf(name) >= 0)
+					return true;
+				open.push(name);
+				for (field in fields) {
+					var copied = structuralCopyTarget(field.type);
+					if (copied != null && containsItself(copied, open))
+						return true;
+				}
+				open.pop();
+				false;
+			case TArray(element):
+				var copied = structuralCopyTarget(element);
+				copied != null && containsItself(copied, open);
+			case TNullable(element): containsItself(element, open);
+			default: false;
+		};
+
+	/** The body of the helper copying a `Dynamic` value (the argument `source`) into `target`, with the helper's own `span`. */
+	public function dynamicStructureBody(target:CompilerType, span:SourceSpan):Array<TypedStatement> {
+		var source = new TypedExpression(TLocal("source"), TDynamic, span);
+		var statements:Array<TypedStatement> = [];
+		var isNull = new TypedExpression(TEqual(source,
+			coerce(new TypedExpression(TNullLiteral, TNull, span), TDynamic, "null comparison")), TBool, span);
+		statements.push(TIf(isNull, [
+			TReturn(coerce(new TypedExpression(TNullLiteral, TNull, span), target, "null structure"), span)
+		], [], span));
+		var result:TypedExpression;
+		switch target {
+			case TAnonymous(name, fields):
+				var output:Array<compiler.types.TypedAst.TypedObjectField> = [];
+				for (field in fields) {
+					var key = new TypedExpression(TStringLiteral(field.name), TString, span);
+					if (!field.optional) {
+						var present = new TypedExpression(TCall("Reflect.hasField", [source, key]), TBool, span);
+						var message =
+							new TypedExpression(TStringLiteral('Missing required field "${field.name}" in dynamic structure conversion'),
+							TString, span);
+						statements.push(TIf(new TypedExpression(TNot(present), TBool, span),
+							[TThrow(coerce(message, TDynamic, "conversion error"), span)], [], span));
+					}
+					var fieldLocal = "$field:" + field.name;
+					statements.push(TVar(fieldLocal,
+						new TypedExpression(TCall("Reflect.field", [source, key]), TDynamic, span), span));
+					var read = new TypedExpression(TLocal(fieldLocal), TDynamic, span);
+					var matches = dynamicFieldMatches(read, field.type);
+					if (matches != null) {
+						var message =
+							new TypedExpression(TStringLiteral('Invalid type for field "${field.name}" in dynamic structure conversion'),
+							TString, span);
+						statements.push(TIf(new TypedExpression(TNot(matches), TBool, span),
+							[TThrow(coerce(message, TDynamic, "conversion error"), span)], [], span));
+					}
+					output.push({
+						name: field.name,
+						value: structuralCopyTarget(field.type) != null ? dynamicStructure(read,
+							field.type) : coerce(read, field.type, 'dynamic field "${field.name}"')
+					});
+				}
+				result = new TypedExpression(TObjectLiteral(name, output, false), target, span);
+			case TArray(element):
+				var matches = dynamicFieldMatches(source, target);
+				if (matches == null)
+					throw new InternalError("Missing array conversion check");
+				var message =
+					new TypedExpression(TStringLiteral("Expected an array in dynamic structure conversion"),
+					TString, span);
+				statements.push(TIf(new TypedExpression(TNot(matches), TBool, span),
+					[TThrow(coerce(message, TDynamic, "conversion error"), span)], [],
+					span));
+				var array = new TypedExpression(TLocal("items"), TArray(TDynamic), span);
+				var copied = new TypedExpression(TLocal("copied"), target, span);
+				statements.push(TVar("items", new TypedExpression(TCast(source), TArray(TDynamic), span), span));
+				statements.push(TVar("copied", new TypedExpression(TArrayLiteral([]), target, span), span));
+				var item = dynamicStructure(new TypedExpression(TLocal("item"), TDynamic, span), element);
+				statements.push(TForIn("item", null, array,
+					[TExpression(new TypedExpression(TArrayPush(copied, item), TInt, span), span)], span));
+				result = copied;
+			default:
+				throw new InternalError("Unsupported structural copy target");
+		}
+		statements.push(TReturn(result, span));
+		return statements;
 	}
 
 	/** Reject wrong primitive/callable kinds before backend casts, so malformed data throws a Haxe exception. */

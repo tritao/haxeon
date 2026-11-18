@@ -453,7 +453,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			enumAdapters:Map<String, TypedClass> = [],
 			codecs:Map<String, TypedFunction> = [],
 			rawMethods:Map<String, TypedFunction> = [],
-			flagMethods:Map<String, TypedFunction> = [];
+			flagMethods:Map<String, TypedFunction> = [],
+			dynamicStructures:Map<String, TypedFunction> = [];
 		function requestCount():Int
 			return session.programOutput.requests.count() + Lambda.count(session.keyPaths.definitions)
 				+ session.representation.genericOwnerRequestCount()
@@ -493,6 +494,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				enumMethods.set(method.name, method);
 				assembler.registerProgramTypes([method], [], [], [], []);
 			}
+			for (copy in bodyTyper.generateDynamicStructures(dynamicStructures))
+				assembler.registerProgramTypes([copy], [], [], [], []);
 			drainRuntimeTypes();
 			reflectNewClasses();
 			if (before == requestCount())
@@ -530,6 +533,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		equalityNames.sort(Reflect.compare);
 		for (name in equalityNames)
 			typedFunctions.push(equalities.get(name));
+		var copyNames = [for (name in dynamicStructures.keys()) name];
+		copyNames.sort(Reflect.compare);
+		for (name in copyNames)
+			typedFunctions.push(dynamicStructures.get(name));
 		keepAnonymousUnits(cachedMetadata != null ? cachedMetadata : retained != null ? retained.program : null,
 			program.classes, retained == null ? null : retained.units);
 		assembler.registerProgramTypes(typedFunctions, typedClasses, typedInterfaces, typedEnums, typedNatives);

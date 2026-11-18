@@ -32,6 +32,11 @@ Longer-term direction is in `ROADMAP.md`.
   3. `resolveClass`, `resolveEnum`, `createInstance`, `createEmptyInstance`, and `createEnum`, `createEnumIndex` and
      `allEnums` on an enum held as a value (on an enum named at the call they are written out by `EnumCreation`), once
      a port needs them. A type named only by a string defeats pruning: the note proposes Haxe's `-dce std` rule.
+- **A `Dynamic` cast straight to an array of structures fails at run time.**
+  `var points:Array<{x:Int}> = dynamicValue;` throws "Array element type
+  mismatch" when the array holds records of another anonymous type; Haxe
+  accepts it unchecked. The array is kept as a storage view, and only an array
+  inside a record is copied (`ConversionResolver.structuralCopyTarget`).
 - **`trace` with several values prints differently from Haxe.**
   `trace(a, b, c)` prints `2, 1, 1`; Haxe prints `2,1,1`.
 - **Warm builds still track subclasses' reads of base-class statics.**
