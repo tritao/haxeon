@@ -301,6 +301,9 @@ in_background run_compile_failure using-base-statics main
 in_background run_compile_failure using-class-reference main
 in_background run_compile_failure using-extension-arguments main
 in_background run_compile_failure using-no-first-argument main
+in_background run_case using-extension-values 0 hl main
+in_background run_compile_failure using-type-parameter-missing main
+in_background run_known_divergence using-extension-value-open
 # Unannotated fields take their initializer's type, typed on demand (docs/design/LAZY_DECLARATION_TYPING.md, slice 3).
 in_background run_case lazy-field-comprehension 0
 in_background run_case lazy-field-map-lambda 0

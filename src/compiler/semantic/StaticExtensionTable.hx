@@ -30,6 +30,7 @@ private typedef ModuleDeclaration = {
 	final start:Int;
 	final kind:Null<StaticExtensionOwnerKind>;
 	final statics:Array<AstFunction>;
+	final ?isAlias:Bool;
 }
 
 /** An owner a `using` resolved to, with the key of the static functions it declares (`keyOfModule`). */
@@ -55,11 +56,16 @@ class StaticExtensionTable {
 	/** Each module's extensions, by the path of its source file. */
 	final modules:Map<String, Array<StaticExtensionOwner>>;
 
+	/** The typedefs that declare `@:using`, by qualified name, sorted: their extensions apply to values of the types they name. */
+	public final aliases:Array<String>;
+
 	/** Each type's own `@:using` extensions, by its qualified name. */
 	final types:Map<String, Array<StaticExtensionOwner>>;
 
 	public function new(modules:Map<String, Array<StaticExtensionOwner>>,
-			types:Map<String, Array<StaticExtensionOwner>>, moduleKeys:Map<String, String>, typeKey:String) {
+			types:Map<String, Array<StaticExtensionOwner>>, moduleKeys:Map<String, String>, typeKey:String,
+			?aliases:Array<String>) {
+		this.aliases = aliases == null ? [] : aliases;
 		this.modules = modules;
 		this.types = types;
 		this.moduleKeys = moduleKeys;
@@ -106,7 +112,8 @@ class StaticExtensionTable {
 		var modules:Map<String, Array<StaticExtensionOwner>> = [],
 			types:Map<String, Array<StaticExtensionOwner>> = [],
 			moduleKeys:Map<String, String> = [],
-			typeKeys:Array<String> = [];
+			typeKeys:Array<String> = [],
+			aliases:Array<String> = [];
 		for (name in names) {
 			var state = states.get(name);
 			if (state == null || state.ast == null)
@@ -132,12 +139,15 @@ class StaticExtensionTable {
 				if (owners.length > 0) {
 					var typeName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, declaration.name);
 					types.set(typeName, [for (owner in owners) owner.owner]);
+					if (declaration.isAlias)
+						aliases.push(typeName);
 					typeKeys.push(typeName + "=" + [for (owner in owners) owner.key].join(";"));
 				}
 			}
 		}
 		typeKeys.sort(Reflect.compare);
-		return new StaticExtensionTable(modules, types, moduleKeys, typeKeys.join(";"));
+		aliases.sort(Reflect.compare);
+		return new StaticExtensionTable(modules, types, moduleKeys, typeKeys.join(";"), aliases);
 	}
 
 	/**
@@ -245,6 +255,17 @@ class StaticExtensionTable {
 				start: declaration.span.start,
 				kind: null,
 				statics: []
+			});
+		// A typedef's `@:using` applies to the values of the type it names (`StaticExtensions`).
+		for (declaration in ast.aliases)
+			result.push({
+				name: declaration.name,
+				isPrivate: declaration.isPrivate,
+				metadata: declaration.metadata,
+				start: declaration.span.start,
+				kind: null,
+				statics: [],
+				isAlias: true
 			});
 		for (declaration in ast.interfaces)
 			result.push({

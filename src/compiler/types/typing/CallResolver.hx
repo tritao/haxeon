@@ -260,6 +260,71 @@ class CallResolver {
 	}
 
 	/**
+	 * `receiver.name` read as a value where the receiver's type has no member `name`: the static extension `Owner.name` with the
+	 * receiver bound as its first argument, as Haxe makes it (`var trim = text.trim;`), or null when no extension applies. The
+	 * receiver is evaluated once, where it is read; the value is a function of the extension's other arguments. A generic
+	 * extension takes its type arguments from the receiver.
+	 */
+	public function boundStaticExtension(receiver:TypedExpression, name:String, span:SourceSpan,
+			scope:Scope):Null<TypedExpression> {
+		if (receiver.expression.match(TClassRef(_)))
+			return null;
+		var value = unwrapNullable(receiver), extension = staticExtensions.find(receiver.type, name, span);
+		if (extension == null && value != receiver)
+			extension = staticExtensions.find(value.type, name, span);
+		if (extension == null)
+			return null;
+		var fn = extension.fn;
+		if (extension.owner.kind != ModuleFunctions)
+			MemberAccess.method(session, extension.owner.name, name, span);
+		var parameters = BodyTyper.functionTypeParameters(fn), substitutions:Map<String, CompilerType> = [];
+		if (parameters.length > 0) {
+			genericInstantiation.inferArgumentTypeParameters(fn, 0, fn.arguments[0], value.type, parameters,
+				substitutions, span);
+			for (parameter in parameters)
+				if (!substitutions.exists(parameter))
+					fail("E1003",
+						'Cannot infer the type parameter "$parameter" of "${extension.key}" from the value it is read on; call it instead',
+						span);
+		}
+		var types = bodyTyper.argumentTypesOf(fn, substitutions),
+			result = parameters.length == 0 ? bodyTyper.functionResultType(fn,
+				fn.span) : session.declarations.types.resultType(fn,
+				substitutions),
+			held = "__haxeon_bound" + span.start,
+			inner = new Scope(scope),
+			arguments:Array<AstArgument> = [],
+			passed:Array<AstExpression> = [Variable(held, span)];
+		inner.define(held, value.type, span);
+		bodyTyper.bindCell(held, span, inner, value.type);
+		for (index in 1...fn.arguments.length) {
+			var argumentName = "__haxeon_argument" + index;
+			arguments.push({
+				name: argumentName,
+				type: InferredType,
+				span: span,
+				optional: AstPredicates.isOptionalArgument(fn.arguments[index])
+			});
+			passed.push(RestArguments.isRest(fn.arguments[index].type) ? Spread(Variable(argumentName, span),
+				span) : Variable(argumentName, span));
+		}
+		// A plain extension is called through its value, whose dispatch entry gives an omitted argument its default.
+		var expected = TFunction([
+			for (index in 1...types.length)
+				DefaultArguments.dispatchType(fn.arguments[index], types[index], session.relations)
+		], result, FunctionTypes.ofArguments(arguments)),
+			call = parameters.length == 0 ? ClosureCall(Variable(extension.key, span), passed,
+				span) : Call(extension.key,
+				passed, span),
+			bound = bodyTyper.typeExpression(Lambda(arguments, [switch result {
+				case TVoid: Expression(call, span);
+				default: Return(call, span);
+			}], 'bound:$name@${span.start}', span), inner, expected);
+		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held), value, span)], bound), bound.type,
+			span);
+	}
+
+	/**
 	 * The receiver an extension is passed: as written where the first argument takes null (`Null<T>`, `Dynamic`, or a generic
 	 * one, whose type the receiver fixes), else its non-null value, as a member call reads it.
 	 */

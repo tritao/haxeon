@@ -1,7 +1,5 @@
 package compiler.types.typing;
 
-import compiler.core.Diagnostic;
-import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
@@ -33,8 +31,9 @@ class TypeParameterMembers {
 		for (bound in session.declarations.typeParameterBounds(receiver.type))
 			if (hasMember(session, bodyTyper, bound, name))
 				return new TypedExpression(TCast(receiver), bound, receiver.span);
-		throw new CompileError(new Diagnostic("E1005", '$display has no field $name',
-			AbstractProperties.nameSpan(span, name, true)));
+		// A missing member, so a call tries the static extensions of the value (through its bounds, `StaticExtensions`).
+		throw new MissingMember("E1005", '$display has no field $name', span,
+			AbstractProperties.nameSpan(span, name, true));
 	}
 
 	/**

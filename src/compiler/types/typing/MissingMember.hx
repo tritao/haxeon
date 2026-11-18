@@ -12,8 +12,9 @@ import compiler.core.Source.SourceSpan;
 class MissingMember extends CompileError {
 	public final span:SourceSpan;
 
-	public function new(code:String, message:String, span:SourceSpan) {
-		super(new Diagnostic(code, message, span));
+	/** `at` is where the error is reported when it stands, when that is not the call itself (the member's name). */
+	public function new(code:String, message:String, span:SourceSpan, ?at:SourceSpan) {
+		super(new Diagnostic(code, message, at == null ? span : at));
 		this.span = span;
 	}
 }

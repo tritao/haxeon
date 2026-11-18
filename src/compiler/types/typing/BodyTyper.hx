@@ -1827,7 +1827,7 @@ class BodyTyper implements BodyTyping {
 					}
 					var object = typeExpression(Variable(objectName, span), scope);
 					for (index in 1...parts.length)
-						object = typedMemberWithFlow(object, parts[index],
+						object = memberOrExtension(object, parts[index],
 							referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
 					object;
 				}
@@ -1970,7 +1970,22 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
-		return typedMemberWithFlow(typeExpression(object, scope), name, span, scope);
+		return memberOrExtension(typeExpression(object, scope), name, span, scope);
+	}
+
+	/**
+	 * The member `name` of the value `receiver`, read as a value. The value's own members come first; where it has none of the
+	 * name, a static extension read as a value is the extension bound to it (`var trim = text.trim;`), as in Haxe.
+	 */
+	function memberOrExtension(receiver:TypedExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression {
+		try
+			return typedMemberWithFlow(receiver, name, span, scope)
+		catch (error:CompileError) {
+			var bound = callResolver.boundStaticExtension(receiver, name, span, scope);
+			if (bound == null)
+				throw error;
+			return bound;
+		}
 	}
 
 	function typeGenericCallArguments(fn:AstFunction, arguments:Array<AstExpression>, scope:Scope, span:SourceSpan):{

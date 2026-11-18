@@ -190,9 +190,14 @@ The current subset includes:
   first; within a module the last type first and its module-level functions last. A static is passed over when it is
   private to the calling code, `@:noUsing`, or its first argument does not take the value (an abstract's conversions count;
   a `Dynamic` value meets only `Dynamic`). Generic extensions infer from the value (`using Lambda`, `StringTools`), a
-  `Null<T>` value is passed as it is where the first argument takes null, and a class named as a value (`Main.f()`) takes
-  no extension. Not yet: an extension read as a function value (`var f = text.trim;`), Haxe's global `haxe.EnumTools`
-  extensions, and `@:using` on a typedef.
+  `Null<T>` value is passed as it is where the first argument takes null. A value of a type parameter takes the extensions
+  of its constraints (`value.describe()` for `T:Shape`), and `@:using` on a typedef applies to values of the type it names
+  (a non-generic typedef; Haxeon types a value by the named type, so it applies to every value of that type, where Haxe
+  applies it only to values written with the typedef). An extension read as a value is the extension bound to the value,
+  evaluated once there (`var trim = text.trim;`, `var add = n.add;`), as in Haxe; a generic one whose other type parameters
+  the value does not fix (`[1, 2].map`) is `E1003` (`using-extension-value-open`). Not yet: a class named as a value
+  (`Main.twice()` with a `Dynamic` first argument, which Haxe passes `Class<Main>`) and Haxe's global `haxe.EnumTools`
+  extensions (`getName`, `getParameters`): both need the `Type` API's class and enum values (TODO.md).
 
 Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
 parameters or a result type that breaks the inherited contract, or explicitly make a public method private.

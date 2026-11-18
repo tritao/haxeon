@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstType;
 import compiler.types.Monomorphs;
 import compiler.types.Type.CompilerType;
+import compiler.types.TypeRelations;
 
 /** A static function found as an extension of a value: `key` is its canonical name, `owner` what declares it. */
 typedef StaticExtension = {
@@ -63,13 +64,35 @@ class StaticExtensions {
 	 * and interfaces, each after its own (Haxe appends a base's and an interface's list to the class's).
 	 */
 	function typeNames(type:CompilerType):Array<String> {
-		var names:Array<String> = [];
+		// A typedef's `@:using` comes first, as Haxe tries a typedef's before the type it names. Haxeon types a value by the type
+		// a typedef names, so it applies to every value of that type.
+		var names = aliasesOf(type);
 		switch type {
 			case TInstance(_, name, _), TAbstract(name, _, _): addTypeName(name, names);
 			case TNullable(element): return typeNames(element);
+			// A value of a type parameter takes its bounds' extensions, in the order they are written, as Haxe does.
+			case TTypeParameter(_, _):
+				for (bound in session.declarations.typeParameterBounds(type))
+					for (name in typeNames(bound))
+						if (names.indexOf(name) < 0)
+							names.push(name);
 			default:
 		}
 		return names;
+	}
+
+	/** The typedefs with `@:using` that name `type` itself (a generic typedef names no one type, and is left out). */
+	function aliasesOf(type:CompilerType):Array<String> {
+		var found:Array<String> = [];
+		for (alias in session.staticExtensions.aliases) {
+			var named:Null<CompilerType> = null;
+			try
+				named = session.declarations.resolve(NamedType(alias), SourceSpan.generated("using typedef"))
+			catch (_:CompileError) {}
+			if (named != null && TypeRelations.equals(Monomorphs.follow(named), type))
+				found.push(alias);
+		}
+		return found;
 	}
 
 	function addTypeName(name:String, names:Array<String>):Void {
