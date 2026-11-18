@@ -1,6 +1,6 @@
 # Structure values: open anonymous types and width subtyping (design note)
 
-Status: in progress; slice 0 and slice 5 (open literal structures) have landed, see "As built (slice 5)".
+Status: in progress; slices 0, 5 (open literal structures) and 6 (`localExpectedTypes` deleted) have landed, see "As built".
 Architecture plan step 2.6 (`../reports/2026-11-architecture-review.md`), approved as a step by the user on 2026-11-18;
 this note is its design.
 Follows 2.3 (type variables) and runs beside 2.5 ([LAZY_DECLARATION_TYPING.md](LAZY_DECLARATION_TYPING.md)), with
@@ -325,6 +325,35 @@ the hint half of `Monomorphs.expectation`, and the hint fill in `settleFrame`. A
 `Dynamic` as Haxe makes it (2.3), and `values.push(1)` into a returned `Array<Float>` is `Int should be Float`. Before
 the deletion, a census build of `src/`, `packages/` and the test programs with the pass disabled lists what else relied
 on it; each such program is either a Haxe error too (and is fixed) or a case this note missed.
+
+As built (slice 6). The census (the pass disabled; `src/` self-compiled, the compiler, programs, runtime and tooling
+suites, the differential cases and the UI Showcase on all three targets) found five things, four of them cases this note
+missed:
+
+- `Parser.hx`, four sites: `arguments.push({name, type, span, optional: optional, defaultValue: defaultValue})` passed
+  as `Array<AstArgument>`, whose `optional` and `defaultValue` are optional fields. The literal has them as required
+  fields, and Haxe converts required to optional. So an open structure meeting a structure that declares a field it has
+  as optional, of the same type or its nullable, turns that field optional with the other's type
+  (`MonomorphFrames.becomesOptional`), unless it is pinned or the field has already been read or written through it
+  (`OpenStructure.usedFields`, noted by `TypeRepresentation.fieldType`): those typed uses have the field's old type.
+  `TypedTypeMap` wraps a literal's value as the nullable of its field where the field turned optional after the value
+  was typed. The literal's record is then `AstArgument`'s, and var to final is the existing read-only widening. Fixture
+  `structure-open-literal-optional-field`.
+- `[null]` and `[for (...) null]` were typed in a later use's context: they are now `Array<Null<?>>`, the type variable
+  filled by the first use that fixes it, as Haxe types them (`NullArrayContextMain`).
+- `[].push(list.shift())` passed as `Array<String>`: the element is `Null<String>`. Haxe unifies `Array<Null<T>>` and
+  `Array<T>`; for a reference `T` that holds null (not a value class, struct or enum) they are one storage, so
+  `TypeRelations.isAssignable` relates the two arrays either way (`sameNullableReference`).
+- A local's annotation was first resolved by the look-ahead, at the declaration; the statement typer resolved it with no
+  span, so an ambiguous import (`E1029`) was reported at the type's own declaration. It is now resolved at the local's
+  span (`ImportShadowingMain`).
+- `values.push(1)` returned as `Array<Float>`: `Int should be Float`, as in Haxe (fixture
+  `local-inference-push-int-as-float`; `tests/programs/local-inference-type-variables.hx` now pushes `1.0`).
+
+The census also found escapes of a provisional name that slice 5 shipped with, since every literal without an expected
+structure is now open: a generic specialization's type arguments and the helpers named after a type (equality, hash,
+enum methods and adapters, wire codecs) close the structures they reach (`f9a9c84e5`). The self-compile is
+byte-identical to slice 5's (frozen sources), and typing allocates 47.44M objects against 48.41M with the pass.
 
 ### Relations
 

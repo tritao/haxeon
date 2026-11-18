@@ -819,10 +819,13 @@ class TypeRepresentation {
 		if (platformField != null)
 			return platformField.type;
 		switch type {
-			case TAnonymous(_, fields):
+			case TAnonymous(structure, fields):
 				for (field in fields)
-					if (field.name == name)
+					if (field.name == name) {
+						// A field typed through a literal's open structure keeps its type from now on (`MonomorphFrames.gain`).
+						session.monomorphs.noteFieldUse(structure, name);
 						return field.type;
+					}
 				throw new CompileError(new Diagnostic("E1005", 'Unknown anonymous field "$name"', span));
 			case TInstance(Class, className, _):
 				var declaration = session.classDecls.get(className);

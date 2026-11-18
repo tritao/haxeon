@@ -105,27 +105,10 @@ class ConversionResolver {
 			span, Warning, fixes));
 	}
 
-	/**
-	 * Whether a value of type `actual` is a `target` as it stands or by an implicit conversion that keeps it: Int to Float,
-	 * into a nullable, or a nullable reference read as the reference (a nullable scalar, read as its default, is not).
-	 */
-	function widensTo(actual:CompilerType, target:CompilerType):Bool
-		return session.relations.isAssignable(actual, target) || switch session.relations.conversion(actual, target) {
-			case IntToFloat, IntToInt64, WrapNullable, UnwrapNullable: true;
-			default: false;
-		};
-
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
 			code:String = "E1009"):TypedExpression {
 		// Where a value meets the type it must have, an empty type variable on either side takes the other's type.
 		if (session.monomorphs.active()) {
-			// A value that converts to what a later use expects of the variable fills it with that type (`push(1)` into an
-			// array returned as `Array<Float>`); any other value fills it with its own.
-			switch Monomorphs.follow(expected) {
-				case TMonomorph(cell) if (cell.hint != null && widensTo(value.type, cell.hint)):
-					Monomorphs.unify(expected, cell.hint);
-				default:
-			}
 			Monomorphs.unify(value.type, expected);
 			expected = Monomorphs.resolve(expected);
 			if (Monomorphs.contains(value.type))

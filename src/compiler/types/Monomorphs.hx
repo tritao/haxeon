@@ -48,30 +48,14 @@ class Monomorphs {
 		};
 
 	/**
-	 * What typing a value expected to be `type` should expect: the hint of an empty type variable (or nothing, without one),
-	 * and otherwise `type` with its filled variables resolved.
+	 * What typing a value expected to be `type` should expect: nothing for an empty type variable, which the value fills, and
+	 * otherwise `type` with its filled variables resolved.
 	 */
 	public static function expectation(type:CompilerType):Null<CompilerType>
 		return switch follow(type) {
-			case TMonomorph(cell): cell.hint == null ? null : resolve(cell.hint);
+			case TMonomorph(_): null;
 			default: resolve(type);
 		};
-
-	/** Records `expected` as the hint of each empty type variable in `type`, part by part (`MonomorphCell.hint`). */
-	public static function hint(type:CompilerType, expected:CompilerType):Void
-		switch [follow(type), follow(expected)] {
-			case [TMonomorph(cell), _]:
-				if (cell.hint == null)
-					cell.hint = expected;
-			case [TNullable(a), TNullable(b)], [TArray(a), TArray(b)], [TIterator(a), TIterator(b)]:
-				hint(a, b);
-			case [TNullable(a), _]:
-				hint(a, expected);
-			case [TMap(k1, v1), TMap(k2, v2)]:
-				hint(k1, k2);
-				hint(v1, v2);
-			default:
-		}
 
 	/**
 	 * Names the local `name`, declared at `span`, as the owner of each empty type variable in its type `type` that no local owns yet
@@ -134,10 +118,7 @@ class Monomorphs {
 	public static function containsUnbound(type:CompilerType):Bool
 		return contains(type) && contains(resolve(type));
 
-	/**
-	 * The first empty type variable in `type` that no later use hinted either (`MonomorphCell.hint`): what settling the frame it
-	 * belongs to could only make Dynamic. Null when there is none.
-	 */
+	/** The first empty type variable in `type`: what settling the frame it belongs to could only make Dynamic. Null when there is none. */
 	public static function firstUnfixed(type:CompilerType):Null<MonomorphCell>
 		return contains(type) ? firstUnfixedWithin(resolve(type), []) : null;
 
@@ -151,7 +132,7 @@ class Monomorphs {
 			return null;
 		}
 		return switch type {
-			case TMonomorph(cell): cell.hint == null ? cell : null;
+			case TMonomorph(cell): cell;
 			case TNullable(element), TArray(element), TIterator(element): firstUnfixedWithin(element, visiting);
 			case TMap(key, value), TKeyPath(key, value, _): first([key, value]);
 			case TFunction(arguments, result, _): first(arguments.concat([result]));

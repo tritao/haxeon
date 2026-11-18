@@ -6,6 +6,7 @@ import compiler.types.Monomorphs;
 import compiler.types.Type.AnonymousField;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.MonomorphCell;
+import compiler.types.TypeRelations;
 import compiler.types.analysis.ClosureConversion.ClosureConversionMark;
 
 /**
@@ -35,6 +36,12 @@ class OpenStructure {
 	 * no more fields (a wider record standing for a narrower structure waits for structure views, STRUCTURE_VALUES.md slice 4).
 	 */
 	public var pinned = false;
+
+	/**
+	 * The fields read or written through the structure so far: their typed uses have the field's type, so it no longer turns
+	 * optional when a structure declaring it optional is met (`MonomorphFrames.gain`).
+	 */
+	public final usedFields:Map<String, Bool> = [];
 
 	public function new(name:String, fields:Array<AnonymousField>, span:SourceSpan, frame:MonomorphFrame) {
 		this.name = name;
@@ -217,6 +224,10 @@ class MonomorphFrames {
 						Monomorphs.unify(own.type, field.type);
 						if (gainWithin(own.type, field.type, visiting))
 							gained = true;
+						if (becomesOptional(structure, own, field)) {
+							replaceField(structure.fields, own, field.type);
+							gained = true;
+						}
 					} else if (field.optional && !structure.pinned) {
 						insertField(structure.fields, field);
 						gained = true;
@@ -280,6 +291,33 @@ class MonomorphFrames {
 			default:
 		}
 	}
+
+	/**
+	 * Whether the field `own` the open `structure` has turns optional where it meets the optional field `expected` of the same type
+	 * (or its nullable): Haxe converts a required field to an optional one, and the literal's record must be the other structure's
+	 * (`{name: n, optional: flag}` passed as `Array<AstArgument>`). The literal's own values are wrapped when it closes
+	 * (`TypedTypeMap`); a field already read or written through the structure keeps its type.
+	 */
+	static function becomesOptional(structure:OpenStructure, own:AnonymousField, expected:AnonymousField):Bool
+		return expected.optional && !own.optional && !structure.pinned && !structure.usedFields.exists(own.name)
+			&& (TypeRelations.equals(own.type, expected.type)
+			|| TypeRelations.equals(TNullable(own.type), expected.type));
+
+	static function replaceField(fields:Array<AnonymousField>, own:AnonymousField, type:CompilerType):Void
+		fields[fields.indexOf(own)] = {
+			name: own.name,
+			type: type,
+			optional: true,
+			isFinal: own.isFinal
+		};
+
+	/** Notes that the field `field` of the structure named `name` is read or written, if it is an open structure. */
+	public function noteFieldUse(name:String, field:String):Void
+		if (Monomorphs.isOpenStructureName(name)) {
+			var structure = structures.get(name);
+			if (structure != null && structure.closed == null)
+				structure.usedFields.set(field, true);
+		}
 
 	function ownedByInnermost(structure:OpenStructure):Bool
 		return frames.length > 0 && frames[frames.length - 1] == structure.frame;

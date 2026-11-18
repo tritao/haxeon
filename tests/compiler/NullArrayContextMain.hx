@@ -21,7 +21,8 @@ class NullArrayContextMain {
 		var result = compiler('var values = [null]; return new Holder(values);');
 		result.compile("Main");
 		var changed = StringTools.replace(prefix, "Array<Null<Box>>", "Array<Null<String>>");
-		// Changing the constructor's contract must also recheck the old caller's writes.
+		// Changing the constructor's contract must also recheck the old caller: the push fixes `[null]` as an array of Null<Box>,
+		// which the constructor no longer takes (E1009, where Haxe reports it too).
 		var source = changed
 			+ 'function make():Holder { var values = [null]; values.push(new Box()); return new Holder(values); } '
 			+ 'function main():Int return 0;';
@@ -34,7 +35,7 @@ class NullArrayContextMain {
 			try
 				candidate.compile("Main")
 			catch (error:CompileError) {
-				if (error.diagnostic.code != "E1002")
+				if (error.diagnostic.code != "E1009")
 					throw error;
 				rejected = true;
 			}

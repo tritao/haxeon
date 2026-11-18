@@ -109,8 +109,8 @@ class TypedTypeMap {
 	public function expression(item:TypedExpression):TypedExpression {
 		var type = map(item.type), expression = switch [item.expression, type] {
 			// An object literal's record is its structure's, named when the structure closes (`MonomorphFrames`).
-			case [TObjectLiteral(_, fields, false), TAnonymous(name, _)]: TObjectLiteral(name, objectFields(fields),
-				false);
+			case [TObjectLiteral(_, fields, false), TAnonymous(name, recordFields)]: TObjectLiteral(name,
+				recordValues(fields, recordFields), false);
 			default: kind(item.expression);
 		};
 		return new TypedExpression(expression, type, item.span, item.stableFlowValue,
@@ -118,6 +118,25 @@ class TypedTypeMap {
 			item.storageType == null ? null : map(item.storageType),
 			item.semanticReference);
 	}
+
+	/**
+	 * The values of an object literal whose record has `recordFields`: a value written before its field turned optional (a literal's
+	 * open structure meeting one that declares it optional, `MonomorphFrames.gain`) is wrapped as the field's nullable.
+	 */
+	function recordValues(fields:Array<TypedObjectField>,
+			recordFields:Array<compiler.types.Type.AnonymousField>):Array<TypedObjectField>
+		return [for (field in fields) {
+			var value = expression(field.value);
+			for (record in recordFields)
+				if (record.name == field.name && record.optional && !TypeRelations.equals(value.type, record.type)
+					&& TypeRelations.equals(TNullable(value.type), record.type)) {
+					value = new TypedExpression(TNullableWrap(value), record.type, value.span);
+					break;
+				}
+			{
+				name:field.name, value:value
+			};
+		}];
 
 	function objectFields(fields:Array<TypedObjectField>):Array<TypedObjectField>
 		return [for (field in fields) {

@@ -47,7 +47,6 @@ interface BodyTyping {
 	function typeMethodCall(object:AstExpression, name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope, ?expectedType:CompilerType):TypedExpression;
 	function contextualExpressionType(expression:AstExpression, scope:Scope):Null<CompilerType>;
-	function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType>;
 
 	// Functions, arguments and inline constants.
 	function typeFunction(fn:AstFunction, ?owner:String, isStatic:Bool = false,

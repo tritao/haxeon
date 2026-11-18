@@ -1240,6 +1240,12 @@ class ExpressionTyper {
 		}
 		if (elementType == null)
 			throw new InternalError("Array element type was not resolved");
+		// Elements that are all null (`[null]`) are a `Null<?>` whose `?` the first use that fixes it fills, as Haxe types them.
+		if (elementType.match(TNull) && !dynamicContext) {
+			var variable = session.monomorphs.create("the element type of this array of nulls", span);
+			if (variable != null)
+				elementType = TNullable(variable);
+		}
 		// Decide storage before coercing any element: a later Float or nullable value can widen it.
 		typedValues = [for (value in typedValues) bodyTyper.coerce(value, elementType, "array element", "E1003")];
 		return new TypedExpression(TArrayLiteral(typedValues), TArray(elementType), span);
@@ -1418,6 +1424,12 @@ class ExpressionTyper {
 		},
 			elementType = expectedElement == null
 			? (flattenedElement == null ? typedValue.type : flattenedElement) : expectedElement;
+		// A comprehension of nulls is an array of `Null<?>`, as an array literal of nulls is.
+		if (expectedElement == null && flattenedElement == null && typedValue.type.match(TNull)) {
+			var variable = session.monomorphs.create("the element type of this array of nulls", span);
+			if (variable != null)
+				elementType = TNullable(variable);
+		}
 		if (flattenedElement == null)
 			typedValue = bodyTyper.coerce(typedValue, elementType, "array comprehension value", "E1003");
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {

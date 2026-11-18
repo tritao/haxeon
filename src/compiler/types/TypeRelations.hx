@@ -209,7 +209,8 @@ class TypeRelations {
 			case TArray(expectedElement):
 				switch actual {
 					case TArray(actualElement): equals(actualElement, expectedElement)
-						|| anonymousReadOnlyWidening(actualElement, expectedElement);
+						|| anonymousReadOnlyWidening(actualElement, expectedElement)
+						|| sameNullableReference(actualElement, expectedElement);
 					default: false;
 				}
 			case TIterator(expectedElement):
@@ -236,6 +237,24 @@ class TypeRelations {
 			default: false;
 		};
 	}
+
+	/**
+	 * Whether `left` and `right` are a reference type that holds null and its `Null<>`, either way round: one storage, so an array of
+	 * one is an array of the other, as Haxe unifies them (`[].push(list.shift())` passed as an `Array<String>`). An enum is not one:
+	 * its values may be stored inline.
+	 */
+	function sameNullableReference(left:CompilerType, right:CompilerType):Bool
+		return switch [left, right] {
+			case [TNullable(inner), _]: holdsNullItself(inner) && equals(inner, right);
+			case [_, TNullable(inner)]: holdsNullItself(inner) && equals(left, inner);
+			default: false;
+		};
+
+	function holdsNullItself(type:CompilerType):Bool
+		return acceptsNull(type) && switch type {
+			case TInstance(NominalKind.Enum, _, _): false;
+			default: true;
+		};
 
 	/** A mutable structural field can be viewed through the same read-only field. */
 	static function anonymousReadOnlyWidening(actual:CompilerType, expected:CompilerType):Bool {

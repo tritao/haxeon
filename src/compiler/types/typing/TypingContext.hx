@@ -38,12 +38,6 @@ class TypingContext {
 	/** Owns the transition from conservative names to resolved lexical IDs. */
 	public final storage = new BindingStoragePlan();
 
-	/**
-	 * The types later uses expect of locals (a return, a typed argument), found before the body is typed. They type a local's
-	 * initializer where it has nothing of its own to go by, and are the hints of the type variables of those that get one.
-	 */
-	public final localExpectedTypes:Map<String, CompilerType> = [];
-
 	/** The type a block expression's result local (a try expression's) has: the type the block is expected to have. */
 	public final resultLocalTypes:Map<String, CompilerType> = [];
 	/** Scoped binding identities, used to reject conversions that erase their lifetime. */

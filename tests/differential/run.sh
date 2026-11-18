@@ -167,6 +167,8 @@ in_background run_case local-inference-empty-map 0
 in_background run_case local-inference-object-literal-context 0
 in_background run_case local-inference-int-float-widening 0
 in_background run_case local-inference-unbound-dynamic 0
+# A later use's expected type no longer types what flows in before it (docs/design/STRUCTURE_VALUES.md, slice 6).
+in_background run_compile_failure local-inference-push-int-as-float
 in_background run_case tuple-switch 0
 in_background run_case generic-enum-constructor-inference 0
 in_background run_case switch-shared-constructor-name 0
@@ -230,6 +232,7 @@ in_background run_compile_failure anonymous-width-var-to-final
 # An object literal's structure stays open while its unit is typed and gains the optional fields of the structures it meets
 # (docs/design/STRUCTURE_VALUES.md, slice 5). Gaining from two structures, or after a narrower use, needs width (slice 4).
 in_background run_case structure-open-literal 0
+in_background run_case structure-open-literal-optional-field 0
 in_background run_known_divergence structure-open-literal-two-uses
 in_background run_compile_failure structure-open-literal-conflicting-field
 in_background run_compile_failure structure-open-literal-required-field

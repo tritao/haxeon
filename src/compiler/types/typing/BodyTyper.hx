@@ -287,7 +287,6 @@ class BodyTyper implements BodyTyping {
 			arguments.push({name: scope.requireId(argument.name), type: type});
 		}
 		context.expectedReturnType = result;
-		inferBodyLocalTypes(fn.statements, result);
 		var monomorphs = frame == null ? session.monomorphs.begin(session.closureConversion.mark()) : frame;
 		var typedStatements = typeStatements(fn.statements, scope, result);
 		if (inference != null) {
@@ -571,10 +570,10 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/**
-	 * Ends `frame` and settles its type variables: an unbound one takes the type a later use hinted, or else is Dynamic, as in
-	 * Haxe, except a `new Map()`'s key and value, which are an error (`MonomorphCell.mustBeFixed`). Returns the map
-	 * that writes the settled types into what was typed in the frame (closure conversions and lambdas are mapped here), or null
-	 * when the frame made none.
+	 * Ends `frame` and settles its type variables: an unbound one is Dynamic, as in Haxe, except a `new Map()`'s key and value,
+	 * which are an error (`MonomorphCell.mustBeFixed`); then closes its literals' structures. Returns the map that writes the
+	 * settled types into what was typed in the frame (closure conversions and lambdas are mapped here), or null when the frame
+	 * made neither.
 	 */
 	function settleFrame(frame:MonomorphFrame):Null<compiler.types.TypedTypeMap> {
 		session.monomorphs.end(frame);
@@ -582,9 +581,6 @@ class BodyTyper implements BodyTyping {
 			return null;
 		var unfixed:Null<compiler.types.Type.MonomorphCell> = null;
 		for (cell in frame.cells) {
-			// Nothing filled it, but a later use expects a type of it: that is its type.
-			if (cell.hint != null && compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
-				compiler.types.Monomorphs.unify(TMonomorph(cell), cell.hint);
 			if (!compiler.types.Monomorphs.isUnbound(TMonomorph(cell)))
 				continue;
 			// Otherwise it is Dynamic, as an unbound monomorph is in Haxe, which says nothing of it. Every one is settled before an
@@ -823,31 +819,6 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
-	/** Whether typing `initializer` with nothing expected makes a type variable for its type (`Monomorphs`). */
-	static function makesTypeVariable(initializer:AstExpression):Bool
-		return switch compiler.syntax.AstPredicates.unannotatedExpression(initializer) {
-			case NullLiteral(_): true;
-			case ArrayLiteral(values, _): values.length == 0;
-			case MapLiteral(entries, _): entries.length == 0;
-			default: false;
-		};
-
-	/** The type a later use expects of a local whose initializer has none of its own (`[]`, `null`, `{items: []}`). */
-	public function expectedInitializerType(name:String, initializer:AstExpression):Null<CompilerType> {
-		if (StringTools.startsWith(name, '$' + 'null-coalesce:'))
-			return null;
-		// Without a type a later use expects, an empty array or map and `null` take type variables, which the first use that
-		// fixes them fills (`Monomorphs`).
-		if (!usesLocalExpectedType(initializer))
-			return null;
-		// An empty array or map and `null` get a type variable, and what a later use expects is only its hint.
-		if (session.monomorphs.canCreate() && makesTypeVariable(initializer))
-			return null;
-		var expected = context.localExpectedTypes.get(name);
-		return expected != null && containsNullLiteral(initializer)
-			&& !isNullable(expected) ? TNullable(expected) : expected;
-	}
-
 	function knownExpressionType(expression:AstExpression, ?bindings:Map<String, CompilerType>):Null<CompilerType>
 		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
 			case Variable(name, _) if (bindings != null): bindings.get(name);
@@ -903,190 +874,6 @@ class BodyTyper implements BodyTyping {
 		if (name.indexOf(".") >= 0 || context.lexicalOwner == null)
 			return null;
 		return findMethod(context.lexicalOwner, name);
-	}
-
-	static function fieldUsesLocalExpectedType(fields:Array<compiler.syntax.Ast.AstObjectField>):Bool {
-		for (field in fields)
-			if (usesLocalExpectedType(field.value))
-				return true;
-		return false;
-	}
-
-	static function usesLocalExpectedType(initializer:AstExpression):Bool
-		return switch compiler.syntax.AstPredicates.unannotatedExpression(initializer) {
-			case NullLiteral(_): true;
-			case ArrayLiteral(values, _): values.length == 0 || valuesAreNull(values);
-			case ArrayComprehension(_, _, _, _, value, _, _): usesLocalExpectedType(value);
-			case MapLiteral(entries, _): entries.length == 0;
-			// An object with such a field (`{lock: new Lock(), results: []}`) takes its type from where the local is used.
-			case ObjectLiteral(fields, _): fieldUsesLocalExpectedType(fields);
-			// Preserve a concrete branch type rather than erasing it to one later interface use.
-			case Conditional(_, whenTrue, whenFalse, _): usesLocalExpectedType(whenTrue)
-				&& usesLocalExpectedType(whenFalse);
-			case SwitchExpression(_, cases, defaultExpression, _):
-				var needsContext = defaultExpression == null || usesLocalExpectedType(defaultExpression);
-				for (arm in cases)
-					if (!usesLocalExpectedType(arm.result))
-						needsContext = false;
-				needsContext;
-			default: false;
-		};
-
-	static function valuesAreNull(values:Array<AstExpression>):Bool {
-		for (value in values)
-			switch value {
-				case NullLiteral(_):
-				default:
-					return false;
-			}
-		return true;
-	}
-
-	static function containsNullLiteral(expression:AstExpression):Bool
-		return ExpressionTyper.containsNullLiteral(expression);
-
-	function inferBodyLocalTypes(statements:Array<AstStatement>, result:CompilerType):Void {
-		var changed = true;
-		while (changed) {
-			changed = inferBodyStatementConstraints(statements, result);
-		}
-	}
-
-	function inferBodyStatementConstraints(statements:Array<AstStatement>, result:CompilerType):Bool {
-		var changed = false;
-		for (statement in statements)
-			switch compiler.syntax.AstPredicates.unannotatedStatement(statement) {
-				case VarDeclaration(name, declared, initializer, declarationSpan):
-					if (declared != null)
-						changed = constrainLocal(name, lowerType(declared, declarationSpan)) || changed;
-					changed = constrainLocalExpression(initializer,
-						context.localExpectedTypes.exists(name) ? context.localExpectedTypes.get(name) : TVoid)
-						|| changed;
-				case Return(expression, _):
-					changed = constrainLocalExpression(expression, result) || changed;
-				case Expression(expression, _):
-					changed = constrainPushedExpression(expression) || constrainLocalExpression(expression, TVoid)
-						|| changed;
-				case If(_, thenBranch, elseBranch, _):
-					changed = inferBodyStatementConstraints(thenBranch, result)
-						|| inferBodyStatementConstraints(elseBranch, result)
-						|| changed;
-				case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _):
-					changed = inferBodyStatementConstraints(body, result) || changed;
-				case Try(tryBranch, catches, _):
-					changed = inferBodyStatementConstraints(tryBranch, result) || changed;
-					for (catchClause in catches)
-						changed = inferBodyStatementConstraints(catchClause.statements, result) || changed;
-				case Defer(body, _):
-					changed = inferBodyStatementConstraints(body, result) || changed;
-				case Switch(_, cases, defaultBranch, _, _):
-					for (switchCase in cases)
-						changed = inferBodyStatementConstraints(switchCase.statements, result) || changed;
-					changed = inferBodyStatementConstraints(defaultBranch, result) || changed;
-				default:
-			}
-		return changed;
-	}
-
-	function constrainPushedExpression(expression:AstExpression):Bool
-		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
-			case MethodCall(receiverExpression, methodName, arguments,
-				_) if (methodName == "push" && arguments.length == 1):
-				switch receiverExpression {
-					case Variable(receiver, _): constrainPushedValue(receiver, arguments[0]);
-					default: false;
-				}
-			case Call(name, arguments, _) if (arguments.length == 1 && StringTools.endsWith(name, ".push")):
-				constrainPushedValue(name.substring(0, name.length - 5), arguments[0]);
-			default: false;
-		};
-
-	function constrainPushedValue(receiver:String, value:AstExpression):Bool
-		return switch context.localExpectedTypes.get(receiver) {
-			case TArray(element): constrainLocalExpression(value, element);
-			default: false;
-		};
-
-	function constrainLocalExpression(expression:AstExpression, expected:CompilerType):Bool
-		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
-			case Variable(name, _): constrainLocal(name, expected);
-			case Call(name, arguments, span):
-				var enumName:Null<String> = switch expected {
-					case TInstance(Enum, value, _): value;
-					case TNullable(element):
-						switch element {
-							case TInstance(Enum, value, _): value;
-							default: null;
-						}
-					default: null;
-				};
-				var info = enumName != null
-					&& sourceIsBareReference(span) ? enumCaseInfo(enumName + "." + lastPathSegment(name)) : null;
-				if (info == null)
-					info = enumCaseInfo(name);
-				var changed = false;
-				if (info != null)
-					for (index in 0...arguments.length) {
-						if (index >= info.params.length)
-							break;
-						var parameter = info.params[index],
-							parameterType = enumParameterType(info.typeParameters, parameter,
-								enumInstance(expected) ?? info.aliasType ?? TInstance(NominalKind.Enum, info.enumName,
-								[]));
-						changed = constrainLocalExpression(arguments[index], parameterType) || changed;
-					}
-						else {
-						var signatureName = resolvedCallName(name);
-						if (session.signatures.exists(signatureName)) {
-							var signature = requiredMapValue(session.signatures, signatureName);
-							if (!isGeneric(signature)) {
-								var expected = argumentTypesOf(signature);
-								for (index in 0...arguments.length) {
-									if (index >= expected.length)
-										break;
-									changed = constrainLocalExpression(arguments[index], expected[index]) || changed;
-								}
-							}
-						}
-					}
-				changed;
-			case New(typeName, arguments, _):
-				var constructorName = typeName + ".new", changed = false;
-				if (session.signatures.exists(constructorName)
-					&& session.classDecls.exists(typeName)
-					&& requiredMapValue(session.classDecls, typeName).typeParameters.length == 0) {
-					var expected = argumentTypesOf(requiredMapValue(session.signatures, constructorName));
-					for (index in 0...arguments.length) {
-						if (index >= expected.length)
-							break;
-						changed = constrainLocalExpression(arguments[index], expected[index]) || changed;
-					}
-				}
-				changed;
-			case ObjectLiteral(fields, _):
-				// An object literal is a present value, so where a `Null<Struct>` is expected its fields are the structure's.
-				var expectedFields = switch expected {
-					case TAnonymous(_, values), TNullable(TAnonymous(_, values)): values;
-					default: null;
-				}, changed = false;
-				if (expectedFields != null)
-					for (field in fields) {
-						var expectedField = ExpressionTyper.anonymousField(expectedFields, field.name);
-						if (expectedField != null)
-							changed = constrainLocalExpression(field.value, expectedField.type) || changed;
-					}
-				changed;
-			default: false;
-		};
-
-	function constrainLocal(name:String, expected:CompilerType):Bool {
-		if (context.localExpectedTypes.exists(name) || (switch (expected) {
-			case TVoid: true;
-			default: false;
-		}))
-			return false;
-		context.localExpectedTypes.set(name, expected);
-		return true;
 	}
 
 	function typeSwitchArrayPattern(value:AstExpression, expected:CompilerType,

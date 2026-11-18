@@ -342,7 +342,8 @@ Can start alongside phase 1 (different packages), but 2.2 to 2.5 are in order. 2
   differential tests against Haxe 4.3.7, `--reverse-typing-order` byte-identical, warm and live structure edits, the
   self-compile no slower than noise and nbody within 3%. Effort L, high risk. The design and the user's decisions are
   recorded (`2b28b4c8e`, `6232eb09c`). Slice 0, the revert, landed on 2026-11-17 (`65810ae26`), and slice 5, open literal structures, on
-  2026-11-18 (`5598a3dfc`). The representation track (haxeon-e4) and slice 6 are in progress.
+  2026-11-18 (`5598a3dfc`, with `f9a9c84e5`), then slice 6, which deletes `localExpectedTypes`. The representation track
+  (haxeon-e4) is in progress; slice 4 (relations) waits for its dispatchers.
 
 ### Phase 3: service
 

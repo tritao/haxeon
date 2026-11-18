@@ -79,13 +79,6 @@ class MonomorphCell {
 	public var bound:Null<CompilerType> = null;
 
 	/**
-	 * The type a later use expects of it (a return, a typed argument): the context values flowing into it are typed in, so
-	 * `list.push({name: n})` types the object as that use's structure. It is not the variable's type: the first use that
-	 * fixes it fills it, as in Haxe, and only one nothing fills takes its hint.
-	 */
-	public var hint:Null<CompilerType> = null;
-
-	/**
 	 * Whether nothing filling it is an error rather than Dynamic: a `new Map()`'s key and value, whose implementation Haxe
 	 * picks from them (`Type parameters of multi type abstracts must be known`).
 	 */

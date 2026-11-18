@@ -1,7 +1,9 @@
 // A local declared without what fixes its type takes it from the first use that does, as in Haxe: an empty array from
 // what is pushed into it (even another empty array, or from inside a lambda) or the typed parameter it is passed to,
 // `var x;` and `var x = null` from the value first assigned, wherever that is, and `new Map()` from its first `set`.
-// What a later use expects (a return, a typed argument) is the context values flowing in are typed in, not the type.
+// What a later use expects (a return, a typed argument) does not type what flows in before it: `values.push(1)` into an
+// array returned as `Array<Float>` is an error, as in Haxe. An object literal pushed gains the optional fields of a
+// structure it meets later (docs/design/STRUCTURE_VALUES.md).
 class Box {
 	public final label:String;
 
@@ -79,17 +81,17 @@ typedef Argument = {name:String, ?optional:Bool};
 function count(arguments:Array<Argument>):Int
 	return arguments.length;
 
-// The object pushed is typed as the structure `count` expects, optional field and all, so the array is one of those.
-function hintedStructure():Int {
+// The object pushed gains the optional field of the structure `count` expects, so the array is one of those.
+function gainedStructure():Int {
 	var arguments = [];
 	arguments.push({name: "a"});
 	return count(arguments);
 }
 
-// The literal pushed is typed as the Float the return expects, so the array is one of Floats.
-function hintedNumbers():Array<Float> {
+// The Float pushed fixes the array as one of Floats, which the return expects.
+function pushedFloats():Array<Float> {
 	var values = [];
-	values.push(1);
+	values.push(1.0);
 	return values;
 }
 
@@ -107,8 +109,9 @@ function comparedFirst(list:String):Int {
 
 typedef ToolRequest = {main:String, classPaths:Array<String>, defines:Array<String>};
 
-// The arrays are fixed by the nullable values `shift` returns, read as the Strings the returned structure expects: an
-// object literal returned as a `Null<ToolRequest>` is a present one, whose fields are the structure's.
+// The arrays are fixed by the nullable values `shift` returns, and an array of `Null<String>` is the `Array<String>` the
+// returned structure expects, as in Haxe: an object literal returned as a `Null<ToolRequest>` is a present one, whose
+// fields are the structure's.
 function toolRequest(arguments:Array<String>):Null<ToolRequest> {
 	var classPaths = [], defines = [];
 	while (arguments.length > 0) {
@@ -134,5 +137,5 @@ function main():Int
 		"b",
 		"a"
 	])
-		+ grouped() + hintedStructure() + Std.int(hintedNumbers()[0]) + comparedFirst("a,b,a") + nullableIntoHinted()
+		+ grouped() + gainedStructure() + Std.int(pushedFloats()[0]) + comparedFirst("a,b,a") + nullableIntoHinted()
 		== 30 ? 42 : 1;

@@ -82,23 +82,18 @@ class StatementTyper {
 
 	/**
 	 * The type of `var name;`: the one its block is expected to have, for a block expression's result local; otherwise a type
-	 * variable its first assignment fills (`Monomorphs`), hinted by what a later use expects.
+	 * variable its first assignment fills (`Monomorphs`).
 	 */
 	function uninitializedType(name:String, span:SourceSpan):CompilerType {
 		var context = session.currentContext,
 			result = context.resultLocalTypes.get(name);
 		if (result != null)
 			return result;
-		var expected = context.localExpectedTypes.get(name),
-			variable = session.monomorphs.create('the type of local "$name"', span);
+		var variable = session.monomorphs.create('the type of local "$name"', span);
 		if (variable != null) {
-			if (expected != null)
-				compiler.types.Monomorphs.hint(variable, expected);
 			compiler.types.Monomorphs.nameLocal(variable, name, span);
 			return variable;
 		}
-		if (expected != null)
-			return expected;
 		throw new CompileError(new Diagnostic("E1002", 'Cannot infer type of local "$name"; add a type annotation',
 			span));
 	}
@@ -113,7 +108,7 @@ class StatementTyper {
 				var declaredType = (switch (declared) {
 					case InferredType: true;
 					default: false;
-				}) ? uninitializedType(name, span) : session.declarations.resolve(declared, null,
+				}) ? uninitializedType(name, span) : session.declarations.resolve(declared, span,
 					context.typeSubstitutions);
 				scope.define(name, declaredType, span, false);
 				bodyTyper.bindCell(name, span, scope, declaredType);
@@ -142,8 +137,9 @@ class StatementTyper {
 							};
 					default:
 				}
-				var declaredType:Null<CompilerType> = declared == null ? bodyTyper.expectedInitializerType(name,
-					initializer) : session.declarations.resolve(declared, null, context.typeSubstitutions);
+				var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
+					span,
+					context.typeSubstitutions);
 				var predeclared = false, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {
@@ -162,10 +158,6 @@ class StatementTyper {
 					if (variable != null)
 						declaredType = TNullable(variable);
 				}
-				// What a later use expects of a local whose initializer made a type variable is that variable's hint.
-				var laterUse = declared == null ? context.localExpectedTypes.get(name) : null;
-				if (laterUse != null)
-					compiler.types.Monomorphs.hint(declaredType != null ? declaredType : value.type, laterUse);
 				if (declaredType != null)
 					value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002");
 				else
