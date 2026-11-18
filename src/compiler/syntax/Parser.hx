@@ -2612,7 +2612,8 @@ class Parser {
 		for (value in values)
 			target.push(value);
 
-	static function expandPatternAlternatives(pattern:AstExpression):Array<AstExpression>
+	/** The patterns `pattern` stands for, one per combination of its alternatives (`A | B`, `Pair(A | B, _)`). */
+	public static function expandPatternAlternatives(pattern:AstExpression):Array<AstExpression>
 		return switch pattern {
 			case BitOr(left, right, _):
 				var values = expandPatternAlternatives(left);

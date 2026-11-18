@@ -1229,8 +1229,7 @@ class BodyTyper implements BodyTyping {
 											// A name binds the element unless it names a constructor, which is matched.
 											case Variable(binding, bindingSpan) if (patternConstructor(binding,
 												bindingSpan, elementType, scope) == null):
-												scope.define(binding, elementType, bindingSpan);
-												bindCell(binding, bindingSpan, scope, elementType);
+												declarePatternName(binding, elementType, bindingSpan, scope);
 												bindings.push({
 													name: scope.requireId(binding),
 													type: elementType,
@@ -1284,11 +1283,22 @@ class BodyTyper implements BodyTyping {
 		};
 	}
 
+	/**
+	 * Declares a name a pattern binds. The pattern of `value.match(pattern)` binds none, as in Haxe: its result is a Bool, so a
+	 * name it bound would be out of scope where it could be read.
+	 */
+	function declarePatternName(name:String, type:CompilerType, span:SourceSpan, scope:Scope):Void {
+		for (pattern in context.postfixMatchPatterns)
+			if (pattern.file == span.file && pattern.start <= span.start && span.end <= pattern.end)
+				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
+		scope.define(name, type, span);
+		bindCell(name, span, scope, type);
+	}
+
 	/** Declares a name a pattern binds to the enum payload at `index`. */
 	function bindPatternName(name:String, span:SourceSpan, scope:Scope, type:CompilerType, storageType:CompilerType,
 			index:Int):TypedSwitchBinding {
-		scope.define(name, type, span);
-		bindCell(name, span, scope, type);
+		declarePatternName(name, type, span, scope);
 		return {
 			name: scope.requireId(name),
 			type: type,
@@ -1314,8 +1324,7 @@ class BodyTyper implements BodyTyping {
 						innerSpan);
 					default:
 				}
-				scope.define(name, expected, span);
-				bindCell(name, span, scope, expected);
+				declarePatternName(name, expected, span, scope);
 				{
 					name:scope.requireId(name), pattern:pattern
 				};
@@ -1341,8 +1350,7 @@ class BodyTyper implements BodyTyping {
 				if (info != null) null;
 				else if (name == "_") null;
 				else {
-					scope.define(name, expected, span);
-					bindCell(name, span, scope, expected);
+					declarePatternName(name, expected, span, scope);
 					scope.requireId(name);
 				}
 			default: null;

@@ -617,8 +617,9 @@ class TestMain {
 			'Enum switch is missing cases: B');
 		expectCompileError('function main():Int { var x = 1; return switch x { case a = b = 1: 1; default: 0; }; }',
 			'A case value can be captured by only one name');
+		// As in Haxe, the pattern of `.match` binds no names.
 		expectCompileError('enum E { A(value:Int); } function main():Int { var e = A(1); return e.match(A(x = 1)) ? x : 0; }',
-			'Unknown variable "x"');
+			'Pattern variables are not allowed in .match patterns');
 		expectCompileError('function main():Int { return switch 1 { case 1: 42; default: "wrong"; }; }',
 			'Type mismatch for switch branch: expected Int, got String');
 		expectCompileError('function main():Int { return switch 1 { case 1: 40; case 1: 2; default: 0; }; }',

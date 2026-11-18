@@ -17,6 +17,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstEnumParameter;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.AstTypeConstraint;
+import compiler.syntax.Ast.AstSwitchExpressionCase;
 import compiler.syntax.AstPredicates;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.types.FunctionTypes;
@@ -171,19 +172,28 @@ class CallResolver {
 			default: false;
 		};
 
-	/** Whether `object` matches `pattern`: `switch object { case pattern: true; default: false }`, with `object` evaluated once. */
+	/**
+	 * Whether `object` matches `pattern`: `switch object { case pattern: true; default: false }`, with `object` evaluated once.
+	 * As in Haxe, the pattern binds no names.
+	 */
 	public function typeEnumMatch(object:AstExpression, pattern:AstExpression, span:SourceSpan,
 			scope:Scope):TypedExpression {
-		var matched = "__haxeon_match" + span.start;
-		return bodyTyper.typeExpression(BlockExpression([VarDeclaration(matched, null, object, span)],
-			SwitchExpression(Variable(matched, span), [
-				{
-					value: pattern,
-					guard: null,
-					result: BoolLiteral(true, span),
-					span: span
-				}
-			], BoolLiteral(false, span), span), span), scope);
+		var matched = "__haxeon_match" + span.start, patterns = session.currentContext.postfixMatchPatterns;
+		var cases:Array<AstSwitchExpressionCase> =
+			[for (alternative in compiler.syntax.Parser.expandPatternAlternatives(pattern))
+			{
+				value:alternative, guard:null, result:BoolLiteral(true, span), span:span
+			}];
+		patterns.push(compiler.syntax.Parser.expressionSpan(pattern));
+		try {
+			var typed = bodyTyper.typeExpression(BlockExpression([VarDeclaration(matched, null, object, span)],
+				SwitchExpression(Variable(matched, span), cases, BoolLiteral(false, span), span), span), scope);
+			patterns.pop();
+			return typed;
+		} catch (error:haxe.Exception) {
+			patterns.pop();
+			throw error;
+		}
 	}
 
 	/**
@@ -1442,10 +1452,14 @@ class CallResolver {
 				constructor = enumCaseInfo(prefix);
 			if (constructor == null && prefix.indexOf(".") < 0)
 				constructor = uniqueEnumCaseInfo(prefix, 0, span);
-			if (constructor != null && constructor.params.length == 0)
-				return typeMethodCall(typeEnumConstructor(prefix, [], null, constructor, span, scope), methodName,
+			if (constructor != null && constructor.params.length == 0) {
+				var value = typeEnumConstructor(prefix, [], null, constructor, span, scope);
+				if (isEnumMatch(value, methodName, arguments))
+					return typeEnumMatch(Variable(prefix, span), arguments[0], span, scope);
+				return typeMethodCall(value, methodName,
 					arguments, span, scope, expectedType,
 					false, prefix, false);
+			}
 		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}

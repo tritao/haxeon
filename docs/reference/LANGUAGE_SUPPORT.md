@@ -63,7 +63,11 @@ The current subset includes:
 - `if`/`else`, `switch`, `while`, `do`/`while`, `for`, `break`, and `continue`
 - Capture patterns: `name = pattern` matches what `pattern` matches and binds the matched value, as a whole case
   (`case moving = Fast | Slow:`), an enum payload (`case Group(lead = Circle(_), _):`), an array element
-  (`case [first = 1, _]:`) or the pattern of `value.match(...)`. Over alternatives it binds whichever one matched.
+  (`case [first = 1, _]:`). Over alternatives it binds whichever one matched.
+- `value.match(pattern)` on an enum value (a constructor without arguments too, `Empty.match(_)`) says whether the value,
+  evaluated once, matches the pattern: nested patterns, constants, `_` and alternatives (`Circle(_) | Rect(1, _)`). As in
+  Haxe, the pattern binds no names: a capture there (`shape`, `Circle(radius)`, `s = Circle(_)`) is `E1019`, "Pattern
+  variables are not allowed in .match patterns".
 - A lowercase name in a pattern captures, as in Haxe, even where a function, local, static or field of that name is in
   scope (`case Box(size):` beside a function `size`): inside the case the name is the captured value.
 - Array iteration and comprehensions

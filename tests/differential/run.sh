@@ -285,6 +285,11 @@ in_background run_case switch-nullable-enum-abstract 0
 in_background run_case pattern-capture-shadows-name 0
 # Haxe's Lambda over arrays and maps (stdlib/Lambda.hx).
 in_background run_case lambda-functions 0
+# `value.match(pattern)`: a switch with one case that binds no names, as in Haxe.
+in_background run_case enum-match 0
+in_background run_compile_failure enum-match-pattern-variable
+in_background run_compile_failure enum-match-payload-variable
+in_background run_compile_failure enum-match-capture
 # Static extensions (`using`, `@:using`) in Haxe's order, after the value's own members (src/compiler/types/typing/StaticExtensions.hx).
 in_background run_case using-static-extensions 0 hl main
 in_background run_compile_failure using-private-static main

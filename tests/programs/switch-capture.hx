@@ -1,5 +1,5 @@
-// `name = pattern` matches what `pattern` matches and binds the matched value: a whole case, an enum payload, an array element
-// or the pattern of `.match`. A capture over alternatives binds whichever one matched.
+// `name = pattern` matches what `pattern` matches and binds the matched value: a whole case, an enum payload or an array
+// element. A capture over alternatives binds whichever one matched. The pattern of `.match` binds none, as in Haxe.
 enum Shape {
 	Circle(radius:Int);
 	Rect(width:Int, height:Int);
@@ -63,7 +63,7 @@ function main():Int {
 		return 5;
 	if (pair([1, 7]) != 8 || pair([4, 5]) != 2 || pair([4]) != 0)
 		return 6;
-	if (!Group(Circle(1), []).match(Group(c = Circle(_), _)) || Circle(1).match(c = Rect(_, _)))
+	if (!Group(Circle(1), []).match(Group(Circle(_), _)) || Circle(1).match(Rect(_, _)))
 		return 7;
 	return 42;
 }

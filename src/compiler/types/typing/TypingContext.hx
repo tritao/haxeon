@@ -52,6 +52,9 @@ class TypingContext {
 
 	public var loopDepth:Int = 0;
 
+	/** The patterns of `value.match(pattern)` being typed, which bind no names (`BodyTyper.declarePatternName`). */
+	public final postfixMatchPatterns:Array<compiler.core.Source.SourceSpan> = [];
+
 	/** Nesting depth of an explicit `@:privateAccess` expression or statement. */
 	public var privateAccessDepth:Int = 0;
 
