@@ -555,6 +555,8 @@ class SemanticIndex {
 			case BlockExpression(statements, result, _):
 				indexRecoveredStatementUses(statements);
 				indexRecoveredExpression(result);
+			case AssignmentValue(store, _):
+				indexRecoveredStatementUses([store]);
 			case ArrayLiteral(values, _):
 				for (value in values)
 					indexRecoveredExpression(value);

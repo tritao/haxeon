@@ -48,6 +48,7 @@ class TypingContext {
 	public var arrayTakeTemporary:Int = 0;
 	public var keyPathTemporary:Int = 0;
 	public var diffTemporary:Int = 0;
+	public var assignedValueTemporary:Int = 0;
 
 	public var loopDepth:Int = 0;
 

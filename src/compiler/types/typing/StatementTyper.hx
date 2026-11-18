@@ -348,7 +348,37 @@ class StatementTyper {
 		return name;
 	}
 
-	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope):TypedStatement {
+	/**
+	 * An assignment used as a value (`AssignmentValue`): the store `assignment`, then its value, the setter's result where a
+	 * setter stores it, else the value stored (`AssignedValue`).
+	 */
+	public function typeAssignmentValue(assignment:AstStatement, span:SourceSpan, scope:Scope):TypedExpression {
+		var assigned = new AssignedValue(session, span);
+		var statement = switch assignment {
+			case Assignment(name, expression, storeSpan): typeAssignment(name, expression, storeSpan, scope, assigned);
+			case FieldAssignment(receiver, fieldName, expression, storeSpan):
+				typeFieldAssignment(receiver, fieldName, expression, storeSpan, scope, assigned);
+			case IndexAssignment(array, offset, expression, storeSpan):
+				typeIndexAssignment(array, offset, expression, storeSpan, scope, assigned);
+			default: throw new InternalError("An assignment value holds an assignment");
+		};
+		return assigned.value(statement);
+	}
+
+	/**
+	 * The value a store writes, `value` (`source` converted to the target's type): bound to the assignment's value where the
+	 * assignment is used as one.
+	 */
+	static inline function stored(assigned:Null<AssignedValue>, value:TypedExpression,
+			source:TypedExpression):TypedExpression
+		return assigned == null ? value : assigned.bind(value, source.type);
+
+	/** The call of the setter that stores an assignment's value, which is its value where the assignment is used as one. */
+	static inline function setterStore(assigned:Null<AssignedValue>, call:TypedExpression):TypedExpression
+		return assigned == null ? call : assigned.setter(call);
+
+	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope,
+			?assigned:AssignedValue):TypedStatement {
 		name = sourceTarget(name, span, scope);
 		var dot = name.lastIndexOf(".");
 		if (dot < 0) {
@@ -362,19 +392,20 @@ class StatementTyper {
 					if (thisType == null)
 						throw new InternalError('Missing "this" type for field "$name"');
 					var propertyWrite = bodyTyper.abstractPropertyWrite(bodyTyper.implicitReceiver(span, scope), name,
-						expression, span, scope);
+						expression, span, scope, assigned);
 					if (propertyWrite != null)
 						return TExpression(propertyWrite, span);
 					PropertyWriteRules.rejectInstanceMutation(session, thisType, name, span);
 					var assignedValue = bodyTyper.typeExpression(expression, scope, instanceField),
-						value = bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002");
+						value = stored(assigned,
+							bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002"), assignedValue);
 					var receiver = bodyTyper.typeExpression(Variable("this", span), scope),
 						propertySetter = ClassProperties.instanceAccessor(session, thisType, name, false, receiver,
 							span);
 					if (propertySetter != null) {
 						session.invalidateCallEffects(propertySetter, scope);
-						return TExpression(bodyTyper.propertySetterCall(receiver, propertySetter, value, span),
-							span);
+						return TExpression(setterStore(assigned, bodyTyper.propertySetterCall(receiver, propertySetter,
+							value, span)), span);
 					}
 					var receiverPath = FlowAnalysis.accessPath(receiver);
 					scope.invalidateField(name);
@@ -396,11 +427,14 @@ class StatementTyper {
 				PropertyWriteRules.rejectStaticMutation(session, staticField.owner, name, span);
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, name, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
-					value = bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
-				return staticStore(staticField.owner, name, value, assignedValue.type, staticField.type, span, scope);
+					value = stored(assigned,
+						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002"), assignedValue);
+				return staticStore(staticField.owner, name, value, assignedValue.type, staticField.type, span, scope,
+					assigned);
 			}
 			var assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-				value = bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002"),
+				value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002"),
+					assignedValue),
 				statement:TypedStatement;
 			if (scope.isCapture(name)) {
 				if (!scope.isCellCapture(name))
@@ -425,8 +459,8 @@ class StatementTyper {
 			object = TypeParameterMembers.receiver(session, bodyTyper,
 				BodyTyper.unwrapNullable(bodyTyper.typeExpression(Variable(objectName, span), scope)), fieldName, span);
 		if (sameType(object.type, TDynamic))
-			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
-		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope);
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
+		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
 		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
@@ -440,20 +474,24 @@ class StatementTyper {
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
-					value = bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002");
-				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope);
+					value = stored(assigned,
+						bodyTyper.coerce(assignedValue, staticField.type, 'field "$name"', "E1002"), assignedValue);
+				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope,
+					assigned);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-					value = bodyTyper.coerce(assignedValue, expected, 'field "$name"', "E1002"),
+					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$name"', "E1002"),
+						assignedValue),
 					setter:Null<String> = platformField == null ? null : platformField.set,
 					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
 						false, object, span) : null,
 					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]),
 						TVoid, span), span) else {
-							propertySetter != null ? TExpression(bodyTyper.propertySetterCall(object,
-								propertySetter, value, span),
+							propertySetter != null
+								? TExpression(setterStore(assigned, bodyTyper.propertySetterCall(object,
+								propertySetter, value, span)),
 								span) : {value = session.representation.boundaryCast(value,
 								session.representation.resolveField(object.type, fieldName, span).physical);
 							TFieldAssign(object, fieldName, value, span);
@@ -473,15 +511,16 @@ class StatementTyper {
 	}
 
 	public function typeIndexAssignment(array:AstExpression, offset:AstExpression, expression:AstExpression,
-			span:SourceSpan, scope:Scope):TypedStatement {
+			span:SourceSpan, scope:Scope, ?assigned:AssignedValue):TypedStatement {
 		var typedArray = BodyTyper.unwrapNullable(bodyTyper.typeExpression(array, scope)),
 			typedIndex = bodyTyper.typeExpression(offset, scope);
 		return switch typedArray.type {
 			case TMap(key, mapValue):
 				DeclaredConformance.requireMapRuntime(session, key, mapValue, span);
 				typedIndex = bodyTyper.coerce(typedIndex, key, "map key", "E1002");
-				var value = bodyTyper.coerce(bodyTyper.typeExpression(expression, scope, mapValue), mapValue,
-					"map value", "E1002"),
+				var assignedValue = bodyTyper.typeExpression(expression, scope, mapValue),
+					value = stored(assigned, bodyTyper.coerce(assignedValue, mapValue, "map value", "E1002"),
+						assignedValue),
 					entryPath = FlowAnalysis.mapEntryPath(typedArray, typedIndex);
 				if (entryPath != null)
 					scope.refineExpression(entryPath, mapValue, FlowAnalysis.entryFactsSurviveCalls(scope, typedArray));
@@ -500,9 +539,9 @@ class StatementTyper {
 				}))
 					fail("E1014", "Array index must be Int", typedIndex.span);
 				var element = bodyTyper.arrayElementType(typedArray.type, span),
-					value = bodyTyper.coerce(bodyTyper.typeExpression(expression, scope, element), element,
-						"array element",
-						"E1002");
+					assignedValue = bodyTyper.typeExpression(expression, scope, element),
+					value = stored(assigned, bodyTyper.coerce(assignedValue, element, "array element", "E1002"),
+						assignedValue);
 				// A stored value can replace any literal-index element reached through an alias.
 				// Drop these transient refinements globally rather than retaining an unsound path fact.
 				scope.invalidateExpressionNamespace("array-entry:");
@@ -512,8 +551,9 @@ class StatementTyper {
 
 	/** `dynamicValue.field = value`: the field is set when the program runs, and the value is boxed. */
 	function dynamicFieldAssignment(object:TypedExpression, fieldName:String, expression:AstExpression, span:SourceSpan,
-			scope:Scope):TypedStatement {
-		var value = bodyTyper.typeExpression(expression, scope);
+			scope:Scope, assigned:Null<AssignedValue>):TypedStatement {
+		var assignedValue = bodyTyper.typeExpression(expression, scope),
+			value = stored(assigned, assignedValue, assignedValue);
 		scope.invalidateField(fieldName);
 		return dynamicFieldStore(object, fieldName, value, span);
 	}
@@ -532,12 +572,12 @@ class StatementTyper {
 
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression,
 			span:SourceSpan,
-			scope:Scope):TypedStatement {
+			scope:Scope, ?assigned:AssignedValue):TypedStatement {
 		var object = TypeParameterMembers.receiver(session, bodyTyper,
 			BodyTyper.unwrapNullable(bodyTyper.typeExpression(receiverExpression, scope)), fieldName, span);
 		if (sameType(object.type, TDynamic))
-			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
-		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope);
+			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
+		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
 		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
@@ -551,20 +591,25 @@ class StatementTyper {
 				bodyTyper.rejectInlineFieldMutation(staticField.owner, fieldName, span);
 				FinalFieldRules.rejectStaticMutation(session, staticField.owner, fieldName, span);
 				var assignedValue = bodyTyper.typeExpression(expression, scope, staticField.type),
-					value = bodyTyper.coerce(assignedValue, staticField.type, 'field "$fieldName"', "E1002");
-				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope);
+					value = stored(assigned, bodyTyper.coerce(assignedValue, staticField.type, 'field "$fieldName"',
+						"E1002"), assignedValue);
+				staticStore(staticField.owner, fieldName, value, assignedValue.type, staticField.type, span, scope,
+					assigned);
 			default:
 				var platformField = PlatformAbi.field(object.type, fieldName),
 					expected = bodyTyper.fieldType(object.type, fieldName, span),
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
-					value = bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"', "E1002");
+					value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"', "E1002"),
+						assignedValue);
 				var setter:Null<String> = platformField == null ? null : platformField.set,
 					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
 						false, object, span) : null;
 				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]),
 					TVoid, span), span) else {
 						if (propertySetter != null)
-							TExpression(bodyTyper.propertySetterCall(object, propertySetter, value, span), span)
+							TExpression(setterStore(assigned,
+								bodyTyper.propertySetterCall(object, propertySetter, value,
+								span)), span)
 								else {
 								value = session.representation.boundaryCast(value,
 									session.representation.resolveField(object.type, fieldName, span).physical);
@@ -585,12 +630,12 @@ class StatementTyper {
 	}
 
 	/** A store of `value` to the static `name` of `owner`: a call of its setter where it is a property (`ClassProperties`). */
-	function staticStore(owner:String, name:String, value:TypedExpression, assigned:CompilerType, stored:CompilerType,
-			span:SourceSpan, scope:Scope):TypedStatement {
+	function staticStore(owner:String, name:String, value:TypedExpression, assignedType:CompilerType,
+			storedType:CompilerType, span:SourceSpan, scope:Scope, assigned:Null<AssignedValue>):TypedStatement {
 		var setterCall = ClassProperties.writeStatic(session, bodyTyper, owner, name, value, span, scope);
 		if (setterCall != null)
-			return TExpression(setterCall, span);
-		refineStaticStore(scope, owner, name, assigned, stored);
+			return TExpression(setterStore(assigned, setterCall), span);
+		refineStaticStore(scope, owner, name, assignedType, storedType);
 		return TStaticFieldAssign(owner, name, value, span);
 	}
 

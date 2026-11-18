@@ -122,6 +122,8 @@ class DependencyScanner {
 				for (statement in statements)
 					scanStatement(statement, dependencies, typeParameters);
 				scanExpression(value, dependencies, typeParameters);
+			case AssignmentValue(store, _):
+				scanStatement(store, dependencies, typeParameters);
 			case ThrowExpression(value, _), Capture(_, value, _):
 				scanExpression(value, dependencies, typeParameters);
 			case Cast(value, type, _):

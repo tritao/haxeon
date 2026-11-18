@@ -697,6 +697,7 @@ private class PurityWalker {
 			case Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _), CheckType(value, _, _),
 				NewArray(_, value, _), Capture(_, value, _): expression(value);
 			case Conditional(test, yes, no, _): expression(test) && expression(yes) && expression(no);
+			case AssignmentValue(store, _): statement(store);
 			case BlockExpression(body, result, _):
 				scoped(() -> {
 					for (statement in body)

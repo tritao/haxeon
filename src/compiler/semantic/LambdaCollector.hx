@@ -111,6 +111,8 @@ class LambdaCollector {
 			case BlockExpression(statements, value, _):
 				collect(statements, functionName, module, generatedByModule);
 				collectLambdaExpression(value, functionName, module, generatedByModule);
+			case AssignmentValue(store, _):
+				collect([store], functionName, module, generatedByModule);
 			case ThrowExpression(value, _), Capture(_, value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case Cast(value, _, _), CheckType(value, _, _):

@@ -283,6 +283,8 @@ class BindingWalker implements AstChildVisitor {
 					statement(entry);
 				expression(result);
 				leaveScope(scope);
+			case AssignmentValue(store, _):
+				statement(store);
 			case SwitchExpression(subject, cases, fallback, _):
 				expression(subject);
 				for (arm in cases) {

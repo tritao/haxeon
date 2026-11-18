@@ -77,6 +77,10 @@ class ScopedEscapeChecker extends BindingWalker {
 				rejectDirect(yes, operation);
 				rejectDirect(no, operation);
 			case Cast(inner, _, _), CheckType(inner, _, _): rejectDirect(inner, operation);
+			// The value of an assignment is the value it stores.
+			case AssignmentValue(Assignment(_, stored, _) | FieldAssignment(_, _, stored, _)
+				| IndexAssignment(_, _, stored, _), _):
+				rejectDirect(stored, operation);
 			case BlockExpression(statements, result, _):
 				var scope = enterScope();
 				for (statement in statements) this.statement(statement);

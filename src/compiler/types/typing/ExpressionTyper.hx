@@ -127,6 +127,7 @@ class ExpressionTyper {
 			case Cast(value, target, span): typeCast(value, target, span, scope, expectedType);
 			case CheckType(value, type, span): typeCheckType(value, type, span, scope);
 			case PostfixIncrement(target, delta, span): postfixIncrement(target, delta, span, scope);
+			case AssignmentValue(store, span): bodyTyper.typeAssignmentValue(store, span, scope);
 			case SwitchExpression(subject, cases, defaultExpression, span): typeSwitchExpression(subject, cases,
 				defaultExpression, span, scope, expectedType);
 			case ObjectLiteral(fields, span): typeObjectLiteral(fields, span, scope, expectedType);
@@ -696,19 +697,11 @@ class ExpressionTyper {
 		span:SourceSpan
 	}> {
 		return switch expression {
-			case BlockExpression(statements, result, span) if (statements.length == 1):
-				switch statements[0] {
-					case compiler.syntax.Ast.AstStatement.Assignment(assignedName, value, _):
-						switch result {
-							case Variable(resultName, _) if (assignedName == resultName): {
-								name: assignedName,
-								value: value,
-								span: span
-							};
-							case _: null;
-						}
-					case _: null;
-				}
+			case AssignmentValue(compiler.syntax.Ast.AstStatement.Assignment(assignedName, value, _), span): {
+				name: assignedName,
+				value: value,
+				span: span
+			};
 			case _: null;
 		};
 	}

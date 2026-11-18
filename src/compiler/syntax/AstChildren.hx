@@ -18,6 +18,8 @@ class AstChildren {
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _),
 				NewMap(_, _, _), Lambda(_, _, _, _):
+			case AssignmentValue(store, _):
+				visitStatement(store, visitor);
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
 				CheckType(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _):
@@ -106,6 +108,7 @@ class AstChildren {
 				Unreachable(_), EmptyExpression(_),
 				ErrorExpression(_), Variable(_, _), NativeLayoutQuery(_, _, _, _), KeyPathLiteral(_, _, _),
 				NewMap(_, _, _), Lambda(_, _, _, _): [];
+			case AssignmentValue(store, _): statementExpressions(store);
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
 				CheckType(value, _, _), NewArray(_, value, _),
 				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _): [value];

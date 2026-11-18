@@ -1613,17 +1613,8 @@ class Parser {
 				span = expressionSpan(expression).merge(expressionSpan(value));
 			expression = switch expression {
 				case Variable(name, _) if (patternDepth > 0): Capture(name, value, span);
-				case Variable(name, _): BlockExpression([Assignment(name, value, span)], Variable(name, span), span);
-				// `a[i] = v` as a value is `v`; the array and index are evaluated once, as in the statement.
-				case Index(array, position, _):
-					var assigned = "__haxeon_assigned";
-					BlockExpression([
-						VarDeclaration(assigned, null, value, span),
-						IndexAssignment(array, position, Variable(assigned, span), span)
-					], Variable(assigned, span), span);
-				default: throw new CompileError(new Diagnostic("E0002",
-					"Assignment expression target must be a variable or an array element",
-					expressionSpan(expression)));
+				default: AssignmentValue(storeTo(expression, value, span,
+					"Assignment expression target must be a variable, field, or array element"), span);
 			};
 		}
 		var assignment = current().kind;
@@ -1648,20 +1639,25 @@ class Parser {
 				case XorAssign: BitXor(target, value, span);
 				default: value;
 			};
-			var resultName = '$' + 'assigned:${span.start}', result = Variable(resultName, span);
-			stable.bindings.push(VarDeclaration(resultName, null, assigned, span));
-			stable.bindings.push(switch target {
-				case Variable(name, _): Assignment(name, result, span);
-				case Index(array, offset, _): IndexAssignment(array, offset, result, span);
-				case Member(object, field, _): FieldAssignment(object, field, result, span);
-				default: throw new CompileError(new Diagnostic("E0002",
-					"Assignment expression target must be a variable, field, or array element",
-					expressionSpan(expression)));
-			});
-			expression = BlockExpression(stable.bindings, result, span);
+			expression = assignmentValue(stable.bindings, storeTo(target, assigned, span,
+				"Assignment expression target must be a variable, field, or array element"), span);
 		}
 		return expression;
 	}
+
+	/** The store of `value` to `target`, a variable, field or array element, as an assignment statement. */
+	function storeTo(target:AstExpression, value:AstExpression, span:SourceSpan, message:String):AstStatement
+		return switch target {
+			case Variable(name, _): Assignment(name, value, span);
+			case Index(array, offset, _): IndexAssignment(array, offset, value, span);
+			case Member(object, field, _): FieldAssignment(object, field, value, span);
+			default: throw new CompileError(new Diagnostic("E0002", message, expressionSpan(target)));
+		};
+
+	/** `store` as a value, after the bindings that make its target stable (`AssignmentTarget`). */
+	static function assignmentValue(bindings:Array<AstStatement>, store:AstStatement, span:SourceSpan):AstExpression
+		return bindings.length == 0 ? AssignmentValue(store, span) : BlockExpression(bindings,
+			AssignmentValue(store, span), span);
 
 	function parseNullCoalesce():AstExpression {
 		var expression = parseOr();
@@ -1946,7 +1942,7 @@ class Parser {
 			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
-			// Prefix `++x`/`--x` update the target and evaluate to its new value,
+			// Prefix `++x`/`--x` update the target and evaluate to its new value (a setter's result, as Haxe's),
 			// lowered like an assignment expression. Field and index targets are
 			// stabilized first so their receiver and index are evaluated once.
 			var start = previous().span,
@@ -1956,17 +1952,8 @@ class Parser {
 				stabilized = AssignmentTarget.stabilize(target, span, expressionSpan),
 				bindings = stabilized.bindings;
 			target = stabilized.target;
-			var assigned = Add(target, IntegerLiteral(delta, start), span);
-			bindings.push(switch target {
-				case Variable(name, _): Assignment(name, assigned, span);
-				case Index(array, offset, _): IndexAssignment(array, offset, assigned, span);
-				case Member(object, field, _): FieldAssignment(object, field, assigned, span);
-				default:
-					throw new CompileError(new Diagnostic("E0002",
-						"Prefix increment target must be a variable, field, or array element",
-						expressionSpan(target)));
-			});
-			return BlockExpression(bindings, target, span);
+			return assignmentValue(bindings, storeTo(target, Add(target, IntegerLiteral(delta, start), span), span,
+				"Prefix increment target must be a variable, field, or array element"), span);
 		}
 		if (match(TokenKind.Integer)) {
 			var token = previous();
@@ -3123,8 +3110,8 @@ class Parser {
 				MethodCall(_, _, _, span), New(_, _, span),
 				NewGeneric(_, _, _, span), NativeLayoutQuery(_, _, _, span), KeyPathLiteral(_, _, span),
 				NewArray(_, _, span), NewMap(_, _, span), Index(_, _, span),
-				PostfixIncrement(_, _, span), Lambda(_, _, _, span), And(_, _, span), Or(_, _, span),
-				Conditional(_, _, _, span), BlockExpression(_, _, span),
+				PostfixIncrement(_, _, span), AssignmentValue(_, span), Lambda(_, _, _, span), And(_, _, span),
+				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
 				Capture(_, _, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),

@@ -2600,15 +2600,21 @@ class BodyTyper implements BodyTyping {
 	 */
 	public function abstractPropertyWrite(object:TypedExpression, name:String, expression:AstExpression,
 			span:SourceSpan,
-			scope:Scope):Null<TypedExpression> {
+			scope:Scope, ?assigned:AssignedValue):Null<TypedExpression> {
 		var property = AbstractProperties.find(session, object.type, name);
 		if (property == null)
 			return null;
 		var setter = AbstractProperties.accessor(session, property, false, span),
 			type = AbstractProperties.typeOf(session, object.type, property),
 			value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
-		return callResolver.typeAbstractAccessorCall(object, setter, [value], span, scope);
+		if (assigned != null)
+			value = assigned.bind(value, value.type);
+		var call = callResolver.typeAbstractAccessorCall(object, setter, [value], span, scope);
+		return assigned == null ? call : assigned.setter(call);
 	}
+
+	public function typeAssignmentValue(assignment:AstStatement, span:SourceSpan, scope:Scope):TypedExpression
+		return statementTyper.typeAssignmentValue(assignment, span, scope);
 
 	/**
 	 * The receiver of a member named without one: `this`, as the abstract's own type in an abstract's method (where `this` itself

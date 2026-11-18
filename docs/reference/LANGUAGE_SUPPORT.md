@@ -107,6 +107,8 @@ The current subset includes:
   `@:isVar` property's), so a read in `set_x` still calls `get_x`. A `never` side cannot be accessed, a `null` side only
   from the class and its subclasses (or `@:allow`, `@:access`), a missing accessor is reported, and so is the variable of a
   property without storage, in Haxe's words and at its places.
+- An assignment used as a value (`(item.label = "x")`, `(item.count += 1)`, `++item.count`, `a = b = 0`) has Haxe's
+  value: the result of the setter where a property's setter stores it, else the value stored, as the target's type.
 - An abstract's implicit conversions, as Haxe casts them: through the expected abstract's `from` conversions, else the
   value's abstract's `to` conversions, a `@:from` or `@:to` function before a `from` or `to` type. Where the other side
   is not an abstract (Int, Float, a class), the value meets the conversion's type as Haxe unifies it, so an Int meets a
@@ -193,9 +195,6 @@ HashLink):
 - A lowercase name in a pattern that is also a function or variable in scope is read as that value instead of capturing
   (`case Box(size):` beside a function `size`). Haxe captures; rename the binding.
 - Variables and properties in an interface (`interface Shape { var area(get, never):Int; }`): a parse error.
-- The value of an assignment to a property, `(item.label = "x")`, `(item.count += 1)`, is the property read again after
-  its setter runs; Haxe's is the setter's result. They differ only for a setter that returns something other than the value
-  it was given.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 

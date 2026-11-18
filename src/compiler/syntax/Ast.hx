@@ -280,6 +280,13 @@ enum AstExpression {
 	Index(array:AstExpression, index:AstExpression, span:SourceSpan);
 	PostfixIncrement(target:AstExpression, delta:Int, span:SourceSpan);
 
+	/**
+	 * An assignment used as a value (`(a = b)`, `(a += b)`, `++a`): `assignment`, an `Assignment`, `FieldAssignment` or
+	 * `IndexAssignment`, stores, and the value is Haxe's: the result of the setter where a property's setter stores it, else the
+	 * value stored. A compound target's receiver and index are bound before it (`AssignmentTarget`).
+	 */
+	AssignmentValue(assignment:AstStatement, span:SourceSpan);
+
 	/** `identity` is the parser's `<member>#<ordinal>` name for the lambda; see `LambdaName`. */
 	Lambda(arguments:Array<AstArgument>, statements:Array<AstStatement>, identity:String, span:SourceSpan);
 }
