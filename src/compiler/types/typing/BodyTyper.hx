@@ -1142,9 +1142,9 @@ class BodyTyper implements BodyTyping {
 							'Type "${compiler.semantic.SemanticSignature.display(elementType)}" does not conform to Equatable',
 							typedValue.span);
 					if (DeclaredConformance.usesEquality(session, elementType)) {
-						ValueEqualityGenerator.request(session, elementType, session.currentContext.name,
+						var keyed = ValueEqualityGenerator.request(session, elementType, session.currentContext.name,
 							typedValue.span);
-						equalityFunction = ValueEqualityGenerator.equalsName(elementType);
+						equalityFunction = ValueEqualityGenerator.equalsName(keyed);
 					}
 				}
 			}

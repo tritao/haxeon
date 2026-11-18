@@ -657,17 +657,17 @@ class CallResolver {
 				var other = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, receiver.type),
 					receiver.type,
 					"enum equality operand");
-				EnumEqualityGenerator.request(session, receiver.type, session.currentContext.name, span);
+				var keyed = EnumEqualityGenerator.request(session, receiver.type, session.currentContext.name, span);
 				session.invalidateUnknownCall(scope);
-				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(receiver.type), [receiver, other]),
+				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [receiver, other]),
 					TBool, span);
 			}
 			if (name == "hash") {
 				if (arguments.length != 0)
 					fail("E1008", 'Method "hash" expects 0 arguments, got ${arguments.length}', span);
-				HashGenerator.request(session, receiver.type, session.currentContext.name, span);
+				var keyed = HashGenerator.request(session, receiver.type, session.currentContext.name, span);
 				session.invalidateUnknownCall(scope);
-				return new TypedExpression(TCall(HashGenerator.hashName(receiver.type), [receiver]), TInt, span);
+				return new TypedExpression(TCall(HashGenerator.hashName(keyed), [receiver]), TInt, span);
 			}
 			var substitutions:Map<String, CompilerType> = [];
 			switch receiver.type {
@@ -684,9 +684,9 @@ class CallResolver {
 			}
 			var typed = typeDeclaredCallArguments(arguments, enumMethod, scope, name, span, substitutions);
 			var result = session.declarations.types.resultType(enumMethod, substitutions);
-			EnumConformanceMethods.request(session, receiver.type, name, session.currentContext.name, span);
+			var keyed = EnumConformanceMethods.request(session, receiver.type, name, session.currentContext.name, span);
 			session.invalidateUnknownCall(scope);
-			return new TypedExpression(TCall(EnumConformanceMethods.name(receiver.type, name),
+			return new TypedExpression(TCall(EnumConformanceMethods.name(keyed, name),
 				[receiver].concat(typed)), result, span);
 		}
 		var className = switch receiver.type {
@@ -1639,14 +1639,12 @@ class CallResolver {
 					fail("E1025",
 						'Enum "${compiler.semantic.SemanticSignature.display(left.type)}" does not conform to Equatable',
 						span);
-				EnumEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(left.type), [left, right]), TBool,
-					span);
+				var keyed = EnumEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
 			}
 			if (DeclaredConformance.usesEquality(session, left.type) && !typeParameter) {
-				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool,
-					span);
+				var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
 			}
 			return new TypedExpression(TEqual(left, right), TBool, span);
 		}
@@ -1656,8 +1654,8 @@ class CallResolver {
 			var value = typeExpressionValue(arguments[0], scope);
 			if (!DeclaredConformance.supportsHash(session, value.type))
 				fail("E1025", DeclaredConformance.capabilityError(session, value.type, "Hashable"), span);
-			HashGenerator.request(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(HashGenerator.hashName(value.type), [value]), TInt, span);
+			var keyed = HashGenerator.request(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(HashGenerator.hashName(keyed), [value]), TInt, span);
 		}
 		if (DiffIntrinsics.handles(name))
 			return bodyTyper.typeExpression(DiffIntrinsics.expand(session, name, arguments, span,
@@ -1679,8 +1677,8 @@ class CallResolver {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			var value = typeExpressionValue(arguments[0], scope);
-			WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.jsonEncodeName(value.type), [value]), TString, span);
+			var keyed = WireCodecGenerator.requestJson(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.jsonEncodeName(keyed), [value]), TString, span);
 		}
 		if (name == "JsonWire.decode" || name == "haxeon.wire.JsonWire.decode") {
 			if (arguments.length != 1)
@@ -1693,16 +1691,16 @@ class CallResolver {
 			};
 			var source = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TString, "JsonWire.decode input",
 				"E1002");
-			WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(resultType), [source]), resultType,
+			var keyed = WireCodecGenerator.requestJson(session, resultType, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.jsonDecodeName(keyed), [source]), resultType,
 				span);
 		}
 		if (name == "MessagePack.encode" || name == "haxeon.wire.MessagePack.encode") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
 			var value = typeExpressionValue(arguments[0], scope);
-			WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.encodeName(value.type), [value]), TBytes, span);
+			var keyed = WireCodecGenerator.request(session, value.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.encodeName(keyed), [value]), TBytes, span);
 		}
 		if (name == "MessagePack.decode" || name == "haxeon.wire.MessagePack.decode") {
 			if (arguments.length != 1)
@@ -1716,8 +1714,8 @@ class CallResolver {
 			};
 			var bytes = bodyTyper.coerce(typeExpressionValue(arguments[0], scope), TBytes, "MessagePack.decode input",
 				"E1002");
-			WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
-			return new TypedExpression(TCall(WireCodecGenerator.decodeName(resultType), [bytes]), resultType, span);
+			var keyed = WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
+			return new TypedExpression(TCall(WireCodecGenerator.decodeName(keyed), [bytes]), resultType, span);
 		}
 		if (name == "Type.enumEq") {
 			if (arguments.length != 2)

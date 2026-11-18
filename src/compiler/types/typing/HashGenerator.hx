@@ -20,9 +20,13 @@ class HashGenerator {
 	public static function hashName(type:CompilerType):String
 		return "$hash" + ValueEqualityGenerator.equalsName(type);
 
-	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
+	/** Requests the helper hashing values of `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */
+	public static function request(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		var name = hashName(type);
 		session.output.requests.add(HashHelper(name, {type: type, origin: origin, span: span}));
+		return type;
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {

@@ -43,6 +43,9 @@ class GenericInstantiation {
 		for (parameter in parameters)
 			if (!substitutions.exists(parameter))
 				fail("E1003", 'Cannot infer generic type parameter "$parameter" for "$baseName"', span);
+		// The specialization is a unit of its own, named after its type arguments: a literal's structure among them closes here.
+		for (parameter in [for (parameter in substitutions.keys()) parameter])
+			substitutions.set(parameter, session.monomorphs.closeReached(requiredMapValue(substitutions, parameter)));
 		var constraints = fn.typeConstraints;
 		if (constraints != null)
 			for (constraint in constraints) {
@@ -103,7 +106,8 @@ class GenericInstantiation {
 					fail("E1009", 'Type mismatch for iterable argument ${index + 1} to "$baseName"', argument.span);
 				var hidden = "$iteration-argument:" + index,
 					parameter = fn.arguments[index];
-				substitutions.set(hidden, argument.type);
+				var iterable = session.monomorphs.closeReached(argument.type);
+				substitutions.set(hidden, iterable);
 				specializedArguments[index] = {
 					name: parameter.name,
 					type: NamedType(hidden),
@@ -111,7 +115,7 @@ class GenericInstantiation {
 					defaultValue: parameter.defaultValue,
 					span: parameter.span
 				};
-				concrete.push(argument.type);
+				concrete.push(iterable);
 				semanticArguments.push(argument);
 			} else {
 				// Keep protocol positions in the key even when null or mutable storage

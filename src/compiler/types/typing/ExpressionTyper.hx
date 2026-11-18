@@ -2540,8 +2540,8 @@ class ExpressionTyper {
 				var type = left.type;
 				if (!DeclaredConformance.has(session, type, "Equatable"))
 					fail("E1025", 'Enum "$name" does not conform to Equatable', comparison.span);
-				EnumEqualityGenerator.request(session, type, session.currentContext.name, comparison.span);
-				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(type), [left, right]), TBool,
+				var keyed = EnumEqualityGenerator.request(session, type, session.currentContext.name, comparison.span);
+				return new TypedExpression(TCall(EnumEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					comparison.span);
 			default:
 				return comparison;
@@ -2697,8 +2697,8 @@ class ExpressionTyper {
 			};
 			if ((session.relations.isNullableValueClass(left.type) || declaredNullable) && !isNullOperand(left)
 				&& !isNullOperand(right)) {
-				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool,
+				var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					span);
 			}
 			return new TypedExpression(TEqual(left, right), TBool, span);
@@ -2712,8 +2712,8 @@ class ExpressionTyper {
 			};
 			if (nullableElement != null) {
 				right = bodyTyper.coerce(right, left.type, "equality comparison", "E1011");
-				ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool,
+				var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					span);
 			}
 			nullableElement = switch right.type {
@@ -2723,8 +2723,8 @@ class ExpressionTyper {
 			};
 			if (nullableElement != null) {
 				left = bodyTyper.coerce(left, right.type, "equality comparison", "E1011");
-				ValueEqualityGenerator.request(session, right.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(right.type), [left, right]), TBool,
+				var keyed = ValueEqualityGenerator.request(session, right.type, session.currentContext.name, span);
+				return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool,
 					span);
 			}
 		}
@@ -2743,8 +2743,8 @@ class ExpressionTyper {
 				default:
 			}
 		if (operation == 2 && TypeRelations.equals(left.type, right.type) && usesOperatorEquality(left.type)) {
-			ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(left.type), [left, right]), TBool, span);
+			var keyed = ValueEqualityGenerator.request(session, left.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(ValueEqualityGenerator.equalsName(keyed), [left, right]), TBool, span);
 		}
 		if (operation == 2 && session.relations.isAssignable(left.type, right.type)) {
 			left = bodyTyper.coerce(left, right.type, "equality comparison", "E1011");

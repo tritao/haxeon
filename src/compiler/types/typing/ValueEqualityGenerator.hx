@@ -21,9 +21,16 @@ class ValueEqualityGenerator {
 	public static function equalsName(type:CompilerType):String
 		return PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
-	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
+	/**
+	 * Requests the helper comparing values of `type`, and returns the type it is keyed by: `type` with the literal structures it
+	 * reaches closed (`MonomorphFrames.closeReached`), since the helper is a unit of its own. Name the helper from that type.
+	 */
+	public static function request(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		var name = equalsName(type);
 		session.output.requests.add(ValueEqualityHelper(name, {type: type, origin: origin, span: span}));
+		return type;
 	}
 
 	/** Field comparisons may request nested value helpers. Process new requests until no more are needed. */

@@ -22,6 +22,8 @@ class EnumInterfaceAdapter {
 
 	public static function request(session:TypingSession, type:CompilerType, interfaceType:CompilerType,
 			span:SourceSpan):String {
+		type = session.monomorphs.closeReached(type);
+		interfaceType = session.monomorphs.closeReached(interfaceType);
 		var key = name(type, interfaceType);
 		session.output.requests.add(EnumInterfaceAdapterHelper(key, {
 			type: type,

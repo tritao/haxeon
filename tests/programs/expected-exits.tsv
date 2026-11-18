@@ -642,3 +642,4 @@ generic-erased-enum-tag	42
 generic-erased-enum-inline	42
 generic-erased-enum-nominal	42
 extern-native-members	42
+open-literal-helpers	42

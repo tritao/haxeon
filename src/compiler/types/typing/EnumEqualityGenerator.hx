@@ -26,12 +26,20 @@ class EnumEqualityGenerator {
 	public static function reflectiveName(type:CompilerType):String
 		return REFLECTIVE_PREFIX + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0, 32);
 
-	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void
+	/** Requests the helper comparing values of `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */
+	public static function request(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		requestNamed(session, equalsName(type), type, origin, span);
+		return type;
+	}
 
 	public static function requestReflective(session:TypingSession, type:CompilerType, origin:String,
-			span:SourceSpan):Void
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		requestNamed(session, reflectiveName(type), type, origin, span);
+		return type;
+	}
 
 	static function requestNamed(session:TypingSession, name:String, type:CompilerType, origin:String,
 			span:SourceSpan):Void {

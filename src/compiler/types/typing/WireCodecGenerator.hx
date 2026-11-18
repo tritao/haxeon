@@ -64,19 +64,28 @@ class WireCodecGenerator {
 	static inline final DEFAULT_MAX_CONTAINER:Int = 1000000;
 	static inline final DEFAULT_MAX_DEPTH:Int = 64;
 
-	/** Register one source-level encode/decode request for later code generation. */
-	public static function request(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
+	/**
+	 * Register one source-level encode/decode request for later code generation, and return the type it is keyed by (see
+	 * `ValueEqualityGenerator.request`): name the codec from that type.
+	 */
+	public static function request(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		if (!isRequestType(session, type))
 			BodyTyper.fail("E1024", 'MessagePack does not support type "$type" in the current wire profile', span);
 		var key = typeKey(type);
 		session.output.requests.add(WireCodecHelper(key, {type: type, origin: origin, span: span}));
+		return type;
 	}
 
-	public static function requestJson(session:TypingSession, type:CompilerType, origin:String, span:SourceSpan):Void {
+	public static function requestJson(session:TypingSession, type:CompilerType, origin:String,
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		if (!isRequestType(session, type))
 			BodyTyper.fail("E1024", 'JSON does not support type "$type" in the current wire profile', span);
 		var key = typeKey(type);
 		session.output.requests.add(JsonCodecHelper(key, {type: type, origin: origin, span: span}));
+		return type;
 	}
 
 	/** Generate wrappers and value codecs requested while typing source bodies. */
@@ -1282,6 +1291,8 @@ class WireCodecGenerator {
 			case TAbstract(name, arguments, _):
 				"abstract_" + nominalKey(name) + (arguments.length == 0
 					? "" : "_" + [for (argument in arguments) typeSegment(typeKey(argument))].join("_"));
+			case TAnonymous(name, _) if (compiler.types.Monomorphs.isOpenStructureName(name)):
+				throw new InternalError('An open literal structure ($name) keyed a wire codec before its unit closed it');
 			case TAnonymous(name, _): "anonymous_" + nominalKey(name);
 			case TInt: "int";
 			case TInt64: "int64";

@@ -32,10 +32,13 @@ class EnumConformanceMethods {
 		return PREFIX + method + ":" + Sha256.encode(compiler.semantic.SemanticSignature.type(type)).substr(0,
 			32);
 
+	/** Requests `method` of the enum `type`, and returns the type it is keyed by (see `ValueEqualityGenerator.request`). */
 	public static function request(session:TypingSession, type:CompilerType, method:String, origin:String,
-			span:SourceSpan):Void {
+			span:SourceSpan):CompilerType {
+		type = session.monomorphs.closeReached(type);
 		var key = name(type, method);
 		session.output.requests.add(EnumMethodHelper(key, {type: type, method: method, origin: origin, span: span}));
+		return type;
 	}
 
 	public static function generate(session:TypingSession, typer:BodyTyper):Array<TypedFunction> {
