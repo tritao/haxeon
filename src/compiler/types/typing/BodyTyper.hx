@@ -2151,7 +2151,10 @@ class BodyTyper implements BodyTyping {
 			MemberAccess.requireField(session, property.declaration, property.field, span);
 			ClassProperties.requireInstanceAccess(session, typedObject.type, name, true, span);
 		}
-		var getter = ClassProperties.instanceAccessor(session, typedObject.type, name, true, typedObject, span);
+		// An interface's variable or property is read through its interface's method (`InterfaceProperties`).
+		var interfaceProperty = InterfaceProperties.find(session, typedObject.type, name);
+		var getter = interfaceProperty != null ? InterfaceProperties.accessor(session, interfaceProperty, true,
+			span) : ClassProperties.instanceAccessor(session, typedObject.type, name, true, typedObject, span);
 		if (getter != null) {
 			var method = requiredMapValue(session.signatures, getter);
 			var methodInfo = session.methodInfo.get(getter),
@@ -2588,6 +2591,9 @@ class BodyTyper implements BodyTyping {
 							session.representation.nominalSubstitutions(type)), name);
 				}
 				found;
+			case TInstance(Interface, _, _):
+				var property = InterfaceProperties.find(session, type, name);
+				property == null ? null : InterfaceProperties.typeOf(session, type, property);
 			case TAbstract(_, _, _):
 				var property = AbstractProperties.find(session, type, name);
 				property == null ? null : AbstractProperties.typeOf(session, type, property);
@@ -2595,12 +2601,25 @@ class BodyTyper implements BodyTyping {
 		};
 
 	/**
-	 * A write of `expression` to the property `name` of `object`, a value of an abstract: a call to its setter
-	 * (`AbstractProperties`). Null when the abstract has no such property.
+	 * A write of `expression` to the property `name` of `object`, a property that is only its accessors: a call to its setter, an
+	 * abstract's (`AbstractProperties`) or an interface's (`InterfaceProperties`). Null when `object` has no such property.
 	 */
-	public function abstractPropertyWrite(object:TypedExpression, name:String, expression:AstExpression,
+	public function accessorPropertyWrite(object:TypedExpression, name:String, expression:AstExpression,
 			span:SourceSpan,
 			scope:Scope, ?assigned:AssignedValue):Null<TypedExpression> {
+		var interfaceProperty = InterfaceProperties.find(session, object.type, name);
+		if (interfaceProperty != null) {
+			var setter = InterfaceProperties.accessor(session, interfaceProperty, false, span),
+				type = InterfaceProperties.typeOf(session, object.type, interfaceProperty),
+				value = coerce(typeExpression(expression, scope, type), type, 'field "$name"', "E1002");
+			if (assigned != null)
+				value = assigned.bind(value, value.type);
+			// The interface's setter is any implementing class's: what it may change is unknown here.
+			session.invalidateUnknownCall(scope);
+			scope.invalidateField(name);
+			var call = propertySetterCall(object, setter, value, span);
+			return assigned == null ? call : assigned.setter(call);
+		}
 		var property = AbstractProperties.find(session, object.type, name);
 		if (property == null)
 			return null;

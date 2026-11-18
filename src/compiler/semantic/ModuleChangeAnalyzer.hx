@@ -40,9 +40,15 @@ class ModuleChangeAnalyzer {
 				+ '<${SemanticSignature.parsedParameters(interfaceDecl.typeParameters, interfaceDecl.typeConstraints, ast.aliases)}>'
 				+ " extends "
 				+ [for (base in interfaceDecl.bases) ModuleCanonicalizer.astTypeName(base)].join(",") + " {" + [
+					for (field in interfaceDecl.fields)
+						(field.isPublic == false ? "private " : "") + (field.isStatic ? "static " : "")
+						+ (field.isFinal ? "final " : "var ") + field.name + "(" + field.readAccess + ","
+						+ field.writeAccess + "):" + (field.type == null ? "_" : SemanticSignature.parsed(field.type,
+						ast.aliases))
+				].concat([
 					for (method in interfaceDecl.methods)
 						method.name + ":" + SemanticSignature.parsedFunction(method, ast.aliases)
-				].join(";") + "}";
+				]).join(";") + "}";
 			interfaces.set(interfaceDecl.name, signature);
 			if (state.interfaceFingerprints.get(interfaceDecl.name) != signature)
 				structuralChanged.set('interface:${interfaceDecl.name}', true);

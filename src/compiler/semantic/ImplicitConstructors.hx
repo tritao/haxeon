@@ -145,7 +145,8 @@ class ImplicitConstructors {
 			span: declaration.span
 		};
 
-	static function substitute(type:AstType, substitutions:Map<String, AstType>):AstType {
+	/** `type` with the type parameters `substitutions` names replaced. */
+	public static function substitute(type:AstType, substitutions:Map<String, AstType>):AstType {
 		if (substitutions.keys().hasNext() == false)
 			return type;
 		return switch type {

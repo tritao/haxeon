@@ -72,7 +72,7 @@ interface BodyTyping {
 	function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void;
 	function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
 			span:SourceSpan):TypedExpression;
-	function abstractPropertyWrite(object:TypedExpression, name:String, expression:AstExpression, span:SourceSpan,
+	function accessorPropertyWrite(object:TypedExpression, name:String, expression:AstExpression, span:SourceSpan,
 			scope:Scope, ?assigned:AssignedValue):Null<TypedExpression>;
 	/** An assignment used as a value (`AssignmentValue`), with Haxe's value: see `StatementTyper.typeAssignmentValue`. */
 	function typeAssignmentValue(assignment:AstStatement, span:SourceSpan, scope:Scope):TypedExpression;

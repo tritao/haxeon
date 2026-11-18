@@ -1119,12 +1119,28 @@ class Parser {
 				bases.push(parseType());
 		}
 		consume(TokenKind.LeftBrace);
-		var methods:Array<AstFunction> = [];
+		var methods:Array<AstFunction> = [], fields:Array<AstField> = [];
 		while (!check(TokenKind.RightBrace)) {
-			var methodMetadata = parseMetadata();
+			var methodMetadata = parseMetadata(),
+				memberStart = current().span,
+				isPublic:Null<Bool> = null,
+				isStatic = false,
+				isFinal = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static)
-				|| check(TokenKind.Inline))
+				|| check(TokenKind.Inline) || check(TokenKind.Final)) {
+				if (check(TokenKind.Public) || check(TokenKind.Private))
+					isPublic = current().kind == TokenKind.Public;
+				else if (check(TokenKind.Static))
+					isStatic = true;
+				else if (check(TokenKind.Final))
+					isFinal = true;
 				advance();
+			}
+			// A variable or property: what it may be is checked with the interface (`InterfaceProperties`), as Haxe does.
+			if (check(TokenKind.Var) || isFinal) {
+				fields.push(parseField(methodMetadata, isPublic, isStatic, false, isFinal, null, memberStart));
+				continue;
+			}
 			var methodStart = consume(TokenKind.Function).span,
 				methodName = consume(TokenKind.Identifier).text;
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
@@ -1171,6 +1187,7 @@ class Parser {
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
 			bases: bases,
+			fields: fields,
 			methods: methods,
 			span: start.merge(end)
 		};
@@ -3095,7 +3112,7 @@ class Parser {
 		return KeyPathLiteral(root, fields, start.merge(previous().span));
 	}
 
-	static function expressionSpan(expression:AstExpression):SourceSpan
+	public static function expressionSpan(expression:AstExpression):SourceSpan
 		return switch expression {
 			case PrivateAccessExpression(_, span): span;
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span),

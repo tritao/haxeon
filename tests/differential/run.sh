@@ -236,6 +236,11 @@ in_background run_compile_failure uncalled-generic-method-error
 in_background run_compile_failure instance-property-never-write
 in_background run_compile_failure instance-property-never-read
 in_background run_compile_failure instance-property-missing-accessor
+# An interface's variables and properties: an access through the interface reaches the object's variable or accessor.
+in_background run_case interface-variables 0
+in_background run_compile_failure interface-variable-missing
+in_background run_compile_failure interface-variable-access-mismatch
+in_background run_compile_failure interface-property-never-write
 # @:hlNative on a function with a body binds the native; the body is typed and never runs.
 in_background run_case hlnative-body 0
 in_background run_compile_failure hlnative-body-error

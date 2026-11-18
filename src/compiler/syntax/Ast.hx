@@ -117,6 +117,14 @@ typedef AstInterface = {
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
 	final bases:Array<AstType>;
+
+	/**
+	 * Its variables and properties, `var x:Int`, `var area(get, never):Int`: an implementing class has each with a matching access
+	 * (`InterfaceProperties`). An access through the interface calls a method of the interface, the accessor or, for a `default`
+	 * side, the hidden accessor every implementing class is given (`InterfaceFieldAccessors`).
+	 */
+	final fields:Array<AstField>;
+
 	final methods:Array<AstFunction>;
 	final span:SourceSpan;
 }

@@ -2188,14 +2188,16 @@ class ExpressionTyper {
 	}
 
 	/**
-	 * Whether `object.field` names a property with accessors: of an abstract (`AbstractProperties`) or of a class instance
-	 * (`ClassProperties`). `object` may name no value at all.
+	 * Whether `object.field` names a property with accessors: of an abstract (`AbstractProperties`), of a class instance
+	 * (`ClassProperties`) or of an interface, whose variables are reached through its methods (`InterfaceProperties`). `object`
+	 * may name no value at all.
 	 */
 	function isAccessorProperty(object:AstExpression, field:String, scope:Scope):Bool {
 		var mark = session.checkpoint();
 		try {
 			var type = BodyTyper.unwrapNullable(bodyTyper.typeExpression(object, scope)).type;
 			return AbstractProperties.find(session, type, field) != null
+				|| InterfaceProperties.find(session, type, field) != null
 				|| ClassProperties.hasInstanceAccessor(session, type, field);
 		} catch (_:CompileError) {
 			session.rewind(mark);

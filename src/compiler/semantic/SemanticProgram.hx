@@ -45,7 +45,7 @@ class SemanticProgram {
 			throw new InternalError("Semantic analysis cannot type bodies or finalize without Typer");
 		var started = Sys.time() * 1000.0;
 		// An unannotated accessor of an annotated property has the property's type; what else a signature leaves out, its body gives.
-		var inferred = AccessorSignatures.withPropertyTypes(program);
+		var inferred = AccessorSignatures.withPropertyTypes(InterfaceFieldAccessors.withAccessors(program));
 		var declarations = DeclarationIndex.registered(inferred),
 			declaredAt = Sys.time() * 1000.0,
 			lifecycle = new DeclarationLifecycle(declarations),

@@ -391,7 +391,7 @@ class StatementTyper {
 				if (instanceField != null) {
 					if (thisType == null)
 						throw new InternalError('Missing "this" type for field "$name"');
-					var propertyWrite = bodyTyper.abstractPropertyWrite(bodyTyper.implicitReceiver(span, scope), name,
+					var propertyWrite = bodyTyper.accessorPropertyWrite(bodyTyper.implicitReceiver(span, scope), name,
 						expression, span, scope, assigned);
 					if (propertyWrite != null)
 						return TExpression(propertyWrite, span);
@@ -460,7 +460,7 @@ class StatementTyper {
 				BodyTyper.unwrapNullable(bodyTyper.typeExpression(Variable(objectName, span), scope)), fieldName, span);
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
-		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope, assigned);
+		var propertyWrite = bodyTyper.accessorPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
 		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);
@@ -577,7 +577,7 @@ class StatementTyper {
 			BodyTyper.unwrapNullable(bodyTyper.typeExpression(receiverExpression, scope)), fieldName, span);
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope, assigned);
-		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope, assigned);
+		var propertyWrite = bodyTyper.accessorPropertyWrite(object, fieldName, expression, span, scope, assigned);
 		if (propertyWrite != null)
 			return TExpression(propertyWrite, span);
 		PropertyWriteRules.rejectInstanceMutation(session, object.type, fieldName, span);

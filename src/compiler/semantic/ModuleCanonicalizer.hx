@@ -231,7 +231,7 @@ class ModuleCanonicalizer {
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
 			fields: [
 				for (field in decl.fields)
-					canonicalAbstractField(field, decl.typeParameters, module, entry, locals, aliases)
+					canonicalField(field, decl.typeParameters, module, entry, locals, aliases)
 			],
 			methods: [
 				for (method in decl.methods)
@@ -240,8 +240,11 @@ class ModuleCanonicalizer {
 			span: decl.span
 		};
 
-	/** An abstract's property with its type and metadata resolved in the module (`AbstractProperties` checks what it may be). */
-	static function canonicalAbstractField(field:compiler.syntax.Ast.AstField, ownerTypeParameters:Array<String>,
+	/**
+	 * An abstract's or an interface's variable or property with its type and metadata resolved in the module
+	 * (`AbstractProperties`, `InterfaceProperties` check what it may be).
+	 */
+	static function canonicalField(field:compiler.syntax.Ast.AstField, ownerTypeParameters:Array<String>,
 			module:String, entry:String, locals:LocalScope, aliases:AliasTable):compiler.syntax.Ast.AstField
 		return {
 			name: field.name,
@@ -254,7 +257,8 @@ class ModuleCanonicalizer {
 			isStatic: field.isStatic,
 			isInline: field.isInline,
 			isFinal: field.isFinal,
-			span: field.span
+			span: field.span,
+			declarationSpan: field.declarationSpan
 		};
 
 	static function canonicalAbstractMethod(method:AstFunction, ownerTypeParameters:Array<String>, module:String,
@@ -287,10 +291,11 @@ class ModuleCanonicalizer {
 		return AstFunctions.withSignature(method, name, typeConstraints, arguments, result, statements);
 	}
 
+	/** `interfaceDecl` with canonical names, and with the accessors its variables and properties imply (`InterfaceFieldAccessors`). */
 	public static function canonicalInterface(interfaceDecl:compiler.syntax.Ast.AstInterface, aliases:AliasTable,
 			packageName:Null<String>, module:String, entry:String,
-			locals:LocalScope):compiler.syntax.Ast.AstInterface
-		return {
+			locals:LocalScope):compiler.syntax.Ast.AstInterface {
+		var canonical:compiler.syntax.Ast.AstInterface = {
 			name: qualifiedTypeName(packageName, interfaceDecl.name),
 			typeParameters: interfaceDecl.typeParameters,
 			typeConstraints: canonicalConstraints(interfaceDecl.typeConstraints, aliases, interfaceDecl.typeParameters),
@@ -298,12 +303,27 @@ class ModuleCanonicalizer {
 				for (base in interfaceDecl.bases)
 					canonicalType(base, aliases, interfaceDecl.typeParameters)
 			],
+			fields: [
+				for (field in interfaceDecl.fields)
+					canonicalField(field, interfaceDecl.typeParameters, module, entry, locals, aliases)
+			],
 			methods: [
 				for (method in interfaceDecl.methods)
 					canonicalInterfaceMethod(method, interfaceDecl.typeParameters, aliases, module, entry, locals)
 			],
 			span: interfaceDecl.span
 		};
+		var implied = InterfaceFieldAccessors.implied(canonical);
+		return implied.length == 0 ? canonical : {
+			name: canonical.name,
+			typeParameters: canonical.typeParameters,
+			typeConstraints: canonical.typeConstraints,
+			bases: canonical.bases,
+			fields: canonical.fields,
+			methods: canonical.methods.concat(implied),
+			span: canonical.span
+		};
+	}
 
 	static function canonicalInterfaceMethod(method:AstFunction, ownerTypeParameters:Array<String>,
 			aliases:AliasTable, module:String, entry:String, locals:LocalScope):AstFunction {

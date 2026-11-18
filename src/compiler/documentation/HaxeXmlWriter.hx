@@ -70,6 +70,8 @@ class HaxeXmlWriter {
 				output.add('</implements>');
 			}
 			emitDocumentation(output, state, comments, decl.span);
+			for (field in decl.fields)
+				emitField(output, state, comments, field);
 			for (method in decl.methods)
 				emitFunction(output, state, comments, method);
 			output.add('</class>\n');
@@ -89,21 +91,8 @@ class HaxeXmlWriter {
 				output.add('</implements>');
 			}
 			emitDocumentation(output, state, comments, decl.span);
-			for (field in decl.fields) {
-				output.add('<');
-				output.add(escape(field.name));
-				output.add(' public="1"');
-				if (field.isStatic)
-					output.add(' static="1"');
-				if (field.isFinal)
-					output.add(' final="1"');
-				output.add('>');
-				emitType(output, field.type == null ? InferredType : field.type);
-				emitDocumentation(output, state, comments, field.span);
-				output.add('</');
-				output.add(escape(field.name));
-				output.add('>\n');
-			}
+			for (field in decl.fields)
+				emitField(output, state, comments, field);
 			for (method in decl.methods)
 				emitFunction(output, state, comments, method);
 			output.add('</class>\n');
@@ -164,6 +153,23 @@ class HaxeXmlWriter {
 			output.add(' private="1"');
 		output.add(extra);
 		output.add('>');
+	}
+
+	static function emitField(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>,
+			field:compiler.syntax.Ast.AstField):Void {
+		output.add('<');
+		output.add(escape(field.name));
+		output.add(' public="1"');
+		if (field.isStatic)
+			output.add(' static="1"');
+		if (field.isFinal)
+			output.add(' final="1"');
+		output.add('>');
+		emitType(output, field.type == null ? InferredType : field.type);
+		emitDocumentation(output, state, comments, field.span);
+		output.add('</');
+		output.add(escape(field.name));
+		output.add('>\n');
 	}
 
 	static function emitFunction(output:StringBuf, state:ModuleState, comments:Array<DocumentationComment>,

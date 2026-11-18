@@ -8,6 +8,7 @@ import compiler.ffi.HxiModel.HxiDeclaration;
 import compiler.ffi.NativeLayout;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.semantic.InitializerUnit;
+import compiler.semantic.InterfaceFieldAccessors;
 import compiler.semantic.SemanticProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstFunction;
@@ -192,6 +193,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 							rejectNativeBinding(method, abstractDecl.name + "." + method.name);
 			for (abstractDecl in program.abstracts)
 				AbstractProperties.validate(session, abstractDecl);
+			for (interfaceDecl in program.interfaces)
+				InterfaceProperties.validate(interfaceDecl);
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true)
 					ClassProperties.validate(session, classDecl);
@@ -2066,7 +2069,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				BodyTyper.fail("E1007", 'Unknown interface "$base"', span);
 			validateInterfaceImplementation(classDecl, baseInstance, classSubstitutions, span);
 		}
+		InterfaceProperties.validateImplementation(session, bodyTyper, classDecl, interfaceDecl,
+			interfaceSubstitutions);
 		for (method in interfaceDecl.methods) {
+			// The accessors its variables and properties imply: the class's hidden ones are made to match
+			// (`InterfaceFieldAccessors`), and a `get` or `set` side's, which the variable's check found, is checked in Haxe's words.
+			var implied = AstFunctions.hasMetadata(method, InterfaceFieldAccessors.GENERATED);
+			if (implied && InterfaceFieldAccessors.isHiddenAccessor(method.name))
+				continue;
 			var implementation = bodyTyper.findMethod(classDecl.name, method.name);
 			if (implementation == null || implementation.isStatic)
 				BodyTyper.fail("E1007",
@@ -2076,8 +2086,10 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			if (!session.signatures.exists(implementationName)
 				|| !sameSignature(BodyTyper.requiredMapValue(session.signatures, implementationName), method,
 				classSubstitutions, interfaceSubstitutions))
-				BodyTyper.fail("E1003",
-					'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"', span);
+				BodyTyper.fail("E1003", implied ? 'Field ${method.name} has different type than in $interfaceName'
+					: 'Method "${classDecl.name}.${method.name}" does not match interface "$interfaceName"',
+					implied ? InterfaceProperties.methodNameSpan(BodyTyper.requiredMapValue(session.signatures,
+					implementationName)) : span);
 		}
 	}
 

@@ -227,6 +227,8 @@ class DeclarationIndex {
 		for (decl in program.interfaces) {
 			declareType(decl.name, DeclarationKind.Interface, decl.span);
 			interfaces.set(decl.name, decl);
+			for (field in decl.fields)
+				declare(DeclarationKind.Member, decl.name + "." + field.name, field.span);
 			for (method in decl.methods)
 				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}

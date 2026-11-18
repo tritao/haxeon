@@ -149,6 +149,7 @@ interface-dispatch	42
 interface-inheritance	43
 interface-upcast	5
 interface-field	42
+interface-variables	42
 multiple-implements	42
 captured-method	42
 throw-string	1

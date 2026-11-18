@@ -547,6 +547,16 @@ class SemanticAssembly {
 				if (declaration.name == constructor.owner && declaration.typeParameters.length > 0)
 					genericOrigins.set(qualified, true);
 		}
+		// A class that implements an interface with variables has their hidden accessors (`InterfaceFieldAccessors`): typed, tracked
+		// and invalidated as its own methods, through its layout dependency on the interface.
+		for (accessor in InterfaceFieldAccessors.add(classes, interfaces)) {
+			var qualified = accessor.owner + "." + accessor.method.name;
+			functions.push(AstFunctions.withName(accessor.method, qualified));
+			owners.set(qualified, owners.get(accessor.owner + ".new"));
+			for (declaration in classes)
+				if (declaration.name == accessor.owner && declaration.typeParameters.length > 0)
+					genericOrigins.set(qualified, true);
+		}
 
 		// Purity and no-return are whole-program facts, but typed bodies are cached between
 		// incremental compiles. Recompute both fresh from the current canonical program (cheap:
