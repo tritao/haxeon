@@ -1,4 +1,5 @@
-/* String map keys are the Strings' NUL-terminated data; key listings wrap them back into Strings. The map is given the
+/* Scalar values are stored boxed, through hl_make_dyn so that Bools and small Ints share the VM's static boxes.
+   String map keys are the Strings' NUL-terminated data; key listings wrap them back into Strings. The map is given the
    String's length too, so it neither scans the key for its end nor compares past it. */
 static uchar *realtime_string_key( vstring *key ) {
 	return (uchar *)realtime_string_data(key);
@@ -13,8 +14,7 @@ HL_PRIM realtime_string_map *HL_NAME(__map_string_i32_alloc)( void ) {
 }
 
 HL_PRIM void HL_NAME(__map_string_i32_set)( realtime_string_map *map, vstring *key, int value ) {
-	vdynamic *dynamic = hl_alloc_dynamic(&hlt_i32);
-	dynamic->v.i = value;
+	vdynamic *dynamic = hl_make_dyn(&value, &hlt_i32);
 	hl_hbset_n(map, realtime_string_key(key), realtime_string_length(key), dynamic);
 }
 
@@ -29,8 +29,7 @@ HL_PRIM realtime_string_map *HL_NAME(__map_string_i64_alloc)( void ) {
 }
 
 HL_PRIM void HL_NAME(__map_string_i64_set)( realtime_string_map *map, vstring *key, int64_t value ) {
-	vdynamic *dynamic = hl_alloc_dynamic(&hlt_i64);
-	dynamic->v.i64 = value;
+	vdynamic *dynamic = hl_make_dyn(&value, &hlt_i64);
 	hl_hbset_n(map, realtime_string_key(key), realtime_string_length(key), dynamic);
 }
 
@@ -45,8 +44,7 @@ HL_PRIM realtime_string_map *HL_NAME(__map_string_bool_alloc)( void ) {
 }
 
 HL_PRIM void HL_NAME(__map_string_bool_set)( realtime_string_map *map, vstring *key, bool value ) {
-	vdynamic *dynamic = hl_alloc_dynamic(&hlt_bool);
-	dynamic->v.b = value;
+	vdynamic *dynamic = hl_make_dyn(&value, &hlt_bool);
 	hl_hbset_n(map, realtime_string_key(key), realtime_string_length(key), dynamic);
 }
 
@@ -61,8 +59,7 @@ HL_PRIM realtime_string_map *HL_NAME(__map_string_f64_alloc)( void ) {
 }
 
 HL_PRIM void HL_NAME(__map_string_f64_set)( realtime_string_map *map, vstring *key, double value ) {
-	vdynamic *dynamic = hl_alloc_dynamic(&hlt_f64);
-	dynamic->v.d = value;
+	vdynamic *dynamic = hl_make_dyn(&value, &hlt_f64);
 	hl_hbset_n(map, realtime_string_key(key), realtime_string_length(key), dynamic);
 }
 
@@ -147,8 +144,7 @@ DEFINE_STRING_REF_MAP()
 #define DEFINE_INT_MAP(SUFFIX, VALUE_TYPE, VALUE_FIELD, VALUE_HLTYPE) \
 HL_PRIM realtime_int_map *HL_NAME(__map_int_##SUFFIX##_alloc)( void ) { return hl_hialloc(); } \
 HL_PRIM void HL_NAME(__map_int_##SUFFIX##_set)( realtime_int_map *map, int key, VALUE_TYPE value ) { \
-	vdynamic *dynamic = hl_alloc_dynamic(&VALUE_HLTYPE); \
-	dynamic->v.VALUE_FIELD = value; \
+	vdynamic *dynamic = hl_make_dyn(&value, &VALUE_HLTYPE); \
 	hl_hiset(map, key, dynamic); \
 } \
 HL_PRIM bool HL_NAME(__map_int_##SUFFIX##_exists)( realtime_int_map *map, int key ) { return hl_hiexists(map, key); } \
