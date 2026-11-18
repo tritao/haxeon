@@ -2834,12 +2834,15 @@ class Parser {
 			var arguments = [], optionals:Array<Bool> = [];
 			if (!check(TokenKind.RightParen)) {
 				do {
+					// `(...Int)->Int`, `(...values:Int)->Int`: a rest parameter is a `haxe.Rest<T>`, as in Haxe, which does not
+					// require it last in a type.
+					var rest = matchEllipsis();
 					var optional = match(TokenKind.Question);
 					if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
 						advance();
 						advance();
 					}
-					var argument = parseType();
+					var argument = restType(rest, parseType());
 					arguments.push(optional ? NullableType(argument) : argument);
 					optionals.push(optional);
 				} while (match(TokenKind.Comma));
