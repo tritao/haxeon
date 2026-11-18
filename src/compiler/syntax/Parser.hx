@@ -830,6 +830,7 @@ class Parser {
 			if (result.indexOf(parameter.text) >= 0)
 				fail(parameter, 'Duplicate type parameter "${parameter.text}"');
 			result.push(parameter.text);
+			// `T:Measured`, `T:Readable & Writable` (Haxe 4's spelling of several constraints) or `T:(Readable, Writable)`.
 			if (match(TokenKind.Colon)) {
 				var grouped = match(TokenKind.LeftParen);
 				do {
@@ -840,7 +841,7 @@ class Parser {
 							type: constraint,
 							span: parameter.span.merge(previous().span)
 						});
-				} while (grouped && match(TokenKind.Comma));
+				} while (grouped ? match(TokenKind.Comma) : match(TokenKind.Ampersand));
 				if (grouped)
 					consume(TokenKind.RightParen);
 			}

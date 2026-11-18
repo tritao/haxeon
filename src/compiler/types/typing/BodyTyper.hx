@@ -2071,6 +2071,7 @@ class BodyTyper implements BodyTyping {
 	}
 
 	public function typedMember(typedObject:TypedExpression, name:String, span:SourceSpan):TypedExpression {
+		typedObject = TypeParameterMembers.receiver(session, this, typedObject, name, span);
 		// A field of a Dynamic value is looked up when the program runs, and is itself Dynamic.
 		if (sameType(typedObject.type, TDynamic)) {
 			session.runtimeDependencyTracker.record(session.currentContext.name, "Reflect");

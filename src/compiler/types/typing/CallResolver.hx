@@ -187,6 +187,14 @@ class CallResolver {
 			span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
 			contextualGenericArguments:Bool = true):TypedExpression {
+		var synthesized = TypeParameterMembers.synthesizedMember(session, receiver, name);
+		if (synthesized != null) {
+			if (arguments.length != synthesized.arguments.length)
+				fail("E1008", '$name expects ${synthesized.arguments.length} arguments, got ${arguments.length}', span);
+			typeCallArguments(arguments, synthesized.arguments, scope, name);
+			return new TypedExpression(TCast(receiver), synthesized.result, span);
+		}
+		receiver = TypeParameterMembers.receiver(session, bodyTyper, receiver, name, span);
 		// Haxe's EnumValue.getIndex(): the constructor's position in the enum's declaration.
 		if (name == "getIndex" && arguments.length == 0 && receiver.type.match(TInstance(NominalKind.Enum, _, _)))
 			return new TypedExpression(TEnumIndex(receiver), TInt, span);

@@ -363,6 +363,41 @@ class DeclarationIndex {
 			case _: false;
 		};
 
+	/**
+	 * The bounds of the type parameter `type`, its constraints resolved in declaration order (`Measured` for `T:Measured`,
+	 * `Readable` then `Writable` for `T:(Readable, Writable)`), a bound that is a type parameter replaced by its own; empty for
+	 * another type or a parameter without constraints.
+	 */
+	public function typeParameterBounds(type:CompilerType):Array<CompilerType> {
+		var bounds:Array<CompilerType> = [];
+		collectBounds(type, bounds, []);
+		return bounds;
+	}
+
+	function collectBounds(type:CompilerType, bounds:Array<CompilerType>, visiting:Array<String>):Void
+		switch type {
+			case TTypeParameter(owner, parameter):
+				var ownerName = Std.string(owner), key = '$ownerName:$parameter';
+				if (visiting.indexOf(key) >= 0)
+					return;
+				visiting.push(key);
+				var constraints = typeConstraints.get(key),
+					parameters = typeParametersByOwner.get(ownerName),
+					substitutions:Map<String, CompilerType> = [];
+				if (parameters != null)
+					for (name in parameters)
+						substitutions.set(name, TTypeParameter(owner, name));
+				if (constraints != null)
+					for (constraint in constraints) {
+						var bound = resolve(constraint.type, constraint.span, substitutions);
+						switch bound {
+							case TTypeParameter(_, _): collectBounds(bound, bounds, visiting);
+							default: bounds.push(bound);
+						}
+					}
+			default:
+		}
+
 	static function representationName(type:CompilerType):Null<String>
 		return switch type {
 			case TInstance(NominalKind.Interface, name, _) if (StructProperties.isConstraintName(name)): name;

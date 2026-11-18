@@ -422,7 +422,8 @@ class StatementTyper {
 
 		var objectName = name.substring(0, dot),
 			fieldName = name.substring(dot + 1, name.length),
-			object = BodyTyper.unwrapNullable(bodyTyper.typeExpression(Variable(objectName, span), scope));
+			object = TypeParameterMembers.receiver(session, bodyTyper,
+				BodyTyper.unwrapNullable(bodyTyper.typeExpression(Variable(objectName, span), scope)), fieldName, span);
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope);
@@ -532,7 +533,8 @@ class StatementTyper {
 	public function typeFieldAssignment(receiverExpression:AstExpression, fieldName:String, expression:AstExpression,
 			span:SourceSpan,
 			scope:Scope):TypedStatement {
-		var object = BodyTyper.unwrapNullable(bodyTyper.typeExpression(receiverExpression, scope));
+		var object = TypeParameterMembers.receiver(session, bodyTyper,
+			BodyTyper.unwrapNullable(bodyTyper.typeExpression(receiverExpression, scope)), fieldName, span);
 		if (sameType(object.type, TDynamic))
 			return dynamicFieldAssignment(object, fieldName, expression, span, scope);
 		var propertyWrite = bodyTyper.abstractPropertyWrite(object, fieldName, expression, span, scope);
