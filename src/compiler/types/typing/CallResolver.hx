@@ -2606,7 +2606,7 @@ class CallResolver {
 			expectedType:Null<CompilerType>, hasExplicitTypeArguments:Bool):TypedExpression {
 		MemberAccess.method(session, typeName, "new", span);
 		if (session.declarations.abstracts.exists(typeName))
-			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope);
+			return typeAbstractConstruction(typeName, typeArguments, arguments, span, scope, expectedType);
 		if (hasExplicitTypeArguments) {
 			if (!session.classDecls.exists(typeName) || session.interfaceDecls.exists(typeName))
 				fail("E1007", 'Unknown class "$typeName"', span);
@@ -2661,16 +2661,20 @@ class CallResolver {
 	}
 
 	function typeAbstractConstruction(name:String, typeArguments:Array<AstType>, arguments:Array<AstExpression>,
-			span:SourceSpan, scope:Scope):TypedExpression {
+			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
 		var decl = requiredMapValue(session.declarations.abstracts, name),
-			valueType = typeArguments.length == 0 ? session.representation.semanticType(NamedType(name), span,
-				session.currentContext.typeSubstitutions)
-				: session.representation.semanticType(AppliedType(name, typeArguments), span,
-				session.currentContext.typeSubstitutions),
 			constructorName = name + ".new",
 			constructor = session.signatures.get(constructorName);
 		if (constructor == null)
 			fail("E1007", 'Abstract "$name" has no constructor', span);
+		var inferred = typeArguments.length == 0
+			&& decl.typeParameters.length > 0 ? inferAbstractConstruction(decl, constructor, arguments, span, scope,
+			expectedType) : null,
+			valueType = inferred != null ? inferred.type : typeArguments.length == 0
+				? session.representation.semanticType(NamedType(name),
+				span, session.currentContext.typeSubstitutions)
+				: session.representation.semanticType(AppliedType(name, typeArguments), span,
+				session.currentContext.typeSubstitutions);
 		if (decl.isExtern == true) {
 			var typed = typeDeclaredCallArguments(arguments, constructor, scope, constructorName, span);
 			return new TypedExpression(TCall(constructorName, typed), valueType, span);
@@ -2684,7 +2688,10 @@ class CallResolver {
 			table = session.types;
 		if (table != null)
 			table.alias(normalized, constructor);
-		var typedArguments = [for (argument in arguments) bodyTyper.typeExpression(argument, scope)],
+		var typedArguments = inferred != null ? inferred.arguments : [
+			for (argument in arguments)
+				bodyTyper.typeExpression(argument, scope)
+		],
 			constructed:TypedExpression;
 		try {
 			constructed = genericInstantiation.specialize(constructorName, normalized, typedArguments, span, scope,
@@ -2694,6 +2701,60 @@ class CallResolver {
 		}
 		return session.representation.boundaryCast(bodyTyper.coerce(constructed, representation,
 			'abstract constructor "$constructorName"', "E1003"), valueType);
+	}
+
+	/**
+	 * `new Box(values)` of a generic abstract without type arguments: as Haxe infers them, from the arguments, typed against the
+	 * constructor's arguments once those before bind them; a parameter they leave open takes the expected type's
+	 * (`var b:Box<Int> = new Box(...)`). The expected type does not steer the arguments: `var b:Box<Float> = new Box([1])` is an
+	 * error, as in Haxe.
+	 */
+	function inferAbstractConstruction(decl:compiler.syntax.Ast.AstAbstract, constructor:AstFunction,
+			arguments:Array<AstExpression>, span:SourceSpan, scope:Scope,
+			expectedType:Null<CompilerType>):{
+				type:CompilerType,
+				arguments:Array<TypedExpression>
+			} {
+		var parameters = decl.typeParameters, substitutions:Map<String, CompilerType> = [];
+		var typed:Array<TypedExpression> = [];
+		for (index in 0...arguments.length) {
+			var declared = index < constructor.arguments.length ? constructor.arguments[index] : null,
+				expectedArgument = declared != null
+					&& allTypeParametersBound(parameters, substitutions)
+					? genericInstantiation.expectedArgumentType(constructor,
+					index, declared, substitutions) : null,
+				argument = bodyTyper.typeExpression(arguments[index], scope, expectedArgument);
+			if (declared != null)
+				genericInstantiation.inferArgumentTypeParameters(constructor, index, declared, argument.type,
+					parameters,
+					substitutions, argument.span);
+			typed.push(argument);
+		}
+		switch expectedType {
+			case TAbstract(expectedName, values, _),
+				TNullable(TAbstract(expectedName, values, _)) if (expectedName == decl.name):
+				for (index in 0...parameters.length)
+					if (index < values.length) {
+						var inferred = substitutions.get(parameters[index]);
+						if (inferred == null)
+							substitutions.set(parameters[index], values[index]);
+						else if (Monomorphs.follow(inferred).match(TMonomorph(_))) {
+							// An argument that left it open (`[]`) takes it, as a type variable unifies.
+							Monomorphs.unify(inferred, values[index]);
+							substitutions.set(parameters[index], Monomorphs.resolve(inferred));
+						}
+					}
+			default:
+		}
+		for (parameter in parameters)
+			if (!substitutions.exists(parameter))
+				fail("E1003", 'Cannot infer generic type parameter "$parameter" for constructor "${decl.name}"', span);
+		validateTypeParameterConstraints(decl.name, decl.typeConstraints, substitutions, span);
+		return {
+			type: TAbstract(decl.name, [for (parameter in parameters) requiredMapValue(substitutions, parameter)],
+				session.representation.semanticType(decl.underlying, decl.span, substitutions)),
+			arguments: typed
+		};
 	}
 
 	static function allTypeParametersBound(parameters:Array<String>, substitutions:Map<String, CompilerType>):Bool {

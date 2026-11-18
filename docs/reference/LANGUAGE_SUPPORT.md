@@ -114,7 +114,12 @@ The current subset includes:
   Float, an abstract through a `@:to` or `@:from`), and the expression has `Type`. `cast` and `cast(value, Type)` cast.
 - Every instance method and constructor of an abstract is typed, as in Haxe, whether or not anything calls it, so an error
   in one nothing calls is reported. Its code is still each call's specialization. A generic static method of an abstract
-  is typed only where it is called (with its type arguments), as a generic function is.
+  is typed only where it is called (with its type arguments), as a generic function or method is, so an error in one
+  nothing calls goes unreported; Haxe types it once. Typing it with its type parameters as themselves waits for member
+  access through a parameter's constraints (`function measure<T:Measured>(value:T) return value.measure()`) and for
+  `sizeof<T>`, `alignof<T>`, `typeInfo<T>` and `RawPtr<T>` layouts to be left to the specialization.
+- `new Box(values)` of a generic abstract infers its type arguments as Haxe does: from the constructor's arguments, a
+  parameter they leave open (`new Box([])`) from the expected type (`var box:Box<Int> = new Box([])`).
 - Module-level `var`, `final` and functions, as in Haxe: the module's own code names them bare, and other modules import
   one (`import pack.Settings.hits;`) or write its full path (`pack.Settings.hits`). As an extension stock Haxe rejects, they
   can also be reached through the module's name (`Settings.hits`, `Settings.record()` with `import pack.Settings;`). When the

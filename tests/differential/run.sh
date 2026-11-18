@@ -216,6 +216,9 @@ in_background run_compile_failure abstract-uncalled-member-error
 # An abstract's from/to conversions unify as Haxe's do: Int meets Float, a class its base; one abstract never chains to another.
 in_background run_case abstract-from-to-widening 0
 in_background run_compile_failure abstract-from-to-not-chained
+# A generic abstract's construction infers its type arguments as Haxe does: from the arguments, then the expected type.
+in_background run_case abstract-construction-inference 0
+in_background run_compile_failure abstract-construction-inference-mismatch
 # An abstract's static variables, in Haxe's initialization order (AbstractStatics).
 in_background run_case abstract-statics 0
 in_background run_compile_failure abstract-static-private
