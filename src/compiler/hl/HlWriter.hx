@@ -647,6 +647,13 @@ class HlWriter {
 				target == null ? [] : [target];
 		};
 
+	/** Whether `instruction` can transfer control to a label: `jumpTargets` is not empty, without building it. */
+	public static function jumps(instruction:HlInstruction):Bool
+		return switch instruction {
+			case Switch(_, targets): targets.length > 0;
+			default: jumpTarget(instruction) != null;
+		};
+
 	/** The label a jump or trap names, or null for any other instruction (a switch names several: `jumpTargets`). */
 	public static function jumpTarget(instruction:HlInstruction):Null<String>
 		return switch instruction {

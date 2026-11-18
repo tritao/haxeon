@@ -48,7 +48,7 @@ class HlRegisterAllocation {
 					starts[index] = true;
 				default:
 			}
-			if (HlWriter.jumpTargets(instructions[index]).length > 0 || exits(instructions[index]))
+			if (HlWriter.jumps(instructions[index]) || exits(instructions[index]))
 				starts[index + 1] = true;
 		}
 		var blockStarts:Array<Int> = [], blockOf:Array<Int> = [];
@@ -63,9 +63,15 @@ class HlRegisterAllocation {
 		var successors:Array<Array<Int>> = [];
 		for (block in 0...blocks) {
 			var last = blockEnd(block) - 1, next:Array<Int> = [], instruction = instructions[last];
-			for (target in HlWriter.jumpTargets(instruction))
-				if (next.indexOf(blockOf[labels.get(target)]) < 0)
-					next.push(blockOf[labels.get(target)]);
+			switch instruction {
+				case Switch(_, targets):
+					for (target in targets)
+						addSuccessor(next, blockOf[labels.get(target)]);
+				default:
+					var target = HlWriter.jumpTarget(instruction);
+					if (target != null)
+						addSuccessor(next, blockOf[labels.get(target)]);
+			}
 			var falls = switch instruction {
 				case Jump(_): false;
 				default: !exits(instruction);
@@ -74,55 +80,64 @@ class HlRegisterAllocation {
 				next.push(block + 1);
 			successors.push(next);
 		}
-		var handlers = activeHandlers(instructions, blocks, blockStarts, blockEnd, blockOf, labels, successors);
-		if (handlers == null)
-			return registerTypes;
-		// Uses before definitions per block, then the live sets to a fixed point.
+		// Most functions have no trap; only those need the handlers each block is protected by.
+		var handlers:Null<Array<Array<Int>>> = null;
+		for (instruction in instructions)
+			switch instruction {
+				case Trap(_, _, _):
+					handlers = activeHandlers(instructions, blocks, blockStarts, blockEnd, blockOf, labels, successors);
+					if (handlers == null)
+						return registerTypes;
+					break;
+				default:
+			}
+		// Uses before definitions per block, then the live sets to a fixed point. Each set is a row of `words` words in one
+		// array per kind, block after block.
 		var words = (count + 31) >> 5;
-		function bits():Array<Int>
-			return [for (_ in 0...words) 0];
-		var used:Array<Array<Int>> = [],
-			defined:Array<Array<Int>> = [],
-			liveIn:Array<Array<Int>> = [],
-			liveOut:Array<Array<Int>> = [];
+		var used = zeros(blocks * words),
+			defined = zeros(blocks * words),
+			liveIn = zeros(blocks * words),
+			liveOut = zeros(blocks * words),
+			thrown = zeros(words);
+		var row = 0;
+		function note(register:Int, written:Bool):Void {
+			var word = row + (register >> 5), bit = 1 << (register & 31);
+			if (written)
+				defined[word] |= bit;
+			else if (defined[word] & bit == 0)
+				used[word] |= bit;
+		}
 		for (block in 0...blocks) {
-			var use = bits(), def = bits();
+			row = block * words;
 			for (index in blockStarts[block]...blockEnd(block))
-				HlRegisters.each(instructions[index], (register, written) -> {
-					var word = register >> 5, bit = 1 << (register & 31);
-					if (written)
-						def[word] |= bit;
-					else if (def[word] & bit == 0)
-						use[word] |= bit;
-				});
-			used.push(use);
-			defined.push(def);
-			liveIn.push(bits());
-			liveOut.push(bits());
+				HlRegisters.each(instructions[index], note);
 		}
 		var changed = true;
 		while (changed) {
 			changed = false;
 			var block = blocks;
 			while (block-- > 0) {
-				var out = liveOut[block], input = liveIn[block], thrown = bits();
+				var base = block * words;
 				for (successor in successors[block]) {
-					var into = liveIn[successor];
+					var from = successor * words;
 					for (word in 0...words)
-						out[word] |= into[word];
+						liveOut[base + word] |= liveIn[from + word];
 				}
+				for (word in 0...words)
+					thrown[word] = 0;
 				// What a handler protecting this block reads is live from its first instruction to its last.
-				for (handler in handlers[block]) {
-					var into = liveIn[handler];
-					for (word in 0...words) {
-						out[word] |= into[word];
-						thrown[word] |= into[word];
+				if (handlers != null)
+					for (handler in handlers[block]) {
+						var from = handler * words;
+						for (word in 0...words) {
+							liveOut[base + word] |= liveIn[from + word];
+							thrown[word] |= liveIn[from + word];
+						}
 					}
-				}
 				for (word in 0...words) {
-					var next = used[block][word] | (out[word] & ~defined[block][word]) | thrown[word];
-					if (next != input[word]) {
-						input[word] = next;
+					var at = base + word, next = used[at] | (liveOut[at] & ~defined[at]) | thrown[word];
+					if (next != liveIn[at]) {
+						liveIn[at] = next;
 						changed = true;
 					}
 				}
@@ -136,10 +151,13 @@ class HlRegisterAllocation {
 			if (position > last[register])
 				last[register] = position;
 		}
+		var position = 0;
+		function coverAt(register:Int, _:Bool):Void
+			cover(register, position);
 		for (block in 0...blocks) {
 			var start = blockStarts[block], end = blockEnd(block) - 1;
 			for (word in 0...words) {
-				var input = liveIn[block][word], output = liveOut[block][word];
+				var input = liveIn[block * words + word], output = liveOut[block * words + word];
 				if (input == 0 && output == 0)
 					continue;
 				for (bit in 0...32) {
@@ -152,8 +170,10 @@ class HlRegisterAllocation {
 						cover(register, end);
 				}
 			}
-			for (index in start...end + 1)
-				HlRegisters.each(instructions[index], (register, _) -> cover(register, index));
+			for (index in start...end + 1) {
+				position = index;
+				HlRegisters.each(instructions[index], coverAt);
+			}
 		}
 		// Linear scan per type: a slot is free again after the last instruction of the register that held it.
 		var order = [for (register in 0...count) if (!pinned[register] && first[register] >= 0) register];
@@ -192,10 +212,25 @@ class HlRegisterAllocation {
 		if (types.length == count)
 			return registerTypes;
 		// A register no instruction names keeps no slot; nothing refers to it.
+		function rename(register:Int):Int
+			return mapping[register];
 		for (index in 0...length)
-			instructions[index] = HlRegisters.map(instructions[index], register -> mapping[register]);
+			instructions[index] = HlRegisters.map(instructions[index], rename);
 		return types;
 	}
+
+	/** `count` zeros, allocated at their final size. */
+	static function zeros(count:Int):Array<Int> {
+		var values:Array<Int> = [];
+		values.resize(count);
+		for (index in 0...count)
+			values[index] = 0;
+		return values;
+	}
+
+	static function addSuccessor(successors:Array<Int>, block:Int):Void
+		if (successors.indexOf(block) < 0)
+			successors.push(block);
 
 	/**
 	 * Per block, the handler blocks of the traps active at any of its instructions: a trap is active from its `Trap` to the
