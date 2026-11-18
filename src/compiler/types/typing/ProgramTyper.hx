@@ -194,7 +194,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				AbstractProperties.validate(session, abstractDecl);
 			for (classDecl in program.classes)
 				if (classDecl.isExtern != true)
-					StaticProperties.validate(session, classDecl);
+					ClassProperties.validate(session, classDecl);
 		}
 		for (native in typedNatives)
 			switch native.convention {

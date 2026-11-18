@@ -31,7 +31,7 @@ class AbstractStatics {
 
 	/**
 	 * Whether `field` of an abstract is a static variable, which its storage class keeps: a stored one, or a property whose
-	 * accessors are the abstract's static methods (`StaticProperties`).
+	 * accessors are the abstract's static methods (`ClassProperties`).
 	 */
 	public static function isStored(field:AstField):Bool
 		return field.isStatic;

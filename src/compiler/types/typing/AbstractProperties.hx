@@ -17,7 +17,7 @@ typedef AbstractProperty = {
 /**
  * An abstract's properties, `var length(get, never):Int`: an abstract stores nothing but its underlying value, so, as in Haxe, a
  * property is only its accessors. A read calls `get_length` and a write `set_length` on the abstract value; `never` forbids the
- * access. A static variable or property is its storage class's (`AbstractStatics`, `StaticProperties`).
+ * access. A static variable or property is its storage class's (`AbstractStatics`, `ClassProperties`).
  */
 class AbstractProperties {
 	/** The instance property `name` of the abstract `type` is a value of, or null. */
@@ -61,13 +61,13 @@ class AbstractProperties {
 
 	/**
 	 * Where `name` is written in `span`, an access of it: the end of a read's expression (`stack.length`), or the name after the
-	 * receiver in a write's statement (`stack.length = 0`); `span` itself for a bare name (`length` in the abstract's methods).
+	 * receiver in a write's statement (`stack.length = 0`) or an update (`stack.length++`); `span` itself for a bare name (`length`
+	 * in the abstract's methods).
 	 */
 	public static function nameSpan(span:SourceSpan, name:String, read:Bool):SourceSpan {
 		var size = haxe.io.Bytes.ofString(name).length;
-		if (read)
-			return span.end - size >= span.start && span.file.slice(span.end - size, span.end) == name
-				? new SourceSpan(span.file, span.end - size, span.end) : span;
+		if (read && span.end - size >= span.start && span.file.slice(span.end - size, span.end) == name)
+			return new SourceSpan(span.file, span.end - size, span.end);
 		var text = span.file.slice(span.start, span.end), dot = text.indexOf("." + name);
 		if (dot < 0)
 			return span;

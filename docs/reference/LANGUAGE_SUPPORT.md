@@ -100,10 +100,13 @@ The current subset includes:
   abstract's implementation class; Haxeon in a hidden class of the module (`AbstractStatics`), which goes where the abstract
   is declared among the module's classes, so they initialize in Haxe's order (below), and a class whose initializers
   reach one of the abstract's statics or static methods initializes after them.
-- Static properties with accessors, of a class or an abstract (`static var count(get, set):Int` with `static function
-  get_count()`), as in Haxe: a read calls `get_count` and a write `set_count` wherever source names the property
-  (`Counter.count`, bare in its own type, `count += 1`, `count++`); inside its own accessor an `@:isVar` property is its
-  variable. A `never` side cannot be accessed and a missing accessor is reported, in Haxe's words.
+- Properties of a class, static or instance, and static properties of an abstract (`var label(get, set):String`,
+  `static var count(get, set):Int`), as in Haxe: a `get`, `set` or `dynamic` side calls its accessor wherever source names
+  the property (`item.label`, `Counter.count`, bare in its own class, `+=`, `++`, `x++` as a value), an instance accessor
+  as a method, so an override is called; inside the accessor of that side the property of `this` is its variable (an
+  `@:isVar` property's), so a read in `set_x` still calls `get_x`. A `never` side cannot be accessed, a `null` side only
+  from the class and its subclasses (or `@:allow`, `@:access`), a missing accessor is reported, and so is the variable of a
+  property without storage, in Haxe's words and at its places.
 - An abstract's implicit conversions, as Haxe casts them: through the expected abstract's `from` conversions, else the
   value's abstract's `to` conversions, a `@:from` or `@:to` function before a `from` or `to` type. Where the other side
   is not an abstract (Int, Float, a class), the value meets the conversion's type as Haxe unifies it, so an Int meets a
@@ -188,6 +191,10 @@ HashLink):
   return type.
 - A lowercase name in a pattern that is also a function or variable in scope is read as that value instead of capturing
   (`case Box(size):` beside a function `size`). Haxe captures; rename the binding.
+- Variables and properties in an interface (`interface Shape { var area(get, never):Int; }`): a parse error.
+- The value of an assignment to a property, `(item.label = "x")`, `(item.count += 1)`, is the property read again after
+  its setter runs; Haxe's is the setter's result. They differ only for a setter that returns something other than the value
+  it was given.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 

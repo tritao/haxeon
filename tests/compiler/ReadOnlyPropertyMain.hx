@@ -11,7 +11,7 @@ class ReadOnlyPropertyMain {
 			+ 'public function new() stored = 0; function get_value():Int return stored; } ';
 		for (operation in ['item.value = 1;', 'item.value += 1;', '++item.value;', 'item.value++;'])
 			expectError(getter + 'function main():Void { var item = new Item(); ' + operation + ' }',
-				operation == 'item.value++;' ? 'E1018' : 'E1024');
+				'E1024');
 		var staticProperty = 'class Item { public static var value(default, null):Int = 0; } ';
 		for (operation in ['Item.value = 1;', 'Item.value += 1;', '++Item.value;', 'Item.value++;'])
 			expectError(staticProperty + 'function main():Void { ' + operation + ' }');

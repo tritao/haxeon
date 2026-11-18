@@ -1901,7 +1901,7 @@ class BodyTyper implements BodyTyping {
 	/** A read of a static field, with any branch-local null refinement applied. */
 	function staticFieldValue(owner:String, name:String, type:CompilerType, span:SourceSpan,
 			scope:Scope):TypedExpression {
-		var property = StaticProperties.read(session, this, owner, name, type, span, scope);
+		var property = ClassProperties.readStatic(session, this, owner, name, type, span, scope);
 		if (property != null)
 			return property;
 		var field = new TypedExpression(TStaticField(owner, name), type, span),
@@ -2104,7 +2104,8 @@ class BodyTyper implements BodyTyping {
 				}
 				var staticField = findStaticField(className, name, span);
 				MemberAccess.field(session, staticField.owner, name, true, span);
-				var property = StaticProperties.read(session, this, staticField.owner, name, staticField.type, span,
+				var property = ClassProperties.readStatic(session, this, staticField.owner, name, staticField.type,
+					span,
 					null);
 				if (property != null)
 					return property;
@@ -2143,11 +2144,14 @@ class BodyTyper implements BodyTyping {
 			case TInstance(Class, className, _): className;
 			default: null;
 		};
-		var getter = instancePropertyAccessor(typedObject.type, name, true);
+		// A property is reached by its own visibility, not its accessor's (`get_x` is usually private), and its read side decides.
+		var property = ClassProperties.instanceField(session, typedObject.type, name);
+		if (property != null) {
+			MemberAccess.requireField(session, property.declaration, property.field, span);
+			ClassProperties.requireInstanceAccess(session, typedObject.type, name, true, span);
+		}
+		var getter = ClassProperties.instanceAccessor(session, typedObject.type, name, true, typedObject, span);
 		if (getter != null) {
-			// A property is reached by its own visibility, not its accessor's (`get_x` is usually private).
-			if (nominalOwner != null)
-				MemberAccess.field(session, nominalOwner, name, false, span);
 			var method = requiredMapValue(session.signatures, getter);
 			var methodInfo = session.methodInfo.get(getter),
 				owner = methodInfo == null ? requiredString(parentPath(getter)) : methodInfo.owner,
@@ -2226,27 +2230,6 @@ class BodyTyper implements BodyTyping {
 		return switch value.type {
 			case TNullable(element): new TypedExpression(value.expression, element, value.span);
 			default: value;
-		};
-
-	public function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>
-		return switch type {
-			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
-				var declaration = requiredMapValue(session.classDecls, className),
-					accessor:Null<String> = null;
-				for (field in declaration.fields)
-					if (field.name == name && !field.isStatic) {
-						var usesAccessor = read ? field.readAccess == GetAccess : field.writeAccess == SetAccess;
-						if (usesAccessor)
-							accessor = className + "." + (read ? "get_" : "set_") + name;
-					}
-				if (accessor != null) {
-					// Inside its own accessor a property names its physical field (Haxe's `@:isVar` storage), not the accessor again.
-					accessor == session.currentContext.functionName ? null : accessor;
-				} else if (declaration.base != null)
-					instancePropertyAccessor(session.declarations.resolve(declaration.base, declaration.span,
-						session.representation.nominalSubstitutions(type)), name, read);
-				else null;
-			default: null;
 		};
 
 	/**

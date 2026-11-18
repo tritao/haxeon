@@ -1,39 +1,27 @@
 package compiler.types.typing;
 
-import compiler.core.Diagnostic;
-import compiler.core.Diagnostic.CompileError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast;
 import compiler.types.Type.CompilerType;
-import compiler.types.Type.NominalKind;
 
-/** Access to properties whose setter is `null` follows the declaring class's lexical access. */
+/** Writes to a class's fields: the source reaches the field, and its property's write side allows the write (`ClassProperties`). */
 class PropertyWriteRules {
 	public static function rejectInstanceMutation(session:TypingSession, type:CompilerType, name:String,
 			span:SourceSpan):Void {
-		var owner = switch type {
-			case TInstance(NominalKind.Class, className, _): className;
-			default: null;
-		};
-		check(session, owner, name, false, span);
+		var found = ClassProperties.instanceField(session, type, name);
+		if (found == null)
+			return;
+		MemberAccess.requireField(session, found.declaration, found.field, span);
+		ClassProperties.requireInstanceAccess(session, type, name, false, span);
 	}
 
 	public static function rejectStaticMutation(session:TypingSession, owner:String, name:String,
 			span:SourceSpan):Void {
-		StaticProperties.requireAccess(session, owner, name, false, span);
-		check(session, owner, name, true, span);
-	}
-
-	/** A write to the field `name` of `owner` or its base classes: the source reaches it, and its property may be written here. */
-	static function check(session:TypingSession, owner:Null<String>, name:String, isStatic:Bool, span:SourceSpan):Void {
-		var found = owner == null ? null : MemberAccess.classField(session, owner, name, isStatic);
+		var found = MemberAccess.classField(session, owner, name, true);
 		if (found == null)
 			return;
 		MemberAccess.requireField(session, found.declaration, found.field, span);
-		if (!canWrite(session, found.declaration, found.field))
-			throw new CompileError(new Diagnostic("E1024",
-				'Property "${compiler.semantic.AbstractStatics.displayOwner(found.declaration.name)}.$name" cannot be written here',
-				span));
+		ClassProperties.requireStaticAccess(session, owner, name, false, span);
 	}
 
 	public static function canWrite(session:TypingSession, declaration:AstClass, field:AstField):Bool

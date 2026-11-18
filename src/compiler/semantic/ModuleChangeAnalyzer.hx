@@ -204,7 +204,7 @@ class ModuleChangeAnalyzer {
 						|| state.staticFieldFingerprints.get(fieldName) != initializer) {
 						structuralChanged.set('static:$fieldName', true);
 						// An unannotated accessor takes the property's type (`AccessorSignatures`), so its signature changes with
-						// the property's declaration; a read or write of the property calls it (`StaticProperties`).
+						// the property's declaration; a read or write of the property calls it (`ClassProperties`).
 						if (field.readAccess == GetAccess)
 							signatureChanged.set(className + ".get_" + field.name, true);
 						if (field.writeAccess == SetAccess)

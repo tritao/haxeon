@@ -2087,9 +2087,12 @@ class ExpressionTyper {
 				TPostfixField(object, name, delta);
 			case TIndex(array, index): TPostfixIndex(array, index, delta);
 			default:
-				// A property of an abstract is read and written through its accessors.
+				// A property of an abstract or a class is read and written through its accessors.
 				var property = switch target {
 					case Member(object, field, _): {object: object, field: field};
+					case Variable(name, variableSpan) if (name.indexOf(".") < 0 && scope.resolve(name) == null
+						&& scope.resolve("this") != null):
+						{object: Variable("this", variableSpan), field: name};
 					case Variable(name, variableSpan) if (name.lastIndexOf(".") > 0):
 						{
 							object: Variable(name.substring(0, name.lastIndexOf(".")), variableSpan),
@@ -2097,7 +2100,7 @@ class ExpressionTyper {
 						};
 					default: null;
 				};
-				if (property != null && isAbstractProperty(property.object, property.field, scope))
+				if (property != null && isAccessorProperty(property.object, property.field, scope))
 					return rewrittenPostfixIncrement(Member(property.object, property.field, span), delta, span, scope,
 						true);
 				fail("E1018", "Postfix increment target is not assignable", span);
@@ -2137,7 +2140,7 @@ class ExpressionTyper {
 			default: false;
 		};
 
-	/** Whether `target` names a static property with an accessor (`StaticProperties`): `count`, `Counter.count`. */
+	/** Whether `target` names a static property with an accessor (`ClassProperties`): `count`, `Counter.count`. */
 	function isStaticProperty(target:AstExpression, scope:Scope):Bool {
 		var place:Null<{owner:Null<String>, field:String}> = switch target {
 			case Variable(name, _) if (name.indexOf(".") < 0):
@@ -2154,8 +2157,8 @@ class ExpressionTyper {
 		if (place == null || place.owner == null)
 			return false;
 		var found = bodyTyper.findStaticFieldNullable(place.owner, place.field);
-		return found != null && (StaticProperties.accessor(session, found.owner, place.field, true) != null
-			|| StaticProperties.accessor(session, found.owner, place.field, false) != null);
+		return found != null && (ClassProperties.staticAccessor(session, found.owner, place.field, true) != null
+			|| ClassProperties.staticAccessor(session, found.owner, place.field, false) != null);
 	}
 
 	/** The class `object` names (`Counter`, `pack.Counter`), or null when it names a value or nothing. */
@@ -2172,12 +2175,17 @@ class ExpressionTyper {
 		}
 	}
 
-	/** Whether `object.field` names a property of an abstract (`AbstractProperties`); `object` may name no value at all. */
-	function isAbstractProperty(object:AstExpression, field:String, scope:Scope):Bool {
+	/**
+	 * Whether `object.field` names a property with accessors: of an abstract (`AbstractProperties`) or of a class instance
+	 * (`ClassProperties`). `object` may name no value at all.
+	 */
+	function isAccessorProperty(object:AstExpression, field:String, scope:Scope):Bool {
 		var mark = session.checkpoint();
-		try
-			return AbstractProperties.find(session, bodyTyper.typeExpression(object, scope).type, field) != null
-		catch (_:CompileError) {
+		try {
+			var type = BodyTyper.unwrapNullable(bodyTyper.typeExpression(object, scope)).type;
+			return AbstractProperties.find(session, type, field) != null
+				|| ClassProperties.hasInstanceAccessor(session, type, field);
+		} catch (_:CompileError) {
 			session.rewind(mark);
 			return false;
 		}

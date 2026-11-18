@@ -113,6 +113,7 @@ class TestCatalog {
 		"FinalFieldMain",
 		"MemberInitializerAccessMain",
 		"AbstractPropertiesMain",
+		"ClassPropertiesMain",
 		"AbstractUncalledMembersMain",
 		"ModuleVariablesMain",
 		"SignatureMetadataMain",

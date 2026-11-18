@@ -226,6 +226,10 @@ in_background run_compile_failure abstract-static-private
 in_background run_case static-properties 0
 in_background run_compile_failure static-property-never-write
 in_background run_compile_failure static-property-missing-accessor
+in_background run_case instance-properties 0
+in_background run_compile_failure instance-property-never-write
+in_background run_compile_failure instance-property-never-read
+in_background run_compile_failure instance-property-missing-accessor
 # @:hlNative on a function with a body binds the native; the body is typed and never runs.
 in_background run_case hlnative-body 0
 in_background run_compile_failure hlnative-body-error

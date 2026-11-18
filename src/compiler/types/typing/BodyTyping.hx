@@ -70,7 +70,6 @@ interface BodyTyping {
 	function findStaticFieldNullable(className:String, name:String):Null<{owner:String, type:CompilerType}>;
 	function findStaticField(className:String, name:String, span:SourceSpan):{owner:String, type:CompilerType};
 	function rejectInlineFieldMutation(owner:String, name:String, span:SourceSpan):Void;
-	function instancePropertyAccessor(type:CompilerType, name:String, read:Bool):Null<String>;
 	function propertySetterCall(object:TypedExpression, setter:String, value:TypedExpression,
 			span:SourceSpan):TypedExpression;
 	function abstractPropertyWrite(object:TypedExpression, name:String, expression:AstExpression, span:SourceSpan,

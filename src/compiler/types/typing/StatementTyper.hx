@@ -299,8 +299,8 @@ class StatementTyper {
 				staticField = bodyTyper.findStaticFieldNullable(owner, fieldName);
 			// A nullable number reads null as 0, and a property calls its accessors: both are `target = target + 1`.
 			if (staticField != null && (ExpressionTyper.isNullableNumber(staticField.type)
-				|| StaticProperties.accessor(session, staticField.owner, fieldName, true) != null
-				|| StaticProperties.accessor(session, staticField.owner, fieldName, false) != null)) {
+				|| ClassProperties.staticAccessor(session, staticField.owner, fieldName, true) != null
+				|| ClassProperties.staticAccessor(session, staticField.owner, fieldName, false) != null)) {
 				var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
 				return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
 			}
@@ -369,7 +369,8 @@ class StatementTyper {
 					var assignedValue = bodyTyper.typeExpression(expression, scope, instanceField),
 						value = bodyTyper.coerce(assignedValue, instanceField, 'field "$name"', "E1002");
 					var receiver = bodyTyper.typeExpression(Variable("this", span), scope),
-						propertySetter = bodyTyper.instancePropertyAccessor(thisType, name, false);
+						propertySetter = ClassProperties.instanceAccessor(session, thisType, name, false, receiver,
+							span);
 					if (propertySetter != null) {
 						session.invalidateCallEffects(propertySetter, scope);
 						return TExpression(bodyTyper.propertySetterCall(receiver, propertySetter, value, span),
@@ -446,8 +447,8 @@ class StatementTyper {
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
 					value = bodyTyper.coerce(assignedValue, expected, 'field "$name"', "E1002"),
 					setter:Null<String> = platformField == null ? null : platformField.set,
-					propertySetter = setter == null ? bodyTyper.instancePropertyAccessor(object.type, fieldName,
-						false) : null,
+					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
+						false, object, span) : null,
 					statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]),
 						TVoid, span), span) else {
 							propertySetter != null ? TExpression(bodyTyper.propertySetterCall(object,
@@ -556,8 +557,8 @@ class StatementTyper {
 					assignedValue = bodyTyper.typeExpression(expression, scope, expected),
 					value = bodyTyper.coerce(assignedValue, expected, 'field "$fieldName"', "E1002");
 				var setter:Null<String> = platformField == null ? null : platformField.set,
-					propertySetter = setter == null ? bodyTyper.instancePropertyAccessor(object.type, fieldName,
-						false) : null;
+					propertySetter = setter == null ? ClassProperties.instanceAccessor(session, object.type, fieldName,
+						false, object, span) : null;
 				var statement = if (setter != null) TExpression(new TypedExpression(TCall(setter, [object, value]),
 					TVoid, span), span) else {
 						if (propertySetter != null)
@@ -581,10 +582,10 @@ class StatementTyper {
 		};
 	}
 
-	/** A store of `value` to the static `name` of `owner`: a call of its setter where it is a property (`StaticProperties`). */
+	/** A store of `value` to the static `name` of `owner`: a call of its setter where it is a property (`ClassProperties`). */
 	function staticStore(owner:String, name:String, value:TypedExpression, assigned:CompilerType, stored:CompilerType,
 			span:SourceSpan, scope:Scope):TypedStatement {
-		var setterCall = StaticProperties.write(session, bodyTyper, owner, name, value, span, scope);
+		var setterCall = ClassProperties.writeStatic(session, bodyTyper, owner, name, value, span, scope);
 		if (setterCall != null)
 			return TExpression(setterCall, span);
 		refineStaticStore(scope, owner, name, assigned, stored);
