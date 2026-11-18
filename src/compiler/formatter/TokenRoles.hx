@@ -217,7 +217,8 @@ class TokenRoles {
 		var cursor = step;
 		if (kind(cursor) == TokenKind.RightParen) {
 			var open = matchOf(cursor);
-			if (open < 0)
+			// Arguments open right after the name; a parenthesis after a space is the expression the metadata is on.
+			if (open < 1 || tokens[code[open - 1]].end != tokens[code[open]].start)
 				return false;
 			cursor = open - 1;
 		}

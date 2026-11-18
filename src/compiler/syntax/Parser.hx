@@ -310,7 +310,10 @@ class Parser {
 			var start = previous().span;
 			consume(TokenKind.Colon);
 			var name = parseQualifiedName(), arguments = [];
-			if (match(TokenKind.LeftParen)) {
+			// Arguments follow the name directly, as in Haxe: with a space, `@:privateAccess (a + b)` is metadata on a parenthesized
+			// expression, not metadata with an argument.
+			if (check(TokenKind.LeftParen) && current().span.start == previous().span.end) {
+				advance();
 				if (!check(TokenKind.RightParen))
 					do arguments.push(parseExpression()) while (match(TokenKind.Comma));
 				var end = consume(TokenKind.RightParen).span;

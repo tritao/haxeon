@@ -633,6 +633,7 @@ long-arithmetic-chain	42
 anonymous-structure-string	42
 field-initializer-type-variables	42
 static-function-field-call	42
+private-access-forms	42
 method-value-dispatch	42
 single-block-loop	42
 try-register-sharing	42

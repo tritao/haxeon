@@ -548,6 +548,10 @@ class BreakAnalyzer {
 			return 0;
 		if (right == TokenKind.Greater && closesTypeArguments(tokens, index + 1, syntax))
 			return 0;
+		// After a metadata name the source's spacing stands: `@:keep(x)` gives the metadata an argument, while `@:keep (x)` is
+		// metadata on a parenthesized expression (Parser.parseMetadata, as in Haxe).
+		if (right == TokenKind.LeftParen && syntax.roles.metadataEnds.exists(tokens[index].start))
+			return tokens[index].end == tokens[index + 1].start ? 0 : 1;
 		if (right == TokenKind.LeftParen && left != TokenKind.Colon && left != TokenKind.Comma
 			&& left != TokenKind.LeftBrace)
 			return endsOperand(tokens, index, left, syntax) || isPrefixOperator(tokens, index, left, syntax) ? 0 : 1;
