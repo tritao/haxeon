@@ -179,6 +179,14 @@ class TypeRelations {
 		}
 		if (abstractConversion(actual, expected))
 			return true;
+		switch actual {
+			case TTypeParameter(_, _):
+				// A type parameter's value is a value of each of its constraints (`T:Res` where a `Res` is expected), as Haxe unifies it.
+				for (bound in declarations.typeParameterBounds(actual))
+					if (isAssignable(bound, expected))
+						return true;
+			default:
+		}
 		return switch expected {
 			case TDynamic: true;
 			case TInstance(expectedKind, _, _):
