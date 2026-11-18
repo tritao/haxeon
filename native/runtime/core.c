@@ -155,13 +155,9 @@ HL_PRIM int HL_NAME(__math_floor)(double value) {
 	return (int)floor(value);
 }
 extern realtime_string_map *hl_hballoc( void );
-extern void hl_hbset( realtime_string_map *map, uchar *key, vdynamic *value );
-extern bool hl_hbexists( realtime_string_map *map, uchar *key );
-extern vdynamic *hl_hbget( realtime_string_map *map, uchar *key );
 extern varray *hl_hbkeys( realtime_string_map *map );
 extern varray *hl_hbvalues( realtime_string_map *map );
 extern int hl_hbsize( realtime_string_map *map );
-extern bool hl_hbremove( realtime_string_map *map, uchar *key );
 extern void hl_hbclear( realtime_string_map *map );
 extern realtime_string_map *hl_hbcopy( realtime_string_map *map );
 

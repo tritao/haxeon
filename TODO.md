@@ -225,8 +225,28 @@ machine; re-measure on a quiet one before acting on a ratio.
   go-ahead, since it is outward-facing.
 
 Held until other lanes finish: architecture plan §13 steps 4 (needs the
-typer's drain order) and 5 (live pruning), and the allocation work in
-`BindingWalker` and `CallResolver` (now on haxeon-7b's `MemberAccess`).
+typer's drain order) and 5 (live pruning).
+
+### Compiler speed
+
+The 2026-11-18 profile of a self-compile (Haxeon-built release compiler,
+29 s on one thread) is flat: compiler code 48%, string-keyed maps 18.5%,
+allocation and GC 17.6%, string operations 7%, int-keyed maps 5%, dynamic
+casts 3.6%. No caller of hashing or allocation is above 0.5%, so the
+allocation work planned in `BindingWalker` and `CallResolver` is dropped
+(about 0.3%). By phase: IR passes 39% (inliner 12%), typing 17%, HashLink
+lowering 17%, IR generation and SSA 11%, parsing 5.5%.
+
+- **Map runtime in the HashLink fork.** Step 1 (string keys with a known
+  length, a hash index as large as the map) took the self-compile from 30.1
+  to 29.0 s. Next: typed value maps (`Int`, `Bool`, `Float` stored unboxed)
+  and an IR `get` that returns a found flag and the value, so a map read
+  neither allocates nor casts. Then re-profile.
+- **Fewer lookups.** String-map time is spread over about 25 classes; the
+  lasting fix is identities as integers instead of names (ADR 0003 M3).
+- **The IR verifier runs in release builds** (4.4%). Skipping it there trades
+  away a check, so it is the user's call.
+- **Parallel and cached compilation** are ADR 0005 (compilation units).
 
 Waiting on the user:
 
