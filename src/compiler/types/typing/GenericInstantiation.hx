@@ -374,6 +374,13 @@ class GenericInstantiation {
 					default:
 				}
 			case AppliedType(name, patternArguments):
+				// A rest parameter's arguments arrive packed in an array (`RestArguments`): its element fixes the type's.
+				if (name == "haxe.Rest" && patternArguments.length == 1)
+					switch actual {
+						case TArray(actualElement):
+							inferTypeParameters(patternArguments[0], actualElement, parameters, substitutions, span);
+						default:
+					}
 				if ((name == "Iterable" || name == "Iterator") && patternArguments.length == 1) {
 					var element = IterationProtocol.element(session.declarations, actual, name == "Iterable");
 					if (element != null)

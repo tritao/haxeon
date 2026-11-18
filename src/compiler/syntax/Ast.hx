@@ -264,6 +264,9 @@ enum AstExpression {
 	 */
 	Extractor(expression:AstExpression, pattern:AstExpression, span:SourceSpan);
 
+	/** `...values` as a call's last argument: the array whose elements a rest parameter receives. Only valid there. */
+	Spread(expression:AstExpression, span:SourceSpan);
+
 	ThrowExpression(expression:AstExpression, span:SourceSpan);
 	Cast(expression:AstExpression, target:Null<AstType>, span:SourceSpan);
 

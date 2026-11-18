@@ -669,11 +669,41 @@ class Parser {
 	}
 
 	/** Parses call arguments up to the closing parenthesis, each anchored at its position in a call of `callee`. */
+	/** `...`, three dots, as before a rest parameter or a spread argument. */
+	function matchEllipsis():Bool {
+		if (!(check(TokenKind.Dot) && peekKind(1) == TokenKind.Dot && peekKind(2) == TokenKind.Dot))
+			return false;
+		advance();
+		advance();
+		advance();
+		return true;
+	}
+
+	/** Only a function's last argument may be a rest parameter, as in Haxe. */
+	function rejectEarlyRest(arguments:Array<AstArgument>):Void
+		for (index in 0...arguments.length - 1)
+			switch arguments[index].type {
+				case AppliedType("haxe.Rest", _):
+					throw new CompileError(new Diagnostic("E0002",
+						"Rest should only be used for the last function argument",
+						arguments[index].span));
+				default:
+			}
+
+	/** A rest parameter's type, `...values:T`, is `haxe.Rest<T>`, as in Haxe. */
+	static function restType(rest:Bool, type:AstType):AstType
+		return rest ? AppliedType("haxe.Rest", [type]) : type;
+
 	function parseCallArguments(callee:String):Array<AstExpression> {
 		var arguments:Array<AstExpression> = [], name = callee.substring(callee.lastIndexOf(".") + 1);
 		if (!check(TokenKind.RightParen)) {
-			do arguments.push(parseAnchoredExpression(name + "(" + arguments.length
-				+ ")")) while (match(TokenKind.Comma));
+			do {
+				// `...values`: an array whose elements a rest parameter receives.
+				var spreadStart = current().span,
+					spread = matchEllipsis() ? spreadStart : null,
+					argument = parseAnchoredExpression(name + "(" + arguments.length + ")");
+				arguments.push(spread == null ? argument : Spread(argument, spread.merge(expressionSpan(argument))));
+			} while (match(TokenKind.Comma));
 		}
 		return arguments;
 	}
@@ -739,9 +769,10 @@ class Parser {
 		var arguments = [];
 		if (!check(TokenKind.RightParen) && !recoveringAtEnd()) {
 			do {
-				var optional = match(TokenKind.Question),
+				var rest = matchEllipsis(),
+					optional = match(TokenKind.Question),
 					argumentToken = consume(TokenKind.Identifier);
-				var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
+				var argumentType = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
 					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 				arguments.push({
 					name: argumentToken.text,
@@ -751,6 +782,7 @@ class Parser {
 					defaultValue: defaultValue
 				});
 			} while (match(TokenKind.Comma));
+			rejectEarlyRest(arguments);
 		}
 		consume(TokenKind.RightParen);
 		var result = match(TokenKind.Colon) ? parseType() : allowMissingReturn
@@ -1169,10 +1201,11 @@ class Parser {
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
-					var optional = match(TokenKind.Question),
+					var rest = matchEllipsis(),
+						optional = match(TokenKind.Question),
 						argumentName = consume(TokenKind.Identifier).text;
 					consume(TokenKind.Colon);
-					var type = parseType(),
+					var type = restType(rest, parseType()),
 						span = previous().span,
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
@@ -1183,6 +1216,7 @@ class Parser {
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
+			rejectEarlyRest(arguments);
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
 				end = consume(TokenKind.Semicolon).span;
@@ -1245,9 +1279,10 @@ class Parser {
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
-					var optional = match(TokenKind.Question),
+					var rest = matchEllipsis(),
+						optional = match(TokenKind.Question),
 						argument = consume(TokenKind.Identifier),
-						type = match(TokenKind.Colon) ? parseType() : InferredType,
+						type = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
 						name: argument.text,
@@ -1257,6 +1292,7 @@ class Parser {
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
+			rejectEarlyRest(arguments);
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : null,
 				body = parseStatementOrBlock(),
@@ -1911,9 +1947,10 @@ class Parser {
 			var arguments = [];
 			if (!check(TokenKind.RightParen))
 				do {
-					var optional = match(TokenKind.Question),
+					var rest = matchEllipsis(),
+						optional = match(TokenKind.Question),
 						argument = consume(TokenKind.Identifier),
-						type = match(TokenKind.Colon) ? parseType() : InferredType,
+						type = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
 						name: argument.text,
@@ -1923,6 +1960,7 @@ class Parser {
 						defaultValue: defaultValue
 					});
 				} while (match(TokenKind.Comma));
+			rejectEarlyRest(arguments);
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : null,
 				body = parseAnonymousFunctionBody(),
@@ -3159,7 +3197,7 @@ class Parser {
 				PostfixIncrement(_, _, span), AssignmentValue(_, span), Lambda(_, _, _, span), And(_, _, span),
 				Or(_, _, span), Conditional(_, _, _, span), BlockExpression(_, _, span),
 				ThrowExpression(_, span), SwitchExpression(_, _, _, span), Cast(_, _, span), CheckType(_, _, span),
-				Capture(_, _, span), Extractor(_, _, span): span;
+				Capture(_, _, span), Extractor(_, _, span), Spread(_, span): span;
 			case ObjectLiteral(_, span), ArrayLiteral(_, span), MapLiteral(_, span),
 				ArrayComprehension(_, _, _, _, _, _, span),
 				MapComprehension(_, _, _, _, _, _, span), Range(_, _, span): span;

@@ -228,7 +228,8 @@ class CallResolver {
 		var fn = extension.fn, key = extension.key;
 		if (extension.owner.kind != ModuleFunctions)
 			MemberAccess.method(session, extension.owner.name, name, span);
-		if (arguments.length + 1 > fn.arguments.length)
+		if (arguments.length + 1 > fn.arguments.length
+			&& !RestArguments.isRest(fn.arguments[fn.arguments.length - 1].type))
 			fail("E1008", 'Function "$key" expects ${fn.arguments.length - 1} arguments, got ${arguments.length}',
 				span);
 		var parameters = BodyTyper.functionTypeParameters(fn);
@@ -515,8 +516,9 @@ class CallResolver {
 			?substitutions:Map<String, CompilerType>, virtualCall:Bool = false,
 			?leading:TypedExpression):Array<TypedExpression> {
 		// `leading` is a first argument typed already: a static extension's receiver.
-		var offset = leading == null ? 0 : 1,
-			parameters = callee.arguments,
+		var offset = leading == null ? 0 : 1;
+		arguments = RestArguments.pack(callee.arguments, arguments, offset, span);
+		var parameters = callee.arguments,
 			declared = bodyTyper.argumentTypesOf(callee, substitutions),
 			required = parameters.length;
 		while (required > offset && AstPredicates.isOptionalArgument(parameters[required - 1]))
@@ -587,6 +589,7 @@ class CallResolver {
 				arguments:Array<TypedExpression>,
 				substitutions:Map<String, CompilerType>
 			} {
+		arguments = RestArguments.pack(declaredArguments, arguments, leading == null ? 0 : leading.length, span);
 		var substitutions:Map<String, CompilerType> = presetSubstitutions == null ? [] : copyMap(presetSubstitutions),
 			typed:Array<Null<TypedExpression>> = [],
 			offset = leading == null ? 0 : leading.length,
@@ -1047,6 +1050,10 @@ class CallResolver {
 		if (functionType == null)
 			fail("E1007", callableName == null
 				? "Cannot call non-function expression" : 'Cannot call non-function "$callableName"', span);
+		var restIndex = functionType.arguments.length - 1;
+		arguments = restIndex >= 0
+			&& RestArguments.isRestValue(functionType.arguments[restIndex]) ? RestArguments.packAt(restIndex,
+			arguments, span) : RestArguments.packAt(-1, arguments, span);
 		var localParameters = callableName == null ? null : scope.localFunctionParameters(callableName);
 		if (localParameters != null && localParameters.length != functionType.arguments.length)
 			localParameters = null;

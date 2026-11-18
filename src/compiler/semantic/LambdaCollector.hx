@@ -113,7 +113,7 @@ class LambdaCollector {
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case AssignmentValue(store, _):
 				collect([store], functionName, module, generatedByModule);
-			case ThrowExpression(value, _), Capture(_, value, _):
+			case ThrowExpression(value, _), Capture(_, value, _), Spread(value, _):
 				collectLambdaExpression(value, functionName, module, generatedByModule);
 			case Extractor(expression, pattern, _):
 				collectLambdaExpression(expression, functionName, module, generatedByModule);

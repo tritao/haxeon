@@ -346,6 +346,12 @@ in_background run_compile_failure extractor-pattern-missing-constructor
 # Indexing a Dynamic value reads and writes the array it holds (haxeon.DynamicOps.index, setIndex).
 in_background run_case dynamic-index 0
 in_background run_compile_failure dynamic-index-string-key
+# Rest parameters: `...values:T` is a haxe.Rest<T> of the arguments from its position on (RestArguments).
+in_background run_case rest-parameters 0 hl main
+in_background run_compile_failure rest-parameter-not-last
+in_background run_compile_failure rest-spread-not-last
+in_background run_compile_failure rest-spread-no-rest
+in_background run_compile_failure rest-argument-type
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure switch-bool-missing

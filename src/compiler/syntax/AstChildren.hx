@@ -22,7 +22,7 @@ class AstChildren {
 				visitStatement(store, visitor);
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
 				CheckType(value, _, _), NewArray(_, value, _),
-				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _):
+				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _), Spread(value, _):
 				visitor.visitChild(value);
 			case Extractor(expression, pattern, _):
 				visitor.visitChild(expression);
@@ -114,7 +114,8 @@ class AstChildren {
 			case AssignmentValue(store, _): statementExpressions(store);
 			case Member(value, _, _), Negate(value, _), Not(value, _), ThrowExpression(value, _), Cast(value, _, _),
 				CheckType(value, _, _), NewArray(_, value, _),
-				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _): [value];
+				PostfixIncrement(value, _, _), BlockExpression(_, value, _), Capture(_, value, _),
+				Spread(value, _): [value];
 			case Extractor(expression, pattern, _): [expression, pattern];
 			case Add(a, b, _), Sub(a, b, _), Mul(a, b, _), Div(a, b, _), Mod(a, b, _), BitAnd(a, b, _), BitXor(a, b, _),
 				BitOr(a, b, _), ShiftLeft(a, b, _),

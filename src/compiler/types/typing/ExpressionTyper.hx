@@ -124,6 +124,9 @@ class ExpressionTyper {
 			case Capture(_, _, span):
 				fail("E1019", "A capture `name = pattern` binds only where the pattern itself is matched", span);
 				null;
+			case Spread(_, span):
+				fail("E1008", "A spread `...values` passes a rest argument, as a call's last argument", span);
+				null;
 			case Extractor(_, _, span):
 				fail("E1019", "An extractor `expression => pattern` matches only as a switch case", span);
 				null;

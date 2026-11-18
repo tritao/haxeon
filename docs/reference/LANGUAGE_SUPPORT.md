@@ -155,6 +155,11 @@ The current subset includes:
   only the full path names the variable, so the extension never changes code Haxe accepts. `haxeon lint --only
   module-namespace` names each use of it, for code that must also compile with Haxe.
 - Haxe-compatible `Sys` operations through the stable runtime ABI
+- Rest parameters, as in Haxe: the last argument of a function, method, constructor, local function or static extension
+  may be `...values:T`, a `haxe.Rest<T>` (`values[i]`, `values.length`, `for (value in values)`, `toArray()`, `append`,
+  `prepend`, `haxe.Rest.of(array)`). A call passes the arguments from its position on one by one (`sum(1, 2, 3)`, `sum()`),
+  or spreads an array (`sum(...numbers)`, which the rest then shares, as on Haxe's targets); a generic rest infers its type
+  from them. On HashLink and Wasm the rest is the array itself.
 - Indexing a `Dynamic` value (`json.items[0]`, `value[i] = v`, `value[i] += 1`, `value[i]++`), as Haxe does on HashLink:
   the index is an Int, a read gives the element of the array the value holds as Dynamic, or null past its end, and a
   write stores there, growing the array. A null value is a null access, and a negative index or a value that holds no array
@@ -216,7 +221,8 @@ HashLink):
 
 - An extractor pattern inside another pattern (`case Some(_.length => 3):`, `case {name: _.length => 3}:`): an extractor is a
   whole case only.
-- Rest parameters (`function sum(...values:Int)`).
+- A function type with a rest parameter written out (`(...values:Int)->Int`), and an arrow lambda's rest parameter
+  (`(...values:Int) -> values.length`), which Haxe also rejects.
 - Width subtyping between structures: a structure with more fields where one with fewer is expected
   (`var arm:{final value:Int;} = item;` for an `item` with more fields) is a type mismatch. It waits for structures
   lowered as views of one object, so the narrower value is the same object (`docs/design/STRUCTURE_VALUES.md`, step 4);
