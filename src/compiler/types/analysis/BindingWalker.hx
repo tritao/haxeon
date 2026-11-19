@@ -43,7 +43,11 @@ class BindingWalker implements AstChildVisitor {
 
 	/** The identity of the declaration of `name` at `span`. */
 	public static function key(name:String, span:SourceSpan):String
-		return name + "@" + span.start;
+		return keyOf(name, span.start);
+
+	/** `key` of a declaration at offset `start`. */
+	public static inline function keyOf(name:String, start:Int):String
+		return name + "@" + start;
 
 	/**
 	 * The local a declaration key (`key`) names. Names a running module sees, such as cell classes, use it rather than the key:
@@ -72,11 +76,17 @@ class BindingWalker implements AstChildVisitor {
 			index = bindingNames.length;
 		while (index > 0) {
 			index--;
-			if (isRoot(bindingNames[index], name, rootLength))
+			if (isRoot(bindingNames[index], name, rootLength)) {
+				resolvedIndex = index;
 				return bindingDeclarations[index];
+			}
 		}
+		resolvedIndex = -1;
 		return null;
 	}
+
+	/** Where in the visible bindings the last `resolve` found its name, or -1; a hook reads it for the name it was given. */
+	var resolvedIndex = -1;
 
 	static function isRoot(candidate:String, name:String, rootLength:Int):Bool {
 		if (candidate.length != rootLength)

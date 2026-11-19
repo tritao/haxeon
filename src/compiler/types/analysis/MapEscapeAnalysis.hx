@@ -39,23 +39,24 @@ class MapEscapeAnalysis {
 			var declaration = resolution.declarations[index];
 			if (declaration < 0)
 				continue;
-			var insideLambda = resolution.lambdaDepths[index] > 0;
-			switch resolution.events[index] {
+			var insideLambda = resolution.lambdaDepthAt(index) > 0;
+			switch resolution.referenceAt(index) {
 				case Use, Write, Callee:
 					escaped[declaration] = true;
 				case MemberCall:
-					var method:String = resolution.details[index];
+					var method = resolution.detailAt(index) ?? "";
 					if (method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0
 						|| (insideLambda && removesEntries(method)))
 						escaped[declaration] = true;
 					else
-						operandUses.set(BindingWalker.key(resolution.names[index], resolution.spans[index]), true);
+						operandUses.set(BindingWalker.keyOf(resolution.names[index], resolution.positions[index]),
+							true);
 				case Receiver:
-					if (insideLambda && removesEntries(resolution.details[index]))
+					if (insideLambda && removesEntries(resolution.detailAt(index) ?? ""))
 						escaped[declaration] = true;
 					else
-						operandUses.set(BindingWalker.key(resolution.names[index], resolution.spans[index]), true);
-				case Declare:
+						operandUses.set(BindingWalker.keyOf(resolution.names[index], resolution.positions[index]),
+							true);
 			}
 		}
 		// By key, as the walk decided: declarations that share a key are one.

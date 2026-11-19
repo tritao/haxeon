@@ -24,7 +24,7 @@ class AssignedDeclarations extends BindingWalker {
 	public static function fromResolution(resolution:BodyResolution):AssignedDeclarations {
 		var result = new AssignedDeclarations();
 		for (index in 0...resolution.length)
-			if (resolution.events[index] == Write && resolution.declarations[index] >= 0
+			if (resolution.referenceAt(index) == Write && resolution.declarations[index] >= 0
 				&& resolution.names[index].indexOf(".") < 0)
 				result.declarations.set(resolution.keyAt(index), true);
 		return result;

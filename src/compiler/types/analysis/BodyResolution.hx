@@ -7,53 +7,51 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.types.analysis.BindingWalker.BindingKind;
 
-/** What one entry of `BodyResolution` records. */
-enum abstract BodyReference(Int) {
-	/** A declaration: `declaration` is its id. */
-	var Declare = 0;
-
+/** What one reference of `BodyResolution` is. */
+enum abstract BodyReference(Int) to Int {
 	/** A bare read of a name. */
-	var Use = 1;
+	var Use = 0;
 
 	/** An assignment or increment of a name, or of a field of it. */
-	var Write = 2;
+	var Write = 1;
 
 	/** A call of a plain name. */
-	var Callee = 3;
+	var Callee = 2;
 
-	/** A call `local.method(...)` the parser spelled as one dotted name; `detail` is the method. */
-	var MemberCall = 4;
+	/** A call `local.method(...)` the parser spelled as one dotted name; its detail is the method. */
+	var MemberCall = 3;
 
-	/** A name that is the target of a collection operation (a call receiver, an index, a loop's iterable); `detail` is it. */
-	var Receiver = 5;
+	/** A name that is the target of a collection operation (a call receiver, an index, a loop's iterable); its detail is it. */
+	var Receiver = 4;
 }
 
 /**
  * A function body's names, resolved once (docs/design/BODY_RESOLUTION.md): its declarations, numbered from 0 in source
  * order, and every reference to a name in walk order, with the declaration it refers to (-1 for none: a field, function or
- * type) and the lambda and `try` depth it is at. Built by `BindingWalker`, the one implementation of the scoping rules.
+ * type) and the lambda depth it is at. Built by `BindingWalker`, the one implementation of the scoping rules.
  */
 class BodyResolution {
 	// Declarations, by id.
 	public final declarationKeys:Array<String> = [];
-	public final declarationNames:Array<String> = [];
 	public final declarationKinds:Array<BindingKind> = [];
 	public final declarationTypes:Array<Null<AstType>> = [];
 	public final declarationInitializers:Array<Null<AstExpression>> = [];
 
-	// Entries, in walk order.
-	public final events:Array<BodyReference> = [];
+	// References, in walk order: the kind and lambda depth packed in one Int, the name, the declaration and the position.
+	final codes:Array<Int> = [];
+
 	public final names:Array<String> = [];
 	public final declarations:Array<Int> = [];
-	/** Where the reference is; a declaration's entry has none (its key has its offset). */
-	public final spans:Array<Null<SourceSpan>> = [];
-	public final details:Array<Null<String>> = [];
-	public final lambdaDepths:Array<Int> = [];
-	public final tryDepths:Array<Int> = [];
+	public final positions:Array<Int> = [];
+
+	/** The method of a `MemberCall` or the operation of a `Receiver`, by reference. */
+	final details:Map<Int, String> = [];
+
+	static inline final KIND_BITS = 3;
 
 	function new() {}
 
-	/** The bindings of a function with `arguments` and `body`. */
+	/** The resolution of a function with `arguments` and `body`. */
 	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>):BodyResolution {
 		var result = new BodyResolution();
 		new BodyResolver(result).record(arguments, body);
@@ -63,7 +61,43 @@ class BodyResolution {
 	public var length(get, never):Int;
 
 	inline function get_length():Int
-		return events.length;
+		return codes.length;
+
+	public inline function referenceAt(index:Int):BodyReference
+		return cast(codes[index] & ((1 << KIND_BITS) - 1));
+
+	public inline function lambdaDepthAt(index:Int):Int
+		return codes[index] >> KIND_BITS;
+
+	public inline function detailAt(index:Int):Null<String>
+		return details.get(index);
+
+	/** The declaration key (`BindingWalker.key`) of reference `index`'s declaration, or null when it names none. */
+	public inline function keyAt(index:Int):Null<String> {
+		var declaration = declarations[index];
+		return declaration < 0 ? null : declarationKeys[declaration];
+	}
+
+	/** Called while recording (`of`); returns the declaration's id. */
+	public function recordDeclaration(key:String, kind:BindingKind, type:Null<AstType>,
+			initializer:Null<AstExpression>):Int {
+		declarationKeys.push(key);
+		declarationKinds.push(kind);
+		declarationTypes.push(type);
+		declarationInitializers.push(initializer);
+		return declarationKeys.length - 1;
+	}
+
+	/** Called while recording (`of`). */
+	public function recordReference(kind:BodyReference, name:String, declaration:Int, position:Int, detail:Null<String>,
+			lambdaDepth:Int):Void {
+		if (detail != null)
+			details.set(codes.length, detail);
+		codes.push((kind:Int) | (lambdaDepth << KIND_BITS));
+		names.push(name);
+		declarations.push(declaration);
+		positions.push(position);
+	}
 
 	/** Each loop's references, by the loop's position: `[first, end)` in the entries (`writesInLoop`). */
 	final loopFirst:Map<Int, Int> = [];
@@ -73,7 +107,7 @@ class BodyResolution {
 	/** Called while recording (`of`): the loop at `position` holds the entries from `first` to the last added. */
 	public function recordLoop(position:Int, first:Int):Void {
 		loopFirst.set(position, first);
-		loopEnd.set(position, events.length);
+		loopEnd.set(position, codes.length);
 	}
 
 	/**
@@ -86,7 +120,7 @@ class BodyResolution {
 			return null;
 		var written:Map<String, Bool> = [];
 		for (index in first...end)
-			if (events[index] == Write && declarations[index] >= 0 && names[index].indexOf(".") < 0)
+			if (referenceAt(index) == Write && declarations[index] >= 0 && names[index].indexOf(".") < 0)
 				written.set(declarationKeys[declarations[index]], true);
 		return written;
 	}
@@ -98,7 +132,7 @@ class BodyResolution {
 	public function recordLambda(position:Int, first:Int, firstDeclaration:Int):Void
 		lambdas.set(position, {
 			first: first,
-			end: events.length,
+			end: codes.length,
 			firstDeclaration: firstDeclaration,
 			endDeclaration: declarationKeys.length
 		});
@@ -118,9 +152,7 @@ class BodyResolution {
 			return null;
 		var free:Map<String, Bool> = [], freeAssigned:Map<String, Bool> = [], assigned:Map<String, Bool> = [];
 		for (index in lambda.first...lambda.end) {
-			var event = events[index];
-			if (event == Declare)
-				continue;
+			var event = referenceAt(index);
 			var declaration = declarations[index],
 				name = names[index],
 				own = declaration >= lambda.firstDeclaration && declaration < lambda.endDeclaration;
@@ -145,15 +177,12 @@ class BodyResolution {
 		var index = byPosition;
 		if (index == null) {
 			index = [];
-			for (entry in 0...events.length) {
-				var span = spans[entry];
-				if (events[entry] != Declare && span != null) {
-					var name = names[entry];
-					index.set(span.start + ":" + name, entry);
-					// `a.b.c` resolves by its root, which is what a member chain's typing looks up.
-					if (name.indexOf(".") > 0)
-						index.set(span.start + ":" + BindingWalker.rootOf(name), entry);
-				}
+			for (entry in 0...codes.length) {
+				var name = names[entry], position = positions[entry];
+				index.set(position + ":" + name, entry);
+				// `a.b.c` resolves by its root, which is what a member chain's typing looks up.
+				if (name.indexOf(".") > 0)
+					index.set(position + ":" + BindingWalker.rootOf(name), entry);
 			}
 			byPosition = index;
 		}
@@ -162,53 +191,14 @@ class BodyResolution {
 	}
 
 	public static inline final UNSEEN = "$unseen";
-
-	/** The declaration key (`BindingWalker.key`) of entry `index`'s declaration, or null when it refers to none. */
-	public inline function keyAt(index:Int):Null<String> {
-		var declaration = declarations[index];
-		return declaration < 0 ? null : declarationKeys[declaration];
-	}
-
-	function add(event:BodyReference, name:String, declaration:Int, span:Null<SourceSpan>, detail:Null<String>,
-			lambdaDepth:Int, tryDepth:Int):Void {
-		events.push(event);
-		names.push(name);
-		declarations.push(declaration);
-		spans.push(span);
-		details.push(detail);
-		lambdaDepths.push(lambdaDepth);
-		tryDepths.push(tryDepth);
-	}
-
-	function declare(name:String, key:String, kind:BindingKind, type:Null<AstType>,
-			initializer:Null<AstExpression>):Int {
-		var id = declarationKeys.length;
-		declarationKeys.push(key);
-		declarationNames.push(name);
-		declarationKinds.push(kind);
-		declarationTypes.push(type);
-		declarationInitializers.push(initializer);
-		return id;
-	}
-
-	/** Called while recording (`of`). */
-	public function recordDeclaration(name:String, key:String, kind:BindingKind, type:Null<AstType>,
-			initializer:Null<AstExpression>, lambdaDepth:Int, tryDepth:Int):Void
-		add(Declare, name, declare(name, key, kind, type, initializer), null, null, lambdaDepth, tryDepth);
-
-	/** Called while recording (`of`). */
-	public function recordReference(event:BodyReference, name:String, declaration:Int, span:SourceSpan,
-			detail:Null<String>,
-			lambdaDepth:Int, tryDepth:Int):Void
-		add(event, name, declaration, span, detail, lambdaDepth, tryDepth);
 }
 
 /** Walks a body once and writes what `BindingWalker` tells it into a `BodyResolution`. */
 private class BodyResolver extends BindingWalker {
 	final bindings:BodyResolution;
 
-	/** Declaration keys to ids; a key names one declaration of the body. */
-	final ids:Map<String, Int> = [];
+	/** The id of each visible binding, beside the walker's stack of them. */
+	final ids:Array<Int> = [];
 
 	public function new(bindings:BodyResolution) {
 		super();
@@ -218,30 +208,30 @@ private class BodyResolver extends BindingWalker {
 	public function record(arguments:Array<AstArgument>, body:Array<AstStatement>):Void
 		walkFunction(arguments, body);
 
-	function idOf(declaration:Null<String>):Int {
-		if (declaration == null)
-			return -1;
-		var id = ids.get(declaration);
-		return id == null ? -1 : id;
-	}
+	/** The id of the binding the last `resolve` found, or -1. */
+	inline function resolvedId():Int
+		return resolvedIndex < 0 ? -1 : ids[resolvedIndex];
 
 	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
-			initializer:Null<AstExpression>):Void {
-		ids.set(declaration, bindings.declarationKeys.length);
-		bindings.recordDeclaration(name, declaration, kind, type, initializer, lambdaDepth, tryDepth);
+			initializer:Null<AstExpression>):Void
+		ids.push(bindings.recordDeclaration(declaration, kind, type, initializer));
+
+	override function leaveScope(height:Int):Void {
+		super.leaveScope(height);
+		ids.resize(height);
 	}
 
 	override function used(name:String, declaration:Null<String>, span:SourceSpan):Void
-		bindings.recordReference(Use, name, idOf(declaration), span, null, lambdaDepth, tryDepth);
+		bindings.recordReference(Use, name, resolvedId(), span.start, null, lambdaDepth);
 
 	override function written(name:String, declaration:Null<String>, span:SourceSpan):Void
-		bindings.recordReference(Write, name, idOf(declaration), span, null, lambdaDepth, tryDepth);
+		bindings.recordReference(Write, name, resolvedId(), span.start, null, lambdaDepth);
 
 	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void
-		bindings.recordReference(Callee, name, idOf(declaration), span, null, lambdaDepth, tryDepth);
+		bindings.recordReference(Callee, name, resolvedId(), span.start, null, lambdaDepth);
 
 	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
-		bindings.recordReference(MemberCall, local, idOf(declaration), span, method, lambdaDepth, tryDepth);
+		bindings.recordReference(MemberCall, local, resolvedId(), span.start, method, lambdaDepth);
 
 	override function statement(value:AstStatement):Void
 		switch value {
@@ -270,7 +260,8 @@ private class BodyResolver extends BindingWalker {
 	override function receiver(target:AstExpression, operation:String):Void
 		switch target {
 			case Variable(name, span):
-				bindings.recordReference(Receiver, name, idOf(resolve(name)), span, operation, lambdaDepth, tryDepth);
+				resolve(name);
+				bindings.recordReference(Receiver, name, resolvedId(), span.start, operation, lambdaDepth);
 			default:
 				expression(target);
 		}
