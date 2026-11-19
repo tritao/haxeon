@@ -6,7 +6,7 @@ import compiler.core.Source.SourceSpan;
 class EnumVisibilityMain {
 	static function main():Void {
 		var spanFile = new SourceFile("Span.hx", "reference()");
-		var bareReference = new SourceSpan(spanFile, 0, 9, true);
+		var bareReference = SourceSpan.reference(spanFile, 0, 9, true);
 		if (bareReference.merge(new SourceSpan(spanFile, 9, 11)).isBareReference)
 			throw "merged non-reference spans inherited a bare-reference marker";
 
