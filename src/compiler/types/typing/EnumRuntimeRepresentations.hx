@@ -29,9 +29,11 @@ class EnumRuntimeRepresentations {
 					&& (compiler.types.Monomorphs.containsUnbound(type) || session.monomorphs.mentionsOpen(type)))
 					session.monomorphs.whenKnown(type, () -> discover(session.monomorphs.settled(type)));
 				else if (arguments.length > 0) {
-					type = compiler.types.Monomorphs.resolve(type);
-					if (!session.representation.containsTypeParameter(type, []))
-						session.output.discoverEnum(EnumRuntimeType.name(type), type);
+					// A new local, not `type` again: a closure above captures `type`, and writing it would keep it in a cell on
+					// every call.
+					var resolved = compiler.types.Monomorphs.resolve(type);
+					if (!session.representation.containsTypeParameter(resolved, []))
+						session.output.discoverEnum(EnumRuntimeType.name(resolved), resolved);
 				}
 			// Arguments contribute to identity, not necessarily storage. The instantiated
 			// payloads are discovered when this declaration is drained below.
