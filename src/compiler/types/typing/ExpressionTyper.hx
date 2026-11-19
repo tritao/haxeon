@@ -2143,7 +2143,8 @@ class ExpressionTyper {
 				// A property of an abstract or a class is read and written through its accessors.
 				var property = switch target {
 					case Member(object, field, _): {object: object, field: field};
-					case Variable(name, variableSpan) if (name.indexOf(".") < 0 && scope.resolve(name) == null
+					case Variable(name,
+						variableSpan) if (name.indexOf(".") < 0 && bodyTyper.localAt(target, scope) == null
 						&& scope.receiverType() != null):
 						{object: Variable("this", variableSpan), field: name};
 					case Variable(name, variableSpan) if (name.lastIndexOf(".") > 0):
@@ -2160,8 +2161,10 @@ class ExpressionTyper {
 				TPostfixLocal("", delta);
 		};
 		switch target {
-			case Variable(name, _):
-				scope.invalidateExpressionsForLocal(name);
+			case Variable(_, _):
+				var local = bodyTyper.localAt(target, scope);
+				if (local != null)
+					scope.invalidateExpressionsForBinding(local);
 			default:
 		}
 		return new TypedExpression(operation, typedTarget.type, span);
@@ -2173,10 +2176,10 @@ class ExpressionTyper {
 	 */
 	function storedType(target:AstExpression, typedTarget:TypedExpression, scope:Scope):CompilerType {
 		switch target {
-			case Variable(name, _):
-				var declared = scope.resolveDeclared(name);
-				if (declared != null)
-					return declared;
+			case Variable(_, _):
+				var local = bodyTyper.localAt(target, scope);
+				if (local != null)
+					return scope.declaredTypeOf(local);
 			default:
 		}
 		return switch typedTarget.expression {
@@ -2197,7 +2200,10 @@ class ExpressionTyper {
 	function isStaticProperty(target:AstExpression, scope:Scope):Bool {
 		var place:Null<{owner:Null<String>, field:String}> = switch target {
 			case Variable(name, _) if (name.indexOf(".") < 0):
-				scope.resolve(name) != null ? null : {owner: session.currentContext.lexicalOwner, field: name};
+				bodyTyper.localAt(target, scope) != null ? null : {
+					owner: session.currentContext.lexicalOwner,
+					field: name
+				};
 			case Variable(name, variableSpan):
 				var dot = name.lastIndexOf(".");
 				{

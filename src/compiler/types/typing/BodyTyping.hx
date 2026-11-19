@@ -45,6 +45,8 @@ interface BodyTyping {
 	function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
 			scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>;
 
+	function localAt(expression:AstExpression, scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>;
+
 	function typeBoundVariable(binding:Null<compiler.types.analysis.Scope.LocalBinding>, name:String, span:SourceSpan,
 			scope:Scope, expectedType:Null<CompilerType>):TypedExpression;
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression;

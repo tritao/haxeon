@@ -211,6 +211,17 @@ class Scope {
 		return null;
 	}
 
+	/**
+	 * Whether a local named `name` is visible here. A question about names, which a pattern asks: a bare name that is no
+	 * constructor binds when a local of that name is visible, rather than being read as an enum abstract's value.
+	 */
+	public function hasVisibleLocal(name:String):Bool {
+		for (value in visibleValues())
+			if (value.source == name)
+				return true;
+		return false;
+	}
+
 	/** The visible bindings, the innermost of each name, innermost first. */
 	public function visibleBindings():Array<LocalBinding> {
 		var values = visibleValues(),

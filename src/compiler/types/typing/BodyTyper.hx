@@ -928,9 +928,12 @@ class BodyTyper implements BodyTyping {
 		var known = knownExpressionType(expression);
 		if (known != null)
 			return known;
-		return switch compiler.syntax.AstPredicates.unannotatedExpression(expression) {
-			case Variable(name, _): name.indexOf(".") >= 0 ? typeExpression(expression,
-				scope).type : scope.resolve(name);
+		var unannotated = compiler.syntax.AstPredicates.unannotatedExpression(expression);
+		return switch unannotated {
+			case Variable(name, _): if (name.indexOf(".") >= 0) typeExpression(expression, scope).type else {
+					var local = localAt(unannotated, scope);
+					local == null ? null : scope.typeOf(local);
+				}
 			case Member(_, _, _): typeExpression(expression, scope).type;
 			case Cast(_, target, castSpan): target == null ? null : lowerType(target, castSpan);
 			case CheckType(_, type, checkSpan): lowerType(type, checkSpan);
@@ -1439,7 +1442,7 @@ class BodyTyper implements BodyTyping {
 				// Enum abstracts are erased to their underlying type, so the
 				// subject cannot name its values; a bare value name resolves as
 				// in any expression rather than binding the subject.
-				if (info == null && scope.resolve(name) == null && isEnumAbstractValueName(name))
+				if (info == null && !scope.hasVisibleLocal(name) && isEnumAbstractValueName(name))
 					return null;
 				if (info != null) null;
 				else if (name == "_") null;
@@ -1471,7 +1474,7 @@ class BodyTyper implements BodyTyping {
 					return own;
 			}
 			var owner = context.lexicalOwner;
-			if (scope.resolve(sourceName) != null || owner != null
+			if (scope.hasVisibleLocal(sourceName) || owner != null
 				&& findStaticFieldNullable(owner, sourceName) != null)
 				return null;
 		}
@@ -1689,6 +1692,17 @@ class BodyTyper implements BodyTyping {
 		}
 		return found;
 	}
+
+	/** The local `expression` reads, when it is one: a variable the resolution resolves, a temporary or a declared local. */
+	public function localAt(expression:AstExpression, scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>
+		return switch expression {
+			case Variable(name, span): referenceBinding(name, span, name, scope);
+			case TemporaryVariable(local, _):
+				var declaration = local.declaration;
+				declaration == null ? null : scope.bindingOf(declaration);
+			case DeclaredVariable(name, declaration, _): scope.bindingOf(BindingWalker.keyOf(name, declaration));
+			default: null;
+		};
 
 	/** A read of a temporary or of a source local named by its declaration, from syntax the typer built. */
 	public function typeBoundVariable(binding:Null<compiler.types.analysis.Scope.LocalBinding>, name:String,
@@ -2755,7 +2769,7 @@ class BodyTyper implements BodyTyping {
 		return span.isBareReference;
 
 	public function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
-		if (scope.resolve(name) != null)
+		if (localAt(Variable(name, span), scope) != null)
 			return typeExpression(Variable(name, span), scope);
 		var thisType = scope.receiverType();
 		if (thisType != null && findFieldType(thisType, name) != null)

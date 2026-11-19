@@ -338,7 +338,7 @@ class StatementTyper {
 		var source = span.isBareReference ? span.referenceName : null;
 		if (source == null || source == name || source.indexOf(".") >= 0)
 			return name;
-		if (scope.resolve(source) != null)
+		if (bodyTyper.referenceBinding(source, span, source, scope) != null)
 			return source;
 		var thisType = scope.receiverType(), owner = session.currentContext.lexicalOwner;
 		if (thisType != null && bodyTyper.findFieldType(thisType, source) != null

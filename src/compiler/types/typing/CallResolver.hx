@@ -1436,7 +1436,9 @@ class CallResolver {
 		arguments = restIndex >= 0
 			&& RestArguments.isRestValue(functionType.arguments[restIndex]) ? RestArguments.packAt(restIndex,
 			arguments, span) : RestArguments.packAt(-1, arguments, span);
-		var localParameters = callableName == null ? null : scope.localFunctionParameters(callableName);
+		var calleeLocal = callableName == null ? null : bodyTyper.localAt(callee, scope),
+			calleeFunction = calleeLocal == null ? null : calleeLocal.localFunction,
+			localParameters = calleeFunction == null ? null : calleeFunction.arguments;
 		if (localParameters != null && localParameters.length != functionType.arguments.length)
 			localParameters = null;
 		// A call may omit the arguments the function type flags optional, as in Haxe; the function fills their defaults.
@@ -1488,17 +1490,22 @@ class CallResolver {
 	 * What the closure being called can assign, when it is known: a lambda called where it is written, or a local
 	 * function that is never reassigned. Null for any other function value, which may assign anything captured.
 	 */
+	/** The local `name` at `span` refers to, in `scope` (`ClosureEffects.LocalResolver`). */
+	function outerLocal(name:String, span:SourceSpan, scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>
+		return bodyTyper.localAt(Variable(name, span), scope);
+
 	function calledClosureEffects(callee:AstExpression, callableName:Null<String>, scope:Scope):Null<ClosureEffects> {
 		switch callee {
 			case Lambda(arguments, body, _, _):
-				return ClosureEffects.of(arguments, body, scope, null, session.isPureCall);
+				return ClosureEffects.of(arguments, body, scope, outerLocal, null, session.isPureCall);
 			default:
 		}
-		var known = callableName == null ? null : scope.localFunction(callableName);
+		var calleeLocal = callableName == null ? null : bodyTyper.localAt(callee, scope),
+			known = calleeLocal == null ? null : calleeLocal.localFunction;
 		if (known == null)
 			return null;
 		return ClosureEffects.of(known.arguments, known.body, known.declaredIn == null ? scope : known.declaredIn,
-			[known], session.isPureCall);
+			outerLocal, [known], session.isPureCall);
 	}
 
 	public function resolveFunctionCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
@@ -1674,9 +1681,10 @@ class CallResolver {
 			if (methodCall != null)
 				return methodCall;
 		}
-		if (scope.resolve(name) != null) {
+		var calleeLocal = bodyTyper.localAt(Variable(name, span), scope);
+		if (calleeLocal != null) {
 			// A local function runs a known body, so a call through it only clears facts when that body might.
-			var local = scope.localFunction(name);
+			var local = calleeLocal.localFunction;
 			return typeClosureCall(Variable(name, span), arguments, span, scope, name,
 				local == null || !session.localFunctionIsPure(local,
 				session.currentContext.lexicalOwner));
@@ -2165,7 +2173,7 @@ class CallResolver {
 					fail("E1009", "Std.isOfType expects a type as its second argument", span);
 					"";
 			};
-			if (scope.resolve(targetName) != null)
+			if (bodyTyper.localAt(arguments[1], scope) != null)
 				fail("E1009", "Std.isOfType expects a type as its second argument", span);
 			if (name == "Std.isExactType" && !session.classDecls.exists(targetName))
 				fail("E1009", "Std.isExactType expects a class as its second argument", span);
@@ -2212,7 +2220,7 @@ class CallResolver {
 					fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
 					"";
 			};
-			if (scope.resolve(targetName) != null
+			if (bodyTyper.localAt(arguments[1], scope) != null
 				|| !(session.classDecls.exists(targetName) || session.interfaceDecls.exists(targetName)))
 				fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
 			// `value` is evaluated once: test the held copy, then cast it or yield null.

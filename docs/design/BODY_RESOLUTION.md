@@ -164,6 +164,16 @@ elements and `bindPattern` take `TemporaryVariable`), and the parameters of the 
 and none typed without a resolution. Making an unseen reference an error waits for step 4.2, since the temporary and
 declared forms are still typed through their names until then. Byte-identical on all 638 programs and the self-compile.
 
+Step 4.2 is done. The typer finds every local it reads, writes, captures or defines through its binding: references by
+the resolution's declaration (`BodyTyper.referenceBinding`, `localAt`), temporaries and declared locals by their keys,
+the receiver from the root scope, typed nodes by binding id or capture field (`Scope.typedBinding`), visible locals by
+enumeration (`visibleBindings`), and definitions by the binding `define` returns. It found two bugs on the way: a
+lambda's captures were kept by name, so a local it declared with a captured local's name was read as the capture
+(`capture-shadowed-in-lambda`), and the later alternatives of a case entered their bindings where the body's are
+looked up. Two questions stay questions about names, since a pattern's names are declarations, not references:
+whether a pattern's bare name is a visible local (`Scope.hasVisibleLocal`). Main-thread instructions as before
+(61.39G), 31 MB more allocated (binding tables, initializer resolutions).
+
 ## Step 4: the typer reads locals by binding
 
 **Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:

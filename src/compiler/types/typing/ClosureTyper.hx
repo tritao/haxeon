@@ -301,7 +301,8 @@ class ClosureTyper {
 		for (binding in lambdaStorage.closureWrites.keys())
 			context.storage.addClosureWrite(binding);
 		for (capture in captures) {
-			var declaration = scope.declarationOf(capture.field);
+			var captured = freeBindings.get(capture.field),
+				declaration = captured == null ? null : captured.declaration;
 			if (declaration != null && outerContext.storage.isClosureWrite(declaration))
 				context.storage.addClosureWrite(declaration);
 		}
