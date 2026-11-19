@@ -42,6 +42,9 @@ interface BodyTyping {
 	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
 			?bound:compiler.types.analysis.Scope.LocalBinding):TypedExpression;
 
+	function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
+			scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>;
+
 	function typeBoundVariable(binding:Null<compiler.types.analysis.Scope.LocalBinding>, name:String, span:SourceSpan,
 			scope:Scope, expectedType:Null<CompilerType>):TypedExpression;
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression;
@@ -112,7 +115,6 @@ interface BodyTyping {
 	/** With `CompileOptions.checkResolution`, whether the body resolver names `name`'s declaration for this reference. */
 	function checkingResolution():Bool;
 
-	function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void;
 	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool;
 
 	/** The values of a closed enum abstract keyed as switch cases are (with `null` for a nullable one), or null when the subject is not one. */

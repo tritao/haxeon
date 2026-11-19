@@ -208,6 +208,37 @@ class Scope {
 	public function isAssignedBinding(value:LocalBinding):Bool
 		return isAssignedId(value.id);
 
+	public function markAssignedBinding(value:LocalBinding):Void
+		ownAssigned().set(value.id, true);
+
+	public function setMapKeySourceOf(value:LocalBinding, source:Null<TypedExpression>):Void {
+		if (source == null) {
+			var sources = mapKeySources;
+			if (sources != null)
+				sources.remove(value.id);
+		} else
+			(mapKeySources == null ? mapKeySources = [] : mapKeySources).set(value.id, source);
+	}
+
+	public function recordAssignmentOf(value:LocalBinding, type:CompilerType):Void
+		facts.recordAssignment(value.id, type);
+
+	public function refineBinding(value:LocalBinding, type:CompilerType):Void
+		facts.refine(value.id, type);
+
+	/** Forgets the expression and map-key facts derived from `value`'s old value. */
+	public function invalidateExpressionsForBinding(value:LocalBinding):Void {
+		facts.invalidatePrefix('$' + 'expression:' + value.id);
+		// Map entries keyed by this local are filed under the map, so they only mention it.
+		facts.invalidateMentioning(':' + value.id);
+	}
+
+	/** A possibly reassigned local also loses field and map-key facts derived from its old value. */
+	public function invalidateBinding(value:LocalBinding):Void {
+		facts.invalidate(value.id);
+		invalidateExpressionsForBinding(value);
+	}
+
 	/** The map key source recorded for `value` in this scope or an enclosing one. */
 	public function mapKeySourceOf(value:LocalBinding):Null<TypedExpression> {
 		var scope:Null<Scope> = this;

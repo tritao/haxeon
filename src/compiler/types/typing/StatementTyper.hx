@@ -29,6 +29,7 @@ import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedStatement;
 import compiler.types.TypedAst.TypedSwitchCase;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
+import compiler.types.analysis.Scope.LocalBinding;
 
 typedef StaticFieldInfo = {owner:String, type:CompilerType};
 
@@ -274,25 +275,27 @@ class StatementTyper {
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
 		var written = name;
 		name = sourceTarget(name, span, scope);
-		checkWritten(written, name, span, scope);
-		if (scope.isScoped(name))
+		var dot = name.indexOf("."),
+			binding = dot < 0 ? bodyTyper.referenceBinding(written, span, name, scope) : null,
+			rootBinding = dot < 0 ? null : bodyTyper.referenceBinding(BindingWalker.rootOf(written), span,
+				name.substring(0, dot), scope);
+		if (binding != null && binding.scoped)
 			fail("E1002", 'Cannot reassign scoped binding "$name"', span);
-		var current = scope.resolve(name);
+		var current = binding == null ? null : scope.typeOf(binding);
 		// A Dynamic local, or a field of one, is incremented as `target = target + 1` with the Dynamic operators, and a nullable
 		// number the same way, reading null as 0 as Haxe does.
-		var dot = name.indexOf("."),
-			root = dot < 0 ? null : scope.resolve(name.substring(0, dot));
+		var root = rootBinding == null ? null : scope.typeOf(rootBinding);
 		// The stored type decides, not a narrowed one: a `Null<Int>` incremented once reads as an Int but still holds a Null<Int>.
-		if ((current != null
-			&& (sameType(current, TDynamic) || ExpressionTyper.isNullableNumber(scope.resolveDeclared(name))))
+		if ((binding != null && current != null
+			&& (sameType(current, TDynamic) || ExpressionTyper.isNullableNumber(scope.declaredTypeOf(binding))))
 			|| (current == null && root != null && sameType(root, TDynamic))) {
 			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
 			var step = delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span);
 			return typeAssignment(name, Add(Variable(name, span), step, span), span, scope);
 		}
-		if (current != null && !scope.isAssigned(name))
+		if (binding != null && !scope.isAssignedBinding(binding))
 			fail("E1023", 'Local "$name" may be used before assignment', span);
-		if (current == null) {
+		if (binding == null || current == null) {
 			var dot = name.indexOf("."),
 				owner = dot < 0 ? session.currentContext.lexicalOwner : name.substring(0, dot),
 				fieldName = dot < 0 ? name : name.substring(dot + 1, name.length),
@@ -321,13 +324,13 @@ class StatementTyper {
 		}
 		if (!sameType(current, TInt) && !sameType(current, TFloat))
 			fail("E1018", 'Increment requires a numeric local "$name"', span);
-		scope.invalidateExpressionsForLocal(name);
-		if (scope.isCapture(name)) {
-			if (!scope.isCellCapture(name))
+		scope.invalidateExpressionsForBinding(binding);
+		if (scope.isCaptured(binding)) {
+			if (!scope.isCellCaptured(binding))
 				fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 			return TCapturedIncrement(name, current, delta, span);
 		}
-		return TIncrement(scope.requireId(name), current, delta, span);
+		return TIncrement(binding.id, current, delta, span);
 	}
 
 	/**
@@ -352,8 +355,35 @@ class StatementTyper {
 	 * An assignment used as a value (`AssignmentValue`): the store `assignment`, then its value, the setter's result where a
 	 * setter stores it, else the value stored (`AssignedValue`).
 	 */
+	/**
+	 * A write from syntax the typer built, to a temporary or to a source local it names by declaration, typed with that
+	 * binding; null for any other statement.
+	 */
+	public function typeGeneratedAssignment(statement:AstStatement, scope:Scope,
+			?assigned:AssignedValue):Null<TypedStatement>
+		return switch statement {
+			case TemporaryAssignment(local, value, span):
+				var declaration = local.declaration;
+				typeAssignment(local.name, value, span, scope, assigned,
+					requiredBinding(declaration == null ? null : scope.bindingOf(declaration),
+					local.name, span));
+			case DeclaredAssignment(name, declaration, value, span):
+				typeAssignment(name, value, span, scope, assigned,
+					requiredBinding(scope.bindingOf(BindingWalker.keyOf(name, declaration)), name, span));
+			default: null;
+		};
+
+	static function requiredBinding(binding:Null<LocalBinding>, name:String, span:SourceSpan):LocalBinding {
+		if (binding == null)
+			throw new InternalError('Generated syntax writes "$name" before its declaration', span);
+		return binding;
+	}
+
 	public function typeAssignmentValue(assignment:AstStatement, span:SourceSpan, scope:Scope):TypedExpression {
 		var assigned = new AssignedValue(session, span);
+		var generated = typeGeneratedAssignment(assignment, scope, assigned);
+		if (generated != null)
+			return assigned.value(generated);
 		var statement = switch assignment {
 			case Assignment(name, expression, storeSpan): typeAssignment(name, expression, storeSpan, scope, assigned);
 			case FieldAssignment(receiver, fieldName, expression, storeSpan):
@@ -378,25 +408,17 @@ class StatementTyper {
 		return assigned == null ? call : assigned.setter(call);
 
 	/** With `CompileOptions.checkResolution`: the local a write's target is rooted at is the one the body resolver names. */
-	function checkWritten(written:String, name:String, span:SourceSpan, scope:Scope):Void {
-		if (!bodyTyper.checkingResolution())
-			return;
-		var root = compiler.types.analysis.BindingWalker.rootOf(name);
-		if (root != "this" && scope.resolve(root) != null)
-			bodyTyper.checkResolved(written, span, root, scope);
-	}
 
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope,
-			?assigned:AssignedValue):TypedStatement {
+			?assigned:AssignedValue, ?bound:LocalBinding):TypedStatement {
 		var written = name;
 		name = sourceTarget(name, span, scope);
-		checkWritten(written, name, span, scope);
 		var dot = name.lastIndexOf(".");
 		if (dot < 0) {
-			if (scope.isScoped(name))
+			var binding = bound != null ? bound : bodyTyper.referenceBinding(written, span, name, scope);
+			if (binding != null && binding.scoped)
 				fail("E1002", 'Cannot reassign scoped binding "$name"', span);
-			var expected = scope.resolveDeclared(name);
-			if (expected == null) {
+			if (binding == null) {
 				var thisType = scope.resolve("this"),
 					instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
 				if (instanceField != null) {
@@ -443,22 +465,23 @@ class StatementTyper {
 				return staticStore(staticField.owner, name, value, assignedValue.type, staticField.type, span, scope,
 					assigned);
 			}
+			var expected = scope.declaredTypeOf(binding);
 			var assignedValue = bodyTyper.typeExpression(expression, scope, expected),
 				value = stored(assigned, bodyTyper.coerce(assignedValue, expected, 'local "$name"', "E1002"),
 					assignedValue),
 				statement:TypedStatement;
-			if (scope.isCapture(name)) {
-				if (!scope.isCellCapture(name))
+			if (scope.isCaptured(binding)) {
+				if (!scope.isCellCaptured(binding))
 					fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
 				statement = TCapturedAssign(name, value, span);
 			} else
-				statement = TAssign(scope.requireId(name), value, span);
-			scope.markAssigned(name);
-			scope.setMapKeySource(name, value.mapKeySource);
-			scope.invalidateExpressionsForLocal(name);
+				statement = TAssign(binding.id, value, span);
+			scope.markAssignedBinding(binding);
+			scope.setMapKeySourceOf(binding, value.mapKeySource);
+			scope.invalidateExpressionsForBinding(binding);
 			var flowType = assignmentFlowType(assignedValue.type, value.type);
-			scope.recordAssignment(name, flowType);
-			scope.refine(name, flowType);
+			scope.recordAssignmentOf(binding, flowType);
+			scope.refineBinding(binding, flowType);
 			return statement;
 		}
 

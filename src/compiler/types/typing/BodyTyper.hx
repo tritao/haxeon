@@ -736,8 +736,6 @@ class BodyTyper implements BodyTyping {
 			case TemporaryDeclaration(local, type, initializer, span):
 				local.declaration = BindingWalker.key(local.name, span);
 				VarDeclaration(local.name, type, initializer, span);
-			case TemporaryAssignment(local, value, span): Assignment(local.name, value, span);
-			case DeclaredAssignment(name, _, value, span): Assignment(name, value, span);
 			default: statement;
 		};
 
@@ -750,6 +748,11 @@ class BodyTyper implements BodyTyping {
 				if (isNoReturnPlaceholder(output, statement))
 					continue;
 				fail("E1012", "Unreachable statement", statementSpan(statement));
+			}
+			var generatedWrite = statementTyper.typeGeneratedAssignment(statements[statementIndex], scope);
+			if (generatedWrite != null) {
+				output.push(generatedWrite);
+				continue;
 			}
 			var simpleStatement = statementTyper.typeSimpleStatement(statement, scope, result, statements,
 				statementIndex);
@@ -1378,18 +1381,6 @@ class BodyTyper implements BodyTyping {
 	 * Fails when the body's resolver names another declaration than the scope does for the local `name`, referenced as
 	 * `referenceName` at `span`. A reference the resolver did not see (syntax the typer built) is not compared.
 	 */
-	public function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void {
-		var resolution = context.resolution;
-		if (resolution == null)
-			return;
-		var resolved = resolution.declarationAt(span.start, referenceName);
-		if (resolved == compiler.types.analysis.BodyResolution.UNSEEN)
-			return;
-		var scoped = scope.declarationOf(name);
-		if (resolved != scoped)
-			throw new InternalError('--check-resolution: "$referenceName" in ${context.name} resolves to ${resolved == null ? "no local" : resolved} in the body resolver, but to ${scoped == null ? "no local" : scoped} in the typer\'s scope',
-				span);
-	}
 
 	/** While a case's pattern is typed, the names it binds, in order (`SwitchCaseTyper`). */
 	public var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>> = null;
@@ -1680,7 +1671,7 @@ class BodyTyper implements BodyTyping {
 	 * The binding a read of `name` at `span` refers to: the resolution's declaration there (none: not a local), or the
 	 * receiver for `this`. Under `--check-resolution` it must be the one the name finds in `scope`.
 	 */
-	function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
+	public function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
 			scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding> {
 		if (name == "this")
 			return scope.receiverBinding();
