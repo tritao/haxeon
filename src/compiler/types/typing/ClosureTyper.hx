@@ -22,6 +22,7 @@ import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.BodyResolution;
+import compiler.types.analysis.Scope.LocalBinding;
 import compiler.types.analysis.StorageRequirements;
 import compiler.types.analysis.Scope;
 
@@ -41,18 +42,26 @@ class ClosureTyper {
 	 * knows the lambda at `span`, else by walking it. `body` is `sourceBody` with the default-argument prologue, which writes
 	 * only the lambda's parameters. With `CompileOptions.checkResolution` the two answers must agree.
 	 */
+	static function requiredCell(cell:Null<String>, name:String):String {
+		if (cell == null)
+			throw new InternalError('Missing capture cell for "$name"');
+		return cell;
+	}
+
 	function lambdaFacts(arguments:Array<AstArgument>, sourceBody:Array<AstStatement>, body:Array<AstStatement>,
 			span:SourceSpan, outerContext:TypingContext):{
 				free:Map<String, Bool>,
 				freeAssigned:Map<String, Bool>,
-				assigned:Map<String, Bool>
+				assigned:Map<String, Bool>,
+				freeDeclarations:Map<String, String>
 			} {
 		function walked() {
 			var free = FreeVariables.of(arguments, body);
 			return {
 				free: free.names,
 				freeAssigned: free.assigned,
-				assigned: AssignedDeclarations.ofFunction(arguments, body).declarations
+				assigned: AssignedDeclarations.ofFunction(arguments, body).declarations,
+				freeDeclarations: free.declarations
 			};
 		}
 		var resolution = outerContext.resolution;
@@ -140,15 +149,24 @@ class ClosureTyper {
 		var facts = lambdaFacts(arguments, sourceBody, body, span, outerContext),
 			freeVariables = facts.free,
 			lambdaAssignments:Map<String, Bool> = [];
+		// The local a free name of the lambda refers to: its declaration's binding, or the receiver for `this`.
+		function freeBinding(name:String):Null<LocalBinding> {
+			var key = facts.freeDeclarations.get(name),
+				found = name == "this" ? scope.receiverBinding() : key == null ? null : scope.bindingOf(key);
+			if (session.checkResolution && found != scope.lookup(name))
+				throw new InternalError('--check-resolution: the lambda at ${span.start} in ${outerContext.name} captures a different "$name" by its declaration than by its name',
+					span);
+			return found;
+		}
 		for (name in facts.freeAssigned.keys()) {
-			var written = scope.declarationOf(name);
+			var written = freeBinding(name);
 			if (written != null)
-				lambdaAssignments.set(written, true);
+				lambdaAssignments.set(written.declaration, true);
 		}
 		// An unqualified instance method in a lambda is resolved through the lexical receiver even without a `this` reference in the syntax.
-		if (scope.resolve("this") != null)
+		if (scope.receiverBinding() != null)
 			for (name in freeVariables.keys())
-				if (scope.resolve(name) == null) {
+				if (freeBinding(name) == null) {
 					var method = bodyTyper.lexicalMethod(name),
 						receiverType = scope.resolve("this");
 					if (method != null && !method.isStatic || receiverType != null
@@ -156,6 +174,7 @@ class ClosureTyper {
 						freeVariables.set("this", true);
 				}
 		var pathConstants:Map<String, String> = [],
+			freeBindings:Map<String, LocalBinding> = [],
 			captures:Array<TypedCapture> = [],
 			captureCells:Map<String, String> = [],
 			captureTypes:Map<String, CompilerType> = [];
@@ -163,41 +182,39 @@ class ClosureTyper {
 		var freeNames = [for (name in freeVariables.keys()) name];
 		freeNames.sort(Reflect.compare);
 		for (name in freeNames) {
-			var capturedType = scope.resolve(name);
-			if (capturedType != null) {
-				var constant = scope.keyPathConstant(name);
+			var binding = freeBinding(name);
+			if (binding != null) {
+				freeBindings.set(name, binding);
+				var constant = binding.keyPathConstant;
 				if (constant != null) {
 					pathConstants.set(name, constant);
 					continue;
 				}
 				// A closure that only reads a local sees whatever it holds when the closure is created, so it must be assigned by then.
-				if (!facts.freeAssigned.exists(name) && !scope.isAssigned(name))
+				if (!facts.freeAssigned.exists(name) && !scope.isAssignedBinding(binding))
 					fail("E1023", 'Local "$name" may be used before assignment', span);
-				var captureType:CompilerType = capturedType;
-				var declaredCaptureType = scope.resolveDeclared(name);
-				var cellClass:Null<String> = null;
-				if (bodyTyper.boundCell(name, scope) != null)
-					cellClass = bodyTyper.boundCell(name, scope);
-				if (cellClass == null && scope.isCellCapture(name))
-					cellClass = scope.requireCellClass(name);
-				var captured = scope.declarationOf(name);
+				var captureType:CompilerType = scope.typeOf(binding);
+				var declaredCaptureType = scope.declaredTypeOf(binding);
+				var cellClass:Null<String> = session.currentContext.storage.cell(binding.id),
+					capturedCell = scope.cellClassOf(binding);
+				if (cellClass == null && scope.isCellCaptured(binding))
+					cellClass = capturedCell;
+				var captured = binding.declaration;
 				if (cellClass == null
-					&& captured != null
 					&& (outerContext.assignedDeclarations.exists(captured) || lambdaAssignments.exists(captured))) {
 					var newCellClass = '$' + 'cell:' + outerContext.name + ':' + name;
-					var bindingId = scope.requireId(name);
-					cellClass = outerContext.storage.requestBinding(bindingId, newCellClass, MutableCapture,
+					cellClass = outerContext.storage.requestBinding(binding.id, newCellClass, MutableCapture,
 						declaredCaptureType == null ? captureType : declaredCaptureType);
 				}
-				var bindingId = scope.requireId(name),
-					captureSource:TypedCaptureSource = if (scope.isCellCapture(name)) CaptureCellEnvironmentField(name,
-						scope.requireCellClass(name)) else if (scope.isCapture(name)) CaptureEnvironmentField(name)
-						else if (cellClass != null)
-						CaptureCellLocal(bindingId,
-						cellClass) else if (scope.isReceiver(name)) CaptureReceiver else CaptureLocal(bindingId);
+				var bindingId = binding.id,
+					captureSource:TypedCaptureSource = if (scope.isCellCaptured(binding))
+						CaptureCellEnvironmentField(name,
+						requiredCell(capturedCell, name)) else if (scope.isCaptured(binding))
+						CaptureEnvironmentField(name) else if (cellClass != null) CaptureCellLocal(bindingId,
+						cellClass) else if (binding.receiver) CaptureReceiver else CaptureLocal(bindingId);
 				lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
-					declaredCaptureType == null ? captureType : declaredCaptureType, scope.localFunction(name),
-					scope.declarationOf(name));
+					declaredCaptureType == null ? captureType : declaredCaptureType, binding.localFunction,
+					binding.declaration);
 				if (cellClass != null)
 					captureCells.set(name, cellClass);
 				captureTypes.set(name, captureType);
@@ -230,15 +247,19 @@ class ClosureTyper {
 				temporary.declaration = BindingWalker.key(localName, arguments[i].span);
 			lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
 		}
-		for (capture in captures)
+		for (capture in captures) {
+			var binding = freeBindings.get(capture.field);
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field),
-				captureCells.get(capture.field),
-				capture.bindingId, capture.storageType, scope.localFunction(capture.field),
-				scope.declarationOf(capture.field));
+				captureCells.get(capture.field), capture.bindingId, capture.storageType,
+				binding == null ? null : binding.localFunction, binding == null ? null : binding.declaration);
+		}
 		for (name in freeNames) if (pathConstants.exists(name)) {
 			// Like a capture, the same local as the one outside, with that declaration's identity.
-			typedBodyScope.define(name, scope.resolve(name), span, true, null, false, null, scope.declarationOf(name));
-			typedBodyScope.setKeyPathConstant(name, pathConstants.get(name));
+			var outer = freeBindings.get(name);
+			if (outer == null)
+				throw new InternalError('Missing the binding of key path constant "$name"');
+			typedBodyScope.define(name, scope.typeOf(outer), span, true, null, false, null,
+				outer.declaration).keyPathConstant = pathConstants.get(name);
 		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
 		// function with a new environment type: closures made before the edit keep the code that reads their environment.

@@ -218,12 +218,16 @@ class BodyResolution {
 	public function lambdaFacts(position:Int):Null<{
 		free:Map<String, Bool>,
 		freeAssigned:Map<String, Bool>,
-		assigned:Map<String, Bool>
+		assigned:Map<String, Bool>,
+		freeDeclarations:Map<String, String>
 	}> {
 		var lambda = lambdas.get(position);
 		if (lambda == null)
 			return null;
-		var free:Map<String, Bool> = [], freeAssigned:Map<String, Bool> = [], assigned:Map<String, Bool> = [];
+		var free:Map<String, Bool> = [],
+			freeAssigned:Map<String, Bool> = [],
+			assigned:Map<String, Bool> = [],
+			freeDeclarations:Map<String, String> = [];
 		for (index in lambda.first...lambda.end) {
 			var event = referenceAt(index);
 			if (event == PlaceWrite || event == PathSet)
@@ -233,12 +237,19 @@ class BodyResolution {
 				own = declaration >= lambda.firstDeclaration && declaration < lambda.endDeclaration;
 			if (!own) {
 				free.set(BindingWalker.rootOf(name), true);
+				if (declaration >= 0)
+					freeDeclarations.set(BindingWalker.rootOf(name), declarationKeys[declaration]);
 				if (event == Write && name.indexOf(".") < 0)
 					freeAssigned.set(name, true);
 			} else if (event == Write && name.indexOf(".") < 0)
 				assigned.set(declarationKeys[declaration], true);
 		}
-		return {free: free, freeAssigned: freeAssigned, assigned: assigned};
+		return {
+			free: free,
+			freeAssigned: freeAssigned,
+			assigned: assigned,
+			freeDeclarations: freeDeclarations
+		};
 	}
 
 	/**
