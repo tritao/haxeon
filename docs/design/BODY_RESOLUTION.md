@@ -69,6 +69,19 @@ Three layers, each with one job.
 
 Measured at each step; the target is the walker time, about 6%, down to the one resolution walk.
 
+## What the typer rewrites
+
+The typer builds syntax of its own while it types: held iterables and `match` temporaries (`ExpressionTyper`,
+`CallResolver`), the old value of a postfix update, intrinsic expansions (`DiffIntrinsics`), and the rewrites of extractor
+and structure patterns into nested switches. A resolution made before typing has no entry for it. So:
+
+- the resolver resolves the syntax as the typer receives it (after canonicalization and `AbstractConstructorNormalizer`);
+- the typer finds a reference's binding by the reference's position and name;
+- a local the typer itself introduces stays in `Scope`: its name is generated and unique, and it is used only inside the
+  syntax that introduced it, so no scoping rule is implemented twice;
+- the pattern rewrites carry the user's bindings over with their names and spans; the check mode shows whether every one
+  still finds its binding, and a rewrite that does not moves before resolution.
+
 ## Open questions
 
 - **Closure writes and look-ahead.** A call can only run a closure made before it, so recording a lambda's writes when
