@@ -2554,7 +2554,7 @@ class IrGenerator {
 					builder.call(intrinsic, [input, builder.typeValue(target)], Bool);
 				} else builder.call(GenericOwnerErasure.typeTestName(origin, intrinsic == "__std_is_exact_type"),
 					[input], Bool);
-			case TCall(name, args) if (StringTools.startsWith(name, "$generic:")
+			case TCall(name, args) if (compiler.semantic.GeneratedNames.isSpecialization(name)
 				&& args.length > 0
 				&& optionalFieldPlace(args[0]) != null):
 				var place = optionalFieldPlace(args[0]);
@@ -4444,7 +4444,8 @@ class IrGenerator {
 
 	function erasedOwnerOperation(type:CompilerType, operation:String, member:String):String
 		return switch type {
-			case TInstance(NominalKind.Class, name, _): '$' + 'generic-erased:$name:$operation:$member';
+			case TInstance(NominalKind.Class, name, _): compiler.semantic.GeneratedNames.erasedOperation(name,
+				operation, member);
 			default: throw new InternalError("Erased generic operation requires a class owner");
 		};
 

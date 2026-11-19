@@ -274,7 +274,8 @@ class TypeRepresentation {
 			representations.push(decision.representation);
 		}
 		validateOwnerComplexity(representations, name, declaration.span);
-		var specialization = session.genericSpecializations.request('$' + 'owner:' + name, representations, policies),
+		var specialization = session.genericSpecializations.request(compiler.semantic.GeneratedNames.ownerOrigin(name),
+			representations, policies),
 			existing = ownerRequests.get(specialization.name);
 		ownerAliases.set(SemanticSignature.type(type), specialization.name);
 		if (existing != null) {

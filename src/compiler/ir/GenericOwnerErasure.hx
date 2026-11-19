@@ -4,21 +4,18 @@ import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
+import compiler.semantic.GeneratedNames;
 
 /** Operations through G<Dynamic> dispatch to the physical owner without changing object identity. */
 class GenericOwnerErasure {
-	static inline final PREFIX = "$generic-erased:";
-
-	/** The full accessor behind an erased operation's inlinable fast path (see `generate`). */
-	static inline final DISPATCH_PREFIX = "$generic-erased-dispatch:";
 	static inline final TYPE_TEST_PREFIX = "$generic-type-test:";
 	/** Whether `name` is an operation through an erased generic owner (`$generic-erased:Owner:get|set|call:member`). */
 	public static inline function isOperation(name:String):Bool
-		return StringTools.startsWith(name, PREFIX);
+		return GeneratedNames.isErasedOperation(name);
 
 	/** The erased-generic call a bound method of an erased owner makes (see IrMethodReferences). */
 	public static inline function erasedCallName(owner:String, member:String):String
-		return PREFIX + owner + ":call:" + member;
+		return GeneratedNames.erasedOperation(owner, "call", member);
 
 	public static function typeTestName(owner:String, exact:Bool):String
 		return TYPE_TEST_PREFIX + (exact ? "exact:" : "instance:") + owner;
@@ -29,7 +26,7 @@ class GenericOwnerErasure {
 		var requests:Map<String, {arguments:Array<IrType>, result:IrType}> = [];
 		for (fn in functions) for (block in fn.blocks) for (instruction in block.instructions)
 			switch instruction.value {
-			case Call(output, name, arguments) if (StringTools.startsWith(name.name, PREFIX)):
+			case Call(output, name, arguments) if (GeneratedNames.isErasedOperation(name.name)):
 				var signature = {arguments: [for (argument in arguments) argument.type], result: output.type},
 					previous = requests.get(name.name);
 				if (previous != null && (!Type.enumEq(previous.result, signature.result)
@@ -43,7 +40,7 @@ class GenericOwnerErasure {
 		var names = [for (name in requests.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
-			var parts = name.substr(PREFIX.length).split(":"), signature = requests.get(name);
+			var parts = GeneratedNames.erasedOperationPath(name).split(":"), signature = requests.get(name);
 			if (parts.length != 3 || signature == null || signature.arguments.length == 0
 				|| (switch (signature.arguments[0]) {
 					case Dyn: false;
@@ -126,7 +123,7 @@ class GenericOwnerErasure {
 					ProviderOperations.detailed(ProviderOperation.GenericErased, operation + ":" + member))));
 				continue;
 			}
-			var dispatch = DISPATCH_PREFIX + owner + ":" + operation + ":" + member;
+			var dispatch = GeneratedNames.erasedDispatch(owner, operation, member);
 			functions.push(new IrFunction(dispatch, builder.arguments, signature.result, builder.blocks,
 				Provider(TypeKey.of(Obj(owner)),
 				ProviderOperations.detailed(ProviderOperation.GenericErased, operation + ":" + member + ":dispatch"))));

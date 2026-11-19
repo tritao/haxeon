@@ -660,7 +660,7 @@ class IrValueArrayPlaceMethods {
 						instruction = Call(out, IrSymbol.of(nested), [array, index].concat(arguments));
 						handled = true;
 					case Call(out, method, arguments)
-						if (StringTools.startsWith(method.name, "$generic:") && arguments.length > 0
+						if (compiler.semantic.GeneratedNames.isSpecialization(method.name) && arguments.length > 0
 						&& aliases.exists(arguments[0].id)):
 						for (argument in arguments.slice(1))
 							if (aliases.exists(argument.id) || optionalScalars.exists(argument.id))

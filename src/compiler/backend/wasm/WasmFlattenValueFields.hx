@@ -345,7 +345,7 @@ class WasmFlattenValueFields {
 	}
 
 	function isPlaceMethod(owner:String, name:String):Bool {
-		if (StringTools.startsWith(name, "$generic:")) {
+		if (compiler.semantic.GeneratedNames.isSpecialization(name)) {
 			var fn = originals.get(name);
 			return fn != null && fn.arguments.length > 0 && fn.arguments[0].name == "this";
 		}

@@ -266,18 +266,8 @@ class SemanticIndex {
 	 * A call to a generic specialization depends on the generic function it was made from: editing or re-laying-out that
 	 * origin drops the specialization, and only callers that know the edge are retyped to request it again.
 	 */
-	static function specializationOrigin(name:String):String {
-		if (!StringTools.startsWith(name, "$generic:"))
-			return name;
-		var ownerPrefix = "$generic:$owner:";
-		if (StringTools.startsWith(name, ownerPrefix)) {
-			var end = name.indexOf("[", ownerPrefix.length), method = name.lastIndexOf(">.");
-			if (end >= 0 && method > end)
-				return name.substring(ownerPrefix.length, end) + "." + name.substr(method + 2);
-		}
-		var end = name.indexOf("[", 9);
-		return end < 0 ? name : name.substring(9, end);
-	}
+	static function specializationOrigin(name:String):String
+		return GeneratedNames.specializationOrigin(name);
 
 	public function indexTypedFunction(fn:TypedFunction, resolve:String->Null<SemanticSymbolId>,
 			resolveEnumCase:(String, Int) -> Null<SemanticSymbolId>,

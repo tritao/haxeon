@@ -88,7 +88,7 @@ class GenericSpecializationRegistry {
 			?policies:Array<String>):GenericSpecialization {
 		var signature = [for (type in representations) SemanticSignature.type(type)].join(","),
 			policy = policies == null ? "legacy" : policies.join(","),
-			key = origin + "[" + policy + "]<" + signature + ">";
+			key = GeneratedNames.specializationKey(origin, policy, signature);
 		if (names.exists(key))
 			return {
 				origin: origin,
@@ -96,7 +96,7 @@ class GenericSpecializationRegistry {
 				name: names.get(key),
 				isNew: false
 			};
-		var name = '$' + 'generic:$key';
+		var name = GeneratedNames.specialization(key);
 		names.set(key, name);
 		return {
 			origin: origin,

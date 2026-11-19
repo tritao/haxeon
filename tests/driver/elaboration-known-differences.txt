@@ -18,17 +18,17 @@ structural-iteration	iteration argument: a specialization's concrete iteration a
 test-shards	iteration argument: a specialization's concrete iteration argument meets the body's own element type
 key-path-semantics	key path argument: a specialization's constant key path meets the body's own parameter
 key-paths	key path argument: a specialization's constant key path meets the body's own parameter
-bounded-generic	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-enum-interface-conformance	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-generic-constrained-owner-hash	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-generic-constrained-owner-lookup-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-generic-struct-functions	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-generic-struct-owner-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-helper-ownership-enum-equality	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-raw-representable	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-scoped-cleanup	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-specialized-map-scalar-keys	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
-struct-value-semantics	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+bounded-generic	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+enum-interface-conformance	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+generic-constrained-owner-hash	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+generic-constrained-owner-lookup-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+generic-struct-functions	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+generic-struct-owner-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+helper-ownership-enum-equality	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+raw-representable	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+scoped-cleanup	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+specialized-map-scalar-keys	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
+struct-value-semantics	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class (the pass re-resolves it; queued with haxeon-e4)
 enum-generic-owner	owner specialization: an enum in the owner's parameters is specialized differently
 generic-nullable-substitution	owner specialization: an optional field of a Null<T> owner argument
 generic-struct-class	owner specialization: a specialized subclass of a generic base class

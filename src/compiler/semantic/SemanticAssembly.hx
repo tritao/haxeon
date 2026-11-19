@@ -1036,7 +1036,7 @@ class SemanticAssembly {
 
 	/** The generic function or method a call or closure target was made from, or null when the target is not generic. */
 	static function genericOrigin(target:String):Null<String> {
-		if (StringTools.startsWith(target, "$generic:"))
+		if (GeneratedNames.isSpecialization(target))
 			return enclosingFunction(target);
 		// A bound method (a method value): made from its owner's method.
 		var reference = compiler.ir.IrMethodReferences.of(target);
@@ -1080,12 +1080,7 @@ class SemanticAssembly {
 
 	static function enclosingFunction(name:String):String {
 		name = LambdaName.outermost(name);
-		if (StringTools.startsWith(name, "$generic:")) {
-			var bracket = name.indexOf("[", 9);
-			if (bracket > 0)
-				name = name.substring(9, bracket);
-		}
-		return name;
+		return GeneratedNames.specializedFunction(name);
 	}
 
 	static function addReverseCall(reverseCalls:Map<String, Array<String>>, callee:String, caller:String):Void {

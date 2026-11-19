@@ -114,11 +114,13 @@ regular recursive generic enums are in the next section.
   under haxeon-e4's contract in that note. Service lane, in order:
   1. Stage 2 items 1 to 3: boundaries, layout constants and helper choice
      for a type parameter recorded by the typer and inserted by the pass,
-     byte-identical, with the equivalence test made permanent. The pass,
-     `--elaborate-generics` and its driver comparison, boundaries (item 1)
-     and the equality and array-search helpers (item 3) are in for erased
-     generic classes (path 7). Left: specializations (paths 6 and 8) under
-     the option, then layout constants (item 2) and the other helpers.
+     byte-identical, with the equivalence test made permanent. Done for
+     paths 6, 7 and 8 under `--elaborate-generics`; the programs that still
+     differ are listed with their reasons in
+     `tests/driver/elaboration-known-differences.txt`. Besides item 4,
+     two groups there are representation decisions items 1 to 3 did not
+     name: a constrained type parameter's member reached through its bound,
+     and iteration and key-path arguments a specialization makes concrete.
   2. Finish step 2.4: type the parser's repaired syntax with the real typer,
      then delete the language service's approximate typer (the item below).
   3. The Android reload crash (below).

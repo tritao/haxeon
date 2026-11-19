@@ -224,7 +224,7 @@ class IrOptionalFieldStorage {
 							args);
 						handled = true;
 					case Call(out, called, arguments)
-						if (StringTools.startsWith(called.name, "$generic:") && arguments.length > 0
+						if (compiler.semantic.GeneratedNames.isSpecialization(called.name) && arguments.length > 0
 						&& aliases.exists(arguments[0].id)):
 						var args:Array<IrValue> = [owner];
 						for (argument in arguments.slice(1)) {
