@@ -557,9 +557,11 @@ class HlLower {
 		for (literal in symbols.stringConstantGlobals())
 			code.constants.push({
 				global: literal.global,
+				// The String's fields: its data, its length and its hash, which a string map computes and keeps on first use.
 				fields: [
 					symbols.internString(literal.value),
-					symbols.internInt(HlSymbolTable.utf16Length(literal.value))
+					symbols.internInt(HlSymbolTable.utf16Length(literal.value)),
+					symbols.internInt(0)
 				]
 			});
 		code.ints = symbols.ints;
