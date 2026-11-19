@@ -286,6 +286,11 @@ class WatchRun {
 			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry,
 			Json.stringify(arguments)]);
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
+		// macOS strips DYLD_* from what the protected /bin/sh inherits, so the app would not find its native
+		// libraries. Set the search path again inside the shell.
+		var dyldPath = Sys.systemName() == "Mac" ? Sys.getEnv("DYLD_LIBRARY_PATH") : null;
+		if (dyldPath != null && dyldPath.length > 0)
+			command = "export DYLD_LIBRARY_PATH=" + quote(dyldPath) + "; " + command;
 		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
 		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
 		if (Sys.systemName() == "Windows")

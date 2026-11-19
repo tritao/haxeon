@@ -449,6 +449,9 @@ class DesktopUiHost {
 									frameRequested = false;
 									liveRuntime.resize(liveRuntime.logicalWidth, liveRuntime.logicalHeight, width,
 										height);
+									// macOS reports SurfaceReady before its Metal layer has a size, so the ready
+									// event's framebuffer query can be 0x0. The first frame carries the real size.
+									liveRuntime.setSurfaceReady(width > 0 && height > 0);
 									var frameStartedAt = Sys.time();
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();

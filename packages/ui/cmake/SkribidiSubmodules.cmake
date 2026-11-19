@@ -41,8 +41,11 @@ if(NK_LIBRARY_TYPE STREQUAL "SHARED" AND NOT EMSCRIPTEN)
         HB_NO_BUFFER_VERIFY
         HB_NO_MATH
         HB_NO_META
-        HB_NO_OT_FONT_GLYPH_NAMES
         HB_NO_OT_SHAPE_FRACTIONS)
+    # CoreText's glyph-name callbacks in the pinned HarfBuzz require this feature.
+    if(NOT APPLE)
+        target_compile_definitions(harfbuzz PRIVATE HB_NO_OT_FONT_GLYPH_NAMES)
+    endif()
     if(NOT APPLE)
         if(NKUI_ENABLE_HARFBUZZ_MINI)
             target_compile_definitions(harfbuzz PRIVATE HB_MINI)
