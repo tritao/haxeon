@@ -8,6 +8,7 @@ import compiler.syntax.Ast.AstObjectField;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstSwitchExpressionCase;
+import compiler.syntax.Ast.TemporaryLocal;
 
 /** An extractor, `expression => pattern`, and the name that captures the value it reads (`name = expression => pattern`). */
 typedef ExtractorParts = {
@@ -262,8 +263,13 @@ class ExtractorPatterns {
 	} return switch value {
 		case Variable(local, _) if (local != "this" && local != "_"):
 			{declaration: null, value: value};
+		case TemporaryVariable(_, _):
+			{declaration: null, value: value};
 		default:
-			{declaration: VarDeclaration(name, null, value, span), value: Variable(name, span)};
+			var held = new TemporaryLocal(name);
+			{
+				declaration:TemporaryDeclaration(held, null, value, span), value:TemporaryVariable(held, span)
+			};
 	};
 
 	/** `expression` with `_` the value it reads: a block that declares `_` for it. */

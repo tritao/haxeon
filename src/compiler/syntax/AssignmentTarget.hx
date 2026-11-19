@@ -2,6 +2,7 @@ package compiler.syntax;
 
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.TemporaryLocal;
 
 typedef StabilizedAssignmentTarget = {
 	final target:AstExpression;
@@ -15,23 +16,23 @@ class AssignmentTarget {
 		var bindings:Array<AstStatement> = [];
 		var stable = switch target {
 			case Index(array, offset, targetSpan):
-				var receiverName = temporary("receiver", span), indexName = temporary("index", span);
-				bindings.push(VarDeclaration(receiverName, null, array, spanOf(array)));
-				bindings.push(VarDeclaration(indexName, null, offset, spanOf(offset)));
-				Index(Variable(receiverName, spanOf(array)), Variable(indexName, spanOf(offset)), targetSpan);
+				var receiver = temporary("receiver", span), index = temporary("index", span);
+				bindings.push(TemporaryDeclaration(receiver, null, array, spanOf(array)));
+				bindings.push(TemporaryDeclaration(index, null, offset, spanOf(offset)));
+				Index(TemporaryVariable(receiver, spanOf(array)), TemporaryVariable(index, spanOf(offset)), targetSpan);
 			case Member(object, field, targetSpan):
-				var receiverName = temporary("receiver", span);
+				var receiver = temporary("receiver", span);
 				// Keep a value receiver as a place, rather than binding an ordinary value copy.
 				// The typer checks its original expression before the generated local hides it.
-				bindings.push(VarDeclaration(receiverName, null, Call("$value.place", [object], spanOf(object)),
+				bindings.push(TemporaryDeclaration(receiver, null, Call("$value.place", [object], spanOf(object)),
 					spanOf(object)));
-				Member(Variable(receiverName, spanOf(object)), field, targetSpan);
+				Member(TemporaryVariable(receiver, spanOf(object)), field, targetSpan);
 			case Variable(_, _): target;
 			default: target;
 		};
 		return {target: stable, bindings: bindings};
 	}
 
-	static function temporary(kind:String, span:compiler.core.Source.SourceSpan):String
-		return '$' + 'compound:$kind:${span.start}';
+	static function temporary(kind:String, span:compiler.core.Source.SourceSpan):TemporaryLocal
+		return new TemporaryLocal('$' + 'compound:$kind:${span.start}');
 }

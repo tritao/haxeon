@@ -28,6 +28,7 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchExpressionCase;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.analysis.AstScan;
 import compiler.types.analysis.FlowAnalysis;
 import compiler.types.analysis.Scope;
@@ -1319,14 +1320,14 @@ class ExpressionTyper {
 	}
 
 	/** `0...held.length`, the indices of the array a comprehension over `index => element` holds. */
-	static function indexRange(held:String, span:SourceSpan):AstExpression
-		return Range(IntegerLiteral(0, span), Member(Variable(held, span), "length", span), span);
+	static function indexRange(held:TemporaryLocal, span:SourceSpan):AstExpression
+		return Range(IntegerLiteral(0, span), Member(TemporaryVariable(held, span), "length", span), span);
 
 	/**
 	 * `expression` evaluated with `element` bound to `held[index]`. A nested `for` is flattened into its parent, so the
 	 * binding goes into each part of that inner comprehension rather than around it, which would hide it.
 	 */
-	static function bindElement(element:String, held:String, index:String, expression:AstExpression,
+	static function bindElement(element:String, held:TemporaryLocal, index:String, expression:AstExpression,
 			span:SourceSpan):AstExpression
 		return switch expression {
 			case ArrayComprehension(innerKey, innerValue, iterable, filter, value, true, innerSpan):
@@ -1335,11 +1336,12 @@ class ExpressionTyper {
 					bindElement(element, held, index, value, span), true, innerSpan);
 			default:
 				BlockExpression([
-					VarDeclaration(element, null, Index(Variable(held, span), Variable(index, span), span), span)
+					VarDeclaration(element, null, Index(TemporaryVariable(held, span), Variable(index, span), span),
+						span)
 				], expression, span);
 		};
 
-	static function bindOptional(element:String, held:String, index:String, expression:Null<AstExpression>,
+	static function bindOptional(element:String, held:TemporaryLocal, index:String, expression:Null<AstExpression>,
 			span:SourceSpan):Null<AstExpression>
 		return expression == null ? null : bindElement(element, held, index, expression, span);
 
@@ -1369,8 +1371,8 @@ class ExpressionTyper {
 			case TArray(element):
 				if (valueName != null) {
 					// `[for (index => element in array) ...]` loops over the indices and binds each element.
-					var held = "__haxeon_array" + span.start;
-					return bodyTyper.typeExpression(BlockExpression([VarDeclaration(held, null, iterable, span)],
+					var held = new TemporaryLocal("__haxeon_array" + span.start);
+					return bodyTyper.typeExpression(BlockExpression([TemporaryDeclaration(held, null, iterable, span)],
 						ArrayComprehension(keyName, null, indexRange(held, span),
 						bindOptional(valueName, held, keyName, predicate, span),
 						bindElement(valueName, held, keyName, value, span), flattened, span),
@@ -1505,8 +1507,8 @@ class ExpressionTyper {
 		switch typedIterable.type {
 			case TArray(element):
 				if (valueName != null) {
-					var held = "__haxeon_array" + span.start;
-					return bodyTyper.typeExpression(BlockExpression([VarDeclaration(held, null, iterable, span)],
+					var held = new TemporaryLocal("__haxeon_array" + span.start);
+					return bodyTyper.typeExpression(BlockExpression([TemporaryDeclaration(held, null, iterable, span)],
 						MapComprehension(keyName, null, indexRange(held, span),
 						bindOptional(valueName, held, keyName, predicate, span),
 						bindElement(valueName, held, keyName, key, span),
@@ -2236,8 +2238,9 @@ class ExpressionTyper {
 			target = stable.target;
 			bindings = stable.bindings;
 		}
-		var old = "__haxeon_incremented", // Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
-			updated = Add(Variable(old, span),
+		var old = new TemporaryLocal("__haxeon_incremented"),
+			// Adding keeps an Int an Int; subtracting would give a Float, as `target -= 1` does.
+			updated = Add(TemporaryVariable(old, span),
 				delta > 0 ? IntegerLiteral(1, span) : Negate(IntegerLiteral(1, span), span), span),
 			store = switch target {
 				case Variable(name, _): Assignment(name, updated, span);
@@ -2247,8 +2250,8 @@ class ExpressionTyper {
 					fail("E1018", "Postfix increment target is not assignable", span);
 					Assignment("", updated, span);
 			};
-		var statements = bindings.concat([VarDeclaration(old, null, target, span), store]);
-		return bodyTyper.typeExpression(BlockExpression(statements, Variable(old, span), span), scope);
+		var statements = bindings.concat([TemporaryDeclaration(old, null, target, span), store]);
+		return bodyTyper.typeExpression(BlockExpression(statements, TemporaryVariable(old, span), span), scope);
 	}
 
 	public static function containsNullLiteral(expression:AstExpression):Bool

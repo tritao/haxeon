@@ -33,6 +33,7 @@ import compiler.types.TypeRelations;
 import compiler.types.DeclarationIndex;
 import compiler.semantic.SemanticSignature;
 import compiler.semantic.StaticExtensionTable.StaticExtensionOwnerKind;
+import compiler.syntax.Ast.TemporaryLocal;
 
 typedef EnumConstructorInfo = {
 	?aliasType:CompilerType,
@@ -178,7 +179,8 @@ class CallResolver {
 	 */
 	public function typeEnumMatch(object:AstExpression, pattern:AstExpression, span:SourceSpan,
 			scope:Scope):TypedExpression {
-		var matched = "__haxeon_match" + span.start, patterns = session.currentContext.postfixMatchPatterns;
+		var matched = new TemporaryLocal("__haxeon_match" + span.start),
+			patterns = session.currentContext.postfixMatchPatterns;
 		var cases:Array<AstSwitchExpressionCase> = [
 			{
 				patterns: compiler.syntax.Parser.expandPatternAlternatives(pattern),
@@ -189,8 +191,9 @@ class CallResolver {
 		];
 		patterns.push(compiler.syntax.Parser.expressionSpan(pattern));
 		try {
-			var typed = bodyTyper.typeExpression(BlockExpression([VarDeclaration(matched, null, object, span)],
-				SwitchExpression(Variable(matched, span), cases, BoolLiteral(false, span), span), span), scope);
+			var typed = bodyTyper.typeExpression(BlockExpression([TemporaryDeclaration(matched, null, object, span)],
+				SwitchExpression(TemporaryVariable(matched, span), cases, BoolLiteral(false, span), span), span),
+				scope);
 			patterns.pop();
 			return typed;
 		} catch (error:haxe.Exception) {
@@ -304,12 +307,12 @@ class CallResolver {
 			result = parameters.length == 0 ? bodyTyper.functionResultType(fn,
 				fn.span) : session.declarations.types.resultType(fn,
 				substitutions),
-			held = "__haxeon_bound" + span.start,
+			held = new TemporaryLocal("__haxeon_bound" + span.start),
 			inner = new Scope(scope),
 			arguments:Array<AstArgument> = [],
-			passed:Array<AstExpression> = [Variable(held, span)];
-		inner.define(held, value.type, span);
-		bodyTyper.bindCell(held, span, inner, value.type);
+			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
+		inner.define(held.name, value.type, span);
+		bodyTyper.bindCell(held.name, span, inner, value.type);
 		for (index in 1...fn.arguments.length) {
 			var argumentName = "__haxeon_argument" + index;
 			arguments.push({
@@ -333,7 +336,7 @@ class CallResolver {
 				case TVoid: Expression(call, span);
 				default: Return(call, span);
 			}], 'bound:$name@${span.start}', span), inner, expected);
-		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held), value, span)], bound), bound.type,
+		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held.name), value, span)], bound), bound.type,
 			span);
 	}
 
@@ -387,13 +390,13 @@ class CallResolver {
 	 */
 	function boundEnumValueFunction(value:TypedExpression, typeFunction:String, name:String, span:SourceSpan,
 			scope:Scope):TypedExpression {
-		var held = "__haxeon_bound" + span.start,
+		var held = new TemporaryLocal("__haxeon_bound" + span.start),
 			inner = new Scope(scope),
 			arguments:Array<AstArgument> = [],
 			argumentTypes:Array<CompilerType> = [],
-			passed:Array<AstExpression> = [Variable(held, span)];
-		inner.define(held, value.type, span);
-		bodyTyper.bindCell(held, span, inner, value.type);
+			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
+		inner.define(held.name, value.type, span);
+		bodyTyper.bindCell(held.name, span, inner, value.type);
 		if (typeFunction == "Type.enumEq") {
 			arguments.push({name: "__haxeon_argument1", type: InferredType, span: span, optional: false});
 			argumentTypes.push(value.type);
@@ -408,7 +411,7 @@ class CallResolver {
 			bound = bodyTyper.typeExpression(Lambda(arguments, [Return(Call(typeFunction, passed, span), span)],
 			'bound:$name@${span.start}', span), inner,
 			TFunction(argumentTypes, result, FunctionTypes.ofArguments(arguments)));
-		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held), value, span)], bound), bound.type,
+		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held.name), value, span)], bound), bound.type,
 			span);
 	}
 
@@ -2209,10 +2212,11 @@ class CallResolver {
 				|| !(session.classDecls.exists(targetName) || session.interfaceDecls.exists(targetName)))
 				fail("E1009", "Std.downcast expects a class or interface as its second argument", span);
 			// `value` is evaluated once: test the held copy, then cast it or yield null.
-			var held = '$' + 'downcast:${span.start}',
-				test = Call("Std.isOfType", [Variable(held, span), arguments[1]], span);
-			return bodyTyper.typeExpression(BlockExpression([VarDeclaration(held, null, arguments[0], span)],
-				Conditional(test, Cast(Variable(held, span), NamedType(targetName), span), NullLiteral(span), span),
+			var held = new TemporaryLocal('$' + 'downcast:${span.start}'),
+				test = Call("Std.isOfType", [TemporaryVariable(held, span), arguments[1]], span);
+			return bodyTyper.typeExpression(BlockExpression([TemporaryDeclaration(held, null, arguments[0], span)],
+				Conditional(test, Cast(TemporaryVariable(held, span), NamedType(targetName), span), NullLiteral(span),
+				span),
 				span),
 				scope, expectedType);
 		}

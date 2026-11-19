@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstSwitchExpressionCase;
+import compiler.syntax.Ast.TemporaryLocal;
 
 /** A switch whose structure patterns were rewritten: `subject` is the tuple of the fields they read, `values` the cases' patterns. */
 typedef StructureSwitch = {
@@ -173,10 +174,12 @@ class StructurePatterns {
 		value:AstExpression} return switch subject {
 			case Variable(name, _) if (name != "this"):
 				{temporary: null, value: subject};
+			case TemporaryVariable(_, _):
+				{temporary: null, value: subject};
 			default:
-				var name = "__haxeon_structure" + span.start;
+				var held = new TemporaryLocal("__haxeon_structure" + span.start);
 				{
-					temporary:VarDeclaration(name, null, subject, span), value:Variable(name, span)
+					temporary:TemporaryDeclaration(held, null, subject, span), value:TemporaryVariable(held, span)
 				};
 		};
 

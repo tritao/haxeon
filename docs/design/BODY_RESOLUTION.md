@@ -144,6 +144,13 @@ Until the typer reads locals by binding, it types these as the named forms under
 treats them the same way; the switches over syntax take them beside their named forms. Byte-identical: the self-compile,
 and the six programs that use the diff intrinsics compiled before and after.
 
+The other temporary families followed: the held array of key-value iteration and comprehensions, the increment of a
+place, compound assignment receivers (`AssignmentTarget`, which the parser uses too), the subjects of `.match`,
+`Std.downcast` and the pattern rewrites, and the bound value of an extension or enum function value. A holder that is
+already a temporary is used as it is, as a local name was. Every program compiles to the same bytes before and after
+(638). Left: the parameters of lambdas the typer builds (`__haxeon_argument*`, which needs a temporary parameter), the
+extractor's `part` (a binding in pattern position), and the two families that refer to source locals.
+
 ## Progress
 
 - `BodyResolution` records a body's declarations and references; `--check-resolution` compares it with the typer's

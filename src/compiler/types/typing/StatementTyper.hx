@@ -13,6 +13,7 @@ import compiler.syntax.Ast.AstCatch;
 import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstType;
+import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.analysis.AstScan;
@@ -818,17 +819,18 @@ class StatementTyper {
 		if (valueName != null)
 			switch typedIterable.type {
 				case TArray(_):
-					var array = "__haxeon_array" + span.start,
+					var array = new TemporaryLocal("__haxeon_array" + span.start),
 						loopBody:Array<AstStatement> = [
-							VarDeclaration(valueName, null, Index(Variable(array, span), Variable(name, span), span),
-								span)
+							VarDeclaration(valueName, null, Index(TemporaryVariable(array, span), Variable(name, span),
+								span), span)
 						];
 					for (statement in body)
 						loopBody.push(statement);
 					return typeIf(BoolLiteral(true, span), [
-						VarDeclaration(array, null, iterable, span),
-						ForIn(name, null, Range(IntegerLiteral(0, span), Member(Variable(array, span), "length", span),
-							span), loopBody, span)
+						TemporaryDeclaration(array, null, iterable, span),
+						ForIn(name, null,
+							Range(IntegerLiteral(0, span), Member(TemporaryVariable(array, span), "length",
+							span), span), loopBody, span)
 					], [], span, scope, result);
 				default:
 			}
