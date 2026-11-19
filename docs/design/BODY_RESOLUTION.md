@@ -1,6 +1,6 @@
 # Resolve a body once, type it, then decide storage
 
-Status: step 1's check mode is in (`--check-resolution`); step 2 in progress (assigned declarations, map privacy, loops and lambdas read the resolution). Order changed: step 2 before the typer reads the resolver, since step 2 is where the time is and the check mode already holds the two resolvers equal. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
+Status (revised 2026-11-19: storage goes straight to IR generation, without an intermediate typed-AST pass): step 1's check mode is in (`--check-resolution`); step 2 in progress (assigned declarations, map privacy, loops and lambdas read the resolution). Order changed: step 2 before the typer reads the resolver, since step 2 is where the time is and the check mode already holds the two resolvers equal. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
 (function-local names as numbers) and, for storage, ADR 0003's layering (representation decisions after typing).
 
 ## Problem
@@ -40,8 +40,12 @@ Three layers, each with one job.
    maps, and closure writes if they need look-ahead) are computed from the resolution in one pass over its references, not
    by walking the syntax. Loops and lambdas read their part by span. What typing finds itself (a lambda's captures and
    writes) it records as it types.
-3. **Storage in the IR.** Cells, closure environments and cell classes are representation: a closure-conversion pass over
-   the IR decides them, where every local is a value and every capture is explicit. The typed AST then has no cell nodes.
+3. **Storage in the IR.** Cells, closure environments and cell classes are representation, decided where the
+   representation is built: IR generation, as closure conversion. The typer emits plain locals and captures, and each typed
+   lambda records its captures by binding id with whether it writes them; IR generation decides from these facts which
+   locals become cells, makes the cell classes and the environments. The typed AST then has no cell nodes. Locals kept in
+   a cell only because they are written in a `try` and read after it follow HashLink's trap semantics, so they belong to
+   HashLink lowering if the Wasm backends do not need them.
 
 `BindingWalker` becomes the resolver; `LexicalStorageAnalysis`, `FreeVariables`, the walks of `MapEscapeAnalysis` and
 `AssignedDeclarations`, the storage paths of the typer and the eight cell node kinds go.
@@ -53,8 +57,8 @@ Three layers, each with one job.
 - **Scoping edge cases against Haxe first**, as differential fixtures: shadowing in sibling blocks, a name declared after a
   lambda that reads the outer one, loop variables captured by closures, catches, pattern bindings in guards and in several
   patterns of one case, local functions calling themselves, a closure made in a loop and called on a later iteration.
-- **Byte-identical** through step 3; step 4 changes the IR and is checked by the compiler reaching the same bytes when it
-  compiles itself, and by the program and Wasm suites.
+- **Byte-identical** through step 4; step 5 may change the IR and is checked by the compiler reaching the same bytes when it
+  compiles itself, the capture fixtures, and the program and Wasm suites.
 
 ## Steps
 
@@ -63,9 +67,14 @@ Three layers, each with one job.
    comprehensions, captures); `Scope`'s name lookup for locals goes when every kind agrees.
 2. **Typing facts** from the resolution: assigned declarations and private maps in one pass; a lambda's captures and
    writes recorded by `ClosureTyper`. The walks of `AssignedDeclarations`, `MapEscapeAnalysis` and `FreeVariables` go.
-3. **Storage after typing**, as a pass over the typed body that produces today's typed AST (cells by binding id).
-   `LexicalStorageAnalysis` and the typer's storage paths go. Byte-identical.
-4. **Storage in the IR**: the pass becomes closure conversion over the IR, and the typed cell nodes go.
+3. **Captures on typed lambdas.** `ClosureTyper` records each lambda's captures by binding id with whether it writes them;
+   compared with the storage pre-pass under the check mode. The typer still emits cells.
+4. **IR generation decides cells** from those facts (captured and written; value bindings written through a field;
+   local functions that refer to themselves; written in a `try` and read after it), with today's names and order, and
+   stops reading the typed cell forms. Byte-identical. Then the typer stops emitting them: the eight typed cell kinds,
+   `BindingStoragePlan`, `LexicalStorageAnalysis`, the cell metadata of `Scope` and E1013 (a written capture without a
+   cell, which cannot happen once every write is known) go.
+5. **Exception-edge cells in HashLink lowering**, if the Wasm backends do not need them.
 
 Measured at each step; the target is the walker time, about 6%, down to the one resolution walk.
 
