@@ -56,6 +56,25 @@ class QueryEngineMain {
 		expect(database.get(total, 0) == 6, "same magnitude");
 		expect(callsOf("magnitude") == 4 && callsOf("total") == 2, "early cutoff: an equal magnitude reuses the total");
 
+		// A kind digested by its computation: free to digest, but a recomputed value always counts as changed.
+		var computedMagnitude = database.register(QueryKind.computed("computed-magnitude", function(db, key) {
+			count("computed-magnitude");
+			var value = db.get(source, key);
+			return value < 0 ? -value : value;
+		}, sameInt));
+		var computedReader = database.register(QueryKind.derived("computed-reader", function(db, key) {
+			count("computed-reader");
+			return db.get(computedMagnitude, key) + 1;
+		}, digestInt, sameInt));
+		database.set(source, 4, 3);
+		expect(database.get(computedReader, 4) == 4, "a reader of a computed digest");
+		database.set(source, 5, 1);
+		expect(database.get(computedReader, 4) == 4 && callsOf("computed-reader") == 1, "unrelated change: reused");
+		database.set(source, 4, -3);
+		expect(database.get(computedReader, 4) == 4, "same magnitude");
+		expect(callsOf("computed-magnitude") == 2 && callsOf("computed-reader") == 2,
+			"no early cutoff through a computed digest: its reader is recomputed");
+
 		// Reads are verified in order: a guard that changes stops verification before the reads behind it.
 		var guarded = database.register(QueryKind.derived("guarded", function(db, _) {
 			count("guarded");
@@ -117,6 +136,6 @@ class QueryEngineMain {
 		expect(mismatch != null && mismatch.query == "leaky(0)",
 			"check mode names the query that read unrecorded state");
 
-		Sys.println("PASS: query engine reuses, cuts off early, verifies reads in order, reports cycles, sweeps and checks reuse");
+		Sys.println("PASS: query engine reuses, cuts off early, digests by computation, verifies reads in order, reports cycles, sweeps and checks reuse");
 	}
 }

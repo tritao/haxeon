@@ -52,9 +52,20 @@ Memo
 Reads are checked in recorded order, so a dependency that would only be read after a changed one is never brought up to
 date needlessly.
 
-**Digests** are 64-bit structural hashes computed by each value type, with two independent 32-bit halves, as
-`SourceFile` does. A digest match is trusted in normal builds; check mode compares whole values. Values that are already
-interned (types, symbols) digest by id.
+**Digests** are 64-bit hashes with two independent 32-bit halves, as `SourceFile` does. A digest match is trusted in
+normal builds; check mode compares whole values. A kind digests its values one of two ways:
+
+- **By content** (`QueryKind.derived`, every input): the value type feeds its parts. Values that are interned (types,
+  symbols) digest by id. This is what early cutoff needs.
+- **By computation** (`QueryKind.computed`): the kind, the key and the digests of the reads, in order. It costs nothing
+  and is sound, since a computation is a function of its reads, but a recomputed value always counts as changed, so its
+  readers get no early cutoff.
+
+IR functions are digested by computation. Measured on the compiler's own sources (2026-11-19): the full encoding of all
+8,538 functions at the scalar replacement stage (`IrFunctionStateCodec.encode`, which `IrFunctionDigest` hashes) is
+98.5 MB and takes 3.1 s to make and 0.4 s to hash, while the pass itself takes 30 ms. A content digest per function per
+pass would cost a hundred times the work it saves. `IrFunctionDigest` stays for inputs set once per build where a
+function is new, for check mode, and for tests.
 
 **Cycles.** The engine keeps the stack of active queries. A query that reads one already on the stack is a cycle: the engine
 reports it with the stack's kinds and keys. A query kind may declare a cycle result (the `DeclarationTypes` rule: report
@@ -112,10 +123,14 @@ Each step is byte-identical on the self-compile and the program suites, and keep
 2. **Inputs:** module sources, the options key, the target profile.
 3. **`DeclarationTypes` on the engine:** its `recordRead` becomes engine reads, and its `DeclarationType` edges become
    recorded dependencies. This proves the engine on the typer's existing rule.
-4. **The first passes (M2):** the passes classed (a) in `IR_PASS_INVENTORY.md` as per-function rewrite queries over the
-   previous stage's output. Measure the compile server's one-string edit and no-op.
-5. **Summarized passes:** the (b) passes with contribution and summary queries, in the inventory's order of edit cost;
-   then the fixpoints; the inliner last.
+4. **The passes (M2), in pipeline order from the front.** A pass gets reuse only if the function it is given is the
+   same object or digest as last build, and an unported whole-program stage before it makes new objects every build,
+   so every function would look changed. The chain therefore starts where objects are kept today, IR generation's
+   per-function cache (`ModuleState.irFunctions`), and each stage is ported after the ones before it: per-function
+   rewrites as computed queries, whole-program stages (pruning, dispatch walks) as summaries over per-function
+   contributions. The inventory's order by edit cost decides nothing until the chain reaches a pass. Measure the
+   compile server's one-string edit and no-op at each step.
+5. **The fixpoints, then the inliner,** where the chain reaches them.
 6. **Lowering and assembly (M4b),** then the front-end caches (M4c).
 
 Measures for every step: self-compile cold (no more than 2% slower while stages are being moved), the compile server's

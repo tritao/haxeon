@@ -256,6 +256,10 @@ Pass<C, S>
 
 ## Order of ports
 
+Superseded for the engine (2026-11-19, [QUERY_ENGINE.md](QUERY_ENGINE.md) step 4): a pass only gets reuse once every
+stage before it keeps unchanged functions as the same objects, so ports go in pipeline order from the front. The order
+below by edit cost remains the measure of what each port is worth.
+
 By edit cost, with what must come first:
 
 0. **The 3.4M floor.** Profile one of the five passes in finding 2 and remove the shared cause. No interface needed; up to 17M (14%).

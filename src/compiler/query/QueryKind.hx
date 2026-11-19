@@ -14,6 +14,9 @@ interface AnyQueryKind {
 	function sweep(revision:Int):Int;
 
 	function describe(key:Int):String;
+
+	/** Feeds the digest of `key`'s current value; a read that closed a cycle, and has no value yet, feeds a mark of its own. */
+	function feedDigest(key:Int, digest:Digest):Void;
 }
 
 /** One query's result, with what its computation read and when it last changed. */
@@ -49,7 +52,8 @@ class QueryKind<V> implements AnyQueryKind {
 	public var index(default, null):Int = -1;
 
 	final compute:Null<(QueryDatabase, Int) -> V>;
-	final digestValue:(V, Digest) -> Void;
+	/** Null for a kind digested by its computation (`computed`). */
+	final digestValue:Null<(V, Digest) -> Void>;
 	final sameValue:(V, V) -> Bool;
 	final onCycle:Null<Int->V>;
 	final keyName:Null<Int->String>;
@@ -57,7 +61,7 @@ class QueryKind<V> implements AnyQueryKind {
 	final active:Array<Bool> = [];
 	final scratch = new Digest();
 
-	function new(name:String, compute:Null<(QueryDatabase, Int) -> V>, digestValue:(V, Digest) -> Void,
+	function new(name:String, compute:Null<(QueryDatabase, Int) -> V>, digestValue:Null<(V, Digest) -> Void>,
 			sameValue:(V, V) -> Bool, onCycle:Null<Int->V>, keyName:Null<Int->String>) {
 		this.name = name;
 		this.compute = compute;
@@ -80,11 +84,30 @@ class QueryKind<V> implements AnyQueryKind {
 			same:(V, V) -> Bool, ?onCycle:Int->V, ?keyName:Int->String):QueryKind<V>
 		return new QueryKind<V>(name, compute, digest, same, onCycle, keyName);
 
+	/**
+	 * A derived kind whose digest is that of its computation: the kind, the key and the digests of what it read, in order.
+	 * For values too large to digest by content, such as IR functions: free to compute, and sound since a computation is a
+	 * function of its reads, but a recomputed value always counts as changed, so its readers get no early cutoff.
+	 */
+	public static function computed<V>(name:String, compute:(QueryDatabase, Int) -> V, same:(V, V) -> Bool,
+			?onCycle:Int->V,
+			?keyName:Int->String):QueryKind<V>
+		return new QueryKind<V>(name, compute, null, same, onCycle, keyName);
+
 	@:allow(compiler.query.QueryDatabase)
 	function register(index:Int):Void {
 		if (this.index >= 0)
 			throw new compiler.core.InternalError("query kind " + name + " is registered twice");
 		this.index = index;
+	}
+
+	public function feedDigest(key:Int, digest:Digest):Void {
+		var memo = memoAt(key);
+		digest.int(index).int(key);
+		if (memo == null)
+			digest.int(-1);
+		else
+			digest.digest(memo.first, memo.second);
 	}
 
 	public function describe(key:Int):String
@@ -110,8 +133,11 @@ class QueryKind<V> implements AnyQueryKind {
 		// The same object is the same value: a stage that changes nothing hands back what it was given.
 		if (memo != null && memo.value == value)
 			return;
+		var digestInput = digestValue;
+		if (digestInput == null)
+			throw new compiler.core.InternalError("input kind " + name + " has no digest");
 		scratch.reset();
-		digestValue(value, scratch);
+		digestInput(value, scratch);
 		if (memo != null && memo.first == scratch.first && memo.second == scratch.second)
 			return;
 		var revision = database.newRevision();
@@ -194,7 +220,17 @@ class QueryKind<V> implements AnyQueryKind {
 		var value = run(database, key, reads, computeValue);
 		database.countComputation();
 		scratch.reset();
-		digestValue(value, scratch);
+		var digestResult = digestValue;
+		if (digestResult != null)
+			digestResult(value, scratch);
+		else {
+			scratch.int(index).int(key);
+			var read = 0;
+			while (read < reads.length) {
+				database.kindAt(reads[read]).feedDigest(reads[read + 1], scratch);
+				read += 2;
+			}
+		}
 		var revision = database.revision;
 		if (memo == null) {
 			var made = new Memo(value, scratch.first, scratch.second, revision, reads);
