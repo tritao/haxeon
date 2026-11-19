@@ -497,31 +497,18 @@ class TypingSession {
 		};
 	}
 
-	/** Only closure-written declarations can change during a call; respect local shadowing. */
-	public function closureWritableNames(scope:Scope):Array<String> {
+	/** The visible locals a closure can write, so a call can change: the innermost of each name. */
+	public function closureWritableBindings(scope:Scope):Array<compiler.types.analysis.Scope.LocalBinding> {
 		var storage = currentContext.storage;
 		if (!storage.hasClosureWrites())
 			return [];
-		// The innermost declaration of each name decides, so walk from the innermost scope out and take each name once.
-		var values = scope.visibleValues(),
-			seen:Map<String, Bool> = [],
-			result:Array<String> = [],
-			index = values.length;
-		while (index > 0) {
-			var value = values[--index];
-			if (seen.exists(value.source))
-				continue;
-			seen.set(value.source, true);
-			if (storage.isClosureWrite(value.declaration))
-				result.push(value.source);
-		}
-		return result;
+		return [for (value in scope.visibleBindings()) if (storage.isClosureWrite(value.declaration)) value];
 	}
 
 	/** An impure call may invoke an escaped closure, including one forwarded through a named function. */
 	public function invalidateUnknownCall(scope:Scope):Void {
-		for (captured in closureWritableNames(scope))
-			scope.invalidate(captured);
+		for (captured in closureWritableBindings(scope))
+			scope.invalidateBinding(captured);
 		scope.invalidateAllExpressions();
 	}
 

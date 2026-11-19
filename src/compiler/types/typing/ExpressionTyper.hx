@@ -1328,6 +1328,12 @@ class ExpressionTyper {
 	}
 
 	/** `0...held.length`, the indices of the array a comprehension over `index => element` holds. */
+	/** Whether the capture `field` of the lambda `scope` is in is kept in a cell, so it can be written. */
+	public static function isCellCapture(scope:Scope, field:String):Bool {
+		var binding = scope.typedBinding(field);
+		return binding != null && scope.isCellCaptured(binding);
+	}
+
 	/** The id of the binding a comprehension defined for `name`, which it must have. */
 	static function definedId(binding:Null<LocalBinding>, name:String):String {
 		if (binding == null)
@@ -2114,7 +2120,7 @@ class ExpressionTyper {
 			fail("E1018", "Postfix increment requires a numeric target", span);
 		var operation:TypedExpressionKind = switch typedTarget.expression {
 			case TLocal(name): TPostfixLocal(name, delta);
-			case TCaptured(name) if (scope.isCellCapture(name)): TPostfixCaptured(name, delta);
+			case TCaptured(name) if (isCellCapture(scope, name)): TPostfixCaptured(name, delta);
 			case TStaticField(owner, name):
 				PropertyWriteRules.rejectStaticMutation(session, owner, name, span);
 				FinalFieldRules.rejectStaticMutation(session, owner, name, span);

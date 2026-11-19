@@ -49,9 +49,9 @@ class LoopFlow {
 	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>,
 			?loopVariables:Array<String>, ?loopSpan:SourceSpan):Void {
 		var visible = scope.visibleDeclarations(), assigned = assignedIn(session, statements, visible, loopSpan);
-		for (name => declaration in visible)
-			if (assigned.exists(declaration))
-				scope.invalidate(name);
+		for (binding in scope.visibleBindings())
+			if (assigned.exists(binding.declaration))
+				scope.invalidateBinding(binding);
 		var locals = scope.visibleLocalNames(),
 			privateMaps = scope.visiblePrivateMapNames(),
 			arrays = scope.visibleArrayNames(),

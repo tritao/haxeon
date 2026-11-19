@@ -49,7 +49,7 @@ class FlowAnalysis {
 			var nonNull = truthy == comparison.nonNullWhenTrue,
 				refined = nonNull ? comparison.nonNullType : TNull;
 			if (comparison.localName.length > 0)
-				scope.refine(comparison.localName, refined);
+				refineTyped(scope, comparison.localName, refined);
 			else
 				scope.refineExpression(comparison.path, refined, comparison.stable);
 		}
@@ -134,9 +134,16 @@ class FlowAnalysis {
 			default: false;
 		};
 
+	/** Refines the local a typed node names (`Scope.typedBinding`). */
+	static function refineTyped(scope:Scope, identity:String, type:CompilerType):Void {
+		var binding = scope.typedBinding(identity);
+		if (binding != null)
+			scope.refineBinding(binding, type);
+	}
+
 	static function refinePath(scope:Scope, path:String, type:CompilerType):Void {
 		if (path.indexOf(".") < 0)
-			scope.refine(path, type);
+			refineTyped(scope, path, type);
 		else
 			scope.refineExpression(path, type);
 	}
@@ -274,7 +281,8 @@ class FlowAnalysis {
 	public static function mapKeySource(expression:TypedExpression, scope:Scope):Null<TypedExpression> {
 		return switch expression.expression {
 			case TLocal(name), TCaptured(name):
-				var source = scope.mapKeySource(name);
+				var binding = scope.typedBinding(name),
+					source = binding == null ? null : scope.mapKeySourceOf(binding);
 				source == null ? expression.mapKeySource : source;
 			case TCast(value), TAbiCast(value), TToDynamic(value),
 				TParameterConversion(value, _): mapKeySource(value, scope);

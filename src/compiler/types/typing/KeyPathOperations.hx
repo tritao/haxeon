@@ -163,7 +163,8 @@ class KeyPathOperations {
 			case TLocal(name) if (session.relations.isValueClass(place.type)
 				&& session.currentContext.storage.cell(name) == null): copyFields(session, place, value, span);
 			case TLocal(name): [TAssign(name, value, span)];
-			case TCaptured(name) if (session.currentContext.scope.isCellCapture(name)): [TCapturedAssign(name, value,
+			case TCaptured(name) if (ExpressionTyper.isCellCapture(session.currentContext.scope, name))
+				: [TCapturedAssign(name, value,
 				span)];
 			case TField(parent, name): [TFieldAssign(parent, name, value, span)];
 			case TStaticField(_, _) if (session.relations.isValueClass(place.type)):

@@ -1479,9 +1479,9 @@ class CallResolver {
 				default:
 			}
 		var effects = calledClosureEffects(callee, callableName, scope);
-		for (captured in session.closureWritableNames(scope))
-			if (effects == null || effects.unknown || effects.writes.exists(captured))
-				scope.invalidate(captured);
+		for (captured in session.closureWritableBindings(scope))
+			if (effects == null || effects.unknown || effects.writes.exists(captured.source))
+				scope.invalidateBinding(captured);
 	}
 
 	/**

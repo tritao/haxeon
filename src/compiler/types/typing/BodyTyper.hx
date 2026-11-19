@@ -2144,7 +2144,8 @@ class BodyTyper implements BodyTyping {
 				return;
 		}
 		var reason = switch unwrappedCast(object).expression {
-			case TLocal(id), TCaptured(id) if (session.closureWritableNames(scope).indexOf(sourceName(id)) >= 0):
+			case TLocal(id),
+				TCaptured(id) if (session.closureWritableBindings(scope).indexOf(scope.typedBinding(id)) >= 0):
 				var local = sourceName(id);
 				'"$local" is assigned by a closure, so a call that may run an escaped closure clears its null check';
 			case TField(_, _):

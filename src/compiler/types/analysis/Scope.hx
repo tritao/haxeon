@@ -188,6 +188,45 @@ class Scope {
 	public function receiverBinding():Null<LocalBinding>
 		return root.receiver;
 
+	/**
+	 * The binding a typed node names: a `TLocal`'s binding id, or the field of a `TCaptured`, which is the capture of that name
+	 * in the lambda this scope is in.
+	 */
+	public function typedBinding(identity:String):Null<LocalBinding> {
+		// The receiver is read as `TLocal("this")`.
+		if (identity == "this")
+			return root.receiver;
+		var found = resolveById(identity);
+		if (found != null)
+			return found;
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var own = scope.captured, values = scope.definitions;
+			if (own != null && values != null)
+				for (value in values.valueList)
+					if (value.source == identity && own.captures.exists(value.id))
+						return value;
+			scope = scope.parent;
+		}
+		return null;
+	}
+
+	/** The visible bindings, the innermost of each name, innermost first. */
+	public function visibleBindings():Array<LocalBinding> {
+		var values = visibleValues(),
+			seen:Map<String, Bool> = [],
+			result:Array<LocalBinding> = [],
+			index = values.length;
+		while (index > 0) {
+			var value = values[--index];
+			if (seen.exists(value.source))
+				continue;
+			seen.set(value.source, true);
+			result.push(value);
+		}
+		return result;
+	}
+
 	/** The receiver's type here, or null outside a method. */
 	public function receiverType():Null<CompilerType> {
 		var value = root.receiver;
