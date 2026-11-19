@@ -69,7 +69,7 @@ class WasmScalarAbi {
 		for (object in program.objects)
 			if (object.isValue) {
 				for (method in object.methods)
-					instanceMethods.set(method.functionName, true);
+					instanceMethods.set(method.functionName.name, true);
 			}
 		for (fn in program.functions)
 			if ((switch fn.kind {
@@ -118,7 +118,7 @@ class WasmScalarAbi {
 		for (object in program.objects)
 			if (object.isValue) {
 				for (method in object.methods)
-					methodNames.push(method.functionName);
+					methodNames.push(method.functionName.name);
 			}
 		for (fn in program.functions)
 			if ((switch fn.kind {
@@ -1273,7 +1273,7 @@ class WasmScalarAbi {
 			return null;
 		for (method in object.methods)
 			if (method.name == name)
-				return method.functionName;
+				return method.functionName.name;
 		return null;
 	}
 

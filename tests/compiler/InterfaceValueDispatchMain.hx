@@ -26,9 +26,9 @@ class InterfaceValueDispatchMain {
 			interfaces: ["Derived"],
 			fields: [{name: "value", type: Obj("Value")}],
 			methods: [
-				{name: "read", functionName: "Owner.read"},
-				{name: "accept", functionName: "Owner.accept"},
-				{name: "plain", functionName: "Owner.plain"}
+				{name: "read", functionName: compiler.ir.IrSymbol.of("Owner.read")},
+				{name: "accept", functionName: compiler.ir.IrSymbol.of("Owner.accept")},
+				{name: "plain", functionName: compiler.ir.IrSymbol.of("Owner.plain")}
 			]
 		};
 		var interfaces:Array<IrInterface>= [

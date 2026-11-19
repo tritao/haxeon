@@ -339,7 +339,7 @@ class IrOptionalFieldStorage {
 				break;
 			for (entry in object.methods)
 				if (entry.name == method)
-					return entry.functionName;
+					return entry.functionName.name;
 			name = object.base;
 		}
 		throw new InternalError('Unknown value method "$method"');

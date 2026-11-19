@@ -137,7 +137,7 @@ class IrMethodResolution {
 		for (entry in object.methods)
 			if (!own.exists(entry.name)) {
 				own.set(entry.name, true);
-				table.set(entry.name, entry.functionName);
+				table.set(entry.name, entry.functionName.name);
 			}
 		tables.set(typeName, table);
 		return table;

@@ -161,7 +161,7 @@ class IrInitializationCalls {
 				var target:Null<String> = null;
 				for (entry in current.methods)
 					if (entry.name == method) {
-						target = entry.functionName;
+						target = entry.functionName.name;
 						break;
 					}
 				if (target != null) {

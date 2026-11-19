@@ -427,7 +427,7 @@ function main():Int return stay(1);
 				base: "Base",
 				interfaces: [],
 				fields: [],
-				methods: [{name: "twice", functionName: "Override.twice"}]
+				methods: [{name: "twice", functionName: compiler.ir.IrSymbol.of("Override.twice")}]
 			}
 		]);
 		var overridden = IrInliner.run(grown, grownCache, compiler.ir.TargetProfile.wasm);

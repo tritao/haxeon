@@ -45,7 +45,7 @@ class IrValueInterfaceBoxes {
 			for (name in value.interfaces) collect(name);
 			// Reflection of an interface box exposes the value's other methods too.
 			for (method in value.methods) if (!contracts.exists(method.name)) {
-				var fn = functionMap.get(method.functionName);
+				var fn = functionMap.get(method.functionName.name);
 				if (fn != null && fn.arguments.length > 0)
 					contracts.set(method.name, {
 						name: method.name,
@@ -60,7 +60,7 @@ class IrValueInterfaceBoxes {
 				if (contract == null) throw new InternalError('Missing interface contract "$methodName"');
 				var implementation:Null<IrFunction> = null;
 				for (method in value.methods) if (method.name == methodName) implementation =
-					functionMap.get(method.functionName);
+					functionMap.get(method.functionName.name);
 				if (implementation == null)
 					throw new InternalError('Missing implementation of "$valueName.$methodName"');
 				var wrapper = boxName + "." + methodName,
@@ -79,7 +79,7 @@ class IrValueInterfaceBoxes {
 					case Void: true;
 					default: false;
 				}) ? result : GenericOwnerErasure.convert(builder, result, contract.result, objectMap));
-				methods.push({name: methodName, functionName: wrapper});
+				methods.push({name: methodName, functionName: compiler.ir.IrSymbol.of(wrapper)});
 				generated.push(new IrFunction(wrapper, builder.arguments, contract.result, builder.blocks,
 					Provider(TypeKey.of(Obj(valueName)),
 					ProviderOperations.detailed(ProviderOperation.InterfaceBox, methodName))));

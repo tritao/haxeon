@@ -338,7 +338,7 @@ class WasmFlattenValueFields {
 				return null;
 			for (method in object.methods)
 				if (method.name == name)
-					return method.functionName;
+					return method.functionName.name;
 			current = object.base;
 		}
 		return null;
@@ -355,7 +355,7 @@ class WasmFlattenValueFields {
 			if (object == null)
 				return false;
 			for (method in object.methods)
-				if (method.functionName == name)
+				if (method.functionName.name == name)
 					return true;
 			current = object.base;
 		}

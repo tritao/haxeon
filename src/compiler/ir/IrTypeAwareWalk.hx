@@ -157,7 +157,7 @@ class IrTypeAwareWalk {
 		for (object in program.objects) {
 			var any = false;
 			for (method in object.methods)
-				if (reached.exists(method.functionName))
+				if (reached.exists(method.functionName.name))
 					any = true;
 			if (any)
 				total++;
@@ -427,7 +427,7 @@ private class IrTypeAwareWalkState {
 						create(field.type);
 					if (keepCreatedClassMethods)
 						for (method in object.methods)
-							reach(method.functionName, false);
+							reach(method.functionName.name, false);
 					current = object.base;
 				}
 			case Enum(name), EnumTag(name):

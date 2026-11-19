@@ -84,7 +84,7 @@ class IrEntryPrune {
 				removed.set(fn.name, true);
 		for (object in program.objects)
 			for (method in object.methods)
-				if (!reachable.exists(method.functionName))
+				if (!reachable.exists(method.functionName.name))
 					removedMethods.set(object.name + "\u0001" + method.name, true);
 		IrReachability.prune(program, reachable);
 		return {removed: removed, removedMethods: removedMethods, calledNatives: walked.calledNatives};

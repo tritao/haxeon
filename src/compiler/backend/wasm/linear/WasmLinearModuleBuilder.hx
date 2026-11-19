@@ -532,7 +532,7 @@ class WasmLinearModuleBuilder {
 		methods = [];
 		for (object in program.objects)
 			for (method in object.methods)
-				methods.set(object.name + "." + method.name, method.functionName);
+				methods.set(object.name + "." + method.name, method.functionName.name);
 		for (fn in program.functions) {
 			if (StringTools.startsWith(fn.name, compiler.ir.IrValueLaneRuntime.PREFIX) && functions.exists(fn.name))
 				continue;

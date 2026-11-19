@@ -2537,7 +2537,7 @@ class HlLower {
 			return null;
 		for (method in descriptor.methods)
 			if (method.name == name)
-				return method.functionName;
+				return method.functionName.name;
 		return null;
 	}
 
@@ -2563,7 +2563,7 @@ class HlLower {
 				return null;
 			for (method in descriptor.methods)
 				if (method.name == name)
-					return method.functionName;
+					return method.functionName.name;
 			owner = descriptor.base == null ? null : Std.string(descriptor.base);
 		}
 		return null;

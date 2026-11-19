@@ -37,7 +37,7 @@ class HlTypedInterfaceTables {
 					throw new InternalError('Wrong private typed interface argument $i in "$name"');
 				var methods = entries.get(object.name);
 				if (methods == null) entries.set(object.name, methods = []);
-				methods.push({name: key, functionName: name});
+				methods.push({name: key, functionName: compiler.ir.IrSymbol.of(name)});
 				found = true;
 			}
 			if (found) keys.set(fn.name, key);

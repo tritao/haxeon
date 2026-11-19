@@ -215,7 +215,7 @@ class ValueArrayAccessMain {
 			methods: [],
 			fields: [{name: "nested", type: Obj("LanePair")}, {name: "optional", type: Nullable(I32)}]
 		};
-		innerDescriptor.methods.push({name: "adjust", functionName: "LaneInner.adjust"});
+		innerDescriptor.methods.push({name: "adjust", functionName: compiler.ir.IrSymbol.of("LaneInner.adjust")});
 		var objects:Map<String, IrObject> = [
 			"LaneElement" => descriptor,
 			"LaneInner" => innerDescriptor,

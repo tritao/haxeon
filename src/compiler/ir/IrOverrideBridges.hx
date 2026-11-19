@@ -35,7 +35,7 @@ class IrOverrideBridges {
 			while (current != null) {
 				for (entry in current.methods)
 					if (entry.name == method) {
-						var fn = index.get(entry.functionName);
+						var fn = index.get(entry.functionName.name);
 						if (fn != null)
 							root = fn;
 					}
@@ -47,7 +47,7 @@ class IrOverrideBridges {
 			if (object.base == null || object.methods.length == 0) object;
 			else {
 				var changed = false, methods = [for (entry in object.methods) {
-					var implementation = index.get(entry.functionName),
+					var implementation = index.get(entry.functionName.name),
 						root = signatureOf(byName.get(object.base), entry.name);
 					if (implementation == null || root == null || sameSignature(implementation, root)) entry;
 					else {
@@ -58,7 +58,7 @@ class IrOverrideBridges {
 						}
 						changed = true;
 						{
-							name:entry.name, functionName:name
+							name:entry.name, functionName:compiler.ir.IrSymbol.of(name)
 						};
 					}
 				}];

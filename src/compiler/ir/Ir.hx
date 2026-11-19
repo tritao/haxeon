@@ -278,10 +278,10 @@ typedef IrObjectField = {
 	@:optional final nullableScalarStorage:Null<IrScalarStorage>;
 }
 
-/** Method name and implementing function attached to an IR object. */
+/** Method name and implementing function attached to an IR object; the function by symbol, as a call names it. */
 typedef IrObjectMethod = {
 	final name:String;
-	final functionName:String;
+	final functionName:IrSymbol;
 }
 
 /** Object layout and dispatch metadata required by backend lowering. */

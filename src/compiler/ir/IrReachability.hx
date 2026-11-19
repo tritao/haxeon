@@ -86,7 +86,7 @@ class IrReachability {
 	public static function prune(program:IrProgram, reachable:Map<String, Bool>):Void {
 		program.functions = [for (fn in program.functions) if (reachable.exists(fn.name)) fn];
 		program.objects = [for (object in program.objects) {
-			var kept = [for (method in object.methods) if (reachable.exists(method.functionName)) method];
+			var kept = [for (method in object.methods) if (reachable.exists(method.functionName.name)) method];
 			kept.length == object.methods.length ? object : IrObjectTools.withMethods(object, kept);
 		}];
 	}
@@ -408,7 +408,7 @@ class IrReachabilityWalk {
 					if (object == null)
 						break;
 					for (method in object.methods)
-						pending.push(method.functionName);
+						pending.push(method.functionName.name);
 					current = object.base;
 				}
 			case Array(element), Nullable(element), Iterator(element):

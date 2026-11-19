@@ -138,7 +138,7 @@ class IrTypedInterfaceDispatch {
 		function findMethod(object:IrObject, method:String):Null<IrFunction> {
 			var current:Null<IrObject> = object;
 			while (current != null) {
-				for (entry in current.methods) if (entry.name == method) return byFunction.get(entry.functionName);
+				for (entry in current.methods) if (entry.name == method) return byFunction.get(entry.functionName.name);
 				IrEntryPrune.noteMethodLookup(current.name, method);
 				current = current.base == null ? null : byName.get(current.base);
 			}

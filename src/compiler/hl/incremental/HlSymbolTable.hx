@@ -605,13 +605,13 @@ class HlSymbolTable {
 				slot = nextSlot++;
 				slots.set(method.name, slot);
 			}
-			if (!functionIndices.exists(method.functionName))
+			if (!functionIndices.exists(method.functionName.name))
 				throw new InternalError('Unknown object method function "${method.functionName}"');
-			var functionIndex = functionIndices.get(method.functionName);
+			var functionIndex = functionIndices.get(method.functionName.name);
 			methods.push({name: internString(method.name), functionIndex: functionIndex, prototype: slot});
 		}
 		if (typedEntries != null) for (entry in typedEntries) {
-			var typedIndex = functionIndices.get(entry.functionName);
+			var typedIndex = functionIndices.get(entry.functionName.name);
 			if (typedIndex == null) throw new InternalError('Unknown typed interface entry "${entry.functionName}"');
 			methods.push({
 				name: internString(entry.name),

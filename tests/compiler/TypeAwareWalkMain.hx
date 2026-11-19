@@ -31,7 +31,7 @@ class TypeAwareWalkMain {
 			interfaces: interfaces,
 			fields: [],
 			methods: [for (method in methods) {
-				name:method, functionName:name + "." + method
+				name:method, functionName:compiler.ir.IrSymbol.of(name + "." + method)
 			}]};
 
 	static function empty(name:String, kind:IrFunctionKind, ?arguments:Array<IrType>, result:IrType = Void):IrFunction {

@@ -294,7 +294,7 @@ class GenericOwnerErasure {
 			functions:IrFunctionIndex):Null<IrFunction> {
 		var current:Null<IrObject> = object;
 		while (current != null) {
-			for (method in current.methods) if (method.name == name) return functions.get(method.functionName);
+			for (method in current.methods) if (method.name == name) return functions.get(method.functionName.name);
 			IrEntryPrune.noteMethodLookup(current.name, name);
 			current = current.base == null ? null : objects.get(current.base);
 		}

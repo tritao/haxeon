@@ -349,7 +349,7 @@ class IrVerifier {
 		for (object in program.objects)
 			if (object.base != null)
 				for (method in object.methods) {
-					var own = signatures.get(method.functionName),
+					var own = signatures.get(method.functionName.name),
 						slot = slotSignature(objects, object.base, method.name, signatures);
 					if (own != null && slot != null && !sameSlotSignature(own, slot))
 						throw new InternalError('IR override "${method.functionName}" of slot "${method.name}" takes ${own.arguments.slice(1)} and returns ${own.result}, but the slot takes ${slot.arguments.slice(1)} and returns ${slot.result}');
@@ -1628,8 +1628,8 @@ class IrVerifier {
 			current = objects.get(objectName);
 		while (current != null) {
 			for (method in current.methods)
-				if (method.name == name && signatures.exists(method.functionName))
-					found = signatures.get(method.functionName);
+				if (method.name == name && signatures.exists(method.functionName.name))
+					found = signatures.get(method.functionName.name);
 			current = current.base == null ? null : objects.get(current.base);
 		}
 		return found;
@@ -1653,7 +1653,7 @@ class IrVerifier {
 	static function findMethodFunction(object:IrObject, name:String, objects:IrVerifyTable<IrObject>):Null<String> {
 		for (method in object.methods)
 			if (method.name == name)
-				return method.functionName;
+				return method.functionName.name;
 		var baseName = object.base;
 		if (baseName == null || !objects.exists(baseName))
 			return null;

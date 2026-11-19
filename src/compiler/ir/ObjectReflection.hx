@@ -379,12 +379,12 @@ class ObjectReflection {
 			var methods:Map<String, {name:String, functionName:String, type:IrType}> = [];
 			for (owner in chain)
 				for (method in owner.methods) {
-					var fn = functionsByName.get(method.functionName);
+					var fn = functionsByName.get(method.functionName.name);
 					if (fn != null && fn.arguments.length > 0)
 						methods.set(method.name,
 							{
 								name: method.name,
-								functionName: method.functionName,
+								functionName: method.functionName.name,
 								type: Function([for (a in fn.arguments.slice(1)) a.type], fn.result)
 							});
 				}

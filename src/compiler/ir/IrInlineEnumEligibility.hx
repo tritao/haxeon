@@ -71,7 +71,7 @@ class IrInlineEnumEligibility {
 		var functions = [for (fn in program.functions) fn.name => fn];
 		for (object in program.objects)
 			for (method in object.methods) {
-				var fn = functions.get(method.functionName);
+				var fn = functions.get(method.functionName.name);
 				if (fn == null)
 					continue;
 				var node = named(objectNodes, object.name);
@@ -115,7 +115,7 @@ class IrInlineEnumEligibility {
 		for (object in program.objects)
 			if (!object.isValue)
 				for (method in object.methods) {
-					var fn = functions.get(method.functionName);
+					var fn = functions.get(method.functionName.name);
 					if (fn == null)
 						continue;
 					for (argument in fn.arguments)

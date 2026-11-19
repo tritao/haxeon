@@ -106,7 +106,7 @@ class IrScalarArguments {
 		var methodNames:Map<String, Bool> = [];
 		for (object in program.objects)
 			for (method in object.methods)
-				if (candidates.exists(method.functionName) || pinnedCandidates.exists(method.functionName))
+				if (candidates.exists(method.functionName.name) || pinnedCandidates.exists(method.functionName.name))
 					methodNames.set(method.name, true);
 		// Do not redirect a call if reconstructing its value arguments would allocate in the clone. In particular,
 		// handler edges can keep an otherwise field-only value alive across blocks.

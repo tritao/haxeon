@@ -1355,8 +1355,8 @@ class FrontendCompilation {
 			for (object in build.objects)
 				for (method in object.methods)
 					if (method.name == "__string"
-						&& method.functionName == IrProgramAssembler.anonymousStringName(object.name)) {
-						var printer = printers.get(method.functionName);
+						&& method.functionName.name == IrProgramAssembler.anonymousStringName(object.name)) {
+						var printer = printers.get(method.functionName.name);
 						if (printer == null)
 							throw new InternalError('Anonymous structure "${object.name}" has no generated __string');
 						build.cached.push(printer);

@@ -326,7 +326,7 @@ private class Walker {
 				return null;
 			for (candidate in descriptor.methods)
 				if (candidate.name == method)
-					return candidate.functionName;
+					return candidate.functionName.name;
 			name = descriptor.base == null ? null : Std.string(descriptor.base);
 			steps++;
 		}

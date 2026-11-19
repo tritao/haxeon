@@ -336,7 +336,7 @@ class IrEnumTagLowering {
 		}
 		for (object in program.objects)
 			for (method in object.methods)
-				retained.set(method.functionName, true);
+				retained.set(method.functionName.name, true);
 		for (native in program.natives)
 			if (native.generatedFunctionDependencies != null)
 				for (name in native.generatedFunctionDependencies)
@@ -502,7 +502,7 @@ class IrEnumTagLowering {
 			var object = objects.get(name);
 			if (object == null)
 				return null;
-			var index = [for (entry in object.methods) entry.name => entry.functionName];
+			var index = [for (entry in object.methods) entry.name => entry.functionName.name];
 			methodNames.set(name, index);
 			return index;
 		}

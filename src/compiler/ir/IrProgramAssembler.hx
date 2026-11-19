@@ -375,7 +375,8 @@ class IrProgramAssembler {
 						// A method slot holds the method's dispatch entry when it has one (`DefaultArguments`).
 						methods.push({
 							name: methodName,
-							functionName: methodDecl.dispatchEntry == null ? functionName : methodDecl.dispatchEntry
+							functionName: compiler.ir.IrSymbol.of(methodDecl.dispatchEntry == null
+								? functionName : methodDecl.dispatchEntry)
 						});
 						// HashLink string conversion calls a proto method named `__string`; the runtime reads the
 						// String object it returns.
@@ -384,12 +385,12 @@ class IrProgramAssembler {
 								case TString: true;
 								default: false;
 							}))
-								methods.push({name: "__string", functionName: functionName});
+								methods.push({name: "__string", functionName: compiler.ir.IrSymbol.of(functionName)});
 					}
 				if (generator.facts.observableClassFieldCount(classDecl.name) != null)
 					methods.push({
 						name: "$haxeonObservableFieldCount",
-						functionName: classDecl.name + ".$haxeonObservableFieldCount"
+						functionName: compiler.ir.IrSymbol.of(classDecl.name + ".$haxeonObservableFieldCount")
 					});
 				objects.push({
 					name: classDecl.name,
@@ -441,7 +442,10 @@ class IrProgramAssembler {
 					name:field.name, type:generator.lowerType(field.type)
 				}],
 					methods: printsStructures
-					? [{name: "__string", functionName: anonymousStringName(anonymous.name)}] : []});
+					? [{
+						name: "__string",
+						functionName: compiler.ir.IrSymbol.of(anonymousStringName(anonymous.name))
+					}] : []});
 		return objects;
 	}
 

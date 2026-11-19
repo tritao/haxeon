@@ -934,7 +934,7 @@ class IrInterpreter {
 		if (declaration != null) {
 			for (method in declaration.methods)
 				if (method.name == name)
-					return method.functionName;
+					return method.functionName.name;
 			if (declaration.base != null)
 				return methodFunction(declaration.base, name);
 		}

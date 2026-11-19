@@ -272,7 +272,7 @@ class IrEnumEscapeReach {
 					walkReferences(field.type);
 				}
 			for (method in current.methods) {
-				var fn = functions.get(method.functionName);
+				var fn = functions.get(method.functionName.name);
 				if (fn != null) {
 					var signature = Function([for (argument in fn.arguments) argument.type], fn.result);
 					inspect(signature, false);

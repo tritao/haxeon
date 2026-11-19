@@ -71,7 +71,7 @@ class GenericStructOwnerMain {
 		for (object in program.objects) {
 			if (object.base == payloadOwner) derived = true;
 			if (object.name == payloadOwner) for (method in object.methods) for (fn in program.functions)
-				if (fn.name == method.functionName) {
+				if (fn.name == method.functionName.name) {
 				if (method.name == "get") get = Type.enumEq(fn.result, Obj("Payload"));
 				if (method.name == "replace") replace = fn.arguments.length == 2
 					&& Type.enumEq(fn.arguments[1].type, Obj("Payload"));

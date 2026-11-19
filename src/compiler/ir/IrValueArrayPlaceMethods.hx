@@ -748,7 +748,7 @@ class IrValueArrayPlaceMethods {
 				break;
 			for (candidate in object.methods)
 				if (candidate.name == method)
-					return candidate.functionName;
+					return candidate.functionName.name;
 			name = object.base;
 		}
 		throw new InternalError('Unknown array place method "$method" on $receiverType');

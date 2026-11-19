@@ -277,7 +277,7 @@ class CanonicalIrCodec {
 			writeCount(output, object.methods.length);
 			for (method in object.methods) {
 				IrTypeCodec.writeString(output, method.name);
-				IrTypeCodec.writeString(output, method.functionName);
+				IrTypeCodec.writeString(output, method.functionName.name);
 			}
 		}
 	}
@@ -327,7 +327,7 @@ class CanonicalIrCodec {
 			for (_ in 0...readCount(input))
 				methods.push({
 					name: IrTypeCodec.readString(input, limit),
-					functionName: IrTypeCodec.readString(input, limit)
+					functionName: compiler.ir.IrSymbol.of(IrTypeCodec.readString(input, limit))
 				});
 			result.push({
 				name: name,
