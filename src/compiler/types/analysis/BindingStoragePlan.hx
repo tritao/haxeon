@@ -17,12 +17,31 @@ class BindingStoragePlan {
 	public final kinds:Map<String, CellStorageKind> = [];
 
 	/** Declarations a closure can write, distinct from cells needed only for parent writes or exception edges. */
-	public final closureWrites:Map<String, Bool> = [];
+	final closureWrites:Map<String, Bool> = [];
+
+	/** How many `closureWrites` holds: most functions have none, and an impure call asks after every visible local. */
+	var closureWriteCount = 0;
 
 	/** Cells named so far under each prefix. */
 	final prefixCounts:Map<String, Int> = [];
 
 	public function new() {}
+
+	public function addClosureWrite(declaration:String):Void
+		if (!closureWrites.exists(declaration)) {
+			closureWrites.set(declaration, true);
+			closureWriteCount++;
+		}
+
+	public function removeClosureWrite(declaration:String):Void
+		if (closureWrites.remove(declaration))
+			closureWriteCount--;
+
+	public function isClosureWrite(declaration:String):Bool
+		return closureWriteCount > 0 && closureWrites.exists(declaration);
+
+	public function hasClosureWrites():Bool
+		return closureWriteCount > 0;
 
 	public function request(declarationKey:String, cellPrefix:String, kind:CellStorageKind):Void {
 		var current = candidates.get(declarationKey);

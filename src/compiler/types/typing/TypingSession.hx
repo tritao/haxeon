@@ -496,6 +496,9 @@ class TypingSession {
 
 	/** Only closure-written declarations can change during a call; respect local shadowing. */
 	public function closureWritableNames(scope:Scope):Array<String> {
+		var storage = currentContext.storage;
+		if (!storage.hasClosureWrites())
+			return [];
 		// The innermost declaration of each name decides, so walk from the innermost scope out and take each name once.
 		var values = scope.visibleValues(),
 			seen:Map<String, Bool> = [],
@@ -506,7 +509,7 @@ class TypingSession {
 			if (seen.exists(value.source))
 				continue;
 			seen.set(value.source, true);
-			if (currentContext.storage.closureWrites.exists(value.declaration))
+			if (storage.isClosureWrite(value.declaration))
 				result.push(value.source);
 		}
 		return result;

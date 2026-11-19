@@ -210,11 +210,11 @@ class ClosureTyper {
 			context.assignedDeclarations.set(declaration, true);
 		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments, session.mayHoldValue, session.mayBeKeyPath);
 		for (binding in lambdaStorage.closureWrites.keys())
-			context.storage.closureWrites.set(binding, true);
+			context.storage.addClosureWrite(binding);
 		for (capture in captures) {
 			var declaration = scope.declarationOf(capture.field);
-			if (declaration != null && outerContext.storage.closureWrites.exists(declaration))
-				context.storage.closureWrites.set(declaration, true);
+			if (declaration != null && outerContext.storage.isClosureWrite(declaration))
+				context.storage.addClosureWrite(declaration);
 		}
 		for (binding in lambdaStorage.mutableCaptures.keys())
 			context.storage.request(binding, '$' + 'cell:' + lambdaName + ':' + BindingWalker.nameOf(binding),

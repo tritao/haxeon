@@ -250,7 +250,7 @@ class BodyTyper implements BodyTyping {
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue,
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
-			context.storage.closureWrites.set(binding, true);
+			context.storage.addClosureWrite(binding);
 		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
@@ -650,11 +650,11 @@ class BodyTyper implements BodyTyping {
 		if (context.storage.candidateKind(declaration) == MutableCapture
 			&& !context.assignedDeclarations.exists(declaration)) {
 			if (referenceCapture(type)) {
-				context.storage.closureWrites.remove(declaration);
+				context.storage.removeClosureWrite(declaration);
 				return;
 			}
 			if (valueCapture(type))
-				context.storage.closureWrites.remove(declaration);
+				context.storage.removeClosureWrite(declaration);
 		}
 		context.storage.bind(declaration, id, type);
 	}
