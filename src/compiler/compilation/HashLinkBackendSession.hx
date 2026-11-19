@@ -192,6 +192,7 @@ class HashLinkBackendSession implements BackendSession {
 		candidateAssembler.checkReuse = context.options.checkReuse;
 		candidateAssembler.irVerified = !context.livePatching;
 		candidateAssembler.livePatching = context.livePatching;
+		candidateAssembler.keepsLowered = context.options.keepSession;
 		if (loweredCache != null) {
 			loweredCache.forEnvironment(loweringEnvironment(candidateAssembler, context));
 			candidateAssembler.loweredCache = loweredCache;

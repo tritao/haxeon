@@ -178,6 +178,12 @@ class HlModuleAssembler {
 	/** The build patches a running module: functions are kept by name (`published`). Otherwise they are linked from `loweredCache`. */
 	public var livePatching = false;
 
+	/**
+	 * A next build may link this one's lowered functions, so lowering records what each read (`HlLoweringView`). Off for a
+	 * compile that keeps no session (`CompileOptions.keepSession`), which neither links nor records.
+	 */
+	public var keepsLowered = true;
+
 	/** The IR given to `assemble` was verified already (a plain build verifies its final IR before any backend). */
 	public var irVerified = false;
 
@@ -209,6 +215,7 @@ class HlModuleAssembler {
 		result.publishedGlobals = publishedGlobals;
 		result.published = published.copy();
 		result.livePatching = livePatching;
+		result.keepsLowered = keepsLowered;
 		result.runtimeNatives = runtimeNatives.copy();
 		result.dispatchNatives = dispatchNatives == null ? null : dispatchNatives.copy();
 		result.fieldReserve = fieldReserve;
@@ -914,7 +921,8 @@ class HlModuleAssembler {
 		}
 		var lowered = HlLower.lowerStableMeasured(ordered, symbols, layout, cache.stableIds,
 			relocated == null ? regenerated : regenerated.concat(relocated),
-			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false, liveCache, irVerified,
+			runtimeNatives, debugMetadata, fieldReserve, developmentMetadata, false,
+			livePatching || keepsLowered ? liveCache : null, irVerified,
 			livePatching,
 			name -> RetiredName.is(name) || !present.exists(name), checkReuse),
 			module = lowered.code;
