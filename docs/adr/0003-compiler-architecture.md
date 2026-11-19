@@ -4,7 +4,8 @@ Date: 2026-11-08
 
 ## Status
 
-Accepted. Migration steps M0 and M1 have landed; M2 onward is pending. What landed is described in
+Accepted. Migration steps M0 and M1 have landed; M2 onward is pending. Amended 2026-11-19: the dependency engine (1)
+comes before the pass framework (4), and a query owns its output (14); see Migration. What landed is described in
 `docs/ARCHITECTURE.md` ("Warm builds: what landed"), which is where the current state lives; this record keeps the
 decisions.
 
@@ -355,6 +356,23 @@ Migration, each step separately gated:
 4. Single frontend pass.
 5. Later: live-build pruning with declared host roots, and per-method pruning.
 
+### 14. A query owns its output (added 2026-11-19)
+
+A query's output holds only values, interned ids (symbols, names, types) and other queries' outputs. It never points into
+data its computation made for its own use, nor into another query's working data. Everything else a computation allocates
+is scratch and dies with it.
+
+- **Why.** The session keeps every output (1), so what an output reaches is what the session costs. Measured on the
+  compiler's own sources (2026-11-19, the allocation-group census of ADR 0004 section 6): releasing the syntax freed none
+  of its 265 MB of pages, because typed code, IR and a rewritten AST built from the parse still pointed into it: positions,
+  names and shared subtrees. Sharing a subtree saves a copy but ties two lifetimes together.
+- **Scratch is a region.** Once outputs are owned, a computation's scratch can run in an allocation region released when
+  the query ends (ADR 0004 section 6). That is only cheap with ADR 0004's level 3 release, without a full collection,
+  so regions follow the queries that prove their outputs own nothing else.
+- **Values.** Positions, operands and ids are values. With ADR 0006 they become structs; until then they are slim
+  immutable objects, compared by value.
+- **Check mode** (10) may verify the rule: a released region with live blocks names the query.
+
 ## Migration
 
 Each step is its own series of commits. Every commit keeps the full driver suite green and the warm-equals-cold tests
@@ -372,18 +390,32 @@ their last user is ported; there are no compatibility aliases.
   target state (`IrGenerator`'s maps and flags, `IrInliner.packedValueFields`) with `TargetProfile` and an explicit
   generation context. It unblocks M2: until then, any memoized pass result can silently depend on unrecorded state.
   The M0 program-level shortcut must include this state in its input digest until M1 lands.
-- **M2 Pass framework (4):**
-  - define the pass interface and the summaries;
-  - inventory the ~25 passes as already local, local plus a summary, or genuinely global;
+Order amended 2026-11-19: the engine core comes first, and the pass framework is built on it. M2's interface already
+records every read with a digest of its answer, which is the engine. Built for passes alone, it would be one more
+mechanism next to the typer's recorded reads (`DeclarationTypes`, semantic edges) and the backend's `LoweringView`,
+which M4 would then have to merge. The passes are where an edit's time goes (66% of a one-string edit of the compiler,
+`IR_PASS_INVENTORY.md`), so they are the first client of the engine, not a separate design.
+
+- **M4a Engine core (1, 10, 14), [`QUERY_ENGINE.md`](../design/QUERY_ENGINE.md):**
+  - the database: query kinds, keys, revisions, recorded reads with answer digests, early cutoff, cycle detection;
+  - check mode for every query (10);
+  - the existing `DeclarationTypes` query and its recorded reads become the first query kind on it.
+- **M2 Pass framework (4), on the engine:** a pass's contribution, summary and rewrite are query kinds, and the view is
+  the engine's read interface:
+  - inventory the ~25 passes as already local, local plus a summary, or genuinely global (`IR_PASS_INVENTORY.md`);
   - move them in order of edit-case cost;
   - move the Wasm builders' own IR passes into layer 6.
+- **M4b Lowering and the rest of assembly as queries:** IR generation and table assembly per function and per
+  declaration, and the relocatable lowering of M0 moved onto the engine, with link as the only whole-program step
+  (decision 2, layers 4 to 8).
 - **M3 Structured identities (5):** one prefix family at a time, together with the pass that owns it in M2. Delete each
-  name parser with its family.
-- **M4 One dependency engine (1):**
+  name parser with its family. Identities are interned ids, so outputs hold ids, not names (14).
+- **M4c Front-end caches:**
   - move the front-end caches (`cachedSemanticProgram`, `lastTypedProgram`, reachability, canonical contributions,
     `objectCache`) and `CompilerSession.reset()` onto queries;
   - replace raw-string fingerprints;
   - delete the coarse paths.
+- **Regions (14):** per-query scratch regions, one query kind at a time, after ADR 0004's level 3 release.
 - **M5 Runtime declaration and path identity (6, 7):** the runtime declaration deletes the front-end restart and
   continuation. Path identity is independent and can go earlier.
 - **M6 Options (8, 9):** each with its measured go/no-go.
@@ -407,5 +439,7 @@ This record is not where the current state lives.
 - **Rejected alternatives:**
   - **More per-stage caches** (the original step 4 of `../design/WARM_REBUILD_REUSE.md`) gives faster wins on the passes ported
     first, but adds a cache and an invalidation rule per pass. That is the source of the bugs described above.
+  - **The pass framework before the engine** (the original order): a recorded-read mechanism for passes alone, which
+    M4 would then replace. Rejected 2026-11-19.
   - **A rewrite** would lose the parts that work (typer, live patching, the existing precise recorders) and stall
     language and backend work.

@@ -1,7 +1,8 @@
 # IR pass inventory and pass interface (ADR 0003, M2)
 
 Status: proposal; the pass order of the frontend is in one place (`compiler.ir.IrPipeline`), the per-pass interface below is not
-written yet. Builds on section B of [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) (pass interface, name families,
+written yet. Since 2026-11-19 it is built on the query engine ([QUERY_ENGINE.md](QUERY_ENGINE.md), ADR 0003 M4a): `view`
+is the engine's read interface, and contributions, summaries and rewrites are query kinds. Builds on section B of [`WARM_REBUILD_REUSE.md`](WARM_REBUILD_REUSE.md) (pass interface, name families,
 file:line evidence). This document adds the measured edit-build cost per pass and proposes the order and the per-pass interface.
 Out of scope: the Wasm builders' own internal passes (ADR 0004 moves the runtime library code, so they will change first).
 
@@ -80,7 +81,7 @@ committed; status is `done`, `active` or `queued`. The declaration model it rest
 | Documentation cleanup into `docs/history/` | a1 | `a1-internals` | done (2026-11-12) |
 | §13 reachability walk over declared providers, pruning before the passes, one frontend pass | dev-c5 | `warm-rebuild-reuse` | queued; waits on the §13 design decisions |
 | Warm-rebuild correctness: the edit sweep, the shared-helper origin (`docs/design/HELPER_OWNERSHIP.md`) | dev-c5 | `warm-rebuild-reuse` | active |
-| M2 framework commit (interface, view, opaque step, check mode; step 1 of the order below), then the (a) ports of step 2 | haxeon-e4 | `main` | active (claimed 2026-11-18) |
+| Engine core (ADR 0003 M4a, [QUERY_ENGINE.md](QUERY_ENGINE.md)), then the M2 framework on it and the (a) ports of step 2 | haxeon-e4 | `main` | active (claimed 2026-11-18, reordered 2026-11-19) |
 | Cold-build performance and the measure and gate scripts (`scripts/measure-cold.sh`, `scripts/gate.sh`) | dev-c5 | `warm-rebuild-reuse` | active |
 | The provider model itself (`IrFunctionKind`, `ProviderOperation`, the provider table and its checks); a1 adds families to it, changes to the model go through dev-c5 | dev-c5 | `warm-rebuild-reuse` | active |
 | HashLink allocator refill path: word-at-a-time scan of the mark bitmap in `flush_free_list` (fixed-class pages), then the TLAB run size; both measured with `scripts/measure-cold.sh` | dev-c5 | `haxeon/flush-word-scan` in `vendor/hashlink` (off 875bc1d25) | active (claimed 2026-11-11) |

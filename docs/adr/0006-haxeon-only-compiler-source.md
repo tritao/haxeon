@@ -4,7 +4,8 @@ Date: 2026-11-18
 
 ## Status
 
-Proposed. Nothing is decided; this records the question, what it would buy and cost, and the conditions for deciding.
+Accepted as the direction (2026-11-19): the compiler's source will require Haxeon. The switch is staged: the decision
+criteria below are now the gates of the migration, and the source keeps compiling with stock Haxe until all of them hold.
 
 ADR 0003 §12 is about which compiler *builds* the shipped worker. This ADR is about the *source*: whether it may stop
 compiling with stock Haxe, so that it can use Haxeon-only language and library features.
@@ -65,13 +66,29 @@ as an array element, local, parameter or return (`docs/design/STRUCTS.md`).
   build time is the Haxeon compiler's: 24 s for the server against stock Haxe's 15 s (2026-11-17), less with the compile
   server's incremental rebuilds.
 
-## Decision criteria
+## Decision
 
-Decide when all of these hold, measured, not before:
+The compiler's source moves to Haxeon, because the long-term design of the compiler needs what only Haxeon gives it:
+ADR 0003's query engine keeps every phase's output, and an output that is ids and inline values (decision 14 there) is
+what makes a large retained session affordable. Plain Haxe can pack a field into an `abstract` over `Int`, but not a
+record with an object in it, such as a source span (a file and a range), which is what the compiler's records are made of.
 
-1. **A feature the compiler needs and plain Haxe cannot express efficiently** exists and is implemented: inline `Array<S>`
-   for structs on HashLink, or `Hashable` struct keys in maps, with a measured gain on the compiler's own workload over the
-   plain-Haxe data layout.
+What plain Haxe can do was done first, measured on the compiler's own sources (2026-11-18 and -19): interned names (one
+string per identifier) and slim spans (48 to 24 bytes, with reference and generated data in subclasses). A span packed
+into an integer was ruled out: it needs a process-wide file table and an explicit release protocol in the compile server,
+since the span would no longer keep its file alive. With a struct, a span is `{file, start, end}` inline in the node that
+has it, and the file keeps today's lifetime.
+
+## Migration gates
+
+The switch happens when all of these hold, measured, not before:
+
+1. **Structs the compiler can use** exist on HashLink, with a measured gain on the compiler's own workload over the
+   plain-Haxe data layout:
+   - a struct passed as a local, parameter or return value is not boxed (today it is, so a span struct would allocate
+     more than the span object it replaces);
+   - inline `Array<S>`;
+   - `Hashable` struct keys in maps.
 2. **The seed is routine:** pinned by hash and fetched (or rebuilt), refreshed by one command, with a documented recovery
    from a broken seed.
 3. **The oracle is replaced:** the self-hosting fixed point in CI, plus a check that the compiler built by the previous seed
@@ -80,12 +97,16 @@ Decide when all of these hold, measured, not before:
    with stock Haxe today.
 
 Until then, compiler performance work stays in plain Haxe (data layout, ids, reusable contexts, `abstract` over `Int` for
-packed fields), so it helps both builds and does not depend on this decision.
+packed fields), so it helps both builds. New compiler code is written so that the switch is mechanical: records that will
+become structs are immutable and compared by value, never by identity.
+
+Order: gate 1 is language and runtime work and comes first; gates 2 and 3 are build work and can go in parallel; gate 4 is
+measured last. The first compiler records to become structs are `SourceSpan`, the IR operand, and the interned symbol and
+name ids of ADR 0003 decision 5.
 
 ## Consequences
 
-- If accepted: the `#if haxeon` forks and the portable-root rule end, the stdlib and value types become available to the
+- The `#if haxeon` forks and the portable-root rule end, the stdlib and value types become available to the
   compiler, and stock Haxe remains only as the reference for the language's semantics in the program tests.
-- If rejected or deferred: the compiler keeps to the common subset; Haxeon-only features reach users first and the
-  compiler only through plain-Haxe equivalents.
-- Either way, inline struct arrays and struct bitfields are language work worth doing for users.
+- Until the gates hold, the compiler keeps to the common subset, and stock Haxe remains its bootstrap seed and oracle.
+- Unboxed struct locals and parameters, inline struct arrays and struct bitfields are language work users get as well.
