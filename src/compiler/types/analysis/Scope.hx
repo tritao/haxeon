@@ -4,9 +4,11 @@ import compiler.core.InternalError;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 import compiler.types.TypedAst.TypedExpression;
+import haxe.ds.ObjectMap;
 
 /** Resolved local binding identity and its declared semantic type. */
 /** A local declared as a function that is never reassigned, so a call through it runs exactly this body. */
@@ -120,6 +122,9 @@ class Scope {
 
 	/** On the root: every binding defined in the function or lambda, by declaration key; the last definition wins. */
 	var byDeclaration:Null<Map<String, LocalBinding>> = null;
+
+	/** On the root: the binding of each temporary the typer introduced (`TemporaryLocal`), by the temporary itself. */
+	var byTemporary:Null<ObjectMap<TemporaryLocal, LocalBinding>> = null;
 
 	/** On the root: the receiver (`this`), a method's or the one a lambda captures. */
 	var receiver:Null<LocalBinding> = null;
@@ -322,6 +327,12 @@ class Scope {
 		return own != null && own.named(name) != null;
 	}
 
+	/** The binding of `temporary`, or null before its declaration is typed. */
+	public function bindingOfTemporary(temporary:TemporaryLocal):Null<LocalBinding> {
+		var temporaries = root.byTemporary;
+		return temporaries == null ? null : temporaries.get(temporary);
+	}
+
 	/** The binding of the declaration with key `declaration` (`BindingWalker.key`), or null when none was defined. */
 	public function bindingOf(declaration:String):Null<LocalBinding> {
 		var table = root.byDeclaration;
@@ -330,7 +341,7 @@ class Scope {
 
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String,
 			receiver:Bool = false,
-			?localFunction:LocalFunction, ?declaration:String):LocalBinding {
+			?localFunction:LocalFunction, ?declaration:String, ?temporary:TemporaryLocal):LocalBinding {
 		var value:LocalBinding = {
 			source: name,
 			declaration: declaration == null ? BindingWalker.key(name, span) : declaration,
@@ -351,6 +362,12 @@ class Scope {
 			if (table == null)
 				table = root.byDeclaration = [];
 			table.set(value.declaration, value);
+			if (temporary != null) {
+				var temporaries = root.byTemporary;
+				if (temporaries == null)
+					temporaries = root.byTemporary = new ObjectMap();
+				temporaries.set(temporary, value);
+			}
 		}
 		return value;
 	}

@@ -93,10 +93,7 @@ class ExpressionTyper {
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): bodyTyper.typeVariableExpression(name, span, scope, expectedType);
 			case TemporaryVariable(local, span):
-				var declaration = local.declaration;
-				bodyTyper.typeBoundVariable(declaration == null ? null : scope.bindingOf(declaration), local.name, span,
-					scope,
-					expectedType);
+				bodyTyper.typeBoundVariable(scope.bindingOfTemporary(local), local.name, span, scope, expectedType);
 			case DeclaredVariable(name, declaration, span):
 				bodyTyper.typeBoundVariable(scope.bindingOf(BindingWalker.keyOf(name, declaration)), name, span, scope,
 					expectedType);

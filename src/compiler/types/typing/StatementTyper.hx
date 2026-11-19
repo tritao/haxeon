@@ -99,6 +99,89 @@ class StatementTyper {
 			span));
 	}
 
+	/** A `var` declaration, or the declaration of `temporary`, a local the typer introduced under `name`. */
+	function typeLocalDeclaration(name:String, declared:Null<AstType>, initializer:AstExpression, span:SourceSpan,
+			scope:Scope, statements:Array<AstStatement>, statementIndex:Int,
+			?temporary:compiler.syntax.Ast.TemporaryLocal):Array<TypedStatement> {
+		var context = session.currentContext;
+		var localFunction:Null<LocalFunction> = null;
+		// A lambda with a declared result type is bound through a typed local; look through that wrapper.
+		var lambda = initializer;
+		switch initializer {
+			case BlockExpression(wrapper, Variable(_, _), _) if (wrapper.length == 1):
+				switch wrapper[0] {
+					case VarDeclaration(_, _, wrapped, _): lambda = wrapped;
+					default:
+				}
+			default:
+		}
+		switch lambda {
+			case Lambda(arguments, body, _, _):
+				// Its writes, in its own body or after it, are in the body's assigned declarations.
+				if (!context.assignedDeclarations.exists(BindingWalker.key(name, span)))
+					localFunction = {
+						arguments: arguments,
+						body: body,
+						outerLocals: scope.visibleLocalNames(),
+						declaredIn: scope
+					};
+			default:
+		}
+		var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
+			span,
+			context.typeSubstitutions);
+		var predeclared:Null<LocalBinding> = null, recursiveCell:Null<String> = null;
+		if (declaredType != null)
+			switch initializer {
+				case Lambda(_, _, _, _):
+					var binding = scope.define(name, declaredType, span, true, null, false, localFunction, null,
+						temporary);
+					predeclared = binding;
+					// A recursive local function reads itself through a cell bound before its closure exists.
+					bodyTyper.bindCell(binding, declaredType);
+					recursiveCell = context.storage.cell(binding.id);
+				default:
+			}
+		var value = bodyTyper.typeExpression(initializer, scope, declaredType);
+		// `var x = null` is a `Null<?>` whose `?` the first assignment of a value fills (`Monomorphs`).
+		if (declaredType == null && TypeRelations.equals(value.type, TNull)) {
+			var variable = session.monomorphs.create('the type of local "$name"', span);
+			if (variable != null)
+				declaredType = TNullable(variable);
+		}
+		if (declaredType != null)
+			value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002");
+		else
+			value = ValueCopy.bind(session, value, value.type);
+		// Its type's empty variables (`var list = []`, `var x = null`) are this local's: one nothing fills is reported by it.
+		if (declared == null)
+			compiler.types.Monomorphs.nameLocal(declaredType != null ? declaredType : value.type, name, span);
+		if (recursiveCell != null && predeclared != null)
+			return [TDeclare(predeclared.id, declaredType, span), TAssign(predeclared.id, value, span)];
+		else if (TypeRelations.equals(value.type, TNull))
+			fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
+		if (localFunction == null && declared == null)
+			localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
+		var binding = predeclared != null ? predeclared : scope.define(name, value.type, span, true, null, false,
+			localFunction, null, temporary);
+		var pathConstant = KeyPathTyping.known(session, value);
+		if (pathConstant != null && !context.assignedDeclarations.exists(binding.declaration)) {
+			binding.keyPathConstant = pathConstant.name;
+			return [];
+		}
+		scope.setMapKeySourceOf(binding, value.mapKeySource);
+		// A local never reassigned holds its initializer: a constructor without arguments is then known by value.
+		var constructor = switch value.expression {
+			case TEnumLiteral(_, index): index;
+			case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
+			default: -1;
+		};
+		if (constructor >= 0 && !context.assignedDeclarations.exists(binding.declaration))
+			binding.knownConstructor = constructor;
+		bodyTyper.bindCell(binding, value.type);
+		return [TVar(binding.id, value, span)];
+	}
+
 	public function typeSimpleStatement(statement:AstStatement, scope:Scope, result:Null<CompilerType>,
 			statements:Array<AstStatement>,
 			statementIndex:Int):Null<Array<TypedStatement>> {
@@ -115,82 +198,9 @@ class StatementTyper {
 				bodyTyper.bindCell(binding, declaredType);
 				[TDeclare(binding.id, declaredType, span)];
 			case VarDeclaration(name, declared, initializer, span):
-				var localFunction:Null<LocalFunction> = null;
-				// A lambda with a declared result type is bound through a typed local; look through that wrapper.
-				var lambda = initializer;
-				switch initializer {
-					case BlockExpression(wrapper, Variable(_, _), _) if (wrapper.length == 1):
-						switch wrapper[0] {
-							case VarDeclaration(_, _, wrapped, _): lambda = wrapped;
-							default:
-						}
-					default:
-				}
-				switch lambda {
-					case Lambda(arguments, body, _, _):
-						// Its writes, in its own body or after it, are in the body's assigned declarations.
-						if (!context.assignedDeclarations.exists(BindingWalker.key(name, span)))
-							localFunction = {
-								arguments: arguments,
-								body: body,
-								outerLocals: scope.visibleLocalNames(),
-								declaredIn: scope
-							};
-					default:
-				}
-				var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
-					span,
-					context.typeSubstitutions);
-				var predeclared:Null<LocalBinding> = null, recursiveCell:Null<String> = null;
-				if (declaredType != null)
-					switch initializer {
-						case Lambda(_, _, _, _):
-							var binding = scope.define(name, declaredType, span, true, null, false, localFunction);
-							predeclared = binding;
-							// A recursive local function reads itself through a cell bound before its closure exists.
-							bodyTyper.bindCell(binding, declaredType);
-							recursiveCell = context.storage.cell(binding.id);
-						default:
-					}
-				var value = bodyTyper.typeExpression(initializer, scope, declaredType);
-				// `var x = null` is a `Null<?>` whose `?` the first assignment of a value fills (`Monomorphs`).
-				if (declaredType == null && TypeRelations.equals(value.type, TNull)) {
-					var variable = session.monomorphs.create('the type of local "$name"', span);
-					if (variable != null)
-						declaredType = TNullable(variable);
-				}
-				if (declaredType != null)
-					value = bodyTyper.coerce(value, declaredType, 'local "$name"', "E1002");
-				else
-					value = ValueCopy.bind(session, value, value.type);
-				// Its type's empty variables (`var list = []`, `var x = null`) are this local's: one nothing fills is reported by it.
-				if (declared == null)
-					compiler.types.Monomorphs.nameLocal(declaredType != null ? declaredType : value.type, name, span);
-				if (recursiveCell != null && predeclared != null)
-					return [TDeclare(predeclared.id, declaredType, span), TAssign(predeclared.id, value, span)];
-				else if (TypeRelations.equals(value.type, TNull))
-					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
-				if (localFunction == null && declared == null)
-					localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
-				var binding = predeclared != null ? predeclared : scope.define(name, value.type, span, true, null,
-					false,
-					localFunction);
-				var pathConstant = KeyPathTyping.known(session, value);
-				if (pathConstant != null && !context.assignedDeclarations.exists(binding.declaration)) {
-					binding.keyPathConstant = pathConstant.name;
-					return [];
-				}
-				scope.setMapKeySourceOf(binding, value.mapKeySource);
-				// A local never reassigned holds its initializer: a constructor without arguments is then known by value.
-				var constructor = switch value.expression {
-					case TEnumLiteral(_, index): index;
-					case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
-					default: -1;
-				};
-				if (constructor >= 0 && !context.assignedDeclarations.exists(binding.declaration))
-					binding.knownConstructor = constructor;
-				bodyTyper.bindCell(binding, value.type);
-				[TVar(binding.id, value, span)];
+				typeLocalDeclaration(name, declared, initializer, span, scope, statements, statementIndex);
+			case TemporaryDeclaration(local, declared, initializer, span):
+				typeLocalDeclaration(local.name, declared, initializer, span, scope, statements, statementIndex, local);
 			case Return(expression, span):
 				var expected = result == null ? context.inferredResult : result;
 				var value = bodyTyper.typeExpression(expression, scope,
@@ -359,9 +369,8 @@ class StatementTyper {
 			?assigned:AssignedValue):Null<TypedStatement>
 		return switch statement {
 			case TemporaryAssignment(local, value, span):
-				var declaration = local.declaration;
 				typeAssignment(local.name, value, span, scope, assigned,
-					requiredBinding(declaration == null ? null : scope.bindingOf(declaration),
+					requiredBinding(scope.bindingOfTemporary(local),
 					local.name, span));
 			case DeclaredAssignment(name, declaration, value, span):
 				typeAssignment(name, value, span, scope, assigned,

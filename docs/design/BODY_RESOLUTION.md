@@ -194,6 +194,19 @@ such syntax (`writes`); a default-argument prologue's writes are the parameters 
 compare, so is `--check-resolution`. `BindingWalker` remains as the resolver's walk and the base of the analyses that
 inspect constructs (`ScopedEscapeChecker`, `ClosureEffects`, `PurityInference`'s neighbours).
 
+A temporary's binding is found by the temporary itself: `Scope.define` enters it by object (`bindingOfTemporary`), where
+it once recorded its declaration's key in the syntax object while typing.
+
+What stays as a documented trade-off:
+- Typed nodes name a local by binding id (`TLocal`) or environment field (`TCaptured`), strings, so `Scope.typedBinding`
+  special-cases the receiver and captures. Integer ids would remove that; measured at under 1% of a self-compile, they are
+  not worth the change to the typed AST and IR generation now.
+- Generated syntax that reuses a source span (an increment typed again as an assignment at the write's position) resolves
+  through the reference the resolution recorded there: correct, and checked on every program, but by convention.
+- Analyses that inspect constructs (`ScopedEscapeChecker`, `ClosureEffects`, `MutableIterationAliases` and others) walk
+  the syntax with `BindingWalker`, so they apply the resolver's rules without reading its result.
+- Closure conversion (cells, environments, lambda lifting) stays in the typer, deciding from bindings.
+
 ## Step 4: the typer reads locals by binding
 
 **Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:

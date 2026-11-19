@@ -311,8 +311,7 @@ class CallResolver {
 			inner = new Scope(scope),
 			arguments:Array<AstArgument> = [],
 			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
-		var heldBinding = inner.define(held.name, value.type, span);
-		held.declaration = heldBinding.declaration;
+		var heldBinding = inner.define(held.name, value.type, span, true, null, false, null, null, held);
 		bodyTyper.bindCell(heldBinding, value.type);
 		for (index in 1...fn.arguments.length) {
 			var argument = new TemporaryLocal("__haxeon_argument" + index);
@@ -397,8 +396,7 @@ class CallResolver {
 			arguments:Array<AstArgument> = [],
 			argumentTypes:Array<CompilerType> = [],
 			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
-		var heldBinding = inner.define(held.name, value.type, span);
-		held.declaration = heldBinding.declaration;
+		var heldBinding = inner.define(held.name, value.type, span, true, null, false, null, null, held);
 		bodyTyper.bindCell(heldBinding, value.type);
 		if (typeFunction == "Type.enumEq") {
 			var argument = new TemporaryLocal("__haxeon_argument1");

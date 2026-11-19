@@ -200,11 +200,10 @@ class ClosureTyper {
 		var typedBodyScope = new Scope(), parameters:Array<LocalBinding> = [];
 		for (i in 0...lambdaArguments.length) {
 			var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
-			var parameter = typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
+			var parameter = typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span, true, null,
+				false,
+				null, null, arguments[i].local);
 			parameters.push(parameter);
-			var temporary = arguments[i].local;
-			if (temporary != null)
-				temporary.declaration = parameter.declaration;
 			lambdaArguments[i] = {name: parameter.id, type: lambdaArguments[i].type};
 		}
 		for (capture in captures) {

@@ -749,23 +749,11 @@ class BodyTyper implements BodyTyping {
 			validateDeferredExpression(child, loopDepth);
 	}
 
-	/**
-	 * A temporary's declaration or assignment as the named statement it is typed as: a temporary is a local of the scope under its
-	 * name until the typer reads locals by binding (docs/design/BODY_RESOLUTION.md).
-	 */
-	static function named(statement:AstStatement):AstStatement
-		return switch statement {
-			case TemporaryDeclaration(local, type, initializer, span):
-				local.declaration = BindingWalker.key(local.name, span);
-				VarDeclaration(local.name, type, initializer, span);
-			default: statement;
-		};
-
 	public function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
-			var statement = named(statements[statementIndex]);
+			var statement = statements[statementIndex];
 			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveSwitch(type, cases))) {
 				if (isNoReturnPlaceholder(output, statement))
 					continue;
@@ -1169,9 +1157,8 @@ class BodyTyper implements BodyTyping {
 							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType,
 								storageType, index));
 						case TemporaryVariable(local, bindingSpan):
-							local.declaration = BindingWalker.key(local.name, bindingSpan);
 							bindings.push(bindPatternName(local.name, bindingSpan, scope, parameterType, storageType,
-								index));
+								index, local));
 						case Call(_, _, _):
 							var nested = typeEnumPattern(argument, parameterType, scope);
 							if (nested == null) {
@@ -1305,11 +1292,10 @@ class BodyTyper implements BodyTyping {
 													arrayIndex: arrayIndex
 												});
 											case TemporaryVariable(local, bindingSpan):
-												local.declaration = BindingWalker.key(local.name, bindingSpan);
 												var binding = local.name;
 												bindings.push({
-													name: declarePatternName(binding, elementType, bindingSpan,
-														scope).id,
+													name: declarePatternName(binding, elementType, bindingSpan, scope,
+														local).id,
 													type: elementType,
 													storageType: elementStorage,
 													fieldStorageType: storageType,
@@ -1365,12 +1351,12 @@ class BodyTyper implements BodyTyping {
 	 * Declares a name a pattern binds. The pattern of `value.match(pattern)` binds none, as in Haxe: its result is a Bool, so a
 	 * name it bound would be out of scope where it could be read.
 	 */
-	function declarePatternName(name:String, type:CompilerType, span:SourceSpan,
-			scope:Scope):compiler.types.analysis.Scope.LocalBinding {
+	function declarePatternName(name:String, type:CompilerType, span:SourceSpan, scope:Scope,
+			?temporary:compiler.syntax.Ast.TemporaryLocal):compiler.types.analysis.Scope.LocalBinding {
 		rejectMatchPatternVariable(span);
 		if (scope.definesHere(name))
 			fail("E1019", 'Variable $name is bound multiple times', span);
-		var binding = scope.define(name, type, span);
+		var binding = scope.define(name, type, span, true, null, false, null, null, temporary);
 		var recorded = patternNames;
 		if (recorded != null)
 			recorded.push({name: name, type: type, span: span, binding: binding});
@@ -1419,9 +1405,9 @@ class BodyTyper implements BodyTyping {
 
 	/** Declares a name a pattern binds to the enum payload at `index`. */
 	function bindPatternName(name:String, span:SourceSpan, scope:Scope, type:CompilerType, storageType:CompilerType,
-			index:Int):TypedSwitchBinding {
+			index:Int, ?temporary:compiler.syntax.Ast.TemporaryLocal):TypedSwitchBinding {
 		return {
-			name: declarePatternName(name, type, span, scope).id,
+			name: declarePatternName(name, type, span, scope, temporary).id,
 			type: type,
 			storageType: storageType,
 			fieldStorageType: storageType,
@@ -1473,8 +1459,7 @@ class BodyTyper implements BodyTyping {
 					declarePatternName(name, expected, span, scope).id;
 			// A temporary the typer put in the pattern binds, whatever its name.
 			case TemporaryVariable(local, span):
-				local.declaration = BindingWalker.key(local.name, span);
-				declarePatternName(local.name, expected, span, scope).id;
+				declarePatternName(local.name, expected, span, scope, local).id;
 			default: null;
 		}
 	}
@@ -1715,9 +1700,7 @@ class BodyTyper implements BodyTyping {
 	public function localAt(expression:AstExpression, scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding>
 		return switch expression {
 			case Variable(name, span): referenceBinding(name, span, name, scope);
-			case TemporaryVariable(local, _):
-				var declaration = local.declaration;
-				declaration == null ? null : scope.bindingOf(declaration);
+			case TemporaryVariable(local, _): scope.bindingOfTemporary(local);
 			case DeclaredVariable(name, declaration, _): scope.bindingOf(BindingWalker.keyOf(name, declaration));
 			default: null;
 		};

@@ -4,13 +4,11 @@ import compiler.core.Source.SourceSpan;
 
 /**
  * A local the typer introduces while it types a body, in syntax it builds (docs/design/BODY_RESOLUTION.md): never named in
- * the source, so no source name can refer to it. `name` is how diagnostics and generated code name it.
+ * the source, so no source name can refer to it: the typer finds its binding by the object (`Scope.bindingOfTemporary`).
+ * `name` is how diagnostics and generated code name it.
  */
 class TemporaryLocal {
 	public final name:String;
-
-	/** Its declaration's key (`BindingWalker.key`), once the typer has typed the declaration; the typer finds it by this. */
-	public var declaration:Null<String> = null;
 
 	public function new(name:String)
 		this.name = name;
