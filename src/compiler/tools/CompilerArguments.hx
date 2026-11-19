@@ -155,6 +155,8 @@ class CompilerArguments {
 		if (live && buildModeExplicit && buildMode != "development")
 			throw new InternalError("--live requires development build mode");
 		if (live) buildMode = "development";
+		if (buildMode == "release" && optionFlags.indexOf(compiler.CompileOptions.VERIFY_IR) < 0)
+			optionFlags.push(compiler.CompileOptions.NO_VERIFY_IR);
 		if ((wasmMemoryStats || wasmGcStress) && backend != Wasm32)
 			throw new InternalError("Wasm allocator options require --target=wasm32");
 		if (wasmGcAllocationCount && backend != WasmGc)

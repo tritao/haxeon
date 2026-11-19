@@ -131,7 +131,7 @@ class IrPipeline {
 			&& (context.laneTarget == IrValueLaneTarget.Wasm32 || context.laneTarget == IrValueLaneTarget.WasmGc);
 
 	static function verifiesHere(program:IrProgram, context:IrPipelineContext):Bool
-		return !context.livePatching && !context.isWasm();
+		return !context.livePatching && !context.isWasm() && context.options.verifyIr;
 
 	static function checksVerification(program:IrProgram, context:IrPipelineContext):Bool
 		return !context.livePatching && !context.isWasm() && context.options.checkReuse;

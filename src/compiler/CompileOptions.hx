@@ -12,6 +12,7 @@ typedef CompileOptionsInit = {
 	final ?parseThreads:Int;
 	final ?keepSession:Bool;
 	final ?elaborateGenerics:Bool;
+	final ?verifyIr:Bool;
 }
 
 /**
@@ -72,6 +73,13 @@ class CompileOptions {
 	 */
 	public final elaborateGenerics:Bool;
 
+	/**
+	 * Check the final IR before lowering (`IrVerifier`). On by default and in tests; a release build turns it off
+	 * (`CompilerArguments`), since a valid compiler only ever makes valid IR. A cached result names it, so a checked build never
+	 * reuses an unchecked one.
+	 */
+	public final verifyIr:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -83,6 +91,7 @@ class CompileOptions {
 		parseThreads = init == null || init.parseThreads == null || init.parseThreads < 1 ? 1 : init.parseThreads;
 		keepSession = init == null || init.keepSession != false;
 		elaborateGenerics = init != null && init.elaborateGenerics == true;
+		verifyIr = init == null || init.verifyIr != false;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -97,7 +106,8 @@ class CompileOptions {
 			reverseTypingOrder: reverseTypingOrder,
 			parseThreads: parseThreads,
 			keepSession: keepSession,
-			elaborateGenerics: elaborateGenerics
+			elaborateGenerics: elaborateGenerics,
+			verifyIr: verifyIr
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -123,11 +133,17 @@ class CompileOptions {
 			flags.push(NO_KEEP_SESSION);
 		if (elaborateGenerics)
 			flags.push("--elaborate-generics");
+		if (!verifyIr)
+			flags.push(NO_VERIFY_IR);
 		return flags;
 	}
 
 	static inline final PARSE_THREADS = "--parse-threads=";
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
+	public static inline final NO_VERIFY_IR = "--no-verify-ir";
+
+	/** Verifies the IR even where the build mode would not (`verifyIr`). */
+	public static inline final VERIFY_IR = "--verify-ir";
 
 	/**
 	 * One spelling of the options that change what a compile makes, for a session's identity and a cached result's key: their flags,
@@ -145,7 +161,7 @@ class CompileOptions {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
-			case NO_KEEP_SESSION: true;
+			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
 
@@ -161,7 +177,8 @@ class CompileOptions {
 			reverseTypingOrder: arguments.indexOf("--reverse-typing-order") >= 0,
 			parseThreads: threadsFrom(arguments),
 			keepSession: arguments.indexOf(NO_KEEP_SESSION) < 0,
-			elaborateGenerics: arguments.indexOf("--elaborate-generics") >= 0
+			elaborateGenerics: arguments.indexOf("--elaborate-generics") >= 0,
+			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0
 		});
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

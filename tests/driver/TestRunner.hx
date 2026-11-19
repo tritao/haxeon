@@ -154,8 +154,10 @@ class TestRunner {
 			arguments.push("--root=" + root);
 		if (!run.plain)
 			arguments.push("--live");
-		else if (release)
+		else if (release) {
 			arguments.push("--build-mode=release");
+			arguments.push("--verify-ir");
+		}
 		if (run.unpruned)
 			arguments.push("--no-early-prune");
 		if (checkReuse)
