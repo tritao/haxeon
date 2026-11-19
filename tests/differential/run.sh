@@ -389,6 +389,7 @@ in_background run_compile_failure switch-bool-missing
 in_background run_case switch-shared-patterns 0
 in_background run_case local-scoping 0
 in_background run_case capture-storage 0
+in_background run_case capture-shadowed-in-lambda 0
 in_background run_known_divergence local-redeclared-same-block
 in_background run_compile_failure switch-pattern-missing-binding
 in_background run_compile_failure switch-pattern-binding-type

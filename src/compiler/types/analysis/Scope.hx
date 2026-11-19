@@ -23,7 +23,8 @@ typedef LocalFunction = {
 	final ?declaredIn:Scope;
 }
 
-private typedef ScopeValue = {
+/** A local as the typer knows it: its name, declaration, binding id and the facts recorded about it. */
+typedef LocalBinding = {
 	final source:String;
 
 	/** The declaration's identity, as `BindingWalker` names it; see `MapPrivacy`. */
@@ -47,16 +48,16 @@ private typedef ScopeValue = {
 private class ScopeDefinitions {
 	static inline final SCAN_LIMIT = 8;
 
-	public final valueList:Array<ScopeValue> = [];
+	public final valueList:Array<LocalBinding> = [];
 
-	var byName:Null<Map<String, ScopeValue>> = null;
+	var byName:Null<Map<String, LocalBinding>> = null;
 
 	/** The first value defined with each binding id. */
-	var byId:Null<Map<String, ScopeValue>> = null;
+	var byId:Null<Map<String, LocalBinding>> = null;
 
 	public function new() {}
 
-	public function named(name:String):Null<ScopeValue> {
+	public function named(name:String):Null<LocalBinding> {
 		var map = byName;
 		if (map != null)
 			return map.get(name);
@@ -66,7 +67,7 @@ private class ScopeDefinitions {
 		return null;
 	}
 
-	public function withId(id:String):Null<ScopeValue> {
+	public function withId(id:String):Null<LocalBinding> {
 		var map = byId;
 		if (map != null)
 			return map.get(id);
@@ -77,7 +78,7 @@ private class ScopeDefinitions {
 	}
 
 	/** Adds `value`, whose name this scope does not define yet. */
-	public function add(value:ScopeValue):Void {
+	public function add(value:LocalBinding):Void {
 		valueList.push(value);
 		var names = byName, ids = byId;
 		if (names != null && ids != null) {
@@ -115,6 +116,12 @@ private class ScopeCaptures {
 class Scope {
 	final parent:Null<Scope>;
 	final facts:FlowFacts;
+
+	/** The outermost scope of the function or lambda, which holds its bindings by declaration (`bindingOf`). */
+	final root:Scope;
+
+	/** On the root: every binding defined in the function or lambda, by declaration key; the last definition wins. */
+	var byDeclaration:Null<Map<String, LocalBinding>> = null;
 	var nextLocalId:Int = 0;
 	/*
 		Most scopes define, assign, capture and track nothing, so each kind of record is made with its first entry (`own...`);
@@ -157,15 +164,22 @@ class Scope {
 
 	public function new(?parent:Scope) {
 		this.parent = parent;
+		root = parent == null ? this : parent.root;
 		facts = new FlowFacts(parent == null ? null : parent.facts);
+	}
+
+	/** The binding of the declaration with key `declaration` (`BindingWalker.key`), or null when none was defined. */
+	public function bindingOf(declaration:String):Null<LocalBinding> {
+		var table = root.byDeclaration;
+		return table == null ? null : table.get(declaration);
 	}
 
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String,
 			receiver:Bool = false,
-			?localFunction:LocalFunction, ?declaration:String):Void {
+			?localFunction:LocalFunction, ?declaration:String):LocalBinding {
 		if (definitions != null && definitions.named(name) != null)
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
-		var value:ScopeValue = {
+		var value:LocalBinding = {
 			source: name,
 			declaration: declaration == null ? BindingWalker.key(name, span) : declaration,
 			declared: type,
@@ -178,10 +192,15 @@ class Scope {
 		};
 		ownDefinitions().add(value);
 		ownAssigned().set(value.id, initialized);
+		var table = root.byDeclaration;
+		if (table == null)
+			table = root.byDeclaration = [];
+		table.set(value.declaration, value);
+		return value;
 	}
 
-	public function defineReceiver(type:CompilerType, span:SourceSpan):Void
-		define("this", type, span, true, null, true);
+	public function defineReceiver(type:CompilerType, span:SourceSpan):LocalBinding
+		return define("this", type, span, true, null, true);
 
 	/** Only bindings proven never reassigned receive a declaration-sequence constant. */
 	public function setKeyPathConstant(name:String, descriptor:String):Void {
@@ -342,18 +361,19 @@ class Scope {
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String,
 			?bindingId:String,
-			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):Void {
+			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):LocalBinding {
 		// A capture is the same variable as the one it captures, so it keeps that declaration's identity.
-		define(name, type, span, true, bindingId, false, localFunction, declaration);
+		var value = define(name, type, span, true, bindingId, false, localFunction, declaration);
 		var own = ownCaptured();
-		own.captures.set(name, true);
+		own.captures.set(value.id, true);
 		if (storageType != null)
-			own.storageTypes.set(requireId(name), storageType);
+			own.storageTypes.set(value.id, storageType);
 		if (cell) {
-			own.cellCaptures.set(name, true);
+			own.cellCaptures.set(value.id, true);
 			if (cellClass != null)
-				own.cellClasses.set(name, cellClass);
+				own.cellClasses.set(value.id, cellClass);
 		}
+		return value;
 	}
 
 	public function recordAssignment(name:String, type:CompilerType):Void {
@@ -461,19 +481,52 @@ class Scope {
 	}
 
 	public function isCapture(name:String):Bool {
-		var own = captured;
-		return own != null && own.captures.exists(name) || (parent != null && parent.isCapture(name));
+		var value = resolveLocal(name);
+		return value != null && isCaptured(value);
 	}
 
 	public function isCellCapture(name:String):Bool {
-		var own = captured;
-		return own != null && own.cellCaptures.exists(name) || (parent != null && parent.isCellCapture(name));
+		var value = resolveLocal(name);
+		return value != null && isCellCaptured(value);
 	}
 
 	public function cellClass(name:String):Null<String> {
-		var own = captured;
-		return own != null && own.cellClasses.exists(name)
-			? own.cellClasses.get(name) : (parent == null ? null : parent.cellClass(name));
+		var value = resolveLocal(name);
+		return value == null ? null : cellClassOf(value);
+	}
+
+	/** Whether `value` is a capture of the lambda this scope is in. */
+	public function isCaptured(value:LocalBinding):Bool {
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var own = scope.captured;
+			if (own != null && own.captures.exists(value.id))
+				return true;
+			scope = scope.parent;
+		}
+		return false;
+	}
+
+	public function isCellCaptured(value:LocalBinding):Bool {
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var own = scope.captured;
+			if (own != null && own.cellCaptures.exists(value.id))
+				return true;
+			scope = scope.parent;
+		}
+		return false;
+	}
+
+	public function cellClassOf(value:LocalBinding):Null<String> {
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var own = scope.captured;
+			if (own != null && own.cellClasses.exists(value.id))
+				return own.cellClasses.get(value.id);
+			scope = scope.parent;
+		}
+		return null;
 	}
 
 	public function requireCellClass(name:String):String {
@@ -547,7 +600,7 @@ class Scope {
 		return value != null && value.receiver;
 	}
 
-	function resolveLocal(name:String):Null<ScopeValue> {
+	function resolveLocal(name:String):Null<LocalBinding> {
 		var scope:Null<Scope> = this;
 		while (scope != null) {
 			var own = scope.definitions;
@@ -561,7 +614,7 @@ class Scope {
 		return null;
 	}
 
-	function resolveById(id:String):Null<ScopeValue> {
+	function resolveById(id:String):Null<LocalBinding> {
 		var own = definitions, found = own == null ? null : own.withId(id);
 		if (found != null)
 			return found;
@@ -578,7 +631,7 @@ class Scope {
 	}
 
 	/** `value` as this scope sees it: its flow-refined type, or the declared one. */
-	function refinedType(value:ScopeValue):CompilerType {
+	function refinedType(value:LocalBinding):CompilerType {
 		var refined = facts.resolve(value.id);
 		return refined == null ? value.declared : refined;
 	}
@@ -626,7 +679,7 @@ class Scope {
 	}
 
 	/** Every visible value, outermost scope first, in an array allocated at its final size. */
-	public function visibleValues():Array<ScopeValue> {
+	public function visibleValues():Array<LocalBinding> {
 		var count = 0, scope:Null<Scope> = this;
 		while (scope != null) {
 			var own = scope.definitions;
@@ -634,7 +687,7 @@ class Scope {
 				count += own.valueList.length;
 			scope = scope.parent;
 		}
-		var result:Array<ScopeValue> = [];
+		var result:Array<LocalBinding> = [];
 		result.resize(count);
 		var end = count;
 		scope = this;
