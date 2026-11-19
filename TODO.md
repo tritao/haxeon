@@ -256,7 +256,8 @@ lowering 17%, IR generation and SSA 11%, parsing 5.5%.
   and an IR `get` that returns a found flag and the value, so a map read
   neither allocates nor casts. Then re-profile.
 - **Fewer lookups.** String-map time is spread over about 80 classes; the
-  lasting fix is identities as integers instead of names (ADR 0003 M3).
+  lasting fix is identities as integers instead of names (ADR 0003 M3),
+  staged in `docs/design/INTEGER_IDENTITIES.md`.
   Strings now cache their map hash (fork 36197c5), which cut 4%; it is a
   complement, not the fix.
 - **SSA value names.** Every SSA temporary carries a `"v<id>"` String

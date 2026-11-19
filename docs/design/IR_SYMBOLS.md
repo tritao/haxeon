@@ -1,6 +1,7 @@
 # IR symbols
 
-Status: proposed. Step 1 of the integer identities in `COMPILER_DATA_LAYOUT.md`; the identity side is ADR 0003 §5 (M3).
+Status: steps 1 and 2 done; 3 and 4 open. The first family of `INTEGER_IDENTITIES.md`; the identity side is ADR 0003 §5
+(M3).
 
 The IR names what it calls by string: `Call(output, functionName, arguments)`, `StaticClosure`, `InstanceClosure`. Every
 pass that needs the callee looks the name up in a map built for it, so the IR passes, assembly and HashLink lowering hash
