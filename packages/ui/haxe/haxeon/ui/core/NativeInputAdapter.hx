@@ -17,6 +17,12 @@ class NativeInputAdapter {
 	var attachedEvents:Null<EventPump>;
 	var eventSubscription:Null<EventSubscription>;
 	final eventListener:PlatformEvent->Void;
+	/**
+		Phone form-factor override (EXOSUIT_FORM_FACTOR=phone): the left mouse button is delivered as touch pointer 0, so
+		the phone gestures work with a mouse. Other buttons are dropped, and a move without the button down is not a touch.
+	**/
+	public static var mouseAsTouch:Bool = false;
+	var mouseTouchDown:Bool = false;
 	/** Converts window logical coordinates into application layout coordinates. */
 	public var coordinateScale:Float = 1.0;
 	var pointerX:Float;
@@ -92,12 +98,32 @@ class NativeInputAdapter {
 			case PointerMove(eventSource, x, y) if (matches(eventSource)):
 				pointerX = x;
 				pointerY = y;
+				if (mouseAsTouch) {
+					if (mouseTouchDown)
+						context.pointerMove(x / coordinateScale, y / coordinateScale, pointerModifiers, touchPointerId(0),
+							new UiTouchData(TouchTool.Finger, 1.0, 0.0, 0.0));
+					return true;
+				}
 				context.pointerMove(x / coordinateScale, y / coordinateScale, pointerModifiers);
 				true;
 			case PointerButton(eventSource, button, action, modifiers, x, y) if (matches(eventSource)):
 				pointerX = x;
 				pointerY = y;
 				snapshotModifiers(UiModifier.fromRaw(modifiers.rawValue()));
+				if (mouseAsTouch) {
+					if (button.rawValue() != NativeKitTypes.PointerButton.Left.rawValue()) return true;
+					var touchData = new UiTouchData(TouchTool.Finger, action == InputAction.Press ? 1.0 : 0.0, 0.0, 0.0);
+					if (action == InputAction.Press) {
+						mouseTouchDown = true;
+						context.pointerDown(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()),
+							touchPointerId(0), touchData);
+					} else if (action == InputAction.Release) {
+						mouseTouchDown = false;
+						context.pointerUp(x / coordinateScale, y / coordinateScale, 0, UiModifier.fromRaw(modifiers.rawValue()),
+							touchPointerId(0), touchData);
+					}
+					return true;
+				}
 				if (action == InputAction.Press)
 					context.pointerDown(x / coordinateScale, y / coordinateScale, button.rawValue(),
 						UiModifier.fromRaw(modifiers.rawValue()));

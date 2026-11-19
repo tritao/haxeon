@@ -813,6 +813,10 @@ class DesktopUiHost {
 		return new DesktopUiHostSession(step, finish);
 	}
 
+	/** Capture JSON names a function instead of failing on it (views may keep callbacks in inspected state). */
+	static function noFunctions(_:Dynamic, value:Dynamic):Dynamic
+		return Reflect.isFunction(value) ? "<function>" : value;
+
 	static function writeDiagnostics(options:DesktopUiHostOptions,
 			application:DesktopUiApplication, renderer:Renderer, state:UiHostRuntime,
 			events:Array<String>, frames:Array<Dynamic>, eventCounts:Map<String, Int>,
@@ -825,9 +829,9 @@ class DesktopUiHost {
 		}
 		File.saveContent(directory + "/ui-tree.txt", application.context().dumpTree() + "\n");
 		File.saveContent(directory + "/layout.json",
-			Json.stringify(application.context().inspect(), null, "  ") + "\n");
+			Json.stringify(application.context().inspect(), noFunctions, "  ") + "\n");
 		File.saveContent(directory + "/app-state.json",
-			Json.stringify(application.diagnosticState(), null, "  ") + "\n");
+			Json.stringify(application.diagnosticState(), noFunctions, "  ") + "\n");
 		var metrics = application.context().frameMetrics;
 		var stats = renderer.stats();
 		var frameData:Dynamic = {
