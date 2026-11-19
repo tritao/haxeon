@@ -109,6 +109,35 @@ and structure patterns into nested switches. A resolution made before typing has
   output (local and cell names). The resolver's ids are numbers; their text stays as today's until a step chooses to
   change the output.
 
+## One binding model (2026-11-19)
+
+The end state: names are resolved once (the resolution), every local is an integer binding id, and `Scope` keeps only
+flow state per binding (narrowed type, assignment, map key sources), with no name lookup. What stands in the way is the
+syntax the typer builds while typing and types by name. Inventory (self-compile and all programs under
+`--check-resolution`, references the resolution has not seen, all of them locals):
+
+| Family | Built by | References | Needs types |
+|---|---|---:|---|
+| `$diff:*` temporaries | `DiffIntrinsics` (field-by-field diff and patch) | 1,533 | yes |
+| `__haxeon_incremented` | `ExpressionTyper.arithmetic` (increment of a place that is not a local) | 108 | yes |
+| `__haxeon_array*` | `ExpressionTyper.typeIndex`, `StatementTyper` (an element's array evaluated once) | about 100 | yes |
+| source locals of a `scoped var` | its cleanup, at generated positions | about 70 | yes (`Disposable`) |
+| source locals of `for (k => v in a)` | key-value iteration and comprehensions | about 45 | yes (array or map) |
+| `$downcast` | `CallResolver.typeExpressionValue`, `ExpressionTyper.typeCast` | 42 | yes |
+| `$compound:receiver` | `AssignmentTarget` (a compound assignment's receiver) | 18 | to check |
+| local function default arguments | the lambda's prologue | 12 | argument types |
+| `__haxeon_bound*`, `__haxeon_argument*`, `__haxeon_match`, pattern temporaries | `CallResolver`, `ExtractorPatterns`, `StructurePatterns` | a few | yes |
+
+Nearly all of it needs types, so a lowering before resolution would take almost nothing. And two families refer to
+source locals from generated syntax, not only to temporaries. So the way is synthetic references: syntax the typer
+builds refers to a binding by id (a temporary's, allocated from the body's resolution, or a source local's), never by
+name. About 100 construction sites in 12 files (`CallResolver`, `BodyTyper`, `DiffIntrinsics`, `ExpressionTyper`,
+`StatementTyper`, the pattern typers and a few more); generated functions (`EnumEqualityGenerator`,
+`WireCodecGenerator` and the like) are typed through `typeFunction` and resolved like source, so they need nothing.
+Then the typer reads every local by id and `Scope`'s name chain goes (with the check mode), and Haxe's same-block
+redeclaration becomes a change to the resolver alone. Speed is not the reason: name lookups are about 1.2% of a
+self-compile.
+
 ## Progress
 
 - `BodyResolution` records a body's declarations and references; `--check-resolution` compares it with the typer's
