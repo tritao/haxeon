@@ -30,8 +30,26 @@ class WarmRebuildReuseMain {
 	static final configSource =
 		"class Config { public static var empty:Dynamic = {}; public var data:Dynamic = {a: 1}; public function new() {} }";
 
+	/** An anonymous type that only an optional parameter's element type names, which no body constructs. */
+	static final encoderSource =
+		"class Encoder { public static function encode(value:Int, ?sections:Array<{tag:Int, name:String}>):Int return sections == null ? value : value + sections.length; }";
+
+	/**
+	 * An abstract member nothing calls is typed to be checked, and the structural iterator it returns is not part of the program:
+	 * a warm build that does not check it again lists the anonymous types a fresh one does.
+	 */
+	static final trailSource =
+		"enum Step { Walk(n:Int); Stop; } abstract Trail(Array<Step>) from Array<Step> { public static function size(steps:Array<Step>):Int return steps.length; public function iterator():Iterator<Step> return this.iterator(); }";
+
+	/**
+	 * Bodies another module reads: an inline function expands in its caller, with the private functions it calls, and a generic
+	 * function is specialized for its caller. Editing only a private helper behind them must change the caller as a fresh build does.
+	 */
+	static final opsSource =
+		"class Ops { public static inline function twice(x:Int):Int return step(x) * 2 + bump(x); static inline function step(x:Int):Int return x + 1; static function bump(x:Int):Int return x + 3; public static function first<T>(xs:Array<T>):T return pick(xs); static function pick<T>(xs:Array<T>):T return xs[0]; }";
+
 	static final mainSource =
-		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null ? 42 : 1; } }";
+		"class Main { static function main():Int { var total = Lib.add(1, 2) + Lib.boxed() + Area.of(Circle(2)) + Level.High; return total == 20 && Lib.name().length == 3 && new Config().data != null && Config.empty != null && Encoder.encode(0) == 0 && Trail.size([Stop]) == 1 && Ops.twice(3) > 0 && Ops.first([5, 6]) > 0 ? 42 : 1; } }";
 
 	static function initialSources():Map<String, String>
 		return [
@@ -41,6 +59,9 @@ class WarmRebuildReuseMain {
 			"Area.hx" => areaSource,
 			"Lib.hx" => libSource,
 			"Config.hx" => configSource,
+			"Encoder.hx" => encoderSource,
+			"Trail.hx" => trailSource,
+			"Ops.hx" => opsSource,
 			"Main.hx" => mainSource
 		];
 
@@ -89,6 +110,12 @@ class WarmRebuildReuseMain {
 		// A reader inlines an enum abstract's value where the value is declared, so moving the declaration retypes the reader.
 		edit(failures, "after an enum abstract moved down its file",
 			files -> files.set("Level.hx", "\n\n" + levelSource));
+		edit(failures, "after an edit of a private inline function an inline function expands into",
+			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return x + 1;", "return x + 2;")));
+		edit(failures, "after an edit of a private function an inline function calls",
+			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return x + 3;", "return x + 4;")));
+		edit(failures, "after an edit of a private generic function a generic function calls",
+			files -> files.set("Ops.hx", StringTools.replace(opsSource, "return xs[0];", "return xs[xs.length - 1];")));
 		if (failures.length > 0)
 			throw failures.join("\n");
 		Sys.println("PASS: a warm plain build equals a fresh one, and reuses its module when nothing changed");

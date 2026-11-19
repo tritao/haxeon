@@ -98,6 +98,45 @@ Open items from the architecture plan's typer and service steps
 The repeated type test after `__exception_matches` and typed payloads for
 regular recursive generic enums are in the next section.
 
+- **`new C()` on a class with no constructor compiles.** Haxe rejects it
+  ("C does not have a constructor"), even when the instance fields have
+  initializers; an inherited constructor, even a private one, is accepted.
+  `CallResolver.typeConstruction` should fail with E1008 when neither the
+  class nor a base class gives it one, and the implicit-constructor path it
+  falls into then goes.
+- **An anonymous type is recorded twice.** `AnonymousTypeRegistry` walks a
+  type once to attribute its structures to the unit being typed
+  (`TypingSession.recordAnonymousUse`) and once to add them to the unit's
+  output (`TypingOutput.discoverAnonymous`): two records of one fact, the
+  kind of drift that made warm builds differ from fresh ones. Record once in
+  the unit's output and derive the unit attribution at merge.
+- **A deferred structure record assumes its unit is still being typed.** A
+  structure whose fields are not known yet is recorded when they are
+  (`Monomorphs.whenKnown` in `AnonymousTypeRegistry.recordUses`), into the
+  output of the unit being typed then. That is the unit that met it as long
+  as no check outlives its unit, which holds but is not checked; fail with an
+  internal error when a deferred record runs after its unit's output was
+  merged or dropped.
+- **Reachability on the query engine: one liveness result per function.**
+  When pruning moves onto the engine (`docs/design/QUERY_ENGINE.md`,
+  whole-program steps), whether a function is live should be its own query
+  read by the stages after it, so a whole-program walk changes only the
+  functions whose liveness changed, as Nimony's DCE writes one live set per
+  module (`doc/internals/ic.md` there). The redo of the early prune still
+  needs each helper recorded with what it serves
+  (`docs/design/WARM_REBUILD_REUSE.md`).
+- **A persistent standard-library cache (low value for now).** Nimony builds
+  its standard library once per compiler build and options key and shares it
+  between builds. Haxeon loads only the standard-library modules a program
+  reaches, so a small program's compile is already short: a program using
+  `Map`, `StringBuf`, `haxe.Json`, `StringTools`, `Reflect` and `Date`
+  compiles in about 0.1 s in the worker, against about 1 s for the whole
+  `haxeon build`. Measure the standard library's share of a large program
+  (the self-compile, the app) before planning it. The cacheable layer would be
+  the typed or early IR of standard-library functions (passes, pruning and
+  specializations depend on the program), once the typer runs on the query
+  engine and memos own their outputs (ADR 0003 decisions 11 and 14).
+
 - **An interface met through an inherited inferred method is not re-checked.**
   When a class implements an interface through a method it inherits, and that
   method's inferred signature changes, a warm build does not check the
