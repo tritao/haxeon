@@ -398,6 +398,10 @@ class BodyTyper implements BodyTyping {
 		return switch operation {
 			case Equality(name): callResolver.equalityCall(name, arguments[0], arguments[1], span);
 			case ArraySearch(name): callResolver.arraySearch(name, arguments[0], arguments[1], span, true);
+			case Hash: callResolver.hashCall(arguments[0], span);
+			case ToString: StringConversion.convertValue(session, arguments[0], this);
+			case RawPointer(name): callResolver.rawPointerOperation(name, arguments, span);
+			case LayoutQuery(kind, type, field): expressionTyper.layoutQuery(kind, type, field, span);
 		};
 
 	static function elaborated(elaboration:Null<GenericElaboration>, type:CompilerType):CompilerType

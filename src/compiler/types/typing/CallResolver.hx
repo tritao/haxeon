@@ -446,47 +446,25 @@ class CallResolver {
 					fail("E1008", "RawPtr.load expects no arguments", span);
 				if (NativeLayout.isNativeValue(pointee))
 					fail("E1022", "Native records are address-only and cannot be loaded by value", span);
-				if (flatValueRecordName(pointee) != null)
-					return new TypedExpression(TCall("$rawptr.load.flat", [receiver]), pointee, span);
-				var layout = nativeMemoryLayout(pointee, span);
-				return new TypedExpression(TCall("$rawptr.load", [
-					receiver,
-					new TypedExpression(TIntLiteral(layout.size), TInt, span),
-					new TypedExpression(TBoolLiteral(layout.signed), TBool, span)
-				]), pointee, span);
+				return rawPointerAccess("load", [receiver], span);
 			case "store":
 				if (arguments.length != 1)
 					fail("E1008", "RawPtr.store expects one value", span);
 				if (NativeLayout.isNativeValue(pointee))
 					fail("E1022", "Native records are address-only and cannot be stored by value", span);
-				if (flatValueRecordName(pointee) != null) {
-					var flatValue = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, pointee),
-						pointee,
-						"RawPtr.store value", "E1002");
-					return new TypedExpression(TCall("$rawptr.store.flat", [receiver, flatValue]), TVoid, span);
-				}
-				var layout = nativeMemoryLayout(pointee, span),
-					value = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, pointee), pointee,
-						"RawPtr.store value",
-						"E1002");
-				return new TypedExpression(TCall("$rawptr.store", [
-					receiver,
-					value,
-					new TypedExpression(TIntLiteral(layout.size), TInt, span)
-				]), TVoid, span);
+				if (flatValueRecordName(pointee) == null && !TypeRepresentation.mentionsTypeParameter(pointee))
+					nativeMemoryLayout(pointee, span);
+				var value = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, pointee), pointee,
+					"RawPtr.store value", "E1002");
+				return rawPointerAccess("store", [receiver, value], span);
 			case "offset":
 				if (arguments.length != 1)
 					fail("E1008", "RawPtr.offset expects one element count", span);
-				var stride = nativePointerStride(pointee, span),
-					count = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt,
-						"RawPtr.offset count",
-						"E1002");
-				return new TypedExpression(TCall("$rawptr.offset", [
-					receiver,
-					count,
-					new TypedExpression(TIntLiteral(stride), TInt, span)
-				]), receiver.type,
-					span);
+				if (!TypeRepresentation.mentionsTypeParameter(pointee))
+					nativePointerStride(pointee, span);
+				var count = bodyTyper.coerce(bodyTyper.typeExpression(arguments[0], scope, TInt), TInt,
+					"RawPtr.offset count", "E1002");
+				return rawPointerAccess("offset", [receiver, count], span);
 			case "byteOffset":
 				if (arguments.length != 1)
 					fail("E1008", "RawPtr.byteOffset expects one byte count", span);
@@ -1115,6 +1093,70 @@ class CallResolver {
 				fail("E1007", 'Cannot call non-function field "$name"', span);
 				null;
 		};
+	}
+
+	/**
+	 * `RawPtr.load`, `store` or `offset` (`name`) through `arguments[0]`, with the value or count after it. Where the pointee
+	 * mentions a type parameter, its layout is the representation's: the elaboration pass makes the access
+	 * (`rawPointerOperation`).
+	 */
+	function rawPointerAccess(name:String, arguments:Array<TypedExpression>, span:SourceSpan):TypedExpression {
+		var pointee = rawPointee(arguments[0]);
+		return TypeRepresentation.mentionsTypeParameter(pointee)
+			? new TypedExpression(TParameterOperation(RawPointer(name),
+			arguments), rawPointerResult(name, arguments[0], pointee), span) : rawPointerOperation(name, arguments,
+			span);
+	}
+
+	static function rawPointee(receiver:TypedExpression):CompilerType
+		return switch receiver.type {
+			case TAbstract(_, [pointee], _): pointee;
+			default: throw new InternalError("A raw pointer access on a value that is no RawPtr");
+		};
+
+	static function rawPointerResult(name:String, receiver:TypedExpression, pointee:CompilerType):CompilerType
+		return switch name {
+			case "load": pointee;
+			case "store": TVoid;
+			default: receiver.type;
+		};
+
+	/** `RawPtr.load`, `store` or `offset` (`name`) through `arguments[0]`, with its pointee's layout. */
+	public function rawPointerOperation(name:String, arguments:Array<TypedExpression>,
+			span:SourceSpan):TypedExpression {
+		var receiver = arguments[0], pointee = rawPointee(receiver);
+		return switch name {
+			case "load" if (flatValueRecordName(pointee) != null):
+				new TypedExpression(TCall("$rawptr.load.flat", [receiver]), pointee, span);
+			case "load":
+				var layout = nativeMemoryLayout(pointee, span);
+				new TypedExpression(TCall("$rawptr.load", [
+					receiver,
+					new TypedExpression(TIntLiteral(layout.size), TInt, span),
+					new TypedExpression(TBoolLiteral(layout.signed), TBool, span)
+				]), pointee, span);
+			case "store" if (flatValueRecordName(pointee) != null):
+				new TypedExpression(TCall("$rawptr.store.flat", [receiver, arguments[1]]), TVoid, span);
+			case "store":
+				new TypedExpression(TCall("$rawptr.store", [
+					receiver,
+					arguments[1],
+					new TypedExpression(TIntLiteral(nativeMemoryLayout(pointee, span).size), TInt, span)
+				]), TVoid, span);
+			case "offset":
+				new TypedExpression(TCall("$rawptr.offset", [
+					receiver,
+					arguments[1],
+					new TypedExpression(TIntLiteral(nativePointerStride(pointee, span)), TInt, span)
+				]), receiver.type, span);
+			default: throw new InternalError('Unknown raw pointer access "$name"');
+		};
+	}
+
+	/** `Hashing.hash` of `value`, with the helper its type asks for. */
+	public function hashCall(value:TypedExpression, span:SourceSpan):TypedExpression {
+		var keyed = HashGenerator.request(session, value.type, session.currentContext.name, span);
+		return new TypedExpression(TCall(HashGenerator.hashName(keyed), [value]), TInt, span);
 	}
 
 	/**
@@ -1875,8 +1917,10 @@ class CallResolver {
 			var value = typeExpressionValue(arguments[0], scope);
 			if (!DeclaredConformance.supportsHash(session, value.type))
 				fail("E1025", DeclaredConformance.capabilityError(session, value.type, "Hashable"), span);
-			var keyed = HashGenerator.request(session, value.type, session.currentContext.name, span);
-			return new TypedExpression(TCall(HashGenerator.hashName(keyed), [value]), TInt, span);
+			// A type parameter's value hashes as its representation does: the elaboration pass chooses the helper.
+			if (TypeRepresentation.mentionsTypeParameter(value.type))
+				return new TypedExpression(TParameterOperation(Hash, [value]), TInt, span);
+			return hashCall(value, span);
 		}
 		if (DiffIntrinsics.handles(name))
 			return bodyTyper.typeExpression(DiffIntrinsics.expand(session, name, arguments, span,

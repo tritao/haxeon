@@ -64,10 +64,11 @@ class CompileOptions {
 	public final keepSession:Bool;
 
 	/**
-	 * Make a generic class's erased code from its methods' own-parameter typing, passed through the elaboration pass
-	 * (`GenericElaboration`), instead of typing each body again with its parameters erased. Output must not change: the test
-	 * driver builds programs both ways and compares the bytes (docs/design/GENERIC_TYPING_ONCE.md, stage 2). For the tests
-	 * that check so, until the pass replaces the second typing.
+	 * Make generic code (a generic class's erased methods, each specialization of a generic function or abstract member, each
+	 * owner specialization's methods) from its own-parameter typing, passed through the elaboration pass (`GenericElaboration`),
+	 * instead of typing each body again for each representation. Output must not change: the test driver builds programs both
+	 * ways and compares the bytes (docs/design/GENERIC_TYPING_ONCE.md, stage 2). For the tests that check so, until the pass
+	 * replaces the second typing.
 	 */
 	public final elaborateGenerics:Bool;
 

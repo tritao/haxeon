@@ -454,6 +454,28 @@ class TypeRepresentation {
 			default: false;
 		};
 
+	/**
+	 * Whether `type` is a generic class's instance in its own type parameters (`Box<T>` in `Box`'s body): its storage is each
+	 * representation's, so it has no physical type of its own, and the elaboration pass gives it the representation's.
+	 */
+	function isOwnInstance(type:CompilerType):Bool
+		return switch type {
+			case TInstance(Class, name, arguments) if (arguments.length > 0):
+				var declaration = session.classDecls.get(name);
+				if (declaration == null || declaration.typeParameters.length != arguments.length) false;
+				else {
+					var own = true;
+					for (index in 0...arguments.length)
+						switch arguments[index] {
+							case TTypeParameter(owner, parameter) if ((owner:String) == name
+								&& parameter == declaration.typeParameters[index]):
+							default: own = false;
+						}
+					own;
+				}
+			default: false;
+		};
+
 	/** Whether `type` mentions a type parameter; `containsTypeParameter` without allocating where no structure is met. */
 	public static function mentionsTypeParameter(type:CompilerType):Bool
 		return switch type {
@@ -893,7 +915,7 @@ class TypeRepresentation {
 				default: false;
 			},
 				physical = specialization != null ? copyMap(specialization.substitutions)
-				: typedInterface ? copyMap(semantic) : isGenericNominal(projected)
+				: typedInterface || isOwnInstance(projected) ? copyMap(semantic) : isGenericNominal(projected)
 				? erasedNominalSubstitutions(owner) : copyMap(semantic);
 		return {semantic: semantic, physical: physical};
 	}
@@ -979,6 +1001,8 @@ class TypeRepresentation {
 
 	function physicalFieldType(type:CompilerType, name:String, span:SourceSpan):CompilerType
 		return switch type {
+			// A class's value in its own type parameters stores as each representation of them does: the elaboration pass makes it.
+			case TInstance(Class, _, _) if (isOwnInstance(type)): fieldType(type, name, span);
 			case TInstance(Class, className, _) if (session.classDecls.exists(className)):
 				var declaration = requiredMapValue(session.classDecls, className),
 					specialization = genericOwner(type),

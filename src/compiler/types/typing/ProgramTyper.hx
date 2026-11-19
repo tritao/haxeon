@@ -65,6 +65,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		this.bodyTyper = bodyTyper;
 		this.reverseTypingOrder = reverseTypingOrder;
 		this.elaborateGenerics = elaborateGenerics;
+		bodyTyper.genericInstantiation.elaborateGenerics = elaborateGenerics;
 		this.session = bodyTyper.session;
 		this.externTyper = new ExternTyper(fn -> bodyTyper.argumentTypesOf(fn),
 			(type, span) -> bodyTyper.lowerType(type, span));
@@ -1678,9 +1679,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			// typed. A specialization's fails the body that asked for it.
 			var mark = session.checkpoint(), unit = units == null ? null : session.beginUnit();
 			try {
-				var typedMethod = typeBody && specialization == null && elaborateGenerics
-					&& classDecl.typeParameters.length > 0 ? elaboratedMethod(classDecl, method,
-					substitutions) : typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
+				var typedMethod = typeBody && elaborateGenerics
+					&& classDecl.typeParameters.length > 0 ? elaboratedMethod(classDecl, method, substitutions,
+					specialization) : typeBody ? bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
 					substitutions,
 					specialization == null ? null : specialization.name + "." + method.name, null,
 					specialization == null ? null : specialization.name,
@@ -1735,14 +1736,16 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	/**
 	 * `method` of the generic class `classDecl` typed once with the class's parameters as themselves, then elaborated for
-	 * `substitutions`, the erased representation (`CompileOptions.elaborateGenerics`).
+	 * `substitutions`: the erased representation, or the owner specialization `specialization` (`CompileOptions.elaborateGenerics`).
 	 */
-	function elaboratedMethod(classDecl:AstClass, method:AstFunction,
-			substitutions:Map<String, CompilerType>):TypedFunction
+	function elaboratedMethod(classDecl:AstClass, method:AstFunction, substitutions:Map<String, CompilerType>,
+			specialization:Null<compiler.types.typing.TypeRepresentation.GenericOwnerRepresentation>):TypedFunction
 		return bodyTyper.typeFunction(method, classDecl.name, method.isStatic,
 			ownSubstitutions(classDecl.name, classDecl.typeParameters, classDecl.name + "." + method.name, method),
-			null,
-			null, null, null, null, new GenericElaboration([classDecl.name], substitutions, bodyTyper));
+			specialization == null ? null : specialization.name + "." + method.name, null,
+			specialization == null ? null : specialization.name,
+			specialization == null ? null : specialization.typeArguments, null,
+			new GenericElaboration([classDecl.name], substitutions, bodyTyper));
 
 	function isConstrainedOwnerTemplate(name:String):Bool {
 		var declaration = session.classDecls.get(name);

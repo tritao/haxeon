@@ -1,0 +1,36 @@
+# Programs whose build with --elaborate-generics still differs from the plain build, or fails, with what is left to do
+# (docs/design/GENERIC_TYPING_ONCE.md, stage 2). One per line: the program's name, a tab, the reason. The test driver's warm-edit
+# builds fail when a program not listed here differs, and when a listed one no longer does, so remove its line then.
+abstract-sibling-call	nested generic call: a callee specialized at the body's own parameter (item 4)
+abstract-underlying-this	nested generic call: a callee specialized at the body's own parameter (item 4)
+generic-contextual-callback	nested generic call: a callee specialized at the body's own parameter (item 4)
+native-memory-flat-struct	nested generic call: a callee specialized at the body's own parameter (item 4)
+nullable-generic-abstract	nested generic call: a callee specialized at the body's own parameter (item 4)
+reactive-derived-cycle	nested generic call: a callee specialized at the body's own parameter (item 4)
+reactive-effect-failure-recovery	nested generic call: a callee specialized at the body's own parameter (item 4)
+typeinfo-generic	nested generic call: a callee specialized at the body's own parameter (item 4)
+wasm-observable-tracking	nested generic call: a callee specialized at the body's own parameter (item 4)
+enum-concrete-payloads	lambda name: a lambda's name hashes its types (item 4)
+rpc-lifecycle	lambda name: a lambda's name hashes its types (item 4)
+comprehension-block-filter	iteration argument: a specialization's concrete iteration argument meets the body's own element type
+lambda-count	iteration argument: a specialization's concrete iteration argument meets the body's own element type
+structural-iteration	iteration argument: a specialization's concrete iteration argument meets the body's own element type
+test-shards	iteration argument: a specialization's concrete iteration argument meets the body's own element type
+key-path-semantics	key path argument: a specialization's constant key path meets the body's own parameter
+key-paths	key path argument: a specialization's constant key path meets the body's own parameter
+bounded-generic	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+enum-interface-conformance	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+generic-constrained-owner-hash	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+generic-constrained-owner-lookup-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+generic-struct-functions	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+generic-struct-owner-allocations	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+helper-ownership-enum-equality	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+raw-representable	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+scoped-cleanup	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+specialized-map-scalar-keys	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+struct-value-semantics	constrained parameter: a member is reached through the bound, where a specialization reaches it on the class
+enum-generic-owner	owner specialization: an enum in the owner's parameters is specialized differently
+generic-nullable-substitution	owner specialization: an optional field of a Null<T> owner argument
+generic-struct-class	owner specialization: a specialized subclass of a generic base class
+open-literal-helpers	shared specialization: a [shape] body's field of an anonymous structure element
+specialized-struct-map	owner specialization: a constrained owner's method result of a nullable struct

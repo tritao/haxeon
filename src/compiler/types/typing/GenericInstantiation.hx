@@ -20,6 +20,12 @@ class GenericInstantiation {
 	final session:TypingSession;
 	final bodyTyper:BodyTyping;
 
+	/**
+	 * Make each specialization's code from the body's own-parameter typing, through the elaboration pass
+	 * (`CompileOptions.elaborateGenerics`).
+	 */
+	public var elaborateGenerics = false;
+
 	public function new(session:TypingSession, bodyTyper:BodyTyping) {
 		this.session = session;
 		this.bodyTyper = bodyTyper;
@@ -233,8 +239,45 @@ class GenericInstantiation {
 			if (session.representation.containsTypeParameter(argument, []))
 				forParameters = true;
 		session.typeSharedUnit(name,
-			() -> session.closureConversion.addFunction(bodyTyper.typeFunction(fn, owner, isStatic, substitutions, name,
+			() -> session.closureConversion.addFunction(elaborateGenerics && !forParameters ? elaboratedBody(name, fn,
+			owner, isStatic, receiver, substitutions) : bodyTyper.typeFunction(fn, owner, isStatic, substitutions, name,
 			receiver)), forParameters, unused);
+	}
+
+	/**
+	 * The specialization `name` of `fn` made by the elaboration pass: the body typed with its own and its owner's type parameters
+	 * as themselves, then elaborated for `substitutions` (`CompileOptions.elaborateGenerics`).
+	 */
+	function elaboratedBody(name:String, fn:AstFunction, owner:Null<String>, isStatic:Bool, receiver:Null<CompilerType>,
+			substitutions:Map<String, CompilerType>):compiler.types.TypedAst.TypedFunction {
+		var key = owner == null ? fn.name : owner + "." + fn.name,
+			own:Map<String, CompilerType> = [],
+			ownerParameters = ownerTypeParameters(owner);
+		for (parameter in ownerParameters)
+			own.set(parameter, TTypeParameter(requiredString(owner), parameter));
+		for (parameter in functionTypeParameters(fn))
+			if (!own.exists(parameter))
+				own.set(parameter, TTypeParameter(key, parameter));
+		// The other substitutions are the specialization's own (an iteration argument's protocol type): the same in both typings.
+		for (name => type in substitutions)
+			if (!own.exists(name) && ownerParameters.indexOf(name) < 0 && functionTypeParameters(fn).indexOf(name) < 0)
+				own.set(name, type);
+		var ownReceiver = receiver == null ? null : session.declarations.abstracts.exists(requiredString(owner))
+			? abstractReceiverType(requiredString(owner), own) : TInstance(Class, requiredString(owner),
+			[for (parameter in ownerParameters) TTypeParameter(requiredString(owner), parameter)]);
+		return bodyTyper.typeFunction(fn, owner, isStatic, own, name, ownReceiver, null, null, null,
+			new GenericElaboration(owner == null ? [key] : [requiredString(owner), key], substitutions, bodyTyper));
+	}
+
+	/** The type parameters of the class or abstract `owner`, none for a module function. */
+	function ownerTypeParameters(owner:Null<String>):Array<String> {
+		if (owner == null)
+			return [];
+		var abstractDecl = session.declarations.abstracts.get(owner);
+		if (abstractDecl != null)
+			return abstractDecl.typeParameters;
+		var classDecl = session.classDecls.get(owner);
+		return classDecl == null ? [] : classDecl.typeParameters;
 	}
 
 	/**

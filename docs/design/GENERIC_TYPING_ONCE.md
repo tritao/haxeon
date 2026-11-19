@@ -219,5 +219,27 @@ output stays byte-identical. They go to the service lane.
 - Typing, against the previous commit on the same sources: the self-compile allocates 50.12 M objects instead of
   49.83 M (+0.6%, the conversions recorded in check units), the UI showcase 18.625 M instead of 18.624 M. Typing time is
   within noise on a loaded machine (self-compile 4.5 to 5.2 s, showcase 1.8 to 2.2 s, both builds).
-- Left: item 2 (layout constants and raw-pointer forms) and the rest of item 3 (string conversion, hashing) show only in
-  specializations, so they come with putting paths 6 and 8 under the option.
+
+### As built (stage 2, second piece)
+
+- **Member reads name their parameter.** The cast after a field read or a method call on a generic owner's erased code
+  (`Dynamic` to `Int` for a `Box<Int>`) carries `parameterSource`: the member's declared type in its class's own
+  parameters and the receiver's substitutions (`TypeRepresentation.memberFieldBoundary`, `memberResultBoundary`;
+  `tests/compiler/MemberBoundarySourceMain.hx`). `60bb5d4c3`.
+- **Paths 6 and 8 under the option.** With `--elaborate-generics`, a specialization of a generic function or abstract member
+  (`GenericInstantiation.elaboratedBody`) and an owner specialization's methods (`ProgramTyper.elaboratedMethod`) are also
+  made by the pass. A specialization at type parameters (path 5) is not: it is only checked. A class's instance in its own
+  parameters (`Box<T>` in `Box`) has no physical type of its own: its fields and methods are typed as declared, and the pass
+  gives them the representation's storage (`TypeRepresentation.isOwnInstance`).
+- **Item 2.** `sizeof`, `alignof`, `offsetof` and `typeInfo` of a type parameter, and `RawPtr<T>.load`, `store` and `offset`,
+  are `TParameterOperation`s (`LayoutQuery`, `RawPointer`) the pass makes for the substituted type.
+- **Item 3, the rest.** `Hashing.hash` and string conversion (concatenation, `Std.string`, interpolation) of a type
+  parameter's value are `TParameterOperation`s (`Hash`, `ToString`).
+- **The known differences** moved to `tests/driver/elaboration-known-differences.txt`. With the option, 637 of the 670
+  test programs that build are identical. The 33 that are not fall in six groups:
+  - nested generic calls (9) and lambda names (2): item 4;
+  - a constrained type parameter's member reached through its bound, where a `[constrained]` specialization reaches it
+    on the class (11);
+  - an iteration argument a specialization makes concrete (4) and a constant key-path argument (2);
+  - owner specializations with an enum, `Null<T>`, a generic base class or a constrained owner's nullable result (4);
+  - a `[shape]` body's field (1).

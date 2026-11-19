@@ -18,13 +18,13 @@ import compiler.types.TypedTypeMap;
 class GenericElaboration extends TypedTypeMap {
 	final owners:Array<String>;
 	final substitutions:Map<String, CompilerType>;
-	final typer:BodyTyper;
+	final typer:BodyTyping;
 
 	/**
 	 * The elaboration of the type parameters of `owners` (a class, or a function and its owner) as `substitutions` gives them, by
 	 * name; `typer` makes each conversion and operation for the substituted types, as typing them does.
 	 */
-	public function new(owners:Array<String>, substitutions:Map<String, CompilerType>, typer:BodyTyper) {
+	public function new(owners:Array<String>, substitutions:Map<String, CompilerType>, typer:BodyTyping) {
 		this.owners = owners;
 		this.substitutions = substitutions;
 		this.typer = typer;
@@ -35,7 +35,10 @@ class GenericElaboration extends TypedTypeMap {
 		return switch item.expression {
 			case TParameterConversion(value, kind): conversion(item, expression(value), kind);
 			case TParameterOperation(operation, arguments):
-				typer.elaborateOperation(operation, [for (argument in arguments) expression(argument)], item.span);
+				typer.elaborateOperation(switch operation {
+					case LayoutQuery(kind, queried, field): LayoutQuery(kind, type(queried), field);
+					default: operation;
+				}, [for (argument in arguments) expression(argument)], item.span);
 			default: super.expression(item);
 		};
 

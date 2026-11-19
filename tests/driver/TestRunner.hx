@@ -109,6 +109,12 @@ class TestRunner {
 			"--run",
 			"compiler.tools.CompilerServer"
 		];
+		knownElaborationDifferences = readKnownDifferences(Path.join([
+			root,
+			"tests",
+			"driver",
+			"elaboration-known-differences.txt"
+		]));
 		configureRuntimeLibraryPath();
 	}
 
@@ -272,7 +278,7 @@ class TestRunner {
 			var same = elaborated.status == 0
 				&& File.getBytes(Path.join([directory, "warm-0.hl"]))
 				.compare(File.getBytes(Path.join([directory, "elaborated-0.hl"]))) == 0,
-				note = elaborationKnownDifferences.get(run.test.name);
+				note = knownElaborationDifferences.get(run.test.name);
 			if (!same && note == null)
 				return {
 					status: 1,
@@ -312,16 +318,21 @@ class TestRunner {
 	static final warmEditKnownFailures:Map<String, String> = [];
 
 	/**
-	 * Programs whose build with `--elaborate-generics` still differs from the plain build, or fails, by name, with the stage 2 item
-	 * of docs/design/GENERIC_TYPING_ONCE.md that fixes each. A name here must still differ: the build fails once it does not.
+	 * Programs whose build with `--elaborate-generics` still differs from the plain build, or fails, by name, with what is left to
+	 * do for each (`tests/driver/elaboration-known-differences.txt`). A name there must still differ: the build fails once it does
+	 * not.
 	 */
-	static final elaborationKnownDifferences:Map<String, String> = [
-		"structural-iteration" => "item 4: a lambda's name hashes its types",
-		"reactive-derived-cycle" => "item 4: a nested generic call is specialized at the class's own parameter",
-		"reactive-effect-failure-recovery"
-			=> "item 4: a nested generic call is specialized at the class's own parameter",
-		"wasm-observable-tracking" => "item 4: a nested generic call is specialized at the class's own parameter"
-	];
+	final knownElaborationDifferences:Map<String, String>;
+
+	static function readKnownDifferences(path:String):Map<String, String> {
+		var known:Map<String, String> = [];
+		for (line in File.getContent(path).split("\n")) {
+			var tab = line.indexOf("\t");
+			if (!StringTools.startsWith(line, "#") && tab > 0)
+				known.set(line.substr(0, tab), line.substr(tab + 1));
+		}
+		return known;
+	}
 
 	/** The result for a warm edit build of a program that is marked as a known failure, or null when `run` is not such a build. */
 	static function knownWarmFailure(run:ProgramRun, compilation:CommandResult):Null<{passed:Bool, output:String}> {

@@ -21,6 +21,15 @@ class StringConversion {
 
 	public static function convert(session:TypingSession, value:TypedExpression,
 			bodyTyper:BodyTyping):TypedExpression {
+		// A type parameter's value converts as its representation does: the elaboration pass chooses how (`GenericElaboration`).
+		if (TypeRepresentation.mentionsTypeParameter(value.type))
+			return new TypedExpression(TParameterOperation(ToString, [value]), TString, value.span);
+		return convertValue(session, value, bodyTyper);
+	}
+
+	/** `value`, whose type mentions no type parameter, as a String. */
+	public static function convertValue(session:TypingSession, value:TypedExpression,
+			bodyTyper:BodyTyping):TypedExpression {
 		var named = name(session, value);
 		if (named != null)
 			return named;

@@ -194,11 +194,22 @@ class ExpressionTyper {
 	function typeNativeLayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:AstType, field:Null<String>,
 			span:SourceSpan,
 			scope:Scope):TypedExpression {
-		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions), size:Int;
+		var resolved = session.declarations.resolve(type, span, session.currentContext.typeSubstitutions);
 		if (kind == TypeInfo)
 			return typeNativeTypeInfo(resolved, span, scope);
+		// A type parameter's layout is its representation's: the elaboration pass makes the query (`layoutQuery`).
 		if (deferredLayout(resolved))
-			return new TypedExpression(TIntLiteral(0), TInt, span);
+			return new TypedExpression(TParameterOperation(LayoutQuery(kind, resolved, field), []), TInt, span);
+		return layoutQuery(kind, resolved, field, span);
+	}
+
+	/** `sizeof`, `alignof`, `offsetof` or `typeInfo` (`kind`) of `resolved`, which is no type parameter. */
+	public function layoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, resolved:CompilerType,
+			field:Null<String>,
+			span:SourceSpan):TypedExpression {
+		if (kind == TypeInfo)
+			return typeNativeTypeInfo(resolved, span, new Scope());
+		var size:Int;
 		var recordName:Null<String> = switch resolved {
 			case TInstance(NominalKind.NativeValue, name, _): name;
 			case TInstance(NominalKind.Class, name, _) if (isFlatStruct(name)): name;
@@ -497,9 +508,10 @@ class ExpressionTyper {
 	}
 
 	function typeNativeTypeInfo(resolved:CompilerType, span:SourceSpan, scope:Scope):TypedExpression {
-		// A type parameter's descriptor is its specialization's: the body is only being checked (`deferredLayout`).
+		// A type parameter's descriptor is its representation's: the elaboration pass makes it (`layoutQuery`).
 		if (deferredLayout(resolved))
-			return new TypedExpression(TNullLiteral, typeInfoType(), span);
+			return new TypedExpression(TParameterOperation(LayoutQuery(TypeInfo, resolved, null), []), typeInfoType(),
+				span);
 		var name = descriptorRecordName(resolved);
 		if (name == null)
 			fail("E1022",

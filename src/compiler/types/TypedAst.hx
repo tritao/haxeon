@@ -57,6 +57,18 @@ enum ParameterOperation {
 
 	/** `Array.indexOf`, `contains` or `remove`, by name, of a value in an array. */
 	ArraySearch(name:String);
+
+	/** `Hashing.hash` of a value. */
+	Hash;
+
+	/** A value turned into a String, as concatenation and `Std.string` do (`StringConversion`). */
+	ToString;
+
+	/** `RawPtr.load`, `store` or `offset`, by name, whose access depends on the pointee's layout. */
+	RawPointer(name:String);
+
+	/** `sizeof`, `alignof`, `offsetof` or `typeInfo` of a type: its layout or descriptor. */
+	LayoutQuery(kind:compiler.syntax.Ast.NativeLayoutQueryKind, type:CompilerType, field:Null<String>);
 }
 
 /** Which conversion a `TParameterConversion` stands for; the elaboration pass makes it for the substituted types. */

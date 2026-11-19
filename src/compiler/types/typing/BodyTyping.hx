@@ -55,6 +55,9 @@ interface BodyTyping {
 			?ownerTypeArguments:Array<CompilerType>, ?inference:DeclarationTypeTable.FunctionInference,
 			?elaboration:GenericElaboration):TypedFunction;
 	function argumentTypesOf(fn:AstFunction, ?substitutions:Map<String, CompilerType>):Array<CompilerType>;
+	function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression;
+	function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation, arguments:Array<TypedExpression>,
+			span:compiler.core.Source.SourceSpan):TypedExpression;
 	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
 			declarationName:String):TypedExpression;
 	function posInfosExpression(span:SourceSpan):AstExpression;
