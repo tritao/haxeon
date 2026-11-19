@@ -84,6 +84,9 @@ class IrGenerator {
 	public final facts:ProgramFacts;
 	public final profile:TargetProfile;
 
+	/** Working storage of the SSA construction, reused from one function to the next. */
+	final ssaScratch = new compiler.ir.cfg.SsaScratch();
+
 	/** The program's objects by name, and those with a selected native layout (flat records copied as RawPtr aggregates); see `withObjects`. */
 	final inlineValueObjects:Map<String, IrObject> = [];
 
@@ -261,7 +264,7 @@ class IrGenerator {
 	public function generateFunction(fn:TypedFunction):IrFunction {
 		try {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
-				built = SsaBuilder.build(cfg);
+				built = SsaBuilder.build(cfg, ssaScratch);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true
 				? Keep : Reachable;
 			var kind:compiler.ir.IrFunction.IrFunctionKind = switch fn.role {

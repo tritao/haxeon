@@ -24,7 +24,10 @@ class SsaBuilder {
 	var immediate:Array<Int> = [];
 	var children:Array<ReadOnlyArray<Int>> = [];
 	var frontierKeys:Array<ReadOnlyArray<Int>> = [];
-	var liveIn:Array<ReadOnlyArray<Int>> = [];
+	final scratch:SsaScratch;
+
+	/** Words per row of the liveness sets in `scratch`: a row per block, a bit per slot. */
+	var words = 0;
 
 	/** Every local gets a dense number once; everything after that is indexed by it, so a name is hashed once per use. */
 	var slots:Map<String, Int> = [];
@@ -53,13 +56,14 @@ class SsaBuilder {
 	var debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 	var debugLocals:Map<String, compiler.ir.cfg.Cfg.CfgDebugLocal> = [];
 
-	public static function build(cfg:CfgFunction):IrFunction {
+	public static function build(cfg:CfgFunction, ?scratch:SsaScratch):IrFunction {
 		CfgVerifier.verify(cfg);
-		return new SsaBuilder(cfg).run();
+		return new SsaBuilder(cfg, scratch == null ? new SsaScratch() : scratch).run();
 	}
 
-	function new(cfg) {
+	function new(cfg, scratch) {
 		this.cfg = cfg;
+		this.scratch = scratch;
 		for (local in cfg.debugLocals)
 			if (!debugLocals.exists(local.identity))
 				debugLocals.set(local.identity, local);
@@ -291,66 +295,54 @@ class SsaBuilder {
 	}
 
 	function computeLiveness():Void {
-		var count = slotNames.length;
-		var words = (count + 31) >> 5,
-			uses = Arrays.shared(cfg.blocks.length, emptyWords),
-			defs = Arrays.shared(cfg.blocks.length, emptyWords);
-		liveIn = Arrays.shared(cfg.blocks.length, emptyWords);
+		var blocks = cfg.blocks.length;
+		words = (slotNames.length + 31) >> 5;
 		if (words == 0)
 			return;
-		// The sets the fixpoint updates, for the reachable blocks; `liveIn` reads them.
-		var live:Array<Null<Array<Int>>> = [];
-		live.resize(cfg.blocks.length);
+		var size = blocks * words, live = scratch.live, uses = scratch.uses, defs = scratch.defs;
+		SsaScratch.zero(live, size);
+		SsaScratch.zero(uses, size);
+		SsaScratch.zero(defs, size);
 		for (block in cfg.blocks) {
 			var id = block.id;
 			if (!reachable[id])
 				continue;
-			var use = Arrays.ints(words, 0), def = Arrays.ints(words, 0), mine = blockSlots[id], cursor = 0;
-			for (located in cfg.blocks[id].instructions)
+			var row = id * words, mine = blockSlots[id], cursor = 0;
+			for (located in block.instructions)
 				switch located.value {
 					case LoadLocal(_, _):
-						var slot = mine[cursor++];
-						if (def[slot >> 5] & (1 << (slot & 31)) == 0)
-							use[slot >> 5] |= 1 << (slot & 31);
+						var slot = mine[cursor++], at = row + (slot >> 5), bit = 1 << (slot & 31);
+						if (defs[at] & bit == 0)
+							uses[at] |= bit;
 					case StoreLocal(_, _):
 						var slot = mine[cursor++];
-						def[slot >> 5] |= 1 << (slot & 31);
+						defs[row + (slot >> 5)] |= 1 << (slot & 31);
 					default:
 				}
-			uses[id] = use;
-			defs[id] = def;
-			var set = Arrays.ints(words, 0);
-			live[id] = set;
-			liveIn[id] = set;
 		}
-		var work:Array<Int> = [],
-			queued = Arrays.bools(cfg.blocks.length, false);
+		var work = scratch.work, queued = scratch.queued;
+		work.resize(0);
+		queued.resize(blocks);
+		for (id in 0...blocks)
+			queued[id] = false;
 		for (block in cfg.blocks)
 			if (reachable[block.id]) {
 				work.push(block.id);
 				queued[block.id] = true;
 			}
-		while (true) {
+		while (work.length > 0) {
 			var id = work.pop();
-			if (id == null)
-				break;
 			queued[id] = false;
-			var input = live[id],
-				use = uses[id],
-				def = defs[id],
-				changed = false;
-			if (input == null)
+			if (!reachable[id])
 				continue;
+			var row = id * words, changed = false;
 			for (word in 0...words) {
 				var out = 0;
-				for (successor in successors[id]) {
-					var successorIn = liveIn[successor];
-					if (successorIn.length > word)
-						out |= successorIn[word];
-				}
-				var next = input[word] | use[word] | (out & ~def[word]);
-				if (next != input[word]) {
-					input[word] = next;
+				for (successor in successors[id])
+					out |= live[successor * words + word];
+				var at = row + word, next = live[at] | uses[at] | (out & ~defs[at]);
+				if (next != live[at]) {
+					live[at] = next;
 					changed = true;
 				}
 			}
@@ -365,7 +357,7 @@ class SsaBuilder {
 	}
 
 	function isLiveIn(block:Int, slot:Int):Bool
-		return liveIn[block].length > (slot >> 5) && liveIn[block][slot >> 5] & (1 << (slot & 31)) != 0;
+		return words > 0 && scratch.live[block * words + (slot >> 5)] & (1 << (slot & 31)) != 0;
 
 	function insertPhis():Void {
 		var definitionBlocks:Array<Null<Array<Int>>> = [for (_ in slotNames) null],
