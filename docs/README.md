@@ -65,6 +65,8 @@ Language:
 - [INTERFACE_VALUES.md](design/INTERFACE_VALUES.md): one interface-value model on every backend.
 - [STRUCTURE_VALUES.md](design/STRUCTURE_VALUES.md): open anonymous types, width subtyping, structures as
   the object itself (plan step 2.6).
+- [TYPE_VALUES.md](design/TYPE_VALUES.md): classes and enums as runtime values (`Class<T>`, `Enum<T>`), the `Type` API's
+  phases 2 and 3.
 - [VALUE_CONSTRUCTOR_DESTINATION.md](design/VALUE_CONSTRUCTOR_DESTINATION.md): value constructors that return their value.
 - [ERROR_MODEL.md](design/ERROR_MODEL.md): `Result` and error enums for expected failures, exceptions for bugs.
 - [PURITY.md](design/PURITY.md), [SCOPED_PLACES.md](design/SCOPED_PLACES.md), [SHADERS.md](design/SHADERS.md): deferred.
