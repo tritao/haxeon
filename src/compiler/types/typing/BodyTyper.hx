@@ -1336,7 +1336,7 @@ class BodyTyper implements BodyTyping {
 	 * Fails when the body's resolver names another declaration than the scope does for the local `name`, referenced as
 	 * `referenceName` at `span`. A reference the resolver did not see (syntax the typer built) is not compared.
 	 */
-	function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void {
+	public function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void {
 		var resolution = context.resolution;
 		if (resolution == null)
 			return;

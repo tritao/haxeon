@@ -105,6 +105,11 @@ interface BodyTyping {
 	var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>>;
 
 	function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool;
+
+	/** With `CompileOptions.checkResolution`, whether the body resolver names `name`'s declaration for this reference. */
+	var checkResolution:Bool;
+
+	function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void;
 	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool;
 
 	/** The values of a closed enum abstract keyed as switch cases are (with `null` for a nullable one), or null when the subject is not one. */

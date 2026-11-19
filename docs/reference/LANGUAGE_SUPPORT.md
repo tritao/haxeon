@@ -270,6 +270,9 @@ HashLink):
   Lambda.count(values); values.push(1);`): `E1003`. Haxeon names and types a generic call's specialization when it types the
   call, so it cannot follow a variable fixed later; one that only the argument's own value carries (`Lambda.empty([])`) is
   Dynamic, as in Haxe. The differential case `lambda-unfixed-before-call` records it.
+- Declaring a local again in the same block (`var x = 1; ...; var x = "ten";`): `E1001` (Duplicate local). Haxe accepts
+  it, the second declaration shadowing the first for the code after it; a nested block works in Haxeon. The differential
+  case `local-redeclared-same-block` records it.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 

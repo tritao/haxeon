@@ -270,7 +270,9 @@ class StatementTyper {
 	}
 
 	public function typeIncrement(name:String, delta:Int, span:SourceSpan, scope:Scope):TypedStatement {
+		var written = name;
 		name = sourceTarget(name, span, scope);
+		checkWritten(written, name, span, scope);
 		if (scope.isScoped(name))
 			fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 		var current = scope.resolve(name);
@@ -375,9 +377,20 @@ class StatementTyper {
 	static inline function setterStore(assigned:Null<AssignedValue>, call:TypedExpression):TypedExpression
 		return assigned == null ? call : assigned.setter(call);
 
+	/** With `CompileOptions.checkResolution`: the local a write's target is rooted at is the one the body resolver names. */
+	function checkWritten(written:String, name:String, span:SourceSpan, scope:Scope):Void {
+		if (!bodyTyper.checkResolution)
+			return;
+		var root = compiler.types.analysis.BindingWalker.rootOf(name);
+		if (root != "this" && scope.resolve(root) != null)
+			bodyTyper.checkResolved(written, span, root, scope);
+	}
+
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope,
 			?assigned:AssignedValue):TypedStatement {
+		var written = name;
 		name = sourceTarget(name, span, scope);
+		checkWritten(written, name, span, scope);
 		var dot = name.lastIndexOf(".");
 		if (dot < 0) {
 			if (scope.isScoped(name))

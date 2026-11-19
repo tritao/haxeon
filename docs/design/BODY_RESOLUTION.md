@@ -100,5 +100,11 @@ and structure patterns into nested switches. A resolution made before typing has
   scope at every local the typer resolves (`BodyTyper.typeVariableExpression`). On the self-compile the two agree on all
   147,602 references compared; 38 are not compared, nearly all the typer's own `__haxeon_match` temporaries. All 637
   programs agree.
+- The check also covers writes and increments (`StatementTyper.checkWritten`); calls of locals and member calls reach
+  `typeVariableExpression`. The differential fixture `local-scoping` (sibling and nested blocks, a lambda reading an outer
+  name a later declaration shadows, loop variables captured per iteration, a closure made in one iteration and run in the
+  next, catches, local recursion, pattern bindings in guards, comprehension variables) agrees with Haxe and passes the
+  check. It found a divergence from Haxe outside this work: a second `var x` in the same block is `E1001` in Haxeon
+  (`local-redeclared-same-block`, `LANGUAGE_SUPPORT.md`).
 - The check found one disagreement: a key-path constant a lambda reads was declared in the lambda's scope with a new
   identity (`path@<lambda>`) instead of its declaration's; `ClosureTyper` now keeps the declaration, as for any capture.
