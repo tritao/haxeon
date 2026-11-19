@@ -64,6 +64,7 @@ reflect-compare-sort	42
 reflect-delete-field	42
 reflect-delete-typed-field	42
 reflect-string-fields	42
+switch-multi-pattern-capture	42
 comprehension-block-filter	42
 sys-exit	42
 array-index-growth	42

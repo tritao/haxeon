@@ -227,16 +227,18 @@ class BindingWalker implements AstChildVisitor {
 				statements(body);
 			case Switch(subject, cases, defaultBranch, _, _):
 				expression(subject);
-				for (entry in cases) {
-					var scope = enterScope();
-					for (pattern in entry.patterns)
+				// Each pattern binds its names over the guard and body, as one case per pattern did, until the patterns of a case
+				// share their bindings (docs/design/SWITCH_CASES.md, step 2).
+				for (entry in cases)
+					for (pattern in entry.patterns) {
+						var scope = enterScope();
 						bindPattern(pattern, entry.span);
-					if (entry.guard != null)
-						expression(entry.guard);
-					for (inner in entry.statements)
-						statement(inner);
-					leaveScope(scope);
-				}
+						if (entry.guard != null)
+							expression(entry.guard);
+						for (inner in entry.statements)
+							statement(inner);
+						leaveScope(scope);
+					}
 				statements(defaultBranch);
 			default:
 				AstChildren.visitStatement(value, this);
@@ -288,15 +290,15 @@ class BindingWalker implements AstChildVisitor {
 				statement(store);
 			case SwitchExpression(subject, cases, fallback, _):
 				expression(subject);
-				for (arm in cases) {
-					var scope = enterScope();
-					for (pattern in arm.patterns)
+				for (arm in cases)
+					for (pattern in arm.patterns) {
+						var scope = enterScope();
 						bindPattern(pattern, arm.span);
-					if (arm.guard != null)
-						expression(arm.guard);
-					expression(arm.result);
-					leaveScope(scope);
-				}
+						if (arm.guard != null)
+							expression(arm.guard);
+						expression(arm.result);
+						leaveScope(scope);
+					}
 				if (fallback != null)
 					expression(fallback);
 			case ArrayComprehension(keyName, valueName, iterable, test, result, _, span):

@@ -87,13 +87,13 @@ class ScopedEscapeChecker extends BindingWalker {
 				rejectDirect(result, operation);
 				leaveScope(scope);
 			case SwitchExpression(_, cases, fallback, _):
-				for (arm in cases) {
-					var scope = enterScope();
-					for (pattern in arm.patterns)
+				for (arm in cases)
+					for (pattern in arm.patterns) {
+						var scope = enterScope();
 						bindPattern(pattern, arm.span);
-					rejectDirect(arm.result, operation);
-					leaveScope(scope);
-				}
+						rejectDirect(arm.result, operation);
+						leaveScope(scope);
+					}
 				if (fallback != null) rejectDirect(fallback, operation);
 			default:
 		}

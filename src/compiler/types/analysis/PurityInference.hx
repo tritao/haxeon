@@ -637,12 +637,12 @@ private class PurityWalker {
 				if (!expression(subject) || !statements(fallback))
 					return false;
 				for (entry in cases)
-					if (!scoped(() -> {
-						for (pattern in entry.patterns)
+					for (pattern in entry.patterns)
+						if (!scoped(() -> {
 							bindPattern(pattern);
-						return (entry.guard == null || expression(entry.guard)) && statements(entry.statements);
-					}))
-						return false;
+							return (entry.guard == null || expression(entry.guard)) && statements(entry.statements);
+						}))
+							return false;
 				true;
 		};
 	}
@@ -711,12 +711,12 @@ private class PurityWalker {
 				if (!expression(subject) || (fallback != null && !expression(fallback)))
 					return false;
 				for (entry in cases)
-					if (!scoped(() -> {
-						for (pattern in entry.patterns)
+					for (pattern in entry.patterns)
+						if (!scoped(() -> {
 							bindPattern(pattern);
-						return (entry.guard == null || expression(entry.guard)) && expression(entry.result);
-					}))
-						return false;
+							return (entry.guard == null || expression(entry.guard)) && expression(entry.result);
+						}))
+							return false;
 				true;
 			case ObjectLiteral(fields, _):
 				for (field in fields)
