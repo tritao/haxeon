@@ -139,6 +139,9 @@ class ConditionalCompilation {
 			cursor = directiveEnd;
 			scan = directiveEnd;
 		}
+		// A `#` in a comment or string only: the text is the source's own.
+		if (cursor == 0)
+			return {text: file.text, defines: []};
 		output.add(isActive(frames) ? file.slice(cursor, source.length) : mask(source, cursor, source.length));
 		if (frames.length > 0)
 			fail(file, source.length, "Unclosed #if directive");
