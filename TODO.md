@@ -255,10 +255,23 @@ lowering 17%, IR generation and SSA 11%, parsing 5.5%.
   to 29.0 s. Next: typed value maps (`Int`, `Bool`, `Float` stored unboxed)
   and an IR `get` that returns a found flag and the value, so a map read
   neither allocates nor casts. Then re-profile.
-- **Fewer lookups.** String-map time is spread over about 25 classes; the
+- **Fewer lookups.** String-map time is spread over about 80 classes; the
   lasting fix is identities as integers instead of names (ADR 0003 M3).
-- **The IR verifier runs in release builds** (4.4%). Skipping it there trades
-  away a check, so it is the user's call.
+  Strings now cache their map hash (fork 36197c5), which cut 4%; it is a
+  complement, not the fix.
+- **SSA value names.** Every SSA temporary carries a `"v<id>"` String
+  (`SsaScratch.valueName` makes each once). A temporary needs no name; drop
+  the field for temporaries with ADR 0003 M3's structured identities.
+- **Lowering facts digest objects as text.** `HlLoweringView.objectDigest` is
+  `Std.string(object)`, paid by every compile-server build (a one-shot compile
+  records no facts since 4b9fcf1bf). Replace it with the query engine's
+  structural digest when lowering moves onto the engine (QUERY_ENGINE.md,
+  step 6).
+- **Per-function scratch.** Register allocation, SSA liveness and the lowering
+  tables now keep their storage across functions; the rest of SSA building,
+  lowering and the inliner still allocate per function. Do them together as
+  `COMPILER_DATA_LAYOUT.md`'s reusable per-function contexts, not one table at
+  a time.
 - **Parallel and cached compilation** are ADR 0005 (compilation units).
 
 Waiting on the user:

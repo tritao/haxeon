@@ -409,14 +409,14 @@ class HlSymbolTable {
 
 	/**
 	 * HashLink's String layout, `_STRING` in native signatures: UTF-16 data plus its length in code units, so length and
-	 * indexing never rescan the data, and the hash string maps keep in it once computed (0 until then). Natives recognize it
-	 * by name and shape.
+	 * indexing never rescan the data, and the hash string maps keep in it once computed (0 until then). The hash has no name,
+	 * so reflection and dynamic access do not see it, as in a stock String. Natives recognize the type by name and shape.
 	 */
 	function internStringObject(key:String):Int {
 		var fields:Array<HlObjectField> = [
 			{name: internString("bytes"), type: internType(RawPtr)},
 			{name: internString("length"), type: internType(I32)},
-			{name: internString("hash"), type: internType(I32)}
+			{name: internString(""), type: internType(I32)}
 		],
 			index = types.length;
 		types.push(HlTypeDef.Object(internString("String"), -1, 0, fields, [], []));
