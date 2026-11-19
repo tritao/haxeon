@@ -34,6 +34,14 @@ class Digest {
 		return this;
 	}
 
+	/** Bytes, with their length first. */
+	public function bytes(value:haxe.io.Bytes):Digest {
+		int(value.length);
+		for (index in 0...value.length)
+			byte(value.get(index));
+		return this;
+	}
+
 	/** Another digest, such as a part's or a dependency's. */
 	public function digest(first:Int, second:Int):Digest
 		return int(first).int(second);

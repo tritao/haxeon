@@ -106,9 +106,12 @@ class QueryKind<V> implements AnyQueryKind {
 	function set(database:QueryDatabase, key:Int, value:V):Void {
 		if (compute != null)
 			throw new compiler.core.InternalError("query " + describe(key) + " is derived, not an input");
+		var memo = memoAt(key);
+		// The same object is the same value: a stage that changes nothing hands back what it was given.
+		if (memo != null && memo.value == value)
+			return;
 		scratch.reset();
 		digestValue(value, scratch);
-		var memo = memoAt(key);
 		if (memo != null && memo.first == scratch.first && memo.second == scratch.second)
 			return;
 		var revision = database.newRevision();

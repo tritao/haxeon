@@ -94,6 +94,7 @@ class TestCatalog {
 		"AllocationReportMain",
 		"TypeAwareWalkMain",
 		"QueryEngineMain",
+		"IrFunctionDigestMain",
 		"WholeNumberMain",
 		"GenericDynamicArgumentMain",
 		"GenericScalarMapOwnerMain",
