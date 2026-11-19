@@ -157,6 +157,43 @@ the index of key-value loops and comprehensions, and the default-argument prolog
 resolved). Typed and walked as the named forms until the typer reads locals by binding. Byte-identical on all 638
 programs and the self-compile.
 
+## Step 4: the typer reads locals by binding
+
+**Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:
+binding id (`$l<n>:<name>`, which the typed AST and IR carry), declared type, flow facts and assignment by binding id,
+captures, map key sources. Only the name lookup is what this step replaces; the state is already keyed by binding.
+
+**Every typing context has a resolution.** Function bodies have one. Field initializers do not (106 references on the
+self-compile and the programs, all `__init.<field>` and lambdas in them): they get the resolution of the initializer
+expression. Syntax the typer builds names nothing by itself except the parameters of the lambdas it builds
+(`__haxeon_argument*`), the extractor's `part`, and locals it defines in a scope directly (`EnumReflection`, bound
+values): these become `TemporaryLocal`s first. After that, a reference the resolution has not seen is an internal error.
+
+**A binding table per context.** `TypingContext` maps each binding it defines to its `Scope` record (made a class,
+`LocalBinding`): source locals by declaration key, temporaries by object, the receiver on its own. `Scope.define` takes
+the key or the temporary and enters it. A lambda's context enters each capture under the captured declaration's key. A
+name lookup is then one map access, with no walk; what the binding is in a given scope (its refined type, whether it is
+assigned) is read from the scope chain by binding id, as now.
+
+**References.** `Variable(name, span)`: the resolution's declaration at `span` (null: not a local, so a field, a
+static or a type). `TemporaryVariable`: the temporary's binding. `DeclaredVariable`: the binding of its key. Writes,
+increments and captures the same way. The free names of a lambda (`lambdaFacts`) are given as declaration keys.
+
+**Names stay where they are names:** diagnostics, binding ids (unchanged, so the output is byte-identical; integer ids
+are the separate stage 3 of `INTEGER_IDENTITIES.md`), and enumerations of what is visible (`visibleValues`, for flow
+invalidation and purity).
+
+**Order, each byte-identical** (all programs compiled before and after, the self-compile, the compiler suite):
+
+1. Resolutions for field initializers; the remaining typer-made names become temporaries; an unseen reference is an
+   error under `--check-resolution`.
+2. Binding tables and `Scope` methods taking a binding, beside the name ones. The typer's reference sites move to
+   bindings, kind by kind: reads, writes and increments, captures, pattern, catch and loop bindings, the receiver.
+   `--check-resolution` compares the binding found with the one the name finds.
+3. The name lookups go: `resolveLocal`, `ScopeDefinitions.named`, `declarationOf(name)` and the check mode.
+4. Haxe's same-block redeclaration: `Scope`'s duplicate check (E1001) goes; the resolver's scoping decides
+   (`local-redeclared-same-block` becomes a case that agrees with Haxe).
+
 ## Progress
 
 - `BodyResolution` records a body's declarations and references; `--check-resolution` compares it with the typer's
