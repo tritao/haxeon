@@ -13,6 +13,18 @@ class SsaScratch {
 	public final work:Array<Int> = [];
 	public final queued:Array<Bool> = [];
 
+	/** The slot of each local of the function being built (`SsaBuilder.slotFor`). */
+	public final slots:Map<String, Int> = [];
+
+	final valueNames:Array<String> = [];
+
+	/** `v<id>`, the name of a CFG value's SSA value, made once per id. */
+	public function valueName(id:Int):String {
+		while (valueNames.length <= id)
+			valueNames.push("v" + valueNames.length);
+		return valueNames[id];
+	}
+
 	public function new() {}
 
 	/** Sets `values` to `count` zeros, keeping its storage. */

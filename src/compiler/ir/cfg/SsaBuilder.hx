@@ -30,7 +30,7 @@ class SsaBuilder {
 	var words = 0;
 
 	/** Every local gets a dense number once; everything after that is indexed by it, so a name is hashed once per use. */
-	var slots:Map<String, Int> = [];
+	var slots:Map<String, Int>;
 
 	var slotNames:Array<String> = [];
 
@@ -64,6 +64,7 @@ class SsaBuilder {
 	function new(cfg, scratch) {
 		this.cfg = cfg;
 		this.scratch = scratch;
+		slots = scratch.slots;
 		for (local in cfg.debugLocals)
 			if (!debugLocals.exists(local.identity))
 				debugLocals.set(local.identity, local);
@@ -274,7 +275,7 @@ class SsaBuilder {
 	}
 
 	function numberLocals():Void {
-		slots = [];
+		slots.clear();
 		slotNames = [];
 		blockSlots = Arrays.shared(cfg.blocks.length, emptyWords);
 		for (argument in cfg.arguments)
@@ -682,7 +683,7 @@ class SsaBuilder {
 
 	function define(value:CfgValue):IrValue {
 		var id:Int = value.id;
-		var result = allocate('v${value.id}', value.type);
+		var result = allocate(scratch.valueName(id), value.type);
 		temporaries[id] = result;
 		return result;
 	}
