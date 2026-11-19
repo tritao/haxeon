@@ -1682,10 +1682,9 @@ class BodyTyper implements BodyTyping {
 						default:
 					}
 			}
-			var value = new TypedExpression(scope.isCapture(name) ? (scope.isCellCapture(name) ? TCellCaptured(name,
-				scope.requireCellClass(name)) : TCaptured(name)) : (boundCell(name,
-				scope) != null ? TCellLocal(scope.requireId(name),
-				requiredString(boundCell(name, scope))) : TLocal(name == "this" ? name : scope.requireId(name))),
+			// A local or capture in a cell reads as its declared type, which is what the cell holds.
+			var value = new TypedExpression(scope.isCapture(name)
+				? TCaptured(name) : TLocal(name == "this" ? name : scope.requireId(name)),
 				type, span, false, scope.mapKeySource(name), scope.isCapture(name)
 				|| boundCell(name, scope) != null ? scope.resolveDeclared(name) : null);
 			// An abstract's implementation reads `this` as its underlying value.
@@ -2081,8 +2080,7 @@ class BodyTyper implements BodyTyping {
 				return;
 		}
 		var reason = switch unwrappedCast(object).expression {
-			case TLocal(id), TCellLocal(id, _), TCaptured(id),
-				TCellCaptured(id, _) if (session.closureWritableNames(scope).indexOf(sourceName(id)) >= 0):
+			case TLocal(id), TCaptured(id) if (session.closureWritableNames(scope).indexOf(sourceName(id)) >= 0):
 				var local = sourceName(id);
 				'"$local" is assigned by a closure, so a call that may run an escaped closure clears its null check';
 			case TField(_, _):
@@ -2113,7 +2111,7 @@ class BodyTyper implements BodyTyping {
 
 	function describeAccess(expression:TypedExpression):Null<String> {
 		return switch expression.expression {
-			case TLocal(id), TCellLocal(id, _), TCaptured(id), TCellCaptured(id, _): sourceName(id);
+			case TLocal(id), TCaptured(id): sourceName(id);
 			case TField(object, field):
 				var parent = describeAccess(object);
 				parent == null ? null : parent + "." + field;
@@ -2523,8 +2521,7 @@ class BodyTyper implements BodyTyping {
 
 	function scopedSource(value:TypedExpression):Null<String> {
 		return switch value.expression {
-			case TLocal(name), TCellLocal(name, _), TCaptured(name),
-				TCellCaptured(name, _): this.context.scopedBindings.get(name);
+			case TLocal(name), TCaptured(name): this.context.scopedBindings.get(name);
 			case TCopy(inner, _), TNullableWrap(inner), TCast(inner), TAbiCast(inner),
 				TParameterConversion(inner, _): scopedSource(inner);
 			default: null;

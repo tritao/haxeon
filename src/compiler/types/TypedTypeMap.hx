@@ -63,9 +63,7 @@ class TypedTypeMap {
 			case TDeclare(name, type, span): TDeclare(name, map(type), span);
 			case TVar(name, initializer, span): TVar(name, expression(initializer), span);
 			case TAssign(name, value, span): TAssign(name, expression(value), span);
-			case TCellAssign(name, cellClass, value, span): TCellAssign(name, cellClass, expression(value), span);
-			case TCellCapturedAssign(name, cellClass, value, span): TCellCapturedAssign(name, cellClass,
-				expression(value), span);
+			case TCapturedAssign(name, value, span): TCapturedAssign(name, expression(value), span);
 			case TFieldAssign(object, name, value, span): TFieldAssign(expression(object), name, expression(value),
 				span);
 			case TStaticFieldAssign(name, field, value, span): TStaticFieldAssign(name, field, expression(value), span);
@@ -75,7 +73,7 @@ class TypedTypeMap {
 			case TMapAssign(target, key, value, span): TMapAssign(expression(target), expression(key),
 				expression(value), span);
 			case TReturn(value, span): TReturn(expression(value), span);
-			case TReturnVoid(_), TBreak(_), TContinue(_), TIncrement(_, _, _): item;
+			case TReturnVoid(_), TBreak(_), TContinue(_): item;
 			case TThrow(value, span): TThrow(expression(value), span);
 			case TDefer(body, span, scopedDisposal): TDefer(statements(body), span, scopedDisposal);
 			case TTry(tryBranch, catches, span): TTry(statements(tryBranch), [for (caught in catches)
@@ -97,12 +95,9 @@ class TypedTypeMap {
 				{
 						arms:[for (arm in switchCase.arms) switchArm(arm)], statements:statements(switchCase.statements)
 					}], statements(defaultBranch), hasDefault, span);
-			case TCellIncrement(name, cellClass, valueType, delta, span): TCellIncrement(name, cellClass,
-				map(valueType), delta,
+			case TIncrement(name, valueType, delta, span): TIncrement(name, map(valueType), delta, span);
+			case TCapturedIncrement(name, valueType, delta, span): TCapturedIncrement(name, map(valueType), delta,
 				span);
-			case TCellCapturedIncrement(name, cellClass, valueType, delta, span): TCellCapturedIncrement(name,
-				cellClass,
-				map(valueType), delta, span);
 			case TExpression(value, span): TExpression(expression(value), span);
 		};
 
@@ -174,10 +169,9 @@ class TypedTypeMap {
 		return switch item {
 			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_),
 				TEnumLiteral(_, _),
-				TNullLiteral, TUnreachable, TVoidLiteral, TLocal(_), TCellLocal(_, _), TCaptured(_),
-				TCellCaptured(_, _),
-				TClassRef(_), TStaticField(_, _), TFunctionRef(_), TPostfixLocal(_, _), TPostfixCellLocal(_, _, _),
-				TPostfixCellCaptured(_, _, _), TPostfixStaticField(_, _, _): item;
+				TNullLiteral, TUnreachable, TVoidLiteral, TLocal(_), TCaptured(_),
+				TClassRef(_), TStaticField(_, _), TFunctionRef(_), TPostfixLocal(_, _), TPostfixCaptured(_, _),
+				TPostfixStaticField(_, _, _): item;
 			case TEnumConstruct(name, index, arguments): TEnumConstruct(name, index, expressions(arguments));
 			case TEnumIndex(value): TEnumIndex(expression(value));
 			case TEnumField(value, constructor, field): TEnumField(expression(value), constructor, field);

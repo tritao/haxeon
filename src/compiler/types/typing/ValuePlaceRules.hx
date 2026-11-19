@@ -36,7 +36,7 @@ class ValuePlaceRules {
 
 	static function checkPlace(session:TypingSession, receiver:TypedExpression, span:SourceSpan):Void {
 		switch receiver.expression {
-			case TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TIndex(_, _):
+			case TLocal(_), TCaptured(_), TIndex(_, _):
 			case TStaticField(owner, name): FinalFieldRules.rejectStaticMutation(session, owner, name, span);
 			case TField(parent, name):
 				FinalFieldRules.rejectInstanceMutation(session, parent, name, span);

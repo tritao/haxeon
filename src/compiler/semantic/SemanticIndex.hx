@@ -939,12 +939,10 @@ class SemanticIndex {
 			switch statement {
 				case TVar(_, value, _), TReturn(value, _), TThrow(value, _), TExpression(value, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TAssign(identity, value, span), TCellAssign(identity, _, value, span),
-					TCellCapturedAssign(identity, _, value, span):
+				case TAssign(identity, value, span), TCapturedAssign(identity, value, span):
 					bindLocalUse(fn, identity, span);
 					indexExpression(fn, value, resolve, resolveEnumCase);
-				case TIncrement(identity, _, span), TCellIncrement(identity, _, _, _, span),
-					TCellCapturedIncrement(identity, _, _, _, span):
+				case TIncrement(identity, _, _, span), TCapturedIncrement(identity, _, _, span):
 					bindLocalUse(fn, identity, span);
 				case TFieldAssign(object, name, value, span):
 					bindMember(resolve, object.type, name, span);
@@ -996,7 +994,7 @@ class SemanticIndex {
 		completionTypes.push({span: expression.span, type: expression.type});
 		indexAbstractTypeDependencies(expression.type, resolve, null);
 		switch expression.expression {
-			case TLocal(identity), TCellLocal(identity, _), TCaptured(identity), TCellCaptured(identity, _):
+			case TLocal(identity), TCaptured(identity):
 				var id = localId(fn, identity);
 				var token = referenceToken(tokens, expression.span, sourceLocalName(identity));
 				if (symbols.exists(id) && token != null)

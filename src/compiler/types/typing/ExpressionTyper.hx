@@ -2094,8 +2094,7 @@ class ExpressionTyper {
 			fail("E1018", "Postfix increment requires a numeric target", span);
 		var operation:TypedExpressionKind = switch typedTarget.expression {
 			case TLocal(name): TPostfixLocal(name, delta);
-			case TCellLocal(name, cellClass): TPostfixCellLocal(name, cellClass, delta);
-			case TCellCaptured(name, cellClass): TPostfixCellCaptured(name, cellClass, delta);
+			case TCaptured(name) if (scope.isCellCapture(name)): TPostfixCaptured(name, delta);
 			case TStaticField(owner, name):
 				PropertyWriteRules.rejectStaticMutation(session, owner, name, span);
 				FinalFieldRules.rejectStaticMutation(session, owner, name, span);

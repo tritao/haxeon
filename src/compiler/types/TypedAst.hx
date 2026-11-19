@@ -103,10 +103,11 @@ enum TypedExpressionKind {
 	TIntToInt64(value:TypedExpression);
 	TFloatToInt(value:TypedExpression);
 	TToDynamic(value:TypedExpression);
+	/** A local; IR generation reads it through its cell when the function keeps it in one (`TypedFunction.cells`). */
 	TLocal(name:String);
-	TCellLocal(name:String, cellClass:String);
+
+	/** A capture of a lambda, through its cell when the lambda's environment holds one (`TypedFunction.cellCaptures`). */
 	TCaptured(name:String);
-	TCellCaptured(name:String, cellClass:String);
 	TClassRef(name:String);
 	TStaticField(name:String, field:String);
 	TFunctionRef(name:String);
@@ -185,8 +186,7 @@ enum TypedExpressionKind {
 	TSuperCall(owner:String, arguments:Array<TypedExpression>);
 	TIndex(array:TypedExpression, index:TypedExpression);
 	TPostfixLocal(name:String, delta:Int);
-	TPostfixCellLocal(name:String, cellClass:String, delta:Int);
-	TPostfixCellCaptured(name:String, cellClass:String, delta:Int);
+	TPostfixCaptured(name:String, delta:Int);
 	TPostfixStaticField(owner:String, name:String, delta:Int);
 	TPostfixField(object:TypedExpression, name:String, delta:Int);
 	TPostfixIndex(array:TypedExpression, index:TypedExpression, delta:Int);
@@ -230,8 +230,7 @@ enum TypedStatement {
 	TDeclare(name:String, type:CompilerType, span:SourceSpan);
 	TVar(name:String, initializer:TypedExpression, span:SourceSpan);
 	TAssign(name:String, value:TypedExpression, span:SourceSpan);
-	TCellAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);
-	TCellCapturedAssign(name:String, cellClass:String, value:TypedExpression, span:SourceSpan);
+	TCapturedAssign(name:String, value:TypedExpression, span:SourceSpan);
 	TFieldAssign(object:TypedExpression, name:String, value:TypedExpression, span:SourceSpan);
 	TStaticFieldAssign(name:String, field:String, value:TypedExpression, span:SourceSpan);
 	TIndexAssign(array:TypedExpression, index:TypedExpression, value:TypedExpression, span:SourceSpan);
@@ -253,9 +252,8 @@ enum TypedStatement {
 	TContinue(span:SourceSpan);
 	TSwitch(expression:TypedExpression, cases:Array<TypedSwitchCase>, defaultBranch:Array<TypedStatement>,
 		hasDefault:Bool, span:SourceSpan);
-	TIncrement(name:String, delta:Int, span:SourceSpan);
-	TCellIncrement(name:String, cellClass:String, valueType:CompilerType, delta:Int, span:SourceSpan);
-	TCellCapturedIncrement(name:String, cellClass:String, valueType:CompilerType, delta:Int, span:SourceSpan);
+	TIncrement(name:String, valueType:CompilerType, delta:Int, span:SourceSpan);
+	TCapturedIncrement(name:String, valueType:CompilerType, delta:Int, span:SourceSpan);
 	TExpression(expression:TypedExpression, span:SourceSpan);
 }
 

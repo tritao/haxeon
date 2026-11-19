@@ -138,4 +138,13 @@ and structure patterns into nested switches. A resolution made before typing has
   The walker's `try` depth counts per lambda. `LexicalStorageAnalysis` and its four walks per body (two, and two per
   lambda) are gone. Compared under `--check-resolution` before the deletion: the self-compile, all 638 programs and the
   capture, closure and `try` tests agree. Main-thread instructions -1.9%, allocation -73 MB, output byte-identical.
-  Next: step 3 (captures on typed lambdas) and the closure-conversion stage.
+- The typed AST has no cell node kinds. A local or capture is `TLocal`/`TCaptured`; writes to a capture have their own
+  forms (`TCapturedAssign`, `TCapturedIncrement`, `TPostfixCaptured`), and `TIncrement` carries its value type. Which
+  locals and captures are cells is data on the function (`TypedFunction.cells`, `cellCaptures`), and IR generation reads
+  and writes through the cell where it says so. A captured write without a cell is an internal error in IR generation;
+  the typer still reports it (E1013). Output byte-identical; all 638 programs, the compiler suite and the capture
+  fixtures pass.
+- Step 3 as planned (a typed lambda's captures with whether it writes them) is not needed: the cell decision is made from
+  the resolution's facts and the binding's type when the binding is declared (`BindingStoragePlan`), not from what typing
+  finds. What remains of the closure-conversion stage is moving that decision, the environments and lambda lifting out
+  of the typer; it changes where code lives, not what it does.

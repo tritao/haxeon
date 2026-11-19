@@ -2635,7 +2635,7 @@ class CallResolver {
 							TAssign(resultName, new TypedExpression(TBoolLiteral(true), TBool, span), span),
 							TBreak(span)
 						], [], span),
-						TIncrement(indexName, 1, span)
+						TIncrement(indexName, TInt, 1, span)
 					], span)
 			];
 			return new TypedExpression(TBlockExpression(statements,

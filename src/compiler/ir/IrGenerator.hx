@@ -75,6 +75,11 @@ private class FunctionScratch {
 	public var observableConstructorInitialization:Bool;
 	public var valueConstructor:Null<String>;
 
+	/** The function's locals kept in a cell, and its captures that are cells, with the cell's class (`TypedFunction`). */
+	public var cells:Map<String, String> = [];
+
+	public var cellCaptures:Map<String, String> = [];
+
 	public function new(isConstructor:Bool)
 		observableConstructorInitialization = isConstructor;
 }
@@ -307,6 +312,8 @@ class IrGenerator {
 		var owner = fn.physicalOwner == null ? fn.owner : fn.physicalOwner;
 		if (fn.isConstructor && owner != null && facts.valueClasses.exists(owner))
 			scratch.valueConstructor = owner;
+		scratch.cells = fn.cells;
+		scratch.cellCaptures = fn.cellCaptures;
 		try {
 			var cfg = generateFunctionCfg(fn);
 			scratch = outer;
@@ -533,15 +540,16 @@ class IrGenerator {
 						});
 					}
 				case TAssign(name, value, _):
-					var loweredValue = lowerExpression(value, builder, localTypes);
+					var loweredValue = lowerExpression(value, builder, localTypes),
+						cellClass = scratch.cells.get(name);
 					if (!builder.isTerminated())
-						builder.store(name, loweredValue);
-				case TCellAssign(name, cellClass, value, _):
-					var loweredValue = lowerExpression(value, builder, localTypes);
-					if (!builder.isTerminated())
-						builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", loweredValue);
-				case TCellCapturedAssign(name, cellClass, value, _):
-					var owner = requireLocalType(localTypes, "this", 'Captured assignment "$name" has no environment');
+						if (cellClass == null)
+							builder.store(name, loweredValue);
+						else
+							builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", loweredValue);
+				case TCapturedAssign(name, value, _):
+					var owner = requireLocalType(localTypes, "this", 'Captured assignment "$name" has no environment'),
+						cellClass = captureCell(name);
 					var loweredValue = lowerExpression(value, builder, localTypes);
 					if (!builder.isTerminated()) {
 						var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
@@ -850,7 +858,15 @@ class IrGenerator {
 					if (builder.isTerminated())
 						break;
 					builder.jump(loop.continueBlock);
-				case TIncrement(name, delta, _):
+				case TIncrement(name, valueType, delta, _) if (scratch.cells.exists(name)):
+					var cell = builder.load('$' + 'cell:$name', Obj(scratch.cells.get(name) ?? "")),
+						value = builder.fieldGet(cell, "value", lowerType(valueType)),
+						one = (switch (valueType) {
+							case TInt: true;
+							default: false;
+						}) ? builder.constInt(1) : builder.constFloat(1.0);
+					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
+				case TIncrement(name, _, delta, _):
 					var type = requireLocalType(localTypes, name, 'Missing increment local "$name"');
 					var one = (switch (type) {
 						case I32: true;
@@ -858,17 +874,9 @@ class IrGenerator {
 					}) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type),
 						one) : builder.sub(builder.load(name, type), one));
-				case TCellIncrement(name, cellClass, valueType, delta, _):
-					var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
-						value = builder.fieldGet(cell, "value", lowerType(valueType)),
-						one = (switch (valueType) {
-							case TInt: true;
-							default: false;
-						}) ? builder.constInt(1) : builder.constFloat(1.0);
-					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
-				case TCellCapturedIncrement(name, cellClass, valueType, delta, _):
+				case TCapturedIncrement(name, valueType, delta, _):
 					var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
-					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
+					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(captureCell(name))),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
 						one = (switch (valueType) {
 							case TInt: true;
@@ -1271,15 +1279,13 @@ class IrGenerator {
 
 	function typedStatementSpan(statement:TypedStatement):compiler.core.Source.SourceSpan
 		return switch statement {
-			case TDeclare(_, _, span), TVar(_, _, span), TAssign(_, _, span), TCellAssign(_, _, _, span),
-				TCellCapturedAssign(_, _, _, span),
+			case TDeclare(_, _, span), TVar(_, _, span), TAssign(_, _, span), TCapturedAssign(_, _, span),
 				TFieldAssign(_, _, _, span), TStaticFieldAssign(_, _, _, span), TIndexAssign(_, _, _, span),
 				TMapAssign(_, _, _, span), TReturn(_, span),
 				TReturnVoid(span), TThrow(_, span), TDefer(_, span, _), TTry(_, _, span), TIf(_, _, _, span),
 				TWhile(_, _, span), TDoWhile(_, _, span),
 				TForIn(_, _, _, _, span), TBreak(span), TContinue(span), TSwitch(_, _, _, _, span),
-				TIncrement(_, _, span), TCellIncrement(_, _, _, _, span),
-				TCellCapturedIncrement(_, _, _, _, span), TExpression(_, span):
+				TIncrement(_, _, _, span), TCapturedIncrement(_, _, _, span), TExpression(_, span):
 				span;
 		};
 
@@ -1651,19 +1657,19 @@ class IrGenerator {
 	function optionalFieldPlace(expression:TypedExpression):Null<OptionalFieldPlace> {
 		return switch expression.expression {
 			case TLocal(name) if (scratch.localOptionalPlaces.exists(name)): scratch.localOptionalPlaces.get(name);
-			case TCellLocal(name,
-				cellClass) if (expression.storageType != null && isNullableValueType(expression.storageType)):
-				optionalCellPlace(name, cellClass, false, expression.span);
-			case TCellCaptured(name,
-				cellClass) if (expression.storageType != null && isNullableValueType(expression.storageType)):
-				optionalCellPlace(name, cellClass, true, expression.span);
+			case TLocal(name) if (scratch.cells.exists(name) && expression.storageType != null
+				&& isNullableValueType(expression.storageType)):
+				optionalCellPlace(name, scratch.cells.get(name) ?? "", false, expression.span);
+			case TCaptured(name) if (scratch.cellCaptures.exists(name) && expression.storageType != null
+				&& isNullableValueType(expression.storageType)):
+				optionalCellPlace(name, captureCell(name), true, expression.span);
 			case TCall("$value.place", [inner]): optionalFieldPlace(inner);
 			case TCast(inner), TAbiCast(inner):
 				switch inner.expression {
-					case TCellLocal(name, cellClass) if (isNullableValueType(inner.type)):
-						optionalCellPlace(name, cellClass, false, inner.span);
-					case TCellCaptured(name, cellClass) if (isNullableValueType(inner.type)):
-						optionalCellPlace(name, cellClass, true, inner.span);
+					case TLocal(name) if (scratch.cells.exists(name) && isNullableValueType(inner.type)):
+						optionalCellPlace(name, scratch.cells.get(name) ?? "", false, inner.span);
+					case TCaptured(name) if (scratch.cellCaptures.exists(name) && isNullableValueType(inner.type)):
+						optionalCellPlace(name, captureCell(name), true, inner.span);
 					case TField(owner, field) if (isNullableValueType(inner.type)):
 						var parent = optionalFieldPlace(owner);
 						parent == null ? {
@@ -1783,6 +1789,14 @@ class IrGenerator {
 		builder.store(rootName, root);
 		var replacement = new TypedExpression(TLocal(rootName), valueType, place.root.span);
 		return lowerExpression(replaceArrayValueRoot(expression, place, replacement), builder, localTypes);
+	}
+
+	/** The cell class of capture `name`, which the function's environment must hold in a cell. */
+	function captureCell(name:String):String {
+		var cellClass = scratch.cellCaptures.get(name);
+		if (cellClass == null)
+			throw new InternalError('Captured variable "$name" is written but not held in a cell');
+		return cellClass;
 	}
 
 	function optionalCellPlace(name:String, cellClass:String, captured:Bool,
@@ -2318,24 +2332,24 @@ class IrGenerator {
 				builder.intrinsic(compiler.ir.Ir.IrIntrinsic.EnumDynamicView(lowerType(enumType)),
 					[lowerExpression(array, builder, localTypes)],
 					lowerType(expression.type));
-			case TLocal(name):
+			case TLocal(name) if (!scratch.cells.exists(name)):
 				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
-			case TCellLocal(name, cellClass):
-				var cell = builder.load('$' + 'cell:$name', Obj(cellClass));
+			case TLocal(name):
+				var cell = builder.load('$' + 'cell:$name', Obj(scratch.cells.get(name) ?? ""));
 				abiBoundaryCast(builder,
 					builder.fieldGet(cell, "value",
 					lowerType(expression.storageType == null ? expression.type : expression.storageType)),
 					lowerType(expression.type));
-			case TCaptured(name):
+			case TCaptured(name) if (!scratch.cellCaptures.exists(name)):
 				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
 				abiBoundaryCast(builder,
 					builder.fieldGet(builder.load("this", owner), name,
 					lowerType(expression.storageType == null ? expression.type : expression.storageType)),
 					lowerType(expression.type));
-			case TCellCaptured(name, cellClass):
+			case TCaptured(name):
 				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
-				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass));
+				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(captureCell(name)));
 				abiBoundaryCast(builder,
 					builder.fieldGet(cell, "value",
 					lowerType(expression.storageType == null ? expression.type : expression.storageType)),
@@ -3460,21 +3474,21 @@ class IrGenerator {
 			case TIndex(array, index):
 				var operands = lowerOperands([array, index], builder, localTypes);
 				elementGet(builder, operands[0], operands[1], lowerType(expression.type));
-			case TPostfixLocal(name, delta):
+			case TPostfixLocal(name, delta) if (!scratch.cells.exists(name)):
 				var type = lowerType(expression.type),
 					oldValue = builder.load(name, type),
 					one = incrementOne(expression.type, builder);
 				builder.store(name, delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
-			case TPostfixCellLocal(name, cellClass, delta):
-				var cell = builder.load('$' + 'cell:$name', Obj(cellClass)),
+			case TPostfixLocal(name, delta):
+				var cell = builder.load('$' + 'cell:$name', Obj(scratch.cells.get(name) ?? "")),
 					oldValue = builder.fieldGet(cell, "value", lowerType(expression.type)),
 					one = incrementOne(expression.type, builder);
 				builder.fieldSet(cell, "value", delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
-			case TPostfixCellCaptured(name, cellClass, delta):
+			case TPostfixCaptured(name, delta):
 				var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
-				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(cellClass)),
+				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(captureCell(name))),
 					oldValue = builder.fieldGet(cell, "value", lowerType(expression.type)),
 					one = incrementOne(expression.type, builder);
 				builder.fieldSet(cell, "value", delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));

@@ -60,7 +60,7 @@ class FlowAnalysis {
 		return switch expression.expression {
 			case TIntLiteral(_), TFloatLiteral(_), TStringLiteral(_), TRuntimeDataAddress(_), TBoolLiteral(_),
 				TEnumLiteral(_, _), TNullLiteral, TVoidLiteral,
-				TLocal(_), TCellLocal(_, _), TCaptured(_), TCellCaptured(_, _), TClassRef(_), TStaticField(_, _),
+				TLocal(_), TCaptured(_), TClassRef(_), TStaticField(_, _),
 				TFunctionRef(_), TLambda(_, _, _),
 				TNewMap(_, _):
 				false;
@@ -130,7 +130,7 @@ class FlowAnalysis {
 	/** Facts about entries of a map that calls cannot reach stay true across calls. */
 	public static function entryFactsSurviveCalls(scope:Scope, map:TypedExpression):Bool
 		return switch map.expression {
-			case TLocal(name), TCellLocal(name, _): scope.isPrivateMap(name);
+			case TLocal(name): scope.isPrivateMap(name);
 			default: false;
 		};
 
@@ -230,7 +230,7 @@ class FlowAnalysis {
 		stable:Bool
 	}> {
 		return switch expression.expression {
-			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): switch expression.type {
+			case TLocal(name), TCaptured(name): switch expression.type {
 					case TNullable(element): {
 						localName: name,
 						path: "",
@@ -255,7 +255,7 @@ class FlowAnalysis {
 
 	public static function accessPath(expression:TypedExpression):Null<String>
 		return switch expression.expression {
-			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _): name;
+			case TLocal(name), TCaptured(name): name;
 			case TStaticField(owner, name): 'static:$owner.$name';
 			case TField(object, name):
 				var parent = accessPath(object);
@@ -273,7 +273,7 @@ class FlowAnalysis {
 
 	public static function mapKeySource(expression:TypedExpression, scope:Scope):Null<TypedExpression> {
 		return switch expression.expression {
-			case TLocal(name), TCellLocal(name, _), TCaptured(name), TCellCaptured(name, _):
+			case TLocal(name), TCaptured(name):
 				var source = scope.mapKeySource(name);
 				source == null ? expression.mapKeySource : source;
 			case TCast(value), TAbiCast(value), TToDynamic(value),

@@ -167,7 +167,7 @@ class StatementTyper {
 				if (recursiveCell != null)
 					return [
 						TDeclare(scope.requireId(name), declaredType, span),
-						TCellAssign(scope.requireId(name), recursiveCell, value, span)
+						TAssign(scope.requireId(name), value, span)
 					];
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
@@ -324,11 +324,9 @@ class StatementTyper {
 		if (scope.isCapture(name)) {
 			if (!scope.isCellCapture(name))
 				fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
-			return TCellCapturedIncrement(name, scope.requireCellClass(name), current, delta, span);
+			return TCapturedIncrement(name, current, delta, span);
 		}
-		var cell = bodyTyper.boundCell(name, scope);
-		return cell != null ? TCellIncrement(scope.requireId(name), cell, current, delta,
-			span) : TIncrement(scope.requireId(name), delta, span);
+		return TIncrement(scope.requireId(name), current, delta, span);
 	}
 
 	/**
@@ -451,12 +449,9 @@ class StatementTyper {
 			if (scope.isCapture(name)) {
 				if (!scope.isCellCapture(name))
 					fail("E1013", 'Captured variable "$name" requires mutable capture cells', span);
-				statement = TCellCapturedAssign(name, scope.requireCellClass(name), value, span);
-			} else {
-				var cell = bodyTyper.boundCell(name, scope);
-				statement = cell != null ? TCellAssign(scope.requireId(name), cell, value,
-					span) : TAssign(scope.requireId(name), value, span);
-			}
+				statement = TCapturedAssign(name, value, span);
+			} else
+				statement = TAssign(scope.requireId(name), value, span);
 			scope.markAssigned(name);
 			scope.setMapKeySource(name, value.mapKeySource);
 			scope.invalidateExpressionsForLocal(name);

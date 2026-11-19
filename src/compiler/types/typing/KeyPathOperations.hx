@@ -159,10 +159,12 @@ class KeyPathOperations {
 			span:SourceSpan):Array<TypedStatement>
 		return switch place.expression {
 			case TCall("$rawptr.ref.flat", [_]): copyFields(session, place, value, span);
-			case TLocal(_) if (session.relations.isValueClass(place.type)): copyFields(session, place, value, span);
+			// A value local in a cell is replaced whole, as the closures that share the cell see it.
+			case TLocal(name) if (session.relations.isValueClass(place.type)
+				&& session.currentContext.storage.cell(name) == null): copyFields(session, place, value, span);
 			case TLocal(name): [TAssign(name, value, span)];
-			case TCellLocal(name, cell): [TCellAssign(name, cell, value, span)];
-			case TCellCaptured(name, cell): [TCellCapturedAssign(name, cell, value, span)];
+			case TCaptured(name) if (session.currentContext.scope.isCellCapture(name)): [TCapturedAssign(name, value,
+				span)];
 			case TField(parent, name): [TFieldAssign(parent, name, value, span)];
 			case TStaticField(_, _) if (session.relations.isValueClass(place.type)):
 				// Static value storage already owns its box. Copy lanes back into it instead
