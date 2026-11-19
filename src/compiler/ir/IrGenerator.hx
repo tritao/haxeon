@@ -1084,9 +1084,9 @@ class IrGenerator {
 						tuple = storeSwitchSubject(switchName, expression, builder, localTypes),
 						exits:Array<CfgBlock> = [];
 					var arms = [for (switchCase in cases) switchCase.arm];
-					var tablePlan = switchTablePlan(expression.type, arms);
+					var tablePlan = switchTablePlan(expression.type, arms, true);
 					if (tablePlan != null) {
-						// Arms that name constructors: one jump table on the constructor index (`lowerTableSwitch`).
+						// Arms that name constructors or integer constants: one jump table (`lowerTableSwitch`).
 						var defaultBlock = builder.createBlock();
 						lowerTableSwitch(tablePlan, arms, switchName, switchType,
 							defaultBlock, true,
@@ -2770,10 +2770,10 @@ class IrGenerator {
 				localTypes.set(resultName, resultType);
 				var tuple = storeSwitchSubject(subjectName, subject, builder, localTypes);
 				var arms = [for (switchCase in cases) switchCase.arm];
-				var tablePlan = switchTablePlan(subject.type, arms);
+				var tablePlan = switchTablePlan(subject.type, arms, defaultExpression != null);
 				if (tablePlan != null) {
-					// Arms that name constructors: one jump table on the constructor index (`lowerTableSwitch`). Without a default the
-					// arms are exhaustive, so no value reaches the fallback, as in a switch statement on an enum.
+					// Arms that name constructors or integer constants: one jump table (`lowerTableSwitch`). Without a default an enum
+					// switch's arms are exhaustive, and an integer one has a catch-all, so no value reaches the fallback.
 					var afterBlock = builder.createBlock(), fallbackBlock = builder.createBlock();
 					lowerTableSwitch(tablePlan, arms, subjectName, subjectType,
 						fallbackBlock, false,
@@ -3971,8 +3971,10 @@ class IrGenerator {
 	 * unguarded. Arms run in source order: an arm whose patterns or guard fail hands over to the next arm that can match the same
 	 * value, since no arm naming another constructor can.
 	 */
-	function switchTablePlan(subject:CompilerType, arms:Array<TypedSwitchArm>):Null<SwitchTablePlan> {
-		if (!isEnumType(subject) || arms.length < 2)
+	function switchTablePlan(subject:CompilerType, arms:Array<TypedSwitchArm>, hasFallback:Bool):Null<SwitchTablePlan> {
+		if (!isEnumType(subject))
+			return intSwitchTablePlan(subject, arms, hasFallback);
+		if (arms.length < 2)
 			return null;
 		var nullable = isNullableEnumType(subject), catchAll = -1;
 		for (index in 0...arms.length) {
@@ -4018,9 +4020,87 @@ class IrGenerator {
 			entries: entries,
 			nullArm: nullArm >= 0 ? nullArm : catchAll,
 			catchAll: catchAll,
-			nullable: nullable
+			nullable: nullable,
+			offset: null
 		};
 	}
+
+	/**
+	 * How a switch on an `Int` is a jump table on the value less the smallest case, or null when it is not one: every arm is an
+	 * integer constant, with any guard, or a last unguarded catch-all, and the constants are dense enough that the table stays
+	 * small. Without a default or a catch-all, a switch expression's arms are not known to cover every value, so it keeps the
+	 * chain of comparisons.
+	 */
+	function intSwitchTablePlan(subject:CompilerType, arms:Array<TypedSwitchArm>,
+			hasFallback:Bool):Null<SwitchTablePlan> {
+		switch subject {
+			case TInt:
+			default:
+				return null;
+		}
+		var catchAll = -1, keys:Array<Int> = [], low = 0, high = 0, constants = 0;
+		for (index in 0...arms.length) {
+			var arm = arms[index];
+			if (arm.arrayPattern != null || arm.predicates.length > 0 || arm.bindings.length > 0
+				|| arm.constructorIndex >= 0)
+				return null;
+			if (arm.isCatchAll) {
+				if (arm.guard != null || index != arms.length - 1)
+					return null;
+				catchAll = index;
+				keys.push(0);
+				continue;
+			}
+			var value = intLiteral(arm.value);
+			if (value == null)
+				return null;
+			if (constants == 0 || value < low)
+				low = value;
+			if (constants == 0 || value > high)
+				high = value;
+			constants++;
+			keys.push(value);
+		}
+		if (constants < MIN_INT_TABLE_CASES || catchAll < 0 && !hasFallback)
+			return null;
+		var size = high - low + 1;
+		if (size <= 0 || size > MAX_INT_TABLE_SIZE || size > constants * INT_TABLE_SPREAD)
+			return null;
+		var fallbacks:Array<Int> = [], entries = [for (_ in 0...size) -1];
+		for (index in 0...arms.length) {
+			var next = -1;
+			if (index != catchAll)
+				for (later in index + 1...arms.length)
+					if (later == catchAll || keys[later] == keys[index]) {
+						next = later;
+						break;
+					}
+			fallbacks.push(next);
+			if (index != catchAll && entries[keys[index] - low] < 0)
+				entries[keys[index] - low] = index;
+		}
+		return {
+			fallbacks: fallbacks,
+			entries: entries,
+			nullArm: catchAll,
+			catchAll: catchAll,
+			nullable: false,
+			offset: low
+		};
+	}
+
+	// An integer switch becomes a table from this many constants, spanning at most this many values per constant and in all.
+	static inline final MIN_INT_TABLE_CASES = 3;
+	static inline final INT_TABLE_SPREAD = 4;
+	static inline final MAX_INT_TABLE_SIZE = 4096;
+
+	/** The value of an integer constant pattern, or null for any other. */
+	static function intLiteral(expression:TypedExpression):Null<Int>
+		return switch expression.expression {
+			case TIntLiteral(value): value;
+			case TCast(value), TAbiCast(value): intLiteral(value);
+			default: null;
+		};
 
 	/**
 	 * Lowers the arms of a switch planned by `switchTablePlan`: a null subject goes to the null arm, any other to the arm the
@@ -4042,8 +4122,9 @@ class IrGenerator {
 				blockOf(plan.nullArm), tableBlock);
 			builder.select(tableBlock);
 		}
-		builder.switchOn(builder.enumIndex(builder.load(subjectName, subjectType)),
-			[for (arm in plan.entries) arm >= 0 ? entryBlocks[arm] : otherwise], otherwise);
+		var subject = builder.load(subjectName, subjectType), offset = plan.offset;
+		builder.switchOn(offset == null ? builder.enumIndex(subject) : offset == 0 ? subject : builder.sub(subject,
+			builder.constInt(offset)), [for (arm in plan.entries) arm >= 0 ? entryBlocks[arm] : otherwise], otherwise);
 		for (index in 0...arms.length) {
 			var arm = arms[index], failure = blockOf(plan.fallbacks[index]);
 			if (arm.predicates.length > 0)
@@ -5073,4 +5154,7 @@ private typedef SwitchTablePlan = {
 
 	final catchAll:Int;
 	final nullable:Bool;
+
+	/** Null for a switch on an enum's constructor index; for an `Int` switch, the smallest case, which is entry 0. */
+	final offset:Null<Int>;
 }
