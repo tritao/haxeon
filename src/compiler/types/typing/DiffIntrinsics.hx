@@ -7,6 +7,7 @@ import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.Type.NominalKind;
 import compiler.types.typing.KeyPathTyping.KeyPathField;
@@ -46,8 +47,8 @@ class DiffIntrinsics {
 					value = hold(session, "fingerprint-value", span),
 					hash = hold(session, "fingerprint-hash", span),
 					statements:Array<AstStatement> = [
-						VarDeclaration(value, null, arguments[0], span),
-						VarDeclaration(hash, IntType, IntegerLiteral(17, span), span)
+						TemporaryDeclaration(value, null, arguments[0], span),
+						TemporaryDeclaration(hash, IntType, IntegerLiteral(17, span), span)
 					];
 				maskedFields(session, declaration, name, span);
 				for (entry in conformanceFields(session, type)) {
@@ -56,12 +57,13 @@ class DiffIntrinsics {
 						fail("E1025",
 							'Cannot synthesize Diff.fingerprint for "${compiler.semantic.SemanticSignature.display(type)}": field "${field.name}" does not conform to Hashable',
 							field.span);
-					var fieldValue = synthesized(Member(Variable(value, span), field.name, span), span),
+					var fieldValue = synthesized(Member(TemporaryVariable(value, span), field.name, span), span),
 						fieldHash = Call("haxeon.Hashing.hash", [fieldValue], span),
-						mixed = Add(Mul(Variable(hash, span), IntegerLiteral(31, span), span), fieldHash, span);
-					statements.push(Assignment(hash, mixed, span));
+						mixed = Add(Mul(TemporaryVariable(hash, span), IntegerLiteral(31, span), span), fieldHash,
+							span);
+					statements.push(TemporaryAssignment(hash, mixed, span));
 				}
-				return BlockExpression(statements, Variable(hash, span), span);
+				return BlockExpression(statements, TemporaryVariable(hash, span), span);
 			case "bit":
 				expectArguments(name, arguments, 1, span);
 				var path:Null<{
@@ -105,8 +107,8 @@ class DiffIntrinsics {
 				var source = hold(session, "copy-source", span),
 					result = hold(session, "copy-result", span),
 					statements:Array<AstStatement> = [
-						VarDeclaration(source, null, arguments[0], span),
-						VarDeclaration(result, null, synthesized(New(declaration.name, [], span), span), span)
+						TemporaryDeclaration(source, null, arguments[0], span),
+						TemporaryDeclaration(result, null, synthesized(New(declaration.name, [], span), span), span)
 					];
 				for (entry in conformanceFields(session, type)) {
 					var field = entry.field;
@@ -114,10 +116,10 @@ class DiffIntrinsics {
 						fail("E1009",
 							'$name cannot copy immutable field "${field.name}" of "${compiler.semantic.SemanticSignature.display(type)}"',
 							span);
-					statements.push(synthesizedStatement(FieldAssignment(Variable(result, span), field.name,
-						Member(Variable(source, span), field.name, span), span), span));
+					statements.push(synthesizedStatement(FieldAssignment(TemporaryVariable(result, span), field.name,
+						Member(TemporaryVariable(source, span), field.name, span), span), span));
 				}
-				return BlockExpression(statements, Variable(result, span), span);
+				return BlockExpression(statements, TemporaryVariable(result, span), span);
 			case "mask":
 				expectArguments(name, arguments, 2, span);
 				var declaration = classOf(session, typeOf(arguments[0]), name, span),
@@ -126,15 +128,16 @@ class DiffIntrinsics {
 					mask = hold(session, "mask", span),
 					fields = maskedFields(session, declaration, name, span),
 					statements:Array<AstStatement> = [
-						VarDeclaration(left, null, arguments[0], span),
-						VarDeclaration(right, null, arguments[1], span),
-						VarDeclaration(mask, IntType, IntegerLiteral(0, span), span)
+						TemporaryDeclaration(left, null, arguments[0], span),
+						TemporaryDeclaration(right, null, arguments[1], span),
+						TemporaryDeclaration(mask, IntType, IntegerLiteral(0, span), span)
 					];
 				for (index in 0...fields.length)
 					statements.push(If(differs(left, right, fields[index].name, span),
-						[Assignment(mask, BitOr(Variable(mask, span), IntegerLiteral(1 << index, span), span), span)],
+						[TemporaryAssignment(mask,
+						BitOr(TemporaryVariable(mask, span), IntegerLiteral(1 << index, span), span), span)],
 						[], span));
-				return BlockExpression(statements, Variable(mask, span), span);
+				return BlockExpression(statements, TemporaryVariable(mask, span), span);
 			case "apply":
 				expectArguments(name, arguments, 3, span);
 				var declaration = classOf(session, typeOf(arguments[0]), name, span),
@@ -144,10 +147,10 @@ class DiffIntrinsics {
 					mask = hold(session, "mask", span),
 					fields = maskedFields(session, declaration, name, span),
 					statements:Array<AstStatement> = [
-						VarDeclaration(target, null, Call("$value.place", [arguments[0]], span), span),
-						VarDeclaration(before, null, arguments[1], span),
-						VarDeclaration(after, null, arguments[2], span),
-						VarDeclaration(mask, IntType, IntegerLiteral(0, span), span)
+						TemporaryDeclaration(target, null, Call("$value.place", [arguments[0]], span), span),
+						TemporaryDeclaration(before, null, arguments[1], span),
+						TemporaryDeclaration(after, null, arguments[2], span),
+						TemporaryDeclaration(mask, IntType, IntegerLiteral(0, span), span)
 					];
 				for (index in 0...fields.length) {
 					var field = fields[index];
@@ -155,12 +158,13 @@ class DiffIntrinsics {
 						fail("E1009", '$name cannot assign immutable field "${field.name}" of "${declaration.name}"',
 							span);
 					statements.push(If(differs(before, after, field.name, span), [
-						synthesizedStatement(FieldAssignment(Variable(target, span), field.name,
-							Member(Variable(after, span), field.name, span), span), span),
-						Assignment(mask, BitOr(Variable(mask, span), IntegerLiteral(1 << index, span), span), span)
+						synthesizedStatement(FieldAssignment(TemporaryVariable(target, span), field.name,
+							Member(TemporaryVariable(after, span), field.name, span), span), span),
+						TemporaryAssignment(mask,
+							BitOr(TemporaryVariable(mask, span), IntegerLiteral(1 << index, span), span), span)
 					], [], span));
 				}
-				return BlockExpression(statements, Variable(mask, span), span);
+				return BlockExpression(statements, TemporaryVariable(mask, span), span);
 			default:
 				fail("E1007", 'Unknown function "$name"', span);
 				return null;
@@ -304,14 +308,14 @@ class DiffIntrinsics {
 			fail("E1008", 'Function "$name" expects $count argument${count == 1 ? "" : "s"}, got ${arguments.length}',
 				span);
 
-	static function differs(left:String, right:String, field:String, span:SourceSpan):AstExpression
-		return synthesized(NotEqual(Member(Variable(left, span), field, span),
-			Member(Variable(right, span), field, span), span),
+	static function differs(left:TemporaryLocal, right:TemporaryLocal, field:String, span:SourceSpan):AstExpression
+		return synthesized(NotEqual(Member(TemporaryVariable(left, span), field, span),
+			Member(TemporaryVariable(right, span), field, span), span),
 			span);
 
-	/** A temporary named by its place and its ordinal in the function being typed, so the same source gives the same name in any session. */
-	static function hold(session:TypingSession, purpose:String, span:SourceSpan):String
-		return '$' + 'diff:$purpose:${span.start}:${session.currentContext.diffTemporary++}';
+	/** A temporary, named by its place and its ordinal in the function being typed, so the same source gives the same name in any session. */
+	static function hold(session:TypingSession, purpose:String, span:SourceSpan):TemporaryLocal
+		return new TemporaryLocal('$' + 'diff:$purpose:${span.start}:${session.currentContext.diffTemporary++}');
 
 	@:noReturn
 	static function fail(code:String, message:String, span:SourceSpan):Void

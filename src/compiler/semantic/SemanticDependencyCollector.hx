@@ -124,11 +124,11 @@ class SemanticDependencyCollector {
 						new AliasTable());
 					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
-				case VarDeclaration(_, type, expression, _):
+				case VarDeclaration(_, type, expression, _), TemporaryDeclaration(_, type, expression, _):
 					addOptionalTypeDependency(result, owner, SemanticDependencyKind.Body, type, new AliasTable());
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
-				case Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
-					Expression(expression, _):
+				case Assignment(_, expression, _), TemporaryAssignment(_, expression, _), Return(expression, _),
+					Throw(expression, _), Expression(expression, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 				case IndexAssignment(array, offset, expression, _):
 					for (item in [array, offset, expression])
@@ -176,7 +176,8 @@ class SemanticDependencyCollector {
 			switch statement {
 				case PrivateAccessStatement(inner, _): scanNativeLayoutQueryStatements(result, owner, [inner], aliases);
 				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _),
-					Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
+					TemporaryDeclaration(_, _, expression, _), Assignment(_, expression, _),
+					TemporaryAssignment(_, expression, _), Return(expression, _), Throw(expression, _),
 					Expression(expression, _):
 					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
 				case IndexAssignment(array, offset, expression, _):
@@ -295,7 +296,8 @@ class SemanticDependencyCollector {
 			case Lambda(_, body, _, _):
 				scanNativeLayoutQueryStatements(result, owner, body, aliases);
 			case IntegerLiteral(_, _) | FloatLiteral(_, _) | StringLiteral(_, _) | BoolLiteral(_, _) | NullLiteral(_)
-				| Unreachable(_) | EmptyExpression(_) | ErrorExpression(_) | Variable(_, _) | NewMap(_, _, _):
+				| Unreachable(_) | EmptyExpression(_) | ErrorExpression(_) | Variable(_, _) | TemporaryVariable(_,
+				_) | NewMap(_, _, _):
 		}
 	}
 
@@ -354,6 +356,9 @@ class SemanticDependencyCollector {
 			case Assignment(name, e, _):
 				scanCallExpression(e, calls, aliases);
 				rememberAlias(name, e, aliases);
+			case TemporaryDeclaration(local, _, e, _), TemporaryAssignment(local, e, _):
+				scanCallExpression(e, calls, aliases);
+				rememberAlias(local.name, e, aliases);
 			case IndexAssignment(array, offset, e, _):
 				scanCallExpression(array, calls, aliases);
 				scanCallExpression(offset, calls, aliases);

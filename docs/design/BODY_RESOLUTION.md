@@ -138,6 +138,12 @@ Then the typer reads every local by id and `Scope`'s name chain goes (with the c
 redeclaration becomes a change to the resolver alone. Speed is not the reason: name lookups are about 1.2% of a
 self-compile.
 
+Pilot (`DiffIntrinsics`, the largest family): a temporary is a `TemporaryLocal` object, declared, assigned and read with
+`TemporaryDeclaration`, `TemporaryAssignment` and `TemporaryVariable`, so syntax the typer builds no longer names it.
+Until the typer reads locals by binding, it types these as the named forms under the temporary's name, and the walker
+treats them the same way; the switches over syntax take them beside their named forms. Byte-identical: the self-compile,
+and the six programs that use the diff intrinsics compiled before and after.
+
 ## Progress
 
 - `BodyResolution` records a body's declarations and references; `--check-resolution` compares it with the typer's

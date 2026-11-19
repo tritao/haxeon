@@ -2,6 +2,17 @@ package compiler.syntax;
 
 import compiler.core.Source.SourceSpan;
 
+/**
+ * A local the typer introduces while it types a body, in syntax it builds (docs/design/BODY_RESOLUTION.md): never named in
+ * the source, so no source name can refer to it. `name` is how diagnostics and generated code name it.
+ */
+class TemporaryLocal {
+	public final name:String;
+
+	public function new(name:String)
+		this.name = name;
+}
+
 /** Source-level type syntax before name resolution and semantic checking. */
 enum AstType {
 	IntType;
@@ -230,6 +241,10 @@ enum AstExpression {
 	ErrorExpression(span:SourceSpan);
 
 	Variable(name:String, span:SourceSpan);
+
+	/** A read of a temporary the typer introduced. */
+	TemporaryVariable(local:TemporaryLocal, span:SourceSpan);
+
 	Member(object:AstExpression, name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Sub(left:AstExpression, right:AstExpression, span:SourceSpan);
@@ -350,6 +365,13 @@ enum AstStatement {
 	VarDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	ScopedDeclaration(name:String, ?type:AstType, initializer:AstExpression, span:SourceSpan);
 	Assignment(name:String, expression:AstExpression, span:SourceSpan);
+
+	/** The declaration of a temporary the typer introduced. */
+	TemporaryDeclaration(local:TemporaryLocal, ?type:AstType, initializer:AstExpression, span:SourceSpan);
+
+	/** An assignment of a temporary the typer introduced. */
+	TemporaryAssignment(local:TemporaryLocal, expression:AstExpression, span:SourceSpan);
+
 	IndexAssignment(array:AstExpression, index:AstExpression, expression:AstExpression, span:SourceSpan);
 	FieldAssignment(object:AstExpression, field:String, expression:AstExpression, span:SourceSpan);
 	Return(expression:AstExpression, span:SourceSpan);

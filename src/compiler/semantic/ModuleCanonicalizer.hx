@@ -464,6 +464,11 @@ class ModuleCanonicalizer {
 			case ScopedDeclaration(n, t, e, span):
 				ScopedDeclaration(n, t == null ? null : canonicalType(t, aliases),
 					canonicalExpression(e, module, entry, locals, aliases), span);
+			case TemporaryDeclaration(local, t, e, span):
+				TemporaryDeclaration(local, t == null ? null : canonicalType(t, aliases),
+					canonicalExpression(e, module, entry, locals, aliases), span);
+			case TemporaryAssignment(local, e, span):
+				TemporaryAssignment(local, canonicalExpression(e, module, entry, locals, aliases), span);
 			case Assignment(n, e,
 				span): Assignment(canonicalAssignmentTarget(n, module, locals, aliases, span),
 				canonicalExpression(e, module, entry, locals, aliases), targetSpan(n, module, locals, span));
@@ -528,7 +533,7 @@ class ModuleCanonicalizer {
 				span): PrivateAccessExpression(canonicalExpression(inner, module, entry, locals, aliases), span);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
-				ErrorExpression(_): e;
+				ErrorExpression(_), TemporaryVariable(_, _): e;
 			case Variable(name, span):
 				var imported = importedReference(name, locals, aliases),
 					resolved = imported != null ? storedImport(name, imported, aliases,

@@ -725,11 +725,23 @@ class BodyTyper implements BodyTyping {
 			validateDeferredExpression(child, loopDepth);
 	}
 
+	/**
+	 * A temporary's declaration or assignment as the named statement it is typed as: a temporary is a local of the scope under its
+	 * name until the typer reads locals by binding (docs/design/BODY_RESOLUTION.md).
+	 */
+	static function named(statement:AstStatement):AstStatement
+		return switch statement {
+			case TemporaryDeclaration(local, type, initializer, span): VarDeclaration(local.name, type, initializer,
+				span);
+			case TemporaryAssignment(local, value, span): Assignment(local.name, value, span);
+			default: statement;
+		};
+
 	public function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement> {
 		var output:Array<TypedStatement> = [];
 		for (statementIndex in 0...statements.length) {
-			var statement = statements[statementIndex];
+			var statement = named(statements[statementIndex]);
 			if (ControlFlow.alwaysReturns(output, function(type, cases) return this.exhaustiveSwitch(type, cases))) {
 				if (isNoReturnPlaceholder(output, statement))
 					continue;
@@ -755,7 +767,7 @@ class BodyTyper implements BodyTyping {
 					session.currentContext.privateAccessDepth--;
 				case ErrorStatement(_):
 					throw new InternalError("Simple statement was not dispatched");
-				case UninitializedDeclaration(_, _, _):
+				case UninitializedDeclaration(_, _, _), TemporaryDeclaration(_, _, _, _), TemporaryAssignment(_, _, _):
 					throw new InternalError("Simple statement was not dispatched");
 				case VarDeclaration(_, _, _, _):
 					throw new InternalError("Simple statement was not dispatched");
@@ -3041,7 +3053,7 @@ class BodyTyper implements BodyTyping {
 		return switch statement {
 			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
-				Assignment(_, _, span),
+				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
 				IndexAssignment(_, _, _, span), FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span),
 				Throw(_, span), Defer(_, span),
 				Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span),

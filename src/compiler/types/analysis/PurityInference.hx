@@ -599,6 +599,14 @@ private class PurityWalker {
 			case Assignment(name, value, _) if (stores != null && !isLocal(name)): dottedFieldStore(name)
 				&& expression(value);
 			case Assignment(name, value, _): isLocal(name) && expression(value);
+			case TemporaryDeclaration(local, _, initializer, _):
+				var pure = expression(initializer);
+				declare(local.name, isNumeric(initializer), null, isIterableInitializer(initializer),
+					isArrayInitializer(initializer), isStringReceiver(initializer),
+					isStringArrayInitializer(initializer),
+					isMapInitializer(initializer));
+				pure;
+			case TemporaryAssignment(local, value, _): isLocal(local.name) && expression(value);
 			case Increment(name, _, _) if (stores != null && !isLocal(name)): dottedFieldStore(name);
 			case Increment(name, _, _): isLocal(name);
 			case IndexAssignment(Variable(name, _), key, value, _) if (isOuterPrivateMap(name)): expression(key)
@@ -670,6 +678,7 @@ private class PurityWalker {
 				MapComprehension(_, _, _, _, _, _, _):
 				false;
 			case Variable("this", _) if (freshReceiver != null): false;
+			case TemporaryVariable(local, _): isLocal(local.name);
 			case Variable(name, _):
 				if (StringTools.startsWith(name, "this.")) {
 					var parts = name.split("."), pure = true;

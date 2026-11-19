@@ -89,6 +89,8 @@ class ExpressionTyper {
 				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): bodyTyper.typeVariableExpression(name, span, scope, expectedType);
+			case TemporaryVariable(local, span): bodyTyper.typeVariableExpression(local.name, span, scope,
+				expectedType);
 			case Lambda(arguments, body, identity, span): closureTyper.typeLambda(arguments, body, identity, span,
 				scope,
 				expectedType, inferDynamicLambdaResult, session.currentContext);

@@ -188,6 +188,13 @@ class BindingWalker implements AstChildVisitor {
 				declare(name, span, Local, type, initializer);
 			case UninitializedDeclaration(name, type, span):
 				declare(name, span, Local, type);
+			// A temporary the typer introduced is a local under its name, as the typer types it.
+			case TemporaryDeclaration(local, type, initializer, span):
+				expression(initializer);
+				declare(local.name, span, Local, type, initializer);
+			case TemporaryAssignment(local, expression, span):
+				this.expression(expression);
+				written(local.name, resolve(local.name), span);
 			case Assignment(name, expression, span):
 				this.expression(expression);
 				written(name, resolve(name), span);
@@ -259,6 +266,8 @@ class BindingWalker implements AstChildVisitor {
 		switch value {
 			case Variable(name, span):
 				used(name, resolve(name), span);
+			case TemporaryVariable(local, span):
+				used(local.name, resolve(local.name), span);
 			case Call(name, arguments, span):
 				var dot = name.indexOf(".");
 				if (dot > 0)

@@ -14,7 +14,8 @@ class LambdaCollector {
 				case ErrorStatement(_):
 				case UninitializedDeclaration(_, _, _):
 				case VarDeclaration(_, _, expression, _), ScopedDeclaration(_, _, expression, _),
-					Assignment(_, expression, _), Return(expression, _), Throw(expression, _),
+					TemporaryDeclaration(_, _, expression, _), Assignment(_, expression, _),
+					TemporaryAssignment(_, expression, _), Return(expression, _), Throw(expression, _),
 					Expression(expression, _):
 					collectExpression(expression, functionName, module, generatedByModule);
 				case Try(tryBranch, catches, _):
