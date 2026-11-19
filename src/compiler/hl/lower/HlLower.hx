@@ -71,7 +71,8 @@ class HlLower {
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
 
-	final blockLabels:Array<String> = [];
+	/** The next label `freshLabel` gives, past the function's last block id. */
+	var nextLabel = 0;
 
 	// Tables by value id of the function being lowered, their storage kept from one function to the next.
 	final valueRegisters:Array<Int> = [];
@@ -777,6 +778,10 @@ class HlLower {
 	}
 
 	function lowerFunction(fn:IrFunction):HlFunction {
+		nextLabel = 0;
+		for (block in fn.blocks)
+			if (block.id >= nextLabel)
+				nextLabel = block.id + 1;
 		var nonNull = new compiler.ir.IrNonNullFacts(fn, true), exactTypes = new compiler.ir.IrExactTypeFacts(fn);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
@@ -904,7 +909,7 @@ class HlLower {
 		for (layoutIndex in 0...emitted.length) {
 			var block = emitted[layoutIndex],
 				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
-			instructions.push(HlInstruction.Label(blockLabel(block.id)));
+			instructions.push(HlInstruction.Label(block.id));
 			debugLocations.push(debugLocation(blockProvenance(block)));
 			// A comparison that ends its block and feeds only that block's branch becomes the branch itself, with
 			// no Bool in between: the loop test then costs one compare-and-jump instead of a compare, two moves and a test.
@@ -1054,7 +1059,7 @@ class HlLower {
 							throw new InternalError('Try block $block.id has no catch value in block $catchBlock');
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
-						instructions.push(HlInstruction.Trap(handlerRegister, blockLabel(catchBlock),
+						instructions.push(HlInstruction.Trap(handlerRegister, catchBlock,
 							preserveExceptionStack));
 					case EndTry(catchBlock, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
@@ -1116,15 +1121,15 @@ class HlLower {
 					case Less(output, left, right) if (output.id == fusedCondition):
 						fusedFloat = isFloat(left.type) || isFloat(right.type);
 						fusedComparison = comparisonJump(0, false, false, requireRegister(left, registers),
-							requireRegister(right, registers), null);
+							requireRegister(right, registers), -1);
 					case LessEqual(output, left, right) if (output.id == fusedCondition):
 						fusedFloat = isFloat(left.type) || isFloat(right.type);
 						fusedComparison = comparisonJump(1, false, false, requireRegister(left, registers),
-							requireRegister(right, registers), null);
+							requireRegister(right, registers), -1);
 					case Equal(output, left, right) if (output.id == fusedCondition):
 						fusedComparison = comparisonJump(2, isNullConstant(left), isNullConstant(right),
 							requireRegister(left, registers),
-							requireRegister(right, registers), null);
+							requireRegister(right, registers), -1);
 					case Less(output, left, right):
 						lowerComparison(output, left, right, 0, false, false, registers, registerTypes, instructions);
 					case LessEqual(output, left, right):
@@ -1139,13 +1144,13 @@ class HlLower {
 						&& functionName.name == compiler.ir.IrReferenceIdentity.NAME):
 						// A reference-identity test ending its block: compare the two pointers and jump, with no Bool.
 						var pointers = identityPointers(arguments, instructions, registers, registerTypes);
-						fusedComparison = comparisonJump(2, false, false, pointers[0], pointers[1], null);
+						fusedComparison = comparisonJump(2, false, false, pointers[0], pointers[1], -1);
 					case Call(output, functionName, arguments) if (output.id == fusedCondition):
 						// The exact-class test ending its block: compare the object's type pointer and jump, with no Bool.
 						var actual = temporaryRegister(IrType.TypeRef, registerTypes);
 						instructions.push(HlInstruction.GetType(actual, requireRegister(arguments[0], registers)));
 						fusedComparison = comparisonJump(2, false, false, actual,
-							requireRegister(arguments[1], registers), null);
+							requireRegister(arguments[1], registers), -1);
 					case Call(output, functionName, arguments):
 						if (functionName.name == compiler.ir.IrReceiverCheck.NAME
 							&& nonNull.has(block.id, instructionIndex)) {
@@ -1282,7 +1287,7 @@ class HlLower {
 						})) {
 							var callable = temporaryRegister(IrType.Bool, registerTypes),
 								error = temporaryRegister(IrType.Bytes, registerTypes),
-								valid = "$callable:" + instructions.length;
+								valid = freshLabel();
 							instructions.push(HlInstruction.Call1(callable, requireFunction("__reflect_is_function"),
 								requireRegister(closure, registers)));
 							instructions.push(HlInstruction.JumpTrue(callable, valid));
@@ -1503,23 +1508,23 @@ class HlLower {
 								}
 						}
 					if (target != fallsThroughTo)
-						instructions.push(HlInstruction.Jump(blockLabel(target)));
+						instructions.push(HlInstruction.Jump(target));
 				case Branch(condition, yes, no):
 					if (edgeMoves(edges, block.id, yes) != null || edgeMoves(edges, block.id, no) != null)
 						throw new InternalError("Phi elimination requires split critical edges");
 					if (yes == fallsThroughTo && no != fallsThroughTo)
 						// The taken side is written next: jump to the other side on the complement, and fall through.
-						instructions.push(fusedComparison != null ? complementJump(fusedComparison, blockLabel(no),
+						instructions.push(fusedComparison != null ? complementJump(fusedComparison, no,
 							fusedFloat) : HlInstruction.JumpFalse(requireRegister(condition, registers),
-							blockLabel(no)));
+							no));
 					else {
 						if (fusedComparison != null)
-							instructions.push(withJumpTarget(fusedComparison, blockLabel(yes)));
+							instructions.push(withJumpTarget(fusedComparison, yes));
 						else
 							instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers),
-								blockLabel(yes)));
+								yes));
 						if (no != fallsThroughTo)
-							instructions.push(HlInstruction.Jump(blockLabel(no)));
+							instructions.push(HlInstruction.Jump(no));
 					}
 				case Switch(value, targets, otherwise):
 					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
@@ -1527,27 +1532,27 @@ class HlLower {
 							throw new InternalError("Phi elimination requires split critical edges");
 					// HashLink's jump table takes only forward offsets: a target laid out before this block is reached through a
 					// jump placed after the table. Values outside it fall through to the jump to `otherwise`.
-					var stubs:Array<{label:String, target:Int}> = [], entries:Array<String> = [];
+					var stubs:Array<{label:Int, target:Int}> = [], entries:Array<Int> = [];
 					for (target in targets)
 						if (layoutPositions.get(target) > layoutIndex)
-							entries.push(blockLabel(target));
+							entries.push(target);
 						else {
 							var stub = null;
 							for (existing in stubs)
 								if (existing.target == target)
 									stub = existing.label;
 							if (stub == null) {
-								stub = '__switch_${block.id}_${stubs.length}';
+								stub = freshLabel();
 								stubs.push({label: stub, target: target});
 							}
 							entries.push(stub);
 						}
 					instructions.push(HlInstruction.Switch(requireRegister(value, registers), entries));
 					if (otherwise != fallsThroughTo || stubs.length > 0)
-						instructions.push(HlInstruction.Jump(blockLabel(otherwise)));
+						instructions.push(HlInstruction.Jump(otherwise));
 					for (stub in stubs) {
 						instructions.push(HlInstruction.Label(stub.label));
-						instructions.push(HlInstruction.Jump(blockLabel(stub.target)));
+						instructions.push(HlInstruction.Jump(stub.target));
 					}
 			}
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
@@ -1577,9 +1582,9 @@ class HlLower {
 					registerTypes),
 				result = temporaryRegister(fn.result, registerTypes),
 				global = internGlobalSlot("$typed-method-slot:" + key, handleType),
-				fallback = "$typed-table:fallback",
-				initialize = "$typed-table:initialize",
-				ready = "$typed-table:ready";
+				fallback = freshLabel(),
+				initialize = freshLabel(),
+				ready = freshLabel();
 			var fast:Array<HlInstruction> = [
 				HlInstruction.GlobalGet(handle, global),
 				HlInstruction.JumpNull(handle, initialize),
@@ -1627,7 +1632,7 @@ class HlLower {
 	 */
 	static function dropUnreferencedLabels(instructions:Array<HlInstruction>, debugLocations:Array<HlDebugLocation>,
 			assignments:Array<HlDebugAssignment>):Void {
-		var referenced:Map<String, Bool> = [];
+		var referenced:Map<Int, Bool> = [];
 		for (instruction in instructions)
 			switch instruction {
 				case JumpSignedLessOrEqual(_, _, target), JumpSignedLess(_, _, target), JumpUnsignedLess(_, _, target),
@@ -1646,7 +1651,7 @@ class HlLower {
 		for (index in 0...instructions.length) {
 			positions.push(kept);
 			switch instructions[index] {
-				case Label(name) if (!referenced.exists(name)):
+				case Label(id) if (!referenced.exists(id)):
 				default:
 					instructions[kept] = instructions[index];
 					if (located)
@@ -1900,8 +1905,8 @@ class HlLower {
 
 	/** The jump taken when a comparison holds; `target` may be filled in later with `withJumpTarget`. */
 	static function comparisonJump(operation:Int, leftNull:Bool, rightNull:Bool, leftReg:Int, rightReg:Int,
-			target:Null<String>):HlInstruction {
-		var label = target == null ? "" : target;
+			target:Int):HlInstruction {
+		var label = target;
 		if (operation == 2 && (leftNull || rightNull))
 			return HlInstruction.JumpNull(leftNull ? rightReg : leftReg, label);
 		return switch operation {
@@ -1915,7 +1920,7 @@ class HlLower {
 	 * The jump taken exactly when the comparison `jump` is not, to `target`. Floats (`float`) use the VM's "not" jumps, taken on NaN too;
 	 * the VM compares those as floats only, so integers use the signed complements.
 	 */
-	static function complementJump(jump:HlInstruction, target:String, float:Bool):HlInstruction
+	static function complementJump(jump:HlInstruction, target:Int, float:Bool):HlInstruction
 		return switch jump {
 			case JumpSignedLess(left, right, _): float ? HlInstruction.JumpNotLess(left, right,
 				target) : HlInstruction.JumpSignedGreaterOrEqual(left, right, target);
@@ -1939,7 +1944,7 @@ class HlLower {
 			default: false;
 		};
 
-	static function withJumpTarget(jump:HlInstruction, target:String):HlInstruction
+	static function withJumpTarget(jump:HlInstruction, target:Int):HlInstruction
 		return switch jump {
 			case JumpSignedLess(left, right, _): HlInstruction.JumpSignedLess(left, right, target);
 			case JumpSignedLessOrEqual(left, right, _): HlInstruction.JumpSignedLessOrEqual(left, right, target);
@@ -1954,8 +1959,8 @@ class HlLower {
 		var destination = defineRegister(output, registers, registerTypes);
 		var leftReg = requireRegister(left, registers),
 			rightReg = requireRegister(right, registers);
-		var trueLabel = '__cmp_true_${output.id}',
-			endLabel = '__cmp_end_${output.id}';
+		var trueLabel = freshLabel(),
+			endLabel = freshLabel();
 		instructions.push(comparisonJump(operation, leftNull, rightNull, leftReg, rightReg, trueLabel));
 		instructions.push(HlInstruction.LoadBool(destination, false));
 		instructions.push(HlInstruction.Jump(endLabel));
@@ -1964,12 +1969,9 @@ class HlLower {
 		instructions.push(HlInstruction.Label(endLabel));
 	}
 
-	/** The label of block `id`, made once per id: functions share them, and a map keyed by them meets the same String. */
-	function blockLabel(id:Int):String {
-		while (blockLabels.length <= id)
-			blockLabels.push("block_" + blockLabels.length);
-		return blockLabels[id];
-	}
+	/** A label of the function being lowered that no block has: block `b` is label `b`. */
+	function freshLabel():Int
+		return nextLabel++;
 
 	function defineRegister(value:IrValue, registers:Array<Int>, types:Array<Int>):Int {
 		if (value.id < registers.length && registers[value.id] >= 0)
@@ -1991,8 +1993,6 @@ class HlLower {
 			instructions:Array<HlInstruction>):Void
 		instructions.push(HlInstruction.GlobalGet(destination, internStringLiteral(value)));
 
-	var enumConstantUses = 0;
-
 	/**
 	 * A constructor without fields denotes one value, so it is made the first time it is evaluated and kept in a global;
 	 * every later evaluation is a global load. Making it on first use needs no initialization order, and a global a patch
@@ -2001,9 +2001,8 @@ class HlLower {
 	function lowerEnumConstant(destination:Int, typeName:String, constructor:Int,
 			instructions:Array<HlInstruction>):Void {
 		var global = internEnumValue(typeName, constructor),
-			id = enumConstantUses++,
-			make = "__enum_make_" + id,
-			done = "__enum_done_" + id;
+			make = freshLabel(),
+			done = freshLabel();
 		instructions.push(HlInstruction.GlobalGet(destination, global));
 		instructions.push(HlInstruction.JumpNull(destination, make));
 		instructions.push(HlInstruction.Jump(done));
@@ -2012,8 +2011,6 @@ class HlLower {
 		instructions.push(HlInstruction.GlobalSet(global, destination));
 		instructions.push(HlInstruction.Label(done));
 	}
-
-	var rawArrayAccesses = 0;
 
 	/** Array and index pairs, as `arrayId:indexId`, already known to be in range at this point of the block being lowered. */
 	final provenInRange:Map<String, Bool> = [];
@@ -2070,9 +2067,8 @@ class HlLower {
 			indexRegister = requireRegister(index, registers),
 			key = '${array.id}:${index.id}';
 		if (!provenInRange.exists(key) && !(writes && validatedArrayAccesses.exists(key))) {
-			var id = rawArrayAccesses++,
-				outOfRange = '__array_out_of_range_$id',
-				inRange = '__array_in_range_$id',
+			var outOfRange = freshLabel(),
+				inRange = freshLabel(),
 				size = temporaryRegister(IrType.I32, registerTypes),
 				unused = temporaryRegister(IrType.Void, registerTypes);
 			instructions.push(HlInstruction.ArraySize(size, arrayRegister));
@@ -2141,8 +2137,8 @@ class HlLower {
 			// virtual type and a boxed value as its scalar type, so none of them matches an object class.
 			var actual = temporaryRegister(IrType.TypeRef, registerTypes),
 				result = defineRegister(output, registers, registerTypes),
-				yes = '__exact_true_${output.id}',
-				done = '__exact_done_${output.id}';
+				yes = freshLabel(),
+				done = freshLabel();
 			instructions.push(HlInstruction.GetType(actual, requireRegister(arguments[0], registers)));
 			instructions.push(HlInstruction.JumpEqual(actual, requireRegister(arguments[1], registers), yes));
 			instructions.push(HlInstruction.LoadBool(result, false));
@@ -2155,8 +2151,8 @@ class HlLower {
 		if (name == compiler.ir.IrReferenceIdentity.NAME) {
 			var pointers = identityPointers(arguments, instructions, registers, registerTypes);
 			var result = defineRegister(output, registers, registerTypes),
-				yes = '__reference_true_${output.id}',
-				done = '__reference_done_${output.id}';
+				yes = freshLabel(),
+				done = freshLabel();
 			instructions.push(HlInstruction.JumpEqual(pointers[0], pointers[1], yes));
 			instructions.push(HlInstruction.LoadBool(result, false));
 			instructions.push(HlInstruction.Jump(done));
@@ -2192,9 +2188,8 @@ class HlLower {
 			return false;
 		var destination = defineRegister(output, registers, registerTypes);
 		var args = [for (argument in arguments) requireRegister(argument, registers)];
-		var id = rawArrayAccesses++,
-			slow = "__runtime_slow_" + id,
-			done = "__runtime_done_" + id;
+		var slow = freshLabel(),
+			done = freshLabel();
 		var size = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.JumpNull(args[0], slow));
 		// The header is read through an object type laid out like it: one field access per header field. The fast path falls

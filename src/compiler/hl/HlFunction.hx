@@ -82,7 +82,7 @@ enum HlInstruction {
 	Unref(destination:Int, reference:Int);
 	Setref(reference:Int, source:Int);
 	RefOffset(destination:Int, reference:Int, index:Int);
-	Trap(destination:Int, target:String, preserveExceptionStack:Bool);
+	Trap(destination:Int, target:Int, preserveExceptionStack:Bool);
 	EndTrap(destination:Int, preserveExceptionStack:Bool);
 	GlobalGet(destination:Int, global:Int);
 	GlobalSet(global:Int, source:Int);
@@ -126,15 +126,15 @@ enum HlInstruction {
 	MakeEnum(destination:Int, constructor:Int, arguments:Array<Int>);
 	EnumIndex(destination:Int, value:Int);
 	EnumField(destination:Int, value:Int, constructor:Int, field:Int);
-	JumpSignedLessOrEqual(left:Int, right:Int, target:String);
-	JumpSignedLess(left:Int, right:Int, target:String);
+	JumpSignedLessOrEqual(left:Int, right:Int, target:Int);
+	JumpSignedLess(left:Int, right:Int, target:Int);
 
 	/** Jumps when `left` is below `right` as unsigned integers, so a negative `left` never jumps: one test for 0 <= left < right. */
-	JumpUnsignedLess(left:Int, right:Int, target:String);
+	JumpUnsignedLess(left:Int, right:Int, target:Int);
 
-	JumpNull(value:Int, target:String);
-	JumpEqual(left:Int, right:Int, target:String);
-	JumpTrue(condition:Int, target:String);
+	JumpNull(value:Int, target:Int);
+	JumpEqual(left:Int, right:Int, target:Int);
+	JumpTrue(condition:Int, target:Int);
 
 	/**
 	 * The complements of the jumps above, so a branch whose taken side is written next jumps to the other side. For integers the
@@ -142,27 +142,31 @@ enum HlInstruction {
 	 * (`JumpNotLess`) and "not greater or equal" (`JumpNotGreaterOrEqual`), which also jump when either side is NaN; the VM
 	 * compares those as floats, never as signed integers.
 	 */
-	JumpFalse(condition:Int, target:String);
+	JumpFalse(condition:Int, target:Int);
 
-	JumpSignedGreaterOrEqual(left:Int, right:Int, target:String);
+	JumpSignedGreaterOrEqual(left:Int, right:Int, target:Int);
 
 	/** The complement of `JumpUnsignedLess`: jumps unless `left` is below `right` as unsigned integers. */
-	JumpUnsignedGreaterOrEqual(left:Int, right:Int, target:String);
-	JumpSignedGreater(left:Int, right:Int, target:String);
+	JumpUnsignedGreaterOrEqual(left:Int, right:Int, target:Int);
+	JumpSignedGreater(left:Int, right:Int, target:Int);
 
-	JumpNotNull(value:Int, target:String);
-	JumpNotEqual(left:Int, right:Int, target:String);
-	JumpNotLess(left:Int, right:Int, target:String);
-	JumpNotGreaterOrEqual(left:Int, right:Int, target:String);
-	Jump(target:String);
+	JumpNotNull(value:Int, target:Int);
+	JumpNotEqual(left:Int, right:Int, target:Int);
+	JumpNotLess(left:Int, right:Int, target:Int);
+	JumpNotGreaterOrEqual(left:Int, right:Int, target:Int);
+	Jump(target:Int);
 
 	/**
 	 * A jump table on an Int register: to `targets[value]` when `0 <= value < targets.length`, else to the next instruction. HashLink
 	 * takes only forward offsets, so every target comes after the switch.
 	 */
-	Switch(value:Int, targets:Array<String>);
+	Switch(value:Int, targets:Array<Int>);
 
-	Label(name:String);
+	/**
+	 * A position jumps, traps and switches name by `id`, unique in its function. Lowering gives block `b` the label `b` and
+	 * numbers its other labels after the last block. The writer leaves a label out of the opcodes (`HlWriter.layout`).
+	 */
+	Label(id:Int);
 	Return(register:Int);
 	Throw(register:Int);
 	Rethrow(register:Int);

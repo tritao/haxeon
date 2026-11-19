@@ -610,16 +610,16 @@ class HlWriter {
 	 * relocations) uses these positions.
 	 */
 	public static function layout(opcodes:Array<HlInstruction>):Array<Int> {
-		var labels:Map<String, Int> = [], loopHeads:Map<String, Bool> = [];
+		var labels:Map<Int, Int> = [], loopHeads:Map<Int, Bool> = [];
 		for (index in 0...opcodes.length)
 			switch opcodes[index] {
-				case Label(name):
-					labels.set(name, index);
+				case Label(id):
+					labels.set(id, index);
 				default:
 			}
 		for (index in 0...opcodes.length) {
 			var target = jumpTarget(opcodes[index]);
-			if (target != null) {
+			if (target >= 0) {
 				var label = labels.get(target);
 				if (label != null && label <= index)
 					loopHeads.set(target, true);
@@ -629,7 +629,7 @@ class HlWriter {
 		for (instruction in opcodes) {
 			positions.push(written);
 			switch instruction {
-				case Label(name) if (!loopHeads.exists(name)):
+				case Label(id) if (!loopHeads.exists(id)):
 				default:
 					written++;
 			}
@@ -639,23 +639,23 @@ class HlWriter {
 	}
 
 	/** Every label `instruction` can transfer to: a jump's or trap's one, each of a switch's. */
-	public static function jumpTargets(instruction:HlInstruction):Array<String>
+	public static function jumpTargets(instruction:HlInstruction):Array<Int>
 		return switch instruction {
 			case Switch(_, targets): targets;
 			default:
 				var target = jumpTarget(instruction);
-				target == null ? [] : [target];
+				target < 0 ? [] : [target];
 		};
 
 	/** Whether `instruction` can transfer control to a label: `jumpTargets` is not empty, without building it. */
 	public static function jumps(instruction:HlInstruction):Bool
 		return switch instruction {
 			case Switch(_, targets): targets.length > 0;
-			default: jumpTarget(instruction) != null;
+			default: jumpTarget(instruction) >= 0;
 		};
 
-	/** The label a jump or trap names, or null for any other instruction (a switch names several: `jumpTargets`). */
-	public static function jumpTarget(instruction:HlInstruction):Null<String>
+	/** The label a jump or trap names, or -1 for any other instruction (a switch names several: `jumpTargets`). */
+	public static function jumpTarget(instruction:HlInstruction):Int
 		return switch instruction {
 			case JumpSignedLessOrEqual(_, _, target), JumpSignedLess(_, _, target), JumpUnsignedLess(_, _, target),
 				JumpNull(_, target), JumpEqual(_, _, target), JumpTrue(_, target), Jump(target), Trap(_, target, _),
@@ -663,16 +663,16 @@ class HlWriter {
 				JumpNotGreaterOrEqual(_, _, target), JumpSignedGreaterOrEqual(_, _, target),
 				JumpSignedGreater(_, _, target),
 				JumpUnsignedGreaterOrEqual(_, _, target): target;
-			default: null;
+			default: -1;
 		};
 
 	function writeFunction(fn:HlFunction):Void {
 		var positions = layout(fn.opcodes), count = fn.opcodes.length;
-		var labels:Map<String, Int> = [];
+		var labels:Map<Int, Int> = [];
 		for (index in 0...count)
 			switch fn.opcodes[index] {
-				case Label(name):
-					labels.set(name, positions[index]);
+				case Label(id):
+					labels.set(id, positions[index]);
 				default:
 			}
 		writeIndex(fn.type);
@@ -831,7 +831,7 @@ class HlWriter {
 	}
 
 	/** Lowers the instruction at `position` into `opcode` and the operands left in `operands`; nothing is allocated per instruction. */
-	function lowerInstruction(instruction:HlInstruction, position:Int, labels:Map<String, Int>):HlOpcode {
+	function lowerInstruction(instruction:HlInstruction, position:Int, labels:Map<Int, Int>):HlOpcode {
 		return switch instruction {
 			case Move(destination, source): {
 				put2(destination, source);
@@ -1236,10 +1236,11 @@ class HlWriter {
 		};
 	}
 
-	static function requireLabel(labels:Map<String, Int>, target:String):Int {
-		if (!labels.exists(target))
-			throw new InternalError('Unknown HashLink jump label "$target"');
-		return labels.get(target);
+	static function requireLabel(labels:Map<Int, Int>, target:Int):Int {
+		var position = labels.get(target);
+		if (position == null)
+			throw new InternalError('Unknown HashLink jump label $target');
+		return position;
 	}
 
 	function writeOpcode(opcode:HlOpcode, operands:Array<Int>):Void {

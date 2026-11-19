@@ -220,7 +220,7 @@ class HlValidator {
 				case Trap(destination, target, _):
 					requireRegister(fn, destination);
 					if (!labels.exists(target))
-						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+						throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 				case EndTrap(destination, _):
 					requireRegister(fn, destination);
 				case GlobalGet(destination, global):
@@ -337,7 +337,7 @@ class HlValidator {
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))
-						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+						throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 				case JumpSignedLess(left, right, target), JumpUnsignedLess(left, right, target),
 					JumpEqual(left, right, target), JumpNotEqual(left, right, target), JumpNotLess(left, right, target),
 					JumpNotGreaterOrEqual(left, right, target), JumpSignedGreaterOrEqual(left, right, target),
@@ -345,27 +345,27 @@ class HlValidator {
 					requireRegister(fn, left);
 					requireRegister(fn, right);
 					if (!labels.exists(target))
-						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+						throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 				case JumpNull(value, target), JumpNotNull(value, target):
 					requireRegister(fn, value);
 					if (!labels.exists(target))
-						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+						throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 				case JumpTrue(condition, target), JumpFalse(condition, target):
 					requireRegister(fn, condition);
 					if (!labels.exists(target))
-						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+						throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 				case Jump(target):
 					if (!labels.exists(target))
-						throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+						throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 				case Switch(value, targets):
 					requireRegister(fn, value);
 					if (targets.length == 0)
 						throw new InternalError('Empty switch in function ${fn.functionIndex}');
 					for (target in targets)
 						if (!labels.exists(target))
-							throw new InternalError('Unknown label "$target" in function ${fn.functionIndex}');
+							throw new InternalError('Unknown label $target in function ${fn.functionIndex}');
 						else if (labels.get(target) <= position)
-							throw new InternalError('Switch target "$target" is not after the switch in function ${fn.functionIndex}');
+							throw new InternalError('Switch target $target is not after the switch in function ${fn.functionIndex}');
 				case Label(_):
 				case Return(register):
 					requireRegister(fn, register);
@@ -383,17 +383,17 @@ class HlValidator {
 	 * closes it (inner traps counted; an inner handler runs with the outer trap still active). The fork's loader checks the
 	 * same (`hl_validate_trap_regions` in vendor/hashlink/src/code.c).
 	 */
-	static function validateTrapRegions(fn:HlFunction, labels:Map<String, Int>):Void {
+	static function validateTrapRegions(fn:HlFunction, labels:Map<Int, Int>):Void {
 		for (position in 0...fn.opcodes.length)
 			switch fn.opcodes[position] {
 				case Trap(_, target, _):
 					var handler = labels.get(target);
 					if (handler <= position)
-						throw new InternalError('Trap handler "$target" is not after its trap in function ${fn.functionIndex}');
+						throw new InternalError('Trap handler $target is not after its trap in function ${fn.functionIndex}');
 					var depthAt:Map<Int, Int> = [], work:Array<Int> = [], depths:Array<Int> = [];
 					function reach(at:Int, depth:Int):Void {
 						if (at <= position || at >= handler)
-							throw new InternalError('Instruction $at runs inside the trap at $position but is not between it and its handler "$target" '
+							throw new InternalError('Instruction $at runs inside the trap at $position but is not between it and its handler $target '
 								+ 'in function ${fn.functionIndex}');
 						if (!depthAt.exists(at)) {
 							depthAt.set(at, depth);
@@ -424,15 +424,15 @@ class HlValidator {
 			}
 	}
 
-	public static function collectLabels(fn:HlFunction):Map<String, Int> {
-		var labels = new Map<String, Int>();
+	public static function collectLabels(fn:HlFunction):Map<Int, Int> {
+		var labels = new Map<Int, Int>();
 		var position = 0;
 		for (instruction in fn.opcodes) {
 			switch instruction {
-				case Label(name):
-					if (labels.exists(name))
-						throw new InternalError('Duplicate label "$name" in function ${fn.functionIndex}');
-					labels.set(name, position);
+				case Label(id):
+					if (labels.exists(id))
+						throw new InternalError('Duplicate label $id in function ${fn.functionIndex}');
+					labels.set(id, position);
 					position++;
 				default:
 					position++;

@@ -18,7 +18,8 @@ import compiler.hl.HlFunction.HlInstruction;
 class HlRegisterAllocation {
 	// Scratch kept from one function to the next: lowering a program allocates each array once, at the size of its largest function.
 	final pinned:Array<Bool> = [];
-	final labels:Map<String, Int> = [];
+	/** The instruction of each label id, or -1. */
+	final labels:Array<Int> = [];
 	final starts:Array<Bool> = [];
 	final blockStarts:Array<Int> = [];
 	final blockOf:Array<Int> = [];
@@ -57,11 +58,13 @@ class HlRegisterAllocation {
 			}
 		var length = instructions.length;
 		// Blocks: a block starts at the first instruction, at a label and after any jump or exit.
-		labels.clear();
+		labels.resize(0);
 		for (index in 0...length)
 			switch instructions[index] {
-				case Label(name):
-					labels.set(name, index);
+				case Label(id):
+					while (labels.length <= id)
+						labels.push(-1);
+					labels[id] = index;
 				default:
 			}
 		fillFalse(starts, length + 1);
@@ -93,11 +96,11 @@ class HlRegisterAllocation {
 			switch instruction {
 				case Switch(_, targets):
 					for (target in targets)
-						addSuccessor(block, blockOf[labels.get(target)]);
+						addSuccessor(block, blockOf[labels[target]]);
 				default:
 					var target = HlWriter.jumpTarget(instruction);
-					if (target != null)
-						addSuccessor(block, blockOf[labels.get(target)]);
+					if (target >= 0)
+						addSuccessor(block, blockOf[labels[target]]);
 			}
 			var falls = switch instruction {
 				case Jump(_): false;
@@ -126,14 +129,13 @@ class HlRegisterAllocation {
 		fill(liveIn, blocks * words, 0);
 		fill(liveOut, blocks * words, 0);
 		fill(thrown, words, 0);
-		var usedBits = used, definedBits = defined, inBits = liveIn, outBits = liveOut, thrownBits = thrown;
 		var row = 0;
 		function note(register:Int, written:Bool):Void {
 			var word = row + (register >> 5), bit = 1 << (register & 31);
 			if (written)
-				definedBits[word] |= bit;
-			else if (definedBits[word] & bit == 0)
-				usedBits[word] |= bit;
+				defined[word] |= bit;
+			else if (defined[word] & bit == 0)
+				used[word] |= bit;
 		}
 		for (block in 0...blocks) {
 			row = block * words;
@@ -149,23 +151,23 @@ class HlRegisterAllocation {
 				for (edge in successorStart[block]...successorStart[block + 1]) {
 					var from = successors[edge] * words;
 					for (word in 0...words)
-						outBits[base + word] |= inBits[from + word];
+						liveOut[base + word] |= liveIn[from + word];
 				}
 				for (word in 0...words)
-					thrownBits[word] = 0;
+					thrown[word] = 0;
 				// What a handler protecting this block reads is live from its first instruction to its last.
 				if (handlers != null)
 					for (handler in handlers[block]) {
 						var from = handler * words;
 						for (word in 0...words) {
-							outBits[base + word] |= inBits[from + word];
-							thrownBits[word] |= inBits[from + word];
+							liveOut[base + word] |= liveIn[from + word];
+							thrown[word] |= liveIn[from + word];
 						}
 					}
 				for (word in 0...words) {
-					var at = base + word, next = usedBits[at] | (outBits[at] & ~definedBits[at]) | thrownBits[word];
-					if (next != inBits[at]) {
-						inBits[at] = next;
+					var at = base + word, next = used[at] | (liveOut[at] & ~defined[at]) | thrown[word];
+					if (next != liveIn[at]) {
+						liveIn[at] = next;
 						changed = true;
 					}
 				}
@@ -305,7 +307,7 @@ class HlRegisterAllocation {
 						active.push(handler);
 				switch instructions[index] {
 					case Trap(_, target, _):
-						handlerEdge = blockOf[labels.get(target)];
+						handlerEdge = blockOf[labels[target]];
 						reach(handlerEdge, stack);
 						stack.push(handlerEdge);
 					case EndTrap(_, _):

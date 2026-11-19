@@ -29,27 +29,27 @@ class NestedTrapMain {
 		];
 		code.functions = [
 			new HlFunction(3, 1, [1, 2, 2], [
-				Trap(1, "outer", false),
-				Trap(2, "inner", false),
+				Trap(1, 1, false),
+				Trap(2, 0, false),
 				LoadInt(0, 0),
 				EndTrap(2, false),
 				EndTrap(1, false),
 				Return(0),
-				Label("inner"),
+				Label(0),
 				LoadInt(0, 1),
 				EndTrap(1, false),
 				Return(0),
-				Label("outer"),
+				Label(1),
 				LoadInt(0, 2),
 				Return(0)
 			]),
 			new HlFunction(3, 2, [1, 2, 1, 0], [
-				Trap(1, "caught", false),
+				Trap(1, 2, false),
 				Call0(0, 1),
 				LoadInt(2, 3),
 				ToDyn(1, 2),
 				Throw(1),
-				Label("caught"),
+				Label(2),
 				LoadInt(0, 4),
 				Call1(3, 0, 0),
 				Return(0)

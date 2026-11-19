@@ -72,22 +72,22 @@ class PatchOpcodeTests {
 			{instruction: GlobalSet(128, 0), opcode: 37, operands: [128, 0]},
 			{instruction: FieldGet(0, 1, 2), opcode: 38, operands: [0, 1, 2]},
 			{instruction: FieldSet(0, 1, 2), opcode: 39, operands: [0, 1, 2]},
-			{instruction: JumpTrue(0, "target"), opcode: 44, operands: [0, -2]},
-			{instruction: JumpFalse(0, "target"), opcode: 45, operands: [0, -2]},
-			{instruction: JumpNull(0, "target"), opcode: 46, operands: [0, -2]},
-			{instruction: JumpNotNull(0, "target"), opcode: 47, operands: [0, -2]},
-			{instruction: JumpSignedGreaterOrEqual(0, 1, "target"), opcode: 49, operands: [0, 1, -2]},
-			{instruction: JumpSignedGreater(0, 1, "target"), opcode: 50, operands: [0, 1, -2]},
-			{instruction: JumpUnsignedGreaterOrEqual(0, 1, "target"), opcode: 53, operands: [0, 1, -2]},
-			{instruction: JumpNotLess(0, 1, "target"), opcode: 54, operands: [0, 1, -2]},
-			{instruction: JumpNotGreaterOrEqual(0, 1, "target"), opcode: 55, operands: [0, 1, -2]},
-			{instruction: JumpNotEqual(0, 1, "target"), opcode: 57, operands: [0, 1, -2]},
-			{instruction: Switch(0, ["after"]), opcode: 70, operands: [0, 1, 0, 0]},
-			{instruction: JumpSignedLess(0, 1, "target"), opcode: 48, operands: [0, 1, -2]},
-			{instruction: JumpSignedLessOrEqual(0, 1, "target"), opcode: 51, operands: [0, 1, -2]},
-			{instruction: JumpUnsignedLess(0, 1, "target"), opcode: 52, operands: [0, 1, -2]},
-			{instruction: JumpEqual(0, 1, "target"), opcode: 56, operands: [0, 1, -2]},
-			{instruction: Jump("target"), opcode: 58, operands: [-2]},
+			{instruction: JumpTrue(0, 2), opcode: 44, operands: [0, -2]},
+			{instruction: JumpFalse(0, 2), opcode: 45, operands: [0, -2]},
+			{instruction: JumpNull(0, 2), opcode: 46, operands: [0, -2]},
+			{instruction: JumpNotNull(0, 2), opcode: 47, operands: [0, -2]},
+			{instruction: JumpSignedGreaterOrEqual(0, 1, 2), opcode: 49, operands: [0, 1, -2]},
+			{instruction: JumpSignedGreater(0, 1, 2), opcode: 50, operands: [0, 1, -2]},
+			{instruction: JumpUnsignedGreaterOrEqual(0, 1, 2), opcode: 53, operands: [0, 1, -2]},
+			{instruction: JumpNotLess(0, 1, 2), opcode: 54, operands: [0, 1, -2]},
+			{instruction: JumpNotGreaterOrEqual(0, 1, 2), opcode: 55, operands: [0, 1, -2]},
+			{instruction: JumpNotEqual(0, 1, 2), opcode: 57, operands: [0, 1, -2]},
+			{instruction: Switch(0, [1]), opcode: 70, operands: [0, 1, 0, 0]},
+			{instruction: JumpSignedLess(0, 1, 2), opcode: 48, operands: [0, 1, -2]},
+			{instruction: JumpSignedLessOrEqual(0, 1, 2), opcode: 51, operands: [0, 1, -2]},
+			{instruction: JumpUnsignedLess(0, 1, 2), opcode: 52, operands: [0, 1, -2]},
+			{instruction: JumpEqual(0, 1, 2), opcode: 56, operands: [0, 1, -2]},
+			{instruction: Jump(2), opcode: 58, operands: [-2]},
 			{instruction: ToDyn(0, 1), opcode: 59, operands: [0, 1]},
 			{instruction: GetType(0, 1), opcode: 85, operands: [0, 1]},
 			{instruction: ToSFloat(0, 1), opcode: 60, operands: [0, 1]},
@@ -99,14 +99,14 @@ class PatchOpcodeTests {
 			{instruction: Setref(0, 1), opcode: 89, operands: [0, 1]},
 			{instruction: RefOffset(0, 1, 2), opcode: 97, operands: [0, 1, 2]},
 			{instruction: ToVirtual(0, 1), opcode: 65, operands: [0, 1]},
-			{instruction: Label("other"), opcode: 66, operands: []},
+			{instruction: Label(0), opcode: 66, operands: []},
 			{instruction: Return(0), opcode: 67, operands: [0]},
 			{instruction: Throw(0), opcode: 68, operands: [0]},
 			{instruction: Rethrow(0), opcode: 69, operands: [0]},
 			{instruction: NullCheck(0), opcode: 71, operands: [0]},
-			{instruction: Trap(0, "target", false), opcode: 72, operands: [0, -2]},
+			{instruction: Trap(0, 2, false), opcode: 72, operands: [0, -2]},
 			{instruction: EndTrap(0, false), opcode: 73, operands: [0]},
-			{instruction: Trap(0, "target", true), opcode: 102, operands: [0, -2]},
+			{instruction: Trap(0, 2, true), opcode: 102, operands: [0, -2]},
 			{instruction: EndTrap(0, true), opcode: 103, operands: [0]},
 			{instruction: GetI8(0, 1, 2), opcode: 74, operands: [0, 1, 2]},
 			{instruction: GetI16(0, 1, 2), opcode: 75, operands: [0, 1, 2]},
@@ -144,12 +144,12 @@ class PatchOpcodeTests {
 				case Switch(_, _): true;
 				default: false;
 			};
-			var code = module(forward ? [fixture.instruction, Label("after"), Return(0)] : loopHead == null ? [
-				Label("target"),
+			var code = module(forward ? [fixture.instruction, Label(1), Return(0)] : loopHead == null ? [
+				Label(2),
 				fixture.instruction,
 				Return(0)
 			] : [
-				Label("target"),
+				Label(2),
 				fixture.instruction,
 				Jump(loopHead),
 				Return(0)
@@ -159,7 +159,7 @@ class PatchOpcodeTests {
 				native = Runtime.inspectPatch(bytes);
 			// The leading label is written only when the fixture jumps back to it (`HlWriter.layout`).
 			var actual = decoded.functions[0].instructions,
-				at = forward || compiler.hl.HlWriter.jumpTarget(fixture.instruction) == null ? 0 : 1,
+				at = forward || compiler.hl.HlWriter.jumpTarget(fixture.instruction) < 0 ? 0 : 1,
 				tail = loopHead == null ? 1 : 2;
 			if (native.functionCount != 1
 				|| native.baseRevision != 1
@@ -318,11 +318,11 @@ class PatchOpcodeTests {
 		// Each path ends its trap, but the end-trap lies after the handler, outside the try region the JIT tracks in
 		// instruction order, where emitting it aborts the process.
 		var trapPastHandler:Array<HlInstruction> = [
-			Trap(0, "handler", false),
-			Jump("after"),
-			Label("handler"),
+			Trap(0, 3, false),
+			Jump(1),
+			Label(3),
 			Return(0),
-			Label("after"),
+			Label(1),
 			EndTrap(0, false),
 			Return(0)
 		];
@@ -339,7 +339,7 @@ class PatchOpcodeTests {
 		if (!trapRejected || Runtime.liveRevision(loaded) != 1 || Runtime.callInt(loaded, 70000) != 42)
 			throw "An end-trap outside its try region changed live state";
 		var mismatchedCleanup:Array<HlInstruction> = [
-			Trap(0, "handler", true), EndTrap(0, false), Return(0), Label("handler"), Return(0)
+			Trap(0, 3, true), EndTrap(0, false), Return(0), Label(3), Return(0)
 		];
 		code.functions = [new HlFunction(2, 0, [1], mismatchedCleanup)];
 		var mismatchedBytes = HlPatchWriter.encode(code, moduleId, [0], [0 => 70000], 1, 2, 1, 0, 0, 3),

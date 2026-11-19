@@ -15,10 +15,9 @@ class HlFunctionEquality {
 		for (index in 0...a.registers.length)
 			if (a.registers[index] != b.registers[index])
 				return 'register $index is type ${a.registers[index]} and ${b.registers[index]}';
-		// Jump targets and labels are strings; lowering again numbers its generated ones from a counter of its own, so two functions
-		// are the same when their labels correspond one to one.
-		var forward:Map<String, String> = [],
-			backward:Map<String, String> = [];
+		// Two functions are the same when their labels correspond one to one, whatever numbers they have.
+		var forward:Map<Int, Int> = [],
+			backward:Map<Int, Int> = [];
 		if (a.opcodes.length != b.opcodes.length)
 			return 'opcode counts ${a.opcodes.length} and ${b.opcodes.length}';
 		for (index in 0...a.opcodes.length)
@@ -45,8 +44,8 @@ class HlFunctionEquality {
 	}
 
 	/** Compare every opcode explicitly; a new constructor must add its operand comparison here. */
-	static function same(a:HlInstruction, b:HlInstruction, forward:Map<String, String>,
-			backward:Map<String, String>):Bool {
+	static function same(a:HlInstruction, b:HlInstruction, forward:Map<Int, Int>,
+			backward:Map<Int, Int>):Bool {
 		return switch a {
 			case Move(destination, source):
 				switch b {
@@ -519,7 +518,7 @@ class HlFunctionEquality {
 		return true;
 	}
 
-	static function sameLabel(a:String, b:String, forward:Map<String, String>, backward:Map<String, String>):Bool {
+	static function sameLabel(a:Int, b:Int, forward:Map<Int, Int>, backward:Map<Int, Int>):Bool {
 		var mapped = forward.get(a), origin = backward.get(b);
 		if (mapped == null && origin == null) {
 			forward.set(a, b);

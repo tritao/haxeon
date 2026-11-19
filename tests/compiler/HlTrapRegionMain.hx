@@ -46,12 +46,19 @@ class HlTrapRegionMain {
 						moved = index;
 					default:
 				}
-			var instruction = fn.opcodes[moved];
-			fn.opcodes[moved] = HlInstruction.Jump("moved_out");
-			fn.opcodes.insert(moved + 1, HlInstruction.Label("moved_back"));
-			fn.opcodes.push(HlInstruction.Label("moved_out"));
+			var instruction = fn.opcodes[moved], back = 0;
+			for (opcode in fn.opcodes)
+				switch opcode {
+					case Label(id) if (id >= back):
+						back = id + 1;
+					default:
+				}
+			var out = back + 1;
+			fn.opcodes[moved] = HlInstruction.Jump(out);
+			fn.opcodes.insert(moved + 1, HlInstruction.Label(back));
+			fn.opcodes.push(HlInstruction.Label(out));
 			fn.opcodes.push(instruction);
-			fn.opcodes.push(HlInstruction.Jump("moved_back"));
+			fn.opcodes.push(HlInstruction.Jump(back));
 			// One debug location per instruction: the moved one keeps its own.
 			if (fn.debugLocations.length > 0) {
 				var location = fn.debugLocations[moved];

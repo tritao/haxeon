@@ -48,8 +48,8 @@ class LiveKeptCheckMain {
 		Sys.println("PASS: a wrong kept function is reported by name");
 	}
 	static function checkOpcodeComparison():Void {
-		var left:Array<HlInstruction> = [Jump("a"), Label("a"), CallN(0, 3, [1, 2]), LoadBool(0, true)];
-		var right:Array<HlInstruction> = [Jump("renamed"), Label("renamed"), CallN(0, 3, [1, 2]), LoadBool(0, true)];
+		var left:Array<HlInstruction> = [Jump(0), Label(0), CallN(0, 3, [1, 2]), LoadBool(0, true)];
+		var right:Array<HlInstruction> = [Jump(1), Label(1), CallN(0, 3, [1, 2]), LoadBool(0, true)];
 		var functionOf = function(ops:Array<HlInstruction>) return new HlFunction(0, 0, [], ops);
 		var compare = function(ops:Array<HlInstruction>) return compiler.hl.HlFunctionEquality
 			.difference(functionOf(left), functionOf(ops));
@@ -59,20 +59,20 @@ class LiveKeptCheckMain {
 		if (compare(right) == null)
 			throw "A changed array operand must compare unequal";
 		right[2] = CallN(0, 3, [1, 2]);
-		right[1] = Label("other");
+		right[1] = Label(2);
 		if (compare(right) == null)
 			throw "Label renaming must be consistent";
-		right[1] = Label("renamed");
+		right[1] = Label(1);
 		right[3] = LoadBool(0, false);
 		if (compare(right) == null)
 			throw "A changed boolean operand must compare unequal";
 		right[3] = LoadInt(0, 1);
 		if (compare(right) == null)
 			throw "Different constructors must compare unequal";
-		if (compiler.hl.HlFunctionEquality.difference(functionOf([Label("a"), Label("b")]),
+		if (compiler.hl.HlFunctionEquality.difference(functionOf([Label(0), Label(3)]),
 			functionOf([
-				Label("same"),
-				Label("same")
+				Label(4),
+				Label(4)
 			])) == null)
 			throw "Label renaming must be one-to-one";
 		Sys.println("PASS: typed opcode comparison preserves operands and label bijections");

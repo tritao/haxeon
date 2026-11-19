@@ -477,13 +477,13 @@ class TestMain {
 
 		var unknownLabel = baseControlFlowModule();
 		unknownLabel.functions = [
-			new HlFunction(2, 0, [1, 1], [JumpSignedLessOrEqual(0, 1, "missing"), Return(0),])
+			new HlFunction(2, 0, [1, 1], [JumpSignedLessOrEqual(0, 1, 2), Return(0),])
 		];
-		expectError(unknownLabel, 'Unknown label "missing" in function 0');
+		expectError(unknownLabel, 'Unknown label 2 in function 0');
 
 		var duplicateLabel = baseControlFlowModule();
-		duplicateLabel.functions = [new HlFunction(2, 0, [1], [Label("same"), Label("same"), Return(0),])];
-		expectError(duplicateLabel, 'Duplicate label "same" in function 0');
+		duplicateLabel.functions = [new HlFunction(2, 0, [1], [Label(0), Label(0), Return(0),])];
+		expectError(duplicateLabel, 'Duplicate label 0 in function 0');
 		Sys.println("PASS: malformed module is rejected before serialization");
 
 		var patchCode = baseControlFlowModule();
@@ -495,10 +495,10 @@ class TestMain {
 			new HlFunction(4, 1, [1, 3, 3], [
 				LoadInt(0, 0),
 				ToDyn(1, 0),
-				Trap(2, "catch", false),
+				Trap(2, 1, false),
 				EndTrap(2, false),
 				Return(0),
-				Label("catch"),
+				Label(1),
 				Throw(2)
 			], [
 				for (line in 10...17)
