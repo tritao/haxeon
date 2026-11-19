@@ -270,9 +270,6 @@ HashLink):
   Lambda.count(values); values.push(1);`): `E1003`. Haxeon names and types a generic call's specialization when it types the
   call, so it cannot follow a variable fixed later; one that only the argument's own value carries (`Lambda.empty([])`) is
   Dynamic, as in Haxe. The differential case `lambda-unfixed-before-call` records it.
-- Declaring a local again in the same block (`var x = 1; ...; var x = "ten";`): `E1001` (Duplicate local). Haxe accepts
-  it, the second declaration shadowing the first for the code after it; a nested block works in Haxeon. The differential
-  case `local-redeclared-same-block` records it.
 - Reading an `Array` element at or past its length (`var a:Array<Null<Bool>> = []; a[3]`): HashLink throws "Array index
   out of bounds". Haxe gives null there (the type's default value for a basic type on static targets). Writing past the
   end grows the array, as in Haxe. Found on 2026-11-19; the Wasm backends are not checked yet.
@@ -293,6 +290,10 @@ value stays null), and a warning can point out a surprising case.
   the rule, so it is due to become a warning.
 - A duplicate switch case is `E1020` ("Duplicate switch case"); Haxe warns that the case is unused and compiles. This
   one does not meet the rule either.
+- Two parameters of one function or lambda with the same name are `E1001` ("Duplicate parameter"); Haxe lets the last
+  one win. Nor does this meet the rule, but it is almost always a mistake, and Rust rejects it too. Declaring a local
+  again in the same block is allowed, as in Haxe: the later declaration shadows the earlier for the code after it
+  (`local-redeclared-same-block`).
 
 An unannotated field's type is its initializer's, and an unannotated function's result and arguments are what its body
 gives them, typed when something first needs them, as in Haxe: the first value `return` fixes the result, later ones must

@@ -1,14 +1,12 @@
 package compiler.types.analysis;
 
 import compiler.core.InternalError;
-import compiler.types.Type.CompilerType;
 import compiler.core.Source.SourceSpan;
-import compiler.core.Diagnostic;
-import compiler.core.Diagnostic.CompileError;
-import compiler.types.TypeRelations;
-import compiler.types.TypedAst.TypedExpression;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstStatement;
+import compiler.types.Type.CompilerType;
+import compiler.types.TypeRelations;
+import compiler.types.TypedAst.TypedExpression;
 
 /** Resolved local binding identity and its declared semantic type. */
 /** A local declared as a function that is never reassigned, so a call through it runs exactly this body. */
@@ -315,6 +313,15 @@ class Scope {
 	}
 
 
+	/**
+	 * Whether this scope itself, not an enclosing one, defines `name`. A local may be declared again in the same block, the
+	 * later declaration shadowing the earlier, as in Haxe; a pattern may not bind a name twice.
+	 */
+	public function definesHere(name:String):Bool {
+		var own = definitions;
+		return own != null && own.named(name) != null;
+	}
+
 	/** The binding of the declaration with key `declaration` (`BindingWalker.key`), or null when none was defined. */
 	public function bindingOf(declaration:String):Null<LocalBinding> {
 		var table = root.byDeclaration;
@@ -324,8 +331,6 @@ class Scope {
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String,
 			receiver:Bool = false,
 			?localFunction:LocalFunction, ?declaration:String):LocalBinding {
-		if (definitions != null && definitions.named(name) != null)
-			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:LocalBinding = {
 			source: name,
 			declaration: declaration == null ? BindingWalker.key(name, span) : declaration,

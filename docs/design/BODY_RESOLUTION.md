@@ -182,6 +182,11 @@ is resolved once and kept with its syntax (`SyntaxResolutions`), and the context
 resolution: no local is declared there. Byte-identical on all 638 programs and the self-compile; allocation and
 main-thread instructions as before step 4.3.
 
+Step 4.4 is done, and with it the plan. A local may be declared again in the same block, as in Haxe and Rust: the
+resolver already scoped it so, and `Scope.define` no longer rejects it. The differential case
+`local-redeclared-same-block` agrees with Haxe. Two duplicates stay errors: two parameters of one function or lambda with
+the same name (`E1001`; Haxe lets the last win, Rust rejects it), and a pattern binding a name twice (`E1019`, as Haxe).
+
 ## Step 4: the typer reads locals by binding
 
 **Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:

@@ -110,6 +110,7 @@ class ClosureTyper {
 		if (expectedFunction != null && expectedFunction.arguments.length != arguments.length)
 			fail("E1008", 'Lambda expects ${expectedFunction.arguments.length} arguments, got ${arguments.length}',
 				span);
+		BodyTyper.rejectDuplicateParameters(arguments);
 		var lambdaArguments:Array<{name:String, type:CompilerType}> = [],
 			lambdaScope = new Scope();
 		for (i in 0...arguments.length) {

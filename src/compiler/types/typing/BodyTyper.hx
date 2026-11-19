@@ -279,6 +279,7 @@ class BodyTyper implements BodyTyping {
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
 		// Resolved again inside the body: with no substitutions given, the body's own context supplies them.
+		rejectDuplicateParameters(fn.arguments);
 		var bodyArgumentTypes = argumentTypesOf(declaration, substitutions);
 		for (index in 0...fn.arguments.length) {
 			var argument = fn.arguments[index], type = bodyArgumentTypes[index];
@@ -548,6 +549,21 @@ class BodyTyper implements BodyTyping {
 	function settleMonomorphs(frame:MonomorphFrame, statements:Array<TypedStatement>):Array<TypedStatement> {
 		var map = settleFrame(frame);
 		return map == null ? statements : map.statements(statements);
+	}
+
+	/**
+	 * A function or lambda may not name two parameters alike. Haxe lets the last one win; that is almost always a mistake,
+	 * so Haxeon reports it, as Rust does.
+	 */
+	public static function rejectDuplicateParameters(arguments:Array<compiler.syntax.Ast.AstArgument>):Void {
+		var seen:Map<String, Bool> = [];
+		for (argument in arguments) {
+			if (argument.name == "_")
+				continue;
+			if (seen.exists(argument.name))
+				fail("E1001", 'Duplicate parameter "${argument.name}"', argument.span);
+			seen.set(argument.name, true);
+		}
 	}
 
 	static function requiredInitializer(field:compiler.syntax.Ast.AstField):AstExpression {
@@ -1353,6 +1369,8 @@ class BodyTyper implements BodyTyping {
 	function declarePatternName(name:String, type:CompilerType, span:SourceSpan,
 			scope:Scope):compiler.types.analysis.Scope.LocalBinding {
 		rejectMatchPatternVariable(span);
+		if (scope.definesHere(name))
+			fail("E1019", 'Variable $name is bound multiple times', span);
 		var binding = scope.define(name, type, span);
 		var recorded = patternNames;
 		if (recorded != null)
