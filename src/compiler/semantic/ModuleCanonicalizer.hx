@@ -507,11 +507,19 @@ class ModuleCanonicalizer {
 					valueName
 				]), span);
 			case Switch(expression, cases, defaultBranch, hasDefault, span):
+				// The values of one `case A, B:` share their statements, and still do once canonical (`StatementTyper.typeSwitch`).
+				var parsed:Null<Array<AstStatement>> = null, canonical:Array<AstStatement> = [];
 				Switch(canonicalExpression(expression, module, entry, locals, aliases), [for (switchCase in cases)
 					{
 						value:canonicalExpression(switchCase.value, module, entry, locals, aliases),
 							guard:canonicalOptionalExpression(switchCase.guard, module, entry, locals, aliases),
-							statements:canonicalBlock(switchCase.statements, module, entry, locals, aliases),
+							statements:{
+							if (switchCase.statements != parsed) {
+								parsed = switchCase.statements;
+								canonical = canonicalBlock(switchCase.statements, module, entry, locals, aliases);
+							}
+						canonical;
+						},
 							span:switchCase.span
 					}], canonicalBlock(defaultBranch, module, entry, locals, aliases), hasDefault,
 						span);

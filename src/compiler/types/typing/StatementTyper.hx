@@ -922,6 +922,14 @@ class StatementTyper {
 		var typedCases:Array<TypedSwitchCase> = [],
 			caseScopes:Array<Scope> = [],
 			seenCases:Map<String, Bool> = [];
+		// `case A, B:` is one case per value sharing its statements. Values that bind nothing type them once: the case's scope
+		// then differs only by its guard, which they share too, and the IR lowers the shared body once.
+		var shared:Null<{
+			statements:Array<AstStatement>,
+			guard:Null<TypedExpression>,
+			body:Array<TypedStatement>,
+			scope:Scope
+		}> = null;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
 				classified = tupleTypes == null ? bodyTyper.switchCasePattern(switchCase.value, typedExpression.type,
@@ -934,14 +942,30 @@ class StatementTyper {
 					|| arrayPattern != null ? typedExpression : pattern == null ? typeCaseConstant(classified.value,
 					typedExpression.type, constantType,
 					scope) : pattern.value;
-			var parsedGuard = switchCase.guard,
+			var bindsNothing = subjectBinding == null && arrayPattern == null
+				&& (pattern == null || pattern.bindings.length == 0),
+				reuse = bindsNothing && shared != null && shared.statements == switchCase.statements ? shared : null;
+			var typedGuard:Null<TypedExpression>, typedBody:Array<TypedStatement>;
+			if (reuse != null) {
+				typedGuard = reuse.guard;
+				typedBody = reuse.body;
+				caseScope = reuse.scope;
+			} else {
+				var parsedGuard = switchCase.guard;
 				typedGuard = parsedGuard == null
 					? null : bodyTyper.coerce(bodyTyper.typeExpression(parsedGuard, caseScope),
 					TBool, "switch guard", "E1003");
-			if (typedGuard != null)
-				caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
-			var typedBody = bodyTyper.typeStatements(switchCase.statements, caseScope, result),
-				constructorIndex = pattern == null ? -1 : pattern.index,
+				if (typedGuard != null)
+					caseScope = FlowAnalysis.narrowedScope(caseScope, typedGuard, true, session.isPureCall);
+				typedBody = bodyTyper.typeStatements(switchCase.statements, caseScope, result);
+			}
+			shared = bindsNothing ? {
+				statements: switchCase.statements,
+				guard: typedGuard,
+				body: typedBody,
+				scope: caseScope
+			} : null;
+			var constructorIndex = pattern == null ? -1 : pattern.index,
 				enumName:Null<String> = pattern == null ? null : pattern.enumName,
 				bindings:Array<TypedSwitchBinding> = pattern == null ? [] : pattern.bindings,
 				predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;

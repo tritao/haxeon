@@ -1084,17 +1084,33 @@ class IrGenerator {
 						tuple = storeSwitchSubject(switchName, expression, builder, localTypes),
 						exits:Array<CfgBlock> = [];
 					var arms = [for (switchCase in cases) switchCase.arm];
+					// One `case A, B:` is a case per value with one typed body (`StatementTyper.typeSwitch`): the first lowers it in a
+					// block of its own and the others jump there.
+					var sharedBody:Null<Array<TypedStatement>> = null, sharedBlock:Null<CfgBlock> = null;
+					function lowerCaseBody(index:Int):Void {
+						var statements = cases[index].statements;
+						if (statements == sharedBody && sharedBlock != null) {
+							builder.jump(sharedBlock);
+							return;
+						}
+						if (index + 1 < cases.length && cases[index + 1].statements == statements) {
+							var block = builder.createBlock();
+							builder.jump(block);
+							builder.select(block);
+							sharedBody = statements;
+							sharedBlock = block;
+						}
+						lowerStatements(statements, builder, localTypes, arms[index].span.end);
+						if (!builder.isTerminated())
+							exits.push(builder.currentBlock());
+					}
 					var tablePlan = switchTablePlan(expression.type, arms, true);
 					if (tablePlan != null) {
 						// Arms that name constructors or integer constants: one jump table (`lowerTableSwitch`).
 						var defaultBlock = builder.createBlock();
 						lowerTableSwitch(tablePlan, arms, switchName, switchType,
 							defaultBlock, true,
-							builder, localTypes, index -> {
-								lowerStatements(cases[index].statements, builder, localTypes, arms[index].span.end);
-								if (!builder.isTerminated())
-									exits.push(builder.currentBlock());
-							});
+							builder, localTypes, lowerCaseBody);
 						builder.select(defaultBlock);
 						if (!hasDefault && tablePlan.catchAll < 0 && isNullableEnumType(expression.type))
 							throwUnmatchedNull(builder);
@@ -1214,9 +1230,7 @@ class IrGenerator {
 								builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 								builder.select(bodyBlock);
 							}
-							lowerStatements(switchCase.statements, builder, localTypes, arm.span.end);
-							if (!builder.isTerminated())
-								exits.push(builder.currentBlock());
+							lowerCaseBody(caseIndex);
 							checkBlock = nextBlock;
 						}
 						builder.select(checkBlock);
