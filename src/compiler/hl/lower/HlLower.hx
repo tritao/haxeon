@@ -782,7 +782,10 @@ class HlLower {
 		for (block in fn.blocks)
 			if (block.id >= nextLabel)
 				nextLabel = block.id + 1;
-		var nonNull = new compiler.ir.IrNonNullFacts(fn, true), exactTypes = new compiler.ir.IrExactTypeFacts(fn);
+		// Both read the function as it is, so they share its graph.
+		var graph = new compiler.ir.IrGraph(fn),
+			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph),
+			exactTypes = new compiler.ir.IrExactTypeFacts(fn, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
 		var registers = valueRegisters;

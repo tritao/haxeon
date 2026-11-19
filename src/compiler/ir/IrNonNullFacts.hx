@@ -16,9 +16,10 @@ class IrNonNullFacts {
 		return false;
 	}
 
-	public function new(fn:IrFunction, ?checkedDereferences:Bool = false) {
+	/** `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function. */
+	public function new(fn:IrFunction, ?checkedDereferences:Bool = false, ?graph:IrGraph) {
 		if (hasReceiver(fn))
-			new NonNullFlow(fn, checkedDereferences, proven).run();
+			new NonNullFlow(fn, checkedDereferences, proven, graph).run();
 	}
 
 	public function has(block:Int, index:Int):Bool {
@@ -61,11 +62,11 @@ private class NonNullFlow {
 
 	var hasRows = false;
 
-	public function new(fn:IrFunction, checkedDereferences:Bool, proven:Array<Null<Array<Int>>>) {
+	public function new(fn:IrFunction, checkedDereferences:Bool, proven:Array<Null<Array<Int>>>, ?graph:IrGraph) {
 		this.fn = fn;
 		this.checkedDereferences = checkedDereferences;
 		this.proven = proven;
-		graph = new IrGraph(fn);
+		this.graph = graph ?? new IrGraph(fn);
 	}
 
 	public function run():Void {

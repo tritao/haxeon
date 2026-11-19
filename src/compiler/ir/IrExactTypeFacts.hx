@@ -19,8 +19,9 @@ class IrExactTypeFacts {
 	final graph:IrGraph;
 	final facts:Array<{block:Int, value:Int, type:String}> = [];
 
-	public function new(fn:IrFunction) {
-		graph = new IrGraph(fn);
+	/** `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function. */
+	public function new(fn:IrFunction, ?graph:IrGraph) {
+		this.graph = graph ?? new IrGraph(fn);
 		var definitions:Map<Int, IrInstruction> = [];
 		for (block in fn.blocks)
 			for (located in block.instructions) {
