@@ -65,6 +65,75 @@ class BodyResolution {
 	inline function get_length():Int
 		return events.length;
 
+	/** Each loop's references, by the loop's position: `[first, end)` in the entries (`writesInLoop`). */
+	final loopFirst:Map<Int, Int> = [];
+
+	final loopEnd:Map<Int, Int> = [];
+
+	/** Called while recording (`of`): the loop at `position` holds the entries from `first` to the last added. */
+	public function recordLoop(position:Int, first:Int):Void {
+		loopFirst.set(position, first);
+		loopEnd.set(position, events.length);
+	}
+
+	/**
+	 * The declarations the loop at `position` (a `while`, `do`, `for` or comprehension) writes, by declaration key, lambdas
+	 * in it included, as `AssignedDeclarations` finds them; null when the body has no such loop (syntax the typer built).
+	 */
+	public function writesInLoop(position:Int):Null<Map<String, Bool>> {
+		var first = loopFirst.get(position), end = loopEnd.get(position);
+		if (first == null || end == null)
+			return null;
+		var written:Map<String, Bool> = [];
+		for (index in first...end)
+			if (events[index] == Write && declarations[index] >= 0 && names[index].indexOf(".") < 0)
+				written.set(declarationKeys[declarations[index]], true);
+		return written;
+	}
+
+	/** Each lambda's entries and declarations, by the lambda's position (`lambdaFacts`). */
+	final lambdas:Map<Int, {first:Int, end:Int, firstDeclaration:Int, endDeclaration:Int}> = [];
+
+	/** Called while recording (`of`): the lambda at `position` holds the entries and declarations made since. */
+	public function recordLambda(position:Int, first:Int, firstDeclaration:Int):Void
+		lambdas.set(position, {
+			first: first,
+			end: events.length,
+			firstDeclaration: firstDeclaration,
+			endDeclaration: declarationKeys.length
+		});
+
+	/**
+	 * What the lambda at `position` sees of the names it does not declare, as `FreeVariables` finds them (`free`: by the local a
+	 * reference names, the part before any dot; `freeAssigned`: those it assigns directly), and the declarations of its own it
+	 * writes, as `AssignedDeclarations` finds them; null when the body has no such lambda.
+	 */
+	public function lambdaFacts(position:Int):Null<{
+		free:Map<String, Bool>,
+		freeAssigned:Map<String, Bool>,
+		assigned:Map<String, Bool>
+	}> {
+		var lambda = lambdas.get(position);
+		if (lambda == null)
+			return null;
+		var free:Map<String, Bool> = [], freeAssigned:Map<String, Bool> = [], assigned:Map<String, Bool> = [];
+		for (index in lambda.first...lambda.end) {
+			var event = events[index];
+			if (event == Declare)
+				continue;
+			var declaration = declarations[index],
+				name = names[index],
+				own = declaration >= lambda.firstDeclaration && declaration < lambda.endDeclaration;
+			if (!own) {
+				free.set(BindingWalker.rootOf(name), true);
+				if (event == Write && name.indexOf(".") < 0)
+					freeAssigned.set(name, true);
+			} else if (event == Write && name.indexOf(".") < 0)
+				assigned.set(declarationKeys[declaration], true);
+		}
+		return {free: free, freeAssigned: freeAssigned, assigned: assigned};
+	}
+
 	/** References by position and name (`declarationAt`), made on first use. */
 	var byPosition:Null<Map<String, Int>> = null;
 
@@ -173,6 +242,30 @@ private class BodyResolver extends BindingWalker {
 
 	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
 		bindings.recordReference(MemberCall, local, idOf(declaration), span, method, lambdaDepth, tryDepth);
+
+	override function statement(value:AstStatement):Void
+		switch value {
+			case While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span):
+				var first = bindings.length;
+				super.statement(value);
+				bindings.recordLoop(span.start, first);
+			default:
+				super.statement(value);
+		}
+
+	override function expression(value:AstExpression):Void
+		switch value {
+			case ArrayComprehension(_, _, _, _, _, _, span), MapComprehension(_, _, _, _, _, _, span):
+				var first = bindings.length;
+				super.expression(value);
+				bindings.recordLoop(span.start, first);
+			case Lambda(_, _, _, span):
+				var first = bindings.length, firstDeclaration = bindings.declarationKeys.length;
+				super.expression(value);
+				bindings.recordLambda(span.start, first, firstDeclaration);
+			default:
+				super.expression(value);
+		}
 
 	override function receiver(target:AstExpression, operation:String):Void
 		switch target {

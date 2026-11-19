@@ -107,7 +107,7 @@ interface BodyTyping {
 	function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool;
 
 	/** With `CompileOptions.checkResolution`, whether the body resolver names `name`'s declaration for this reference. */
-	var checkResolution:Bool;
+	function checkingResolution():Bool;
 
 	function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void;
 	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool;

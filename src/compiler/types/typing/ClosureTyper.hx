@@ -34,6 +34,59 @@ class ClosureTyper {
 		this.bodyTyper = bodyTyper;
 	}
 
+	/**
+	 * The names a lambda reads, calls or writes without declaring them (`free`, by the local before any dot), those it assigns
+	 * directly (`freeAssigned`), and the declarations of its own it writes (`assigned`): from the function's resolution when it
+	 * knows the lambda at `span`, else by walking it. `body` is `sourceBody` with the default-argument prologue, which writes
+	 * only the lambda's parameters. With `CompileOptions.checkResolution` the two answers must agree.
+	 */
+	function lambdaFacts(arguments:Array<AstArgument>, sourceBody:Array<AstStatement>, body:Array<AstStatement>,
+			span:SourceSpan, outerContext:TypingContext):{
+				free:Map<String, Bool>,
+				freeAssigned:Map<String, Bool>,
+				assigned:Map<String, Bool>
+			} {
+		function walked() {
+			var free = FreeVariables.of(arguments, body);
+			return {
+				free: free.names,
+				freeAssigned: free.assigned,
+				assigned: AssignedDeclarations.ofFunction(arguments, body).declarations
+			};
+		}
+		var resolution = outerContext.resolution;
+		var resolved = resolution == null ? null : resolution.lambdaFacts(span.start);
+		if (resolved == null)
+			return walked();
+		if (body != sourceBody) {
+			var parameters:Map<String, String> = [
+				for (argument in arguments) argument.name => compiler.types.analysis.BindingWalker.key(argument.name,
+					argument.span)
+			];
+			var prologue = body.slice(0, body.length - sourceBody.length);
+			for (declaration in AssignedDeclarations.within(prologue, parameters).declarations.keys())
+				resolved.assigned.set(declaration, true);
+		}
+		if (session.checkResolution) {
+			var expected = walked();
+			for (part in ["free", "freeAssigned", "assigned"]) {
+				var mine = part == "free" ? resolved.free : part == "freeAssigned"
+					? resolved.freeAssigned : resolved.assigned,
+					theirs = part == "free" ? expected.free : part == "freeAssigned"
+						? expected.freeAssigned : expected.assigned;
+				for (key in theirs.keys())
+					if (!mine.exists(key))
+						throw new InternalError('--check-resolution: the lambda at ${span.start} in ${outerContext.name} has $part "$key" by its walk but not by the resolution',
+							span);
+				for (key in mine.keys())
+					if (!theirs.exists(key))
+						throw new InternalError('--check-resolution: the lambda at ${span.start} in ${outerContext.name} has $part "$key" by the resolution but not by its walk',
+							span);
+			}
+		}
+		return resolved;
+	}
+
 	public function typeLambda(arguments:Array<AstArgument>, body:Array<AstStatement>, identity:String, span:SourceSpan,
 			scope:Scope,
 			expectedType:Null<CompilerType>, inferDynamicLambdaResult:Bool,
@@ -80,12 +133,13 @@ class ClosureTyper {
 			lambdaScope.define(localName, argumentType, argument.span);
 			lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
 		}
+		var sourceBody = body;
 		body = DefaultArguments.withPrologue(arguments, [for (argument in lambdaArguments) argument.type], body,
 			session.relations);
-		var free = FreeVariables.of(arguments, body),
-			freeVariables = free.names,
+		var facts = lambdaFacts(arguments, sourceBody, body, span, outerContext),
+			freeVariables = facts.free,
 			lambdaAssignments:Map<String, Bool> = [];
-		for (name in free.assigned.keys()) {
+		for (name in facts.freeAssigned.keys()) {
 			var written = scope.declarationOf(name);
 			if (written != null)
 				lambdaAssignments.set(written, true);
@@ -116,7 +170,7 @@ class ClosureTyper {
 					continue;
 				}
 				// A closure that only reads a local sees whatever it holds when the closure is created, so it must be assigned by then.
-				if (!free.assigned.exists(name) && !scope.isAssigned(name))
+				if (!facts.freeAssigned.exists(name) && !scope.isAssigned(name))
 					fail("E1023", 'Local "$name" may be used before assignment', span);
 				var captureType:CompilerType = capturedType;
 				var declaredCaptureType = scope.resolveDeclared(name);
@@ -205,7 +259,7 @@ class ClosureTyper {
 			case TVoid: true;
 			default: false;
 		});
-		for (declaration in AssignedDeclarations.ofFunction(arguments, body).declarations.keys())
+		for (declaration in facts.assigned.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (declaration in lambdaAssignments.keys())
 			context.assignedDeclarations.set(declaration, true);

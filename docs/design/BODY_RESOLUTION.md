@@ -1,6 +1,6 @@
 # Resolve a body once, type it, then decide storage
 
-Status: step 1 in progress: the check mode is in (`--check-resolution`); the typer does not read the resolver yet. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
+Status: step 1's check mode is in (`--check-resolution`); step 2 in progress (assigned declarations, map privacy, loops and lambdas read the resolution). Order changed: step 2 before the typer reads the resolver, since step 2 is where the time is and the check mode already holds the two resolvers equal. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
 (function-local names as numbers) and, for storage, ADR 0003's layering (representation decisions after typing).
 
 ## Problem
@@ -108,3 +108,9 @@ and structure patterns into nested switches. A resolution made before typing has
   (`local-redeclared-same-block`, `LANGUAGE_SUPPORT.md`).
 - The check found one disagreement: a key-path constant a lambda reads was declared in the lambda's scope with a new
   identity (`path@<lambda>`) instead of its declaration's; `ClosureTyper` now keeps the declaration, as for any capture.
+- Step 2: `BodyTyper.typeFunction` resolves each body once (`BodyResolution`) and reads assigned declarations
+  (`AssignedDeclarations.fromResolution`) and map privacy (`MapEscapeAnalysis.fromResolution`) from it; loop entry reads a
+  loop's writes by its span (`writesInLoop`), and a lambda's free variables and writes by its span (`lambdaFacts`, plus
+  the default-argument prologue, which the typer builds). Under `--check-resolution` each answer is compared with the walk
+  it replaces. The self-compile and all 637 programs agree; main-thread instructions -0.8%, cycles about -1%, output
+  byte-identical. The record allocates 33 MB more than the walks it replaces; compacting it is next.

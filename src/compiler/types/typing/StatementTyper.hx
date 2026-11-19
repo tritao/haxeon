@@ -379,7 +379,7 @@ class StatementTyper {
 
 	/** With `CompileOptions.checkResolution`: the local a write's target is rooted at is the one the body resolver names. */
 	function checkWritten(written:String, name:String, span:SourceSpan, scope:Scope):Void {
-		if (!bodyTyper.checkResolution)
+		if (!bodyTyper.checkingResolution())
 			return;
 		var root = compiler.types.analysis.BindingWalker.rootOf(name);
 		if (root != "this" && scope.resolve(root) != null)
@@ -767,7 +767,7 @@ class StatementTyper {
 
 	public function typeWhile(predicate:AstExpression, body:Array<AstStatement>, span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
-		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
+		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]), null, span);
 		var typedCondition = ConversionResolver.plainValue(bodyTyper.typeExpression(predicate, scope),
 			bodyTyper);
 		if (!TypeRelations.equals(typedCondition.type, TBool))
@@ -786,7 +786,7 @@ class StatementTyper {
 
 	public function typeDoWhile(body:Array<AstStatement>, predicate:AstExpression, span:SourceSpan, scope:Scope,
 			result:Null<CompilerType>):TypedStatement {
-		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]));
+		LoopFlow.enter(session, scope, body.concat([Expression(predicate, span)]), null, span);
 		var bodyScope = new Scope(scope), context = session.currentContext;
 		context.loopDepth++;
 		var typedBody = bodyTyper.typeStatements(body, bodyScope, result);
@@ -837,7 +837,7 @@ class StatementTyper {
 				default:
 			}
 		var originalIterable = typedIterable;
-		LoopFlow.enter(session, scope, body, [name, valueName]);
+		LoopFlow.enter(session, scope, body, [name, valueName], span);
 		var element:CompilerType = switch typedIterable.type {
 			case TArray(element): element;
 			case TIterator(element): element;

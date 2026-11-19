@@ -63,7 +63,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 
 	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false,
 			checkResolution:Bool = false) {
-		bodyTyper.checkResolution = checkResolution;
+		bodyTyper.checkResolutions(checkResolution);
 		this.bodyTyper = bodyTyper;
 		this.reverseTypingOrder = reverseTypingOrder;
 		this.elaborateGenerics = elaborateGenerics;

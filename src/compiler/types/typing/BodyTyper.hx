@@ -247,13 +247,14 @@ class BodyTyper implements BodyTyping {
 		if (functionContext == null)
 			functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
 				specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
-		if (checkResolution)
-			context.resolution = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements);
+		// The body's names, resolved once: the analyses below read them (docs/design/BODY_RESOLUTION.md).
+		var resolution = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements);
+		context.resolution = resolution;
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue,
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
 			context.storage.addClosureWrite(binding);
-		for (declaration in AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations.keys())
+		for (declaration in AssignedDeclarations.fromResolution(resolution).declarations.keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + BindingWalker.nameOf(binding),
@@ -264,7 +265,7 @@ class BodyTyper implements BodyTyping {
 				ExceptionEdge);
 		}
 		var scope = new Scope();
-		scope.setMapPrivacy(MapEscapeAnalysis.analyze(fn.arguments, fn.statements));
+		scope.setMapPrivacy(MapEscapeAnalysis.fromResolution(resolution));
 		context.scope = scope;
 		var isConstructor = owner != null && session.classDecls.exists(owner) && fn.name == "new";
 		if (abstractReceiver != null) {
@@ -1329,8 +1330,12 @@ class BodyTyper implements BodyTyping {
 				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
 	}
 
-	/** Compare the body resolver with the scopes at every local (`CompileOptions.checkResolution`). */
-	public var checkResolution = false;
+	/** Whether the body resolver is compared with the scopes at every local (`CompileOptions.checkResolution`). */
+	public function checkingResolution():Bool
+		return session.checkResolution;
+
+	public function checkResolutions(enabled:Bool):Void
+		session.checkResolution = enabled;
 
 	/**
 	 * Fails when the body's resolver names another declaration than the scope does for the local `name`, referenced as
@@ -1650,7 +1655,7 @@ class BodyTyper implements BodyTyping {
 		if (name == "this" && context.memberInitializer)
 			fail("E1005", "Cannot access this or other member field in variable initialization", span);
 		var type = scope.resolve(name);
-		if (checkResolution && type != null && name != "this")
+		if (session.checkResolution && type != null && name != "this")
 			checkResolved(referenceName, referenceSpan, name, scope);
 		// A local whose type a use has since fixed reads as that type.
 		if (type != null && session.monomorphs.active())

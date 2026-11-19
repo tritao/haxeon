@@ -265,6 +265,9 @@ class TypingSession {
 	/** Structural conversion helpers already emitted for each origin and target shape. */
 	public final dynamicStructureConversions:Map<String, Bool> = [];
 
+	/** Compare the body resolver with the scopes and with the walks it replaces (`CompileOptions.checkResolution`). */
+	public var checkResolution = false;
+
 	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
 
 	/** Attributes an anonymous type to the unit being typed: the outermost body, which a lambda is part of. */

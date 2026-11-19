@@ -20,6 +20,16 @@ class AssignedDeclarations extends BindingWalker {
 		return result;
 	}
 
+	/** A whole function, read from its resolved names (`BodyResolution`) instead of walking it. */
+	public static function fromResolution(resolution:BodyResolution):AssignedDeclarations {
+		var result = new AssignedDeclarations();
+		for (index in 0...resolution.length)
+			if (resolution.events[index] == Write && resolution.declarations[index] >= 0
+				&& resolution.names[index].indexOf(".") < 0)
+				result.declarations.set(resolution.keyAt(index), true);
+		return result;
+	}
+
 	/** Statements that run in a scope where `visible` locals (name to declaration) are already declared. */
 	public static function within(statements:Array<AstStatement>, visible:Map<String, String>):AssignedDeclarations {
 		var result = new AssignedDeclarations();

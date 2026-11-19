@@ -1,6 +1,5 @@
 package compiler.types.analysis;
 
-import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
@@ -17,64 +16,61 @@ import compiler.types.analysis.BindingWalker.BindingKind;
  * entry. Declarations are told apart by `BindingWalker`, so the same name in a sibling block, or shadowed by a loop or
  * lambda variable, is a different map.
  */
-class MapEscapeAnalysis extends BindingWalker {
+class MapEscapeAnalysis {
 	public static final MAP_OPERATIONS = ["get", "set", "exists", "remove", "clear", "keys", "size", "iterator",
 		"copy"];
 
-	final fresh:Map<String, Bool> = [];
-	final escaped:Map<String, Bool> = [];
-	final operandUses:Map<String, Bool> = [];
 
-	public static function analyze(arguments:Array<AstArgument>, body:Array<AstStatement>):MapPrivacy {
-		var analysis = new MapEscapeAnalysis();
-		analysis.walkFunction(arguments, body);
-		var privateDeclarations:Map<String, Bool> = [];
-		for (declaration in analysis.fresh.keys())
-			if (!analysis.escaped.exists(declaration))
-				privateDeclarations.set(declaration, true);
-		return new MapPrivacy(privateDeclarations, analysis.operandUses);
-	}
+	public static function analyze(arguments:Array<AstArgument>, body:Array<AstStatement>):MapPrivacy
+		return fromResolution(BodyResolution.of(arguments, body));
 
-	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
-			initializer:Null<AstExpression>):Void {
-		if (kind == BindingKind.Local && initializer != null
-			&& (createsMap(initializer) || isEmptyLiteralOfMap(type, initializer)))
-			fresh.set(declaration, true);
-	}
-
-	override function used(name:String, declaration:Null<String>, span:SourceSpan):Void {
-		if (declaration != null)
-			escaped.set(declaration, true);
-	}
-
-	override function written(name:String, declaration:Null<String>, span:SourceSpan):Void {
-		if (declaration != null)
-			escaped.set(declaration, true);
-	}
-
-	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void {
-		if (declaration == null)
-			return;
-		if (method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0
-			|| (insideLambda() && removesEntries(method)))
-			escaped.set(declaration, true);
-		else
-			operandUses.set(BindingWalker.key(local, span), true);
-	}
-
-	override function receiver(target:AstExpression, operation:String):Void {
-		switch target {
-			case Variable(name, span):
-				var declaration = resolve(name);
-				if (declaration == null)
-					return;
-				if (insideLambda() && removesEntries(operation))
-					escaped.set(declaration, true);
-				else
-					operandUses.set(BindingWalker.key(name, span), true);
-			default:
-				expression(target);
+	/** The same, read from a body's resolved names (`BodyResolution`) instead of walking it. */
+	public static function fromResolution(resolution:BodyResolution):MapPrivacy {
+		var count = resolution.declarationKeys.length,
+			fresh = [for (_ in 0...count) false],
+			escaped = [for (_ in 0...count) false],
+			operandUses:Map<String, Bool> = [];
+		for (id in 0...count) {
+			var initializer = resolution.declarationInitializers[id];
+			fresh[id] = resolution.declarationKinds[id] == BindingKind.Local && initializer != null
+				&& (createsMap(initializer) || isEmptyLiteralOfMap(resolution.declarationTypes[id], initializer));
 		}
+		for (index in 0...resolution.length) {
+			var declaration = resolution.declarations[index];
+			if (declaration < 0)
+				continue;
+			var insideLambda = resolution.lambdaDepths[index] > 0;
+			switch resolution.events[index] {
+				case Use, Write, Callee:
+					escaped[declaration] = true;
+				case MemberCall:
+					var method:String = resolution.details[index];
+					if (method.indexOf(".") >= 0 || MAP_OPERATIONS.indexOf(method) < 0
+						|| (insideLambda && removesEntries(method)))
+						escaped[declaration] = true;
+					else
+						operandUses.set(BindingWalker.key(resolution.names[index], resolution.spans[index]), true);
+				case Receiver:
+					if (insideLambda && removesEntries(resolution.details[index]))
+						escaped[declaration] = true;
+					else
+						operandUses.set(BindingWalker.key(resolution.names[index], resolution.spans[index]), true);
+				case Declare:
+			}
+		}
+		// By key, as the walk decided: declarations that share a key are one.
+		var freshKeys:Map<String, Bool> = [], escapedKeys:Map<String, Bool> = [];
+		for (id in 0...count) {
+			if (fresh[id])
+				freshKeys.set(resolution.declarationKeys[id], true);
+			if (escaped[id])
+				escapedKeys.set(resolution.declarationKeys[id], true);
+		}
+		var privateDeclarations:Map<String, Bool> = [];
+		for (key in freshKeys.keys())
+			if (!escapedKeys.exists(key))
+				privateDeclarations.set(key, true);
+		return new MapPrivacy(privateDeclarations, operandUses);
 	}
 
 	static function removesEntries(operation:String):Bool
