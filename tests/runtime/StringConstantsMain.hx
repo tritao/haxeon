@@ -22,8 +22,8 @@ class StringConstantsMain {
 		if (fixedResult.artifact.hashLink().module.constants.length < 2)
 			throw 'A build nothing patches should hold each literal as a constant, got ${fixedResult.artifact.hashLink().module.constants.length}';
 		for (constant in fixedResult.artifact.hashLink().module.constants)
-			if (constant.fields.length != 2)
-				throw "A String constant has two fields: its data and its length";
+			if (constant.fields.length != 3)
+				throw "A String constant has three fields: its data, its length and its hash (0 until a map computes it)";
 		var live = new Compiler();
 		live.livePatching = true;
 		live.registerNative("allocated", "std", "gc_total_allocated", [], CompilerType.TFloat);
