@@ -225,6 +225,9 @@ class ClosureTyper {
 		for (i in 0...lambdaArguments.length) {
 			var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
 			typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
+			var temporary = arguments[i].local;
+			if (temporary != null)
+				temporary.declaration = BindingWalker.key(localName, arguments[i].span);
 			lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
 		}
 		for (capture in captures)

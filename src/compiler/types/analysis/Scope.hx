@@ -122,6 +122,19 @@ class Scope {
 
 	/** On the root: every binding defined in the function or lambda, by declaration key; the last definition wins. */
 	var byDeclaration:Null<Map<String, LocalBinding>> = null;
+
+	/** False for a scope whose bindings nothing reads by declaration (`alternative`). */
+	var entersBindings = true;
+
+	/**
+	 * The scope of a later pattern of a case with several: it binds the names the first pattern does, and the case's guard
+	 * and body read the first pattern's bindings (`SwitchCaseTyper`), so its own are not entered by declaration.
+	 */
+	public static function alternative(outer:Scope):Scope {
+		var scope = new Scope(outer);
+		scope.entersBindings = false;
+		return scope;
+	}
 	var nextLocalId:Int = 0;
 	/*
 		Most scopes define, assign, capture and track nothing, so each kind of record is made with its first entry (`own...`);
@@ -168,6 +181,53 @@ class Scope {
 		facts = new FlowFacts(parent == null ? null : parent.facts);
 	}
 
+	/** The receiver (`this`) as this scope sees it, or null outside a method. */
+	public function receiverBinding():Null<LocalBinding>
+		return resolveLocal("this");
+
+	/** The local `name` by its name (`--check-resolution` compares it with the binding a reference finds). */
+	public function lookup(name:String):Null<LocalBinding>
+		return resolveLocal(name);
+
+	/** `value`'s type here: its flow-refined type, or the declared one. */
+	public function typeOf(value:LocalBinding):CompilerType
+		return refinedType(value);
+
+	/** The type `value` is stored as: a capture's storage type, or its declared type. */
+	public function declaredTypeOf(value:LocalBinding):CompilerType {
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var own = scope.captured;
+			if (own != null && own.storageTypes.exists(value.id))
+				return own.storageTypes.get(value.id);
+			scope = scope.parent;
+		}
+		return value.declared;
+	}
+
+	public function isAssignedBinding(value:LocalBinding):Bool
+		return isAssignedId(value.id);
+
+	/** The map key source recorded for `value` in this scope or an enclosing one. */
+	public function mapKeySourceOf(value:LocalBinding):Null<TypedExpression> {
+		var scope:Null<Scope> = this;
+		while (scope != null) {
+			var sources = scope.mapKeySources;
+			if (sources != null && sources.exists(value.id))
+				return sources.get(value.id);
+			scope = scope.parent;
+		}
+		return null;
+	}
+
+	/** `privateMapUseIsKnown` for the use of `value`, written `name`, at `span`. */
+	public function privateMapUseIsKnownFor(value:LocalBinding, name:String, span:SourceSpan):Bool {
+		var found = mapPrivacy();
+		if (found == null || !found.isPrivate(value.declaration))
+			return true;
+		return found.isOperandUse(name, span);
+	}
+
 	/** The binding of the declaration with key `declaration` (`BindingWalker.key`), or null when none was defined. */
 	public function bindingOf(declaration:String):Null<LocalBinding> {
 		var table = root.byDeclaration;
@@ -192,10 +252,12 @@ class Scope {
 		};
 		ownDefinitions().add(value);
 		ownAssigned().set(value.id, initialized);
-		var table = root.byDeclaration;
-		if (table == null)
-			table = root.byDeclaration = [];
-		table.set(value.declaration, value);
+		if (entersBindings) {
+			var table = root.byDeclaration;
+			if (table == null)
+				table = root.byDeclaration = [];
+			table.set(value.declaration, value);
+		}
 		return value;
 	}
 

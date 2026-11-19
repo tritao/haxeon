@@ -733,8 +733,9 @@ class BodyTyper implements BodyTyping {
 	 */
 	static function named(statement:AstStatement):AstStatement
 		return switch statement {
-			case TemporaryDeclaration(local, type, initializer, span): VarDeclaration(local.name, type, initializer,
-				span);
+			case TemporaryDeclaration(local, type, initializer, span):
+				local.declaration = BindingWalker.key(local.name, span);
+				VarDeclaration(local.name, type, initializer, span);
 			case TemporaryAssignment(local, value, span): Assignment(local.name, value, span);
 			case DeclaredAssignment(name, _, value, span): Assignment(name, value, span);
 			default: statement;
@@ -1139,6 +1140,7 @@ class BodyTyper implements BodyTyping {
 							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType,
 								storageType, index));
 						case TemporaryVariable(local, bindingSpan):
+							local.declaration = BindingWalker.key(local.name, bindingSpan);
 							bindings.push(bindPatternName(local.name, bindingSpan, scope, parameterType, storageType,
 								index));
 						case Call(_, _, _):
@@ -1274,6 +1276,7 @@ class BodyTyper implements BodyTyping {
 													arrayIndex: arrayIndex
 												});
 											case TemporaryVariable(local, bindingSpan):
+												local.declaration = BindingWalker.key(local.name, bindingSpan);
 												var binding = local.name;
 												declarePatternName(binding, elementType, bindingSpan, scope);
 												bindings.push({
@@ -1454,6 +1457,7 @@ class BodyTyper implements BodyTyping {
 				}
 			// A temporary the typer put in the pattern binds, whatever its name.
 			case TemporaryVariable(local, span):
+				local.declaration = BindingWalker.key(local.name, span);
 				declarePatternName(local.name, expected, span, scope);
 				scope.requireId(local.name);
 			default: null;
@@ -1672,8 +1676,41 @@ class BodyTyper implements BodyTyping {
 			span.isBareReference, span.referenceName);
 	}
 
+	/**
+	 * The binding a read of `name` at `span` refers to: the resolution's declaration there (none: not a local), or the
+	 * receiver for `this`. Under `--check-resolution` it must be the one the name finds in `scope`.
+	 */
+	function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
+			scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding> {
+		if (name == "this")
+			return scope.receiverBinding();
+		if (name.indexOf(".") >= 0)
+			return null;
+		var resolution = context.resolution;
+		var found = if (resolution == null) scope.lookup(name) else {
+			// Every local the resolution has not seen is in syntax the typer built, which reads locals as temporaries or by
+			// their declaration: a name it has not seen is a function, field or type.
+			var key = resolution.declarationAt(referenceSpan.start, referenceName);
+			key == null || key == compiler.types.analysis.BodyResolution.UNSEEN ? null : scope.bindingOf(key);
+		};
+		if (session.checkResolution && found != scope.lookup(name)) {
+			var named = scope.lookup(name);
+			throw new InternalError('--check-resolution: "$referenceName" in ${context.name} finds ${found == null ? "no local" : found.declaration + " (" + found.id + ")"} by its declaration but ${named == null ? "no local" : named.declaration + " (" + named.id + ")"} by its name',
+				referenceSpan);
+		}
+		return found;
+	}
+
+	/** A read of a temporary or of a source local named by its declaration, from syntax the typer built. */
+	public function typeBoundVariable(binding:Null<compiler.types.analysis.Scope.LocalBinding>, name:String,
+			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
+		if (binding == null)
+			throw new InternalError('Generated syntax reads "$name" before its declaration', span);
+		return typeVariableExpression(name, span, scope, expectedType, binding);
+	}
+
 	public function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>):TypedExpression {
+			expectedType:Null<CompilerType>, ?bound:compiler.types.analysis.Scope.LocalBinding):TypedExpression {
 		var referenceName = name, referenceSpan = span;
 		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
 		var sourceName = span.isBareReference ? span.referenceName : null,
@@ -1692,20 +1729,19 @@ class BodyTyper implements BodyTyping {
 		// Haxe checks an instance field's typed initializer for `this`, which a member read through it is too.
 		if (name == "this" && context.memberInitializer)
 			fail("E1005", "Cannot access this or other member field in variable initialization", span);
-		var type = scope.resolve(name);
-		if (session.checkResolution && type != null && name != "this")
-			checkResolved(referenceName, referenceSpan, name, scope);
+		var binding = bound != null ? bound : referenceBinding(referenceName, referenceSpan, name, scope);
+		var type = binding == null ? null : scope.typeOf(binding);
 		// A local whose type a use has since fixed reads as that type.
 		if (type != null && session.monomorphs.active())
 			type = compiler.types.Monomorphs.resolve(type);
-		return if (type != null) {
-			if (!scope.privateMapUseIsKnown(name, span))
+		return if (binding != null && type != null) {
+			if (!scope.privateMapUseIsKnownFor(binding, name, span))
 				fail("E9001",
 					'Internal compiler error: "$name" was analysed as a map nothing else can reach, but this use was not seen by that analysis',
 					span);
-			if (!scope.isAssigned(name))
+			if (!scope.isAssignedBinding(binding))
 				fail("E1023", 'Local "$name" may be used before assignment', span);
-			var pathConstant = scope.keyPathConstant(name);
+			var pathConstant = binding.keyPathConstant;
 			if (pathConstant != null)
 				return new TypedExpression(TCall(pathConstant, []), type, span);
 			// A local proven null has no value of its own to read; the null itself has no ABI cast from the local's storage.
@@ -1713,7 +1749,7 @@ class BodyTyper implements BodyTyping {
 				case TNull: true;
 				default: false;
 			})) {
-				var declared = scope.resolveDeclared(name);
+				var declared = scope.declaredTypeOf(binding);
 				if (declared != null)
 					switch declared {
 						case TNullable(_): return new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral,
@@ -1722,10 +1758,10 @@ class BodyTyper implements BodyTyping {
 					}
 			}
 			// A local or capture in a cell reads as its declared type, which is what the cell holds.
-			var value = new TypedExpression(scope.isCapture(name)
-				? TCaptured(name) : TLocal(name == "this" ? name : scope.requireId(name)),
-				type, span, false, scope.mapKeySource(name), scope.isCapture(name)
-				|| boundCell(name, scope) != null ? scope.resolveDeclared(name) : null);
+			var captured = scope.isCaptured(binding);
+			var value = new TypedExpression(captured ? TCaptured(name) : TLocal(name == "this" ? name : binding.id),
+				type, span, false, scope.mapKeySourceOf(binding), captured
+				|| context.storage.cell(binding.id) != null ? scope.declaredTypeOf(binding) : null);
 			// An abstract's implementation reads `this` as its underlying value.
 			// Keep the nominal receiver in scope for calls to its own methods.
 			if (name == "this" && context.lexicalOwner != null

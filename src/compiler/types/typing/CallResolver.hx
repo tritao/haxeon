@@ -312,6 +312,7 @@ class CallResolver {
 			arguments:Array<AstArgument> = [],
 			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
 		inner.define(held.name, value.type, span);
+		held.declaration = compiler.types.analysis.BindingWalker.key(held.name, span);
 		bodyTyper.bindCell(held.name, span, inner, value.type);
 		for (index in 1...fn.arguments.length) {
 			var argument = new TemporaryLocal("__haxeon_argument" + index);
@@ -397,6 +398,7 @@ class CallResolver {
 			argumentTypes:Array<CompilerType> = [],
 			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
 		inner.define(held.name, value.type, span);
+		held.declaration = compiler.types.analysis.BindingWalker.key(held.name, span);
 		bodyTyper.bindCell(held.name, span, inner, value.type);
 		if (typeFunction == "Type.enumEq") {
 			var argument = new TemporaryLocal("__haxeon_argument1");

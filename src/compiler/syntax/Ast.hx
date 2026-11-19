@@ -9,6 +9,9 @@ import compiler.core.Source.SourceSpan;
 class TemporaryLocal {
 	public final name:String;
 
+	/** Its declaration's key (`BindingWalker.key`), once the typer has typed the declaration; the typer finds it by this. */
+	public var declaration:Null<String> = null;
+
 	public function new(name:String)
 		this.name = name;
 }

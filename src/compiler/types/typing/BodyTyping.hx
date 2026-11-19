@@ -39,8 +39,11 @@ interface BodyTyping {
 	function exhaustiveSwitch(type:CompilerType, cases:Array<TypedSwitchCase>):Bool;
 
 	// Expression forms BodyTyper owns.
-	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>):TypedExpression;
+	function typeVariableExpression(name:String, span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>,
+			?bound:compiler.types.analysis.Scope.LocalBinding):TypedExpression;
+
+	function typeBoundVariable(binding:Null<compiler.types.analysis.Scope.LocalBinding>, name:String, span:SourceSpan,
+			scope:Scope, expectedType:Null<CompilerType>):TypedExpression;
 	function typeMember(object:AstExpression, name:String, span:SourceSpan, scope:Scope):TypedExpression;
 	function typeBlockExpression(statements:Array<AstStatement>, result:AstExpression, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression;

@@ -241,31 +241,45 @@ class BodyResolution {
 		return {free: free, freeAssigned: freeAssigned, assigned: assigned};
 	}
 
-	/** References by position and name (`declarationAt`), made on first use. */
-	var byPosition:Null<Map<String, Int>> = null;
+	/**
+	 * References by position (`declarationAt`), made on first use: the latest reference at each position, and before each
+	 * reference the previous one at its position (-1 for none).
+	 */
+	var latestAt:Null<Map<Int, Int>> = null;
+
+	final previousAt:Array<Int> = [];
 
 	/**
 	 * The declaration key (`BindingWalker.key`) the reference to `name` at `position` resolves to: null when it names no local,
-	 * and `UNSEEN` when the body has no such reference, as for syntax the typer builds itself.
+	 * and `UNSEEN` when the body has no such reference, as for syntax the typer builds itself. `a.b.c` is found by its root
+	 * too, which is what a member chain's typing looks up; the latest reference at the position that matches wins.
 	 */
 	public function declarationAt(position:Int, name:String):Null<String> {
-		var index = byPosition;
-		if (index == null) {
-			index = [];
+		var latest = latestAt;
+		if (latest == null) {
+			latest = [];
+			previousAt.resize(codes.length);
 			for (entry in 0...codes.length) {
 				var kind = referenceAt(entry);
-				if (kind == PlaceWrite || kind == PathSet)
+				if (kind == PlaceWrite || kind == PathSet) {
+					previousAt[entry] = -1;
 					continue;
-				var name = names[entry], position = positions[entry];
-				index.set(position + ":" + name, entry);
-				// `a.b.c` resolves by its root, which is what a member chain's typing looks up.
-				if (name.indexOf(".") > 0)
-					index.set(position + ":" + BindingWalker.rootOf(name), entry);
+				}
+				var at = positions[entry], before = latest.get(at);
+				previousAt[entry] = before == null ? -1 : before;
+				latest.set(at, entry);
 			}
-			byPosition = index;
+			latestAt = latest;
 		}
-		var entry = index.get(position + ":" + name);
-		return entry == null ? UNSEEN : keyAt(entry);
+		var found = latest.get(position), entry = found == null ? -1 : found;
+		while (entry >= 0) {
+			var referenced = names[entry];
+			if (referenced == name || referenced.length > name.length && referenced.charCodeAt(name.length) == ".".code
+				&& StringTools.startsWith(referenced, name) && referenced.indexOf(".") == name.length)
+				return keyAt(entry);
+			entry = previousAt[entry];
+		}
+		return UNSEEN;
 	}
 
 	public static inline final UNSEEN = "$unseen";

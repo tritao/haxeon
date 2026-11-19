@@ -48,7 +48,7 @@ class SwitchCaseTyper {
 			guarded:Bool, seenCases:Map<String, Bool>):Array<SwitchPatternMatch> {
 		var matches:Array<SwitchPatternMatch> = [], firstNames:Array<PatternName> = [];
 		for (index in 0...patterns.length) {
-			var scope = index == 0 ? caseScope : new Scope(outer),
+			var scope = index == 0 ? caseScope : Scope.alternative(outer),
 				names:Array<PatternName> = [],
 				saved = bodyTyper.patternNames;
 			bodyTyper.patternNames = names;

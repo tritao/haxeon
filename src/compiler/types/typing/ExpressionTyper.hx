@@ -45,6 +45,7 @@ import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
 import compiler.types.StructProperties;
+import compiler.types.analysis.BindingWalker;
 
 /** Dispatches source expressions and owns their expression-specific typing rules. */
 class ExpressionTyper {
@@ -90,9 +91,14 @@ class ExpressionTyper {
 				ErrorExpression(_):
 				typeLiteral(expression, expectedType);
 			case Variable(name, span): bodyTyper.typeVariableExpression(name, span, scope, expectedType);
-			case TemporaryVariable(local, span): bodyTyper.typeVariableExpression(local.name, span, scope,
-				expectedType);
-			case DeclaredVariable(name, _, span): bodyTyper.typeVariableExpression(name, span, scope, expectedType);
+			case TemporaryVariable(local, span):
+				var declaration = local.declaration;
+				bodyTyper.typeBoundVariable(declaration == null ? null : scope.bindingOf(declaration), local.name, span,
+					scope,
+					expectedType);
+			case DeclaredVariable(name, declaration, span):
+				bodyTyper.typeBoundVariable(scope.bindingOf(BindingWalker.keyOf(name, declaration)), name, span, scope,
+					expectedType);
 			case Lambda(arguments, body, identity, span): closureTyper.typeLambda(arguments, body, identity, span,
 				scope,
 				expectedType, inferDynamicLambdaResult, session.currentContext);
