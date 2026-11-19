@@ -390,6 +390,10 @@ class DesktopUiHost {
 					case WindowClose(source) if (source.rawValue() == window.rawValue()):
 						hostContext.requestClose();
 						scheduleFrameWithReason("window-close");
+					// The application's Quit (Cmd-Q, the Dock, a menu's Quit role) closes this window as its close button does.
+					case Raw(kind, _, _, _, _, _, _) if (kind == EventKind.ApplicationQuitRequested):
+						hostContext.requestClose();
+						scheduleFrameWithReason("application-quit");
 					case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
 						resizeSurface(width, height);
 					case WindowFramebufferResize(source, _,
