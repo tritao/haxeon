@@ -21,6 +21,14 @@ class IrProgramIndex {
 	final objects:Map<String, IrObject> = [];
 	final interfaces:Map<String, IrInterface> = [];
 	final subtypes:Map<String, Array<IrObject>> = [];
+
+	/**
+	 * For each class name, the names whose class extends it directly, and where each name's classes are in `program.objects`;
+	 * made on the first `subtypesOf`. A name's base is its first class's, as `isObjectSubtype` follows it.
+	 */
+	var subclassNames:Null<Map<String, Array<String>>> = null;
+
+	var positionsByName:Map<String, Array<Int>> = [];
 	final implementors:Map<String, Array<IrObject>> = [];
 
 	/** The index for `program`, kept on it and rebuilt when its declaration arrays change. */
@@ -125,10 +133,44 @@ class IrProgramIndex {
 	public function subtypesOf(typeName:String):Array<IrObject> {
 		var result = subtypes.get(typeName);
 		if (result == null) {
-			result = [
-				for (object in program.objects)
-					if (isObjectSubtype(object.name, typeName)) object
-			];
+			var children = subclassNames;
+			if (children == null) {
+				children = [];
+				for (position in 0...program.objects.length) {
+					var name = program.objects[position].name, positions = positionsByName.get(name);
+					if (positions == null) {
+						positions = [];
+						positionsByName.set(name, positions);
+						var first = objects.get(name), base = first == null ? null : first.base;
+						if (base != null) {
+							var names = children.get(base);
+							if (names == null) {
+								names = [];
+								children.set(base, names);
+							}
+							names.push(name);
+						}
+					}
+					positions.push(position);
+				}
+				subclassNames = children;
+			}
+			// The names below `typeName` in the class tree, then their classes in declaration order.
+			var found:Array<Int> = [], seen:Map<String, Bool> = [typeName => true], pending = [typeName];
+			while (pending.length > 0) {
+				var name = pending.pop(), positions = positionsByName.get(name), below = children.get(name);
+				if (positions != null)
+					for (position in positions)
+						found.push(position);
+				if (below != null)
+					for (child in below)
+						if (!seen.exists(child)) {
+							seen.set(child, true);
+							pending.push(child);
+						}
+			}
+			found.sort((a, b) -> a - b);
+			result = [for (position in found) program.objects[position]];
 			subtypes.set(typeName, result);
 		}
 		return result;
