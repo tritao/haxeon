@@ -55,6 +55,9 @@ class BodyResolution {
 	public final declarationTypes:Array<Null<AstType>> = [];
 	public final declarationInitializers:Array<Null<AstExpression>> = [];
 
+	/** Whether the body, lambdas included, declares a scoped binding (`scoped var`), which `ScopedEscapeChecker` checks. */
+	public var declaresScoped(default, null) = false;
+
 	/** How many lambdas enclose each declaration. */
 	public final declarationLambdaDepths:Array<Int> = [];
 
@@ -140,6 +143,10 @@ class BodyResolution {
 	/** Called while recording (`of`): the `PathSet` just recorded has receiver `target`. */
 	public function recordPathTarget(target:AstExpression, declaration:Int):Void
 		pathTargets.set(codes.length - 1, {target: target, declaration: declaration});
+
+	/** Called while recording (`of`). */
+	public function recordScoped():Void
+		declaresScoped = true;
 
 	/** Called while recording (`of`). */
 	public function recordLocalFunction(declaration:Int, lambdaPosition:Int):Void
@@ -326,6 +333,9 @@ private class BodyResolver extends BindingWalker {
 				bindings.recordLoop(span.start, first);
 			case FieldAssignment(object, _, _, span):
 				placeWrite(object, span);
+				super.statement(value);
+			case ScopedDeclaration(_, _, _, _):
+				bindings.recordScoped();
 				super.statement(value);
 			case VarDeclaration(name, _, Lambda(_, _, _, lambdaSpan), span):
 				super.statement(value);

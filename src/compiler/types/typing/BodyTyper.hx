@@ -216,7 +216,6 @@ class BodyTyper implements BodyTyping {
 			?abstractReceiver:CompilerType, ?physicalOwner:String,
 			?ownerTypeArguments:Array<CompilerType>,
 			?inference:DeclarationTypeTable.FunctionInference, ?elaboration:GenericElaboration):TypedFunction {
-		compiler.types.analysis.ScopedEscapeChecker.check(fn.arguments, fn.statements);
 		var elaborationMark = elaboration == null ? null : session.closureConversion.mark();
 		var functionName = specializedName == null
 			? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
@@ -249,6 +248,9 @@ class BodyTyper implements BodyTyping {
 		// The body's names, resolved once: the analyses below read them (docs/design/BODY_RESOLUTION.md).
 		var resolution = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements);
 		context.resolution = resolution;
+		// Only a scoped binding can escape.
+		if (resolution.declaresScoped)
+			compiler.types.analysis.ScopedEscapeChecker.check(fn.arguments, fn.statements);
 		var lexicalStorage = compiler.types.analysis.StorageRequirements.ofBody(resolution, session.mayHoldValue,
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())

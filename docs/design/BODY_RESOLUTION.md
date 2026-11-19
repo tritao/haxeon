@@ -148,3 +148,7 @@ and structure patterns into nested switches. A resolution made before typing has
   the resolution's facts and the binding's type when the binding is declared (`BindingStoragePlan`), not from what typing
   finds. What remains of the closure-conversion stage is moving that decision, the environments and lambda lifting out
   of the typer; it changes where code lives, not what it does.
+- `ScopedEscapeChecker` walks a body only when its resolution records a scoped binding (`declaresScoped`), lambdas
+  included: nothing else can escape. Main-thread instructions -1.0%. The walkers left are cheaper than porting them:
+  `PurityInference` (about 1.1%, spread thin, judging calls and fields rather than names) and the resolution itself
+  (about 1%, built once per distinct body; generic specializations add under 2%).

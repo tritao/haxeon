@@ -50,6 +50,15 @@ class ScopedEscapeCheckerMain {
 			}
 			if (!rejected) throw 'Compiler accepted scoped escape: $body';
 		}
+		// The compiler checks a body only when it declares a scoped binding; one declared inside a lambda counts.
+		var rejected = false;
+		try Frontend.compile(contract
+			+ 'function main():Void { var make = function():Resource { scoped var item = new Resource(); return item; }; }')
+		catch (error:CompileError) {
+			if (error.diagnostic.code != 'E1002' || error.diagnostic.message.indexOf('Scoped binding') < 0) throw error;
+			rejected = true;
+		}
+		if (!rejected) throw 'Compiler accepted a scoped escape inside a lambda';
 		Sys.println('PASS: scoped direct escapes and helper calls');
 	}
 }
