@@ -268,7 +268,17 @@ class TypingSession {
 	/** Compare the body resolver with the scopes and with the walks it replaces (`CompileOptions.checkResolution`). */
 	public var checkResolution = false;
 
-	public final bodyContexts:Array<TypingContext> = [new TypingContext("")];
+	public final bodyContexts:Array<TypingContext> = [outsideBodies()];
+
+	/** The resolutions of what declarations hold outside their bodies (`SyntaxResolutions`). */
+	public final syntaxResolutions = new SyntaxResolutions();
+
+	/** The context outside every body, where constants and metadata are typed: no local is declared there. */
+	static function outsideBodies():TypingContext {
+		var context = new TypingContext("");
+		context.resolution = compiler.types.analysis.BodyResolution.empty();
+		return context;
+	}
 
 	/** Attributes an anonymous type to the unit being typed: the outermost body, which a lambda is part of. */
 	public function recordAnonymousUse(name:String, fields:Array<compiler.types.Type.AnonymousField>):Void {

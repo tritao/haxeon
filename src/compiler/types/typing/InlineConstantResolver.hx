@@ -65,8 +65,7 @@ class InlineConstantResolver {
 			typeParameters = classDecl.typeParameters;
 		try {
 			session.typeSharedUnit(unit, function() {
-				var initializer = bodyTyper.typeInlineInitializer(syntax, constantOwner, name, constantType,
-					typeParameters),
+				var initializer = bodyTyper.typeInlineInitializer(field, constantOwner, constantType, typeParameters),
 					literal = InlineConstantEvaluator.evaluate(initializer);
 				if (literal == null)
 					fail("E1002", 'Inline field "$constantOwner.$name" requires a compile-time constant initializer',

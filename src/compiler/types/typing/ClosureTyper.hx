@@ -153,12 +153,8 @@ class ClosureTyper {
 			lambdaAssignments:Map<String, Bool> = [];
 		// The local a free name of the lambda refers to: its declaration's binding, or the receiver for `this`.
 		function freeBinding(name:String):Null<LocalBinding> {
-			var key = facts.freeDeclarations.get(name),
-				found = name == "this" ? scope.receiverBinding() : key == null ? null : scope.bindingOf(key);
-			if (session.checkResolution && found != scope.lookup(name))
-				throw new InternalError('--check-resolution: the lambda at ${span.start} in ${outerContext.name} captures a different "$name" by its declaration than by its name',
-					span);
-			return found;
+			var key = facts.freeDeclarations.get(name);
+			return name == "this" ? scope.receiverBinding() : key == null ? null : scope.bindingOf(key);
 		}
 		for (name in facts.freeAssigned.keys()) {
 			var written = freeBinding(name);

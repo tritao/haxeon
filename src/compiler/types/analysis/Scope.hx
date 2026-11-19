@@ -244,10 +244,6 @@ class Scope {
 		return value == null ? null : refinedType(value);
 	}
 
-	/** The local `name` by its name (`--check-resolution` compares it with the binding a reference finds). */
-	public function lookup(name:String):Null<LocalBinding>
-		return resolveLocal(name);
-
 	/** `value`'s type here: its flow-refined type, or the declared one. */
 	public function typeOf(value:LocalBinding):CompilerType
 		return refinedType(value);
@@ -318,6 +314,7 @@ class Scope {
 		return found.isOperandUse(name, span);
 	}
 
+
 	/** The binding of the declaration with key `declaration` (`BindingWalker.key`), or null when none was defined. */
 	public function bindingOf(declaration:String):Null<LocalBinding> {
 		var table = root.byDeclaration;
@@ -356,67 +353,16 @@ class Scope {
 	public function defineReceiver(type:CompilerType, span:SourceSpan):LocalBinding
 		return define("this", type, span, true, null, true);
 
-	/** Only bindings proven never reassigned receive a declaration-sequence constant. */
-	public function setKeyPathConstant(name:String, descriptor:String):Void {
-		var value = resolveLocal(name);
-		if (value != null) value.keyPathConstant = descriptor;
-	}
-
-	/** Records that `name`, never reassigned, holds the constructor without arguments at `index`. */
-	public function setKnownConstructor(name:String, index:Int):Void {
-		var value = resolveLocal(name);
-		if (value != null) value.knownConstructor = index;
-	}
-
 	/** The constructor without arguments the local with binding `id` is known to hold, or -1. */
 	public function knownConstructor(id:String):Int {
 		var value = resolveById(id);
 		return value == null || value.knownConstructor == null ? -1 : value.knownConstructor;
 	}
 
-	public function keyPathConstant(name:String):Null<String> {
-		var value = resolveLocal(name);
-		return value == null ? null : value.keyPathConstant;
-	}
-
-	public function isAssigned(name:String):Bool {
-		var value = resolveLocal(name);
-		return value != null && isAssignedId(value.id);
-	}
-
-	public function markAssigned(name:String):Void {
-		var value = resolveLocal(name);
-		if (value != null)
-			ownAssigned().set(value.id, true);
-	}
-
 	/** For speculative typing: every visible local counts as assigned in this scope, not in its parents. */
 	public function assumeAllAssigned():Void
 		for (value in visibleValues())
 			ownAssigned().set(value.id, true);
-
-	public function setMapKeySource(name:String, source:Null<TypedExpression>):Void {
-		var value = resolveLocal(name);
-		if (value == null)
-			return;
-		if (source == null) {
-			var sources = mapKeySources;
-			if (sources != null)
-				sources.remove(value.id);
-		} else
-			(mapKeySources == null ? mapKeySources = [] : mapKeySources).set(value.id, source);
-	}
-
-	public function mapKeySource(name:String):Null<TypedExpression> {
-		var value = resolveLocal(name);
-		if (value == null)
-			return null;
-		var sources = mapKeySources;
-		if (sources != null && sources.exists(value.id))
-			return sources.get(value.id);
-		var outer = parent;
-		return outer == null ? null : outer.mapKeySource(name);
-	}
 
 	/**
 	 * Where control flow from `paths` rejoins this scope (after an if, a switch, a try, a do-while body, a conditional or a
@@ -530,25 +476,11 @@ class Scope {
 		return value;
 	}
 
-	public function recordAssignment(name:String, type:CompilerType):Void {
-		var local = resolveLocal(name);
-		if (local != null)
-			facts.recordAssignment(local.id, type);
-	}
-
 	public function trackInvalidations():FlowFacts
 		return facts.trackInvalidations();
 
 	public function applyInvalidations(summary:FlowFacts):Void
 		facts.applyInvalidations(summary);
-
-	public function refine(name:String, type:CompilerType):Void {
-		var local = resolveLocal(name);
-		if (local == null)
-			local = resolveById(name);
-		if (local != null)
-			facts.refine(local.id, type);
-	}
 
 	/** Which local maps only this function can reach; see MapEscapeAnalysis. Set on the function's outermost scope. */
 	var privacy:Null<MapPrivacy> = null;
@@ -565,18 +497,6 @@ class Scope {
 			scope = scope.parent;
 		}
 		return null;
-	}
-
-	/**
-	 * The typer met a use of `name` at `span`. Returns false when it resolves to a private map but the analysis that
-	 * made it private did not see this use as a map operand: the two scopings then disagree, and treating the map as
-	 * private could be wrong.
-	 */
-	public function privateMapUseIsKnown(name:String, span:SourceSpan):Bool {
-		var value = resolveLocal(name), found = mapPrivacy();
-		if (value == null || found == null || !found.isPrivate(value.declaration))
-			return true;
-		return found.isOperandUse(name, span);
 	}
 
 	/** Whether the local with binding `id` is a map that calls cannot reach. */
@@ -616,39 +536,6 @@ class Scope {
 	public function invalidateField(field:String):Void
 		facts.invalidateField(field);
 
-	public function invalidateExpressionsForLocal(name:String):Void {
-		var local = resolveLocal(name);
-		if (local != null) {
-			facts.invalidatePrefix('$' + 'expression:' + local.id);
-			// Map entries keyed by this local are filed under the map, so they only mention it.
-			facts.invalidateMentioning(':' + local.id);
-		}
-	}
-
-	/** A possibly reassigned local also loses field and map-key facts derived from its old value. */
-	public function invalidate(name:String):Void {
-		var local = resolveLocal(name);
-		if (local != null) {
-			facts.invalidate(local.id);
-			invalidateExpressionsForLocal(name);
-		}
-	}
-
-	public function isCapture(name:String):Bool {
-		var value = resolveLocal(name);
-		return value != null && isCaptured(value);
-	}
-
-	public function isCellCapture(name:String):Bool {
-		var value = resolveLocal(name);
-		return value != null && isCellCaptured(value);
-	}
-
-	public function cellClass(name:String):Null<String> {
-		var value = resolveLocal(name);
-		return value == null ? null : cellClassOf(value);
-	}
-
 	/** Whether `value` is a capture of the lambda this scope is in. */
 	public function isCaptured(value:LocalBinding):Bool {
 		var scope:Null<Scope> = this;
@@ -683,91 +570,6 @@ class Scope {
 		return null;
 	}
 
-	public function requireCellClass(name:String):String {
-		var resolved = cellClass(name);
-		if (resolved == null)
-			throw new InternalError('Missing capture cell for "$name"');
-		return resolved;
-	}
-
-	public function resolve(name:String):Null<CompilerType> {
-		var value = resolveLocal(name);
-		if (value == null)
-			return null;
-		var refined = facts.resolve(value.id);
-		return refined == null ? value.declared : refined;
-	}
-
-	public function resolveDeclared(name:String):Null<CompilerType> {
-		var value = resolveLocal(name);
-		if (value == null)
-			return null;
-		var own = captured;
-		if (own != null && own.storageTypes.exists(value.id))
-			return own.storageTypes.get(value.id);
-		return parent == null ? value.declared : parent.resolveDeclaredById(value.id, value.declared);
-	}
-
-	function resolveDeclaredById(id:String, fallback:CompilerType):CompilerType {
-		var own = captured;
-		return own != null && own.storageTypes.exists(id)
-			? own.storageTypes.get(id) : (parent == null ? fallback : parent.resolveDeclaredById(id, fallback));
-	}
-
-	public function resolveId(name:String):Null<String> {
-		var value = resolveLocal(name);
-		return value == null ? null : value.id;
-	}
-
-	/** Mark and query the lexical binding, so a shadowing local does not inherit its lifetime. */
-	public function markScoped(name:String):Void {
-		var value = resolveLocal(name);
-		if (value == null)
-			throw new InternalError('Missing scoped binding "$name"');
-		value.scoped = true;
-	}
-
-	public function isScoped(name:String):Bool {
-		var value = resolveLocal(name);
-		return value != null && value.scoped;
-	}
-
-	public function localFunction(name:String):Null<LocalFunction> {
-		var value = resolveLocal(name);
-		return value == null ? null : value.localFunction;
-	}
-
-	public function localFunctionParameters(name:String):Null<Array<AstArgument>> {
-		var found = localFunction(name);
-		return found == null ? null : found.arguments;
-	}
-
-	public function requireId(name:String):String {
-		var value = resolveLocal(name);
-		if (value == null)
-			throw new InternalError('Missing binding for local "$name"');
-		return value.id;
-	}
-
-	public function isReceiver(name:String):Bool {
-		var value = resolveLocal(name);
-		return value != null && value.receiver;
-	}
-
-	function resolveLocal(name:String):Null<LocalBinding> {
-		var scope:Null<Scope> = this;
-		while (scope != null) {
-			var own = scope.definitions;
-			if (own != null) {
-				var found = own.named(name);
-				if (found != null)
-					return found;
-			}
-			scope = scope.parent;
-		}
-		return null;
-	}
-
 	function resolveById(id:String):Null<LocalBinding> {
 		var own = definitions, found = own == null ? null : own.withId(id);
 		if (found != null)
@@ -790,12 +592,6 @@ class Scope {
 		return refined == null ? value.declared : refined;
 	}
 
-	/** The declaration the local `name` refers to here, in `BindingWalker.key` form. */
-	public function declarationOf(name:String):Null<String> {
-		var value = resolveLocal(name);
-		return value == null ? null : value.declaration;
-	}
-
 	/** Every visible local's name with its declaration; where a name is declared more than once, the innermost wins. */
 	public function visibleDeclarations():Map<String, String> {
 		var result:Map<String, String> = [];
@@ -808,11 +604,22 @@ class Scope {
 	public function visibleLocalNames():Array<String>
 		return [for (value in visibleValues()) value.source];
 
+	/**
+	 * The visible binding of each name, the innermost, in the order the names are first declared (as
+	 * `visibleDeclarations`).
+	 */
+	function innermostByName():Map<String, LocalBinding> {
+		var result:Map<String, LocalBinding> = [];
+		for (value in visibleValues())
+			result.set(value.source, value);
+		return result;
+	}
+
 	/** Declared array locals visible here, respecting lexical shadowing. */
 	public function visibleArrayNames():Array<String> {
 		var result = [];
-		for (name in visibleDeclarations().keys())
-			switch resolveDeclared(name) {
+		for (name => value in innermostByName())
+			switch declaredTypeOf(value) {
 				case TArray(_):
 					result.push(name);
 				default:
@@ -823,8 +630,8 @@ class Scope {
 	/** Primitive-key map locals visible here, respecting lexical shadowing. */
 	public function visiblePrimitiveMapNames():Array<String> {
 		var result = [];
-		for (name in visibleDeclarations().keys())
-			switch resolveDeclared(name) {
+		for (name => value in innermostByName())
+			switch declaredTypeOf(value) {
 				case TMap(TString, _), TMap(TInt, _):
 					result.push(name);
 				default:

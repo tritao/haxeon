@@ -514,7 +514,7 @@ class BodyTyper implements BodyTyping {
 					boxedType,
 					argument.span)),
 					TBool, argument.span),
-				defaultValue = coerce(typeDefaultExpression(argument.defaultValue, parameter.type, body.name),
+				defaultValue = coerce(typeDefaultExpression(argument, parameter.type, body.name),
 					parameter.type, 'default argument ${index + 1} to "${body.name}"');
 			arguments.push({name: parameter.name, type: boxedType});
 			callArguments.push(new TypedExpression(TConditional(absent, defaultValue,
@@ -550,13 +550,21 @@ class BodyTyper implements BodyTyping {
 		return map == null ? statements : map.statements(statements);
 	}
 
+	static function requiredInitializer(field:compiler.syntax.Ast.AstField):AstExpression {
+		var initializer = field.initializer;
+		if (initializer == null)
+			throw new InternalError('Field "${field.name}" has no initializer');
+		return initializer;
+	}
+
 	/**
 	 * A field initializer, typed as a body is: in a type-variable frame of its own, so an empty `[]`, `new Map()` or `null` inside it
 	 * (in a comprehension, a nested literal, a lambda's locals) is settled by what follows it there, as in a function body.
 	 */
-	public function typeFieldInitializer(expression:AstExpression, scope:Scope, type:CompilerType,
+	public function typeFieldInitializer(field:compiler.syntax.Ast.AstField, scope:Scope, type:CompilerType,
 			label:String):TypedExpression {
-		context.resolution = compiler.types.analysis.BodyResolution.ofExpression(expression);
+		var expression = requiredInitializer(field);
+		context.resolution = session.syntaxResolutions.ofInitializer(field);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
 		try
 			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
@@ -575,9 +583,13 @@ class BodyTyper implements BodyTyping {
 	 * use, in another unit, could fix it. While it is typed, a read of the field itself gets `provisional`'s argument, a type
 	 * variable of this frame that the initializer's type then fills, as a self-reference reads its own field in Haxe.
 	 */
-	public function typeInferredFieldInitializer(expression:AstExpression, scope:Scope, owner:String, name:String,
-			isStatic:Bool, span:SourceSpan, provisional:CompilerType->Void):TypedExpression {
-		context.resolution = compiler.types.analysis.BodyResolution.ofExpression(expression);
+	public function typeInferredFieldInitializer(declared:compiler.syntax.Ast.AstField, scope:Scope, owner:String,
+			provisional:CompilerType->Void):TypedExpression {
+		var expression = requiredInitializer(declared),
+			name = declared.name,
+			isStatic = declared.isStatic,
+			span = declared.span;
+		context.resolution = session.syntaxResolutions.ofInitializer(declared);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()),
 			field = 'field "$owner.$name"',
 			typed:TypedExpression;
@@ -1372,9 +1384,6 @@ class BodyTyper implements BodyTyping {
 	}
 
 	/** Whether the body resolver is compared with the scopes at every local (`CompileOptions.checkResolution`). */
-	public function checkingResolution():Bool
-		return session.checkResolution;
-
 	public function checkResolutions(enabled:Bool):Void
 		session.checkResolution = enabled;
 
@@ -1670,7 +1679,7 @@ class BodyTyper implements BodyTyping {
 
 	/**
 	 * The binding a read of `name` at `span` refers to: the resolution's declaration there (none: not a local), or the
-	 * receiver for `this`. Under `--check-resolution` it must be the one the name finds in `scope`.
+	 * receiver for `this`. `referenceName` is the name as the resolution saw it, when the typer reads it under another.
 	 */
 	public function referenceBinding(referenceName:String, referenceSpan:SourceSpan, name:String,
 			scope:Scope):Null<compiler.types.analysis.Scope.LocalBinding> {
@@ -1679,18 +1688,13 @@ class BodyTyper implements BodyTyping {
 		if (name.indexOf(".") >= 0)
 			return null;
 		var resolution = context.resolution;
-		var found = if (resolution == null) scope.lookup(name) else {
-			// Every local the resolution has not seen is in syntax the typer built, which reads locals as temporaries or by
-			// their declaration: a name it has not seen is a function, field or type.
-			var key = resolution.declarationAt(referenceSpan.start, referenceName);
-			key == null || key == compiler.types.analysis.BodyResolution.UNSEEN ? null : scope.bindingOf(key);
-		};
-		if (session.checkResolution && found != scope.lookup(name)) {
-			var named = scope.lookup(name);
-			throw new InternalError('--check-resolution: "$referenceName" in ${context.name} finds ${found == null ? "no local" : found.declaration + " (" + found.id + ")"} by its declaration but ${named == null ? "no local" : named.declaration + " (" + named.id + ")"} by its name',
+		if (resolution == null)
+			throw new InternalError('"$referenceName" is read in ${context.name}, which has no resolution',
 				referenceSpan);
-		}
-		return found;
+		// Every local the resolution has not seen is in syntax the typer built, which reads locals as temporaries or by their
+		// declaration: a name it has not seen is a function, field or type.
+		var key = resolution.declarationAt(referenceSpan.start, referenceName);
+		return key == null || key == compiler.types.analysis.BodyResolution.UNSEEN ? null : scope.bindingOf(key);
 	}
 
 	/** The local `expression` reads, when it is one: a variable the resolution resolves, a temporary or a declared local. */
@@ -2235,10 +2239,11 @@ class BodyTyper implements BodyTyping {
 		return inlineConstantResolver.resolve(owner, name, span);
 
 	/** An inline field's initializer, against its annotation `expected`, or giving an unannotated one (`expected` null) its type. */
-	public function typeInlineInitializer(expression:AstExpression, owner:String, name:String,
-			expected:Null<CompilerType>,
+	public function typeInlineInitializer(field:compiler.syntax.Ast.AstField, owner:String, expected:Null<CompilerType>,
 			typeParameters:Array<String>):TypedExpression {
+		var expression = requiredInitializer(field), name = field.name;
 		var body = enterBody(owner + ".__inline", declarationTypeSubstitutions(owner, typeParameters), owner);
+		body.resolution = session.syntaxResolutions.ofInitializer(field);
 		var initializer:TypedExpression;
 		try {
 			var value = typeExpression(expression, new Scope(), expected);
@@ -2539,8 +2544,11 @@ class BodyTyper implements BodyTyping {
 	static function isPosInfosParameter(argument:compiler.syntax.Ast.AstArgument):Bool
 		return CallResolver.isPosInfosParameter(argument);
 
-	public function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
+	public function typeDefaultExpression(argument:compiler.syntax.Ast.AstArgument, expected:CompilerType,
 			declarationName:String):TypedExpression {
+		var expression = argument.defaultValue;
+		if (expression == null)
+			throw new InternalError('Argument "${argument.name}" of "$declarationName" has no default value');
 		// Defaults are resolved in the callee's scope but their substituted constants belong to the caller's artifact.
 		var previousCaller = defaultArgumentCaller;
 		if (defaultArgumentCaller == null)
@@ -2548,6 +2556,7 @@ class BodyTyper implements BodyTyping {
 		var body = enterBody(TypingSession.defaultArgumentBody(requiredString(defaultArgumentCaller), declarationName),
 			null,
 			parentPath(declarationName));
+		body.resolution = session.syntaxResolutions.ofDefault(argument);
 		try {
 			var typed = typeExpression(expression, new Scope(), expected);
 			session.output.records.recordDefaultArgumentSource(defaultArgumentCaller,

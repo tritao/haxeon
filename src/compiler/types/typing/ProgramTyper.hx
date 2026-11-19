@@ -855,7 +855,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					if (!field.isStatic)
 						scope.defineReceiver(session.representation.receiverType(classDecl.name, erasedSubstitutions),
 							field.span);
-					initializer = bodyTyper.typeFieldInitializer(parsedInitializer, scope, type,
+					initializer = bodyTyper.typeFieldInitializer(field, scope, type,
 						initializerLabel(classDecl, field));
 					bodyTyper.leaveBody(initializerContext);
 					initializerContextWarnings = initializerContext.warnings;
@@ -1241,8 +1241,8 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			throw new InternalError('Field "${classDecl.name}.${field.name}" has no initializer');
 		if (!field.isStatic)
 			scope.defineReceiver(session.representation.receiverType(classDecl.name, substitutions), field.span);
-		var initializer = type == null ? bodyTyper.typeInferredFieldInitializer(expression, scope, classDecl.name,
-			field.name, field.isStatic, field.span, provisional) : bodyTyper.typeFieldInitializer(expression, scope,
+		var initializer = type == null ? bodyTyper.typeInferredFieldInitializer(field, scope, classDecl.name,
+			provisional) : bodyTyper.typeFieldInitializer(field, scope,
 			type,
 			initializerLabel(classDecl, field));
 		var fieldType = type == null ? initializer.type : type;
@@ -1273,9 +1273,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			context.memberInitializer = !field.isStatic;
 			if (!field.isStatic)
 				scope.defineReceiver(session.representation.receiverType(classDecl.name, substitutions), field.span);
-			lifted = bodyTyper.typeInferredFieldInitializer(expression, scope, classDecl.name, field.name,
-				field.isStatic,
-				field.span, _ -> {}).type;
+			lifted = bodyTyper.typeInferredFieldInitializer(field, scope, classDecl.name, _ -> {}).type;
 			bodyTyper.leaveBody(context);
 			session.endDeclarationUnit(begun);
 		} catch (error:CompileError) {

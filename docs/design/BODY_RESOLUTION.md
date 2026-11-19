@@ -174,6 +174,14 @@ looked up. Two questions stay questions about names, since a pattern's names are
 whether a pattern's bare name is a visible local (`Scope.hasVisibleLocal`). Main-thread instructions as before
 (61.39G), 31 MB more allocated (binding tables, initializer resolutions).
 
+Step 4.3 is done. `Scope` has no lookup of a local by name: its name methods and `resolveLocal` are gone, and so are the
+check mode's comparisons with them (`--check-resolution` now only compares the resolution's lambda and loop facts with
+the walks still kept for syntax the typer builds). Every typing context has a resolution, and one without is an internal
+error. What a declaration holds outside its bodies (a field's or an inline constant's initializer, an argument's default)
+is resolved once and kept with its syntax (`SyntaxResolutions`), and the context outside every body has an empty
+resolution: no local is declared there. Byte-identical on all 638 programs and the self-compile; allocation and
+main-thread instructions as before step 4.3.
+
 ## Step 4: the typer reads locals by binding
 
 **Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:

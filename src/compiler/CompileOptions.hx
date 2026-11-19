@@ -82,8 +82,9 @@ class CompileOptions {
 	public final verifyIr:Bool;
 
 	/**
-	 * Check, at every local the typer resolves, that the body's resolver (`BodyResolution`) names the same declaration as the
-	 * typer's scopes, and fail on a difference (docs/design/BODY_RESOLUTION.md, step 1). Slow; for the test suites.
+	 * Check that what the body's resolution (`BodyResolution`) gives of each lambda and loop is what walking its syntax gives,
+	 * as the typer still does for syntax it builds, and fail on a difference (docs/design/BODY_RESOLUTION.md). Slow; for
+	 * the test suites.
 	 */
 	public final checkResolution:Bool;
 

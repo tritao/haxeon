@@ -80,7 +80,7 @@ class GenericInstantiation {
 				arguments.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
 					'default argument ${index + 1} to "$baseName"'));
 			else
-				arguments.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(defaultValue, expected, baseName),
+				arguments.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(parameter, expected, baseName),
 					expected,
 					'default argument ${index + 1} to "$baseName"'));
 		}

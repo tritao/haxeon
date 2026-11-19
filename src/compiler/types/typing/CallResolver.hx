@@ -699,7 +699,7 @@ class CallResolver {
 				typed.push(bodyTyper.coerce(new TypedExpression(TNullLiteral, TNull, span), expected,
 					'default argument ${i + 1} to "$name"'));
 			else
-				typed.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(defaultValue, expected, name), expected,
+				typed.push(bodyTyper.coerce(bodyTyper.typeDefaultExpression(parameter, expected, name), expected,
 					'default argument ${i + 1} to "$name"'));
 		}
 		return coerceArguments(typed, types, name);
@@ -1462,7 +1462,7 @@ class CallResolver {
 			var parameter = localParameters == null ? null : localParameters[index];
 			typedArguments.push(parameter != null
 				&& DefaultArguments.valueDefault(parameter, functionType.arguments[index], session.relations)
-				? bodyTyper.typeDefaultExpression(parameter.defaultValue, functionType.arguments[index],
+				? bodyTyper.typeDefaultExpression(parameter, functionType.arguments[index],
 				callableName) : new TypedExpression(TNullLiteral, TNull, span));
 		}
 		typedArguments = coerceArguments(typedArguments, functionType.arguments,
@@ -3036,7 +3036,7 @@ class CallResolver {
 				else if (defaultValue == null)
 					typed.push(new TypedExpression(TNullLiteral, TNull, span));
 				else
-					typed.push(bodyTyper.typeDefaultExpression(defaultValue, semanticExpected[index], constructorName));
+					typed.push(bodyTyper.typeDefaultExpression(parameter, semanticExpected[index], constructorName));
 			}
 			typed = coerceArguments(typed, semanticExpected, constructorName);
 		}

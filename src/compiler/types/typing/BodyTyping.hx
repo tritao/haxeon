@@ -66,10 +66,10 @@ interface BodyTyping {
 	function elaborateBoundary(value:TypedExpression, target:CompilerType):TypedExpression;
 	function elaborateOperation(operation:compiler.types.TypedAst.ParameterOperation, arguments:Array<TypedExpression>,
 			span:compiler.core.Source.SourceSpan):TypedExpression;
-	function typeDefaultExpression(expression:AstExpression, expected:CompilerType,
+	function typeDefaultExpression(argument:compiler.syntax.Ast.AstArgument, expected:CompilerType,
 			declarationName:String):TypedExpression;
 	function posInfosExpression(span:SourceSpan):AstExpression;
-	function typeInlineInitializer(expression:AstExpression, owner:String, name:String, expected:Null<CompilerType>,
+	function typeInlineInitializer(field:compiler.syntax.Ast.AstField, owner:String, expected:Null<CompilerType>,
 			typeParameters:Array<String>):TypedExpression;
 
 	// Members, fields and receivers.
@@ -117,9 +117,6 @@ interface BodyTyping {
 	}>>;
 
 	function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool;
-
-	/** With `CompileOptions.checkResolution`, whether the body resolver names `name`'s declaration for this reference. */
-	function checkingResolution():Bool;
 
 	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool;
 
