@@ -88,9 +88,9 @@ class EnumReflection {
 				statement:TypedStatement,
 				local:TypedExpression
 			} {
-		inner.define(name, value.type, span);
-		bodyTyper.bindCell(name, span, inner, value.type);
-		var id = inner.requireId(name);
+		var binding = inner.define(name, value.type, span);
+		bodyTyper.bindCell(binding, value.type);
+		var id = binding.id;
 		return {statement: TVar(id, value, span), local: new TypedExpression(TLocal(id), value.type, span)};
 	}
 

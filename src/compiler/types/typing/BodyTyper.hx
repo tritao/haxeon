@@ -274,7 +274,7 @@ class BodyTyper implements BodyTyping {
 		} else if (owner != null && !isStatic) {
 			scope.defineReceiver(session.representation.receiverType(owner, context.typeSubstitutions), fn.span);
 		}
-		context.receiver = scope.resolve("this");
+		context.receiver = scope.receiverType();
 		var arguments:Array<{name:String, type:CompilerType}> = [];
 		if (abstractReceiver != null)
 			arguments.push({name: "this", type: abstractReceiver});
@@ -282,14 +282,14 @@ class BodyTyper implements BodyTyping {
 		var bodyArgumentTypes = argumentTypesOf(declaration, substitutions);
 		for (index in 0...fn.arguments.length) {
 			var argument = fn.arguments[index], type = bodyArgumentTypes[index];
-			scope.define(argument.name, type, argument.span);
+			var parameter = scope.define(argument.name, type, argument.span);
 			var constants = session.keyPaths.parameters.get(functionName);
 			if (constants != null && constants.exists(argument.name)) {
-				scope.setKeyPathConstant(argument.name, constants.get(argument.name));
+				parameter.keyPathConstant = constants.get(argument.name);
 				continue;
 			}
-			bindCell(argument.name, argument.span, scope, type);
-			arguments.push({name: scope.requireId(argument.name), type: type});
+			bindCell(parameter, type);
+			arguments.push({name: parameter.id, type: type});
 		}
 		context.expectedReturnType = result;
 		var monomorphs = frame == null ? session.monomorphs.begin(session.closureConversion.mark()) : frame;
@@ -644,14 +644,9 @@ class BodyTyper implements BodyTyping {
 		return map;
 	}
 
-	public function boundCell(name:String, scope:Scope):Null<String> {
-		var id = scope.resolveId(name);
-		return id == null ? null : context.storage.cell(id);
-	}
 
-	public function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
-		var id = scope.requireId(name),
-			declaration = BindingWalker.key(name, span);
+	public function bindCell(binding:compiler.types.analysis.Scope.LocalBinding, type:CompilerType):Void {
+		var id = binding.id, declaration = binding.declaration;
 		// Refine conservative receiver writes once their type is known. Whole assignments keep their storage and flow effects.
 		if (context.storage.candidateKind(declaration) == MutableCapture
 			&& !context.assignedDeclarations.exists(declaration)) {
@@ -787,9 +782,10 @@ class BodyTyper implements BodyTyping {
 						throw new InternalError("Scoped declaration was not typed");
 					for (item in typed)
 						output.push(item);
-					var boundType = scope.resolveDeclared(name);
-					if (boundType == null)
+					var bound = scope.bindingOf(BindingWalker.key(name, span));
+					if (bound == null)
 						throw new InternalError("Scoped binding was not declared");
+					var boundType = scope.declaredTypeOf(bound);
 					// A no-return initializer never registers cleanup and has no value to dispatch on.
 					if ((switch boundType {
 						case TNever: true;
@@ -803,8 +799,8 @@ class BodyTyper implements BodyTyping {
 					var contract = lowerType(NamedType("Disposable"), span);
 					if (!satisfiesDisposable(element, contract))
 						fail("E1002", 'Scoped binding "$name" requires Disposable conformance', span);
-					scope.markScoped(name);
-					context.scopedBindings.set(scope.requireId(name), name);
+					bound.scoped = true;
+					context.scopedBindings.set(bound.id, name);
 					// The cleanup reads the binding this statement declares, by its declaration.
 					var call = Expression(MethodCall(DeclaredVariable(name, span.start, span), "dispose", [], span),
 						span);
@@ -1269,9 +1265,9 @@ class BodyTyper implements BodyTyping {
 											// A name binds the element unless it names a constructor, which is matched.
 											case Variable(binding, bindingSpan) if (patternConstructor(binding,
 												bindingSpan, elementType, scope) == null):
-												declarePatternName(binding, elementType, bindingSpan, scope);
 												bindings.push({
-													name: scope.requireId(binding),
+													name: declarePatternName(binding, elementType, bindingSpan,
+														scope).id,
 													type: elementType,
 													storageType: elementStorage,
 													fieldStorageType: storageType,
@@ -1281,9 +1277,9 @@ class BodyTyper implements BodyTyping {
 											case TemporaryVariable(local, bindingSpan):
 												local.declaration = BindingWalker.key(local.name, bindingSpan);
 												var binding = local.name;
-												declarePatternName(binding, elementType, bindingSpan, scope);
 												bindings.push({
-													name: scope.requireId(binding),
+													name: declarePatternName(binding, elementType, bindingSpan,
+														scope).id,
 													type: elementType,
 													storageType: elementStorage,
 													fieldStorageType: storageType,
@@ -1339,13 +1335,15 @@ class BodyTyper implements BodyTyping {
 	 * Declares a name a pattern binds. The pattern of `value.match(pattern)` binds none, as in Haxe: its result is a Bool, so a
 	 * name it bound would be out of scope where it could be read.
 	 */
-	function declarePatternName(name:String, type:CompilerType, span:SourceSpan, scope:Scope):Void {
+	function declarePatternName(name:String, type:CompilerType, span:SourceSpan,
+			scope:Scope):compiler.types.analysis.Scope.LocalBinding {
 		rejectMatchPatternVariable(span);
+		var binding = scope.define(name, type, span);
 		var recorded = patternNames;
 		if (recorded != null)
-			recorded.push({name: name, type: type, span: span});
-		scope.define(name, type, span);
-		bindCell(name, span, scope, type);
+			recorded.push({name: name, type: type, span: span, binding: binding});
+		bindCell(binding, type);
+		return binding;
 	}
 
 	/** Enters the switch at `span` rewritten from structure patterns, whose tuple reads the fields at `columns`, until `leave`. */
@@ -1383,7 +1381,12 @@ class BodyTyper implements BodyTyping {
 	 */
 
 	/** While a case's pattern is typed, the names it binds, in order (`SwitchCaseTyper`). */
-	public var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>> = null;
+	public var patternNames:Null<Array<{
+		name:String,
+		type:CompilerType,
+		span:SourceSpan,
+		binding:compiler.types.analysis.Scope.LocalBinding
+	}>> = null;
 
 	public function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool
 		return isAssignable(actual, expected);
@@ -1391,9 +1394,8 @@ class BodyTyper implements BodyTyping {
 	/** Declares a name a pattern binds to the enum payload at `index`. */
 	function bindPatternName(name:String, span:SourceSpan, scope:Scope, type:CompilerType, storageType:CompilerType,
 			index:Int):TypedSwitchBinding {
-		declarePatternName(name, type, span, scope);
 		return {
-			name: scope.requireId(name),
+			name: declarePatternName(name, type, span, scope).id,
 			type: type,
 			storageType: storageType,
 			fieldStorageType: storageType,
@@ -1417,9 +1419,8 @@ class BodyTyper implements BodyTyping {
 						innerSpan);
 					default:
 				}
-				declarePatternName(name, expected, span, scope);
 				{
-					name:scope.requireId(name), pattern:pattern
+					name:declarePatternName(name, expected, span, scope).id, pattern:pattern
 				};
 			default: null;
 		};
@@ -1442,15 +1443,12 @@ class BodyTyper implements BodyTyping {
 					return null;
 				if (info != null) null;
 				else if (name == "_") null;
-				else {
-					declarePatternName(name, expected, span, scope);
-					scope.requireId(name);
-				}
+				else
+					declarePatternName(name, expected, span, scope).id;
 			// A temporary the typer put in the pattern binds, whatever its name.
 			case TemporaryVariable(local, span):
 				local.declaration = BindingWalker.key(local.name, span);
-				declarePatternName(local.name, expected, span, scope);
-				scope.requireId(local.name);
+				declarePatternName(local.name, expected, span, scope).id;
 			default: null;
 		}
 	}
@@ -1706,7 +1704,7 @@ class BodyTyper implements BodyTyping {
 		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
 		var sourceName = span.isBareReference ? span.referenceName : null,
 			owner = context.lexicalOwner,
-			thisType = scope.resolve("this");
+			thisType = scope.receiverType();
 		if (name != "this"
 			&& sourceName != null
 			&& sourceName.indexOf(".") < 0
@@ -1772,7 +1770,7 @@ class BodyTyper implements BodyTyping {
 					return inlineValue == null ? staticFieldValue(ownStatic.owner, name, ownStatic.type, span,
 						scope) : inlineValue;
 				}
-				var thisType = scope.resolve("this");
+				var thisType = scope.receiverType();
 				if (thisType != null && findFieldType(thisType, name) != null)
 					return typedMemberWithFlow(implicitReceiver(span, scope), name, span, scope);
 			}
@@ -1873,7 +1871,7 @@ class BodyTyper implements BodyTyping {
 						for (value in unqualifiedAbstract.values)
 							if (value.name == name)
 								return EnumAbstractValues.typed(this, unqualifiedAbstract, value, span);
-					var thisType = scope.resolve("this");
+					var thisType = scope.receiverType();
 					if (thisType == null)
 						fail("E1005", 'Unknown variable "$name"', span);
 					var field = findFieldType(thisType, name);
@@ -2758,7 +2756,7 @@ class BodyTyper implements BodyTyping {
 	public function resolveReceiver(name:String, span:SourceSpan, scope:Scope):Null<TypedExpression> {
 		if (scope.resolve(name) != null)
 			return typeExpression(Variable(name, span), scope);
-		var thisType = scope.resolve("this");
+		var thisType = scope.receiverType();
 		if (thisType != null && findFieldType(thisType, name) != null)
 			return typeExpression(Variable(name, span), scope);
 		var owner = context.lexicalOwner,
@@ -2846,7 +2844,7 @@ class BodyTyper implements BodyTyping {
 	 * reads as the underlying value), so its properties are found.
 	 */
 	public function implicitReceiver(span:SourceSpan, scope:Scope):TypedExpression {
-		var receiver = typeExpression(Variable("this", span), scope), thisType = scope.resolve("this");
+		var receiver = typeExpression(Variable("this", span), scope), thisType = scope.receiverType();
 		return switch thisType {
 			case TAbstract(_, _, _): session.representation.boundaryCast(receiver, thisType);
 			default: receiver;

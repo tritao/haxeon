@@ -89,8 +89,7 @@ interface BodyTyping {
 	function implicitReceiver(span:SourceSpan, scope:Scope):TypedExpression;
 
 	// Captured locals.
-	function boundCell(name:String, scope:Scope):Null<String>;
-	function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void;
+	function bindCell(binding:compiler.types.analysis.Scope.LocalBinding, type:CompilerType):Void;
 
 	// Switch rules, shared by statement switches and switch expressions.
 	function switchCasePattern(value:AstExpression, expected:CompilerType, scope:Scope):SwitchCasePattern;
@@ -108,7 +107,12 @@ interface BodyTyping {
 	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>;
 
 	/** While a case's pattern is typed, the names it binds, in order (`SwitchCaseTyper`); null otherwise. */
-	var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>>;
+	var patternNames:Null<Array<{
+		name:String,
+		type:CompilerType,
+		span:SourceSpan,
+		binding:compiler.types.analysis.Scope.LocalBinding
+	}>>;
 
 	function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool;
 

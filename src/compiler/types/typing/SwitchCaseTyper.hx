@@ -25,7 +25,12 @@ typedef SwitchPatternMatch = {
 	final span:SourceSpan;
 }
 
-private typedef PatternName = {name:String, type:CompilerType, span:SourceSpan};
+private typedef PatternName = {
+	name:String,
+	type:CompilerType,
+	span:SourceSpan,
+	binding:compiler.types.analysis.Scope.LocalBinding
+};
 
 /**
  * Types the patterns of one switch case, for statement and expression switches alike (docs/design/SWITCH_CASES.md). The first
@@ -149,7 +154,8 @@ class SwitchCaseTyper {
 				fail("E1003",
 					'${compiler.semantic.SemanticSignature.display(bound.type)} should be ${compiler.semantic.SemanticSignature.display(first.type)}',
 					first.span);
-			locals.set(scope.requireId(bound.name), caseScope.requireId(bound.name));
+			if (first != null)
+				locals.set(bound.binding.id, first.binding.id);
 		}
 		for (first in firstNames)
 			if (named(names, first.name) == null)

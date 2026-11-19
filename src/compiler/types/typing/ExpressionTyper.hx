@@ -46,6 +46,7 @@ import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
 import compiler.types.StructProperties;
 import compiler.types.analysis.BindingWalker;
+import compiler.types.analysis.Scope.LocalBinding;
 
 /** Dispatches source expressions and owns their expression-specific typing rules. */
 class ExpressionTyper {
@@ -1327,6 +1328,13 @@ class ExpressionTyper {
 	}
 
 	/** `0...held.length`, the indices of the array a comprehension over `index => element` holds. */
+	/** The id of the binding a comprehension defined for `name`, which it must have. */
+	static function definedId(binding:Null<LocalBinding>, name:String):String {
+		if (binding == null)
+			throw new InternalError('Missing binding for local "$name"');
+		return binding.id;
+	}
+
 	static function indexRange(held:TemporaryLocal, span:SourceSpan):AstExpression
 		return Range(IntegerLiteral(0, span), Member(TemporaryVariable(held, span), "length", span), span);
 
@@ -1411,11 +1419,11 @@ class ExpressionTyper {
 		}
 		if (keyType == null)
 			throw new InternalError("Array comprehension item type was not resolved");
-		loopScope.define(keyName, keyType, span);
+		var keyBinding = loopScope.define(keyName, keyType, span), valueBinding:Null<LocalBinding> = null;
 		if (valueName != null)
 			switch originalIterable.type {
 				case TMap(_, mapValue):
-					loopScope.define(valueName, mapValue, span);
+					valueBinding = loopScope.define(valueName, mapValue, span);
 				default:
 			}
 		var map = valueName == null ? CallResolver.mapKeyIteratorSource(originalIterable) : null;
@@ -1425,7 +1433,7 @@ class ExpressionTyper {
 			&& !AstScan.mayRemoveMapEntries([for (expression in bodyExpressions) Expression(expression, span)],
 			keyName)) {
 			if (map != null) {
-				var key = new TypedExpression(TLocal(loopScope.requireId(keyName)), keyType, span),
+				var key = new TypedExpression(TLocal(keyBinding.id), keyType, span),
 					entryPath = FlowAnalysis.mapEntryPath(map, key);
 				if (entryPath != null)
 					switch map.type {
@@ -1484,12 +1492,12 @@ class ExpressionTyper {
 						[new TypedExpression(TLocal(inner), elementType, span)]), TInt, span), span)
 				], span);
 			}
-			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition, append,
+			return structuralComprehension(typedIterable, keyBinding.id, typedCondition, append,
 				resultName,
 				new TypedExpression(TArrayLiteral([]), resultType, span), result, span);
 		}
-		return new TypedExpression(TArrayComprehension(loopScope.requireId(keyName),
-			valueName == null ? null : loopScope.requireId(valueName),
+		return new TypedExpression(TArrayComprehension(keyBinding.id,
+			valueName == null ? null : definedId(valueBinding, valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedValue, flattened),
 			TArray(elementType), span, false, map);
 	}
@@ -1548,11 +1556,11 @@ class ExpressionTyper {
 		}
 		if (itemType == null)
 			throw new InternalError("Map comprehension item type was not resolved");
-		loopScope.define(keyName, itemType, span);
+		var keyBinding = loopScope.define(keyName, itemType, span), valueBinding:Null<LocalBinding> = null;
 		if (valueName != null)
 			switch originalIterable.type {
 				case TMap(_, mapValue):
-					loopScope.define(valueName, mapValue, span);
+					valueBinding = loopScope.define(valueName, mapValue, span);
 				default:
 			}
 		var typedCondition = predicate == null
@@ -1577,12 +1585,12 @@ class ExpressionTyper {
 			var resultType = TMap(resultKey, resultValue),
 				resultName = "$comprehension-result:" + span.start;
 			var result = new TypedExpression(TLocal(resultName), resultType, span);
-			return structuralComprehension(typedIterable, loopScope.requireId(keyName), typedCondition,
+			return structuralComprehension(typedIterable, keyBinding.id, typedCondition,
 				TMapAssign(result, typedKey, typedValue, span),
 				resultName, new TypedExpression(TMapLiteral([]), resultType, span), result, span);
 		}
-		return new TypedExpression(TMapComprehension(loopScope.requireId(keyName),
-			valueName == null ? null : loopScope.requireId(valueName),
+		return new TypedExpression(TMapComprehension(keyBinding.id,
+			valueName == null ? null : definedId(valueBinding, valueName),
 			valueName == null ? typedIterable : originalIterable, typedCondition, typedKey, typedValue),
 			TMap(resultKey, resultValue), span);
 	}
@@ -2130,7 +2138,7 @@ class ExpressionTyper {
 				var property = switch target {
 					case Member(object, field, _): {object: object, field: field};
 					case Variable(name, variableSpan) if (name.indexOf(".") < 0 && scope.resolve(name) == null
-						&& scope.resolve("this") != null):
+						&& scope.receiverType() != null):
 						{object: Variable("this", variableSpan), field: name};
 					case Variable(name, variableSpan) if (name.lastIndexOf(".") > 0):
 						{

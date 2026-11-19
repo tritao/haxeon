@@ -311,9 +311,9 @@ class CallResolver {
 			inner = new Scope(scope),
 			arguments:Array<AstArgument> = [],
 			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
-		inner.define(held.name, value.type, span);
-		held.declaration = compiler.types.analysis.BindingWalker.key(held.name, span);
-		bodyTyper.bindCell(held.name, span, inner, value.type);
+		var heldBinding = inner.define(held.name, value.type, span);
+		held.declaration = heldBinding.declaration;
+		bodyTyper.bindCell(heldBinding, value.type);
 		for (index in 1...fn.arguments.length) {
 			var argument = new TemporaryLocal("__haxeon_argument" + index);
 			arguments.push({
@@ -338,7 +338,7 @@ class CallResolver {
 				case TVoid: Expression(call, span);
 				default: Return(call, span);
 			}], 'bound:$name@${span.start}', span), inner, expected);
-		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held.name), value, span)], bound), bound.type,
+		return new TypedExpression(TBlockExpression([TVar(heldBinding.id, value, span)], bound), bound.type,
 			span);
 	}
 
@@ -397,9 +397,9 @@ class CallResolver {
 			arguments:Array<AstArgument> = [],
 			argumentTypes:Array<CompilerType> = [],
 			passed:Array<AstExpression> = [TemporaryVariable(held, span)];
-		inner.define(held.name, value.type, span);
-		held.declaration = compiler.types.analysis.BindingWalker.key(held.name, span);
-		bodyTyper.bindCell(held.name, span, inner, value.type);
+		var heldBinding = inner.define(held.name, value.type, span);
+		held.declaration = heldBinding.declaration;
+		bodyTyper.bindCell(heldBinding, value.type);
 		if (typeFunction == "Type.enumEq") {
 			var argument = new TemporaryLocal("__haxeon_argument1");
 			arguments.push({name: argument.name, type: InferredType, span: span, optional: false, local: argument});
@@ -415,7 +415,7 @@ class CallResolver {
 			bound = bodyTyper.typeExpression(Lambda(arguments, [Return(Call(typeFunction, passed, span), span)],
 			'bound:$name@${span.start}', span), inner,
 			TFunction(argumentTypes, result, FunctionTypes.ofArguments(arguments)));
-		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held.name), value, span)], bound), bound.type,
+		return new TypedExpression(TBlockExpression([TVar(heldBinding.id, value, span)], bound), bound.type,
 			span);
 	}
 
@@ -1236,7 +1236,7 @@ class CallResolver {
 
 	public function typeImplicitFunctionFieldCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
 			scope:Scope):Null<TypedExpression> {
-		var thisType = scope.resolve("this"),
+		var thisType = scope.receiverType(),
 			callableFieldType = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
 		if (callableFieldType == null) {
 			// A static field of the class (or a base) that holds a function (`static var twice:Int->Int`), called by its bare name:
@@ -1576,12 +1576,12 @@ class CallResolver {
 		// An abstract's own instance method called without a receiver is a call on `this`, whose type
 		// arguments are the method's: they are not inferred again from the call's arguments.
 		var abstractDeclaration = session.declarations.abstracts.get(owner);
-		if (abstractDeclaration != null && scope.resolve("this") != null)
+		if (abstractDeclaration != null && scope.receiverType() != null)
 			for (candidate in abstractDeclaration.methods)
 				if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
 					return typeAbstractMethodCall(session.representation
 						.boundaryCast(typeExpressionValue(Variable("this", span), scope),
-						scope.resolve("this")), name, arguments, span,
+						scope.receiverType()), name, arguments, span,
 						scope);
 		var methodInfo = findMethod(owner, name);
 		if (methodInfo == null)
@@ -1594,7 +1594,7 @@ class CallResolver {
 		if (BodyTyper.functionTypeParameters(method).length > 0) {
 			var receiver:Null<TypedExpression> = null;
 			if (!methodInfo.isStatic) {
-				if (scope.resolve("this") == null)
+				if (scope.receiverType() == null)
 					fail("E1007", 'Instance method "$methodKey" requires an object', span);
 				receiver = typeExpressionValue(Variable("this", span), scope);
 			}
@@ -1614,7 +1614,7 @@ class CallResolver {
 				bodyTyper.functionResultType(method, method.span),
 				span), methodKey, scope);
 		}
-		if (scope.resolve("this") == null)
+		if (scope.receiverType() == null)
 			fail("E1007", 'Instance method "$methodKey" requires an object', span);
 		var receiver = typeExpressionValue(Variable("this", span), scope),
 			methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
@@ -1984,7 +1984,7 @@ class CallResolver {
 			baseType = requiredMapValue(session.classDecls, owner).base;
 		if (baseType == null)
 			fail("E1007", 'super.$name() requires a base class', span);
-		if (scope.resolve("this") == null)
+		if (scope.receiverType() == null)
 			fail("E1007", 'super.$name() requires an instance method', span);
 		var baseName = switch session.declarations.resolve(baseType, span, session.currentContext.typeSubstitutions) {
 			case TInstance(_, value, _): value;

@@ -111,9 +111,9 @@ class StatementTyper {
 					default: false;
 				}) ? uninitializedType(name, span) : session.declarations.resolve(declared, span,
 					context.typeSubstitutions);
-				scope.define(name, declaredType, span, false);
-				bodyTyper.bindCell(name, span, scope, declaredType);
-				[TDeclare(scope.requireId(name), declaredType, span)];
+				var binding = scope.define(name, declaredType, span, false);
+				bodyTyper.bindCell(binding, declaredType);
+				[TDeclare(binding.id, declaredType, span)];
 			case VarDeclaration(name, declared, initializer, span):
 				var localFunction:Null<LocalFunction> = null;
 				// A lambda with a declared result type is bound through a typed local; look through that wrapper.
@@ -141,15 +141,15 @@ class StatementTyper {
 				var declaredType:Null<CompilerType> = declared == null ? null : session.declarations.resolve(declared,
 					span,
 					context.typeSubstitutions);
-				var predeclared = false, recursiveCell:Null<String> = null;
+				var predeclared:Null<LocalBinding> = null, recursiveCell:Null<String> = null;
 				if (declaredType != null)
 					switch initializer {
 						case Lambda(_, _, _, _):
-							scope.define(name, declaredType, span, true, null, false, localFunction);
-							predeclared = true;
+							var binding = scope.define(name, declaredType, span, true, null, false, localFunction);
+							predeclared = binding;
 							// A recursive local function reads itself through a cell bound before its closure exists.
-							bodyTyper.bindCell(name, span, scope, declaredType);
-							recursiveCell = context.storage.cell(scope.requireId(name));
+							bodyTyper.bindCell(binding, declaredType);
+							recursiveCell = context.storage.cell(binding.id);
 						default:
 					}
 				var value = bodyTyper.typeExpression(initializer, scope, declaredType);
@@ -166,35 +166,31 @@ class StatementTyper {
 				// Its type's empty variables (`var list = []`, `var x = null`) are this local's: one nothing fills is reported by it.
 				if (declared == null)
 					compiler.types.Monomorphs.nameLocal(declaredType != null ? declaredType : value.type, name, span);
-				if (recursiveCell != null)
-					return [
-						TDeclare(scope.requireId(name), declaredType, span),
-						TAssign(scope.requireId(name), value, span)
-					];
+				if (recursiveCell != null && predeclared != null)
+					return [TDeclare(predeclared.id, declaredType, span), TAssign(predeclared.id, value, span)];
 				else if (TypeRelations.equals(value.type, TNull))
 					fail("E1002", 'Null requires an explicit nullable type for local "$name"', span);
 				if (localFunction == null && declared == null)
 					localFunction = aliasedFunction(name, span, value, statements, statementIndex, scope);
-				if (!predeclared)
-					scope.define(name, value.type, span, true, null, false, localFunction);
+				var binding = predeclared != null ? predeclared : scope.define(name, value.type, span, true, null,
+					false,
+					localFunction);
 				var pathConstant = KeyPathTyping.known(session, value);
-				if (pathConstant != null
-					&& !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span))) {
-					scope.setKeyPathConstant(name, pathConstant.name);
+				if (pathConstant != null && !context.assignedDeclarations.exists(binding.declaration)) {
+					binding.keyPathConstant = pathConstant.name;
 					return [];
 				}
-				scope.setMapKeySource(name, value.mapKeySource);
+				scope.setMapKeySourceOf(binding, value.mapKeySource);
 				// A local never reassigned holds its initializer: a constructor without arguments is then known by value.
 				var constructor = switch value.expression {
 					case TEnumLiteral(_, index): index;
 					case TEnumConstruct(_, index, arguments) if (arguments.length == 0): index;
 					default: -1;
 				};
-				if (constructor >= 0
-					&& !context.assignedDeclarations.exists(compiler.types.analysis.BindingWalker.key(name, span)))
-					scope.setKnownConstructor(name, constructor);
-				bodyTyper.bindCell(name, span, scope, value.type);
-				[TVar(scope.requireId(name), value, span)];
+				if (constructor >= 0 && !context.assignedDeclarations.exists(binding.declaration))
+					binding.knownConstructor = constructor;
+				bodyTyper.bindCell(binding, value.type);
+				[TVar(binding.id, value, span)];
 			case Return(expression, span):
 				var expected = result == null ? context.inferredResult : result;
 				var value = bodyTyper.typeExpression(expression, scope,
@@ -344,7 +340,7 @@ class StatementTyper {
 			return name;
 		if (scope.resolve(source) != null)
 			return source;
-		var thisType = scope.resolve("this"), owner = session.currentContext.lexicalOwner;
+		var thisType = scope.receiverType(), owner = session.currentContext.lexicalOwner;
 		if (thisType != null && bodyTyper.findFieldType(thisType, source) != null
 			|| owner != null && bodyTyper.findStaticFieldNullable(owner, source) != null)
 			return source;
@@ -419,7 +415,7 @@ class StatementTyper {
 			if (binding != null && binding.scoped)
 				fail("E1002", 'Cannot reassign scoped binding "$name"', span);
 			if (binding == null) {
-				var thisType = scope.resolve("this"),
+				var thisType = scope.receiverType(),
 					instanceField = thisType == null ? null : bodyTyper.findFieldType(thisType, name);
 				if (instanceField != null) {
 					if (thisType == null)
@@ -727,11 +723,11 @@ class StatementTyper {
 			// A handler can run after any prefix of the try body, not just after its final state.
 			catchScope.applyInvalidations(exceptionalInvalidations);
 			catchScopes.push(catchScope);
-			catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
-			bodyTyper.bindCell(catchClause.name, catchClause.span, catchScope, loweredCatchType);
+			var caught = catchScope.define(catchClause.name, loweredCatchType, catchClause.span);
+			bodyTyper.bindCell(caught, loweredCatchType);
 			var subject = catchSubject(loweredCatchType);
 			typedCatches.push({
-				name: catchScope.requireId(catchClause.name),
+				name: caught.id,
 				type: loweredCatchType,
 				subject: subject,
 				statements: bodyTyper.typeStatements(catchClause.statements, catchScope, result),
@@ -880,15 +876,16 @@ class StatementTyper {
 				item;
 		};
 		var loopScope = new Scope(scope);
-		loopScope.define(name, element, span);
-		bodyTyper.bindCell(name, span, loopScope, element);
+		var keyBinding = loopScope.define(name, element, span),
+			valueBinding:Null<LocalBinding> = null;
+		bodyTyper.bindCell(keyBinding, element);
 		// Keys come from a snapshot, so an entry the body removes may still be visited later.
 		if (valueName == null && !AstScan.mayRemoveMapEntries(body, name)) {
 			var map = CallResolver.mapKeyIteratorSource(originalIterable);
 			if (map == null)
 				map = FlowAnalysis.mapKeySource(originalIterable, scope);
 			if (map != null) {
-				var key = new TypedExpression(TLocal(loopScope.requireId(name)), element, span),
+				var key = new TypedExpression(TLocal(keyBinding.id), element, span),
 					entryPath = FlowAnalysis.mapEntryPath(map, key);
 				if (entryPath != null)
 					switch map.type {
@@ -902,8 +899,8 @@ class StatementTyper {
 		if (valueName != null)
 			switch originalIterable.type {
 				case TMap(_, value):
-					loopScope.define(valueName, value, span);
-					bodyTyper.bindCell(valueName, span, loopScope, value);
+					valueBinding = loopScope.define(valueName, value, span);
+					bodyTyper.bindCell(valueBinding, value);
 				default:
 					fail("E1014", "Key/value for-in requires a Map", span);
 			}
@@ -911,7 +908,7 @@ class StatementTyper {
 		context.loopDepth++;
 		var typedBody = bodyTyper.typeStatements(body, loopScope, result);
 		context.loopDepth--;
-		var valueId:Null<String> = valueName == null ? null : loopScope.requireId(valueName);
+		var valueId:Null<String> = valueBinding == null ? null : valueBinding.id;
 		if (IterationProtocol.structuralIterator(typedIterable.type)) {
 			var held = "$for-iterator:" + span.start;
 			var receiver = new TypedExpression(TLocal(held), typedIterable.type, span);
@@ -919,10 +916,10 @@ class StatementTyper {
 			var next = IterationProtocol.call(session, receiver, "next");
 			return TIf(new TypedExpression(TBoolLiteral(true), TBool, span), [
 				TVar(held, typedIterable, span),
-				TWhile(hasNext, [TVar(loopScope.requireId(name), next, span)].concat(typedBody), span)
+				TWhile(hasNext, [TVar(keyBinding.id, next, span)].concat(typedBody), span)
 			], [], span);
 		}
-		return TForIn(loopScope.requireId(name), valueId, valueName == null ? typedIterable : originalIterable,
+		return TForIn(keyBinding.id, valueId, valueName == null ? typedIterable : originalIterable,
 			typedBody, span);
 	}
 

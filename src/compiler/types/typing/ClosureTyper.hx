@@ -140,8 +140,10 @@ class ClosureTyper {
 			if (expectedFunction != null && !TypeRelations.equals(argumentType, expectedFunction.arguments[i])
 				&& !TypeRelations.equals(declaredType, expectedFunction.arguments[i]))
 				fail("E1003", "Lambda argument type does not match its context", argument.span);
-			lambdaScope.define(localName, argumentType, argument.span);
-			lambdaArguments.push({name: lambdaScope.requireId(localName), type: argumentType});
+			lambdaArguments.push({
+				name: lambdaScope.define(localName, argumentType, argument.span).id,
+				type: argumentType
+			});
 		}
 		var sourceBody = body;
 		body = DefaultArguments.withPrologue(arguments, [for (argument in lambdaArguments) argument.type], body,
@@ -168,7 +170,7 @@ class ClosureTyper {
 			for (name in freeVariables.keys())
 				if (freeBinding(name) == null) {
 					var method = bodyTyper.lexicalMethod(name),
-						receiverType = scope.resolve("this");
+						receiverType = scope.receiverType();
 					if (method != null && !method.isStatic || receiverType != null
 						&& bodyTyper.findFieldType(receiverType, name) != null)
 						freeVariables.set("this", true);
@@ -238,14 +240,15 @@ class ClosureTyper {
 		var variant = session.counters.nextLambdaVariant(lambdaKey);
 		if (variant > 0)
 			identity = compiler.semantic.LambdaName.variant(identity, variant);
-		var typedBodyScope = new Scope();
+		var typedBodyScope = new Scope(), parameters:Array<LocalBinding> = [];
 		for (i in 0...lambdaArguments.length) {
 			var localName = arguments[i].name == "_" ? '$' + 'discard:$i' : arguments[i].name;
-			typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
+			var parameter = typedBodyScope.define(localName, lambdaArguments[i].type, arguments[i].span);
+			parameters.push(parameter);
 			var temporary = arguments[i].local;
 			if (temporary != null)
-				temporary.declaration = BindingWalker.key(localName, arguments[i].span);
-			lambdaArguments[i] = {name: typedBodyScope.requireId(localName), type: lambdaArguments[i].type};
+				temporary.declaration = parameter.declaration;
+			lambdaArguments[i] = {name: parameter.id, type: lambdaArguments[i].type};
 		}
 		for (capture in captures) {
 			var binding = freeBindings.get(capture.field);
@@ -269,7 +272,7 @@ class ClosureTyper {
 			lambdaContext = session.enterBody(lambdaName, outerContext.typeSubstitutions, null),
 			context = session.currentContext;
 		context.scope = typedBodyScope;
-		context.receiver = typedBodyScope.resolve("this");
+		context.receiver = typedBodyScope.receiverType();
 		// A result that is an empty type variable (a callback's `T`, `CallResolver.openResult`) is the body's, as an unannotated
 		// lambda's is: a statement body makes it Void, as in Haxe.
 		var openResult:Null<CompilerType> = null;
@@ -309,9 +312,7 @@ class ClosureTyper {
 			context.storage.request(binding, "$cell:" + lambdaName + ":" + BindingWalker.nameOf(binding),
 				ExceptionEdge);
 		for (i in 0...arguments.length)
-			bodyTyper.bindCell(arguments[i].name == "_" ? "$discard:" + i : arguments[i].name, arguments[i].span,
-				typedBodyScope,
-				lambdaArguments[i].type);
+			bodyTyper.bindCell(parameters[i], lambdaArguments[i].type);
 		var typedBody = bodyTyper.typeStatements(body, typedBodyScope, expectedFunction == null
 			|| inferContextualResult ? null : expectedFunction.result),
 			inferredResult:CompilerType;

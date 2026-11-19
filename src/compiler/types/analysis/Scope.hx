@@ -123,6 +123,9 @@ class Scope {
 	/** On the root: every binding defined in the function or lambda, by declaration key; the last definition wins. */
 	var byDeclaration:Null<Map<String, LocalBinding>> = null;
 
+	/** On the root: the receiver (`this`), a method's or the one a lambda captures. */
+	var receiver:Null<LocalBinding> = null;
+
 	/** False for a scope whose bindings nothing reads by declaration (`alternative`). */
 	var entersBindings = true;
 
@@ -183,7 +186,13 @@ class Scope {
 
 	/** The receiver (`this`) as this scope sees it, or null outside a method. */
 	public function receiverBinding():Null<LocalBinding>
-		return resolveLocal("this");
+		return root.receiver;
+
+	/** The receiver's type here, or null outside a method. */
+	public function receiverType():Null<CompilerType> {
+		var value = root.receiver;
+		return value == null ? null : refinedType(value);
+	}
 
 	/** The local `name` by its name (`--check-resolution` compares it with the binding a reference finds). */
 	public function lookup(name:String):Null<LocalBinding>
@@ -283,6 +292,8 @@ class Scope {
 		};
 		ownDefinitions().add(value);
 		ownAssigned().set(value.id, initialized);
+		if (name == "this")
+			root.receiver = value;
 		if (entersBindings) {
 			var table = root.byDeclaration;
 			if (table == null)
