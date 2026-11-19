@@ -61,7 +61,9 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 	/** Make a generic class's erased code by elaborating its own-parameter typing; see `CompileOptions.elaborateGenerics`. */
 	final elaborateGenerics:Bool;
 
-	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false) {
+	public function new(bodyTyper:BodyTyper, reverseTypingOrder:Bool = false, elaborateGenerics:Bool = false,
+			checkResolution:Bool = false) {
+		bodyTyper.checkResolution = checkResolution;
 		this.bodyTyper = bodyTyper;
 		this.reverseTypingOrder = reverseTypingOrder;
 		this.elaborateGenerics = elaborateGenerics;

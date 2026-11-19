@@ -178,7 +178,8 @@ class ClosureTyper {
 				capture.bindingId, capture.storageType, scope.localFunction(capture.field),
 				scope.declarationOf(capture.field));
 		for (name in freeNames) if (pathConstants.exists(name)) {
-			typedBodyScope.define(name, scope.resolve(name), span);
+			// Like a capture, the same local as the one outside, with that declaration's identity.
+			typedBodyScope.define(name, scope.resolve(name), span, true, null, false, null, scope.declarationOf(name));
 			typedBodyScope.setKeyPathConstant(name, pathConstants.get(name));
 		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new

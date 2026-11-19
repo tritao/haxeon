@@ -247,6 +247,8 @@ class BodyTyper implements BodyTyping {
 		if (functionContext == null)
 			functionContext = enterBody(functionName, substitutions, specializedName == null ? null : owner,
 				specializedName == null ? null : owner == null ? fn.name : owner + "." + fn.name);
+		if (checkResolution)
+			context.resolution = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements);
 		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue,
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
@@ -1327,6 +1329,26 @@ class BodyTyper implements BodyTyping {
 				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
 	}
 
+	/** Compare the body resolver with the scopes at every local (`CompileOptions.checkResolution`). */
+	public var checkResolution = false;
+
+	/**
+	 * Fails when the body's resolver names another declaration than the scope does for the local `name`, referenced as
+	 * `referenceName` at `span`. A reference the resolver did not see (syntax the typer built) is not compared.
+	 */
+	function checkResolved(referenceName:String, span:SourceSpan, name:String, scope:Scope):Void {
+		var resolution = context.resolution;
+		if (resolution == null)
+			return;
+		var resolved = resolution.declarationAt(span.start, referenceName);
+		if (resolved == compiler.types.analysis.BodyResolution.UNSEEN)
+			return;
+		var scoped = scope.declarationOf(name);
+		if (resolved != scoped)
+			throw new InternalError('--check-resolution: "$referenceName" in ${context.name} resolves to ${resolved == null ? "no local" : resolved} in the body resolver, but to ${scoped == null ? "no local" : scoped} in the typer\'s scope',
+				span);
+	}
+
 	/** While a case's pattern is typed, the names it binds, in order (`SwitchCaseTyper`). */
 	public var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>> = null;
 
@@ -1609,6 +1631,7 @@ class BodyTyper implements BodyTyping {
 
 	public function typeVariableExpression(name:String, span:SourceSpan, scope:Scope,
 			expectedType:Null<CompilerType>):TypedExpression {
+		var referenceName = name, referenceSpan = span;
 		// Canonical module names are fallbacks: a source-level member takes precedence, including an inherited one.
 		var sourceName = span.isBareReference ? span.referenceName : null,
 			owner = context.lexicalOwner,
@@ -1627,6 +1650,8 @@ class BodyTyper implements BodyTyping {
 		if (name == "this" && context.memberInitializer)
 			fail("E1005", "Cannot access this or other member field in variable initialization", span);
 		var type = scope.resolve(name);
+		if (checkResolution && type != null && name != "this")
+			checkResolved(referenceName, referenceSpan, name, scope);
 		// A local whose type a use has since fixed reads as that type.
 		if (type != null && session.monomorphs.active())
 			type = compiler.types.Monomorphs.resolve(type);

@@ -38,6 +38,10 @@ class TypingContext {
 	/** Owns the transition from conservative names to resolved lexical IDs. */
 	public final storage = new BindingStoragePlan();
 
+	/** The body's names as its resolver resolves them, when they are checked (`CompileOptions.checkResolution`); a lambda's
+	 * are its function's. */
+	public var resolution:Null<compiler.types.analysis.BodyResolution> = null;
+
 	/** The type a block expression's result local (a try expression's) has: the type the block is expected to have. */
 	public final resultLocalTypes:Map<String, CompilerType> = [];
 	/** Scoped binding identities, used to reject conversions that erase their lifetime. */

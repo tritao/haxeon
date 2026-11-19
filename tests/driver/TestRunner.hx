@@ -79,6 +79,9 @@ class TestRunner {
 	/** `--check-reuse`: programs are also rebuilt warm, and every compile checks what it reuses (`CompileOptions.checkReuse`). */
 	public var checkReuse = false;
 
+	/** `--check-resolution`: every compile checks its body resolver against the typer's scopes (`CompileOptions.checkResolution`). */
+	public var checkResolution = false;
+
 	/**
 	 * `--check-isolation`: each program is also compiled in a compile server started for it alone, and must come out byte for byte as
 	 * it does in the shared server, after whatever that server compiled before. A difference is state one compile left in the process
@@ -162,6 +165,8 @@ class TestRunner {
 			arguments.push("--no-early-prune");
 		if (checkReuse)
 			arguments.push("--check-reuse");
+		if (checkResolution)
+			arguments.push("--check-resolution");
 		arguments.push(source);
 		return arguments;
 	}

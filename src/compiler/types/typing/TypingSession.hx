@@ -685,6 +685,7 @@ class TypingSession {
 		if (isLambda) {
 			body.privateAccessDepth = currentContext.privateAccessDepth;
 			body.memberInitializer = currentContext.memberInitializer;
+			body.resolution = currentContext.resolution;
 		}
 		// A unit's outermost body: a top-level one, or a declaration's unit typed on demand inside another body.
 		if (bodyContexts.length == 1 || !output.shared && bodyContexts.length == output.baseDepth)

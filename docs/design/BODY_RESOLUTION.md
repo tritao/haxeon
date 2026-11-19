@@ -1,6 +1,6 @@
 # Resolve a body once, type it, then decide storage
 
-Status: proposed 2026-11-19. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
+Status: step 1 in progress: the check mode is in (`--check-resolution`); the typer does not read the resolver yet. Replaces `BODY_BINDINGS.md` (a cheaper second resolver). Stage 2 of `INTEGER_IDENTITIES.md`
 (function-local names as numbers) and, for storage, ADR 0003's layering (representation decisions after typing).
 
 ## Problem
@@ -93,3 +93,12 @@ and structure patterns into nested switches. A resolution made before typing has
 - **Binding id text.** The typer's ids (`$l<N>:name`) and the walkers' keys (`name@offset`) both exist and reach the
   output (local and cell names). The resolver's ids are numbers; their text stays as today's until a step chooses to
   change the output.
+
+## Progress
+
+- `BodyResolution` records a body's declarations and references; `--check-resolution` compares it with the typer's
+  scope at every local the typer resolves (`BodyTyper.typeVariableExpression`). On the self-compile the two agree on all
+  147,602 references compared; 38 are not compared, nearly all the typer's own `__haxeon_match` temporaries. All 637
+  programs agree.
+- The check found one disagreement: a key-path constant a lambda reads was declared in the lambda's scope with a new
+  identity (`path@<lambda>`) instead of its declaration's; `ClosureTyper` now keeps the declaration, as for any capture.
