@@ -71,6 +71,13 @@ class HlLower {
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
 
+	final blockLabels:Array<String> = [];
+
+	// Tables by value id of the function being lowered, their storage kept from one function to the next.
+	final valueRegisters:Array<Int> = [];
+	final valueIsNull:Array<Bool> = [];
+	final valueUses:Array<Int> = [];
+
 	/** Register allocation of release code, its scratch reused from one function to the next. */
 	final registerAllocation = new HlRegisterAllocation();
 
@@ -773,10 +780,12 @@ class HlLower {
 		var nonNull = new compiler.ir.IrNonNullFacts(fn, true), exactTypes = new compiler.ir.IrExactTypeFacts(fn);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
-		var registers:Array<Int> = [];
+		var registers = valueRegisters;
+		registers.resize(0);
 		var registerTypes:Array<Int> = [];
 		var catchValues:Map<Int, IrValue> = [];
-		var nullValues:Array<Bool> = [];
+		var nullValues = valueIsNull;
+		nullValues.resize(0);
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
 		for (block in fn.blocks)
@@ -793,7 +802,8 @@ class HlLower {
 				}
 			}
 		var scalarOptionals = new HlScalarValueLocals(fn, view, type -> temporaryRegister(type, registerTypes));
-		var uses:Array<Int> = [];
+		var uses = valueUses;
+		uses.resize(0);
 		function countUse(value:IrValue):Void {
 			while (uses.length <= value.id)
 				uses.push(0);
@@ -894,7 +904,7 @@ class HlLower {
 		for (layoutIndex in 0...emitted.length) {
 			var block = emitted[layoutIndex],
 				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
-			instructions.push(HlInstruction.Label('block_${block.id}'));
+			instructions.push(HlInstruction.Label(blockLabel(block.id)));
 			debugLocations.push(debugLocation(blockProvenance(block)));
 			// A comparison that ends its block and feeds only that block's branch becomes the branch itself, with
 			// no Bool in between: the loop test then costs one compare-and-jump instead of a compare, two moves and a test.
@@ -1044,7 +1054,7 @@ class HlLower {
 							throw new InternalError('Try block $block.id has no catch value in block $catchBlock');
 						var handlerValue = catchValues.get(catchBlock);
 						var handlerRegister = requireRegister(handlerValue, registers);
-						instructions.push(HlInstruction.Trap(handlerRegister, 'block_$catchBlock',
+						instructions.push(HlInstruction.Trap(handlerRegister, blockLabel(catchBlock),
 							preserveExceptionStack));
 					case EndTry(catchBlock, preserveExceptionStack):
 						if (!catchValues.exists(catchBlock))
@@ -1493,22 +1503,23 @@ class HlLower {
 								}
 						}
 					if (target != fallsThroughTo)
-						instructions.push(HlInstruction.Jump('block_$target'));
+						instructions.push(HlInstruction.Jump(blockLabel(target)));
 				case Branch(condition, yes, no):
 					if (edgeMoves(edges, block.id, yes) != null || edgeMoves(edges, block.id, no) != null)
 						throw new InternalError("Phi elimination requires split critical edges");
 					if (yes == fallsThroughTo && no != fallsThroughTo)
 						// The taken side is written next: jump to the other side on the complement, and fall through.
-						instructions.push(fusedComparison != null ? complementJump(fusedComparison, 'block_$no',
-							fusedFloat) : HlInstruction.JumpFalse(requireRegister(condition, registers), 'block_$no'));
+						instructions.push(fusedComparison != null ? complementJump(fusedComparison, blockLabel(no),
+							fusedFloat) : HlInstruction.JumpFalse(requireRegister(condition, registers),
+							blockLabel(no)));
 					else {
 						if (fusedComparison != null)
-							instructions.push(withJumpTarget(fusedComparison, 'block_$yes'));
+							instructions.push(withJumpTarget(fusedComparison, blockLabel(yes)));
 						else
 							instructions.push(HlInstruction.JumpTrue(requireRegister(condition, registers),
-								'block_$yes'));
+								blockLabel(yes)));
 						if (no != fallsThroughTo)
-							instructions.push(HlInstruction.Jump('block_$no'));
+							instructions.push(HlInstruction.Jump(blockLabel(no)));
 					}
 				case Switch(value, targets, otherwise):
 					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
@@ -1519,7 +1530,7 @@ class HlLower {
 					var stubs:Array<{label:String, target:Int}> = [], entries:Array<String> = [];
 					for (target in targets)
 						if (layoutPositions.get(target) > layoutIndex)
-							entries.push('block_$target');
+							entries.push(blockLabel(target));
 						else {
 							var stub = null;
 							for (existing in stubs)
@@ -1533,10 +1544,10 @@ class HlLower {
 						}
 					instructions.push(HlInstruction.Switch(requireRegister(value, registers), entries));
 					if (otherwise != fallsThroughTo || stubs.length > 0)
-						instructions.push(HlInstruction.Jump('block_$otherwise'));
+						instructions.push(HlInstruction.Jump(blockLabel(otherwise)));
 					for (stub in stubs) {
 						instructions.push(HlInstruction.Label(stub.label));
-						instructions.push(HlInstruction.Jump('block_${stub.target}'));
+						instructions.push(HlInstruction.Jump(blockLabel(stub.target)));
 					}
 			}
 			appendDebugLocations(debugLocations, instructions.length - terminatorStart, terminator.provenance);
@@ -1939,6 +1950,13 @@ class HlLower {
 		instructions.push(HlInstruction.Label(trueLabel));
 		instructions.push(HlInstruction.LoadBool(destination, true));
 		instructions.push(HlInstruction.Label(endLabel));
+	}
+
+	/** The label of block `id`, made once per id: functions share them, and a map keyed by them meets the same String. */
+	function blockLabel(id:Int):String {
+		while (blockLabels.length <= id)
+			blockLabels.push("block_" + blockLabels.length);
+		return blockLabels[id];
 	}
 
 	function defineRegister(value:IrValue, registers:Array<Int>, types:Array<Int>):Int {
