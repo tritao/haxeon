@@ -1676,23 +1676,35 @@ class HlLower {
 
 	static final generatedDebugLocation:HlDebugLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
-	/** The latest provenance and its location, replaced as one value: neighbouring opcodes nearly always share it. */
-	var lastDebugLocation:Null<{provenance:SourceProvenance, location:HlDebugLocation}> = null;
+	// The last location made, and what it was made from: consecutive instructions mostly share their source.
+	var lastProvenance:Null<SourceProvenance> = null;
+
+	var lastSource:Null<compiler.ir.SourceProvenance.SourceLocation> = null;
+	var lastFlags = -1;
+	var lastLocation:Null<HlDebugLocation> = null;
 
 	/** Locations are immutable, so opcodes from one provenance share a single one. */
 	function debugLocation(provenance:SourceProvenance):HlDebugLocation {
-		var last = lastDebugLocation;
-		if (last != null && last.provenance == provenance)
-			return last.location;
+		var last = lastLocation;
+		if (last != null && provenance == lastProvenance)
+			return last;
 		var location = provenance.location;
-		var result:HlDebugLocation = location == null ? generatedDebugLocation : new HlDebugLocation(location.path,
-			location.line, location.column,
-			location.endLine, location.endColumn, location.sourceHash, location.start, location.end,
-			switch provenance.origin {
-				case CompilerGenerated(_): 1;
-				case UserSource: 0;
-			});
-		lastDebugLocation = {provenance: provenance, location: result};
+		if (location == null)
+			return generatedDebugLocation;
+		var flags = switch provenance.origin {
+			case CompilerGenerated(_): 1;
+			case UserSource: 0;
+		};
+		if (last != null && location == lastSource && flags == lastFlags) {
+			lastProvenance = provenance;
+			return last;
+		}
+		var result = new HlDebugLocation(location.path, location.line, location.column, location.endLine,
+			location.endColumn, location.sourceHash, location.start, location.end, flags);
+		lastProvenance = provenance;
+		lastSource = location;
+		lastFlags = flags;
+		lastLocation = result;
 		return result;
 	}
 
