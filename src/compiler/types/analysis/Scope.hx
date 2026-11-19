@@ -40,19 +40,62 @@ private typedef ScopeValue = {
 	var knownConstructor:Null<Int>;
 }
 
-/** The locals a scope defines: by name, in definition order, and by binding id. */
+/**
+ * The locals a scope defines, in definition order, found by name or binding id. Most scopes define a few, which a scan finds
+ * sooner than a hash; a scope with more gets maps.
+ */
 private class ScopeDefinitions {
-	public final values:Map<String, ScopeValue> = [];
+	static inline final SCAN_LIMIT = 8;
 
-	/**
-	 * The same values in definition order, and by identity. Walking a map goes through an iterator object whose every call is dynamic, and
-	 * looking a value up by id by walking the map compared every id of the scope; the visible set is asked for at every branch of every function.
-	 */
 	public final valueList:Array<ScopeValue> = [];
 
-	public final valuesById:Map<String, ScopeValue> = [];
+	var byName:Null<Map<String, ScopeValue>> = null;
+
+	/** The first value defined with each binding id. */
+	var byId:Null<Map<String, ScopeValue>> = null;
 
 	public function new() {}
+
+	public function named(name:String):Null<ScopeValue> {
+		var map = byName;
+		if (map != null)
+			return map.get(name);
+		for (value in valueList)
+			if (value.source == name)
+				return value;
+		return null;
+	}
+
+	public function withId(id:String):Null<ScopeValue> {
+		var map = byId;
+		if (map != null)
+			return map.get(id);
+		for (value in valueList)
+			if (value.id == id)
+				return value;
+		return null;
+	}
+
+	/** Adds `value`, whose name this scope does not define yet. */
+	public function add(value:ScopeValue):Void {
+		valueList.push(value);
+		var names = byName, ids = byId;
+		if (names != null && ids != null) {
+			names.set(value.source, value);
+			if (!ids.exists(value.id))
+				ids.set(value.id, value);
+		} else if (valueList.length > SCAN_LIMIT) {
+			names = [];
+			ids = [];
+			for (each in valueList) {
+				names.set(each.source, each);
+				if (!ids.exists(each.id))
+					ids.set(each.id, each);
+			}
+			byName = names;
+			byId = ids;
+		}
+	}
 }
 
 /** The locals a scope (a lambda's) captures, and how they are stored. */
@@ -120,7 +163,7 @@ class Scope {
 	public function define(name:String, type:CompilerType, span:SourceSpan, initialized:Bool = true, ?bindingId:String,
 			receiver:Bool = false,
 			?localFunction:LocalFunction, ?declaration:String):Void {
-		if (definitions != null && definitions.values.exists(name))
+		if (definitions != null && definitions.named(name) != null)
 			throw new CompileError(new Diagnostic("E1001", 'Duplicate local "$name"', span));
 		var value:ScopeValue = {
 			source: name,
@@ -133,11 +176,7 @@ class Scope {
 			keyPathConstant: null,
 			knownConstructor: null
 		};
-		var own = ownDefinitions();
-		own.values.set(name, value);
-		own.valueList.push(value);
-		if (!own.valuesById.exists(value.id))
-			own.valuesById.set(value.id, value);
+		ownDefinitions().add(value);
 		ownAssigned().set(value.id, initialized);
 	}
 
@@ -513,7 +552,7 @@ class Scope {
 		while (scope != null) {
 			var own = scope.definitions;
 			if (own != null) {
-				var found = own.values.get(name);
+				var found = own.named(name);
 				if (found != null)
 					return found;
 			}
@@ -523,7 +562,7 @@ class Scope {
 	}
 
 	function resolveById(id:String):Null<ScopeValue> {
-		var own = definitions, found = own == null ? null : own.valuesById.get(id);
+		var own = definitions, found = own == null ? null : own.withId(id);
 		if (found != null)
 			return found;
 		var outer = parent;
