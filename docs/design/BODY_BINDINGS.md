@@ -1,6 +1,6 @@
 # Body bindings: resolve a function body's names once
 
-Status: superseded by `STORAGE_AFTER_TYPING.md` (2026-11-19): a cheaper second resolver is the wrong fix. Was stage 2 of
+Status: superseded by `BODY_RESOLUTION.md` (2026-11-19): a cheaper second resolver is the wrong fix. Was stage 2 of
 `INTEGER_IDENTITIES.md` (function-local names as numbers), done where the
 profile says.
 
