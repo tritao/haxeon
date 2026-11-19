@@ -245,6 +245,12 @@ enum AstExpression {
 	/** A read of a temporary the typer introduced. */
 	TemporaryVariable(local:TemporaryLocal, span:SourceSpan);
 
+	/**
+	 * A read of the source local `name` declared at offset `declaration` (its declaration's key, `BindingWalker.key`), in syntax
+	 * the typer built: generated code reaches a source local by its declaration, not by its name.
+	 */
+	DeclaredVariable(name:String, declaration:Int, span:SourceSpan);
+
 	Member(object:AstExpression, name:String, span:SourceSpan);
 	Add(left:AstExpression, right:AstExpression, span:SourceSpan);
 	Sub(left:AstExpression, right:AstExpression, span:SourceSpan);
@@ -371,6 +377,9 @@ enum AstStatement {
 
 	/** An assignment of a temporary the typer introduced. */
 	TemporaryAssignment(local:TemporaryLocal, expression:AstExpression, span:SourceSpan);
+
+	/** An assignment of the source local `name` declared at offset `declaration`, in syntax the typer built (`DeclaredVariable`). */
+	DeclaredAssignment(name:String, declaration:Int, expression:AstExpression, span:SourceSpan);
 
 	IndexAssignment(array:AstExpression, index:AstExpression, expression:AstExpression, span:SourceSpan);
 	FieldAssignment(object:AstExpression, field:String, expression:AstExpression, span:SourceSpan);

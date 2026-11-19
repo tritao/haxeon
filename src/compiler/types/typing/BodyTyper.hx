@@ -734,6 +734,7 @@ class BodyTyper implements BodyTyping {
 			case TemporaryDeclaration(local, type, initializer, span): VarDeclaration(local.name, type, initializer,
 				span);
 			case TemporaryAssignment(local, value, span): Assignment(local.name, value, span);
+			case DeclaredAssignment(name, _, value, span): Assignment(name, value, span);
 			default: statement;
 		};
 
@@ -767,7 +768,8 @@ class BodyTyper implements BodyTyping {
 					session.currentContext.privateAccessDepth--;
 				case ErrorStatement(_):
 					throw new InternalError("Simple statement was not dispatched");
-				case UninitializedDeclaration(_, _, _), TemporaryDeclaration(_, _, _, _), TemporaryAssignment(_, _, _):
+				case UninitializedDeclaration(_, _, _), TemporaryDeclaration(_, _, _, _), TemporaryAssignment(_, _, _),
+					DeclaredAssignment(_, _, _, _):
 					throw new InternalError("Simple statement was not dispatched");
 				case VarDeclaration(_, _, _, _):
 					throw new InternalError("Simple statement was not dispatched");
@@ -797,10 +799,13 @@ class BodyTyper implements BodyTyping {
 						fail("E1002", 'Scoped binding "$name" requires Disposable conformance', span);
 					scope.markScoped(name);
 					context.scopedBindings.set(scope.requireId(name), name);
-					var call = Expression(MethodCall(Variable(name, span), "dispose", [], span), span);
+					// The cleanup reads the binding this statement declares, by its declaration.
+					var call = Expression(MethodCall(DeclaredVariable(name, span.start, span), "dispose", [], span),
+						span);
 					var cleanup:Array<AstStatement> = switch boundType {
-						case TNullable(_): [If(NotEqual(Variable(name, span), NullLiteral(span), span), [call], [],
-							span)];
+						case TNullable(_): [If(NotEqual(DeclaredVariable(name, span.start, span), NullLiteral(span),
+							span),
+							[call], [], span)];
 						default: [call];
 					};
 					output.push(TDefer(typeStatements(cleanup, new Scope(scope), result), span, true));
@@ -3054,6 +3059,7 @@ class BodyTyper implements BodyTyping {
 			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
+				DeclaredAssignment(_, _, _, span),
 				IndexAssignment(_, _, _, span), FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span),
 				Throw(_, span), Defer(_, span),
 				Try(_, _, span), If(_, _, _, span), While(_, _, span), DoWhile(_, _, span), ForIn(_, _, _, _, span),

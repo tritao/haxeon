@@ -263,7 +263,7 @@ class ExtractorPatterns {
 	} return switch value {
 		case Variable(local, _) if (local != "this" && local != "_"):
 			{declaration: null, value: value};
-		case TemporaryVariable(_, _):
+		case TemporaryVariable(_, _), DeclaredVariable(_, _, _):
 			{declaration: null, value: value};
 		default:
 			var held = new TemporaryLocal(name);

@@ -92,6 +92,7 @@ class ExpressionTyper {
 			case Variable(name, span): bodyTyper.typeVariableExpression(name, span, scope, expectedType);
 			case TemporaryVariable(local, span): bodyTyper.typeVariableExpression(local.name, span, scope,
 				expectedType);
+			case DeclaredVariable(name, _, span): bodyTyper.typeVariableExpression(name, span, scope, expectedType);
 			case Lambda(arguments, body, identity, span): closureTyper.typeLambda(arguments, body, identity, span,
 				scope,
 				expectedType, inferDynamicLambdaResult, session.currentContext);
@@ -1336,8 +1337,9 @@ class ExpressionTyper {
 					bindElement(element, held, index, value, span), true, innerSpan);
 			default:
 				BlockExpression([
-					VarDeclaration(element, null, Index(TemporaryVariable(held, span), Variable(index, span), span),
-						span)
+					VarDeclaration(element, null,
+						Index(TemporaryVariable(held, span), DeclaredVariable(index, span.start,
+						span), span), span)
 				], expression, span);
 		};
 

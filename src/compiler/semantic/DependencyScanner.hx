@@ -31,7 +31,8 @@ class DependencyScanner {
 				if (type != null)
 					scanAnnotation(type, dependencies, typeParameters);
 				scanExpression(e, dependencies, typeParameters);
-			case Assignment(_, e, _), TemporaryAssignment(_, e, _), Return(e, _), Throw(e, _):
+			case Assignment(_, e, _), TemporaryAssignment(_, e, _), DeclaredAssignment(_, _, e, _), Return(e, _),
+				Throw(e, _):
 				scanExpression(e, dependencies, typeParameters);
 			case Defer(body, _):
 				for (statement in body)

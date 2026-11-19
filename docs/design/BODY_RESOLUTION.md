@@ -151,6 +151,12 @@ already a temporary is used as it is, as a local name was. Every program compile
 (638). Left: the parameters of lambdas the typer builds (`__haxeon_argument*`, which needs a temporary parameter), the
 extractor's `part` (a binding in pattern position), and the two families that refer to source locals.
 
+Generated syntax that reads or writes a source local names its declaration: `DeclaredVariable` and `DeclaredAssignment`
+carry the local's name and declaration offset, its key in the resolution. They are used by the cleanup of a `scoped var`,
+the index of key-value loops and comprehensions, and the default-argument prologue (a lambda's is built after its body was
+resolved). Typed and walked as the named forms until the typer reads locals by binding. Byte-identical on all 638
+programs and the self-compile.
+
 ## Progress
 
 - `BodyResolution` records a body's declarations and references; `--check-resolution` compares it with the typer's

@@ -3188,6 +3188,7 @@ class Parser {
 			case IntegerLiteral(_, span), FloatLiteral(_, span), StringLiteral(_, span), BoolLiteral(_, span),
 				NullLiteral(span), Unreachable(span),
 				EmptyExpression(span), ErrorExpression(span), Variable(_, span), TemporaryVariable(_, span),
+				DeclaredVariable(_, _, span),
 				Member(_, _, span),
 				Add(_, _, span),
 				Sub(_, _, span), Mul(_, _, span),
@@ -3449,6 +3450,7 @@ class Parser {
 			case ErrorStatement(span), PrivateAccessStatement(_, span): span;
 			case UninitializedDeclaration(_, _, span), VarDeclaration(_, _, _, span), ScopedDeclaration(_, _, _, span),
 				Assignment(_, _, span), TemporaryDeclaration(_, _, _, span), TemporaryAssignment(_, _, span),
+				DeclaredAssignment(_, _, _, span),
 				IndexAssignment(_, _, _, span), FieldAssignment(_, _, _, span), Return(_, span), ReturnVoid(span),
 				Throw(_, span), Defer(_, span),
 				Try(_, _, span), If(_, _, _, span), While(_, _, span),

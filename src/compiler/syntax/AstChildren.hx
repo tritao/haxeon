@@ -16,7 +16,8 @@ class AstChildren {
 				visitor.visitChild(inner);
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
-				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), NativeLayoutQuery(_, _, _, _),
+				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
+				NativeLayoutQuery(_, _, _, _),
 				KeyPathLiteral(_, _, _),
 				NewMap(_, _, _), Lambda(_, _, _, _):
 			case AssignmentValue(store, _):
@@ -86,6 +87,7 @@ class AstChildren {
 				visitStatement(inner, visitor);
 			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _),
 				TemporaryDeclaration(_, _, value, _), TemporaryAssignment(_, value, _),
+				DeclaredAssignment(_, _, value, _),
 				Return(value, _), Throw(value, _), Expression(value, _), If(value, _, _, _),
 				While(value, _, _), DoWhile(_, value, _), ForIn(_, _, value, _, _):
 				visitor.visitChild(value);
@@ -113,7 +115,8 @@ class AstChildren {
 			case PrivateAccessExpression(inner, _): [inner];
 			case IntegerLiteral(_, _), FloatLiteral(_, _), StringLiteral(_, _), BoolLiteral(_, _), NullLiteral(_),
 				Unreachable(_), EmptyExpression(_),
-				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), NativeLayoutQuery(_, _, _, _),
+				ErrorExpression(_), Variable(_, _), TemporaryVariable(_, _), DeclaredVariable(_, _, _),
+				NativeLayoutQuery(_, _, _, _),
 				KeyPathLiteral(_, _, _),
 				NewMap(_, _, _), Lambda(_, _, _, _): [];
 			case AssignmentValue(store, _): statementExpressions(store);
@@ -163,6 +166,7 @@ class AstChildren {
 			case PrivateAccessStatement(inner, _): statementExpressions(inner);
 			case VarDeclaration(_, _, value, _), ScopedDeclaration(_, _, value, _), Assignment(_, value, _),
 				TemporaryDeclaration(_, _, value, _), TemporaryAssignment(_, value, _),
+				DeclaredAssignment(_, _, value, _),
 				Return(value, _), Throw(value, _), Expression(value, _), If(value, _, _, _),
 				While(value, _, _), DoWhile(_, value, _), ForIn(_, _, value, _, _): [value];
 			case IndexAssignment(array, offset, value, _): [array, offset, value];

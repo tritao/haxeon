@@ -174,7 +174,7 @@ class StructurePatterns {
 		value:AstExpression} return switch subject {
 			case Variable(name, _) if (name != "this"):
 				{temporary: null, value: subject};
-			case TemporaryVariable(_, _):
+			case TemporaryVariable(_, _), DeclaredVariable(_, _, _):
 				{temporary: null, value: subject};
 			default:
 				var held = new TemporaryLocal("__haxeon_structure" + span.start);

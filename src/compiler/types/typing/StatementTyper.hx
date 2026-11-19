@@ -821,8 +821,8 @@ class StatementTyper {
 				case TArray(_):
 					var array = new TemporaryLocal("__haxeon_array" + span.start),
 						loopBody:Array<AstStatement> = [
-							VarDeclaration(valueName, null, Index(TemporaryVariable(array, span), Variable(name, span),
-								span), span)
+							VarDeclaration(valueName, null, Index(TemporaryVariable(array, span),
+								DeclaredVariable(name, span.start, span), span), span)
 						];
 					for (statement in body)
 						loopBody.push(statement);

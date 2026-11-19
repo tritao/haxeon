@@ -92,8 +92,9 @@ class DefaultArguments {
 			var argument = arguments[index];
 			if (filledByCallee(argument, types[index], relations)) {
 				var span = argument.span;
-				prologue.push(If(Equal(Variable(argument.name, span), NullLiteral(span), span), [
-					Assignment(argument.name, argument.defaultValue, span)
+				// The parameter, by its declaration: a lambda's prologue is built after its body was resolved.
+				prologue.push(If(Equal(DeclaredVariable(argument.name, span.start, span), NullLiteral(span), span), [
+					DeclaredAssignment(argument.name, span.start, argument.defaultValue, span)
 				], [], span));
 			}
 		}
