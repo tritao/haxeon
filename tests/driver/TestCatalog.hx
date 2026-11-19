@@ -93,6 +93,7 @@ class TestCatalog {
 		"OpportunityCensusMain",
 		"AllocationReportMain",
 		"TypeAwareWalkMain",
+		"QueryEngineMain",
 		"WholeNumberMain",
 		"GenericDynamicArgumentMain",
 		"GenericScalarMapOwnerMain",
