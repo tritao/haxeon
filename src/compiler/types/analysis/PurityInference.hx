@@ -638,7 +638,8 @@ private class PurityWalker {
 					return false;
 				for (entry in cases)
 					if (!scoped(() -> {
-						bindPattern(entry.value);
+						for (pattern in entry.patterns)
+							bindPattern(pattern);
 						return (entry.guard == null || expression(entry.guard)) && statements(entry.statements);
 					}))
 						return false;
@@ -711,7 +712,8 @@ private class PurityWalker {
 					return false;
 				for (entry in cases)
 					if (!scoped(() -> {
-						bindPattern(entry.value);
+						for (pattern in entry.patterns)
+							bindPattern(pattern);
 						return (entry.guard == null || expression(entry.guard)) && expression(entry.result);
 					}))
 						return false;

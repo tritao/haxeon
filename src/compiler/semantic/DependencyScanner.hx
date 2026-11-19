@@ -79,7 +79,8 @@ class DependencyScanner {
 			case Switch(expression, cases, defaultBranch, _, _):
 				scanExpression(expression, dependencies, typeParameters);
 				for (switchCase in cases) {
-					scanExpression(switchCase.value, dependencies, typeParameters);
+					for (pattern in switchCase.patterns)
+						scanExpression(pattern, dependencies, typeParameters);
 					var guard = switchCase.guard;
 					if (guard != null)
 						scanExpression(guard, dependencies, typeParameters);
@@ -139,7 +140,8 @@ class DependencyScanner {
 			case SwitchExpression(subject, cases, fallback, _):
 				scanExpression(subject, dependencies, typeParameters);
 				for (switchCase in cases) {
-					scanExpression(switchCase.value, dependencies, typeParameters);
+					for (pattern in switchCase.patterns)
+						scanExpression(pattern, dependencies, typeParameters);
 					var guard = switchCase.guard;
 					if (guard != null)
 						scanExpression(guard, dependencies, typeParameters);

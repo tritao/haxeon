@@ -897,6 +897,8 @@ class StatementTyper {
 	public function typeSwitch(expression:AstExpression, cases:Array<AstSwitchCase>, defaultBranch:Array<AstStatement>,
 			hasDefault:Bool, span:SourceSpan,
 			scope:Scope, result:Null<CompilerType>):TypedStatement {
+		// Typed one pattern per case, until typed cases carry their patterns (docs/design/SWITCH_CASES.md).
+		cases = compiler.syntax.SwitchCases.perPattern(cases);
 		var tupleElements = TupleSwitch.subjectElements(expression),
 			typedExpression = tupleElements == null ? bodyTyper.typeExpression(expression,
 				scope) : TupleSwitch.typeSubject(bodyTyper, tupleElements, span, scope),
@@ -905,7 +907,7 @@ class StatementTyper {
 		var wholeValue = false;
 		if (tupleTypes == null && constantType == null && !isArraySwitchable(typedExpression.type)
 			&& !BodyTyper.isEnum(typedExpression.type)) {
-			if (!TupleSwitch.wholeValueCases([for (switchCase in cases) switchCase.value]))
+			if (!TupleSwitch.wholeValueCases(compiler.syntax.SwitchCases.patterns(cases)))
 				fail("E1019", "Switch requires an Int, String, Bool, array, or enum value", typedExpression.span);
 			// `_`, names and `null` match any value: as the tuple of that one value (`TupleSwitch.wholeValueCases`).
 			typedExpression = TupleSwitch.wholeValue(typedExpression);
@@ -913,7 +915,7 @@ class StatementTyper {
 			tupleTypes = TupleSwitch.elementTypes(typedExpression);
 			cases = [for (switchCase in cases)
 				{
-					value:TupleSwitch.wholeValuePattern(switchCase.value),
+					patterns:[TupleSwitch.wholeValuePattern(compiler.syntax.SwitchCases.only(switchCase.patterns))],
 						guard:switchCase.guard,
 						statements:switchCase.statements,
 						span:switchCase.span
@@ -932,8 +934,11 @@ class StatementTyper {
 		}> = null;
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				classified = tupleTypes == null ? bodyTyper.switchCasePattern(switchCase.value, typedExpression.type,
-					caseScope) : bodyTyper.switchTuplePattern(switchCase.value, tupleTypes, switchCase.span, caseScope),
+				classified = tupleTypes == null
+					? bodyTyper.switchCasePattern(compiler.syntax.SwitchCases.only(switchCase.patterns),
+					typedExpression.type,
+					caseScope) : bodyTyper.switchTuplePattern(compiler.syntax.SwitchCases.only(switchCase.patterns),
+					tupleTypes, switchCase.span, caseScope),
 				subjectBinding = classified.subjectBinding,
 				isCatchAll = classified.isCatchAll,
 				arrayPattern = classified.arrayPattern,

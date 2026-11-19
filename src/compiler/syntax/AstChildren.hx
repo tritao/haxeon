@@ -57,7 +57,8 @@ class AstChildren {
 			case SwitchExpression(subject, cases, fallback, _):
 				visitor.visitChild(subject);
 				for (arm in cases) {
-					visitor.visitChild(arm.value);
+					for (pattern in arm.patterns)
+						visitor.visitChild(pattern);
 					if (arm.guard != null)
 						visitor.visitChild(arm.guard);
 					visitor.visitChild(arm.result);
@@ -96,7 +97,8 @@ class AstChildren {
 			case Switch(subject, cases, _, _, _):
 				visitor.visitChild(subject);
 				for (arm in cases) {
-					visitor.visitChild(arm.value);
+					for (pattern in arm.patterns)
+						visitor.visitChild(pattern);
 					if (arm.guard != null)
 						visitor.visitChild(arm.guard);
 				}
@@ -138,7 +140,8 @@ class AstChildren {
 			case SwitchExpression(subject, cases, fallback, _):
 				var result = [subject];
 				for (arm in cases) {
-					result.push(arm.value);
+					for (pattern in arm.patterns)
+						result.push(pattern);
 					if (arm.guard != null)
 						result.push(arm.guard);
 					result.push(arm.result);
@@ -163,7 +166,8 @@ class AstChildren {
 			case Switch(subject, cases, _, _, _):
 				var result = [subject];
 				for (arm in cases) {
-					result.push(arm.value);
+					for (pattern in arm.patterns)
+						result.push(pattern);
 					if (arm.guard != null)
 						result.push(arm.guard);
 				}

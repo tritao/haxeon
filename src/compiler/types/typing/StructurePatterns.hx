@@ -55,11 +55,13 @@ class StructurePatterns {
 	public static function rewriteStatement(subject:AstExpression, cases:Array<AstSwitchCase>,
 			defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan):StructureRewrite<Array<AstStatement>> {
 		var held = hold(subject, span),
-			fieldCases = [for (switchCase in cases) if (!isNullPattern(switchCase.value)) switchCase],
-			tuple = rewrite(held.value, [for (switchCase in fieldCases) switchCase.value], span);
+			fieldCases = [for (switchCase in cases)
+				if (!isNullPattern(compiler.syntax.SwitchCases.only(switchCase.patterns))) switchCase],
+			tuple = rewrite(held.value,
+				[for (switchCase in fieldCases) compiler.syntax.SwitchCases.only(switchCase.patterns)], span);
 		var fieldSwitch = Switch(tuple.subject, [for (index in 0...fieldCases.length)
 			{
-				value:tuple.values[index],
+				patterns:[tuple.values[index]],
 					guard:fieldCases[index].guard,
 					statements:fieldCases[index].statements,
 					span:fieldCases[index].span
@@ -70,10 +72,11 @@ class StructurePatterns {
 		else {
 			var nullCases:Array<AstSwitchCase> = [], covered = false;
 			for (switchCase in cases)
-				if (matchesNull(switchCase.value)) {
+				if (matchesNull(compiler.syntax.SwitchCases.only(switchCase.patterns))) {
 					covered = switchCase.guard == null;
 					nullCases.push({
-						value: covered ? openNull(switchCase.value) : switchCase.value,
+						patterns: [covered ? openNull(compiler.syntax.SwitchCases.only(switchCase.patterns))
+							: compiler.syntax.SwitchCases.only(switchCase.patterns)],
 						guard: switchCase.guard,
 						statements: switchCase.statements,
 						span: switchCase.span
@@ -83,7 +86,7 @@ class StructurePatterns {
 				}
 			// A null no case matches reaches the default, or else reads the fields it has not, as Haxe's matcher does.
 			var nullSwitch = Switch(held.value, nullCases, covered ? [] : hasDefault ? defaultBranch : [fieldSwitch],
-				!covered, nullSpan([for (switchCase in cases) switchCase.value]));
+				!covered, nullSpan(compiler.syntax.SwitchCases.patterns(cases)));
 			statements.push(If(Equal(held.value, NullLiteral(span), span), [nullSwitch], [fieldSwitch], span));
 		}
 		return {rewritten: statements, columns: tuple.columns};
@@ -93,11 +96,13 @@ class StructurePatterns {
 	public static function rewriteExpression(subject:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			fallback:Null<AstExpression>, span:SourceSpan):StructureRewrite<AstExpression> {
 		var held = hold(subject, span),
-			fieldCases = [for (switchCase in cases) if (!isNullPattern(switchCase.value)) switchCase],
-			tuple = rewrite(held.value, [for (switchCase in fieldCases) switchCase.value], span);
+			fieldCases = [for (switchCase in cases)
+				if (!isNullPattern(compiler.syntax.SwitchCases.only(switchCase.patterns))) switchCase],
+			tuple = rewrite(held.value,
+				[for (switchCase in fieldCases) compiler.syntax.SwitchCases.only(switchCase.patterns)], span);
 		var fieldSwitch = SwitchExpression(tuple.subject, [for (index in 0...fieldCases.length)
 			{
-				value:tuple.values[index],
+				patterns:[tuple.values[index]],
 					guard:fieldCases[index].guard,
 					result:fieldCases[index].result,
 					span:fieldCases[index].span
@@ -106,10 +111,11 @@ class StructurePatterns {
 		if (fieldCases.length != cases.length) {
 			var nullCases:Array<AstSwitchExpressionCase> = [], covered = false;
 			for (switchCase in cases)
-				if (matchesNull(switchCase.value)) {
+				if (matchesNull(compiler.syntax.SwitchCases.only(switchCase.patterns))) {
 					covered = switchCase.guard == null;
 					nullCases.push({
-						value: covered ? openNull(switchCase.value) : switchCase.value,
+						patterns: [covered ? openNull(compiler.syntax.SwitchCases.only(switchCase.patterns))
+							: compiler.syntax.SwitchCases.only(switchCase.patterns)],
 						guard: switchCase.guard,
 						result: switchCase.result,
 						span: switchCase.span
@@ -120,7 +126,7 @@ class StructurePatterns {
 			// A null no case matches reaches the default, or else reads the fields it has not, as Haxe's matcher does.
 			var nullSwitch = SwitchExpression(held.value, nullCases,
 				covered ? null : fallback == null ? fieldSwitch : fallback,
-				nullSpan([for (switchCase in cases) switchCase.value]));
+				nullSpan(compiler.syntax.SwitchCases.expressionPatterns(cases)));
 			result = Conditional(Equal(held.value, NullLiteral(span), span), nullSwitch, fieldSwitch, span);
 		}
 		return {

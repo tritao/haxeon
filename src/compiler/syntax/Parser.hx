@@ -1379,13 +1379,12 @@ class Parser {
 					appendStatements(statements, parseStatements());
 				var caseEnd = statements.length == 0
 					? expressionSpan(values[values.length - 1]) : statementSpan(statements[statements.length - 1]);
-				for (value in values)
-					cases.push({
-						value: value,
-						guard: guard,
-						statements: statements,
-						span: caseStart.merge(caseEnd)
-					});
+				cases.push({
+					patterns: values,
+					guard: guard,
+					statements: statements,
+					span: caseStart.merge(caseEnd)
+				});
 			}
 			var defaultBranch = [], hasDefault = match(TokenKind.Default);
 			if (hasDefault) {
@@ -2563,13 +2562,12 @@ class Parser {
 			var guard = parseSwitchGuard();
 			consume(TokenKind.Colon);
 			var result = parseSwitchExpressionBranch();
-			for (value in values)
-				cases.push({
-					value: value,
-					guard: guard,
-					result: result,
-					span: caseStart.merge(expressionSpan(result))
-				});
+			cases.push({
+				patterns: values,
+				guard: guard,
+				result: result,
+				span: caseStart.merge(expressionSpan(result))
+			});
 		}
 		var fallback = null;
 		if (match(TokenKind.Default)) {

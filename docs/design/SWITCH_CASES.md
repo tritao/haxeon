@@ -1,6 +1,6 @@
 # Switch cases with several patterns
 
-Status: proposed 2026-11-19.
+Status: step 1 done; steps 2 to 4 open.
 
 ## Problem
 

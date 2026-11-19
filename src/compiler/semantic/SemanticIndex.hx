@@ -474,7 +474,8 @@ class SemanticIndex {
 				case Switch(value, cases, fallback, _, _):
 					indexRecoveredExpression(value);
 					for (item in cases) {
-						indexRecoveredExpression(item.value);
+						for (pattern in item.patterns)
+							indexRecoveredExpression(pattern);
 						if (item.guard != null)
 							indexRecoveredExpression(item.guard);
 						indexRecoveredStatementUses(item.statements);
@@ -568,7 +569,8 @@ class SemanticIndex {
 			case SwitchExpression(value, cases, fallback, _):
 				indexRecoveredExpression(value);
 				for (item in cases) {
-					indexRecoveredExpression(item.value);
+					for (pattern in item.patterns)
+						indexRecoveredExpression(pattern);
 					if (item.guard != null)
 						indexRecoveredExpression(item.guard);
 					indexRecoveredExpression(item.result);

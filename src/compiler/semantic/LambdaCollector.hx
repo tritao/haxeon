@@ -49,7 +49,8 @@ class LambdaCollector {
 				case Switch(expression, cases, defaultBranch, _, _):
 					collectLambdaExpression(expression, functionName, module, generatedByModule);
 					for (switchCase in cases) {
-						collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
+						for (pattern in switchCase.patterns)
+							collectLambdaExpression(pattern, functionName, module, generatedByModule);
 						var guard = switchCase.guard;
 						if (guard != null)
 							collectLambdaExpression(guard, functionName, module, generatedByModule);
@@ -123,7 +124,8 @@ class LambdaCollector {
 			case SwitchExpression(subject, cases, fallback, _):
 				collectLambdaExpression(subject, functionName, module, generatedByModule);
 				for (switchCase in cases) {
-					collectLambdaExpression(switchCase.value, functionName, module, generatedByModule);
+					for (pattern in switchCase.patterns)
+						collectLambdaExpression(pattern, functionName, module, generatedByModule);
 					var guard = switchCase.guard;
 					if (guard != null)
 						collectLambdaExpression(guard, functionName, module, generatedByModule);

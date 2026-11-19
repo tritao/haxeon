@@ -73,13 +73,13 @@ class ExtractorPatterns {
 	/** The switch statement of `subject` with `cases`, its first run of extractor cases matched as nested switches. */
 	public static function rewriteStatement(subject:AstExpression, cases:Array<AstSwitchCase>,
 			defaultBranch:Array<AstStatement>, hasDefault:Bool, span:SourceSpan):Array<AstStatement> {
-		var step = plan(subject, [for (switchCase in cases) switchCase.value], span),
+		var step = plan(subject, compiler.syntax.SwitchCases.patterns(cases), span),
 			inner:Array<AstSwitchCase> = [],
 			open = true;
 		for (index in step.first...step.end) {
 			var switchCase = cases[index], parts = step.inner[index - step.first];
 			inner.push({
-				value: parts.pattern,
+				patterns: [parts.pattern],
 				guard: bound(parts.name, step.extracted, switchCase.guard, span),
 				statements: parts.name == null ? switchCase.statements : [
 					VarDeclaration(parts.name, null, step.extracted, span)
@@ -94,7 +94,8 @@ class ExtractorPatterns {
 		var rest = cases.slice(step.end),
 			// What runs when the run's patterns did not match: the cases after it, else the default.
 			after:Array<AstStatement> = rest.length > 0 ? [
-				Switch(step.subject, rest, defaultBranch, hasDefault, patternSpan(rest[0].value))
+				Switch(step.subject, rest, defaultBranch, hasDefault,
+					patternSpan(compiler.syntax.SwitchCases.only(rest[0].patterns)))
 			] : defaultBranch,
 			hasAfter = rest.length > 0 || hasDefault;
 		// Each switch has a span of its own, which names what lowering keeps for it.
@@ -106,7 +107,7 @@ class ExtractorPatterns {
 			statements.push(step.first == 0 ? matched : Switch(step.subject, before, [matched], true, span));
 		else {
 			var outer:AstSwitchCase = {
-				value: step.outer,
+				patterns: [step.outer],
 				guard: null,
 				statements: [matched],
 				span: cases[step.first].span
@@ -121,13 +122,13 @@ class ExtractorPatterns {
 	/** The switch expression of `subject` with `cases`, its first run of extractor cases matched as nested switches. */
 	public static function rewriteExpression(subject:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			fallback:Null<AstExpression>, span:SourceSpan):AstExpression {
-		var step = plan(subject, [for (switchCase in cases) switchCase.value], span),
+		var step = plan(subject, compiler.syntax.SwitchCases.expressionPatterns(cases), span),
 			inner:Array<AstSwitchExpressionCase> = [],
 			open = true;
 		for (index in step.first...step.end) {
 			var switchCase = cases[index], parts = step.inner[index - step.first];
 			inner.push({
-				value: parts.pattern,
+				patterns: [parts.pattern],
 				guard: bound(parts.name, step.extracted, switchCase.guard, span),
 				result: parts.name == null ? switchCase.result : BlockExpression([
 					VarDeclaration(parts.name, null, step.extracted, span)
@@ -142,7 +143,7 @@ class ExtractorPatterns {
 		var rest = cases.slice(step.end),
 			// What the switch is when the run's patterns did not match: the cases after it, else the default.
 			after = rest.length > 0 ? SwitchExpression(step.subject, rest, fallback,
-				patternSpan(rest[0].value)) : fallback;
+				patternSpan(compiler.syntax.SwitchCases.only(rest[0].patterns))) : fallback;
 		// Each switch has a span of its own, which names what lowering keeps for it.
 		var matched = SwitchExpression(evaluated(step.expression, step.extracted, span), inner, open ? after : null,
 			step.span),
@@ -152,7 +153,7 @@ class ExtractorPatterns {
 			result = step.first == 0 ? matched : SwitchExpression(step.subject, before, matched, span);
 		else {
 			var outer:AstSwitchExpressionCase = {
-				value: step.outer,
+				patterns: [step.outer],
 				guard: null,
 				result: matched,
 				span: cases[step.first].span

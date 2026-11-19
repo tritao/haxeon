@@ -821,17 +821,19 @@ class BodyTyper implements BodyTyping {
 				case ForIn(name, valueName, iterable, body, span):
 					output.push(statementTyper.typeForIn(name, valueName, iterable, body, span, scope, result));
 				case Switch(expression, cases, defaultBranch, hasDefault, span)
-					if (ExtractorPatterns.present([for (switchCase in cases) switchCase.value])):
+					if (ExtractorPatterns.present(compiler.syntax.SwitchCases.patterns(cases))):
 					// Extractor cases match as nested switches (`ExtractorPatterns`).
-					for (capture in ExtractorPatterns.captures([for (switchCase in cases) switchCase.value]))
+					for (capture in ExtractorPatterns.captures(compiler.syntax.SwitchCases.patterns(cases)))
 						rejectMatchPatternVariable(capture);
-					for (typed in typeStatements(ExtractorPatterns.rewriteStatement(expression, cases, defaultBranch,
+					for (typed in typeStatements(ExtractorPatterns.rewriteStatement(expression,
+						compiler.syntax.SwitchCases.perPattern(cases), defaultBranch,
 						hasDefault, span), scope, result))
 						output.push(typed);
 				case Switch(expression, cases, defaultBranch, hasDefault, span)
-					if (StructurePatterns.present([for (switchCase in cases) switchCase.value])):
+					if (StructurePatterns.present(compiler.syntax.SwitchCases.patterns(cases))):
 					// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
-					var rewrite = StructurePatterns.rewriteStatement(expression, cases, defaultBranch, hasDefault,
+					var rewrite = StructurePatterns.rewriteStatement(expression,
+						compiler.syntax.SwitchCases.perPattern(cases), defaultBranch, hasDefault,
 						span);
 					var typedStatements:Array<TypedStatement>;
 					enterStructureSwitch(span, rewrite.columns);

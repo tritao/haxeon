@@ -77,7 +77,7 @@ class AbstractConstructorNormalizer {
 
 	static function rewriteCase(entry:AstSwitchCase, resultName:String):AstSwitchCase
 		return {
-			value: entry.value,
+			patterns: entry.patterns,
 			guard: entry.guard,
 			statements: rewriteStatements(entry.statements, resultName),
 			span: entry.span

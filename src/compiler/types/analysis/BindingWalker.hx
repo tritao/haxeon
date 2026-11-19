@@ -229,7 +229,8 @@ class BindingWalker implements AstChildVisitor {
 				expression(subject);
 				for (entry in cases) {
 					var scope = enterScope();
-					bindPattern(entry.value, entry.span);
+					for (pattern in entry.patterns)
+						bindPattern(pattern, entry.span);
 					if (entry.guard != null)
 						expression(entry.guard);
 					for (inner in entry.statements)
@@ -289,7 +290,8 @@ class BindingWalker implements AstChildVisitor {
 				expression(subject);
 				for (arm in cases) {
 					var scope = enterScope();
-					bindPattern(arm.value, arm.span);
+					for (pattern in arm.patterns)
+						bindPattern(pattern, arm.span);
 					if (arm.guard != null)
 						expression(arm.guard);
 					expression(arm.result);

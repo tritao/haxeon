@@ -179,11 +179,14 @@ class CallResolver {
 	public function typeEnumMatch(object:AstExpression, pattern:AstExpression, span:SourceSpan,
 			scope:Scope):TypedExpression {
 		var matched = "__haxeon_match" + span.start, patterns = session.currentContext.postfixMatchPatterns;
-		var cases:Array<AstSwitchExpressionCase> =
-			[for (alternative in compiler.syntax.Parser.expandPatternAlternatives(pattern))
+		var cases:Array<AstSwitchExpressionCase> = [
 			{
-				value:alternative, guard:null, result:BoolLiteral(true, span), span:span
-			}];
+				patterns: compiler.syntax.Parser.expandPatternAlternatives(pattern),
+				guard: null,
+				result: BoolLiteral(true, span),
+				span: span
+			}
+		];
 		patterns.push(compiler.syntax.Parser.expressionSpan(pattern));
 		try {
 			var typed = bodyTyper.typeExpression(BlockExpression([VarDeclaration(matched, null, object, span)],

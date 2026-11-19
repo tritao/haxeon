@@ -330,9 +330,9 @@ typedef AstMapEntry = {
 	final span:SourceSpan;
 }
 
-/** One guarded arm of a switch used as an expression. */
+/** One guarded arm of a switch used as an expression: `case A, B if guard: result` has the patterns `A` and `B`. */
 typedef AstSwitchExpressionCase = {
-	final value:AstExpression;
+	final patterns:Array<AstExpression>;
 	final guard:Null<AstExpression>;
 	final result:AstExpression;
 	final span:SourceSpan;
@@ -370,9 +370,12 @@ enum AstStatement {
 	Expression(expression:AstExpression, span:SourceSpan);
 }
 
-/** One guarded statement arm of a parsed switch. */
+/**
+ * One guarded statement arm of a parsed switch: `case A, B if guard:` has the patterns `A` and `B` (and the alternatives of
+ * `A | B`), which share the guard and the statements (docs/design/SWITCH_CASES.md).
+ */
 typedef AstSwitchCase = {
-	final value:AstExpression;
+	final patterns:Array<AstExpression>;
 	final guard:Null<AstExpression>;
 	final statements:Array<AstStatement>;
 	final span:SourceSpan;

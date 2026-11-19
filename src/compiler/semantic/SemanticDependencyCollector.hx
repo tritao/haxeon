@@ -158,8 +158,9 @@ class SemanticDependencyCollector {
 				case Switch(expression, cases, fallback, _, _):
 					addExpressionDependencies(result, owner, SemanticDependencyKind.Body, expression, module, entry);
 					for (switchCase in cases) {
-						addExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.value, module,
-							entry);
+						for (pattern in switchCase.patterns)
+							addExpressionDependencies(result, owner, SemanticDependencyKind.Body, pattern, module,
+								entry);
 						addOptionalExpressionDependencies(result, owner, SemanticDependencyKind.Body, switchCase.guard,
 							module, entry);
 						addBodyDependencies(result, owner, switchCase.statements, module, entry);
@@ -206,7 +207,8 @@ class SemanticDependencyCollector {
 				case Switch(expression, cases, fallback, _, _):
 					scanNativeLayoutQueryExpression(result, owner, expression, aliases);
 					for (switchCase in cases) {
-						scanNativeLayoutQueryExpression(result, owner, switchCase.value, aliases);
+						for (pattern in switchCase.patterns)
+							scanNativeLayoutQueryExpression(result, owner, pattern, aliases);
 						if (switchCase.guard != null)
 							scanNativeLayoutQueryExpression(result, owner, switchCase.guard, aliases);
 						scanNativeLayoutQueryStatements(result, owner, switchCase.statements, aliases);
@@ -251,7 +253,8 @@ class SemanticDependencyCollector {
 			case SwitchExpression(subject, cases, fallback, _):
 				scanNativeLayoutQueryExpression(result, owner, subject, aliases);
 				for (switchCase in cases) {
-					scanNativeLayoutQueryExpression(result, owner, switchCase.value, aliases);
+					for (pattern in switchCase.patterns)
+						scanNativeLayoutQueryExpression(result, owner, pattern, aliases);
 					if (switchCase.guard != null)
 						scanNativeLayoutQueryExpression(result, owner, switchCase.guard, aliases);
 					scanNativeLayoutQueryExpression(result, owner, switchCase.result, aliases);
@@ -395,7 +398,8 @@ class SemanticDependencyCollector {
 			case Switch(expression, cases, defaultBranch, _, _):
 				scanCallExpression(expression, calls, aliases);
 				for (switchCase in cases) {
-					scanCallExpression(switchCase.value, calls, aliases);
+					for (pattern in switchCase.patterns)
+						scanCallExpression(pattern, calls, aliases);
 					var guard = switchCase.guard;
 					if (guard != null)
 						scanCallExpression(guard, calls, aliases);
@@ -464,7 +468,8 @@ class SemanticDependencyCollector {
 			case SwitchExpression(subject, cases, fallback, _):
 				scanCallExpression(subject, calls, aliases);
 				for (switchCase in cases) {
-					scanCallExpression(switchCase.value, calls, aliases);
+					for (pattern in switchCase.patterns)
+						scanCallExpression(pattern, calls, aliases);
 					var guard = switchCase.guard;
 					if (guard != null)
 						scanCallExpression(guard, calls, aliases);
