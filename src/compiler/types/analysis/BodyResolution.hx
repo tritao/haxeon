@@ -97,6 +97,10 @@ class BodyResolution {
 		return result;
 	}
 
+	/** The resolution of an expression typed on its own, as a field initializer is. */
+	public static function ofExpression(expression:AstExpression):BodyResolution
+		return of([], [Expression(expression, compiler.syntax.Parser.expressionSpan(expression))]);
+
 	public var length(get, never):Int;
 
 	inline function get_length():Int

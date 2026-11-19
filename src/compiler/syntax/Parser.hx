@@ -766,7 +766,7 @@ class Parser {
 		var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
-		var arguments = [];
+		var arguments:Array<AstArgument> = [];
 		if (!check(TokenKind.RightParen) && !recoveringAtEnd()) {
 			do {
 				var rest = matchEllipsis(),
@@ -1198,7 +1198,7 @@ class Parser {
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 				typeParameters = parseTypeParameters(typeConstraints);
 			consume(TokenKind.LeftParen);
-			var arguments = [];
+			var arguments:Array<AstArgument> = [];
 			if (!check(TokenKind.RightParen))
 				do {
 					var rest = matchEllipsis(),
@@ -1276,7 +1276,7 @@ class Parser {
 			var identity = openLambda();
 			lambdaPaths[lambdaPaths.length - 1].pop();
 			consume(TokenKind.LeftParen);
-			var arguments = [];
+			var arguments:Array<AstArgument> = [];
 			if (!check(TokenKind.RightParen))
 				do {
 					var rest = matchEllipsis(),
@@ -1943,7 +1943,7 @@ class Parser {
 		if (match(TokenKind.Function)) {
 			var start = previous().span, identity = openLambda();
 			consume(TokenKind.LeftParen);
-			var arguments = [];
+			var arguments:Array<AstArgument> = [];
 			if (!check(TokenKind.RightParen))
 				do {
 					var rest = matchEllipsis(),
@@ -2197,7 +2197,7 @@ class Parser {
 				return parsePostfix(grouped);
 			}
 			advance();
-			var arguments = [];
+			var arguments:Array<AstArgument> = [];
 			if (!check(TokenKind.RightParen)) {
 				do {
 					var optional = match(TokenKind.Question),

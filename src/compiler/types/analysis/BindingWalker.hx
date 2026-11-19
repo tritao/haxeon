@@ -367,6 +367,8 @@ class BindingWalker implements AstChildVisitor {
 		switch pattern {
 			case Variable(name, variableSpan):
 				declare(name, variableSpan, Pattern);
+			case TemporaryVariable(local, variableSpan):
+				declare(local.name, variableSpan, Pattern);
 			case Capture(name, inner, captureSpan):
 				declare(name, captureSpan, Pattern);
 				bindPattern(inner, span);

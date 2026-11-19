@@ -314,15 +314,16 @@ class CallResolver {
 		inner.define(held.name, value.type, span);
 		bodyTyper.bindCell(held.name, span, inner, value.type);
 		for (index in 1...fn.arguments.length) {
-			var argumentName = "__haxeon_argument" + index;
+			var argument = new TemporaryLocal("__haxeon_argument" + index);
 			arguments.push({
-				name: argumentName,
+				name: argument.name,
 				type: InferredType,
 				span: span,
-				optional: AstPredicates.isOptionalArgument(fn.arguments[index])
+				optional: AstPredicates.isOptionalArgument(fn.arguments[index]),
+				local: argument
 			});
-			passed.push(RestArguments.isRest(fn.arguments[index].type) ? Spread(Variable(argumentName, span),
-				span) : Variable(argumentName, span));
+			passed.push(RestArguments.isRest(fn.arguments[index].type) ? Spread(TemporaryVariable(argument, span),
+				span) : TemporaryVariable(argument, span));
 		}
 		// A plain extension is called through its value, whose dispatch entry gives an omitted argument its default.
 		var expected = TFunction([
@@ -398,9 +399,10 @@ class CallResolver {
 		inner.define(held.name, value.type, span);
 		bodyTyper.bindCell(held.name, span, inner, value.type);
 		if (typeFunction == "Type.enumEq") {
-			arguments.push({name: "__haxeon_argument1", type: InferredType, span: span, optional: false});
+			var argument = new TemporaryLocal("__haxeon_argument1");
+			arguments.push({name: argument.name, type: InferredType, span: span, optional: false, local: argument});
 			argumentTypes.push(value.type);
-			passed.push(Variable("__haxeon_argument1", span));
+			passed.push(TemporaryVariable(argument, span));
 		}
 		var result = switch typeFunction {
 			case "Type.enumConstructor": TString;

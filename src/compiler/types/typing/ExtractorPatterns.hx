@@ -201,7 +201,8 @@ class ExtractorPatterns {
 		}
 		var hole = requiredHole(values[first]), key = holeKey(values[first], hole);
 		// The part is the compiler's own binding, not a name the pattern writes (`.match` patterns may hold extractors).
-		var part = Variable("__haxeon_part" + hole.span.start, SourceSpan.generated("extractor part")),
+		var part = TemporaryVariable(new TemporaryLocal("__haxeon_part" + hole.span.start),
+			SourceSpan.generated("extractor part")),
 			end = first + 1,
 			inner = [hole.parts];
 		while (end < values.length && extractorOf(values[end]) == null) {

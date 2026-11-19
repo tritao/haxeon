@@ -157,6 +157,13 @@ the index of key-value loops and comprehensions, and the default-argument prolog
 resolved). Typed and walked as the named forms until the typer reads locals by binding. Byte-identical on all 638
 programs and the self-compile.
 
+Step 4.1 is done. Field initializers are typed with the resolution of their expression (`BodyResolution.ofExpression`).
+The extractor's `part` is a temporary, bound in pattern position (`switchSubjectBinding`, enum payloads, array payload
+elements and `bindPattern` take `TemporaryVariable`), and the parameters of the lambdas the typer builds are temporaries
+(`AstArgument.local`). Logged over the self-compile and all programs: no plain reference the resolution has not seen,
+and none typed without a resolution. Making an unseen reference an error waits for step 4.2, since the temporary and
+declared forms are still typed through their names until then. Byte-identical on all 638 programs and the self-compile.
+
 ## Step 4: the typer reads locals by binding
 
 **Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:

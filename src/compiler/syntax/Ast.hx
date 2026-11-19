@@ -55,6 +55,9 @@ typedef AstArgument = {
 	/** Written `?x`. A default value makes the argument optional too: see `AstPredicates.isOptionalArgument`. */
 	final ?optional:Bool;
 	final ?defaultValue:AstExpression;
+
+	/** The temporary this argument is, when the typer built the function (`TemporaryLocal`). */
+	final ?local:TemporaryLocal;
 }
 
 /** Source spelling of a field's read or write accessor policy. */

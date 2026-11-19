@@ -556,6 +556,7 @@ class BodyTyper implements BodyTyping {
 	 */
 	public function typeFieldInitializer(expression:AstExpression, scope:Scope, type:CompilerType,
 			label:String):TypedExpression {
+		context.resolution = compiler.types.analysis.BodyResolution.ofExpression(expression);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()), typed:TypedExpression;
 		try
 			typed = coerce(typeExpression(expression, scope, type), type, label, "E1002")
@@ -576,6 +577,7 @@ class BodyTyper implements BodyTyping {
 	 */
 	public function typeInferredFieldInitializer(expression:AstExpression, scope:Scope, owner:String, name:String,
 			isStatic:Bool, span:SourceSpan, provisional:CompilerType->Void):TypedExpression {
+		context.resolution = compiler.types.analysis.BodyResolution.ofExpression(expression);
 		var frame = session.monomorphs.begin(session.closureConversion.mark()),
 			field = 'field "$owner.$name"',
 			typed:TypedExpression;
@@ -1136,6 +1138,9 @@ class BodyTyper implements BodyTyping {
 									constantName));
 							} else bindings.push(bindPatternName(binding, bindingSpan, scope, parameterType,
 								storageType, index));
+						case TemporaryVariable(local, bindingSpan):
+							bindings.push(bindPatternName(local.name, bindingSpan, scope, parameterType, storageType,
+								index));
 						case Call(_, _, _):
 							var nested = typeEnumPattern(argument, parameterType, scope);
 							if (nested == null) {
@@ -1259,6 +1264,17 @@ class BodyTyper implements BodyTyping {
 											// A name binds the element unless it names a constructor, which is matched.
 											case Variable(binding, bindingSpan) if (patternConstructor(binding,
 												bindingSpan, elementType, scope) == null):
+												declarePatternName(binding, elementType, bindingSpan, scope);
+												bindings.push({
+													name: scope.requireId(binding),
+													type: elementType,
+													storageType: elementStorage,
+													fieldStorageType: storageType,
+													index: index,
+													arrayIndex: arrayIndex
+												});
+											case TemporaryVariable(local, bindingSpan):
+												var binding = local.name;
 												declarePatternName(binding, elementType, bindingSpan, scope);
 												bindings.push({
 													name: scope.requireId(binding),
@@ -1436,6 +1452,10 @@ class BodyTyper implements BodyTyping {
 					declarePatternName(name, expected, span, scope);
 					scope.requireId(name);
 				}
+			// A temporary the typer put in the pattern binds, whatever its name.
+			case TemporaryVariable(local, span):
+				declarePatternName(local.name, expected, span, scope);
+				scope.requireId(local.name);
 			default: null;
 		}
 	}
