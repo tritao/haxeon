@@ -9,8 +9,9 @@ import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
 import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
-import compiler.types.analysis.LexicalStorageAnalysis;
+import compiler.types.analysis.BodyResolution;
 import compiler.types.analysis.MapEscapeAnalysis;
+import compiler.types.analysis.StorageRequirements;
 
 /**
  * Analyses that read source before typing tell declarations apart by scope: the same name declared in two blocks, or
@@ -34,7 +35,7 @@ class BindingAnalysisMain {
 			"private-access statement visitor must match statementExpressions");
 		var privateCapture =
 			parse('function main():Void { var captured = 0; var f = function():Int return @:privateAccess captured; captured = 1; }');
-		var privateStorage = LexicalStorageAnalysis.analyze(privateCapture.statements, privateCapture.arguments);
+		var privateStorage = storageOf(privateCapture);
 		expect(privateStorage.mutableCaptures.exists(declaration(privateCapture, "captured", 0)),
 			"binding walker must see a captured binding inside private access");
 		// Cells: a local needs one when a lambda captures it and it is written.
@@ -45,7 +46,7 @@ class BindingAnalysisMain {
 			var read = function():Int return counter + untouched;
 			var bump = function():Void { for (i in [1, 2]) { counter++; } };
 		}");
-		var storage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		var storage = storageOf(fn);
 		expect(storage.mutableCaptures.exists(declaration(fn, "counter", 0)),
 			"a captured, written local needs a cell, even written in a loop inside the lambda");
 		expect(!storage.mutableCaptures.exists(declaration(fn, "untouched", 0)),
@@ -57,7 +58,7 @@ class BindingAnalysisMain {
 			var flag = true;
 			if (flag) { var x = 0; var f = function():Void { x++; }; } else { var x = 1; var g = function():Int return x; }
 		}");
-		storage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		storage = storageOf(fn);
 		expect(storage.mutableCaptures.exists(declaration(fn, "x", 0)), "the first x is captured and written");
 		expect(!storage.mutableCaptures.exists(declaration(fn, "x", 1)),
 			"the second x, in a sibling block, is only read by its lambda");
@@ -69,7 +70,7 @@ class BindingAnalysisMain {
 			total = 1;
 			var f = function(total:Int):Int { total = total + 1; return total; };
 		}");
-		storage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		storage = storageOf(fn);
 		expect(!storage.mutableCaptures.exists(declaration(fn, "total", 0)),
 			"a lambda's own parameter is not a capture of the outer local");
 
@@ -80,7 +81,7 @@ class BindingAnalysisMain {
 			var later = 0;
 			try { seen = 1; var inside = 2; inside = 3; } catch (e:Dynamic) { later = 1; }
 		}");
-		storage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		storage = storageOf(fn);
 		expect(storage.exceptionCells.exists(declaration(fn, "seen", 0)),
 			"a local written in a try needs a cell for the exception edge");
 		expect(!storage.exceptionCells.exists(declaration(fn, "inside", 0)), "one declared inside the try does not");
@@ -92,7 +93,7 @@ class BindingAnalysisMain {
 			function fact(n:Int):Int { return n <= 1 ? 1 : n * fact(n - 1); }
 			return fact(5);
 		}");
-		storage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		storage = storageOf(fn);
 		expect(storage.mutableCaptures.exists(declaration(fn, "fact", 0)), "a recursive local function needs a cell");
 
 		// Private maps: per declaration, not per name.
@@ -176,6 +177,9 @@ class BindingAnalysisMain {
 				default:
 			}
 	}
+
+	static function storageOf(fn:AstFunction):StorageRequirements
+		return StorageRequirements.ofBody(BodyResolution.of(fn.arguments, fn.statements), null, null);
 
 	static function expect(condition:Bool, message:String):Void {
 		if (!condition)

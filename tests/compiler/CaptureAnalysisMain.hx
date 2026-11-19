@@ -4,7 +4,8 @@ import compiler.syntax.Parser;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.CellStorageKind;
 import compiler.types.analysis.BindingStoragePlan;
-import compiler.types.analysis.LexicalStorageAnalysis;
+import compiler.types.analysis.BodyResolution;
+import compiler.types.analysis.StorageRequirements;
 
 class CaptureAnalysisMain {
 	static function main():Void {
@@ -92,11 +93,10 @@ class CaptureAnalysisMain {
 		Sys.println("PASS: capture and exception-edge storage analysis");
 	}
 
-	static function analyzeLexically(source:String):compiler.types.analysis.LexicalStorageAnalysis
-		.LexicalStorageRequirements {
+	static function analyzeLexically(source:String):StorageRequirements {
 		var program = new Parser(new Lexer(new SourceFile("capture-analysis.hx", source)).tokenize()).parseProgram();
 		var fn = program.functions[0];
-		return LexicalStorageAnalysis.analyze(fn.statements, fn.arguments);
+		return StorageRequirements.ofBody(BodyResolution.of(fn.arguments, fn.statements), null, null);
 	}
 
 	static function count(values:Map<String, Bool>):Int {
