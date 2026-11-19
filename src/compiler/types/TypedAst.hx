@@ -219,8 +219,9 @@ typedef TypedMapEntry = {
 }
 
 /** Type-checked arm of a switch expression: its pattern and the value it produces. */
+/** One case of a switch expression: an arm per pattern, sharing the guard, and the result typed once. */
 typedef TypedSwitchExpressionCase = {
-	final arm:TypedSwitchArm;
+	final arms:Array<TypedSwitchArm>;
 	final result:TypedExpression;
 }
 
@@ -259,8 +260,12 @@ enum TypedStatement {
 }
 
 /** Type-checked arm of a switch statement: its pattern and the statements it runs. */
+/**
+ * One case of a switch statement: an arm per pattern (`case A, B:`), sharing the guard, and the statements typed once. Every
+ * pattern binds the same names to the same locals (docs/design/SWITCH_CASES.md).
+ */
 typedef TypedSwitchCase = {
-	final arm:TypedSwitchArm;
+	final arms:Array<TypedSwitchArm>;
 	final statements:Array<TypedStatement>;
 }
 

@@ -100,6 +100,11 @@ interface BodyTyping {
 
 	function switchArrayPatternKey(pattern:TypedSwitchArrayPattern):Null<String>;
 	function switchCaseKey(value:TypedExpression, predicates:Array<TypedSwitchPredicate>):Null<String>;
+
+	/** While a case's pattern is typed, the names it binds, in order (`SwitchCaseTyper`); null otherwise. */
+	var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>>;
+
+	function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool;
 	function enumCaseCovered(type:CompilerType, constructorIndex:Int, cases:Array<TypedSwitchCoverageCase>):Bool;
 
 	/** The values of a closed enum abstract keyed as switch cases are (with `null` for a nullable one), or null when the subject is not one. */

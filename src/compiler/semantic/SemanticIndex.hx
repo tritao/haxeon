@@ -879,9 +879,11 @@ class SemanticIndex {
 					indexCompletionLocals(body, span, depth + 1);
 				case TSwitch(_, cases, fallback, _, span):
 					for (item in cases) {
-						for (binding in item.arm.bindings)
-							addCompletionLocal(binding.name, binding.type, item.arm.span, item.arm.span, depth + 1);
-						indexCompletionLocals(item.statements, item.arm.span, depth + 1);
+						// The patterns of a case bind the same names to the same locals: the first's are the case's.
+						var first = item.arms[0];
+						for (binding in first.bindings)
+							addCompletionLocal(binding.name, binding.type, first.span, first.span, depth + 1);
+						indexCompletionLocals(item.statements, first.span, depth + 1);
 					}
 					indexCompletionLocals(fallback, span, depth + 1);
 				default:
@@ -976,8 +978,10 @@ class SemanticIndex {
 				case TSwitch(value, cases, fallback, _, _):
 					indexExpression(fn, value, resolve, resolveEnumCase);
 					for (item in cases) {
-						indexExpression(fn, item.arm.value, resolve, resolveEnumCase);
-						bindEnumCase(resolveEnumCase, item.arm.enumName, item.arm.constructorIndex, item.arm.span);
+						for (arm in item.arms) {
+							indexExpression(fn, arm.value, resolve, resolveEnumCase);
+							bindEnumCase(resolveEnumCase, arm.enumName, arm.constructorIndex, arm.span);
+						}
 						indexStatements(fn, item.statements, resolve, resolveEnumCase);
 					}
 					indexStatements(fn, fallback, resolve, resolveEnumCase);
@@ -1065,10 +1069,13 @@ class SemanticIndex {
 			case TSwitchExpression(value, cases, fallback):
 				indexExpression(fn, value, resolve, resolveEnumCase);
 				for (item in cases) {
-					bindEnumCase(resolveEnumCase, item.arm.enumName, item.arm.constructorIndex, item.arm.value.span);
-					indexExpression(fn, item.arm.value, resolve, resolveEnumCase);
-					if (item.arm.guard != null)
-						indexExpression(fn, item.arm.guard, resolve, resolveEnumCase);
+					for (arm in item.arms) {
+						bindEnumCase(resolveEnumCase, arm.enumName, arm.constructorIndex, arm.value.span);
+						indexExpression(fn, arm.value, resolve, resolveEnumCase);
+					}
+					var guard = item.arms[0].guard;
+					if (guard != null)
+						indexExpression(fn, guard, resolve, resolveEnumCase);
 					indexExpression(fn, item.result, resolve, resolveEnumCase);
 				}
 				if (fallback != null)

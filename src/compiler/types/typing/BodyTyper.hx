@@ -1298,6 +1298,9 @@ class BodyTyper implements BodyTyping {
 	 */
 	function declarePatternName(name:String, type:CompilerType, span:SourceSpan, scope:Scope):Void {
 		rejectMatchPatternVariable(span);
+		var recorded = patternNames;
+		if (recorded != null)
+			recorded.push({name: name, type: type, span: span});
 		scope.define(name, type, span);
 		bindCell(name, span, scope, type);
 	}
@@ -1323,6 +1326,12 @@ class BodyTyper implements BodyTyping {
 			if (pattern.file == span.file && pattern.start <= span.start && span.end <= pattern.end)
 				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
 	}
+
+	/** While a case's pattern is typed, the names it binds, in order (`SwitchCaseTyper`). */
+	public var patternNames:Null<Array<{name:String, type:CompilerType, span:SourceSpan}>> = null;
+
+	public function isAssignableTo(actual:CompilerType, expected:CompilerType):Bool
+		return isAssignable(actual, expected);
 
 	/** Declares a name a pattern binds to the enum payload at `index`. */
 	function bindPatternName(name:String, span:SourceSpan, scope:Scope, type:CompilerType, storageType:CompilerType,
@@ -2868,13 +2877,14 @@ class BodyTyper implements BodyTyping {
 			case TBool | TNullable(TBool):
 				var seen:Map<String, Bool> = [];
 				for (switchCase in cases)
-					if (switchCase.arm.guard == null) {
-						if (switchCase.arm.isCatchAll)
-							return true;
-						var key = switchCaseKey(switchCase.arm.value, []);
-						if (key != null)
-							seen.set(key, true);
-					}
+					for (arm in switchCase.arms)
+						if (arm.guard == null) {
+							if (arm.isCatchAll)
+								return true;
+							var key = switchCaseKey(arm.value, []);
+							if (key != null)
+								seen.set(key, true);
+						}
 				return seen.exists("bool:true") && seen.exists("bool:false");
 			default:
 		}
@@ -2882,13 +2892,13 @@ class BodyTyper implements BodyTyping {
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return false;
 		var enumDecl = requiredMapValue(session.enumDecls, enumName),
-			coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in cases)
+			coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in cases) for (arm in switchCase.arms)
 				{
-					constructorIndex:switchCase.arm.constructorIndex,
-						subjectBinding:switchCase.arm.subjectBinding,
-						isCatchAll:switchCase.arm.isCatchAll,
-						guard:switchCase.arm.guard,
-						predicates:switchCase.arm.predicates
+					constructorIndex:arm.constructorIndex,
+						subjectBinding:arm.subjectBinding,
+						isCatchAll:arm.isCatchAll,
+						guard:arm.guard,
+						predicates:arm.predicates
 				}];
 		for (index in 0...enumDecl.cases.length)
 			if (!enumCaseCovered(type, index, coverageCases))

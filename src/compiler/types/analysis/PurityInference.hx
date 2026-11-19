@@ -637,12 +637,11 @@ private class PurityWalker {
 				if (!expression(subject) || !statements(fallback))
 					return false;
 				for (entry in cases)
-					for (pattern in entry.patterns)
-						if (!scoped(() -> {
-							bindPattern(pattern);
-							return (entry.guard == null || expression(entry.guard)) && statements(entry.statements);
-						}))
-							return false;
+					if (!scoped(() -> {
+						bindCasePatterns(entry.patterns);
+						return (entry.guard == null || expression(entry.guard)) && statements(entry.statements);
+					}))
+						return false;
 				true;
 		};
 	}
@@ -711,12 +710,11 @@ private class PurityWalker {
 				if (!expression(subject) || (fallback != null && !expression(fallback)))
 					return false;
 				for (entry in cases)
-					for (pattern in entry.patterns)
-						if (!scoped(() -> {
-							bindPattern(pattern);
-							return (entry.guard == null || expression(entry.guard)) && expression(entry.result);
-						}))
-							return false;
+					if (!scoped(() -> {
+						bindCasePatterns(entry.patterns);
+						return (entry.guard == null || expression(entry.guard)) && expression(entry.result);
+					}))
+						return false;
 				true;
 			case ObjectLiteral(fields, _):
 				for (field in fields)
@@ -1054,6 +1052,11 @@ private class PurityWalker {
 				return false;
 		return true;
 	}
+
+	/** The patterns of one case bind the same names (`SwitchCaseTyper`), all fresh locals of the case. */
+	function bindCasePatterns(patterns:Array<AstExpression>):Void
+		for (pattern in patterns)
+			bindPattern(pattern);
 
 	/** Pattern names are fresh locals; constructors and literals in patterns have no effect. */
 	function bindPattern(pattern:AstExpression):Void {

@@ -143,7 +143,7 @@ class RawRepresentableGenerator {
 								continue;
 							seen.set(code, true);
 							cases.push({
-								arm: {
+								arms: [{
 									value: constant,
 									subjectBinding: null,
 									arrayPattern: null,
@@ -154,7 +154,7 @@ class RawRepresentableGenerator {
 									bindings: [],
 									predicates: [],
 									span: span
-								},
+								}],
 								statements: [TReturn(present, span)]
 							});
 						default:

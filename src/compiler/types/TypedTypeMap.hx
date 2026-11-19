@@ -95,7 +95,7 @@ class TypedTypeMap {
 			case TSwitch(subject, cases, defaultBranch, hasDefault, span): TSwitch(expression(subject),
 				[for (switchCase in cases)
 				{
-						arm:switchArm(switchCase.arm), statements:statements(switchCase.statements)
+						arms:[for (arm in switchCase.arms) switchArm(arm)], statements:statements(switchCase.statements)
 					}], statements(defaultBranch), hasDefault, span);
 			case TCellIncrement(name, cellClass, valueType, delta, span): TCellIncrement(name, cellClass,
 				map(valueType), delta,
@@ -220,7 +220,7 @@ class TypedTypeMap {
 			case TSwitchExpression(subject, cases, defaultExpression): TSwitchExpression(expression(subject),
 				[for (switchCase in cases)
 				{
-						arm:switchArm(switchCase.arm), result:expression(switchCase.result)
+						arms:[for (arm in switchCase.arms) switchArm(arm)], result:expression(switchCase.result)
 					}], optional(defaultExpression));
 			case TObjectLiteral(name, fields, isDynamic): TObjectLiteral(name, objectFields(fields), isDynamic);
 			case TArrayLiteral(values): TArrayLiteral(expressions(values));

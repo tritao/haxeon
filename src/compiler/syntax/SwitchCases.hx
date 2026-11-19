@@ -15,8 +15,8 @@ class SwitchCases {
 		return [for (switchCase in cases) for (pattern in switchCase.patterns) pattern];
 
 	/**
-	 * A case per pattern, sharing the case's guard and statements, for the typing that still takes one pattern per case. The
-	 * cases of one `case A, B:` keep the same statements, which typing recognizes (`StatementTyper.typeSwitch`).
+	 * A case per pattern, sharing the case's guard and statements, for the pattern rewrites that take one pattern per case
+	 * (`ExtractorPatterns`, `StructurePatterns`); typing otherwise keeps a case's patterns together (`SwitchCaseTyper`).
 	 */
 	public static function perPattern(cases:Array<AstSwitchCase>):Array<AstSwitchCase>
 		return [for (switchCase in cases)

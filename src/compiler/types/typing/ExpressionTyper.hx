@@ -39,7 +39,6 @@ import compiler.types.TypedAst.TypedExpressionKind;
 import compiler.types.TypedAst.TypedMapEntry;
 import compiler.types.TypedAst.TypedObjectField;
 import compiler.types.TypedAst.TypedSwitchExpressionCase;
-import compiler.types.TypedAst.TypedSwitchPredicate;
 import compiler.types.TypedAst.TypedSwitchCoverageCase;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
@@ -1668,19 +1667,19 @@ class ExpressionTyper {
 	public function typeSwitchExpression(expression:AstExpression, cases:Array<AstSwitchExpressionCase>,
 			defaultExpression:Null<AstExpression>,
 			span:SourceSpan, scope:Scope, expectedType:Null<CompilerType>):TypedExpression {
-		// Typed one pattern per case, until typed cases carry their patterns (docs/design/SWITCH_CASES.md).
-		cases = compiler.syntax.SwitchCases.expressionPerPattern(cases);
 		// Extractor cases match as nested switches (`ExtractorPatterns`).
 		if (ExtractorPatterns.present(compiler.syntax.SwitchCases.expressionPatterns(cases))) {
 			for (capture in ExtractorPatterns.captures(compiler.syntax.SwitchCases.expressionPatterns(cases)))
 				bodyTyper.rejectMatchPatternVariable(capture);
-			return bodyTyper.typeExpression(ExtractorPatterns.rewriteExpression(expression, cases, defaultExpression,
+			return bodyTyper.typeExpression(ExtractorPatterns.rewriteExpression(expression,
+				compiler.syntax.SwitchCases.expressionPerPattern(cases), defaultExpression,
 				span),
 				scope, expectedType);
 		}
 		// Structure patterns match as the tuple switch of the fields they name (`StructurePatterns`).
 		if (StructurePatterns.present(compiler.syntax.SwitchCases.expressionPatterns(cases))) {
-			var rewrite = StructurePatterns.rewriteExpression(expression, cases, defaultExpression, span);
+			var rewrite = StructurePatterns.rewriteExpression(expression,
+				compiler.syntax.SwitchCases.expressionPerPattern(cases), defaultExpression, span);
 			var typed:TypedExpression;
 			bodyTyper.enterStructureSwitch(span, rewrite.columns);
 			try
@@ -1708,7 +1707,7 @@ class ExpressionTyper {
 			tupleTypes = TupleSwitch.elementTypes(typedSubject);
 			cases = [for (switchCase in cases)
 				{
-					patterns:[TupleSwitch.wholeValuePattern(compiler.syntax.SwitchCases.only(switchCase.patterns))],
+					patterns:[for (pattern in switchCase.patterns) TupleSwitch.wholeValuePattern(pattern)],
 						guard:switchCase.guard,
 						result:switchCase.result,
 						span:switchCase.span
@@ -1737,21 +1736,11 @@ class ExpressionTyper {
 			default: true;
 		}))
 			resultType = typedDefault.type;
+		var caseTyper = new SwitchCaseTyper(bodyTyper);
 		for (switchCase in cases) {
 			var caseScope = new Scope(scope),
-				classified = tupleTypes == null
-					? bodyTyper.switchCasePattern(compiler.syntax.SwitchCases.only(switchCase.patterns),
-					typedSubject.type,
-					caseScope) : bodyTyper.switchTuplePattern(compiler.syntax.SwitchCases.only(switchCase.patterns),
-					tupleTypes, switchCase.span, caseScope),
-				subjectBinding = classified.subjectBinding,
-				isCatchAll = classified.isCatchAll,
-				arrayPattern = classified.arrayPattern,
-				pattern = classified.enumPattern,
-				typedValue = isCatchAll
-					|| arrayPattern != null ? typedSubject : pattern == null ? typeCaseConstant(classified.value,
-					typedSubject.type, constantType,
-					scope) : pattern.value;
+				matches = caseTyper.typePatterns(switchCase.patterns, switchCase.span, typedSubject, tupleTypes,
+					constantType, scope, caseScope, switchCase.guard != null, seenCases);
 			var parsedGuard = switchCase.guard,
 				typedGuard = parsedGuard == null
 					? null : bodyTyper.coerce(bodyTyper.typeExpression(parsedGuard, caseScope), TBool, "switch guard",
@@ -1767,9 +1756,6 @@ class ExpressionTyper {
 			} else
 				typedResult = bodyTyper.typeExpression(switchCase.result, caseScope,
 					expectedType == null ? resultType : expectedType);
-			var enumName:Null<String> = pattern == null ? null : pattern.enumName,
-				constructorIndex = pattern == null ? -1 : pattern.index,
-				predicates:Array<TypedSwitchPredicate> = pattern == null ? [] : pattern.predicates;
 			if (expectedType == null && (switch (typedResult.type) {
 				case TNever: false;
 				default: true;
@@ -1780,35 +1766,8 @@ class ExpressionTyper {
 					fail("E1003", "Switch branches must have matching types", switchCase.span);
 				resultType = joined;
 			}
-			if (pattern == null) {
-				var literal = BodyTyper.enumLiteral(typedValue);
-				if (literal != null) {
-					enumName = literal.name;
-					constructorIndex = literal.index;
-				}
-			}
-			var caseKey = arrayPattern == null ? bodyTyper.switchCaseKey(typedValue,
-				predicates) : bodyTyper.switchArrayPatternKey(arrayPattern);
-			if (isCatchAll)
-				seenCases.set("$catchall", true);
-			if (caseKey != null && typedGuard == null) {
-				if (seenCases.exists(caseKey))
-					fail("E1020", "Duplicate switch case", switchCase.span);
-				seenCases.set(caseKey, true);
-			}
 			typedCases.push({
-				arm: {
-					value: typedValue,
-					subjectBinding: subjectBinding,
-					arrayPattern: arrayPattern,
-					isCatchAll: isCatchAll,
-					guard: typedGuard,
-					enumName: enumName,
-					constructorIndex: constructorIndex,
-					bindings: pattern == null ? [] : pattern.bindings,
-					predicates: predicates,
-					span: switchCase.span
-				},
+				arms: [for (match in matches) SwitchCaseTyper.arm(match, typedGuard)],
 				result: typedResult
 			});
 		}
@@ -1829,7 +1788,7 @@ class ExpressionTyper {
 				result = deferred == null ? switchCase.result : bodyTyper.typeExpression(deferred.expression,
 					deferred.scope, resultType);
 			{
-				arm:switchCase.arm, result:branchResult(result, resultType, "switch branch")
+				arms:switchCase.arms, result:branchResult(result, resultType, "switch branch")
 			};
 		}];
 		if (deferredDefault != null)
@@ -1840,7 +1799,7 @@ class ExpressionTyper {
 			var nullArm = typedDefault == null ? null : SwitchNullCoverage.nullAccessArm(typedSubject, seenCases, span);
 			if (nullArm != null) {
 				typedCases.push({
-					arm: nullArm,
+					arms: [nullArm],
 					result: branchResult(new TypedExpression(TThrowExpression(SwitchNullCoverage.nullAccess(span)),
 						TNever,
 						span), resultType, "switch branch")
@@ -1852,10 +1811,10 @@ class ExpressionTyper {
 			typedDefault = branchResult(typedDefault, resultType, "switch branch");
 		if (tupleTypes != null) {
 			var unmatched = typedDefault != null ? null : TupleSwitch.unmatched(session, bodyTyper, tupleTypes,
-				[for (typedCase in typedCases) typedCase.arm]);
+				[for (typedCase in typedCases) for (arm in typedCase.arms) arm]);
 			if (unmatched == null && typedDefault == null)
 				unmatched = SwitchNullCoverage.tupleWitness(session, bodyTyper, tupleTypes,
-					[for (typedCase in typedCases) typedCase.arm]);
+					[for (typedCase in typedCases) for (arm in typedCase.arms) arm]);
 			if (unmatched != null)
 				fail("E1021", TupleSwitch.missingCases(unmatched, bodyTyper.structureSwitchColumns(span), wholeValue),
 					span);
@@ -1871,13 +1830,14 @@ class ExpressionTyper {
 		if (BodyTyper.isEnum(typedSubject.type) && typedDefault == null && !seenCases.exists("$catchall")) {
 			var resolvedEnumName = Std.string(BodyTyper.enumName(typedSubject.type)),
 				missing:Array<String> = [],
-				coverageCases:Array<TypedSwitchCoverageCase> = [for (switchCase in typedCases)
+				coverageCases:Array<TypedSwitchCoverageCase> =
+					[for (switchCase in typedCases) for (arm in switchCase.arms)
 					{
-						constructorIndex:switchCase.arm.constructorIndex,
-							subjectBinding:switchCase.arm.subjectBinding,
-							isCatchAll:switchCase.arm.isCatchAll,
-							guard:switchCase.arm.guard,
-							predicates:switchCase.arm.predicates
+						constructorIndex:arm.constructorIndex,
+							subjectBinding:arm.subjectBinding,
+							isCatchAll:arm.isCatchAll,
+							guard:arm.guard,
+							predicates:arm.predicates
 					}];
 			if (session.enumDecls.exists(resolvedEnumName)) {
 				var enumDecl = session.enumDecls.get(resolvedEnumName);
@@ -1890,7 +1850,7 @@ class ExpressionTyper {
 			// must (SwitchNullCoverage).
 			if (missing.length == 0) {
 				var nullWitness = SwitchNullCoverage.witness(session, bodyTyper, typedSubject.type,
-					[for (typedCase in typedCases) typedCase.arm]);
+					[for (typedCase in typedCases) for (arm in typedCase.arms) arm]);
 				if (nullWitness != null)
 					missing.push(nullWitness);
 			}
@@ -1921,13 +1881,6 @@ class ExpressionTyper {
 			default: false;
 		};
 
-	/** A constant case, typed as the subject's value: `case null` alone is typed as the (nullable) subject. */
-	function typeCaseConstant(value:AstExpression, subjectType:CompilerType, constantType:Null<CompilerType>,
-			scope:Scope):TypedExpression {
-		var type = constantType == null
-			|| compiler.syntax.AstPredicates.isNullExpression(value) ? subjectType : constantType;
-		return bodyTyper.coerce(bodyTyper.typeExpression(value, scope, type), type, "switch case", "E1019");
-	}
 
 	static function isArraySwitchable(type:CompilerType):Bool
 		return switch type {
@@ -2066,7 +2019,7 @@ class ExpressionTyper {
 			case TSwitchExpression(subject, cases, defaultExpression):
 				var converted:Array<TypedSwitchExpressionCase> = [for (item in cases)
 					{
-						arm:item.arm, result:coerceCastNull(item.result, expected)
+						arms:item.arms, result:coerceCastNull(item.result, expected)
 					}];
 				new TypedExpression(TSwitchExpression(subject, converted,
 					defaultExpression == null ? null : coerceCastNull(defaultExpression, expected)),

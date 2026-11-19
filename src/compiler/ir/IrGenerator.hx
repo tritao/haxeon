@@ -1083,24 +1083,24 @@ class IrGenerator {
 						switchType = lowerType(expression.type),
 						tuple = storeSwitchSubject(switchName, expression, builder, localTypes),
 						exits:Array<CfgBlock> = [];
-					var arms = [for (switchCase in cases) switchCase.arm];
-					// One `case A, B:` is a case per value with one typed body (`StatementTyper.typeSwitch`): the first lowers it in a
-					// block of its own and the others jump there.
-					var sharedBody:Null<Array<TypedStatement>> = null, sharedBlock:Null<CfgBlock> = null;
-					function lowerCaseBody(index:Int):Void {
-						var statements = cases[index].statements;
-						if (statements == sharedBody && sharedBlock != null) {
-							builder.jump(sharedBlock);
+					// The arms of every case in order, one per pattern, and the case each belongs to.
+					var arms = [for (switchCase in cases) for (arm in switchCase.arms) arm],
+						caseOf = [for (index in 0...cases.length) for (_ in cases[index].arms) index];
+					// A case's body is lowered once: with several patterns, in a block of its own the other patterns' arms jump to.
+					var bodies:Array<Null<CfgBlock>> = [for (_ in cases) null];
+					function lowerCaseBody(caseIndex:Int):Void {
+						var shared = bodies[caseIndex], switchCase = cases[caseIndex];
+						if (shared != null) {
+							builder.jump(shared);
 							return;
 						}
-						if (index + 1 < cases.length && cases[index + 1].statements == statements) {
+						if (switchCase.arms.length > 1) {
 							var block = builder.createBlock();
 							builder.jump(block);
 							builder.select(block);
-							sharedBody = statements;
-							sharedBlock = block;
+							bodies[caseIndex] = block;
 						}
-						lowerStatements(statements, builder, localTypes, arms[index].span.end);
+						lowerStatements(switchCase.statements, builder, localTypes, switchCase.arms[0].span.end);
 						if (!builder.isTerminated())
 							exits.push(builder.currentBlock());
 					}
@@ -1110,7 +1110,7 @@ class IrGenerator {
 						var defaultBlock = builder.createBlock();
 						lowerTableSwitch(tablePlan, arms, switchName, switchType,
 							defaultBlock, true,
-							builder, localTypes, lowerCaseBody);
+							builder, localTypes, armIndex -> lowerCaseBody(caseOf[armIndex]));
 						builder.select(defaultBlock);
 						if (!hasDefault && tablePlan.catchAll < 0 && isNullableEnumType(expression.type))
 							throwUnmatchedNull(builder);
@@ -1131,8 +1131,8 @@ class IrGenerator {
 						var checkBlock = builder.currentBlock(), // An unguarded `case _:` or `case other:` matches every value, so nothing falls out of the arms.
 							matchesEverything = false,
 							nullAsFalse = readsNullAsFalse(expression.type, arms, hasDefault);
-						for (caseIndex in 0...cases.length) {
-							var switchCase = cases[caseIndex], arm = switchCase.arm;
+						for (armIndex in 0...arms.length) {
+							var caseIndex = caseOf[armIndex], arm = arms[armIndex];
 							if (arm.guard == null && arm.isCatchAll)
 								matchesEverything = true;
 							var matchBlock = builder.createBlock(),
@@ -1140,7 +1140,7 @@ class IrGenerator {
 								nextBlock = builder.createBlock();
 							if (arm.arrayPattern != null)
 								lowerSwitchArrayPattern(arm.arrayPattern, switchName, switchType, tuple,
-									caseIndex,
+									armIndex,
 									checkBlock, matchBlock, nextBlock, builder,
 									localTypes);
 							else if (tuple) {
@@ -2783,7 +2783,30 @@ class IrGenerator {
 					resultType = lowerType(expression.type);
 				localTypes.set(resultName, resultType);
 				var tuple = storeSwitchSubject(subjectName, subject, builder, localTypes);
-				var arms = [for (switchCase in cases) switchCase.arm];
+				// The arms of every case in order, one per pattern, and the case each belongs to.
+				var arms = [for (switchCase in cases) for (arm in switchCase.arms) arm],
+					caseOf = [for (index in 0...cases.length) for (_ in cases[index].arms) index];
+				// A case's result is lowered once: with several patterns, in a block of its own the other patterns' arms jump to.
+				var results:Array<Null<CfgBlock>> = [for (_ in cases) null];
+				function lowerCaseResult(caseIndex:Int, afterBlock:CfgBlock):Void {
+					var shared = results[caseIndex], switchCase = cases[caseIndex];
+					if (shared != null) {
+						builder.jump(shared);
+						return;
+					}
+					if (switchCase.arms.length > 1) {
+						var block = builder.createBlock();
+						builder.jump(block);
+						builder.select(block);
+						results[caseIndex] = block;
+					}
+					var caseResult = abiBoundaryCast(builder, lowerExpression(switchCase.result, builder, localTypes),
+						resultType);
+					if (!builder.isTerminated()) {
+						builder.store(resultName, caseResult);
+						builder.jump(afterBlock);
+					}
+				}
 				var tablePlan = switchTablePlan(subject.type, arms, defaultExpression != null);
 				if (tablePlan != null) {
 					// Arms that name constructors or integer constants: one jump table (`lowerTableSwitch`). Without a default an enum
@@ -2791,15 +2814,7 @@ class IrGenerator {
 					var afterBlock = builder.createBlock(), fallbackBlock = builder.createBlock();
 					lowerTableSwitch(tablePlan, arms, subjectName, subjectType,
 						fallbackBlock, false,
-						builder, localTypes, index -> {
-							var caseResult = abiBoundaryCast(builder,
-								lowerExpression(cases[index].result, builder, localTypes),
-								resultType);
-							if (!builder.isTerminated()) {
-								builder.store(resultName, caseResult);
-								builder.jump(afterBlock);
-							}
-						});
+						builder, localTypes, armIndex -> lowerCaseResult(caseOf[armIndex], afterBlock));
 					var fallback = defaultExpression;
 					builder.select(fallbackBlock);
 					if (fallback == null && tablePlan.catchAll < 0 && isNullableEnumType(subject.type))
@@ -2824,11 +2839,11 @@ class IrGenerator {
 					var bodyBlocks:Array<CfgBlock> = [];
 					var matchBlocks:Array<CfgBlock> = [];
 					var checkBlocks:Array<CfgBlock> = [entryBlock];
-					for (caseIndex in 0...cases.length) {
+					for (armIndex in 0...arms.length) {
 						var matchBlock = builder.createBlock();
 						matchBlocks.push(matchBlock);
-						bodyBlocks.push(arms[caseIndex].guard == null ? matchBlock : builder.createBlock());
-						if (caseIndex + 1 < cases.length)
+						bodyBlocks.push(arms[armIndex].guard == null ? matchBlock : builder.createBlock());
+						if (armIndex + 1 < arms.length)
 							checkBlocks.push(builder.createBlock());
 					}
 					// Keep all case and fallback blocks before their shared join. HashLink
@@ -2836,28 +2851,27 @@ class IrGenerator {
 					// dominate the branch.
 					var fallbackBlock = builder.createBlock(),
 						afterBlock = builder.createBlock();
-					if (cases.length == 0)
+					if (arms.length == 0)
 						builder.jumpFrom(entryBlock, fallbackBlock);
-					for (caseIndex in 0...cases.length) {
-						var switchCase = cases[caseIndex],
-							arm = switchCase.arm,
-							isExhaustiveFinalCase = defaultExpression == null && caseIndex == cases.length - 1
+					for (armIndex in 0...arms.length) {
+						var arm = arms[armIndex],
+							isExhaustiveFinalCase = defaultExpression == null && armIndex == arms.length - 1
 								&& arm.guard == null,
-							bodyBlock = bodyBlocks[caseIndex],
-							nextBlock = caseIndex + 1 < cases.length
-								? checkBlocks[caseIndex + 1]
+							bodyBlock = bodyBlocks[armIndex],
+							nextBlock = armIndex + 1 < arms.length
+								? checkBlocks[armIndex + 1]
 								: (defaultExpression == null && !throwsAtFallback ? afterBlock : fallbackBlock);
-						var matchBlock = matchBlocks[caseIndex];
+						var matchBlock = matchBlocks[armIndex];
 						if (arm.arrayPattern != null)
-							lowerSwitchArrayPattern(arm.arrayPattern, subjectName, subjectType, tuple, caseIndex,
-								checkBlocks[caseIndex], matchBlocks[caseIndex],
+							lowerSwitchArrayPattern(arm.arrayPattern, subjectName, subjectType, tuple, armIndex,
+								checkBlocks[armIndex], matchBlocks[armIndex],
 								nextBlock, builder, localTypes);
 						else if (tuple) {
 							// `case _`, the one other tuple case.
-							builder.select(checkBlocks[caseIndex]);
+							builder.select(checkBlocks[armIndex]);
 							builder.jump(matchBlock);
 						} else {
-							builder.select(checkBlocks[caseIndex]);
+							builder.select(checkBlocks[armIndex]);
 							var subjectValue = builder.load(subjectName, subjectType);
 							if (isNullableEnumType(subject.type) && arm.constructorIndex >= 0
 								&& !isExhaustiveFinalCase) {
@@ -2944,13 +2958,7 @@ class IrGenerator {
 							builder.branch(lowerExpression(guard, builder, localTypes), bodyBlock, nextBlock);
 							builder.select(bodyBlock);
 						}
-						var caseResult = abiBoundaryCast(builder,
-							lowerExpression(switchCase.result, builder, localTypes),
-							resultType);
-						if (!builder.isTerminated()) {
-							builder.store(resultName, caseResult);
-							builder.jump(afterBlock);
-						}
+						lowerCaseResult(caseOf[armIndex], afterBlock);
 					}
 					var fallback = defaultExpression;
 					if (throwsAtFallback) {

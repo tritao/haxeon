@@ -1,6 +1,6 @@
 # Switch cases with several patterns
 
-Status: step 1 done; steps 2 to 4 open.
+Status: done (steps 1 to 4).
 
 ## Problem
 
@@ -55,3 +55,16 @@ the stock-built compiler is unaffected. The formatter and the language server re
    guard and flow tests.
 3. IR: one body per case; remove the `2e9ad93e5` sharing.
 4. Tests for the bindings rule, against Haxe's diagnostics (`tests/differential`).
+
+## As built
+
+- `SwitchCaseTyper` types a case's patterns for statement and expression switches alike; `BodyTyping.patternNames`
+  records what each pattern binds, and the later patterns' locals are mapped to the first's.
+- The AST walkers (binding, storage, purity, escapes) declare the first pattern's names in the case's scope and walk the
+  others in scopes of their own.
+- The IR flattens a switch's cases into arms, one per pattern, for the jump tables and the comparison chain, and lowers each
+  case's body or result once.
+- Extractor and structure patterns are still rewritten one pattern per case (`SwitchCases.perPattern`) before typing,
+  so a multi-pattern case that uses them types its body per pattern.
+- The fixtures `switch-shared-patterns`, `switch-pattern-missing-binding` and `switch-pattern-binding-type` compare
+  with Haxe.

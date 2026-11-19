@@ -386,6 +386,9 @@ in_background run_compile_failure rest-argument-type
 in_background run_compile_failure tuple-switch-nested-null-missing
 in_background run_compile_failure switch-nested-null-missing
 in_background run_compile_failure switch-bool-missing
+in_background run_case switch-shared-patterns 0
+in_background run_compile_failure switch-pattern-missing-binding
+in_background run_compile_failure switch-pattern-binding-type
 # Haxe 4.3.7 rejects the next two by failing with Not_found while it names the missing null; Haxeon reports E1021.
 in_background run_compile_failure switch-nested-nullable-enum-abstract-missing
 in_background run_compile_failure tuple-switch-nested-nullable-enum-abstract-missing

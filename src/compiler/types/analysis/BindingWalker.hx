@@ -227,18 +227,16 @@ class BindingWalker implements AstChildVisitor {
 				statements(body);
 			case Switch(subject, cases, defaultBranch, _, _):
 				expression(subject);
-				// Each pattern binds its names over the guard and body, as one case per pattern did, until the patterns of a case
-				// share their bindings (docs/design/SWITCH_CASES.md, step 2).
-				for (entry in cases)
-					for (pattern in entry.patterns) {
-						var scope = enterScope();
-						bindPattern(pattern, entry.span);
-						if (entry.guard != null)
-							expression(entry.guard);
-						for (inner in entry.statements)
-							statement(inner);
-						leaveScope(scope);
-					}
+				// The first pattern declares the case's names; the others bind the same names to its locals (`SwitchCaseTyper`).
+				for (entry in cases) {
+					var scope = enterScope();
+					bindCasePatterns(entry.patterns, entry.span);
+					if (entry.guard != null)
+						expression(entry.guard);
+					for (inner in entry.statements)
+						statement(inner);
+					leaveScope(scope);
+				}
 				statements(defaultBranch);
 			default:
 				AstChildren.visitStatement(value, this);
@@ -290,15 +288,14 @@ class BindingWalker implements AstChildVisitor {
 				statement(store);
 			case SwitchExpression(subject, cases, fallback, _):
 				expression(subject);
-				for (arm in cases)
-					for (pattern in arm.patterns) {
-						var scope = enterScope();
-						bindPattern(pattern, arm.span);
-						if (arm.guard != null)
-							expression(arm.guard);
-						expression(arm.result);
-						leaveScope(scope);
-					}
+				for (arm in cases) {
+					var scope = enterScope();
+					bindCasePatterns(arm.patterns, arm.span);
+					if (arm.guard != null)
+						expression(arm.guard);
+					expression(arm.result);
+					leaveScope(scope);
+				}
 				if (fallback != null)
 					expression(fallback);
 			case ArrayComprehension(keyName, valueName, iterable, test, result, _, span):
@@ -326,6 +323,20 @@ class BindingWalker implements AstChildVisitor {
 				AstChildren.visit(value, this);
 		}
 	}
+
+	/**
+	 * The patterns of one case: the first declares the names the guard and body read; each other pattern is walked in a scope of
+	 * its own, since its names are the first's locals once typed (`SwitchCaseTyper`).
+	 */
+	function bindCasePatterns(patterns:Array<AstExpression>, span:SourceSpan):Void
+		for (index in 0...patterns.length)
+			if (index == 0)
+				bindPattern(patterns[0], span);
+			else {
+				var scope = enterScope();
+				bindPattern(patterns[index], span);
+				leaveScope(scope);
+			}
 
 	/** Every name in a case pattern may bind a variable; naming too many is the safe error. */
 	function bindPattern(pattern:AstExpression, span:SourceSpan):Void {
