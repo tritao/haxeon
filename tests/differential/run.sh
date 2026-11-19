@@ -309,6 +309,9 @@ in_background run_compile_failure using-no-first-argument main
 in_background run_case using-extension-values 0 hl main
 in_background run_compile_failure using-type-parameter-missing main
 in_background run_known_divergence using-extension-value-open
+# Type.enumConstructor, Type.enumParameters and Haxe's global EnumValueTools (src/compiler/types/typing/EnumReflection.hx).
+in_background run_case enum-reflection 0 hl main
+in_background run_compile_failure enum-value-tools-arguments
 # Unannotated fields take their initializer's type, typed on demand (docs/design/LAZY_DECLARATION_TYPING.md, slice 3).
 in_background run_case lazy-field-comprehension 0
 in_background run_case lazy-field-map-lambda 0

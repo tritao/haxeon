@@ -30,6 +30,7 @@ enum-array-iterator-escape	42
 anonymous-function	42
 enum-abstract	42
 enum-argument-string	42
+enum-reflection	42
 concise-try	42
 switch-expression-block	42
 switch-expression-throw-arm	42

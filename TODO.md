@@ -15,23 +15,19 @@ Longer-term direction is in `ROADMAP.md`.
   share a value name. Keep enum abstracts as `TAbstract`, like other
   abstracts, and resolve bare values from the expected type; then remove the
   package heuristic.
-- **Most of Haxe's `Type` API is missing.** Haxeon has 2 of its 20
-  functions, `Type.enumIndex` and `Type.enumEq`, as compiler intrinsics
-  (`E1007: Unknown function "Type.getClassName"` for the rest). Haxe
-  libraries that serialize, log or load plugins need the others. In phases:
-  1. `enumConstructor` and `enumParameters`, which need only the enum value,
-     like the two that exist.
-  2. Classes and enums as runtime values, `Class<T>` and `Enum<T>`, on
-     HashLink, wasm32 and wasm-gc, with `getClass`, `getEnum`,
-     `getSuperClass`, `getClassName`, `getEnumName`, `getInstanceFields`,
-     `getClassFields`, `getEnumConstructs`, `allEnums` and `typeof`. Write a
-     design note first and agree it with the typer lane: it shares the
-     runtime type representation with structure values (architecture step
-     2.6, `docs/design/STRUCTURE_VALUES.md`).
-  3. `resolveClass`, `resolveEnum`, `createInstance`,
-     `createEmptyInstance`, `createEnum` and `createEnumIndex`, once a port
-     needs them. A type named only by a string defeats pruning, so this
-     needs `@:keep` and Haxe's dead-code rules.
+- **Most of Haxe's `Type` API is missing.** Haxeon has the enum-value part, on a value of a known enum type:
+  `Type.enumIndex`, `Type.enumEq`, `Type.enumConstructor`, `Type.enumParameters` and Haxe's global
+  `haxe.EnumTools.EnumValueTools` (`getName`, `getParameters`, `getIndex`, `equals`), which the typer provides
+  (`EnumReflection`, `StaticExtensions.enumValueTool`). The rest (`E1007: Unknown function "Type.getClassName"`) needs
+  classes and enums as runtime values; the design is `docs/design/TYPE_VALUES.md` (reviewed by haxeon-e4, decisions
+  for the user listed at its end). Haxe libraries that serialize, log or load plugins need it. In phases:
+  2. `Class<T>`, `Enum<T>` and `EnumValue` on HashLink, wasm32 and wasm-gc: one `TypeDescriptor` per declaration,
+     `getClass`, `getEnum`, `getSuperClass`, `getClassName`, `getEnumName`, `getInstanceFields`, `getClassFields`,
+     `getEnumConstructs`, `allEnums`, `typeof`, a class named as a value (`Main.twice()` with a `Dynamic` first
+     argument), Haxe's `EnumTools` on an enum, and `enumConstructor`/`enumParameters` on `Dynamic`. Slice 3 needs
+     `ClassId` lowered on every backend (`INTERFACE_VALUES.md`).
+  3. `resolveClass`, `resolveEnum`, `createInstance`, `createEmptyInstance`, `createEnum` and `createEnumIndex`, once a
+     port needs them. A type named only by a string defeats pruning: the note proposes Haxe's `-dce std` rule.
 - **`trace` with several values prints differently from Haxe.**
   `trace(a, b, c)` prints `2, 1, 1`; Haxe prints `2,1,1`.
 - **Warm builds still track subclasses' reads of base-class statics.**

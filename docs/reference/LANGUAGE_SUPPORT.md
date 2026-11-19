@@ -195,9 +195,20 @@ The current subset includes:
   (a non-generic typedef; Haxeon types a value by the named type, so it applies to every value of that type, where Haxe
   applies it only to values written with the typedef). An extension read as a value is the extension bound to the value,
   evaluated once there (`var trim = text.trim;`, `var add = n.add;`), as in Haxe; a generic one whose other type parameters
-  the value does not fix (`[1, 2].map`) is `E1003` (`using-extension-value-open`). Not yet: a class named as a value
-  (`Main.twice()` with a `Dynamic` first argument, which Haxe passes `Class<Main>`) and Haxe's global `haxe.EnumTools`
-  extensions (`getName`, `getParameters`): both need the `Type` API's class and enum values (TODO.md).
+  the value does not fix (`[1, 2].map`) is `E1003` (`using-extension-value-open`). Last come Haxe's global extensions of an
+  enum value, `haxe.EnumTools.EnumValueTools` (below), which apply without a `using`. Not yet: a class named as a value
+  (`Main.twice()` with a `Dynamic` first argument, which Haxe passes `Class<Main>`) and Haxe's `haxe.EnumTools` on an enum
+  itself (`Color.getName()`, `Color.createAll()`): both need the `Type` API's class and enum values
+  (`docs/design/TYPE_VALUES.md`).
+- The enum part of Haxe's `Type` API, on a value of a known enum type: `Type.enumIndex`, `Type.enumEq`,
+  `Type.enumConstructor` (the constructor's name) and `Type.enumParameters` (a new `Array<Dynamic>` of its arguments in
+  declaration order, `null` for an optional one left out; writing to it does not change the value, as on HashLink). Haxe's
+  `EnumValueTools` give the same as extensions of every enum value: `getName()`, `getParameters()`, `getIndex()` and
+  `equals(other)`, tried after the value's own `@:using` and its module's `using`, as in Haxe (a `using haxe.EnumTools`
+  puts them at its place in the module's list), and callable as `EnumValueTools.getName(value)`. A `Null<E>` value is
+  checked, as a call of a method on it is: null throws "Null access", as Haxe's does. `Type.enumEq` also compares
+  `Dynamic` values; the others need the enum's type where they are typed. `Dynamic` and Haxe's `EnumValue` type wait for
+  enums as runtime values (`docs/design/TYPE_VALUES.md`).
 
 Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
 parameters or a result type that breaks the inherited contract, or explicitly make a public method private.
@@ -250,8 +261,9 @@ HashLink):
   after a narrower use (`structure-open-literal-two-uses`). A literal that meets one structure gains its optional fields,
   as in Haxe (`structure-open-literal`).
 - In the standard library: `haxe.ds.List`, `haxe.ds.Vector`, `Lambda.list` (it returns a `haxe.ds.List`), the file handles of `sys.io.File.read` and
-  `write` (`getContent` and `saveContent` work), and the `Type` API (`typeof`, `getClass`, `getClassName`): it needs
-  class and enum values (`Class<T>`, `Enum<T>`), which Haxeon does not have yet.
+  `write` (`getContent` and `saveContent` work), and the `Type` API beyond an enum value's (`typeof`, `getClass`,
+  `getClassName`), with Haxe's `EnumValue` type: it needs class and enum values (`Class<T>`, `Enum<T>`), which Haxeon
+  does not have yet (`docs/design/TYPE_VALUES.md`).
 - A method whose return type would be inferred from `++field` (`function next() return ++i;`): `E1020`. Declare the
   return type.
 - A generic call whose type argument is a type variable something after the call still fixes (`var values = [];

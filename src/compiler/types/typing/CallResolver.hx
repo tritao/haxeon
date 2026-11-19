@@ -236,6 +236,14 @@ class CallResolver {
 		if (extension == null)
 			return null;
 		var fn = extension.fn, key = extension.key;
+		if (fn == null) {
+			var expected = key == "Type.enumEq" ? 1 : 0;
+			if (arguments.length != expected)
+				fail("E1008",
+					'Function "haxe.EnumTools.EnumValueTools.$name" expects $expected arguments, got ${arguments.length}',
+					span);
+			return typeEnumValueFunction(key, key == "Type.enumEq" ? declared : receiver, arguments, span, scope);
+		}
 		if (extension.owner.kind != ModuleFunctions)
 			MemberAccess.method(session, extension.owner.name, name, span);
 		if (arguments.length + 1 > fn.arguments.length
@@ -275,6 +283,8 @@ class CallResolver {
 		if (extension == null)
 			return null;
 		var fn = extension.fn;
+		if (fn == null)
+			return boundEnumValueFunction(value, extension.key, name, span, scope);
 		if (extension.owner.kind != ModuleFunctions)
 			MemberAccess.method(session, extension.owner.name, name, span);
 		var parameters = BodyTyper.functionTypeParameters(fn), substitutions:Map<String, CompilerType> = [];
@@ -325,6 +335,81 @@ class CallResolver {
 	}
 
 	/**
+	 * The `Type` function `name` (`Type.enumConstructor`, `Type.enumParameters`, `Type.enumIndex`, `Type.enumEq`) on the typed
+	 * enum value `value`, with the call's other arguments: what a call of it and Haxe's `EnumValueTools` extension both type.
+	 */
+	function typeEnumValueFunction(name:String, value:TypedExpression, others:Array<AstExpression>, span:SourceSpan,
+			scope:Scope):TypedExpression {
+		var expected = name == "Type.enumEq" ? 1 : 0;
+		if (others.length != expected)
+			fail("E1008", 'Function "$name" expects ${expected + 1} arguments, got ${others.length + 1}', span);
+		if (name == "Type.enumEq")
+			return typeEnumEq(value, others[0], scope, span);
+		var type = EnumReflection.enumType(value.type);
+		if (type == null)
+			throw new CompileError(new Diagnostic("E1009", '$name requires an enum value', span));
+		value = bodyTyper.coerce(value, type, '$name value', "E1002");
+		return switch name {
+			case "Type.enumConstructor": EnumReflection.constructorName(session, bodyTyper, value, scope, span);
+			case "Type.enumParameters": EnumReflection.parameters(session, bodyTyper, value, scope, span);
+			case "Type.enumIndex": new TypedExpression(TEnumIndex(value), TInt, span);
+			default: throw new InternalError('Unknown enum value function "$name"');
+		};
+	}
+
+	/**
+	 * `Type.enumEq(left, right)`: an enum value's constructors and arguments compared deeply, through its reflective equality;
+	 * on `Dynamic` values, through the concrete enum each holds.
+	 */
+	function typeEnumEq(leftValue:TypedExpression, rightExpression:AstExpression, scope:Scope,
+			span:SourceSpan):TypedExpression {
+		var rightValue = bodyTyper.typeExpression(rightExpression, scope, leftValue.type);
+		if (EnumReflection.enumType(leftValue.type) != null) {
+			EnumEqualityGenerator.requestReflective(session, leftValue.type, session.currentContext.name, span);
+			return new TypedExpression(TCall(EnumEqualityGenerator.reflectiveName(leftValue.type),
+				[
+					leftValue,
+					bodyTyper.coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")
+				]),
+				TBool, span);
+		}
+		var left = bodyTyper.coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
+			right = bodyTyper.coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
+		return new TypedExpression(TCall("$enum-dynamic-reflect", [left, right]), TBool, span);
+	}
+
+	/**
+	 * Haxe's `EnumValueTools.name` read as a value (`var name = color.getName;`): a function of its other arguments with the
+	 * enum value `value` bound, evaluated where it is read, as `boundStaticExtension` makes an extension's.
+	 */
+	function boundEnumValueFunction(value:TypedExpression, typeFunction:String, name:String, span:SourceSpan,
+			scope:Scope):TypedExpression {
+		var held = "__haxeon_bound" + span.start,
+			inner = new Scope(scope),
+			arguments:Array<AstArgument> = [],
+			argumentTypes:Array<CompilerType> = [],
+			passed:Array<AstExpression> = [Variable(held, span)];
+		inner.define(held, value.type, span);
+		bodyTyper.bindCell(held, span, inner, value.type);
+		if (typeFunction == "Type.enumEq") {
+			arguments.push({name: "__haxeon_argument1", type: InferredType, span: span, optional: false});
+			argumentTypes.push(value.type);
+			passed.push(Variable("__haxeon_argument1", span));
+		}
+		var result = switch typeFunction {
+			case "Type.enumConstructor": TString;
+			case "Type.enumParameters": TArray(TDynamic);
+			case "Type.enumIndex": TInt;
+			default: TBool;
+		},
+			bound = bodyTyper.typeExpression(Lambda(arguments, [Return(Call(typeFunction, passed, span), span)],
+			'bound:$name@${span.start}', span), inner,
+			TFunction(argumentTypes, result, FunctionTypes.ofArguments(arguments)));
+		return new TypedExpression(TBlockExpression([TVar(inner.requireId(held), value, span)], bound), bound.type,
+			span);
+	}
+
+	/**
 	 * The receiver an extension is passed: as written where the first argument takes null (`Null<T>`, `Dynamic`, or a generic
 	 * one, whose type the receiver fixes), else its non-null value, as a member call reads it.
 	 */
@@ -352,9 +437,6 @@ class CallResolver {
 			return new TypedExpression(TCast(receiver), synthesized.result, span);
 		}
 		receiver = TypeParameterMembers.receiver(session, bodyTyper, receiver, name, span);
-		// Haxe's EnumValue.getIndex(): the constructor's position in the enum's declaration.
-		if (name == "getIndex" && arguments.length == 0 && receiver.type.match(TInstance(NominalKind.Enum, _, _)))
-			return new TypedExpression(TEnumIndex(receiver), TInt, span);
 		var pathCall = KeyPathOperations.call(session, receiver, name, arguments, span, scope, bodyTyper);
 		if (pathCall != null)
 			return pathCall;
@@ -2007,16 +2089,18 @@ class CallResolver {
 				function(argument) return typeExpressionValue(argument, scope).type,
 				function(argument) return typeExpressionValue(argument, scope)),
 				scope, expectedType);
-		if (name == "Type.enumIndex") {
-			if (arguments.length != 1)
-				fail("E1008", 'Function "$name" expects 1 argument, got ${arguments.length}', span);
-			var value = typeExpressionValue(arguments[0], scope);
-			switch value.type {
-				case TInstance(NominalKind.Enum, _, _):
-				default:
-					fail("E1009", "Type.enumIndex requires an enum value", span);
-			}
-			return new TypedExpression(TEnumIndex(value), TInt, span);
+		if (name == "Type.enumIndex" || name == "Type.enumConstructor" || name == "Type.enumParameters"
+			|| name == "Type.enumEq") {
+			if (arguments.length == 0)
+				fail("E1008", 'Function "$name" expects ${name == "Type.enumEq" ? 2 : 1} arguments, got 0', span);
+			return typeEnumValueFunction(name, typeExpressionValue(arguments[0], scope), arguments.slice(1), span,
+				scope);
+		}
+		if (StringTools.startsWith(name, StaticExtensions.ENUM_VALUE_TOOLS + ".")) {
+			var typeFunction =
+				StaticExtensions.enumValueTool(name.substr(StaticExtensions.ENUM_VALUE_TOOLS.length + 1));
+			if (typeFunction != null)
+				return typeBuiltinCall(typeFunction, arguments, span, scope, expectedType);
 		}
 		if (name == "JsonWire.encode" || name == "haxeon.wire.JsonWire.encode") {
 			if (arguments.length != 1)
@@ -2062,30 +2146,6 @@ class CallResolver {
 			var keyed = WireCodecGenerator.request(session, resultType, session.currentContext.name, span);
 			return new TypedExpression(TCall(WireCodecGenerator.decodeName(keyed), [bytes]), resultType, span);
 		}
-		if (name == "Type.enumEq") {
-			if (arguments.length != 2)
-				fail("E1008", 'Function "Type.enumEq" expects 2 arguments, got ${arguments.length}', span);
-			var leftValue = typeExpressionValue(arguments[0], scope),
-				rightValue = bodyTyper.typeExpression(arguments[1], scope, leftValue.type);
-			var enumValue = switch leftValue.type {
-				case TInstance(NominalKind.Enum, _, _): true;
-				case TNullable(TInstance(NominalKind.Enum, _, _)): true;
-				default: false;
-			};
-			if (enumValue) {
-				EnumEqualityGenerator.requestReflective(session, leftValue.type, session.currentContext.name, span);
-				return new TypedExpression(TCall(EnumEqualityGenerator.reflectiveName(leftValue.type),
-					[
-						leftValue,
-						bodyTyper.coerce(rightValue, leftValue.type, "Type.enumEq value", "E1002")
-					]),
-					TBool, span);
-			}
-			var left = bodyTyper.coerce(leftValue, TDynamic, "Type.enumEq value", "E1002"),
-				right = bodyTyper.coerce(rightValue, TDynamic, "Type.enumEq value", "E1002");
-			return new TypedExpression(TCall("$enum-dynamic-reflect", [left, right]), TBool, span);
-		}
-
 		if (name == "Std.isOfType" || name == "Std.isExactType") {
 			if (arguments.length != 2)
 				fail("E1008", 'Function "Std.isOfType" expects 2 arguments, got ${arguments.length}', span);

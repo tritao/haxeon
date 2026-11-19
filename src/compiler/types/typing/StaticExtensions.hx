@@ -9,11 +9,14 @@ import compiler.types.Monomorphs;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypeRelations;
 
-/** A static function found as an extension of a value: `key` is its canonical name, `owner` what declares it. */
+/**
+ * A static function found as an extension of a value: `key` is its canonical name, `owner` what declares it. One of Haxe's
+ * `EnumValueTools`, which the typer provides, has no function: its `key` is the `Type` function it is (`enumValueTool`).
+ */
 typedef StaticExtension = {
 	final owner:StaticExtensionOwner;
 	final key:String;
-	final fn:AstFunction;
+	final fn:Null<AstFunction>;
 }
 
 /**
@@ -27,10 +30,27 @@ typedef StaticExtension = {
  * argument whose type accepts the value, and the next owner is tried.
  *
  * A value of an unfixed type takes no extension, as in Haxe (where it could fix the type as a side effect). A `Dynamic` value
- * takes only a function whose first argument is `Dynamic`. Haxe's global extensions (`haxe.EnumTools`) are not modelled:
- * Haxeon gives an enum value's `getIndex()` itself.
+ * takes only a function whose first argument is `Dynamic`.
+ *
+ * Last come Haxe's global extensions: an enum value's `haxe.EnumTools.EnumValueTools` (`getName()`, `getParameters()`,
+ * `getIndex()`, `equals(other)`), which apply without a `using`. A module's `using haxe.EnumTools` puts them at its place in
+ * the module's list, as in Haxe. The typer provides them (`enumValueTool`); Haxe's `EnumTools` on an enum itself needs the enum
+ * as a runtime value and is not modelled yet.
  */
 class StaticExtensions {
+	/** The class `haxe.EnumTools.EnumValueTools` is, as Haxeon names a module's secondary type. */
+	public static inline final ENUM_VALUE_TOOLS = "haxe.EnumValueTools";
+
+	/** The `Type` function Haxe's `EnumValueTools.name` calls, or null for another name. */
+	public static function enumValueTool(name:String):Null<String>
+		return switch name {
+			case "getName": "Type.enumConstructor";
+			case "getParameters": "Type.enumParameters";
+			case "getIndex": "Type.enumIndex";
+			case "equals": "Type.enumEq";
+			default: null;
+		};
+
 	final session:TypingSession;
 	final genericInstantiation:GenericInstantiation;
 
@@ -56,7 +76,17 @@ class StaticExtensions {
 			if (found != null)
 				return found;
 		}
-		return null;
+		return enumValueTools(receiver, name);
+	}
+
+	/** Haxe's `EnumValueTools.name` on a value of `receiver`, or null when it is not an enum value or has no such tool. */
+	static function enumValueTools(receiver:CompilerType, name:String):Null<StaticExtension> {
+		var tool = enumValueTool(name);
+		return tool == null || EnumReflection.enumType(receiver) == null ? null : {
+			owner: {name: ENUM_VALUE_TOOLS, kind: ClassStatics},
+			key: tool,
+			fn: null
+		};
 	}
 
 	/**
@@ -125,6 +155,8 @@ class StaticExtensions {
 		if (seen.exists(seenKey))
 			return null;
 		seen.set(seenKey, true);
+		if (owner.name == ENUM_VALUE_TOOLS && owner.kind == ClassStatics)
+			return enumValueTools(receiver, name);
 		var fn = session.signatures.get(key);
 		if (fn == null || fn.arguments.length == 0 || !isStatic(owner, key, fn) || hasMetadata(fn, "noUsing")
 			|| hasMetadata(fn, "impl"))
