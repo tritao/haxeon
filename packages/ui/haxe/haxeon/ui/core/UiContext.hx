@@ -1,6 +1,7 @@
 package haxeon.ui.core;
 
 import haxeon.ui.NativeEnums;
+import haxeon.ui.style.Density;
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.ui.debug.RenderCost;
 import haxeon.platform.Surface as PlatformSurface;
@@ -54,6 +55,8 @@ class UiContext {
 	public final gestures:GestureArena;
 	public final animations:AnimationScheduler;
 	public final interactionStates:InteractionStateStore;
+	/** Control sizing for the input in use; the host sets Touch when touch is primary. */
+	public var density:Density = Density.Pointer;
 
 	/** Application commands and shortcut scopes owned by this UI context. */
 	public final commands:CommandRegistry;

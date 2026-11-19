@@ -11,6 +11,9 @@ class DragRecognizer extends GestureRecognizer {
 	public final hasStart:Bool;
 	public final hasMove:Bool;
 	public final hasEnd:Bool;
+	/** Velocity in px/s of the most recent drag release, written by the arena just before onEnd runs. */
+	public var velocityX(default, null):Float = 0.0;
+	public var velocityY(default, null):Float = 0.0;
 
 	public function new(threshold:Float = 6.0, ?onStart:GestureEvent->Void,
 			?onMove:GestureEvent->Void, ?onEnd:GestureEvent->Void) {
@@ -21,5 +24,11 @@ class DragRecognizer extends GestureRecognizer {
 		this.onStart = onStart == null ? function(_) {} : onStart;
 		this.onMove = onMove == null ? function(_) {} : onMove;
 		this.onEnd = onEnd == null ? function(_) {} : onEnd;
+	}
+
+	@:allow(haxeon.ui.gestures.GestureArena)
+	function setVelocity(x:Float, y:Float):Void {
+		velocityX = x;
+		velocityY = y;
 	}
 }

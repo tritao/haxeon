@@ -10,7 +10,7 @@ class GestureRecognizer {
 
 	public function new(kind:Int, threshold:Float, interval:Float,
 			onRecognized:Null<GestureEvent->Void>) {
-		if (kind < GestureKind.Tap || kind > GestureKind.DragEnd || !finite(threshold) || !finite(interval)
+		if (kind < GestureKind.Tap || kind > GestureKind.Swipe || !finite(threshold) || !finite(interval)
 			|| threshold < 0.0 || interval < 0.0
 			|| ((kind == GestureKind.DoubleTap || kind == GestureKind.LongPress) && interval == 0.0))
 			throw "Gesture thresholds and intervals must be finite and valid";

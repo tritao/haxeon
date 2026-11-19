@@ -2,6 +2,7 @@ package haxeon.ui.host;
 
 import haxeon.platform.Surface as PlatformSurface;
 import haxeon.platform.event.EventPump;
+import haxeon.ui.style.Density;
 
 import NativeKitUI.UiStatus;
 import haxeon.ProfileCounter;
@@ -94,6 +95,7 @@ class UiHostRuntime {
 				renderer = Renderer.create();
 				nativeSurface = PlatformSurface.borrowNativeHandle(surface);
 				created.context().attachPlatformSurface(nativeSurface);
+				created.context().density = context.touchPrimary ? Density.Touch : Density.Pointer;
 				// Hosts without a top-level window (Android) pass an invalid handle: skip window chrome, and let
 				// the input adapter use the surface as its target.
 				if (window.isValid()) created.context().attachPlatformWindow(window);
