@@ -56,8 +56,9 @@ class SsaBuilder {
 	var debugBindings:Array<compiler.ir.IrFunction.IrDebugBinding> = [];
 	var debugLocals:Map<String, compiler.ir.cfg.Cfg.CfgDebugLocal> = [];
 
-	public static function build(cfg:CfgFunction, ?scratch:SsaScratch):IrFunction {
-		CfgVerifier.verify(cfg);
+	public static function build(cfg:CfgFunction, ?scratch:SsaScratch, verify:Bool = true):IrFunction {
+		if (verify)
+			CfgVerifier.verify(cfg);
 		return new SsaBuilder(cfg, scratch == null ? new SsaScratch() : scratch).run();
 	}
 

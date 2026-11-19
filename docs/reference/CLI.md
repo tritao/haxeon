@@ -204,9 +204,9 @@ fingerprints. It does not disable the other IR passes. Direct compiler calls tur
 A compile states its passes and self-checks as flags, never through the environment, so one compile server serves any
 mix of them: `--no-inline`, `--no-load-store-forwarding`, `--no-strength-reduction`, `--no-early-prune` (a migration
 reference for the reachability walk), `--check-reuse` (compare everything a compile reuses with a fresh build; slow, for
-the test suites), `--no-verify-ir` and `--verify-ir`, and `--wasm-legacy-exceptions` (below). The IR verifier checks the
-final HashLink IR before lowering; a release build (`--build-mode=release`) skips it unless `--verify-ir` is given, and the
-test driver always gives it.
+the test suites), `--no-verify-ir` and `--verify-ir`, and `--wasm-legacy-exceptions` (below). The IR verifiers check each
+function's CFG and the final HashLink IR before lowering; a release build (`--build-mode=release`) skips them unless
+`--verify-ir` is given, and the test driver always gives it.
 
 A compile server keeps a session between requests and builds on it (`--session=reuse`, the default); a request with
 other settings starts it over anyway. `--session=fresh` starts it over before compiling, so the result depends on the

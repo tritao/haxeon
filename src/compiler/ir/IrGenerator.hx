@@ -84,6 +84,9 @@ class IrGenerator {
 	public final facts:ProgramFacts;
 	public final profile:TargetProfile;
 
+	/** Check each function's CFG before SSA construction (`CompileOptions.verifyIr`). */
+	public var verifiesCfg = true;
+
 	/** Working storage of the SSA construction, reused from one function to the next. */
 	final ssaScratch = new compiler.ir.cfg.SsaScratch();
 
@@ -115,8 +118,11 @@ class IrGenerator {
 	 * The same generator once the program's objects are known. Generating the objects (`IrProgramAssembler.objectsFrom`) needs a
 	 * generator that has none yet; generating functions reads them, as input. Generation creates no objects of its own.
 	 */
-	public function withObjects(objects:Array<IrObject>):IrGenerator
-		return new IrGenerator(facts, profile, objects);
+	public function withObjects(objects:Array<IrObject>):IrGenerator {
+		var result = new IrGenerator(facts, profile, objects);
+		result.verifiesCfg = verifiesCfg;
+		return result;
+	}
 
 	static inline final ObservableStateField:String = "$haxeonObservableState";
 	static inline final ObservableSourceClass:String = "haxeon.reactive.ObservableSource";
@@ -264,7 +270,7 @@ class IrGenerator {
 	public function generateFunction(fn:TypedFunction):IrFunction {
 		try {
 			var cfg = CfgIteratorReplacement.run(generateCfg(fn)),
-				built = SsaBuilder.build(cfg, ssaScratch);
+				built = SsaBuilder.build(cfg, ssaScratch, verifiesCfg);
 			var retention:compiler.ir.IrFunction.IrRetention = fn.isExposed == true ? Expose : fn.isKept == true
 				? Keep : Reachable;
 			var kind:compiler.ir.IrFunction.IrFunctionKind = switch fn.role {

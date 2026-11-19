@@ -433,6 +433,7 @@ class FrontendCompilation {
 			build.typedNew = typedNew;
 			context.frontendPassFunctions.push(typedNew.functions.length);
 			build.generator = new IrGenerator(compiler.ir.ProgramFacts.of(typedNew), context.targetProfile());
+			build.generator.verifiesCfg = context.options.verifyIr;
 			build.typerMetrics = typedResult.metrics;
 			var runtimeDependencies = typedResult.runtimeDependencies;
 			build.runtimeDependencies = runtimeDependencies;
