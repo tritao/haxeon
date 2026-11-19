@@ -230,7 +230,12 @@ class Monomorphs {
 	 * caller's own check. A variable is not filled with a type that mentions it, nor with Null, Void or Never, which do not
 	 * fix a local's type.
 	 */
-	public static function unify(actual:CompilerType, expected:CompilerType):Void {
+	public static function unify(actual:CompilerType, expected:CompilerType):Void
+		unifyWithin(actual, expected, []);
+
+	/** `unify`, where `meeting` holds the pairs of structures being met further out: a recursive structure meets its own once. */
+	static function unifyWithin(actual:CompilerType, expected:CompilerType,
+			meeting:Array<Array<AnonymousField>>):Void {
 		var left = follow(actual), right = follow(expected);
 		switch [left, right] {
 			case [TMonomorph(a), TMonomorph(b)]:
@@ -241,24 +246,37 @@ class Monomorphs {
 			case [_, TMonomorph(cell)]:
 				fill(cell, left);
 			case [TNullable(a), TNullable(b)], [TArray(a), TArray(b)], [TIterator(a), TIterator(b)]:
-				unify(a, b);
+				unifyWithin(a, b, meeting);
 			// A value converts to its nullable: what fixes `?` in `Null<?>` is the value's own type.
 			case [_, TNullable(b)] if (isUnbound(b) && !isNullish(left)):
-				unify(left, b);
+				unifyWithin(left, b, meeting);
 			// And a nullable meets its value's type: an optional unannotated argument `?x` stored in an Int field is a `Null<Int>`.
 			case [TNullable(a), _] if (isUnbound(a) && !isNullish(right)):
-				unify(a, right);
+				unifyWithin(a, right, meeting);
 			case [TMap(k1, v1), TMap(k2, v2)]:
-				unify(k1, k2);
-				unify(v1, v2);
+				unifyWithin(k1, k2, meeting);
+				unifyWithin(v1, v2, meeting);
 			case [TFunction(a1, r1, _), TFunction(a2, r2, _)] if (a1.length == a2.length):
 				for (index in 0...a1.length)
-					unify(a2[index], a1[index]);
-				unify(r1, r2);
+					unifyWithin(a2[index], a1[index], meeting);
+				unifyWithin(r1, r2, meeting);
 			case [TInstance(k1, n1, a1), TInstance(k2, n2, a2)] if (k1 == k2 && (n1:String) == (n2:String)
 				&& a1.length == a2.length):
 				for (index in 0...a1.length)
-					unify(a1[index], a2[index]);
+					unifyWithin(a1[index], a2[index], meeting);
+			// Two structures meet field by field, by name (`{a:String}` fills `{a:?}`); a field only one has is the caller's to check.
+			case [TAnonymous(_, a), TAnonymous(_, b)] if (a != b):
+				for (index in 0...meeting.length >> 1)
+					if (meeting[index * 2] == a && meeting[index * 2 + 1] == b)
+						return;
+				meeting.push(a);
+				meeting.push(b);
+				for (field in a)
+					for (other in b)
+						if (other.name == field.name)
+							unifyWithin(field.type, other.type, meeting);
+				meeting.pop();
+				meeting.pop();
 			default:
 		}
 	}

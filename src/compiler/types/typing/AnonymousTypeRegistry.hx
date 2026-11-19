@@ -14,6 +14,9 @@ class AnonymousTypeRegistry {
 		switch type {
 			// An open literal structure is registered when it is closed, under its final name (`MonomorphFrames`).
 			case TAnonymous(name, _) if (compiler.types.Monomorphs.isOpenStructureName(name)):
+			// A structure that mentions a type variable is named after its fields once they are known (`Monomorphs.resolve`).
+			case TAnonymous(_, _) if (compiler.types.Monomorphs.containsUnbound(type)):
+				session.monomorphs.whenKnown(type, () -> discover(session.monomorphs.settled(type)));
 			case TAnonymous(name, fields):
 				if (seen.exists(name))
 					return;
@@ -42,6 +45,9 @@ class AnonymousTypeRegistry {
 		}
 
 	public function register(type:CompilerType):Void {
+		// A type variable already filled is replaced by its type, so a structure is registered under its final name.
+		if (compiler.types.Monomorphs.contains(type) && !compiler.types.Monomorphs.containsUnbound(type))
+			type = compiler.types.Monomorphs.resolve(type);
 		recordUses(type, []);
 		// A unit typed to be checked and dropped adds no type to the program.
 		if (!session.output.checkOnly)
@@ -51,6 +57,9 @@ class AnonymousTypeRegistry {
 	function discover(type:CompilerType):Void
 		switch type {
 			case TAnonymous(name, _) if (compiler.types.Monomorphs.isOpenStructureName(name)):
+			// A structure that mentions a type variable is named after its fields once they are known (`Monomorphs.resolve`).
+			case TAnonymous(_, _) if (compiler.types.Monomorphs.containsUnbound(type)):
+				session.monomorphs.whenKnown(type, () -> discover(session.monomorphs.settled(type)));
 			case TAnonymous(name, fields):
 				if (session.anonymousTypes.exists(name))
 					return;

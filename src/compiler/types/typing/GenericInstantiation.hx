@@ -198,21 +198,26 @@ class GenericInstantiation {
 	 * A specialization is named and typed after its type arguments when the call is typed, so they must be known then. One that is
 	 * an empty type variable only an argument's own value carries (`Lambda.empty([])`, whose element type nothing else can fix) is
 	 * Dynamic already, as Haxe makes it, and settles here. One that something after the call could still fix (a local's, or one
-	 * the call's result carries) is an error: a specialization cannot follow it.
+	 * the call's result carries) is an error: a specialization cannot follow it. The call's lambdas are typed already, so they fix
+	 * nothing later and do not count as carriers. An unannotated function's result is the one its body gives it.
 	 */
 	function settleTypeArguments(baseName:String, fn:AstFunction, arguments:Array<TypedExpression>,
 			substitutions:Map<String, CompilerType>, span:SourceSpan):Void {
-		var result:Null<CompilerType> = switch fn.result {
-			case InferredType: null;
-			default: session.declarations.types.resultType(fn, substitutions);
-		};
+		var result = session.declarations.types.resultType(fn, substitutions);
 		for (parameter in substitutions.keys())
 			for (cell in Monomorphs.unboundCells(requiredMapValue(substitutions, parameter))) {
 				if (!Monomorphs.isUnbound(TMonomorph(cell)))
 					continue;
-				var carriers = [for (argument in arguments) if (Monomorphs.mentions(cell, argument.type)) argument];
-				if (result != null && !Monomorphs.mentions(cell, result) && carriers.length == 1
-					&& session.monomorphs.carriedOnlyBy(cell, carriers[0].span))
+				var carriers = [
+					for (argument in arguments)
+						if (Monomorphs.mentions(cell, argument.type) && !argument.expression.match(TLambda(_, _, _)))
+						argument
+				];
+				// A variable no other argument carries is a lambda's result's, which its body left empty (`opt(i -> null)`): Haxe
+				// leaves it unknown, so Dynamic, even where the call's result mentions it.
+				var lambdaOnly = carriers.length == 0;
+				if (lambdaOnly ? session.monomorphs.carriedOnlyBy(cell, span) : !Monomorphs.mentions(cell, result)
+					&& carriers.length == 1 && session.monomorphs.carriedOnlyBy(cell, carriers[0].span))
 					Monomorphs.unify(TMonomorph(cell), TDynamic);
 				else
 					fail("E1003",
@@ -410,6 +415,14 @@ class GenericInstantiation {
 			span:SourceSpan):Void {
 		if (substitutions.exists(name)) {
 			var previous = requiredMapValue(substitutions, name);
+			// A type variable meets the type inferred before, as Haxe unifies them: `Lambda.concat([1], [])` fills the element of `[]`
+			// with Int, and `Lambda.concat([], [2])` the first one's.
+			if (Monomorphs.containsUnbound(previous) || Monomorphs.containsUnbound(actual)) {
+				Monomorphs.unify(actual, previous);
+				previous = Monomorphs.resolve(previous);
+				actual = Monomorphs.resolve(actual);
+				substitutions.set(name, previous);
+			}
 			if ((switch (previous) {
 				case TDynamic: true;
 				default: false;

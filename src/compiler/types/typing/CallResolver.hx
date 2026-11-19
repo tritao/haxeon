@@ -647,6 +647,21 @@ class CallResolver {
 			typed:Array<Null<TypedExpression>> = [],
 			offset = leading == null ? 0 : leading.length,
 			lambdas:Array<Int> = [];
+		// A parameter a `Dynamic` expectation of the result gives (`trace(one(i -> p))`) is what the arguments leave it: Dynamic
+		// only where they fix nothing, as Haxe's Dynamic unifies with any type.
+		var fallbacks = [for (parameter => type in substitutions) if (type.match(TDynamic)) parameter];
+		for (parameter in fallbacks)
+			substitutions.remove(parameter);
+		function settleFallbacks():Bool {
+			var settled = false;
+			for (parameter in fallbacks)
+				if (!substitutions.exists(parameter)) {
+					substitutions.set(parameter, TDynamic);
+					settled = true;
+				} else if (compiler.types.Monomorphs.isUnbound(requiredMapValue(substitutions, parameter)))
+					compiler.types.Monomorphs.unify(requiredMapValue(substitutions, parameter), TDynamic);
+			return settled;
+		}
 		if (leading != null)
 			for (index in 0...leading.length) {
 				genericInstantiation.inferArgumentTypeParameters(fn, index, declaredArguments[index],
@@ -673,18 +688,26 @@ class CallResolver {
 			var progressed = false;
 			for (index in lambdas.copy()) {
 				var declared = declaredArguments[offset + index],
-					expected = lambdaExpectation(declared.type, declared.span, parameters, substitutions);
+					opened:Map<String, CompilerType> = [],
+					expected = lambdaExpectation(declared.type, declared.span,
+						compiler.syntax.Parser.expressionSpan(arguments[index]), parameters, substitutions, opened,
+						fallbacks);
 				if (expected == null && !lambdaParametersAnnotated(arguments[index]))
 					continue;
 				var argument = bodyTyper.typeExpression(arguments[index], scope, expected, expected != null);
 				genericInstantiation.inferArgumentTypeParameters(fn, offset + index, declared, argument.type,
 					parameters,
 					substitutions, argument.span);
+				// A parameter only the callback's result fixes is the type variable its body filled (or left empty, which
+				// `settleTypeArguments` settles where only this callback carries it).
+				for (parameter => variable in opened)
+					if (!substitutions.exists(parameter))
+						substitutions.set(parameter, variable);
 				typed[offset + index] = argument;
 				lambdas.remove(index);
 				progressed = true;
 			}
-			if (!progressed) {
+			if (!progressed && !settleFallbacks()) {
 				// No callback supplies the missing parameter context. Preserve the
 				// ordinary inference diagnostic rather than assuming Dynamic.
 				var index = lambdas[0];
@@ -692,6 +715,7 @@ class CallResolver {
 				fail("E1003", "Cannot infer generic callback context", span);
 			}
 		}
+		settleFallbacks();
 		return {arguments: [for (argument in typed) requiredArgument(argument)], substitutions: substitutions};
 	}
 
@@ -723,12 +747,14 @@ class CallResolver {
 		};
 
 	/**
-		The function type a lambda argument is typed against. Its parameter types
-		must be known; a result that still mentions an unbound type parameter is
-		left as Dynamic, which tells the lambda typer to infer it from the body.
+		The function type a lambda argument (written at `argumentSpan`) is typed against. Its parameter types
+		must be known; a result that still mentions an unbound type parameter opens a type variable for it
+		(`openResult`), recorded in `opened`, which the lambda's body fills; `fallbacks` are the parameters a Dynamic
+		expectation of the call's result gives.
 	**/
-	function lambdaExpectation(declared:AstType, span:SourceSpan, parameters:Array<String>,
-			substitutions:Map<String, CompilerType>):Null<CompilerType> {
+	function lambdaExpectation(declared:AstType, span:SourceSpan, argumentSpan:SourceSpan, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>, opened:Map<String, CompilerType>,
+			fallbacks:Array<String>):Null<CompilerType> {
 		if (allTypeParametersBound(parameters, substitutions))
 			return session.declarations.resolve(declared, span, substitutions);
 		return switch declared {
@@ -741,8 +767,9 @@ class CallResolver {
 						session.declarations.resolve(argument, span, substitutions)
 				];
 				CompilerType.TFunction(resolvedArguments,
-					mentionsUnbound(result, parameters, substitutions) ? openResult(result, span, parameters,
-					substitutions) : session.declarations.resolve(result, span, substitutions),
+					mentionsUnbound(result, parameters, substitutions) ? openResult(result, span, argumentSpan,
+					parameters, substitutions, opened, fallbacks) : session.declarations.resolve(result, span,
+					substitutions),
 					FunctionTypes.canonical(optional));
 			default: null;
 		};
@@ -751,21 +778,74 @@ class CallResolver {
 	/**
 	 * A callback's expected result that mentions type parameters nothing has fixed yet (`f:T->Iterable<S>`): each is a type variable
 	 * the callback's result fills, as in Haxe, so its body converts to the declared result (an Array to `Iterable<S>`) and the call
-	 * infers the parameter from it. Dynamic where no body is being typed, which could settle the variables.
+	 * infers the parameter from it. Each variable is made at the callback (`argumentSpan`), which carries it, and recorded in `opened`.
+	 * Dynamic where no body is being typed, which could settle the variables.
 	 */
-	function openResult(result:AstType, span:SourceSpan, parameters:Array<String>,
-			substitutions:Map<String, CompilerType>):CompilerType {
-		var open = copyMap(substitutions);
+	function openResult(result:AstType, span:SourceSpan, argumentSpan:SourceSpan, parameters:Array<String>,
+			substitutions:Map<String, CompilerType>, opened:Map<String, CompilerType>,
+			fallbacks:Array<String>):CompilerType {
+		var open = copyMap(substitutions), made:Map<String, CompilerType> = [];
 		for (parameter in parameters)
 			if (!open.exists(parameter)) {
 				var variable = session.monomorphs.create('the type parameter "$parameter" of a callback\'s result',
-					span);
+					argumentSpan);
 				if (variable == null)
 					return TDynamic;
 				open.set(parameter, variable);
+				made.set(parameter, variable);
 			}
-		return session.declarations.resolve(result, span, open);
+		var resolved = session.declarations.resolve(result, span, open);
+		// A recursive typedef's structure is named after its type arguments when it is resolved (`Node<T>`), so one resolved
+		// while a variable is empty keeps that variable's spelling in its name, and two callbacks would share it: Dynamic, as
+		// before results were opened.
+		if (namesEmptyVariable(resolved, [])) {
+			// Where the call's result is expected as Dynamic, the parameters are Dynamic, as that expectation gives them.
+			for (parameter in made.keys())
+				if (fallbacks.indexOf(parameter) < 0)
+					return TDynamic;
+			for (parameter in made.keys()) {
+				open.set(parameter, TDynamic);
+				opened.set(parameter, TDynamic);
+			}
+			return session.declarations.resolve(result, span, open);
+		}
+		for (parameter => variable in made)
+			opened.set(parameter, variable);
+		return resolved;
 	}
+
+	/** Whether `type` holds a recursive structure named while a type variable it mentions was empty. */
+	static function namesEmptyVariable(type:CompilerType, seen:Array<Array<compiler.types.Type.AnonymousField>>):Bool
+		return switch type {
+			case TAnonymous(name, fields):
+				if (seen.indexOf(fields) >= 0)
+					false;
+				else if (SemanticSignature.isRecursiveAnonymousName(name) && name.indexOf("unknown:") >= 0)
+					true;
+				else {
+					seen.push(fields);
+					var found = false;
+					for (field in fields)
+						if (namesEmptyVariable(field.type, seen))
+							found = true;
+					found;
+				}
+			case TNullable(element), TArray(element), TIterator(element): namesEmptyVariable(element, seen);
+			case TMap(key, value): namesEmptyVariable(key, seen) || namesEmptyVariable(value, seen);
+			case TInstance(_, _, arguments), TAbstract(_, arguments, _):
+				var found = false;
+				for (argument in arguments)
+					if (namesEmptyVariable(argument, seen))
+						found = true;
+				found;
+			case TFunction(arguments, result, _):
+				var found = namesEmptyVariable(result, seen);
+				for (argument in arguments)
+					if (namesEmptyVariable(argument, seen))
+						found = true;
+				found;
+			default: false;
+		};
 
 	static function mentionsUnbound(type:AstType, parameters:Array<String>,
 			substitutions:Map<String, CompilerType>):Bool

@@ -289,6 +289,11 @@ in_background run_case lambda-empty-literal 0
 in_background run_case lambda-flatten 0
 # A generic call's type argument a later statement fixes: Haxeon specializes the call when it types it.
 in_background run_known_divergence lambda-unfixed-before-call
+# A callback's result fills the type parameters it mentions, and an empty literal's element settles at the call (08d893179).
+in_background run_case callback-result-structure-variable 0
+in_background run_case callback-result-left-open 0
+in_background run_case callback-result-typedef-parameter 0
+in_background run_case generic-empty-literal-arguments 0
 # `value.match(pattern)`: a switch with one case that binds no names, as in Haxe.
 in_background run_case enum-match 0
 in_background run_compile_failure enum-match-pattern-variable
