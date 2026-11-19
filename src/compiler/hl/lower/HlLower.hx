@@ -71,6 +71,9 @@ class HlLower {
 	/** Whether lowering keeps, for each function, the requests and facts that let a later build reuse its code. */
 	final recordLowering:Bool;
 
+	/** Register allocation of release code, its scratch reused from one function to the next. */
+	final registerAllocation = new HlRegisterAllocation();
+
 	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
 	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
 
@@ -1598,7 +1601,7 @@ class HlLower {
 		// Release code shares registers between values that are not live at once; development code keeps one per value, which is
 		// what a debugger shows a variable from.
 		if (!developmentMetadata)
-			registerTypes = HlRegisterAllocation.run(instructions, registerTypes, fn.arguments.length);
+			registerTypes = registerAllocation.run(instructions, registerTypes, fn.arguments.length);
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
 			requireFunction(fn.name), registerTypes,
 			instructions, debugLocations, scopedAssignments);

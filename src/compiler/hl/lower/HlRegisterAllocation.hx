@@ -16,13 +16,37 @@ import compiler.hl.HlFunction.HlInstruction;
  * register whose address is taken (`Ref`) keeps a slot of its own.
  */
 class HlRegisterAllocation {
+	// Scratch kept from one function to the next: lowering a program allocates each array once, at the size of its largest function.
+	final pinned:Array<Bool> = [];
+	final labels:Map<String, Int> = [];
+	final starts:Array<Bool> = [];
+	final blockStarts:Array<Int> = [];
+	final blockOf:Array<Int> = [];
+
+	/** The successors of block `b` are `successors[successorStart[b] ... successorStart[b + 1] - 1]`. */
+	final successorStart:Array<Int> = [];
+
+	final successors:Array<Int> = [];
+	final used:Array<Int> = [];
+	final defined:Array<Int> = [];
+	final liveIn:Array<Int> = [];
+	final liveOut:Array<Int> = [];
+	final thrown:Array<Int> = [];
+	final first:Array<Int> = [];
+	final last:Array<Int> = [];
+	final mapping:Array<Int> = [];
+	final order:Array<Int> = [];
+	final freeAt:Array<Int> = [];
+	final slotsByType:Map<Int, Array<Int>> = [];
+
+	public function new() {}
+
 	/** Renames the registers of `instructions` in place and returns the types of the registers that remain. */
-	public static function run(instructions:Array<HlInstruction>, registerTypes:Array<Int>,
-			argumentCount:Int):Array<Int> {
+	public function run(instructions:Array<HlInstruction>, registerTypes:Array<Int>, argumentCount:Int):Array<Int> {
 		var count = registerTypes.length;
 		if (count <= argumentCount + 1)
 			return registerTypes;
-		var pinned:Array<Bool> = [for (_ in 0...count) false];
+		fillFalse(pinned, count);
 		for (index in 0...argumentCount)
 			pinned[index] = true;
 		for (instruction in instructions)
@@ -33,14 +57,14 @@ class HlRegisterAllocation {
 			}
 		var length = instructions.length;
 		// Blocks: a block starts at the first instruction, at a label and after any jump or exit.
-		var labels:Map<String, Int> = [];
+		labels.clear();
 		for (index in 0...length)
 			switch instructions[index] {
 				case Label(name):
 					labels.set(name, index);
 				default:
 			}
-		var starts:Array<Bool> = [for (_ in 0...length + 1) false];
+		fillFalse(starts, length + 1);
 		starts[0] = true;
 		for (index in 0...length) {
 			switch instructions[index] {
@@ -51,7 +75,8 @@ class HlRegisterAllocation {
 			if (HlWriter.jumps(instructions[index]) || exits(instructions[index]))
 				starts[index + 1] = true;
 		}
-		var blockStarts:Array<Int> = [], blockOf:Array<Int> = [];
+		blockStarts.resize(0);
+		blockOf.resize(0);
 		for (index in 0...length) {
 			if (starts[index])
 				blockStarts.push(index);
@@ -60,32 +85,34 @@ class HlRegisterAllocation {
 		var blocks = blockStarts.length;
 		function blockEnd(block:Int):Int
 			return block + 1 < blocks ? blockStarts[block + 1] : length;
-		var successors:Array<Array<Int>> = [];
+		successorStart.resize(0);
+		successors.resize(0);
 		for (block in 0...blocks) {
-			var last = blockEnd(block) - 1, next:Array<Int> = [], instruction = instructions[last];
+			var end = blockEnd(block) - 1, instruction = instructions[end];
+			successorStart.push(successors.length);
 			switch instruction {
 				case Switch(_, targets):
 					for (target in targets)
-						addSuccessor(next, blockOf[labels.get(target)]);
+						addSuccessor(block, blockOf[labels.get(target)]);
 				default:
 					var target = HlWriter.jumpTarget(instruction);
 					if (target != null)
-						addSuccessor(next, blockOf[labels.get(target)]);
+						addSuccessor(block, blockOf[labels.get(target)]);
 			}
 			var falls = switch instruction {
 				case Jump(_): false;
 				default: !exits(instruction);
 			};
 			if (falls && block + 1 < blocks)
-				next.push(block + 1);
-			successors.push(next);
+				successors.push(block + 1);
 		}
+		successorStart.push(successors.length);
 		// Most functions have no trap; only those need the handlers each block is protected by.
 		var handlers:Null<Array<Array<Int>>> = null;
 		for (instruction in instructions)
 			switch instruction {
 				case Trap(_, _, _):
-					handlers = activeHandlers(instructions, blocks, blockStarts, blockEnd, blockOf, labels, successors);
+					handlers = activeHandlers(instructions, blocks, blockEnd);
 					if (handlers == null)
 						return registerTypes;
 					break;
@@ -94,18 +121,19 @@ class HlRegisterAllocation {
 		// Uses before definitions per block, then the live sets to a fixed point. Each set is a row of `words` words in one
 		// array per kind, block after block.
 		var words = (count + 31) >> 5;
-		var used = zeros(blocks * words),
-			defined = zeros(blocks * words),
-			liveIn = zeros(blocks * words),
-			liveOut = zeros(blocks * words),
-			thrown = zeros(words);
+		fill(used, blocks * words, 0);
+		fill(defined, blocks * words, 0);
+		fill(liveIn, blocks * words, 0);
+		fill(liveOut, blocks * words, 0);
+		fill(thrown, words, 0);
+		var usedBits = used, definedBits = defined, inBits = liveIn, outBits = liveOut, thrownBits = thrown;
 		var row = 0;
 		function note(register:Int, written:Bool):Void {
 			var word = row + (register >> 5), bit = 1 << (register & 31);
 			if (written)
-				defined[word] |= bit;
-			else if (defined[word] & bit == 0)
-				used[word] |= bit;
+				definedBits[word] |= bit;
+			else if (definedBits[word] & bit == 0)
+				usedBits[word] |= bit;
 		}
 		for (block in 0...blocks) {
 			row = block * words;
@@ -118,33 +146,34 @@ class HlRegisterAllocation {
 			var block = blocks;
 			while (block-- > 0) {
 				var base = block * words;
-				for (successor in successors[block]) {
-					var from = successor * words;
+				for (edge in successorStart[block]...successorStart[block + 1]) {
+					var from = successors[edge] * words;
 					for (word in 0...words)
-						liveOut[base + word] |= liveIn[from + word];
+						outBits[base + word] |= inBits[from + word];
 				}
 				for (word in 0...words)
-					thrown[word] = 0;
+					thrownBits[word] = 0;
 				// What a handler protecting this block reads is live from its first instruction to its last.
 				if (handlers != null)
 					for (handler in handlers[block]) {
 						var from = handler * words;
 						for (word in 0...words) {
-							liveOut[base + word] |= liveIn[from + word];
-							thrown[word] |= liveIn[from + word];
+							outBits[base + word] |= inBits[from + word];
+							thrownBits[word] |= inBits[from + word];
 						}
 					}
 				for (word in 0...words) {
-					var at = base + word, next = used[at] | (liveOut[at] & ~defined[at]) | thrown[word];
-					if (next != liveIn[at]) {
-						liveIn[at] = next;
+					var at = base + word, next = usedBits[at] | (outBits[at] & ~definedBits[at]) | thrownBits[word];
+					if (next != inBits[at]) {
+						inBits[at] = next;
 						changed = true;
 					}
 				}
 			}
 		}
 		// The hull of each register's live points in instruction order.
-		var first:Array<Int> = [for (_ in 0...count) -1], last:Array<Int> = [for (_ in 0...count) -1];
+		fill(first, count, -1);
+		fill(last, count, -1);
 		function cover(register:Int, position:Int):Void {
 			if (first[register] < 0 || position < first[register])
 				first[register] = position;
@@ -176,9 +205,13 @@ class HlRegisterAllocation {
 			}
 		}
 		// Linear scan per type: a slot is free again after the last instruction of the register that held it.
-		var order = [for (register in 0...count) if (!pinned[register] && first[register] >= 0) register];
+		order.resize(0);
+		for (register in 0...count)
+			if (!pinned[register] && first[register] >= 0)
+				order.push(register);
 		order.sort((a, b) -> first[a] != first[b] ? first[a] - first[b] : a - b);
-		var mapping:Array<Int> = [for (_ in 0...count) -1], types:Array<Int> = [];
+		fill(mapping, count, -1);
+		var types:Array<Int> = [];
 		for (register in 0...argumentCount) {
 			mapping[register] = types.length;
 			types.push(registerTypes[register]);
@@ -188,7 +221,8 @@ class HlRegisterAllocation {
 				mapping[register] = types.length;
 				types.push(registerTypes[register]);
 			}
-		var freeAt:Array<Int> = [], slotsByType:Map<Int, Array<Int>> = [];
+		freeAt.resize(0);
+		slotsByType.clear();
 		for (register in order) {
 			var type = registerTypes[register], slots = slotsByType.get(type), chosen = -1;
 			if (slots == null) {
@@ -219,27 +253,33 @@ class HlRegisterAllocation {
 		return types;
 	}
 
-	/** `count` zeros, allocated at their final size. */
-	static function zeros(count:Int):Array<Int> {
-		var values:Array<Int> = [];
+	/** Sets `values` to `count` copies of `value`, keeping its storage. */
+	static function fill(values:Array<Int>, count:Int, value:Int):Void {
 		values.resize(count);
 		for (index in 0...count)
-			values[index] = 0;
-		return values;
+			values[index] = value;
 	}
 
-	static function addSuccessor(successors:Array<Int>, block:Int):Void
-		if (successors.indexOf(block) < 0)
-			successors.push(block);
+	static function fillFalse(values:Array<Bool>, count:Int):Void {
+		values.resize(count);
+		for (index in 0...count)
+			values[index] = false;
+	}
+
+	/** Adds an edge from `block`, whose edges are the last ones added, unless it has it already. */
+	function addSuccessor(block:Int, target:Int):Void {
+		for (edge in successorStart[block]...successors.length)
+			if (successors[edge] == target)
+				return;
+		successors.push(target);
+	}
 
 	/**
 	 * Per block, the handler blocks of the traps active at any of its instructions: a trap is active from its `Trap` to the
 	 * `EndTrap` that closes it, along every path, and its handler is entered with the traps that were active before it. Null when
 	 * two paths reach a block with different traps active, which the lowering does not produce; the function is then left as it is.
 	 */
-	static function activeHandlers(instructions:Array<HlInstruction>, blocks:Int, blockStarts:Array<Int>,
-			blockEnd:Int->Int,
-			blockOf:Array<Int>, labels:Map<String, Int>, successors:Array<Array<Int>>):Null<Array<Array<Int>>> {
+	function activeHandlers(instructions:Array<HlInstruction>, blocks:Int, blockEnd:Int->Int):Null<Array<Array<Int>>> {
 		var handlers:Array<Array<Int>> = [for (_ in 0...blocks)[]],
 			entry:Array<Null<Array<Int>>> = [for (_ in 0...blocks) null],
 			work = [0],
@@ -275,9 +315,9 @@ class HlRegisterAllocation {
 					default:
 				}
 			}
-			for (successor in successors[block])
-				if (successor != handlerEdge)
-					reach(successor, stack);
+			for (edge in successorStart[block]...successorStart[block + 1])
+				if (successors[edge] != handlerEdge)
+					reach(successors[edge], stack);
 		}
 		return consistent ? handlers : null;
 	}
