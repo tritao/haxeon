@@ -403,8 +403,6 @@ class StatementTyper {
 	static inline function setterStore(assigned:Null<AssignedValue>, call:TypedExpression):TypedExpression
 		return assigned == null ? call : assigned.setter(call);
 
-	/** With `CompileOptions.checkResolution`: the local a write's target is rooted at is the one the body resolver names. */
-
 	public function typeAssignment(name:String, expression:AstExpression, span:SourceSpan, scope:Scope,
 			?assigned:AssignedValue, ?bound:LocalBinding):TypedStatement {
 		var written = name;

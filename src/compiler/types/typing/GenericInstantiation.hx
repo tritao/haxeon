@@ -146,8 +146,7 @@ class GenericInstantiation {
 		var constants:Map<String, String> = [],
 			constantIndices:Map<Int, Bool> = [],
 			constantPolicies:Array<String> = [],
-			assigned = compiler.types.analysis.AssignedDeclarations.ofFunction(fn.arguments,
-				fn.statements).declarations;
+			assigned = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements).writes();
 		for (index in 0...semanticArguments.length) {
 			var definition = KeyPathTyping.known(session, semanticArguments[index]),
 				parameter = fn.arguments[index];

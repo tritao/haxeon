@@ -72,6 +72,15 @@ class DefaultArguments {
 			&& !AstPredicates.isNullExpression(argument.defaultValue)
 			&& holdsNull(type, relations);
 
+	/** The declaration keys of the parameters `withPrologue`'s prologue fills, `types` being the arguments'. */
+	public static function filledDeclarations(arguments:Array<AstArgument>, types:Array<CompilerType>,
+			relations:TypeRelations):Array<String>
+		return [
+			for (index in 0...arguments.length)
+				if (filledByCallee(arguments[index], types[index], relations))
+				compiler.types.analysis.BindingWalker.key(arguments[index].name, arguments[index].span)
+		];
+
 	/** `fn` with the prologue of `withPrologue`; `types` are its arguments'. */
 	public static function withFunctionPrologue(fn:AstFunction, types:Array<CompilerType>,
 			relations:TypeRelations):AstFunction {

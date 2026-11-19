@@ -7,7 +7,6 @@ import compiler.syntax.AstChildren;
 import compiler.syntax.AstChildren.AstChildVisitor;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
-import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.BodyResolution;
 import compiler.types.analysis.MapEscapeAnalysis;
@@ -141,7 +140,7 @@ class BindingAnalysisMain {
 			if (true) { var x = 2; x = 3; }
 			var f = function():Void { y++; box.n = 4; };
 		}");
-		var assigned = AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations;
+		var assigned = BodyResolution.of(fn.arguments, fn.statements).writes();
 		expect(!assigned.exists(declaration(fn, "x", 0)), "writing an inner x does not write the outer one");
 		expect(assigned.exists(declaration(fn, "x", 1)), "but it writes the inner one");
 		expect(assigned.exists(declaration(fn, "y", 0)), "an increment inside a lambda writes the captured local");

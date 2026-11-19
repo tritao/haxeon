@@ -12,7 +12,7 @@ class MutableIterationAliases extends BindingWalker {
 	public static function ofFunction(fn:AstFunction):Map<String, Bool> {
 		var walker = new MutableIterationAliases();
 		walker.walkFunction(fn.arguments, fn.statements);
-		var mutable = AssignedDeclarations.ofFunction(fn.arguments, fn.statements).declarations;
+		var mutable = BodyResolution.of(fn.arguments, fn.statements).writes();
 		// An inferred local can store the parameter inside an object/array, return it
 		// from a closure, or pass that storage to another function. Keep the declared
 		// protocol at these boundaries; only direct uses specialize concretely.

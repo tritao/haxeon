@@ -13,7 +13,6 @@ typedef CompileOptionsInit = {
 	final ?keepSession:Bool;
 	final ?elaborateGenerics:Bool;
 	final ?verifyIr:Bool;
-	final ?checkResolution:Bool;
 }
 
 /**
@@ -81,13 +80,6 @@ class CompileOptions {
 	 */
 	public final verifyIr:Bool;
 
-	/**
-	 * Check that what the body's resolution (`BodyResolution`) gives of each lambda and loop is what walking its syntax gives,
-	 * as the typer still does for syntax it builds, and fail on a difference (docs/design/BODY_RESOLUTION.md). Slow; for
-	 * the test suites.
-	 */
-	public final checkResolution:Bool;
-
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -100,7 +92,6 @@ class CompileOptions {
 		keepSession = init == null || init.keepSession != false;
 		elaborateGenerics = init != null && init.elaborateGenerics == true;
 		verifyIr = init == null || init.verifyIr != false;
-		checkResolution = init != null && init.checkResolution == true;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -116,8 +107,7 @@ class CompileOptions {
 			parseThreads: parseThreads,
 			keepSession: keepSession,
 			elaborateGenerics: elaborateGenerics,
-			verifyIr: verifyIr,
-			checkResolution: checkResolution
+			verifyIr: verifyIr
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -145,8 +135,6 @@ class CompileOptions {
 			flags.push("--elaborate-generics");
 		if (!verifyIr)
 			flags.push(NO_VERIFY_IR);
-		if (checkResolution)
-			flags.push("--check-resolution");
 		return flags;
 	}
 
@@ -172,8 +160,7 @@ class CompileOptions {
 		return switch argument {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
-				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics",
-				"--check-resolution": true;
+				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
@@ -191,8 +178,7 @@ class CompileOptions {
 			parseThreads: threadsFrom(arguments),
 			keepSession: arguments.indexOf(NO_KEEP_SESSION) < 0,
 			elaborateGenerics: arguments.indexOf("--elaborate-generics") >= 0,
-			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0,
-			checkResolution: arguments.indexOf("--check-resolution") >= 0
+			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0
 		});
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

@@ -20,7 +20,6 @@ import compiler.runtime.PlatformAbi;
 import compiler.semantic.GenericSpecializationRegistry;
 import compiler.types.typing.InlineConstantState.ResolvedInlineConstant;
 import compiler.types.typing.CallResolver.EnumConstructorInfo;
-import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
@@ -255,7 +254,7 @@ class BodyTyper implements BodyTyping {
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
 			context.storage.addClosureWrite(binding);
-		for (declaration in AssignedDeclarations.fromResolution(resolution).declarations.keys())
+		for (declaration in resolution.writes().keys())
 			context.assignedDeclarations.set(declaration, true);
 		for (binding in lexicalStorage.mutableCaptures.keys()) {
 			context.storage.request(binding, '$' + 'cell:' + context.name + ':' + BindingWalker.nameOf(binding),
@@ -1401,9 +1400,6 @@ class BodyTyper implements BodyTyping {
 				fail("E1019", "Pattern variables are not allowed in .match patterns", span);
 	}
 
-	/** Whether the body resolver is compared with the scopes at every local (`CompileOptions.checkResolution`). */
-	public function checkResolutions(enabled:Bool):Void
-		session.checkResolution = enabled;
 
 	/**
 	 * Fails when the body's resolver names another declaration than the scope does for the local `name`, referenced as

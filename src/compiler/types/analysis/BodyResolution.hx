@@ -34,6 +34,18 @@ enum abstract BodyReference(Int) to Int {
 	var PathSet = 6;
 }
 
+/**
+ * What a lambda sees of the names it does not declare (`free`: by the local a reference
+ * names, the part before any dot; `freeAssigned`: those it assigns directly; `freeDeclarations`: the declaration of each
+ * free local), and the declarations of its own it writes (`assigned`).
+ */
+typedef LambdaFacts = {
+	free:Map<String, Bool>,
+	freeAssigned:Map<String, Bool>,
+	assigned:Map<String, Bool>,
+	freeDeclarations:Map<String, String>
+}
+
 /** A lambda of a `BodyResolution`: its references `[first, end)`, its declarations, and how many lambdas enclose its body. */
 typedef BodyLambda = {
 	final first:Int;
@@ -91,11 +103,22 @@ class BodyResolution {
 	function new() {}
 
 	/** The resolution of a function with `arguments` and `body`. */
-	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>):BodyResolution {
+	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>,
+			?outer:Map<String, String>):BodyResolution {
 		var result = new BodyResolution();
-		new BodyResolver(result).record(arguments, body);
+		new BodyResolver(result).record(arguments, body, outer);
 		return result;
 	}
+
+	/**
+	 * How many declarations are not the body's own but the `outer` ones it was resolved within (`of`): syntax the typer
+	 * builds is resolved where it is typed, so its names reach the locals visible there. They are the first ids.
+	 */
+	public var outerCount(default, null) = 0;
+
+	/** Called while recording (`of`): the declarations before this one are outer. */
+	public function recordOuter():Void
+		outerCount = declarationKeys.length;
 
 	/** The resolution of no syntax: where nothing declares a local, outside every body. */
 	public static function empty():BodyResolution
@@ -184,7 +207,7 @@ class BodyResolution {
 
 	/**
 	 * The declarations the loop at `position` (a `while`, `do`, `for` or comprehension) writes, by declaration key, lambdas
-	 * in it included, as `AssignedDeclarations` finds them; null when the body has no such loop (syntax the typer built).
+	 * in it included; null when the body has no such loop (syntax the typer built).
 	 */
 	public function writesInLoop(position:Int):Null<Map<String, Bool>> {
 		var first = loopFirst.get(position), end = loopEnd.get(position);
@@ -215,19 +238,35 @@ class BodyResolution {
 		});
 
 	/**
-	 * What the lambda at `position` sees of the names it does not declare, as `FreeVariables` finds them (`free`: by the local a
+	 * What the lambda at `position` sees of the names it does not declare (`free`: by the local a
 	 * reference names, the part before any dot; `freeAssigned`: those it assigns directly), and the declarations of its own it
-	 * writes, as `AssignedDeclarations` finds them; null when the body has no such lambda.
+	 * writes; null when the body has no such lambda.
 	 */
-	public function lambdaFacts(position:Int):Null<{
-		free:Map<String, Bool>,
-		freeAssigned:Map<String, Bool>,
-		assigned:Map<String, Bool>,
-		freeDeclarations:Map<String, String>
-	}> {
+	public function lambdaFacts(position:Int):Null<LambdaFacts> {
 		var lambda = lambdas.get(position);
-		if (lambda == null)
-			return null;
+		return lambda == null ? null : facts(lambda.first, lambda.end, lambda.firstDeclaration, lambda.endDeclaration);
+	}
+
+	/** `lambdaFacts` of the whole body, as a lambda the typer built and resolved within the locals around it is. */
+	public function bodyFacts():LambdaFacts
+		return facts(0, codes.length, outerCount, declarationKeys.length);
+
+	/** The declarations the body assigns or increments, its own and the outer ones; a write to a field is no write of the local. */
+	public function writes():Map<String, Bool> {
+		var written:Map<String, Bool> = [];
+		for (index in 0...codes.length)
+			if (referenceAt(index) == Write && declarations[index] >= 0 && names[index].indexOf(".") < 0)
+				written.set(declarationKeys[declarations[index]], true);
+		return written;
+	}
+
+	function facts(first:Int, end:Int, firstDeclaration:Int, endDeclaration:Int):LambdaFacts {
+		var lambda = {
+			first: first,
+			end: end,
+			firstDeclaration: firstDeclaration,
+			endDeclaration: endDeclaration
+		};
 		var free:Map<String, Bool> = [],
 			freeAssigned:Map<String, Bool> = [],
 			assigned:Map<String, Bool> = [],
@@ -315,8 +354,20 @@ private class BodyResolver extends BindingWalker {
 		this.bindings = bindings;
 	}
 
-	public function record(arguments:Array<AstArgument>, body:Array<AstStatement>):Void
+	public function record(arguments:Array<AstArgument>, body:Array<AstStatement>,
+			outer:Null<Map<String, String>>):Void {
+		if (outer != null) {
+			// Visible where the body is typed: declared before it, outside every lambda of it.
+			for (name => declaration in outer) {
+				bindings.recordDeclaration(declaration, Local, null, null, -1);
+				ids.push(bindings.declarationKeys.length - 1);
+				declarationTryDepths.push(0);
+				bind(name, declaration);
+			}
+			bindings.recordOuter();
+		}
 		walkFunction(arguments, body);
+	}
 
 	/** The id of the binding the last `resolve` found, or -1. */
 	inline function resolvedId():Int

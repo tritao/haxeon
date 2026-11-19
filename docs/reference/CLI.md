@@ -204,8 +204,7 @@ fingerprints. It does not disable the other IR passes. Direct compiler calls tur
 A compile states its passes and self-checks as flags, never through the environment, so one compile server serves any
 mix of them: `--no-inline`, `--no-load-store-forwarding`, `--no-strength-reduction`, `--no-early-prune` (a migration
 reference for the reachability walk), `--check-reuse` (compare everything a compile reuses with a fresh build; slow, for
-the test suites), `--check-resolution` (compare what the body resolution gives of each lambda and loop with walking its
-syntax; slow, for the test suites), `--no-verify-ir` and `--verify-ir`, and `--wasm-legacy-exceptions` (below). The IR verifiers check each
+the test suites), `--no-verify-ir` and `--verify-ir`, and `--wasm-legacy-exceptions` (below). The IR verifiers check each
 function's CFG and the final HashLink IR before lowering; a release build (`--build-mode=release`) skips them unless
 `--verify-ir` is given, and the test driver always gives it.
 

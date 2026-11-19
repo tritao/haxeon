@@ -15,8 +15,6 @@ private typedef DriverOptions = {
 	/** `--check-isolation`: every program must compile in the shared compile server exactly as in one of its own. */
 	var checkIsolation:Bool;
 
-	/** `--check-resolution`: every compile checks its body resolver against the typer's scopes (`CompileOptions.checkResolution`). */
-	var checkResolution:Bool;
 
 	/** `--release`: plain builds are release builds. */
 	var release:Bool;
@@ -45,7 +43,6 @@ class TestDriver {
 		var options = parseOptions(Sys.args());
 		var runner = new TestRunner(options.root);
 		runner.checkReuse = options.checkReuse;
-		runner.checkResolution = options.checkResolution;
 		runner.checkIsolation = options.checkIsolation;
 		runner.release = options.release;
 		var failures = 0;
@@ -163,7 +160,7 @@ class TestDriver {
 		var suites = ["all"];
 		var filter:Null<EReg> = null;
 		var listOnly = false;
-		var checkReuse = false, checkIsolation = false, checkResolution = false, release = false;
+		var checkReuse = false, checkIsolation = false, release = false;
 		var jobs = 1;
 		var index = 0;
 		while (index < args.length) {
@@ -184,8 +181,6 @@ class TestDriver {
 					listOnly = true;
 				case "--check-reuse":
 					checkReuse = true;
-				case "--check-resolution":
-					checkResolution = true;
 				case "--check-isolation":
 					checkIsolation = true;
 				case "--release":
@@ -208,7 +203,6 @@ class TestDriver {
 			listOnly: listOnly,
 			jobs: jobs,
 			checkReuse: checkReuse,
-			checkResolution: checkResolution,
 			checkIsolation: checkIsolation,
 			release: release
 		};

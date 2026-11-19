@@ -3,8 +3,8 @@ package compiler.types.typing;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
-import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.AstScan;
+import compiler.types.analysis.BodyResolution;
 import compiler.types.analysis.Scope;
 
 /**
@@ -20,26 +20,14 @@ class LoopFlow {
 		enter(session, scope, [for (expression in expressions) Expression(expression, span)], loopVariables, span);
 
 	/**
-	 * The declarations the loop writes: from the body's resolution when it knows the loop at `loopSpan`, else by walking
-	 * `statements`. With `CompileOptions.checkResolution` the two must agree on the `visible` declarations.
+	 * The declarations the loop writes: from the body's resolution when it knows the loop at `loopSpan`, else, for syntax
+	 * the typer built, by resolving `statements` within the `visible` locals.
 	 */
 	static function assignedIn(session:TypingSession, statements:Array<AstStatement>, visible:Map<String, String>,
 			loopSpan:Null<SourceSpan>):Map<String, Bool> {
-		var resolution = session.currentContext.resolution;
-		if (resolution == null || loopSpan == null)
-			return AssignedDeclarations.within(statements, visible).declarations;
-		var resolved = resolution.writesInLoop(loopSpan.start);
-		if (resolved == null)
-			return AssignedDeclarations.within(statements, visible).declarations;
-		if (session.checkResolution) {
-			var walked = AssignedDeclarations.within(statements, visible).declarations;
-			for (name => declaration in visible)
-				if (resolved.exists(declaration) != walked.exists(declaration))
-					throw new compiler.core
-						.InternalError('--check-resolution: the loop at ${loopSpan.start} in ${session.currentContext.name} ${walked.exists(declaration) ? "writes" : "does not write"} "$name" by its walk, but the resolution says otherwise',
-						loopSpan);
-		}
-		return resolved;
+		var resolution = session.currentContext.resolution,
+			resolved = resolution == null || loopSpan == null ? null : resolution.writesInLoop(loopSpan.start);
+		return resolved != null ? resolved : BodyResolution.of([], statements, visible).writes();
 	}
 
 	/**

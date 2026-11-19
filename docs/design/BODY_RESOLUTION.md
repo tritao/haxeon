@@ -187,6 +187,13 @@ resolver already scoped it so, and `Scope.define` no longer rejects it. The diff
 `local-redeclared-same-block` agrees with Haxe. Two duplicates stay errors: two parameters of one function or lambda with
 the same name (`E1001`; Haxe lets the last win, Rust rejects it), and a pattern binding a name twice (`E1019`, as Haxe).
 
+The last walkers are gone. Syntax the typer builds is resolved where it is typed, within the locals visible there
+(`BodyResolution.of` with `outer`): a lambda the typer built gets its facts from that (`bodyFacts`), and so does a loop in
+such syntax (`writes`); a default-argument prologue's writes are the parameters it fills
+(`DefaultArguments.filledDeclarations`). `FreeVariables` and `AssignedDeclarations` are deleted, and with nothing left to
+compare, so is `--check-resolution`. `BindingWalker` remains as the resolver's walk and the base of the analyses that
+inspect constructs (`ScopedEscapeChecker`, `ClosureEffects`, `PurityInference`'s neighbours).
+
 ## Step 4: the typer reads locals by binding
 
 **Today.** `Scope` finds a local by walking its chain of scopes by name (`resolveLocal`), and then reads its state:

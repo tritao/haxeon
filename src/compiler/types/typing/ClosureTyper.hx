@@ -17,9 +17,7 @@ import compiler.types.TypedAst.TypedCapture;
 import compiler.types.TypedAst.TypedCaptureSource;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
-import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
-import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.BodyResolution;
 import compiler.types.analysis.Scope.LocalBinding;
@@ -36,64 +34,26 @@ class ClosureTyper {
 		this.bodyTyper = bodyTyper;
 	}
 
-	/**
-	 * The names a lambda reads, calls or writes without declaring them (`free`, by the local before any dot), those it assigns
-	 * directly (`freeAssigned`), and the declarations of its own it writes (`assigned`): from the function's resolution when it
-	 * knows the lambda at `span`, else by walking it. `body` is `sourceBody` with the default-argument prologue, which writes
-	 * only the lambda's parameters. With `CompileOptions.checkResolution` the two answers must agree.
-	 */
 	static function requiredCell(cell:Null<String>, name:String):String {
 		if (cell == null)
 			throw new InternalError('Missing capture cell for "$name"');
 		return cell;
 	}
 
-	function lambdaFacts(arguments:Array<AstArgument>, sourceBody:Array<AstStatement>, body:Array<AstStatement>,
-			span:SourceSpan, outerContext:TypingContext):{
-				free:Map<String, Bool>,
-				freeAssigned:Map<String, Bool>,
-				assigned:Map<String, Bool>,
-				freeDeclarations:Map<String, String>
-			} {
-		function walked() {
-			var free = FreeVariables.of(arguments, body);
-			return {
-				free: free.names,
-				freeAssigned: free.assigned,
-				assigned: AssignedDeclarations.ofFunction(arguments, body).declarations,
-				freeDeclarations: free.declarations
-			};
-		}
-		var resolution = outerContext.resolution;
-		var resolved = resolution == null ? null : resolution.lambdaFacts(span.start);
+	/**
+	 * What the lambda sees of the locals around it and writes of its own (`BodyResolution.lambdaFacts`): from its function's
+	 * resolution, or, for a lambda the typer built, from resolving it within the locals `scope` makes visible. `filled` are
+	 * the declarations of the parameters its default-argument prologue writes, which the typer adds after the resolution.
+	 */
+	function lambdaFacts(arguments:Array<AstArgument>, body:Array<AstStatement>, span:SourceSpan,
+			outerContext:TypingContext, scope:Scope,
+			filled:Array<String>):compiler.types.analysis.BodyResolution.LambdaFacts {
+		var resolution = outerContext.resolution,
+			resolved = resolution == null ? null : resolution.lambdaFacts(span.start);
 		if (resolved == null)
-			return walked();
-		if (body != sourceBody) {
-			var parameters:Map<String, String> = [
-				for (argument in arguments) argument.name => compiler.types.analysis.BindingWalker.key(argument.name,
-					argument.span)
-			];
-			var prologue = body.slice(0, body.length - sourceBody.length);
-			for (declaration in AssignedDeclarations.within(prologue, parameters).declarations.keys())
-				resolved.assigned.set(declaration, true);
-		}
-		if (session.checkResolution) {
-			var expected = walked();
-			for (part in ["free", "freeAssigned", "assigned"]) {
-				var mine = part == "free" ? resolved.free : part == "freeAssigned"
-					? resolved.freeAssigned : resolved.assigned,
-					theirs = part == "free" ? expected.free : part == "freeAssigned"
-						? expected.freeAssigned : expected.assigned;
-				for (key in theirs.keys())
-					if (!mine.exists(key))
-						throw new InternalError('--check-resolution: the lambda at ${span.start} in ${outerContext.name} has $part "$key" by its walk but not by the resolution',
-							span);
-				for (key in mine.keys())
-					if (!theirs.exists(key))
-						throw new InternalError('--check-resolution: the lambda at ${span.start} in ${outerContext.name} has $part "$key" by the resolution but not by its walk',
-							span);
-			}
-		}
+			return BodyResolution.of(arguments, body, scope.visibleDeclarations()).bodyFacts();
+		for (declaration in filled)
+			resolved.assigned.set(declaration, true);
 		return resolved;
 	}
 
@@ -146,10 +106,10 @@ class ClosureTyper {
 				type: argumentType
 			});
 		}
-		var sourceBody = body;
-		body = DefaultArguments.withPrologue(arguments, [for (argument in lambdaArguments) argument.type], body,
-			session.relations);
-		var facts = lambdaFacts(arguments, sourceBody, body, span, outerContext),
+		var argumentTypes = [for (argument in lambdaArguments) argument.type];
+		body = DefaultArguments.withPrologue(arguments, argumentTypes, body, session.relations);
+		var facts = lambdaFacts(arguments, body, span, outerContext, scope,
+			DefaultArguments.filledDeclarations(arguments, argumentTypes, session.relations)),
 			freeVariables = facts.free,
 			lambdaAssignments:Map<String, Bool> = [];
 		// The local a free name of the lambda refers to: its declaration's binding, or the receiver for `this`.
