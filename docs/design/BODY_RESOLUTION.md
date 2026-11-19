@@ -15,7 +15,7 @@ The analyses run before typing for different reasons:
 
 | Analysis | What it is for | Needs look-ahead |
 |---|---|---|
-| `LexicalStorageAnalysis` (2 walks per body, 2 more per lambda) | which locals live in cells | no: representation |
+| `LexicalStorageAnalysis` (2 walks per body, 2 more per lambda; now `StorageRequirements`) | which locals live in cells | no: representation |
 | — its closure writes | flow facts of locals a closure may write are dropped at calls | to be checked (Open questions) |
 | `AssignedDeclarations` (per body, lambda and loop) | narrowing of never-reassigned locals; loop entry | yes |
 | `MapEscapeAnalysis` | map entry facts survive calls for private maps | yes |
@@ -129,3 +129,13 @@ and structure patterns into nested switches. A resolution made before typing has
   the default-argument prologue, which the typer builds). Under `--check-resolution` each answer is compared with the walk
   it replaces. The self-compile and all 637 programs agree; main-thread instructions -0.8%, cycles about -1%, output
   byte-identical. The record allocates 33 MB more than the walks it replaces; compacting it is next.
+- The record is compact (references in four arrays, kind and flags packed with the lambda depth; declarations have no
+  reference entries): allocation back to within 3 MB of before the resolution.
+- Storage requirements (`StorageRequirements`) are read from the resolution: which locals need a cell and which a closure
+  can write, for a body or one lambda, its own declarations only. The resolution records what this needs beyond names:
+  place writes (a field assignment's object, a method call's receiver, an increment's target, a `set` key whose receiver
+  may be a key path), local functions, and per reference whether it is captured or in a deeper `try` of its own function.
+  The walker's `try` depth counts per lambda. `LexicalStorageAnalysis` and its four walks per body (two, and two per
+  lambda) are gone. Compared under `--check-resolution` before the deletion: the self-compile, all 638 programs and the
+  capture, closure and `try` tests agree. Main-thread instructions -1.9%, allocation -73 MB, output byte-identical.
+  Next: step 3 (captures on typed lambdas) and the closure-conversion stage.

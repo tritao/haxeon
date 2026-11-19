@@ -25,7 +25,6 @@ import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.MapEscapeAnalysis;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
-import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.analysis.Scope;
 import compiler.semantic.SemanticProgram.SemanticMethodInfo;
 import compiler.semantic.SemanticSignature;
@@ -250,7 +249,7 @@ class BodyTyper implements BodyTyping {
 		// The body's names, resolved once: the analyses below read them (docs/design/BODY_RESOLUTION.md).
 		var resolution = compiler.types.analysis.BodyResolution.of(fn.arguments, fn.statements);
 		context.resolution = resolution;
-		var lexicalStorage = LexicalStorageAnalysis.analyze(fn.statements, fn.arguments, session.mayHoldValue,
+		var lexicalStorage = compiler.types.analysis.StorageRequirements.ofBody(resolution, session.mayHoldValue,
 			session.mayBeKeyPath);
 		for (binding in lexicalStorage.closureWrites.keys())
 			context.storage.addClosureWrite(binding);
@@ -648,7 +647,7 @@ class BodyTyper implements BodyTyping {
 
 	public function bindCell(name:String, span:SourceSpan, scope:Scope, type:CompilerType):Void {
 		var id = scope.requireId(name),
-			declaration = LexicalStorageAnalysis.key(name, span);
+			declaration = BindingWalker.key(name, span);
 		// Refine conservative receiver writes once their type is known. Whole assignments keep their storage and flow effects.
 		if (context.storage.candidateKind(declaration) == MutableCapture
 			&& !context.assignedDeclarations.exists(declaration)) {

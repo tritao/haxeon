@@ -23,6 +23,24 @@ enum abstract BodyReference(Int) to Int {
 
 	/** A name that is the target of a collection operation (a call receiver, an index, a loop's iterable); its detail is it. */
 	var Receiver = 4;
+
+	/**
+	 * The local at the root of a place a statement may write without assigning the local: a field assignment's object, a
+	 * method call's receiver, an increment's target. Not a reference of the name; storage reads it (`StorageRequirements`).
+	 */
+	var PlaceWrite = 5;
+
+	/** Like `PlaceWrite`, for the key of a `set` call whose receiver may be a key path (`pathTargetAt`). */
+	var PathSet = 6;
+}
+
+/** A lambda of a `BodyResolution`: its references `[first, end)`, its declarations, and how many lambdas enclose its body. */
+typedef BodyLambda = {
+	final first:Int;
+	final end:Int;
+	final firstDeclaration:Int;
+	final endDeclaration:Int;
+	final depth:Int;
 }
 
 /**
@@ -37,7 +55,11 @@ class BodyResolution {
 	public final declarationTypes:Array<Null<AstType>> = [];
 	public final declarationInitializers:Array<Null<AstExpression>> = [];
 
-	// References, in walk order: the kind and lambda depth packed in one Int, the name, the declaration and the position.
+	/** How many lambdas enclose each declaration. */
+	public final declarationLambdaDepths:Array<Int> = [];
+
+	// References, in walk order: the kind, two flags and the lambda depth packed in one Int, the name, the declaration and
+	// the position.
 	final codes:Array<Int> = [];
 
 	public final names:Array<String> = [];
@@ -47,7 +69,21 @@ class BodyResolution {
 	/** The method of a `MemberCall` or the operation of a `Receiver`, by reference. */
 	final details:Map<Int, String> = [];
 
-	static inline final KIND_BITS = 3;
+	/** The receiver of a `PathSet` and the declaration it names (-1 for none), by reference. */
+	final pathTargets:Map<Int, {target:AstExpression, declaration:Int}> = [];
+
+	/** The position of the lambda each local function is, by the declaration of its name. */
+	final localFunctions:Map<Int, Int> = [];
+
+	static inline final KIND_MASK = 7;
+
+	/** The reference is in a lambda nested in its declaration's function or lambda. */
+	public static inline final CAPTURED = 8;
+
+	/** The reference is in its declaration's function or lambda, in a `try` body the declaration is outside of. */
+	public static inline final DEEPER_TRY = 16;
+
+	static inline final DEPTH_SHIFT = 5;
 
 	function new() {}
 
@@ -64,10 +100,22 @@ class BodyResolution {
 		return codes.length;
 
 	public inline function referenceAt(index:Int):BodyReference
-		return cast(codes[index] & ((1 << KIND_BITS) - 1));
+		return cast(codes[index] & KIND_MASK);
 
 	public inline function lambdaDepthAt(index:Int):Int
-		return codes[index] >> KIND_BITS;
+		return codes[index] >> DEPTH_SHIFT;
+
+	/** Whether reference `index` has `flag` (`CAPTURED`, `DEEPER_TRY`). */
+	public inline function hasFlag(index:Int, flag:Int):Bool
+		return codes[index] & flag != 0;
+
+	/** Of a `PathSet`. */
+	public function pathTargetAt(index:Int):Null<{target:AstExpression, declaration:Int}>
+		return pathTargets.get(index);
+
+	/** The position of the lambda declaration `declaration` is a local function of, or null. */
+	public function localFunctionAt(declaration:Int):Null<Int>
+		return localFunctions.get(declaration);
 
 	public inline function detailAt(index:Int):Null<String>
 		return details.get(index);
@@ -79,21 +127,30 @@ class BodyResolution {
 	}
 
 	/** Called while recording (`of`); returns the declaration's id. */
-	public function recordDeclaration(key:String, kind:BindingKind, type:Null<AstType>,
-			initializer:Null<AstExpression>):Int {
+	public function recordDeclaration(key:String, kind:BindingKind, type:Null<AstType>, initializer:Null<AstExpression>,
+			lambdaDepth:Int):Int {
 		declarationKeys.push(key);
+		declarationLambdaDepths.push(lambdaDepth);
 		declarationKinds.push(kind);
 		declarationTypes.push(type);
 		declarationInitializers.push(initializer);
 		return declarationKeys.length - 1;
 	}
 
+	/** Called while recording (`of`): the `PathSet` just recorded has receiver `target`. */
+	public function recordPathTarget(target:AstExpression, declaration:Int):Void
+		pathTargets.set(codes.length - 1, {target: target, declaration: declaration});
+
+	/** Called while recording (`of`). */
+	public function recordLocalFunction(declaration:Int, lambdaPosition:Int):Void
+		localFunctions.set(declaration, lambdaPosition);
+
 	/** Called while recording (`of`). */
 	public function recordReference(kind:BodyReference, name:String, declaration:Int, position:Int, detail:Null<String>,
-			lambdaDepth:Int):Void {
+			flags:Int, lambdaDepth:Int):Void {
 		if (detail != null)
 			details.set(codes.length, detail);
-		codes.push((kind:Int) | (lambdaDepth << KIND_BITS));
+		codes.push((kind:Int) | flags | (lambdaDepth << DEPTH_SHIFT));
 		names.push(name);
 		declarations.push(declaration);
 		positions.push(position);
@@ -126,15 +183,20 @@ class BodyResolution {
 	}
 
 	/** Each lambda's entries and declarations, by the lambda's position (`lambdaFacts`). */
-	final lambdas:Map<Int, {first:Int, end:Int, firstDeclaration:Int, endDeclaration:Int}> = [];
+	final lambdas:Map<Int, BodyLambda> = [];
+
+	/** The entries and declarations of the lambda at `position`, or null when the body has no such lambda. */
+	public function lambdaAt(position:Int):Null<BodyLambda>
+		return lambdas.get(position);
 
 	/** Called while recording (`of`): the lambda at `position` holds the entries and declarations made since. */
-	public function recordLambda(position:Int, first:Int, firstDeclaration:Int):Void
+	public function recordLambda(position:Int, first:Int, firstDeclaration:Int, depth:Int):Void
 		lambdas.set(position, {
 			first: first,
 			end: codes.length,
 			firstDeclaration: firstDeclaration,
-			endDeclaration: declarationKeys.length
+			endDeclaration: declarationKeys.length,
+			depth: depth
 		});
 
 	/**
@@ -153,6 +215,8 @@ class BodyResolution {
 		var free:Map<String, Bool> = [], freeAssigned:Map<String, Bool> = [], assigned:Map<String, Bool> = [];
 		for (index in lambda.first...lambda.end) {
 			var event = referenceAt(index);
+			if (event == PlaceWrite || event == PathSet)
+				continue;
 			var declaration = declarations[index],
 				name = names[index],
 				own = declaration >= lambda.firstDeclaration && declaration < lambda.endDeclaration;
@@ -178,6 +242,9 @@ class BodyResolution {
 		if (index == null) {
 			index = [];
 			for (entry in 0...codes.length) {
+				var kind = referenceAt(entry);
+				if (kind == PlaceWrite || kind == PathSet)
+					continue;
 				var name = names[entry], position = positions[entry];
 				index.set(position + ":" + name, entry);
 				// `a.b.c` resolves by its root, which is what a member chain's typing looks up.
@@ -200,6 +267,9 @@ private class BodyResolver extends BindingWalker {
 	/** The id of each visible binding, beside the walker's stack of them. */
 	final ids:Array<Int> = [];
 
+	/** The `try` depth (`BindingWalker.tryDepth`) of each declaration, by id. */
+	final declarationTryDepths:Array<Int> = [];
+
 	public function new(bindings:BodyResolution) {
 		super();
 		this.bindings = bindings;
@@ -212,9 +282,24 @@ private class BodyResolver extends BindingWalker {
 	inline function resolvedId():Int
 		return resolvedIndex < 0 ? -1 : ids[resolvedIndex];
 
+	/** Records a reference to the binding the last `resolve` found. */
+	function add(kind:BodyReference, name:String, span:SourceSpan, ?detail:String):Void {
+		var id = resolvedId(), flags = 0;
+		if (id >= 0) {
+			var depth = bindings.declarationLambdaDepths[id];
+			if (lambdaDepth > depth)
+				flags |= BodyResolution.CAPTURED;
+			else if (tryDepth > declarationTryDepths[id])
+				flags |= BodyResolution.DEEPER_TRY;
+		}
+		bindings.recordReference(kind, name, id, span.start, detail, flags, lambdaDepth);
+	}
+
 	override function declared(name:String, declaration:String, kind:BindingKind, type:Null<AstType>,
-			initializer:Null<AstExpression>):Void
-		ids.push(bindings.recordDeclaration(declaration, kind, type, initializer));
+			initializer:Null<AstExpression>):Void {
+		ids.push(bindings.recordDeclaration(declaration, kind, type, initializer, lambdaDepth));
+		declarationTryDepths.push(tryDepth);
+	}
 
 	override function leaveScope(height:Int):Void {
 		super.leaveScope(height);
@@ -222,16 +307,16 @@ private class BodyResolver extends BindingWalker {
 	}
 
 	override function used(name:String, declaration:Null<String>, span:SourceSpan):Void
-		bindings.recordReference(Use, name, resolvedId(), span.start, null, lambdaDepth);
+		add(Use, name, span);
 
 	override function written(name:String, declaration:Null<String>, span:SourceSpan):Void
-		bindings.recordReference(Write, name, resolvedId(), span.start, null, lambdaDepth);
+		add(Write, name, span);
 
 	override function callee(name:String, declaration:Null<String>, span:SourceSpan):Void
-		bindings.recordReference(Callee, name, resolvedId(), span.start, null, lambdaDepth);
+		add(Callee, name, span);
 
 	override function memberCall(local:String, declaration:Null<String>, method:String, span:SourceSpan):Void
-		bindings.recordReference(MemberCall, local, resolvedId(), span.start, method, lambdaDepth);
+		add(MemberCall, local, span, method);
 
 	override function statement(value:AstStatement):Void
 		switch value {
@@ -239,11 +324,32 @@ private class BodyResolver extends BindingWalker {
 				var first = bindings.length;
 				super.statement(value);
 				bindings.recordLoop(span.start, first);
+			case FieldAssignment(object, _, _, span):
+				placeWrite(object, span);
+				super.statement(value);
+			case VarDeclaration(name, _, Lambda(_, _, _, lambdaSpan), span):
+				super.statement(value);
+				resolve(name);
+				var id = resolvedId();
+				if (id >= 0 && bindings.declarationKeys[id] == BindingWalker.key(name, span))
+					bindings.recordLocalFunction(id, lambdaSpan.start);
 			default:
 				super.statement(value);
 		}
 
-	override function expression(value:AstExpression):Void
+	override function expression(value:AstExpression):Void {
+		switch value {
+			case MethodCall(target, "set", arguments, span) if (arguments.length == 2):
+				pathSet(target, arguments[0], span);
+			case Call(name, arguments, span) if (StringTools.endsWith(name, ".set") && arguments.length == 2):
+				pathSet(Variable(name.substr(0, name.length - 4), span), arguments[0], span);
+			default:
+		}
+		switch value {
+			case PostfixIncrement(target, _, span), MethodCall(target, _, _, span):
+				placeWrite(target, span);
+			default:
+		}
 		switch value {
 			case ArrayComprehension(_, _, _, _, _, _, span), MapComprehension(_, _, _, _, _, _, span):
 				var first = bindings.length;
@@ -252,17 +358,49 @@ private class BodyResolver extends BindingWalker {
 			case Lambda(_, _, _, span):
 				var first = bindings.length, firstDeclaration = bindings.declarationKeys.length;
 				super.expression(value);
-				bindings.recordLambda(span.start, first, firstDeclaration);
+				bindings.recordLambda(span.start, first, firstDeclaration, lambdaDepth + 1);
 			default:
 				super.expression(value);
 		}
+	}
 
 	override function receiver(target:AstExpression, operation:String):Void
 		switch target {
 			case Variable(name, span):
 				resolve(name);
-				bindings.recordReference(Receiver, name, resolvedId(), span.start, operation, lambdaDepth);
+				add(Receiver, name, span, operation);
 			default:
 				expression(target);
 		}
+
+	/** The local at the root of `place`, a variable or a chain of fields of one, or null. */
+	static function placeRoot(place:AstExpression):Null<String>
+		return switch place {
+			case Variable(name, _): BindingWalker.rootOf(name);
+			case Member(parent, _, _): placeRoot(parent);
+			default: null;
+		};
+
+	function placeWrite(place:AstExpression, span:SourceSpan):Void {
+		var root = placeRoot(place);
+		if (root != null && resolve(root) != null)
+			add(PlaceWrite, root, span);
+	}
+
+	/** A `set` call on `target` with key `key`: whether it writes the key's root depends on what `target` is (`StorageRequirements`). */
+	function pathSet(target:AstExpression, key:AstExpression, span:SourceSpan):Void {
+		var root = placeRoot(key);
+		if (root == null)
+			return;
+		var targetId = switch target {
+			case Variable(name, _) if (name.indexOf(".") < 0):
+				resolve(name);
+				resolvedId();
+			default: -1;
+		};
+		if (resolve(root) == null)
+			return;
+		add(PathSet, root, span);
+		bindings.recordPathTarget(target, targetId);
+	}
 }

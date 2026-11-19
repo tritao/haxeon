@@ -57,6 +57,7 @@ class MapEscapeAnalysis {
 					else
 						operandUses.set(BindingWalker.keyOf(resolution.names[index], resolution.positions[index]),
 							true);
+				case PlaceWrite, PathSet:
 			}
 		}
 		// By key, as the walk decided: declarations that share a key are one.

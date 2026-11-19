@@ -273,6 +273,9 @@ HashLink):
 - Declaring a local again in the same block (`var x = 1; ...; var x = "ten";`): `E1001` (Duplicate local). Haxe accepts
   it, the second declaration shadowing the first for the code after it; a nested block works in Haxeon. The differential
   case `local-redeclared-same-block` records it.
+- Reading an `Array` element at or past its length (`var a:Array<Null<Bool>> = []; a[3]`): HashLink throws "Array index
+  out of bounds". Haxe gives null there (the type's default value for a basic type on static targets). Writing past the
+  end grows the array, as in Haxe. Found on 2026-11-19; the Wasm backends are not checked yet.
 - Reading a field of a value whose type is a type variable nothing has fixed yet (`items.length`). Haxe accepts it.
   Reported on 2026-11-17 (not verified on current main).
 

@@ -1,5 +1,7 @@
 package compiler.types.typing;
 
+import compiler.types.analysis.BindingWalker;
+
 import compiler.core.Diagnostic;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
@@ -16,7 +18,6 @@ import compiler.types.Type.NominalKind;
 import compiler.types.analysis.AstScan;
 import compiler.types.analysis.ControlFlow;
 import compiler.types.analysis.FlowAnalysis;
-import compiler.types.analysis.LexicalStorageAnalysis;
 import compiler.types.TypeRelations;
 import compiler.types.IterationProtocol;
 import compiler.types.analysis.Scope;
@@ -68,7 +69,7 @@ class StatementTyper {
 		if (!hasOptional)
 			return null;
 		// A local can only be written in its scope, which the body's assigned declarations already cover.
-		if (session.currentContext.assignedDeclarations.exists(LexicalStorageAnalysis.key(name, span)))
+		if (session.currentContext.assignedDeclarations.exists(BindingWalker.key(name, span)))
 			return null;
 		return {
 			arguments: signature.arguments,
@@ -126,7 +127,7 @@ class StatementTyper {
 				switch lambda {
 					case Lambda(arguments, body, _, _):
 						// Its writes, in its own body or after it, are in the body's assigned declarations.
-						if (!context.assignedDeclarations.exists(LexicalStorageAnalysis.key(name, span)))
+						if (!context.assignedDeclarations.exists(BindingWalker.key(name, span)))
 							localFunction = {
 								arguments: arguments,
 								body: body,

@@ -36,7 +36,7 @@ class BindingWalker implements AstChildVisitor {
 	final bindingDeclarations:Array<String> = [];
 	var lambdaDepth:Int = 0;
 
-	/** How many `try` bodies of the function itself enclose the walk; a lambda's own `try` blocks are its own. */
+	/** How many `try` bodies of the innermost function or lambda enclose the walk; a lambda starts again from 0. */
 	var tryDepth:Int = 0;
 
 	function new() {}
@@ -221,11 +221,9 @@ class BindingWalker implements AstChildVisitor {
 					statement(entry);
 				leaveScope(scope);
 			case Try(tryBranch, catches, _):
-				if (lambdaDepth == 0)
-					tryDepth++;
+				tryDepth++;
 				statements(tryBranch);
-				if (lambdaDepth == 0)
-					tryDepth--;
+				tryDepth--;
 				for (caught in catches) {
 					var scope = enterScope();
 					declare(caught.name, caught.span, Catch);
@@ -284,8 +282,10 @@ class BindingWalker implements AstChildVisitor {
 				expression(target);
 			case Lambda(arguments, body, _, _):
 				lambdaDepth++;
-				var scope = enterScope();
+				var scope = enterScope(), outerTryDepth = tryDepth;
+				tryDepth = 0;
 				walkFunction(arguments, body);
+				tryDepth = outerTryDepth;
 				leaveScope(scope);
 				lambdaDepth--;
 			case BlockExpression(body, result, _):

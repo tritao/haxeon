@@ -21,7 +21,8 @@ import compiler.types.analysis.AssignedDeclarations;
 import compiler.types.analysis.BindingWalker;
 import compiler.types.analysis.FreeVariables;
 import compiler.types.analysis.ControlFlow;
-import compiler.types.analysis.LexicalStorageAnalysis;
+import compiler.types.analysis.BodyResolution;
+import compiler.types.analysis.StorageRequirements;
 import compiler.types.analysis.Scope;
 
 /** Types lambda bodies and coordinates their capture and closure-conversion records. */
@@ -263,7 +264,13 @@ class ClosureTyper {
 			context.assignedDeclarations.set(declaration, true);
 		for (declaration in lambdaAssignments.keys())
 			context.assignedDeclarations.set(declaration, true);
-		var lambdaStorage = LexicalStorageAnalysis.analyze(body, arguments, session.mayHoldValue, session.mayBeKeyPath);
+		var outerResolution = outerContext.resolution,
+			lambdaStorage = outerResolution == null ? null : StorageRequirements.ofLambda(outerResolution, span.start,
+				session.mayHoldValue, session.mayBeKeyPath);
+		// Syntax the typer built has no place in the body's resolution.
+		if (lambdaStorage == null)
+			lambdaStorage = StorageRequirements.ofBody(BodyResolution.of(arguments, body), session.mayHoldValue,
+				session.mayBeKeyPath);
 		for (binding in lambdaStorage.closureWrites.keys())
 			context.storage.addClosureWrite(binding);
 		for (capture in captures) {
