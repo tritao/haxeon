@@ -550,7 +550,7 @@ class IrGenerator {
 						else
 							builder.fieldSet(builder.load('$' + 'cell:$name', Obj(cellClass)), "value", loweredValue);
 				case TCapturedAssign(name, value, _):
-					var owner = requireLocalType(localTypes, "this", 'Captured assignment "$name" has no environment'),
+					var owner = environmentType(localTypes, "Captured assignment", name),
 						cellClass = captureCell(name);
 					var loweredValue = lowerExpression(value, builder, localTypes);
 					if (!builder.isTerminated()) {
@@ -869,7 +869,7 @@ class IrGenerator {
 						}) ? builder.constInt(1) : builder.constFloat(1.0);
 					builder.fieldSet(cell, "value", delta > 0 ? builder.add(value, one) : builder.sub(value, one));
 				case TIncrement(name, _, delta, _):
-					var type = requireLocalType(localTypes, name, 'Missing increment local "$name"');
+					var type = localType(localTypes, name, "Missing increment local");
 					var one = (switch (type) {
 						case I32: true;
 						default: false;
@@ -877,7 +877,7 @@ class IrGenerator {
 					builder.store(name, delta > 0 ? builder.add(builder.load(name, type),
 						one) : builder.sub(builder.load(name, type), one));
 				case TCapturedIncrement(name, valueType, delta, _):
-					var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
+					var owner = environmentType(localTypes, "Captured increment", name);
 					var cell = builder.fieldGet(builder.load("this", owner), name, Obj(captureCell(name))),
 						value = builder.fieldGet(cell, "value", lowerType(valueType)),
 						one = (switch (valueType) {
@@ -2326,7 +2326,7 @@ class IrGenerator {
 					[lowerExpression(array, builder, localTypes)],
 					lowerType(expression.type));
 			case TLocal(name) if (!scratch.cells.exists(name)):
-				var type = requireLocalType(localTypes, name, 'Missing typed local "$name"');
+				var type = localType(localTypes, name, "Missing typed local");
 				abiBoundaryCast(builder, builder.load(name, type), lowerType(expression.type));
 			case TLocal(name):
 				var cell = builder.load('$' + 'cell:$name', Obj(scratch.cells.get(name) ?? ""));
@@ -2335,13 +2335,13 @@ class IrGenerator {
 					lowerType(expression.storageType == null ? expression.type : expression.storageType)),
 					lowerType(expression.type));
 			case TCaptured(name) if (!scratch.cellCaptures.exists(name)):
-				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
+				var owner = environmentType(localTypes, "Captured value", name);
 				abiBoundaryCast(builder,
 					builder.fieldGet(builder.load("this", owner), name,
 					lowerType(expression.storageType == null ? expression.type : expression.storageType)),
 					lowerType(expression.type));
 			case TCaptured(name):
-				var owner = requireLocalType(localTypes, "this", 'Captured value "$name" has no environment');
+				var owner = environmentType(localTypes, "Captured value", name);
 				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(captureCell(name)));
 				abiBoundaryCast(builder,
 					builder.fieldGet(cell, "value",
@@ -2388,8 +2388,8 @@ class IrGenerator {
 								lowerExpression(expression, builder, localTypes), storageType);
 							case CaptureLocal(bindingId):
 								abiBoundaryCast(builder,
-									builder.load(bindingId, requireLocalType(localTypes, bindingId,
-									'Missing captured binding "$bindingId"')), storageType);
+									builder.load(bindingId,
+									localType(localTypes, bindingId, "Missing captured binding")), storageType);
 							case CaptureReceiver:
 								abiBoundaryCast(builder, builder.load("this",
 									requireLocalType(localTypes, "this", "Captured receiver has no ABI local")),
@@ -2511,7 +2511,7 @@ class IrGenerator {
 				var name = switch marker.expression {
 					case TLocal(value): value;
 					default: throw new InternalError("Invalid captured cell place");
-				}, owner = requireLocalType(localTypes, "this", 'Captured cell "$name" has no environment');
+				}, owner = environmentType(localTypes, "Captured cell", name);
 				builder.fieldGet(builder.load("this", owner), name, lowerType(expression.type));
 			case TCall("$value.place", [value]):
 				lowerExpression(value, builder, localTypes);
@@ -3474,7 +3474,7 @@ class IrGenerator {
 				builder.fieldSet(cell, "value", delta > 0 ? builder.add(oldValue, one) : builder.sub(oldValue, one));
 				oldValue;
 			case TPostfixCaptured(name, delta):
-				var owner = requireLocalType(localTypes, "this", 'Captured increment "$name" has no environment');
+				var owner = environmentType(localTypes, "Captured increment", name);
 				var cell = builder.fieldGet(builder.load("this", owner), name, Obj(captureCell(name))),
 					oldValue = builder.fieldGet(cell, "value", lowerType(expression.type)),
 					one = incrementOne(expression.type, builder);
@@ -3817,6 +3817,22 @@ class IrGenerator {
 		if (!localTypes.exists(name))
 			throw new InternalError(message);
 		return localTypes.get(name);
+	}
+
+	/** The type of local `name`. The error names it only when it is missing: these run for every local read. */
+	function localType(localTypes:Map<String, IrType>, name:String, missing:String):IrType {
+		var type = localTypes.get(name);
+		if (type == null)
+			throw new InternalError('$missing "$name"');
+		return type;
+	}
+
+	/** The type of `this`, the environment a closure reads `captured` from (`use` says how). */
+	function environmentType(localTypes:Map<String, IrType>, use:String, captured:String):IrType {
+		var type = localTypes.get("this");
+		if (type == null)
+			throw new InternalError('$use "$captured" has no environment');
+		return type;
 	}
 
 	function setComprehensionMapEntry(builder:IrLocalsBuilder, localTypes:Map<String, IrType>, types:MapTypes,
