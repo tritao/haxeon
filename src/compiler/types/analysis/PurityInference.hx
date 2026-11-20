@@ -74,7 +74,7 @@ class PurityInference {
 		walker.declare("this");
 		if (outerLocals != null)
 			for (name in outerLocals)
-				walker.declare(name);
+				walker.declareOuter(name, false, false);
 		if (privateMaps != null)
 			for (name in privateMaps)
 				if (!hasArgument(arguments, name))
@@ -113,8 +113,8 @@ class PurityInference {
 		walker.stores = stores;
 		walker.declare("this");
 		for (name in outerLocals)
-			walker.declare(name, false, null, false, outerArrays != null && outerArrays.indexOf(name) >= 0, false,
-				false, outerMaps != null && outerMaps.indexOf(name) >= 0);
+			walker.declareOuter(name, outerArrays != null && outerArrays.indexOf(name) >= 0,
+				outerMaps != null && outerMaps.indexOf(name) >= 0);
 		if (privateMaps != null)
 			for (name in privateMaps)
 				walker.privateMaps.set(name, true);
@@ -465,6 +465,29 @@ private class PurityWalker {
 			stringArray: stringArray,
 			map: map
 		});
+
+	/**
+	 * Declares a local of an enclosing body, known only as an array or a map or neither. A body is walked with every visible
+	 * outer local declared, so these share their facts, which are never changed.
+	 */
+	public function declareOuter(name:String, array:Bool, map:Bool):Void
+		scopes[scopes.length - 1].set(name, array ? (map ? OUTER_ARRAY_MAP : OUTER_ARRAY) : map ? OUTER_MAP : OUTER);
+
+	static final OUTER:LocalFact = outerFact(false, false);
+	static final OUTER_ARRAY:LocalFact = outerFact(true, false);
+	static final OUTER_MAP:LocalFact = outerFact(false, true);
+	static final OUTER_ARRAY_MAP:LocalFact = outerFact(true, true);
+
+	static function outerFact(array:Bool, map:Bool):LocalFact
+		return {
+			numeric: false,
+			className: null,
+			iterable: false,
+			array: array,
+			string: false,
+			stringArray: false,
+			map: map
+		};
 
 	public static function isNumericType(type:Null<AstType>):Bool
 		return switch type {
