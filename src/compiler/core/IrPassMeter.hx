@@ -32,8 +32,11 @@ class IrPassMeter {
 		return {time: haxe.Timer.stamp(), allocation: AllocationMeter.sample()};
 
 	/** Records the time taken and what was allocated since `before` under `name`. */
-	public function stop(name:String, before:IrPassStart):Void
+	public function stop(name:String, before:IrPassStart):Void {
 		record(name, before, AllocationMeter.sample(), haxe.Timer.stamp());
+		if (PeakProbe.on())
+			PeakProbe.mark("pass-" + name);
+	}
 
 	function record(name:String, before:IrPassStart, after:AllocationMeter.AllocationSnapshot, time:Float):Void {
 		if (!bytes.exists(name))

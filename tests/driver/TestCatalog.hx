@@ -356,6 +356,7 @@ class TestCatalog {
 		"WorkerNullAccessMain",
 		"RuntimeDomainMain",
 		"GcAllocationPathsMain",
+		"GcCensusMain",
 		"GcEmptyPagesMain",
 		"GcOwnerPagesMain",
 		"GcOwnerRetirementMain",

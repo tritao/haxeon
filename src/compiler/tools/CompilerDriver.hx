@@ -9,6 +9,7 @@ import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
 import compiler.core.CancellationToken;
 import compiler.core.InternalError;
+import compiler.core.PeakProbe;
 import compiler.documentation.HaxeXmlWriter;
 import compiler.ffi.CHeaderEmitter;
 import compiler.hl.HlWriter;
@@ -87,8 +88,10 @@ class CompilerDriver {
 				outputBytes = BackendArtifacts.wasm(result.artifact).bytes;
 			else {
 				outputIndices = BackendArtifacts.hashLink(result.artifact).functionIndices;
+				PeakProbe.mark("write-start");
 				if (!deferFullModule)
 					writeModule(result, request.output, session);
+				PeakProbe.mark("write-done");
 			}
 			if (cancellation != null && !deferFullModule)
 				cancellation.check();

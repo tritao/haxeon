@@ -562,3 +562,24 @@ then writes, for each compile, how many artifacts each kind of invalidation sele
 functions were retyped and regenerated, to its log under the session directory (`HAXEON_COMPILER_SESSION_DIR`, default
 `~/.cache/haxeon/compiler`). A comment-only edit should retype nothing; if it reports a long list, the kind with the large count
 names the dependency that is invalidating too much.
+
+### What sets the compiler's peak memory
+
+A one-shot compile collects after every gigabyte allocated (`ProcessMemory`), so just before a collection the heap holds
+what the last collection kept plus a gigabyte since. The peak is that, at the collection where it is largest, plus pages the
+phases after it could not reuse. `scripts/peak-timeline.py` shows which collection it is and what the heap holds there:
+
+```sh
+H=out/cmake/release/hashlink-runtime/hl
+ARGS="compiler.hl --entry=compiler.tools.HaxeonCompiler --root=src --root=lib/haxeon-io --root=stdlib --sources-file=srcs.txt --output=/tmp/out.hl"
+scripts/peak-timeline.py -- $H $ARGS                          # resident memory at each phase mark and collection, and the peak
+scripts/peak-timeline.py HL_GC_CENSUS_AT=0 -- $H $ARGS        # census inside every collection: what each one keeps
+scripts/peak-timeline.py HAXEON_PEAK_CENSUS=ir-done -- $H $ARGS   # census at a phase mark (collects first)
+scripts/peak-timeline.py HAXEON_PEAK_CENSUS=all HL_GC_CENSUS_NOGC=1 -- $H $ARGS   # pages per size class at every mark
+```
+
+The phase marks (`compiler.core.PeakProbe`) and the census (`hl_gc_census` in the fork's `gc_census.c`) cost nothing unless
+those variables are set. A census prints, as `census` lines in the log, live bytes by type, by nearest owner (arrays,
+maps and strings are charged to the object holding them) and by path from the roots with field names, and per size class
+the pages mapped, resident and live. Live data at a collection raises every later peak by its size; data that dies between
+two collections still counts at the second one, so releasing it earlier only helps if a collection runs in between.

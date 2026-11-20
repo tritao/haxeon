@@ -1,5 +1,6 @@
 package compiler.hl.lower;
 
+import compiler.core.PeakProbe;
 import compiler.core.InternalError;
 import compiler.hl.incremental.HlSymbolRequest.HlRuntimeHeader;
 import compiler.ir.IrTypeIdentity;
@@ -473,6 +474,7 @@ class HlLower {
 		for (native in cDispatchNatives)
 			lowerNative(native);
 		var metadataDoneAt = Sys.time() * 1000.0;
+		PeakProbe.mark("lower-metadata-done");
 		var allocationAfterMetadata = AllocationMeter.sample();
 		var environment = checkingLinks ? symbols.copy() : null;
 		var entries:Map<String, compiler.hl.incremental.HlLoweredFunction> = [];
@@ -541,6 +543,7 @@ class HlLower {
 		if (environment != null && reusedFunctions == 0)
 			verifyLinking(program, environment);
 		var functionsDoneAt = Sys.time() * 1000.0;
+		PeakProbe.mark("lower-functions-done");
 		var allocationAfterFunctions = AllocationMeter.sample();
 		// The VM uses function identities for stack-trace and profiler names in every mode.
 		var identities = [for (fn in program.functions) cachedFunctionIdentity(fn)];

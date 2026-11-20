@@ -1,5 +1,6 @@
 package compiler.compilation;
 
+import compiler.core.PeakProbe;
 import compiler.core.AllocationMeter;
 import compiler.core.Diagnostic.CompileError;
 import compiler.core.InternalError;
@@ -258,6 +259,7 @@ class FrontendCompilation {
 				continue;
 			}
 			runIrPipeline(build);
+			PeakProbe.mark("ir-done");
 			selectChangedFunctions(build);
 			var irAssemblyDoneAt = now();
 			build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
@@ -282,6 +284,7 @@ class FrontendCompilation {
 				build:Null<FrontendBuild>,
 				carried:Null<{regenerated:Array<String>, retyped:Array<String>}>
 			} {
+		PeakProbe.mark("frontend-start");
 		seedRepresentationModules(context);
 		var build = new FrontendBuild(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics, carried);
 		startPass(build);
@@ -313,12 +316,14 @@ class FrontendCompilation {
 			};
 		collectCachedIr(build);
 		checkCancelled(token);
+		PeakProbe.mark("typing-done");
 		// A compile that keeps no session assembles the IR from the typed program alone; the syntax is no longer needed.
 		if (!context.options.keepSession) {
 			context.state.releaseSyntax();
 			context.moduleAnalyzer.releaseLookupParses();
 		}
 		assembleTables(build);
+		PeakProbe.mark("tables-done");
 		// The IR is made from the tables from here on: a compile that keeps no session lets the typed program go.
 		if (!context.options.keepSession) {
 			build.typedNew = null;

@@ -1,5 +1,6 @@
 package compiler.compilation;
 
+import compiler.core.PeakProbe;
 import compiler.core.AllocationMeter;
 import compiler.abi.LambdaAlignment;
 import compiler.abi.RetiredName;
@@ -138,6 +139,7 @@ class HashLinkBackendSession implements BackendSession {
 			relocated:Array<String>,
 			token:Null<CancellationToken>):BackendAssemblyResult {
 		var allocationAtStart = AllocationMeter.sample();
+		PeakProbe.mark("backend-start");
 		compiler.ir.IrReachabilityReport.report("final program", ir);
 		var nextAbi = RuntimeAbi.describe(ir),
 			previousAbi = context.state.publishedAbi,
@@ -207,6 +209,7 @@ class HashLinkBackendSession implements BackendSession {
 		for (reason in assembly.objectReasons)
 			reloadReasons.push(reason);
 		var assembledAt = Sys.time() * 1000.0;
+		PeakProbe.mark("backend-assembled");
 		var allocationAfterAssembly = AllocationMeter.sample();
 		if (candidateAssembler.developmentMetadata)
 			attachSourceSnapshots(context, assembly.module);
