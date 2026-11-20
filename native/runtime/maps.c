@@ -5,8 +5,16 @@ static uchar *realtime_string_key( vstring *key ) {
 	return (uchar *)realtime_string_data(key);
 }
 
+/* The VM lists the keys' character data; each entry becomes its String in place, so a listing allocates one array.
+   Both element types are pointers, and array storage is scanned without regard to its element type. */
 static varray *realtime_string_keys( varray *keys ) {
-	return realtime_string_array(keys);
+	uchar **entries = hl_aptr(keys, uchar *);
+	for( int i = 0; i < keys->size; i++ ) {
+		uchar *data = entries[i];
+		hl_gc_store_ref(&entries[i],data == NULL ? NULL : realtime_string_wrap(data,(int)ustrlen(data)),hl_string_type);
+	}
+	keys->at = hl_string_type;
+	return keys;
 }
 
 HL_PRIM realtime_string_map *HL_NAME(__map_string_i32_alloc)( void ) {
@@ -131,7 +139,7 @@ HL_PRIM vdynamic *HL_NAME(__map_string_ref_get)( realtime_string_map *map, vstri
 	return dynamic; \
 } \
 HL_PRIM varray *HL_NAME(__map_string_ref_keys)( realtime_string_map *map ) { return realtime_string_keys(hl_hbkeys(map)); } \
-HL_PRIM varray *HL_NAME(__map_string_ref_values)( realtime_string_map *map ) { return realtime_ref_values(hl_hbvalues(map)); } \
+HL_PRIM varray *HL_NAME(__map_string_ref_values)( realtime_string_map *map ) { return hl_hbvalues(map); } \
 HL_PRIM bool HL_NAME(__map_string_ref_remove)( realtime_string_map *map, vstring *key ) { return hl_hbremove_s(map, key); } \
 HL_PRIM void HL_NAME(__map_string_ref_clear)( realtime_string_map *map ) { hl_hbclear(map); } \
 HL_PRIM realtime_string_map *HL_NAME(__map_string_ref_copy)( realtime_string_map *map ) { return hl_hbcopy(map); } \
@@ -208,7 +216,7 @@ HL_PRIM vdynamic *HL_NAME(__map_int_ref_get)( realtime_int_map *map, int key ) {
 	return dynamic; \
 } \
 HL_PRIM varray *HL_NAME(__map_int_ref_keys)( realtime_int_map *map ) { return hl_hikeys(map); } \
-HL_PRIM varray *HL_NAME(__map_int_ref_values)( realtime_int_map *map ) { return realtime_ref_values(hl_hivalues(map)); } \
+HL_PRIM varray *HL_NAME(__map_int_ref_values)( realtime_int_map *map ) { return hl_hivalues(map); } \
 HL_PRIM bool HL_NAME(__map_int_ref_remove)( realtime_int_map *map, int key ) { return hl_hiremove(map, key); } \
 HL_PRIM void HL_NAME(__map_int_ref_clear)( realtime_int_map *map ) { hl_hiclear(map); } \
 HL_PRIM realtime_int_map *HL_NAME(__map_int_ref_copy)( realtime_int_map *map ) { return hl_hicopy(map); } \

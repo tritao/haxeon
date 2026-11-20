@@ -299,15 +299,6 @@ static varray *realtime_typed_values(varray *dynamicValues, hl_type *valueType) 
 	return result;
 }
 
-static varray *realtime_ref_values(varray *dynamicValues) {
-	varray *result = hl_alloc_array(&hlt_dyn, dynamicValues->size);
-	vdynamic **source = hl_aptr(dynamicValues, vdynamic *);
-	void **target = hl_aptr(result, void *);
-	for (int i = 0; i < dynamicValues->size; i++)
-		hl_gc_store_ref(&target[i],source[i],&hlt_dyn);
-	return result;
-}
-
 #define DEFINE_ARRAY_COPY(SUFFIX) \
 HL_PRIM varray *HL_NAME(__array_copy_##SUFFIX)( varray *array ) { return realtime_array_copy(array); } \
 HL_PRIM varray *HL_NAME(__array_concat_##SUFFIX)( varray *left, varray *right ) { return realtime_array_concat(left, right); } \
