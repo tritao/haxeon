@@ -163,6 +163,30 @@ regular recursive generic enums are in the next section.
   real typer. Queued for the service lane after stage 2 items 1 to 3 of
   step 2.7.
 
+### Direct SSA follow-ups
+
+From [DIRECT_SSA.md](docs/design/DIRECT_SSA.md)'s trade-offs: the generator
+builds SSA as it emits, so there is no form over mutable locals to rebuild
+SSA from.
+
+- **Flag irreducible control flow.** Braun et al.'s construction is minimal
+  only for reducible graphs; for irreducible ones it can leave redundant phi
+  cycles (extra phis, not wrong code), and `IrSsaVariables` does not run the
+  paper's SCC minimization. Haxe's structured control flow never makes one, so
+  have `IrVerifier` report an irreducible graph, and add the minimization only
+  if a lowering ever needs one (generators, state machines, labeled jumps).
+- **One SSA builder.** `IrLocalsBuilder` (locals) and `IrBuilder` (explicit
+  phis, used by the passes) are separate. Merge them, locals as an option, so
+  passes that restructure control flow repair SSA through the same machinery
+  the generator uses.
+- **Document sealing where control flow is lowered.** A block whose
+  predecessors are not all known when it is selected (loop headers, continue
+  targets, do-while bodies, shared case bodies) must be made with
+  `createOpenBlock` and sealed when its last edge is in; a missed one is an
+  internal error, never a miscompile, but a crash for users. Say so at the
+  generator's control-flow lowering, so a new construct gets it right the
+  first time.
+
 ### Known differences from Haxe still open
 
 The Haxe code Haxeon rejects or runs differently is listed in
