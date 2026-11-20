@@ -72,8 +72,14 @@ pages frees almost nothing yet: regions wait until outputs and scratch are alloc
    own design note, `IR_CORE_COLUMNS.md`, with a migration that lets passes move one at a time behind one API.
 8. **Tokens as a table.** The lexer's tokens as rows of a per-file table, spans made only for the nodes that keep them
    (`TOKEN_TABLE.md`).
-9. **Regions for what is left** (ADR 0004 §6): per-stage temporaries allocated in a region the GC releases without
-   marking the heap, once the above has made outputs and temporaries easy to tell apart.
+9. **Phase regions, after the IR core in columns** (ADR 0004 §6): data with one end of life allocated in a region and
+   released as soon as it is dead, at a known point and in bulk, rather than when the collector next runs. Two
+   conditions, which the syntax-region pilot missed (its survivors were on nearly every page): a region holds only what
+   dies together, and its release is checked (the fork's owner live count) and falls back to the collector when
+   something still points in. The candidates: the front end of a one-shot build (syntax and typed trees), released
+   after IR generation once what the IR keeps of it (files, spans, names) lives outside the region; and a build's
+   temporaries in the compile server, once what the session retains and what a build discards are apart.
+   Per-function and per-pass temporaries are better served by reused scratch (steps 3 and 7): nothing is allocated.
 
 Flat records (step 7) are written so the source still builds with stock Haxe: a record is declared once as a struct
 under `#if haxeon` and as a final class otherwise, in one package, immutable and compared by `equals`, never by identity,
