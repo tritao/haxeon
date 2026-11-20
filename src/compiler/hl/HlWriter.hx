@@ -31,6 +31,8 @@ class HlWriter {
 	var debugFiles:Array<String> = [];
 	var debugFileIndices:Map<String, Int> = [];
 
+	var functionScratch:Null<HlFunctionScratch>;
+
 	public function new(?cache:HlWriterCache) {
 		this.cache = cache;
 	}
@@ -278,11 +280,15 @@ class HlWriter {
 		}
 		writeShared(prefix);
 		for (fn in code.functions) {
-			var encoded = cache == null ? null : cache.get(fn);
+			// Without a cache nothing keeps a function's encoding, so it is written in place.
+			if (cache == null) {
+				writeFunction(fn);
+				continue;
+			}
+			var encoded = cache.get(fn);
 			if (encoded == null) {
 				encoded = encodePreparedFunction(fn);
-				if (cache != null)
-					cache.set(fn, encoded);
+				cache.set(fn, encoded);
 			}
 			writeShared(encoded);
 		}
@@ -345,6 +351,7 @@ class HlWriter {
 		writer.hasDebug = hasDebug;
 		writer.debugFiles = debugFiles;
 		writer.debugFileIndices = debugFileIndices;
+		writer.functionScratch = scratch();
 		writer.writeFunction(fn);
 		return writer.bytes();
 	}
@@ -446,7 +453,8 @@ class HlWriter {
 	}
 
 	function writeSpanGroup(group:HlOpcodeSourceSpanGroup, fileIndices:Map<String, Int>):Void {
-		var positions = layout(group.opcodes);
+		var positions = scratch().positions;
+		layoutInto(group.opcodes, positions, scratch().labelIndices, scratch().loopHeads);
 		writeUnsignedIndex(group.stableId);
 		writeUnsignedIndex(positions[group.opcodes.length]);
 		var previousPath = "", previousFileIndex = -1;
@@ -610,32 +618,58 @@ class HlWriter {
 	 * relocations) uses these positions.
 	 */
 	public static function layout(opcodes:Array<HlInstruction>):Array<Int> {
-		var labels:Map<Int, Int> = [], loopHeads:Map<Int, Bool> = [];
+		var positions:Array<Int> = [];
+		layoutInto(opcodes, positions, [], []);
+		return positions;
+	}
+
+	/**
+	 * `layout` into `positions`, leaving in `labelIndices` the instruction index of each label by id (-1 for an id no label has);
+	 * all three arrays are overwritten, so a writer reuses them for every function.
+	 */
+	static function layoutInto(opcodes:Array<HlInstruction>, positions:Array<Int>, labelIndices:Array<Int>,
+			loopHeads:Array<Bool>):Void {
+		var labelCount = 0;
+		for (instruction in opcodes)
+			switch instruction {
+				case Label(id):
+					if (id < 0)
+						throw new InternalError('Negative HashLink label $id');
+					if (id >= labelCount)
+						labelCount = id + 1;
+				default:
+			}
+		labelIndices.resize(labelCount);
+		loopHeads.resize(labelCount);
+		for (id in 0...labelCount) {
+			labelIndices[id] = -1;
+			loopHeads[id] = false;
+		}
 		for (index in 0...opcodes.length)
 			switch opcodes[index] {
 				case Label(id):
-					labels.set(id, index);
+					labelIndices[id] = index;
 				default:
 			}
 		for (index in 0...opcodes.length) {
 			var target = jumpTarget(opcodes[index]);
-			if (target >= 0) {
-				var label = labels.get(target);
-				if (label != null && label <= index)
-					loopHeads.set(target, true);
+			if (target >= 0 && target < labelCount) {
+				var label = labelIndices[target];
+				if (label >= 0 && label <= index)
+					loopHeads[target] = true;
 			}
 		}
-		var positions:Array<Int> = [], written = 0;
-		for (instruction in opcodes) {
-			positions.push(written);
-			switch instruction {
-				case Label(id) if (!loopHeads.exists(id)):
+		positions.resize(opcodes.length + 1);
+		var written = 0;
+		for (index in 0...opcodes.length) {
+			positions[index] = written;
+			switch opcodes[index] {
+				case Label(id) if (!loopHeads[id]):
 				default:
 					written++;
 			}
 		}
-		positions.push(written);
-		return positions;
+		positions[opcodes.length] = written;
 	}
 
 	/** Every label `instruction` can transfer to: a jump's or trap's one, each of a switch's. */
@@ -666,15 +700,16 @@ class HlWriter {
 			default: -1;
 		};
 
+	function scratch():HlFunctionScratch {
+		if (functionScratch == null)
+			functionScratch = new HlFunctionScratch();
+		return functionScratch;
+	}
+
 	function writeFunction(fn:HlFunction):Void {
-		var positions = layout(fn.opcodes), count = fn.opcodes.length;
-		var labels:Map<Int, Int> = [];
-		for (index in 0...count)
-			switch fn.opcodes[index] {
-				case Label(id):
-					labels.set(id, positions[index]);
-				default:
-			}
+		var scratch = scratch(), positions = scratch.positions;
+		layoutInto(fn.opcodes, positions, scratch.labelIndices, scratch.loopHeads);
+		var count = fn.opcodes.length;
 		writeIndex(fn.type);
 		writeUnsignedIndex(fn.functionIndex);
 		writeUnsignedIndex(fn.registers.length);
@@ -684,12 +719,12 @@ class HlWriter {
 		for (index in 0...count) {
 			if (positions[index + 1] == positions[index])
 				continue;
-			var opcode = lowerInstruction(fn.opcodes[index], positions[index], labels);
+			var opcode = lowerInstruction(fn.opcodes[index], positions[index], scratch);
 			HlOpcodeSchema.validate(opcode, operands);
 			writeOpcode(opcode, operands);
 		}
 		if (hasDebug) {
-			writeDebugLocations(fn, positions);
+			writeDebugLocations(fn, positions, scratch.located);
 			writeUnsignedIndex(fn.debugAssignments.length);
 			for (assignment in fn.debugAssignments) {
 				writeUnsignedIndex(assignment.name);
@@ -753,8 +788,8 @@ class HlWriter {
 	/** The location of a function that was given none. */
 	static final generatedLocation = new HlDebugLocation("<generated>", 1, 1, 1, 1, 0, -1, -1, 1);
 
-	function writeDebugLocations(fn:HlFunction, positions:Array<Int>):Void {
-		var located:Array<HlDebugLocation> = [];
+	function writeDebugLocations(fn:HlFunction, positions:Array<Int>, located:Array<HlDebugLocation>):Void {
+		located.resize(0);
 		for (index in 0...fn.opcodes.length)
 			if (positions[index + 1] != positions[index])
 				located.push(fn.debugLocations.length == 0 ? generatedLocation : fn.debugLocations[index]);
@@ -831,7 +866,7 @@ class HlWriter {
 	}
 
 	/** Lowers the instruction at `position` into `opcode` and the operands left in `operands`; nothing is allocated per instruction. */
-	function lowerInstruction(instruction:HlInstruction, position:Int, labels:Map<Int, Int>):HlOpcode {
+	function lowerInstruction(instruction:HlInstruction, position:Int, scratch:HlFunctionScratch):HlOpcode {
 		return switch instruction {
 			case Move(destination, source): {
 				put2(destination, source);
@@ -1106,85 +1141,85 @@ class HlWriter {
 					HlOpcode.EnumField;
 				}
 			case JumpSignedLessOrEqual(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JSLte;
 				}
 			case JumpSignedLess(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JSLt;
 				}
 			case JumpUnsignedLess(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JULt;
 				}
 			case JumpNull(value, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put2(value, targetPosition - (position + 1));
 					HlOpcode.JNull;
 				}
 			case JumpEqual(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JEq;
 				}
 			case JumpTrue(condition, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put2(condition, targetPosition - (position + 1));
 					HlOpcode.JTrue;
 				}
 			case JumpFalse(condition, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put2(condition, targetPosition - (position + 1));
 					HlOpcode.JFalse;
 				}
 			case JumpNotNull(value, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put2(value, targetPosition - (position + 1));
 					HlOpcode.JNotNull;
 				}
 			case JumpNotEqual(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JNotEq;
 				}
 			case JumpNotLess(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JNotLt;
 				}
 			case JumpNotGreaterOrEqual(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JNotGte;
 				}
 			case JumpSignedGreaterOrEqual(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JSGte;
 				}
 			case JumpUnsignedGreaterOrEqual(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JUGte;
 				}
 			case JumpSignedGreater(left, right, target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put3(left, right, targetPosition - (position + 1));
 					HlOpcode.JSGt;
@@ -1194,17 +1229,17 @@ class HlWriter {
 				operands.push(value);
 				operands.push(targets.length);
 				for (target in targets)
-					operands.push(requireLabel(labels, target) - (position + 1));
+					operands.push(scratch.labelPosition(target) - (position + 1));
 				operands.push(0);
 				HlOpcode.Switch;
 			case Jump(target):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put1(targetPosition - (position + 1));
 					HlOpcode.JAlways;
 				}
 			case Trap(destination, target, preserveExceptionStack):
-				var targetPosition = requireLabel(labels, target);
+				var targetPosition = scratch.labelPosition(target);
 				{
 					put2(destination, targetPosition - (position + 1));
 					preserveExceptionStack == true ? HlOpcode.CleanupTrap : HlOpcode.Trap;
@@ -1236,12 +1271,6 @@ class HlWriter {
 		};
 	}
 
-	static function requireLabel(labels:Map<Int, Int>, target:Int):Int {
-		var position = labels.get(target);
-		if (position == null)
-			throw new InternalError('Unknown HashLink jump label $target');
-		return position;
-	}
 
 	function writeOpcode(opcode:HlOpcode, operands:Array<Int>):Void {
 		output.writeByte(opcode);
@@ -1272,5 +1301,23 @@ class HlWriter {
 		} else {
 			throw new InternalError('HL index is out of range: $value');
 		}
+	}
+}
+
+/** The working arrays of the function being written (see `HlWriter.layout`), reused by every function of a module. */
+private class HlFunctionScratch {
+	public final positions:Array<Int> = [];
+	public final labelIndices:Array<Int> = [];
+	public final loopHeads:Array<Bool> = [];
+	public final located:Array<HlDebugLocation> = [];
+
+	public function new() {}
+
+	/** The written position of the label `target` in the function laid out last. */
+	public function labelPosition(target:Int):Int {
+		var index = target >= 0 && target < labelIndices.length ? labelIndices[target] : -1;
+		if (index < 0)
+			throw new InternalError('Unknown HashLink jump label $target');
+		return positions[index];
 	}
 }
