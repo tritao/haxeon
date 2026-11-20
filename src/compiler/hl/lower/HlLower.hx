@@ -1093,6 +1093,7 @@ class HlLower {
 		var catchValues:Map<Int, IrValue> = [];
 		var nullValues = valueIsNull;
 		nullValues.resize(0);
+		var hasPointerOffsets = false;
 		for (argument in fn.arguments)
 			defineRegister(argument, registers, registerTypes);
 		for (block in fn.blocks)
@@ -1105,6 +1106,8 @@ class HlLower {
 						while (nullValues.length <= value.id)
 							nullValues.push(false);
 						nullValues[value.id] = true;
+					case PointerOffset(_, _, _):
+						hasPointerOffsets = true;
 					case _:
 				}
 			}
@@ -1139,6 +1142,18 @@ class HlLower {
 						countUse(value);
 					case Jump(_), Unreachable:
 				}
+		}
+		var foldedAddresses = hasPointerOffsets ? foldedPointerOffsets(fn, uses) : null;
+		function memoryAddress(pointer:IrValue, instructions:Array<HlInstruction>):{base:Int, offset:Int} {
+			var folded = foldedAddresses == null ? null : foldedAddresses.get(pointer.id);
+			if (folded != null)
+				return {
+					base: requireRegister(folded.pointer, registers),
+					offset: requireRegister(folded.byteOffset, registers)
+				};
+			var zeroOffset = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
+			return {base: requireRegister(pointer, registers), offset: zeroOffset};
 		}
 		// An array boxed only to be cast back to an array, as a coercion between array types does, is the same HashLink array
 		// (`HlType.Array` carries no element type): the cast takes the array itself unchecked, and the box is not made.
@@ -1306,23 +1321,20 @@ class HlLower {
 						// still assembled for a Wasm compilation, but never executes this path.
 						instructions.push(HlInstruction.LoadInt(defineRegister(output, registers, registerTypes),
 							internInt(0)));
+					case PointerOffset(output, _, _) if (foldedAddresses != null && foldedAddresses.exists(output.id)):
 					case PointerOffset(output, pointer, byteOffset):
 						instructions.push(HlInstruction.Call2(defineRegister(output, registers, registerTypes),
 							requireFunction("__hl_bytes_offset"),
 							requireRegister(pointer, registers), requireRegister(byteOffset, registers)));
 					case MemoryLoad(output, pointer, size, signed):
 						var destination = defineRegister(output, registers, registerTypes),
-							zeroOffset = temporaryRegister(IrType.I32, registerTypes);
-						instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
+							address = memoryAddress(pointer, instructions);
 						if (size == 1)
-							instructions.push(HlInstruction.GetI8(destination, requireRegister(pointer, registers),
-								zeroOffset));
+							instructions.push(HlInstruction.GetI8(destination, address.base, address.offset));
 						else if (size == 2)
-							instructions.push(HlInstruction.GetI16(destination, requireRegister(pointer, registers),
-								zeroOffset));
+							instructions.push(HlInstruction.GetI16(destination, address.base, address.offset));
 						else
-							instructions.push(HlInstruction.GetMem(destination, requireRegister(pointer, registers),
-								zeroOffset));
+							instructions.push(HlInstruction.GetMem(destination, address.base, address.offset));
 						if (signed && size < 4) {
 							var shift = temporaryRegister(IrType.I32, registerTypes),
 								shiftCount = internInt(size == 1 ? 24 : 16);
@@ -1331,16 +1343,15 @@ class HlLower {
 							instructions.push(HlInstruction.ShiftRight(destination, destination, shift));
 						}
 					case MemoryStore(pointer, value, size):
-						var zeroOffset = temporaryRegister(IrType.I32, registerTypes);
-						instructions.push(HlInstruction.LoadInt(zeroOffset, internInt(0)));
+						var address = memoryAddress(pointer, instructions);
 						if (size == 1)
-							instructions.push(HlInstruction.SetI8(requireRegister(pointer, registers), zeroOffset,
+							instructions.push(HlInstruction.SetI8(address.base, address.offset,
 								requireRegister(value, registers)));
 						else if (size == 2)
-							instructions.push(HlInstruction.SetI16(requireRegister(pointer, registers), zeroOffset,
+							instructions.push(HlInstruction.SetI16(address.base, address.offset,
 								requireRegister(value, registers)));
 						else
-							instructions.push(HlInstruction.SetMem(requireRegister(pointer, registers), zeroOffset,
+							instructions.push(HlInstruction.SetMem(address.base, address.offset,
 								requireRegister(value, registers)));
 					case ConstBool(output, value):
 						instructions.push(HlInstruction.LoadBool(defineRegister(output, registers, registerTypes),
@@ -2318,6 +2329,37 @@ class HlLower {
 	/** A label of the function being lowered that no block has: block `b` is label `b`. */
 	function freshLabel():Int
 		return nextLabel++;
+
+	/**
+	 * The pointer offsets of `fn` read only as the address of loads and stores, by output id. HashLink's memory opcodes take a
+	 * byte offset register, so such an address is never made: each access takes the offset's pointer and byte offset itself.
+	 * `uses` counts every read of a value; a debug binding keeps the offset, so a debugger can show it.
+	 */
+	static function foldedPointerOffsets(fn:IrFunction, uses:Array<Int>):Null<Map<Int, {
+		pointer:IrValue,
+		byteOffset:IrValue
+	}>> {
+		var offsets:Map<Int, {pointer:IrValue, byteOffset:IrValue}> = [], addressUses:Map<Int, Int> = [];
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case PointerOffset(output, pointer, byteOffset):
+						offsets.set(output.id, {pointer: pointer, byteOffset: byteOffset});
+					case MemoryLoad(_, pointer, _, _), MemoryStore(pointer, _, _):
+						addressUses.set(pointer.id,
+							(addressUses.exists(pointer.id) ? addressUses.get(pointer.id) : 0) + 1);
+					default:
+				}
+		for (binding in fn.debugBindings)
+			offsets.remove(binding.value.id);
+		var folded = false;
+		for (id in [for (id in offsets.keys()) id])
+			if (!addressUses.exists(id) || addressUses.get(id) != uses[id])
+				offsets.remove(id);
+			else
+				folded = true;
+		return folded ? offsets : null;
+	}
 
 	function defineRegister(value:IrValue, registers:Array<Int>, types:Array<Int>):Int {
 		if (value.id < registers.length && registers[value.id] >= 0)
