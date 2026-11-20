@@ -1720,14 +1720,16 @@ class CallResolver {
 				// A value in scope wins; otherwise the longest dotted prefix that
 				// names a type is the receiver, so "pkg.Type.FIELD.method()"
 				// types FIELD as a static member of pkg.Type.
-				var parts = splitPath(name), firstMember = 1;
-				var sourceParts = span.referenceName == null ? parts : splitPath(span.referenceName);
-				receiverName = sourceParts[0];
+				var source = span.referenceName == null ? name : span.referenceName,
+					firstDot = source.indexOf("."),
+					path = name,
+					firstMember = 1;
+				receiverName = firstDot < 0 ? source : source.substring(0, firstDot);
 				receiver = bodyTyper.resolveReceiver(receiverName, span, scope);
 				if (receiver != null)
-					parts = sourceParts;
+					path = source;
 				// The first `prefixLength` parts of `name` end at `cut`, the dot after them.
-				var prefixLength = parts.length - 1, cut = lastDot;
+				var prefixLength = dots(name), cut = lastDot;
 				while (receiver == null && prefixLength >= 1) {
 					var prefix = name.substring(0, cut);
 					var referenced = typeReference(prefix);
@@ -1740,10 +1742,13 @@ class CallResolver {
 					prefixLength--;
 					cut = name.lastIndexOf(".", cut - 1);
 				}
-				if (receiver != null)
+				// Members between the receiver and the method: the path is split only when there are any.
+				if (receiver != null && firstMember < dots(path)) {
+					var parts = splitPath(path);
 					for (index in firstMember...parts.length - 1)
 						receiver = bodyTyper.typedMemberWithFlow(receiver, parts[index],
 							BodyTyper.referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
+				}
 			}
 		}
 		if (receiver != null)
@@ -1956,6 +1961,15 @@ class CallResolver {
 
 	static function splitPath(path:String):Array<String>
 		return path.split(".");
+
+	/** How many dots `path` has: one fewer than its parts. */
+	static function dots(path:String):Int {
+		var count = 0;
+		for (index in 0...path.length)
+			if (StringTools.fastCodeAt(path, index) == ".".code)
+				count++;
+		return count;
+	}
 
 	/** The type a qualified name denotes, when its static members can be accessed: the name itself, or the enum abstract a typedef names. */
 	function typeReference(name:String):Null<String> {
