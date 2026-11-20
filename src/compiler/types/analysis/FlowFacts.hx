@@ -97,8 +97,9 @@ class FlowFacts {
 		// These effects were already recorded in enclosing tries; replaying them is not a new unknown write.
 		var outerSink = invalidationSink;
 		invalidationSink = null;
-		for (key in recorded.invalidated.keys())
-			invalidate(key);
+		if (hasFlags(recorded.invalidated))
+			for (key in recorded.invalidated.keys())
+				invalidate(key);
 		for (prefix in recorded.invalidatedPrefixes)
 			invalidatePrefix(prefix);
 		for (prefix in recorded.invalidatedNamespaces)
@@ -171,12 +172,15 @@ class FlowFacts {
 		var facts = tables;
 		if (facts == null)
 			return false;
-		for (key in facts.refinedTypes.keys())
-			into.set(key, true);
-		for (key in facts.stableRefinedTypes.keys())
-			into.set(key, true);
-		for (key in facts.invalidated.keys())
-			into.set(key, true);
+		if (hasTypes(facts.refinedTypes))
+			for (key in facts.refinedTypes.keys())
+				into.set(key, true);
+		if (hasTypes(facts.stableRefinedTypes))
+			for (key in facts.stableRefinedTypes.keys())
+				into.set(key, true);
+		if (hasFlags(facts.invalidated))
+			for (key in facts.invalidated.keys())
+				into.set(key, true);
 		return facts.invalidatedPrefixes.length > 0
 			|| facts.invalidatedNamespaces.length > 0
 			|| facts.erasedNamespaces.length > 0
@@ -201,21 +205,24 @@ class FlowFacts {
 		var facts = tables;
 		if (facts == null)
 			return;
-		for (key in facts.refinedTypes.keys())
-			if (!seen.exists(key)) {
-				seen.set(key, true);
-				result.push(key);
-			}
-		for (key in facts.stableRefinedTypes.keys())
-			if (!seen.exists(key)) {
-				seen.set(key, true);
-				result.push(key);
-			}
-		for (key in facts.invalidated.keys())
-			if (!seen.exists(key)) {
-				seen.set(key, true);
-				result.push(key);
-			}
+		if (hasTypes(facts.refinedTypes))
+			for (key in facts.refinedTypes.keys())
+				if (!seen.exists(key)) {
+					seen.set(key, true);
+					result.push(key);
+				}
+		if (hasTypes(facts.stableRefinedTypes))
+			for (key in facts.stableRefinedTypes.keys())
+				if (!seen.exists(key)) {
+					seen.set(key, true);
+					result.push(key);
+				}
+		if (hasFlags(facts.invalidated))
+			for (key in facts.invalidated.keys())
+				if (!seen.exists(key)) {
+					seen.set(key, true);
+					result.push(key);
+				}
 	}
 
 	function resolveStable(bindingId:String):Null<CompilerType> {
@@ -260,12 +267,14 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.invalidatePrefix(prefix);
 		var facts = own();
-		for (bindingId in facts.refinedTypes.keys())
-			if (isUnder(bindingId, prefix))
-				facts.refinedTypes.remove(bindingId);
-		for (bindingId in facts.stableRefinedTypes.keys())
-			if (isUnder(bindingId, prefix))
-				facts.stableRefinedTypes.remove(bindingId);
+		if (hasTypes(facts.refinedTypes))
+			for (bindingId in facts.refinedTypes.keys())
+				if (isUnder(bindingId, prefix))
+					facts.refinedTypes.remove(bindingId);
+		if (hasTypes(facts.stableRefinedTypes))
+			for (bindingId in facts.stableRefinedTypes.keys())
+				if (isUnder(bindingId, prefix))
+					facts.stableRefinedTypes.remove(bindingId);
 		facts.invalidatedPrefixes.push(prefix);
 	}
 
@@ -273,10 +282,13 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.invalidateNamespace(prefix);
 		var facts = own();
-		for (bindingId in facts.refinedTypes.keys())
-			if (StringTools.startsWith(bindingId, prefix))
-				facts.refinedTypes.remove(bindingId);
-		facts.invalidatedNamespaces.push(prefix);
+		if (hasTypes(facts.refinedTypes))
+			for (bindingId in facts.refinedTypes.keys())
+				if (StringTools.startsWith(bindingId, prefix))
+					facts.refinedTypes.remove(bindingId);
+		// Every unknown call forgets the same namespace again; once recorded, it is recorded.
+		if (facts.invalidatedNamespaces.indexOf(prefix) < 0)
+			facts.invalidatedNamespaces.push(prefix);
 	}
 
 	/** Forgets every fact under `prefix`, including stable ones, in this branch and the branches it extends. */
@@ -284,12 +296,14 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.invalidateNamespaceCompletely(prefix);
 		var facts = own();
-		for (bindingId in facts.refinedTypes.keys())
-			if (StringTools.startsWith(bindingId, prefix))
-				facts.refinedTypes.remove(bindingId);
-		for (bindingId in facts.stableRefinedTypes.keys())
-			if (StringTools.startsWith(bindingId, prefix))
-				facts.stableRefinedTypes.remove(bindingId);
+		if (hasTypes(facts.refinedTypes))
+			for (bindingId in facts.refinedTypes.keys())
+				if (StringTools.startsWith(bindingId, prefix))
+					facts.refinedTypes.remove(bindingId);
+		if (hasTypes(facts.stableRefinedTypes))
+			for (bindingId in facts.stableRefinedTypes.keys())
+				if (StringTools.startsWith(bindingId, prefix))
+					facts.stableRefinedTypes.remove(bindingId);
 		facts.erasedNamespaces.push(prefix);
 	}
 
@@ -298,12 +312,14 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.invalidateMentioning(fragment);
 		var facts = own(), expressionPrefix = EXPRESSION_PREFIX;
-		for (bindingId in facts.refinedTypes.keys())
-			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
-				facts.refinedTypes.remove(bindingId);
-		for (bindingId in facts.stableRefinedTypes.keys())
-			if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
-				facts.stableRefinedTypes.remove(bindingId);
+		if (hasTypes(facts.refinedTypes))
+			for (bindingId in facts.refinedTypes.keys())
+				if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
+					facts.refinedTypes.remove(bindingId);
+		if (hasTypes(facts.stableRefinedTypes))
+			for (bindingId in facts.stableRefinedTypes.keys())
+				if (StringTools.startsWith(bindingId, expressionPrefix) && bindingId.indexOf(fragment) >= 0)
+					facts.stableRefinedTypes.remove(bindingId);
 		facts.erasedMentions.push(fragment);
 	}
 
@@ -314,6 +330,23 @@ class FlowFacts {
 			if (bindingId.indexOf(fragment) >= 0)
 				return true;
 		return false;
+	}
+
+	/** Whether `table` has an entry. Haxeon's maps count theirs; iterating one copies its keys out, even when there are none. */
+	static function hasTypes(table:Map<String, CompilerType>):Bool {
+		#if haxeon
+		return table.size() > 0;
+		#else
+		return table.keys().hasNext();
+		#end
+	}
+
+	static function hasFlags(table:Map<String, Bool>):Bool {
+		#if haxeon
+		return table.size() > 0;
+		#else
+		return table.keys().hasNext();
+		#end
 	}
 
 	public function invalidateAllExpressions():Void
@@ -328,9 +361,10 @@ class FlowFacts {
 		if (invalidationSink != null)
 			invalidationSink.invalidateField(field);
 		var facts = own();
-		for (bindingId in facts.refinedTypes.keys())
-			if (mentionsField(bindingId, field))
-				facts.refinedTypes.remove(bindingId);
+		if (hasTypes(facts.refinedTypes))
+			for (bindingId in facts.refinedTypes.keys())
+				if (mentionsField(bindingId, field))
+					facts.refinedTypes.remove(bindingId);
 		facts.invalidatedFields.push(field);
 	}
 
