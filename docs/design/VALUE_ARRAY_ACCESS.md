@@ -1,6 +1,6 @@
 # Reading value arrays at the cost of a field
 
-Status: proposed; steps 1 and 2 implemented (`HlLower.lowerValueArrayRead`, `valueArrayView`).
+Status: proposed; steps 1 to 4 implemented on HashLink (`HlLower.lowerValueArrayRead`, `valueArrayView`, the validity lane in `value_arrays.c`).
 
 ## Problem
 
@@ -38,9 +38,11 @@ validity bits inline, which halves it, but each read still finds out at run time
 
 1. Inline scalar reads, the header compared per read (done).
 2. Headers resolved per array value where the value is defined (done).
-3. The bounds analysis, then its use by the raw array accesses in place of `provenInRange`: after step 2, a read's
-   size load and bounds check are most of what is left of its cost.
-4. The validity lane, in the runtime and both Wasm backends at once, so arrays of non-null structs read inline too.
+3. The bounds analysis (`IrLoopBounds`) for value array reads (done). Raw `Int` and `Float` reads keep the VM's check:
+   on x86-64 its fused check and load costs less than a separate load, and on ARM64 the gain needs a fused opcode in
+   the VM.
+4. The validity lane in the HashLink runtime, so arrays of non-null structs read inline too (done). The Wasm runtimes
+   keep their own layouts; nothing else depends on this one.
 5. Value array reads and writes as IR operations with their layout; the natives remain for `Dynamic` bridges and the
    reflection paths.
 

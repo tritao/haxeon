@@ -370,7 +370,7 @@ class HlLower {
 								ensureNative(runtimeNatives, "__iterator_has_next",
 									[IrType.Abstract("realtime_iterator")], IrType.Bool);
 							case Call(_, name, arguments) if (name.name == VALUE_ARRAY_READ_I32 && arguments.length == 5
-								&& withoutValidity(arguments[0].type)):
+								&& readsInline(arguments[0].type)):
 								ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
 								ensureNative(runtimeNatives, VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
 							case ArrayGet(_, array, _):
@@ -747,6 +747,9 @@ class HlLower {
 	static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
 
 	static inline final ARRAY_SIZE_OFFSET = 16;
+
+	/** Where a value array keeps its validity lane (`value_arrays.c` asserts it). */
+	static inline final VALUE_ARRAY_VALIDITY_OFFSET = 104;
 	static inline final ARRAY_DATA_OFFSET = 24;
 
 	/** The type word at the start of an array's storage. */
@@ -772,13 +775,20 @@ class HlLower {
 		return -1;
 	}
 
-	/**
-	 * Whether a value array of `array`'s type has no validity bits, so reading one of its elements checks only the index:
-	 * enums (their null is tag zero) and nullable structs (`IrValueArrayLayout`).
-	 */
-	static function withoutValidity(array:IrType):Bool
+	/** Whether a value array of `array`'s type is read inline (`hasValidity` tells how). */
+	static function readsInline(array:IrType):Bool
 		return switch array {
-			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))): true;
+			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))), Array(Obj(_)): true;
+			default: false;
+		};
+
+	/**
+	 * Whether a value array of `array`'s type keeps a presence bit per element (`IrValueArrayLayout`): arrays of non-null
+	 * structs do; enums (their null is tag zero) and nullable structs do not.
+	 */
+	static function hasValidity(array:IrType):Bool
+		return switch array {
+			case Array(Obj(_)): true;
 			default: false;
 		};
 
@@ -789,7 +799,7 @@ class HlLower {
 	static function inlineValueArraySlot(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>,
 			index:Int,
 			arguments:Array<IrValue>):Null<InlineValueSlot> {
-		if (arguments.length != 5 || !withoutValidity(arguments[0].type))
+		if (arguments.length != 5 || !readsInline(arguments[0].type))
 			return null;
 		var offset = constantBefore(instructions, index, arguments[2]),
 			width = constantBefore(instructions, index, arguments[3]),
@@ -799,10 +809,10 @@ class HlLower {
 	}
 
 	/**
-	 * A scalar read of a value array element without validity bits, inline (`VALUE_ARRAY_ACCESS.md`): with the array's
-	 * header resolved to its value array (`valueArrayView`), an index in range loads the slot from the scalar lane,
-	 * `index * stride + offset`; an index out of range, or a header that is no value array's, calls the native, which
-	 * raises its errors as before.
+	 * A scalar read of a value array element, inline (`VALUE_ARRAY_ACCESS.md`): with the array's header resolved to its
+	 * value array (`valueArrayView`), an index in range, of an element present (for arrays with validity bits), loads the
+	 * slot from the scalar lane, `index * stride + offset`; anything else calls the native, which raises its errors as
+	 * before.
 	 */
 	function lowerValueArrayRead(output:IrValue, arguments:Array<IrValue>, slot:InlineValueSlot, block:Int,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
@@ -821,6 +831,24 @@ class HlLower {
 			instructions.push(HlInstruction.GetMem(size, view.array,
 				constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
 			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
+		}
+		// An element of an array with validity bits is read only once it was written; else the native raises its error.
+		if (hasValidity(arguments[0].type)) {
+			var bits = temporaryRegister(IrType.Bytes, registerTypes),
+				byte = temporaryRegister(IrType.I32, registerTypes),
+				byteIndex = temporaryRegister(IrType.I32, registerTypes),
+				bit = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.GetMem(bits, view.array,
+				constantRegister(VALUE_ARRAY_VALIDITY_OFFSET, instructions, registerTypes)));
+			instructions.push(HlInstruction.UnsignedShiftRight(byteIndex, index,
+				constantRegister(3, instructions, registerTypes)));
+			instructions.push(HlInstruction.Add(byteIndex, byteIndex,
+				constantRegister(LANE_HEADER_BYTES, instructions, registerTypes)));
+			instructions.push(HlInstruction.GetI8(byte, bits, byteIndex));
+			instructions.push(HlInstruction.BitAnd(bit, index, constantRegister(7, instructions, registerTypes)));
+			instructions.push(HlInstruction.UnsignedShiftRight(byte, byte, bit));
+			instructions.push(HlInstruction.BitAnd(byte, byte, constantRegister(1, instructions, registerTypes)));
+			instructions.push(HlInstruction.JumpEqual(byte, constantRegister(0, instructions, registerTypes), slow));
 		}
 		instructions.push(HlInstruction.GetMem(data, view.array,
 			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));

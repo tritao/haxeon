@@ -24,6 +24,10 @@ typedef struct {
 	int reference_stride;
 	int word_bits;
 	bool has_validity;
+	/* Presence bits of the elements of an array with validity: a lane of its own, so that a bit is at a fixed place
+	 * whatever the capacity (VALUE_ARRAY_ACCESS.md); null until the first growth, and for arrays without validity. */
+	vbyte *validity;
+	vbyte *pending_validity;
 } realtime_value_array;
 
 /* HlLower inlines scalar reads of arrays without validity bits (VALUE_ARRAY_ACCESS.md): it resolves a header to its value
@@ -33,6 +37,8 @@ _Static_assert(sizeof(void*) != 8 || offsetof(realtime_value_array, scalar_strid
 	"HlLower reads the scalar stride at this offset");
 _Static_assert(sizeof(void*) != 8 || (offsetof(varray, size) == 16 && offsetof(varray, data) == 24),
 	"HlLower reads an array's size and data at these offsets");
+_Static_assert(sizeof(void*) != 8 || offsetof(realtime_value_array, validity) == 104,
+	"HlLower reads the validity lane at this offset");
 
 HL_PRIM hl_type *HL_NAME(__value_array_header_type)() {
 	return &realtime_value_array_type;
@@ -64,8 +70,6 @@ static uint64_t realtime_value_array_payload_words(realtime_value_array *array, 
 
 static int realtime_value_array_scalar_bytes(realtime_value_array *array, int capacity) {
 	uint64_t words = realtime_value_array_payload_words(array, capacity);
-	if( array->has_validity )
-		words += ((uint64_t)(unsigned int)capacity + (unsigned int)array->word_bits - 1) / (unsigned int)array->word_bits;
 	uint64_t bytes = words * ((unsigned int)array->word_bits / 8);
 	if( bytes > INT_MAX - HL_WSIZE ) hl_error("Value array scalar lane is too large");
 	return (int)bytes;
@@ -84,19 +88,20 @@ static vbyte *realtime_value_array_alloc_lane(realtime_value_array *array, int b
 	return lane;
 }
 
-static vbyte *realtime_value_array_validity(realtime_value_array *array, vbyte *scalar, int capacity) {
-	return scalar + HL_WSIZE + (size_t)realtime_value_array_payload_words(array, capacity) * (array->word_bits / 8);
+/* One bit per element, after the lane's type word. */
+static int realtime_value_array_validity_bytes(int capacity) {
+	return (int)(((uint64_t)(unsigned int)capacity + 7) / 8);
 }
 
 static bool realtime_value_array_valid_at(realtime_value_array *array, int index) {
 	if( !array->has_validity ) return true;
-	vbyte *bits = realtime_value_array_validity(array, array->array.data, array->array.capacity);
+	vbyte *bits = array->validity + HL_WSIZE;
 	return (bits[index >> 3] & (1u << (index & 7))) != 0;
 }
 
 static void realtime_value_array_set_valid(realtime_value_array *array, int index, bool value) {
 	if( !array->has_validity ) return;
-	vbyte *bits = realtime_value_array_validity(array, array->array.data, array->array.capacity);
+	vbyte *bits = array->validity + HL_WSIZE;
 	unsigned int mask = 1u << (index & 7);
 	if( value ) bits[index >> 3] |= mask; else bits[index >> 3] &= ~mask;
 }
@@ -136,8 +141,8 @@ static void realtime_lane_storage_replace_capacity(varray *value, int32_t next, 
 	if( next == array->array.capacity ) return; /* Native reference lanes are allocated eagerly. */
 	int scalar_bytes = realtime_value_array_scalar_bytes(array, next);
 	int reference_bytes = realtime_value_array_reference_bytes(array, next);
-	int old_capacity = array->array.capacity, size = array->array.size;
-	vbyte *old_scalar = array->array.data, *old_references = array->references;
+	int size = array->array.size;
+	vbyte *old_scalar = array->array.data, *old_references = array->references, *old_validity = array->validity;
 	hl_trap_ctx trap;
 	vdynamic *error = NULL;
 	hl_trap(trap, error, failed);
@@ -148,30 +153,35 @@ static void realtime_lane_storage_replace_capacity(varray *value, int32_t next, 
 		references = realtime_value_array_alloc_lane(array, reference_bytes, true);
 		hl_gc_store_ref(&array->pending_references, references, &hlt_bytes);
 	}
+	vbyte *validity = NULL;
+	if( array->has_validity ) {
+		validity = realtime_value_array_alloc_lane(array, realtime_value_array_validity_bytes(next), false);
+		hl_gc_store_ref(&array->pending_validity, validity, &hlt_bytes);
+	}
 	if( size != 0 ) {
 		size_t payload = (size_t)size * (array->scalar_stride_bits / 8);
 		if( payload != 0 ) memcpy(scalar + HL_WSIZE, old_scalar + HL_WSIZE, payload);
-		if( array->has_validity ) {
-			vbyte *source = realtime_value_array_validity(array, old_scalar, old_capacity);
-			vbyte *target = realtime_value_array_validity(array, scalar, next);
-			memcpy(target, source, ((size_t)size + 7) / 8);
-		}
+		if( array->has_validity )
+			memcpy(validity + HL_WSIZE, old_validity + HL_WSIZE, ((size_t)size + 7) / 8);
 		if( array->reference_stride != 0 )
 			hl_gc_copy_values(references + HL_WSIZE, old_references + HL_WSIZE,
 				(size_t)size * array->reference_stride * sizeof(void*), &hlt_dyn);
 	}
 	hl_gc_store_ref(&array->array.data, scalar, &hlt_bytes);
 	hl_gc_store_ref(&array->references, references, &hlt_bytes);
+	hl_gc_store_ref(&array->validity, validity, &hlt_bytes);
 	array->array.capacity = next;
 	realtime_value_array_sync(array);
 	hl_gc_store_ref(&array->pending_scalar, NULL, &hlt_bytes);
 	hl_gc_store_ref(&array->pending_references, NULL, &hlt_bytes);
+	hl_gc_store_ref(&array->pending_validity, NULL, &hlt_bytes);
 	hl_endtrap(trap);
 	return;
 failed:
 	hl_endtrap(trap);
 	hl_gc_store_ref(&array->pending_scalar, NULL, &hlt_bytes);
 	hl_gc_store_ref(&array->pending_references, NULL, &hlt_bytes);
+	hl_gc_store_ref(&array->pending_validity, NULL, &hlt_bytes);
 	hl_rethrow(error);
 }
 
