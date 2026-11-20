@@ -21,6 +21,9 @@ class IrScalarClosures {
 	final generatedMakers:Array<IrFunction> = [];
 	final generatedObjects:Array<IrObject> = [];
 
+	/** How many operands read each value id of the function `discover` is reading, its storage kept from one to the next. */
+	final useCounts:Array<Int> = [];
+
 	public static function rewrite(program:IrProgram):Void {
 		var pass = new IrScalarClosures(program);
 		pass.discover();
@@ -50,21 +53,21 @@ class IrScalarClosures {
 			excludeNested(native.result);
 		}
 		for (fn in program.functions) {
-			var signatureQueries:Map<Int, Bool> = [], uses:Map<Int, Int> = [];
-			function use(input:IrValue):Void
-				uses.set(input.id, (uses.exists(input.id) ? uses.get(input.id) : 0) + 1);
+			// Most functions make no signature query, and need no map of them.
+			var signatureQueries:Null<Map<Int, Bool>> = null, uses = useCounts;
+			uses.resize(0);
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
-					for (inputIndex in 0...IrOperands.count(located.value)) {
-						var input = IrOperands.at(located.value, inputIndex);
-						use(input);
-					}
+					for (inputIndex in 0...IrOperands.count(located.value))
+						countUse(uses, IrOperands.at(located.value, inputIndex));
 					switch located.value {
 						case Phi(_, inputs):
 							for (input in inputs)
-								use(input.value);
+								countUse(uses, input.value);
 						case Call(_, callTarget,
 							arguments) if (callTarget.name == "__closure_is_of_type" && (arguments.length == 2)):
+							if (signatureQueries == null)
+								signatureQueries = [];
 							signatureQueries.set(arguments[1].id, true);
 						default:
 					}
@@ -72,7 +75,7 @@ class IrScalarClosures {
 				if (block.terminator != null)
 					switch block.terminator.value {
 						case Return(value), Throw(value), Rethrow(value), Branch(value, _, _), Switch(value, _, _):
-							use(value);
+							countUse(uses, value);
 						default:
 					}
 			}
@@ -109,13 +112,20 @@ class IrScalarClosures {
 							else
 								excludeNested(output.type);
 							excludeNested(input.type);
-						case TypeValue(out, type) if (!signatureQueries.exists(out.id) || uses.get(out.id) != 1):
+						case TypeValue(out, type) if (signatureQueries == null || !signatureQueries.exists(out.id)
+							|| out.id >= uses.length || uses[out.id] != 1):
 							excludeNested(type);
 						default:
 					}
 		}
 		for (name in excluded.keys())
 			candidates.remove(name);
+	}
+
+	static function countUse(uses:Array<Int>, value:IrValue):Void {
+		while (uses.length <= value.id)
+			uses.push(0);
+		uses[value.id]++;
 	}
 
 	function note(type:IrType):Bool {

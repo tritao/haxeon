@@ -99,5 +99,11 @@ class IrNonNullScratch {
 	public final outgoing:Array<Int> = [];
 	public final fresh:Array<Int> = [];
 
+	/** The facts of the last analysis (`IrNonNullFacts.has`). */
+	public final provenStart:Array<Int> = [];
+
+	public final provenLength:Array<Int> = [];
+	public final provenWords:Array<Int> = [];
+
 	public function new() {}
 }

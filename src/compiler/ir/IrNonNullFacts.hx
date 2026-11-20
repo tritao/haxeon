@@ -5,8 +5,12 @@ import compiler.ir.IrPassScratch.IrNonNullScratch;
 
 /** Must facts at instruction entry; SSA values are never invalidated by a call or a store. */
 class IrNonNullFacts {
-	/** Per block id, a bit per instruction index whose receiver is proven non-null; null for a block with none. */
-	final proven:Array<Null<Array<Int>>> = [];
+	/**
+	 * The rows of the scratch the analysis ran in: per block id, where its run of words starts in `provenWords` (-1 for a block
+	 * with no proven receiver) and how long it is, a bit per instruction index whose receiver is proven non-null. Null when
+	 * nothing was analyzed.
+	 */
+	final rows:Null<IrNonNullScratch> = null;
 
 	/** Whether any instruction of `fn` has a receiver whose non-nullness could be proven: without one there is nothing to analyze. */
 	static function hasReceiver(fn:IrFunction):Bool {
@@ -19,16 +23,24 @@ class IrNonNullFacts {
 
 	/**
 	 * `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function; `scratch`, the caller's
-	 * tables reused across functions (`IrPassScratch.nonNull`).
+	 * tables reused across functions (`IrPassScratch.nonNull`). The facts are kept in `scratch`: they hold until it is next
+	 * given to an analysis.
 	 */
 	public function new(fn:IrFunction, ?checkedDereferences:Bool = false, ?graph:IrGraph, ?scratch:IrNonNullScratch) {
-		if (hasReceiver(fn))
-			new NonNullFlow(fn, checkedDereferences, proven, graph, scratch ?? new IrNonNullScratch()).run();
+		if (hasReceiver(fn)) {
+			var tables = scratch ?? new IrNonNullScratch();
+			new NonNullFlow(fn, checkedDereferences, graph, tables).run();
+			rows = tables;
+		}
 	}
 
 	public function has(block:Int, index:Int):Bool {
-		var at = block >= 0 && block < proven.length ? proven[block] : null, word = index >>> 5;
-		return at != null && word < at.length && (at[word] & (1 << (index & 31))) != 0;
+		var rows = this.rows;
+		if (rows == null || block < 0 || block >= rows.provenStart.length)
+			return false;
+		var start = rows.provenStart[block], word = index >>> 5;
+		return start >= 0 && word < rows.provenLength[block]
+			&& (rows.provenWords[start + word] & (1 << (index & 31))) != 0;
 	}
 
 	public static function checked(instruction:IrInstruction):Null<IrValue>
@@ -49,7 +61,6 @@ class IrNonNullFacts {
 private class NonNullFlow {
 	final fn:IrFunction;
 	final checkedDereferences:Bool;
-	final proven:Array<Null<Array<Int>>>;
 	final graph:IrGraph;
 	final scratch:IrNonNullScratch;
 
@@ -67,11 +78,9 @@ private class NonNullFlow {
 
 	var hasRows = false;
 
-	public function new(fn:IrFunction, checkedDereferences:Bool, proven:Array<Null<Array<Int>>>, graph:Null<IrGraph>,
-			scratch:IrNonNullScratch) {
+	public function new(fn:IrFunction, checkedDereferences:Bool, graph:Null<IrGraph>, scratch:IrNonNullScratch) {
 		this.fn = fn;
 		this.checkedDereferences = checkedDereferences;
-		this.proven = proven;
 		this.graph = graph ?? new IrGraph(fn);
 		this.scratch = scratch;
 		positions = scratch.positions;
@@ -175,9 +184,13 @@ private class NonNullFlow {
 				}
 			}
 		}
-		var facts = before;
+		var facts = before,
+			provenStart = filledInts(scratch.provenStart, blockCount, -1),
+			provenLength = filledInts(scratch.provenLength, blockCount, 0),
+			provenWords = scratch.provenWords;
+		provenWords.resize(0);
 		for (block in fn.blocks) {
-			var at:Null<Array<Int>> = null;
+			var start = -1;
 			if (hasRows && graph.isReachable(block.id))
 				for (word in 0...words)
 					facts[word] = incoming[block.id * words + word];
@@ -191,18 +204,17 @@ private class NonNullFlow {
 				var located = block.instructions[index],
 					receiver = IrNonNullFacts.checked(located.value);
 				if (receiver != null && has(facts, receiver.id)) {
-					if (at == null)
-						at = [];
-					while (at.length <= index >>> 5)
-						at.push(0);
-					at[index >>> 5] |= 1 << (index & 31);
+					if (start < 0) {
+						var length = ((block.instructions.length - 1) >>> 5) + 1;
+						start = provenWords.length;
+						for (_ in 0...length)
+							provenWords.push(0);
+						provenStart[block.id] = start;
+						provenLength[block.id] = length;
+					}
+					provenWords[start + (index >>> 5)] |= 1 << (index & 31);
 				}
 				transfer(located.value, facts, block.id, !hasTry);
-			}
-			if (at != null) {
-				while (proven.length <= block.id)
-					proven.push(null);
-				proven[block.id] = at;
 			}
 		}
 	}
