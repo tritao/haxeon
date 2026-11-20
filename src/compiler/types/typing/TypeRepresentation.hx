@@ -176,8 +176,8 @@ class TypeRepresentation {
 			case TInstance(Enum, _, values): values;
 			default: [];
 		};
-		var substitutions = typeParameterSubstitutions(typeParameters, arguments),
-			resolved = semanticType(parameter.type, parameter.span, substitutions);
+		var substitutions = typeParameters.length == 0 ? null : typeParameterSubstitutions(typeParameters, arguments),
+			resolved = session.declarations.declaredTypes.enumParameterType(parameter, substitutions);
 		return parameter.optional ? TNullable(resolved) : resolved;
 	}
 

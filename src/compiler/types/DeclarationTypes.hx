@@ -1,6 +1,7 @@
 package compiler.types;
 
 import compiler.syntax.Ast.AstArgument;
+import compiler.syntax.Ast.AstEnumParameter;
 import compiler.syntax.Ast.AstField;
 import compiler.syntax.Ast.AstFunction;
 import compiler.types.Type.CompilerType;
@@ -52,6 +53,7 @@ class DeclaredTypes implements DeclarationTypes {
 	final fieldTypes = new ObjectMap<AstField, CompilerType>();
 	final argumentTypesByArgument = new ObjectMap<AstArgument, CompilerType>();
 	final resultTypes = new ObjectMap<AstFunction, CompilerType>();
+	final enumParameterTypes = new ObjectMap<AstEnumParameter, CompilerType>();
 
 	public function new(declarations:DeclarationIndex)
 		this.declarations = declarations;
@@ -78,6 +80,19 @@ class DeclaredTypes implements DeclarationTypes {
 		var type = declarations.resolve(fn.result, fn.span, substitutions);
 		if (shared)
 			resultTypes.set(fn, type);
+		return type;
+	}
+
+	/** The annotation of an enum constructor's `parameter`, resolved with `substitutions`. */
+	public function enumParameterType(parameter:AstEnumParameter,
+			substitutions:Null<Map<String, CompilerType>>):CompilerType {
+		var shared = declarations.resolvesShareable(substitutions);
+		var cached = shared ? enumParameterTypes.get(parameter) : null;
+		if (cached != null)
+			return cached;
+		var type = declarations.resolve(parameter.type, parameter.span, substitutions);
+		if (shared)
+			enumParameterTypes.set(parameter, type);
 		return type;
 	}
 
