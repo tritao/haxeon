@@ -347,7 +347,7 @@ class HlModuleAssembler {
 	function moveChangedSignatures(program:IrProgram, tag:String, dispatched:Map<String, Bool>):SignatureMoves {
 		var renames:Map<String, String> = [], moved:Array<String> = [];
 		for (fn in program.functions) {
-			var known = cache.signatures.get(fn.name);
+			var known = cache.signatureOf(fn.name);
 			// A lambda renamed for this build (`renameLambdas`) still has the signature it was cached with, which names its
 			// environment by its old ordinal; the renamed environment keeps its type, so ordinals do not count.
 			if (known == null

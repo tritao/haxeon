@@ -45,7 +45,6 @@ class HlFunctionCache {
 	public final stableIds:Map<String, Int> = [];
 	public final slots:Array<String> = [];
 	public final functions:Map<String, IrFunction> = [];
-	public final signatures:Map<String, String> = [];
 
 	var nextStableId:Int = 0x10000;
 
@@ -69,8 +68,6 @@ class HlFunctionCache {
 			result.slots.push(name);
 		for (name => fn in functions)
 			result.functions.set(name, fn);
-		for (name => signature in signatures)
-			result.signatures.set(name, signature);
 		result.nextStableId = nextStableId;
 		return result;
 	}
@@ -79,8 +76,8 @@ class HlFunctionCache {
 		var ids:Array<HlStableFunctionState> = [for (name => id in stableIds) {
 			name:name, id:id
 		}];
-		var signatureState:Array<HlFunctionSignatureState> = [for (name => value in signatures) {
-			name:name, signature:value
+		var signatureState:Array<HlFunctionSignatureState> = [for (name => fn in functions) {
+			name:name, signature:signature(fn)
 		}];
 		var functionState:Array<HlCachedFunctionState> = [for (name => fn in functions)
 			{
@@ -127,16 +124,17 @@ class HlFunctionCache {
 				throw new InternalError("Cached function name mismatch");
 			result.functions.set(entry.name, fn);
 		}
+		var signed:Map<String, Bool> = [];
 		for (entry in state.signatures) {
-			if (!result.functions.exists(entry.name) || result.signatures.exists(entry.name))
+			if (!result.functions.exists(entry.name) || signed.exists(entry.name))
 				throw new InternalError("Invalid function signature state");
 			var fn = result.functions.get(entry.name);
 			if (entry.signature != signature(fn))
 				throw new InternalError("Cached function signature mismatch");
-			result.signatures.set(entry.name, entry.signature);
+			signed.set(entry.name, true);
 		}
 		for (name in result.slots)
-			if (!result.functions.exists(name) || !result.signatures.exists(name))
+			if (!result.functions.exists(name) || !signed.exists(name))
 				throw new InternalError("Incomplete function cache state");
 		result.nextStableId = state.nextStableId;
 		return result;
@@ -158,8 +156,13 @@ class HlFunctionCache {
 				slots.push(fn.name);
 			}
 			functions.set(fn.name, fn);
-			signatures.set(fn.name, signature(fn));
 		}
+	}
+
+	/** The signature of the code the cache has for `name` (`signature`), or null when it has none. */
+	public function signatureOf(name:String):Null<String> {
+		var fn = functions.get(name);
+		return fn == null ? null : signature(fn);
 	}
 
 	/**
@@ -179,8 +182,7 @@ class HlFunctionCache {
 				throw new InternalError('Cannot rename function ${entry.from} to ${entry.to}, which exists');
 		var slotsOf:Map<String, Int> = [],
 			idsOf:Map<String, Int> = [],
-			bodies:Map<String, IrFunction> = [],
-			signaturesOf:Map<String, String> = [];
+			bodies:Map<String, IrFunction> = [];
 		for (entry in moved) {
 			if (userSlots.exists(entry.from))
 				slotsOf.set(entry.from, userSlots.get(entry.from));
@@ -188,12 +190,9 @@ class HlFunctionCache {
 				idsOf.set(entry.from, stableIds.get(entry.from));
 			if (functions.exists(entry.from))
 				bodies.set(entry.from, functions.get(entry.from));
-			if (signatures.exists(entry.from))
-				signaturesOf.set(entry.from, signatures.get(entry.from));
 			userSlots.remove(entry.from);
 			stableIds.remove(entry.from);
 			functions.remove(entry.from);
-			signatures.remove(entry.from);
 		}
 		for (entry in moved) {
 			if (slotsOf.exists(entry.from)) {
@@ -206,8 +205,6 @@ class HlFunctionCache {
 			var body = bodies.get(entry.from);
 			if (body != null)
 				functions.set(entry.to, body.withBlocks(body.blocks, null, null, null, entry.to));
-			if (signaturesOf.exists(entry.from))
-				signatures.set(entry.to, signaturesOf.get(entry.from));
 		}
 	}
 
@@ -215,7 +212,7 @@ class HlFunctionCache {
 	public function replaceBody(name:String, fn:IrFunction):Void {
 		if (!functions.exists(name))
 			throw new InternalError('Cannot replace the code of unknown function $name');
-		if (signature(fn) != signatures.get(name))
+		if (signature(fn) != signatureOf(name))
 			throw new InternalError('The new code of $name has another signature');
 		functions.set(name, fn);
 	}
@@ -233,7 +230,6 @@ class HlFunctionCache {
 				userSlots.remove(name);
 				stableIds.remove(name);
 				functions.remove(name);
-				signatures.remove(name);
 			}
 		slots.resize(0);
 		for (name in kept) {
