@@ -102,6 +102,13 @@ class CompilationContext {
 	public function isWasmTarget():Bool
 		return owner.isWasmTarget();
 
+	/**
+	 * Whether the build describes its runtime ABI (`RuntimeAbi`): a live build plans against it, a kept session plans its next build
+	 * with it, and a Wasm build records it in its state. A plain HashLink build that keeps no session has no reader for it.
+	 */
+	public function describesRuntimeAbi():Bool
+		return livePatching || options.keepSession || isWasmTarget();
+
 	public function targetProfile():compiler.ir.TargetProfile
 		return isWasmTarget() ? compiler.ir.TargetProfile.wasm : compiler.ir.TargetProfile.hashLink;
 

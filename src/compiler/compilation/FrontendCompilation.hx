@@ -1481,13 +1481,16 @@ class FrontendCompilation {
 						canonical;
 					} else object;
 				}], context.options, meter);
-			var cNativeNames = [for (native in irCNatives) native.name].join(","),
-				ownPrints:Map<String, String> = [];
-			for (fn in cached)
-				if (PositionalName.is(fn.name))
-					ownPrints.set(fn.name, context.state.inlineCache.positionalFingerprint(fn, cNativeNames));
-			context.state.inlineCache.finishPositionalFingerprints();
-			ir.positionalFingerprints = PositionalName.nested(ownPrints);
+			// The fingerprints go into the runtime ABI only.
+			if (context.describesRuntimeAbi()) {
+				var cNativeNames = [for (native in irCNatives) native.name].join(","),
+					ownPrints:Map<String, String> = [];
+				for (fn in cached)
+					if (PositionalName.is(fn.name))
+						ownPrints.set(fn.name, context.state.inlineCache.positionalFingerprint(fn, cNativeNames));
+				context.state.inlineCache.finishPositionalFingerprints();
+				ir.positionalFingerprints = PositionalName.nested(ownPrints);
+			}
 			if (context.livePatching) {
 				var texts:Map<String, String> =
 					[for (state in context.state.modules) state.source.path => state.source.text];

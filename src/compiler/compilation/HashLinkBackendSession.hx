@@ -141,9 +141,7 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
 		compiler.ir.IrReachabilityReport.report("final program", ir);
-		// Only a live build plans against an ABI, and only a kept session has a next build to plan with this one.
-		var nextAbi = context.livePatching
-			|| context.options.keepSession ? RuntimeAbi.describe(ir) : null,
+		var nextAbi = context.describesRuntimeAbi() ? RuntimeAbi.describe(ir) : null,
 			previousAbi = context.state.publishedAbi,
 			baseAssembler = assembler;
 		var assemblyIr = ir;
