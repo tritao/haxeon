@@ -264,6 +264,7 @@ in_background run_compile_failure uncalled-generic-error
 in_background run_compile_failure uncalled-generic-method-error
 in_background run_compile_failure generic-field-own-parameters-error
 in_background run_case generic-nullable-parameter-read 0
+in_background run_case generic-nullable-element-inference 0
 in_background run_compile_failure instance-property-never-write
 in_background run_compile_failure instance-property-never-read
 in_background run_compile_failure instance-property-missing-accessor

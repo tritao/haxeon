@@ -460,10 +460,11 @@ class GenericInstantiation {
 					default:
 				}
 			case NullableType(element):
+				// `Null<T>` takes a value that is not nullable too, binding `T` to its type, as `inferFromType` does and Haxe unifies.
 				switch actual {
 					case TNullable(actualElement): inferTypeParameters(element, actualElement, parameters,
 						substitutions, span);
-					default:
+					default: inferTypeParameters(element, actual, parameters, substitutions, span);
 				}
 			case AppliedType(name, patternArguments):
 				// A rest parameter's arguments arrive packed in an array (`RestArguments`): its element fixes the type's.
