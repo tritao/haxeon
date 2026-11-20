@@ -82,7 +82,7 @@ class IrValueArrayElements {
 		var push = new IrBuilder(),
 			pushArray = push.argument("array", arrayType),
 			pushValue = push.argument("value", storage),
-			length = new IrValue(1000000, "$array-length", I32);
+			length = push.freshValue("$array-length", I32);
 		push.currentBlock().instructions.push(new Located(ArraySize(length, pushArray),
 			SourceProvenance.generated("value-array-push")));
 		push.call(setName(), [pushArray, length, pushValue], Void);
@@ -97,14 +97,14 @@ class IrValueArrayElements {
 		var unshift = new IrBuilder(),
 			unshiftArray = unshift.argument("array", arrayType),
 			unshiftValue = unshift.argument("value", storage),
-			unshiftLength = new IrValue(1000000, "$array-length", I32);
+			unshiftLength = unshift.freshValue("$array-length", I32);
 		unshift.call(insertName(), [unshiftArray, unshift.constInt(0), unshiftValue], Void);
 		unshift.currentBlock().instructions.push(new Located(ArraySize(unshiftLength, unshiftArray),
 			SourceProvenance.generated("value-array-unshift")));
 		unshift.returnValue(unshiftLength);
 		var pop = new IrBuilder(),
 			popArray = pop.argument("array", arrayType),
-			popLength = new IrValue(1000000, "$array-length", I32);
+			popLength = pop.freshValue("$array-length", I32);
 		pop.currentBlock().instructions.push(new Located(ArraySize(popLength, popArray),
 			SourceProvenance.generated("value-array-pop")));
 		switch storage {
@@ -126,7 +126,7 @@ class IrValueArrayElements {
 			shiftValue:IrValue;
 		switch storage {
 			case EnumTag(_):
-				var length = new IrValue(1000000, "$array-length", I32),
+				var length = shift.freshValue("$array-length", I32),
 					absent = shift.createBlock(),
 					present = shift.createBlock();
 				shift.currentBlock().instructions.push(new Located(ArraySize(length, shiftArray),

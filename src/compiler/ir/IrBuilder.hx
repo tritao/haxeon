@@ -301,6 +301,10 @@ class IrBuilder {
 	public function branch(condition:IrValue, yes:IrBlock, no:IrBlock):Void
 		terminate(Branch(condition, yes.id, no.id));
 
+	/** A value of the function being built, for an instruction its caller adds to a block itself. */
+	public function freshValue(name:String, type:IrType):IrValue
+		return new IrValue(nextValue++, name, type);
+
 	function emit(instruction:IrInstruction):Void {
 		if (isTerminated())
 			throw new InternalError("Cannot emit after terminator");
