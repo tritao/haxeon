@@ -1481,6 +1481,9 @@ class BodyTyper implements BodyTyping {
 				if (own != null)
 					return own;
 			}
+			// Likewise a value of the enum abstract the subject holds wins; it is then matched as a constant.
+			if (expectedEnumAbstractDeclaresValue(expected, lastPathSegment(sourceName)))
+				return null;
 			var owner = context.lexicalOwner;
 			if (scope.hasVisibleLocal(sourceName) || owner != null
 				&& findStaticFieldNullable(owner, sourceName) != null)
@@ -1518,6 +1521,18 @@ class BodyTyper implements BodyTyping {
 					};
 			}
 		return null;
+	}
+
+	function expectedEnumAbstractDeclaresValue(expected:CompilerType, valueName:String):Bool {
+		var declaration = switch expected {
+			case TAbstract(name, _, _) | TNullable(TAbstract(name, _, _)): session.enumAbstractDecls.get(name);
+			default: null;
+		};
+		if (declaration != null)
+			for (value in declaration.values)
+				if (value.name == valueName)
+					return true;
+		return false;
 	}
 
 	function isEnumAbstractValueName(name:String):Bool {
