@@ -119,32 +119,34 @@ release, the fallback, and diagnostics naming each escape by holder.
 
 `ProgramTyper.typeClassMethods` per class runs in `Arena.unit` with `--typing-arenas`: the typed methods, the units'
 `TypingOutput`s and the shared units typed with them are copied out at the finish; function, specialization, anonymous
-type, dynamic-structure and generic-enum-use names are interned; the default-argument resolution cache and the runtime
-dependency tables are made outside; key-path constants are copied out where the session keeps them.
+type, dynamic-structure and generic-enum-use names are interned; the default-argument resolution cache is made outside.
+The session's tables hold typed values made outside the arena: a unit's records are classes (`UnitAnswers`,
+`UnitAnonymousUses`, `UnitSources`) instead of maps stored in maps, as are the runtime dependency targets
+(`RuntimeTargets`) and a specialization's key-path constants (`KeyPathConstants`, kept through `KeyPathState`); the
+program's anonymous type registry keeps a copy of each type it registers; a literal structure, once closed, leaves the
+table of open ones for a table of closed types by provisional name, its closed type made outside (`MonomorphFrames`).
+
+Measured on main at 5b198e899 (allocation 2.58 GB):
 
 | Mode | Released | Kept | Evacuated | Release time | Peak | Wall | Collections |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| off | | | | | 1.768 GB | 13.5 s | 2 |
-| `--typing-arenas` | 65 of 539 | 474 | 1 | 0.67 s | 1.893 GB | 16.0 s | 2 |
-| `--typing-arenas=strict` | 64 | 475 | none | | | | |
+| off | | | | | 1.586 GB | 13.3 to 13.5 s | 2 |
+| `--typing-arenas` | 477 to 479 of 539 | 60 to 62 | 16 to 17 (50 KB) | 0.29 s | 1.592 GB | 14.5 to 14.7 s | 2 |
+| `--typing-arenas=strict` | 468 to 472 | 67 to 71 | none | | | | |
 
-Output identical in every mode. With arenas that rewrote untyped words (before the copy and evacuation kept to known
-layouts, below), 539 of 539 released, 172 by evacuating 1.5 MB, for a peak of 1.657 GB; that rewrote words of map tables
-and other untyped blocks that only their use made pointers, which a release must never do. Now a kept arena costs: its
-pages join the collector's part-full, so the peak rises. `scripts/check-typing-arenas.sh` is the escape check: it builds
-the compiler with Haxeon, compiles it again with `--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, fails when an arena
-is kept (printing each reference by holder field and allocation site) or the output changes.
+Output identical in every mode. The counts move by a few between runs: a stale word of an older frame can point into
+an arena's recycled pages and keep it. Releasing the typing temporaries does not pay today: the peak is set later, by
+the IR passes and the backend, and the collections fall where they did, so the option stays off. (Before the copy and
+evacuation kept to known layouts, 539 arenas released, but by rewriting words of untyped blocks that only their use made
+pointers, which a release must never do.) `scripts/check-typing-arenas.sh` is the escape check: it builds the compiler
+with Haxeon, compiles it again with `--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, fails when an arena is kept
+(printing each reference by holder field and allocation site) or the output changes.
 
-What keeps the arenas now, by holder and allocation site: maps of maps. `UnitRecords` keeps purity, no-return,
-declaration-read, anonymous-use and default-argument records as `Map<String, Map<...>>` (`map_string_ref` of
-`map_string_bool`): the inner maps are untyped blocks stored as the outer map's values, whose layout does not say what
-its values are, so neither the copy of a unit's output nor an evacuation may follow them. Then the session tables of
-the earlier list: key-path constants (`GenericInstantiation.specialize`), the monomorph frames' open structures kept
-by provisional name after they close (`MonomorphFrames.structures`, which also keeps each one's frame), anonymous
-types resolved inside a class and registered for the program (`DeclarationIndex.resolveInner`,
-`ExpressionTyper.typeObjectLiteral`), the runtime dependency tables. Each needs a representation the layouts can read:
-a record type in place of an inner map (a class holding the map, so the field's type names its layout), tables made in
-the session's arena with their values, a provisional structure as a name and a record outside its frame.
+What `strict` still names, largest first: normalized abstract constructors aliased in the declaration type table (a
+fresh normalized copy per call, `CallResolver.typeAbstractConstruction`, which another track is changing); typed
+expressions and their kinds held by tables of inline constant values; the anonymous types that `DeclarationIndex`
+resolves for the session's declaration types; typing contexts left in a context stack; flow-fact tables. Each is a
+table of the session holding values made inside a unit, for the same kind of change as above.
 
 A class unit's allocation by kind (539 units, 554 MB of arena blocks at their release): compiler classes 12%, anonymous
 records 6%, enums 5%, `String` objects 9% and their bytes 13%, containers held by compiler objects 21%, loose containers
@@ -258,8 +260,8 @@ without them; made without arenas, the same 1.1 GB of temporaries cost a 4th col
    the typed program after the IR tables and the incremental-only module records. Output identical, peak unchanged; the
    front-end arena needs them.
 1. **Runtime:** done (above), except packing.
-2. **Typing per class:** in place behind `--typing-arenas` (above), 65 of 539 classes released. Next: the representations
-   the kept arenas name (records in place of maps of maps first), then the option on by default.
+2. **Typing per class:** in place behind `--typing-arenas` (above): 477 of 539 classes release, 470 without evacuation;
+   peak unchanged, wall +1.1 s. Off by default: the typing temporaries are not what sets the peak.
 3. **HL lowering per batch of functions:** instructions and debug locations flat or built in the build arena (an
    instruction's argument arrays too), HL types and strings interned there (the symbol table's methods run in its arena),
    `fieldSlots` filled outside. A sampled prototype with only the symbol table and finish moved out still kept every unit
