@@ -33,8 +33,66 @@ typedef RecoveredParse = {
 private typedef LambdaNumbering = {
 	final member:String;
 	final counts:Array<Map<String, Int>>;
-	final path:Array<String>;
-	final paths:Array<Array<String>>;
+	final path:LambdaPath;
+	final paths:Array<LambdaPath>;
+}
+
+/**
+ * Where the cursor is in the body it is in (`Parser.openLambda`): its steps, outermost first. A call argument's step is kept
+ * as its callee and position and spelled, `name(index)`, only when a lambda is named at it, which few arguments are.
+ */
+private class LambdaPath {
+	final steps:Array<String>;
+
+	/** Per step, the argument position it stands for, or -1 for a step kept as it is written. */
+	final arguments:Array<Int>;
+
+	public function new(?steps:Array<String>, ?arguments:Array<Int>) {
+		this.steps = steps ?? [];
+		this.arguments = arguments ?? [];
+	}
+
+	public var length(get, never):Int;
+
+	inline function get_length():Int
+		return steps.length;
+
+	public function push(step:String):Void {
+		steps.push(step);
+		arguments.push(-1);
+	}
+
+	/** The step of argument `index` of a call of `callee`. */
+	public function pushArgument(callee:String, index:Int):Void {
+		steps.push(callee);
+		arguments.push(index);
+	}
+
+	public function pop():Void {
+		steps.pop();
+		arguments.pop();
+	}
+
+	public function copy():LambdaPath
+		return new LambdaPath(steps.copy(), arguments.copy());
+
+	public function step(index:Int):String {
+		var position = arguments[index], text = steps[index];
+		return position < 0 ? text : text.substring(text.lastIndexOf(".") + 1) + "(" + position + ")";
+	}
+
+	/** The steps joined by `/`. */
+	public function join():String {
+		if (steps.length == 0)
+			return "";
+		var out = new StringBuf();
+		for (index in 0...steps.length) {
+			if (index > 0)
+				out.add("/");
+			out.add(step(index));
+		}
+		return out.toString();
+	}
 }
 
 /** Where to resume lambda numbering after a parse is thrown away. */
@@ -43,7 +101,7 @@ private typedef LambdaMark = {
 	final counts:Array<Map<String, Int>>;
 
 	final undo:Int;
-	final path:Array<String>;
+	final path:LambdaPath;
 	final paths:Int;
 }
 
@@ -111,10 +169,10 @@ class Parser {
 	var lambdaUndo = new LambdaUndo();
 
 	/** Where the cursor is in the body it is in: the declarations, assignments and call arguments around it, outermost first. */
-	var lambdaPath:Array<String> = [];
+	var lambdaPath = new LambdaPath();
 
 	/** `lambdaPath` of each body that encloses the lambda being parsed. */
-	var lambdaPaths:Array<Array<String>> = [];
+	var lambdaPaths:Array<LambdaPath> = [];
 
 	var recoveryDiagnostics:Array<compiler.core.Diagnostic> = [];
 
@@ -608,7 +666,7 @@ class Parser {
 		};
 		lambdaMember = name;
 		lambdaCounts = [[]];
-		lambdaPath = [];
+		lambdaPath = new LambdaPath();
 		lambdaPaths = [];
 		return outer;
 	}
@@ -638,26 +696,26 @@ class Parser {
 		counts.set(anchor, ordinal + 1);
 		lambdaCounts.push([]);
 		lambdaPaths.push(lambdaPath);
-		lambdaPath = [];
+		lambdaPath = new LambdaPath();
 		return identity;
 	}
 
 	function closeLambda():Void {
 		lambdaCounts.pop();
 		var outer = lambdaPaths.pop();
-		lambdaPath = outer == null ? [] : outer;
+		lambdaPath = outer == null ? new LambdaPath() : outer;
 	}
 
 	static inline final LAMBDA_ANCHOR_LIMIT:Int = 48;
 
 	function lambdaAnchor():String {
-		var anchor = lambdaPath.join("/");
+		var anchor = lambdaPath.join();
 		if (anchor.length <= LAMBDA_ANCHOR_LIMIT)
 			return anchor;
 		var hash:Int = cast 0x811C9DC5;
 		for (index in 0...anchor.length)
 			hash = (hash ^ anchor.charCodeAt(index)) * 16777619;
-		return lambdaPath[lambdaPath.length - 1] + "~" + StringTools.hex(hash & 0x7FFFFFFF, 8);
+		return lambdaPath.step(lambdaPath.length - 1) + "~" + StringTools.hex(hash & 0x7FFFFFFF, 8);
 	}
 
 	/** Parses an expression written at `step` of the path that anchors lambdas (see `openLambda`). */
@@ -695,13 +753,14 @@ class Parser {
 		return rest ? AppliedType("haxe.Rest", [type]) : type;
 
 	function parseCallArguments(callee:String):Array<AstExpression> {
-		var arguments:Array<AstExpression> = [], name = callee.substring(callee.lastIndexOf(".") + 1);
+		var arguments:Array<AstExpression> = [];
 		if (!check(TokenKind.RightParen)) {
 			do {
 				// `...values`: an array whose elements a rest parameter receives.
-				var spreadStart = current().span,
-					spread = matchEllipsis() ? spreadStart : null,
-					argument = parseAnchoredExpression(name + "(" + arguments.length + ")");
+				var spreadStart = current().span, spread = matchEllipsis() ? spreadStart : null;
+				lambdaPath.pushArgument(callee, arguments.length);
+				var argument = parseExpression();
+				lambdaPath.pop();
 				arguments.push(spread == null ? argument : Spread(argument, spread.merge(expressionSpan(argument))));
 			} while (match(TokenKind.Comma));
 		}
