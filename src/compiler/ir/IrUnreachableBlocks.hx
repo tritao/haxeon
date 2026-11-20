@@ -49,15 +49,23 @@ class IrUnreachableBlocks {
 				}
 				continue;
 			}
-			var instructions = block.instructions.copy();
-			for (index in 0...instructions.length)
-				switch instructions[index].value {
+			// The instructions are copied only when a phi loses an input; any other reached block is shared as it is.
+			var instructions:Null<Array<Located<IrInstruction>>> = null;
+			for (index in 0...block.instructions.length)
+				switch block.instructions[index].value {
 					case Phi(output, inputs):
 						var kept = [for (input in inputs) if (flows(input.block, block.id, successors, reached)) input];
-						if (kept.length != inputs.length)
-							instructions[index] = new Located(Phi(output, kept), instructions[index].provenance);
+						if (kept.length != inputs.length) {
+							if (instructions == null)
+								instructions = block.instructions.copy();
+							instructions[index] = new Located(Phi(output, kept), block.instructions[index].provenance);
+						}
 					default:
 				}
+			if (instructions == null) {
+				blocks.push(block);
+				continue;
+			}
 			var copy = new IrBlock(block.id, instructions);
 			copy.terminator = block.terminator;
 			blocks.push(copy);

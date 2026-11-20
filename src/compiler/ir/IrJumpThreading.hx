@@ -89,15 +89,23 @@ class IrJumpThreading {
 		if (!bridges.keys().hasNext()) return fn;
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) if (!bridges.exists(block.id)) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions) switch located.value {
-				case Phi(out, inputs):
-					var rewritten:Array<IrPhiInput> = [for (input in inputs)
-						{
-							block:originalPredecessor(input.block, bridges), value:input.value
-						}];
-					copy.instructions.push(new Located(Phi(out, rewritten), located.provenance));
-				default: copy.instructions.push(located);
+			// A block whose phis name no bridge and whose edges reach no bridge is shared as it is.
+			if (!namesBridge(block, bridges)) {
+				blocks.push(block);
+				continue;
+			}
+			var copy = new IrBlock(block.id, block.instructions.copy());
+			for (index in 0...copy.instructions.length) {
+				var located = copy.instructions[index];
+				switch located.value {
+					case Phi(out, inputs):
+						var rewritten:Array<IrPhiInput> = [for (input in inputs)
+							{
+								block:originalPredecessor(input.block, bridges), value:input.value
+							}];
+						copy.instructions[index] = new Located(Phi(out, rewritten), located.provenance);
+					default:
+				}
 			}
 			var term = block.terminator;
 			if (term != null) switch term.value {
@@ -256,7 +264,13 @@ class IrJumpThreading {
 		}
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
-			var skippedBy = skipped.get(block.id), copy = new IrBlock(block.id);
+			var skippedBy = skipped.get(block.id);
+			// A block that is not skipped, gains no phi input and is not redirected is shared as it is.
+			if (skippedBy == null && !redirects.exists(block.id) && !gainsInputs(block, added)) {
+				blocks.push(block);
+				continue;
+			}
+			var copy = new IrBlock(block.id);
 			if (skippedBy == null)
 				for (located in block.instructions)
 					switch located.value {
@@ -298,6 +312,46 @@ class IrJumpThreading {
 	static function finalTarget(id:Int, bridges:Map<Int, JumpBridge>):Int {
 		while (bridges.exists(id)) id = bridges.get(id).target;
 		return id;
+	}
+
+	static function gainsInputs(block:IrBlock, added:Map<Int, Array<IrPhiInput>>):Bool {
+		for (located in block.instructions)
+			switch located.value {
+				case Phi(output, _) if (added.exists(output.id)):
+					return true;
+				default:
+			}
+		return false;
+	}
+
+	/** Whether threading `bridges` changes `block`: a phi input from a bridge, or an edge into one. */
+	static function namesBridge(block:IrBlock, bridges:Map<Int, JumpBridge>):Bool {
+		for (located in block.instructions)
+			switch located.value {
+				case Phi(_, inputs):
+					for (input in inputs)
+						if (bridges.exists(input.block))
+							return true;
+				default:
+			}
+		var term = block.terminator;
+		if (term == null)
+			return false;
+		return switch term.value {
+			case Jump(target): bridges.exists(target);
+			case Branch(_, yes, no): bridges.exists(yes) || bridges.exists(no);
+			case Switch(_, targets, otherwise):
+				if (bridges.exists(otherwise)) true else {
+					var found = false;
+					for (target in targets)
+						if (bridges.exists(target)) {
+							found = true;
+							break;
+						}
+					found;
+				}
+			default: false;
+		};
 	}
 
 	static function originalPredecessor(id:Int, bridges:Map<Int, JumpBridge>):Int {
