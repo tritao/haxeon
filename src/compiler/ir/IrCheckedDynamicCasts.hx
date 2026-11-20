@@ -64,7 +64,8 @@ class IrCheckedDynamicCasts {
 						[new Located(Call(out, IrSymbol.of(helperFor(out.type, out.type, "hl.Bytes", true)), [input]),
 							located.provenance)];
 					case Function(_, _) if (checkFunctionCasts):
-						[new Located(Call(out, IrSymbol.of(helperFor(out.type, out.type, Std.string(out.type), false)),
+						[new Located(Call(out,
+							IrSymbol.of(helperFor(out.type, out.type, IrTypeIdentity.text(out.type), false)),
 							[input]),
 							located.provenance)];
 					case Nullable(Function(_, _)) if (checkFunctionCasts):
@@ -72,7 +73,8 @@ class IrCheckedDynamicCasts {
 							case Nullable(value): value;
 							default: throw new InternalError("Invalid nullable function cast");
 						};
-						[new Located(Call(out, IrSymbol.of(helperFor(out.type, inner, Std.string(inner), true)),
+						[new Located(Call(out,
+							IrSymbol.of(helperFor(out.type, inner, IrTypeIdentity.text(inner), true)),
 							[input]),
 							located.provenance)];
 					case Virtual(name):

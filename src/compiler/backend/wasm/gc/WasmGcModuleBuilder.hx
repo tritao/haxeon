@@ -1308,7 +1308,7 @@ class WasmGcModuleBuilder {
 		}, resultType:IrType = switch closureType {
 			case Function(_, result): result;
 			default: Void;
-		}, key = Std.string(closureType), closureSignature = plan.closureFunctionType(closureType),
+		}, key = compiler.ir.IrTypeIdentity.text(closureType), closureSignature = plan.closureFunctionType(closureType),
 			staticType = module.typeIndex(closureSignature), existing = closureTypes.get(key);
 		if (existing == null) {
 			existing = {staticType: staticType, instanceType: null};

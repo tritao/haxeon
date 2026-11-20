@@ -36,7 +36,7 @@ class IrTypeTools {
 					erasedResult = erase(result);
 				var same = IrTypeIdentity.same(erasedResult, result);
 				for (index in 0...arguments.length)
-					if (Std.string(erasedArguments[index]) != Std.string(arguments[index]))
+					if (!IrTypeIdentity.same(erasedArguments[index], arguments[index]))
 						same = false;
 				same ? type : Function(erasedArguments, erasedResult);
 			default: type;

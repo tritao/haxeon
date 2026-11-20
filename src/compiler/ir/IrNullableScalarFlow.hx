@@ -304,7 +304,7 @@ class IrNullableScalarFlow {
 							}]), located.provenance));
 					case SafeCast(out, value) if (parts.exists(value.id)):
 						var part = required(value),
-							name = PREFIX + Std.string(out.type);
+							name = PREFIX + IrTypeIdentity.text(out.type);
 						checks.set(name, out.type);
 						target.instructions.push(new Located(Call(out, IrSymbol.of(name), [part.present, part.payload]),
 							located.provenance));

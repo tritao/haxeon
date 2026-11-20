@@ -1164,7 +1164,7 @@ class WasmFunctionLower {
 					emit(body, [I32Const(descriptor | 1), LocalSet(requiredLocal(values, output.id))]);
 				}
 			case CallClosure(output, closure, arguments):
-				var typeInfo = closureTypes.get(Std.string(closure.type));
+				var typeInfo = closureTypes.get(compiler.ir.IrTypeIdentity.text(closure.type));
 				if (typeInfo == null)
 					throw new InternalError('Wasm closure type ${Std.string(closure.type)} has no indirect signature');
 				var model = context.representation.model;

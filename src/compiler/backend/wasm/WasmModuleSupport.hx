@@ -278,7 +278,7 @@ class WasmModuleSupport {
 									var type = closureFunctionType(closure.type, arguments, resultType, abi);
 									// Any closure may be an instance closure: a cast adapts closures as instance closures
 									// (WasmLinearClosureAdapters).
-									var key = Std.string(closure.type);
+									var key = compiler.ir.IrTypeIdentity.text(closure.type);
 									if (!result.exists(key)) result.set(key, {
 										staticType: module.typeIndex(type),
 										instanceType: module.typeIndex({
@@ -308,7 +308,7 @@ class WasmModuleSupport {
 										.concat(closureSignature.parameters),
 									results: closureSignature.results
 								});
-							var key = Std.string(output.type),
+							var key = compiler.ir.IrTypeIdentity.text(output.type),
 								existing = result.get(key);
 							if (existing == null)
 								result.set(key, {staticType: staticType, instanceType: instanceType});

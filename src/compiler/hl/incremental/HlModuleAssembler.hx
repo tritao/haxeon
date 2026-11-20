@@ -423,7 +423,8 @@ class HlModuleAssembler {
 	}
 
 	static function sameType(a:IrType, b:IrType):Bool
-		return IrTypeCodec.withoutOrdinals(Std.string(a)) == IrTypeCodec.withoutOrdinals(Std.string(b));
+		return IrTypeCodec.withoutOrdinals(compiler.ir.IrTypeIdentity.text(a))
+			== IrTypeCodec.withoutOrdinals(compiler.ir.IrTypeIdentity.text(b));
 
 	/** `value` as a `type` that holds every value of its own, or null when `type` does not. */
 	static function widen(builder:IrBuilder, value:IrValue, type:IrType):Null<IrValue> {

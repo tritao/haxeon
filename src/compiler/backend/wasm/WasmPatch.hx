@@ -144,8 +144,8 @@ class WasmPatch {
 	}
 
 	static function signature(fn:IrFunction):String
-		return "(" + [for (argument in fn.arguments) Std.string(argument.type)].join(",") + ")->"
-			+ Std.string(fn.result);
+		return "(" + [for (argument in fn.arguments) compiler.ir.IrTypeIdentity.text(argument.type)].join(",") + ")->"
+			+ compiler.ir.IrTypeIdentity.text(fn.result);
 
 	static function stableId(name:String):Int {
 		var hash:Int = -2128831035;

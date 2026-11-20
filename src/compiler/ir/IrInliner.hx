@@ -431,7 +431,7 @@ class IrInliner {
 				nullable = field.nullableScalarStorage;
 			field.name
 				+ "="
-				+ Std.string(field.type)
+				+ IrTypeIdentity.text(field.type)
 				+ (native == null ? ""
 				: ':native=${native.offset}:${native.size}:${native.alignment}:${native.signed}:${native.inlineRecord}')
 				+ (scalar == null ? "" : ':scalar=${scalar.size}:${scalar.signed}')

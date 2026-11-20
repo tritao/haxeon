@@ -68,7 +68,7 @@ class WasmDynamicCalls {
 						case SafeCast(out, _) if (switch out.type {
 							case Function(_, _): true;
 							default: false;
-						}): targets.set(Std.string(out.type), out.type);
+						}): targets.set(compiler.ir.IrTypeIdentity.text(out.type), out.type);
 						copy.instructions.push(ins);
 						case Call(out, name, args) if (makers.exists(name.name)):
 							varargs = true;

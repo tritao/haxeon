@@ -22,8 +22,9 @@ class HlTypedInterfaceTables {
 			var logical = IrTypedInterfaceDispatch.originalEntryName(fn.name);
 			var prefix = fn.name.substr(0, fn.name.length - logical.length),
 				key = "$typed-method:" + fn.name.length + ":" + fn.name + ":"
-					+ Std.string([for (i in 1...fn.arguments.length) fn.arguments[i].type]) + ":"
-					+ Std.string(fn.result),
+					+ compiler.ir.IrTypeIdentity.listText([for (i in 1...fn.arguments.length) fn.arguments[i].type])
+					+ ":"
+					+ compiler.ir.IrTypeIdentity.text(fn.result),
 				found = false;
 			for (object in program.objects) if (!object.isValue) {
 				var name = prefix + IrTypedInterfaceDispatch.adapterName(logical, object.name),
