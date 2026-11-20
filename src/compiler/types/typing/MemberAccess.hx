@@ -83,31 +83,27 @@ class MemberAccess {
 	 * `Derived.make()` and a bare `make()` inside Derived do not reach Base's static `make`.
 	 */
 	public static function methodInfo(session:TypingSession, className:String, name:String):Null<SemanticMethodInfo> {
-		var results:Array<SemanticMethodInfo> = [];
-		findMethods(session, className, name, results);
-		return results.length == 0 || results[0].isStatic && results[0].owner != className ? null : results[0];
+		var found = findMethod(session, className, name);
+		return found == null || found.isStatic && found.owner != className ? null : found;
 	}
 
-	static function findMethods(session:TypingSession, className:String, name:String,
-			results:Array<SemanticMethodInfo>):Void {
-		if (results.length > 0)
-			return;
-		var key = className + "." + name, info = session.methodInfo.get(key);
-		if (info != null) {
-			results.push(info);
-			return;
-		}
+	static function findMethod(session:TypingSession, className:String, name:String):Null<SemanticMethodInfo> {
+		var info = session.methodInfo.get(className + "." + name);
+		if (info != null)
+			return info;
 		var classDecl = session.classDecls.get(className);
 		if (classDecl != null) {
 			var base = classDecl.base;
-			if (base != null)
-				findMethods(session, BodyTyper.inheritanceName(base), name, results);
-			return;
+			return base == null ? null : findMethod(session, BodyTyper.inheritanceName(base), name);
 		}
 		var interfaceDecl = session.interfaceDecls.get(className);
 		if (interfaceDecl != null)
-			for (base in interfaceDecl.bases)
-				findMethods(session, BodyTyper.inheritanceName(base), name, results);
+			for (base in interfaceDecl.bases) {
+				var inherited = findMethod(session, BodyTyper.inheritanceName(base), name);
+				if (inherited != null)
+					return inherited;
+			}
+		return null;
 	}
 
 	/**
