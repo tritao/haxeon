@@ -1,10 +1,15 @@
 # Arenas
 
-Status: proposed (`COMPILER_DATA_LAYOUT.md` step 9, ADR 0004 §6). The runtime part is in the fork (below); the compiler
-uses none yet. Measured on the frozen self-compile input.
+Status: the runtime is in the fork (below); the compiler types each class in an arena of its own behind
+`--typing-arenas` (`CompileOptions.typingArenas`, off by default). Measured on the frozen self-compile input.
 
 This is region-based memory management with a checked release. We call a region an **arena** at every layer: the fork's
 API (`hl_gc_arena_*`, std primitives `gc_arena_*`), its diagnostics (`HL_GC_ARENA_*`), and the compiler's `Arena`.
+
+Two kinds of arena exist, on purpose with different names. `runtime.memory.NativeArena` (with `NativeSpan` and `RawPtr`,
+the "Native" family) bump-allocates flat records in unmanaged memory; its `reset` and `dispose` are unchecked, and a
+`RawPtr` kept past them dangles, which is the caller's bug. `compiler.core.Arena`, this note's subject, holds any object
+the collector manages, and its release is checked: it never frees what is still referenced.
 
 ## Problem
 
@@ -55,6 +60,20 @@ or the global one. "Outside" is always an explicit target, never "the parent", b
 | phase | the front end, until IR generation | tokens, syntax, canonical declarations, semantic models, typed program, typer scopes |
 | unit | one class typed, one function lowered | everything the unit allocates except its outputs |
 
+## Data rules for arenas
+
+1. **Ids across lifetimes, pointers within one.** A structure refers to data of a shorter life by id or name, never by
+   pointer.
+2. **Build, then finish.** A unit's outputs are constructed in the arena they belong to (the phase's, the build's), or
+   copied out once at the unit's finish; nothing the unit leaves outside points into it.
+3. **Every long-lived structure has a home arena** and stores only data of its lifetime or longer.
+4. **Caches live in the arena of what they hold**: a cache keyed by syntax computes its entries outside the arena of the
+   work asking.
+5. **Scratch storage grows in its owner's arena** and is cleared at the end of the unit, not the start: a table kept for
+   reuse must not hold the last unit's values past it.
+6. **Long-lived kinds have type homes in the global arena**: names, `IrSymbol`, type ids, source files. A name made inside
+   a unit is interned (`GlobalNames.of`) before a session table keeps it.
+
 ## How placement is expressed
 
 No new expression syntax: it would need `#if haxeon` at every allocation site and break the stock-Haxe build. Two ways
@@ -66,11 +85,47 @@ instead, both plain Haxe:
    copied out at the unit's finish. `within` releases a unit arena from its own frame, which existed while `work` ran
    (below, "Soundness").
 2. **A home on long-lived types.** `@:arena(global) class IrSymbol` makes instances go to that arena wherever they are
-   created. The HL lowering honours it by setting the type's home when the module loads (`hl_gc_arena_set_home`); stock
-   Haxe ignores the metadata.
+   created. The HL lowering is to honour it by setting the type's home when the module loads (`hl_gc_arena_set_home`, in
+   the fork); stock Haxe ignores the metadata. Not done yet: the typing pilot needs no home, as its long-lived values are
+   names (interned) and outputs (copied out).
+
+`Arena.unit(work, ?publish, ?onKept)` runs `work` in a fresh arena, copies its result out into the arena current before
+(`hl_gc_arena_copy`), lets `publish` put what else it handed out where it belongs, and releases the arena from its own
+frame. `Arena.toGlobal(value)` copies a value out of the current arena into the collector's pages.
 
 Under stock Haxe, or off HashLink, `Arena.within` just calls the function. Safety stays in the runtime: the checked
 release, the fallback, and diagnostics naming each escape by holder.
+
+## The typing pilot
+
+`ProgramTyper.typeClassMethods` per class runs in `Arena.unit` with `--typing-arenas`: the typed methods, the units'
+`TypingOutput`s and the shared units typed with them are copied out at the finish; function, specialization, anonymous
+type, dynamic-structure and generic-enum-use names are interned; the default-argument resolution cache and the runtime
+dependency tables are made outside; key-path constants are copied out where the session keeps them.
+
+| Mode | Released | Kept | Evacuated | Release time | Peak | Wall | Collections |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| off | | | | | 1.768 GB | 13.5 s | 2 |
+| `--typing-arenas` | 539 of 539 | 0 | 172 (1.5 MB) | 0.24 s (0.44 ms each) | 1.657 GB | 14.2 to 14.3 s | 2 |
+| `--typing-arenas=strict` | 358 | 181 | none | | | | |
+
+Output identical in every mode. The first collection moves from typing to IR generation: the arenas' 0.6 GB of typing
+temporaries no longer count toward it. Typing takes 2.9 s instead of 2.4: write tracking's faults, the releases, the
+copies. `scripts/check-typing-arenas.sh` is the escape check: it builds the compiler with Haxeon, compiles it again with
+`--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, fails when an arena is kept (printing each reference by holder field
+and allocation site) or the output changes.
+
+What `strict` shows is still placed by evacuation (the top holders, in a sample of references): the monomorph frames'
+open structures, kept by provisional name after they close (`MonomorphFrames.structures`, which also keeps each one's
+frame); anonymous types resolved inside a class and registered for the program (`DeclarationIndex.resolveInner`,
+`ExpressionTyper.typeObjectLiteral`); key-path constants that other session tables share; normalized abstract
+constructors; closure contexts left in the typing session's context stack past its length. Each needs its table made in
+the session's arena with its values, which is a change to how the typer represents them (a provisional structure as a
+name and a record outside the frame, an anonymous type registry that interns), not a placement at one call.
+
+A class unit's allocation by kind (539 units, 554 MB of arena blocks at their release): compiler classes 12%, anonymous
+records 6%, enums 5%, `String` objects 9% and their bytes 13%, containers held by compiler objects 21%, loose containers
+(locals, temporaries) 29%, other untyped blocks 6%.
 
 ## Measured units
 
@@ -131,6 +186,14 @@ no-return queries, invalidations); the type registry's entries. Not spans: IR ke
   free at once. `HL_GC_ARENA_TRACKING=0` turns tracking off (every release falls back).
 - **Diagnostics**: `HL_GC_ARENA_CENSUS` prints each kept arena's references by holder (a block's type and offset, a root,
   a thread's stack); `HL_GC_ARENA_HOLDERS` the holder census of a collection-based release (`hl_gc_arena_release`).
+- **Copy and evacuation**: `hl_gc_arena_copy(value, arena, target)` copies what a value reaches inside an arena to a
+  target, by layout (untyped blocks word by word, inner pointers moved with their block), sharing and cycles kept, no
+  collection while it runs; an incomplete copy only keeps the arena. `hl_gc_arena_set_evacuation(true)` makes a release
+  copy out what heap words and roots reach in the arena, each to its holder's arena, rewrite them, and release; a stack
+  or register reference still keeps it. A typed block's words count only where its layout has a pointer, as the
+  collector reads them.
+- **Allocation sites**: `HL_GC_ARENA_SITES` records the call stack of every block allocated in an arena (through the
+  locked path), so a kept arena's report names where each referenced block was made, and holders by field.
 - **Missing**: small-allocation packing (level 2). An arena takes a page per size class it uses, 0.3 to 0.8 MB for a
   small unit; recycled when it is released, but when one is kept those pages join the collector's part-full (an arena per
   lowered function, all kept: peak 3.5 GB). A path-to-root diagnostic (`HL_GC_ARENA_PATHS`) exists as a scratch patch.
@@ -168,13 +231,9 @@ without them; made without arenas, the same 1.1 GB of temporaries cost a 4th col
    the typed program after the IR tables and the incremental-only module records. Output identical, peak unchanged; the
    front-end arena needs them.
 1. **Runtime:** done (above), except packing.
-2. **First pilot: typing per class.** `Arena.within(unitArena, () -> typeClassMethods(...))`, with the typed bodies and
-   `TypingOutput` built in the phase arena (homes for the typed-tree types, their arrays made in the target), the typer's
-   names interned globally, and the typing session's tables extended outside. Measured today with outputs inside: every
-   class unit is kept (25 to 50 references each: typed bodies, `TypingOutput`, session tables), at 1.3 ms a release.
-   Expected effect once they release: what the front end allocates in the collector's view drops from 1.9 to 1.3 GB, so
-   one collection fewer before the IR passes, and the IR passes start from a heap that never held those temporaries:
-   roughly -0.2 to -0.3 GB of peak, to be measured.
+2. **Typing per class:** in place behind `--typing-arenas` (above). Every class releases, a third by evacuation; peak
+   -0.11 GB, wall +0.7 s. Next: the representation changes `strict` names, so evacuation copies nothing, then the option
+   on by default.
 3. **HL lowering per batch of functions:** instructions and debug locations flat or built in the build arena (an
    instruction's argument arrays too), HL types and strings interned there (the symbol table's methods run in its arena),
    `fieldSlots` filled outside. A sampled prototype with only the symbol table and finish moved out still kept every unit
