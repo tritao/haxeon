@@ -349,7 +349,7 @@ representation contract and implementation sequence. The frontend recognizes
 `@:value @:repr("C")` records, shares ABI layout rules with HXI, and folds
 `sizeof`, `alignof`, and `offsetof` queries to constants. HashLink now lowers
 typed `RawPtr<T>` memory operations to SSA loads, stores, and offsets, and the
-Haxeon `Arena` provides stable bump-allocated native blocks.
+Haxeon `NativeArena` provides stable bump-allocated native blocks.
 
 ## Source-declared HashLink bindings
 

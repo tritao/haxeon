@@ -256,7 +256,7 @@ tested in CI, but the worker that ships is not self-hosted. That costs us three 
 
 - **Forks.** Code forks by build: the `#if haxeon` paths in `HlWriter`, and the GC setter declared by hand through
   `@:hlNative` for the stock build.
-- **Unreachable stdlib.** The worker cannot use the Haxeon stdlib: not `runtime.memory.Arena`, not allocation regions
+- **Unreachable stdlib.** The worker cannot use the Haxeon stdlib: not `runtime.memory.NativeArena`, not allocation regions
   (ADR 0004, 6), not the shared runtime library.
 - **Workarounds.** General-purpose code the compiler needs has to live in a portable source root that both builds read
   (`lib/haxeon-io`, for byte sinks and segmented bytes).

@@ -1,5 +1,5 @@
 #if !wasm
-import runtime.memory.Arena;
+import runtime.memory.NativeArena;
 #end
 import haxeon.reactive.Effect;
 import haxeon.reactive.ReactiveRuntime;
@@ -256,7 +256,7 @@ function main():Int {
 	optionalField.set(optionalRoot, null);
 	if (optionalField.get(optionalRoot) != null) return 27;
 	#if !wasm
-	var arena = new Arena(64), pointer:RawPtr<SpecPoint>= arena.alloc(1);
+	var arena = new NativeArena(64), pointer:RawPtr<SpecPoint>= arena.alloc(1);
 	if (SpecPointers.foreign(pointer) != 42) return 28;
 	arena.dispose();
 	#end

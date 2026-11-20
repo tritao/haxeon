@@ -119,7 +119,7 @@ root, but only `__reference_equal` is restricted to stdlib sources (`1d60d0ec`, 
 
 Wasm GC constraints that the shared library respects:
 
-- **No interior pointers.** Shared code addresses memory as a buffer plus an offset. `RawPtr`, `NativeSpan` and `Arena`
+- **No interior pointers.** Shared code addresses memory as a buffer plus an offset. `RawPtr`, `NativeSpan` and `NativeArena`
   stay HL and Linear32 only.
 - **No multi-byte loads from i8 arrays.** Byte-heavy code (hashing, UTF-8) is measured on GC in R1. It may get a
   per-target fast path.

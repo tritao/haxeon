@@ -1,4 +1,4 @@
-import runtime.memory.Arena;
+import runtime.memory.NativeArena;
 import runtime.memory.RawPtr;
 
 @:value @:repr("C")
@@ -14,7 +14,7 @@ function main():Int {
 		|| offsetof<NativeNode>("ratio") != 16
 		|| offsetof<NativeNode>("next") != 24)
 		return 1;
-	var arena = new Arena(32);
+	var arena = new NativeArena(32);
 	var nodes:RawPtr<NativeNode> = arena.alloc(2);
 	var tag:RawPtr<UInt8> = nodes.byteOffset(offsetof<NativeNode>("tag")).castTo();
 	var value:RawPtr<Int64> = nodes.byteOffset(offsetof<NativeNode>("value")).castTo();

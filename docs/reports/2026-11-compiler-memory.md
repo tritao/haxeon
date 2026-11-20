@@ -173,7 +173,7 @@ What an edit build allocates (bytes, from `--timings`; total about 12.0 GB): `ir
 `encode` 1.3 GB (18.7M objects), `backend-assembly` 1.1 GB, `backend-functions` 0.8 GB, `write` 0.2 GB. The `encode` phase writes a module of about 100 MB
 and allocates 13 times that; it is the one phase that is mostly byte buffers.
 
-Could the worker use `runtime.memory.Arena`? Not as it is. `Arena` hands out `RawPtr<T>` values sized with `sizeof<T>`/`alignof<T>`, which only the Haxeon
+Could the worker use `runtime.memory.Arena` (now `NativeArena`)? Not as it is. It hands out `RawPtr<T>` values sized with `sizeof<T>`/`alignof<T>`, which only the Haxeon
 compiler understands, and the worker is built with the stock Haxe compiler (the test driver and the launcher run `haxe -hl`). It is also for GC-free native
 structs, not for `hl.Bytes` buffers. A byte-buffer arena would need a small native in `haxeon_runtime` (allocate a block, return `hl.Bytes` over it, free
 at the end of the build) and its owner must guarantee that nothing keeps a reference past the build.

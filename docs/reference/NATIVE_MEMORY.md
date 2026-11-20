@@ -101,12 +101,12 @@ The CLI uses a registered HXI target when present. Otherwise `wasm32` and
 explicit target triple, such as `x86_64-pc-windows-msvc`. Direct library typing defaults to the portable 64-bit
 profile unless the caller supplies a target.
 
-## Arena
+## NativeArena
 
-`runtime.memory.Arena` uses aligned bump allocation over non-moving blocks:
+`runtime.memory.NativeArena` uses aligned bump allocation over non-moving blocks:
 
 ```haxe
-final arena = new Arena();
+final arena = new NativeArena();
 var one:RawPtr<Vec2> = arena.alloc();
 var many:RawPtr<Vec2> = arena.alloc(32);
 arena.reset();
@@ -117,7 +117,10 @@ The pointee type is inferred from the expected `RawPtr<T>` type. `reset()` makes
 all existing pointers invalid and allows the blocks to be reused. `dispose()`
 releases every block and is safe to call repeatedly. Allocation count must be
 positive, and the current implementation supports alignments up to 16 bytes.
-There is no individual `free` operation.
+There is no individual `free` operation, and nothing checks what still points
+into a block: a `RawPtr` kept past `reset()` or `dispose()` dangles, which is the
+caller's bug. (The compiler's managed `Arena`, any object with a checked release,
+is the other kind; see `docs/design/ARENAS.md`.)
 
 Haxeon performs layout-based alignment, bump advancement, block growth, and
 reset. The only new native runtime operations acquire and release raw backing

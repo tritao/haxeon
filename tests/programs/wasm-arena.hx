@@ -1,8 +1,8 @@
-import runtime.memory.Arena;
+import runtime.memory.NativeArena;
 import runtime.memory.RawPtr;
 
 function main():Int {
-	var arena = new Arena(32);
+	var arena = new NativeArena(32);
 	var first:RawPtr<Int32> = arena.alloc(4);
 	first.store(12);
 	first.offset(3).store(30);

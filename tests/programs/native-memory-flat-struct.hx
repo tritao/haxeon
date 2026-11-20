@@ -1,4 +1,4 @@
-import runtime.memory.Arena;
+import runtime.memory.NativeArena;
 import runtime.memory.NativeSpan;
 import runtime.memory.RawPtr;
 
@@ -73,7 +73,7 @@ function main():Int {
 	if (sizeof<FlatLeaf>() != 8 || alignof<FlatLeaf>() != 4 || offsetof<FlatLeaf>("delta") != 2
 		|| offsetof<FlatLeaf>("ratio") != 4 || sizeof<FlatPacket>() != 16 || alignof<FlatPacket>() != 4
 		|| offsetof<FlatPacket>("child") != 4 || offsetof<FlatPacket>("count") != 12) return 1;
-	var arena = new Arena(64),
+	var arena = new NativeArena(64),
 		pointer:RawPtr<FlatPacket> = arena.alloc(2),
 		leaf = new FlatLeaf(),
 		packet = new FlatPacket();

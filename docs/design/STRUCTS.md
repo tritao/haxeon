@@ -146,7 +146,7 @@ not base classes or ordinary marker interfaces.
   Strings, arrays, class instances, closures, `Dynamic` and enums that carry
   data are not flat. A flat struct gets:
   - a C layout wherever it is stored;
-  - use through `RawPtr<T>`, `NativeSpan<T>` and `Arena`;
+  - use through `RawPtr<T>`, `NativeSpan<T>` and `NativeArena`;
   - a full descriptor, with offsets (see Reflection), and C header output.
 - **`Portable`:** flat, and no `RawPtr` anywhere, including in nested fields.
   - Its layout is identical on every supported target. Pointer width is the
@@ -234,7 +234,7 @@ holders allocates 1,024 objects on each Wasm target, with no additional object f
 - **Padding is always zero.** The bytes between fields are zero after every
   construction and copy:
   - HashLink `New` already zero-fills;
-  - `Arena.alloc` of a flat type must zero-fill (it returns `malloc` memory
+  - `NativeArena.alloc` of a flat type must zero-fill (it returns `malloc` memory
     today);
   - whole-record stores write zero padding;
   - field stores never touch padding.
@@ -1564,7 +1564,7 @@ point green.
      arm64 headers) agrees for portable structs.
 3. **Native memory operations.**
    - Whole-record `load`/`store`, `p.ref` places, `NativeSpan` of structs,
-     and zero-filling `Arena.alloc`.
+     and zero-filling `NativeArena.alloc`.
    - Migrate native records and HXI records to structs.
 3a. **Scoped mutable places** (deferred; no current consumer).
    - Validate the restricted ref/scoped callback contract in SCOPED_PLACES.md.

@@ -82,7 +82,7 @@ function main():Int {
 	var bytes = haxe.io.Bytes.ofString(\"ABC\");
 	if (Spans.byteSum(bytes) != 65 + 66 + 67)
 		return 10;
-	var arena = new runtime.memory.Arena();
+	var arena = new runtime.memory.NativeArena();
 	var raw:runtime.memory.RawPtr<UInt8> = arena.alloc(3);
 	raw.store(200);
 	raw.offset(1).store(50);
