@@ -32,6 +32,9 @@ class IrPassScratch {
 	/** The graph of the function a pass reads, refilled for each (`IrGraph.reset`) and released when the pass is done. */
 	public final graph = new IrGraph();
 
+	/** The tables of `IrLoadStoreForwarding`. */
+	public final loadStore = new IrLoadStoreForwarding.IrLoadStoreScratch();
+
 	/** The graph the passes over bodies refill (`IrBodyGraph.reset`). */
 	public final bodyGraph = new IrBodyGraph();
 

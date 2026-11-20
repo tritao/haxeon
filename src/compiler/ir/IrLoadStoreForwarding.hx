@@ -29,28 +29,58 @@ class IrLoadStoreForwarding {
 	 * lends the graph.
 	 */
 	public static function run(fn:IrFunction, ?objects:IrObjectTable, ?scratch:IrPassScratch):IrFunction {
-		var substitutions:Map<Int, IrValue> = [], constants:Map<Int, Int> = [];
+		var pass = scratch ?? new IrPassScratch(), tables = pass.loadStore;
+		var result = forward(fn, objects, pass, tables);
+		tables.release();
+		return result;
+	}
+
+	static function forward(fn:IrFunction, objects:Null<IrObjectTable>, pass:IrPassScratch,
+			tables:IrLoadStoreScratch):IrFunction {
+		var substitutes = tables.substitutes, constants = tables.constants, constantValues = tables.constantValues;
+		constants.clear();
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
 					case ConstInt(out, value):
-						constants.set(out.id, value);
+						constants.add(out.id);
+						while (constantValues.length <= out.id)
+							constantValues.push(0);
+						constantValues[out.id] = value;
 					default:
 				}
+		function constant(value:IrValue):Null<Int>
+			return constants.has(value.id) ? constantValues[value.id] : null;
 		var use = function(value:IrValue):IrValue {
-			while (substitutions.exists(value.id))
-				value = substitutions.get(value.id);
+			while (value.id < substitutes.length && substitutes[value.id] != null)
+				value = substitutes[value.id];
 			return value;
 		};
+		function substitute(out:IrValue, known:IrValue):Void {
+			while (substitutes.length <= out.id)
+				substitutes.push(null);
+			substitutes[out.id] = known;
+		}
 		// Nothing is copied until a load is forwarded: most functions forward nothing, and a copy of every block that is then thrown away
 		// (with a remapped instruction for each analyzed one) was most of this pass's allocation.
-		var incoming = incomingFields(fn, objects, scratch),
-			dropped:Null<haxe.ds.ObjectMap<Dynamic, Bool>> = null,
+		incomingFields(fn, objects, pass, tables);
+		var dropped:Null<haxe.ds.ObjectMap<Dynamic, Bool>> = null,
 			substituted = 0;
-		// Each block's incoming fields are its own to change; the element facts reuse one list.
-		var elements:Array<KnownElement> = [];
+		// A block's facts start from its incoming fields; the field and element facts each reuse one list.
+		var fields = tables.fields, elements = tables.elements;
 		for (block in fn.blocks) {
-			var fields:Array<KnownField> = incoming.exists(block.id) ? incoming.get(block.id) : [];
+			fields.resize(0);
+			if (block.id < tables.incomingCount.length) {
+				var start = tables.incomingStart[block.id];
+				for (index in start...start + tables.incomingCount[block.id]) {
+					var key = tables.incomingKeys[index];
+					fields.push({
+						object: tables.keyObjects[key],
+						field: tables.keyFields[key],
+						value: tables.incomingValues[index]
+					});
+				}
+			}
 			elements.resize(0);
 			for (located in block.instructions) {
 				var instruction = substituted == 0 ? located.value : IrInliner.remap(located.value, use,
@@ -77,7 +107,7 @@ class IrLoadStoreForwarding {
 								if (entry.object == object.id && entry.field == field)
 									known = entry.value;
 							if (known != null && sameType(out.type, known.type)) {
-								substitutions.set(out.id, known);
+								substitute(out, known);
 								substituted++;
 								drop = true;
 							} else {
@@ -90,7 +120,7 @@ class IrLoadStoreForwarding {
 							fields.resize(0);
 							elements.resize(0);
 						} else {
-							var literal = constants.get(index.id),
+							var literal = constant(index),
 								constant = literal != null,
 								key = literal == null ? index.id : literal;
 							dropAliasedElements(elements, array, constant, key);
@@ -106,7 +136,7 @@ class IrLoadStoreForwarding {
 							fields.resize(0);
 							elements.resize(0);
 						} else if (!excludedField(out.type, objects)) {
-							var literal = constants.get(index.id),
+							var literal = constant(index),
 								constant = literal != null,
 								key = literal == null ? index.id : literal,
 								known:Null<IrValue> = null;
@@ -114,7 +144,7 @@ class IrLoadStoreForwarding {
 								if (entry.array.id == array.id && entry.constant == constant && entry.index == key)
 									known = entry.value;
 							if (known != null && sameType(out.type, known.type)) {
-								substitutions.set(out.id, known);
+								substitute(out, known);
 								substituted++;
 								drop = true;
 							} else {
@@ -183,20 +213,25 @@ class IrLoadStoreForwarding {
 		return fn.withBlocks(blocks, bindings);
 	}
 
-	/** Fields available on every normal path into each block. */
-	static function incomingFields(fn:IrFunction, objects:Null<IrObjectTable>,
-			scratch:Null<IrPassScratch>):Map<Int, Array<KnownField>> {
-		var result:Map<Int, Array<KnownField>> = [],
-			keyObjects:Array<Int> = [],
-			keyFields:Array<String> = [],
+	/**
+	 * Fields available on every normal path into each block, as `tables`' incoming rows: per block id, a run of keys (see
+	 * `keyObjects` and `keyFields`) with their values. A block past the rows, or with an empty run, has none.
+	 */
+	static function incomingFields(fn:IrFunction, objects:Null<IrObjectTable>, pass:IrPassScratch,
+			tables:IrLoadStoreScratch):Void {
+		var keyObjects = tables.keyObjects,
+			keyFields = tables.keyFields,
 			byObject:Map<Int, Map<String, Int>> = [],
 			byField:Map<String, Array<Int>> = [],
 			repeated = false;
+		tables.incomingCount.resize(0);
+		keyObjects.resize(0);
+		keyFields.resize(0);
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
 					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
-						return result;
+						return;
 					case FieldGet(_, object, field), FieldSet(object, field, _) if (plainObject(object.type)):
 						var fields = byObject.get(object.id);
 						if (fields == null) {
@@ -219,16 +254,19 @@ class IrLoadStoreForwarding {
 					default:
 				}
 		if (!repeated || fn.blocks.length < 2)
-			return result;
+			return;
 		// A key's state is absent (not available), present with a null value (the analysis top), or present with its value.
 		var count = keyObjects.length,
-			graph = scratch == null ? new IrGraph(fn) : scratch.graph.reset(fn),
-			outgoing:Map<Int, BlockFields> = [],
-			top = BlockFields.top();
+			graph = pass.graph.reset(fn),
+			blockCount = 0;
+		for (block in fn.blocks)
+			if (block.id >= blockCount)
+				blockCount = block.id + 1;
+		var outgoing = tables.outgoingFields(blockCount);
 		for (id in graph.order)
-			outgoing.set(id, top);
-		var before = new FieldStates(count),
-			after = new FieldStates(count),
+			outgoing[id].setEverything();
+		var before = tables.before.reset(count),
+			after = tables.after.reset(count),
 			entry = fn.blocks[0].id;
 		function meet(id:Int, into:FieldStates):Void {
 			var count = graph.predecessorCount(id);
@@ -236,29 +274,29 @@ class IrLoadStoreForwarding {
 				into.clear();
 				return;
 			}
-			into.load(outgoing.get(graph.predecessor(id, 0)));
+			into.load(outgoing[graph.predecessor(id, 0)]);
 			for (i in 1...count)
-				into.intersect(outgoing.get(graph.predecessor(id, i)));
+				into.intersect(outgoing[graph.predecessor(id, i)]);
 		}
 		// A block with an instruction that forgets every field leaves with what the instructions after the last such one give, whatever
 		// it was entered with: its state is made once, from nothing, and only the other blocks meet their predecessors.
-		var resumeAt:Map<Int, Int> = [], settled:Map<Int, Bool> = [];
+		var resumeAt = IrPassScratch.filledInts(tables.resumeAt, blockCount, 0), settled = tables.settled;
+		settled.clear();
 		for (id in graph.order) {
 			var instructions = graph.block(id).instructions, resume = 0;
 			for (index in 0...instructions.length)
 				if (forgetsFields(instructions[index].value, objects))
 					resume = index + 1;
-			resumeAt.set(id, resume);
+			resumeAt[id] = resume;
 		}
 		var changed = true;
 		while (changed) {
 			changed = false;
 			for (id in graph.order) {
-				var instructions = graph.block(id).instructions, resume = resumeAt.get(id);
+				var instructions = graph.block(id).instructions, resume = resumeAt[id];
 				if (resume > 0) {
-					if (settled.exists(id))
+					if (!settled.add(id))
 						continue;
-					settled.set(id, true);
 					after.clear();
 				} else
 					meet(id, after);
@@ -280,25 +318,32 @@ class IrLoadStoreForwarding {
 							}
 						default:
 					}
-				if (!after.matches(outgoing.get(id))) {
-					outgoing.set(id, after.compact());
+				if (!after.matches(outgoing[id])) {
+					after.storeInto(outgoing[id]);
 					changed = true;
 				}
 			}
 		}
 		// With the outgoing states fixed, each block's incoming state is the meet of its predecessors' once more.
+		var starts = IrPassScratch.filledInts(tables.incomingStart, blockCount, 0),
+			counts = IrPassScratch.filledInts(tables.incomingCount, blockCount, 0),
+			keys = tables.incomingKeys,
+			values = tables.incomingValues;
+		keys.resize(0);
+		values.resize(0);
 		for (id in graph.order) {
 			meet(id, before);
-			var fields:Array<KnownField> = [];
+			starts[id] = keys.length;
 			for (key in 0...count) {
 				var value = before.values[key];
-				if (before.present[key] && value != null)
-					fields.push({object: keyObjects[key], field: keyFields[key], value: value});
+				if (before.present[key] && value != null) {
+					keys.push(key);
+					values.push(value);
+				}
 			}
-			result.set(id, fields);
+			counts[id] = keys.length - starts[id];
 		}
 		graph.release();
-		return result;
 	}
 
 	/** Whether `instruction` makes every available field unknown: an access the keys do not cover, a call or a memory write. */
@@ -426,22 +471,31 @@ class IrLoadStoreForwarding {
 		};
 }
 
-/** A block's outgoing available fields, stored compactly: the present keys and their values (null for the analysis top). */
+/**
+ * A block's outgoing available fields, stored compactly: the present keys and their values (null for the analysis top), or
+ * every key with the top value, the state every block starts from. Each block has its own, refilled as the analysis goes.
+ */
 private class BlockFields {
-	/** Every key present with the top value: the state every block starts from. */
-	public final everything:Bool;
+	public var everything = true;
 
-	public final keys:Array<Int>;
-	public final values:Array<Null<IrValue>>;
+	public final keys:Array<Int> = [];
+	public final values:Array<Null<IrValue>> = [];
 
-	public function new(everything:Bool, keys:Array<Int>, values:Array<Null<IrValue>>) {
-		this.everything = everything;
-		this.keys = keys;
-		this.values = values;
+	public function new() {}
+
+	public function setEverything():Void {
+		everything = true;
+		keys.resize(0);
+		values.resize(0);
 	}
 
-	public static function top():BlockFields
-		return new BlockFields(true, [], []);
+	/** Lets go of the values. */
+	public function release():Void {
+		for (index in 0...values.length)
+			values[index] = null;
+		values.resize(0);
+		keys.resize(0);
+	}
 }
 
 /**
@@ -457,16 +511,31 @@ private class FieldStates {
 	final marked:Array<Null<IrValue>>;
 	var generation = 0;
 
-	public function new(count:Int) {
+	public function new() {
 		present = [];
 		values = [];
 		marks = [];
 		marked = [];
+	}
+
+	/** Makes this a state of `count` keys, each absent, in the storage of the last function's. */
+	public function reset(count:Int):FieldStates {
+		IrPassScratch.filledBools(present, count, false);
+		IrPassScratch.filledInts(marks, count, 0);
+		values.resize(0);
+		marked.resize(0);
 		for (_ in 0...count) {
-			present.push(false);
 			values.push(null);
-			marks.push(0);
 			marked.push(null);
+		}
+		return this;
+	}
+
+	/** Lets go of the values. */
+	public function release():Void {
+		for (index in 0...values.length) {
+			values[index] = null;
+			marked[index] = null;
 		}
 	}
 
@@ -546,16 +615,88 @@ private class FieldStates {
 		return true;
 	}
 
-	public function compact():BlockFields {
-		var keys:Array<Int> = [], kept:Array<Null<IrValue>> = [];
+	/** Writes this state, compactly, as `fields`. */
+	public function storeInto(fields:BlockFields):Void {
+		fields.everything = false;
+		fields.keys.resize(0);
+		fields.values.resize(0);
 		for (key in 0...present.length)
 			if (present[key]) {
-				keys.push(key);
-				kept.push(values[key]);
+				fields.keys.push(key);
+				fields.values.push(values[key]);
 			}
-		return new BlockFields(false, keys, kept);
 	}
 
 	static inline function sameValue(a:IrValue, b:IrValue):Bool
 		return a.id == b.id && IrTypeIdentity.same(a.type, b.type);
+}
+
+/**
+ * The tables of `IrLoadStoreForwarding`, kept from one function to the next (`IrPassScratch.loadStore`); `release` drops
+ * every value of the function, so none stays reachable from them.
+ */
+@:allow(compiler.ir.IrLoadStoreForwarding)
+class IrLoadStoreScratch {
+	/** Per value id: what a forwarded load is replaced by, and the value of an integer constant. */
+	final substitutes:Array<Null<IrValue>> = [];
+
+	final constants = new IrPassScratch.IrValueMarks();
+	final constantValues:Array<Int> = [];
+
+	/** The facts of the block being rewritten. */
+	final fields:Array<KnownField> = [];
+
+	final elements:Array<KnownElement> = [];
+
+	/** The function's field keys: the object value id and the field name of each. */
+	final keyObjects:Array<Int> = [];
+
+	final keyFields:Array<String> = [];
+
+	/** The incoming fields: per block id, where its run starts in `incomingKeys`/`incomingValues` and how long it is. */
+	final incomingStart:Array<Int> = [];
+
+	final incomingCount:Array<Int> = [];
+	final incomingKeys:Array<Int> = [];
+	final incomingValues:Array<IrValue> = [];
+
+	/** Per block id: its outgoing fields, the instruction its state is made from, and whether that state is made. */
+	final outgoing:Array<BlockFields> = [];
+
+	var outgoingUsed = 0;
+	final resumeAt:Array<Int> = [];
+	final settled = new IrPassScratch.IrValueMarks();
+	final before = new FieldStates();
+	final after = new FieldStates();
+
+	public function new() {}
+
+	/** The outgoing fields of `count` block ids, kept from the last function. */
+	function outgoingFields(count:Int):Array<BlockFields> {
+		while (outgoing.length < count)
+			outgoing.push(new BlockFields());
+		if (count > outgoingUsed)
+			outgoingUsed = count;
+		return outgoing;
+	}
+
+	function release():Void {
+		for (index in 0...substitutes.length)
+			substitutes[index] = null;
+		substitutes.resize(0);
+		for (index in 0...fields.length)
+			fields[index] = null;
+		fields.resize(0);
+		for (index in 0...elements.length)
+			elements[index] = null;
+		elements.resize(0);
+		for (index in 0...incomingValues.length)
+			incomingValues[index] = null;
+		incomingValues.resize(0);
+		for (index in 0...outgoingUsed)
+			outgoing[index].release();
+		outgoingUsed = 0;
+		before.release();
+		after.release();
+	}
 }
