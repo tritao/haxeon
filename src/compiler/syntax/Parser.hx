@@ -456,7 +456,7 @@ class Parser {
 					isPublic = advance().kind == TokenKind.Public;
 			}
 			if (values != null && !isStatic && isEnumAbstractValue(isFinal)) {
-				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt);
+				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt, methodMetadata);
 				nextImplicitInt = switch value.value {
 					case IntegerLiteral(literal, _): literal + 1;
 					default: null;
@@ -504,7 +504,8 @@ class Parser {
 
 	/** `var Name = expr;` or `var Name;`, whose value Haxe numbers or names (`implicitEnumAbstractValue`). */
 	function parseEnumAbstractValue(abstractName:String, underlying:AstType,
-			nextImplicitInt:Null<Int>):compiler.syntax.Ast.AstEnumAbstractValue {
+			nextImplicitInt:Null<Int>,
+			metadata:Array<compiler.syntax.Ast.AstMetadata>):compiler.syntax.Ast.AstEnumAbstractValue {
 		match(TokenKind.Var);
 		var valueName = consumeName();
 		// A value's type is its abstract, which it may also be written as.
@@ -518,7 +519,12 @@ class Parser {
 		var value = if (match(TokenKind.Assign)) parseExpression();
 		else implicitEnumAbstractValue(underlying, valueName, nextImplicitInt);
 		var end = consume(TokenKind.Semicolon).span;
-		return {name: valueName.text, value: value, span: valueName.span.merge(end)};
+		return {
+			name: valueName.text,
+			metadata: metadata,
+			value: value,
+			span: valueName.span.merge(end)
+		};
 	}
 
 	function implicitEnumAbstractValue(underlying:AstType, name:Token, nextInt:Null<Int>):AstExpression {

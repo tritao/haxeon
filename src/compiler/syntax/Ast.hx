@@ -186,6 +186,7 @@ typedef AstEnum = {
 /** One named constant declared by an enum abstract. */
 typedef AstEnumAbstractValue = {
 	final name:String;
+	final metadata:Array<AstMetadata>;
 	final value:AstExpression;
 	final span:SourceSpan;
 }

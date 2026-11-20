@@ -221,6 +221,7 @@ class ModuleCanonicalizer {
 			values: decl.values == null ? null : [for (value in decl.values)
 			{
 				name:value.name,
+					metadata:canonicalMetadata(value.metadata, module, entry, locals, aliases),
 					value:canonicalExpression(value.value, module, entry, locals, aliases),
 					span:value.span
 			}],

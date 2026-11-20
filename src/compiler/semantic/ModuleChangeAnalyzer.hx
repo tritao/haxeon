@@ -130,7 +130,8 @@ class ModuleChangeAnalyzer {
 				signature += ":enum[" + fieldMetadataFingerprint(state, abstractDecl.metadata) + "]{"
 					+ [
 						for (value in abstractDecl.values)
-							value.name + "=" + state.source.slice(value.span.start, value.span.end)
+							fieldMetadataFingerprint(state, value.metadata) + value.name + "="
+							+ state.source.slice(value.span.start, value.span.end)
 					].join(";") + "} implements " + (abstractDecl.conformances == null
 					? "" : [for (type in abstractDecl.conformances) SemanticSignature.parsed(type,
 					ast.aliases)].join(","));

@@ -40,6 +40,12 @@ class StructSyntaxMain {
 			|| annotationProgram.abstracts[0].metadata.length != 1
 			|| annotationProgram.abstracts[0].metadata[0].name != "annotation")
 			throw "metadata on an annotation enum abstract must survive parsing";
+		var valueSource = "enum abstract Op(Int) { @:deprecated(\"use B\") var A; var B; }",
+			values = new Parser(new Lexer(new SourceFile("Values.hx", valueSource)).tokenize()).parseProgram()
+				.abstracts[0].values;
+		if (values == null || values.length != 2 || values[0].metadata.length != 1
+			|| values[0].metadata[0].name != "deprecated" || values[1].metadata.length != 0)
+			throw "metadata on an enum abstract value must survive parsing";
 
 		expectError("struct Point extends Base {}", "cannot extend a class", "extends");
 		expectError("struct Point : Located {}", 'use "implements"', ":");
