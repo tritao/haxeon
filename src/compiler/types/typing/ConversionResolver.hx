@@ -368,7 +368,7 @@ class ConversionResolver {
 			default: compiler.semantic.SemanticSignature.type(target);
 		};
 		var origin = session.currentContext.name, span = value.span;
-		var helper = "$dynamic-structure:" + origin + ":" + name;
+		var helper = compiler.core.GlobalNames.of("$dynamic-structure:" + origin + ":" + name);
 		if (session.dynamicStructureConversions.get(helper) == true)
 			fail("E1016",
 				"Recursive Dynamic to anonymous structure conversion is not supported; convert the recursive fields explicitly",

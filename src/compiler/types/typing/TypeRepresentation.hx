@@ -212,7 +212,8 @@ class TypeRepresentation {
 	}
 
 	function functionUsesGenericEnum(fn:AstFunction, parameter:String):Bool {
-		var key = fn.span.file.path + ":" + fn.span.start + ":" + fn.name + ":" + parameter;
+		var key =
+			compiler.core.GlobalNames.of(fn.span.file.path + ":" + fn.span.start + ":" + fn.name + ":" + parameter);
 		if (!enumBodyUses.exists(key)) enumBodyUses.set(key, compiler.types.analysis.GenericEnumUsage.uses(fn,
 			type -> enumContainsParameter(type, parameter, [])));
 		return enumBodyUses.get(key);

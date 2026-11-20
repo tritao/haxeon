@@ -17,11 +17,11 @@ class GeneratedNames {
 	 * representations spelled `signature`: `origin[policy]<signature>`.
 	 */
 	public static function specializationKey(origin:String, policy:String, signature:String):String
-		return origin + "[" + policy + "]<" + signature + ">";
+		return compiler.core.GlobalNames.of(origin + "[" + policy + "]<" + signature + ">");
 
 	/** The function or owner name of the specialization keyed `key`: `$generic:key`. */
 	public static function specialization(key:String):String
-		return SPECIALIZATION_PREFIX + key;
+		return compiler.core.GlobalNames.of(SPECIALIZATION_PREFIX + key);
 
 	/** The origin a generic owner's specializations are keyed by: `$owner:Owner`. */
 	public static function ownerOrigin(owner:String):String

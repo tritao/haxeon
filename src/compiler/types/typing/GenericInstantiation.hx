@@ -173,7 +173,7 @@ class GenericInstantiation {
 				for (index in 0...genericCall.arguments.length) if (!constantIndices.exists(index))
 					genericCall.arguments[index]
 			];
-		session.keyPaths.parameters.set(specialization.name, constants);
+		session.keyPaths.parameters.set(specialization.name, compiler.core.Arena.toGlobal(constants));
 		var representationReceiver:Null<CompilerType> = null;
 		if (receiver != null)
 			representationReceiver = session.declarations.abstracts.exists(requiredString(owner))
@@ -295,7 +295,7 @@ class GenericInstantiation {
 			representation = session.representation.genericFunction(fn, [], underlying),
 			specialization = session.genericSpecializations.request(baseName, [], representation.policies),
 			constants:Map<String, String> = [];
-		session.keyPaths.parameters.set(specialization.name, constants);
+		session.keyPaths.parameters.set(specialization.name, compiler.core.Arena.toGlobal(constants));
 		typeSpecializationBody(specialization.name, fn, owner, true,
 			instanceMember ? abstractReceiverType(owner, representation.substitutions) : null,
 			representation.substitutions, [], true);

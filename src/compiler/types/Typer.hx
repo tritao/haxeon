@@ -46,9 +46,10 @@ class Typer {
 			?nativeAbiTarget:String, ?cachedMetadata:TypedProgram, ?facts:ProgramFacts, requireMain:Bool = true,
 			?retained:RetainedFromPrevious, reverseTypingOrder:Bool = false,
 			?previousSignatures:compiler.types.typing.ProgramTyper.PreviousSignatures,
-			elaborateGenerics:Bool = false):MeasuredTypedProgram
+			elaborateGenerics:Bool = false,
+			typingArenas:compiler.CompileOptions.TypingArenas = Off):MeasuredTypedProgram
 		return new ProgramTyper(new BodyTyper(externals, specializations, nativeAbiTarget),
-			reverseTypingOrder, elaborateGenerics).typeProgramMeasured(semantic, selected, requireMain,
+			reverseTypingOrder, elaborateGenerics, typingArenas).typeProgramMeasured(semantic, selected, requireMain,
 			entryPoint,
 			cachedMetadata, facts,
 			retained, previousSignatures);

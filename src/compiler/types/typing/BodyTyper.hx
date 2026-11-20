@@ -216,8 +216,8 @@ class BodyTyper implements BodyTyping {
 			?ownerTypeArguments:Array<CompilerType>,
 			?inference:DeclarationTypeTable.FunctionInference, ?elaboration:GenericElaboration):TypedFunction {
 		var elaborationMark = elaboration == null ? null : session.closureConversion.mark();
-		var functionName = specializedName == null
-			? (owner == null ? fn.name : owner + "." + fn.name) : specializedName;
+		var functionName = compiler.core.GlobalNames.of(specializedName == null
+			? (owner == null ? fn.name : owner + "." + fn.name) : specializedName);
 		// The declaration the query knows: the prologue below makes a copy of it.
 		var declaration = fn;
 		var functionContext:Null<TypingContext> = null, frame:Null<MonomorphFrame> = null;

@@ -17,10 +17,11 @@ class RuntimeDependencyTracker {
 	public function record(functionName:String, target:String):Void {
 		var targets = dependencies.get(functionName);
 		if (targets == null) {
-			targets = [];
-			dependencies.set(functionName, targets);
+			// The session's table: made outside the arena of the body being typed, as are the names it keeps.
+			targets = compiler.core.Arena.within(compiler.core.Arena.global, () -> new Map<String, Bool>());
+			dependencies.set(compiler.core.GlobalNames.of(functionName), targets);
 		}
-		targets.set(target, true);
+		targets.set(compiler.core.GlobalNames.of(target), true);
 	}
 
 	public function ordered():Array<{

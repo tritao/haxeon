@@ -37,7 +37,8 @@ class SyntaxResolutions {
 			var value = argument.defaultValue;
 			if (value == null)
 				throw new InternalError('Argument "${argument.name}" has no default value to resolve');
-			found = BodyResolution.ofExpression(value);
+			// The cache lives as long as the syntax it is keyed by: what it holds is made outside the arena of the work asking.
+			found = compiler.core.Arena.within(compiler.core.Arena.global, () -> BodyResolution.ofExpression(value));
 			defaults.set(argument, found);
 		}
 		return found;
