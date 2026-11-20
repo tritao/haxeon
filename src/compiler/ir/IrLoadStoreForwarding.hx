@@ -56,6 +56,9 @@ class IrLoadStoreForwarding {
 				value = substitutes[value.id];
 			return value;
 		};
+		var renamed = function(value:IrValue):Bool return value.id < substitutes.length
+			&& substitutes[value.id] != null;
+		var sameBlock = function(id:Int):Int return id;
 		function substitute(out:IrValue, known:IrValue):Void {
 			while (substitutes.length <= out.id)
 				substitutes.push(null);
@@ -83,8 +86,10 @@ class IrLoadStoreForwarding {
 			}
 			elements.resize(0);
 			for (located in block.instructions) {
-				var instruction = substituted == 0 ? located.value : IrInliner.remap(located.value, use,
-					function(id:Int):Int return id),
+				var instruction = substituted == 0
+					|| !IrOperands.anyValue(located.value, renamed) ? located.value : IrInliner.remap(located.value,
+					use,
+					sameBlock),
 					drop = false;
 				switch instruction {
 					case FieldSet(object, field, value):
@@ -172,44 +177,49 @@ class IrLoadStoreForwarding {
 		}
 		if (substituted == 0)
 			return fn;
+		// Every use of a forwarded load's output takes the value it was forwarded from, in any block (successor phis, debug
+		// bindings): the blocks with a dropped load or such a use are copied, the others are shared as they are.
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
+			var changed = false;
+			for (located in block.instructions)
+				if ((dropped != null && dropped.exists(located)) || IrOperands.anyValue(located.value, renamed)) {
+					changed = true;
+					break;
+				}
+			var term = block.terminator,
+				terminator:Null<IrTerminator> = term == null ? null : switch term.value {
+					case Unreachable, Jump(_): null;
+					case Return(value): renamed(value) ? Return(use(value)) : null;
+					case Throw(value): renamed(value) ? Throw(use(value)) : null;
+					case Rethrow(value): renamed(value) ? Rethrow(use(value)) : null;
+					case Branch(condition, yes, no): renamed(condition) ? Branch(use(condition), yes, no) : null;
+					case Switch(switchValue, switchTargets, switchOtherwise): renamed(switchValue)
+						? Switch(use(switchValue),
+						switchTargets.copy(), switchOtherwise) : null;
+				};
+			if (!changed && terminator == null) {
+				blocks.push(block);
+				continue;
+			}
 			var copy = new IrBlock(block.id);
 			for (located in block.instructions)
 				if (dropped == null || !dropped.exists(located))
-					copy.instructions.push(located);
-			copy.terminator = block.terminator;
+					copy.instructions.push(IrOperands.anyValue(located.value, renamed)
+						? new Located(IrInliner.remap(located.value,
+						use, sameBlock), located.provenance) : located);
+			copy.terminator = term == null || terminator == null ? term : new Located(terminator, term.provenance);
 			blocks.push(copy);
 		}
-		// Rewrite the whole function: successor phis and debug bindings may use deleted outputs.
-		for (block in blocks) {
-			for (index in 0...block.instructions.length) {
-				var located = block.instructions[index];
-				block.instructions[index] = new Located(IrInliner.remap(located.value, use,
-					function(id:Int):Int return id), located.provenance);
-			}
-			var term = block.terminator;
-			if (term != null)
-				block.terminator = new Located(switch term.value {
-					case Unreachable: Unreachable;
-					case Return(value): Return(use(value));
-					case Throw(value): Throw(use(value));
-					case Rethrow(value): Rethrow(use(value));
-					case Branch(condition, yes, no): Branch(use(condition), yes, no);
-					case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
-						switchTargets.copy(), switchOtherwise);
-					case Jump(target): Jump(target);
-				}, term.provenance);
-		}
 		var bindings:Array<IrDebugBinding> = [for (binding in fn.debugBindings)
-			{
-				identity:binding.identity,
-					name:binding.name,
-					value:use(binding.value),
-					path:binding.path,
-					scopeStart:binding.scopeStart,
-					scopeEnd:binding.scopeEnd
-			}];
+			renamed(binding.value) ? {
+				identity: binding.identity,
+				name: binding.name,
+				value: use(binding.value),
+				path: binding.path,
+				scopeStart: binding.scopeStart,
+				scopeEnd: binding.scopeEnd
+			} : binding];
 		return fn.withBlocks(blocks, bindings);
 	}
 
