@@ -77,6 +77,14 @@ class HlLower {
 	// Tables by value id of the function being lowered, their storage kept from one function to the next.
 	final valueRegisters:Array<Int> = [];
 
+	/**
+	 * A function's instructions and their debug locations are built here and copied out at their final length, so a
+	 * function's arrays are allocated once rather than regrown as it is lowered.
+	 */
+	final instructionScratch:Array<HlInstruction> = [];
+
+	final locationScratch:Array<HlDebugLocation> = [];
+
 	/** The tables of the non-null analysis, reused across functions. */
 	final nonNullScratch = new compiler.ir.IrPassScratch.IrNonNullScratch();
 	final valueIsNull:Array<Bool> = [];
@@ -913,8 +921,9 @@ class HlLower {
 					assignmentBindings.push(binding);
 				}
 		}
-		var instructions:Array<HlInstruction> = [],
-			debugLocations:Array<HlDebugLocation> = [];
+		var instructions = instructionScratch, debugLocations = locationScratch;
+		instructions.resize(0);
+		debugLocations.resize(0);
 		// A jump to the block written next is left out: control falls through to it.
 		var emitted = [
 			for (block in orderedBlocks(fn))
@@ -1637,7 +1646,7 @@ class HlLower {
 			registerTypes = registerAllocation.run(instructions, registerTypes, fn.arguments.length);
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
 			requireFunction(fn.name), registerTypes,
-			instructions, debugLocations, scopedAssignments);
+			instructions.copy(), debugLocations.copy(), scopedAssignments);
 	}
 
 	/**
