@@ -2354,6 +2354,10 @@ class Parser {
 			|| current().text == "offsetof"
 			|| current().text == "typeInfo"))
 			return parseNativeLayoutQuery();
+		// `abstract` in an abstract's method is a value, as `this` is, so `abstract.label()` is a call on it.
+		if (check(TokenKind.Identifier) && current().text == "abstract")
+			return parsePostfix(Variable("abstract", SourceSpan.reference(current().span.file, advance().span.start,
+				previous().span.end, true)));
 		if (isNameToken(current().kind)) {
 			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
 			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {

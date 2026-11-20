@@ -1735,6 +1735,11 @@ class BodyTyper implements BodyTyping {
 		var sourceName = span.isBareReference ? span.referenceName : null,
 			owner = context.lexicalOwner,
 			thisType = scope.receiverType();
+		// In an abstract's instance method `abstract` is `this` as a value of the abstract, as in Haxe.
+		var asAbstract = name == "abstract" && bound == null && owner != null
+			&& session.declarations.abstracts.exists(owner) && scope.receiverBinding() != null;
+		if (asAbstract)
+			name = "this";
 		if (name != "this"
 			&& sourceName != null
 			&& sourceName.indexOf(".") < 0
@@ -1783,7 +1788,7 @@ class BodyTyper implements BodyTyping {
 				|| context.storage.cell(binding.id) != null ? scope.declaredTypeOf(binding) : null);
 			// An abstract's implementation reads `this` as its underlying value.
 			// Keep the nominal receiver in scope for calls to its own methods.
-			if (name == "this" && context.lexicalOwner != null
+			if (name == "this" && !asAbstract && context.lexicalOwner != null
 				&& session.declarations.abstracts.exists(context.lexicalOwner))
 				switch type {
 					case TAbstract(_, _, representation):

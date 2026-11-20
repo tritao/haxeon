@@ -122,13 +122,14 @@ class ClosureTyper {
 			if (written != null)
 				lambdaAssignments.set(written.declaration, true);
 		}
-		// An unqualified instance method in a lambda is resolved through the lexical receiver even without a `this` reference in the syntax.
+		// An unqualified instance method in a lambda is resolved through the lexical receiver even without a `this` reference in the syntax,
+		// as an abstract's `abstract` is.
 		if (scope.receiverBinding() != null)
 			for (name in freeVariables.keys())
 				if (freeBinding(name) == null) {
 					var method = bodyTyper.lexicalMethod(name),
 						receiverType = scope.receiverType();
-					if (method != null && !method.isStatic || receiverType != null
+					if (name == "abstract" || method != null && !method.isStatic || receiverType != null
 						&& bodyTyper.findFieldType(receiverType, name) != null)
 						freeVariables.set("this", true);
 				}
