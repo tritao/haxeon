@@ -190,25 +190,20 @@ typedef AstEnumAbstractValue = {
 	final span:SourceSpan;
 }
 
-/** Parsed enum abstract, including explicit conversion relationships. */
-typedef AstEnumAbstract = {
-	final name:String;
-	final metadata:Array<AstMetadata>;
-	final ?conformances:Array<AstType>;
-	final underlying:AstType;
-	final fromTypes:Array<AstType>;
-	final toTypes:Array<AstType>;
-	final values:Array<AstEnumAbstractValue>;
-	final span:SourceSpan;
-}
-
-/** Parsed non-enum abstract and the methods exposed through its underlying type. */
+/**
+ * Parsed abstract. An enum abstract (`enum abstract`) is an abstract that also declares values; like any abstract it may have
+ * methods, properties and statics.
+ */
 typedef AstAbstract = {
 	final name:String;
 	final ?isExtern:Bool;
 	final ?metadata:Array<AstMetadata>;
 	final typeParameters:Array<String>;
 	final ?typeConstraints:Array<AstTypeConstraint>;
+
+	/** The interfaces an enum abstract declares with `implements`. */
+	final ?conformances:Array<AstType>;
+
 	final underlying:AstType;
 	final fromTypes:Array<AstType>;
 	final toTypes:Array<AstType>;
@@ -217,6 +212,13 @@ typedef AstAbstract = {
 	final fields:Array<AstField>;
 
 	final methods:Array<AstFunction>;
+
+	/**
+	 * An enum abstract's values in declaration order; null for a plain abstract. Null rather than empty, because an enum
+	 * abstract may declare no values and is still one (its switches are closed over none).
+	 */
+	final ?values:Array<AstEnumAbstractValue>;
+
 	final span:SourceSpan;
 }
 
@@ -465,7 +467,6 @@ typedef AstProgram = {
 	final imports:Array<AstImport>;
 	final aliases:Array<AstTypeAlias>;
 	final enums:Array<AstEnum>;
-	final enumAbstracts:Array<AstEnumAbstract>;
 	final abstracts:Array<AstAbstract>;
 	final interfaces:Array<AstInterface>;
 	final classes:Array<AstClass>;

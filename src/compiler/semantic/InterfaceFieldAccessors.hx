@@ -104,7 +104,6 @@ class InterfaceFieldAccessors {
 			usings: program.usings,
 			aliases: program.aliases,
 			enums: program.enums,
-			enumAbstracts: program.enumAbstracts,
 			abstracts: program.abstracts,
 			interfaces: interfaces,
 			classes: classes,

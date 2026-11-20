@@ -125,23 +125,10 @@ class ModuleChangeAnalyzer {
 			signature += ":method-metadata:"
 				+ [for (method in abstractDecl.methods) if (method.isStatic && method.metadata != null)
 				method.name + "=" + fieldMetadataFingerprint(state, method.metadata)].join(";");
-			abstracts.set(abstractName, signature);
-			if (state.abstractFingerprints.get(abstractName) != signature)
-				structuralChanged.set('abstract:$abstractName', true);
-		}
-		for (abstractDecl in ast.enumAbstracts) {
-			var abstractName = ModuleCanonicalizer.qualifiedTypeName(ast.packageName, abstractDecl.name),
-				signature = abstractName
-					+ "["
-					+ fieldMetadataFingerprint(state, abstractDecl.metadata)
-					+ "]("
-					+ SemanticSignature.parsed(abstractDecl.underlying, ast.aliases)
-					+ ") from "
+			// An enum abstract's values, conformances and metadata (`@:annotation`) are part of how it types.
+			if (abstractDecl.values != null)
+				signature += ":enum[" + fieldMetadataFingerprint(state, abstractDecl.metadata) + "]{"
 					+ [
-						for (type in abstractDecl.fromTypes)
-							SemanticSignature.parsed(type, ast.aliases)
-					].join(",") + " to " + [for (type in abstractDecl.toTypes) SemanticSignature.parsed(type,
-					ast.aliases)].join(",") + " {" + [
 						for (value in abstractDecl.values)
 							value.name + "=" + state.source.slice(value.span.start, value.span.end)
 					].join(";") + "} implements " + (abstractDecl.conformances == null

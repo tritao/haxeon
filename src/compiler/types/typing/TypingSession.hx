@@ -44,7 +44,7 @@ class TypingSession {
 	var enumsByFile:Null<Map<String, Array<{name:String, declaration:compiler.syntax.Ast.AstEnum}>>> = null;
 
 	public final enumRepresentations:EnumRuntimeRepresentations;
-	public var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
+	public var enumAbstractDecls:Map<String, compiler.syntax.Ast.AstAbstract> = [];
 
 	/**
 	 * The enum abstract a source name denotes, directly or through typedefs, or null. Every lookup of an enum abstract by a
@@ -604,7 +604,7 @@ class TypingSession {
 
 	function isTypeName(name:String):Bool
 		return compiler.types.analysis.PurityAnnotations.isTypeName(name, classDecls, interfaceDecls, enumDecls,
-			enumAbstractDecls, declarations.abstracts)
+			declarations.abstracts)
 			|| enumAbstractName(name) != null;
 
 	public function hasPureAnnotation(name:String):Bool

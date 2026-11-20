@@ -136,7 +136,6 @@ class ModuleState {
 	public var canonicalProgramFunctions:Array<AstFunction> = [];
 	public var canonicalAliases:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 	public var canonicalEnums:Array<compiler.syntax.Ast.AstEnum> = [];
-	public var canonicalEnumAbstracts:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
 	public var canonicalAbstracts:Array<compiler.syntax.Ast.AstAbstract> = [];
 	public var canonicalInterfaces:Array<compiler.syntax.Ast.AstInterface> = [];
 	public var canonicalClasses:Array<compiler.syntax.Ast.AstClass> = [];
@@ -248,7 +247,6 @@ class ModuleState {
 		result.canonicalProgramFunctions = canonicalProgramFunctions;
 		result.canonicalAliases = canonicalAliases;
 		result.canonicalEnums = canonicalEnums;
-		result.canonicalEnumAbstracts = canonicalEnumAbstracts;
 		result.canonicalAbstracts = canonicalAbstracts;
 		result.canonicalInterfaces = canonicalInterfaces;
 		result.canonicalClasses = canonicalClasses;

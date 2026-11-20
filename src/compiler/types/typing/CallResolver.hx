@@ -1751,7 +1751,8 @@ class CallResolver {
 			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, receiverName,
 				false);
 		}
-		// Nothing else names the receiver: a constructor without arguments can ("Color.Red.getIndex()", "Red.getIndex()").
+		// Nothing else names the receiver: a constructor without arguments can ("Color.Red.getIndex()", "Red.getIndex()"), and
+		// so can an enum abstract value ("Color.Blue.label()", "Blue.label()").
 		if (methodName != null && !session.signatures.exists(name)) {
 			var prefix = name.substring(0, name.lastIndexOf(".")),
 				constructor = enumCaseInfo(prefix);
@@ -1765,6 +1766,11 @@ class CallResolver {
 					arguments, span, scope, expectedType,
 					false, prefix, false);
 			}
+			var abstractValue = bodyTyper.enumAbstractValueReference(prefix,
+				BodyTyper.referencePrefixSpan(prefix, span));
+			if (abstractValue != null)
+				return typeMethodCall(abstractValue, methodName, arguments, span, scope, expectedType, false, prefix,
+					false);
 		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}

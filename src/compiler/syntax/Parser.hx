@@ -11,7 +11,6 @@ import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstTypeAlias;
 import compiler.syntax.Ast.AstEnum;
-import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstImport;
@@ -246,7 +245,6 @@ class Parser {
 			fields:Array<AstField> = [],
 			aliases:Array<AstTypeAlias> = [],
 			enums:Array<AstEnum> = [],
-			enumAbstracts:Array<AstEnumAbstract> = [],
 			abstracts:Array<AstAbstract> = [],
 			interfaces:Array<AstInterface> = [],
 			classes = [];
@@ -269,7 +267,7 @@ class Parser {
 					var start = previous().span;
 					if (check(TokenKind.Identifier) && current().text == "abstract") {
 						advance();
-						enumAbstracts.push(parseEnumAbstract(start, metadata));
+						abstracts.push(parseAbstract(start, false, metadata, true));
 					} else
 						enums.push(parseEnum(start, metadata));
 				} else if (check(TokenKind.Interface))
@@ -311,7 +309,6 @@ class Parser {
 			imports: imports,
 			aliases: aliases,
 			enums: enums,
-			enumAbstracts: enumAbstracts,
 			abstracts: abstracts,
 			interfaces: interfaces,
 			classes: classes,
@@ -402,19 +399,28 @@ class Parser {
 		return result;
 	}
 
-	function parseAbstract(start:SourceSpan, isExtern:Bool = false,
-			?metadata:Array<compiler.syntax.Ast.AstMetadata>):AstAbstract {
+	/** An abstract, or with `isEnum` an enum abstract: the same members, plus its values and `implements`. */
+	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
+			isEnum:Bool = false):AstAbstract {
 		var name = consume(TokenKind.Identifier).text,
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
 		var underlying = parseType();
 		consume(TokenKind.RightParen);
-		var fromTypes = [], toTypes = [];
+		var fromTypes = [], toTypes = [], conformances:Array<AstType> = [];
 		while (!check(TokenKind.LeftBrace)) {
+			if (isEnum && match(TokenKind.Implements)) {
+				conformances.push(parseType());
+				if (match(TokenKind.Comma)) fail(previous(),
+					'Enum abstract "$name": repeat "implements" for each interface');
+				continue;
+			}
+			if (isEnum && match(TokenKind.Colon)) fail(previous(),
+				'Enum abstract "$name": use "implements" to declare conformance');
 			var conversion = consume(TokenKind.Identifier);
 			if (conversion.text != "from" && conversion.text != "to")
-				fail(conversion, 'Expected "from" or "to"');
+				fail(conversion, isEnum ? 'Expected "from", "to" or "implements"' : 'Expected "from" or "to"');
 			var conversionType = parseType();
 			if (conversion.text == "from")
 				fromTypes.push(conversionType);
@@ -422,7 +428,11 @@ class Parser {
 				toTypes.push(conversionType);
 		}
 		consume(TokenKind.LeftBrace);
-		var methods:Array<AstFunction> = [], fields:Array<AstField> = [];
+		var methods:Array<AstFunction> = [],
+			fields:Array<AstField> = [],
+			values:Null<Array<compiler.syntax.Ast.AstEnumAbstractValue>> = isEnum ? [] : null;
+		// Haxe assigns omitted values: Int counts up from the previous literal (starting at 0); String uses the value's name.
+		var nextImplicitInt:Null<Int> = 0;
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata(),
 				memberStart = current().span;
@@ -445,6 +455,15 @@ class Parser {
 				} else
 					isPublic = advance().kind == TokenKind.Public;
 			}
+			if (values != null && !isStatic && isEnumAbstractValue(isFinal)) {
+				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt);
+				nextImplicitInt = switch value.value {
+					case IntegerLiteral(literal, _): literal + 1;
+					default: null;
+				};
+				values.push(value);
+				continue;
+			}
 			if (!check(TokenKind.Function)) {
 				// A property: what it may be is checked with its type (`AbstractProperties`), as Haxe does.
 				fields.push(parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart));
@@ -462,66 +481,44 @@ class Parser {
 			metadata: metadata == null ? [] : metadata,
 			typeParameters: typeParameters,
 			typeConstraints: typeConstraints,
+			conformances: conformances,
 			underlying: underlying,
 			fromTypes: fromTypes,
 			toTypes: toTypes,
 			fields: fields,
 			methods: methods,
+			values: values,
 			span: start.merge(end)
 		};
 	}
 
-	function parseEnumAbstract(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnumAbstract {
-		var name = consume(TokenKind.Identifier).text;
-		consume(TokenKind.LeftParen);
-		var underlying = parseType();
-		consume(TokenKind.RightParen);
-		var fromTypes = [], toTypes = [], conformances = [];
-		while (!check(TokenKind.LeftBrace)) {
-			if (match(TokenKind.Implements)) {
-				conformances.push(parseType());
-				if (match(TokenKind.Comma)) fail(previous(),
-					'Enum abstract "$name": repeat "implements" for each interface');
-				continue;
+	/**
+	 * Whether the enum abstract member ahead, after its modifiers, is a value: a non-static `var` or `final` with no property
+	 * accessors (`var name(get, never)` is a property), as Haxe reads it.
+	 */
+	function isEnumAbstractValue(afterFinal:Bool):Bool {
+		if (afterFinal)
+			return !check(TokenKind.Function) && peekKind(1) != TokenKind.LeftParen;
+		return check(TokenKind.Var) && peekKind(2) != TokenKind.LeftParen;
+	}
+
+	/** `var Name = expr;` or `var Name;`, whose value Haxe numbers or names (`implicitEnumAbstractValue`). */
+	function parseEnumAbstractValue(abstractName:String, underlying:AstType,
+			nextImplicitInt:Null<Int>):compiler.syntax.Ast.AstEnumAbstractValue {
+		match(TokenKind.Var);
+		var valueName = consumeName();
+		// A value's type is its abstract, which it may also be written as.
+		if (match(TokenKind.Colon)) {
+			var written = previous();
+			switch parseType() {
+				case NamedType(typeName) if (typeName == abstractName):
+				default: fail(written, 'Enum abstract value ${valueName.text} has the type $abstractName');
 			}
-			if (match(TokenKind.Colon)) fail(previous(),
-				'Enum abstract "$name": use "implements" to declare conformance');
-			var conversion = consume(TokenKind.Identifier);
-			if (conversion.text != "from" && conversion.text != "to")
-				fail(conversion, 'Expected "from", "to" or "implements"');
-			var conversionType = parseType();
-			if (conversion.text == "from")
-				fromTypes.push(conversionType);
-			else
-				toTypes.push(conversionType);
 		}
-		consume(TokenKind.LeftBrace);
-		var values = [];
-		// Haxe assigns omitted values: Int counts up from the previous literal (starting at 0); String uses the value's name.
-		var nextImplicitInt:Null<Int> = 0;
-		while (!check(TokenKind.RightBrace)) {
-			match(TokenKind.Var);
-			var valueName = consumeName();
-			var value = if (match(TokenKind.Assign)) parseExpression();
-			else implicitEnumAbstractValue(underlying, valueName, nextImplicitInt);
-			var end = consume(TokenKind.Semicolon).span;
-			nextImplicitInt = switch value {
-				case IntegerLiteral(literal, _): literal + 1;
-				default: null;
-			};
-			values.push({name: valueName.text, value: value, span: valueName.span.merge(end)});
-		}
-		var end = consume(TokenKind.RightBrace).span;
-		return {
-			name: name,
-			metadata: metadata,
-			conformances: conformances,
-			underlying: underlying,
-			fromTypes: fromTypes,
-			toTypes: toTypes,
-			values: values,
-			span: start.merge(end)
-		};
+		var value = if (match(TokenKind.Assign)) parseExpression();
+		else implicitEnumAbstractValue(underlying, valueName, nextImplicitInt);
+		var end = consume(TokenKind.Semicolon).span;
+		return {name: valueName.text, value: value, span: valueName.span.merge(end)};
 	}
 
 	function implicitEnumAbstractValue(underlying:AstType, name:Token, nextInt:Null<Int>):AstExpression {

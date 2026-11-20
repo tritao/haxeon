@@ -36,9 +36,9 @@ class StructSyntaxMain {
 		var annotationSource = "@:annotation enum abstract Replicate(Int) { var all; var owner; }",
 			annotationProgram =
 				new Parser(new Lexer(new SourceFile("Annotation.hx", annotationSource)).tokenize()).parseProgram();
-		if (annotationProgram.enumAbstracts.length != 1
-			|| annotationProgram.enumAbstracts[0].metadata.length != 1
-			|| annotationProgram.enumAbstracts[0].metadata[0].name != "annotation")
+		if (annotationProgram.abstracts.length != 1 || annotationProgram.abstracts[0].values == null
+			|| annotationProgram.abstracts[0].metadata.length != 1
+			|| annotationProgram.abstracts[0].metadata[0].name != "annotation")
 			throw "metadata on an annotation enum abstract must survive parsing";
 
 		expectError("struct Point extends Base {}", "cannot extend a class", "extends");

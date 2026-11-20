@@ -112,9 +112,10 @@ class ModuleAnalyzer {
 					DependencyScanner.scanStatement(statement, dependencies,
 						ownerTypeParameters.concat(method.typeParameters == null ? [] : method.typeParameters));
 		}
-		for (abstractDecl in ast.enumAbstracts)
-			for (value in abstractDecl.values)
-				DependencyScanner.scanExpression(value.value, dependencies);
+		for (abstractDecl in ast.abstracts)
+			if (abstractDecl.values != null)
+				for (value in abstractDecl.values)
+					DependencyScanner.scanExpression(value.value, dependencies);
 		// A type named only in an annotation, cast or catch clause is a dependency when a source module has that name.
 		// The dependency is the module that resolved: for `Types.Kind` in package `pk` that is `pk.Types`, while the
 		// dotted type name itself names no module and the later passes do not qualify dotted names.
@@ -139,10 +140,12 @@ class ModuleAnalyzer {
 			for (constructor in enumDecl.cases)
 				dependencies.remove(constructor.name);
 		}
-		for (abstractDecl in ast.enumAbstracts)
+		// So is a value of its enum abstracts: `Beta.upper()`.
+		for (abstractDecl in ast.abstracts) {
 			dependencies.remove(abstractDecl.name);
-		for (abstractDecl in ast.abstracts)
-			dependencies.remove(abstractDecl.name);
+			for (value in abstractDecl.values ?? [])
+				dependencies.remove(value.name);
+		}
 		// A typedef this module declares is local too: `Code.High` through `typedef Code = ...` names no module.
 		for (alias in ast.aliases)
 			dependencies.remove(alias.name);
@@ -297,13 +300,8 @@ class ModuleAnalyzer {
 					addModuleTypeDependency(field.type, state, dependencies, abstractDecl.typeParameters);
 			for (method in abstractDecl.methods)
 				addFunctionTypeDependencies(method, state, dependencies, abstractDecl.typeParameters);
-		}
-		for (abstractDecl in ast.enumAbstracts) {
-			if (abstractDecl.conformances != null)
-				for (type in abstractDecl.conformances) addModuleTypeDependency(type, state, dependencies);
-			addModuleTypeDependency(abstractDecl.underlying, state, dependencies);
-			for (type in abstractDecl.fromTypes.concat(abstractDecl.toTypes))
-				addModuleTypeDependency(type, state, dependencies);
+			for (type in abstractDecl.conformances ?? [])
+				addModuleTypeDependency(type, state, dependencies, abstractDecl.typeParameters);
 		}
 		for (fn in ast.functions)
 			addFunctionTypeDependencies(fn, state, dependencies);
@@ -353,8 +351,6 @@ class ModuleAnalyzer {
 		for (declaration in ast.aliases)
 			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.enums)
-			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
-		for (declaration in ast.enumAbstracts)
 			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
 		for (declaration in ast.abstracts)
 			addDeclarationAlias(moduleName, declaration.name, aliases, moduleAlias, bare);
@@ -442,7 +438,6 @@ class ModuleAnalyzer {
 					usings: program.usings,
 					aliases: program.aliases,
 					enums: program.enums,
-					enumAbstracts: program.enumAbstracts,
 					abstracts: program.abstracts,
 					interfaces: program.interfaces,
 					classes: program.classes,
@@ -522,8 +517,6 @@ class ModuleAnalyzer {
 			indexDeclaration(prefix + declaration.name, moduleName);
 		for (declaration in ast.enums)
 			indexDeclaration(prefix + declaration.name, moduleName);
-		for (declaration in ast.enumAbstracts)
-			indexDeclaration(prefix + declaration.name, moduleName);
 		for (declaration in ast.abstracts)
 			indexDeclaration(prefix + declaration.name, moduleName);
 		for (declaration in ast.interfaces)
@@ -583,8 +576,6 @@ class ModuleAnalyzer {
 		for (declaration in ast.enums)
 			typeNames.set(declaration.name, true);
 		for (declaration in ast.abstracts)
-			typeNames.set(declaration.name, true);
-		for (declaration in ast.enumAbstracts)
 			typeNames.set(declaration.name, true);
 		for (declaration in ast.interfaces)
 			typeNames.set(declaration.name, true);

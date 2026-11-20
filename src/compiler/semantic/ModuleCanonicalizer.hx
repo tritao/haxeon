@@ -133,8 +133,6 @@ class ModuleCanonicalizer {
 			aliases.set(alias.name, qualifiedTypeName(packageName, alias.name));
 		for (enumDecl in program.enums)
 			aliases.set(enumDecl.name, qualifiedTypeName(packageName, enumDecl.name));
-		for (abstractDecl in program.enumAbstracts)
-			aliases.set(abstractDecl.name, qualifiedTypeName(packageName, abstractDecl.name));
 		for (abstractDecl in program.abstracts)
 			aliases.set(abstractDecl.name, qualifiedTypeName(packageName, abstractDecl.name));
 		for (interfaceDecl in program.interfaces)
@@ -184,32 +182,15 @@ class ModuleCanonicalizer {
 				span: enumDecl.span};
 	}
 
-	public static function canonicalEnumAbstract(decl:compiler.syntax.Ast.AstEnumAbstract, aliases:AliasTable,
-			packageName:Null<String>, module:String,
-			entry:String, locals:LocalScope):compiler.syntax.Ast.AstEnumAbstract
-		return {name: qualifiedTypeName(packageName, decl.name),
-			metadata: canonicalMetadata(decl.metadata, module, entry, locals, aliases),
-			conformances: decl.conformances == null
-			? [] : [for (type in decl.conformances) canonicalType(type, aliases)],
-			underlying: canonicalType(decl.underlying, aliases),
-			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases)],
-			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases)],
-			values: [for (value in decl.values)
-			{
-				name:value.name,
-					value:canonicalExpression(value.value, module, entry, locals, aliases),
-					span:value.span
-			}],
-				span: decl.span};
-
 	public static function canonicalMetadata(metadata:Array<compiler.syntax.Ast.AstMetadata>, module:String,
 			entry:String, locals:LocalScope,
 			aliases:AliasTable):Array<compiler.syntax.Ast.AstMetadata>
 		return [for (annotation in metadata)
 			{
 				name:resolveTypeName(annotation.name, aliases),
-					// Access grants name a source path, not an imported expression alias.
-					arguments:annotation.name == "access" || annotation.name == "allow" ? annotation.arguments : [
+					// Access grants name a source path and `@:forward` names fields, not imported expression aliases.
+					arguments:annotation.name == "access" || annotation.name == "allow"
+					|| annotation.name == "forward" ? annotation.arguments : [
 						for (argument in annotation.arguments)
 							canonicalExpression(argument, module, entry, locals, aliases)
 					],
@@ -219,12 +200,13 @@ class ModuleCanonicalizer {
 	public static function canonicalAbstract(decl:compiler.syntax.Ast.AstAbstract, aliases:AliasTable,
 			packageName:Null<String>, module:String, entry:String,
 			locals:LocalScope):compiler.syntax.Ast.AstAbstract
-		return {
-			name: qualifiedTypeName(packageName, decl.name),
+		return {name: qualifiedTypeName(packageName, decl.name),
 			isExtern: decl.isExtern,
-			metadata: decl.metadata,
+			metadata: decl.metadata == null ? null : canonicalMetadata(decl.metadata, module, entry, locals, aliases),
 			typeParameters: decl.typeParameters,
 			typeConstraints: canonicalConstraints(decl.typeConstraints, aliases, decl.typeParameters),
+			conformances: decl.conformances == null
+			? null : [for (type in decl.conformances) canonicalType(type, aliases, decl.typeParameters)],
 			underlying: canonicalType(decl.underlying, aliases, decl.typeParameters),
 			fromTypes: [for (type in decl.fromTypes) canonicalType(type, aliases, decl.typeParameters)],
 			toTypes: [for (type in decl.toTypes) canonicalType(type, aliases, decl.typeParameters)],
@@ -236,8 +218,13 @@ class ModuleCanonicalizer {
 				for (method in decl.methods)
 					canonicalAbstractMethod(method, decl.typeParameters, module, entry, locals, method.name, aliases)
 			],
-			span: decl.span
-		};
+			values: decl.values == null ? null : [for (value in decl.values)
+			{
+				name:value.name,
+					value:canonicalExpression(value.value, module, entry, locals, aliases),
+					span:value.span
+			}],
+				span: decl.span};
 
 	/**
 	 * An abstract's or an interface's variable or property with its type and metadata resolved in the module

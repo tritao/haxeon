@@ -1864,9 +1864,8 @@ class LanguageService {
 				addWorkspaceSymbol(result, state, alias.name, "type", null,
 					'typedef ${alias.name}=${typeName(alias.type)}', alias.span);
 			for (decl in ast.abstracts)
-				addWorkspaceSymbol(result, state, decl.name, "type", null, 'abstract ${decl.name}', decl.span);
-			for (decl in ast.enumAbstracts)
-				addWorkspaceSymbol(result, state, decl.name, "type", null, 'enum abstract ${decl.name}', decl.span);
+				addWorkspaceSymbol(result, state, decl.name, "type", null,
+					(decl.values == null ? 'abstract ' : 'enum abstract ') + decl.name, decl.span);
 			for (decl in ast.interfaces) {
 				addWorkspaceSymbol(result, state, decl.name, "interface", null, 'interface ${decl.name}', decl.span);
 				for (method in decl.methods)

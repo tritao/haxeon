@@ -3,7 +3,6 @@ package compiler.types.analysis;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstEnum;
-import compiler.syntax.Ast.AstEnumAbstract;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstInterface;
 import compiler.syntax.Ast.AstMetadata;
@@ -16,9 +15,9 @@ import compiler.syntax.Ast.AstMetadata;
 class PurityAnnotations {
 	public static function isTypeName(name:String, classDecls:Map<String, AstClass>,
 			interfaceDecls:Map<String, AstInterface>, enumDecls:Map<String, AstEnum>,
-			enumAbstractDecls:Map<String, AstEnumAbstract>, abstractDecls:Map<String, AstAbstract>):Bool
+			abstractDecls:Map<String, AstAbstract>):Bool
 		return classDecls.exists(name) || interfaceDecls.exists(name) || enumDecls.exists(name)
-			|| enumAbstractDecls.exists(name) || abstractDecls.exists(name);
+			|| abstractDecls.exists(name);
 
 	/** Annotated functions and read-only compiler intrinsics; purity inference seeds from these. */
 	public static function isDeclaredPure(name:String, signatures:Map<String, AstFunction>,

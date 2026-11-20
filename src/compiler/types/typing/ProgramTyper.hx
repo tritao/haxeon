@@ -110,7 +110,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 			refreshing = classesToRefresh(semantic.program.classes, cachedMetadata.classes, selected);
 		}
 		var program = semantic.program;
-		for (decl in program.enumAbstracts) {
+		for (decl in session.declarations.enumAbstractList) {
 			RawRepresentableGenerator.validate(session, bodyTyper, decl);
 			FlagsGenerator.validate(session, bodyTyper, decl);
 			for (value in decl.values)

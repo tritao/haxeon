@@ -108,7 +108,6 @@ class CompilerMemoryCensus {
 					state.canonicalInterfaces = [];
 					state.canonicalAbstracts = [];
 					state.canonicalAliases = [];
-					state.canonicalEnumAbstracts = [];
 				}
 			},
 				{name: "semantic models of modules",

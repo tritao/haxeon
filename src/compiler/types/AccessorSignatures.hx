@@ -28,7 +28,6 @@ class AccessorSignatures {
 			usings: program.usings,
 			aliases: program.aliases,
 			enums: program.enums,
-			enumAbstracts: program.enumAbstracts,
 			abstracts: program.abstracts,
 			interfaces: program.interfaces,
 			classes: classes,

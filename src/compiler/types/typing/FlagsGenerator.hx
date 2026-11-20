@@ -4,7 +4,7 @@ import compiler.core.InternalError;
 import compiler.types.typing.HelperRequests.HelperRequest;
 import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.Ast.AstEnumAbstract;
+import compiler.syntax.Ast.AstAbstract;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
 import compiler.types.TypedAst.TypedExpressionKind;
@@ -17,7 +17,7 @@ import compiler.types.InlineConstantEvaluator;
 class FlagsGenerator {
 	public static inline final PREFIX = "$flags:";
 
-	public static function conforms(session:TypingSession, declaration:AstEnumAbstract):Bool
+	public static function conforms(session:TypingSession, declaration:AstAbstract):Bool
 		return DeclaredConformance.has(session,
 			TAbstract(declaration.name, [], session.declarations.resolve(declaration.underlying, declaration.span)),
 			"Flags");
@@ -45,7 +45,7 @@ class FlagsGenerator {
 		};
 	}
 
-	static function code(typer:BodyTyper, declaration:AstEnumAbstract,
+	static function code(typer:BodyTyper, declaration:AstAbstract,
 			value:compiler.syntax.Ast.AstEnumAbstractValue):Int {
 		var constant = InlineConstantEvaluator.evaluate(EnumAbstractValues.raw(typer, declaration, value));
 		if (constant != null)
@@ -61,7 +61,7 @@ class FlagsGenerator {
 	static function single(value:Int):Bool
 		return value != 0 && (value & (value - 1)) == 0;
 
-	public static function validate(session:TypingSession, typer:BodyTyper, declaration:AstEnumAbstract):Void {
+	public static function validate(session:TypingSession, typer:BodyTyper, declaration:AstAbstract):Void {
 		if (!conforms(session, declaration))
 			return;
 		if (!compiler.types.TypeRelations.equals(typer.lowerType(declaration.underlying, declaration.span), TInt))

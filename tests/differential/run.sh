@@ -239,6 +239,9 @@ in_background run_compile_failure abstract-construction-inference-mismatch
 # An abstract's static variables, in Haxe's initialization order (AbstractStatics).
 in_background run_case abstract-statics 0
 in_background run_compile_failure abstract-static-private
+# An enum abstract has an abstract's members besides its values; a value has the abstract's type.
+in_background run_case enum-abstract-members 0
+in_background run_compile_failure enum-abstract-value-type
 # Static properties with accessors, of a class and of an abstract (StaticProperties).
 in_background run_case static-properties 0
 in_background run_compile_failure static-property-never-write

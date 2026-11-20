@@ -132,7 +132,6 @@ class SemanticProgram {
 			usings: program.usings,
 			aliases: program.aliases,
 			enums: current.enums,
-			enumAbstracts: program.enumAbstracts,
 			abstracts: abstracts,
 			interfaces: program.interfaces,
 			classes: classes,

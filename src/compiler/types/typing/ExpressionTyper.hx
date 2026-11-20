@@ -21,7 +21,7 @@ import compiler.syntax.Ast.AstMetadata;
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstClass;
 import compiler.syntax.Ast.AstField;
-import compiler.syntax.Ast.AstEnumAbstract;
+import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstMapEntry;
 import compiler.syntax.Ast.AstObjectField;
 import compiler.syntax.Ast.AstExpression;
@@ -571,7 +571,7 @@ class ExpressionTyper {
 	public function prepareNativeTypeAnnotations(program:AstProgram):Void {
 		typedAnnotationValues = [];
 		var structSchemas:Map<String, AstClass> = [],
-			abstractSchemas:Map<String, AstEnumAbstract> = [];
+			abstractSchemas:Map<String, AstAbstract> = [];
 		for (declaration in program.classes)
 			if (hasMetadata(declaration.metadata, "annotation")) {
 				validateAnnotationMarker(declaration.metadata);
@@ -588,8 +588,8 @@ class ExpressionTyper {
 					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
 				structSchemas.set(declaration.name, declaration);
 			}
-		for (declaration in program.enumAbstracts)
-			if (hasMetadata(declaration.metadata, "annotation")) {
+		for (declaration in program.abstracts)
+			if (declaration.values != null && hasMetadata(declaration.metadata, "annotation")) {
 				if (structSchemas.exists(declaration.name))
 					fail("E1024", 'Duplicate annotation declaration "${declaration.name}"', declaration.span);
 				validateAnnotationMarker(declaration.metadata);
@@ -635,7 +635,7 @@ class ExpressionTyper {
 
 	function typeAnnotationUses(metadata:Array<AstMetadata>, owner:String, annotationNames:Map<String, Bool>,
 			structSchemas:Map<String, AstClass>,
-			abstractSchemas:Map<String, AstEnumAbstract>):Void {
+			abstractSchemas:Map<String, AstAbstract>):Void {
 		var seen:Map<String, Bool> = [];
 		for (annotation in metadata) {
 			if (annotation.name == "annotation" || isBuiltInMetadata(annotation.name))

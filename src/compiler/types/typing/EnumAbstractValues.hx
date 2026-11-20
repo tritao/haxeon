@@ -1,7 +1,7 @@
 package compiler.types.typing;
 
 import compiler.core.Source.SourceSpan;
-import compiler.syntax.Ast.AstEnumAbstract;
+import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstEnumAbstractValue;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
@@ -20,7 +20,7 @@ class EnumAbstractValues {
 			default: false;
 		};
 
-	public static function raw(typer:BodyTyper, declaration:AstEnumAbstract,
+	public static function raw(typer:BodyTyper, declaration:AstAbstract,
 			value:AstEnumAbstractValue):TypedExpression {
 		var session = typer.session,
 			key = declaration.name + "." + value.name,
@@ -71,7 +71,7 @@ class EnumAbstractValues {
 	}
 
 	/** The value at a use site: the cached constant, typed as the abstract and located at `span`, where it is used. */
-	public static function typed(typer:BodyTyper, declaration:AstEnumAbstract, value:AstEnumAbstractValue,
+	public static function typed(typer:BodyTyper, declaration:AstAbstract, value:AstEnumAbstractValue,
 			span:SourceSpan):TypedExpression {
 		typer.recordInlineConstantDependency(declaration.name);
 		var expression = raw(typer, declaration, value);

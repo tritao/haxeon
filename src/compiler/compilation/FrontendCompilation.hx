@@ -1986,9 +1986,9 @@ class FrontendCompilation {
 
 	static function sameDeclarations(previous:AstProgram, current:AstProgram):Bool {
 		return sameNames([for (decl in previous.enums) decl.name], [for (decl in current.enums) decl.name])
-			&& sameNames([for (decl in previous.enumAbstracts) decl.name],
-			[for (decl in current.enumAbstracts) decl.name])
 			&& sameNames([for (decl in previous.abstracts) decl.name], [for (decl in current.abstracts) decl.name])
+			&& sameNames([for (decl in previous.abstracts) if (decl.values != null) decl.name],
+			[for (decl in current.abstracts) if (decl.values != null) decl.name])
 			&& sameNames([for (decl in previous.interfaces) decl.name], [for (decl in current.interfaces) decl.name])
 			&& sameNames([for (decl in previous.classes) decl.name], [for (decl in current.classes) decl.name])
 			&& sameNames([for (decl in previous.functions) decl.name], [for (decl in current.functions) decl.name])

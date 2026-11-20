@@ -131,19 +131,14 @@ class UnusedImports {
 				for (item in declaration.cases)
 					names.push(item.name);
 			}
-		for (declaration in program.enumAbstracts)
-			if (wants(declaration.name)) {
-				if (declaration.fromTypes.length > 0 || declaration.toTypes.length > 0)
-					return null;
-				names.push(declaration.name);
-				for (value in declaration.values)
-					names.push(value.name);
-			}
 		for (declaration in program.abstracts)
 			if (wants(declaration.name)) {
 				if (declaration.fromTypes.length > 0 || declaration.toTypes.length > 0)
 					return null;
 				names.push(declaration.name);
+				if (declaration.values != null)
+					for (value in declaration.values)
+						names.push(value.name);
 			}
 		for (declaration in program.interfaces)
 			if (wants(declaration.name))

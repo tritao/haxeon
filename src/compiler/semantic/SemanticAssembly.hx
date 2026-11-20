@@ -63,7 +63,6 @@ class SemanticAssembly {
 			programFunctions:Array<AstFunction> = [],
 			typeAliases:Array<compiler.syntax.Ast.AstTypeAlias> = [],
 			enums:Array<compiler.syntax.Ast.AstEnum> = [],
-			enumAbstracts:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
 			abstracts:Array<compiler.syntax.Ast.AstAbstract> = [],
 			interfaces:Array<compiler.syntax.Ast.AstInterface> = [],
 			classes:Array<compiler.syntax.Ast.AstClass> = [],
@@ -92,13 +91,12 @@ class SemanticAssembly {
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 				enumCasesByType.set(canonicalName, [for (enumCase in declaration.cases) enumCase.name]);
 			}
-			for (declaration in program.enumAbstracts) {
-				var canonicalName = ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name);
+			for (declaration in program.abstracts) {
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
-				enumCasesByType.set(canonicalName, [for (enumCase in declaration.values) enumCase.name]);
+				if (declaration.values != null)
+					enumCasesByType.set(ModuleCanonicalizer.qualifiedTypeName(program.packageName, declaration.name),
+						[for (value in declaration.values) value.name]);
 			}
-			for (declaration in program.abstracts)
-				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.interfaces)
 				addSourceAlias(sourceTypeAliases, moduleAliases, moduleName, declaration.name, program.packageName);
 			for (declaration in program.classes)
@@ -206,8 +204,6 @@ class SemanticAssembly {
 					typeAliases.push(value);
 				for (value in state.canonicalEnums)
 					enums.push(value);
-				for (value in state.canonicalEnumAbstracts)
-					enumAbstracts.push(value);
 				for (value in state.canonicalAbstracts)
 					abstracts.push(value);
 				for (value in state.canonicalInterfaces)
@@ -318,7 +314,6 @@ class SemanticAssembly {
 					ModuleCanonicalizer.addExpressionAlias(aliases, caseName, target);
 			var aliasStart = typeAliases.length,
 				enumStart = enums.length,
-				enumAbstractStart = enumAbstracts.length,
 				abstractStart = abstracts.length,
 				interfaceStart = interfaces.length,
 				classStart = classes.length,
@@ -340,9 +335,6 @@ class SemanticAssembly {
 			for (enumDecl in ast.enums)
 				enums.push(ModuleCanonicalizer.canonicalEnum(enumDecl, aliases, ast.packageName, name, entryModule,
 					locals));
-			for (abstractDecl in ast.enumAbstracts)
-				enumAbstracts.push(ModuleCanonicalizer.canonicalEnumAbstract(abstractDecl, aliases, ast.packageName,
-					name, entryModule, locals));
 			for (abstractDecl in ast.abstracts) {
 				var canonicalAbstract = ModuleCanonicalizer.canonicalAbstract(abstractDecl, aliases, ast.packageName,
 					name, entryModule, locals);
@@ -509,7 +501,6 @@ class SemanticAssembly {
 				SemanticDependencyCollector.addTypeDependency(state.semanticDependencies, alias.name,
 					SemanticDependencyKind.Layout, alias.type, aliases);
 			state.canonicalEnums = enums.slice(enumStart);
-			state.canonicalEnumAbstracts = enumAbstracts.slice(enumAbstractStart);
 			state.canonicalAbstracts = abstracts.slice(abstractStart);
 			state.canonicalInterfaces = interfaces.slice(interfaceStart);
 			state.canonicalClasses = classes.slice(classStart);
@@ -573,8 +564,6 @@ class SemanticAssembly {
 			[for (interfaceDecl in interfaces) interfaceDecl.name => interfaceDecl];
 		var purityScopeEnums:Map<String, compiler.syntax.Ast.AstEnum> =
 			[for (enumDecl in enums) enumDecl.name => enumDecl];
-		var purityScopeEnumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> =
-			[for (decl in enumAbstracts) decl.name => decl];
 		var purityScopeAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> =
 			[for (decl in abstracts) decl.name => decl];
 		// The typer's own signature table: purity inferred over any other scope can disagree with what typing relied on, and
@@ -587,7 +576,7 @@ class SemanticAssembly {
 			purityScopeClasses);
 		var isTypeName = function(candidate:String):Bool return compiler.types.analysis.PurityAnnotations
 			.isTypeName(candidate, purityScopeClasses,
-			purityScopeInterfaces, purityScopeEnums, purityScopeEnumAbstracts, purityScopeAbstracts);
+			purityScopeInterfaces, purityScopeEnums, purityScopeAbstracts);
 		var freshInferredPure = compiler.types.analysis.PurityInference.infer(purityScopeSignatures, purityScopeClasses,
 			purityScopeAbstracts,
 			purityScopeEnums, isAnnotatedPure, isTypeName);
@@ -943,7 +932,6 @@ class SemanticAssembly {
 			imports: [],
 			aliases: typeAliases,
 			enums: enums,
-			enumAbstracts: enumAbstracts,
 			abstracts: abstracts,
 			interfaces: interfaces,
 			classes: classes,

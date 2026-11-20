@@ -42,8 +42,6 @@ class ImportShadowing {
 			names.push(QualifiedName.last(declaration.name));
 		for (declaration in ast.enums)
 			names.push(QualifiedName.last(declaration.name));
-		for (declaration in ast.enumAbstracts)
-			names.push(QualifiedName.last(declaration.name));
 		for (declaration in ast.abstracts)
 			names.push(QualifiedName.last(declaration.name));
 		for (declaration in ast.aliases)

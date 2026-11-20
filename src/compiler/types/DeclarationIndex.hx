@@ -62,15 +62,16 @@ class OpenStructure {
 class DeclarationIndex {
 	public final aliases:Map<String, AstTypeAlias> = [];
 	public final enums:Map<String, AstEnum> = [];
-	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstEnumAbstract> = [];
-
-	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
-	public final enumAbstractList:Array<compiler.syntax.Ast.AstEnumAbstract> = [];
-
-	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
+	/** Every abstract, enum abstracts included. */
 	public final abstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
 
-	final enumAbstractViews:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+	/** The abstracts that are enum abstracts (they declare values), for the lookups of values. */
+	public final enumAbstracts:Map<String, compiler.syntax.Ast.AstAbstract> = [];
+
+	/** The same enum abstracts and aliases in declaration order, for the lookups that go through all of them (a map is walked through an iterator whose calls are dynamic). */
+	public final enumAbstractList:Array<compiler.syntax.Ast.AstAbstract> = [];
+
+	public final aliasList:Array<compiler.syntax.Ast.AstTypeAlias> = [];
 
 	// This index belongs to one semantic declaration snapshot; rebuilding the index drops the cache.
 	final abstractEqualityOperators:Map<String, Bool> = [];
@@ -131,36 +132,11 @@ class DeclarationIndex {
 				null;
 		};
 
-	/** Both abstract declaration forms share conversion and method lookup. */
-	public function abstractDeclaration(name:String):Null<compiler.syntax.Ast.AstAbstract> {
-		var ordinary = abstracts.get(name);
-		if (ordinary != null)
-			return ordinary;
-		var known = enumAbstractViews.get(name);
-		if (known != null)
-			return known;
-		var declaration = enumAbstracts.get(name);
-		if (declaration == null)
-			return null;
-		var view:compiler.syntax.Ast.AstAbstract = {
-			name: name,
-			metadata: declaration.metadata,
-			typeParameters: [],
-			underlying: declaration.underlying,
-			fromTypes: declaration.fromTypes,
-			toTypes: declaration.toTypes,
-			fields: [],
-			methods: [],
-			span: declaration.span
-		};
-		enumAbstractViews.set(name, view);
-		return view;
-	}
+	public inline function abstractDeclaration(name:String):Null<compiler.syntax.Ast.AstAbstract>
+		return abstracts.get(name);
 
 	public function abstractNames():Array<String> {
 		var names = [for (name in abstracts.keys()) name];
-		for (name in enumAbstracts.keys())
-			names.push(name);
 		names.sort(Reflect.compare);
 		return names;
 	}
@@ -211,16 +187,15 @@ class DeclarationIndex {
 			for (enumCase in decl.cases)
 				declare(DeclarationKind.EnumCase, decl.name + "." + enumCase.name, enumCase.span);
 		}
-		for (decl in program.enumAbstracts) {
-			declareType(decl.name, DeclarationKind.Abstract, decl.span);
-			enumAbstracts.set(decl.name, decl);
-			enumAbstractList.push(decl);
-			for (value in decl.values)
-				declare(DeclarationKind.Member, decl.name + "." + value.name, value.span);
-		}
 		for (decl in program.abstracts) {
 			declareType(decl.name, DeclarationKind.Abstract, decl.span);
 			abstracts.set(decl.name, decl);
+			if (decl.values != null) {
+				enumAbstracts.set(decl.name, decl);
+				enumAbstractList.push(decl);
+				for (value in decl.values)
+					declare(DeclarationKind.Member, decl.name + "." + value.name, value.span);
+			}
 			for (method in decl.methods)
 				declare(DeclarationKind.Member, decl.name + "." + method.name, method.span);
 		}
@@ -663,9 +638,6 @@ class DeclarationIndex {
 				fail('Type "$name" expects ${alias.typeParameters.length} type arguments, got 0', span);
 			return resolveAlias(alias, resolving, substitutions);
 		}
-		var enumAbstract = enumAbstracts.get(name);
-		if (enumAbstract != null)
-			return TAbstract(name, [], resolveInner(enumAbstract.underlying, span, resolving, substitutions));
 		var decl = abstracts.get(name);
 		if (decl != null) {
 			if (decl.typeParameters.length != 0)
@@ -1064,13 +1036,6 @@ class DeclarationIndex {
 			for (method in decl.methods)
 				resolveFunction(method, decl.name, substitutions);
 		}
-		for (decl in program.enumAbstracts) {
-			resolve(decl.underlying, decl.span);
-			for (type in decl.fromTypes)
-				resolve(type, decl.span);
-			for (type in decl.toTypes)
-				resolve(type, decl.span);
-		}
 		for (decl in program.enums) {
 			var substitutions:Map<String, CompilerType> = [];
 			for (parameter in decl.typeParameters)
@@ -1372,8 +1337,6 @@ class DeclarationIndex {
 			return program.aliases[0].span;
 		if (program.enums.length > 0)
 			return program.enums[0].span;
-		if (program.enumAbstracts.length > 0)
-			return program.enumAbstracts[0].span;
 		if (program.abstracts.length > 0)
 			return program.abstracts[0].span;
 		if (program.interfaces.length > 0)

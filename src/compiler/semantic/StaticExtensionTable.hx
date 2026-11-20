@@ -238,15 +238,6 @@ class StaticExtensionTable {
 				kind: AbstractStatics,
 				statics: [for (method in declaration.methods) if (method.isStatic) method]
 			});
-		for (declaration in ast.enumAbstracts)
-			result.push({
-				name: declaration.name,
-				isPrivate: false,
-				metadata: declaration.metadata,
-				start: declaration.span.start,
-				kind: null,
-				statics: []
-			});
 		for (declaration in ast.enums)
 			result.push({
 				name: declaration.name,

@@ -2697,16 +2697,42 @@ class BodyTyper implements BodyTyping {
 		return null;
 	}
 
+	/** The enum abstract value `name` names, qualified (`Color.Blue`) or bare (`Blue`), or null when it names none. */
+	public function enumAbstractValueReference(name:String, span:SourceSpan):Null<TypedExpression> {
+		var dot = name.lastIndexOf("."), declaration:Null<compiler.syntax.Ast.AstAbstract> = null;
+		if (dot < 0)
+			declaration = findBareEnumAbstract(name, span);
+		else {
+			var owner = session.enumAbstractName(name.substr(0, dot));
+			declaration = owner == null ? null : session.enumAbstractDecls.get(owner);
+		}
+		if (declaration != null) {
+			var valueName = name.substr(dot + 1);
+			for (value in declaration.values)
+				if (value.name == valueName)
+					return EnumAbstractValues.typed(this, declaration, value, span);
+		}
+		return null;
+	}
+
 	/**
 	 * The enum abstract an uncontextualized bare value name belongs to.
+	 * In an enum abstract's own code (its methods and its statics' initializers) its values are its own members and win.
 	 * Among several abstracts declaring the value, the one in the current type's own package wins: its
 	 * types are visible without an import, as in Haxe. An ambiguity that leaves more than one is an
 	 * error.
 	 */
-	function findBareEnumAbstract(name:String, span:SourceSpan):Null<compiler.syntax.Ast.AstEnumAbstract> {
-		var found:Null<compiler.syntax.Ast.AstEnumAbstract> = null,
+	function findBareEnumAbstract(name:String, span:SourceSpan):Null<compiler.syntax.Ast.AstAbstract> {
+		var lexicalOwner = context.lexicalOwner,
+			own = lexicalOwner == null
+				? null : session.enumAbstractDecls.get(AbstractStatics.displayOwner(lexicalOwner));
+		if (own != null)
+			for (value in own.values)
+				if (value.name == name)
+					return own;
+		var found:Null<compiler.syntax.Ast.AstAbstract> = null,
 			ambiguous = false,
-			samePackage:Array<compiler.syntax.Ast.AstEnumAbstract> = [],
+			samePackage:Array<compiler.syntax.Ast.AstAbstract> = [],
 			declaredBy:Array<String> = [];
 		var ownerPackage = context.lexicalOwner == null ? null : pathBeforeLast(context.lexicalOwner);
 		for (candidate in session.declarations.enumAbstractList) {

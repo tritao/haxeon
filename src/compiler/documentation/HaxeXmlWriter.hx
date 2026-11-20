@@ -103,26 +103,19 @@ class HaxeXmlWriter {
 			emitType(output, decl.underlying);
 			output.add('</this>');
 			emitDocumentation(output, state, comments, decl.span);
+			if (decl.values != null)
+				for (value in decl.values) {
+					output.add('<');
+					output.add(escape(value.name));
+					output.add(' public="1" static="1">');
+					emitType(output, decl.underlying);
+					emitDocumentation(output, state, comments, value.span);
+					output.add('</');
+					output.add(escape(value.name));
+					output.add('>\n');
+				}
 			for (method in decl.methods)
 				emitFunction(output, state, comments, method);
-			output.add('</abstract>\n');
-		}
-		for (decl in program.enumAbstracts) {
-			openType(output, "abstract", qualified(program, decl.name), [], state, decl.span, false);
-			output.add('<this>');
-			emitType(output, decl.underlying);
-			output.add('</this>');
-			emitDocumentation(output, state, comments, decl.span);
-			for (value in decl.values) {
-				output.add('<');
-				output.add(escape(value.name));
-				output.add(' public="1" static="1">');
-				emitType(output, decl.underlying);
-				emitDocumentation(output, state, comments, value.span);
-				output.add('</');
-				output.add(escape(value.name));
-				output.add('>\n');
-			}
 			output.add('</abstract>\n');
 		}
 		if (program.functions.length > 0) {

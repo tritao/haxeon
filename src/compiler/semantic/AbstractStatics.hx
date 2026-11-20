@@ -66,7 +66,6 @@ class AbstractStatics {
 			usings: program.usings,
 			aliases: program.aliases,
 			enums: program.enums,
-			enumAbstracts: program.enumAbstracts,
 			abstracts: abstracts,
 			interfaces: program.interfaces,
 			classes: classes,
@@ -96,11 +95,13 @@ class AbstractStatics {
 			metadata: declaration.metadata,
 			typeParameters: declaration.typeParameters,
 			typeConstraints: declaration.typeConstraints,
+			conformances: declaration.conformances,
 			underlying: declaration.underlying,
 			fromTypes: declaration.fromTypes,
 			toTypes: declaration.toTypes,
 			fields: fields,
 			methods: declaration.methods,
+			values: declaration.values,
 			span: declaration.span
 		};
 }
