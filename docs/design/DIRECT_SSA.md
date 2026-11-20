@@ -71,3 +71,8 @@ input, and the output's size, in the commit. Later byte-identity checks use the 
   creation stored once into one local, no copies), which SSA values alone do not say: an SSA value can be shared by two
   locals after `var b = a`.
 - **One phi provenance per block** instead of one per phi.
+- **A join reads its predecessors before it makes a phi.** A lookup through a sealed block with several predecessors
+  collects their values first and makes a phi only when they differ, so the trivial phis the plain algorithm makes and then
+  removes are never made. A lookup that comes back to a join while it is still collecting is on a cycle; the join gets its
+  phi then, and the phi is completed and checked for triviality once the collection ends (the marker variant in Braun et
+  al.).

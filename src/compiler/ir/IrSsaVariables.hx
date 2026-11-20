@@ -103,6 +103,7 @@ class IrSsaVariables {
 			throw new InternalError('SSA block $id added out of order');
 		blockCount++;
 		scratch.sealed[id] = sealed;
+		scratch.collecting[id] = 0;
 		scratch.selected[id] = false;
 		scratch.lookedThrough[id] = false;
 		scratch.predecessorCounts[id] = 0;
@@ -158,13 +159,20 @@ class IrSsaVariables {
 	}
 
 	static inline final SINGLE = 1;
-	static inline final MULTIPLE = 2;
+
+	/**
+	 * A join: its predecessors' values are found first, and a phi made only when they differ, so trivial phis are never made.
+	 * A lookup that comes back to the join while it collects is on a cycle, and gets the join's phi then (Braun et al.).
+	 */
+	static inline final COLLECT = 2;
 
 	function readThroughPredecessors(variable:Int, start:Int):IrValue {
 		var stack = scratch.lookupBlocks,
 			states = scratch.lookupStates,
 			indices = scratch.lookupIndices,
 			frames = scratch.lookupPhis,
+			bases = scratch.lookupBases,
+			collected = scratch.collected,
 			depth = 0,
 			result:IrValue = null;
 		push(stack, states, 0, start);
@@ -180,6 +188,16 @@ class IrSsaVariables {
 					continue;
 				}
 				scratch.lookedThrough[block] = true;
+				// A lookup that comes back to a join still collecting closes a cycle: the join gets its phi now.
+				var collector = scratch.collecting[block];
+				if (collector > 0) {
+					var phi = newPhi(block, variable);
+					frames[collector - 1] = phi;
+					write(variable, block, phi.output);
+					result = phi.output;
+					depth--;
+					continue;
+				}
 				if (!scratch.sealed[block]) {
 					var phi = newPhi(block, variable);
 					incomplete.push(phi);
@@ -198,11 +216,11 @@ class IrSsaVariables {
 				if (count == 1) {
 					states[top] = SINGLE;
 				} else {
-					var phi = newPhi(block, variable);
-					write(variable, block, phi.output);
-					states[top] = MULTIPLE;
-					frames[top] = phi;
+					states[top] = COLLECT;
+					bases[top] = collected.length;
 					indices[top] = 0;
+					frames[top] = null;
+					scratch.collecting[block] = depth;
 				}
 				push(stack, states, depth, predecessor(block, 0));
 				depth++;
@@ -214,23 +232,53 @@ class IrSsaVariables {
 				depth--;
 				continue;
 			}
-			var phi = frames[top], index = indices[top];
-			if (phi == null)
-				throw new InternalError("SSA lookup lost its phi");
-			phi.inputs.push({block: predecessor(block, index), value: result});
-			index++;
-			if (index < scratch.predecessorCounts[block]) {
-				indices[top] = index;
-				result = null;
-				push(stack, states, depth, predecessor(block, index));
-				depth++;
+			if (states[top] == COLLECT) {
+				collected.push(result);
+				var next = indices[top] + 1;
+				if (next < scratch.predecessorCounts[block]) {
+					indices[top] = next;
+					result = null;
+					push(stack, states, depth, predecessor(block, next));
+					depth++;
+					continue;
+				}
+				scratch.collecting[block] = 0;
+				var cyclic = frames[top];
+				if (cyclic == null)
+					result = merged(variable, block, bases[top]);
+				else {
+					frames[top] = null;
+					var base = bases[top];
+					for (index in base...collected.length)
+						cyclic.inputs.push({block: predecessor(block, index - base), value: collected[index]});
+					collected.resize(base);
+					result = removeIfTrivial(cyclic, true);
+				}
+				write(variable, block, result);
+				depth--;
 				continue;
 			}
-			frames[top] = null;
-			result = removeIfTrivial(phi, false);
-			write(variable, block, result);
-			depth--;
+			throw new InternalError("SSA lookup in an unknown state");
 		}
+		return result;
+	}
+
+	/** The value of `variable` entering `block` from the predecessors' values collected from `base` on, which it pops. */
+	function merged(variable:Int, block:Int, base:Int):IrValue {
+		var collected = scratch.collected, first = find(collected[base]), same = true;
+		for (index in base + 1...collected.length)
+			if (find(collected[index]) != first) {
+				same = false;
+				break;
+			}
+		var result = first;
+		if (!same) {
+			var phi = newPhi(block, variable);
+			for (index in base...collected.length)
+				phi.inputs.push({block: predecessor(block, index - base), value: collected[index]});
+			result = phi.output;
+		}
+		collected.resize(base);
 		return result;
 	}
 
@@ -240,6 +288,7 @@ class IrSsaVariables {
 			states.push(0);
 			scratch.lookupIndices.push(0);
 			scratch.lookupPhis.push(null);
+			scratch.lookupBases.push(0);
 		} else {
 			stack[depth] = block;
 			states[depth] = 0;
@@ -562,6 +611,15 @@ class IrSsaScratch {
 	public final lookupStates:Array<Int> = [];
 	public final lookupIndices:Array<Int> = [];
 	public final lookupPhis:Array<Null<IrPendingPhi>> = [];
+
+	/** Per lookup frame on a join that cannot be on a cycle, where its predecessors' values start in `collected`. */
+	public final lookupBases:Array<Int> = [];
+
+	public final collected:Array<IrValue> = [];
+
+	/** Per block, one past the depth of the frame collecting its predecessors' values, or 0 when none is. */
+	public final collecting:Array<Int> = [];
+
 	public final placed:Array<IrPendingPhi> = [];
 	final valueNames:Array<String> = [];
 
@@ -581,6 +639,7 @@ class IrSsaScratch {
 		edgeTo.resize(0);
 		replacements.resize(0);
 		undefinedReads.resize(0);
+		collected.resize(0);
 	}
 
 	public final undefinedReads:Array<Int> = [];
