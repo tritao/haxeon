@@ -85,6 +85,9 @@ class HlLower {
 
 	final locationScratch:Array<HlDebugLocation> = [];
 
+	/** The graph of the function being lowered, its tables reused across functions. */
+	final functionGraph = new compiler.ir.IrGraph();
+
 	/** The tables of the non-null analysis, reused across functions. */
 	final nonNullScratch = new compiler.ir.IrPassScratch.IrNonNullScratch();
 	final valueIsNull:Array<Bool> = [];
@@ -1082,7 +1085,7 @@ class HlLower {
 			if (block.id >= nextLabel)
 				nextLabel = block.id + 1;
 		// Both read the function as it is, so they share its graph.
-		var graph = new compiler.ir.IrGraph(fn),
+		var graph = functionGraph.reset(fn),
 			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph, nonNullScratch),
 			exactTypes = new compiler.ir.IrExactTypeFacts(fn, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
@@ -1977,6 +1980,7 @@ class HlLower {
 		// what a debugger shows a variable from.
 		if (!developmentMetadata)
 			registerTypes = registerAllocation.run(instructions, registerTypes, fn.arguments.length);
+		graph.release();
 		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
 			requireFunction(fn.name), registerTypes,
 			instructions.copy(), debugLocations.copy(), scopedAssignments);

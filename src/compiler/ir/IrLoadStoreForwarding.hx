@@ -24,8 +24,11 @@ private typedef KnownElement = {
  * the same elements. Erased dynamic array accesses use calls, which invalidate all known loads. */
 class IrLoadStoreForwarding {
 
-	/** Object layouts are needed only to exclude inline value fields; unknown Obj fields are excluded too. */
-	public static function run(fn:IrFunction, ?objects:IrObjectTable):IrFunction {
+	/**
+	 * Object layouts are needed only to exclude inline value fields; unknown Obj fields are excluded too. `scratch`, when given,
+	 * lends the graph.
+	 */
+	public static function run(fn:IrFunction, ?objects:IrObjectTable, ?scratch:IrPassScratch):IrFunction {
 		var substitutions:Map<Int, IrValue> = [], constants:Map<Int, Int> = [];
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -41,7 +44,7 @@ class IrLoadStoreForwarding {
 		};
 		// Nothing is copied until a load is forwarded: most functions forward nothing, and a copy of every block that is then thrown away
 		// (with a remapped instruction for each analyzed one) was most of this pass's allocation.
-		var incoming = incomingFields(fn, objects),
+		var incoming = incomingFields(fn, objects, scratch),
 			dropped:Null<haxe.ds.ObjectMap<Dynamic, Bool>> = null,
 			substituted = 0;
 		// Each block's incoming fields are its own to change; the element facts reuse one list.
@@ -181,7 +184,8 @@ class IrLoadStoreForwarding {
 	}
 
 	/** Fields available on every normal path into each block. */
-	static function incomingFields(fn:IrFunction, objects:Null<IrObjectTable>):Map<Int, Array<KnownField>> {
+	static function incomingFields(fn:IrFunction, objects:Null<IrObjectTable>,
+			scratch:Null<IrPassScratch>):Map<Int, Array<KnownField>> {
 		var result:Map<Int, Array<KnownField>> = [],
 			keyObjects:Array<Int> = [],
 			keyFields:Array<String> = [],
@@ -218,7 +222,7 @@ class IrLoadStoreForwarding {
 			return result;
 		// A key's state is absent (not available), present with a null value (the analysis top), or present with its value.
 		var count = keyObjects.length,
-			graph = new IrGraph(fn),
+			graph = scratch == null ? new IrGraph(fn) : scratch.graph.reset(fn),
 			outgoing:Map<Int, BlockFields> = [],
 			top = BlockFields.top();
 		for (id in graph.order)
@@ -293,6 +297,7 @@ class IrLoadStoreForwarding {
 			}
 			result.set(id, fields);
 		}
+		graph.release();
 		return result;
 	}
 

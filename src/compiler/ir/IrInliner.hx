@@ -480,7 +480,7 @@ class IrInliner {
 				var source = result;
 				result =
 					IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(IrScalarRefPromotion.run(IrJumpThreading.threadConstantBranches(result)),
-					inliner.passScratch), inliner.passScratch));
+					inliner.passScratch), inliner.passScratch), inliner.passScratch);
 				clean = {source: source, result: result};
 			} else
 				result = clean.result;
@@ -601,7 +601,7 @@ class IrInliner {
 		var result = allowInline ? inlineCalls(original) : profile.packedValueFields
 			? IrScalarReplacement.rewrite(original, table, false, true) : original;
 		if (loadStoreForwarding)
-			result = IrLoadStoreForwarding.run(result, table);
+			result = IrLoadStoreForwarding.run(result, table, passScratch);
 		if (strengthReduction)
 			result = IrStrengthReduction.run(result);
 		objectFrames.pop();

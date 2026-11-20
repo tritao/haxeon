@@ -29,6 +29,9 @@ class IrPassScratch {
 
 	public final secondInts:Array<Int> = [];
 
+	/** The graph of the function a pass reads, refilled for each (`IrGraph.reset`) and released when the pass is done. */
+	public final graph = new IrGraph();
+
 	/** The graph the passes over bodies refill (`IrBodyGraph.reset`). */
 	public final bodyGraph = new IrBodyGraph();
 

@@ -14,27 +14,50 @@ import haxe.ds.ReadOnlyArray;
  */
 class IrGraph {
 	/** The reachable blocks in reverse postorder, the entry first. */
-	public final order:ReadOnlyArray<Int>;
+	public var order(get, never):ReadOnlyArray<Int>;
 
-	final blocks:Array<Null<IrBlock>>;
-	final reachable:Array<Bool>;
+	final postorder:Array<Int> = [];
+	final blocks:Array<Null<IrBlock>> = [];
+	final reachable:Array<Bool> = [];
 
 	/** Per block id, where its run starts in `successorTargets` and how long it is (0 for an unreachable block). */
-	final successorStart:Array<Int>;
+	final successorStart:Array<Int> = [];
 
-	final successorCounts:Array<Int>;
+	final successorCounts:Array<Int> = [];
 	final successorTargets:Array<Int> = [];
 
 	/** The same for predecessors, each block's in the order the walk met them. */
-	final predecessorStart:Array<Int>;
+	final predecessorStart:Array<Int> = [];
 
-	final predecessorCounts:Array<Int>;
+	final predecessorCounts:Array<Int> = [];
 	final predecessorSources:Array<Int> = [];
 
 	/** Immediate dominators by id, -1 for an unreachable block; computed the first time one is asked for. */
-	var dominators:Null<Array<Int>> = null;
+	final dominators:Array<Int> = [];
 
-	public function new(fn:IrFunction) {
+	var hasDominators = false;
+
+	// The walk's and the dominator computation's working rows.
+	final edgeFrom:Array<Int> = [];
+	final edgeTo:Array<Int> = [];
+	final stack:Array<Int> = [];
+	final next:Array<Int> = [];
+	final rank:Array<Int> = [];
+
+	/**
+	 * The graph of `fn`; without one, an empty graph for its owner to `reset` for one function after another, so its tables
+	 * are allocated once at the size of the largest.
+	 */
+	public function new(?fn:IrFunction) {
+		if (fn != null)
+			reset(fn);
+	}
+
+	inline function get_order():ReadOnlyArray<Int>
+		return postorder;
+
+	/** Makes this the graph of `fn`, in the storage of the function it was before. */
+	public function reset(fn:IrFunction):IrGraph {
 		if (fn.blocks.length == 0)
 			throw new InternalError("IR function has no entry block");
 		var size = 0;
@@ -44,35 +67,32 @@ class IrGraph {
 			if (block.id >= size)
 				size = block.id + 1;
 		}
-		blocks = [];
 		blocks.resize(size);
-		reachable = [];
-		reachable.resize(size);
-		for (index in 0...size) {
+		for (index in 0...size)
 			blocks[index] = null;
-			reachable[index] = false;
-		}
-		successorStart = filled(size, 0);
-		successorCounts = filled(size, 0);
-		predecessorStart = filled(size, 0);
-		predecessorCounts = filled(size, 0);
+		IrPassScratch.filledBools(reachable, size, false);
+		IrPassScratch.filledInts(successorStart, size, 0);
+		IrPassScratch.filledInts(successorCounts, size, 0);
+		IrPassScratch.filledInts(predecessorStart, size, 0);
+		IrPassScratch.filledInts(predecessorCounts, size, 0);
+		successorTargets.resize(0);
+		hasDominators = false;
 		for (block in fn.blocks) {
 			if (blocks[block.id] != null)
 				throw new InternalError('Duplicate IR block ${block.id}');
 			blocks[block.id] = block;
 		}
-		var postorder:Array<Int> = [];
-		visit(fn.blocks[0].id, postorder);
+		postorder.resize(0);
+		visit(fn.blocks[0].id);
 		postorder.reverse();
-		order = postorder;
+		return this;
 	}
 
-	static function filled(count:Int, value:Int):Array<Int> {
-		var values:Array<Int> = [];
-		values.resize(count);
-		for (index in 0...count)
-			values[index] = value;
-		return values;
+	/** Lets go of the function's blocks, so a graph kept for the next function keeps none of this one alive. */
+	public function release():Void {
+		for (index in 0...blocks.length)
+			blocks[index] = null;
+		blocks.resize(0);
 	}
 
 	/** The block `id`; it must be one of the function's blocks. */
@@ -122,12 +142,11 @@ class IrGraph {
 
 	/** The immediate dominator of `id`, the entry for itself, or -1 when `id` is not reachable. */
 	public function immediateDominator(id:Int):Int {
-		var table = dominators;
-		if (table == null) {
-			table = computeDominators();
-			dominators = table;
+		if (!hasDominators) {
+			computeDominators();
+			hasDominators = true;
 		}
-		return id >= 0 && id < table.length ? table[id] : -1;
+		return id >= 0 && id < dominators.length ? dominators[id] : -1;
 	}
 
 	public function dominates(definition:Int, use:Int):Bool {
@@ -146,10 +165,14 @@ class IrGraph {
 	 * Depth first from `entry`, recording each reachable block's successors and pushing it to `postorder` once it is done; the
 	 * edges, in the order the walk takes them, then give each block its predecessors in that order.
 	 */
-	function visit(entry:Int, postorder:Array<Int>):Void {
-		var edgeFrom:Array<Int> = [], edgeTo:Array<Int> = [];
+	function visit(entry:Int):Void {
+		edgeFrom.resize(0);
+		edgeTo.resize(0);
+		stack.resize(0);
+		next.resize(0);
 		prepareVisit(entry);
-		var stack:Array<Int> = [entry], next:Array<Int> = [0];
+		stack.push(entry);
+		next.push(0);
 		while (stack.length > 0) {
 			var top = stack.length - 1, id = stack[top];
 			if (next[top] < successorCounts[id]) {
@@ -224,14 +247,9 @@ class IrGraph {
 	}
 
 	/** Immediate dominators by the iterative algorithm of Cooper, Harvey and Kennedy, over reverse postorder ranks. */
-	function computeDominators():Array<Int> {
-		var table:Array<Int> = [], rank:Array<Int> = [];
-		table.resize(blocks.length);
-		rank.resize(blocks.length);
-		for (index in 0...blocks.length) {
-			table[index] = -1;
-			rank[index] = -1;
-		}
+	function computeDominators():Void {
+		var table = IrPassScratch.filledInts(dominators, blocks.length, -1),
+			rank = IrPassScratch.filledInts(this.rank, blocks.length, -1);
 		for (index in 0...order.length)
 			rank[order[index]] = index;
 		table[order[0]] = order[0];
@@ -251,7 +269,6 @@ class IrGraph {
 				}
 			}
 		}
-		return table;
 	}
 
 	static function intersect(table:Array<Int>, rank:Array<Int>, left:Int, right:Int):Int {

@@ -13,7 +13,8 @@ private typedef JumpBridge = {
 
 /** Thread linear edges through empty jump blocks while preserving SSA phi edges. */
 class IrJumpThreading {
-	public static function run(fn:IrFunction):IrFunction {
+	/** `scratch`, when given, lends the graph. */
+	public static function run(fn:IrFunction, ?scratch:IrPassScratch):IrFunction {
 		if (fn.blocks.length < 3) return fn;
 		var candidate = false;
 		for (block in fn.blocks) {
@@ -29,7 +30,14 @@ class IrJumpThreading {
 			}
 		}
 		if (!candidate) return fn;
-		var graph = new IrGraph(fn), external:Map<Int, Bool> = [], bridges:Map<Int, JumpBridge> = [];
+		var graph = scratch == null ? new IrGraph(fn) : scratch.graph.reset(fn),
+			result = threadBridges(fn, graph);
+		graph.release();
+		return result;
+	}
+
+	static function threadBridges(fn:IrFunction, graph:IrGraph):IrFunction {
+		var external:Map<Int, Bool> = [], bridges:Map<Int, JumpBridge> = [];
 		// Reachability analysis ignores dead blocks. Preserve any IDs that a dead edge or phi still mentions.
 		for (block in fn.blocks) if (!graph.isReachable(block.id)) {
 			if (block.terminator != null) switch block.terminator.value {
