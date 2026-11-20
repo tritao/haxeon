@@ -75,7 +75,7 @@ class ModuleState {
 	public var ownerConstraintFingerprints:Map<String, String> = [];
 	public var staticFieldFingerprints:Map<String, String> = [];
 	public var instanceInitializerFingerprints:Map<String, String> = [];
-	public var bodyFingerprints:Map<String, String> = [];
+	public var bodyFingerprints:Map<String, compiler.semantic.BodyFingerprint> = [];
 
 	/**
 	 * The type each unannotated declaration of the module was typed with when it was last typed, spelled by `SemanticSignature`: the

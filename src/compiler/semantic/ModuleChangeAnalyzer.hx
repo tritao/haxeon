@@ -12,7 +12,7 @@ typedef ModuleChangeAnalysis = {
 	final signatureChanged:Map<String, Bool>;
 	final structuralChanged:Map<String, Bool>;
 	final signatureFingerprints:Map<String, String>;
-	final bodyFingerprints:Map<String, String>;
+	final bodyFingerprints:Map<String, BodyFingerprint>;
 	final interfaceFingerprints:Map<String, String>;
 	final aliasFingerprints:Map<String, String>;
 	final enumFingerprints:Map<String, String>;
@@ -32,7 +32,7 @@ class ModuleChangeAnalyzer {
 			signatureChanged:Map<String, Bool> = [],
 			structuralChanged:Map<String, Bool> = [];
 		var signatures:Map<String, String> = [],
-			bodies:Map<String, String> = [];
+			bodies:Map<String, BodyFingerprint> = [];
 		var wireFields:Map<String, String> = [];
 		var interfaces:Map<String, String> = [];
 		for (interfaceDecl in ast.interfaces) {
@@ -244,12 +244,12 @@ class ModuleChangeAnalyzer {
 			var canonical = state.name == entry && fn.name == "main" ? "main" : state.name + "." + fn.name;
 			var signature = SemanticSignature.parsedFunction(fn, ast.aliases)
 				+ inferredFrom(state, fn),
-				body = sourceFingerprint(state, fn.span, fn.typeParameters != null && fn.typeParameters.length > 0);
+				body = bodyFingerprint(state, fn.span, fn.typeParameters != null && fn.typeParameters.length > 0);
 			signatures.set(fn.name, signature);
 			bodies.set(fn.name, body);
 			if (state.signatureFingerprints.get(fn.name) != signature)
 				signatureChanged.set(canonical, true);
-			else if (state.bodyFingerprints.get(fn.name) != body)
+			else if (!body.equals(state.bodyFingerprints.get(fn.name)))
 				bodyChanged.set(canonical, true);
 		}
 		for (classDecl in ast.classes) {
@@ -307,14 +307,14 @@ class ModuleChangeAnalyzer {
 					canonical = localName,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases)
 						+ inferredFrom(state, method),
-					body = sourceFingerprint(state,
+					body = bodyFingerprint(state,
 						method.span, classDecl.typeParameters.length > 0 || method.typeParameters != null
 						&& method.typeParameters.length > 0);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
 					signatureChanged.set(canonical, true);
-				else if (state.bodyFingerprints.get(localName) != body)
+				else if (!body.equals(state.bodyFingerprints.get(localName)))
 					bodyChanged.set(canonical, true);
 			}
 		}
@@ -324,14 +324,14 @@ class ModuleChangeAnalyzer {
 				var localName = abstractName + "." + method.name,
 					signature = SemanticSignature.parsedFunction(method, ast.aliases)
 						+ inferredFrom(state, method),
-					body = sourceFingerprint(state,
+					body = bodyFingerprint(state,
 						method.span, abstractDecl.typeParameters.length > 0 || method.typeParameters != null
 						&& method.typeParameters.length > 0);
 				signatures.set(localName, signature);
 				bodies.set(localName, body);
 				if (state.signatureFingerprints.get(localName) != signature)
 					signatureChanged.set(localName, true);
-				else if (state.bodyFingerprints.get(localName) != body)
+				else if (!body.equals(state.bodyFingerprints.get(localName)))
 					bodyChanged.set(localName, true);
 			}
 		}
@@ -396,6 +396,11 @@ class ModuleChangeAnalyzer {
 	 * its specializations are kept from one build to the next while the function is unchanged, and they carry offsets in
 	 * their debug mappings and in the names of their lambdas, so a function that only moved along its line must not keep them.
 	 */
+	/** `sourceFingerprint` of a function's body, compared without its text being copied. */
+	static function bodyFingerprint(state:compiler.modules.ModuleState, span:compiler.core.Source.SourceSpan,
+			generic:Bool = false):BodyFingerprint
+		return new BodyFingerprint(state.source, span.start, span.end, generic ? span.start : -1);
+
 	static function sourceFingerprint(state:compiler.modules.ModuleState, span:compiler.core.Source.SourceSpan,
 			generic:Bool = false):String
 		return state.source.path + ":" + Std.string(state.source.lineAt(span.start))
