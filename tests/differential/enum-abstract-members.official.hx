@@ -15,10 +15,10 @@ enum abstract Color(Int) from Int to Int {
 		return this * 2;
 
 	public inline function isRed():Bool
-		return (cast this : Color) == Red;
+		return (cast this:Color) == Red;
 
 	public function label():String
-		return switch (cast this : Color) {
+		return switch (cast this:Color) {
 			case Red: names[0];
 			case Green: names[1];
 			case Blue: names[2];
@@ -35,7 +35,7 @@ enum abstract Color(Int) from Int to Int {
 		return created;
 
 	@:op(A + B) static function add(a:Color, b:Int):Color
-		return (a : Int) + b;
+		return (a:Int) + b;
 }
 
 // Another abstract declaring a value of the same name: in Color's own code, Color's wins.
@@ -75,9 +75,9 @@ class Main {
 		var m = Color.make(5);
 		Sys.println(m.label() + " " + Color.count() + " " + (Color.Red + 6).label() + " " + Color.all.length);
 		var i:Int = Typed;
-		Sys.println(i + " " + (Light.Red : Int) + " " + (Light.Off : Int));
+		Sys.println(i + " " + (Light.Red:Int) + " " + (Light.Off:Int));
 		var k:Kind = true;
-		Sys.println(k.upper() + " " + Beta.upper() + " " + (Alpha : String));
+		Sys.println(k.upper() + " " + Beta.upper() + " " + (Alpha:String));
 		Sys.println(name(A) + name(B) + name(C));
 	}
 }
