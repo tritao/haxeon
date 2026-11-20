@@ -138,7 +138,7 @@ class GenericInstantiation {
 				// under the same concrete-type list.
 				if (IterationProtocol.name(expected) != null)
 					concrete.push(expected);
-				semanticArguments.push(bodyTyper.coerce(argument, expected, 'argument ${index + 1} to "$baseName"'));
+				semanticArguments.push(bodyTyper.coerceArgument(argument, expected, baseName, index + 1));
 			}
 		}
 		if (concrete.length > 0)

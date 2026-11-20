@@ -30,6 +30,9 @@ interface BodyTyping {
 			inferDynamicLambdaResult:Bool = false):TypedExpression;
 	function coerce(value:TypedExpression, expected:CompilerType, context:String,
 			code:String = "E1009"):TypedExpression;
+
+	/** `coerce` for argument `position` (from 1) of a call to `callee`, its mismatch message spelled only on a mismatch. */
+	function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String, position:Int):TypedExpression;
 	function typeStatements(statements:Array<AstStatement>, scope:Scope,
 			result:Null<CompilerType>):Array<TypedStatement>;
 	function lowerType(type:AstType, span:SourceSpan):CompilerType;

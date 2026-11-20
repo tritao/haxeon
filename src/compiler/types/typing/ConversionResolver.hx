@@ -55,7 +55,7 @@ class ConversionResolver {
 		};
 
 	/** `value ?? default`: a nullable scalar read as its element type, null giving the type's Haxe default. Evaluates `value` once. */
-	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String,
+	function nullableWithDefault(value:TypedExpression, expected:CompilerType, context:String, position:Int,
 			code:String):TypedExpression {
 		var element = switch value.type {
 			case TNullable(inner): inner;
@@ -67,7 +67,7 @@ class ConversionResolver {
 			nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type,
 				span),
 			isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
-			present = coerce(new TypedExpression(TCast(local), element, span), expected, context, code),
+			present = convert(new TypedExpression(TCast(local), element, span), expected, context, position, code),
 			fallback = switch expected {
 				case TFloat: new TypedExpression(TFloatLiteral(0.0), TFloat, span);
 				case TBool: new TypedExpression(TBoolLiteral(false), TBool, span);
@@ -105,7 +105,23 @@ class ConversionResolver {
 	}
 
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
-			code:String = "E1009"):TypedExpression {
+			code:String = "E1009"):TypedExpression
+		return convert(value, expected, context, 0, code);
+
+	/**
+	 * `value` as argument `position` (from 1) of a call to `callee`. A call coerces every argument, and the message's
+	 * `argument N to "callee"` is spelled only when one does not convert.
+	 */
+	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String,
+			position:Int):TypedExpression
+		return convert(value, expected, callee, position, "E1009");
+
+	/** What a mismatch names: `context`, or, with `position` set, that argument of a call to `context`. */
+	static function subject(context:String, position:Int):String
+		return position == 0 ? context : 'argument $position to "$context"';
+
+	function convert(value:TypedExpression, expected:CompilerType, context:String, position:Int,
+			code:String):TypedExpression {
 		// Where a value meets the type it must have, an empty type variable on either side takes the other's type.
 		if (session.monomorphs.active()) {
 			Monomorphs.unify(value.type, expected);
@@ -149,7 +165,7 @@ class ConversionResolver {
 		}) && !TypeRelations.equals(value.type, expected)) {
 			if (!session.relations.isAssignable(value.type, expected))
 				fail(code,
-					'Type mismatch for $context: iteration requires compatible iterator(), hasNext():Bool and next() methods',
+					'Type mismatch for ${subject(context, position)}: iteration requires compatible iterator(), hasNext():Bool and next() methods',
 					value.span);
 			return iterationAdapter(value, expected);
 		}
@@ -170,7 +186,8 @@ class ConversionResolver {
 						nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
 							value.type, span),
 						isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
-						present = coerce(new TypedExpression(TCast(local), element, span), interfaceType, context,
+						present = convert(new TypedExpression(TCast(local), element, span), interfaceType, context,
+							position,
 							code),
 						nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
 							expected, span),
@@ -191,7 +208,7 @@ class ConversionResolver {
 			}) && (switch (value.type) {
 				case TDynamic: false;
 				default: true;
-			}) && !isNullable(value.type)): var converted = coerce(value, element, context, code);
+			}) && !isNullable(value.type)): var converted = convert(value, element, context, position, code);
 			return new TypedExpression(TNullableWrap(converted), expected, value.span);
 			default:
 		}
@@ -209,7 +226,7 @@ class ConversionResolver {
 				nilValue = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)),
 				value.type, span),
 				isNull = new TypedExpression(TEqual(local, nilValue), TBool, span),
-				present = coerce(new TypedExpression(TCast(local), element, span), target, context, code),
+				present = convert(new TypedExpression(TCast(local), element, span), target, context, position, code),
 				nilResult = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), expected,
 				span),
 				result = new TypedExpression(TNullableWrap(present), expected, span);
@@ -223,7 +240,8 @@ class ConversionResolver {
 				TAbstract(_, _, _)] if ((switch (session.relations.conversion(element, expected)) {
 					case AbstractCast: true;
 					default: false;
-				})): return coerce(new TypedExpression(TCast(value), element, value.span), expected, context, code);
+				})): return convert(new TypedExpression(TCast(value), element, value.span), expected, context, position,
+					code);
 			default:
 		}
 		return switch session.relations.conversion(value.type, expected) {
@@ -237,7 +255,7 @@ class ConversionResolver {
 			case ReferenceCast:
 				adaptFunction(value, expected, value.span);
 			case AbstractCast:
-				abstractCast(value, expected, context, code);
+				abstractCast(value, expected, context, position, code);
 			case ToDynamic:
 				// A dynamic box stores a pointer, not an inline copy. Own a value-class payload before boxing it.
 				var owned = ValueCopy.bind(session, value, value.type), enumType = EnumDynamicBox.enumType(value.type);
@@ -268,12 +286,12 @@ class ConversionResolver {
 			case UnwrapNullable:
 				new TypedExpression(TCast(value), expected, value.span);
 			case UnwrapNullableDefault:
-				nullableWithDefault(value, expected, context, code);
+				nullableWithDefault(value, expected, context, position, code);
 			case Incompatible:
 				var closed = closedLiteralMismatch(value.type, expected);
 				fail(code,
 					closed
-					?? 'Type mismatch for $context: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
+					?? 'Type mismatch for ${subject(context, position)}: expected ${SemanticSignature.display(expected)}, got ${SemanticSignature.display(value.type)}',
 					value.span);
 				value;
 		};
@@ -537,22 +555,26 @@ class ConversionResolver {
 	}
 
 	/** `value` as an `expected` by an abstract's implicit conversion: the route `AbstractConversionGraph.route` finds. */
-	function abstractCast(value:TypedExpression, expected:CompilerType, context:String, code:String):TypedExpression {
+	function abstractCast(value:TypedExpression, expected:CompilerType, context:String, position:Int,
+			code:String):TypedExpression {
 		var route = session.declarations.conversions.route(value.type, expected);
 		return switch route {
 			case FromFunction(name, argument):
-				new TypedExpression(TCall(name, [coerce(value, argument, context, code)]), expected, value.span);
+				new TypedExpression(TCall(name, [convert(value, argument, context, position, code)]), expected,
+					value.span);
 			// A value of the very type the abstract converts from or to is the abstract's as it is.
 			case FromType(declared):
-				var converted = TypeRelations.equals(value.type, declared) ? value : coerce(value, declared, context,
+				var converted = TypeRelations.equals(value.type, declared) ? value : convert(value, declared, context,
+					position,
 					code);
 				session.representation.boundaryCast(converted, expected);
 			case ToFunction(method, _):
 				var call = abstractMethodCall(value, method, value.span);
-				coerce(call, expected, context, code);
+				convert(call, expected, context, position, code);
 			case ToType(declared):
 				var converted = session.representation.boundaryCast(value, declared);
-				TypeRelations.equals(declared, expected) ? converted : coerce(converted, expected, context, code);
+				TypeRelations.equals(declared, expected) ? converted : convert(converted, expected, context, position,
+					code);
 			case null:
 				throw new InternalError("An abstract cast has no conversion route");
 		};

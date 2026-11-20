@@ -63,7 +63,7 @@ class CallResolver {
 			name:String):Array<TypedExpression> {
 		var output:Array<TypedExpression> = [];
 		for (i in 0...arguments.length)
-			output.push(bodyTyper.coerce(arguments[i], expected[i], 'argument ${i + 1} to "$name"'));
+			output.push(bodyTyper.coerceArgument(arguments[i], expected[i], name, i + 1));
 		return output;
 	}
 
@@ -679,11 +679,11 @@ class CallResolver {
 					session.relations) : declared[index]
 			];
 		if (leading != null)
-			typed.push(bodyTyper.coerce(leading, types[0], 'argument 1 to "$name"'));
+			typed.push(bodyTyper.coerceArgument(leading, types[0], name, 1));
 		for (i in 0...arguments.length) {
 			var supplied = types[i + offset],
 				value = bodyTyper.typeExpression(arguments[i], scope, supplied);
-			typed.push(bodyTyper.coerce(value, supplied, 'argument ${i + 1 + offset} to "$name"'));
+			typed.push(bodyTyper.coerceArgument(value, supplied, name, i + 1 + offset));
 		}
 		for (i in arguments.length + offset...parameters.length) {
 			var parameter = parameters[i],

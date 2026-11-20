@@ -2635,6 +2635,17 @@ class BodyTyper implements BodyTyping {
 
 	public function coerce(value:TypedExpression, expected:CompilerType, context:String,
 			code:String = "E1009"):TypedExpression {
+		rejectScopedDynamic(value, expected);
+		return conversionResolver.coerce(value, expected, context, code);
+	}
+
+	public function coerceArgument(value:TypedExpression, expected:CompilerType, callee:String,
+			position:Int):TypedExpression {
+		rejectScopedDynamic(value, expected);
+		return conversionResolver.coerceArgument(value, expected, callee, position);
+	}
+
+	function rejectScopedDynamic(value:TypedExpression, expected:CompilerType):Void
 		if ((switch expected {
 			case TDynamic: true;
 			default: false;
@@ -2643,8 +2654,6 @@ class BodyTyper implements BodyTyping {
 			if (name != null)
 				fail("E1002", 'Scoped binding "$name" cannot be converted to Dynamic', value.span);
 		}
-		return conversionResolver.coerce(value, expected, context, code);
-	}
 
 	function isAssignable(actual:CompilerType, expected:CompilerType):Bool {
 		return session.relations.isAssignable(actual, expected);
