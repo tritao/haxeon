@@ -38,9 +38,21 @@ class IrSharedRuntimeCalls {
 	public static function apply(program:IrProgram):{program:IrProgram, helpers:Array<String>} {
 		var helpers:Map<String, IrFunction> = [for (fn in program.functions) if (isHelper(fn.name)) fn.name => fn],
 			added:Array<IrFunction> = [];
+		// The helper of each runtime function by signature, so a call site whose helper is known spells no name.
+		var named:Map<String, IrTypeMap<String>> = [];
 		function helper(name:String, arguments:Array<IrValue>, result:IrType):String {
+			var signature = IrType.Function([for (argument in arguments) argument.type], result),
+				bySignature = named.get(name);
+			if (bySignature == null) {
+				bySignature = new IrTypeMap();
+				named.set(name, bySignature);
+			}
+			var known = bySignature.get(signature);
+			if (known != null)
+				return known;
 			var key = name + SUFFIX + IrTypeIdentity.listText([for (argument in arguments) argument.type]) + "->"
 				+ IrTypeIdentity.text(result);
+			bySignature.set(signature, key);
 			if (!helpers.exists(key)) {
 				var builder = new IrBuilder(),
 					parameters = [for (index in 0...arguments.length) builder.argument("value" + index,
