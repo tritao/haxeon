@@ -1,6 +1,6 @@
 # Reading value arrays at the cost of a field
 
-Status: proposed (first step implemented: inline scalar reads, `HlLower.lowerValueArrayRead`).
+Status: proposed; steps 1 and 2 implemented (`HlLower.lowerValueArrayRead`, `valueArrayView`).
 
 ## Problem
 
@@ -27,8 +27,9 @@ validity bits inline, which halves it, but each read still finds out at run time
 2. **Layout in the IR.** Reads and writes become IR operations that carry the element's slot and layout (stride, offset,
    width, sign, whether elements have validity bits) instead of calls to `__value_array_read_*` with constant arguments.
    HashLink lowers them to a bounds check and a load; the Wasm backends lower them as they lower the natives now. The
-   validity bitmap moves before the payload, at a fixed offset from the lane's start, so checking presence is one load
-   too (today it follows the payload, at an offset that depends on the capacity).
+   validity bitmap becomes a lane of its own, which the value array points to as it does to its reference lane, so
+   checking presence is a load and a bit test (today it follows the payload in the scalar lane, at an offset that
+   depends on the capacity; moved before the payload, the payload's offset would depend on it instead).
 3. **Bounds checks proved once.** An IR analysis of indices proven in range (loop induction variables bounded by the
    array's length, an index checked earlier on every path) removes the check from reads it covers, for raw `Int` and
    `Float` arrays as for value arrays; raw arrays have a per-block version of this already (`provenInRange`).
@@ -36,11 +37,12 @@ validity bits inline, which halves it, but each read still finds out at run time
 ## Migration
 
 1. Inline scalar reads, the header compared per read (done).
-2. Headers resolved per array value, in `HlLower`, within a block first (as `elementOffsets` and `provenInRange` are),
-   then across blocks from the value's definition.
-3. Value array reads and writes as IR operations with their layout; the natives remain for `Dynamic` bridges and the
-   reflection paths. The validity bitmap before the payload, in the runtime and both Wasm backends at once.
-4. The bounds analysis, then its use by the raw array accesses in place of `provenInRange`.
+2. Headers resolved per array value where the value is defined (done).
+3. The bounds analysis, then its use by the raw array accesses in place of `provenInRange`: after step 2, a read's
+   size load and bounds check are most of what is left of its cost.
+4. The validity lane, in the runtime and both Wasm backends at once, so arrays of non-null structs read inline too.
+5. Value array reads and writes as IR operations with their layout; the natives remain for `Dynamic` bridges and the
+   reflection paths.
 
 ## Checks
 

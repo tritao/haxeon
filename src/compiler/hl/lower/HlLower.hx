@@ -804,7 +804,7 @@ class HlLower {
 	 * `index * stride + offset`; an index out of range, or a header that is no value array's, calls the native, which
 	 * raises its errors as before.
 	 */
-	function lowerValueArrayRead(output:IrValue, arguments:Array<IrValue>, slot:InlineValueSlot,
+	function lowerValueArrayRead(output:IrValue, arguments:Array<IrValue>, slot:InlineValueSlot, block:Int,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
 		var array = requireRegister(arguments[0], registers),
 			index = requireRegister(arguments[1], registers),
@@ -816,9 +816,12 @@ class HlLower {
 			data = temporaryRegister(IrType.Bytes, registerTypes),
 			position = temporaryRegister(IrType.I32, registerTypes);
 		instructions.push(HlInstruction.JumpNull(view.array, slow));
-		instructions.push(HlInstruction.GetMem(size, view.array,
-			constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
-		instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
+		// A loop that runs the index up to the array's length, and resizes nothing, proved it in range.
+		if (!provenByLoop(arguments[0], arguments[1], block)) {
+			instructions.push(HlInstruction.GetMem(size, view.array,
+				constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
+			instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
+		}
 		instructions.push(HlInstruction.GetMem(data, view.array,
 			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.Mul(position, index, view.strideBytes));
@@ -1146,6 +1149,8 @@ class HlLower {
 		viewedArrays.clear();
 		definedViews.clear();
 		hasViewedArrays = false;
+		loweringFunction = fn;
+		loopBounds = null;
 		for (block in fn.blocks)
 			for (index in 0...block.instructions.length)
 				switch block.instructions[index].value {
@@ -1433,7 +1438,8 @@ class HlLower {
 							&& scalarReadFollows(block.instructions, instructionIndex + 1, arguments)) {
 							// The read checks the same element the same way (`realtime_value_array_check_read`).
 						} else if (inlineSlot != null) {
-							lowerValueArrayRead(output, arguments, inlineSlot, instructions, registers, registerTypes);
+							lowerValueArrayRead(output, arguments, inlineSlot, block.id, instructions, registers,
+								registerTypes);
 						} else if (!lowerRuntimeFastPath(output, functionName.name, arguments, instructions, registers,
 							registerTypes)) {
 							var destination = defineRegister(output, registers, registerTypes);
@@ -2315,6 +2321,26 @@ class HlLower {
 	final definedViews:Map<Int, ValueArrayView> = [];
 
 	var hasViewedArrays = false;
+
+	/** The function being lowered, and the proofs of its loops' array indices, made when a read first asks for one. */
+	var loweringFunction:Null<IrFunction> = null;
+
+	var loopBounds:Null<compiler.ir.IrLoopBounds> = null;
+
+	@:processWide("an empty set of calls known not to resize arrays, never added to")
+	static final noPureCalls:Map<String, Bool> = [];
+
+	/** Whether the loops around `block` prove `index` in range of `array` (`IrLoopBounds`). */
+	function provenByLoop(array:IrValue, index:IrValue, block:Int):Bool {
+		var bounds = loopBounds, fn = loweringFunction;
+		if (fn == null)
+			return false;
+		if (bounds == null) {
+			bounds = new compiler.ir.IrLoopBounds(fn, noPureCalls);
+			loopBounds = bounds;
+		}
+		return bounds.proven(array, index, block);
+	}
 
 	/**
 	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
