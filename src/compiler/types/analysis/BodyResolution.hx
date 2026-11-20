@@ -296,12 +296,10 @@ class BodyResolution {
 	}
 
 	/**
-	 * References by position (`declarationAt`), made on first use: the latest reference at each position, and before each
-	 * reference the previous one at its position (-1 for none).
+	 * The references `declarationAt` can find (all but place writes and path sets), sorted by position and, at one position,
+	 * by recording order; made on first use.
 	 */
-	var latestAt:Null<Map<Int, Int>> = null;
-
-	final previousAt:Array<Int> = [];
+	var byPosition:Null<Array<Int>> = null;
 
 	/**
 	 * The declaration key (`BindingWalker.key`) the reference to `name` at `position` resolves to: null when it names no local,
@@ -309,29 +307,34 @@ class BodyResolution {
 	 * too, which is what a member chain's typing looks up; the latest reference at the position that matches wins.
 	 */
 	public function declarationAt(position:Int, name:String):Null<String> {
-		var latest = latestAt;
-		if (latest == null) {
-			latest = [];
-			previousAt.resize(codes.length);
+		var order = byPosition;
+		if (order == null) {
+			order = [];
 			for (entry in 0...codes.length) {
 				var kind = referenceAt(entry);
-				if (kind == PlaceWrite || kind == PathSet) {
-					previousAt[entry] = -1;
-					continue;
-				}
-				var at = positions[entry], before = latest.get(at);
-				previousAt[entry] = before == null ? -1 : before;
-				latest.set(at, entry);
+				if (kind != PlaceWrite && kind != PathSet)
+					order.push(entry);
 			}
-			latestAt = latest;
+			var at = positions;
+			order.sort((left, right) -> at[left] != at[right] ? at[left] - at[right] : left - right);
+			byPosition = order;
 		}
-		var found = latest.get(position), entry = found == null ? -1 : found;
-		while (entry >= 0) {
-			var referenced = names[entry];
+		// The first sorted reference past `position`; the ones at it are just before, the latest last.
+		var low = 0, high = order.length;
+		while (low < high) {
+			var middle = (low + high) >> 1;
+			if (positions[order[middle]] <= position)
+				low = middle + 1;
+			else
+				high = middle;
+		}
+		var index = low - 1;
+		while (index >= 0 && positions[order[index]] == position) {
+			var entry = order[index], referenced = names[entry];
 			if (referenced == name || referenced.length > name.length && referenced.charCodeAt(name.length) == ".".code
 				&& StringTools.startsWith(referenced, name) && referenced.indexOf(".") == name.length)
 				return keyAt(entry);
-			entry = previousAt[entry];
+			index--;
 		}
 		return UNSEEN;
 	}
