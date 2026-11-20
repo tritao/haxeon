@@ -290,29 +290,34 @@ class DeclarationTypeTable implements DeclarationTypes {
 	 * `type` with each type parameter `substitutions` names replaced. A field's type mentions one only inside the types that can
 	 * hold it (`ProgramTyper.typeFieldInitializer` rejects a structure that would), so a structure is left as it is.
 	 */
-	public static function substitute(type:CompilerType, substitutions:Null<Map<String, CompilerType>>):CompilerType {
-		if (substitutions == null)
-			return type;
-		function each(types:Array<CompilerType>):Array<CompilerType>
-			return [for (part in types) substitute(part, substitutions)];
+	public static function substitute(type:CompilerType, substitutions:Null<Map<String, CompilerType>>):CompilerType
+		return substitutions == null
+			|| compiler.types.DeclarationIndex.isEmpty(substitutions) ? type : substituteWithin(type,
+			substitutions);
+
+	static function substituteWithin(type:CompilerType, substitutions:Map<String, CompilerType>):CompilerType
 		return switch type {
 			case TTypeParameter(_, name):
 				var replacement = substitutions.get(name);
 				replacement == null ? type : replacement;
-			case TNullable(element): TNullable(substitute(element, substitutions));
-			case TArray(element): TArray(substitute(element, substitutions));
-			case TIterator(element): TIterator(substitute(element, substitutions));
-			case TMap(key, value): TMap(substitute(key, substitutions), substitute(value, substitutions));
+			case TNullable(element): TNullable(substituteWithin(element, substitutions));
+			case TArray(element): TArray(substituteWithin(element, substitutions));
+			case TIterator(element): TIterator(substituteWithin(element, substitutions));
+			case TMap(key, value): TMap(substituteWithin(key, substitutions), substituteWithin(value, substitutions));
 			case TKeyPath(root, value, writable):
-				TKeyPath(substitute(root, substitutions), substitute(value, substitutions), writable);
-			case TFunction(arguments, result, optional): TFunction(each(arguments), substitute(result, substitutions),
-				optional);
-			case TInstance(kind, name, arguments): TInstance(kind, name, each(arguments));
+				TKeyPath(substituteWithin(root, substitutions), substituteWithin(value, substitutions), writable);
+			case TFunction(arguments, result, optional): TFunction(substituteEach(arguments, substitutions),
+				substituteWithin(result, substitutions), optional);
+			case TInstance(kind, name, arguments): TInstance(kind, name, substituteEach(arguments, substitutions));
 			case TAbstract(name, arguments, representation):
-				TAbstract(name, each(arguments), substitute(representation, substitutions));
+				TAbstract(name, substituteEach(arguments, substitutions),
+					substituteWithin(representation, substitutions));
 			default: type;
 		};
-	}
+
+	static function substituteEach(types:Array<CompilerType>,
+			substitutions:Map<String, CompilerType>):Array<CompilerType>
+		return [for (part in types) substituteWithin(part, substitutions)];
 
 	/** Gives the unannotated field `key` of a class this build does not type again the type an earlier build gave it. */
 	public function seedField(key:String, type:CompilerType):Void

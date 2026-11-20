@@ -872,7 +872,7 @@ class DeclarationIndex {
 		return openDepth == 0 && (substitutions == null || isEmpty(substitutions));
 
 	/** Haxeon's maps count their entries; stock Haxe's only iterate them, and Haxeon's iteration copies the keys out first. */
-	static function isEmpty(substitutions:Map<String, CompilerType>):Bool {
+	public static function isEmpty(substitutions:Map<String, CompilerType>):Bool {
 		#if haxeon
 		return substitutions.size() == 0;
 		#else
