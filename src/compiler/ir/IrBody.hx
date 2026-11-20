@@ -55,7 +55,7 @@ class IrBody {
 	final bindingEnds:Array<Int>;
 	final bindingValues:Array<Int>;
 
-	/** Takes the builder's columns as its own; the builder is not used again. */
+	/** Copies the builder's columns at their exact size. */
 	function new(builder:IrBodyBuilder, name:String, kind:IrFunctionKind, result:Int, inlineHint:Bool,
 			retention:IrRetention) {
 		this.name = name;
@@ -64,28 +64,28 @@ class IrBody {
 		this.inlineHint = inlineHint;
 		this.retention = retention;
 		types = builder.types;
-		opcodes = builder.opcodes;
-		outputs = builder.outputs;
-		auxes = builder.auxes;
-		provenances = builder.provenances;
-		operandStarts = builder.operandStarts;
-		operandPool = builder.operands;
-		ints = builder.ints;
-		floats = builder.floats;
-		strings = builder.strings;
-		provenancePool = builder.provenancePool;
-		blockIds = builder.blockIds;
-		blockStarts = builder.blockStarts;
-		valueTypes = builder.valueTypes;
-		valueNames = builder.valueNames;
-		valueRows = builder.valueRows;
-		argumentIds = builder.argumentIds;
-		bindingIdentities = builder.bindingIdentities;
-		bindingNames = builder.bindingNames;
-		bindingPaths = builder.bindingPaths;
-		bindingStarts = builder.bindingStarts;
-		bindingEnds = builder.bindingEnds;
-		bindingValues = builder.bindingValues;
+		opcodes = builder.opcodes.copy();
+		outputs = builder.outputs.copy();
+		auxes = builder.auxes.copy();
+		provenances = builder.provenances.copy();
+		operandStarts = builder.operandStarts.copy();
+		operandPool = builder.operands.copy();
+		ints = builder.ints.copy();
+		floats = builder.floats.copy();
+		strings = builder.strings.copy();
+		provenancePool = builder.provenancePool.copy();
+		blockIds = builder.blockIds.copy();
+		blockStarts = builder.blockStarts.copy();
+		valueTypes = builder.valueTypes.copy();
+		valueNames = builder.valueNames.copy();
+		valueRows = builder.valueRows.copy();
+		argumentIds = builder.argumentIds.copy();
+		bindingIdentities = builder.bindingIdentities.copy();
+		bindingNames = builder.bindingNames.copy();
+		bindingPaths = builder.bindingPaths.copy();
+		bindingStarts = builder.bindingStarts.copy();
+		bindingEnds = builder.bindingEnds.copy();
+		bindingValues = builder.bindingValues.copy();
 	}
 
 	// Rows.

@@ -8,11 +8,12 @@ import compiler.ir.SourceProvenance.Located;
 
 /**
  * Appends the rows of an `IrBody`, block by block, and makes the body (`finish`). A body is never changed once made: a pass that
- * rewrites builds a new one. `encode` makes the body of an `IrFunction` through it.
+ * rewrites builds a new one. `encode` makes the body of an `IrFunction` through it. One builder serves many bodies: `finish`
+ * copies its columns at their exact size and `reset` empties them without giving their storage back.
  */
 @:allow(compiler.ir.IrBody)
 class IrBodyBuilder {
-	final types:IrTypeIds;
+	var types:IrTypeIds;
 	final opcodes:Array<Int> = [];
 	final outputs:Array<Int> = [];
 	final auxes:Array<Int> = [];
@@ -51,9 +52,39 @@ class IrBodyBuilder {
 	public function new(types:IrTypeIds)
 		this.types = types;
 
-	/** The body of `fn`, every value, row and binding of it, in its order. */
-	public static function encode(fn:IrFunction, types:IrTypeIds):IrBody {
-		var builder = new IrBodyBuilder(types);
+	/** Empties the builder for another body, whose types are numbered in `types`. */
+	public function reset(types:IrTypeIds):Void {
+		this.types = types;
+		opcodes.resize(0);
+		outputs.resize(0);
+		auxes.resize(0);
+		provenances.resize(0);
+		operandStarts.resize(1);
+		operands.resize(0);
+		ints.resize(0);
+		floats.resize(0);
+		strings.resize(0);
+		provenancePool.resize(0);
+		blockIds.resize(0);
+		blockStarts.resize(0);
+		valueTypes.resize(0);
+		valueNames.resize(0);
+		valueRows.resize(0);
+		argumentIds.resize(0);
+		bindingIdentities.resize(0);
+		bindingNames.resize(0);
+		bindingPaths.resize(0);
+		bindingStarts.resize(0);
+		bindingEnds.resize(0);
+		bindingValues.resize(0);
+	}
+
+	/** The body of `fn`, every value, row and binding of it, in its order; made with `builder` when given, which is reset first. */
+	public static function encode(fn:IrFunction, types:IrTypeIds, ?builder:IrBodyBuilder):IrBody {
+		if (builder == null)
+			builder = new IrBodyBuilder(types);
+		else
+			builder.reset(types);
 		for (argument in fn.arguments)
 			builder.argumentIds.push(builder.value(argument));
 		for (block in fn.blocks) {
@@ -82,10 +113,15 @@ class IrBodyBuilder {
 		var id = value.id;
 		if (id < 0)
 			throw new InternalError('IR body value ${value.name} has a negative id');
-		while (valueTypes.length <= id) {
-			valueTypes.push(-1);
-			valueNames.push(null);
-			valueRows.push(-1);
+		if (valueTypes.length <= id) {
+			var from = valueTypes.length;
+			valueTypes.resize(id + 1);
+			valueNames.resize(id + 1);
+			valueRows.resize(id + 1);
+			for (index in from...id + 1) {
+				valueTypes[index] = -1;
+				valueRows[index] = -1;
+			}
 		}
 		if (valueTypes[id] < 0) {
 			valueTypes[id] = types.id(value.type);
@@ -132,7 +168,9 @@ class IrBodyBuilder {
 	public function finish(name:String, kind:IrFunctionKind, result:IrType, inlineHint:Bool,
 			retention:IrRetention):IrBody {
 		blockStarts.push(opcodes.length);
-		return new IrBody(this, name, kind, types.id(result), inlineHint, retention);
+		var body = new IrBody(this, name, kind, types.id(result), inlineHint, retention);
+		blockStarts.pop();
+		return body;
 	}
 
 	static inline function symbol(name:String):Int
