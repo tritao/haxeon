@@ -2,56 +2,12 @@ package compiler.types.analysis;
 
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstStatement;
+import compiler.syntax.AstChildren;
 
 /** Looks through every expression of a statement list, including nested bodies and lambdas, for one that passes a test. */
 class AstScan {
-	public static function anyExpression(statements:Array<AstStatement>, test:AstExpression->Bool):Bool {
-		for (statement in statements)
-			if (statementMatches(statement, test))
-				return true;
-		return false;
-	}
-
-	static function statementMatches(statement:AstStatement, test:AstExpression->Bool):Bool {
-		for (expression in compiler.syntax.AstChildren.statementExpressions(statement))
-			if (expressionMatches(expression, test))
-				return true;
-		return switch statement {
-			case PrivateAccessStatement(inner, _): statementMatches(inner, test);
-			case If(_, yes, no, _): anyExpression(yes, test) || anyExpression(no, test);
-			case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): anyExpression(body, test);
-			case Defer(body, _): anyExpression(body, test);
-			case Try(tryBranch, catches, _):
-				if (anyExpression(tryBranch, test))
-					return true;
-				for (caught in catches)
-					if (anyExpression(caught.statements, test))
-						return true;
-				false;
-			case Switch(_, cases, defaultBranch, _, _):
-				for (entry in cases)
-					if (anyExpression(entry.statements, test))
-						return true;
-				anyExpression(defaultBranch, test);
-			default: false;
-		};
-	}
-
-	static function expressionMatches(expression:AstExpression, test:AstExpression->Bool):Bool {
-		if (test(expression))
-			return true;
-		switch expression {
-			case BlockExpression(statements, value, _):
-				return anyExpression(statements, test) || expressionMatches(value, test);
-			case Lambda(_, body, _, _):
-				return anyExpression(body, test);
-			default:
-		}
-		for (child in compiler.syntax.AstChildren.expressions(expression))
-			if (expressionMatches(child, test))
-				return true;
-		return false;
-	}
+	public static function anyExpression(statements:Array<AstStatement>, test:AstExpression->Bool):Bool
+		return new ExpressionSearch(test).inStatements(statements);
 
 	/** Whether a `return` in these statements returns from the function they belong to; a lambda's returns are its own. */
 	public static function returns(statements:Array<AstStatement>):Bool {
@@ -171,5 +127,67 @@ class AstScan {
 			case Variable(name, _): name == key;
 			default: false;
 		};
+	}
+}
+
+/**
+ * One `AstScan.anyExpression` search: walks the children through `AstChildren`'s visitor rather than its arrays, which
+ * every node of a scanned body would allocate, and stops testing once an expression has passed.
+ */
+private class ExpressionSearch implements AstChildVisitor {
+	final test:AstExpression->Bool;
+	var found = false;
+
+	public function new(test:AstExpression->Bool)
+		this.test = test;
+
+	public function inStatements(statements:Array<AstStatement>):Bool {
+		for (statement in statements)
+			if (inStatement(statement))
+				return true;
+		return false;
+	}
+
+	function inStatement(statement:AstStatement):Bool {
+		AstChildren.visitStatement(statement, this);
+		if (found)
+			return true;
+		return switch statement {
+			case PrivateAccessStatement(inner, _): inStatement(inner);
+			case If(_, yes, no, _): inStatements(yes) || inStatements(no);
+			case While(_, body, _), DoWhile(body, _, _), ForIn(_, _, _, body, _): inStatements(body);
+			case Defer(body, _): inStatements(body);
+			case Try(tryBranch, catches, _):
+				if (inStatements(tryBranch))
+					return true;
+				for (caught in catches)
+					if (inStatements(caught.statements))
+						return true;
+				false;
+			case Switch(_, cases, defaultBranch, _, _):
+				for (entry in cases)
+					if (inStatements(entry.statements))
+						return true;
+				inStatements(defaultBranch);
+			default: false;
+		};
+	}
+
+	public function visitChild(child:AstExpression):Void
+		if (!found && inExpression(child))
+			found = true;
+
+	function inExpression(expression:AstExpression):Bool {
+		if (test(expression))
+			return true;
+		switch expression {
+			case BlockExpression(statements, value, _):
+				return inStatements(statements) || inExpression(value);
+			case Lambda(_, body, _, _):
+				return inStatements(body);
+			default:
+		}
+		AstChildren.visit(expression, this);
+		return found;
 	}
 }
