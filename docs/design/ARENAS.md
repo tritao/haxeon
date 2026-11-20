@@ -50,6 +50,25 @@ Arenas nest. Each unit names where its outputs go: the enclosing unit's arena, a
 or the global one. "Outside" is always an explicit target, never "the parent", because the inliner's units are recursive
 (a callee's inlined form is computed inside its caller's unit but belongs to the stage).
 
+## The design in layers
+
+Arenas are the third of four layers, each taking what the one above leaves, in the order they pay:
+
+1. **No garbage made.** Ids across lifetimes instead of spelled text (interned names, type and symbol ids); scratch
+   reused by an owner of the right lifetime and cleared at the unit's end; keys and messages built only when used;
+   results copied out at their exact size. This is the main lever: it lowers allocation, peak and time on every target,
+   with no runtime support.
+2. **Flat data in flat storage.** IR columns where passes read (`IR_CORE_COLUMNS.md`), the token table, HL output as a
+   code stream with line columns, value arrays: one array in place of many small objects leaves less to collect and fewer
+   pointers to escape. Ordinary arrays by default; a `NativeArena` only for flat data with an explicit end that no session
+   cache keeps, since where flat data lives barely changes the peak and reuse gives the gain.
+3. **Checked arenas for object graphs,** in coarse units (a class typed, a batch of functions lowered), with outputs
+   placed outside by the data rules and the checked release as the safety net.
+4. **The collector** for the rest, and the fallback of every release.
+
+The compiler stays plain Haxe and builds with stock Haxe (`Arena.within` and type homes are no-ops there), and no layer's
+correctness depends on the code placing data right: a mistake costs memory, reported by holder and site.
+
 ## Arenas by lifetime
 
 | Arena | Lives for | Holds |
@@ -249,6 +268,39 @@ without them; made without arenas, the same 1.1 GB of temporaries cost a 4th col
    copies flat columns into the stage's arena), and IR generation per function.
 5. **The front end as a phase arena**, once its escapes are near zero, released after the IR tables.
 6. **The compile server:** a build's temporaries in a build arena, what the session keeps in the session arena.
+
+## How the design got here
+
+Each change followed a measurement that contradicted an assumption; the goal (bulk freeing without more collections, a
+lower peak) stayed:
+
+| Assumed | Measured | Became |
+|---|---|---|
+| releasing dead data lowers the peak | peak unchanged: it follows garbage between collections, not the live set | stop making garbage; return short-lived pages at once |
+| one region for the front end | released nothing: escapes on every page | smaller units, outputs placed outside |
+| release as a plain reset | Haxe has no lifetimes; any store can point in, and an unchecked reset corrupts the heap | a checked release over written pages, about 1 ms against 140 to 200 ms for a collection |
+| an arena per function | too small: releases outweighed the work | classes or batches of functions |
+| outputs placed outside suffice | shared tables kept most classes; evacuating them released all, but rewrote words of blocks without a layout, which is unsound | evacuation only along known layouts; maps of maps as records, whose layout is known; shared tables in the session arena |
+| typer-checked scoped types for a plain reset | 72% of a class unit's temporaries are strings and containers | dropped; inferred escape analysis kept as a later option |
+| a `NativeArena` for the compiler's flat data | reuse gave the gain, native storage about 0.1% more | reuse with ordinary arrays |
+| IR columns for every pass | reads twice as fast, rewrites slower | columns where passes read; rewriting passes wait |
+| "region", "group" | ambiguous with collector terms; an `Arena` already existed for flat records | `Arena` (managed, checked) and `NativeArena` (flat, unchecked) |
+
+Considered and not planned: explicit ownership of containers (it needs non-escape annotations across the compiler and the
+standard library), a precise stack (the units met no stack references once `within` releases from its own frame), a
+moving generational collector (a large VM project that collects more often by design).
+
+## Open decisions
+
+1. **The cost of the check.** Write tracking and releases add time to typing. Once layers 1 and 2 have shrunk what the
+   units allocate, measure again and choose: checked releases as they are; checked in CI and debug builds and unchecked in
+   release builds of the compiler; or an inferred escape analysis (per-function summaries of escaping parameters, beside
+   the purity and receiver-effect inference) that places proven-local allocations in arenas released without a check.
+2. **Portability.** Page tracking needs Linux (`userfaultfd`, `PAGEMAP_SCAN`), and the exact stack read x86-64 Linux;
+   elsewhere every release falls back. Checked arenas on every target need a software write barrier (card marking on
+   pointer stores), with page tracking kept as Linux's faster path.
+3. **Evacuation** rewrites only words a block's layout names as pointers; any other word that looks like an address keeps
+   the arena. Whether it stays once the code places everything right is decided by what `strict` still keeps.
 
 ## How success is measured
 
