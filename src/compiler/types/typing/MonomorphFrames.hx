@@ -86,8 +86,14 @@ class MonomorphFrame {
 class MonomorphFrames {
 	final frames:Array<MonomorphFrame> = [];
 
-	/** The open structures by provisional name, kept once closed so that a late read of a provisional name finds its closed type. */
+	/** The open structures by provisional name, until they close. */
 	final structures:Map<String, OpenStructure> = [];
+
+	/**
+	 * The closed type of each structure that was open, by provisional name, so that a late read of a provisional name finds it. It
+	 * outlives the unit that wrote the literal, so it is kept outside that unit's arena, as the closed type is (`closeStructure`).
+	 */
+	final closedStructures:Map<String, CompilerType> = [];
 
 	/** How many structures are open in the frames being typed: none means no type can mention one. */
 	var openCount = 0;
@@ -421,8 +427,12 @@ class MonomorphFrames {
 		return switch type {
 			case TAnonymous(name, _) if (Monomorphs.isOpenStructureName(name)):
 				var structure = structures.get(name);
-				if (structure == null)
-					throw new compiler.core.InternalError('Unknown open structure "$name"');
+				if (structure == null) {
+					var closed = closedStructures.get(name);
+					if (closed == null)
+						throw new compiler.core.InternalError('Unknown open structure "$name"');
+					return closed;
+				}
 				if (structure.closed != null)
 					structure.closed;
 				else if (close)
@@ -472,8 +482,12 @@ class MonomorphFrames {
 			};
 		}
 		closing.remove(structure);
-		closed = TAnonymous(SemanticSignature.anonymousTypeName(fields), fields);
+		// The closed type outlives the unit that wrote the literal: it is made outside the unit's arena, and every later read of
+		// the structure, through its provisional name or its frame, gets it.
+		closed = compiler.core.Arena.toGlobal(TAnonymous(SemanticSignature.anonymousTypeName(fields), fields));
 		structure.closed = closed;
+		structures.remove(structure.name);
+		closedStructures.set(compiler.core.GlobalNames.of(structure.name), closed);
 		openCount--;
 		if (registered)
 			register(closed);
@@ -494,11 +508,19 @@ class MonomorphFrames {
 		var declaration = frame.declaration;
 		if (declaration == null || frame.literals.length == 0)
 			return;
-		var origin = {declaration: declaration, isField: frame.declarationIsField};
+		// Kept for the session, outside the arena of the unit settling.
+		var origin = compiler.core.Arena.toGlobal({declaration: declaration, isField: frame.declarationIsField});
 		for (structure in frame.literals)
-			if (structure.closed != null && reaches(type, structure.fields, []))
-				literalOrigins.set(structure.fields, origin);
+			if (structure.closed != null && reaches(type, closedFields(structure), []))
+				literalOrigins.set(closedFields(structure), origin);
 	}
+
+	/** The fields of `structure`'s closed type, which every type that reaches the structure once it is closed has. */
+	static function closedFields(structure:OpenStructure):Array<AnonymousField>
+		return switch structure.closed {
+			case TAnonymous(_, fields): fields;
+			default: structure.fields;
+		};
 
 	static function reaches(type:CompilerType, fields:Array<AnonymousField>, visiting:Array<Array<AnonymousField>>):Bool
 		return switch type {

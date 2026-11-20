@@ -63,7 +63,8 @@ class AnonymousTypeRegistry {
 			case TAnonymous(name, fields):
 				if (session.anonymousTypes.exists(name))
 					return;
-				session.anonymousTypes.set(name, fields);
+				// The program's registry: what it keeps is made outside the arena of the unit that met the type first.
+				session.anonymousTypes.set(name, compiler.core.Arena.toGlobal(fields));
 				for (field in fields)
 					discover(field.type);
 			case TNullable(element), TArray(element), TIterator(element):
@@ -71,7 +72,8 @@ class AnonymousTypeRegistry {
 			case TKeyPath(root, value, _):
 				var name = compiler.types.KeyPathType.descriptorName(root, value);
 				if (!session.anonymousTypes.exists(name))
-					session.anonymousTypes.set(name, compiler.types.KeyPathType.fields(root, value));
+					session.anonymousTypes.set(compiler.core.GlobalNames.of(name),
+						compiler.core.Arena.toGlobal(compiler.types.KeyPathType.fields(root, value)));
 				discover(root);
 				discover(value);
 			case TMap(key, value):

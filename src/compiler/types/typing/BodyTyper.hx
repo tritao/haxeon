@@ -283,7 +283,7 @@ class BodyTyper implements BodyTyping {
 		for (index in 0...fn.arguments.length) {
 			var argument = fn.arguments[index], type = bodyArgumentTypes[index];
 			var parameter = scope.define(argument.name, type, argument.span);
-			var constants = session.keyPaths.parameters.get(functionName);
+			var constants = session.keyPaths.constantsOf(functionName);
 			if (constants != null && constants.exists(argument.name)) {
 				parameter.keyPathConstant = constants.get(argument.name);
 				continue;
