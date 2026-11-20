@@ -117,24 +117,14 @@ class IrNullableScalarFlow {
 
 	static function rewriteFunction(fn:IrFunction, checks:Map<String, IrType>, functions:Map<String, IrFunction>,
 			clone:Bool):NullableScalarRewrite {
-		var candidates:Map<Int, IrValue> = [], nulls:Map<Int, Bool> = [], next = 0;
-		for (argument in fn.arguments) {
-			if (argument.id >= next)
-				next = argument.id + 1;
+		var candidates:Map<Int, IrValue> = [], nulls:Map<Int, Bool> = [], next = fn.nextValueId();
+		for (argument in fn.arguments)
 			if (clone && inner(argument.type) != null)
 				candidates.set(argument.id, argument);
-		}
 		for (block in fn.blocks)
 			for (located in block.instructions) {
 				var instruction = located.value,
 					out = IrOperands.output(instruction);
-				if (out != null && out.id >= next)
-					next = out.id + 1;
-				for (inputIndex in 0...IrOperands.count(instruction)) {
-					var input = IrOperands.at(instruction, inputIndex);
-					if (input.id >= next)
-						next = input.id + 1;
-				}
 				if (out != null && inner(out.type) != null)
 					switch instruction {
 						case ConstNull(_):

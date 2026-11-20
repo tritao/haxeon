@@ -33,7 +33,7 @@ class IrValueArrayOptionalRewrite {
 				block:Int,
 				position:Int
 			}> = [], dynamicWrites:Map<Int, IrValue> = [], dynamicBoxes:Map<Int, Bool> = [], uses:Map<Int, Int> = [],
-			next = 0;
+			next = fn.nextValueId();
 		function use(value:IrValue):Void
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
 		function readAt(id:Int):OptionalArrayAccess {
@@ -54,20 +54,12 @@ class IrValueArrayOptionalRewrite {
 				throw new InternalError('Missing optional array unbox $id');
 			return value;
 		}
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
 		for (block in fn.blocks) {
 			for (position in 0...block.instructions.length) {
 				var instruction = block.instructions[position].value,
 					out = IrOperands.output(instruction);
-				if (out != null && out.id >= next)
-					next = out.id + 1;
-				for (input in IrOperands.inputs(instruction)) {
+				for (input in IrOperands.inputs(instruction))
 					use(input);
-					if (input.id >= next)
-						next = input.id + 1;
-				}
 				switch instruction {
 					case Phi(_, inputs):
 						for (input in inputs)

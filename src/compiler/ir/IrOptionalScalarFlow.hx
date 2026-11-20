@@ -557,16 +557,7 @@ class IrOptionalScalarFlow {
 	}
 
 	function transform(fn:IrFunction, clone:Bool):IrFunction {
-		var next = 0;
-		for (arg in fn.arguments)
-			if (arg.id >= next)
-				next = arg.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var out = IrOperands.output(located.value);
-				if (out != null && out.id >= next)
-					next = out.id + 1;
-			}
+		var next = fn.nextValueId();
 		var places = arrayPlaceValues(fn),
 			types:Map<Int, String> = [],
 			components:Map<Int, Array<IrValue>> = [],

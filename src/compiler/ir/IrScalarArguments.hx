@@ -532,22 +532,8 @@ class IrScalarArguments {
 		return false;
 	}
 
-	static function nextId(fn:IrFunction):Int {
-		var max = -1;
-		for (arg in fn.arguments)
-			if (arg.id > max)
-				max = arg.id;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var out = IrOperands.output(located.value);
-				if (out != null && out.id > max)
-					max = out.id;
-			}
-		return max + 1;
-	}
-
 	static function clone(fn:IrFunction, objects:Map<String, IrObject>, preserveReceiver:Bool = false):IrFunction {
-		var next = nextId(fn),
+		var next = fn.nextValueId(),
 			args:Array<IrValue> = [],
 			prefix:Array<Located<IrInstruction>> = [];
 		var origin = SourceProvenance.generated("scalar-argument");
@@ -639,7 +625,7 @@ class IrScalarArguments {
 		var next = -1;
 		function fresh():Int {
 			if (next < 0)
-				next = nextId(fn);
+				next = fn.nextValueId();
 			return next++;
 		}
 		var closures:Map<Int, {name:String, receiver:Null<IrValue>}> = [];

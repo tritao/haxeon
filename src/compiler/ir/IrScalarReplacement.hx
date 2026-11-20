@@ -44,18 +44,11 @@ class IrScalarReplacement {
 		}
 		if (!candidate)
 			return fn;
-		var blocks:Array<IrBlock> = [], next = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
+		var blocks:Array<IrBlock> = [], next = fn.nextValueId();
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
+			for (located in block.instructions)
 				copy.instructions.push(located);
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-			}
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 		}

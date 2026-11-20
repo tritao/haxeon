@@ -9,21 +9,14 @@ class IrStrengthReduction {
 
 	public static function run(fn:IrFunction):IrFunction {
 		var constants:Map<Int, Float> = [];
-		var nextValue = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= nextValue)
-				nextValue = argument.id + 1;
+		var nextValue = fn.nextValueId();
 		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= nextValue)
-					nextValue = output.id + 1;
+			for (located in block.instructions)
 				switch located.value {
 					case ConstFloat(out, value):
 						constants.set(out.id, value);
 					default:
 				}
-			}
 
 		// Only the blocks with a division to reduce are copied; a function without one comes back as it is.
 		return IrFunctionRewrite.instructions(fn, function(located) {

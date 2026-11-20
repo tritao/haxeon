@@ -308,7 +308,7 @@ class IrScalarClosures {
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		if (!needsRewrite(fn))
 			return fn;
-		var next = nextId(fn), values:Map<Int, IrValue> = [];
+		var next = fn.nextValueId(), values:Map<Int, IrValue> = [];
 		var typeValues:Map<Int, IrType> = [];
 		for (block in fn.blocks)
 			for (located in block.instructions)
@@ -806,18 +806,4 @@ class IrScalarClosures {
 
 	static function key(type:IrType):String
 		return IrTypeIdentity.text(type);
-
-	static function nextId(fn:IrFunction):Int {
-		var max = -1;
-		for (argument in fn.arguments)
-			if (argument.id > max)
-				max = argument.id;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id > max)
-					max = output.id;
-			}
-		return max + 1;
-	}
 }

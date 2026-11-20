@@ -167,19 +167,7 @@ class IrInlineEnumLowering {
 					values.set(value.id, new IrValue(value.id, value.name, mapped(value.type)));
 				return values.get(value.id);
 			}
-			var nextValue = 0;
-			for (arg in fn.arguments)
-				if (arg.id >= nextValue)
-					nextValue = arg.id + 1;
-			for (block in fn.blocks)
-				for (item in block.instructions) {
-					var out = IrOperands.output(item.value);
-					if (out != null && out.id >= nextValue)
-						nextValue = out.id + 1;
-					for (input in IrOperands.inputs(item.value))
-						if (input.id >= nextValue)
-							nextValue = input.id + 1;
-				}
+			var nextValue = fn.nextValueId();
 			function fresh(type:IrType):IrValue
 				return new IrValue(nextValue++, "$enum-value-load", type);
 			function copyLoad(block:IrBlock, output:IrValue, raw:IrValue, enumName:String,

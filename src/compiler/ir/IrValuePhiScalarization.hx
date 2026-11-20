@@ -79,16 +79,10 @@ class IrValuePhiScalarization {
 			var debug = IrInliner.substitute(copies, substitutions, fn.debugBindings);
 			fn = fn.withBlocks(copies, debug);
 		}
-		var known:Map<Int, Bool> = [], next = 0, byId:Map<Int, IrBlock> = [];
-		for (arg in fn.arguments)
-			if (arg.id >= next)
-				next = arg.id + 1;
+		var known:Map<Int, Bool> = [], next = fn.nextValueId(), byId:Map<Int, IrBlock> = [];
 		for (block in fn.blocks) {
 			byId.set(block.id, block);
 			for (located in block.instructions) {
-				var out = IrOperands.output(located.value);
-				if (out != null && out.id >= next)
-					next = out.id + 1;
 				switch located.value {
 					case ValueInit(out) if (valueName(out.type) != null):
 						known.set(out.id, true);

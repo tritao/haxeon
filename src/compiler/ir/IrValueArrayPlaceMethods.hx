@@ -133,7 +133,7 @@ class IrValueArrayPlaceMethods {
 		if (fn.arguments.length == 0 || !isValue(fn.arguments[0].type))
 			throw new InternalError('Array place method "$name" has no value receiver');
 		var receiver = fn.arguments[0],
-			next = nextId(fn),
+			next = fn.nextValueId(),
 			array = new IrValue(next++, "$array-place", Array(element)),
 			index = new IrValue(next++, "$array-index", I32),
 			aliases:Map<Int, Array<String>> = [receiver.id => path.copy()],
@@ -806,21 +806,4 @@ class IrValueArrayPlaceMethods {
 			case I32, I64, F32, F64, Bool: zero(value);
 			default: ConstNull(value);
 		};
-
-	static function nextId(fn:IrFunction):Int {
-		var next = 0;
-		for (arg in fn.arguments)
-			if (arg.id >= next)
-				next = arg.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= next)
-						next = input.id + 1;
-			}
-		return next;
-	}
 }

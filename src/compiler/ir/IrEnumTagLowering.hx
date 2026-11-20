@@ -584,18 +584,8 @@ class IrEnumTagLowering {
 					case Dyn: true;
 					default: false;
 				})): markChanged();
-				if (next < 0) {
-					next = 0;
-					for (argument in currentFunction.arguments)
-						if (argument.id >= next)
-							next = argument.id + 1;
-					for (block in currentFunction.blocks)
-						for (entry in block.instructions) {
-							var output = IrOperands.output(entry.value);
-							if (output != null && output.id >= next)
-								next = output.id + 1;
-						}
-				}
+				if (next < 0)
+					next = currentFunction.nextValueId();
 				var boxed = new IrValue(next++, "$enum-tag:implicit-box", Dyn);
 				required.set(name, true);
 				rewritten.push(new Located(Call(boxed, IrSymbol.of(boxNames.get(name)), [value]),

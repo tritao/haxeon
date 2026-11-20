@@ -1018,7 +1018,7 @@ class WasmScalarAbi {
 
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		var signature = signatures.get(fn.name),
-			next = nextId(fn),
+			next = fn.nextValueId(),
 			args:Array<IrValue> = [],
 			prefix:Array<Located<IrInstruction>> = [];
 		var isolated = isolatedValues(fn);
@@ -1327,17 +1327,4 @@ class WasmScalarAbi {
 			default: throw new InternalError('Expected a value object, got $type');
 		};
 
-	static function nextId(fn:IrFunction):Int {
-		var next = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-			}
-		return next;
-	}
 }

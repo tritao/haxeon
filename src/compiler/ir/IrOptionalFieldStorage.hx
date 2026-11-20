@@ -156,7 +156,7 @@ class IrOptionalFieldStorage {
 		if (plan == null || fn.arguments.length == 0)
 			throw new InternalError('Invalid optional method specialization "$name"');
 		var receiver = fn.arguments[0],
-			next = nextId(fn),
+			next = fn.nextValueId(),
 			owner = new IrValue(next++, "$optional-owner", Obj(request.owner)),
 			aliases:Map<Int, Array<String>> = [receiver.id => request.path];
 		// A receiver projection remains a place across SSA blocks. A cast only unwraps a nullable projection; the original
@@ -422,7 +422,7 @@ class IrOptionalFieldStorage {
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		if (!needsRewrite(fn))
 			return fn;
-		var changed = false, blocks:Array<IrBlock> = [], next = nextId(fn);
+		var changed = false, blocks:Array<IrBlock> = [], next = fn.nextValueId();
 		for (block in fn.blocks) {
 			var replacement = new IrBlock(block.id);
 			for (located in block.instructions) {
@@ -518,20 +518,6 @@ class IrOptionalFieldStorage {
 					default:
 				}
 		return false;
-	}
-
-	static function nextId(fn:IrFunction):Int {
-		var max = -1;
-		for (arg in fn.arguments)
-			if (arg.id > max)
-				max = arg.id;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id > max)
-					max = output.id;
-			}
-		return max + 1;
 	}
 
 	function accessor(plan:OptionalFieldPlan, write:Bool):IrFunction {

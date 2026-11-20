@@ -827,26 +827,16 @@ class IrInliner {
 			}
 		if (!found && !IrCopyElision.hasCopies(fn.blocks))
 			return fn;
-		var blocks:Array<IrBlock> = [], nextValue = 0, nextBlock = 0;
+		var blocks:Array<IrBlock> = [], nextValue = fn.nextValueId(), nextBlock = 0;
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
+			for (located in block.instructions)
 				copy.instructions.push(located);
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= nextValue)
-					nextValue = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= nextValue)
-						nextValue = input.id + 1;
-			}
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 			if (block.id >= nextBlock)
 				nextBlock = block.id + 1;
 		}
-		for (argument in fn.arguments)
-			if (argument.id >= nextValue)
-				nextValue = argument.id + 1;
 		var index = 0, inlines = 0, instructions = countInstructions(fn), substitutions:Map<Int, IrValue> = [];
 		while (index < blocks.length) {
 			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;

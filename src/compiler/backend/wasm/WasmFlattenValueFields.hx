@@ -59,7 +59,7 @@ class WasmFlattenValueFields {
 				original = originals.get(method.original);
 			if (original == null || original.arguments.length == 0)
 				throw new InternalError('Missing Wasm GC place method "${method.original}"');
-			var next = nextId(original),
+			var next = original.nextValueId(),
 				owner = new IrValue(next, "$wasm-gc-place-owner", Obj(method.owner)),
 				args = [owner].concat(original.arguments.slice(1)),
 				clone = new IrFunction(method.name, args, original.result, original.blocks, GeneratedHelper, [],
@@ -100,19 +100,16 @@ class WasmFlattenValueFields {
 	function rewriteFunction(fn:IrFunction, seed:Null<{id:Int, place:FlattenedPlace}>):IrFunction {
 		// Materializing a phi input may dereference its holder, so do it only on the selected edge.
 		fn = PhiEdges.split(fn);
-		var aliases:Map<Int, FlattenedPlace> = [], fresh:Map<Int, Bool> = [], changed = true, next = 0;
+		var aliases:Map<Int, FlattenedPlace> = [],
+			fresh:Map<Int, Bool> = [],
+			changed = true,
+			next = fn.nextValueId();
 		if (seed != null)
 			aliases.set(seed.id, seed.place);
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
 		while (changed) {
 			changed = false;
 			for (block in fn.blocks)
 				for (located in block.instructions) {
-					var output = IrOperands.output(located.value);
-					if (output != null && output.id >= next)
-						next = output.id + 1;
 					switch located.value {
 						case NewObject(out, _) | ValueInit(out):
 							fresh.set(out.id, true);
@@ -368,19 +365,6 @@ class WasmFlattenValueFields {
 			default: throw new InternalError('Expected an object type, got $type');
 		};
 
-	static function nextId(fn:IrFunction):Int {
-		var next = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-			}
-		return next;
-	}
 
 	/** Translate a logical field path to its one physical GC field. */
 	function physical(type:IrType, path:Array<String>):String {

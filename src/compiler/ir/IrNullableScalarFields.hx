@@ -30,7 +30,7 @@ class IrNullableScalarFields {
 	function rewriteFunction(fn:IrFunction):IrFunction {
 		if (!needsRewrite(fn))
 			return fn;
-		var next = nextValue(fn), changed = false, blocks:Array<IrBlock> = [];
+		var next = fn.nextValueId(), changed = false, blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
 			for (located in block.instructions) {
@@ -127,20 +127,4 @@ class IrNullableScalarFields {
 		return null;
 	}
 
-	static function nextValue(fn:IrFunction):Int {
-		var next = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= next)
-						next = input.id + 1;
-			}
-		return next;
-	}
 }

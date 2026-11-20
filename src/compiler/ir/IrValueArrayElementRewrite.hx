@@ -9,13 +9,7 @@ class IrValueArrayElementRewrite {
 	public static function rewrite(fn:IrFunction, element:IrType, helpers:IrValueArrayElements,
 			tagUnboxes:Map<String, IrType>):IrFunction {
 		fn = rewriteCheckedSplice(fn, element, helpers, tagUnboxes);
-		var arrayType:IrType = Array(element), next = 0, changed = false;
-		for (argument in fn.arguments) if (argument.id >= next) next = argument.id + 1;
-		for (block in fn.blocks) for (located in block.instructions) {
-			var output = IrOperands.output(located.value);
-			if (output != null && output.id >= next) next = output.id + 1;
-			for (input in IrOperands.inputs(located.value)) if (input.id >= next) next = input.id + 1;
-		}
+		var arrayType:IrType = Array(element), next = fn.nextValueId(), changed = false;
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);

@@ -405,19 +405,7 @@ class IrValueArrayProgramRewrite {
 
 	/** A checked concrete view must install the lane representation on the shared dynamic header. */
 	static function rewriteCasts(fn:IrFunction, element:IrType, retype:String):IrFunction {
-		var next = 0, changed = false, blocks:Array<IrBlock> = [];
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= next)
-						next = input.id + 1;
-			}
+		var next = fn.nextValueId(), changed = false, blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);
 			for (located in block.instructions)
@@ -495,18 +483,8 @@ class IrValueArrayProgramRewrite {
 				var instruction = switch located.value {
 					case ArrayGet(out, array, index): Call(out, IrSymbol.of("__array_get_any"), [array, index]);
 					case ArraySet(array, index, value):
-						if (next < 0) {
-							next = 0;
-							for (argument in fn.arguments)
-								if (argument.id >= next)
-									next = argument.id + 1;
-							for (body in fn.blocks)
-								for (entry in body.instructions) {
-									var output = IrOperands.output(entry.value);
-									if (output != null && output.id >= next)
-										next = output.id + 1;
-								}
-						}
+						if (next < 0)
+							next = fn.nextValueId();
 						Call(new IrValue(next++, "$dynamic-array-write", Void), IrSymbol.of("__array_set_any"),
 							[array, index, value]);
 					case Call(out, name, args): Call(out,

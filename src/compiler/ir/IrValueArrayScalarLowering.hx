@@ -35,21 +35,11 @@ class IrValueArrayScalarLowering {
 		}
 		if (!found)
 			return fn;
-		var next = 0, nextBlock = 0, blocks:Array<IrBlock> = [], changed = false;
-		for (arg in fn.arguments)
-			if (arg.id >= next)
-				next = arg.id + 1;
+		var next = fn.nextValueId(), nextBlock = 0, blocks:Array<IrBlock> = [], changed = false;
 		for (block in fn.blocks) {
 			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
+			for (located in block.instructions)
 				copy.instructions.push(located);
-				var out = IrOperands.output(located.value);
-				if (out != null && out.id >= next)
-					next = out.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= next)
-						next = input.id + 1;
-			}
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 			if (block.id >= nextBlock)

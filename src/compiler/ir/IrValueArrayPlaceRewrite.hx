@@ -45,7 +45,7 @@ class IrValueArrayPlaceRewrite {
 			aliases:Map<Int, ArrayPlace> = [],
 			raw:Map<Int, ArrayPlace> = [],
 			nulls:Map<Int, Bool> = [],
-			next = 0;
+			next = fn.nextValueId();
 		function requiredPlace(id:Int):ArrayPlace {
 			var place = aliases.get(id);
 			if (place == null) throw new InternalError('Missing array place $id');
@@ -60,11 +60,7 @@ class IrValueArrayPlaceRewrite {
 			case Nullable(I32 | I64 | F32 | F64 | Bool): true;
 			default: false;
 		};
-		for (arg in fn.arguments) if (arg.id >= next) next = arg.id + 1;
 		for (block in fn.blocks) for (located in block.instructions) {
-			var out = IrOperands.output(located.value);
-			if (out != null && out.id >= next) next = out.id + 1;
-			for (input in IrOperands.inputs(located.value)) if (input.id >= next) next = input.id + 1;
 			switch located.value {
 				case ConstNull(value): nulls.set(value.id, true);
 				case ArrayGet(value, array, index) if (roots.exists(value.id)):

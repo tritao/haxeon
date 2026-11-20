@@ -173,19 +173,7 @@ class IrInstrumentation {
 		var covered = scope.covers(fn.name);
 		if (!covered && !hasTry(fn))
 			return fn;
-		var nextValue = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= nextValue)
-				nextValue = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= nextValue)
-					nextValue = output.id + 1;
-				for (input in IrOperands.inputs(located.value))
-					if (input.id >= nextValue)
-						nextValue = input.id + 1;
-			}
+		var nextValue = fn.nextValueId();
 		inline function value(type:IrType):IrValue
 			return new IrValue(nextValue++, "$prof", type);
 		var provenance = SourceProvenance.generated("profiler probe");

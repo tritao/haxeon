@@ -226,7 +226,41 @@ class AuditVerifierMain {
 		IrVerifier.verify(decoded);
 	}
 
+	/** A dropped value's debug binding keeps its id: new values are numbered above it, and no other value may take it. */
+	static function verifyStaleDebugBindings():Void {
+		var builder = new IrBuilder(),
+			input = builder.argument("input", I32),
+			dropped = new IrValue(40, "dropped", Obj("Gone"));
+		builder.returnValue(input);
+		function binding(value:IrValue):compiler.ir.IrFunction.IrDebugBinding
+			return {
+				identity: "local:dropped",
+				name: "dropped",
+				value: value,
+				path: "test.hx",
+				scopeStart: 0,
+				scopeEnd: 1
+			};
+		var fn = new IrFunction("main", builder.arguments, I32, builder.blocks, Ordinary, [binding(dropped)]);
+		if (fn.nextValueId() != 41)
+			throw 'A new value must be numbered above a bound one, not ${fn.nextValueId()}';
+		var program = new IrProgram("main");
+		program.functions.push(fn);
+		IrVerifier.verify(program);
+		var reused = new IrBuilder(),
+			argument = reused.argument("input", I32),
+			other = new IrValue(40, "other", I32);
+		reused.currentBlock().instructions.push(new Located(Add(other, argument, argument),
+			SourceProvenance.generated("stale-binding-test")));
+		reused.returnValue(other);
+		var stale = new IrProgram("main");
+		stale.functions.push(new IrFunction("main", reused.arguments, I32, reused.blocks, Ordinary,
+			[binding(dropped)]));
+		rejected(stale, "Debug binding dropped names value 40");
+	}
+
 	static function main():Void {
+		verifyStaleDebugBindings();
 		verifyValueConstructionShape();
 		verifyInlineEnumIntrinsics();
 		verifyLaneArrayInvariant();

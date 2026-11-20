@@ -63,16 +63,7 @@ class IrArrayFactory {
 		if (!requested)
 			return fn;
 
-		var changed = false, next = 0;
-		for (argument in fn.arguments)
-			if (argument.id >= next)
-				next = argument.id + 1;
-		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null && output.id >= next)
-					next = output.id + 1;
-			}
+		var changed = false, next = fn.nextValueId();
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {
 			var target = new IrBlock(block.id);

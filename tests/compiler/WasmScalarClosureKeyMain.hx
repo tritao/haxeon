@@ -22,10 +22,23 @@ class WasmScalarClosureKeyMain {
 			var found = false;
 			program.functions = [for (fn in program.functions) {
 				if (fn.name.indexOf("boundary") >= 0) {
-					var arguments = fn.arguments.copy(), argument = arguments[0];
-					arguments[0] = new IrValue(argument.id, argument.name, Nullable(argument.type));
+					var arguments = fn.arguments.copy(),
+						argument = arguments[0],
+						nullableArgument = new IrValue(argument.id, argument.name, Nullable(argument.type));
+					arguments[0] = nullableArgument;
 					found = true;
-					fn.withBlocks(fn.blocks, null, arguments);
+					// The argument's debug binding names the retyped value, as the verifier requires.
+					fn.withBlocks(fn.blocks, [
+						for (binding in fn.debugBindings)
+							binding.value.id == argument.id ? {
+								identity: binding.identity,
+								name: binding.name,
+								value: nullableArgument,
+								path: binding.path,
+								scopeStart: binding.scopeStart,
+								scopeEnd: binding.scopeEnd
+							} : binding
+					], arguments);
 				} else fn;
 			}];
 			if (!found) throw "Missing exposed boundary";

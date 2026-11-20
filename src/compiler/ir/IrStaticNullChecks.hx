@@ -57,14 +57,9 @@ class IrStaticNullChecks {
 				result.push(known.result);
 				continue;
 			}
-			var origins:Map<Int, String> = [], nextId = 0;
-			for (argument in fn.arguments)
-				nextId = Std.int(Math.max(nextId, argument.id + 1));
+			var origins:Map<Int, String> = [], nextId = fn.nextValueId();
 			for (block in fn.blocks)
 				for (instruction in block.instructions) {
-					var output = IrOperands.output(instruction.value);
-					if (output != null)
-						nextId = Std.int(Math.max(nextId, output.id + 1));
 					switch instruction.value {
 						case GlobalGet(value, name):
 							origins.set(value.id, name);

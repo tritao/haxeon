@@ -6,7 +6,6 @@ import compiler.ir.IrTypeIdentity;
 import compiler.ir.Ir;
 import compiler.ir.IrBuilder;
 import compiler.ir.IrFunction;
-import compiler.ir.IrOperands;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.SourceProvenance;
 
@@ -46,15 +45,7 @@ class WasmDynamicCalls {
 				isFunction = n.name;
 		var needsFunctionTest = false;
 		for (fn in program.functions) {
-			var nextId = 0;
-			for (arg in fn.arguments)
-				nextId = Std.int(Math.max(nextId, arg.id + 1));
-			for (block in fn.blocks)
-				for (ins in block.instructions) {
-					var out = IrOperands.output(ins.value);
-					if (out != null)
-						nextId = Std.int(Math.max(nextId, out.id + 1));
-				}
+			var nextId = fn.nextValueId();
 			function temp(type:IrType):IrValue
 				return new IrValue(nextId++, "wasm-call", type);
 			var blocks:Array<IrBlock> = [];

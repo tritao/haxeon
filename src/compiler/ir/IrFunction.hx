@@ -111,6 +111,33 @@ class IrFunction {
 		this.kind = kind;
 	}
 
+	/**
+	 * The first id above every value the function names: its arguments, its instructions' outputs and operands, and its debug
+	 * bindings. A pass
+	 * that adds values numbers them from here; a binding's value may be gone from the code, and its id must not name another value.
+	 */
+	public function nextValueId():Int {
+		var next = 0;
+		for (argument in arguments)
+			if (argument.id >= next)
+				next = argument.id + 1;
+		for (block in blocks)
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null && output.id >= next)
+					next = output.id + 1;
+				for (index in 0...IrOperands.count(located.value)) {
+					var input = IrOperands.at(located.value, index);
+					if (input.id >= next)
+						next = input.id + 1;
+				}
+			}
+		for (binding in debugBindings)
+			if (binding.value.id >= next)
+				next = binding.value.id + 1;
+		return next;
+	}
+
 	/** The operation this function serves for a type, as a row of the provider table, or `None` when it is not a provider. */
 	public var provides(get, never):Provides<TypeKey>;
 

@@ -204,7 +204,7 @@ class IrValueInterfaceBoxes {
 		}
 		function freshId():Int {
 			if (next < 0)
-				next = nextId(current);
+				next = current.nextValueId();
 			return next++;
 		}
 		function replacement(located:Located<IrInstruction>):Null<Array<Located<IrInstruction>>>
@@ -307,15 +307,5 @@ class IrValueInterfaceBoxes {
 			generated.push(new IrFunction(TYPE_ID, builder.arguments, I32, builder.blocks, GeneratedHelper));
 		}
 		return rewritten.concat(generated);
-	}
-
-	static function nextId(fn:IrFunction):Int {
-		var max = -1;
-		for (argument in fn.arguments) if (argument.id > max) max = argument.id;
-		for (block in fn.blocks) for (located in block.instructions) {
-			var output = IrOperands.output(located.value);
-			if (output != null && output.id > max) max = output.id;
-		}
-		return max + 1;
 	}
 }

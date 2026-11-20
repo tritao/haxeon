@@ -661,6 +661,14 @@ class IrVerifier {
 					values.define(output, id, position);
 			}
 		}
+		// A binding whose value was dropped keeps its id, which no new value may take (`IrFunction.nextValueId`): the debugger would
+		// show the binding's local holding that other value.
+		for (binding in fn.debugBindings) {
+			var bound = binding.value;
+			if (values.exists(bound.id)
+				&& (values.nameOf(bound.id) != bound.name || !sameType(values.get(bound.id), bound.type)))
+				throw new InternalError('Debug binding ${binding.name} names value ${bound.id}, which is another value here');
+		}
 		for (id in graph.order) {
 			var block = graph.block(id);
 			for (position in 0...block.instructions.length) {
@@ -1897,6 +1905,7 @@ class IrVerifier {
  */
 class IrVerifyValues {
 	var types:Array<Null<IrType>> = [];
+	var names:Array<String> = [];
 	var blocks:Array<Int> = [];
 	var positions:Array<Int> = [];
 	var defined:Array<Int> = [];
@@ -1916,6 +1925,9 @@ class IrVerifyValues {
 	public inline function get(id:Int):IrType
 		return types[id];
 
+	public inline function nameOf(id:Int):String
+		return names[id];
+
 	public inline function blockOf(id:Int):Int
 		return blocks[id];
 
@@ -1930,10 +1942,12 @@ class IrVerifyValues {
 			throw new InternalError('Duplicate IR value $id');
 		while (types.length <= id) {
 			types.push(null);
+			names.push(null);
 			blocks.push(0);
 			positions.push(0);
 		}
 		types[id] = value.type;
+		names[id] = value.name;
 		blocks[id] = block;
 		positions[id] = position;
 		if (count == defined.length)
