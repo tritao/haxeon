@@ -10,11 +10,17 @@ import compiler.syntax.Ast.AstSwitchCase;
 import compiler.syntax.Ast.AstSwitchExpressionCase;
 import compiler.syntax.Ast.TemporaryLocal;
 
-/** An extractor, `expression => pattern`, and the name that captures the value it reads (`name = expression => pattern`). */
+/**
+ * An extractor, `expression => pattern`, and the name that captures the value it reads (`name = expression => pattern`). The
+ * locals the rewrite declares for it, `_` and the name, are declared at the spans the resolver gives them (`BindingWalker`):
+ * the extractor's and the capture's.
+ */
 typedef ExtractorParts = {
 	final name:Null<String>;
+	final nameSpan:Null<SourceSpan>;
 	final expression:AstExpression;
 	final pattern:AstExpression;
+	final span:SourceSpan;
 }
 
 /**
@@ -81,9 +87,9 @@ class ExtractorPatterns {
 			var switchCase = cases[index], parts = step.inner[index - step.first];
 			inner.push({
 				patterns: [parts.pattern],
-				guard: bound(parts.name, step.extracted, switchCase.guard, span),
+				guard: bound(parts, step.extracted, switchCase.guard, span),
 				statements: parts.name == null ? switchCase.statements : [
-					VarDeclaration(parts.name, null, step.extracted, span)
+					VarDeclaration(parts.name, null, step.extracted, parts.nameSpan ?? span)
 				].concat(switchCase.statements),
 				span: switchCase.span
 			});
@@ -100,7 +106,7 @@ class ExtractorPatterns {
 			] : defaultBranch,
 			hasAfter = rest.length > 0 || hasDefault;
 		// Each switch has a span of its own, which names what lowering keeps for it.
-		var matched = Switch(evaluated(step.expression, step.extracted, span), inner, open ? after : [],
+		var matched = Switch(evaluated(step, span), inner, open ? after : [],
 			open && hasAfter, step.span),
 			before = cases.slice(0, step.first),
 			statements = step.declarations.copy();
@@ -130,9 +136,9 @@ class ExtractorPatterns {
 			var switchCase = cases[index], parts = step.inner[index - step.first];
 			inner.push({
 				patterns: [parts.pattern],
-				guard: bound(parts.name, step.extracted, switchCase.guard, span),
+				guard: bound(parts, step.extracted, switchCase.guard, span),
 				result: parts.name == null ? switchCase.result : BlockExpression([
-					VarDeclaration(parts.name, null, step.extracted, span)
+					VarDeclaration(parts.name, null, step.extracted, parts.nameSpan ?? span)
 				], switchCase.result, span),
 				span: switchCase.span
 			});
@@ -146,7 +152,7 @@ class ExtractorPatterns {
 			after = rest.length > 0 ? SwitchExpression(step.subject, rest, fallback,
 				patternSpan(compiler.syntax.SwitchCases.only(rest[0].patterns))) : fallback;
 		// Each switch has a span of its own, which names what lowering keeps for it.
-		var matched = SwitchExpression(evaluated(step.expression, step.extracted, span), inner, open ? after : null,
+		var matched = SwitchExpression(evaluated(step, span), inner, open ? after : null,
 			step.span),
 			before = cases.slice(0, step.first),
 			result:AstExpression;
@@ -273,15 +279,18 @@ class ExtractorPatterns {
 			};
 	};
 
-	/** `expression` with `_` the value it reads: a block that declares `_` for it. */
-	static function evaluated(expression:AstExpression, value:AstExpression, span:SourceSpan):AstExpression
-		return BlockExpression([VarDeclaration("_", null, value, span)], expression, span);
+	/** The step's expression with `_` the value it reads: a block that declares `_` for it, at the first extractor's span. */
+	static function evaluated(step:ExtractorStep, span:SourceSpan):AstExpression
+		return BlockExpression([VarDeclaration("_", null, step.extracted, step.inner[0].span)], step.expression, span);
 
-	/** A guard that reads the capture `name`: in a block that binds it, as the body is. */
-	static function bound(name:Null<String>, value:AstExpression, guard:Null<AstExpression>,
-			span:SourceSpan):Null<AstExpression>
-		return name == null
-			|| guard == null ? guard : BlockExpression([VarDeclaration(name, null, value, span)], guard, span);
+	/** A guard that reads the capture: in a block that binds it, as the body is. */
+	static function bound(parts:ExtractorParts, value:AstExpression, guard:Null<AstExpression>,
+			span:SourceSpan):Null<AstExpression> {
+		var name = parts.name;
+		return name == null || guard == null ? guard : BlockExpression([
+			VarDeclaration(name, null, value, parts.nameSpan ?? span)
+		], guard, span);
+	}
 
 	static function patternSpan(pattern:AstExpression):SourceSpan
 		return compiler.syntax.Parser.expressionSpan(pattern);
@@ -294,9 +303,22 @@ class ExtractorPatterns {
 	/** An extractor written as `value` itself: its expression and pattern, and the name that captures what it reads. */
 	static function extractorOf(value:AstExpression):Null<ExtractorParts>
 		return switch value {
-			case Extractor(expression, pattern, _): {name: null, expression: expression, pattern: pattern};
-			case Capture(name, Extractor(expression, pattern, _), _):
-				{name: name, expression: expression, pattern: pattern};
+			case Extractor(expression, pattern, span):
+				{
+					name: null,
+					nameSpan: null,
+					expression: expression,
+					pattern: pattern,
+					span: span
+				};
+			case Capture(name, Extractor(expression, pattern, span), nameSpan):
+				{
+					name: name,
+					nameSpan: nameSpan,
+					expression: expression,
+					pattern: pattern,
+					span: span
+				};
 			default: null;
 		};
 

@@ -285,6 +285,10 @@ class BindingWalker implements AstChildVisitor {
 				receiver(target, name);
 				for (argument in arguments)
 					expression(argument);
+			case Extractor(read, inner, extractorSpan):
+				// In a `.match` pattern, walked as an expression since it binds no names; `_` is the value being matched.
+				extracted(read, extractorSpan);
+				expression(inner);
 			case Index(target, position, _):
 				receiver(target, "get");
 				expression(position);
@@ -362,6 +366,14 @@ class BindingWalker implements AstChildVisitor {
 				leaveScope(scope);
 			}
 
+	/** An extractor's expression, which reads the value being matched as `_` (`ExtractorPatterns`), declared at the extractor. */
+	function extracted(value:AstExpression, span:SourceSpan):Void {
+		var scope = enterScope();
+		declare("_", span, Pattern);
+		expression(value);
+		leaveScope(scope);
+	}
+
 	/** Every name in a case pattern may bind a variable; naming too many is the safe error. */
 	function bindPattern(pattern:AstExpression, span:SourceSpan):Void {
 		switch pattern {
@@ -372,7 +384,8 @@ class BindingWalker implements AstChildVisitor {
 			case Capture(name, inner, captureSpan):
 				declare(name, captureSpan, Pattern);
 				bindPattern(inner, span);
-			case Extractor(_, inner, _):
+			case Extractor(expression, inner, extractorSpan):
+				extracted(expression, extractorSpan);
 				bindPattern(inner, span);
 			case Call(_, arguments, _), ArrayLiteral(arguments, _):
 				for (argument in arguments)
