@@ -174,7 +174,8 @@ class IrInlineEnumEligibility {
 			for (block in fn.blocks) {
 				for (located in block.instructions) {
 					var instruction = located.value;
-					for (input in IrOperands.inputs(instruction))
+					for (inputIndex in 0...IrOperands.count(instruction)) {
+						var input = IrOperands.at(instruction, inputIndex);
 						if (descriptors.exists(input.id)) {
 							descriptorUses.set(input.id,
 								(descriptorUses.exists(input.id) ? descriptorUses.get(input.id) : 0) + 1);
@@ -203,6 +204,7 @@ class IrInlineEnumEligibility {
 									otherDescriptors.set(input.id, true);
 							}
 						}
+					}
 					switch instruction {
 						case Call(out, name, arguments) if (StringTools.startsWith(name.name, "__map_")
 							&& StringTools.contains(name.name, "_ref_")):
