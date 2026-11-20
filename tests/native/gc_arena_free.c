@@ -123,10 +123,17 @@ static NOINLINE varray *copied_out(void *arena) {
 		hl_hbset_n(map,stored,3,hl_make_dyn(&value,&hlt_i32));
 	}
 	hl_aptr(maps,void*)[0] = map;
-	varray *outer = hl_alloc_array(&hlt_array,3);
+	// A map boxed in a Dynamic, as a table of references stores one.
+	varray *boxes = hl_alloc_array(&hlt_dyn,1);
+	vdynamic *box = (vdynamic*)hl_gc_alloc_gen(&map_type,sizeof(vdynamic),MEM_KIND_DYNAMIC | MEM_ZERO);
+	box->t = &map_type;
+	box->v.ptr = map;
+	hl_aptr(boxes,vdynamic*)[0] = box;
+	varray *outer = hl_alloc_array(&hlt_array,4);
 	hl_aptr(outer,varray*)[0] = self;
 	hl_aptr(outer,varray*)[1] = bytes;
 	hl_aptr(outer,varray*)[2] = maps;
+	hl_aptr(outer,varray*)[3] = boxes;
 	varray *copy = (varray*)hl_gc_arena_copy((vdynamic*)outer,arena,hl_gc_arena_global());
 	hl_gc_arena_leave(previous);
 	return copy;
@@ -302,6 +309,8 @@ int main(void) {
 		uchar key[8] = {'k','n','a',0};
 		vdynamic *value = hl_hbget_n(map,key,3);
 		if(!check(data[7] == 7 && data[31] == 31 && value && value->v.i == 13,"the copy, its bytes and its map survive the release and a collection")) goto done;
+		vdynamic *box = hl_aptr(hl_aptr(copy,varray*)[3],vdynamic*)[0];
+		if(!check(box->v.ptr == map,"a boxed map is copied with the map it holds")) goto done;
 		copy = NULL;
 		global_slot = NULL;
 	}
