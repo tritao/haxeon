@@ -1568,7 +1568,7 @@ class CallResolver {
 			if (index > 0)
 				line = join(line, text(", "));
 			line = join(line, StringConversion.convert(session,
-				bodyTyper.typeExpression(arguments[index], scope, TDynamic), bodyTyper));
+				bodyTyper.typeExpression(arguments[index], scope, TDynamic), bodyTyper, scope));
 		}
 		return join(line, text("\n"));
 	}
@@ -2293,7 +2293,7 @@ class CallResolver {
 		// type, as the stdlib signature gives it, so mixed branches such as `cond ? "a" : 1` still join.
 		if (name == "Std.string" && arguments.length == 1)
 			return StringConversion.convert(session, bodyTyper.typeExpression(arguments[0], scope, TDynamic),
-				bodyTyper);
+				bodyTyper, scope);
 		if (name == "Std.stdString") {
 			if (arguments.length != 1)
 				fail("E1008", 'Function "Std.string" expects 1 argument, got ${arguments.length}', span);

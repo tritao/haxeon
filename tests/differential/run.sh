@@ -246,6 +246,7 @@ in_background run_case switch-enum-abstract-value-names 0
 in_background run_case cast-expression-extent 0
 in_background run_case array-index-dynamic 0
 in_background run_case enum-creation 0 hl main
+in_background run_case abstract-to-string 0
 # Static properties with accessors, of a class and of an abstract (StaticProperties).
 in_background run_case static-properties 0
 in_background run_compile_failure static-property-never-write

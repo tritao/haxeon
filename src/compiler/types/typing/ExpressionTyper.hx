@@ -2439,8 +2439,8 @@ class ExpressionTyper {
 		}) && isNumeric(left.type))
 			right = bodyTyper.coerce(right, left.type, "arithmetic operand");
 		if (add && (isStringOperand(left.type) || isStringOperand(right.type))) {
-			left = stringify(left);
-			right = stringify(right);
+			left = stringify(left, scope);
+			right = stringify(right, scope);
 			return new TypedExpression(TAdd(left, right), TString, span);
 		}
 		left = plain(left);
@@ -3007,8 +3007,8 @@ class ExpressionTyper {
 			default: isStringConvertible(type);
 		};
 
-	function stringify(value:TypedExpression):TypedExpression
-		return StringConversion.convert(session, value, bodyTyper);
+	function stringify(value:TypedExpression, scope:Scope):TypedExpression
+		return StringConversion.convert(session, value, bodyTyper, scope);
 
 	static function sameType(left:CompilerType, right:CompilerType):Bool
 		return TypeRelations.equals(left, right);

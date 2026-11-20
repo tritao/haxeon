@@ -1,11 +1,15 @@
 package compiler.types.typing;
 
+import compiler.syntax.Ast.TemporaryLocal;
 import compiler.types.Type.CompilerType;
 import compiler.types.TypedAst.TypedExpression;
+import compiler.types.analysis.Scope;
 
 /**
  * The one rule for turning a typed value into a String. Concatenation (`"a" + value`), `Std.string(value)` and string
  * interpolation (which lowers to `Std.string`) all use it, so a value prints the same way through each:
+ * - an abstract with a `toString()` method, where its type is known (not through a type parameter), calls it, private or
+ *   not, and a nullable one that holds null is `null`, as Haxe does;
  * - an enum abstract that names its values (`RawRepresentable`, `Flags`) prints its name, and a nullable one `null`;
  * - a String, or an abstract that converts to one, is itself;
  * - Float and Dynamic values go through `Std.string`, and everything else through the runtime's boxed conversion.
@@ -19,12 +23,66 @@ class StringConversion {
 			default: false;
 		};
 
-	public static function convert(session:TypingSession, value:TypedExpression,
-			bodyTyper:BodyTyping):TypedExpression {
+	public static function convert(session:TypingSession, value:TypedExpression, bodyTyper:BodyTyping,
+			scope:Scope):TypedExpression {
 		// A type parameter's value converts as its representation does: the elaboration pass chooses how (`GenericElaboration`).
 		if (TypeRepresentation.mentionsTypeParameter(value.type))
 			return new TypedExpression(TParameterOperation(ToString, [value]), TString, value.span);
-		return convertValue(session, value, bodyTyper);
+		var called = abstractToString(session, value, bodyTyper, scope);
+		return called != null ? called : convertValue(session, value, bodyTyper);
+	}
+
+	/**
+	 * `value.toString()` for a value of an abstract that declares an instance `toString` taking no arguments, or null. A
+	 * nullable value is held once and tested for null first. Haxe makes this call only where the abstract is the static
+	 * type, so a value converted through a type parameter prints its underlying value instead.
+	 */
+	static function abstractToString(session:TypingSession, value:TypedExpression, bodyTyper:BodyTyping,
+			scope:Scope):Null<TypedExpression> {
+		var span = value.span, nullable = false, abstractType = value.type;
+		switch value.type {
+			case TNullable(inner = TAbstract(_, _, _)):
+				nullable = true;
+				abstractType = inner;
+			default:
+		}
+		var declaration = switch abstractType {
+			case TAbstract(name, _, _): session.declarations.abstractDeclaration(name);
+			default: null;
+		};
+		if (declaration == null || !Lambda.exists(declaration.methods, method -> method.name == "toString"
+			&& !method.isStatic && method.arguments.length == 0))
+			return null;
+		var inner = new Scope(scope);
+		function hold(name:String, held:TypedExpression):{
+			statement:compiler.types.TypedAst.TypedStatement,
+			local:TypedExpression,
+			temporary:TemporaryLocal
+		} {
+			var temporary = new TemporaryLocal(name + span.start),
+				binding = inner.define(temporary.name, held.type, span, true, null, false, null, null, temporary);
+			bodyTyper.bindCell(binding, held.type);
+			return {
+				statement: TVar(binding.id, held, span),
+				local: new TypedExpression(TLocal(binding.id), held.type, span),
+				temporary: temporary
+			};
+		}
+		var whole = hold("__haxeon_string_held", value),
+			present = nullable ? hold("__haxeon_string_present", new TypedExpression(TCast(whole.local), abstractType,
+				span)) : whole,
+			call =
+				bodyTyper.coerce(bodyTyper.typeExpression(PrivateAccessExpression(MethodCall(TemporaryVariable(present.temporary,
+				span), "toString", [], span), span), inner, TString), TString, "string conversion", "E1010");
+		if (!nullable)
+			return new TypedExpression(TBlockExpression([whole.statement], call), TString, span);
+		var absent = new TypedExpression(TNullableWrap(new TypedExpression(TNullLiteral, TNull, span)), value.type,
+			span),
+			isAbsent = new TypedExpression(TEqual(whole.local, absent), TBool, span);
+		return new TypedExpression(TBlockExpression([whole.statement],
+			new TypedExpression(TConditional(isAbsent, new TypedExpression(TStringLiteral("null"), TString, span),
+			new TypedExpression(TBlockExpression([present.statement], call), TString, span)), TString, span)),
+			TString, span);
 	}
 
 	/** `value`, whose type mentions no type parameter, as a String. */
