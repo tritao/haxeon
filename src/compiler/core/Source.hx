@@ -208,11 +208,15 @@ class SourceSpan {
 		this.end = end;
 	}
 
-	/** A span of a reference: a plain span unless the reference is bare or has a name recorded. */
+	/**
+	 * A span of a reference: a plain span unless the reference is bare or has a name recorded. Most references are bare
+	 * names with nothing recorded, so those get a span of their own class with no extra fields.
+	 */
 	public static function reference(file:SourceFile, start:Int, end:Int, isBareReference:Bool,
 			?referenceName:String):SourceSpan
-		return isBareReference || referenceName != null ? new ReferenceSpan(file, start, end, isBareReference,
-			referenceName) : new SourceSpan(file, start, end);
+		return referenceName != null ? new ReferenceSpan(file, start, end, isBareReference,
+			referenceName) : isBareReference ? new BareReferenceSpan(file, start, end) : new SourceSpan(file, start,
+			end);
 
 	function get_isBareReference():Bool
 		return false;
@@ -253,12 +257,18 @@ class GeneratedSpan extends SourceSpan {
 		return reason;
 }
 
-/** A reference's span, with what the parser and the canonicalizer recorded about the reference. */
+/** The span of a bare reference with no name recorded. */
+class BareReferenceSpan extends SourceSpan {
+	override function get_isBareReference():Bool
+		return true;
+}
+
+/** A reference's span, with the name the canonicalizer recorded and whether the parser saw it bare. */
 class ReferenceSpan extends SourceSpan {
 	final bare:Bool;
-	final written:Null<String>;
+	final written:String;
 
-	public function new(file:SourceFile, start:Int, end:Int, bare:Bool, written:Null<String>) {
+	public function new(file:SourceFile, start:Int, end:Int, bare:Bool, written:String) {
 		super(file, start, end);
 		this.bare = bare;
 		this.written = written;
