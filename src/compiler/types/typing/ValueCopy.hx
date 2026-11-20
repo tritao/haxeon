@@ -19,12 +19,12 @@ class ValueCopy {
 			return value;
 		switch type {
 			case TNullable(element):
-				var nullableLayout = layoutOf(session, element, []);
+				var nullableLayout = layoutOf(session, element, null);
 				if (nullableLayout != null)
 					return new TypedExpression(TCopy(value, nullableLayout), type, value.span);
 			default:
 		}
-		var layout = layoutOf(session, type, []);
+		var layout = layoutOf(session, type, null);
 		return layout == null ? value : new TypedExpression(TCopy(value, layout), value.type, value.span);
 	}
 
@@ -37,7 +37,9 @@ class ValueCopy {
 			default: false;
 		};
 
-	static function layoutOf(session:TypingSession, type:CompilerType, visiting:Array<String>):Null<ValueCopyLayout> {
+	/** `visiting` holds the value classes being laid out around this one, null at the top. */
+	static function layoutOf(session:TypingSession, type:CompilerType,
+			visiting:Null<Array<String>>):Null<ValueCopyLayout> {
 		var name = switch type {
 			case TInstance(NominalKind.Class, className, _): className;
 			default: return null;
@@ -47,7 +49,7 @@ class ValueCopy {
 			|| (declaration.isStruct != true && !hasMetadata(declaration, "value"))
 			|| hasMetadata(declaration, "repr")
 			|| declaration.typeParameters.length > 0
-			|| visiting.indexOf(name) >= 0)
+			|| visiting != null && visiting.indexOf(name) >= 0)
 			return null;
 		var fields:Array<{name:String, type:CompilerType, nested:Null<ValueCopyLayout>}> = [];
 		for (field in declaration.fields) {
@@ -58,7 +60,7 @@ class ValueCopy {
 				case TNullable(element): element;
 				default: fieldType;
 			};
-			var nested = layoutOf(session, nestedType, visiting.concat([name]));
+			var nested = layoutOf(session, nestedType, visiting == null ? [name] : visiting.concat([name]));
 			fields.push({name: field.name, type: fieldType, nested: nested});
 		}
 		return {name: name, fields: fields};

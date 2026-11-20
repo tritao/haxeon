@@ -51,11 +51,9 @@ class MemberAccess {
 		// An abstract's static variables are its storage class's (`AbstractStatics`).
 		if (isStatic && session.declarations.abstracts.exists(className))
 			className = AbstractStatics.storageName(className);
-		var owner:Null<String> = className, seen:Map<String, Bool> = [];
+		// A cycle is found without remembering the walk: a second walker at half the speed meets the first only on one.
+		var owner:Null<String> = className, slow:Null<String> = className, steps = 0;
 		while (owner != null) {
-			if (seen.exists(owner))
-				throw new InternalError('Cyclic class hierarchy while resolving "$className.$name"');
-			seen.set(owner, true);
 			var declaration = session.classDecls.get(owner);
 			if (declaration == null)
 				return null;
@@ -66,8 +64,17 @@ class MemberAccess {
 			if (isStatic)
 				return null;
 			owner = declaration.base == null ? null : baseName(declaration.base);
+			if (++steps % 2 == 0)
+				slow = baseClassOf(session, slow);
+			if (owner != null && owner == slow)
+				throw new InternalError('Cyclic class hierarchy while resolving "$className.$name"');
 		}
 		return null;
+	}
+
+	static function baseClassOf(session:TypingSession, className:Null<String>):Null<String> {
+		var declaration = className == null ? null : session.classDecls.get(className);
+		return declaration == null || declaration.base == null ? null : baseName(declaration.base);
 	}
 
 	/**
