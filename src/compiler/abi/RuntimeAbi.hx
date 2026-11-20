@@ -1,6 +1,7 @@
 package compiler.abi;
 
 import compiler.ir.Ir;
+import compiler.ir.IrFunction;
 import compiler.ir.IrTypeIdentity;
 
 /** Deterministic semantic descriptions of every runtime-visible declaration. */
@@ -36,7 +37,7 @@ class RuntimeAbi {
 			enums:Map<String, String> = [],
 			globals:Map<String, String> = [];
 		for (fn in program.functions)
-			functions.set(fn.name, signature([for (argument in fn.arguments) argument.type], fn.result));
+			functions.set(fn.name, functionSignature(fn));
 		for (object in program.objects)
 			objects.set(object.name,
 				'kind=${object.isValue ? "value" : "object"};base=${object.base};interfaces=${object.interfaces.join(",")};fields=${[for (field in object.fields) fieldSignature(field)].join(",")};methods=${[for (method in object.methods) method.name + ":" + method.functionName].join(",")}');
@@ -73,13 +74,52 @@ class RuntimeAbi {
 			+ (nullable == null ? "" : ":nullable-storage=" + nullable.size + ":" + nullable.signed);
 	}
 
-	static function signature(arguments:Array<IrType>, result:IrType):String
-		return "(" + [for (argument in arguments) typeKey(argument)].join(",") + ")->" + typeKey(result);
+	/** A function's signature, as `signature` spells it, without collecting its argument types first. */
+	static function functionSignature(fn:IrFunction):String {
+		var out = new StringBuf();
+		out.add("(");
+		for (index in 0...fn.arguments.length) {
+			if (index > 0)
+				out.add(",");
+			writeKey(out, fn.arguments[index].type);
+		}
+		out.add(")->");
+		writeKey(out, fn.result);
+		return out.toString();
+	}
 
-	static function typeKey(type:IrType):String
-		return switch type {
-			case Array(element): 'Array<${typeKey(element)}>';
-			case Function(arguments, result): signature(arguments, result);
-			default: IrTypeIdentity.text(type);
-		};
+	static function signature(arguments:Array<IrType>, result:IrType):String {
+		var out = new StringBuf();
+		writeSignature(out, arguments, result);
+		return out.toString();
+	}
+
+	static function typeKey(type:IrType):String {
+		var out = new StringBuf();
+		writeKey(out, type);
+		return out.toString();
+	}
+
+	static function writeSignature(out:StringBuf, arguments:Array<IrType>, result:IrType):Void {
+		out.add("(");
+		for (index in 0...arguments.length) {
+			if (index > 0)
+				out.add(",");
+			writeKey(out, arguments[index]);
+		}
+		out.add(")->");
+		writeKey(out, result);
+	}
+
+	static function writeKey(out:StringBuf, type:IrType):Void
+		switch type {
+			case Array(element):
+				out.add("Array<");
+				writeKey(out, element);
+				out.add(">");
+			case Function(arguments, result):
+				writeSignature(out, arguments, result);
+			default:
+				IrTypeIdentity.write(out, type);
+		}
 }

@@ -71,7 +71,8 @@ class IrTypeIdentity {
 		return hash;
 	}
 
-	static function write(out:StringBuf, type:IrType):Void
+	/** Appends the type's text to `out`, for callers that build a larger text around it. */
+	public static function write(out:StringBuf, type:IrType):Void
 		switch type {
 			case Void:
 				out.add("Void");

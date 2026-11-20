@@ -3,6 +3,7 @@ package compiler.hl.incremental;
 import compiler.core.InternalError;
 import compiler.hl.HlWriter;
 import compiler.ir.IrFunction;
+import compiler.ir.IrTypeIdentity;
 import compiler.ir.codec.IrFunctionStateCodec;
 
 /** Serialized SSA body associated with a cached function name. */
@@ -251,6 +252,17 @@ class HlFunctionCache {
 	public function ordered():Array<IrFunction>
 		return [for (name in slots) functions.get(name)];
 
-	public static function signature(fn:IrFunction):String
-		return "(" + [for (a in fn.arguments) Std.string(a.type)].join(",") + ")->" + Std.string(fn.result);
+	/** `(a,b)->r` with each type's identity text (`IrTypeIdentity`), the same whichever compiler built the compiler. */
+	public static function signature(fn:IrFunction):String {
+		var out = new StringBuf();
+		out.add("(");
+		for (index in 0...fn.arguments.length) {
+			if (index > 0)
+				out.add(",");
+			IrTypeIdentity.write(out, fn.arguments[index].type);
+		}
+		out.add(")->");
+		IrTypeIdentity.write(out, fn.result);
+		return out.toString();
+	}
 }
