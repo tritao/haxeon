@@ -324,6 +324,12 @@ class FrontendCompilation {
 			build.typedNew = null;
 			context.state.lastTypedProgram = null;
 			context.state.releaseIncrementalRecords();
+			// Nothing reads the typed bodies past the tables; live patching still reads the semantic program's parameter defaults.
+			build.typedByName = [];
+			for (state in context.state.modules)
+				state.typedFunctions = [];
+			if (!context.livePatching)
+				context.state.semanticProgram = null;
 		}
 		return {result: null, build: build, carried: null};
 	}
