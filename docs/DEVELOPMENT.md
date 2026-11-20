@@ -242,7 +242,7 @@ runtime fingerprints or hot-reload compatibility.
   hot path keep an array next to the map, filled where entries are added, and iterate that. The Haxeon-built worker (ADR 0003 section 12)
   may make this moot; until then it is measured, not folklore.
 - **Hash a name once.** A name used for several lookups in a pass (a callee, a local) is looked up once to get a dense number, and the
-  per-name state after that is an array indexed by it (see `SsaBuilder`, `IrInliner`).
+  per-name state after that is an array indexed by it (see `IrSsaVariables`, `IrInliner`).
 - **Allocation sites come from the allocation census, not the profiler.** `HAXEON_COMPILER_ALLOC_CENSUS=<file>` on a build and
   `scripts/alloc-sites.py <file>` rank where a build allocates (stacks sampled by bytes, exact counts by type). The profiler's alloc samples
   carry only the allocator's return address and cannot name a site.

@@ -1,11 +1,11 @@
-package compiler.ir.cfg;
+package compiler.ir;
 
-import compiler.ir.cfg.Cfg.CfgBlock;
+import compiler.ir.Ir.IrBlock;
 
 /** Active structured-loop targets and the trap depth at their declaration. */
-typedef CfgLoopContext = {
-	final breakBlock:CfgBlock;
-	final continueBlock:CfgBlock;
+typedef IrLoopContext = {
+	final breakBlock:IrBlock;
+	final continueBlock:IrBlock;
 	final breakFlag:String;
 	final trapDepth:Int;
 

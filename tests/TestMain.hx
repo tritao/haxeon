@@ -35,14 +35,10 @@ import compiler.ir.IrFunction;
 import compiler.ir.IrGenerator;
 import compiler.ir.IrGraph;
 import compiler.ir.IrInterpreter;
+import compiler.ir.IrLocalsBuilder;
+import compiler.ir.IrSsaVariables.IrSsaScratch;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
-import compiler.ir.cfg.Cfg.CfgBlock;
-import compiler.ir.cfg.Cfg.CfgFunction;
-import compiler.ir.cfg.Cfg.CfgInstruction;
-import compiler.ir.cfg.Cfg.CfgValue;
-import compiler.ir.cfg.CfgVerifier;
-import compiler.ir.cfg.SsaBuilder;
 import compiler.ir.codec.IrFunctionStateCodec;
 import compiler.ir.codec.IrInstructionCodec;
 import compiler.ir.codec.IrTerminatorCodec;
@@ -812,21 +808,9 @@ class TestMain {
 			'function main():Int { var outer = 0; while (outer < 2) { var inner = 0; while (inner < 2) { inner = inner + 1; } outer = outer + inner; } return outer; }';
 		var ast = new Parser(new Lexer(new SourceFile("ssa.hx", mutableSource)).tokenize()).parseProgram();
 		var typed = Typer.type(ast),
-			cfg = IrGenerator.forProgram(typed, compiler.ir.TargetProfile.portable).generateCfg(typed.functions[0]),
-			loads = 0,
-			stores = 0;
-		for (block in cfg.blocks)
-			for (instruction in block.instructions)
-				switch instruction.value {
-					case LoadLocal(_, _):
-						loads++;
-					case StoreLocal(_, _):
-						stores++;
-					default:
-				}
-		if (loads == 0 || stores == 0)
-			throw "Typed AST did not lower through mutable-local CFG";
-		var built = SsaBuilder.build(cfg), phis = 0;
+			built = IrGenerator.forProgram(typed,
+				compiler.ir.TargetProfile.portable).generateFunction(typed.functions[0]),
+			phis = 0;
 		for (block in built.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
@@ -836,7 +820,7 @@ class TestMain {
 				}
 		if (phis != 2)
 			throw 'Pruned SSA expected two live loop phis, got $phis';
-		Sys.println("PASS: mutable CFG lowers through pruned dominance-based SSA");
+		Sys.println("PASS: locals lower directly to pruned SSA with one phi per live loop variable");
 
 		var nullableEnum =
 			Frontend.compile('enum DropZone { Center; Left; } class Target { public function new() {} public function zoneAt():Null<DropZone> return Center; } function main():Int { var zone = new Target().zoneAt(); return zone != null ? 42 : 1; }'),
@@ -854,16 +838,17 @@ class TestMain {
 		HlWriter.encode(nullableEnumHl).flatten();
 		Sys.println("PASS: nullable enum null checks use dedicated HashLink null branches");
 
-		var deepBlockCount = 2048, deepBlocks:Array<CfgBlock> = [];
-		for (index in 0...deepBlockCount) {
-			var block = new CfgBlock(index), value = new CfgValue(index, I32);
-			block.instructions.push(located(ConstInt(value, 42)));
-			block.terminator = located(index
-				+ 1 == deepBlockCount
-				? compiler.ir.cfg.Cfg.CfgTerminator.Return(value) : compiler.ir.cfg.Cfg.CfgTerminator.Jump(index + 1));
-			deepBlocks.push(block);
+		// A local stored in the entry and read at the end of a long chain: the read looks through every block.
+		var deepBlockCount = 2048, deepBuilder = new IrLocalsBuilder(new IrSsaScratch());
+		deepBuilder.store("value", deepBuilder.constInt(42));
+		for (index in 1...deepBlockCount) {
+			var next = deepBuilder.createBlock();
+			deepBuilder.jump(next);
+			deepBuilder.select(next);
 		}
-		var deepSsa = SsaBuilder.build(new CfgFunction("deep-chain", [], I32, deepBlocks, [], deepBlockCount));
+		deepBuilder.returnValue(deepBuilder.load("value", I32));
+		var deepBody = deepBuilder.finish(),
+			deepSsa = new IrFunction("deep-chain", [], I32, deepBody.blocks, Ordinary);
 		var deepGraph = new IrGraph(deepSsa);
 		if (deepSsa.blocks.length != deepBlockCount || deepGraph.order.length != deepBlockCount)
 			throw "Deep CFG traversal lost blocks";
@@ -893,28 +878,52 @@ class TestMain {
 				throw 'Post-dominator chain failed across bitset word boundary at block $index';
 		Sys.println("PASS: Wasm post-dominator bitsets preserve chains across word boundaries");
 
-		var unterminated = new CfgBlock(0);
-		expectCfgError(new CfgFunction("bad", [], I32, [unterminated], [], 0),
-			"Reachable CFG block 0 in bad has no terminator");
-		var badTarget = new CfgBlock(0);
-		badTarget.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(4));
-		expectCfgError(new CfgFunction("bad", [], I32, [badTarget], [], 0), "Unknown CFG block 4");
-		var duplicate = new CfgBlock(0),
-			first = new CfgValue(0, I32),
-			again = new CfgValue(0, I32);
-		duplicate.instructions.push(located(ConstInt(first, 1)));
-		duplicate.instructions.push(located(ConstInt(again, 2)));
-		duplicate.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Return(again));
-		expectCfgError(new CfgFunction("bad", [], I32, [duplicate], [], 1), "Duplicate CFG value 0");
-		var crossBlockA = new CfgBlock(0),
-			crossBlockB = new CfgBlock(1),
-			crossValue = new CfgValue(0, I32);
-		crossBlockA.instructions.push(located(ConstInt(crossValue, 1)));
-		crossBlockA.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Jump(1));
-		crossBlockB.terminator = located(compiler.ir.cfg.Cfg.CfgTerminator.Return(crossValue));
-		expectCfgError(new CfgFunction("bad", [], I32, [crossBlockA, crossBlockB], [], 1),
-			"CFG value 0 is used outside its defining block or before definition in block 1");
-		Sys.println("PASS: CFG verifier rejects malformed blocks, edges, and values");
+		// An edge into a block that a read already looked through would change what the read saw.
+		expectBuilderError(builder -> {
+			var join = builder.createBlock();
+			builder.store("x", builder.constInt(1));
+			builder.jump(join);
+			builder.select(join);
+			builder.load("x", I32);
+			var late = builder.createBlock();
+			builder.branch(builder.constBool(true), late, late);
+			builder.select(late);
+			builder.jump(join);
+		}, "Edge from SSA block 2 into block 1, which was sealed and read through");
+		expectBuilderError(builder -> {
+			var join = builder.createBlock(), other = builder.createBlock();
+			builder.store("x", builder.constInt(1));
+			builder.branch(builder.constBool(true), join, other);
+			builder.select(other);
+			builder.jump(join);
+			builder.select(join);
+			builder.returnValue(builder.load("y", I32));
+		}, 'Local "y" used before definition');
+		// A loop header made open gets its back edge after the body read the variable, and the phi closes the loop.
+		var loopBuilder = new IrLocalsBuilder(new IrSsaScratch());
+		loopBuilder.store("i", loopBuilder.constInt(0));
+		var header = loopBuilder.createOpenBlock(), body = loopBuilder.createBlock(), done = loopBuilder.createBlock();
+		loopBuilder.jump(header);
+		loopBuilder.select(header);
+		loopBuilder.branch(loopBuilder.less(loopBuilder.load("i", I32), loopBuilder.constInt(10)), body, done);
+		loopBuilder.select(body);
+		loopBuilder.store("i", loopBuilder.add(loopBuilder.load("i", I32), loopBuilder.constInt(1)));
+		loopBuilder.jump(header);
+		loopBuilder.select(done);
+		loopBuilder.returnValue(loopBuilder.load("i", I32));
+		var loopBlocks = loopBuilder.finish().blocks, loopPhis = 0;
+		for (block in loopBlocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case compiler.ir.Ir.IrInstruction.Phi(_, inputs) if (inputs.length == 2):
+						loopPhis++;
+					case compiler.ir.Ir.IrInstruction.Phi(_, _):
+						throw "A loop phi must have one input per predecessor";
+					default:
+				}
+		if (loopPhis != 1)
+			throw 'An open loop header expected one phi, got $loopPhis';
+		Sys.println("PASS: the locals builder rejects late edges and undefined locals, and closes loops");
 		var mismatchedIterator = new compiler.ir.Ir.IrValue(0, "iterator", Iterator(I32)),
 			wrongIteratorElement = new compiler.ir.Ir.IrValue(1, "wrongElement", Bytes),
 			mismatchedIteratorBlock = new compiler.ir.Ir.IrBlock(0);
@@ -2439,10 +2448,12 @@ class TestMain {
 		}
 	}
 
-	static function expectCfgError(cfg:CfgFunction, expected:String):Void {
+	static function expectBuilderError(build:IrLocalsBuilder->Void, expected:String):Void {
 		try {
-			CfgVerifier.verify(cfg);
-			throw 'CFG verifier accepted invalid graph; expected "$expected"';
+			var builder = new IrLocalsBuilder(new IrSsaScratch());
+			build(builder);
+			builder.finish();
+			throw 'the locals builder accepted an invalid function; expected "$expected"';
 		} catch (error:InternalError) {
 			if (error.message != expected)
 				throw error;

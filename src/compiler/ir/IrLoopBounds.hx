@@ -7,7 +7,7 @@ private typedef BoundsLoop = {
 	final members:Map<Int, Bool>;
 }
 
-/** Read-only proofs for unit-step counted loops, including the pre-increment form emitted by SsaBuilder. */
+/** Read-only proofs for unit-step counted loops, including the pre-increment form of counted for-in loops. */
 class IrLoopBounds {
 	final graph:IrGraph;
 	final loops:Array<BoundsLoop> = [];

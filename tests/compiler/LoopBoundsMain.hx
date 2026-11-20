@@ -36,7 +36,7 @@ class LoopBoundsMain {
 	static function main():Void {
 		expect(count("function scan(a:Array<Int>):Int { var n = 0; for (i in 0...a.length) n += a[i]; return n; }",
 			"scan") == 1,
-			"recognize SsaBuilder's pre-increment induction and separate guard block");
+			"recognize the pre-increment induction and separate guard block of counted loops");
 		expect(count("function scan(a:Array<Int>):Int { var n = 0; for (i in 2...a.length) n += a[i]; return n; }",
 			"scan") == 1,
 			"nonzero nonnegative loop start");

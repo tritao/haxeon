@@ -74,8 +74,7 @@ class CompileOptions {
 	public final elaborateGenerics:Bool;
 
 	/**
-	 * Check the final IR before lowering (`IrVerifier`) and each function's CFG before SSA construction (`CfgVerifier`). On by
-	 * default and in tests; a release build turns it off (`CompilerArguments`), since a valid compiler only ever makes valid IR.
+	 * Check the final IR before lowering (`IrVerifier`). On by default and in tests; a release build turns it off (`CompilerArguments`), since a valid compiler only ever makes valid IR.
 	 * A cached result names it, so a checked build never reuses an unchecked one.
 	 */
 	public final verifyIr:Bool;
