@@ -616,13 +616,13 @@ class BodyTyper implements BodyTyping {
 			var value = typeExpression(expression, scope, null);
 			if (TypeRelations.equals(value.type, TNull))
 				fail("E1002",
-					'Cannot infer the type of $field: nothing in its initializer fixes the type of its null value; annotate it',
+					'Cannot infer the type of $field: nothing in its initializer fixes the type of its null value; annotate the field\'s type',
 					span);
 			compiler.types.Monomorphs.unify(self, value.type);
 			var unfixed = compiler.types.Monomorphs.firstUnfixed(value.type);
 			if (unfixed != null)
 				fail("E1002",
-					'Cannot infer the type of $field: nothing in its initializer fixes ${unfixed.origin}; annotate it',
+					'Cannot infer the type of $field: nothing in its initializer fixes ${unfixed.origin}; annotate the field\'s type',
 					span);
 			typed = coerce(value, value.type, isStatic ? 'static $field' : field, "E1002");
 		} catch (error:haxe.Exception) {

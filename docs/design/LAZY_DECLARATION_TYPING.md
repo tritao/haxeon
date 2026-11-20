@@ -78,7 +78,7 @@ Haxeon's must not. `--reverse-typing-order` gives identical bytes today, and mus
 3. **A type left open at the end of the unit is an error, not Dynamic.** If the settled declaration type still
    contains a type variable that nothing in the unit fixed (an element of `[]`, the `T` of a lone `return null`, an
    argument the body never constrains), typing reports
-   `Cannot infer the type of field "C.x": nothing in its initializer fixes <origin>; annotate it` (likewise for a
+   `Cannot infer the type of field "C.x": nothing in its initializer fixes <origin>; annotate the field's type` (likewise for a
    return type or an argument). A local's unfixed variable inside the unit still becomes `Dynamic`, as 2.3 decided.
    Haxe would let a later unit fix it, which depends on order. The error keeps today's behaviour for the empty array
    field (`E1002`, "annotate it") and never accepts a program with different types than Haxe would give it.
@@ -103,7 +103,7 @@ What differs from Haxe, all of it a rejection of a program that Haxe accepts wit
 
 | Program | Haxe 4.3.7 | Haxeon |
 |---|---|---|
-| `static var e = [];` fixed by a use elsewhere | the first use in typing order fixes it | error, annotate (as today) |
+| `static var e = [];` fixed by a use elsewhere | the first use in typing order fixes it | error `E1002`, annotate the field's type (kept on purpose: the field's type must not depend on typing order) |
 | `static var c = new Map();` fixed elsewhere | the first use fixes it | error, annotate (as 2.3 for locals) |
 | `function f() return null;` | `Null<Unknown>` | error, annotate |
 | `function g(x) {}` fixed only by callers | the first caller fixes it | error, annotate (see decisions) |

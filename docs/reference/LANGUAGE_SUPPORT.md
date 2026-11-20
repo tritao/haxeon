@@ -307,7 +307,7 @@ another function fix such a type, Haxe's result depends on the order it types fu
 annotation instead (`E1002`, docs/design/LAZY_DECLARATION_TYPING.md, the user's decisions):
 
 - A type the initializer leaves open: `static var e = [];`, `static var m = new Map();`, `static var n = null;`
-  (`Cannot infer the type of field "C.e": nothing in its initializer fixes ...; annotate it`).
+  (`Cannot infer the type of field "C.e": nothing in its initializer fixes ...; annotate the field's type`).
 - A type a function's body leaves open: a lone `return null` (`Cannot infer the return type of function "C.f": nothing in
   its body fixes the type of the null it returns; annotate it`), or an argument only its callers fix, `function g(x) {}`
   called as `g(1)` (`Cannot infer the type of argument "x" of function "C.g": nothing in its body fixes it; annotate it`).

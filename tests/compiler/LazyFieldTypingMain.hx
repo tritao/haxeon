@@ -16,7 +16,7 @@ class LazyFieldTypingMain {
 	static function main():Void {
 		rejects("an empty array", ["class Main {", "	static var e = [];", "	static function main() e.push(1);", "}"],
 			"2:9",
-			'Cannot infer the type of field "Main.e": nothing in its initializer fixes the element type of this empty array; annotate it');
+			'Cannot infer the type of field "Main.e": nothing in its initializer fixes the element type of this empty array; annotate the field\'s type');
 		rejects("an empty map", [
 			"class Main {",
 			"	static var m = new Map();",
@@ -24,9 +24,9 @@ class LazyFieldTypingMain {
 			"}"
 		],
 			"2:9",
-			'Cannot infer the type of field "Main.m": nothing in its initializer fixes the key type of this empty map; annotate it');
+			'Cannot infer the type of field "Main.m": nothing in its initializer fixes the key type of this empty map; annotate the field\'s type');
 		rejects("a lone null", ["class Main {", "	static var n = null;", "	static function main() n = 1;", "}"], "2:9",
-			'Cannot infer the type of field "Main.n": nothing in its initializer fixes the type of its null value; annotate it');
+			'Cannot infer the type of field "Main.n": nothing in its initializer fixes the type of its null value; annotate the field\'s type');
 		// The diagnostic is on the first field of the cycle in declaration order, whichever was forced first.
 		var cycle = [
 			"class Other {",
