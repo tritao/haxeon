@@ -104,7 +104,7 @@ typedef CompileMetrics = {
 	final frontendPassReports:Array<String>;
 
 	/** What each IR pass allocated, for the timings line; empty when the build reused its pipeline and ran none. */
-	final irPassAllocations:Array<compiler.core.IrPassMeter.IrPassAllocation>;
+	final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost>;
 
 	final semanticAssemblyMs:Float;
 	final semanticAliasMs:Float;
@@ -678,7 +678,7 @@ class Compiler {
 						frontendRestarts: [],
 						frontendPassFunctions: [],
 						frontendPassReports: [],
-						irPassAllocations: [],
+						irPassCosts: [],
 						semanticAssemblyMs: 0.0,
 						semanticAliasMs: 0.0,
 						semanticCanonicalizationMs: 0.0,

@@ -53,7 +53,7 @@ class CompilationContext {
 	public final frontendPassReports:Array<String> = [];
 
 	/** What each IR pass allocated in this compile, in the order the passes first ran (`IrPassMeter`). */
-	public final irPassAllocations:Array<compiler.core.IrPassMeter.IrPassAllocation> = [];
+	public final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost> = [];
 
 	/** Time and allocation of every `parse` so far; a pass reports the difference, since parsing happens in the graph and in semantic assembly. */
 	public var parseMs = 0.0;

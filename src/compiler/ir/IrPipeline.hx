@@ -22,8 +22,7 @@ import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
  * (`WasmScalarClosureEscapes`, `WasmLinearModuleBuilder`, `WasmGcModuleBuilder`).
  *
  * To add a pass: write it as a function of the program (and the context, for what it reads besides the program), wrap it in a stage
- * at its place in the list, with `when` for the targets that run it, `measured` for its line in the pass allocation report and
- * `checksPrune` when the early prune's check mode must hold after it.
+ * at its place in the list, with `when` for the targets that run it and `checksPrune` when the early prune's check mode must hold after it.
  */
 class IrPipeline {
 	/** From the generated functions to the finished program (`IrProgramAssembler.assemble`). */
@@ -31,31 +30,31 @@ class IrPipeline {
 		new IrAssemblyStage("constant-branches", constantBranches),
 		// Erased dispatch can reach a specialized body that the original callers do not name.
 		// Expose those targets before the walk filters typed enum/value conversions.
-		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects).measured(),
+		new IrAssemblyStage("generic-owner-erasure", genericOwnerErasure).when(hasObjects),
 		new IrAssemblyStage("dispatch-walk", dispatchWalk).when(pruning),
 		new IrAssemblyStage("enum-dynamic-dispatch-input", enumDynamicDispatchInput).when(hasObjects),
-		new IrAssemblyStage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects).measured(),
+		new IrAssemblyStage("enum-dynamic-dispatch", enumDynamicDispatch).when(hasObjects),
 		new IrAssemblyStage("reachability-report", reachabilityReport).when(reportsReachability),
-		new IrAssemblyStage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects).measured(),
-		new IrAssemblyStage("override-bridges", overrideBridges).when(hasObjects).measured(),
+		new IrAssemblyStage("value-dynamic-dispatch", valueDynamicDispatch).when(hasObjects),
+		new IrAssemblyStage("override-bridges", overrideBridges).when(hasObjects),
 		new IrAssemblyStage("entry-prune", entryPrune).when(pruning).prunes(),
-		new IrAssemblyStage("value-interface-boxes", valueInterfaceBoxes).when(hasInterfaces).measured().checksPrune(),
-		new IrAssemblyStage("typed-interface-calls", typedInterfaceCalls).when(hasInterfaces).measured(),
-		new IrAssemblyStage("typed-interface-generate", typedInterfaceGenerate).when(hasInterfaces).measured(),
+		new IrAssemblyStage("value-interface-boxes", valueInterfaceBoxes).when(hasInterfaces).checksPrune(),
+		new IrAssemblyStage("typed-interface-calls", typedInterfaceCalls).when(hasInterfaces),
+		new IrAssemblyStage("typed-interface-generate", typedInterfaceGenerate).when(hasInterfaces),
 		new IrAssemblyStage("typed-interface-boxes", typedInterfaceBoxes).when(hasInterfaces),
-		new IrAssemblyStage("checked-dynamic-casts", checkedDynamicCasts).when(hasObjects).measured().checksPrune(),
+		new IrAssemblyStage("checked-dynamic-casts", checkedDynamicCasts).when(hasObjects).checksPrune(),
 		new IrAssemblyStage("exported-functions", exportedFunctions).when(exportsFunctions),
 		new IrAssemblyStage("enum-specializations", enumSpecializations).when(lowersEnums),
 		new IrAssemblyStage("enum-tag-lowering", enumTagLowering).when(lowersEnums),
-		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).measured().checksPrune(),
-		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects).measured(),
+		new IrAssemblyStage("inline-enum-lowering", inlineEnums).when(lowersEnums).checksPrune(),
+		new IrAssemblyStage("optional-scalar-flow", optionalScalarFlow).when(hasObjects),
 		new IrAssemblyStage("optional-value-helpers", optionalHelpers).when(hasObjects).checksPrune(OPTIONAL),
-		new IrAssemblyStage("static-null-checks", staticNullChecks).measured().checksPrune(),
+		new IrAssemblyStage("static-null-checks", staticNullChecks).checksPrune(),
 		new IrAssemblyStage("reflectable-objects", reflectableObjects).when(hasReflectable),
 		new IrAssemblyStage("object-reflection", objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
-		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).measured().checksPrune(REFLECTION),
+		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
 		new IrAssemblyStage("enum-tag-escapes", assemblyEnumTagEscapes)
 	]);
@@ -68,22 +67,22 @@ class IrPipeline {
 	 */
 	public static final target:IrStageList = new IrStageList("target", [
 		new IrStage("closed-enum-tag-abi", closedEnumTagAbi).when(closesEnumTags),
-		new IrStage("value-array-rewrite", valueArrayRewrite).measured(),
+		new IrStage("value-array-rewrite", valueArrayRewrite),
 		new IrStage("value-constructors", valueConstructors).when(wasm),
 		new IrStage("value-phi-scalarization", valuePhiScalarization).when(wasm),
 		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
 		new IrStage("value-phi-scalarization", valuePhiScalarization).when(wasmValueLanes),
-		new IrStage("value-constructors", valueConstructors).when(hashLink).measured(),
-		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink).measured(),
-		new IrStage("scalar-arguments", scalarArguments).when(hashLink).measured(),
-		new IrStage("scalar-closures", scalarClosures).when(hashLink).measured(),
-		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink).measured(),
+		new IrStage("value-constructors", valueConstructors).when(hashLink),
+		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink),
+		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
+		new IrStage("scalar-closures", scalarClosures).when(hashLink),
+		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink),
 		new IrStage("scalar-replacement-objects", scalarReplacementObjects),
-		new IrStage("scalar-replacement", scalarReplacement).measured(),
-		new IrStage("nullable-scalar-flow", nullableScalarFlow).measured(),
+		new IrStage("scalar-replacement", scalarReplacement),
+		new IrStage("nullable-scalar-flow", nullableScalarFlow),
 		new IrStage("enum-tag-escapes", enumTagEscapes),
-		new IrStage("inliner", inliner).measured(),
-		new IrStage("verifier", verifier).when(verifiesHere).measured(),
+		new IrStage("inliner", inliner),
+		new IrStage("verifier", verifier).when(verifiesHere),
 		new IrStage("verifier-check", verifierCheck).when(checksVerification)
 	]);
 

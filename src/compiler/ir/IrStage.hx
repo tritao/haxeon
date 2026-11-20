@@ -24,20 +24,12 @@ class IrStage extends IrStageHooks {
 		enabled = predicate;
 		return this;
 	}
-
-	public function measured():IrStage {
-		setMetered();
-		return this;
-	}
 }
 
-/** What every stage declares besides its pass: its name, its metering and the early prune's check hooks. */
+/** What every stage declares besides its pass: its name and the early prune's check hooks. */
 class IrStageHooks {
-	/** The stage's name; for a metered stage also the name its allocation is recorded under (`IrPassMeter`). */
+	/** The stage's name, also the name its time and allocation are recorded under (`IrPassMeter`). */
 	public final name:String;
-
-	/** The allocation of the stage is recorded under `name`. */
-	public var metered(default, null) = false;
 
 	/**
 	 * Check mode of the early prune (`IrEntryPrune.checkRemoved`): after this stage, run or not, nothing may call a function the prune
@@ -50,9 +42,6 @@ class IrStageHooks {
 
 	function new(name:String)
 		this.name = name;
-
-	function setMetered():Void
-		metered = true;
 
 	function setPruneCheck(label:Null<String>):Void
 		pruneCheck = label == null ? name : label;
@@ -89,11 +78,6 @@ class IrAssemblyStage extends IrStageHooks {
 		return this;
 	}
 
-	public function measured():IrAssemblyStage {
-		setMetered();
-		return this;
-	}
-
 	/** `label` names the stage in a failure; the stage name by default. */
 	public function checksPrune(?label:String):IrAssemblyStage {
 		setPruneCheck(label);
@@ -120,7 +104,7 @@ class IrStageList {
 		for (stage in stages) {
 			var enabled = stage.enabled;
 			if (enabled == null || enabled(program, context)) {
-				if (stage.metered && context.meter != null) {
+				if (context.meter != null) {
 					var meter:compiler.core.IrPassMeter = context.meter, before = meter.start();
 					program = stage.run(program, context);
 					meter.stop(stage.name, before);
@@ -152,7 +136,7 @@ class IrAssemblyStageList {
 			for (stage in stages) {
 				var enabled = stage.enabled;
 				if (enabled == null || enabled(assembly, context)) {
-					if (stage.metered && context.meter != null) {
+					if (context.meter != null) {
 						var meter:compiler.core.IrPassMeter = context.meter, before = meter.start();
 						assembly = stage.run(assembly, context);
 						meter.stop(stage.name, before);

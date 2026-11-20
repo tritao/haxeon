@@ -155,7 +155,7 @@ class CompilationPipeline {
 				frontendRestarts: frontend.frontendRestarts,
 				frontendPassFunctions: frontend.frontendPassFunctions,
 				frontendPassReports: frontend.frontendPassReports,
-				irPassAllocations: frontend.irPassAllocations,
+				irPassCosts: frontend.irPassCosts,
 				semanticAssemblyMs: frontendDoneAt - frontendGraphDoneAt,
 				semanticAliasMs: frontend.semanticAliasMs,
 				semanticCanonicalizationMs: frontend.semanticCanonicalizationMs,

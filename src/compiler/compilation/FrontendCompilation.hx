@@ -67,7 +67,7 @@ typedef FrontendResult = {
 	final frontendRestarts:Array<String>;
 	final frontendPassFunctions:Array<Int>;
 	final frontendPassReports:Array<String>;
-	final irPassAllocations:Array<compiler.core.IrPassMeter.IrPassAllocation>;
+	final irPassCosts:Array<compiler.core.IrPassMeter.IrPassCost>;
 	final frontendDoneAt:Float;
 
 	/** Semantic analysis of the final frontend pass, which `typingLoweringDoneAt - frontendDoneAt` includes. */
@@ -1447,7 +1447,7 @@ class FrontendCompilation {
 			passes.verifyMemo = context.state.verifyMemo;
 			ir = compiler.ir.IrPipeline.target.run(ir, passes);
 			for (entry in meter.entries())
-				context.irPassAllocations.push(entry);
+				context.irPassCosts.push(entry);
 			inlinerChanged = passes.inlinerChanged;
 			if (reusedPipeline != null) {
 				var difference = PipelineSnapshot.irDifference(reusedPipeline.ir, ir);
@@ -1516,7 +1516,7 @@ class FrontendCompilation {
 			frontendRestarts: context.frontendRestarts,
 			frontendPassFunctions: context.frontendPassFunctions,
 			frontendPassReports: context.frontendPassReports,
-			irPassAllocations: context.irPassAllocations,
+			irPassCosts: context.irPassCosts,
 			frontendDoneAt: build.frontendDoneAt,
 			analysisMs: build.analysisDoneAt - build.frontendDoneAt,
 			irGenerationMs: build.irGenerationDoneAt - build.typingDoneAt,
