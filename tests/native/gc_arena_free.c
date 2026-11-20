@@ -180,6 +180,27 @@ int main(void) {
 		int inner = freed(&arena_g), enclosing = freed(&arena_f);
 		if( tracked && !check(inner == 0 && enclosing == 0,"nested arenas nothing points into are both released")) goto done;
 	}
+	/* Type homes: a type homed outside any arena allocates there whatever arena is current, and one homed in an arena
+	   allocates in it from inside another. */
+	{
+		static hl_type global_home, arena_home;
+		global_home = hlt_bytes;
+		arena_home = hlt_bytes;
+		hl_gc_arena_set_home(&global_home,hl_gc_arena_global());
+		hl_gc_arena_set_home(&arena_home,&arena_a);
+		void *outer = hl_gc_arena_enter(&arena_a);
+		hl_gc_arena_leave(outer);
+		void *previous = hl_gc_arena_enter(&arena_b);
+		global_slot = hl_gc_alloc_gen(&global_home,64,MEM_KIND_NOPTR);
+		outside[5] = hl_gc_alloc_gen(&arena_home,64,MEM_KIND_NOPTR);
+		fill(&arena_b,1000,0);
+		hl_gc_arena_leave(previous);
+		int current = freed(&arena_b);
+		if( tracked && !check(current == 0,"objects of homed types are not the current arena's")) goto done;
+		if(!expect_kept(freed(&arena_a),"an object homed in an arena is that arena's")) goto done;
+		global_slot = NULL;
+		outside[5] = NULL;
+	}
 	result = 0;
 done:
 	if( result == 0 ) {
