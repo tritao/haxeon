@@ -74,27 +74,8 @@ class HlLower {
 	/** The next label `freshLabel` gives, past the function's last block id. */
 	var nextLabel = 0;
 
-	// Tables by value id of the function being lowered, their storage kept from one function to the next.
-	final valueRegisters:Array<Int> = [];
-
-	/**
-	 * A function's instructions and their debug locations are built here and copied out at their final length, so a
-	 * function's arrays are allocated once rather than regrown as it is lowered.
-	 */
-	final instructionScratch:Array<HlInstruction> = [];
-
-	final locationScratch:Array<HlDebugLocation> = [];
-
-	/** The graph of the function being lowered, its tables reused across functions. */
-	final functionGraph = new compiler.ir.IrGraph();
-
-	/** The tables of the non-null analysis, reused across functions. */
-	final nonNullScratch = new compiler.ir.IrPassScratch.IrNonNullScratch();
-	final valueIsNull:Array<Bool> = [];
-	final valueUses:Array<Int> = [];
-
-	/** Register allocation of release code, its scratch reused from one function to the next. */
-	final registerAllocation = new HlRegisterAllocation();
+	/** The tables of the function being lowered, their storage kept from one function to the next. */
+	final scratch = new HlLowerScratch();
 
 	/** The functions of the last build, to link instead of lowering again; filled with this build's at the end. */
 	final loweredCache:Null<compiler.hl.incremental.HlLoweredCache>;
@@ -1085,16 +1066,17 @@ class HlLower {
 			if (block.id >= nextLabel)
 				nextLabel = block.id + 1;
 		// Both read the function as it is, so they share its graph.
-		var graph = functionGraph.reset(fn),
-			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph, nonNullScratch),
+		var graph = scratch.graph.reset(fn),
+			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph, scratch.nonNull),
 			exactTypes = new compiler.ir.IrExactTypeFacts(fn, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.
-		var registers = valueRegisters;
+		var registers = scratch.registers;
 		registers.resize(0);
-		var registerTypes:Array<Int> = [];
+		var registerTypes = scratch.registerTypes;
+		registerTypes.resize(0);
 		var catchValues:Map<Int, IrValue> = [];
-		var nullValues = valueIsNull;
+		var nullValues = scratch.nullValues;
 		nullValues.resize(0);
 		var hasPointerOffsets = false;
 		for (argument in fn.arguments)
@@ -1115,7 +1097,7 @@ class HlLower {
 				}
 			}
 		var scalarOptionals = new HlScalarValueLocals(fn, view, type -> temporaryRegister(type, registerTypes));
-		var uses = valueUses;
+		var uses = scratch.uses;
 		uses.resize(0);
 		function countUse(value:IrValue):Void {
 			while (uses.length <= value.id)
@@ -1173,30 +1155,17 @@ class HlLower {
 						}
 					default:
 				}
-		var edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>> = [];
 		for (block in fn.blocks)
 			for (instruction in block.instructions)
 				switch instruction.value {
-					case Phi(output, inputs):
+					case Phi(output, _):
 						defineRegister(output, registers, registerTypes);
-						for (input in inputs) {
-							var from = edges.get(input.block);
-							if (from == null) {
-								from = [];
-								edges.set(input.block, from);
-							}
-							var moves = from.get(block.id);
-							if (moves == null) {
-								moves = [];
-								from.set(block.id, moves);
-							}
-							moves.push({destination: output, source: input.value});
-						}
 					case Catch(output):
 						catchValues.set(block.id, output);
 						defineRegister(output, registers, registerTypes);
 					default:
 				}
+		groupPhiMoves(fn);
 
 		var bindingsByValue:Map<Int, Array<compiler.ir.IrFunction.IrDebugBinding>> = [];
 		for (binding in fn.debugBindings) {
@@ -1233,15 +1202,11 @@ class HlLower {
 						hasViewedArrays = true;
 					default:
 				}
-		var instructions = instructionScratch, debugLocations = locationScratch;
+		var instructions = scratch.instructions, debugLocations = scratch.debugLocations;
 		instructions.resize(0);
 		debugLocations.resize(0);
 		// A jump to the block written next is left out: control falls through to it.
-		var emitted = [
-			for (block in orderedBlocks(fn))
-				if (block.instructions.length > 0 || block.terminator != null) block
-		];
-		var layoutPositions:Map<Int, Int> = [for (index in 0...emitted.length) emitted[index].id => index];
+		var emitted = layOut(fn), layoutPositions = scratch.layoutPositions;
 		for (layoutIndex in 0...emitted.length) {
 			var block = emitted[layoutIndex],
 				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
@@ -1849,28 +1814,30 @@ class HlLower {
 				case Rethrow(value):
 					instructions.push(HlInstruction.Rethrow(requireRegister(value, registers)));
 				case Jump(target):
-					var jumpMoves = edgeMoves(edges, block.id, target);
-					if (jumpMoves != null)
-						for (write in emitPhiMoves(jumpMoves, registers, registerTypes, instructions)) {
-							var bindings = bindingsByValue.get(write.value.id);
+					if (hasPhiMoves(block.id, target)) {
+						emitPhiMoves(block.id, registers, registerTypes, instructions);
+						for (write in 0...scratch.writtenValues.length) {
+							var position = scratch.writtenPositions[write],
+								bindings = bindingsByValue.get(scratch.writtenValues[write].id);
 							if (bindings != null)
 								for (binding in bindings) {
-									var assignmentKey = binding.identity + "@" + write.position;
+									var assignmentKey = binding.identity + "@" + position;
 									if (!seenAssignments.exists(assignmentKey)) {
 										seenAssignments.set(assignmentKey, true);
 										debugAssignments.push({
 											name: internString(binding.name),
-											position: write.position,
+											position: position,
 											scopeEnd: -1
 										});
 										assignmentBindings.push(binding);
 									}
 								}
 						}
+					}
 					if (target != fallsThroughTo)
 						instructions.push(HlInstruction.Jump(target));
 				case Branch(condition, yes, no):
-					if (edgeMoves(edges, block.id, yes) != null || edgeMoves(edges, block.id, no) != null)
+					if (hasPhiMoves(block.id, yes) || hasPhiMoves(block.id, no))
 						throw new InternalError("Phi elimination requires split critical edges");
 					if (yes == fallsThroughTo && no != fallsThroughTo)
 						// The taken side is written next: jump to the other side on the complement, and fall through.
@@ -1888,13 +1855,13 @@ class HlLower {
 					}
 				case Switch(value, targets, otherwise):
 					for (target in compiler.ir.IrSwitch.successors(targets, otherwise))
-						if (edgeMoves(edges, block.id, target) != null)
+						if (hasPhiMoves(block.id, target))
 							throw new InternalError("Phi elimination requires split critical edges");
 					// HashLink's jump table takes only forward offsets: a target laid out before this block is reached through a
 					// jump placed after the table. Values outside it fall through to the jump to `otherwise`.
 					var stubs:Array<{label:Int, target:Int}> = [], entries:Array<Int> = [];
 					for (target in targets)
-						if (layoutPositions.get(target) > layoutIndex)
+						if (layoutPositions[target] > layoutIndex)
 							entries.push(target);
 						else {
 							var stub = null;
@@ -1978,12 +1945,14 @@ class HlLower {
 		dropUnreferencedLabels(instructions, debugLocations, scopedAssignments);
 		// Release code shares registers between values that are not live at once; development code keeps one per value, which is
 		// what a debugger shows a variable from.
-		if (!developmentMetadata)
-			registerTypes = registerAllocation.run(instructions, registerTypes, fn.arguments.length);
-		graph.release();
-		return new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
-			requireFunction(fn.name), registerTypes,
+		var allocated = developmentMetadata ? registerTypes : scratch.registerAllocation.run(instructions,
+			registerTypes,
+			fn.arguments.length);
+		var lowered = new HlFunction(internFunctionType([for (argument in fn.arguments) argument.type], fn.result),
+			requireFunction(fn.name), allocated == scratch.registerTypes ? allocated.copy() : allocated,
 			instructions.copy(), debugLocations.copy(), scopedAssignments);
+		scratch.release();
+		return lowered;
 	}
 
 	/**
@@ -1991,9 +1960,10 @@ class HlLower {
 	 * instruction the VM compiles at load; a block reached by falling through needs none. Debug locations and the positions of
 	 * debug assignments follow the instructions that stay.
 	 */
-	static function dropUnreferencedLabels(instructions:Array<HlInstruction>, debugLocations:Array<HlDebugLocation>,
+	function dropUnreferencedLabels(instructions:Array<HlInstruction>, debugLocations:Array<HlDebugLocation>,
 			assignments:Array<HlDebugAssignment>):Void {
-		var referenced:Map<Int, Bool> = [];
+		var referenced = scratch.referencedLabels;
+		referenced.clear();
 		for (instruction in instructions)
 			switch instruction {
 				case JumpSignedLessOrEqual(_, _, target), JumpSignedLess(_, _, target), JumpUnsignedLess(_, _, target),
@@ -2002,17 +1972,18 @@ class HlLower {
 					JumpNotGreaterOrEqual(_, _, target), JumpSignedGreaterOrEqual(_, _, target),
 					JumpSignedGreater(_, _, target),
 					JumpUnsignedGreaterOrEqual(_, _, target):
-					referenced.set(target, true);
+					referenced.add(target);
 				case Switch(_, targets):
 					for (target in targets)
-						referenced.set(target, true);
+						referenced.add(target);
 				default:
 			}
-		var located = debugLocations.length == instructions.length, kept = 0, positions:Array<Int> = [];
+		var located = debugLocations.length == instructions.length, kept = 0, positions = scratch.keptPositions;
+		positions.resize(0);
 		for (index in 0...instructions.length) {
 			positions.push(kept);
 			switch instructions[index] {
-				case Label(id) if (!referenced.exists(id)):
+				case Label(id) if (!referenced.has(id)):
 				default:
 					instructions[kept] = instructions[index];
 					if (located)
@@ -2120,122 +2091,237 @@ class HlLower {
 		allocation details, so lay each protected region out before its handler and
 		its continuation regardless of block creation order.
 	**/
-	static function orderedBlocks(fn:IrFunction):Array<IrBlock> {
-		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block],
-			seen:Map<Int, Bool> = [],
-			output:Array<IrBlock> = [];
-		appendReversePostorder(byId, seen, output, fn.blocks[0].id);
+	function layOut(fn:IrFunction):Array<IrBlock> {
+		var size = 0;
 		for (block in fn.blocks)
-			if (!seen.exists(block.id) && (block.instructions.length > 0 || block.terminator != null))
-				appendReversePostorder(byId, seen, output, block.id);
-		return output;
+			if (block.id >= size)
+				size = block.id + 1;
+		var byId = scratch.blocksById, layout = scratch.layout;
+		byId.resize(0);
+		for (_ in 0...size)
+			byId.push(null);
+		for (block in fn.blocks)
+			byId[block.id] = block;
+		scratch.laidOut.clear();
+		layout.resize(0);
+		appendReversePostorder(fn.blocks[0].id);
+		for (block in fn.blocks)
+			if (!scratch.laidOut.has(block.id) && (block.instructions.length > 0 || block.terminator != null))
+				appendReversePostorder(block.id);
+		// A block with neither instructions nor a terminator writes nothing.
+		var kept = 0;
+		for (block in layout)
+			if (block.instructions.length > 0 || block.terminator != null)
+				layout[kept++] = block;
+		layout.resize(kept);
+		var positions = compiler.ir.IrPassScratch.filledInts(scratch.layoutPositions, size, -1);
+		for (index in 0...kept)
+			positions[layout[index].id] = index;
+		return layout;
 	}
 
-	static function appendReversePostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>,
-			entry:Int):Void {
-		var postorder:Array<IrBlock> = [];
-		visitPostorder(byId, seen, postorder, entry);
+	function appendReversePostorder(entry:Int):Void {
+		var postorder = scratch.postorder;
+		postorder.resize(0);
+		visitPostorder(entry);
 		var index = postorder.length;
 		while (index > 0) {
 			index--;
-			output.push(postorder[index]);
+			scratch.layout.push(postorder[index]);
 		}
 	}
 
-	static function visitPostorder(byId:Map<Int, IrBlock>, seen:Map<Int, Bool>, output:Array<IrBlock>, id:Int):Void {
-		if (seen.exists(id) || !byId.exists(id))
+	/**
+	 * Depth first from `id` over the blocks not laid out yet. Each block on the walk's stack has a run of children in
+	 * `children`, from the end of the run below it to `stackEnd`, of which `stackNext` is the next to visit.
+	 */
+	function visitPostorder(id:Int):Void {
+		var byId = scratch.blocksById, laidOut = scratch.laidOut;
+		if (id < 0 || id >= byId.length || byId[id] == null || !laidOut.add(id))
 			return;
-		var stack:Array<{id:Int, next:Int, children:Array<Int>}> = [];
-		seen.set(id, true);
-		stack.push({id: id, next: 0, children: postorderChildren(byId.get(id))});
-		while (stack.length > 0) {
-			var frame = stack[stack.length - 1];
-			if (frame.next < frame.children.length) {
-				var child = frame.children[frame.next++];
-				if (seen.exists(child) || !byId.exists(child))
-					continue;
-				seen.set(child, true);
-				stack.push({id: child, next: 0, children: postorderChildren(byId.get(child))});
+		var stackBlocks = scratch.stackBlocks,
+			stackNext = scratch.stackNext,
+			stackEnd = scratch.stackEnd,
+			children = scratch.children;
+		stackBlocks.resize(0);
+		stackNext.resize(0);
+		stackEnd.resize(0);
+		children.resize(0);
+		function push(id:Int):Void {
+			stackBlocks.push(id);
+			stackNext.push(children.length);
+			appendPostorderChildren(byId[id], children);
+			stackEnd.push(children.length);
+		}
+		push(id);
+		while (stackBlocks.length > 0) {
+			var top = stackBlocks.length - 1;
+			if (stackNext[top] < stackEnd[top]) {
+				var child = children[stackNext[top]];
+				stackNext[top]++;
+				if (child >= 0 && child < byId.length && byId[child] != null && laidOut.add(child))
+					push(child);
 			} else {
-				output.push(byId.get(frame.id));
-				stack.pop();
+				scratch.postorder.push(byId[stackBlocks[top]]);
+				children.resize(top > 0 ? stackEnd[top - 1] : 0);
+				stackBlocks.pop();
+				stackNext.pop();
+				stackEnd.pop();
 			}
 		}
 	}
 
-	static function postorderChildren(block:IrBlock):Array<Int> {
-		var region:Null<{catchBlock:Int, afterBlock:Int}> = null;
+	static function appendPostorderChildren(block:IrBlock, children:Array<Int>):Void {
+		var catchBlock = -1, afterBlock = -1;
 		for (instruction in block.instructions)
 			switch instruction.value {
-				case BeginTry(catchBlock, afterBlock, _):
-					region = {catchBlock: catchBlock, afterBlock: afterBlock};
+				case BeginTry(handler, after, _):
+					catchBlock = handler;
+					afterBlock = after;
 				default:
 			}
-		var children:Array<Int> = [];
-		if (region != null) {
+		if (catchBlock >= 0) {
 			// Visit structural exits first because reversal places the protected
 			// body before its handler and the handler before the shared exit.
-			children.push(region.afterBlock);
-			children.push(region.catchBlock);
+			children.push(afterBlock);
+			children.push(catchBlock);
 		}
 		var terminator = block.terminator;
-		if (terminator != null) {
-			var successors:Array<Int> = switch terminator.value {
-				case Jump(target): [target];
-				case Branch(_, yes, no): [yes, no];
-				case Switch(_, targets, otherwise): compiler.ir.IrSwitch.successors(targets, otherwise);
-				case Return(_), Throw(_), Rethrow(_), Unreachable: [];
-			};
-			var successorIndex = successors.length;
-			while (successorIndex > 0) {
-				successorIndex--;
-				children.push(successors[successorIndex]);
+		if (terminator != null)
+			switch terminator.value {
+				case Jump(target):
+					children.push(target);
+				case Branch(_, yes, no):
+					children.push(no);
+					children.push(yes);
+				case Switch(_, targets, otherwise):
+					var successors = compiler.ir.IrSwitch.successors(targets, otherwise),
+						successorIndex = successors.length;
+					while (successorIndex > 0) {
+						successorIndex--;
+						children.push(successors[successorIndex]);
+					}
+				case Return(_), Throw(_), Rethrow(_), Unreachable:
 			}
+	}
+
+	/**
+	 * Groups the phi moves of `fn` by the block their edge leaves, in the order of the phis and of their inputs. Only an edge
+	 * that is a jump can carry moves; a block whose moves go to more than one block has the target -2.
+	 */
+	function groupPhiMoves(fn:IrFunction):Void {
+		var size = 0, total = 0;
+		for (block in fn.blocks) {
+			if (block.id >= size)
+				size = block.id + 1;
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case Phi(_, inputs):
+						for (input in inputs)
+							if (input.block >= size)
+								size = input.block + 1;
+					default:
+				}
 		}
-		return children;
+		var starts = compiler.ir.IrPassScratch.filledInts(scratch.moveStart, size, 0),
+			counts = compiler.ir.IrPassScratch.filledInts(scratch.moveCount, size, 0),
+			targets = compiler.ir.IrPassScratch.filledInts(scratch.moveTarget, size, -1);
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case Phi(_, inputs):
+						for (input in inputs) {
+							counts[input.block]++;
+							total++;
+							var target = targets[input.block];
+							targets[input.block] = target == -1 || target == block.id ? block.id : -2;
+						}
+					default:
+				}
+		var offset = 0;
+		for (id in 0...size) {
+			starts[id] = offset;
+			offset += counts[id];
+			counts[id] = 0;
+		}
+		var destinations = scratch.moveDestinations, sources = scratch.moveSources;
+		destinations.resize(0);
+		sources.resize(0);
+		for (_ in 0...total) {
+			destinations.push(null);
+			sources.push(null);
+		}
+		for (block in fn.blocks)
+			for (instruction in block.instructions)
+				switch instruction.value {
+					case Phi(output, inputs):
+						for (input in inputs) {
+							var at = starts[input.block] + counts[input.block];
+							destinations[at] = output;
+							sources[at] = input.value;
+							counts[input.block]++;
+						}
+					default:
+				}
 	}
 
-	/** The phi moves on the edge `from` to `to`, or null when it has none. */
-	static function edgeMoves(edges:Map<Int, Map<Int, Array<{destination:IrValue, source:IrValue}>>>, from:Int,
-			to:Int):Null<Array<{
-				destination:IrValue,
-				source:IrValue
-			}>> {
-		var targets = edges.get(from);
-		return targets == null ? null : targets.get(to);
+	/** Whether the edge `from` to `to` has phi moves. */
+	function hasPhiMoves(from:Int, to:Int):Bool {
+		if (from < 0 || from >= scratch.moveCount.length || scratch.moveCount[from] == 0)
+			return false;
+		var target = scratch.moveTarget[from];
+		return target == to || target == -2;
 	}
 
-	function emitPhiMoves(moves:Array<{destination:IrValue, source:IrValue}>, registers:Array<Int>,
-			registerTypes:Array<Int>,
-			instructions:Array<HlInstruction>):Array<{
-				value:IrValue,
-				position:Int
-			}> {
-		var writes:Array<{value:IrValue, position:Int}> = [];
-		if (moves.length == 1) {
-			var destination = requireRegister(moves[0].destination, registers),
-				source = requireRegister(moves[0].source, registers);
+	/**
+	 * Writes the phi moves of the jump leaving `from`, which happen at once; `scratch.writtenValues` and `writtenPositions` are
+	 * then the values written and where.
+	 */
+	function emitPhiMoves(from:Int, registers:Array<Int>, registerTypes:Array<Int>,
+			instructions:Array<HlInstruction>):Void {
+		if (scratch.moveTarget[from] == -2)
+			throw new InternalError("Phi elimination requires split critical edges");
+		var writtenValues = scratch.writtenValues,
+			writtenPositions = scratch.writtenPositions,
+			destinations = scratch.moveDestinations,
+			sources = scratch.moveSources,
+			start = scratch.moveStart[from],
+			count = scratch.moveCount[from];
+		writtenValues.resize(0);
+		writtenPositions.resize(0);
+		if (count == 1) {
+			var destination = requireRegister(destinations[start], registers),
+				source = requireRegister(sources[start], registers);
 			if (destination != source) {
-				writes.push({value: moves[0].destination, position: instructions.length});
+				writtenValues.push(destinations[start]);
+				writtenPositions.push(instructions.length);
 				instructions.push(HlInstruction.Move(destination, source));
 			}
-			return writes;
+			return;
 		}
-		// The moves happen at once: a move is written once no move still to be written reads its destination, and a cycle of
-		// moves is broken by saving one destination in a temporary and reading that instead.
-		var pending:Array<{destination:Int, source:Int, value:IrValue}> = [];
-		for (move in moves) {
-			var destination = requireRegister(move.destination, registers),
-				source = requireRegister(move.source, registers);
-			if (destination != source)
-				pending.push({destination: destination, source: source, value: move.destination});
+		// A move is written once no move still to be written reads its destination, and a cycle of moves is broken by saving
+		// one destination in a temporary and reading that instead.
+		var pendingDestinations = scratch.pendingDestinations,
+			pendingSources = scratch.pendingSources,
+			pendingValues = scratch.pendingValues;
+		pendingDestinations.resize(0);
+		pendingSources.resize(0);
+		pendingValues.resize(0);
+		for (index in start...start + count) {
+			var destination = requireRegister(destinations[index], registers),
+				source = requireRegister(sources[index], registers);
+			if (destination != source) {
+				pendingDestinations.push(destination);
+				pendingSources.push(source);
+				pendingValues.push(destinations[index]);
+			}
 		}
-		while (pending.length > 0) {
+		while (pendingDestinations.length > 0) {
 			var ready = -1;
-			for (index in 0...pending.length) {
+			for (index in 0...pendingDestinations.length) {
 				var read = false;
-				for (other in pending)
-					if (other.source == pending[index].destination) {
+				for (other in 0...pendingSources.length)
+					if (pendingSources[other] == pendingDestinations[index]) {
 						read = true;
 						break;
 					}
@@ -2245,23 +2331,27 @@ class HlLower {
 				}
 			}
 			if (ready < 0) {
-				var saved = pending[0].destination,
+				var saved = pendingDestinations[0],
 					temporary = temporaryRegisterType(registerTypes[saved], registerTypes);
 				instructions.push(HlInstruction.Move(temporary, saved));
-				for (index in 0...pending.length)
-					if (pending[index].source == saved)
-						pending[index] = {
-							destination: pending[index].destination,
-							source: temporary,
-							value: pending[index].value
-						};
+				for (index in 0...pendingSources.length)
+					if (pendingSources[index] == saved)
+						pendingSources[index] = temporary;
 				continue;
 			}
-			var move = pending.splice(ready, 1)[0];
-			writes.push({value: move.value, position: instructions.length});
-			instructions.push(HlInstruction.Move(move.destination, move.source));
+			var destination = pendingDestinations[ready], source = pendingSources[ready];
+			writtenValues.push(pendingValues[ready]);
+			writtenPositions.push(instructions.length);
+			instructions.push(HlInstruction.Move(destination, source));
+			for (index in ready...pendingDestinations.length - 1) {
+				pendingDestinations[index] = pendingDestinations[index + 1];
+				pendingSources[index] = pendingSources[index + 1];
+				pendingValues[index] = pendingValues[index + 1];
+			}
+			pendingDestinations.pop();
+			pendingSources.pop();
+			pendingValues.pop();
 		}
-		return writes;
 	}
 
 	/** The jump taken when a comparison holds; `target` may be filled in later with `withJumpTarget`. */
