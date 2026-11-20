@@ -1,6 +1,7 @@
 package compiler.ir;
 
 import compiler.ir.Ir;
+import compiler.ir.IrPassScratch.IrNonNullScratch;
 
 /** Must facts at instruction entry; SSA values are never invalidated by a call or a store. */
 class IrNonNullFacts {
@@ -16,10 +17,13 @@ class IrNonNullFacts {
 		return false;
 	}
 
-	/** `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function. */
-	public function new(fn:IrFunction, ?checkedDereferences:Bool = false, ?graph:IrGraph) {
+	/**
+	 * `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function; `scratch`, the caller's
+	 * tables reused across functions (`IrPassScratch.nonNull`).
+	 */
+	public function new(fn:IrFunction, ?checkedDereferences:Bool = false, ?graph:IrGraph, ?scratch:IrNonNullScratch) {
 		if (hasReceiver(fn))
-			new NonNullFlow(fn, checkedDereferences, proven, graph).run();
+			new NonNullFlow(fn, checkedDereferences, proven, graph, scratch ?? new IrNonNullScratch()).run();
 	}
 
 	public function has(block:Int, index:Int):Bool {
@@ -47,26 +51,33 @@ private class NonNullFlow {
 	final checkedDereferences:Bool;
 	final proven:Array<Null<Array<Int>>>;
 	final graph:IrGraph;
+	final scratch:IrNonNullScratch;
 
 	/** Per value id, its fact bit, or -1 for a value that cannot have one. */
-	var positions:Array<Int> = [];
+	final positions:Array<Int>;
 
 	/** Per value id of a Bool, the value one of its branch's edges proves non-null, or -1; and which edge. */
-	var testValue:Array<Int> = [];
+	final testValue:Array<Int>;
 
-	var testOnTrue:Array<Bool> = [];
+	final testOnTrue:Array<Bool>;
 	var words = 0;
 
 	/** Per block id, the facts leaving it: a row of `words` words. Kept only without exception edges, for reachable blocks. */
-	var outgoing:Array<Int> = [];
+	final outgoing:Array<Int>;
 
 	var hasRows = false;
 
-	public function new(fn:IrFunction, checkedDereferences:Bool, proven:Array<Null<Array<Int>>>, ?graph:IrGraph) {
+	public function new(fn:IrFunction, checkedDereferences:Bool, proven:Array<Null<Array<Int>>>, graph:Null<IrGraph>,
+			scratch:IrNonNullScratch) {
 		this.fn = fn;
 		this.checkedDereferences = checkedDereferences;
 		this.proven = proven;
 		this.graph = graph ?? new IrGraph(fn);
+		this.scratch = scratch;
+		positions = scratch.positions;
+		testValue = scratch.testValue;
+		testOnTrue = scratch.testOnTrue;
+		outgoing = scratch.outgoing;
 	}
 
 	public function run():Void {
@@ -84,12 +95,13 @@ private class NonNullFlow {
 			}
 		}
 		// A fact can affect a receiver through an upcast or phi even if it is not itself a receiver.
-		positions = filledInts(valueCount, -1);
+		filledInts(positions, valueCount, -1);
 		var count = 0;
 		for (argument in fn.arguments)
 			if (positions[argument.id] < 0)
 				positions[argument.id] = count++;
-		var nulls = filledBools(valueCount, false), fresh:Array<Int> = [], hasTry = false;
+		var nulls = filledBools(scratch.nulls, valueCount, false), fresh = scratch.fresh, hasTry = false;
+		fresh.resize(0);
 		for (block in fn.blocks)
 			for (located in block.instructions) {
 				var out = IrOperands.output(located.value);
@@ -105,8 +117,8 @@ private class NonNullFlow {
 					default:
 				}
 			}
-		testValue = filledInts(valueCount, -1);
-		testOnTrue = filledBools(valueCount, false);
+		filledInts(testValue, valueCount, -1);
+		filledBools(testOnTrue, valueCount, false);
 		for (block in fn.blocks)
 			for (located in block.instructions)
 				switch located.value {
@@ -122,14 +134,14 @@ private class NonNullFlow {
 					default:
 				}
 		words = (count + 31) >>> 5;
-		var before = filledInts(words, 0), after = filledInts(words, 0);
+		var before = filledInts(scratch.before, words, 0), after = filledInts(scratch.after, words, 0);
 		// Without exception edges the facts flow to a fixed point; each reachable block keeps the row it enters with and the
 		// row it leaves with, starting from "everything" so the intersection over predecessors only ever shrinks.
-		var incoming:Array<Int> = [];
+		var incoming = scratch.incoming;
 		if (!hasTry) {
 			hasRows = true;
-			incoming = filledInts(blockCount * words, 0);
-			outgoing = filledInts(blockCount * words, 0);
+			filledInts(incoming, blockCount * words, 0);
+			filledInts(outgoing, blockCount * words, 0);
 			for (id in graph.order)
 				for (word in 0...words)
 					outgoing[id * words + word] = word == words - 1
@@ -304,19 +316,9 @@ private class NonNullFlow {
 	function testOf(condition:Int):Int
 		return condition >= 0 && condition < testValue.length ? testValue[condition] : -1;
 
-	static function filledInts(count:Int, value:Int):Array<Int> {
-		var values:Array<Int> = [];
-		values.resize(count);
-		for (index in 0...count)
-			values[index] = value;
-		return values;
-	}
+	static inline function filledInts(values:Array<Int>, count:Int, value:Int):Array<Int>
+		return IrPassScratch.filledInts(values, count, value);
 
-	static function filledBools(count:Int, value:Bool):Array<Bool> {
-		var values:Array<Bool> = [];
-		values.resize(count);
-		for (index in 0...count)
-			values[index] = value;
-		return values;
-	}
+	static inline function filledBools(values:Array<Bool>, count:Int, value:Bool):Array<Bool>
+		return IrPassScratch.filledBools(values, count, value);
 }

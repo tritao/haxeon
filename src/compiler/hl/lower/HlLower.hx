@@ -76,6 +76,9 @@ class HlLower {
 
 	// Tables by value id of the function being lowered, their storage kept from one function to the next.
 	final valueRegisters:Array<Int> = [];
+
+	/** The tables of the non-null analysis, reused across functions. */
+	final nonNullScratch = new compiler.ir.IrPassScratch.IrNonNullScratch();
 	final valueIsNull:Array<Bool> = [];
 	final valueUses:Array<Int> = [];
 
@@ -793,7 +796,7 @@ class HlLower {
 				nextLabel = block.id + 1;
 		// Both read the function as it is, so they share its graph.
 		var graph = new compiler.ir.IrGraph(fn),
-			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph),
+			nonNull = new compiler.ir.IrNonNullFacts(fn, true, graph, nonNullScratch),
 			exactTypes = new compiler.ir.IrExactTypeFacts(fn, graph);
 		// Tables about values are indexed by value id, which is dense within a function: a register (-1 before its
 		// definition), whether the value is a null constant, and how many operands read it.

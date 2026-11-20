@@ -15,13 +15,17 @@ class IrDeadPureValues {
 	@:processWide("a shared empty value, never added to")
 	static final none:Array<compiler.ir.SourceProvenance.Located<IrInstruction>> = [];
 
-	public static function run(fn:IrFunction):IrFunction {
-		var definitions:Map<Int, IrInstruction> = [], live:Map<Int, Bool> = [], pending:Array<IrValue> = [];
+	/** `scratch` is the caller's, reused across functions (`IrPassScratch`). */
+	public static function run(fn:IrFunction, ?scratch:IrPassScratch):IrFunction {
+		var tables = scratch ?? new IrPassScratch(),
+			definitions = tables.definitions,
+			live = tables.marked,
+			pending = tables.pending;
+		live.clear();
+		pending.resize(0);
 		function mark(value:IrValue):Void {
-			if (!live.exists(value.id)) {
-				live.set(value.id, true);
+			if (live.add(value.id))
 				pending.push(value);
-			}
 		}
 		function inputs(instruction:IrInstruction):Void {
 			for (valueIndex in 0...IrOperands.count(instruction)) {
@@ -36,7 +40,11 @@ class IrDeadPureValues {
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				var instruction = located.value, output = IrOperands.output(instruction);
-				if (output != null) definitions.set(output.id, instruction);
+				if (output != null) {
+					while (definitions.length <= output.id)
+						definitions.push(null);
+					definitions[output.id] = instruction;
+				}
 				if (!removable(instruction)) inputs(instruction);
 			}
 			if (block.terminator != null) switch block.terminator.value {
@@ -49,12 +57,20 @@ class IrDeadPureValues {
 			var value = pending.pop();
 			if (value == null)
 				break;
-			var definition = definitions.get(value.id);
+			var definition = value.id < definitions.length ? definitions[value.id] : null;
 			if (definition != null) inputs(definition);
 		}
-		return IrFunctionRewrite.instructions(fn, located -> {
+		var result = IrFunctionRewrite.instructions(fn, located -> {
 			var output = IrOperands.output(located.value);
-			return output != null && !live.exists(output.id) && removable(located.value) ? none : null;
+			return output != null && !live.has(output.id) && removable(located.value) ? none : null;
 		});
+		// The table keeps no instruction alive after the pass.
+		for (block in fn.blocks)
+			for (located in block.instructions) {
+				var output = IrOperands.output(located.value);
+				if (output != null)
+					definitions[output.id] = null;
+			}
+		return result;
 	}
 }

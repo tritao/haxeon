@@ -224,6 +224,9 @@ class IrInliner {
 
 	final table:IrObjectTable;
 
+	/** The tables the cleanup passes reuse across functions. */
+	final passScratch = new IrPassScratch();
+
 	/** Which function each class and method resolve to, shared with the other passes that resolve calls. */
 	final resolution:IrMethodResolution;
 
@@ -476,7 +479,8 @@ class IrInliner {
 			if (clean == null || clean.source != result) {
 				var source = result;
 				result =
-					IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(IrJumpThreading.threadConstantBranches(result))));
+					IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(IrJumpThreading.threadConstantBranches(result),
+					inliner.passScratch), inliner.passScratch));
 				clean = {source: source, result: result};
 			} else
 				result = clean.result;
