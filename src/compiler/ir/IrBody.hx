@@ -174,6 +174,12 @@ class IrBody {
 		return last >= blockStarts[block] && opcode(last).isTerminator() ? last : -1;
 	}
 
+	/** The row after the block's last instruction: its terminator row, or its end when it has none. */
+	public function instructionEnd(block:Int):Int {
+		var terminator = terminatorRow(block);
+		return terminator >= 0 ? terminator : blockStarts[block + 1];
+	}
+
 	// Values.
 
 	/** Every value id is below it. */

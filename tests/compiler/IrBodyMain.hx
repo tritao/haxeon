@@ -8,7 +8,10 @@ import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateEquality;
 
-/** Every instruction and terminator kind round-trips through an `IrBody`, and the body's accessors read what was encoded. */
+/**
+ * Every instruction and terminator kind round-trips through an `IrBody`, and the body's accessors read what was encoded. The
+ * passes over bodies give what their object versions give.
+ */
 class IrBodyMain {
 	static var nextId = 0;
 
@@ -187,8 +190,68 @@ class IrBodyMain {
 		// The pipeline's round trip is its own option, off by default, and implies verification.
 		var options = compiler.CompileOptions.fromArguments(["--no-verify-ir", "--check-ir-body"]);
 		expect(!new compiler.CompileOptions().checkIrBody, "the body check is off by default");
+		bodyPasses();
 		expect(options.checkIrBody && options.verifyIr && options.arguments().join(" ") == "--check-ir-body",
 			"the body check as a flag");
+	}
+
+	static function block(id:Int, instructions:Array<IrInstruction>, terminator:Null<IrTerminator>):IrBlock {
+		var where = SourceProvenance.generated("body-pass-test"), result = new IrBlock(id);
+		for (instruction in instructions)
+			result.instructions.push(new Located(instruction, where));
+		if (terminator != null)
+			result.terminator = new Located(terminator, where);
+		return result;
+	}
+
+	/** Runs a pass on `fn` and on its body; both must change it, and the same way. */
+	static function samePass(what:String, fn:IrFunction, objectPass:IrFunction->IrFunction,
+			bodyPass:(IrBody, compiler.ir.IrPassScratch) -> IrBody):Void {
+		var types = new IrTypeIds(),
+			scratch = new compiler.ir.IrPassScratch(),
+			body = IrBodyBuilder.encode(fn, types),
+			expected = objectPass(fn),
+			result = bodyPass(body, scratch);
+		if (expected == fn || result == body)
+			throw 'IrBody: the $what test function must change';
+		var difference = IrFunctionStateEquality.difference(expected, result.toFunction());
+		if (difference != null)
+			throw 'IrBody: $what on a body differs from its object version: $difference';
+	}
+
+	static function bodyPasses():Void {
+		nextId = 0;
+		var condition = value("condition", Bool),
+			x = value("x", I32),
+			dead = value("dead", I32),
+			deadSum = value("deadSum", I32),
+			kept = value("kept", I32);
+		samePass("dead pure values", new IrFunction("Main.dead", [condition, x], I32, [
+			block(0, [ConstInt(dead, 1), Add(deadSum, dead, x), Add(kept, x, x)], Return(kept))
+		], Ordinary), fn -> compiler.ir.IrDeadPureValues.run(fn),
+			(body, scratch) -> compiler.ir.IrDeadPureValues.runBody(body, scratch));
+		samePass("jump threading", new IrFunction("Main.bridges", [condition, x], I32, [
+			block(0, [], Branch(condition, 1, 2)),
+			block(1, [], Jump(3)),
+			block(2, [], Jump(4)),
+			block(4, [], Jump(3)),
+			block(3, [], Return(x))
+		], Ordinary), fn -> compiler.ir.IrJumpThreading.run(fn),
+			(body, scratch) -> compiler.ir.IrBodyJumpThreading.run(body, scratch));
+		var yes = value("yes", Bool),
+			no = value("no", Bool),
+			joined = value("joined", Bool),
+			one = value("one", I32),
+			two = value("two", I32);
+		samePass("constant branches", new IrFunction("Main.constants", [condition, x], I32, [
+			block(0, [], Branch(condition, 1, 2)),
+			block(1, [ConstBool(yes, true)], Jump(3)),
+			block(2, [ConstBool(no, false)], Jump(3)),
+			block(3, [Phi(joined, [{block: 1, value: yes}, {block: 2, value: no}])], Branch(joined, 4, 5)),
+			block(4, [ConstInt(one, 1)], Return(one)),
+			block(5, [ConstInt(two, 2)], Return(two))
+		], Ordinary), fn -> compiler.ir.IrJumpThreading.threadConstantBranches(fn),
+			(body, scratch) -> compiler.ir.IrBodyJumpThreading.threadConstantBranches(body, scratch));
 	}
 
 	static function check(fn:IrFunction, types:IrTypeIds):Void {

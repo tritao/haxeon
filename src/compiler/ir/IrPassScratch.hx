@@ -21,6 +21,20 @@ class IrPassScratch {
 	/** The tables of `IrNonNullFacts`. */
 	public final nonNull = new IrNonNullScratch();
 
+	/** A worklist of value ids, for the passes over bodies. */
+	public final pendingIds:Array<Int> = [];
+
+	/** Two tables of Ints by value or block id, for the passes over bodies. */
+	public final firstInts:Array<Int> = [];
+
+	public final secondInts:Array<Int> = [];
+
+	/** The graph the passes over bodies refill (`IrBodyGraph.reset`). */
+	public final bodyGraph = new IrBodyGraph();
+
+	/** The builder the passes over bodies make their results with (`IrBodyBuilder.startFrom`). */
+	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
+
 	public function new() {}
 
 	/** `values` with `count` entries, each `value`; its storage is kept between uses. */

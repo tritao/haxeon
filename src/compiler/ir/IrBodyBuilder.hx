@@ -103,6 +103,104 @@ class IrBodyBuilder {
 	public inline function rowCount():Int
 		return opcodes.length;
 
+	/**
+	 * Empties the builder for a rewrite of `source`: the new body keeps its arguments, and every value of it under the same id, name
+	 * and type, so rows can be copied as they are and new values numbered from `source.valueLimit()` (`newValue`). Rows, blocks and
+	 * bindings start empty.
+	 */
+	public function startFrom(source:IrBody):Void {
+		reset(source.types);
+		var count = source.valueTypes.length;
+		valueTypes.resize(count);
+		valueNames.resize(count);
+		valueRows.resize(count);
+		for (id in 0...count) {
+			valueTypes[id] = source.valueTypes[id];
+			valueNames[id] = source.valueNames[id];
+			valueRows[id] = -1;
+		}
+		for (argument in source.argumentIds)
+			argumentIds.push(argument);
+	}
+
+	/** A value that is not in the body yet, with the next id. */
+	public function newValue(name:String, type:IrType):Int {
+		var id = valueTypes.length;
+		valueTypes.push(types.id(type));
+		valueNames.push(name);
+		valueRows.push(-1);
+		return id;
+	}
+
+	/** Appends `id` to the operands of the row being built. */
+	public inline function operandId(id:Int):Void
+		operands.push(id);
+
+	/**
+	 * Appends `source`'s row `row` unchanged but for its operands, each replaced by `substitution[id]` when that is not -1 (when
+	 * a substitution is given). Its pool entries are copied, so the row means here what it meant there.
+	 */
+	public function copyRow(source:IrBody, row:Int, ?substitution:Array<Int>):Void {
+		var start = source.operandStarts[row], end = source.operandStarts[row + 1];
+		for (index in start...end) {
+			var id = source.operandPool[index];
+			if (substitution != null && id < substitution.length && substitution[id] >= 0)
+				id = substitution[id];
+			operands.push(id);
+		}
+		this.row(source.opcode(row), source.outputs[row], copyAux(source, row), source.provenance(row));
+	}
+
+	/** `source`'s row's auxiliary field, its pool entries copied to this builder's pools. */
+	public function copyAux(source:IrBody, row:Int):Int {
+		var aux = source.auxes[row];
+		return switch source.opcode(row) {
+			case IrOpcode.ConstFloat:
+				floats.push(source.floats[aux]);
+				floats.length - 1;
+			case IrOpcode.ConstString:
+				strings.push(source.strings[aux]);
+				strings.length - 1;
+			case IrOpcode.Phi:
+				copyInts(source, aux, source.operandCount(row));
+			case IrOpcode.StaticDataAddress:
+				copyInts(source, aux, 1 + source.ints[aux]);
+			case IrOpcode.BeginTry:
+				copyInts(source, aux, 3);
+			case IrOpcode.EndTry, IrOpcode.MakeEnum, IrOpcode.EnumField, IrOpcode.Branch:
+				copyInts(source, aux, 2);
+			case IrOpcode.Switch:
+				copyInts(source, aux, 2 + source.ints[aux + 1]);
+			default:
+				aux;
+		};
+	}
+
+	function copyInts(source:IrBody, start:Int, count:Int):Int {
+		var result = ints.length;
+		for (index in start...start + count)
+			ints.push(source.ints[index]);
+		return result;
+	}
+
+	/** Appends `source`'s debug binding `index`, its value replaced by `value`. */
+	public function copyBinding(source:IrBody, index:Int, value:Int):Void {
+		bindingIdentities.push(source.bindingIdentities[index]);
+		bindingNames.push(source.bindingNames[index]);
+		bindingPaths.push(source.bindingPaths[index]);
+		bindingStarts.push(source.bindingStarts[index]);
+		bindingEnds.push(source.bindingEnds[index]);
+		bindingValues.push(value);
+	}
+
+	/** The body made, with `source`'s name, kind, result and flags. */
+	public function finishFrom(source:IrBody):IrBody {
+		blockStarts.push(opcodes.length);
+		var body = new IrBody(this, source.name, source.kind, source.result, source.inlineHint, source.retention);
+		blockStarts.pop();
+		return body;
+	}
+
 	public function beginBlock(id:Int):Void {
 		blockIds.push(id);
 		blockStarts.push(opcodes.length);
@@ -149,6 +247,10 @@ class IrBodyBuilder {
 		provenances.push(last);
 		operandStarts.push(operands.length);
 	}
+
+	/** Where the next entry of the int pool goes: the auxiliary field of a row whose run starts there. */
+	public inline function poolStart():Int
+		return ints.length;
 
 	/** Appends `value` to the int pool and gives its index. */
 	public inline function int(value:Int):Int {
