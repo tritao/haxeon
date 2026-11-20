@@ -40,7 +40,17 @@ class HlRegisterAllocation {
 	final freeAt:Array<Int> = [];
 	final slotsByType:Map<Int, Array<Int>> = [];
 
-	public function new() {}
+	/** The types whose slots the last function used, emptied for the next; and the types of its slots. */
+	final typesWithSlots:Array<Int> = [];
+
+	final types:Array<Int> = [];
+
+	/** Registers by their first instruction, then by number. */
+	final byFirst:(Int, Int) -> Int;
+
+	public function new() {
+		byFirst = (a, b) -> first[a] != first[b] ? first[a] - first[b] : a - b;
+	}
 
 	/** Renames the registers of `instructions` in place and returns the types of the registers that remain. */
 	public function run(instructions:Array<HlInstruction>, registerTypes:Array<Int>, argumentCount:Int):Array<Int> {
@@ -211,9 +221,10 @@ class HlRegisterAllocation {
 		for (register in 0...count)
 			if (!pinned[register] && first[register] >= 0)
 				order.push(register);
-		order.sort((a, b) -> first[a] != first[b] ? first[a] - first[b] : a - b);
+		order.sort(byFirst);
 		fill(mapping, count, -1);
-		var types:Array<Int> = [];
+		var types = this.types;
+		types.resize(0);
 		for (register in 0...argumentCount) {
 			mapping[register] = types.length;
 			types.push(registerTypes[register]);
@@ -224,13 +235,17 @@ class HlRegisterAllocation {
 				types.push(registerTypes[register]);
 			}
 		freeAt.resize(0);
-		slotsByType.clear();
+		for (type in typesWithSlots)
+			slotsByType.get(type).resize(0);
+		typesWithSlots.resize(0);
 		for (register in order) {
 			var type = registerTypes[register], slots = slotsByType.get(type), chosen = -1;
 			if (slots == null) {
 				slots = [];
 				slotsByType.set(type, slots);
 			}
+			if (slots.length == 0)
+				typesWithSlots.push(type);
 			for (slot in slots)
 				if (freeAt[slot] < first[register]) {
 					chosen = slot;
@@ -252,7 +267,7 @@ class HlRegisterAllocation {
 			return mapping[register];
 		for (index in 0...length)
 			instructions[index] = HlRegisters.map(instructions[index], rename);
-		return types;
+		return types.copy();
 	}
 
 	/** Sets `values` to `count` copies of `value`, keeping its storage. */
