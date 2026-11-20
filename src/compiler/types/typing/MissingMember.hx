@@ -2,9 +2,12 @@ package compiler.types.typing;
 
 import compiler.core.Diagnostic;
 import compiler.core.Source.SourceSpan;
+import compiler.semantic.SemanticSignature;
+import compiler.types.Monomorphs;
+import compiler.types.Type.CompilerType;
 
 /**
- * A method call whose receiver has no member of that name (`Unknown String method "trim"`). The call (`CallResolver.typeMethodCall`)
+ * A method call whose receiver has no member of that name (`String has no field trim`). The call (`CallResolver.typeMethodCall`)
  * then tries the static extensions (`StaticExtensions`), as Haxe tries them only once the value's own members have none; when no
  * extension applies either, the error stands as it is. `span` is the call's, which tells the call that failed apart from a call
  * among its arguments.
@@ -17,4 +20,28 @@ class MissingMember extends CompileError {
 		super(new Diagnostic(code, message, at == null ? span : at));
 		this.span = span;
 	}
+
+	/**
+	 * Haxe's error for a member `owner` lacks (`haxe.io.Bytes has no field fill`, `Class<Foo> has no field make`), with the code
+	 * of a missing field, at the member's name in `span`.
+	 */
+	public static function field(owner:String, name:String, span:SourceSpan):MissingMember
+		return new MissingMember("E1005", '$owner has no field $name', span,
+			AbstractProperties.nameSpan(span, name, true));
+
+	/** `type` as Haxe spells it in that error: platform types by their Haxe paths, a structure by its fields. */
+	public static function haxeType(type:CompilerType):String
+		return switch Monomorphs.follow(type) {
+			case TBytes: "haxe.io.Bytes";
+			case TNullable(element): 'Null<${haxeType(element)}>';
+			case TArray(element): 'Array<${haxeType(element)}>';
+			case TIterator(element): 'Iterator<${haxeType(element)}>';
+			case TMap(key, value): 'haxe.ds.Map<${haxeType(key)}, ${haxeType(value)}>';
+			case TAbstract(name, arguments, _), TInstance(_, name, arguments):
+				arguments.length == 0 ? name : '$name<${[for (argument in arguments) haxeType(argument)].join(", ")}>';
+			case TAnonymous(_, fields) if (fields.length == 0): "{ }";
+			case TAnonymous(_, fields):
+				'{ ${[for (field in fields) (field.optional ? "?" : "") + field.name + " : " + haxeType(field.type)].join(", ")} }';
+			case followed: SemanticSignature.display(followed);
+		};
 }

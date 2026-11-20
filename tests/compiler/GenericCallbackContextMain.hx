@@ -36,7 +36,7 @@ class GenericCallbackContextMain {
 				try
 					candidate.compile("Main")
 				catch (error:CompileError) {
-					if (error.diagnostic.code != "E1007" && error.diagnostic.code != "E1003")
+					if (error.diagnostic.code != "E1005" && error.diagnostic.code != "E1003")
 						throw error;
 					rejected = true;
 				}

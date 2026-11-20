@@ -210,10 +210,10 @@ class CallResolver {
 	 */
 	public function typeMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, platformFirst:Bool = true, receiverName:Null<String> = null,
-			contextualGenericArguments:Bool = true, ?declaredReceiver:TypedExpression):TypedExpression {
+			expectedType:Null<CompilerType>, platformFirst:Bool = true, contextualGenericArguments:Bool = true,
+			?declaredReceiver:TypedExpression):TypedExpression {
 		try
-			return typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst, receiverName,
+			return typeMemberCall(receiver, name, arguments, span, scope, expectedType, platformFirst,
 				contextualGenericArguments)
 		catch (missing:MissingMember) {
 			// Only this call's own member is missing (not one called among its arguments), and only a value takes an extension:
@@ -436,8 +436,7 @@ class CallResolver {
 
 	function typeMemberCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, platformFirst:Bool, receiverName:Null<String>,
-			contextualGenericArguments:Bool):TypedExpression {
+			expectedType:Null<CompilerType>, platformFirst:Bool, contextualGenericArguments:Bool):TypedExpression {
 		var synthesized = TypeParameterMembers.synthesizedMember(session, receiver, name);
 		if (synthesized != null) {
 			if (arguments.length != synthesized.arguments.length)
@@ -490,8 +489,7 @@ class CallResolver {
 		var fieldCall = typeFunctionFieldCall(receiver, name, arguments, span, scope);
 		if (fieldCall != null)
 			return fieldCall;
-		return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, receiverName,
-			contextualGenericArguments);
+		return resolveInstanceMethod(receiver, name, arguments, span, scope, expectedType, contextualGenericArguments);
 	}
 
 	public function typeRawPointerNullCall(name:String, arguments:Array<AstExpression>, span:SourceSpan,
@@ -987,8 +985,7 @@ class CallResolver {
 
 	public function resolveInstanceMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan, scope:Scope,
-			expectedType:Null<CompilerType>, receiverName:Null<String> = null,
-			contextualGenericArguments:Bool = true):TypedExpression {
+			expectedType:Null<CompilerType>, contextualGenericArguments:Bool = true):TypedExpression {
 		if (sameType(receiver.type, TDynamic)) {
 			// A Dynamic value takes an extension whose first argument is Dynamic before its field is looked up at run time.
 			var extension = typeStaticExtensionCall(receiver, receiver, name, arguments, span, scope, expectedType);
@@ -1041,8 +1038,7 @@ class CallResolver {
 				null;
 		};
 		if (className == null)
-			throw new MissingMember("E1007",
-				'Cannot call method on non-object "${receiverName == null ? name : receiverName}"', span);
+			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 		var methodInfo = findMethod(className, name);
 		var classReference = switch receiver.expression {
 			case TClassRef(_):
@@ -1076,8 +1072,9 @@ class CallResolver {
 			}
 		}
 		if (methodInfo == null || methodInfo.isStatic)
-			throw new MissingMember("E1007", classReference
-				? 'Unknown static method "$className.$name"' : 'Unknown instance method "$className.$name"', span);
+			throw MissingMember.field(classReference ? staticOwner(className) : MissingMember.haxeType(receiver.type),
+				name,
+				span);
 		MemberAccess.method(session, methodInfo.owner, name, span);
 		var methodOwnerType = projectNominal(receiver.type, methodInfo.owner),
 			substitutions = session.representation.nominalSubstitutions(methodOwnerType),
@@ -1163,7 +1160,7 @@ class CallResolver {
 			if (candidate.name == name && !candidate.isStatic && candidate.name != "new")
 				method = candidate;
 		if (method == null)
-			throw new MissingMember("E1007", 'Unknown abstract method "$abstractName.$name"', span);
+			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 		MemberAccess.method(session, abstractName, name, span);
 		var methodKey = abstractName + "." + name,
 			signature = requiredMapValue(session.signatures, methodKey),
@@ -1547,8 +1544,12 @@ class CallResolver {
 			var external = requiredMapValue(session.externals, name);
 			expectedArguments = external.arguments;
 			result = external.result;
-		} else
+		} else {
+			var dot = name.lastIndexOf(".");
+			if (dot > 0 && isStaticOwner(name.substr(0, dot)))
+				throw MissingMember.field(staticOwner(name.substr(0, dot)), name.substr(dot + 1), span);
 			fail("E1007", 'Unknown function "$name"', span);
+		}
 		// trace takes any value and any further values, as Haxe's `trace(v:Dynamic, ...rest)` does (the rest become the position's
 		// customParams), and prints a line in haxe.Log's form: "path/File.hx:12: v, p1, p2", each value as Std.string gives it and
 		// the path relative to its source root. The newline matters beyond looks: hosts that print by line (a browser console)
@@ -1769,8 +1770,7 @@ class CallResolver {
 			if (isEnumMatch(receiver, methodName, arguments))
 				return typeEnumMatch(Variable(name.substring(0, name.lastIndexOf(".")), span), arguments[0], span,
 					scope);
-			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, receiverName,
-				false);
+			return typeMethodCall(receiver, methodName, arguments, span, scope, expectedType, false, false);
 		}
 		// Nothing else names the receiver: a constructor without arguments can ("Color.Red.getIndex()", "Red.getIndex()"), and
 		// so can an enum abstract value ("Color.Blue.label()", "Blue.label()").
@@ -1783,15 +1783,12 @@ class CallResolver {
 				var value = typeEnumConstructor(prefix, [], null, constructor, span, scope);
 				if (isEnumMatch(value, methodName, arguments))
 					return typeEnumMatch(Variable(prefix, span), arguments[0], span, scope);
-				return typeMethodCall(value, methodName,
-					arguments, span, scope, expectedType,
-					false, prefix, false);
+				return typeMethodCall(value, methodName, arguments, span, scope, expectedType, false, false);
 			}
 			var abstractValue = bodyTyper.enumAbstractValueReference(prefix,
 				BodyTyper.referencePrefixSpan(prefix, span));
 			if (abstractValue != null)
-				return typeMethodCall(abstractValue, methodName, arguments, span, scope, expectedType, false, prefix,
-					false);
+				return typeMethodCall(abstractValue, methodName, arguments, span, scope, expectedType, false, false);
 		}
 		return resolveFunctionCall(name, arguments, span, scope);
 	}
@@ -1972,6 +1969,16 @@ class CallResolver {
 	}
 
 	/** The type a qualified name denotes, when its static members can be accessed: the name itself, or the enum abstract a typedef names. */
+	function isStaticOwner(name:String):Bool
+		return session.classDecls.exists(name) || session.declarations.enums.exists(name)
+			|| session.declarations.abstractDeclaration(name) != null;
+
+	/** The type whose statics a type's name stands for, as Haxe spells it (`Class<Foo>`, `Enum<Color>`, `Abstract<Flag>`). */
+	function staticOwner(name:String):String
+		return session.declarations.abstractDeclaration(name) != null
+			? 'Abstract<$name>' : session.declarations.enums.exists(name)
+			? 'Enum<$name>' : 'Class<$name>';
+
 	function typeReference(name:String):Null<String> {
 		if (session.classDecls.exists(name) || PlatformAbi.isType(name))
 			return name;
@@ -2502,7 +2509,7 @@ class CallResolver {
 				"String.split separator");
 			return new TypedExpression(TCall("__string_split", [receiver, separator]), TArray(TString), span);
 		}
-		throw new MissingMember("E1007", 'Unknown String method "$name"', span);
+		throw MissingMember.field("String", name, span);
 	}
 
 	/**
@@ -2834,7 +2841,7 @@ class CallResolver {
 		var library = typeLibraryArrayMethod(receiver, name, arguments, span, scope);
 		if (library != null)
 			return library;
-		throw new MissingMember("E1007", 'Unknown array method "$name"', span);
+		throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 	}
 
 	/** Choose a raw collection operation without changing the nominal element checked at the call site. */
@@ -2885,7 +2892,7 @@ class CallResolver {
 	public function typeIteratorMethod(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan):TypedExpression {
 		if (name != "hasNext" && name != "next")
-			throw new MissingMember("E1007", 'Unknown Iterator method "$name"', span);
+			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 		if (arguments.length != 0)
 			fail("E1008", 'Iterator.$name expects no arguments', span);
 		return switch name {
@@ -2975,7 +2982,7 @@ class CallResolver {
 			return new TypedExpression(TCollectionCall(receiver, "size", []), TInt, span);
 		}
 		if (name != "exists" && name != "remove" && name != "get")
-			throw new MissingMember("E1007", 'Unknown map method "$name"', span);
+			throw MissingMember.field(MissingMember.haxeType(receiver.type), name, span);
 		if (arguments.length != 1)
 			fail("E1008", 'Map.$name expects one argument', span);
 		var key = bodyTyper.coerce(typeExpressionValue(arguments[0], scope, mapType.key), mapType.key, "map key",

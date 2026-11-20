@@ -55,7 +55,7 @@ function main():Int {
 			compiler.compile("Main");
 			throw 'ReadOnlyArray accepted mutation: $statement';
 		} catch (error:CompileError) {
-			if (error.diagnostic.code != "E1007" && error.diagnostic.code != "E1015")
+			if (error.diagnostic.code != "E1005" && error.diagnostic.code != "E1015")
 				throw error;
 		}
 	}

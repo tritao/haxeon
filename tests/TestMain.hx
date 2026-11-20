@@ -669,7 +669,30 @@ class TestMain {
 		// A static is not inherited, as in Haxe: it is reached through the class that declares it.
 		Frontend.compile('class InferredCallBase { public static function inherited():Int return 1; } class InferredCallDerived extends InferredCallBase {} class InferredCallInheritedField { public static final count = InferredCallBase.inherited(); } function main():Int return InferredCallInheritedField.count;');
 		expectCompileError('class InferredCallBase { public static function inherited():Int return 1; } class InferredCallDerived extends InferredCallBase {} class InferredCallInheritedField { public static final count = InferredCallDerived.inherited(); } function main():Int return InferredCallInheritedField.count;',
-			'Unknown static method "InferredCallDerived.inherited"');
+			'Class<InferredCallDerived> has no field inherited');
+		// A call of a method the receiver's type does not have reports the missing field as Haxe does, for every kind of receiver.
+		for (missing in [
+			{source: 'function main():Int { var n = 1; n.huh(); return 0; }', message: 'Int has no field huh'},
+			{source: 'function main():Int { "x".nada(); return 0; }', message: 'String has no field nada'},
+			{source: 'function main():Int { [1].nix(); return 0; }', message: 'Array<Int> has no field nix'},
+			{
+				source: 'function main():Int { var m = new Map<Int, String>(); m.nil(); return 0; }',
+				message: 'haxe.ds.Map<Int, String> has no field nil'
+			},
+			{
+				source: 'function main():Int { var o = {x: 1}; o.no(); return 0; }',
+				message: '{ x : Int } has no field no'
+			},
+			{
+				source: 'enum Color { Red; } function main():Int { Color.no(); return 0; }',
+				message: 'Enum<Color> has no field no'
+			},
+			{
+				source: 'enum Color { Red; } function main():Int { Red.no(); return 0; }',
+				message: 'Color has no field no'
+			}
+		])
+			expectCompileError(missing.source, missing.message);
 		expectCompileError('class StaticBase { public static var count = 1; } class StaticDerived extends StaticBase { public static function read():Int return count; } function main():Int return StaticDerived.read();',
 			'Unknown variable "count"');
 		expectCompileError('class StaticBase { public static var count = 1; } class StaticDerived extends StaticBase {} function main():Int return StaticDerived.count;',

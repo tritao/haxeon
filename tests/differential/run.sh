@@ -154,6 +154,35 @@ run_warning_case() {
 	echo "PASS: $name official and realtime compilers warn alike ($(echo "$official_warnings" | wc -l) warnings)"
 }
 
+# A compile error: the line, column and message of the first error each compiler reports. Haxe prints
+# `Main.hx:12: characters 11-16 : Counter has no field reset`, Haxeon `.../Main.hx:12:11: E1005: Counter has no field reset`; both
+# compile the case as Main.hx, so the types of its module are named alike.
+run_error_case() {
+	local name=$1
+	local official_dir realtime_source
+	realtime_source=$(realtime_case_source "$name" main)
+	official_dir=$(mktemp -d "$out_dir/official-error.XXXXXX")
+	trap 'rm -rf "$official_dir"' RETURN
+	cp "$root_dir/tests/differential/$name.official.hx" "$official_dir/Main.hx"
+	# Both compilers fail, so their status is not checked here (pipefail).
+	local official_error realtime_error
+	official_error=$(cd "$official_dir" && "$haxe" -cp . -main Main -hl "$out_dir/$name.error.official.hl" 2>&1 |
+		sed -n 's/^Main\.hx:\([0-9]*\): characters \([0-9]*\)-[0-9]* : \(.*\)$/\1:\2 \3/p' | head -n 1 || true)
+	realtime_error=$(realtime_compile "$realtime_source" "$out_dir/$name.error.realtime.hl" 2>&1 >/dev/null |
+		sed -n 's/^.*\/Main\.hx:\([0-9]*\):\([0-9]*\): E[0-9]*: \(.*\)$/\1:\2 \3/p' | head -n 1 || true)
+	rm -rf "$(dirname "$realtime_source")"
+	if [[ -z "$official_error" ]]; then
+		echo "$name: the reference reported no error" >&2
+		exit 1
+	fi
+	if [[ "$official_error" != "$realtime_error" ]]; then
+		echo "$name: errors differ" >&2
+		diff -u <(echo "$official_error") <(echo "$realtime_error") >&2 || true
+		exit 1
+	fi
+	echo "PASS: $name official and realtime compilers report the same error ($official_error)"
+}
+
 # A known divergence: a program stock Haxe compiles and runs (exit 0) that Haxeon rejects until the step named beside the case lands
 # (each is listed in docs/reference/LANGUAGE_SUPPORT.md). The check fails once Haxeon compiles it, so the case moves to run_case.
 run_known_divergence() {
@@ -263,6 +292,12 @@ in_background run_case constrained-type-parameter-members 0
 in_background run_case constrained-type-parameter-assignment 0
 in_background run_compile_failure uncalled-generic-error
 in_background run_compile_failure uncalled-generic-method-error
+in_background run_error_case missing-field-call-instance
+in_background run_error_case missing-field-call-chained
+in_background run_error_case missing-field-call-static
+in_background run_error_case missing-field-call-abstract
+in_background run_error_case missing-field-call-abstract-static
+in_background run_error_case missing-field-call-bytes
 in_background run_compile_failure generic-field-own-parameters-error
 in_background run_case generic-nullable-parameter-read 0
 in_background run_case generic-nullable-element-inference 0

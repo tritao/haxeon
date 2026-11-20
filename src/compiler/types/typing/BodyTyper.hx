@@ -2524,7 +2524,7 @@ class BodyTyper implements BodyTyping {
 		if (callResolver.isEnumMatch(receiver, name, arguments))
 			return callResolver.typeEnumMatch(object, arguments[0], span, scope);
 		// A static extension may take the receiver as written, null included (`CallResolver.typeStaticExtensionCall`).
-		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType, true, null, true,
+		return callResolver.typeMethodCall(receiver, name, arguments, span, scope, expectedType, true, true,
 			declared == receiver ? null : declared);
 	}
 
