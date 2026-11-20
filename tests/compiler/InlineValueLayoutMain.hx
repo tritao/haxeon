@@ -730,7 +730,7 @@ class InlineValueLayoutMain {
 				Obj("AllocationOwner"));
 		var lengths:Array<compiler.ir.Ir.IrValue> = [];
 		for (index in 0...arrays.length) {
-			var length = new compiler.ir.Ir.IrValue(900000 + index, "$length", I32);
+			var length = allocationBuilder.freshValue("$length", I32);
 			allocationBuilder.currentBlock()
 				.instructions.push(new compiler.ir.SourceProvenance.Located(ArraySize(length, arrays[index]),
 				compiler.ir.SourceProvenance.generated("wasm-value-array-allocation-test")));
@@ -959,7 +959,7 @@ class InlineValueLayoutMain {
 			IrValueLaneReference.type());
 		var forwardedOwner = forwardBuilder.call(IrValueLaneReference.UNPACK, [forwardedCarrier],
 			Obj("AllocationOwner"));
-		var forwardLength = new compiler.ir.Ir.IrValue(800000, "$forward-length", I32);
+		var forwardLength = forwardBuilder.freshValue("$forward-length", I32);
 		forwardBuilder.currentBlock()
 			.instructions.push(new compiler.ir.SourceProvenance.Located(ArraySize(forwardLength, originalArray),
 			compiler.ir.SourceProvenance.generated("wasm-value-array-forward-test")));

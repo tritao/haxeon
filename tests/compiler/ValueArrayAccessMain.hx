@@ -259,7 +259,7 @@ class ValueArrayAccessMain {
 			optionalSnapshotArray = optionalSnapshot.argument("array", optionalPairArrayType),
 			optionalSnapshotCallback = optionalSnapshot.argument("callback", optionalSnapshotCallbackType),
 			optionalSnapshotIndex = optionalSnapshot.constInt(0),
-			optionalSnapshotRaw = new IrValue(900010, "$optional-snapshot", optionalPairType);
+			optionalSnapshotRaw = optionalSnapshot.freshValue("$optional-snapshot", optionalPairType);
 		optionalSnapshot.currentBlock()
 			.instructions.push(new Located(ArrayGet(optionalSnapshotRaw, optionalSnapshotArray, optionalSnapshotIndex),
 			SourceProvenance.generated("optional-array-snapshot")));
@@ -467,7 +467,7 @@ class ValueArrayAccessMain {
 		var retypedAfterAliasWrite = builder.call(pairHelpers.getter(pairHelpers.slot(["value"])),
 			[retypedArray, index], I32);
 		builder.call("__array_push_any", [dynamicArray, dynamicPair], I32);
-		var retypedSize = new IrValue(999999, "$retyped-size", I32);
+		var retypedSize = builder.freshValue("$retyped-size", I32);
 		builder.currentBlock().instructions.push(new Located(ArraySize(retypedSize, retypedArray),
 			SourceProvenance.generated("array-factory-test")));
 		var beforeTypedElements = builder.call("std.gc_total_allocated", [], F64),
@@ -479,7 +479,7 @@ class ValueArrayAccessMain {
 			builder.fieldSet(pair, "label", otherOwner);
 			builder.currentBlock().instructions.push(new Located(ArraySet(bridgeArray, index, pair),
 				SourceProvenance.generated("array-element-test")));
-			var loaded = new IrValue(900000 + _, "$typed-element", pairType);
+			var loaded = builder.freshValue("$typed-element", pairType);
 			builder.currentBlock().instructions.push(new Located(ArrayGet(loaded, bridgeArray, index),
 				SourceProvenance.generated("array-element-test")));
 			typedElementValue = builder.fieldGet(loaded, "value", I32);
@@ -506,7 +506,7 @@ class ValueArrayAccessMain {
 			builder.constInt(19)
 		], Obj("LaneOwner"));
 		var beforeTypedInsert = builder.call("std.gc_total_allocated", [], F64),
-			selectedPair = new IrValue(900100, "$insert-source", pairType);
+			selectedPair = builder.freshValue("$insert-source", pairType);
 		builder.currentBlock()
 			.instructions.push(new Located(ArrayGet(selectedPair, pushArray, builder.constInt(1)),
 			SourceProvenance.generated("array-insert-test")));
@@ -859,7 +859,7 @@ class ValueArrayAccessMain {
 			callerDelta = caller.argument("delta", I32),
 			callerChild = caller.fieldGet(callerReceiver, "inner", Obj("LaneInner"));
 		caller.currentBlock()
-			.instructions.push(new Located(MethodCall(new IrValue(900000, "$nested-call", Void), callerChild, "adjust",
+			.instructions.push(new Located(MethodCall(caller.freshValue("$nested-call", Void), callerChild, "adjust",
 			[callerDelta], false),
 			SourceProvenance.generated("array-place-test")));
 		caller.returnValue(caller.constVoid());
@@ -869,13 +869,14 @@ class ValueArrayAccessMain {
 			placeArray = placeCaller.argument("array", arrayType),
 			placeIndex = placeCaller.argument("index", I32),
 			placeDelta = placeCaller.argument("delta", I32),
-			placeRoot = new IrValue(900000, "$element-place", element),
+			placeRoot = placeCaller.freshValue("$element-place", element),
 			placeProvenance = SourceProvenance.generated("array-place-caller-test");
 		placeCaller.currentBlock().instructions.push(new Located(ArrayGet(placeRoot, placeArray, placeIndex),
 			placeProvenance));
 		var placeChild = placeCaller.fieldGet(placeRoot, "inner", Obj("LaneInner"));
 		placeCaller.currentBlock()
-			.instructions.push(new Located(MethodCall(new IrValue(900001, "$place-adjust", Void), placeChild, "adjust",
+			.instructions
+			.push(new Located(MethodCall(placeCaller.freshValue("$place-adjust", Void), placeChild, "adjust",
 			[placeDelta], false), placeProvenance));
 		placeCaller.currentBlock().instructions.push(new Located(ArraySet(placeArray, placeIndex, placeRoot),
 			placeProvenance));
@@ -888,11 +889,11 @@ class ValueArrayAccessMain {
 			growthArray = growthCaller.argument("array", arrayType),
 			growthIndex = growthCaller.argument("index", I32),
 			growthCallback = growthCaller.argument("callback", callbackType),
-			growthRoot = new IrValue(900002, "$growth-place", element);
+			growthRoot = growthCaller.freshValue("$growth-place", element);
 		growthCaller.currentBlock().instructions.push(new Located(ArrayGet(growthRoot, growthArray, growthIndex),
 			placeProvenance));
 		growthCaller.currentBlock()
-			.instructions.push(new Located(MethodCall(new IrValue(900003, "$growth-method", Void), growthRoot,
+			.instructions.push(new Located(MethodCall(growthCaller.freshValue("$growth-method", Void), growthRoot,
 			"LaneElement.nestedAround",
 			[
 				growthCallback,
@@ -910,7 +911,7 @@ class ValueArrayAccessMain {
 			valueArray = valueCaller.argument("array", arrayType),
 			valueIndex = valueCaller.argument("index", I32),
 			valuePair = valueCaller.argument("value", pairType),
-			valueRoot = new IrValue(900005, "$value-place", element);
+			valueRoot = valueCaller.freshValue("$value-place", element);
 		valueCaller.currentBlock().instructions.push(new Located(ArrayGet(valueRoot, valueArray, valueIndex),
 			placeProvenance));
 		valueCaller.fieldSet(valueRoot, "pair", valuePair);
@@ -924,7 +925,7 @@ class ValueArrayAccessMain {
 		var escapingPlace = new IrBuilder(),
 			escapingArray = escapingPlace.argument("array", arrayType),
 			escapingIndex = escapingPlace.argument("index", I32),
-			escapingRoot = new IrValue(900004, "$escaping-place", element);
+			escapingRoot = escapingPlace.freshValue("$escaping-place", element);
 		escapingPlace.currentBlock().instructions.push(new Located(ArrayGet(escapingRoot, escapingArray, escapingIndex),
 			placeProvenance));
 		escapingPlace.returnValue(escapingRoot);
@@ -1837,7 +1838,7 @@ class ValueArrayAccessMain {
 			var badRead = new IrBuilder(),
 				values = badRead.call(pairFactory.allocateName(), [badRead.constInt(1)], pairArrayType);
 			var invalid = badRead.constInt(outOfBounds ? 1 : 0),
-				ignored = new IrValue(800000, "$invalid-element", pairType);
+				ignored = badRead.freshValue("$invalid-element", pairType);
 			badRead.currentBlock().instructions.push(new Located(ArrayGet(ignored, values, invalid),
 				SourceProvenance.generated("array-element-test")));
 			badRead.call("std.sys_exit", [badRead.constInt(0)], Void);
@@ -1868,7 +1869,7 @@ class ValueArrayAccessMain {
 		var notCaught = exception.constBool(false);
 		exception.jump(after);
 		exception.select(handler);
-		handler.instructions.push(new Located(Catch(new IrValue(1000000, "$caught", Dyn)), provenance));
+		handler.instructions.push(new Located(Catch(exception.freshValue("$caught", Dyn)), provenance));
 		var caught = exception.constBool(true);
 		exception.jump(after);
 		exception.select(after);
@@ -1914,7 +1915,8 @@ class ValueArrayAccessMain {
 		var scalarNotCaught = scalarException.constBool(false);
 		scalarException.jump(scalarAfter);
 		scalarException.select(scalarHandler);
-		scalarHandler.instructions.push(new Located(Catch(new IrValue(1000001, "$caught-scalar", Dyn)), provenance));
+		scalarHandler.instructions.push(new Located(Catch(scalarException.freshValue("$caught-scalar", Dyn)),
+			provenance));
 		var scalarCaught = scalarException.constBool(true);
 		scalarException.jump(scalarAfter);
 		scalarException.select(scalarAfter);

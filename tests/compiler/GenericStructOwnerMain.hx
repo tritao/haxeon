@@ -198,7 +198,7 @@ class GenericStructOwnerMain {
 			invalid.jump(after);
 			invalid.select(handler);
 			handler.instructions.push(new compiler.ir.SourceProvenance
-				.Located(Catch(new IrValue(1000000, "$caught", Dyn)), provenance));
+				.Located(Catch(invalid.freshValue("$caught", Dyn)), provenance));
 			invalid.returnValue(invalid.constInt(isNull ? 1 : 42));
 			invalid.select(after);
 			if (isNull) {

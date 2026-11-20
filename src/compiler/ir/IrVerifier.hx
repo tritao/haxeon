@@ -632,10 +632,13 @@ class IrVerifier {
 		values.reset();
 		// Lane and scalar stack references are rare. A function whose arguments and outputs have none of those types has no operand of
 		// those types either (an operand has the type of its definition, checked below), so the operand scans for them are skipped.
-		var lanes = false, scalarRefs = false;
+		var lanes = false, scalarRefs = false, made = 0, limit = 0;
 		for (argument in fn.arguments) {
 			lanes = lanes || IrValueLaneReference.isCarrier(argument.type);
 			scalarRefs = scalarRefs || IrHlScalarRef.element(argument.type) != null;
+			made++;
+			if (argument.id >= limit)
+				limit = argument.id + 1;
 		}
 		for (block in fn.blocks)
 			for (located in block.instructions) {
@@ -643,8 +646,21 @@ class IrVerifier {
 				if (produced != null) {
 					lanes = lanes || IrValueLaneReference.isCarrier(produced.type);
 					scalarRefs = scalarRefs || IrHlScalarRef.element(produced.type) != null;
+					made++;
+					if (produced.id >= limit)
+						limit = produced.id + 1;
 				}
 			}
+		for (binding in fn.debugBindings) {
+			made++;
+			if (binding.value.id >= limit)
+				limit = binding.value.id + 1;
+		}
+		// Every table indexed by value id is sized to the highest id, so ids stay near the count of values: a pass numbers new values
+		// from `IrFunction.nextValueId` (or `IrBuilder.freshValue`), and only the values it later drops leave gaps.
+		if (limit > SPARSE_VALUE_SLACK + SPARSE_VALUE_FACTOR * made)
+			throw new InternalError('IR function ${fn.name} numbers a value ${limit - 1} but names only $made values: '
+				+ 'value ids must be dense, numbered from IrFunction.nextValueId');
 		for (argument in fn.arguments)
 			values.define(argument, fn.blocks[0].id, -1);
 		for (id in graph.order) {
@@ -1747,6 +1763,11 @@ class IrVerifier {
 
 	/** The one table of value types and definition sites, cleared and reused by every function (`IrVerifyValues`). */
 	static final scratchValues = new IrVerifyValues();
+
+	/** How sparse a function's value ids may be: ids below this many per value named, plus the slack, after passes drop values. */
+	static inline final SPARSE_VALUE_FACTOR = 8;
+
+	static inline final SPARSE_VALUE_SLACK = 1024;
 
 	static function require(values:IrVerifyValues, value:IrValue):Void {
 		if (!values.exists(value.id))

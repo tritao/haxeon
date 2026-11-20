@@ -137,7 +137,7 @@ class GcPhiThrowProbe {
 			b.jump(after);
 			b.select(handler);
 			handler.instructions
-				.push(new compiler.ir.SourceProvenance.Located(Catch(new IrValue(1000000, "caught", Dyn)),
+				.push(new compiler.ir.SourceProvenance.Located(Catch(b.freshValue("caught", Dyn)),
 				where));
 			b.returnValue(b.constInt(99));
 			b.select(after);

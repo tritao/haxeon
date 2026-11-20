@@ -17,9 +17,9 @@ class IteratorTypeDescriptorMain {
 			ints = b.call("__array_alloc_i32", [b.constInt(1)], Array(I32)),
 			strings = b.call("__array_alloc_bytes", [b.constInt(1)], Array(Bytes)),
 			nested = b.call("__array_alloc_typed_ref", [b.constInt(1), b.typeValue(Array(I32))], Array(Array(I32))),
-			intIterator = new IrValue(1000000, "intIterator", Iterator(I32)),
-			stringIterator = new IrValue(1000001, "stringIterator", Iterator(Bytes)),
-			nestedIterator = new IrValue(1000004, "nestedIterator", Iterator(Array(I32))),
+			intIterator = b.freshValue("intIterator", Iterator(I32)),
+			stringIterator = b.freshValue("stringIterator", Iterator(Bytes)),
+			nestedIterator = b.freshValue("nestedIterator", Iterator(Array(I32))),
 			intValue = b.constInt(17),
 			stringValue = b.constString("kept"),
 			provenance = SourceProvenance.generated("iterator-type-test");
@@ -60,7 +60,7 @@ class IteratorTypeDescriptorMain {
 		b.select(checkNestedMismatch);
 		b.branch(nestedMismatch, fail, readValues);
 		b.select(readValues);
-		var nextInt = new IrValue(1000002, "nextInt", I32), nextString = new IrValue(1000003, "nextString", Bytes);
+		var nextInt = b.freshValue("nextInt", I32), nextString = b.freshValue("nextString", Bytes);
 		b.currentBlock().instructions.push(new Located(IteratorNext(nextInt, intIterator), provenance));
 		b.currentBlock().instructions.push(new Located(IteratorNext(nextString, stringIterator), provenance));
 		b.branch(b.equal(nextInt, intValue), checkStringValue, fail);
@@ -130,8 +130,8 @@ class IteratorTypeDescriptorMain {
 			receiver = write.toDyn(holder),
 			goodArray = write.call("__array_alloc_i32", [write.constInt(1)], Array(I32)),
 			badArray = write.call("__array_alloc_bytes", [write.constInt(1)], Array(Bytes)),
-			good = new IrValue(1000010, "good", Iterator(I32)),
-			bad = new IrValue(1000011, "bad", Iterator(Bytes));
+			good = write.freshValue("good", Iterator(I32)),
+			bad = write.freshValue("bad", Iterator(Bytes));
 		write.currentBlock().instructions.push(new Located(IteratorNew(good, goodArray), provenance));
 		write.currentBlock().instructions.push(new Located(IteratorNew(bad, badArray), provenance));
 		write.call("$generic-erased:Holder:set:value", [receiver, write.toDyn(good)], Void);
@@ -148,7 +148,7 @@ class IteratorTypeDescriptorMain {
 		body.instructions.push(new Located(EndTry(caught.id, false), provenance));
 		write.jump(after);
 		write.select(caught);
-		caught.instructions.push(new Located(Catch(new IrValue(1000012, "caught", Dyn)), provenance));
+		caught.instructions.push(new Located(Catch(write.freshValue("caught", Dyn)), provenance));
 		write.branch(write.equal(write.fieldGet(holder, "value", Iterator(I32)), good), unchanged, changed);
 		write.select(unchanged);
 		write.returnValue(write.constInt(42));
