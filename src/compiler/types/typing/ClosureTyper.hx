@@ -173,7 +173,7 @@ class ClosureTyper {
 						cellClass) else if (binding.receiver) CaptureReceiver else CaptureLocal(bindingId);
 				lambdaScope.defineCapture(name, captureType, span, cellClass != null, cellClass, bindingId,
 					declaredCaptureType == null ? captureType : declaredCaptureType, binding.localFunction,
-					binding.declaration);
+					binding.declaration, binding.temporary);
 				if (cellClass != null)
 					captureCells.set(name, cellClass);
 				captureTypes.set(name, captureType);
@@ -210,7 +210,8 @@ class ClosureTyper {
 			var binding = freeBindings.get(capture.field);
 			typedBodyScope.defineCapture(capture.field, capture.type, span, captureCells.exists(capture.field),
 				captureCells.get(capture.field), capture.bindingId, capture.storageType,
-				binding == null ? null : binding.localFunction, binding == null ? null : binding.declaration);
+				binding == null ? null : binding.localFunction, binding == null ? null : binding.declaration,
+				binding == null ? null : binding.temporary);
 		}
 		for (name in freeNames) if (pathConstants.exists(name)) {
 			// Like a capture, the same local as the one outside, with that declaration's identity.
@@ -218,7 +219,7 @@ class ClosureTyper {
 			if (outer == null)
 				throw new InternalError('Missing the binding of key path constant "$name"');
 			typedBodyScope.define(name, scope.typeOf(outer), span, true, null, false, null,
-				outer.declaration).keyPathConstant = pathConstants.get(name);
+				outer.declaration, outer.temporary).keyPathConstant = pathConstants.get(name);
 		}
 		// A lambda that captures is named after what it captures too, so an edit that changes its environment makes a new
 		// function with a new environment type: closures made before the edit keep the code that reads their environment.

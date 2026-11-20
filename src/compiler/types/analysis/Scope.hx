@@ -39,6 +39,9 @@ typedef LocalBinding = {
 
 	/** The index of the constructor without arguments a never-reassigned local holds, or null. */
 	var knownConstructor:Null<Int>;
+
+	/** The temporary the typer declared this local as, which generated syntax reads it by; null for a source local. */
+	final temporary:Null<TemporaryLocal>;
 }
 
 /**
@@ -351,7 +354,8 @@ class Scope {
 			localFunction: localFunction,
 			scoped: false,
 			keyPathConstant: null,
-			knownConstructor: null
+			knownConstructor: null,
+			temporary: temporary
 		};
 		ownDefinitions().add(value);
 		ownAssigned().set(value.id, initialized);
@@ -483,9 +487,11 @@ class Scope {
 
 	public function defineCapture(name:String, type:CompilerType, span:SourceSpan, cell:Bool = false, ?cellClass:String,
 			?bindingId:String,
-			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String):LocalBinding {
-		// A capture is the same variable as the one it captures, so it keeps that declaration's identity.
-		var value = define(name, type, span, true, bindingId, false, localFunction, declaration);
+			?storageType:CompilerType, ?localFunction:LocalFunction, ?declaration:String,
+			?temporary:TemporaryLocal):LocalBinding {
+		// A capture is the same variable as the one it captures, so it keeps that declaration's identity, and a captured
+		// temporary is read by the same temporary inside the lambda.
+		var value = define(name, type, span, true, bindingId, false, localFunction, declaration, temporary);
 		var own = ownCaptured();
 		own.captures.set(value.id, true);
 		if (storageType != null)
