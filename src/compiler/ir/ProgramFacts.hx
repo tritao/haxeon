@@ -19,6 +19,10 @@ class ProgramFacts {
 	public var valueClasses:Map<String, Bool> = [];
 	public var classBases:Map<String, String> = [];
 	public var genericOwnerAliases:Map<String, String> = [];
+
+	/** `genericOwnerAliases` by type, "" for none: IR generation asks per map operation and per type it lowers. */
+	final ownerAliasesByType = new compiler.semantic.SemanticTypeMap<String>();
+
 	public var typedInterfaceContracts:Map<String, TypedInterface> = [];
 	public var genericClasses:Map<String, Bool> = [];
 	public var genericOwnerOrigins:Map<String, String> = [];
@@ -33,6 +37,16 @@ class ProgramFacts {
 		facts.bindEnumConstructors(typed.enums);
 		facts.bindClasses(typed.classes, typed.interfaces, typed.genericOwnerAliases);
 		return facts;
+	}
+
+	/** The specialized owner `genericOwnerAliases` names for `type`, spelling each distinct type once. */
+	public function genericOwnerAlias(type:compiler.types.Type.CompilerType):Null<String> {
+		var known = ownerAliasesByType.get(type);
+		if (known == null) {
+			known = genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type)) ?? "";
+			ownerAliasesByType.set(type, known);
+		}
+		return known == "" ? null : known;
 	}
 
 	/** No classes, enums or interfaces: for code that lowers types or runs a pass on a program built by hand. */
@@ -114,6 +128,7 @@ class ProgramFacts {
 			?ownerAliases:Map<String, String>):Void {
 		valueClasses = [];
 		genericOwnerAliases = ownerAliases == null ? [] : ownerAliases;
+		ownerAliasesByType.clear();
 		genericClasses = [];
 		genericOwnerOrigins = [];
 		classBases = [];

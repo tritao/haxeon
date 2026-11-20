@@ -204,6 +204,7 @@ class TestCatalog {
 		"ValueInterfaceHelperReuseMain",
 		"NominalInterfaceTypeMain",
 		"NullStringMapMain",
+		"SemanticTypeMapMain",
 		"EnumPayloadMetadataMain",
 		"ModuleChangeAnalyzerMain",
 		"SemanticModelMain",

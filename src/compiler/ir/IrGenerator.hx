@@ -177,10 +177,10 @@ class IrGenerator {
 
 	/** Consume the source Map representation selected by the typer. */
 	function isSpecializedMap(key:CompilerType, value:CompilerType):Bool
-		return facts.genericOwnerAliases.exists(compiler.semantic.SemanticSignature.type(TMap(key, value)));
+		return facts.genericOwnerAlias(TMap(key, value)) != null;
 
 	function specializedMapOwner(key:CompilerType, value:CompilerType):String {
-		var owner = facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(TMap(key, value)));
+		var owner = facts.genericOwnerAlias(TMap(key, value));
 		if (owner == null)
 			throw new InternalError('Missing specialized generic map owner for $key -> $value');
 		return owner;
@@ -4526,7 +4526,7 @@ class IrGenerator {
 					case NominalKind.Class:
 						// An owner alias is made only for a generic class with type arguments, so a class without any needs no signature string.
 						var physical = arguments.length == 0
-							? null : facts.genericOwnerAliases.get(compiler.semantic.SemanticSignature.type(type));
+							? null : facts.genericOwnerAlias(type);
 						physical == null
 							&& isErasedGenericOwner(type) ? Dyn : Obj(physical == null ? name : physical);
 					case NominalKind.Interface: Virtual(name);
