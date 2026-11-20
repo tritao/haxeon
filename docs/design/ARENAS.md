@@ -106,22 +106,26 @@ dependency tables are made outside; key-path constants are copied out where the 
 | Mode | Released | Kept | Evacuated | Release time | Peak | Wall | Collections |
 |---|---:|---:|---:|---:|---:|---:|---:|
 | off | | | | | 1.768 GB | 13.5 s | 2 |
-| `--typing-arenas` | 539 of 539 | 0 | 172 (1.5 MB) | 0.24 s (0.44 ms each) | 1.657 GB | 14.2 to 14.3 s | 2 |
-| `--typing-arenas=strict` | 358 | 181 | none | | | | |
+| `--typing-arenas` | 65 of 539 | 474 | 1 | 0.67 s | 1.893 GB | 16.0 s | 2 |
+| `--typing-arenas=strict` | 64 | 475 | none | | | | |
 
-Output identical in every mode. The first collection moves from typing to IR generation: the arenas' 0.6 GB of typing
-temporaries no longer count toward it. Typing takes 2.9 s instead of 2.4: write tracking's faults, the releases, the
-copies. `scripts/check-typing-arenas.sh` is the escape check: it builds the compiler with Haxeon, compiles it again with
-`--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, fails when an arena is kept (printing each reference by holder field
-and allocation site) or the output changes.
+Output identical in every mode. With arenas that rewrote untyped words (before the copy and evacuation kept to known
+layouts, below), 539 of 539 released, 172 by evacuating 1.5 MB, for a peak of 1.657 GB; that rewrote words of map tables
+and other untyped blocks that only their use made pointers, which a release must never do. Now a kept arena costs: its
+pages join the collector's part-full, so the peak rises. `scripts/check-typing-arenas.sh` is the escape check: it builds
+the compiler with Haxeon, compiles it again with `--typing-arenas=check` and `HL_GC_ARENA_SITES=1`, fails when an arena
+is kept (printing each reference by holder field and allocation site) or the output changes.
 
-What `strict` shows is still placed by evacuation (the top holders, in a sample of references): the monomorph frames'
-open structures, kept by provisional name after they close (`MonomorphFrames.structures`, which also keeps each one's
-frame); anonymous types resolved inside a class and registered for the program (`DeclarationIndex.resolveInner`,
-`ExpressionTyper.typeObjectLiteral`); key-path constants that other session tables share; normalized abstract
-constructors; closure contexts left in the typing session's context stack past its length. Each needs its table made in
-the session's arena with its values, which is a change to how the typer represents them (a provisional structure as a
-name and a record outside the frame, an anonymous type registry that interns), not a placement at one call.
+What keeps the arenas now, by holder and allocation site: maps of maps. `UnitRecords` keeps purity, no-return,
+declaration-read, anonymous-use and default-argument records as `Map<String, Map<...>>` (`map_string_ref` of
+`map_string_bool`): the inner maps are untyped blocks stored as the outer map's values, whose layout does not say what
+its values are, so neither the copy of a unit's output nor an evacuation may follow them. Then the session tables of
+the earlier list: key-path constants (`GenericInstantiation.specialize`), the monomorph frames' open structures kept
+by provisional name after they close (`MonomorphFrames.structures`, which also keeps each one's frame), anonymous
+types resolved inside a class and registered for the program (`DeclarationIndex.resolveInner`,
+`ExpressionTyper.typeObjectLiteral`), the runtime dependency tables. Each needs a representation the layouts can read:
+a record type in place of an inner map (a class holding the map, so the field's type names its layout), tables made in
+the session's arena with their values, a provisional structure as a name and a record outside its frame.
 
 A class unit's allocation by kind (539 units, 554 MB of arena blocks at their release): compiler classes 12%, anonymous
 records 6%, enums 5%, `String` objects 9% and their bytes 13%, containers held by compiler objects 21%, loose containers
@@ -187,11 +191,15 @@ no-return queries, invalidations); the type registry's entries. Not spans: IR ke
 - **Diagnostics**: `HL_GC_ARENA_CENSUS` prints each kept arena's references by holder (a block's type and offset, a root,
   a thread's stack); `HL_GC_ARENA_HOLDERS` the holder census of a collection-based release (`hl_gc_arena_release`).
 - **Copy and evacuation**: `hl_gc_arena_copy(value, arena, target)` copies what a value reaches inside an arena to a
-  target, by layout (untyped blocks word by word, inner pointers moved with their block), sharing and cycles kept, no
-  collection while it runs; an incomplete copy only keeps the arena. `hl_gc_arena_set_evacuation(true)` makes a release
-  copy out what heap words and roots reach in the arena, each to its holder's arena, rewrite them, and release; a stack
-  or register reference still keeps it. A typed block's words count only where its layout has a pointer, as the
-  collector reads them.
+  target, sharing and cycles kept, no collection while it runs. `hl_gc_arena_set_evacuation(true)` makes a release copy
+  out what typed fields outside the arena reach in it, each to the field's arena, rewrite the fields, and release.
+  Neither ever rewrites a word that is not known to be a pointer: only an object's pointer fields (by its type), an enum
+  constructor's pointer parameters, a closure's bound value, an array's storage and, when the element type is a
+  pointer, its elements, and the words a registered layout names for an untyped block reached through a field of a
+  registered abstract type (`hl_gc_arena_register_layout`; `hl_gc_arena_map_layout` for the std maps, which the
+  runtime library registers for its `map_*` types). A block of no known layout is not copied and keeps the arena; a word
+  of an untyped block, a root, a pinned value, a stack or register word keeps it too, never being rewritten. A typed
+  block's words count as references only where its layout has a pointer, as the collector reads them.
 - **Allocation sites**: `HL_GC_ARENA_SITES` records the call stack of every block allocated in an arena (through the
   locked path), so a kept arena's report names where each referenced block was made, and holders by field.
 - **Missing**: small-allocation packing (level 2). An arena takes a page per size class it uses, 0.3 to 0.8 MB for a
@@ -231,9 +239,8 @@ without them; made without arenas, the same 1.1 GB of temporaries cost a 4th col
    the typed program after the IR tables and the incremental-only module records. Output identical, peak unchanged; the
    front-end arena needs them.
 1. **Runtime:** done (above), except packing.
-2. **Typing per class:** in place behind `--typing-arenas` (above). Every class releases, a third by evacuation; peak
-   -0.11 GB, wall +0.7 s. Next: the representation changes `strict` names, so evacuation copies nothing, then the option
-   on by default.
+2. **Typing per class:** in place behind `--typing-arenas` (above), 65 of 539 classes released. Next: the representations
+   the kept arenas name (records in place of maps of maps first), then the option on by default.
 3. **HL lowering per batch of functions:** instructions and debug locations flat or built in the build arena (an
    instruction's argument arrays too), HL types and strings interned there (the symbol table's methods run in its arena),
    `fieldSlots` filled outside. A sampled prototype with only the symbol table and finish moved out still kept every unit
