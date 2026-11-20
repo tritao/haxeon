@@ -551,14 +551,14 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 		return {
 			program: result,
 			runtimeDependencies: typedRuntimeDependencies,
-			purityQueries: session.programOutput.records.purityQueries,
-			inlineConstantDependencies: session.programOutput.records.inlineConstantDependencies,
-			declarationTypeReads: session.programOutput.records.declarationTypeReads,
+			purityQueries: session.programOutput.records.purityQueriesByUnit(),
+			inlineConstantDependencies: session.programOutput.records.inlineConstantDependenciesByUnit(),
+			declarationTypeReads: session.programOutput.records.declarationTypeReadsByUnit(),
 			typedUnits: session.programOutput.records.typedUnits,
 			inferredSignatures: requiredTypes().typedSignatures(),
-			defaultArgumentSources: session.programOutput.records.defaultArgumentSources,
-			noReturnQueries: session.programOutput.records.noReturnQueries,
-			keyPathUses: session.programOutput.records.keyPathUses,
+			defaultArgumentSources: session.programOutput.records.defaultArgumentSourcesByUnit(),
+			noReturnQueries: session.programOutput.records.noReturnQueriesByUnit(),
+			keyPathUses: session.programOutput.records.keyPathUsesByUnit(),
 			metrics: {
 				allocationPhases: [
 					AllocationMeter.delta("typer-setup", allocationAtStart, allocationAfterSetup),
@@ -607,7 +607,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 					fields.set(classDecl.name + "." + field.name, true);
 		for (unit => types in previous.anonymousUnits) {
 			if (session.programOutput.records.typedUnits.exists(unit)
-				|| session.programOutput.records.anonymousUnits.exists(unit))
+				|| session.programOutput.records.hasAnonymousUnit(unit))
 				continue;
 			var initialized = InitializerUnit.field(unit),
 				exists = session.signatures.exists(unit) || initialized != null && fields.exists(initialized);
@@ -618,7 +618,7 @@ class ProgramTyper implements DeclarationTypeTable.DeclarationTyping {
 				uses.set(entry.name, entry.fields);
 				registry.register(TAnonymous(entry.name, entry.fields));
 			}
-			session.programOutput.records.anonymousUnits.set(unit, uses);
+			session.programOutput.records.keepAnonymousUnit(unit, uses);
 		}
 	}
 
