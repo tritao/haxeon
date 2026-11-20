@@ -150,11 +150,14 @@ private class NonNullFlow {
 			while (changed) {
 				changed = false;
 				for (id in graph.order) {
-					var preds = graph.predecessorsOf(id);
-					if (id != entry && preds.length > 0) {
-						loadEdge(before, preds[0], edgeFact(preds[0], id));
-						for (i in 1...preds.length)
-							intersectEdge(before, preds[i], edgeFact(preds[i], id));
+					var count = graph.predecessorCount(id);
+					if (id != entry && count > 0) {
+						var first = graph.predecessor(id, 0);
+						loadEdge(before, first, edgeFact(first, id));
+						for (i in 1...count) {
+							var pred = graph.predecessor(id, i);
+							intersectEdge(before, pred, edgeFact(pred, id));
+						}
 					} else
 						clear(before);
 					for (word in 0...words) {

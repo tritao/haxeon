@@ -57,7 +57,8 @@ class WasmGcRoots {
 			for (position in 0...graph.order.length) {
 				var id = graph.order[graph.order.length - 1 - position],
 					out = emptyBitSet(wordCount);
-				for (successor in graph.successorsOf(id)) {
+				for (edge in 0...graph.successorCount(id)) {
+					var successor = graph.successor(id, edge);
 					unionBitsInto(out, liveIn.get(successor));
 					addPhiEdgeReferences(out, graph.block(successor), id, referenceIndices);
 				}

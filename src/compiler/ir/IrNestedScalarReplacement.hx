@@ -245,7 +245,9 @@ class IrNestedScalarReplacement {
 			var local = writes.get(handler.block);
 			if (local != null) for (position in local) if (position > handler.position) return false;
 			var seen:Map<Int, Bool> = [], pending:Array<Int> = [];
-			if (graph.isReachable(handler.block)) for (next in graph.successorsOf(handler.block)) pending.push(next);
+			if (graph.isReachable(handler.block))
+				for (index in 0...graph.successorCount(handler.block)) pending.push(graph.successor(handler.block,
+					index));
 			while (true) {
 				var id = pending.pop();
 				if (id == null)
@@ -253,7 +255,8 @@ class IrNestedScalarReplacement {
 				if (id == home.id || seen.exists(id)) continue;
 				seen.set(id, true);
 				if (writes.exists(id)) return false;
-				if (graph.isReachable(id)) for (target in graph.successorsOf(id)) pending.push(target);
+				if (graph.isReachable(id))
+					for (index in 0...graph.successorCount(id)) pending.push(graph.successor(id, index));
 			}
 		}
 		return true;

@@ -516,16 +516,16 @@ class WasmFunctionLower {
 					false;
 			})): if (diamondGraph == null) diamondGraph = new compiler.ir.IrGraph(context.irFunction);
 			var graph = diamondGraph;
-			var joinPreds = graph.predecessorsOf(block.id);
 			var first = graph.block(inputs[0].block), second = graph.block(inputs[1].block);
-			var pa = graph.predecessorsOf(first.id), pb = graph.predecessorsOf(second.id);
-			if (joinPreds.length != 2 || pa.length != 1 || pb.length != 1 || pa[0] != pb[0]
+			if (graph.predecessorCount(block.id) != 2 || graph.predecessorCount(first.id) != 1
+				|| graph.predecessorCount(second.id) != 1
+				|| graph.predecessor(first.id, 0) != graph.predecessor(second.id, 0)
 				|| first.instructions.length != 1
 				|| second.instructions.length != 1) return false;
 			// Locals, not fields: the call to graph.block below would end a null check on a field.
 			var firstTerminator = first.terminator, secondTerminator = second.terminator;
 			if (firstTerminator == null || secondTerminator == null) return false;
-			var branchTerminator = graph.block(pa[0]).terminator;
+			var branchTerminator = graph.block(graph.predecessor(first.id, 0)).terminator;
 			if (branchTerminator == null) return false;
 			// Terminators and instructions are different enums, so they are matched in two switches: one array literal must have one element type.
 			switch [branchTerminator.value, firstTerminator.value, secondTerminator.value] {

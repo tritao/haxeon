@@ -48,7 +48,7 @@ class IrExactTypeFacts {
 					case Branch(condition, yes, no) if (yes != no):
 						var arguments = tests.get(condition.id),
 							type = arguments == null ? null : classes.get(arguments[1].id);
-						if (type != null && known.predecessorsOf(yes).length == 1)
+						if (type != null && known.predecessorCount(yes) == 1)
 							facts.push({block: yes, value: arguments[0].id, type: type});
 					default:
 				}

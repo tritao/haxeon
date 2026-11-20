@@ -49,11 +49,13 @@ class WasmStructurer {
 	function plan():Void {
 		var graph = analysis.graph, forwardEdges:Map<Int, Int> = [];
 		for (to in graph.order) {
-			for (from in graph.predecessorsOf(to))
+			for (edge in 0...graph.predecessorCount(to)) {
+				var from = graph.predecessor(to, edge);
 				if (isBackEdge(from, to))
 					loopHeaders.set(to, true);
 				else
 					forwardEdges.set(to, (forwardEdges.exists(to) ? forwardEdges.get(to) : 0) + 1);
+			}
 		}
 		// Reverse postorder, so each list below is already in layout order.
 		for (id in graph.order)

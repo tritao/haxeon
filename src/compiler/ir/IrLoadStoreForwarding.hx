@@ -227,14 +227,14 @@ class IrLoadStoreForwarding {
 			after = new FieldStates(count),
 			entry = fn.blocks[0].id;
 		function meet(id:Int, into:FieldStates):Void {
-			var predecessors = graph.predecessorsOf(id);
-			if (id == entry || predecessors.length == 0) {
+			var count = graph.predecessorCount(id);
+			if (id == entry || count == 0) {
 				into.clear();
 				return;
 			}
-			into.load(outgoing.get(predecessors[0]));
-			for (i in 1...predecessors.length)
-				into.intersect(outgoing.get(predecessors[i]));
+			into.load(outgoing.get(graph.predecessor(id, 0)));
+			for (i in 1...count)
+				into.intersect(outgoing.get(graph.predecessor(id, i)));
 		}
 		// A block with an instruction that forgets every field leaves with what the instructions after the last such one give, whatever
 		// it was entered with: its state is made once, from nothing, and only the other blocks meet their predecessors.

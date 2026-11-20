@@ -671,16 +671,16 @@ class IrVerifier {
 				}
 				switch instruction {
 					case Phi(out, inputs):
-						var expected = graph.predecessorsOf(id);
+						var expected = graph.predecessorCount(id);
 						// A phi needs a predecessor to take each input from.
-						if (expected.length == 0 || inputs.length != expected.length)
+						if (expected == 0 || inputs.length != expected)
 							throw new InternalError('Phi ${out.id} does not cover every predecessor');
 						for (position in 0...inputs.length) {
 							var input = inputs[position], repeated = false;
 							for (earlier in 0...position)
 								if (inputs[earlier].block == input.block)
 									repeated = true;
-							if (expected.indexOf(input.block) < 0 || repeated)
+							if (!graph.hasEdge(input.block, id) || repeated)
 								throw new InternalError('Invalid phi predecessor ${input.block}');
 							verifyUse(input.value, input.block, graph.block(input.block).instructions.length, values,
 								graph);

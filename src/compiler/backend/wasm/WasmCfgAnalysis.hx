@@ -3,7 +3,6 @@ package compiler.backend.wasm;
 import compiler.core.InternalError;
 import compiler.ir.IrFunction;
 import compiler.ir.IrGraph;
-import haxe.ds.ReadOnlyArray;
 
 typedef WasmCfgScc = {
 	final blocks:Array<Int>;
@@ -47,9 +46,11 @@ class WasmCfgAnalysis {
 	public function backEdges():Array<{from:Int, to:Int}> {
 		var result = [];
 		for (from in graph.order)
-			for (to in graph.successorsOf(from))
+			for (edge in 0...graph.successorCount(from)) {
+				var to = graph.successor(from, edge);
 				if (graph.dominates(to, from))
 					result.push({from: from, to: to});
+			}
 		return result;
 	}
 
@@ -58,7 +59,7 @@ class WasmCfgAnalysis {
 		for (index in 0...graph.order.length)
 			blockIndices.set(graph.order[index], index);
 		for (id in graph.order)
-			if (graph.successorsOf(id).length == 0)
+			if (graph.successorCount(id) == 0)
 				exits.set(id, true);
 		if (!exits.keys().hasNext())
 			throw new InternalError('CFG ${functionName} has no exit block');
@@ -73,10 +74,9 @@ class WasmCfgAnalysis {
 			for (id in graph.order) {
 				if (exits.exists(id))
 					continue;
-				var successors = graph.successorsOf(id),
-					next = all.copy();
-				for (successor in successors)
-					intersectBitSet(next, requiredBitSet(sets, successor));
+				var next = all.copy();
+				for (edge in 0...graph.successorCount(id))
+					intersectBitSet(next, requiredBitSet(sets, graph.successor(id, edge)));
 				setBit(next, requiredIndex(blockIndices, id));
 				if (!sameBitSet(next, requiredBitSet(sets, id))) {
 					sets.set(id, next);
@@ -137,12 +137,12 @@ class WasmCfgAnalysis {
 	}
 
 	static function visitScc(graph:IrGraph, root:Int, traversal:WasmSccTraversal):Void {
-		var pending:Array<{id:Int, next:Int, successors:ReadOnlyArray<Int>}> = [];
+		var pending:Array<{id:Int, next:Int}> = [];
 		beginScc(graph, root, traversal, pending);
 		while (pending.length > 0) {
 			var frame = pending[pending.length - 1], id = frame.id;
-			if (frame.next < frame.successors.length) {
-				var successor = frame.successors[frame.next++];
+			if (frame.next < graph.successorCount(frame.id)) {
+				var successor = graph.successor(frame.id, frame.next++);
 				if (!traversal.indices.exists(successor)) beginScc(graph, successor, traversal, pending);
 				else if (traversal.onStack.exists(successor))
 					traversal.low.set(id, Std.int(Math.min(requiredIndex(traversal.low, id),
@@ -166,22 +166,18 @@ class WasmCfgAnalysis {
 				members.push(member);
 			} while (member != id);
 			var cyclic = members.length > 1;
-			if (!cyclic) for (successor in graph.successorsOf(id)) if (successor == id) cyclic = true;
+			if (!cyclic && graph.hasEdge(id, id)) cyclic = true;
 			traversal.result.push({blocks: members, cyclic: cyclic});
 		}
 	}
 
 	static function beginScc(graph:IrGraph, id:Int, traversal:WasmSccTraversal,
-			pending:Array<{
-				id:Int,
-				next:Int,
-				successors:ReadOnlyArray<Int>
-			}>):Void {
+			pending:Array<{id:Int, next:Int}>):Void {
 		traversal.indices.set(id, traversal.nextIndex);
 		traversal.low.set(id, traversal.nextIndex++);
 		traversal.stack.push(id);
 		traversal.onStack.set(id, true);
-		pending.push({id: id, next: 0, successors: graph.successorsOf(id)});
+		pending.push({id: id, next: 0});
 	}
 
 	function isReducible():Bool {
@@ -193,8 +189,8 @@ class WasmCfgAnalysis {
 				members.set(id, true);
 			var entries:Map<Int, Bool> = [];
 			for (id in scc.blocks)
-				for (predecessor in graph.predecessorsOf(id))
-					if (!members.exists(predecessor))
+				for (edge in 0...graph.predecessorCount(id))
+					if (!members.exists(graph.predecessor(id, edge)))
 						entries.set(id, true);
 			// The function entry has an implicit predecessor outside the CFG. Model
 			// it as an entry when it belongs to this SCC, so entry-rooted loops get

@@ -56,17 +56,17 @@ class IrJumpThreading {
 				default: -1;
 			};
 			if (target < 0 || target == bridge.id || !graph.contains(target)) continue;
-			var predecessors = graph.predecessorsOf(bridge.id);
-			if (predecessors.length != 1 || predecessors[0] == bridge.id
-				|| predecessors[0] == target) continue;
-			var term = graph.block(predecessors[0]).terminator;
+			if (graph.predecessorCount(bridge.id) != 1) continue;
+			var only = graph.predecessor(bridge.id, 0);
+			if (only == bridge.id || only == target) continue;
+			var term = graph.block(only).terminator;
 			if (term == null) continue;
 			// A conditional predecessor jumps to the target itself when the target has no phis to give a new input to.
 			switch term.value {
 				case Jump(_): bridges.set(bridge.id,
-					{predecessor: predecessors[0], target: target, conditional: false});
+					{predecessor: only, target: target, conditional: false});
 				case Branch(_, _, _), Switch(_, _, _): bridges.set(bridge.id, {
-					predecessor: predecessors[0],
+					predecessor: only,
 					target: target,
 					conditional: true
 				});

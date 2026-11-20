@@ -423,11 +423,10 @@ class IrScalarReplacement {
 		for (id in graph.order)
 			frontier.set(id, []);
 		for (id in graph.order) {
-			var preds = graph.predecessorsOf(id);
-			if (preds.length < 2)
+			if (graph.predecessorCount(id) < 2)
 				continue;
-			for (pred in preds) {
-				var runner = pred, guard = 0;
+			for (index in 0...graph.predecessorCount(id)) {
+				var runner = graph.predecessor(id, index), guard = 0;
 				while (graph.isReachable(runner) && runner != graph.immediateDominator(id)
 					&& guard <= graph.order.length) {
 					var entries = frontier.get(runner);
@@ -593,7 +592,8 @@ class IrScalarReplacement {
 					default:
 				}
 			}
-			for (successor in graph.successorsOf(blockId))
+			for (edge in 0...graph.successorCount(blockId)) {
+				var successor = graph.successor(blockId, edge);
 				if (phis.exists(successor))
 					for (name => output in phis.get(successor)) {
 						var known = current.get(name);
@@ -602,6 +602,7 @@ class IrScalarReplacement {
 							value: known == null ? zeroFor(name) : known
 						});
 					}
+			}
 			var descendants:Array<Int> = cast children.get(blockId);
 			var index = descendants.length;
 			while (index > 0) {
@@ -679,8 +680,8 @@ class IrScalarReplacement {
 	/** Whether `id` can reach itself again, that is, whether it runs more than once per call. */
 	static function inLoop(graph:IrGraph, id:Int):Bool {
 		var seen:Map<Int, Bool> = [], work:Array<Int> = [];
-		for (successor in graph.successorsOf(id))
-			work.push(successor);
+		for (index in 0...graph.successorCount(id))
+			work.push(graph.successor(id, index));
 		while (true) {
 			var current = work.pop();
 			if (current == null)
@@ -690,8 +691,8 @@ class IrScalarReplacement {
 			if (seen.exists(current))
 				continue;
 			seen.set(current, true);
-			for (successor in graph.successorsOf(current))
-				work.push(successor);
+			for (index in 0...graph.successorCount(current))
+				work.push(graph.successor(current, index));
 		}
 		return false;
 	}
