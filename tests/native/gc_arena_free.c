@@ -75,6 +75,22 @@ static NOINLINE int freed_with_stack_slot(void *arena, void *value) {
 	return slot == value ? result : -100;
 }
 
+/* Makes a cycle of two blocks and a byte block pointed into, in `arena`, and returns them copied out of it. */
+static NOINLINE void *copied_out(void *arena) {
+	void *previous = hl_gc_arena_enter(arena);
+	void **first = (void**)hl_gc_alloc_raw(sizeof(void*) * 4);
+	void **second = (void**)hl_gc_alloc_raw(sizeof(void*) * 4);
+	unsigned char *bytes = (unsigned char*)hl_gc_alloc_noptr(32);
+	for(int b=0;b<32;b++) bytes[b] = (unsigned char)b;
+	first[0] = second;
+	first[1] = bytes + 8; // inside the block, as a map's second table is inside its first
+	first[2] = bytes; // which the collector keeps by its start
+	second[0] = first;
+	void *copy = hl_gc_arena_copy((vdynamic*)first,arena,hl_gc_arena_global());
+	hl_gc_arena_leave(previous);
+	return copy;
+}
+
 static int expect_kept(int found, const char *label) {
 	return check(tracked ? found > 0 : found == -1,label);
 }
@@ -213,6 +229,40 @@ int main(void) {
 		int found = freed(&arena_c);
 		if( tracked && !check(found == 0,"a table that grew inside an arena does not keep it")) goto done;
 		table = NULL;
+	}
+	/* Copying out: what a value reaches inside an arena is copied, pointers inside a block included, and the arena then has
+	   nothing outside pointing in. */
+	{
+		global_slot = copied_out(&arena_d);
+		void **copy = (void**)global_slot, **copied_second = (void**)copy[0];
+		if(!check(hl_gc_arena_owner_of(copy) == hl_gc_arena_global(),"a copy is made outside the arena")) goto done;
+		if(!check(copied_second[0] == (void*)copy,"a cycle is kept")) goto done;
+		if(!check(((unsigned char*)copy[1])[0] == 8 && ((unsigned char*)copy[1])[23] == 31,"a pointer inside a block moves with it")) goto done;
+		copy = copied_second = NULL;
+		int found = freed(&arena_d);
+		if( tracked && !check(found == 0,"an arena whose result was copied out is released")) goto done;
+		hl_gc_major();
+		if(!check(((unsigned char*)((void**)global_slot)[1])[7] == 15,"the copy survives the release and a collection")) goto done;
+		global_slot = NULL;
+	}
+
+	/* An evacuating release: a heap word or a root pointing into the arena gets a copy, and the arena is released; a stack
+	   word still keeps it. */
+	{
+		hl_gc_arena_set_evacuation(true);
+		outside[7] = fill(&arena_e,1000,1);
+		global_slot = fill(&arena_f,1000,1);
+		int from_page = freed(&arena_e), from_root = freed(&arena_f);
+		if( tracked && !check(from_page == 0 && from_root == 0,"heap words and roots into an arena are evacuated")) goto done;
+		hl_gc_major();
+		if(!check(chain_intact((void**)outside[7],1000) && chain_intact((void**)global_slot,1000),"evacuated blocks are intact")) goto done;
+		outside[7] = NULL;
+		global_slot = NULL;
+		void *last = fill(&arena_g,1000,1);
+		int found = freed_with_stack_slot(&arena_g,last);
+		if(!expect_kept(found,"a stack word still keeps an arena")) goto done;
+		last = NULL;
+		hl_gc_arena_set_evacuation(false);
 	}
 	result = 0;
 done:
