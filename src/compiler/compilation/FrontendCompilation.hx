@@ -1447,12 +1447,14 @@ class FrontendCompilation {
 			entryPoint = build.semanticAssembly.entryPoint;
 		// A plain build whose pipeline inputs equal the last build's gets that build's final IR: no pass runs. With `--check-reuse`
 		// the passes run anyway and the result is compared with the reused one.
-		var inputs = pipelineInputs(context, generator, build.instrumentScope, cached, build.initializers, irNatives,
-			irCNatives, objects,
-			build.interfaces, build.enums, build.staticFields, entryPoint, build.reflectable),
+		// A build that keeps no session has no next build to give its final IR to, so it records no inputs to match.
+		var inputs = context.options.keepSession ? pipelineInputs(context, generator, build.instrumentScope, cached,
+			build.initializers, irNatives, irCNatives, objects, build.interfaces, build.enums, build.staticFields,
+			entryPoint,
+			build.reflectable) : null,
 			previousPipeline = context.state.pipelineSnapshot,
 			reuseMiss = context.livePatching ? "live patching" : previousPipeline == null
-				? "no earlier build" : previousPipeline.mismatch(inputs),
+				|| inputs == null ? "no earlier build" : previousPipeline.mismatch(inputs),
 			matchesPrevious = reuseMiss == null,
 			checkingReuse = context.options.checkReuse,
 			reusedPipeline:Null<PipelineSnapshot> = matchesPrevious ? previousPipeline : null,
@@ -1529,7 +1531,8 @@ class FrontendCompilation {
 			// The prune ran early: after the last pass nothing may call what it removed (`IrEntryPrune`).
 			if (checkingReuse)
 				compiler.ir.IrEntryPrune.checkRemoved("the pipeline", ir.functions, ir.prunedFunctions);
-			context.state.pipelineSnapshot = context.livePatching ? null : new PipelineSnapshot(inputs, ir);
+			context.state.pipelineSnapshot = context.livePatching
+				|| inputs == null ? null : new PipelineSnapshot(inputs, ir);
 		}
 		build.ir = ir;
 		build.inlinerChanged = inlinerChanged;
