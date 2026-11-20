@@ -738,6 +738,33 @@ class HlLower {
 
 	static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
 
+	static inline final VALUE_ARRAY_READ = "__value_array_read_";
+
+	/**
+	 * Whether a scalar read of the same element as the read at `position`, whose value is used, is beside it, with nothing
+	 * but constants and reads of that element between: that read checks the element (in range, present) as this one would.
+	 */
+	static function usedReadNearby(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>,
+			position:Int,
+			read:Array<IrValue>, uses:Array<Int>):Bool {
+		for (direction in [-1, 1]) {
+			var at = position + direction;
+			while (at >= 0 && at < instructions.length) {
+				switch instructions[at].value {
+					case ConstInt(_, _), ConstBool(_, _):
+					case Call(output, name, arguments) if (StringTools.startsWith(name.name, VALUE_ARRAY_READ)
+						&& arguments.length >= 2 && arguments[0].id == read[0].id && arguments[1].id == read[1].id):
+						if (output.id < uses.length && uses[output.id] > 0)
+							return true;
+					default:
+						break;
+				}
+				at += direction;
+			}
+		}
+		return false;
+	}
+
 	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
 	static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
 
@@ -1462,6 +1489,10 @@ class HlLower {
 						if (functionName.name == compiler.ir.IrReceiverCheck.NAME
 							&& nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
+						} else if (StringTools.startsWith(functionName.name, VALUE_ARRAY_READ)
+							&& (output.id >= uses.length || uses[output.id] == 0) && !bindingsByValue.exists(output.id)
+							&& usedReadNearby(block.instructions, instructionIndex, arguments, uses)) {
+							// A field of the element nothing reads; the read beside it checks the element the same way.
 						} else if (functionName.name == VALUE_ARRAY_VALIDATE
 							&& scalarReadFollows(block.instructions, instructionIndex + 1, arguments)) {
 							// The read checks the same element the same way (`realtime_value_array_check_read`).
