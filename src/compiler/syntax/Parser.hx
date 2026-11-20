@@ -1961,6 +1961,25 @@ class Parser {
 		return expression;
 	}
 
+	/** Whether the parentheses at the current token are a typed cast's `(value, Type)`: a comma directly inside them. */
+	function parenthesesHoldTypedCast():Bool {
+		var depth = 0, offset = 0;
+		while (true) {
+			switch peekKind(offset++) {
+				case LeftParen | LeftBracket | LeftBrace:
+					depth++;
+				case RightParen | RightBracket | RightBrace:
+					if (--depth == 0)
+						return false;
+				case Comma if (depth == 1):
+					return true;
+				case Eof:
+					return false;
+				default:
+			}
+		}
+	}
+
 	function parsePrimary():AstExpression {
 		if (match(TokenKind.Backslash))
 			return parseKeyPathLiteral(previous().span);
@@ -1986,14 +2005,15 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier) && current().text == "cast") {
 			var start = advance().span;
-			if (match(TokenKind.LeftParen)) {
-				var value = parseExpression(), target = null;
-				if (match(TokenKind.Comma))
-					target = parseType();
-				var end = consume(TokenKind.RightParen).span;
+			if (check(TokenKind.LeftParen) && parenthesesHoldTypedCast()) {
+				advance();
+				var value = parseExpression();
+				consume(TokenKind.Comma);
+				var target = parseType(), end = consume(TokenKind.RightParen).span;
 				return parsePostfix(Cast(value, target, start.merge(end)));
 			}
-			var value = parsePrimary();
+			// An unsafe cast takes the whole expression to its right, as in Haxe: `cast (x) % 2` casts `(x) % 2`.
+			var value = parseExpression();
 			return Cast(value, null, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Function)) {
