@@ -68,9 +68,11 @@ pages frees almost nothing yet: regions wait until outputs and scratch are alloc
    form over named locals, its verifier, liveness and the dominance-frontier phi placement go. Design in
    `DIRECT_SSA.md`.
 7. **The IR core in columns.** Instructions as rows of parallel `Int` columns (opcode, type id, operand range) with the
-   operand pool, values and blocks as ids, side tables per pass reused (1 to 4). This touches every pass, so it gets its
-   own design note, with a migration that lets passes move one at a time behind the current API.
-8. **Regions for what is left** (ADR 0004 §6): per-stage temporaries allocated in a region the GC releases without
+   operand pool, values and blocks as ids, side tables per pass reused (1 to 4). This touches every pass, so it has its
+   own design note, `IR_CORE_COLUMNS.md`, with a migration that lets passes move one at a time behind one API.
+8. **Tokens as a table.** The lexer's tokens as rows of a per-file table, spans made only for the nodes that keep them
+   (`TOKEN_TABLE.md`).
+9. **Regions for what is left** (ADR 0004 §6): per-stage temporaries allocated in a region the GC releases without
    marking the heap, once the above has made outputs and temporaries easy to tell apart.
 
 Flat records (step 7) are written so the source still builds with stock Haxe: a record is declared once as a struct
