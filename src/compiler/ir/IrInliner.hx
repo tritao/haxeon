@@ -267,6 +267,12 @@ class IrInliner {
 	 */
 	final components:Array<Int> = [];
 
+	/**
+	 * Inlined forms are memoized for the next compile (`IrInlineCache.memo`), which needs what each one consulted: the functions,
+	 * the objects and their prints. A compile that keeps no session has no next compile, so it records none of it.
+	 */
+	final memoizes:Bool;
+
 	/** The compile checks its reuse (`CompileOptions.checkReuse`): a function with a usable memo is inlined again and the two results must be equal. */
 	final checkingMemo:Bool;
 
@@ -280,6 +286,7 @@ class IrInliner {
 		this.loadStoreForwarding = options.loadStoreForwarding;
 		this.strengthReduction = options.strengthReduction;
 		this.checkingMemo = options.checkReuse;
+		this.memoizes = options.keepSession;
 		this.profile = profile;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
@@ -323,15 +330,16 @@ class IrInliner {
 				subclasses.get(base).push(object.name);
 			}
 		}
-		for (name => object in objects) {
-			var children = subclasses.get(name), text = describe(object);
-			if (children != null) {
-				var sorted = children.copy();
-				sorted.sort(Reflect.compare);
-				text += ">" + sorted.join(",");
+		if (memoizes)
+			for (name => object in objects) {
+				var children = subclasses.get(name), text = describe(object);
+				if (children != null) {
+					var sorted = children.copy();
+					sorted.sort(Reflect.compare);
+					text += ">" + sorted.join(",");
+				}
+				objectPrints.set(name, cache.objectPrintId(name, text));
 			}
-			objectPrints.set(name, cache.objectPrintId(name, text));
-		}
 		table = new IrObjectTable(objects, subclasses);
 		resolution = IrMethodResolution.of(program);
 		computeComponents();
@@ -568,7 +576,7 @@ class IrInliner {
 			return known;
 		}
 		var original = functions[id], name = original.name;
-		var memo = cache.memo.get(name),
+		var memo = memoizes ? cache.memo.get(name) : null,
 			usable = memo != null
 				&& memo.source == original
 				&& memo.fingerprint == fingerprint
@@ -592,26 +600,33 @@ class IrInliner {
 		}
 		visiting[id] = true;
 		depth++;
-		frames.push([]);
-		frameSerials.push(++serials);
 		frameIds.push(id);
 		frameImpure.push(false);
 		var consultedObjects:Map<String, Bool> = [];
-		objectFrames.push(consultedObjects);
-		table.consulted = consultedObjects;
+		if (memoizes) {
+			frames.push([]);
+			frameSerials.push(++serials);
+			objectFrames.push(consultedObjects);
+			table.consulted = consultedObjects;
+		}
 		var result = allowInline ? inlineCalls(original) : profile.packedValueFields
 			? IrScalarReplacement.rewrite(original, table, false, true) : original;
 		if (loadStoreForwarding)
 			result = IrLoadStoreForwarding.run(result, table, passScratch);
 		if (strengthReduction)
 			result = IrStrengthReduction.run(result);
-		objectFrames.pop();
-		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
-		var consulted = frames.pop(), isImpure = frameImpure.pop() == true;
-		frameSerials.pop();
+		var isImpure = frameImpure.pop() == true;
 		frameIds.pop();
 		depth--;
 		visiting[id] = false;
+		if (!memoizes) {
+			done[id] = result;
+			return result;
+		}
+		objectFrames.pop();
+		table.consulted = objectFrames.length > 0 ? objectFrames[objectFrames.length - 1] : null;
+		var consulted = frames.pop();
+		frameSerials.pop();
 		// The functions consulted, once each and in name order (numbers are in name order).
 		consulted.sort((left, right) -> left - right);
 		var dependencies:Array<IrFunction> = [], dependencyIds:Array<Int> = [], last = -1;
