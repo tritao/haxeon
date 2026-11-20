@@ -864,10 +864,22 @@ class DeclarationIndex {
 			openStructures.set(key, enclosing);
 	}
 
+	/**
+	 * Whether a type resolved now, with no substitutions, is complete and can be kept: not while a typedef's structure is open,
+	 * since a type resolved meanwhile may refer to it before its fields are all in.
+	 */
+	public function resolvesShareable(substitutions:Null<Map<String, CompilerType>>):Bool
+		return openDepth == 0 && (substitutions == null || isEmpty(substitutions));
+
+	/** Haxeon's maps count their entries; stock Haxe's only iterate them, and Haxeon's iteration copies the keys out first. */
 	static function isEmpty(substitutions:Map<String, CompilerType>):Bool {
+		#if haxeon
+		return substitutions.size() == 0;
+		#else
 		for (_ in substitutions.keys())
 			return false;
 		return true;
+		#end
 	}
 
 	function resolveAbstract(decl:compiler.syntax.Ast.AstAbstract, span:SourceSpan, resolving:Null<Map<String, Bool>>,
