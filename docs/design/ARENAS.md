@@ -69,6 +69,30 @@ Arenas are the third of four layers, each taking what the one above leaves, in t
 The compiler stays plain Haxe and builds with stock Haxe (`Arena.within` and type homes are no-ops there), and no layer's
 correctness depends on the code placing data right: a mistake costs memory, reported by holder and site.
 
+## Flat data and handles
+
+Flat tables (layer 2) refer to each other by handle, not pointer, so a record that names another stays flat. Kept to
+what the compiler needs:
+
+- **Typed ids.** Each table has its id type, an abstract over `Int` (`TokenId`, `IrValueId`, `HlRegId`); a table is
+  indexed only by its own. Ids are dense and slots are never reused within the table's lifetime, so an id cannot come to
+  name something else. This is the data rule "ids across lifetimes" made a type.
+- **Flat allocation is typed.** `NativeArena.alloc<T:Flat>` rejects a type with managed references at compile time
+  (today it throws at run time).
+- **One column type.** `NativeColumn<T:Flat>`: growable, zero-filled, indexed by its id type, copied out at its exact
+  size; callers index it and never hold a `RawPtr`. Its storage is the one place with a dual declaration (`RawPtr` on
+  Haxeon, `hl.Bytes` under stock Haxe).
+- **Reset is checked in debug builds.** A `NativeArena` counts its resets; a column remembers the count it was made
+  under and a debug build checks it on access, so use after `reset()` fails instead of reading another unit's data.
+  Release builds do not check.
+
+Not now: per-slot generational handles. They serve tables whose slots are freed one by one and reused while others
+still refer to them (the compile server's module records, users' entity worlds); a one-shot compile frees whole tables.
+They are added when such a table moves to flat storage.
+
+The first user is the first native-arena pilot (the token table is the likely one); the pieces are built as it needs
+them, not ahead of it.
+
 ## Arenas by lifetime
 
 | Arena | Lives for | Holds |
