@@ -137,6 +137,18 @@ class IrJumpThreading {
 	 * threaded to, so no phi gains an input.
 	 */
 	public static function threadConstantBranches(fn:IrFunction):IrFunction {
+		// Most functions have no block of that shape: find that out before counting every use.
+		var shaped = false;
+		for (block in fn.blocks)
+			if (block != fn.blocks[0] && block.instructions.length == 1 && block.terminator != null)
+				switch [block.instructions[0].value, block.terminator.value] {
+					case [Phi(phi, _), Branch(condition, _, _)] if (condition.id == phi.id):
+						shaped = true;
+						break;
+					default:
+				}
+		if (!shaped)
+			return fn;
 		var constants:Map<Int, Bool> = [], uses:Map<Int, Int> = [];
 		function use(value:IrValue):Void
 			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
