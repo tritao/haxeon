@@ -16,34 +16,40 @@ import compiler.ir.SourceProvenance.Located;
 class IrExactTypeFacts {
 	public static inline final TEST = "__object_has_exact_type";
 
-	final graph:IrGraph;
+	final graph:Null<IrGraph>;
 	final facts:Array<{block:Int, value:Int, type:String}> = [];
 
 	/** `graph`, when given, is `fn`'s, shared with other analyses of the same unchanged function. */
 	public function new(fn:IrFunction, ?graph:IrGraph) {
-		this.graph = graph ?? new IrGraph(fn);
-		var definitions:Map<Int, IrInstruction> = [];
+		// Only tests and the classes they name matter; most functions have no test, and then nothing else is looked at.
+		var tests:Null<Map<Int, Array<IrValue>>> = null, classes:Null<Map<Int, String>> = null;
 		for (block in fn.blocks)
-			for (located in block.instructions) {
-				var output = IrOperands.output(located.value);
-				if (output != null)
-					definitions.set(output.id, located.value);
-			}
+			for (located in block.instructions)
+				switch located.value {
+					case Call(output, name, arguments) if (name.name == TEST && arguments.length == 2):
+						if (tests == null)
+							tests = [];
+						tests.set(output.id, arguments);
+					case TypeValue(output, Obj(type)):
+						if (classes == null)
+							classes = [];
+						classes.set(output.id, type);
+					default:
+				}
+		if (tests == null || classes == null) {
+			this.graph = graph;
+			return;
+		}
+		var known = graph ?? new IrGraph(fn);
+		this.graph = known;
 		for (block in fn.blocks)
 			if (block.terminator != null)
 				switch block.terminator.value {
 					case Branch(condition, yes, no) if (yes != no):
-						switch definitions.get(condition.id) {
-							case Call(_, name, arguments) if (name.name == TEST && arguments.length == 2):
-								switch definitions.get(arguments[1].id) {
-									case TypeValue(_, Obj(type)):
-										var entries = graph.predecessorsOf(yes);
-										if (entries.length == 1)
-											facts.push({block: yes, value: arguments[0].id, type: type});
-									default:
-								}
-							default:
-						}
+						var arguments = tests.get(condition.id),
+							type = arguments == null ? null : classes.get(arguments[1].id);
+						if (type != null && known.predecessorsOf(yes).length == 1)
+							facts.push({block: yes, value: arguments[0].id, type: type});
 					default:
 				}
 	}
@@ -103,9 +109,11 @@ class IrExactTypeFacts {
 
 	/** The class `value` is known to have exactly in `block`, or null. */
 	public function exactType(block:Int, value:Int):Null<String> {
-		for (fact in facts)
-			if (fact.value == value && graph.dominates(fact.block, block))
-				return fact.type;
+		var known = graph;
+		if (known != null)
+			for (fact in facts)
+				if (fact.value == value && known.dominates(fact.block, block))
+					return fact.type;
 		return null;
 	}
 }
