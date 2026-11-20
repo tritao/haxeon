@@ -1,8 +1,8 @@
 # The IR core in columns
 
 Status: proposed (`COMPILER_DATA_LAYOUT.md` step 7); migration step 1 done: `IrBody` exists beside the IR and the
-verifier checks its round trip. Depends on the ADR 0006 decision about how flat records are declared; see "Both builds"
-below.
+verifier checks its round trip under `--check-ir-body`. Depends on the ADR 0006 decision about how flat records are
+declared; see "Both builds" below.
 
 ## Problem
 
@@ -50,7 +50,8 @@ encode and a decode on every call and make the compiler slower until the end. A 
 once at its exit, and runs on bodies in between. Each step leaves the output byte-identical, so the self-compile is the
 check between steps:
 
-1. `IrBody` beside the current IR, with conversions both ways; the verifier checks a round trip on every function.
+1. `IrBody` beside the current IR, with conversions both ways; the verifier checks a round trip on every function
+   (`--check-ir-body`, off by default: it copies every function).
 2. The inliner stage runs on bodies throughout: `IrInliner`'s per-function pipeline (inlining, `IrLoadStoreForwarding`,
    `IrScalarReplacement`, `IrStrengthReduction`) and its cleanup chain (constant branches, `IrScalarRefPromotion`,
    `IrDeadPureValues`, `IrReceiverCheckElision`, `IrJumpThreading`, with `IrGraph` and `IrNonNullFacts`), converting

@@ -13,6 +13,7 @@ typedef CompileOptionsInit = {
 	final ?keepSession:Bool;
 	final ?elaborateGenerics:Bool;
 	final ?verifyIr:Bool;
+	final ?checkIrBody:Bool;
 }
 
 /**
@@ -79,6 +80,12 @@ class CompileOptions {
 	 */
 	public final verifyIr:Bool;
 
+	/**
+	 * Check that every function the verifier checks round-trips through an `IrBody` (docs/design/IR_CORE_COLUMNS.md); implies
+	 * `verifyIr`. Off by default: it allocates a copy of every function.
+	 */
+	public final checkIrBody:Bool;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -90,7 +97,8 @@ class CompileOptions {
 		parseThreads = init == null || init.parseThreads == null || init.parseThreads < 1 ? 1 : init.parseThreads;
 		keepSession = init == null || init.keepSession != false;
 		elaborateGenerics = init != null && init.elaborateGenerics == true;
-		verifyIr = init == null || init.verifyIr != false;
+		checkIrBody = init != null && init.checkIrBody == true;
+		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -106,7 +114,8 @@ class CompileOptions {
 			parseThreads: parseThreads,
 			keepSession: keepSession,
 			elaborateGenerics: elaborateGenerics,
-			verifyIr: verifyIr
+			verifyIr: verifyIr,
+			checkIrBody: checkIrBody
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -134,6 +143,8 @@ class CompileOptions {
 			flags.push("--elaborate-generics");
 		if (!verifyIr)
 			flags.push(NO_VERIFY_IR);
+		if (checkIrBody)
+			flags.push(CHECK_IR_BODY);
 		return flags;
 	}
 
@@ -143,6 +154,9 @@ class CompileOptions {
 
 	/** Verifies the IR even where the build mode would not (`verifyIr`). */
 	public static inline final VERIFY_IR = "--verify-ir";
+
+	/** Checks the `IrBody` round trip of every verified function (`checkIrBody`). */
+	public static inline final CHECK_IR_BODY = "--check-ir-body";
 
 	/**
 	 * One spelling of the options that change what a compile makes, for a session's identity and a cached result's key: their flags,
@@ -160,7 +174,7 @@ class CompileOptions {
 			case "--no-inline", "--no-load-store-forwarding", "--no-strength-reduction", "--no-early-prune",
 				"--check-reuse",
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
-			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR: true;
+			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY: true;
 			default: StringTools.startsWith(argument, PARSE_THREADS);
 		};
 
@@ -177,7 +191,8 @@ class CompileOptions {
 			parseThreads: threadsFrom(arguments),
 			keepSession: arguments.indexOf(NO_KEEP_SESSION) < 0,
 			elaborateGenerics: arguments.indexOf("--elaborate-generics") >= 0,
-			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0
+			verifyIr: arguments.indexOf(NO_VERIFY_IR) < 0 || arguments.indexOf(VERIFY_IR) >= 0,
+			checkIrBody: arguments.indexOf(CHECK_IR_BODY) >= 0
 		});
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */

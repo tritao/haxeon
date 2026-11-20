@@ -280,11 +280,11 @@ class IrVerifier {
 
 	/**
 	 * `verify`, skipping the functions the last verification accepted whose IR and whose reads of the rest of the program are unchanged
-	 * (see `IrVerifyMemo`). The program-level checks still run in full. This is the pipeline's verification (`CompileOptions.verifyIr`),
-	 * so it also checks that each function it verifies round-trips through an `IrBody` (docs/design/IR_CORE_COLUMNS.md).
+	 * (see `IrVerifyMemo`). The program-level checks still run in full. With `checkBodies` (`CompileOptions.checkIrBody`), each function
+	 * it verifies must also round-trip through an `IrBody` (docs/design/IR_CORE_COLUMNS.md).
 	 */
-	public static function verifyReusing(program:IrProgram, memo:IrVerifyMemo):Void {
-		verifySelected(program, null, memo, new IrTypeIds());
+	public static function verifyReusing(program:IrProgram, memo:IrVerifyMemo, checkBodies:Bool = false):Void {
+		verifySelected(program, null, memo, checkBodies ? new IrTypeIds() : null);
 	}
 
 	/** Verify shared program metadata and only the named function bodies. */

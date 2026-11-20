@@ -526,7 +526,7 @@ class IrPipeline {
 		var memo = context.verifyMemo;
 		if (memo == null)
 			throw new InternalError("The verifier stage needs the session's verify memo");
-		IrVerifier.verifyReusing(program, memo);
+		IrVerifier.verifyReusing(program, memo, context.options.checkIrBody);
 		return program;
 	}
 

@@ -242,7 +242,7 @@ class IrBody {
 
 	/**
 	 * Where `fn` and the function its body decodes to first differ, or null when they are equal: every function the compiler makes
-	 * must have a body (`IrVerifier.verifyReusing`, when IR verification is on).
+	 * must have a body (`IrVerifier.verifyReusing` with `CompileOptions.checkIrBody`).
 	 */
 	public static function roundTripDifference(fn:IrFunction, types:IrTypeIds):Null<String>
 		return compiler.ir.codec.IrFunctionStateEquality.difference(fn, IrBodyBuilder.encode(fn, types).toFunction());

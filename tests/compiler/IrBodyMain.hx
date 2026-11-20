@@ -184,6 +184,11 @@ class IrBodyMain {
 		clash.terminator = new Located(Return(new IrValue(0, "x", I64)), user);
 		if (IrBody.roundTripDifference(new IrFunction("Main.clash", [], I32, [clash], Ordinary), types) == null)
 			throw "A value id with two types must not round-trip";
+		// The pipeline's round trip is its own option, off by default, and implies verification.
+		var options = compiler.CompileOptions.fromArguments(["--no-verify-ir", "--check-ir-body"]);
+		expect(!new compiler.CompileOptions().checkIrBody, "the body check is off by default");
+		expect(options.checkIrBody && options.verifyIr && options.arguments().join(" ") == "--check-ir-body",
+			"the body check as a flag");
 	}
 
 	static function check(fn:IrFunction, types:IrTypeIds):Void {
