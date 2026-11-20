@@ -116,6 +116,24 @@ private class ScopeCaptures {
  * Lexical bindings, definite assignment, flow facts, and capture decisions.
  * Child scopes preserve stable binding IDs while maintaining branch-local facts.
  */
+/** The visible locals as a loop sees them on entry (`Scope.loopLocals`). */
+typedef LoopLocals = {
+	/** The innermost binding of each name, innermost first (as `Scope.visibleBindings`). */
+	final innermost:Array<LocalBinding>;
+
+	/** The source name of every visible local, outermost first (as `Scope.visibleLocalNames`). */
+	final names:Array<String>;
+
+	/** The names of the visible locals that are maps only this function can reach. */
+	final privateMaps:Array<String>;
+
+	/** The names whose innermost binding is declared an array. */
+	final arrays:Array<String>;
+
+	/** The names whose innermost binding is declared a map with String or Int keys. */
+	final primitiveMaps:Array<String>;
+}
+
 class Scope {
 	final parent:Null<Scope>;
 	final facts:FlowFacts;
@@ -533,10 +551,6 @@ class Scope {
 		return value != null && found != null && found.isPrivate(value.declaration);
 	}
 
-	/** Source names of the visible locals that are maps only this function can reach. */
-	public function visiblePrivateMapNames():Array<String>
-		return [for (value in visibleValues()) if (isPrivateMap(value.id)) value.source];
-
 	public function refineExpression(path:String, type:CompilerType, stable:Bool = false):Void
 		facts.refine('$' + 'expression:$path', type, stable);
 
@@ -632,38 +646,36 @@ class Scope {
 	public function visibleLocalNames():Array<String>
 		return [for (value in visibleValues()) value.source];
 
-	/**
-	 * The visible binding of each name, the innermost, in the order the names are first declared (as
-	 * `visibleDeclarations`).
-	 */
-	function innermostByName():Map<String, LocalBinding> {
-		var result:Map<String, LocalBinding> = [];
-		for (value in visibleValues())
-			result.set(value.source, value);
-		return result;
-	}
-
-	/** Declared array locals visible here, respecting lexical shadowing. */
-	public function visibleArrayNames():Array<String> {
-		var result = [];
-		for (name => value in innermostByName())
+	/** What a loop entered here needs of the visible locals (`LoopFlow.enter`), from one walk of them. */
+	public function loopLocals():LoopLocals {
+		var values = visibleValues(),
+			result:LoopLocals = {
+				innermost: [],
+				names: [],
+				privateMaps: [],
+				arrays: [],
+				primitiveMaps: []
+			};
+		for (value in values) {
+			result.names.push(value.source);
+			if (isPrivateMap(value.id))
+				result.privateMaps.push(value.source);
+		}
+		var seen:Map<String, Bool> = [], index = values.length;
+		while (index > 0) {
+			var value = values[--index];
+			if (seen.exists(value.source))
+				continue;
+			seen.set(value.source, true);
+			result.innermost.push(value);
 			switch declaredTypeOf(value) {
 				case TArray(_):
-					result.push(name);
-				default:
-			}
-		return result;
-	}
-
-	/** Primitive-key map locals visible here, respecting lexical shadowing. */
-	public function visiblePrimitiveMapNames():Array<String> {
-		var result = [];
-		for (name => value in innermostByName())
-			switch declaredTypeOf(value) {
+					result.arrays.push(value.source);
 				case TMap(TString, _), TMap(TInt, _):
-					result.push(name);
+					result.primitiveMaps.push(value.source);
 				default:
 			}
+		}
 		return result;
 	}
 

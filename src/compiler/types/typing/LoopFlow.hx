@@ -21,13 +21,13 @@ class LoopFlow {
 
 	/**
 	 * The declarations the loop writes: from the body's resolution when it knows the loop at `loopSpan`, else, for syntax
-	 * the typer built, by resolving `statements` within the `visible` locals.
+	 * the typer built, by resolving `statements` within the locals visible in `scope`.
 	 */
-	static function assignedIn(session:TypingSession, statements:Array<AstStatement>, visible:Map<String, String>,
+	static function assignedIn(session:TypingSession, scope:Scope, statements:Array<AstStatement>,
 			loopSpan:Null<SourceSpan>):Map<String, Bool> {
 		var resolution = session.currentContext.resolution,
 			resolved = resolution == null || loopSpan == null ? null : resolution.writesInLoop(loopSpan.start);
-		return resolved != null ? resolved : BodyResolution.of([], statements, visible).writes();
+		return resolved != null ? resolved : BodyResolution.of([], statements, scope.visibleDeclarations()).writes();
 	}
 
 	/**
@@ -36,14 +36,14 @@ class LoopFlow {
 	 */
 	public static function enter(session:TypingSession, scope:Scope, statements:Array<AstStatement>,
 			?loopVariables:Array<String>, ?loopSpan:SourceSpan):Void {
-		var visible = scope.visibleDeclarations(), assigned = assignedIn(session, statements, visible, loopSpan);
-		for (binding in scope.visibleBindings())
+		var assigned = assignedIn(session, scope, statements, loopSpan), visible = scope.loopLocals();
+		for (binding in visible.innermost)
 			if (assigned.exists(binding.declaration))
 				scope.invalidateBinding(binding);
-		var locals = scope.visibleLocalNames(),
-			privateMaps = scope.visiblePrivateMapNames(),
-			arrays = scope.visibleArrayNames(),
-			maps = scope.visiblePrimitiveMapNames();
+		var locals = visible.names,
+			privateMaps = visible.privateMaps,
+			arrays = visible.arrays,
+			maps = visible.primitiveMaps;
 		if (loopVariables != null)
 			for (name in loopVariables)
 				if (name != null) {
