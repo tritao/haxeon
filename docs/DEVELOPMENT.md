@@ -53,6 +53,25 @@ compile left in the process, which `CompilerStaticsMain` keeps out of compiler s
 `driver-isolated` suites run them. Program cases build in development mode unless `--release` is given, which makes their plain
 builds release builds (`driver-release`), the mode tools ship in.
 
+### Performance guard
+
+The `perf-guard` suite (`scripts/perf-guard.py`) builds the compiler from the checkout in release mode and measures that build
+compiling the checkout's own sources: allocated bytes and collections (from the driver's allocation phases), peak RSS, and
+main-thread `instructions:u` where perf is installed and `perf_event_paranoid` is at most 2 (on CI runners it is not, and the
+metric is skipped). Wall time is printed, never compared. It measures on Linux x86-64 only and passes elsewhere.
+
+Each metric is compared with `tests/perf/self-compile-baseline.json`, which holds its value and tolerance and why the tolerance
+is what it is. Above the tolerance the suite fails; below it the suite passes and asks for the baseline to be updated, so a gain
+is locked in. The input is the live source tree, so the values move as the compiler grows: a change that moves them on purpose
+(a feature that costs memory, an optimization) updates the baseline in the same commit, from a quiet Linux x86-64 machine:
+
+```sh
+python3 scripts/perf-guard.py            # measure and compare
+python3 scripts/perf-guard.py --update   # write the measured values into the baseline; tolerances are kept
+```
+
+Say in the commit message what moved and why. A tolerance is changed by editing the file, with its `why`.
+
 ### The same commands on every platform
 
 Setup is two CMake invocations, wrapped by a script per shell. Everything after that is the `haxeon` command, spelled the
