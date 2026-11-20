@@ -675,16 +675,18 @@ class IrInliner {
 
 	/** The function a call resolves to when it can be inlined, else null. */
 	function calleeOf(instruction:IrInstruction):Null<IrFunction> {
-		var id = -1, actuals:Array<IrValue> = null;
+		// A method call's actuals are its receiver, then its arguments.
+		var id = -1, receiver:Null<IrValue> = null, arguments:Array<IrValue> = null;
 		switch instruction {
-			case Call(_, target, arguments):
+			case Call(_, target, callArguments):
 				id = functionId(target);
-				actuals = arguments;
-			case MethodCall(_, object, methodName, arguments, _):
+				arguments = callArguments;
+			case MethodCall(_, object, methodName, callArguments, _):
 				var target = resolveMethod(object, methodName), known = target == null ? null : ids.get(target);
 				if (known != null)
 					id = known;
-				actuals = [object].concat(arguments);
+				receiver = object;
+				arguments = callArguments;
 			default:
 		}
 		if (id < 0)
@@ -707,11 +709,17 @@ class IrInliner {
 		}
 		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name)
 			|| IrTypedInterfaceDispatch.isAdapterEntry(original.name)
-			|| original.arguments.length != actuals.length
+			|| original.arguments.length != arguments.length + (receiver == null ? 0 : 1)
 			|| !looksInlinable(original))
 			return null;
-		for (index in 0...actuals.length)
-			if (!bindable(actuals[index].type, original.arguments[index].type))
+		var offset = 0;
+		if (receiver != null) {
+			if (!bindable(receiver.type, original.arguments[0].type))
+				return null;
+			offset = 1;
+		}
+		for (index in 0...arguments.length)
+			if (!bindable(arguments[index].type, original.arguments[index + offset].type))
 				return null;
 		var candidate = inlinedVersion(id);
 		if (candidate == null || !fits(candidate))
@@ -830,9 +838,7 @@ class IrInliner {
 			return fn;
 		var blocks:Array<IrBlock> = [], nextValue = fn.nextValueId(), nextBlock = 0;
 		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions)
-				copy.instructions.push(located);
+			var copy = new IrBlock(block.id, block.instructions.copy());
 			copy.terminator = block.terminator;
 			blocks.push(copy);
 			if (block.id >= nextBlock)
@@ -1001,38 +1007,57 @@ class IrInliner {
 		return current;
 	}
 
-	/** Rewrites every use of a spliced call's output to the value the callee returned. */
+	/**
+	 * Rewrites every use of a spliced call's output to the value the callee returned, in place. Only the instructions and
+	 * terminators that use a substituted value are replaced; the bindings come back as given when none names one.
+	 */
 	public static function substitute(blocks:Array<IrBlock>, substitutions:Map<Int, IrValue>,
 			bindings:Array<IrDebugBinding>):Array<IrDebugBinding> {
 		var use = function(value:IrValue):IrValue return resolve(value, substitutions);
+		var substituted = function(value:IrValue):Bool return substitutions.exists(value.id);
 		var sameBlock = function(id:Int):Int return id;
 		for (block in blocks) {
 			for (position in 0...block.instructions.length) {
 				var located = block.instructions[position];
-				block.instructions[position] = new Located(remap(located.value, use, sameBlock), located.provenance);
+				if (IrOperands.anyValue(located.value, substituted))
+					block.instructions[position] = new Located(remap(located.value, use, sameBlock),
+						located.provenance);
 			}
 			var terminator = block.terminator;
-			if (terminator != null)
-				block.terminator = new Located(switch terminator.value {
-					case Unreachable: Unreachable;
-					case Return(value): Return(use(value));
-					case Throw(value): Throw(use(value));
-					case Rethrow(value): Rethrow(use(value));
-					case Jump(target): Jump(target);
-					case Branch(condition, whenTrue, whenFalse): Branch(use(condition), whenTrue, whenFalse);
-					case Switch(switchValue, switchTargets, switchOtherwise): Switch(use(switchValue),
-						switchTargets.copy(), switchOtherwise);
-				}, terminator.provenance);
+			if (terminator != null) {
+				var rewritten:Null<IrTerminator> = switch terminator.value {
+					case Unreachable, Jump(_): null;
+					case Return(value): substituted(value) ? Return(use(value)) : null;
+					case Throw(value): substituted(value) ? Throw(use(value)) : null;
+					case Rethrow(value): substituted(value) ? Rethrow(use(value)) : null;
+					case Branch(condition, whenTrue, whenFalse): substituted(condition) ? Branch(use(condition),
+						whenTrue,
+						whenFalse) : null;
+					case Switch(switchValue, switchTargets, switchOtherwise): substituted(switchValue)
+						? Switch(use(switchValue),
+						switchTargets.copy(), switchOtherwise) : null;
+				};
+				if (rewritten != null)
+					block.terminator = new Located(rewritten, terminator.provenance);
+			}
 		}
+		var renamed = false;
+		for (binding in bindings)
+			if (substituted(binding.value)) {
+				renamed = true;
+				break;
+			}
+		if (!renamed)
+			return bindings;
 		return [for (binding in bindings)
-			{
-				identity:binding.identity,
-					name:binding.name,
-					value:use(binding.value),
-					path:binding.path,
-					scopeStart:binding.scopeStart,
-					scopeEnd:binding.scopeEnd
-			}];
+			substituted(binding.value) ? {
+				identity: binding.identity,
+				name: binding.name,
+				value: use(binding.value),
+				path: binding.path,
+				scopeStart: binding.scopeStart,
+				scopeEnd: binding.scopeEnd
+			} : binding];
 	}
 
 	/**
