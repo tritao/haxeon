@@ -215,6 +215,7 @@ DEFINE_PRIM(_VOID,__value_array_ensure,_ARR _I32);
 DEFINE_PRIM(_I32,__value_array_prepare_write,_ARR _I32 _BOOL _BOOL);
 DEFINE_PRIM(_VOID,__value_array_validate,_ARR _I32);
 DEFINE_PRIM(_TYPE,__value_array_header_type,_NO_ARG);
+DEFINE_PRIM(_TYPE,__value_array_forward_type,_NO_ARG);
 DEFINE_PRIM(_BOOL,__value_array_is_initialized,_ARR _I32);
 DEFINE_PRIM(_VOID,__value_array_mark,_ARR _I32);
 DEFINE_PRIM(_VOID,__value_array_remove_at,_ARR _I32);

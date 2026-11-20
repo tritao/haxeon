@@ -372,6 +372,7 @@ class HlLower {
 							case Call(_, name, arguments) if (name.name == VALUE_ARRAY_READ_I32 && arguments.length == 5
 								&& withoutValidity(arguments[0].type)):
 								ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
+								ensureNative(runtimeNatives, VALUE_ARRAY_FORWARD_TYPE, [], IrType.TypeRef);
 							case ArrayGet(_, array, _):
 								ensureRawArrayNative(runtimeNatives, array.type, "check");
 							case ArraySet(array, _, _):
@@ -740,8 +741,16 @@ class HlLower {
 	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
 	static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
 
-	/** Where a value array header keeps its scalar stride in bits; `value_arrays.c` asserts it. */
+	static inline final VALUE_ARRAY_FORWARD_TYPE = "__value_array_forward_type";
+
+	/** Where a value array keeps its scalar stride in bits, and an array its size and data; `value_arrays.c` asserts them. */
 	static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
+
+	static inline final ARRAY_SIZE_OFFSET = 16;
+	static inline final ARRAY_DATA_OFFSET = 24;
+
+	/** The type word at the start of an array's storage. */
+	static inline final LANE_HEADER_BYTES = 8;
 
 	/** How far back from a call its constant arguments are looked for; the IR emits them right before it. */
 	static inline final CONSTANT_LOOKBACK = 8;
@@ -790,64 +799,39 @@ class HlLower {
 	}
 
 	/**
-	 * A scalar read of a value array element without validity bits, inline: when the header is a value array's own (not a
-	 * forwarding header) and the index is in range, the slot is loaded from the scalar lane, `index * stride + offset`;
-	 * anything else calls the native, which raises its errors as before.
+	 * A scalar read of a value array element without validity bits, inline (`VALUE_ARRAY_ACCESS.md`): with the array's
+	 * header resolved to its value array (`valueArrayView`), an index in range loads the slot from the scalar lane,
+	 * `index * stride + offset`; an index out of range, or a header that is no value array's, calls the native, which
+	 * raises its errors as before.
 	 */
 	function lowerValueArrayRead(output:IrValue, arguments:Array<IrValue>, slot:InlineValueSlot,
 			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
-		var offset = slot.offset, width = slot.width, signed = slot.signed;
 		var array = requireRegister(arguments[0], registers),
 			index = requireRegister(arguments[1], registers),
 			destination = defineRegister(output, registers, registerTypes),
+			view = valueArrayView(arguments[0], instructions, registers, registerTypes),
 			slow = freshLabel(),
 			done = freshLabel(),
-			ready = freshLabel(),
-			actual = temporaryRegister(IrType.TypeRef, registerTypes),
-			expected = temporaryRegister(IrType.TypeRef, registerTypes),
-			global = internGlobalSlot(VALUE_ARRAY_HEADER_TYPE, IrType.TypeRef),
 			size = temporaryRegister(IrType.I32, registerTypes),
-			header = temporaryRegister(IrType.Bytes, registerTypes),
-			strideOffset = temporaryRegister(IrType.I32, registerTypes),
-			strideBits = temporaryRegister(IrType.I32, registerTypes),
-			three = temporaryRegister(IrType.I32, registerTypes),
-			strideBytes = temporaryRegister(IrType.I32, registerTypes),
-			position = temporaryRegister(IrType.I32, registerTypes),
-			data = temporaryRegister(IrType.Bytes, registerTypes);
-		instructions.push(HlInstruction.GetType(actual, array));
-		instructions.push(HlInstruction.GlobalGet(expected, global));
-		instructions.push(HlInstruction.JumpNotNull(expected, ready));
-		instructions.push(HlInstruction.Call0(expected, requireFunction(VALUE_ARRAY_HEADER_TYPE)));
-		instructions.push(HlInstruction.GlobalSet(global, expected));
-		instructions.push(HlInstruction.Label(ready));
-		// As pointers: the VM compares type registers structurally, and every array header type is an array type.
-		var actualPointer = temporaryRegister(IrType.RawPtr, registerTypes),
-			expectedPointer = temporaryRegister(IrType.RawPtr, registerTypes);
-		instructions.push(HlInstruction.UnsafeCast(actualPointer, actual));
-		instructions.push(HlInstruction.UnsafeCast(expectedPointer, expected));
-		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, slow));
-		instructions.push(HlInstruction.ArraySize(size, array));
+			data = temporaryRegister(IrType.Bytes, registerTypes),
+			position = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.JumpNull(view.array, slow));
+		instructions.push(HlInstruction.GetMem(size, view.array,
+			constantRegister(ARRAY_SIZE_OFFSET, instructions, registerTypes)));
 		instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
-		instructions.push(HlInstruction.UnsafeCast(header, array));
-		instructions.push(HlInstruction.LoadInt(strideOffset, internInt(VALUE_ARRAY_STRIDE_OFFSET)));
-		instructions.push(HlInstruction.GetMem(strideBits, header, strideOffset));
-		instructions.push(HlInstruction.LoadInt(three, internInt(3)));
-		instructions.push(HlInstruction.UnsignedShiftRight(strideBytes, strideBits, three));
-		instructions.push(HlInstruction.Mul(position, index, strideBytes));
-		if (offset > 0) {
-			var byteOffset = temporaryRegister(IrType.I32, registerTypes);
-			instructions.push(HlInstruction.LoadInt(byteOffset, internInt(offset >> 3)));
-			instructions.push(HlInstruction.Add(position, position, byteOffset));
-		}
-		instructions.push(HlInstruction.RefData(data, array));
-		switch width {
+		instructions.push(HlInstruction.GetMem(data, view.array,
+			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
+		instructions.push(HlInstruction.Mul(position, index, view.strideBytes));
+		// The lane starts with a type word; the payload follows it.
+		instructions.push(HlInstruction.Add(position, position,
+			constantRegister(LANE_HEADER_BYTES + (slot.offset >> 3), instructions, registerTypes)));
+		switch slot.width {
 			case 8: instructions.push(HlInstruction.GetI8(destination, data, position));
 			case 16: instructions.push(HlInstruction.GetI16(destination, data, position));
 			default: instructions.push(HlInstruction.GetMem(destination, data, position));
 		}
-		if (signed && width < 32) {
-			var shift = temporaryRegister(IrType.I32, registerTypes);
-			instructions.push(HlInstruction.LoadInt(shift, internInt(32 - width)));
+		if (slot.signed && slot.width < 32) {
+			var shift = constantRegister(32 - slot.width, instructions, registerTypes);
 			instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
 			instructions.push(HlInstruction.ShiftRight(destination, destination, shift));
 		}
@@ -856,6 +840,94 @@ class HlLower {
 		instructions.push(HlInstruction.CallN(destination, requireFunction(VALUE_ARRAY_READ_I32),
 			[for (argument in arguments) requireRegister(argument, registers)]));
 		instructions.push(HlInstruction.Label(done));
+	}
+
+	/** A register holding `value`, loaded where it is asked for. */
+	function constantRegister(value:Int, instructions:Array<HlInstruction>, registerTypes:Array<Int>):Int {
+		var register = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.LoadInt(register, internInt(value)));
+		return register;
+	}
+
+	/**
+	 * The value array `array`'s header leads to, as raw memory, and its stride in bytes; null for a header that is no value
+	 * array's. A header stays the header it is, and the value array it leads to keeps its identity as it grows, so this is
+	 * resolved once per array value within a block (`valueArrayViews`): the value array itself, or a forwarding header's
+	 * data (`__value_array_retype`).
+	 */
+	function valueArrayView(array:IrValue, instructions:Array<HlInstruction>, registers:Array<Int>,
+			registerTypes:Array<Int>):ValueArrayView {
+		var known = definedViews.get(array.id) ?? valueArrayViews.get(array.id);
+		if (known != null)
+			return known;
+		var view = resolveValueArrayView(array, instructions, registers, registerTypes);
+		valueArrayViews.set(array.id, view);
+		return view;
+	}
+
+	/**
+	 * Resolves `array`'s view where the array value is defined (an argument or phi at its block's start, any other value
+	 * right after its instruction), so it dominates every read of the value (`definedViews`).
+	 */
+	function defineValueArrayView(array:IrValue, instructions:Array<HlInstruction>, registers:Array<Int>,
+			registerTypes:Array<Int>):Void
+		if (hasViewedArrays && viewedArrays.exists(array.id) && !definedViews.exists(array.id))
+			definedViews.set(array.id, resolveValueArrayView(array, instructions, registers, registerTypes));
+
+	function resolveValueArrayView(array:IrValue, instructions:Array<HlInstruction>, registers:Array<Int>,
+			registerTypes:Array<Int>):ValueArrayView {
+		var header = requireRegister(array, registers),
+			view:ValueArrayView = {
+				array: temporaryRegister(IrType.Bytes, registerTypes),
+				strideBytes: temporaryRegister(IrType.I32, registerTypes)
+			},
+			actual = temporaryRegister(IrType.TypeRef, registerTypes),
+			actualPointer = temporaryRegister(IrType.RawPtr, registerTypes),
+			expectedPointer = temporaryRegister(IrType.RawPtr, registerTypes),
+			forwarded = freshLabel(),
+			absent = freshLabel(),
+			resolved = freshLabel(),
+			strided = freshLabel();
+		instructions.push(HlInstruction.GetType(actual, header));
+		instructions.push(HlInstruction.UnsafeCast(actualPointer, actual));
+		// As pointers: the VM compares type registers structurally, and every array header type is an array type.
+		runtimeTypePointer(expectedPointer, VALUE_ARRAY_HEADER_TYPE, instructions, registerTypes);
+		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, forwarded));
+		instructions.push(HlInstruction.UnsafeCast(view.array, header));
+		instructions.push(HlInstruction.Jump(resolved));
+		instructions.push(HlInstruction.Label(forwarded));
+		runtimeTypePointer(expectedPointer, VALUE_ARRAY_FORWARD_TYPE, instructions, registerTypes);
+		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, absent));
+		var raw = temporaryRegister(IrType.Bytes, registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(raw, header));
+		instructions.push(HlInstruction.GetMem(view.array, raw,
+			constantRegister(ARRAY_DATA_OFFSET, instructions, registerTypes)));
+		instructions.push(HlInstruction.Jump(resolved));
+		instructions.push(HlInstruction.Label(absent));
+		instructions.push(HlInstruction.LoadNull(view.array));
+		instructions.push(HlInstruction.Label(resolved));
+		instructions.push(HlInstruction.JumpNull(view.array, strided));
+		var strideBits = temporaryRegister(IrType.I32, registerTypes);
+		instructions.push(HlInstruction.GetMem(strideBits, view.array,
+			constantRegister(VALUE_ARRAY_STRIDE_OFFSET, instructions, registerTypes)));
+		instructions.push(HlInstruction.UnsignedShiftRight(view.strideBytes, strideBits,
+			constantRegister(3, instructions, registerTypes)));
+		instructions.push(HlInstruction.Label(strided));
+		return view;
+	}
+
+	/** `destination` becomes the runtime type a native names, as a pointer, kept in a global made on first use. */
+	function runtimeTypePointer(destination:Int, native:String, instructions:Array<HlInstruction>,
+			registerTypes:Array<Int>):Void {
+		var type = temporaryRegister(IrType.TypeRef, registerTypes),
+			global = internGlobalSlot(native, IrType.TypeRef),
+			ready = freshLabel();
+		instructions.push(HlInstruction.GlobalGet(type, global));
+		instructions.push(HlInstruction.JumpNotNull(type, ready));
+		instructions.push(HlInstruction.Call0(type, requireFunction(native)));
+		instructions.push(HlInstruction.GlobalSet(global, type));
+		instructions.push(HlInstruction.Label(ready));
+		instructions.push(HlInstruction.UnsafeCast(destination, type));
 	}
 
 	/**
@@ -1070,6 +1142,19 @@ class HlLower {
 					assignmentBindings.push(binding);
 				}
 		}
+		// The array values read inline get their value array view where they are defined (`defineValueArrayView`).
+		viewedArrays.clear();
+		definedViews.clear();
+		hasViewedArrays = false;
+		for (block in fn.blocks)
+			for (index in 0...block.instructions.length)
+				switch block.instructions[index].value {
+					case Call(_, name, arguments) if (name.name == VALUE_ARRAY_READ_I32
+						&& inlineValueArraySlot(block.instructions, index, arguments) != null):
+						viewedArrays.set(arguments[0].id, true);
+						hasViewedArrays = true;
+					default:
+				}
 		var instructions = instructionScratch, debugLocations = locationScratch;
 		instructions.resize(0);
 		debugLocations.resize(0);
@@ -1084,6 +1169,19 @@ class HlLower {
 				fallsThroughTo = layoutIndex + 1 < emitted.length ? emitted[layoutIndex + 1].id : -1;
 			instructions.push(HlInstruction.Label(block.id));
 			debugLocations.push(debugLocation(blockProvenance(block)));
+			// Arguments and phis are defined when the block starts: their value array views are resolved here.
+			if (hasViewedArrays) {
+				var viewStart = instructions.length;
+				if (block == fn.blocks[0])
+					for (argument in fn.arguments)
+						defineValueArrayView(argument, instructions, registers, registerTypes);
+				for (located in block.instructions)
+					switch located.value {
+						case Phi(output, _): defineValueArrayView(output, instructions, registers, registerTypes);
+						default:
+					}
+				appendDebugLocations(debugLocations, instructions.length - viewStart, blockProvenance(block));
+			}
 			// A comparison that ends its block and feeds only that block's branch becomes the branch itself, with
 			// no Bool in between: the loop test then costs one compare-and-jump instead of a compare, two moves and a test.
 			var fusedCondition:Null<Int> = null,
@@ -1107,6 +1205,7 @@ class HlLower {
 				}
 			provenInRange.clear();
 			elementOffsets.clear();
+			valueArrayViews.clear();
 			validatedArrayAccesses.clear();
 			for (instructionIndex in 0...block.instructions.length) {
 				var instruction = block.instructions[instructionIndex];
@@ -1629,6 +1728,8 @@ class HlLower {
 							requireRegister(value, registers),
 							constructor, field));
 				}
+				if (output != null)
+					defineValueArrayView(output, instructions, registers, registerTypes);
 				appendDebugLocations(debugLocations, instructions.length - instructionStart, instruction.provenance);
 				if (output != null && instructions.length > instructionStart) {
 					var bindings = bindingsByValue.get(output.id);
@@ -2204,6 +2305,16 @@ class HlLower {
 	 * separately, since fused reads no longer need an offset register.
 	 */
 	final elementOffsets:Map<String, Int> = [];
+
+	/** The value array each array value's header leads to, resolved in the block being lowered (`valueArrayView`). */
+	final valueArrayViews:Map<Int, ValueArrayView> = [];
+
+	/** The array values of the function being lowered that have inline reads, and their views resolved where defined. */
+	final viewedArrays:Map<Int, Bool> = [];
+
+	final definedViews:Map<Int, ValueArrayView> = [];
+
+	var hasViewedArrays = false;
 
 	/**
 	 * Whether an instruction leaves every proven array bound intact: it runs no code and shrinks no array. Anything else,
@@ -2879,4 +2990,10 @@ private typedef InlineValueSlot = {
 	final offset:Int;
 	final width:Int;
 	final signed:Bool;
+}
+
+/** A value array as raw memory (null for a header that is no value array's) and its stride in bytes. */
+private typedef ValueArrayView = {
+	final array:Int;
+	final strideBytes:Int;
 }

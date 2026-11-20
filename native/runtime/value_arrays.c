@@ -26,14 +26,20 @@ typedef struct {
 	bool has_validity;
 } realtime_value_array;
 
-/* HlLower inlines scalar reads of arrays without validity bits: it compares the header's type with
- * __value_array_header_type(), checks the index against the size and reads the stride from this offset. */
-#define REALTIME_VALUE_ARRAY_STRIDE_OFFSET 88
-_Static_assert(sizeof(void*) != 8 || offsetof(realtime_value_array, scalar_stride_bits) == REALTIME_VALUE_ARRAY_STRIDE_OFFSET,
+/* HlLower inlines scalar reads of arrays without validity bits (VALUE_ARRAY_ACCESS.md): it resolves a header to its value
+ * array once, by comparing the header's type with these two (a forwarding header's data is the value array), then reads
+ * the size, the scalar lane and the stride at these offsets. */
+_Static_assert(sizeof(void*) != 8 || offsetof(realtime_value_array, scalar_stride_bits) == 88,
 	"HlLower reads the scalar stride at this offset");
+_Static_assert(sizeof(void*) != 8 || (offsetof(varray, size) == 16 && offsetof(varray, data) == 24),
+	"HlLower reads an array's size and data at these offsets");
 
 HL_PRIM hl_type *HL_NAME(__value_array_header_type)() {
 	return &realtime_value_array_type;
+}
+
+HL_PRIM hl_type *HL_NAME(__value_array_forward_type)() {
+	return &realtime_value_array_forward_type;
 }
 
 static realtime_value_array *realtime_value_array_require(varray *array) {
