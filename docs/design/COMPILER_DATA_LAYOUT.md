@@ -29,12 +29,12 @@ The allocation census of 2026-11-20 (`HAXEON_COMPILER_ALLOC_CENSUS`, same input,
 `CfgBuilder` 4.3%, `IrInliner` 4.3%, `IrGenerator` 3.4%, then a tail where 40 files reach 79%. Every function is built
 twice, as a CFG over named locals (1.36 million `CfgInstruction`s, each in a `Located`) and then as SSA.
 
-What stays alive is much smaller than what is allocated. With one allocation group per phase (ADR 0004 section 6), the
+What stays alive is much smaller than what is allocated. With one arena per phase (ADR 0004 section 6), the
 data each phase made that is still reachable when the compile ends is 283 MB in all: parse and semantic 83, typing 11,
 IR generation 61, IR assembly 51, HashLink lowering and encoding 77. Peak resident memory (1.92 GB) is collector slack
 over a live set of 0.3 to 0.55 GB, so the peak follows allocation volume and the collection trigger, not the size of the
 retained structures. Each phase's survivors are spread over 95 to 100% of its group's pages, so releasing a phase's
-pages frees almost nothing yet: regions wait until outputs and scratch are allocated apart (step 7).
+pages frees almost nothing yet: arenas wait until outputs and scratch are allocated apart (step 9).
 
 ## The layout
 
@@ -72,16 +72,15 @@ pages frees almost nothing yet: regions wait until outputs and scratch are alloc
    own design note, `IR_CORE_COLUMNS.md`, with a migration that lets passes move one at a time behind one API.
 8. **Tokens as a table.** The lexer's tokens as rows of a per-file table, spans made only for the nodes that keep them
    (`TOKEN_TABLE.md`).
-9. **Phase regions, after the IR core in columns** (ADR 0004 §6): data with one end of life allocated in a region and
-   released as soon as it is dead, at a known point and in bulk, rather than when the collector next runs. Two
-   conditions, which the syntax-region pilot missed (its survivors were on nearly every page): a region holds only what
-   dies together, and its release is checked (the fork's owner live count) and falls back to the collector when
-   something still points in. The candidates: the front end of a one-shot build (syntax and typed trees), released
-   after IR generation once what the IR keeps of it (files, spans, names) lives outside the region; and a build's
-   temporaries in the compile server, once what the session retains and what a build discards are apart.
-   Reused scratch (steps 3 and 7) removes the tables; what a function's typing, IR generation, inlining and lowering
-   still allocate is 85% temporaries, 1.5 GB in all, and regions per function released without a collection are what
-   keeps that out of the collector's schedule. Design, measurements and order: `ALLOCATION_REGIONS.md`.
+9. **Arenas** (ADR 0004 §6): data with one end of life allocated in an arena and released as soon as it is dead, at a
+   known point and in bulk, rather than when the collector next runs. Two conditions, which the syntax-region pilot
+   missed (its survivors were on nearly every page): an arena holds only what dies together, and its release is checked
+   and falls back to the collector when something still points in. The candidates: units of work (a class typed, a batch
+   of functions lowered), whose temporaries are 85% of what they allocate, 1.5 GB in all; the front end of a one-shot
+   build (syntax and typed trees), released after IR generation once what the IR keeps of it (files, spans, names)
+   lives outside it; and a build's temporaries in the compile server, once what the session retains and what a build
+   discards are apart. Reused scratch (steps 3 and 7) removes the tables, not the rest. The fork releases an arena
+   without a collection. Design, measurements and order: `ARENAS.md`.
 
 Flat records (step 7) are written so the source still builds with stock Haxe: a record is declared once as a struct
 under `#if haxeon` and as a final class otherwise, in one package, immutable and compared by `equals`, never by identity,
