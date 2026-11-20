@@ -1190,15 +1190,11 @@ class IrGenerator {
 										boolPattern ? nextBlock : predicateBlock);
 								else {
 									var switchValue = arm.constructorIndex >= 0
-										&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue,
-										switchValueName = builder.operandName();
-									localTypes.set(switchValueName, switchValue.type);
-									builder.store(switchValueName, switchValue);
+										&& isEnumType(expression.type) ? builder.enumIndex(subjectValue) : subjectValue;
 									var caseValue = arm.constructorIndex >= 0
 										? builder.constInt(arm.constructorIndex)
 										: lowerExpression(arm.value,
 										builder, localTypes);
-									switchValue = builder.load(switchValueName, switchValue.type);
 									var matches = if (isNullExpression(arm.value)) builder.equal(switchValue,
 										builder.constNull(switchType));
 									else if ((switch (switchValue.type) {
@@ -1296,7 +1292,9 @@ class IrGenerator {
 
 	function lowerOperands(expressions:Array<TypedExpression>, builder:IrLocalsBuilder, localTypes:Map<String, IrType>,
 			firstOwner:Bool = false):Array<IrValue> {
-		var names:Array<String> = [], types:Array<IrType> = [];
+		// An SSA value stays usable in every block its own block dominates, so each operand is kept as it is while the
+		// next ones are lowered, whatever blocks they make.
+		var values:Array<IrValue> = [];
 		for (index in 0...expressions.length) {
 			var expression = expressions[index],
 				value = firstOwner
@@ -1304,13 +1302,9 @@ class IrGenerator {
 					builder, localTypes);
 			if (builder.isTerminated())
 				return [];
-			var name = builder.operandName();
-			localTypes.set(name, value.type);
-			builder.store(name, value);
-			names.push(name);
-			types.push(value.type);
+			values.push(value);
 		}
-		return [for (index in 0...names.length) builder.load(names[index], types[index])];
+		return values;
 	}
 
 	function lowerMapGet(builder:IrLocalsBuilder, localTypes:Map<String, IrType>, map:IrValue, key:IrValue,
@@ -2236,21 +2230,14 @@ class IrGenerator {
 			default: null;
 		};
 
-	/** `node`, an arithmetic operator, applied to its lowered left operand and `right`, with both kept in operand locals as `lowerOperands` does. */
+	/** `node`, an arithmetic operator, applied to its lowered left operand and `right`, as `lowerOperands` keeps operands. */
 	function lowerArithmeticStep(node:TypedExpression, left:IrValue, right:TypedExpression, builder:IrLocalsBuilder,
 			localTypes:Map<String, IrType>):IrValue {
 		var values:Array<IrValue> = [];
 		if (!builder.isTerminated()) {
-			var leftName = builder.operandName();
-			localTypes.set(leftName, left.type);
-			builder.store(leftName, left);
 			var rightValue = lowerExpression(right, builder, localTypes);
-			if (!builder.isTerminated()) {
-				var rightName = builder.operandName();
-				localTypes.set(rightName, rightValue.type);
-				builder.store(rightName, rightValue);
-				values = [builder.load(leftName, left.type), builder.load(rightName, rightValue.type)];
-			}
+			if (!builder.isTerminated())
+				values = [left, rightValue];
 		}
 		return switch node.expression {
 			case TAdd(_, _): builder.add(values[0], values[1]);
@@ -2921,9 +2908,7 @@ class IrGenerator {
 								// The last arm of an exhaustive switch takes what reaches it, but an enum subject is still read, so
 								// a null one fails with a null access as Haxe's does.
 								if (arm.constructorIndex >= 0 && isEnumType(subject.type)) {
-									var indexName = builder.operandName(), index = builder.enumIndex(subjectValue);
-									localTypes.set(indexName, index.type);
-									builder.store(indexName, index);
+									builder.enumIndex(subjectValue);
 								}
 								builder.jump(matchBlock);
 							} else if (boolPattern != null)
@@ -2932,14 +2917,10 @@ class IrGenerator {
 									boolPattern ? nextBlock : matchBlock);
 							else {
 								var comparisonValue = arm.constructorIndex >= 0
-									&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue,
-									comparisonName = builder.operandName();
-								localTypes.set(comparisonName, comparisonValue.type);
-								builder.store(comparisonName, comparisonValue);
+									&& isEnumType(subject.type) ? builder.enumIndex(subjectValue) : subjectValue;
 								var caseValue = arm.constructorIndex >= 0
 									? builder.constInt(arm.constructorIndex) : lowerExpression(arm.value,
 									builder, localTypes);
-								comparisonValue = builder.load(comparisonName, comparisonValue.type);
 								var matches = if (isNullExpression(arm.value)) builder.equal(comparisonValue,
 									builder.constNull(subjectType));
 								else if ((switch (comparisonValue.type) {
