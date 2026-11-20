@@ -1658,8 +1658,80 @@ class Parser {
 		// A loop body is the loop, which has no value, as in Haxe (where a loop is an expression of type Void): `() -> for (x in xs) f(x)`.
 		if (check(TokenKind.For) || check(TokenKind.While) || check(TokenKind.Do))
 			return [parseStatement()];
+		// So is an `if` without an `else`, which Haxe types Void: `x -> if (x > 0) f(x)`.
+		if (check(TokenKind.If) && !ifHasElseAhead())
+			return [parseVoidIf()];
 		var value = parseExpression();
 		return [Return(value, expressionSpan(value))];
+	}
+
+	/** An `if` without an `else` in an expression's place, as Haxe reads it: a statement whose branch ends with the expression. */
+	function parseVoidIf():AstStatement {
+		var start = advance().span;
+		consume(TokenKind.LeftParen);
+		var condition = parseExpression();
+		consume(TokenKind.RightParen);
+		var thenBranch = if (check(TokenKind.LeftBrace))
+			parseStatementOrBlock()
+			else if (check(TokenKind.If) && !ifHasElseAhead())
+			[parseVoidIf()]
+			else {
+				var value = parseExpression();
+				[Expression(value, expressionSpan(value))];
+			};
+		return If(condition, thenBranch, [], start.merge(statementEnd(thenBranch)));
+	}
+
+	/**
+	 * Whether the `if` at the current token has an `else`: past its condition, an `else` at the depth the `if` is at, not taken by
+	 * an `if` nested in its branch, before the expression ends (a closing bracket or a comma of the enclosing one, or a semicolon
+	 * not followed by `else`).
+	 */
+	function ifHasElseAhead():Bool {
+		var cursor = position + 1, depth = 0;
+		if (cursor >= tokens.length || tokens[cursor].kind != TokenKind.LeftParen)
+			return false;
+		while (cursor < tokens.length) {
+			switch tokens[cursor].kind {
+				case LeftParen:
+					depth++;
+				case RightParen:
+					depth--;
+				default:
+			}
+			cursor++;
+			if (depth == 0)
+				break;
+		}
+		var nested = 0;
+		while (cursor < tokens.length) {
+			switch tokens[cursor].kind {
+				case LeftParen, LeftBracket, LeftBrace:
+					depth++;
+				case RightParen, RightBracket, RightBrace:
+					if (depth == 0)
+						return false;
+					depth--;
+				case Comma:
+					if (depth == 0)
+						return false;
+				case If:
+					if (depth == 0)
+						nested++;
+				case Else:
+					if (depth == 0) {
+						if (nested == 0)
+							return true;
+						nested--;
+					}
+				case Semicolon:
+					if (depth == 0)
+						return nested == 0 && cursor + 1 < tokens.length && tokens[cursor + 1].kind == TokenKind.Else;
+				default:
+			}
+			cursor++;
+		}
+		return false;
 	}
 
 	/** A final try statement yields its branch value; throwing branches already terminate. */
