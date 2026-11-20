@@ -41,7 +41,7 @@ set_target_properties(jit_native_properties PROPERTIES
 # from it. They land in <build>/native-tests, beside hashlink-runtime.
 set(HAXEON_NATIVE_TEST_DIR "${CMAKE_BINARY_DIR}/native-tests")
 set(HAXEON_NATIVE_TEST_PROGRAMS
-  gc_allocation_paths gc_empty_pages gc_owner_pages gc_owner_tlab gc_owner_classes gc_alloc_groups gc_mark_completion gc_stack_boundary
+  gc_allocation_paths gc_empty_pages gc_owner_pages gc_owner_tlab gc_owner_classes gc_arenas gc_mark_completion gc_stack_boundary
   string_map_hash)
 set(HAXEON_NATIVE_TESTS)
 foreach(_program IN LISTS HAXEON_NATIVE_TEST_PROGRAMS)

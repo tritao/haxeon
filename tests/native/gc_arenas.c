@@ -2,8 +2,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-/* While an allocation group is current on a thread, what the thread allocates without an owner of its own goes to the
-   group's pages. Releasing the group reports how many of its blocks are still live and returns its pages once none is. */
+/* While an arena is current on a thread, what the thread allocates without an owner of its own goes to the
+   arena's pages. Releasing the arena reports how many of its blocks are still live and returns its pages once none is. */
 
 HL_API void hl_gc_profile_stats(unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*);
 
@@ -16,7 +16,7 @@ HL_API void hl_gc_profile_stats(unsigned long long*,unsigned long long*,unsigned
 #define COUNT 200000
 static void *blocks[COUNT];
 static void *kept[4];
-static int group_a, group_b, group_c;
+static int arena_a, arena_b, arena_c;
 
 static int check(int success, const char *label) {
 	if(!success) fprintf(stderr,"FAIL: %s\n",label);
@@ -42,9 +42,9 @@ static NOINLINE void drop(int count) {
 	for(int i=0;i<count;i++) blocks[i] = NULL;
 }
 
-static NOINLINE int released(void *group) {
+static NOINLINE int released(void *arena) {
 	scrub_stack();
-	return hl_gc_group_release(group);
+	return hl_gc_arena_release(arena);
 }
 
 int main(void) {
@@ -55,19 +55,19 @@ int main(void) {
 	for(int i=0;i<4;i++) hl_add_root(&kept[i]);
 	(void)blocks;
 
-	/* Everything allocated in a group is dead at release: the count is zero and the pages go back. */
+	/* Everything allocated in an arena is dead at release: the count is zero and the pages go back. */
 	for(int cycle=0;cycle<40;cycle++) {
 		unsigned long long base, peak, after;
 		hl_gc_major();
 		base = heap_bytes();
-		void *previous = hl_gc_group_enter(&group_a);
-		if(!check(previous == NULL,"no group is current at first")) goto done;
+		void *previous = hl_gc_arena_enter(&arena_a);
+		if(!check(previous == NULL,"no arena is current at first")) goto done;
 		fill(COUNT);
-		hl_gc_group_leave(previous);
+		hl_gc_arena_leave(previous);
 		peak = heap_bytes();
-		if(!check(peak > base + COUNT * 16 / 2,"the group's blocks occupy pages")) goto done;
+		if(!check(peak > base + COUNT * 16 / 2,"the arena's blocks occupy pages")) goto done;
 		drop(COUNT);
-		if(!check(released(&group_a) == 0,"a group whose blocks all died counts none")) goto done;
+		if(!check(released(&arena_a) == 0,"an arena whose blocks all died counts none")) goto done;
 		after = heap_bytes();
 		if(!check(after < base + (1 << 20),"releasing it returns its pages")) goto done;
 	}
@@ -77,15 +77,15 @@ int main(void) {
 	{
 		hl_gc_major();
 		unsigned long long base = heap_bytes();
-		void *previous = hl_gc_group_enter(&group_b);
+		void *previous = hl_gc_arena_enter(&arena_b);
 		fill(COUNT);
 		for(int i=0;i<4;i++) {
 			kept[i] = hl_gc_alloc_noptr(32);
 			for(int b=0;b<32;b++) ((unsigned char*)kept[i])[b] = 0x5a;
 		}
-		hl_gc_group_leave(previous);
+		hl_gc_arena_leave(previous);
 		drop(COUNT);
-		if(!check(released(&group_b) == 4,"a release counts the blocks that escaped the group")) goto done;
+		if(!check(released(&arena_b) == 4,"a release counts the blocks that escaped the arena")) goto done;
 		if(!check(heap_bytes() < base + (1 << 20),"and returns every page that holds none of them")) goto done;
 		hl_gc_major();
 		int intact = 1;
@@ -97,22 +97,22 @@ int main(void) {
 		hl_gc_major();
 	}
 
-	/* Groups nest, and leaving one makes the enclosing one current again; outside any group nothing goes to one. */
+	/* Arenas nest, and leaving one makes the enclosing one current again; outside any arena nothing goes to one. */
 	{
-		void *outer = hl_gc_group_enter(&group_a);
+		void *outer = hl_gc_arena_enter(&arena_a);
 		kept[0] = hl_gc_alloc_noptr(16);
-		void *inner = hl_gc_group_enter(&group_c);
-		if(!check(inner == &group_a,"entering returns the enclosing group")) goto done;
+		void *inner = hl_gc_arena_enter(&arena_c);
+		if(!check(inner == &arena_a,"entering returns the enclosing arena")) goto done;
 		kept[1] = hl_gc_alloc_noptr(16);
-		hl_gc_group_leave(inner);
+		hl_gc_arena_leave(inner);
 		kept[2] = hl_gc_alloc_noptr(16);
-		hl_gc_group_leave(outer);
+		hl_gc_arena_leave(outer);
 		kept[3] = hl_gc_alloc_noptr(16);
-		if(!check(released(&group_c) == 1,"the inner group holds only what was allocated inside it")) goto done;
-		if(!check(released(&group_a) == 2,"the outer group holds what was allocated around the inner one")) goto done;
+		if(!check(released(&arena_c) == 1,"the inner arena holds only what was allocated inside it")) goto done;
+		if(!check(released(&arena_a) == 2,"the outer arena holds what was allocated around the inner one")) goto done;
 		for(int i=0;i<4;i++) kept[i] = NULL;
 	}
-	if(!check(hl_gc_group_release(NULL) == 0,"releasing no group does nothing")) goto done;
+	if(!check(hl_gc_arena_release(NULL) == 0,"releasing no arena does nothing")) goto done;
 	result = 0;
 done:
 	return result;
