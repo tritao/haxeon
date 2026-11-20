@@ -394,7 +394,8 @@ HL_PRIM realtime_file_lock *HL_NAME(__host_file_lock_acquire)(vstring *path) {
 	return lock;
 #else
 	char *owned = realtime_host_path(path);
-	int file = open(owned, O_RDWR | O_CREAT
+	/* O_CLOEXEC: a child that outlives this process must not keep its lock (exohost could not restart). */
+	int file = open(owned, O_RDWR | O_CREAT | O_CLOEXEC
 #ifdef O_NOFOLLOW
 		| O_NOFOLLOW
 #endif

@@ -520,8 +520,17 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 		if (fcntl(parent_ends[i], F_SETFL, O_NONBLOCK) < 0) error = errno;
 	if (error == 0) { error = posix_spawn_file_actions_init(&actions); actions_ready = error == 0; }
 	if (error == 0) { error = posix_spawnattr_init(&spawn_attributes); attributes_ready = error == 0; }
-	if (error == 0 && new_process_group) error = posix_spawnattr_setpgroup(&spawn_attributes, 0);
-	if (error == 0 && new_process_group) error = posix_spawnattr_setflags(&spawn_attributes, POSIX_SPAWN_SETPGROUP);
+	short spawn_flags = 0;
+	if (error == 0 && new_process_group) {
+		error = posix_spawnattr_setpgroup(&spawn_attributes, 0);
+		spawn_flags |= POSIX_SPAWN_SETPGROUP;
+	}
+#ifdef __APPLE__
+	/* The child gets its stdio and nothing else: a descriptor the parent opened without O_CLOEXEC (a lock, a socket)
+	   must not outlive the parent in it. Linux has no such flag; its descriptors are opened O_CLOEXEC. */
+	spawn_flags |= POSIX_SPAWN_CLOEXEC_DEFAULT;
+#endif
+	if (error == 0 && spawn_flags != 0) error = posix_spawnattr_setflags(&spawn_attributes, spawn_flags);
 	for (int i = 0; i < 3 && error == 0; i++) error = posix_spawn_file_actions_adddup2(&actions, pipes[i][i == 0 ? 0 : 1], i);
 	for (int i = 0; i < 3 && error == 0; i++)
 		for (int j = 0; j < 2 && error == 0; j++) error = posix_spawn_file_actions_addclose(&actions, pipes[i][j]);
@@ -538,8 +547,7 @@ HL_PRIM realtime_child_process *HL_NAME(__process_spawn)(vstring *command, varra
 		error = ENOTSUP;
 #endif
 	}
-	if (error == 0) error = posix_spawnp(&pid, program, &actions,
-		new_process_group ? &spawn_attributes : NULL, argv, env);
+	if (error == 0) error = posix_spawnp(&pid, program, &actions, &spawn_attributes, argv, env);
 	if (attributes_ready) posix_spawnattr_destroy(&spawn_attributes);
 	if (actions_ready) posix_spawn_file_actions_destroy(&actions);
 	for (int i = 0; i <= count; i++) free(argv[i]);
