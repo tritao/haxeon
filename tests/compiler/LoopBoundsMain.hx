@@ -43,6 +43,11 @@ class LoopBoundsMain {
 		expect(count("function scan(a:Array<Int>):Int { var n = 0; for (i in -1...a.length) n += a[i]; return n; }",
 			"scan") == 0,
 			"negative start cannot use signed upper bound alone");
+		expect(count("function scan(a:Array<Int>):Int { var n = 0; for (x in a) n += x; return n; }", "scan") == 1,
+			"an array for-in counts from -1 and tests the incremented index against the length");
+		expect(count("function resize(a:Array<Int>):Void { a.pop(); } function scan(a:Array<Int>):Int { var n = 0; for (x in a) { resize(a); n += x; } return n; }",
+			"scan") == 0,
+			"an array for-in whose body may resize the array keeps its check");
 		expect(count("function scan(a:Array<Int>):Int { var n = 0; for (i in 0...a.length) for (j in (i + 1)...a.length) n += a[i] + a[j]; return n; }",
 			"scan") == 2,
 			"nested nbody-style start has a dominating nonnegative outer range");

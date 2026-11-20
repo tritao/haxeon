@@ -2,6 +2,12 @@ package compiler.ir;
 
 import compiler.ir.Ir;
 
+/** An induction variable's first tested value: `value` plus `offset`. */
+private typedef InductionStart = {
+	final value:IrValue;
+	final offset:Int;
+}
+
 private typedef BoundsLoop = {
 	final header:Int;
 	final members:Map<Int, Bool>;
@@ -137,7 +143,8 @@ class IrLoopBounds {
 		for (loop in loops)
 			if (loop.members.exists(accessBlock) && stable(loop)) {
 				var start = inductionStart(index, loop);
-				if (start != null && nonnegative(start, loop.header, []) && guarded(array, index, accessBlock, loop))
+				if (start != null && startsNonnegative(start, loop.header, [])
+					&& guarded(array, index, accessBlock, loop))
 					return true;
 			}
 		return false;
@@ -166,7 +173,20 @@ class IrLoopBounds {
 		return false;
 	}
 
-	function inductionStart(index:IrValue, loop:BoundsLoop):Null<IrValue> {
+	/** Whether the first index the loop tests, `start.value + start.offset`, is at least zero. */
+	function startsNonnegative(start:InductionStart, header:Int, seen:Map<Int, Bool>):Bool {
+		if (start.offset == 0)
+			return nonnegative(start.value, header, seen);
+		var literal = integer(start.value, []);
+		return literal != null && literal + start.offset >= 0;
+	}
+
+	/**
+	 * Where `index` starts in `loop`: an induction variable counting up by one from a value before the loop, or that value
+	 * plus one, tested before its first use (`index = i + 1` with `i` starting at `start - 1`, or at a constant, as a for-in
+	 * over an array counts from -1).
+	 */
+	function inductionStart(index:IrValue, loop:BoundsLoop):Null<InductionStart> {
 		var phi = index, preincrement = false;
 		switch definitions.get(index.id) {
 			case Add(_, left, right) if (one(right)):
@@ -184,20 +204,23 @@ class IrLoopBounds {
 			case Phi(_, incoming): incoming;
 			default: return null;
 		};
-		var start:Null<IrValue> = null, step = false;
+		var start:Null<IrValue> = null, offset = 0, step = false;
 		for (input in inputs)
 			if (!loop.members.exists(input.block)) {
-				var initial = input.value;
+				var initial = input.value, initialOffset = 0;
 				if (preincrement)
 					switch definitions.get(initial.id) {
 						case Sub(_, left, right) if (one(right)):
 							initial = left;
+						case ConstInt(_, _):
+							initialOffset = 1;
 						default:
 							return null;
 					}
-				if (start != null && start.id != initial.id)
+				if (start != null && (start.id != initial.id || offset != initialOffset))
 					return null;
 				start = initial;
+				offset = initialOffset;
 			} else if (preincrement) {
 				if (input.value.id != index.id)
 					return null;
@@ -209,7 +232,7 @@ class IrLoopBounds {
 					default:
 						return null;
 				}
-		return step ? start : null;
+		return step && start != null ? {value: start, offset: offset} : null;
 	}
 
 	function one(value:IrValue):Bool {
@@ -254,7 +277,7 @@ class IrLoopBounds {
 		for (loop in loops)
 			if (loop.members.exists(atBlock) && stable(loop)) {
 				var start = inductionStart(value, loop);
-				if (start == null || !nonnegative(start, loop.header, seen))
+				if (start == null || !startsNonnegative(start, loop.header, seen))
 					continue;
 				for (id in graph.order)
 					if (loop.members.exists(id)) {
