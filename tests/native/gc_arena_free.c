@@ -19,6 +19,7 @@ HL_PRIM double hl_gc_allocated_since_collection(void);
 #define COUNT 100000
 static void **blocks;
 static void *global_slot;
+static varray *table;
 static void **outside;
 static int tracked;
 static int arena_a, arena_b, arena_c, arena_d, arena_e, arena_f, arena_g;
@@ -92,6 +93,7 @@ int main(void) {
 	memset(blocks,0,sizeof(void*) * COUNT);
 	hl_add_root(&global_slot);
 	hl_add_root(&outside);
+	hl_add_root(&table);
 	const char *option = getenv("HL_GC_ARENA_TRACKING");
 	tracked = !(option && strcmp(option,"0") == 0);
 	for(int i=0;i<COUNT;i+=4096) hl_add_root(&blocks[i]); // part of `blocks` is a root, the rest plain memory
@@ -200,6 +202,17 @@ int main(void) {
 		if(!expect_kept(freed(&arena_a),"an object homed in an arena is that arena's")) goto done;
 		global_slot = NULL;
 		outside[5] = NULL;
+	}
+	/* A table made outside that grows inside an arena grows in its own pages, so the arena is still released. */
+	{
+		table = hl_alloc_array(&hlt_i32,4);
+		void *previous = hl_gc_arena_enter(&arena_c);
+		for(int i=0;i<64;i++) hl_gc_alloc_raw(64);
+		hl_array_reserve(table,100000);
+		hl_gc_arena_leave(previous);
+		int found = freed(&arena_c);
+		if( tracked && !check(found == 0,"a table that grew inside an arena does not keep it")) goto done;
+		table = NULL;
 	}
 	result = 0;
 done:
