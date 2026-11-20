@@ -1754,15 +1754,14 @@ class CallResolver {
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
 		var expectedEnumName = enumName(expectedType);
-		var constructorName = name.indexOf(".") < 0 ? name : compiler.core.QualifiedName.last(name);
-		var enumCase = expectedEnumName != null
-			&& sourceIsBareReference(span) ? enumCaseInfo(expectedEnumName + "." + constructorName) : null;
+		var enumCase = expectedEnumName != null && sourceIsBareReference(span) ? enumCaseInfoOf(expectedEnumName,
+			name.indexOf(".") < 0 ? name : compiler.core.QualifiedName.last(name)) : null;
 		if (enumCase == null) {
 			enumCase = enumCaseInfo(name);
 			if (enumCase == null && expectedEnumName != null && name.indexOf(".") < 0)
-				enumCase = enumCaseInfo(expectedEnumName + "." + constructorName);
+				enumCase = enumCaseInfoOf(expectedEnumName, name);
 			if (enumCase == null && name.indexOf(".") < 0)
-				enumCase = uniqueEnumCaseInfo(constructorName, arguments.length, span);
+				enumCase = uniqueEnumCaseInfo(name, arguments.length, span);
 		}
 		if (enumCase != null)
 			return typeEnumConstructor(name, arguments, expectedType, enumCase, span, scope);
@@ -1885,12 +1884,13 @@ class CallResolver {
 
 	public function enumCaseInfo(name:String):Null<EnumConstructorInfo> {
 		var separator = name.lastIndexOf(".");
-		if (separator < 0)
-			return null;
-		var qualifier = name.substring(0, separator),
-			qualifiedType = session.declarations.enumQualifierType(qualifier),
-			enumName = enumName(qualifiedType),
-			caseName = name.substring(separator + 1);
+		return separator < 0 ? null : enumCaseInfoOf(name.substring(0, separator), name.substring(separator + 1));
+	}
+
+	/** The constructor `caseName` of the enum `qualifier` names, as `enumCaseInfo` finds `qualifier.caseName`. */
+	function enumCaseInfoOf(qualifier:String, caseName:String):Null<EnumConstructorInfo> {
+		var qualifiedType = session.declarations.enumQualifierType(qualifier),
+			enumName = enumName(qualifiedType);
 		if (enumName == null || !session.enumDecls.exists(enumName))
 			return null;
 		var declaration = requiredMapValue(session.enumDecls, enumName);

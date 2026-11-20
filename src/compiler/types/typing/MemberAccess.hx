@@ -72,6 +72,11 @@ class MemberAccess {
 		return null;
 	}
 
+	static function member<V>(table:Map<String, Map<String, V>>, owner:String, name:String):Null<V> {
+		var members = table.get(owner);
+		return members == null ? null : members.get(name);
+	}
+
 	static function baseClassOf(session:TypingSession, className:Null<String>):Null<String> {
 		var declaration = className == null ? null : session.classDecls.get(className);
 		return declaration == null || declaration.base == null ? null : baseName(declaration.base);
@@ -88,7 +93,7 @@ class MemberAccess {
 	}
 
 	static function findMethod(session:TypingSession, className:String, name:String):Null<SemanticMethodInfo> {
-		var info = session.methodInfo.get(className + "." + name);
+		var info = member(session.methodsByOwner, className, name);
 		if (info != null)
 			return info;
 		var classDecl = session.classDecls.get(className);
@@ -174,7 +179,7 @@ class MemberAccess {
 	}
 
 	static function declaredMethod(session:TypingSession, owner:String, name:String):Null<DeclaredMember> {
-		var declared = session.signatures.get(owner + "." + name);
+		var declared = member(session.signaturesByOwner, owner, name);
 		return declared == null ? null : {
 			owner: owner,
 			name: name,
@@ -235,7 +240,7 @@ class MemberAccess {
 			seen:Map<String, Bool> = [];
 		while (current != null && !seen.exists(current)) {
 			seen.set(current, true);
-			var declared = session.signatures.get(current + "." + name);
+			var declared = member(session.signaturesByOwner, current, name);
 			if (declared != null && (declared.isPublic != null || declared.isOverride != true))
 				return declared.isPublic == true;
 			var base = session.classDecls.get(current);

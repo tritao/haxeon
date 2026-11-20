@@ -1,6 +1,7 @@
 package compiler.semantic;
 
 import compiler.core.InternalError;
+import compiler.core.QualifiedName;
 import compiler.semantic.DeclarationLifecycle.DeclarationStage;
 import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstArgument;
@@ -32,6 +33,11 @@ class SemanticProgram {
 	public final relations:TypeRelations;
 	public final signatures:Map<String, AstFunction>;
 	public final methodInfo:Map<String, SemanticMethodInfo>;
+
+	/** `signatures` and `methodInfo` by owner, then member name (`QualifiedName.byOwner`). */
+	public final signaturesByOwner:Map<String, Map<String, AstFunction>>;
+
+	public final methodsByOwner:Map<String, Map<String, SemanticMethodInfo>>;
 	public final lifecycle:DeclarationLifecycle;
 	public final lifecycleMetrics:SemanticLifecycleMetrics;
 
@@ -223,12 +229,14 @@ class SemanticProgram {
 		if (preparedSignatures != null && preparedMethodInfo != null) {
 			signatures = preparedSignatures;
 			methodInfo = preparedMethodInfo;
-			return;
+		} else {
+			signatures = [];
+			methodInfo = [];
+			fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures,
+				methodInfo);
 		}
-		signatures = [];
-		methodInfo = [];
-		fillSignatures(program.interfaces, program.classes, program.abstracts, program.functions, signatures,
-			methodInfo);
+		signaturesByOwner = QualifiedName.byOwner(signatures);
+		methodsByOwner = QualifiedName.byOwner(methodInfo);
 	}
 
 	/**

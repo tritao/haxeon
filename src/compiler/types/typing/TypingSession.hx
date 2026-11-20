@@ -34,6 +34,11 @@ class TypingSession {
 
 	public var methodInfo:Map<String, SemanticMethodInfo> = [];
 
+	/** `signatures` and `methodInfo` by owner, then member name, as the program bound last has them. */
+	public var signaturesByOwner:Map<String, Map<String, AstFunction>> = [];
+
+	public var methodsByOwner:Map<String, Map<String, SemanticMethodInfo>> = [];
+
 	/** The program's static extensions (`StaticExtensions`), from the program bound last. */
 	public var staticExtensions:compiler.semantic.StaticExtensionTable = compiler.semantic.StaticExtensionTable.empty();
 	public final externals:Map<String, {arguments:Array<CompilerType>, result:CompilerType}>;
@@ -392,6 +397,8 @@ class TypingSession {
 		relations = semantic.relations;
 		signatures = semantic.signatures;
 		methodInfo = semantic.methodInfo;
+		signaturesByOwner = semantic.signaturesByOwner;
+		methodsByOwner = semantic.methodsByOwner;
 		staticExtensions = semantic.staticExtensions;
 		enumDecls = declarations.enums;
 		enumsByFile = null;

@@ -32,4 +32,24 @@ class QualifiedName {
 		parts.push(path.substring(start, path.length));
 		return parts;
 	}
+
+	/**
+	 * `table` by owner, then by the last component of its names: for a `name` without a dot, `table.get(owner + "." + name)` is
+	 * `byOwner(table).get(owner).get(name)`, found without building the qualified name.
+	 */
+	public static function byOwner<V>(table:Map<String, V>):Map<String, Map<String, V>> {
+		var result:Map<String, Map<String, V>> = [];
+		for (key => value in table) {
+			var separator = key.lastIndexOf(".");
+			if (separator < 0)
+				continue;
+			var owner = key.substring(0, separator), members = result.get(owner);
+			if (members == null) {
+				members = [];
+				result.set(owner, members);
+			}
+			members.set(key.substring(separator + 1, key.length), value);
+		}
+		return result;
+	}
 }
