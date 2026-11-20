@@ -20,6 +20,9 @@ typedef NativeDefinition = {
 class NativeRegistry {
 	final definitions:Map<String, NativeDefinition> = [];
 
+	/** The first part of every dotted native name (`hasChild`). */
+	final parents:Map<String, Bool> = [];
+
 	public function new(?configuration:Array<NativeDefinition>) {
 		if (configuration != null)
 			for (native in configuration)
@@ -34,6 +37,9 @@ class NativeRegistry {
 			throw new InternalError('Native "$name" is reserved by the compiler runtime ABI');
 		if (definitions.exists(name))
 			throw new InternalError('Native "$name" is already registered');
+		var dot = name.indexOf(".");
+		if (dot > 0)
+			parents.set(name.substring(0, dot), true);
 		definitions.set(name, {
 			name: name,
 			library: library,
@@ -59,12 +65,9 @@ class NativeRegistry {
 		return result;
 	}
 
-	public function hasChild(prefix:String):Bool {
-		for (name in definitions.keys())
-			if (name != prefix && name.indexOf(".") > 0 && name.substring(0, name.indexOf(".")) == prefix)
-				return true;
-		return false;
-	}
+	/** Whether a native is named `prefix.something`. */
+	public function hasChild(prefix:String):Bool
+		return parents.exists(prefix);
 
 	public function irNatives():Array<IrNative>
 		return [for (name in sortedNames()) {
