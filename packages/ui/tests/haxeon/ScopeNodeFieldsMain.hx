@@ -6,6 +6,8 @@ import haxeon.ui.core.WidgetId;
 import nativekit.ffi.NativeKitTypes.WindowDecorationRegionKind;
 
 class ScopeNodeFieldsMain {
+	static final callerFilter:String->Bool = function(command:String):Bool return command == "caller.command";
+
 	static function main():Int {
 		var first = new RenderNode(new WidgetId(1));
 		var boundary = new ScopeRootBoundary(first);
@@ -17,6 +19,7 @@ class ScopeNodeFieldsMain {
 		first.hitTestBehavior = HitTestBehavior.ChildrenOnly;
 		first.focusTrap = true;
 		first.hitTestSelf = false;
+		first.commandShortcutFilter = callerFilter;
 		var next = new RenderNode(first.id);
 		boundary.transfer(first, next);
 		check(next);
@@ -34,9 +37,11 @@ class ScopeNodeFieldsMain {
 		var changed = new RenderNode(plain.id);
 		changed.cursor = CursorShape.Crosshair;
 		changed.tabIndex = 12;
+		var bodyFilter:String->Bool = function(command:String):Bool return false;
+		changed.commandShortcutFilter = bodyFilter;
 		authored.transfer(plain, changed);
-		if (changed.cursor != CursorShape.Crosshair
-			|| changed.tabIndex != 12) throw "Body-owned fields failed to advance without a caller override";
+		if (changed.cursor != CursorShape.Crosshair || changed.tabIndex != 12
+			|| changed.commandShortcutFilter != bodyFilter) throw "Body-owned fields failed to advance without a caller override";
 		return 42;
 	}
 	static function check(node:RenderNode):Void {
@@ -44,6 +49,7 @@ class ScopeNodeFieldsMain {
 			|| node.tabIndex != 7 || node.commandScope != "caller"
 			|| node.windowDecoration != WindowDecorationRegionKind.Drag
 			|| node.windowDecorationCursor != CursorShape.Move || node.hitTestBehavior != HitTestBehavior.ChildrenOnly
-			|| !node.focusTrap || node.hitTestSelf) throw "Caller node fields lost on body replacement";
+			|| !node.focusTrap || node.hitTestSelf
+			|| node.commandShortcutFilter != callerFilter) throw "Caller node fields lost on body replacement";
 	}
 }

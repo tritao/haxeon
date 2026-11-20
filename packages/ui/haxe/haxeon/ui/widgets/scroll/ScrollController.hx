@@ -17,7 +17,16 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 	public var contentWidth(default, null):Float;
 	public var contentHeight(default, null):Float;
 	public var hasMetrics(default, null):Bool;
-
+	/** Fling decay: velocity is multiplied by this much per second, so about 2 s bring 4000 px/s to rest. */
+	static inline var FlingFriction:Float = 0.135;
+	/** A fling slower than this (px/s) is not started, and one that decays below it stops. */
+	static inline var FlingMinVelocity:Float = 30.0;
+	var flingX:Float = 0.0;
+	var flingY:Float = 0.0;
+	/** True while momentum from `fling` is still moving the content. */
+	public var isFlinging(get, never):Bool;
+	inline function get_isFlinging():Bool
+		return flingX != 0.0 || flingY != 0.0;
 
 	public function new(offsetX:Float = 0.0, offsetY:Float = 0.0) {
 		if (!finiteNonNegative(offsetX) || !finiteNonNegative(offsetY))
@@ -58,6 +67,57 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		return true;
 	}
 
+	/**
+	 * Starts momentum from a release velocity in px/s (positive scrolls toward larger offsets). The speed decays
+	 * exponentially, and an axis stops at its edge. Any other offset change ends the fling.
+	 */
+	public function fling(velocityX:Float, velocityY:Float):Void {
+		if (!Math.isFinite(velocityX) || !Math.isFinite(velocityY)) throw "Fling velocity must be finite";
+		cancelAnimation();
+		flingX = flingStart(velocityX, offsetX, maxScrollX);
+		flingY = flingStart(velocityY, offsetY, maxScrollY);
+		if (isFlinging && binding.scheduler != null) binding.scheduler.track(this);
+	}
+
+	/** Ends momentum where the content is now. */
+	public function stopFling():Void {
+		flingX = 0.0;
+		flingY = 0.0;
+	}
+
+	/** The velocity an axis starts with: none when it is too slow, has no room to scroll, or already sits at the edge it heads for. */
+	function flingStart(velocity:Float, offset:Float, maxScroll:Float):Float {
+		if (Math.abs(velocity) < FlingMinVelocity) return 0.0;
+		if (hasMetrics && maxScroll <= 0.0) return 0.0;
+		if (velocity < 0.0 && offset <= 0.0) return 0.0;
+		if (velocity > 0.0 && hasMetrics && offset >= maxScroll) return 0.0;
+		return velocity;
+	}
+
+	/** Moves the content by this frame's share of the fling; returns whether momentum remains. */
+	function advanceFling(deltaSeconds:Float):Bool {
+		if (!isFlinging || deltaSeconds <= 0.0) return isFlinging;
+		var decay = Math.pow(FlingFriction, deltaSeconds);
+		// The distance covered while v decays exponentially: v * (1 - decay) / -ln(friction).
+		var travel = (1.0 - decay) / -Math.log(FlingFriction);
+		var nextX = clampX(offsetX + flingX * travel);
+		var nextY = clampY(offsetY + flingY * travel);
+		if (nextX == offsetX || (flingX < 0.0 && nextX <= 0.0) || (flingX > 0.0 && hasMetrics && nextX >= maxScrollX)) flingX = 0.0;
+		if (nextY == offsetY || (flingY < 0.0 && nextY <= 0.0) || (flingY > 0.0 && hasMetrics && nextY >= maxScrollY)) flingY = 0.0;
+		flingX *= decay;
+		flingY *= decay;
+		if (Math.abs(flingX) < FlingMinVelocity) flingX = 0.0;
+		if (Math.abs(flingY) < FlingMinVelocity) flingY = 0.0;
+		targetX = nextX;
+		targetY = nextY;
+		if (nextX != offsetX || nextY != offsetY) {
+			offsetX = nextX;
+			offsetY = nextY;
+			notifyChanged();
+		}
+		return isFlinging;
+	}
+
 	/** Enables time-based exponential movement; jumpTo always remains immediate. */
 	public function configureAnimation(enabled:Bool, duration:Float = 0.12):Void {
 		if (!Math.isFinite(duration) || duration < 0) throw "Scroll duration must be finite and non-negative";
@@ -82,7 +142,8 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 
 	public function advance(deltaSeconds:Float):Bool {
 		if (!Math.isFinite(deltaSeconds) || deltaSeconds < 0) throw "Scroll time must be finite and non-negative";
-		if (deltaSeconds == 0) return offsetX != targetX || offsetY != targetY;
+		var flinging = advanceFling(deltaSeconds);
+		if (deltaSeconds == 0) return flinging || offsetX != targetX || offsetY != targetY;
 		var remaining = animationDuration == 0 ? 0 : Math.pow(0.01, deltaSeconds / animationDuration);
 		var nextX = targetX + (offsetX - targetX) * remaining;
 		var nextY = targetY + (offsetY - targetY) * remaining;
@@ -93,10 +154,11 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 			offsetY = nextY;
 			notifyChanged();
 		}
-		return offsetX != targetX || offsetY != targetY;
+		return flinging || offsetX != targetX || offsetY != targetY;
 	}
 
 	public function cancelAnimation():Void {
+		stopFling();
 		if (binding.scheduler != null) binding.scheduler.remove(this);
 		targetX = offsetX;
 		targetY = offsetY;
@@ -112,7 +174,7 @@ class ScrollController implements haxeon.ui.animation.RetainedAnimation {
 		binding.changed = callback;
 		binding.scheduler = clock;
 		binding.owner = owner;
-		if (binding.scheduler != null && (offsetX != targetX || offsetY != targetY)) binding.scheduler.track(this);
+		if (binding.scheduler != null && (offsetX != targetX || offsetY != targetY || isFlinging)) binding.scheduler.track(this);
 	}
 
 	@:allow(haxeon.ui.widgets.scroll.ScrollBinding)

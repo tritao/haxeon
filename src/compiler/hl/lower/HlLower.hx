@@ -142,7 +142,16 @@ class HlLower {
 		var affected = regenerated;
 		if (!trustCache || regenerated == null || loweredCache == null || !loweredCache.entries.iterator().hasNext()) {
 			// The final IR of a plain build is verified where it is made (`FrontendCompilation`), once, whatever the backend.
-			if (!irVerified)
+			// A frozen function (a retired signature, or a lambda the program dropped) is code the running module holds for
+			// its closures: the objects it names may be gone from the program, so it is lowered against the published types
+			// and not verified against this program.
+			if (!irVerified && frozen != null) {
+				var selected:Map<String, Bool> = [];
+				for (fn in program.functions)
+					if (!frozen(fn.name))
+						selected.set(fn.name, true);
+				IrVerifier.verifyFunctions(program, selected);
+			} else if (!irVerified)
 				IrVerifier.verify(program);
 		} else {
 			// Only regenerated functions are lowered again. Every other function's IR compared equal, provenance and file
@@ -2380,13 +2389,49 @@ class HlLower {
 		return index;
 	}
 
+	/**
+	 * The type index of object `name`. An object the program no longer has can still be named by a function the module keeps
+	 * for the running program's closures (`HlModuleAssembler.dropGuards`), such as a lambda an edit deleted or whose captures
+	 * changed, with its environment. A resident session reuses that function's lowered code, but a resumed one lowers it again
+	 * from its IR, so such an object resolves to the type the running module has (`publishedObjectType`).
+	 */
 	function requireObjectType(name:String):Int {
-		if (!objectTypeIndices.exists(name))
-			throw new HlMissingEntity('Unknown IR object "$name"');
 		var index = objectTypeIndices.get(name);
+		if (index == null)
+			index = publishedObjectType(name);
+		if (index == null)
+			throw new HlMissingEntity('Unknown IR object "$name"');
 		if (requests != null)
 			requests.push(TypeOf(IrType.Obj(name), index));
 		return index;
+	}
+
+	/** The published type index of object `name` when the program does not declare it, else null (see `requireObjectType`). */
+	function publishedObjectType(name:String):Null<Int> {
+		if (view.object(name) != null)
+			return null;
+		var published = symbols.objectDefinition(name);
+		return published == null ? null : published.index;
+	}
+
+	/** HashLink's index of field `name` in published object `typeName`, declared by it or one of its published bases. */
+	function publishedFieldIndex(typeName:String, name:String):Null<{index:Int, owner:String}> {
+		var owner:Null<String> = typeName;
+		while (owner != null) {
+			var index = symbols.objectFieldIndex(owner, name),
+				published = symbols.objectDefinition(owner);
+			if (index != null)
+				return {index: index, owner: owner};
+			owner = published == null ? null : switch published.definition {
+				case Object(_, base, _, _, _, _) if (base >= 0):
+					switch symbols.types[base] {
+						case Object(baseName, _, _, _, _, _): symbols.strings[baseName];
+						default: null;
+					}
+				default: null;
+			};
+		}
+		return null;
 	}
 
 	function requireEnumConstructor(typeName:String, type:IrType, constructor:Int):Int {
@@ -2427,8 +2472,23 @@ class HlLower {
 		var owner = typeName;
 		while (true) {
 			var descriptor = view.object(owner);
-			if (descriptor == null)
+			if (descriptor == null) {
+				// An object only a function the program no longer has names: its fields are where the running module has them.
+				var published:Null<{index:Int, owner:String}> = null;
+				if (owner == typeName && publishedObjectType(typeName) != null)
+					published = publishedFieldIndex(typeName, name);
+				if (published != null) {
+					if (byName == null) {
+						byName = [];
+						fieldSlots.set(typeName, byName);
+					}
+					byName.set(name, published);
+					if (requests != null)
+						requests.push(FieldSlot(published.owner, name, published.index));
+					return published.index;
+				}
 				throw new HlMissingEntity('Unknown IR object "$owner"');
+			}
 			var declares = false;
 			for (field in descriptor.fields)
 				if (field.name == name)

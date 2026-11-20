@@ -19,6 +19,7 @@ import haxeon.ui.semantics.Semantics;
 	var authored_hitTestBehavior:HitTestBehavior;
 	var authored_focusTrap:Bool;
 	var authored_hitTestSelf:Bool;
+	var authored_commandShortcutFilter:Null<String->Bool>;
 
 	var styleOverrides:Int = 0;
 	var semanticsOverride:Bool = false;
@@ -40,6 +41,7 @@ import haxeon.ui.semantics.Semantics;
 		authored_hitTestBehavior = root.hitTestBehavior;
 		authored_focusTrap = root.focusTrap;
 		authored_hitTestSelf = root.hitTestSelf;
+		authored_commandShortcutFilter = root.commandShortcutFilter;
 
 		handlers = root.handlers == null ? 0 : root.handlers.length;
 		outside = root.outsidePointerDownHandlers == null ? 0 : root.outsidePointerDownHandlers.length;
@@ -155,6 +157,8 @@ import haxeon.ui.semantics.Semantics;
 		if (authored_hitTestBehavior == inner.authored_hitTestBehavior) authored_hitTestBehavior = next.hitTestBehavior;
 		if (authored_focusTrap == inner.authored_focusTrap) authored_focusTrap = next.focusTrap;
 		if (authored_hitTestSelf == inner.authored_hitTestSelf) authored_hitTestSelf = next.hitTestSelf;
+		if (authored_commandShortcutFilter
+			== inner.authored_commandShortcutFilter) authored_commandShortcutFilter = next.commandShortcutFilter;
 		if (semantics == inner.semantics) semantics = next.semantics;
 		handlers += (next.handlers == null ? 0 : next.handlers.length) - inner.handlers;
 		outside += (next.outsidePointerDownHandlers == null ? 0 : next.outsidePointerDownHandlers.length)
@@ -202,6 +206,10 @@ import haxeon.ui.semantics.Semantics;
 		var next_hitTestSelf = next.hitTestSelf;
 		if ((nodeOverrides & 128) != 0) next.hitTestSelf = previous.hitTestSelf;
 		authored_hitTestSelf = next_hitTestSelf;
+		if (previous.commandShortcutFilter != authored_commandShortcutFilter) nodeOverrides |= 256;
+		var next_commandShortcutFilter = next.commandShortcutFilter;
+		if ((nodeOverrides & 256) != 0) next.commandShortcutFilter = previous.commandShortcutFilter;
+		authored_commandShortcutFilter = next_commandShortcutFilter;
 	}
 
 	function transferStyle(previous:LayoutStyle, next:LayoutStyle):Void {

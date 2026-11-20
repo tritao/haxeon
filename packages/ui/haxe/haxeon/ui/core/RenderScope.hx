@@ -101,9 +101,10 @@ class RenderScope extends ReactiveDependencySet {
 		var parent = previous == null ? null : previous.parent;
 		var slot = parent == null ? -1 : parent.children.indexOf(previous);
 		beginDependencies();
+		var next:Null<RenderNode> = null;
 		try {
 			if (previous != null) context.beforeRenderScopeChange(previous);
-			var next = context.buildRenderScope(this, rootId);
+			next = context.buildRenderScope(this, rootId);
 			if (next == null || !next.id.equals(rootId) || next.parent != null && !(next == previous
 				&& next.parent == parent)) throw "A render scope body must produce its reserved, unparented root";
 			var existing = next.scopeOwner();
@@ -133,6 +134,10 @@ class RenderScope extends ReactiveDependencySet {
 			failDependencies();
 			throw error;
 		}
+		// A rerun builds outside the enclosing view, like a patch: a view wrapper that moves nodes after building
+		// (TooltipOverlayHost lifts tooltips) must see what the body made, or the new nodes and the ones it moved
+		// before would carry one ID. The initial mount runs inside that view's build, which sees it.
+		if (previous != null) context.renderScopeRebuilt(next);
 	}
 
 	override public function onMaybeStale():Void {

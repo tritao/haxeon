@@ -172,8 +172,65 @@ class DesktopUiHost {
 				if (NativeKit.nk_window_set_icons(window, pixels, images) != Result.Ok)
 					throw "Window icons failed: " + NativeKit.nk_last_error();
 			}
+			// The outer bounds in logical pixels, which a later run can pass back as the placement.
+			var readPlacement = function():Null<WindowPlacement> {
+				var position = NativeKit.nk_window_get_position(window);
+				var size = NativeKit.nk_window_get_size(window);
+				if (position.status != Result.Ok || size.status != Result.Ok) return null;
+				// The size is the client area's; the bounds set on the next run are the outer frame's.
+				var width = size.out_width, height = size.out_height;
+				var frame = NativeKit.nk_window_get_frame_extents(window);
+				if (frame.status == Result.Ok) {
+					width += frame.out_extents.get_left() + frame.out_extents.get_right();
+					height += frame.out_extents.get_top() + frame.out_extents.get_bottom();
+				}
+				return new WindowPlacement(position.out_x, position.out_y, width, height, false);
+			};
+			// Whether the bounds, set on this window as they are, would overlap a connected monitor. A monitor the
+			// window was on may since have been disconnected. When the monitors cannot be listed, the answer is yes.
+			var onSomeMonitor = function(bounds:WindowPlacement):Bool {
+				var scale = NativeKit.nk_window_get_scale(window);
+				var monitors = Bytes.alloc(16 * 4);
+				var count = Bytes.alloc(4);
+				count.setInt32(0, 16);
+				if (scale.status != Result.Ok || NativeKit.nk_monitor_list(monitors, count) != Result.Ok) return true;
+				for (index in 0...count.getInt32(0)) {
+					var geometry = NativeKit.nk_monitor_get_geometry(new MonitorHandle(monitors.getInt32(index * 4)));
+					if (geometry.status != Result.Ok) continue;
+					var monitor = geometry.out_geometry;
+					// Windows reports monitors at the system scale and a window's bounds at the window's own scale.
+					var toWindow = Sys.systemName() == "Windows" ? monitor.get_scale_x() / scale.out_scale : 1.0;
+					if (bounds.x < (monitor.get_x() + monitor.get_width()) * toWindow
+						&& monitor.get_x() * toWindow < bounds.x + bounds.width
+						&& bounds.y < (monitor.get_y() + monitor.get_height()) * toWindow
+						&& monitor.get_y() * toWindow < bounds.y + bounds.height)
+						return true;
+				}
+				return false;
+			};
+			// A saved placement is applied while the window is still hidden (Windows), so it opens there without a jump.
+			// A placement that cannot be applied, or lies on no monitor, is ignored: the window keeps the place the
+			// system gave it. The placement was saved at the scale of the monitor the window was on, while the bounds
+			// are set at the scale of the monitor the system chose; moving there can change the scale, so the bounds
+			// are set once more at the new one.
+			var placement = options.placement;
+			if (placement != null && placement.width > 0 && placement.height > 0 && onSomeMonitor(placement)) {
+				var scale = NativeKit.nk_window_get_scale(window);
+				NativeKit.nk_window_set_bounds(window, placement.x, placement.y, placement.width, placement.height);
+				var moved = NativeKit.nk_window_get_scale(window);
+				if (scale.status == Result.Ok && moved.status == Result.Ok && moved.out_scale != scale.out_scale)
+					NativeKit.nk_window_set_bounds(window, placement.x, placement.y, placement.width, placement.height);
+			}
+			// The bounds a maximized window restores to are the last ones read while it was not maximized, first
+			// the ones it opens with, so a window maximized from the start still has a placement to save.
+			var restoredPlacement = readPlacement();
 			if (deferShowForIcon && NativeKit.nk_window_show(window, true) != Result.Ok)
 				throw "Window show failed: " + NativeKit.nk_last_error();
+			if (placement != null && placement.maximized)
+				NativeKit.nk_window_maximize(window);
+			// Windows does not bring a new window forward by itself; without this a reopened window lands behind.
+			if (options.activate)
+				NativeKit.nk_window_activate(window);
 
 			var graphicsApi:GraphicsApi = NativeKitGpu.nkgpu_default_graphics_api();
 			var surfaceOptions = new NativeSurfaceOptions();
@@ -275,6 +332,23 @@ class DesktopUiHost {
 			var hostContext = new DesktopUiHostContext(fonts, pump, window, surface,
 				function() session.stop(), scheduleFrame);
 			if (customChrome) hostContext.windowControls = new WindowControls(window, hostContext);
+			hostContext.windowActive = function():Bool {
+				var state = NativeKit.nk_window_get_state(window);
+				return state.status == Result.Ok && state.out_state.get_flags().contains(WindowStateFlags.Active);
+			};
+			hostContext.windowPlacement = function():Null<WindowPlacement> {
+				var state = NativeKit.nk_window_get_state(window);
+				if (state.status != Result.Ok) return null;
+				var flags = state.out_state.get_flags();
+				if (flags.contains(WindowStateFlags.Minimized)
+					|| flags.contains(WindowStateFlags.Fullscreen)) return null;
+				var last = restoredPlacement;
+				if (flags.contains(WindowStateFlags.Maximized))
+					return last == null ? null : new WindowPlacement(last.x, last.y, last.width, last.height, true);
+				var current = readPlacement();
+				if (current != null) restoredPlacement = current;
+				return current;
+			};
 			var liveRuntime = new UiHostRuntime(session, hostContext, window, surface,
 				initialWidth, initialHeight, applySizeLimits);
 			runtime = liveRuntime;
@@ -316,6 +390,10 @@ class DesktopUiHost {
 					case WindowClose(source) if (source.rawValue() == window.rawValue()):
 						hostContext.requestClose();
 						scheduleFrameWithReason("window-close");
+					// The application's Quit (Cmd-Q, the Dock, a menu's Quit role) closes this window as its close button does.
+					case Raw(kind, _, _, _, _, _, _) if (kind == EventKind.ApplicationQuitRequested):
+						hostContext.requestClose();
+						scheduleFrameWithReason("application-quit");
 					case WindowResize(source, width, height) if (source.rawValue() == window.rawValue()):
 						resizeSurface(width, height);
 					case WindowFramebufferResize(source, _,
@@ -375,6 +453,9 @@ class DesktopUiHost {
 									frameRequested = false;
 									liveRuntime.resize(liveRuntime.logicalWidth, liveRuntime.logicalHeight, width,
 										height);
+									// macOS reports SurfaceReady before its Metal layer has a size, so the ready
+									// event's framebuffer query can be 0x0. The first frame carries the real size.
+									liveRuntime.setSurfaceReady(width > 0 && height > 0);
 									var frameStartedAt = Sys.time();
 									var gcCountBefore = options.captureDirectory == null ? 0.0 : Gc.collections();
 									var gcMicrosBefore = options.captureDirectory == null ? 0.0 : Gc.markMicros();
@@ -739,6 +820,10 @@ class DesktopUiHost {
 		return new DesktopUiHostSession(step, finish);
 	}
 
+	/** Capture JSON names a function instead of failing on it (views may keep callbacks in inspected state). */
+	static function noFunctions(_:Dynamic, value:Dynamic):Dynamic
+		return Reflect.isFunction(value) ? "<function>" : value;
+
 	static function writeDiagnostics(options:DesktopUiHostOptions,
 			application:DesktopUiApplication, renderer:Renderer, state:UiHostRuntime,
 			events:Array<String>, frames:Array<Dynamic>, eventCounts:Map<String, Int>,
@@ -751,9 +836,9 @@ class DesktopUiHost {
 		}
 		File.saveContent(directory + "/ui-tree.txt", application.context().dumpTree() + "\n");
 		File.saveContent(directory + "/layout.json",
-			Json.stringify(application.context().inspect(), null, "  ") + "\n");
+			Json.stringify(application.context().inspect(), noFunctions, "  ") + "\n");
 		File.saveContent(directory + "/app-state.json",
-			Json.stringify(application.diagnosticState(), null, "  ") + "\n");
+			Json.stringify(application.diagnosticState(), noFunctions, "  ") + "\n");
 		var metrics = application.context().frameMetrics;
 		var stats = renderer.stats();
 		var frameData:Dynamic = {

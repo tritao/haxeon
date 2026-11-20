@@ -21,6 +21,7 @@ import haxeon.ui.widgets.overlays.Popup;
 import haxeon.ui.widgets.scroll.ScrollController;
 import haxeon.ui.widgets.text.Text;
 import haxeon.ui.widgets.text.TextField;
+import haxeon.ui.widgets.text.TextSelection;
 
 /** Search input and virtualized results with input-owned keyboard focus. Retain across builds. */
 class SearchPicker implements View {
@@ -39,6 +40,8 @@ class SearchPicker implements View {
 	public var placeholder:String = "Search";
 	public var prefix:String = "";
 	public var emptyText:String = "No matching results";
+	/** Keeps the whole query selected until the user edits it or moves the caret, so typing replaces a value the owner filled in. */
+	public var selectQuery:Bool = false;
 	public var modal:Bool = true;
 	public var dimBackdrop:Bool = false;
 	public var menuSurface:Bool = true;
@@ -92,13 +95,25 @@ class SearchPicker implements View {
 		inputStyle.height = LayoutAxis.fixed(34);
 		inputStyle.padding = new Insets(8, 4, 8, 4);
 		inputStyle.background = tokens.selectionField;
-		var input = new TextField("cv-input",
-			query,
-			function(value) model.setQuery(value),
-			inputStyle,
-			placeholder,
-			new TextStyle(15),
-			tokens.textPrimary);
+		var input:TextField = null;
+		// The field reads its selection provider again right after an edit, before the next build: drop it at once,
+		// or the first typed character is selected and replaced by the second ("builds" became "uilds").
+		var release = function() {
+			selectQuery = false;
+			if (input != null) {
+				input.selectionProvider = null;
+				input.onSelectionChange = null;
+			}
+		};
+		input = new TextField("cv-input", query, function(value) {
+			release();
+			model.setQuery(value);
+		}, inputStyle, placeholder, new TextStyle(15), tokens.textPrimary);
+		if (selectQuery) {
+			var end = query.length;
+			input.selectionProvider = function() return new TextSelection(0, end);
+			input.onSelectionChange = function(_) release();
+		}
 		input.placeholder = placeholder;
 		input.onSubmit = function(_) {
 			model.navigate(UiKey.Enter, haxeon.ui.core.UiModifier.empty(), 1);

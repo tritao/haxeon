@@ -1,5 +1,6 @@
 package tools;
 
+import build.execution.OutputCapture;
 import compiler.core.InternalError;
 import haxe.Json;
 import haxe.io.Path;
@@ -33,6 +34,11 @@ class WatchRun {
 			?session:build.BuildSession):Int {
 		if (Sys.systemName() != "Linux" && Sys.systemName() != "Mac" && Sys.systemName() != "Windows")
 			throw new InternalError("haxeon run --watch currently requires Linux, macOS or Windows");
+		// Each edit's result goes to the events file too, and the app (and a live host) learns its path from the environment.
+		var events = WatchEvents.pathFor(output),
+			rebuilds = 0;
+		WatchEvents.reset(events);
+		Sys.putEnv(WatchEvents.ENVIRONMENT, events);
 		var project = initial,
 			baseline = snapshot(project),
 			logPath = output + ".watch.log",
@@ -97,13 +103,32 @@ class WatchRun {
 				Sys.println("haxeon: source changed; rebuilding" + (compilerOnly ? " Haxe code" : " project"));
 				// `baseline` stays the snapshot this build started from: a save that lands while it runs differs from it, so the
 				// next pass builds again. Snapshotting after the build would take such a save as built.
-				var updated = rebuild(change);
+				var build = ++rebuilds;
+				rotateEvents(events);
+				WatchEvents.emit(events, "rebuild-started", build, null, null, changedPaths(previous, baseline));
+				// The build's output streams into the events file as it prints: its console is not where anyone looks.
+				// Lines are queued under the capture lock and appended in batches (WatchEventLines), all before the result event.
+				var lines = new WatchEventLines(events, build);
+				OutputCapture.begin(lines.add);
+				var updated = try rebuild(change) catch (error:haxe.Exception) {
+					OutputCapture.end();
+					lines.close();
+					throw error;
+				}
+				OutputCapture.end();
+				lines.close();
 				if (updated == null) {
 					Sys.stderr().writeString("haxeon: build failed; keeping the current app open\n");
+					WatchEvents.emit(events, "build-failed", build);
 					continue;
 				}
 				project = updated;
 				watcher = reopenWatcher(watcher, project);
+				var published = liveHost == null ? null : publication(output);
+				WatchEvents.emit(events, "build-ok", build, published == null ? null : published.revision);
+				if (liveHost != null && compilerOnly && published != null)
+					WatchEvents.emit(events, "patch-published", build, published.revision, null, null,
+						published.reloadReasons);
 				if (liveHost != null && compilerOnly) {
 					if (profile != null)
 						profile.keepRevision(output);
@@ -120,6 +145,7 @@ class WatchRun {
 				process.close();
 				finishProfile(profile);
 				profile = startProfile(profiling);
+				WatchEvents.emit(events, "reload", build, null, null, null, null, "restarting the app");
 				process = launch(runtime, output, arguments, project.root, logPath, liveHost, entry, profile);
 				logOffset = 0;
 			}
@@ -260,6 +286,11 @@ class WatchRun {
 			.concat(liveHost == null ? [output].concat(arguments) : [liveHost, output, entry,
 			Json.stringify(arguments)]);
 		var command = "exec " + commandArguments.map(quote).join(" ") + " > " + quote(logPath) + " 2>&1";
+		// macOS strips DYLD_* from what the protected /bin/sh inherits, so the app would not find its native
+		// libraries. Set the search path again inside the shell.
+		var dyldPath = Sys.systemName() == "Mac" ? Sys.getEnv("DYLD_LIBRARY_PATH") : null;
+		if (dyldPath != null && dyldPath.length > 0)
+			command = "export DYLD_LIBRARY_PATH=" + quote(dyldPath) + "; " + command;
 		// Without arguments, Process runs a Windows line through cmd /C, which supplies the outer quotes.
 		var windowsCommand = commandArguments.map(windowsQuote).join(" ") + " > " + windowsQuote(logPath) + " 2>&1";
 		if (Sys.systemName() == "Windows")
@@ -406,5 +437,54 @@ class WatchRun {
 			if (!before.exists(path) && Path.extension(path) != "hx")
 				return false;
 		return true;
+	}
+
+	/** Moves a file that grew past `WatchEvents.MAX_BYTES` to `<file>.1`, so a long session keeps the recent events and a bounded file. */
+	static function rotateEvents(path:String):Void {
+		try {
+			if (!FileSystem.exists(path) || FileSystem.stat(path).size < WatchEvents.MAX_BYTES)
+				return;
+			var previous = path + ".1";
+			if (FileSystem.exists(previous))
+				FileSystem.deleteFile(previous);
+			FileSystem.rename(path, previous);
+		} catch (_:Dynamic) {
+			WatchEvents.reset(path);
+		}
+	}
+
+	/** Paths that differ between two watch snapshots, sorted. */
+	static function changedPaths(before:Map<String, String>, after:Map<String, String>):Array<String> {
+		var result:Array<String> = [];
+		for (path in after.keys())
+			if (before.get(path) != after.get(path))
+				result.push(path);
+		for (path in before.keys())
+			if (!after.exists(path))
+				result.push(path);
+		result.sort(Reflect.compare);
+		return result;
+	}
+
+	/** The revision and reload reasons of the live publication the compiler just wrote, or null without one. */
+	static function publication(output:String):Null<{revision:Int, reloadReasons:Array<String>}> {
+		try {
+			var value:Dynamic = Json.parse(File.getContent(output + ".live.patch.json"));
+			if (!Std.isOfType(value.revision, Int))
+				return null;
+			var reasons:Null<Array<Dynamic>> = value.reloadReasons;
+			function describe(reason:Dynamic):String {
+				if (reason.code == null)
+					return Std.string(reason);
+				return reason.entityId == null ? Std.string(reason.code) : Std.string(reason.code) + " "
+					+ Std.string(reason.entityId);
+			}
+			var described = reasons == null ? [] : [for (reason in reasons) describe(reason)];
+			if (value.requiresReload == true && described.length == 0)
+				described.push("the build requires a reload");
+			return {revision: (value.revision: Int), reloadReasons: described};
+		} catch (_:Dynamic) {
+			return null;
+		}
 	}
 }

@@ -16,7 +16,9 @@ import haxeon.ui.core.UiEvent;
 import haxeon.ui.core.UiEventKind;
 import haxeon.ui.core.UiKey;
 import haxeon.ui.core.UiModifier;
+import haxeon.ui.core.UiTouchData;
 import haxeon.ui.core.View;
+import haxeon.ui.gestures.VelocityTracker;
 import haxeon.ui.semantics.AccessibilityAction;
 import haxeon.ui.semantics.AccessibilityOrientation;
 import haxeon.ui.semantics.AccessibilityRole;
@@ -28,6 +30,8 @@ import haxeon.ui.style.StyleTarget;
 class ScrollView implements View {
 	static inline var ScrollbarHitWidth:Float = 12.0;
 	static inline var ScrollbarInset:Float = 2.0;
+	/** Distance a touch must travel before it becomes a scroll rather than a tap. */
+	static inline var TouchSlop:Float = 8.0;
 	final key:Key;
 	final child:View;
 	final axis:Int;
@@ -249,6 +253,71 @@ class ScrollView implements View {
 				}
 				if (dx != 0 || dy != 0) visibility.value.reveal();
 				if (controller.scrollBy(dx, dy)) event.stopPropagation();
+			});
+			// A touch drag scrolls 1:1 and flings on release. Mouse input has no UiTouchData and keeps its wheel and
+			// scrollbar behaviour. The drag claims the pointer (capture and preventDefault) only once it passes the
+			// slop, so taps reach their buttons and an inner scroll view keeps a drag from the outer one.
+			var touch = context.resourceState(context.id("touch-scroll"), function() return new TouchScrollState(),
+				function(_) {}).value;
+			viewport.on(UiEventKind.PointerDown, function(event) {
+				if (event.button != 0 || !Std.isOfType(event.data, UiTouchData)) return;
+				if (touch.tracking && touch.scrolling && touch.pointer != event.pointerId) return;
+				controller.stopFling();
+				touch.begin(event.pointerId, event.x, event.y);
+			});
+			viewport.on(UiEventKind.PointerMove, function(event) {
+				if (!touch.tracking || touch.pointer != event.pointerId) return;
+				if (!touch.scrolling) {
+					if (event.defaultPrevented) {
+						touch.tracking = false;
+						return;
+					}
+					var movedX = event.x - touch.startX;
+					var movedY = event.y - touch.startY;
+					var absX = Math.abs(movedX);
+					var absY = Math.abs(movedY);
+					if (movedX * movedX + movedY * movedY < TouchSlop * TouchSlop) return;
+					var canX = axis != ScrollAxis.Vertical && controller.maxScrollX > 0.0;
+					var canY = axis != ScrollAxis.Horizontal && controller.maxScrollY > 0.0;
+					var claims = axis == ScrollAxis.Both ? canX || canY : axis == ScrollAxis.Vertical ? canY
+						&& absY >= absX : canX && absX >= absY;
+					if (!claims) {
+						touch.tracking = false;
+						return;
+					}
+					touch.scrolling = true;
+					touch.lastX = event.x;
+					touch.lastY = event.y;
+					touch.velocity.reset();
+					touch.velocity.add(Sys.time(), event.x, event.y);
+					event.capturePointer();
+					event.preventDefault();
+					return;
+				}
+				var deltaX = axis != ScrollAxis.Vertical ? touch.lastX - event.x : 0.0;
+				var deltaY = axis != ScrollAxis.Horizontal ? touch.lastY - event.y : 0.0;
+				touch.lastX = event.x;
+				touch.lastY = event.y;
+				touch.velocity.add(Sys.time(), event.x, event.y);
+				controller.jumpTo(controller.offsetX + deltaX, controller.offsetY + deltaY);
+				event.preventDefault();
+			});
+			viewport.on(UiEventKind.PointerUp, function(event) {
+				if (!touch.tracking || touch.pointer != event.pointerId) return;
+				var wasScrolling = touch.scrolling;
+				touch.tracking = false;
+				touch.scrolling = false;
+				if (!wasScrolling) return;
+				touch.velocity.add(Sys.time(), event.x, event.y);
+				touch.velocity.compute(Sys.time());
+				controller.fling(axis != ScrollAxis.Vertical ? -touch.velocity.velocityX : 0.0,
+					axis != ScrollAxis.Horizontal ? -touch.velocity.velocityY : 0.0);
+				event.preventDefault();
+			});
+			viewport.on(UiEventKind.PointerCancel, function(event) {
+				if (!touch.tracking || touch.pointer != event.pointerId) return;
+				touch.tracking = false;
+				touch.scrolling = false;
 			});
 			var handleKey = function(event:UiEvent) {
 				if (event.defaultPrevented) return;
@@ -486,4 +555,25 @@ private class ScrollbarDragState {
 	public var maximum:Float = 0.0;
 	public var travel:Float = 0.0;
 	public function new() {}
+}
+
+private class TouchScrollState {
+	public var tracking:Bool = false;
+	public var scrolling:Bool = false;
+	public var pointer:Int = 0;
+	public var startX:Float = 0.0;
+	public var startY:Float = 0.0;
+	public var lastX:Float = 0.0;
+	public var lastY:Float = 0.0;
+	public final velocity:VelocityTracker = new VelocityTracker();
+	public function new() {}
+
+	public function begin(pointer:Int, x:Float, y:Float):Void {
+		this.pointer = pointer;
+		tracking = true;
+		scrolling = false;
+		startX = lastX = x;
+		startY = lastY = y;
+		velocity.reset();
+	}
 }

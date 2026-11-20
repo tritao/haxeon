@@ -1,5 +1,6 @@
 package haxeon.ui.core;
 
+import haxeon.ui.style.Density;
 import haxeon.reactive.ReactiveRuntime;
 import haxeon.ui.debug.RenderCost;
 import haxeon.platform.Surface as PlatformSurface;
@@ -53,6 +54,8 @@ class UiContext {
 	public final gestures:GestureArena;
 	public final animations:AnimationScheduler;
 	public final interactionStates:InteractionStateStore;
+	/** Control sizing for the input in use; the host sets Touch when touch is primary. */
+	public var density:Density = Density.Pointer;
 
 	/** Application commands and shortcut scopes owned by this UI context. */
 	public final commands:CommandRegistry;
@@ -71,6 +74,7 @@ class UiContext {
 	var inspectionEnabled = false;
 	var inspectionNode:Null<RenderNode>;
 	var pendingFocus:Null<WidgetId> = null;
+	var pendingFocusLabel:Null<String> = null;
 	var windowFocused:Bool = true;
 	var focusBeforeWindowBlur:Null<WidgetId> = null;
 
@@ -207,12 +211,16 @@ class UiContext {
 		submittedStyleSheet = null;
 		hitTestIds = [];
 		disposed = false;
+		// The verification build lays out a throwaway copy of the tree: focus it asks for there (a widget that takes focus when
+		// first laid out) must not move the real focus, or the compared trees differ by something no frame did.
 		buildContext.setFocusRequester(function(id) {
-			return focusWidget(id);
+			return !verifying && focusWidget(id);
 		});
 		buildContext.setDeferredFocusRequester(function(id) {
+			if (verifying) return;
 			ensureLive();
 			pendingFocus = id;
+			pendingFocusLabel = buildContext.deferredFocusLabel;
 		});
 		customCanvases = new Map();
 		customLists = new Map();
@@ -302,7 +310,12 @@ class UiContext {
 	/** Builds a fresh view tree, resolves native layout, and reconnects geometry by stable ID. */
 	public function submit(view:View, frame:LayoutFrame):RenderNode {
 		var build = function() return view;
+		var focusBefore = focus.focusedId;
 		var result = submitInternal(frame, null, build);
+		// Focus moved during this frame: the nodes take on their focused state in the next one, so this frame's tree is
+		// not yet what a rebuild would give. The check waits for the following frame.
+		if (focus.focusedId != focusBefore)
+			return result;
 		return maybeVerifyRetention(build, frame, result);
 	}
 
@@ -707,9 +720,14 @@ class UiContext {
 		var routedInteractionRevision = interactionStates.revision;
 		var previousFocus = focus.focusedId;
 		focus.rebuild(next);
-		var requestedFocus = pendingFocus;
+		var requestedFocus = pendingFocus, requestedLabel = pendingFocusLabel;
 		pendingFocus = null;
-		if (requestedFocus != null) focus.focus(requestedFocus);
+		pendingFocusLabel = null;
+		if (requestedFocus != null && !focus.focus(requestedFocus) && requestedLabel != null) {
+			// A restored context keeps rows from an earlier build, so the id asked for may belong to a build that was discarded.
+			var stand = focus.eligibleTreeItemByLabel(requestedLabel);
+			if (stand != null) focus.focus(stand.id);
+		}
 		var nextFocus = focus.focusedId;
 		var focusChanged = (previousFocus == null
 			&& nextFocus != null) || (previousFocus != null && (nextFocus == null || !previousFocus.equals(nextFocus)));

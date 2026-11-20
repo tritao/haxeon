@@ -26,6 +26,7 @@ import build.execution.ExecutionBackend.ExecutionBackendFactory;
 import build.execution.ExecutionPlan;
 import build.execution.Executor;
 import build.execution.JobServer;
+import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.lowering.LoweringContext;
 import build.lowering.PlanLowerer;
@@ -51,6 +52,8 @@ import project.SourceAcquirer;
 import sys.FileSystem;
 import sys.io.File;
 import tools.DirectoryWatcher;
+import tools.WatchEventLines;
+import tools.WatchEvents;
 import tools.WatchRun;
 #if (target.threaded && !eval)
 import sys.thread.Lock;
@@ -84,6 +87,7 @@ class BuildSystemMain {
 		testWorkerVersionMemo();
 		testWatchChangeClassification();
 		testWatchSnapshot();
+		testWatchEventsFile();
 		testDirectoryWatcher();
 		#if (target.threaded && !eval)
 		testWatchBuildsSavesMadeDuringABuild();
@@ -904,9 +908,82 @@ class BuildSystemMain {
 		expect(status == 0, "the watched app exits normally");
 		expect(builds.length == 3, 'every save made during a build is built: ${builds.length} builds for 3 saves');
 		expect(builds[2] == File.getContent(source), "the last build saw the last save");
+		var kinds:Array<String> = [];
+		for (line in File.getContent(WatchEvents.pathFor(program)).split("\n"))
+			if (line.length > 0)
+				kinds.push(haxe.Json.parse(line).kind);
+		expect(kinds.join(",")
+			== "rebuild-started,build-failed,rebuild-started,build-ok,reload,rebuild-started,build-failed",
+			"the events file records each rebuild and its result: " + kinds.join(","));
+		expect(Sys.getEnv(WatchEvents.ENVIRONMENT) == WatchEvents.pathFor(program),
+			"the watched app learns the events file from its environment");
+		FileSystem.deleteFile(WatchEvents.pathFor(program));
 		FileTree.remove(root);
 	}
 	#end
+
+	/** Build output reaches the events file line by line, however a child process splits it, as one JSON object per line. */
+	static function testWatchEventsFile():Void {
+		var lines:Array<String> = [];
+		OutputCapture.begin(line -> lines.push(line));
+		OutputCapture.record("src/A.hx:4:2: E1005: Missing return\r\nsecond ");
+		OutputCapture.record("half\n");
+		build.BuildOutput.line("compiler: 12 ms");
+		OutputCapture.record("unterminated");
+		OutputCapture.end();
+		OutputCapture.record("not captured\n");
+		expect(lines.join("|") == "src/A.hx:4:2: E1005: Missing return|second half|compiler: 12 ms|unterminated",
+			"each printed line is delivered once, whole: " + lines.join("|"));
+		var root = temporaryDirectory("watch-events"), path = WatchEvents.pathFor(Path.join([root, "live.hl"]));
+		File.saveContent(path, "stale\n");
+		WatchEvents.reset(path);
+		WatchEvents.emit(path, "rebuild-started", 1, null, null, ["src/A.hx"]);
+		WatchEvents.emit(path, "output-line", 1, null, "src/A.hx:4:2: E1005: \"quoted\"");
+		WatchEvents.emit(path, "patch-rejected", null, 3, null, null, null, "refused");
+		WatchEvents.emit(null, "ignored");
+		var events:Array<Dynamic> =
+			[for (line in File.getContent(path).split("\n")) if (line.length > 0) haxe.Json.parse(line)];
+		expect(events.length == 3, "a new watch starts the file empty, one line per event: " + events.length);
+		expect(events[0].kind == "rebuild-started" && events[0].build == 1 && events[0].changedFiles[0] == "src/A.hx"
+			&& events[0].time > 0,
+			"an event carries its kind, time and fields");
+		expect(events[1].line == "src/A.hx:4:2: E1005: \"quoted\"", "an output line survives JSON quoting");
+		expect(events[2].revision == 3 && events[2].message == "refused" && events[2].build == null,
+			"fields that do not apply are null");
+		// A rebuild's output lines are queued and appended in batches; all of them are in the file, in order, before the
+		// event written after the batch is closed.
+		WatchEvents.reset(path);
+		var batch = new WatchEventLines(path, 2);
+		OutputCapture.begin(batch.add);
+		for (index in 0...500)
+			OutputCapture.record('line $index\n');
+		var waited = 0.0;
+		while (File.getContent(path).split("\n").length - 1 < 500 && waited < 10.0) {
+			Sys.sleep(0.05);
+			waited += 0.05;
+		}
+		expect(File.getContent(path).split("\n").length - 1 == 500,
+			"queued lines reach the file while the build still runs");
+		OutputCapture.record("last\n");
+		OutputCapture.end();
+		batch.close();
+		WatchEvents.emit(path, "build-failed", 2);
+		var batched:Array<Dynamic> =
+			[for (line in File.getContent(path).split("\n")) if (line.length > 0) haxe.Json.parse(line)];
+		expect(batched.length == 502, "every output line is written once, then the result: " + batched.length);
+		var ordered = batched.length == 502 && batched[500].line == "last" && batched[501].kind == "build-failed";
+		if (ordered)
+			for (index in 0...500)
+				if (batched[index].kind != "output-line" || batched[index].build != 2
+					|| batched[index].line != 'line $index')
+					ordered = false;
+		expect(ordered, "batched output lines keep their order and come before the build's result");
+		// A file that cannot be written (its path is a directory) is not the build's problem.
+		var blocked = new WatchEventLines(root, 3);
+		blocked.add("dropped");
+		blocked.close();
+		FileTree.remove(root);
+	}
 
 	static function testWatchChangeClassification():Void {
 		var before = ["src/A.hx" => "1:10", "src/B.hx" => "1:20", "haxeon.json" => "1:30"];

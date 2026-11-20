@@ -83,3 +83,18 @@ HL_PRIM bool HL_NAME(native_trace_install)( vstring *library ) {
 	return false;
 }
 #endif
+
+/* The performance counter, in ticks as a double (below 2^53 for centuries of uptime): the clock of NativeKit's
+   NK_LATENCY_TRACE file and of the input hook, so an application can stamp its own marks on that timeline. It needs no
+   NativeKit, so it is built either way. */
+HL_PRIM double HL_NAME(native_qpc)( void ) {
+#ifdef _WIN32
+	LARGE_INTEGER now;
+	QueryPerformanceCounter(&now);
+	return (double)now.QuadPart;
+#else
+	struct timespec now;
+	clock_gettime(CLOCK_MONOTONIC,&now);
+	return (double)now.tv_sec * 1e9 + (double)now.tv_nsec;
+#endif
+}

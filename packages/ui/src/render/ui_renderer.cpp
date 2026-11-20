@@ -442,6 +442,12 @@ bool create_atlas_image(UiRendererImpl::State &state, UiRendererImpl::State::Atl
     return true;
 }
 
+// Retained geometry bakes glyph UVs for one atlas page: once the page is gone those versions can never be drawn.
+void drop_geometry_for_missing_atlases(UiRendererImpl::State &state) {
+    if (!state.geometry) return;
+    state.geometry->drop_stale_atlases([&state](const AtlasTextureKey &key) { return state.atlases.contains(key); });
+}
+
 // Run after frame submission: queued uploads keep their source owner alive.
 void trim_atlas_cache(UiRendererImpl::State &state) {
     for (auto it = state.atlases.begin(); it != state.atlases.end();) {
@@ -449,6 +455,7 @@ void trim_atlas_cache(UiRendererImpl::State &state) {
         nkgpu_image_destroy(state.renderer, it->second.image);
         it = state.atlases.erase(it);
     }
+    drop_geometry_for_missing_atlases(state);
 }
 
 void copy_atlas_pixels(UiRendererImpl::State::AtlasImage &target, const AtlasUpload &upload,
@@ -489,6 +496,7 @@ void retire_atlas_generations(UiRendererImpl::State &state, AtlasTextureId textu
         nkgpu_image_destroy(state.renderer, iterator->second.image);
         iterator = state.atlases.erase(iterator);
     }
+    drop_geometry_for_missing_atlases(state);
 }
 
 /*

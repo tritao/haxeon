@@ -29,10 +29,13 @@ class TooltipOverlayHost implements View {
 		// A self-updating widget (Tabs) rebuilds without the view, so what it made has tooltips still in their anchors while the
 		// ones lifted by the build before stay in the overlay: both would carry one ID. Lift what a patch made in the place of
 		// the tooltip it replaces.
+		// A render scope that runs again alone does the same. When the content is that scope, its new root took the
+		// overlay's place (and the lifted tooltips, which its boundary keeps as the caller's).
 		context.onPatched = function(patched) {
+			var overlay = context.currentRoot(root);
 			var made:Array<RenderNode> = [];
 			patched.walk(function(node) {
-				if (node.styleType == "tooltip" && node.parent != root) made.push(node);
+				if (node.styleType == "tooltip" && node.parent != overlay) made.push(node);
 			});
 			for (tip in made) {
 				var anchor = tip.parent;
@@ -45,14 +48,14 @@ class TooltipOverlayHost implements View {
 				var entry = {tip: tip, anchor: anchor};
 				if (position < 0) {
 					lifted.push(entry);
-					root.add(tip.detach());
+					overlay.add(tip.detach());
 					continue;
 				}
 				var previous = lifted[position].tip;
 				lifted[position] = entry;
 				tip.detach();
-				if (previous.parent == root) previous.replaceWith(tip);
-				else root.add(tip);
+				if (previous.parent == overlay) previous.replaceWith(tip);
+				else overlay.add(tip);
 			}
 		};
 		return root;
