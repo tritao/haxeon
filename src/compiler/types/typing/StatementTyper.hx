@@ -572,7 +572,8 @@ class StatementTyper {
 			default:
 				typedIndex = ConversionResolver.plainValue(typedIndex, bodyTyper);
 				if ((switch typedIndex.type {
-					case TNever: true;
+					// A Dynamic index (an untyped `cast`) unifies with Int, as in Haxe.
+					case TNever | TDynamic: true;
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
 					default: false;
 				}))

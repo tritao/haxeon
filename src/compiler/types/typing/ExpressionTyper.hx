@@ -1650,7 +1650,8 @@ class ExpressionTyper {
 					refined == null ? CallResolver.nullableMapValue(value) : refined, span);
 			default: typedIndex = plain(typedIndex);
 				if ((switch typedIndex.type {
-					case TNever: true;
+					// A Dynamic index (an untyped `cast`) unifies with Int, as in Haxe.
+					case TNever | TDynamic: true;
 					case TAbstract(_, _, _): session.relations.isAssignable(typedIndex.type, TInt);
 					default: false;
 				})) typedIndex = bodyTyper.coerce(typedIndex, TInt, "array index", "E1014");
