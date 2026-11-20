@@ -20,6 +20,13 @@ run "$(haxeon_native_test gc_stack_boundary)"
 for mode in 0 1; do
 	HL_GC_ALLOC_FAST=$mode run "$(haxeon_native_test gc_arenas)"
 done
+# An arena released without a collection is reused at once when nothing points into it, and left to the collector when
+# a page, a root or a stack slot does; with write tracking off every release is left to the collector.
+for tracking in 1 0; do
+	for mode in 0 1; do
+		HL_GC_ARENA_TRACKING=$tracking HL_GC_ALLOC_FAST=$mode run "$(haxeon_native_test gc_arena_free)" >/dev/null
+	done
+done
 # Owned allocations come out of the thread's buffers through the inline entry.
 HL_GC_ALLOC_FAST=1 run "$(haxeon_native_test gc_owner_tlab)"
 # With the empty-page cache on, an owner's emptied pages stay cached until the owner is released.
@@ -30,4 +37,4 @@ if [ "$warnings" != 1 ]; then
 	cat "$work/classes.err" >&2
 	exit 1
 fi
-printf '%s\n' 'PASS: owners are counted from their pages, allocate from thread buffers, share pages past the class limit and give classes back; arenas own what they allocate'
+printf '%s\n' 'PASS: owners are counted from their pages, allocate from thread buffers, share pages past the class limit and give classes back; arenas own what they allocate and are released without a collection when nothing points in'
