@@ -1709,25 +1709,27 @@ class CallResolver {
 			if (methodCall != null)
 				return methodCall;
 		}
-		var parts = splitPath(name),
-			receiverName:Null<String> = null,
+		var receiverName:Null<String> = null,
 			receiver:Null<TypedExpression> = null,
 			methodName:Null<String> = null,
-			firstMember = 1;
-		if (parts.length >= 2) {
-			methodName = parts[parts.length - 1];
+			lastDot = name.lastIndexOf(".");
+		if (lastDot >= 0) {
+			methodName = name.substring(lastDot + 1);
+			// A declared function needs no receiver: its path is split only when it may name one.
 			if (!session.signatures.exists(name)) {
 				// A value in scope wins; otherwise the longest dotted prefix that
 				// names a type is the receiver, so "pkg.Type.FIELD.method()"
 				// types FIELD as a static member of pkg.Type.
+				var parts = splitPath(name), firstMember = 1;
 				var sourceParts = span.referenceName == null ? parts : splitPath(span.referenceName);
 				receiverName = sourceParts[0];
 				receiver = bodyTyper.resolveReceiver(receiverName, span, scope);
 				if (receiver != null)
 					parts = sourceParts;
-				var prefixLength = parts.length - 1;
+				// The first `prefixLength` parts of `name` end at `cut`, the dot after them.
+				var prefixLength = parts.length - 1, cut = lastDot;
 				while (receiver == null && prefixLength >= 1) {
-					var prefix = parts.slice(0, prefixLength).join(".");
+					var prefix = name.substring(0, cut);
 					var referenced = typeReference(prefix);
 					if (referenced != null) {
 						receiverName = prefix;
@@ -1736,13 +1738,14 @@ class CallResolver {
 						firstMember = prefixLength;
 					}
 					prefixLength--;
+					cut = name.lastIndexOf(".", cut - 1);
 				}
+				if (receiver != null)
+					for (index in firstMember...parts.length - 1)
+						receiver = bodyTyper.typedMemberWithFlow(receiver, parts[index],
+							BodyTyper.referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
 			}
 		}
-		if (receiver != null)
-			for (index in firstMember...parts.length - 1)
-				receiver = bodyTyper.typedMemberWithFlow(receiver, parts[index],
-					BodyTyper.referencePrefixSpan(parts.slice(0, index + 1).join("."), span), scope);
 		if (receiver != null)
 			receiver = unwrapNullable(receiver);
 		var expectedEnumName = enumName(expectedType);
