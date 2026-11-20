@@ -79,7 +79,9 @@ pages frees almost nothing yet: regions wait until outputs and scratch are alloc
    something still points in. The candidates: the front end of a one-shot build (syntax and typed trees), released
    after IR generation once what the IR keeps of it (files, spans, names) lives outside the region; and a build's
    temporaries in the compile server, once what the session retains and what a build discards are apart.
-   Per-function and per-pass temporaries are better served by reused scratch (steps 3 and 7): nothing is allocated.
+   Reused scratch (steps 3 and 7) removes the tables; what a function's typing, IR generation, inlining and lowering
+   still allocate is 85% temporaries, 1.5 GB in all, and regions per function released without a collection are what
+   keeps that out of the collector's schedule. Design, measurements and order: `ALLOCATION_REGIONS.md`.
 
 Flat records (step 7) are written so the source still builds with stock Haxe: a record is declared once as a struct
 under `#if haxeon` and as a final class otherwise, in one package, immutable and compared by `equals`, never by identity,
