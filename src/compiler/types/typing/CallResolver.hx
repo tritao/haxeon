@@ -11,6 +11,7 @@ import compiler.ffi.NativeLayout;
 import compiler.runtime.ArrayLibrary;
 import compiler.runtime.PlatformAbi;
 import compiler.runtime.RuntimeType;
+import compiler.syntax.Ast.AstAbstract;
 import compiler.syntax.Ast.AstArgument;
 import compiler.syntax.Ast.AstExpression;
 import compiler.syntax.Ast.AstFunction;
@@ -1114,6 +1115,13 @@ class CallResolver {
 			castCall.span) : castCall;
 	}
 
+	static function declaresMethod(declaration:AstAbstract, name:String, isStatic:Bool):Bool {
+		for (method in declaration.methods)
+			if (method.name == name && method.isStatic == isStatic)
+				return true;
+		return false;
+	}
+
 	public function typeAbstractMethodCall(receiver:TypedExpression, name:String, arguments:Array<AstExpression>,
 			span:SourceSpan,
 			scope:Scope):Null<TypedExpression> {
@@ -1126,6 +1134,9 @@ class CallResolver {
 				return null;
 		}
 		var rawDeclaration = session.enumAbstractDecls.get(abstractName);
+		// A member the abstract declares itself wins over the one its conformance synthesizes.
+		if (rawDeclaration != null && declaresMethod(rawDeclaration, name, false))
+			rawDeclaration = null;
 		if (rawDeclaration != null && FlagsGenerator.conforms(session, rawDeclaration)
 			&& FlagsGenerator.isMember(name, false)) {
 			var info = FlagsGenerator.signature(abstractName, name),
@@ -1644,6 +1655,8 @@ class CallResolver {
 				owner = abstractName == null ? written : abstractName,
 				member = name.substring(rawOwnerEnd + 1),
 				declaration = abstractName == null ? null : session.enumAbstractDecls.get(abstractName);
+			if (declaration != null && declaresMethod(declaration, member, true))
+				declaration = null;
 			if (declaration != null && FlagsGenerator.conforms(session, declaration)
 				&& FlagsGenerator.isMember(member, true)) {
 				var info = FlagsGenerator.signature(owner, member),
@@ -1656,7 +1669,8 @@ class CallResolver {
 		if (rawOwnerEnd > 0 && name.substring(rawOwnerEnd + 1) == "fromRaw") {
 			var rawOwner = session.enumAbstractName(name.substring(0, rawOwnerEnd)),
 				declaration = rawOwner == null ? null : session.enumAbstractDecls.get(rawOwner);
-			if (declaration != null && RawRepresentableGenerator.conforms(session, declaration)) {
+			if (declaration != null && !declaresMethod(declaration, "fromRaw", true)
+				&& RawRepresentableGenerator.conforms(session, declaration)) {
 				if (arguments.length != 1)
 					fail("E1008", "fromRaw expects one argument", span);
 				var raw = bodyTyper.lowerType(declaration.underlying, declaration.span),
