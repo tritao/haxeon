@@ -188,8 +188,8 @@ private class IrTypeAwareWalkState {
 	final nativeResults:Map<String, String>;
 	final staticTypes:Map<String, IrType> = [];
 
-	/** `operation\nTypeKey` (operation without detail) to the names of the functions serving it. */
-	final providers:Map<String, Array<String>> = [];
+	/** Operation, then `TypeKey` text, to the names of the functions serving it. */
+	final providers:Map<String, Map<String, Array<String>>> = [];
 
 	final reached:Map<String, Bool> = [];
 	final created:Map<String, Bool> = [];
@@ -199,7 +199,10 @@ private class IrTypeAwareWalkState {
 	final missingSeen:Map<String, Bool> = [];
 	final pending:Array<String> = [];
 	final sites:Array<DispatchSite> = [];
-	final siteSeen:Map<String, Bool> = [];
+	/** The methods with a dispatch site, by receiver class and by receiver interface. */
+	final classSites:Map<String, Map<String, Bool>> = [];
+
+	final interfaceSites:Map<String, Map<String, Bool>> = [];
 	final dynamicOperations:Map<String, Bool> = [];
 	final nativesDone:Map<String, Bool> = [];
 	var stringUsed:Bool = false;
@@ -223,9 +226,9 @@ private class IrTypeAwareWalkState {
 				case Serves(type, operation):
 					// Indexed by the whole operation and by its base: a typed operation names the former (`inline-enum-helper:box`), a dynamic
 					// site asks for the latter (every `equals:...` helper of a type).
-					addProvider(operation + "\n" + type.toString(), fn.name);
+					addProvider(operation, type.toString(), fn.name);
 					if (IrProviders.base(operation) != operation)
-						addProvider(IrProviders.base(operation) + "\n" + type.toString(), fn.name);
+						addProvider(IrProviders.base(operation), type.toString(), fn.name);
 				case None:
 			}
 		}
@@ -238,13 +241,23 @@ private class IrTypeAwareWalkState {
 			staticTypes.set(field.name, field.type);
 	}
 
-	function addProvider(key:String, name:String):Void {
-		var names = providers.get(key);
+	function addProvider(operation:String, type:String, name:String):Void {
+		var byType = providers.get(operation);
+		if (byType == null) {
+			byType = [];
+			providers.set(operation, byType);
+		}
+		var names = byType.get(type);
 		if (names == null) {
 			names = [];
-			providers.set(key, names);
+			byType.set(type, names);
 		}
 		names.push(name);
+	}
+
+	function providersOf(operation:String, type:String):Null<Array<String>> {
+		var byType = providers.get(operation);
+		return byType == null ? null : byType.get(type);
 	}
 
 	public function run():IrWalkResult {
@@ -346,10 +359,10 @@ private class IrTypeAwareWalkState {
 			case Intrinsic(_, operation, _):
 				var typed = IrProviders.typedOperation(operation);
 				if (typed != null) {
-					var key = typed.operation + "\n" + typed.subject.toString();
+					var subject = typed.subject.toString(), key = typed.operation + "\n" + subject;
 					demanded.set(key, true);
 					create(typeOfKey(operation));
-					var names = providers.get(key);
+					var names = providersOf(typed.operation, subject);
 					if (names == null) {
 						if (requireProviders && !missingSeen.exists(key)) {
 							missingSeen.set(key, true);
@@ -405,9 +418,13 @@ private class IrTypeAwareWalkState {
 	}
 
 	function site(typeName:String, method:String, isInterface:Bool):Void {
-		var key = typeName + (isInterface ? "\u0002" : "\u0001") + method;
-		if (!siteSeen.exists(key)) {
-			siteSeen.set(key, true);
+		var seen = isInterface ? interfaceSites : classSites, methods = seen.get(typeName);
+		if (methods == null) {
+			methods = [];
+			seen.set(typeName, methods);
+		}
+		if (!methods.exists(method)) {
+			methods.set(method, true);
 			sites.push({typeName: typeName, method: method, isInterface: isInterface});
 		}
 	}
@@ -465,13 +482,16 @@ private class IrTypeAwareWalkState {
 						reach(method, false);
 				}
 		}
-		for (operation in dynamicOperations.keys())
-			for (type in created.keys()) {
-				var names = providers.get(operation + "\n" + type);
-				if (names != null)
-					for (name in names)
-						reach(name, false);
-			}
+		for (operation in dynamicOperations.keys()) {
+			var byType = providers.get(operation);
+			if (byType != null)
+				for (type in created.keys()) {
+					var names = byType.get(type);
+					if (names != null)
+						for (name in names)
+							reach(name, false);
+				}
+		}
 		// Code is generated in place of a native that reached code calls, for every class; what it calls is reached here, once per symbol.
 		if (classDependencies != null)
 			for (name in [for (name in calledNatives.keys()) name]) {

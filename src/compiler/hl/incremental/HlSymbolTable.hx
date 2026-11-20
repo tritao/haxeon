@@ -344,7 +344,7 @@ class HlSymbolTable {
 				typeIndices.set(key, index);
 				return index;
 			case Function(arguments, result):
-				return internFunction(arguments, result);
+				return internFunctionByKey(arguments, result, key);
 			case Enum(name):
 				throw new InternalError('Enum type "$name" must be registered before use');
 			case Virtual(name):
@@ -885,12 +885,10 @@ class HlSymbolTable {
 		return methods.get(methodName);
 	}
 
-	public function internFunction(arguments:Array<IrType>, result:IrType):Int {
-		var key = 'fun(${[for (a in arguments) typeKey(a)].join(",")})->${typeKey(result)}',
-			found = typeIndices.get(key);
-		if (typeIndices.exists(key))
-			return typeIndices.get(key);
-		ensureWritable();
+	public function internFunction(arguments:Array<IrType>, result:IrType):Int
+		return internType(Function(arguments, result));
+
+	function internFunctionByKey(arguments:Array<IrType>, result:IrType, key:String):Int {
 		var args = [for (a in arguments) internType(a)],
 			ret = internType(result),
 			index = types.length;
