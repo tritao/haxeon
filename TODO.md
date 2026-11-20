@@ -187,6 +187,37 @@ SSA from.
   generator's control-flow lowering, so a new construct gets it right the
   first time.
 
+### Structure after the memory work
+
+Design debt and levers left once the peak work lands:
+
+- **A performance guard in CI.** Main-thread instructions, allocated bytes
+  and peak resident memory of the self-compile on the frozen input, failing
+  on a clear regression, so the gains stay.
+- **One IR representation.** Objects are the IR; `IrBody` columns exist
+  beside it, unused by any pass (rewriting on immutable bodies was slower).
+  Decide: design in-place editing and migrate
+  ([IR_CORE_COLUMNS.md](docs/design/IR_CORE_COLUMNS.md)), or keep columns
+  for read-only consumers (the lowering reading bodies) and remove the rest.
+- **The checked-arena runtime.** The fork's write tracking, evacuation and
+  layout registration are unused by the compiler (the pilot did not pay,
+  [ARENAS.md](docs/design/ARENAS.md)). Either make it a language feature with
+  users and tests, or shrink it to what is used.
+- **Ownership by lifetime instead of one-shot switches.** Several "when no
+  session is kept, release X" points exist; build data should live in a build
+  scope and session data in a session scope, so a one-shot compile just drops
+  the build scope and the two modes cannot drift.
+- **Finish integer identities** (ADR 0003 M3,
+  [INTEGER_IDENTITIES.md](docs/design/INTEGER_IDENTITIES.md)): binding and
+  symbol ids everywhere rather than one string key at a time.
+- **Parallel compilation** (ADR 0005): typing per class and lowering per
+  function are natural units; the largest wall-time lever left.
+- **Warm-build latency.** Benchmark compile-server and language-service
+  rebuilds (latency, memory) beside the one-shot self-compile.
+- **The collection policy.** The peak is the last collection's survivors plus
+  the 1 GB trigger; a trigger tied to the live data is a policy to measure,
+  not necessarily more collections.
+
 ### Known differences from Haxe still open
 
 The Haxe code Haxeon rejects or runs differently is listed in
