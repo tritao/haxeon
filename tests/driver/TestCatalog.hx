@@ -81,6 +81,7 @@ class TestCatalog {
 		"InlinerMain",
 		"InlinerSourceIdentityMain",
 		"IrStateEqualityMain",
+		"IrBodyMain",
 		"StaticNullCheckReuseMain",
 		"LoadStoreMain",
 		"StrengthReductionMain",

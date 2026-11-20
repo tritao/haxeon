@@ -41,6 +41,14 @@ class IrSymbol {
 		return symbol;
 	}
 
+	/** The symbol with id `id`, which must be one `of` has given. */
+	public static function at(id:Int):IrSymbol {
+		lock.acquire();
+		var symbol = byId[id];
+		lock.release();
+		return symbol;
+	}
+
 	/** How many symbols exist: every id is below it, so it sizes a table indexed by id. */
 	public static function count():Int {
 		lock.acquire();

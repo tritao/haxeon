@@ -280,10 +280,11 @@ class IrVerifier {
 
 	/**
 	 * `verify`, skipping the functions the last verification accepted whose IR and whose reads of the rest of the program are unchanged
-	 * (see `IrVerifyMemo`). The program-level checks still run in full.
+	 * (see `IrVerifyMemo`). The program-level checks still run in full. This is the pipeline's verification (`CompileOptions.verifyIr`),
+	 * so it also checks that each function it verifies round-trips through an `IrBody` (docs/design/IR_CORE_COLUMNS.md).
 	 */
 	public static function verifyReusing(program:IrProgram, memo:IrVerifyMemo):Void {
-		verifySelected(program, null, memo);
+		verifySelected(program, null, memo, new IrTypeIds());
 	}
 
 	/** Verify shared program metadata and only the named function bodies. */
@@ -291,7 +292,9 @@ class IrVerifier {
 		verifySelected(program, names, null);
 	}
 
-	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>, memo:Null<IrVerifyMemo>):Void {
+	/** With `bodies`, each verified function's body round trip is checked too, its types numbered there. */
+	static function verifySelected(program:IrProgram, selected:Null<Map<String, Bool>>, memo:Null<IrVerifyMemo>,
+			?bodies:IrTypeIds):Void {
 		var signatures:Map<String, {arguments:Array<IrType>, result:IrType, kind:IrFunctionKind}> = [];
 		var closureCasts:Map<String, String> = [];
 		for (fn in program.functions)
@@ -495,6 +498,11 @@ class IrVerifier {
 					verifyFunction(fn, tables.signatures, tables.objects, tables.interfaces, tables.enums,
 						tables.globals, tables.scalarFunctions,
 						tables.carrierSlots, tables.physicalValues, tables.closureCasts);
+					if (bodies != null) {
+						var difference = IrBody.roundTripDifference(fn, bodies);
+						if (difference != null)
+							throw new InternalError('IR body round trip: $difference');
+					}
 					if (memo != null)
 						memo.accept(fn);
 				} catch (error:InternalError) {

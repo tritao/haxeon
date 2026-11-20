@@ -50,6 +50,62 @@ class IrFunctionStateEquality {
 		return true;
 	}
 
+	/** Where two functions first differ, as `same` compares them, or null when they are the same; for error messages. */
+	public static function difference(left:IrFunction, right:IrFunction):Null<String> {
+		if (same(left, right))
+			return null;
+		if (left.name != right.name)
+			return 'name ${left.name} / ${right.name}';
+		if (!sameKind(left.kind, right.kind))
+			return 'kind ${left.kind} / ${right.kind}';
+		if (left.inlineHint != right.inlineHint || left.retention != right.retention)
+			return "inline hint or retention";
+		if (!IrVerifier.sameType(left.result, right.result))
+			return 'result ${left.result} / ${right.result}';
+		if (left.arguments.length != right.arguments.length)
+			return 'argument count ${left.arguments.length} / ${right.arguments.length}';
+		for (i in 0...left.arguments.length)
+			if (!value(left.arguments[i], right.arguments[i]))
+				return 'argument $i: ${describe(left.arguments[i])} / ${describe(right.arguments[i])}';
+		if (left.debugBindings.length != right.debugBindings.length)
+			return 'debug binding count ${left.debugBindings.length} / ${right.debugBindings.length}';
+		for (i in 0...left.debugBindings.length) {
+			var a = left.debugBindings[i], b = right.debugBindings[i];
+			if (a.identity != b.identity || a.name != b.name || a.path != b.path || a.scopeStart != b.scopeStart
+				|| a.scopeEnd != b.scopeEnd
+				|| !value(a.value, b.value))
+				return 'debug binding $i: ${a.name} ${describe(a.value)} / ${b.name} ${describe(b.value)}';
+		}
+		if (left.blocks.length != right.blocks.length)
+			return 'block count ${left.blocks.length} / ${right.blocks.length}';
+		for (i in 0...left.blocks.length) {
+			var a = left.blocks[i], b = right.blocks[i];
+			if (a.id != b.id)
+				return 'block $i id ${a.id} / ${b.id}';
+			if (a.instructions.length != b.instructions.length)
+				return 'block ${a.id} instruction count ${a.instructions.length} / ${b.instructions.length}';
+			for (j in 0...a.instructions.length) {
+				var x = a.instructions[j], y = b.instructions[j];
+				if (!instruction(x.value, y.value))
+					return 'block ${a.id} instruction $j: ${x.value} / ${y.value}';
+				if (!provenance(x.provenance, y.provenance))
+					return 'block ${a.id} instruction $j provenance';
+			}
+			var x = a.terminator, y = b.terminator;
+			if (x == null || y == null) {
+				if (x != y)
+					return 'block ${a.id} terminator presence';
+			} else if (!terminator(x.value, y.value))
+				return 'block ${a.id} terminator: ${x.value} / ${y.value}';
+			else if (!provenance(x.provenance, y.provenance))
+				return 'block ${a.id} terminator provenance';
+		}
+		return "unlocated";
+	}
+
+	static function describe(value:IrValue):String
+		return 'value ${value.id} "${value.name}" ${value.type}';
+
 	static function sameKind(a:compiler.ir.IrFunction.IrFunctionKind, b:compiler.ir.IrFunction.IrFunctionKind):Bool
 		return switch [a, b] {
 			case [Ordinary, Ordinary]: true;
