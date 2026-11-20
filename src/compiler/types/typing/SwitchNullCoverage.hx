@@ -174,6 +174,20 @@ class SwitchNullCoverage {
 	}
 
 	/**
+	 * `patterns` with its first column replaced by a constructor's `arity` arguments: `arguments`, or wildcards for a row that
+	 * matches any value there. Built only for the rows the constructor reaches.
+	 */
+	static function expandFirst(patterns:Array<NullPattern>, arguments:Null<Array<NullPattern>>,
+			arity:Int):Array<NullPattern> {
+		var result:Array<NullPattern> = [];
+		for (index in 0...arity)
+			result.push(arguments == null ? Any : arguments[index]);
+		for (index in 1...patterns.length)
+			result.push(patterns[index]);
+		return result;
+	}
+
+	/**
 	 * The missing positions of `rows` (one entry per column) when a switch below the root leaves a null unmatched, or null.
 	 * Follows Haxe's matcher: the first row picks the column, which is swapped with the first one, and a constructor's
 	 * arguments come before the remaining columns.
@@ -191,7 +205,8 @@ class SwitchNullCoverage {
 			}
 		if (column < 0)
 			return first.guarded ? missing(session, bodyTyper, rows.slice(1), width, root) : null;
-		var swapped = [for (row in rows) {
+		// Rows are never changed in place, so with the first column chosen they serve as they are.
+		var swapped = column == 0 ? rows : [for (row in rows) {
 			patterns:swap(row.patterns, column), guarded:row.guarded
 		}];
 		var type:Null<CompilerType> = null,
@@ -217,17 +232,18 @@ class SwitchNullCoverage {
 			}
 		for (value in values) {
 			var specialized:Array<NullRow> = [];
-			for (row in swapped) {
-				var rest = row.patterns.slice(1);
+			for (row in swapped)
 				switch row.patterns[0] {
 					case Any:
-						specialized.push({patterns: [for (_ in 0...value.arity) Any].concat(rest),
+						specialized.push({patterns: expandFirst(row.patterns, null, value.arity),
 							guarded: row.guarded});
 					case Value(key, _, _, arguments) if (key == value.key):
-						specialized.push({patterns: arguments.concat(rest), guarded: row.guarded});
+						specialized.push({
+							patterns: expandFirst(row.patterns, arguments, value.arity),
+							guarded: row.guarded
+						});
 					default:
 				}
-			}
 			var below = missing(session, bodyTyper, specialized, value.arity + width - 1, false);
 			if (below != null) {
 				var shown = value.arity == 0 ? value.name : '${value.name}(${below.slice(0, value.arity).join(", ")})';
