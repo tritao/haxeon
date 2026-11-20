@@ -384,9 +384,14 @@ class ModuleAnalyzer {
 		return parsed.ast;
 	}
 
-	/** Drops the parses kept for lookups into modules this build does not compile; a later lookup parses again. */
-	public function releaseLookupParses():Void
+	/**
+	 * Drops the parses kept for lookups into modules this build does not compile, and the imported members worked out from syntax
+	 * trees; a later lookup parses again.
+	 */
+	public function releaseLookupParses():Void {
 		lookupParses.clear();
+		importedMembers.clear();
+	}
 
 	/** Parses the module's current source, or returns the lookup parse of that same source. */
 	function sourceParse(state:ModuleState):LookupParse {

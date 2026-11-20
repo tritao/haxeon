@@ -118,6 +118,44 @@ class SessionState {
 			state.lastGoodSemanticModel = null;
 			state.canonicalFunctions = [];
 			state.canonicalAllFunctions = [];
+			state.canonicalProgramFunctions = [];
+			state.canonicalAliases = [];
+			state.canonicalEnums = [];
+			state.canonicalAbstracts = [];
+			state.canonicalInterfaces = [];
+			state.canonicalClasses = [];
+			state.canonicalNamespaceUses = [];
+			state.canonicalFunctionNamespaceUses = [];
+			state.canonicalCalls = [];
+			// Nothing canonical is left to reuse: a later canonicalization starts over.
+			state.canonicalRevision = -1;
+		}
+
+	/**
+	 * Releases the records only a next build reads to decide what to redo (dependency edges, fingerprints, the answers typed bodies
+	 * relied on, the inferred signatures and declaration types), for a compile that keeps no session once its last frontend pass has
+	 * assembled the IR tables. A pass that restarts reads them, so they are made as before and dropped only here. Changes the modules
+	 * in place, as `releaseRetained` does.
+	 */
+	public function releaseIncrementalRecords():Void
+		for (state in modules) {
+			state.semanticDependencies = [];
+			state.signatureFingerprints = [];
+			state.interfaceFingerprints = [];
+			state.aliasFingerprints = [];
+			state.enumFingerprints = [];
+			state.wireFieldFingerprints = [];
+			state.abstractFingerprints = [];
+			state.ownerConstraintFingerprints = [];
+			state.staticFieldFingerprints = [];
+			state.instanceInitializerFingerprints = [];
+			state.bodyFingerprints = [];
+			state.declarationTypeDigests = [];
+			state.inferredSignatures = [];
+			state.purityQueries = [];
+			state.noReturnQueries = [];
+			state.keyPathUses = [];
+			state.defaultArgumentSources = [];
 		}
 
 	public function new(types:TypeRegistry, genericSpecializations:GenericSpecializationRegistry,

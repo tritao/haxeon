@@ -66,9 +66,10 @@ class CompilationPipeline {
 				&& reusedFrom.backendEnvironment == backendKey ? reusedFrom.backend : null,
 			checkingReuse = context.options.checkReuse,
 			backendReused = previousBackend != null && !checkingReuse;
-		if (typedNew == null)
+		// A compile that keeps no session has let the typed program go once the IR tables were assembled.
+		if (typedNew == null && context.options.keepSession)
 			throw new InternalError("Build frontend did not produce a typed program");
-		var nativeTypeDescriptors = typedNew.nativeTypeDescriptors;
+		var nativeTypeDescriptors = frontend.nativeTypeDescriptors;
 		// A compile that keeps no session needs only the final IR from here on.
 		if (!context.options.keepSession) {
 			frontend.typedProgram = null;

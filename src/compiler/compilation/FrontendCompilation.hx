@@ -44,8 +44,14 @@ import compiler.compilation.PipelineSnapshot.PipelineInputs;
 typedef FrontendResult = {
 	final ir:Null<IrProgram>;
 	final moduleNames:Array<String>;
-	/** Null once a compile that keeps no session (`CompileOptions.keepSession`) has released it before the backend. */
+	/**
+	 * Null when a compile that keeps no session (`CompileOptions.keepSession`) has released it: once the IR tables are assembled
+	 * from it, or before the backend.
+	 */
 	var typedProgram:Null<TypedProgram>;
+
+	/** The typed program's native type descriptors, which outlive it. */
+	final nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData>;
 	final retyped:Array<String>;
 	final invalidations:Array<compiler.semantic.Invalidation.InvalidatedArtifact>;
 	final regenerated:Array<String>;
@@ -134,7 +140,18 @@ private class FrontendBuild {
 	public var analysisDoneAt:Float;
 	public var typingDoneAt:Float;
 	public var allocationAfterProgramTyping:AllocationSnapshot;
-	public var typedNew:TypedProgram;
+	/** Null once released (`FrontendCompilation.throughTables`); its native type descriptors are kept below. */
+	public var typedNew:Null<TypedProgram>;
+
+	/** The typed program, which the phases up to the IR tables read; an error once it is released. */
+	public function typed():TypedProgram {
+		var program = typedNew;
+		if (program == null)
+			throw new InternalError("The typed program was read after it was released");
+		return program;
+	}
+
+	public var nativeTypeDescriptors:Array<compiler.types.NativeTypeDescriptor.NativeTypeDescriptorData> = [];
 	public var typerMetrics:TyperPhaseMetrics;
 	public var generator:IrGenerator;
 	public var runtimeDependencies:Array<{
@@ -224,6 +241,47 @@ class FrontendCompilation {
 				regenerated:Array<String>,
 				retyped:Array<String>
 			}):FrontendResult {
+		while (true) {
+			var pass = throughTables(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics,
+				pendingBody,
+				pendingSignatures, pendingStructural, carried);
+			if (pass.result != null)
+				return pass.result;
+			var build = pass.build;
+			if (build == null) {
+				// A runtime helper found while typing joins the program: the next pass is an incremental one over what this one
+				// published, with the newly reachable modules to type, and the work of this pass carries over.
+				pendingBody = [];
+				pendingSignatures = [];
+				pendingStructural = [];
+				carried = pass.carried;
+				continue;
+			}
+			runIrPipeline(build);
+			selectChangedFunctions(build);
+			var irAssemblyDoneAt = now();
+			build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
+				AllocationMeter.sample()));
+			return result(build, build.ir, build.relocated, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
+		}
+	}
+
+	/**
+	 * One frontend pass up to the IR tables: a result when the pass ends there, the build to run the IR pipeline on, or neither and
+	 * what to carry into the pass that restarts it. It runs in a frame of its own, which is gone by the time the IR passes run: a
+	 * compile that keeps no session releases the typed program here, and a dead slot of a longer-lived frame would keep it alive.
+	 */
+	static function throughTables(context:CompilationContext, entryModule:String, token:Null<CancellationToken>,
+			rollbackModules:Map<String, ModuleState>, lowerToIr:Bool, indexSemantics:Bool,
+			pendingBody:Null<Map<String, Bool>>, pendingSignatures:Null<Map<String, Bool>>,
+			pendingStructural:Null<Map<String, Bool>>, carried:Null<{
+				regenerated:Array<String>,
+				retyped:Array<String>
+			}>):{
+				result:Null<FrontendResult>,
+				build:Null<FrontendBuild>,
+				carried:Null<{regenerated:Array<String>, retyped:Array<String>}>
+			} {
 		seedRepresentationModules(context);
 		var build = new FrontendBuild(context, entryModule, token, rollbackModules, lowerToIr, indexSemantics, carried);
 		startPass(build);
@@ -231,7 +289,7 @@ class FrontendCompilation {
 		resolveGraph(build, pendingBody, pendingSignatures, pendingStructural);
 		assembleSemantics(build);
 		typeProgram(build);
-		TypingWarnings.publish(context, entryModule, build.names, build.typedNew, rollbackModules);
+		TypingWarnings.publish(context, entryModule, build.names, build.typed(), rollbackModules);
 		rebuildSemanticIndex(build, typedFieldTypes(build));
 		publishObjects(build);
 		publishFunctions(build);
@@ -239,22 +297,20 @@ class FrontendCompilation {
 		pruneCachedFunctions(build);
 		generatePendingIr(build);
 		reportPass(build);
-		// A runtime helper found while typing joins the program after this pass. What was typed so far is published, so the next
-		// pass is an incremental one over it: it has the newly reachable modules to type, and the work of this pass carries over.
-		if (includeTypedRuntimeDependencies(context, build.runtimeDependencies, build.typedNew.functions,
+		if (includeTypedRuntimeDependencies(context, build.runtimeDependencies, build.typed().functions,
 			build.semanticAssembly.owners, build.names, rollbackModules)) {
-			context.state.lastTypedProgram = build.typedNew;
-			return run(context, entryModule, token, rollbackModules, snapshotDoneAt, lowerToIr, indexSemantics, [], [],
-				[], {
-					regenerated: build.regenerated,
-					retyped: build.retyped
-				});
+			context.state.lastTypedProgram = build.typed();
+			return {result: null, build: null, carried: {regenerated: build.regenerated, retyped: build.retyped}};
 		}
 		if (context.options.checkReuse)
 			checkHelperCalls(build.context.state.modules, build.names);
 		finishTyping(build);
 		if (!lowerToIr)
-			return result(build, null, [], build.typingLoweringDoneAt, null, null);
+			return {
+				result: result(build, null, [], build.typingLoweringDoneAt, null, null),
+				build: null,
+				carried: null
+			};
 		collectCachedIr(build);
 		checkCancelled(token);
 		// A compile that keeps no session assembles the IR from the typed program alone; the syntax is no longer needed.
@@ -263,12 +319,13 @@ class FrontendCompilation {
 			context.moduleAnalyzer.releaseLookupParses();
 		}
 		assembleTables(build);
-		runIrPipeline(build);
-		selectChangedFunctions(build);
-		var irAssemblyDoneAt = now();
-		build.allocationPhases.push(AllocationMeter.delta("ir-assembly", build.allocationAfterTyping,
-			AllocationMeter.sample()));
-		return result(build, build.ir, build.relocated, irAssemblyDoneAt, build.reusedPipeline, build.reuseMiss);
+		// The IR is made from the tables from here on: a compile that keeps no session lets the typed program go.
+		if (!context.options.keepSession) {
+			build.typedNew = null;
+			context.state.lastTypedProgram = null;
+			context.state.releaseIncrementalRecords();
+		}
+		return {result: null, build: build, carried: null};
 	}
 
 	/** The clock of every timestamp and duration in `FrontendResult`: milliseconds. */
@@ -431,6 +488,7 @@ class FrontendCompilation {
 			build.typingDoneAt = now();
 			var typedNew = typedResult.program;
 			build.typedNew = typedNew;
+			build.nativeTypeDescriptors = typedNew.nativeTypeDescriptors;
 			context.frontendPassFunctions.push(typedNew.functions.length);
 			build.generator = new IrGenerator(compiler.ir.ProgramFacts.of(typedNew), context.targetProfile());
 			build.typerMetrics = typedResult.metrics;
@@ -553,7 +611,7 @@ class FrontendCompilation {
 	/** The types typing gave the unannotated fields of the typed program, by key. */
 	static function typedFieldTypes(build:FrontendBuild):Map<String, CompilerType> {
 		var inferred = build.semanticAssembly.inferredDeclarations, result:Map<String, CompilerType> = [];
-		for (classDecl in build.typedNew.classes)
+		for (classDecl in build.typed().classes)
 			for (field in classDecl.fields)
 				if (inferred.exists(classDecl.name + "." + field.name))
 					result.set(classDecl.name + "." + field.name, field.type);
@@ -616,7 +674,7 @@ class FrontendCompilation {
 	/** The object layouts of the typed classes, in the object caches, and the generator that lowers against them. */
 	static function publishObjects(build:FrontendBuild):Void {
 		var context = build.context,
-			typedNew = build.typedNew,
+			typedNew = build.typed(),
 			generator = build.generator,
 			carried = build.carried,
 			objectCache = context.state.objectCache,
@@ -698,7 +756,7 @@ class FrontendCompilation {
 		var context = build.context,
 			token = build.token,
 			rollbackModules = build.rollbackModules,
-			typedNew = build.typedNew,
+			typedNew = build.typed(),
 			generator = build.generator,
 			owners = build.semanticAssembly.owners,
 			generatedByModule = build.semanticAssembly.generatedByModule,
@@ -869,11 +927,11 @@ class FrontendCompilation {
 				changed.push({declaration: declaration, before: before, after: digest});
 			context.state.writableState(module, build.rollbackModules).declarationTypeDigests.set(declaration, digest);
 		}
-		for (fn in build.typedNew.functions)
+		for (fn in build.typed().functions)
 			if (inferred.exists(fn.name))
 				publish(owners.get(fn.name), fn.name,
 					TFunction([for (argument in fn.arguments) argument.type], fn.result, []));
-		for (classDecl in build.typedNew.classes)
+		for (classDecl in build.typed().classes)
 			for (field in classDecl.fields)
 				if (inferred.exists(classDecl.name + "." + field.name))
 					publish(owners.get(classDecl.name + ".new"), classDecl.name + "." + field.name, field.type);
@@ -942,7 +1000,7 @@ class FrontendCompilation {
 
 	static function publishIndex(build:FrontendBuild):Void {
 		if (build.indexSemantics) {
-			indexTypedInitializers(build.context, build.typedNew, build.reindexedModules);
+			indexTypedInitializers(build.context, build.typed(), build.reindexedModules);
 			// An unannotated function's signature, as the table gave it, also where this build did not index its body.
 			for (module in build.reindexedModules.keys()) {
 				var state = build.context.state.modules.get(module);
@@ -950,7 +1008,7 @@ class FrontendCompilation {
 					for (key => signature in state.inferredSignatures)
 						recordInferredSignature(build.context, module, key, signature);
 			}
-			publishResolvedDependencies(build.context, build.typedNew, build.reindexedModules, build.rollbackModules);
+			publishResolvedDependencies(build.context, build.typed(), build.reindexedModules, build.rollbackModules);
 		}
 		build.allocationAfterIndexPublication = AllocationMeter.sample();
 	}
@@ -1287,7 +1345,7 @@ class FrontendCompilation {
 				if (compiler.ir.IrSourceRehash.of(held, currentHashes) != held)
 					throw new InternalError('--check-reuse: cached function "$functionName" of module "${owners.get(functionName)}" names a file hash that is not the file\'s current one');
 			}
-		dropUnusedKeyPathFields(build.typedNew, cached);
+		dropUnusedKeyPathFields(build.typed(), cached);
 	}
 
 	/**
@@ -1302,7 +1360,7 @@ class FrontendCompilation {
 	static function assembleTables(build:FrontendBuild):Void {
 		var context = build.context,
 			generator = build.generator,
-			typedNew = build.typedNew;
+			typedNew = build.typed();
 		var resolvedObjects = resolvedObjectsFrom(context.state.objectCache, typedNew,
 			functionNamesOf(build.cachedNames, typedNew));
 		var objectNames = [for (name in resolvedObjects.keys()) name];
@@ -1498,6 +1556,7 @@ class FrontendCompilation {
 			ir: ir,
 			moduleNames: build.names,
 			typedProgram: build.typedNew,
+			nativeTypeDescriptors: build.nativeTypeDescriptors,
 			retyped: build.retyped,
 			invalidations: semanticAssembly.invalidations,
 			regenerated: build.regenerated,
