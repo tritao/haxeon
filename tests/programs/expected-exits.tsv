@@ -610,6 +610,7 @@ enum-constants	42
 gc-stats	42
 dynamic-object-empty-array	42
 bytes-to-hex	42
+bytes-access	42
 statement-metadata	42
 int32-ucompare	42
 int64-low-high	42

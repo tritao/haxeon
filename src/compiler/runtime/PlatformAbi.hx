@@ -145,6 +145,32 @@ class PlatformAbi {
 			case "compare": {arguments: [CompilerType.TBytes], result: CompilerType.TInt,
 				nativeName: "__bytes_compare"};
 			case "toString": {arguments: noArguments(), result: CompilerType.TString, nativeName: "__bytes_to_string"};
+			// Haxe source in the stdlib (haxe/io/BytesAccess.hx), the same on every target.
+			case "fill": {
+				arguments: [CompilerType.TInt, CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TVoid,
+				nativeName: "haxe.io.BytesAccess.fill"
+			};
+			case "getUInt16": {
+				arguments: [CompilerType.TInt],
+				result: CompilerType.TInt,
+				nativeName: "haxe.io.BytesAccess.getUInt16"
+			};
+			case "setUInt16": {
+				arguments: [CompilerType.TInt, CompilerType.TInt],
+				result: CompilerType.TVoid,
+				nativeName: "haxe.io.BytesAccess.setUInt16"
+			};
+			case "getInt64": {
+				arguments: [CompilerType.TInt],
+				result: CompilerType.TInt64,
+				nativeName: "haxe.io.BytesAccess.getInt64"
+			};
+			case "setInt64": {
+				arguments: [CompilerType.TInt, CompilerType.TInt64],
+				result: CompilerType.TVoid,
+				nativeName: "haxe.io.BytesAccess.setInt64"
+			};
 			// Haxe source in the stdlib (haxe/io/BytesHex.hx), the same on every target.
 			case "toHex": {
 				arguments: noArguments(),
