@@ -93,10 +93,13 @@ class TypeRepresentation {
 	/** Resolve a method result through the receiver's nominal projection. */
 	public function resolveMethodResult(receiver:CompilerType, owner:String,
 			method:AstFunction):TypeRepresentationResult {
-		var substitutions = methodSubstitutions(receiver, owner);
+		var substitutions = methodSubstitutions(receiver, owner),
+			semantic = session.declarations.types.resultType(method, substitutions.semantic);
 		return {
-			semantic: session.declarations.types.resultType(method, substitutions.semantic),
-			physical: session.declarations.types.resultType(method, substitutions.physical)
+			semantic: semantic,
+			physical: substitutions.physical == substitutions.semantic
+				? semantic : session.declarations.types.resultType(method,
+				substitutions.physical)
 		};
 	}
 
@@ -109,7 +112,9 @@ class TypeRepresentation {
 		// Through the declaration types: an unannotated argument's type is its function body's.
 		var substitutions = methodSubstitutions(receiver, owner),
 			semantic = session.declarations.types.argumentTypes(method, substitutions.semantic),
-			physical = session.declarations.types.argumentTypes(method, substitutions.physical),
+			physical = substitutions.physical == substitutions.semantic
+				? semantic : session.declarations.types.argumentTypes(method,
+				substitutions.physical),
 			result:Array<TypeRepresentationResult> = [];
 		for (index in 0...method.arguments.length) {
 			var resolved:TypeRepresentationResult = {semantic: semantic[index], physical: physical[index]};
@@ -917,7 +922,7 @@ class TypeRepresentation {
 			},
 				physical = specialization != null ? copyMap(specialization.substitutions)
 				: typedInterface || isOwnInstance(projected) ? copyMap(semantic) : isGenericNominal(projected)
-				? erasedNominalSubstitutions(owner) : copyMap(semantic);
+				? erasedNominalSubstitutions(owner) : semantic;
 		return {semantic: semantic, physical: physical};
 	}
 
