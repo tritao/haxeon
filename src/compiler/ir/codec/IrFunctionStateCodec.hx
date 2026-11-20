@@ -473,7 +473,8 @@ class IrFunctionStateCodec {
 		var id:Int = value.id;
 		if (values.exists(id)) {
 			var previous = values.get(id);
-			if (previous.name != value.name || Std.string(previous.type) != Std.string(value.type))
+			if (previous != value
+				&& (previous.name != value.name || !compiler.ir.IrTypeIdentity.same(previous.type, value.type)))
 				throw new InternalError("Conflicting IR value identity");
 		}
 		values.set(id, value);
