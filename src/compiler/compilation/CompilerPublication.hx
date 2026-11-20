@@ -14,7 +14,7 @@ typedef PublishedBaseline = {
 typedef PendingPublication = {
 	final baseline:PublishedBaseline;
 	final revision:Int;
-	final abi:RuntimeAbiDescriptor;
+	final abi:Null<RuntimeAbiDescriptor>;
 	/** The state the build started from, which rejecting or retracting the publication returns to. */
 	final snapshot:SessionState;
 }
@@ -82,17 +82,21 @@ class CompilerPublication {
 			case Untracked, Ready(_):
 		}
 
-	public function candidate(revision:Int, abi:RuntimeAbiDescriptor, snapshot:SessionState):Void
-		state = switch state {
-			case Untracked: Untracked;
-			case Ready(baseline): Pending({
-				baseline: baseline,
-				revision: revision,
-				abi: abi,
-				snapshot: snapshot
-			});
-			case Pending(candidate): throw new InternalError('Publication revision ${candidate.revision} is still pending');
-		};
+	/** `abi` is null for a build that keeps no session (`BackendAssemblyResult.abi`). */
+	public function candidate(revision:Int, abi:Null<RuntimeAbiDescriptor>, snapshot:SessionState):Void {
+		switch state {
+			case Untracked:
+			case Ready(baseline):
+				state = Pending({
+					baseline: baseline,
+					revision: revision,
+					abi: abi,
+					snapshot: snapshot
+				});
+			case Pending(candidate):
+				throw new InternalError('Publication revision ${candidate.revision} is still pending');
+		}
+	}
 
 	/** A no-op build needs no host action and must not create an acknowledgement opportunity. */
 	public function unchanged(revision:Int):Void

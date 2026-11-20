@@ -15,7 +15,12 @@ typedef BackendAssemblyResult = {
 	/** The assembler the build left (HashLink; null for another backend); a reused result gives it back to the session. */
 	final assembler:Null<HlModuleAssembler>;
 
-	final abi:RuntimeAbiDescriptor;
+	/**
+	 * The runtime ABI the next build plans against; null for a plain build that keeps no session, which nothing plans against or
+	 * publishes from.
+	 */
+	final abi:Null<RuntimeAbiDescriptor>;
+
 	final reloadReasons:Array<AbiChange>;
 
 	/** The function slots a patch replaces. */

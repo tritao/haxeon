@@ -141,7 +141,9 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAtStart = AllocationMeter.sample();
 		PeakProbe.mark("backend-start");
 		compiler.ir.IrReachabilityReport.report("final program", ir);
-		var nextAbi = RuntimeAbi.describe(ir),
+		// Only a live build plans against an ABI, and only a kept session has a next build to plan with this one.
+		var nextAbi = context.livePatching
+			|| context.options.keepSession ? RuntimeAbi.describe(ir) : null,
 			previousAbi = context.state.publishedAbi,
 			baseAssembler = assembler;
 		var assemblyIr = ir;
@@ -158,7 +160,7 @@ class HashLinkBackendSession implements BackendSession {
 		// Lambdas are named by their position among their siblings. When an edit moved those names onto other functions, give
 		// the running module's lambdas the names their functions have now (see `LambdaAlignment`), so the plan compares, and
 		// the patch replaces, each function with itself. Only an assembler that holds the running layout can rename it.
-		if (context.livePatching && baseAssembler.isPublished() && previousAbi != null) {
+		if (context.livePatching && baseAssembler.isPublished() && previousAbi != null && nextAbi != null) {
 			var alignment = LambdaAlignment.align(previousAbi.positional, nextAbi.positional,
 				Std.string(baseAssembler.lastRevision() + 1),
 				LambdaAlignment.placesOf(previousAbi, nextAbi));
@@ -170,7 +172,7 @@ class HashLinkBackendSession implements BackendSession {
 		}
 		// Patch planning describes what a running module must do to adopt this build. Without live patching there is no
 		// running module, and the plan would only mix session history into the build.
-		var decision = context.livePatching ? PatchPlanner.plan(previousAbi, nextAbi, true,
+		var decision = context.livePatching && nextAbi != null ? PatchPlanner.plan(previousAbi, nextAbi, true,
 			baseAssembler.isPublished()) : PatchDecision.Patch,
 			reloadReasons:Array<AbiChange> = switch decision {
 				case Patch: [];
@@ -203,7 +205,7 @@ class HashLinkBackendSession implements BackendSession {
 		var allocationAfterCopy = AllocationMeter.sample();
 		var assembly = candidateAssembler.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
 			decision, relocated,
-			PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+			nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 		for (detail in assembly.layoutReasons)
 			reloadReasons.push(AssemblyLayoutChanged(detail));
 		for (reason in assembly.objectReasons)
@@ -223,7 +225,7 @@ class HashLinkBackendSession implements BackendSession {
 			var freshAssembly = fresh.assemble(assemblyIr, context.state.rehydratedChanges(regenerated, assemblyIr),
 				decision,
 				relocated,
-				PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
+				nextAbi == null ? null : PatchPlanner.dispatchedFunctions(previousAbi, nextAbi));
 			if (fresh.developmentMetadata)
 				attachSourceSnapshots(context, freshAssembly.module);
 			var difference = moduleDifference(assembly.module, freshAssembly.module);

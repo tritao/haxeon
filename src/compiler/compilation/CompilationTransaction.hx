@@ -4,7 +4,6 @@ import compiler.Compiler;
 import compiler.Compiler.CompileResult;
 import compiler.core.CancellationToken;
 import compiler.core.Diagnostic;
-import compiler.core.InternalError;
 
 /** Owns snapshot, rollback, and publication boundaries for one compilation. */
 class CompilationTransaction {
@@ -37,8 +36,6 @@ class CompilationTransaction {
 				transactionStartedAt, snapshotDoneAt, frontendStartedAt,
 				indexSemantics, compiler.publication.baseline());
 			var abi = candidate.publishedAbi;
-			if (abi == null)
-				throw new InternalError("Compilation did not produce a runtime ABI");
 			compiler.adoptCandidate(candidate);
 			if (result.unchanged)
 				compiler.publication.unchanged(result.revision);
