@@ -20,6 +20,8 @@ class ModuleAnalyzer {
 	final natives:NativeRegistry;
 	final compiledOnce:Bool;
 	final buildSemanticModels:Bool;
+	/** Whether a module keeps its tokens after its parse: a kept session reads them again (`lastGoodTokens`, semantic models). */
+	final keepsTokens:Bool;
 	final defines:Map<String, String>;
 	final sourceLoader:ModuleSourceLoader;
 	final declarationOwners:DeclarationOwners;
@@ -30,12 +32,14 @@ class ModuleAnalyzer {
 
 	public function new(modules:Map<String, ModuleState>, types:TypeRegistry, natives:NativeRegistry, compiledOnce:Bool,
 			defines:Map<String, String>,
-			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners) {
+			sourceLoader:ModuleSourceLoader, ?buildSemanticModels = true, ?declarationOwners:DeclarationOwners,
+			?keepsTokens = true) {
 		this.modules = modules;
 		this.types = types;
 		this.natives = natives;
 		this.compiledOnce = compiledOnce;
 		this.buildSemanticModels = buildSemanticModels;
+		this.keepsTokens = keepsTokens || buildSemanticModels;
 		this.defines = defines;
 		this.sourceLoader = sourceLoader;
 		this.declarationOwners = declarationOwners == null ? new DeclarationOwners() : declarationOwners;
@@ -58,7 +62,7 @@ class ModuleAnalyzer {
 			var parsed = sourceParse(state);
 			lookupParses.remove(state.name);
 			state.conditionalDefines = parsed.defines;
-			state.tokens = parsed.tokens;
+			state.tokens = keepsTokens ? parsed.tokens : [];
 			state.ast = parsed.ast;
 			declarationOwners.release(state.name);
 			indexDeclarations(state.name, state.parsedAst());

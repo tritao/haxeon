@@ -80,7 +80,7 @@ class CompilationContext {
 		// A copy: the loader remembers the names no root holds, and each build probes again for those.
 		moduleAnalyzer = new ModuleAnalyzer(state.modules, state.types, natives, state.compiledOnce, defines,
 			owner.sourceLoader.copy(), buildSemanticModels,
-			state.declarationOwners);
+			state.declarationOwners, options.keepSession);
 	}
 
 	public function parse(module:ModuleState, entry:String, body:Map<String, Bool>, signatures:Map<String, Bool>,
