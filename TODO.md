@@ -26,8 +26,9 @@ Longer-term direction is in `ROADMAP.md`.
      `getEnumConstructs`, `allEnums`, `typeof`, a class named as a value (`Main.twice()` with a `Dynamic` first
      argument), Haxe's `EnumTools` on an enum, and `enumConstructor`/`enumParameters` on `Dynamic`. Slice 3 needs
      `ClassId` lowered on every backend (`INTERFACE_VALUES.md`).
-  3. `resolveClass`, `resolveEnum`, `createInstance`, `createEmptyInstance`, `createEnum` and `createEnumIndex`, once a
-     port needs them. A type named only by a string defeats pruning: the note proposes Haxe's `-dce std` rule.
+  3. `resolveClass`, `resolveEnum`, `createInstance`, `createEmptyInstance`, and `createEnum`, `createEnumIndex` and
+     `allEnums` on an enum held as a value (on an enum named at the call they are written out by `EnumCreation`), once
+     a port needs them. A type named only by a string defeats pruning: the note proposes Haxe's `-dce std` rule.
 - **`trace` with several values prints differently from Haxe.**
   `trace(a, b, c)` prints `2, 1, 1`; Haxe prints `2,1,1`.
 - **Warm builds still track subclasses' reads of base-class statics.**

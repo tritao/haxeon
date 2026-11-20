@@ -2111,6 +2111,9 @@ class CallResolver {
 				function(argument) return typeExpressionValue(argument, scope).type,
 				function(argument) return typeExpressionValue(argument, scope)),
 				scope, expectedType);
+		if (EnumCreation.handles(name))
+			return bodyTyper.typeExpression(EnumCreation.expand(session, name, arguments, span, expectedType), scope,
+				expectedType);
 		if (name == "Type.enumIndex" || name == "Type.enumConstructor" || name == "Type.enumParameters"
 			|| name == "Type.enumEq") {
 			if (arguments.length == 0)

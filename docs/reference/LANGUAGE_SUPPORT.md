@@ -209,6 +209,11 @@ The current subset includes:
   checked, as a call of a method on it is: null throws "Null access", as Haxe's does. `Type.enumEq` also compares
   `Dynamic` values; the others need the enum's type where they are typed. `Dynamic` and Haxe's `EnumValue` type wait for
   enums as runtime values (`docs/design/TYPE_VALUES.md`).
+- On an enum named where they are called: `Type.createEnumIndex(E, index, ?params)`, `Type.createEnum(E, name, ?params)`
+  and `Type.allEnums(E)` (its constructors without arguments, in order). They throw what HashLink's `Type` throws for
+  an index out of range, an unknown name, a constructor with arguments given none, or a wrong count of arguments. A
+  generic enum's arguments come from the expected type, else they are `Dynamic`. An enum held as a value (`Enum<T>`)
+  waits for enums as runtime values.
 
 Inherited methods share a virtual slot by name. A subclass cannot reuse that name with incompatible
 parameters or a result type that breaks the inherited contract, or explicitly make a public method private.
