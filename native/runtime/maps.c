@@ -219,3 +219,16 @@ DEFINE_INT_REF_MAP()
 #undef DEFINE_INT_REF_MAP
 
 #undef DEFINE_INT_MAP
+
+/* The maps above are the VM's own (maps.h): an arena copies and evacuates them along the VM's map layout. */
+#if defined(__GNUC__)
+__attribute__((constructor)) static void realtime_map_layouts( void ) {
+	static const uchar *names[] = {
+		USTR("map_string_i32"), USTR("map_string_i64"), USTR("map_string_bool"), USTR("map_string_f64"), USTR("map_string_bytes"),
+		USTR("map_string_ref"), USTR("map_int_i32"), USTR("map_int_i64"), USTR("map_int_bool"), USTR("map_int_f64"),
+		USTR("map_int_bytes"), USTR("map_int_ref")
+	};
+	for( unsigned i = 0; i < sizeof(names) / sizeof(names[0]); i++ )
+		hl_gc_arena_register_layout(names[i], hl_gc_arena_map_layout);
+}
+#endif

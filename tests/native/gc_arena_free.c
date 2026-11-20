@@ -9,6 +9,7 @@
 
 HL_API void hl_gc_profile_stats(unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*);
 HL_PRIM double hl_gc_allocated_since_collection(void);
+HL_API void *hl_hballoc(void);
 
 #ifdef _MSC_VER
 #	define NOINLINE __declspec(noinline)
@@ -22,7 +23,7 @@ static void *global_slot;
 static varray *table;
 static void **outside;
 static int tracked;
-static int arena_a, arena_b, arena_c, arena_d, arena_e, arena_f, arena_g;
+static int arena_a, arena_b, arena_c, arena_d, arena_e, arena_f, arena_g, arena_h, arena_i;
 
 static int check(int success, const char *label) {
 	if(!success) fprintf(stderr,"FAIL: %s\n",label);
@@ -75,18 +76,58 @@ static NOINLINE int freed_with_stack_slot(void *arena, void *value) {
 	return slot == value ? result : -100;
 }
 
-/* Makes a cycle of two blocks and a byte block pointed into, in `arena`, and returns them copied out of it. */
-static NOINLINE void *copied_out(void *arena) {
+/* A chain of `count` arrays in `arena`, each holding the one made before it, and the last returned. */
+static NOINLINE varray *array_chain(void *arena, int count) {
 	void *previous = hl_gc_arena_enter(arena);
-	void **first = (void**)hl_gc_alloc_raw(sizeof(void*) * 4);
-	void **second = (void**)hl_gc_alloc_raw(sizeof(void*) * 4);
-	unsigned char *bytes = (unsigned char*)hl_gc_alloc_noptr(32);
-	for(int b=0;b<32;b++) bytes[b] = (unsigned char)b;
-	first[0] = second;
-	first[1] = bytes + 8; // inside the block, as a map's second table is inside its first
-	first[2] = bytes; // which the collector keeps by its start
-	second[0] = first;
-	void *copy = hl_gc_arena_copy((vdynamic*)first,arena,hl_gc_arena_global());
+	varray *last = NULL;
+	for(int i=0;i<count;i++) {
+		varray *node = hl_alloc_array(&hlt_array,1);
+		hl_aptr(node,varray*)[0] = last;
+		last = node;
+	}
+	hl_gc_arena_leave(previous);
+	return last;
+}
+
+static int array_chain_intact(varray *last, int count) {
+	int n = 0;
+	while( last ) { n++; last = hl_aptr(last,varray*)[0]; }
+	return n == count;
+}
+
+static hl_type map_type, closure_type;
+
+/* Writes the address of a block of `arena` into `bytes` and returns it disguised, so no stack word holds it. */
+static NOINLINE uintptr_t spell_address(void *arena, void **bytes) {
+	varray *inside = array_chain(arena,10);
+	bytes[2] = inside;
+	return (uintptr_t)inside ^ 0x5a5a;
+}
+
+/* In `arena`: an array holding itself, bytes, a map and a raw block, returned copied out of it. */
+static NOINLINE varray *copied_out(void *arena) {
+	void *previous = hl_gc_arena_enter(arena);
+	varray *self = hl_alloc_array(&hlt_array,1);
+	hl_aptr(self,varray*)[0] = self;
+	varray *bytes = hl_alloc_array(&hlt_bytes,2);
+	unsigned char *data = (unsigned char*)hl_gc_alloc_noptr(32);
+	for(int b=0;b<32;b++) data[b] = (unsigned char)b;
+	hl_aptr(bytes,unsigned char*)[0] = data;
+	varray *maps = hl_alloc_array(&map_type,1);
+	void *map = hl_hballoc();
+	for(int k=0;k<40;k++) {
+		uchar key[8] = {'k',(uchar)('a' + k % 26),(uchar)('a' + k / 26),0};
+		uchar *stored = (uchar*)hl_gc_alloc_noptr(sizeof(key));
+		memcpy(stored,key,sizeof(key));
+		int value = k;
+		hl_hbset_n(map,stored,3,hl_make_dyn(&value,&hlt_i32));
+	}
+	hl_aptr(maps,void*)[0] = map;
+	varray *outer = hl_alloc_array(&hlt_array,3);
+	hl_aptr(outer,varray*)[0] = self;
+	hl_aptr(outer,varray*)[1] = bytes;
+	hl_aptr(outer,varray*)[2] = maps;
+	varray *copy = (varray*)hl_gc_arena_copy((vdynamic*)outer,arena,hl_gc_arena_global());
 	hl_gc_arena_leave(previous);
 	return copy;
 }
@@ -144,6 +185,19 @@ int main(void) {
 			if( heap_bytes() > peak ) peak = heap_bytes();
 		}
 		if( tracked && !check(peak < base + (8 << 20),"sequential arenas reuse the same pages")) goto done;
+	}
+
+	/* A byte block that spells an arena's address is no reference, and an evacuating release never changes it. (Whether
+	   the arena is released here depends on what stale words this C frame keeps, so only the bytes are checked.) */
+	{
+		hl_gc_arena_set_evacuation(true);
+		void **bytes = (void**)hl_gc_alloc_noptr(sizeof(void*) * 4);
+		outside[10] = bytes;
+		uintptr_t spelled = spell_address(&arena_i,bytes);
+		freed(&arena_i);
+		hl_gc_arena_set_evacuation(false);
+		if(!check(((uintptr_t)bytes[2] ^ 0x5a5a) == spelled,"a byte block's words are never rewritten")) goto done;
+		outside[10] = NULL;
 	}
 
 	/* A reference from a heap page outside the arena, written while it was open, keeps it; the blocks stay valid. */
@@ -230,36 +284,63 @@ int main(void) {
 		if( tracked && !check(found == 0,"a table that grew inside an arena does not keep it")) goto done;
 		table = NULL;
 	}
-	/* Copying out: what a value reaches inside an arena is copied, pointers inside a block included, and the arena then has
-	   nothing outside pointing in. */
+	/* Copying out: what a value reaches inside an arena is copied along the layouts of typed blocks and registered untyped
+	   ones (a map's tables), and the arena then has nothing outside pointing in. */
 	{
+		map_type.kind = HABSTRACT;
+		map_type.abs_name = USTR("hl_bytes_map");
 		global_slot = copied_out(&arena_d);
-		void **copy = (void**)global_slot, **copied_second = (void**)copy[0];
-		if(!check(hl_gc_arena_owner_of(copy) == hl_gc_arena_global(),"a copy is made outside the arena")) goto done;
-		if(!check(copied_second[0] == (void*)copy,"a cycle is kept")) goto done;
-		if(!check(((unsigned char*)copy[1])[0] == 8 && ((unsigned char*)copy[1])[23] == 31,"a pointer inside a block moves with it")) goto done;
-		copy = copied_second = NULL;
+		varray *copy = (varray*)global_slot, *self = hl_aptr(copy,varray*)[0];
+		if(!check(hl_gc_arena_owner_of(copy) == hl_gc_arena_global() && hl_aptr(self,varray*)[0] == self,"a copy is made outside the arena, its cycle kept")) goto done;
+		copy = self = NULL;
 		int found = freed(&arena_d);
 		if( tracked && !check(found == 0,"an arena whose result was copied out is released")) goto done;
 		hl_gc_major();
-		if(!check(((unsigned char*)((void**)global_slot)[1])[7] == 15,"the copy survives the release and a collection")) goto done;
+		copy = (varray*)global_slot;
+		unsigned char *data = hl_aptr(hl_aptr(copy,varray*)[1],unsigned char*)[0];
+		void *map = hl_aptr(hl_aptr(copy,varray*)[2],void*)[0];
+		uchar key[8] = {'k','n','a',0};
+		vdynamic *value = hl_hbget_n(map,key,3);
+		if(!check(data[7] == 7 && data[31] == 31 && value && value->v.i == 13,"the copy, its bytes and its map survive the release and a collection")) goto done;
+		copy = NULL;
 		global_slot = NULL;
 	}
 
-	/* An evacuating release: a heap word or a root pointing into the arena gets a copy, and the arena is released; a stack
-	   word still keeps it. */
+	/* An evacuating release copies out what typed fields outside the arena point to, and releases it; a word of an untyped
+	   block, a root, a stack word only keep it. A word that merely spells an address is never rewritten. */
 	{
 		hl_gc_arena_set_evacuation(true);
-		outside[7] = fill(&arena_e,1000,1);
-		global_slot = fill(&arena_f,1000,1);
-		int from_page = freed(&arena_e), from_root = freed(&arena_f);
-		if( tracked && !check(from_page == 0 && from_root == 0,"heap words and roots into an arena are evacuated")) goto done;
+		closure_type.kind = HFUN;
+		vclosure *closure = (vclosure*)hl_gc_alloc_gen(&closure_type,sizeof(vclosure),MEM_KIND_DYNAMIC | MEM_ZERO);
+		closure->t = &closure_type;
+		closure->hasValue = 1;
+		global_slot = closure;
+		closure->value = array_chain(&arena_e,1000);
+		closure = NULL;
+		int from_field = freed(&arena_e);
+		if( tracked && !check(from_field == 0,"a typed field into an arena is evacuated")) goto done;
 		hl_gc_major();
-		if(!check(chain_intact((void**)outside[7],1000) && chain_intact((void**)global_slot,1000),"evacuated blocks are intact")) goto done;
-		outside[7] = NULL;
+		if(!check(array_chain_intact((varray*)((vclosure*)global_slot)->value,1000),"evacuated blocks are intact")) goto done;
 		global_slot = NULL;
-		void *last = fill(&arena_g,1000,1);
-		int found = freed_with_stack_slot(&arena_g,last);
+		/* An untyped block and a byte block outside, each holding the arena's address as a plain word. */
+		void **untyped = (void**)hl_gc_alloc_raw(sizeof(void*) * 4);
+		void **bytes = (void**)hl_gc_alloc_noptr(sizeof(void*) * 4);
+		outside[8] = untyped;
+		outside[9] = bytes;
+		varray *inside = array_chain(&arena_f,10);
+		untyped[1] = inside;
+		bytes[1] = inside;
+		int from_untyped = freed(&arena_f);
+		if(!expect_kept(from_untyped,"a word of an untyped block keeps an arena instead of being evacuated")) goto done;
+		if(!check(untyped[1] == (void*)inside && bytes[1] == (void*)inside,"words of untyped and byte blocks are never rewritten")) goto done;
+		inside = NULL;
+		untyped = bytes = NULL;
+		outside[8] = outside[9] = NULL;
+		global_slot = array_chain(&arena_g,10);
+		if(!expect_kept(freed(&arena_g),"a root keeps an arena instead of being evacuated")) goto done;
+		global_slot = NULL;
+		varray *last = array_chain(&arena_h,1000);
+		int found = freed_with_stack_slot(&arena_h,last);
 		if(!expect_kept(found,"a stack word still keeps an arena")) goto done;
 		last = NULL;
 		hl_gc_arena_set_evacuation(false);
