@@ -34,6 +34,7 @@ checkout-hashlink                ci          fresh-native -- bash tests/integrat
 hashlink-launchers               ci          fresh-native -- bash tests/integration/test-hashlink-launchers.sh
 gc-root-index                    ci          -- tests/integration/test-gc-root-index.sh
 gc-flush-scan                    ci          -- bash tests/integration/test-gc-flush-scan.sh
+string-map-hash                  ci          -- bash tests/integration/test-string-map-hash.sh
 # A tool outside the tree links the compiler sources through common.hxml.
 external-tool-build              wave,ci     -- bash tests/integration/test-external-tool-build.sh
 no-nul-literals                  quick,ci    -- bash tests/integration/test-no-nul-literals.sh
