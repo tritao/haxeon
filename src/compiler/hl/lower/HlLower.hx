@@ -369,6 +369,9 @@ class HlLower {
 							case IteratorHasNext(_, _):
 								ensureNative(runtimeNatives, "__iterator_has_next",
 									[IrType.Abstract("realtime_iterator")], IrType.Bool);
+							case Call(_, name, arguments) if (name.name == VALUE_ARRAY_READ_I32 && arguments.length == 5
+								&& withoutValidity(arguments[0].type)):
+								ensureNative(runtimeNatives, VALUE_ARRAY_HEADER_TYPE, [], IrType.TypeRef);
 							case ArrayGet(_, array, _):
 								ensureRawArrayNative(runtimeNatives, array.type, "check");
 							case ArraySet(array, _, _):
@@ -730,6 +733,152 @@ class HlLower {
 		};
 
 	/** Byte shift of one element of an Int or Float array, whose storage the compiler lays out itself; null for any other array. */
+	static inline final VALUE_ARRAY_VALIDATE = "__value_array_validate";
+
+	static inline final VALUE_ARRAY_READ_I32 = "__value_array_read_i32";
+
+	/** The runtime's type of a value array header, which a forwarding header does not have (`value_arrays.c`). */
+	static inline final VALUE_ARRAY_HEADER_TYPE = "__value_array_header_type";
+
+	/** Where a value array header keeps its scalar stride in bits; `value_arrays.c` asserts it. */
+	static inline final VALUE_ARRAY_STRIDE_OFFSET = 88;
+
+	/** How far back from a call its constant arguments are looked for; the IR emits them right before it. */
+	static inline final CONSTANT_LOOKBACK = 8;
+
+	/** The Int or Bool constant (a Bool as 0 or 1) `value` is, when its definition is just before `index`; else -1. */
+	static function constantBefore(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>, index:Int,
+			value:IrValue):Int {
+		var position = index - 1, limit = index - CONSTANT_LOOKBACK;
+		while (position >= 0 && position >= limit) {
+			switch instructions[position].value {
+				case ConstInt(output, number) if (output.id == value.id):
+					return number;
+				case ConstBool(output, flag) if (output.id == value.id):
+					return flag ? 1 : 0;
+				default:
+			}
+			position--;
+		}
+		return -1;
+	}
+
+	/**
+	 * Whether a value array of `array`'s type has no validity bits, so reading one of its elements checks only the index:
+	 * enums (their null is tag zero) and nullable structs (`IrValueArrayLayout`).
+	 */
+	static function withoutValidity(array:IrType):Bool
+		return switch array {
+			case Array(EnumTag(_)), Array(Enum(_)), Array(Nullable(Obj(_))): true;
+			default: false;
+		};
+
+	/**
+	 * The slot `__value_array_read_i32` at `index` of `instructions` reads, as constants, when it is read inline
+	 * (`lowerValueArrayRead`); null otherwise.
+	 */
+	static function inlineValueArraySlot(instructions:Array<compiler.ir.SourceProvenance.Located<IrInstruction>>,
+			index:Int,
+			arguments:Array<IrValue>):Null<InlineValueSlot> {
+		if (arguments.length != 5 || !withoutValidity(arguments[0].type))
+			return null;
+		var offset = constantBefore(instructions, index, arguments[2]),
+			width = constantBefore(instructions, index, arguments[3]),
+			signed = constantBefore(instructions, index, arguments[4]);
+		return offset >= 0 && offset % 8 == 0 && signed >= 0 && (width == 8 || width == 16 || width == 32)
+			? {offset: offset, width: width, signed: signed == 1} : null;
+	}
+
+	/**
+	 * A scalar read of a value array element without validity bits, inline: when the header is a value array's own (not a
+	 * forwarding header) and the index is in range, the slot is loaded from the scalar lane, `index * stride + offset`;
+	 * anything else calls the native, which raises its errors as before.
+	 */
+	function lowerValueArrayRead(output:IrValue, arguments:Array<IrValue>, slot:InlineValueSlot,
+			instructions:Array<HlInstruction>, registers:Array<Int>, registerTypes:Array<Int>):Void {
+		var offset = slot.offset, width = slot.width, signed = slot.signed;
+		var array = requireRegister(arguments[0], registers),
+			index = requireRegister(arguments[1], registers),
+			destination = defineRegister(output, registers, registerTypes),
+			slow = freshLabel(),
+			done = freshLabel(),
+			ready = freshLabel(),
+			actual = temporaryRegister(IrType.TypeRef, registerTypes),
+			expected = temporaryRegister(IrType.TypeRef, registerTypes),
+			global = internGlobalSlot(VALUE_ARRAY_HEADER_TYPE, IrType.TypeRef),
+			size = temporaryRegister(IrType.I32, registerTypes),
+			header = temporaryRegister(IrType.Bytes, registerTypes),
+			strideOffset = temporaryRegister(IrType.I32, registerTypes),
+			strideBits = temporaryRegister(IrType.I32, registerTypes),
+			three = temporaryRegister(IrType.I32, registerTypes),
+			strideBytes = temporaryRegister(IrType.I32, registerTypes),
+			position = temporaryRegister(IrType.I32, registerTypes),
+			data = temporaryRegister(IrType.Bytes, registerTypes);
+		instructions.push(HlInstruction.GetType(actual, array));
+		instructions.push(HlInstruction.GlobalGet(expected, global));
+		instructions.push(HlInstruction.JumpNotNull(expected, ready));
+		instructions.push(HlInstruction.Call0(expected, requireFunction(VALUE_ARRAY_HEADER_TYPE)));
+		instructions.push(HlInstruction.GlobalSet(global, expected));
+		instructions.push(HlInstruction.Label(ready));
+		// As pointers: the VM compares type registers structurally, and every array header type is an array type.
+		var actualPointer = temporaryRegister(IrType.RawPtr, registerTypes),
+			expectedPointer = temporaryRegister(IrType.RawPtr, registerTypes);
+		instructions.push(HlInstruction.UnsafeCast(actualPointer, actual));
+		instructions.push(HlInstruction.UnsafeCast(expectedPointer, expected));
+		instructions.push(HlInstruction.JumpNotEqual(actualPointer, expectedPointer, slow));
+		instructions.push(HlInstruction.ArraySize(size, array));
+		instructions.push(HlInstruction.JumpUnsignedGreaterOrEqual(index, size, slow));
+		instructions.push(HlInstruction.UnsafeCast(header, array));
+		instructions.push(HlInstruction.LoadInt(strideOffset, internInt(VALUE_ARRAY_STRIDE_OFFSET)));
+		instructions.push(HlInstruction.GetMem(strideBits, header, strideOffset));
+		instructions.push(HlInstruction.LoadInt(three, internInt(3)));
+		instructions.push(HlInstruction.UnsignedShiftRight(strideBytes, strideBits, three));
+		instructions.push(HlInstruction.Mul(position, index, strideBytes));
+		if (offset > 0) {
+			var byteOffset = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.LoadInt(byteOffset, internInt(offset >> 3)));
+			instructions.push(HlInstruction.Add(position, position, byteOffset));
+		}
+		instructions.push(HlInstruction.RefData(data, array));
+		switch width {
+			case 8: instructions.push(HlInstruction.GetI8(destination, data, position));
+			case 16: instructions.push(HlInstruction.GetI16(destination, data, position));
+			default: instructions.push(HlInstruction.GetMem(destination, data, position));
+		}
+		if (signed && width < 32) {
+			var shift = temporaryRegister(IrType.I32, registerTypes);
+			instructions.push(HlInstruction.LoadInt(shift, internInt(32 - width)));
+			instructions.push(HlInstruction.ShiftLeft(destination, destination, shift));
+			instructions.push(HlInstruction.ShiftRight(destination, destination, shift));
+		}
+		instructions.push(HlInstruction.Jump(done));
+		instructions.push(HlInstruction.Label(slow));
+		instructions.push(HlInstruction.CallN(destination, requireFunction(VALUE_ARRAY_READ_I32),
+			[for (argument in arguments) requireRegister(argument, registers)]));
+		instructions.push(HlInstruction.Label(done));
+	}
+
+	/**
+	 * Whether the first instruction from `start` on that is not a constant reads a scalar of the element `validate` checks.
+	 * The HashLink runtime's scalar reads validate their element as `__value_array_validate` does, with the same errors, so
+	 * a validation right before one adds nothing: a payload-free enum element is read as exactly that pair.
+	 */
+	static function scalarReadFollows(instructions:Array<compiler.ir.SourceProvenance.Located<compiler.ir.Ir.IrInstruction>>,
+			start:Int, validate:Array<IrValue>):Bool {
+		if (validate.length != 2)
+			return false;
+		for (position in start...instructions.length)
+			switch instructions[position].value {
+				case ConstInt(_, _), ConstBool(_, _):
+				case Call(_, name, arguments):
+					return StringTools.startsWith(name.name, "__value_array_read_") && arguments.length >= 2
+						&& arguments[0].id == validate[0].id && arguments[1].id == validate[1].id;
+				default:
+					return false;
+			}
+		return false;
+	}
+
 	static function rawArrayShift(array:IrType):Null<Int>
 		return switch array {
 			case Array(I32): 2;
@@ -1176,9 +1325,16 @@ class HlLower {
 						fusedComparison = comparisonJump(2, false, false, actual,
 							requireRegister(arguments[1], registers), -1);
 					case Call(output, functionName, arguments):
+						var inlineSlot = functionName.name == VALUE_ARRAY_READ_I32
+							? inlineValueArraySlot(block.instructions, instructionIndex, arguments) : null;
 						if (functionName.name == compiler.ir.IrReceiverCheck.NAME
 							&& nonNull.has(block.id, instructionIndex)) {
 							// A previous successful dereference or check already proved this SSA receiver non-null.
+						} else if (functionName.name == VALUE_ARRAY_VALIDATE
+							&& scalarReadFollows(block.instructions, instructionIndex + 1, arguments)) {
+							// The read checks the same element the same way (`realtime_value_array_check_read`).
+						} else if (inlineSlot != null) {
+							lowerValueArrayRead(output, arguments, inlineSlot, instructions, registers, registerTypes);
 						} else if (!lowerRuntimeFastPath(output, functionName.name, arguments, instructions, registers,
 							registerTypes)) {
 							var destination = defineRegister(output, registers, registerTypes);
@@ -2716,4 +2872,11 @@ class HlLower {
 			requests.push(FunctionRef(name, index));
 		return index;
 	}
+}
+
+/** A value array scalar slot read inline: its bit offset in the element, its width in bits and whether it is signed. */
+private typedef InlineValueSlot = {
+	final offset:Int;
+	final width:Int;
+	final signed:Bool;
 }

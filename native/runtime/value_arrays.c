@@ -1,5 +1,6 @@
 /* Inline struct arrays keep a scalar lane separate from the references traced by the collector. */
 #include <limits.h>
+#include <stddef.h>
 
 /* HARRAY has the same runtime type identity as an ordinary HashLink array, but this distinct type word lets dynamic
  * array operations recognize the extended header without reading past an ordinary varray. */
@@ -24,6 +25,16 @@ typedef struct {
 	int word_bits;
 	bool has_validity;
 } realtime_value_array;
+
+/* HlLower inlines scalar reads of arrays without validity bits: it compares the header's type with
+ * __value_array_header_type(), checks the index against the size and reads the stride from this offset. */
+#define REALTIME_VALUE_ARRAY_STRIDE_OFFSET 88
+_Static_assert(sizeof(void*) != 8 || offsetof(realtime_value_array, scalar_stride_bits) == REALTIME_VALUE_ARRAY_STRIDE_OFFSET,
+	"HlLower reads the scalar stride at this offset");
+
+HL_PRIM hl_type *HL_NAME(__value_array_header_type)() {
+	return &realtime_value_array_type;
+}
 
 static realtime_value_array *realtime_value_array_require(varray *array) {
 	if( array != NULL && array->t == &realtime_value_array_forward_type )
