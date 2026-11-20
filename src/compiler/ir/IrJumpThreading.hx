@@ -144,7 +144,7 @@ class IrJumpThreading {
 	 * selects, so the Bool is never made on that path; a block every predecessor skips is dropped. Only targets without phis are
 	 * threaded to, so no phi gains an input.
 	 */
-	public static function threadConstantBranches(fn:IrFunction):IrFunction {
+	public static function threadConstantBranches(fn:IrFunction, ?scratch:IrPassScratch):IrFunction {
 		// Most functions have no block of that shape: find that out before counting every use.
 		var shaped = false;
 		for (block in fn.blocks)
@@ -157,14 +157,26 @@ class IrJumpThreading {
 				}
 		if (!shaped)
 			return fn;
-		var constants:Map<Int, Bool> = [], uses:Map<Int, Int> = [];
-		function use(value:IrValue):Void
-			uses.set(value.id, (uses.exists(value.id) ? uses.get(value.id) : 0) + 1);
+		// By value id: how many operands read it, and whether it is a Bool constant (`constants`) and which (`constantValues`).
+		var tables = scratch ?? new IrPassScratch(),
+			uses = tables.firstInts,
+			constantValues = tables.secondInts,
+			constants = tables.marked;
+		uses.resize(0);
+		constants.clear();
+		function use(value:IrValue):Void {
+			while (uses.length <= value.id)
+				uses.push(0);
+			uses[value.id]++;
+		}
 		for (block in fn.blocks) {
 			for (located in block.instructions) {
 				switch located.value {
 					case ConstBool(output, value):
-						constants.set(output.id, value);
+						constants.add(output.id);
+						while (constantValues.length <= output.id)
+							constantValues.push(0);
+						constantValues[output.id] = value ? 1 : 0;
 					case Phi(_, inputs):
 						for (input in inputs)
 							use(input.value);
@@ -185,7 +197,7 @@ class IrJumpThreading {
 		for (binding in fn.debugBindings)
 			use(binding.value);
 		var byId:Map<Int, IrBlock> = [for (block in fn.blocks) block.id => block],
-			redirects:Map<String, Int> = [],
+			redirects:Map<Int, Map<Int, Int>> = [],
 			skipped:Map<Int, Array<Int>> = [],
 			added:Map<Int, Array<IrPhiInput>> = [],
 			threaded:Map<String, Bool> = [];
@@ -194,10 +206,11 @@ class IrJumpThreading {
 				continue;
 			switch [block.instructions[0].value, block.terminator.value] {
 				case [Phi(phi, inputs),
-					Branch(condition, yes, no)] if (condition.id == phi.id && uses.get(phi.id) == 1 && yes != block.id
+					Branch(condition, yes, no)] if (condition.id == phi.id && uses[phi.id] == 1 && yes != block.id
 					&& no != block.id && byId.exists(yes) && byId.exists(no)):
 					for (input in inputs) {
-						var target = constants.exists(input.value.id) ? (constants.get(input.value.id) ? yes : no) : -1;
+						var target = constants.has(input.value.id)
+							? (constantValues[input.value.id] != 0 ? yes : no) : -1;
 						// A target with phis gets an input for the new edge, so a predecessor that already reaches it (it would then
 						// have two edges in) is not threaded there.
 						var key = input.block + ">" + target, targetBlock = byId.get(target);
@@ -205,7 +218,12 @@ class IrJumpThreading {
 							|| hasPhis(targetBlock) && (reaches(byId.get(input.block), target) || threaded.exists(key)))
 							continue;
 						threaded.set(key, true);
-						redirects.set(input.block + ":" + block.id, target);
+						var from = redirects.get(input.block);
+						if (from == null) {
+							from = [];
+							redirects.set(input.block, from);
+						}
+						from.set(block.id, target);
 						if (!skipped.exists(block.id))
 							skipped.set(block.id, []);
 						skipped.get(block.id).push(input.block);
@@ -233,8 +251,8 @@ class IrJumpThreading {
 		if (!skipped.keys().hasNext())
 			return fn;
 		function retarget(from:Int, to:Int):Int {
-			var key = from + ":" + to;
-			return redirects.exists(key) ? redirects.get(key) : to;
+			var targets = redirects.get(from);
+			return targets != null && targets.exists(to) ? targets.get(to) : to;
 		}
 		var blocks:Array<IrBlock> = [];
 		for (block in fn.blocks) {

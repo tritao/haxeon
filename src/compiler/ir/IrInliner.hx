@@ -479,7 +479,8 @@ class IrInliner {
 			if (clean == null || clean.source != result) {
 				var source = result;
 				result =
-					IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(IrScalarRefPromotion.run(IrJumpThreading.threadConstantBranches(result)),
+					IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(IrScalarRefPromotion.run(IrJumpThreading.threadConstantBranches(result,
+					inliner.passScratch)),
 					inliner.passScratch), inliner.passScratch), inliner.passScratch);
 				clean = {source: source, result: result};
 			} else
