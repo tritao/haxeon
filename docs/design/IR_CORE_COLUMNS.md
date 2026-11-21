@@ -113,6 +113,29 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 6. The Wasm lowerings read bodies (until then they decode, off the self-compile's path); `IrInstruction`, `Located`
    instructions, `IrValue`, `IrBlock` and `IrFunctionRewrite` go.
 
+## Session caching model
+
+What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
+(the encode point is scalar closures on HashLink, the last value phi scalarization on Wasm). Every body a cache holds is
+frozen; a body no cache holds is the stages' own (`ofOwnedBody`) and exists only in a one-shot compile. Keys are function
+names; reuse is by object identity of the `IrFunction` an entry was made from.
+
+- **Encode point** (`IrInlineCache.bodySources`, name → `IrFunction`): last build's function before the encode point, which
+  has its objects (the stages before still read them) and its frozen encoding. A rebuilt function equal to it
+  (`IrFunctionStateEquality.same`) is replaced by it, so the stages after see the same object and reuse by identity.
+- **Stages between the encode point and the inliner**: no cache of their own. A function a stage changes is a frozen,
+  compacted copy; one it leaves is the same object.
+- **Inliner** (`IrInlineCache`): `sources` (name → the function it was given, deduplicated as above); `originals` (name →
+  {source function, its frozen body}); `memo` (name → {source function, fingerprint, the functions and object prints it
+  consulted, the inlined form as a frozen compacted body}); `cleaned` (name → {inlined form, cleaned function}); `published`
+  (name → the function the backends got); `publishedBytes` (name → {function, its comparison encoding}); `instrumented`.
+  A memo entry is reused while its source is the same object, its dependencies are the same objects and its object prints
+  match; an unchanged inlined form is the original body itself, and an unchanged cleanup shares the memo's body.
+- **After the inliner**: the published functions are their frozen bodies (`IrFunction.ofBody`), decoded only when read.
+
+The objects stay alive in a session for as long as stages before the encode point read them, through their own caches and
+`bodySources`; once the encode point is at the start of the IR stages, a session can keep the bodies alone.
+
 ## Checks
 
 Allocated bytes, main-thread instructions and peak memory on the frozen input at each step, as for the other steps; the
