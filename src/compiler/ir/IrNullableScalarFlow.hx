@@ -17,12 +17,12 @@ class IrNullableScalarFlow {
 	public static inline final CALL_PREFIX = "$nullable-scalar:arguments:";
 
 	/**
-	 * Rewrites `program`'s functions, reading them as bodies made with `types` (fresh ones when not given): the bodies are frozen
-	 * and compacted when `retained` past this compile, else the next stage's own (`IrFunction.ofOwnedBody`).
+	 * Rewrites `program`'s functions, reading them as bodies made with `types` (`IrTypeIds.ofFunctions` when not given): the
+	 * bodies are frozen and compacted when `retained` past this compile, else the next stage's own (`IrFunction.ofOwnedBody`).
 	 */
 	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = false):Void {
 		if (types == null)
-			types = new IrTypeIds();
+			types = IrTypeIds.ofFunctions(program.functions);
 		if (scratch == null)
 			scratch = new IrPassScratch();
 		var builder = scratch.bodyBuilder;

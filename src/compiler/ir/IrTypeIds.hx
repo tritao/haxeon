@@ -13,6 +13,19 @@ class IrTypeIds {
 
 	public function new() {}
 
+	/**
+	 * The ids the bodies of `functions` were made with, or new ones when none has a body: for a pass run on its own (a test), so
+	 * the bodies one such pass leaves are read with their own ids by the next.
+	 */
+	public static function ofFunctions(functions:Array<IrFunction>):IrTypeIds {
+		for (fn in functions) {
+			var body = fn.body;
+			if (body != null)
+				return body.types;
+		}
+		return new IrTypeIds();
+	}
+
 	/** The id of `type`, given the first time a type equal to it is seen. */
 	public function id(type:IrType):Int {
 		var known = ids.get(type);

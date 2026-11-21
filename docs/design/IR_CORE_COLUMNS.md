@@ -103,9 +103,11 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    `IrBodyBuilder.finishNamed`), so the stages after it number theirs as before. In a session, a function the passes before
    the conversion point rebuild the same as last time is replaced by last compile's object (`stableBodySources`), which has
    its body, as the inliner does with its own inputs.
-   *Value phi scalarization reads bodies*: its last run before scalar replacement (each target's) reads bodies; the earlier
-   runs, and the calls from scalar arguments, keep the object version until those stages move. *Scalar closures reads
-   bodies*, and is the encode point on HashLink (Wasm's is that last value phi scalarization); its object version is gone.
+   *Value phi scalarization reads bodies*, every run; its object version is gone. *Scalar closures reads bodies*; its object
+   version is gone. *Scalar arguments reads bodies*, and splits value joins itself first (the value phi run that preceded
+   it on every target that runs it). It is the encode point on HashLink and on Wasm with value lanes (Wasm without lanes
+   encodes at its last value phi scalarization). Its clones are new bodies (`IrBodyBuilder.startFrom` with new arguments),
+   whose calls it redirects in place, deciding each on the body before any row changes.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
    `setResult`).
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
@@ -116,7 +118,8 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 ## Session caching model
 
 What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
-(the encode point is scalar closures on HashLink, the last value phi scalarization on Wasm). Every body a cache holds is
+(the encode point is scalar arguments on HashLink and on Wasm with value lanes, the last value phi scalarization on Wasm
+without them). Every body a cache holds is
 frozen; a body no cache holds is the stages' own (`ofOwnedBody`) and exists only in a one-shot compile. Keys are function
 names; reuse is by object identity of the `IrFunction` an entry was made from.
 

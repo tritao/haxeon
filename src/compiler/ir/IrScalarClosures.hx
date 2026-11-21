@@ -31,12 +31,12 @@ class IrScalarClosures {
 	final typeValues:Map<Int, IrType> = [];
 
 	/**
-	 * Rewrites `program`'s functions as bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (fresh ones when not
-	 * given), which this stage encodes on HashLink, the pipeline's first over bodies there. A function that changes becomes its
-	 * edited body: a frozen copy when a session keeps the stage's functions (`retained`), else the body edited in place.
+	 * Rewrites `program`'s functions as bodies (docs/design/IR_CORE_COLUMNS.md, migration), made with `types` (those of the
+	 * program's bodies when not given, `IrTypeIds.ofFunctions`). A function that changes becomes its edited body: a frozen copy
+	 * when a session keeps the stage's functions (`retained`), else the body edited in place.
 	 */
 	public static function rewrite(program:IrProgram, ?types:IrTypeIds, ?scratch:IrPassScratch, retained = false):Void {
-		var pass = new IrScalarClosures(program, types == null ? new IrTypeIds() : types,
+		var pass = new IrScalarClosures(program, types == null ? IrTypeIds.ofFunctions(program.functions) : types,
 			scratch == null ? new IrPassScratch() : scratch, retained);
 		var bodies = [for (fn in program.functions) pass.bodyOf(fn)];
 		pass.discover(bodies);

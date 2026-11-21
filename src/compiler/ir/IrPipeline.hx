@@ -69,13 +69,11 @@ class IrPipeline {
 		new IrStage("closed-enum-tag-abi", closedEnumTagAbi).when(closesEnumTags),
 		new IrStage("value-array-rewrite", valueArrayRewrite),
 		new IrStage("value-constructors", valueConstructors).when(wasmValueLanes),
-		new IrStage("value-phi-scalarization", valuePhiScalarization).when(wasmValueLanes),
 		new IrStage("scalar-arguments", scalarArgumentsOnly).when(wasmValueLanes),
 		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmValueLanes),
 		new IrStage("value-constructors", valueConstructors).when(wasmWithoutLanes),
 		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(wasmWithoutLanes),
 		new IrStage("value-constructors", valueConstructors).when(hashLink),
-		new IrStage("value-phi-scalarization", valuePhiScalarization).when(hashLink),
 		new IrStage("scalar-arguments", scalarArguments).when(hashLink),
 		new IrStage("scalar-closures", scalarClosures).when(hashLink),
 		new IrStage("value-phi-scalarization", valuePhiScalarizationBodies).when(hashLink),
@@ -463,46 +461,42 @@ class IrPipeline {
 	}
 
 	/**
-	 * Value joins are scalarized before the scalar call ABI is chosen. The HashLink call rewrite can introduce further value joins, so
-	 * HashLink runs `value-phi-scalarization` again after it.
+	 * Value joins are scalarized at the start of `scalar-arguments`, before the scalar call ABI is chosen. Its call rewrite can
+	 * introduce further value joins, so `value-phi-scalarization` runs again after it.
 	 */
 	static function valueConstructors(program:IrProgram, context:IrPipelineContext):IrProgram {
 		IrValueConstructors.rewrite(program);
 		return program;
 	}
 
-	static function valuePhiScalarization(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrValuePhiScalarization.rewrite(program);
-		return program;
-	}
-
 	/**
-	 * The last value phi scalarization before scalar replacement, on bodies. On Wasm, the conversion point
-	 * (docs/design/IR_CORE_COLUMNS.md, migration), where each function is encoded; on HashLink that is scalar closures.
+	 * The last value phi scalarization before scalar replacement, on bodies. Without value lanes on Wasm, the conversion point
+	 * (docs/design/IR_CORE_COLUMNS.md, migration), where each function is encoded; elsewhere that is scalar arguments.
 	 */
 	static function valuePhiScalarizationBodies(program:IrProgram, context:IrPipelineContext):IrProgram {
-		var retained = context.options.keepSession;
-		if (context.isWasm())
+		if (wasmWithoutLanes(program, context))
 			stableBodySources(program, context);
-		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch, retained);
+		IrValuePhiScalarization.rewriteBodies(program, bodyTypes(context), context.passScratch,
+			context.options.keepSession);
 		return program;
 	}
 
+	/** Wasm's scalar argument ABI, with value lanes; the conversion point there (see `valuePhiScalarizationBodies`). */
 	static function scalarArgumentsOnly(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program, true);
-		return program;
-	}
-
-	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrScalarArguments.rewrite(program);
-		return program;
-	}
-
-	/** On HashLink, the first stage over bodies: the conversion point (see `valuePhiScalarizationBodies`). */
-	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
-		var retained = context.options.keepSession;
 		stableBodySources(program, context);
-		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch, retained);
+		IrScalarArguments.rewrite(program, true, bodyTypes(context), context.passScratch, context.options.keepSession);
+		return program;
+	}
+
+	/** HashLink's scalar argument and result ABI; the conversion point there (see `valuePhiScalarizationBodies`). */
+	static function scalarArguments(program:IrProgram, context:IrPipelineContext):IrProgram {
+		stableBodySources(program, context);
+		IrScalarArguments.rewrite(program, false, bodyTypes(context), context.passScratch, context.options.keepSession);
+		return program;
+	}
+
+	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
+		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
 	}
 

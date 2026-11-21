@@ -3,7 +3,7 @@ package compiler.ir;
 import compiler.ir.Ir;
 
 /**
- * The value places of one function that never escape: a value construction whose object is read and written only through
+ * The value places of one function body that never escape: a value construction whose object is read and written only through
  * its own fields, never passed on, joined, returned or thrown, and whose fields all keep their representation in a register.
  * Such a place can live as one local per field. HashLink lowering keeps them in registers (`HlScalarValueLocals`), and
  * `IrScalarArguments` asks the same question to decide whether a specialized callee keeps its value arguments in registers.
@@ -13,68 +13,47 @@ import compiler.ir.Ir;
 class IrScalarValuePlaces {
 	final valid:Map<Int, Bool> = [];
 
-	/** The constructions that qualify, in instruction order. */
-	public final places:Array<IrValue> = [];
-
-	public function new(fn:IrFunction, object:String->Null<IrObject>) {
+	public function new(body:IrBody, object:String->Null<IrObject>) {
 		var roots:Map<Int, String> = [];
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case ValueInit(out)
-						if (object(IrTypeTools.valueObjectName(out.type)) != null
-						&& scalarFields(object(IrTypeTools.valueObjectName(out.type)), object)):
-						var name = IrTypeTools.valueObjectName(out.type);
-						roots.set(out.id, name);
-						valid.set(out.id, true);
-					default:
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.ValueInit) {
+					var out = body.output(row), name = IrTypeTools.valueObjectName(body.valueType(out));
+					if (object(name) != null && scalarFields(object(name), object)) {
+						roots.set(out, name);
+						valid.set(out, true);
+					}
 				}
-		for (block in fn.blocks) {
-			for (located in block.instructions) {
-				switch located.value {
-					case Phi(_, inputs):
-						for (input in inputs)
-							if (roots.exists(input.value.id))
-								valid.set(input.value.id, false);
-					default:
-				}
-				for (inputIndex in 0...IrOperands.count(located.value)) {
-					var input = IrOperands.at(located.value, inputIndex);
-					if (roots.exists(input.id)) {
-						var allowed = switch located.value {
-							case FieldGet(_, owner,
-								field) if (owner.id == input.id): hasField(object(roots.get(input.id)), field);
-							case FieldSet(owner, field,
-								value) if (owner.id == input.id
-								&& value.id != input.id): hasField(object(roots.get(input.id)),
-								field);
+				row = body.nextRow(row);
+			}
+		}
+		// A place may only be the object of a field read, or of a write of another value; any other use lets it escape.
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				for (index in 0...body.operandCount(row)) {
+					var input = body.operand(row, index);
+					if (roots.exists(input)) {
+						var allowed = switch body.opcode(row) {
+							case IrOpcode.FieldGet: index == 0
+								&& hasField(object(roots.get(input)), body.symbol(row).name);
+							case IrOpcode.FieldSet: index == 0 && (body.operand(row, 1):Int) != (input:Int)
+								&& hasField(object(roots.get(input)), body.symbol(row).name);
 							default: false;
 						};
 						if (!allowed)
-							valid.set(input.id, false);
+							valid.set(input, false);
 					}
 				}
+				row = body.nextRow(row);
 			}
-			if (block.terminator != null)
-				switch block.terminator.value {
-					case Return(value), Throw(value), Rethrow(value), Branch(value, _, _),
-						Switch(value, _, _) if (roots.exists(value.id)):
-						valid.set(value.id, false);
-					default:
-				}
 		}
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case ValueInit(out) if (roots.exists(out.id) && valid.get(out.id) == true):
-						places.push(out);
-					default:
-				}
 	}
 
 	/** Whether `value` is one of the places. */
-	public function contains(value:IrValue):Bool
-		return valid.get(value.id) == true;
+	public function contains(value:IrValueId):Bool
+		return valid.get(value) == true;
 
 	static function hasField(object:IrObject, name:String):Bool {
 		for (field in object.fields)

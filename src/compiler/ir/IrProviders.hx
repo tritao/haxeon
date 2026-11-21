@@ -4,6 +4,7 @@ import compiler.core.Provides;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
+import compiler.ir.IrFunction.IrFunctionKind;
 
 /**
  * The table of generated helpers: which function serves which operation on which type. A generator states it when it creates the
@@ -35,20 +36,26 @@ class IrProviders {
 		};
 
 	/** Whether `fn` is the equality helper of a value type, or a copy of one made for the scalar call ABI. */
-	public static function isValueEquality(fn:IrFunction, byName:Map<String, IrFunction>):Bool {
-		var current = fn;
-		while (current != null) {
-			switch current.kind {
+	public static function isValueEquality(fn:IrFunction, byName:Map<String, IrFunction>):Bool
+		return isValueEqualityNamed(fn.name, fn.kind, byName);
+
+	/** `isValueEquality` of the function named `name` of kind `kind`, which `byName` need not hold. */
+	public static function isValueEqualityNamed(name:String, kind:IrFunctionKind, byName:Map<String, IrFunction>):Bool {
+		while (true) {
+			switch kind {
 				case Provider(subject, operation):
 					return base(operation) == ProviderOperation.Equals && !subject.isEnum();
 				case ScalarArguments:
 				default:
 					return false;
 			}
-			var original = IrScalarArguments.originalName(current.name);
-			current = original == null ? null : byName.get(original);
+			var original = IrScalarArguments.originalName(name),
+				current = original == null ? null : byName.get(original);
+			if (current == null)
+				return false;
+			name = current.name;
+			kind = current.kind;
 		}
-		return false;
 	}
 
 	/**
