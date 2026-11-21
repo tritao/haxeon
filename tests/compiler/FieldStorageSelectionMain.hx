@@ -54,12 +54,16 @@ class FieldStorageSelectionMain {
 					b.returnValue(v);
 					p.functions.push(new IrFunction("f" + i, b.arguments, I32, b.blocks, Ordinary));
 				}
+				// Encoded first, as the pipeline's functions are when the nullable scalar fields run on their bodies.
+				var types = new compiler.ir.IrTypeIds();
+				for (fn in p.functions)
+					fn.bodyIn(types);
 				var original = p.functions.copy(),
 					before = AllocationMeter.sample();
 				var optional = new IrOptionalFieldStorage(p.objects);
 				p.functions = optional.rewrite(p.functions);
 				p.objects = optional.physicalObjects(p.objects);
-				p.functions = new IrNullableScalarFields(p.objects).rewrite(p.functions);
+				p.functions = new IrNullableScalarFields(p.objects).rewrite(p.functions, types);
 				var bytes = AllocationMeter.sample().bytes - before.bytes;
 				if (bytes > 1024 * 1024)
 					throw 'Unrelated field rewrites allocated $bytes bytes, expected less than 1 MiB';

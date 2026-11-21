@@ -4,9 +4,11 @@ import compiler.core.InternalError;
 import compiler.core.Provides.ProviderOperation;
 import compiler.core.Provides.ProviderOperations;
 import compiler.ir.Ir;
-import compiler.ir.SourceProvenance.Located;
 
-/** Preserve the payload width of a nullable native scalar on every field store. */
+/**
+ * Preserve the payload width of a nullable native scalar on every field store. On IR bodies (docs/design/IR_CORE_COLUMNS.md,
+ * migration): a store is preceded in place by a call of the width's normalizer, whose functions are built and encoded later.
+ */
 class IrNullableScalarFields {
 	final objects:Map<String, IrObject>;
 	final helpers:Map<String, IrFunction> = [];
@@ -14,8 +16,26 @@ class IrNullableScalarFields {
 	public function new(declarations:Array<IrObject>)
 		objects = [for (object in declarations) object.name => object];
 
-	public function rewrite(functions:Array<IrFunction>):Array<IrFunction> {
-		var rewritten = [for (fn in functions) rewriteFunction(fn)];
+	/**
+	 * `functions` with their stores normalized, read as their bodies made with `types` (those of the functions' bodies when not
+	 * given): a function that changes becomes its edited body, frozen when a session keeps the stage's functions (`retained`),
+	 * else owned by the next stage; the normalizers come last.
+	 */
+	public function rewrite(functions:Array<IrFunction>, ?types:IrTypeIds, ?builder:IrBodyBuilder,
+			retained = true):Array<IrFunction> {
+		if (types == null)
+			types = IrTypeIds.ofFunctions(functions);
+		var rewritten:Array<IrFunction> = [];
+		for (fn in functions) {
+			var body = fn.bodyIn(types, builder, retained);
+			if (!needsRewrite(body)) {
+				rewritten.push(fn);
+				continue;
+			}
+			var edited = body.forEditing(builder);
+			rewriteBody(edited);
+			rewritten.push(retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited));
+		}
 		var names = [for (name in helpers.keys()) name];
 		names.sort(Reflect.compare);
 		for (name in names) {
@@ -27,46 +47,44 @@ class IrNullableScalarFields {
 		return rewritten;
 	}
 
-	function rewriteFunction(fn:IrFunction):IrFunction {
-		if (!needsRewrite(fn))
-			return fn;
-		var next = fn.nextValueId(), changed = false, blocks:Array<IrBlock> = [];
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id);
-			for (located in block.instructions) {
-				var instruction = located.value, rewrittenInstruction = false;
-				switch instruction {
-					case FieldSet(owner, name, value):
-						var field = findField(owner.type, name);
-						if (field != null && field.nullableScalarStorage != null) {
-							var helper = helperFor(field.type, field.nullableScalarStorage);
-							var normalized = new IrValue(next++, "$nullable-scalar", field.type);
-							copy.instructions.push(new Located(Call(normalized, IrSymbol.of(helper), [value]),
-								located.provenance));
-							instruction = FieldSet(owner, name, normalized);
-							rewrittenInstruction = true;
-							changed = true;
-						}
-					default:
-				}
-				copy.instructions.push(rewrittenInstruction ? new Located(instruction, located.provenance) : located);
-			}
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-		}
-		return changed ? fn.withBlocks(blocks) : fn;
+	/** The field a store row of `body` writes, when it has a nullable scalar storage. */
+	function narrowedField(body:IrBody, row:Int):Null<IrObjectField> {
+		if (body.opcode(row) != IrOpcode.FieldSet)
+			return null;
+		var field = findField(body.valueType(body.operand(row, 0)), body.symbol(row).name);
+		return field != null && field.nullableScalarStorage != null ? field : null;
 	}
 
-	function needsRewrite(fn:IrFunction):Bool {
-		for (block in fn.blocks)
-			for (located in block.instructions)
-				switch located.value {
-					case FieldSet(owner, name, _):
-						var field = findField(owner.type, name);
-						if (field != null && field.nullableScalarStorage != null)
-							return true;
-					default:
+	/** New values are numbered from the first id nothing names, as the object version numbered them. */
+	function rewriteBody(body:IrBody):Void {
+		var next = body.presentValueLimit();
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var field = narrowedField(body, row);
+				if (field != null) {
+					var helper = helperFor(field.type, field.nullableScalarStorage),
+						normalized = body.newValueAt(next++, "$nullable-scalar", body.typeId(field.type));
+					body.beginRow();
+					body.pushOperand(body.operand(row, 1));
+					body.linkBefore(block, row,
+						body.endRow(IrOpcode.Call, normalized, IrSymbol.of(helper).id, body.provenance(row)));
+					body.setOperand(row, 1, normalized);
 				}
+				row = body.nextRow(row);
+			}
+		}
+	}
+
+	function needsRewrite(body:IrBody):Bool {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (narrowedField(body, row) != null)
+					return true;
+				row = body.nextRow(row);
+			}
+		}
 		return false;
 	}
 

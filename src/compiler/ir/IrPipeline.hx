@@ -54,6 +54,7 @@ class IrPipeline {
 		new IrAssemblyStage("object-reflection", objectReflection),
 		new IrAssemblyStage("reflection-casts", reflectionCasts).when(hasObjects),
 		new IrAssemblyStage("optional-field-storage", optionalFieldStorage).when(hasObjects),
+		new IrAssemblyStage("encode-bodies", encodeBodies),
 		new IrAssemblyStage("nullable-scalar-fields", nullFields).when(hasObjects).checksPrune(REFLECTION),
 		new IrAssemblyStage("runtime-surface", runtimeSurface),
 		new IrAssemblyStage("enum-tag-escapes", assemblyEnumTagEscapes)
@@ -436,29 +437,33 @@ class IrPipeline {
 		return assembly;
 	}
 
-	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = new IrNullableScalarFields(assembly.objects).rewrite(assembly.functions);
+	/**
+	 * The conversion point (docs/design/IR_CORE_COLUMNS.md, migration): every function is encoded, and the stages from here on read
+	 * bodies. A session takes last compile's object for a function rebuilt the same, which has its body; a one-shot compile lets the
+	 * objects go.
+	 */
+	static function encodeBodies(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+		var cache = context.inlineCache, retained = context.options.keepSession;
+		if (retained && cache != null)
+			assembly.functions = cache.stableBodySources(assembly.functions);
+		var types = bodyTypes(context), builder = context.passScratch.bodyBuilder;
+		for (fn in assembly.functions) {
+			fn.bodyIn(types, builder, retained);
+			if (!retained)
+				fn.releaseDecoded();
+		}
 		return assembly;
 	}
 
-	/**
-	 * The first stage over bodies: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each function is
-	 * encoded (`IrProgramAssembler.finish` reads every function's body).
-	 */
+	static function nullFields(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
+		assembly.functions = new IrNullableScalarFields(assembly.objects).rewrite(assembly.functions,
+			bodyTypes(context),
+			context.passScratch.bodyBuilder, context.options.keepSession);
+		return assembly;
+	}
+
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		// A session takes last compile's object for a function rebuilt the same, which has its body.
-		var cache = context.inlineCache;
-		if (context.options.keepSession && cache != null)
-			assembly.functions = cache.stableBodySources(assembly.functions);
-		var program = IrProgramAssembler.finish(assembly, context);
-		assembly.program = program;
-		if (!context.options.keepSession) {
-			var types = bodyTypes(context), builder = context.passScratch.bodyBuilder;
-			for (fn in program.functions) {
-				fn.bodyIn(types, builder, false);
-				fn.releaseDecoded();
-			}
-		}
+		assembly.program = IrProgramAssembler.finish(assembly, context);
 		return assembly;
 	}
 
