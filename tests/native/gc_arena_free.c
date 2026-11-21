@@ -5,7 +5,8 @@
 
 /* An arena released without a collection (hl_gc_arena_free): its pages are reused at once when nothing outside points into
    it, and handed to the collector when something does, whether the reference is in a page of the heap, a root or a
-   stack slot. With HL_GC_ARENA_TRACKING=0 no release is checked and every arena goes to the collector. */
+   stack slot. Where the VM cannot track writes (not 64-bit Linux, or HL_GC_ARENA_TRACKING=0) no release is checked and
+   every arena goes to the collector. */
 
 HL_API void hl_gc_profile_stats(unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*,unsigned long long*);
 HL_PRIM double hl_gc_allocated_since_collection(void);
@@ -158,8 +159,7 @@ int main(void) {
 	hl_add_root(&global_slot);
 	hl_add_root(&outside);
 	hl_add_root(&table);
-	const char *option = getenv("HL_GC_ARENA_TRACKING");
-	tracked = !(option && strcmp(option,"0") == 0);
+	tracked = hl_gc_arena_tracking_available();
 	for(int i=0;i<COUNT;i+=4096) hl_add_root(&blocks[i]); // part of `blocks` is a root, the rest plain memory
 	outside = (void**)hl_gc_alloc_raw(sizeof(void*) * 64);
 
@@ -181,6 +181,16 @@ int main(void) {
 			if(!check(hl_gc_allocated_since_collection() >= filled,"and its allocations still count")) goto done;
 		}
 		if(!check(collections() == marks,"no collection ran")) goto done;
+		if( !tracked ) {
+			/* The collection frees its blocks: their pages leave the heap or, where emptied pages are cached, as much again
+			   allocated outside any arena fits in them. */
+			scrub_stack();
+			hl_gc_major();
+			unsigned long long collected = heap_bytes();
+			for(int i=0;i<COUNT;i++) hl_gc_alloc_raw(16 + (i & 7) * 8);
+			int reclaimed = collected < base + (1 << 20) || heap_bytes() < collected + (1 << 20);
+			if(!check(reclaimed,"the collector frees the blocks of an arena it was handed")) { fprintf(stderr,"heap %llu, then %llu\n",collected,heap_bytes()); goto done; }
+		}
 		/* Many more, one after another: the pool serves them, so the heap does not grow. */
 		unsigned long long peak = heap_bytes();
 		for(int cycle=0;cycle<50;cycle++) {

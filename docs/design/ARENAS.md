@@ -261,7 +261,8 @@ no-return queries, invalidations); the type registry's entries. Not spans: IR ke
   of those pages, the roots and the stacks are checked conservatively. Nothing found: the pages go to a pool (256 MB at
   most) that new pages of the same size and kind come from, and the arena's bytes leave the collection trigger. Something
   found, or writes not tracked for the arena's whole life: its pages join the collector's. Either way its owner class is
-  free at once. `HL_GC_ARENA_TRACKING=0` turns tracking off (every release falls back).
+  free at once. Tracking exists on 64-bit Linux only; `HL_GC_ARENA_TRACKING=0` turns it off (every release falls back),
+  and `hl_gc_arena_tracking_available()` says whether releases are checked.
 - **Diagnostics**: `HL_GC_ARENA_CENSUS` prints each kept arena's references by holder (a block's type and offset, a root,
   a thread's stack); `HL_GC_ARENA_HOLDERS` the holder census of a collection-based release (`hl_gc_arena_release`).
 - **Copy and evacuation**: `hl_gc_arena_copy(value, arena, target)` copies what a value reaches inside an arena to a
