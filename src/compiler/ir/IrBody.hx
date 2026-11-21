@@ -50,32 +50,36 @@ class IrBody {
 	 */
 	public var edited(default, null) = false;
 
-	final opcodes:Array<Int>;
-	final outputs:Array<Int>;
-	final auxes:Array<Int>;
-	final provenances:Array<Int>;
-	final operandStarts:Array<Int>;
-	final operandEnds:Array<Int>;
-	final previousRows:Array<Int>;
-	final nextRows:Array<Int>;
-	final operandPool:Array<Int>;
-	final ints:Array<Int>;
-	final floats:Array<Float>;
-	final strings:Array<String>;
-	final provenancePool:Array<SourceProvenance>;
-	final blockIds:Array<Int>;
-	final blockFirstRows:Array<Int>;
-	final blockLastRows:Array<Int>;
-	final valueTypes:Array<Int>;
-	final valueNames:Array<String>;
-	final valueRows:Array<Int>;
-	final argumentIds:Array<Int>;
-	final bindingIdentities:Array<String>;
-	final bindingNames:Array<String>;
-	final bindingPaths:Array<String>;
-	final bindingStarts:Array<Int>;
-	final bindingEnds:Array<Int>;
-	final bindingValues:Array<Int>;
+	// The columns. A thawed copy of a body no edit touched shares its source's until its first edit (`sharing`).
+	var opcodes:Array<Int>;
+	var outputs:Array<Int>;
+	var auxes:Array<Int>;
+	var provenances:Array<Int>;
+	var operandStarts:Array<Int>;
+	var operandEnds:Array<Int>;
+	var previousRows:Array<Int>;
+	var nextRows:Array<Int>;
+	var operandPool:Array<Int>;
+	var ints:Array<Int>;
+	var floats:Array<Float>;
+	var strings:Array<String>;
+	var provenancePool:Array<SourceProvenance>;
+	var blockIds:Array<Int>;
+	var blockFirstRows:Array<Int>;
+	var blockLastRows:Array<Int>;
+	var valueTypes:Array<Int>;
+	var valueNames:Array<String>;
+	var valueRows:Array<Int>;
+	var argumentIds:Array<Int>;
+	var bindingIdentities:Array<String>;
+	var bindingNames:Array<String>;
+	var bindingPaths:Array<String>;
+	var bindingStarts:Array<Int>;
+	var bindingEnds:Array<Int>;
+	var bindingValues:Array<Int>;
+
+	/** Whether the columns are a frozen body's, which the first edit copies (`unshare`): a thaw that is never edited copies nothing. */
+	var sharing = false;
 
 	/** Where the operands of the row being made (`beginRow`) start in the operand pool. */
 	var rowOperandsFrom = 0;
@@ -101,7 +105,7 @@ class IrBody {
 			types = shared.types;
 			opcodes = shared.opcodes;
 			outputs = shared.outputs;
-			auxes = shared.auxes.copy();
+			auxes = shared.auxes;
 			provenances = shared.provenances;
 			operandStarts = shared.operandStarts;
 			operandEnds = shared.operandEnds;
@@ -166,6 +170,7 @@ class IrBody {
 		if (!frozen)
 			throw new InternalError('IR body $name is not frozen, so another body cannot share its columns');
 		var result = new IrBody(null, name, kind, this.result, inlineHint, retention, this);
+		result.auxes = auxes.copy();
 		for (index in 0...rows.length)
 			result.auxes[rows[index]] = values[index];
 		result.frozen = true;
@@ -361,15 +366,55 @@ class IrBody {
 	}
 
 	/** A copy of this body that a pass may edit: compacted, or column for column when no edit left anything to drop. */
-	public function thaw(?builder:IrBodyBuilder):IrBody
-		return edited ? IrBodyBuilder.compact(this, builder) : IrBodyBuilder.copy(this, builder);
+	public function thaw(?builder:IrBodyBuilder):IrBody {
+		if (edited)
+			return IrBodyBuilder.compact(this, builder);
+		if (!frozen)
+			return IrBodyBuilder.copy(this, builder);
+		var result = new IrBody(null, name, kind, this.result, inlineHint, retention, this);
+		result.sharing = true;
+		return result;
+	}
 
 	// Edits, in place. Each requires the body not to be frozen.
 
 	inline function editing():Void {
 		if (frozen)
 			throw new InternalError('IR body $name is frozen: a cache holds it, and a pass may only change a copy');
+		if (sharing)
+			unshare();
 		edited = true;
+	}
+
+	/** Copies the columns this body shares with the frozen body it was thawed from, before its first edit. */
+	function unshare():Void {
+		sharing = false;
+		opcodes = opcodes.copy();
+		outputs = outputs.copy();
+		auxes = auxes.copy();
+		provenances = provenances.copy();
+		operandStarts = operandStarts.copy();
+		operandEnds = operandEnds.copy();
+		previousRows = previousRows.copy();
+		nextRows = nextRows.copy();
+		operandPool = operandPool.copy();
+		ints = ints.copy();
+		floats = floats.copy();
+		strings = strings.copy();
+		provenancePool = provenancePool.copy();
+		blockIds = blockIds.copy();
+		blockFirstRows = blockFirstRows.copy();
+		blockLastRows = blockLastRows.copy();
+		valueTypes = valueTypes.copy();
+		valueNames = valueNames.copy();
+		valueRows = valueRows.copy();
+		argumentIds = argumentIds.copy();
+		bindingIdentities = bindingIdentities.copy();
+		bindingNames = bindingNames.copy();
+		bindingPaths = bindingPaths.copy();
+		bindingStarts = bindingStarts.copy();
+		bindingEnds = bindingEnds.copy();
+		bindingValues = bindingValues.copy();
 	}
 
 	/** An edit that overwrites a pool entry or a binding, which a trial does not remember. */
@@ -557,23 +602,28 @@ class IrBody {
 		rowOperandsFrom = operandPool.length;
 	}
 
-	public inline function pushOperand(value:IrValueId):Void
+	public inline function pushOperand(value:IrValueId):Void {
+		editing();
 		operandPool.push(value);
+	}
 
 	/** Appends `value` to the int pool and gives its index. */
 	public inline function pushInt(value:Int):Int {
+		editing();
 		ints.push(value);
 		return ints.length - 1;
 	}
 
 	/** Adds a float to the pool and gives its index, for a `ConstFloat` row's auxiliary field. */
 	public inline function addFloat(value:Float):Int {
+		editing();
 		floats.push(value);
 		return floats.length - 1;
 	}
 
 	/** Adds a string to the pool and gives its index, for a `ConstString` row's auxiliary field. */
 	public inline function addString(value:String):Int {
+		editing();
 		strings.push(value);
 		return strings.length - 1;
 	}
