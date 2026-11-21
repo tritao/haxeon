@@ -16,6 +16,8 @@ typedef CompileOptionsInit = {
 	final ?checkIrBody:Bool;
 	final ?typingArenas:TypingArenas;
 	final ?phaseCollections:Bool;
+	final ?cCompiler:String;
+	final ?cSdk:String;
 }
 
 /** Whether the typer types each class's methods in an arena of its own (`CompileOptions.typingArenas`). */
@@ -118,6 +120,15 @@ class CompileOptions {
 	 */
 	public final phaseCollections:Bool;
 
+	/**
+	 * The C compiler a `--target=hlc` build compiles and links its C with (`cc`, `clang`, `gcc`), or null to write the C sources
+	 * only (docs/design/AOT_BACKEND.md). Changes no output of the compile itself, so `key` leaves it out.
+	 */
+	public final cCompiler:Null<String>;
+
+	/** The C SDK a `--target=hlc` build compiles against: a directory with `include/` and `lib/` (the native build's `hlc-sdk`). */
+	public final cSdk:Null<String>;
+
 	public function new(?init:CompileOptionsInit) {
 		inlining = init == null || init.inlining != false;
 		loadStoreForwarding = init == null || init.loadStoreForwarding != false;
@@ -133,6 +144,8 @@ class CompileOptions {
 		verifyIr = checkIrBody || init == null || init.verifyIr != false;
 		typingArenas = init == null || init.typingArenas == null ? Off : init.typingArenas;
 		phaseCollections = init == null || init.phaseCollections == null ? !keepSession : init.phaseCollections;
+		cCompiler = init == null ? null : init.cCompiler;
+		cSdk = init == null ? null : init.cSdk;
 	}
 
 	/** These options with `inlining` set, the others kept. */
@@ -151,7 +164,9 @@ class CompileOptions {
 			verifyIr: verifyIr,
 			checkIrBody: checkIrBody,
 			typingArenas: typingArenas,
-			phaseCollections: phaseCollections
+			phaseCollections: phaseCollections,
+			cCompiler: cCompiler,
+			cSdk: cSdk
 		});
 
 	/** The command-line flags that state these options, the defaults left out; `CompilerArguments` reads them back. */
@@ -191,10 +206,20 @@ class CompileOptions {
 			flags.push(PHASE_COLLECTIONS);
 		if (!phaseCollections && !keepSession)
 			flags.push(NO_PHASE_COLLECTIONS);
+		if (cCompiler != null)
+			flags.push(C_COMPILER + cCompiler);
+		if (cSdk != null)
+			flags.push(C_SDK + cSdk);
 		return flags;
 	}
 
 	static inline final PARSE_THREADS = "--parse-threads=";
+
+	/** The C compiler of a `--target=hlc` build (`cCompiler`). */
+	public static inline final C_COMPILER = "--c-compiler=";
+
+	/** The C SDK of a `--target=hlc` build (`cSdk`). */
+	public static inline final C_SDK = "--c-sdk=";
 	public static inline final NO_KEEP_SESSION = "--no-keep-session";
 	public static inline final NO_VERIFY_IR = "--no-verify-ir";
 
@@ -226,7 +251,8 @@ class CompileOptions {
 	public function key():String
 		return [
 			for (flag in arguments())
-				if (!StringTools.startsWith(flag, PARSE_THREADS) && flag != NO_KEEP_SESSION && flag != TYPING_ARENAS
+				if (!StringTools.startsWith(flag, PARSE_THREADS) && !StringTools.startsWith(flag, C_COMPILER)
+				&& !StringTools.startsWith(flag, C_SDK) && flag != NO_KEEP_SESSION && flag != TYPING_ARENAS
 				&& flag != TYPING_ARENAS_CHECK && flag != TYPING_ARENAS_STRICT && flag != PHASE_COLLECTIONS
 				&& flag != NO_PHASE_COLLECTIONS) flag
 		].join(" ");
@@ -239,7 +265,8 @@ class CompileOptions {
 				"--wasm-legacy-exceptions", "--reverse-typing-order", "--elaborate-generics": true;
 			case NO_KEEP_SESSION, NO_VERIFY_IR, VERIFY_IR, CHECK_IR_BODY, TYPING_ARENAS, TYPING_ARENAS_CHECK,
 				TYPING_ARENAS_STRICT, PHASE_COLLECTIONS, NO_PHASE_COLLECTIONS: true;
-			default: StringTools.startsWith(argument, PARSE_THREADS);
+			default: StringTools.startsWith(argument, PARSE_THREADS) || StringTools.startsWith(argument, C_COMPILER)
+				|| StringTools.startsWith(argument, C_SDK);
 		};
 
 	/** The options the flags among `arguments` state, the others left at their defaults. */
@@ -260,8 +287,19 @@ class CompileOptions {
 			typingArenas: arguments.indexOf(TYPING_ARENAS_STRICT) >= 0 ? Strict : arguments.indexOf(TYPING_ARENAS_CHECK)
 				>= 0 ? Check : arguments.indexOf(TYPING_ARENAS) >= 0 ? On : Off,
 			phaseCollections: arguments.indexOf(PHASE_COLLECTIONS) >= 0 ? true : arguments.indexOf(NO_PHASE_COLLECTIONS)
-				>= 0 ? false : null
+				>= 0 ? false : null,
+			cCompiler: lastValue(arguments, C_COMPILER),
+			cSdk: lastValue(arguments, C_SDK)
 		});
+
+	/** The value of the last `PREFIXvalue` among `arguments`, or null. */
+	static function lastValue(arguments:Array<String>, prefix:String):Null<String> {
+		var found:Null<String> = null;
+		for (argument in arguments)
+			if (StringTools.startsWith(argument, prefix))
+				found = argument.substr(prefix.length);
+		return found;
+	}
 
 	/** The value of the last `--parse-threads=N` among `arguments`, or 1. */
 	static function threadsFrom(arguments:Array<String>):Int {

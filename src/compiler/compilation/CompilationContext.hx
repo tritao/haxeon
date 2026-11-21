@@ -123,7 +123,7 @@ class CompilationContext {
 		return switch owner.backendTarget {
 			case WasmGc: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.WasmGc;
 			case Wasm32: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.Wasm32;
-			case HashLink | Wasm64: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.HashLink;
+			case HashLink | HashLinkC | Wasm64: compiler.ir.IrValueLaneLayout.IrValueLaneTarget.HashLink;
 		};
 
 	public function exportedFunctions():Array<String>

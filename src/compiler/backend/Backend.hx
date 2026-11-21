@@ -7,6 +7,9 @@ import haxe.io.Bytes;
 /** Target selected by the compiler after canonical Haxeon IR is available. */
 enum BackendTarget {
 	HashLink;
+
+	/** C from the IR on the HashLink runtime (`--target=hlc`, docs/design/AOT_BACKEND.md): HashLink's semantics and layouts. */
+	HashLinkC;
 	Wasm32;
 	Wasm64;
 	WasmGc;

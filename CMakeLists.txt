@@ -192,6 +192,26 @@ else()
   set_target_properties(hlvm PROPERTIES OUTPUT_NAME hl)
 endif()
 
+# The SDK a `--target=hlc` build compiles against (`--c-sdk`, docs/design/AOT_BACKEND.md): the VM library and libffi in
+# lib/, the runtime headers in include/, and the entry point the generated C links with in src/.
+set(HAXEON_HLC_SDK_DIR "${CMAKE_BINARY_DIR}/hlc-sdk")
+set(_hlc_sdk_headers
+  vendor/hashlink/src/hl.h vendor/hashlink/src/hlc.h vendor/hashlink/src/hlmodule.h vendor/hashlink/src/hlsystem.h
+  vendor/hashlink/src/opcodes.h vendor/hashlink/src/gc_write.h vendor/hashlink/src/hl_ffi.h)
+list(TRANSFORM _hlc_sdk_headers PREPEND "${CMAKE_SOURCE_DIR}/")
+add_custom_target(haxeon-hlc-sdk ALL
+  COMMAND "${CMAKE_COMMAND}" -E make_directory "${HAXEON_HLC_SDK_DIR}/include" "${HAXEON_HLC_SDK_DIR}/lib"
+    "${HAXEON_HLC_SDK_DIR}/src"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${_hlc_sdk_headers} "${HAXEON_HLC_SDK_DIR}/include"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${HAXEON_HLC_SDK_DIR}/src"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm>" "${HAXEON_HLC_SDK_DIR}/lib"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_pinned_libffi>"
+    "${HAXEON_HLC_SDK_DIR}/lib/libffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
+  DEPENDS hlvm "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
+  COMMENT "Assembling the hlc SDK"
+  VERBATIM
+)
+
 add_subdirectory(tests/native)
 
 # The wasm32 runtimes committed in stdlib/haxeon/wasm: haxeon-wasm-runtime and haxeon-wasm-runtime-check.

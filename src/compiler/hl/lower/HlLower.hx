@@ -1061,7 +1061,8 @@ class HlLower {
 	}
 
 	/** Float and Int elements are read in place; every other element type is boxed and cast back. */
-	static function iteratorNextNative(element:IrType):{name:String, result:IrType} return switch element {
+	/** The native an iterator's `next` calls for elements of type `element`, and what it returns. */
+	public static function iteratorNextNative(element:IrType):{name:String, result:IrType} return switch element {
 		case F64: {name: "__iterator_next_f64", result: IrType.F64};
 		case I32: {name: "__iterator_next_i32", result: IrType.I32};
 		default: {name: "__iterator_next", result: IrType.Dyn};

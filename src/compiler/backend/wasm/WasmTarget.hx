@@ -51,7 +51,7 @@ class WasmTarget {
 				threads: false,
 				debugNames: debugNames
 			};
-			case HashLink: throw new InternalError("HashLink is not a Wasm target");
+			case HashLink | HashLinkC: throw new InternalError("HashLink is not a Wasm target");
 		};
 	}
 

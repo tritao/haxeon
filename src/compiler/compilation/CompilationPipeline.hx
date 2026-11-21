@@ -124,7 +124,7 @@ class CompilationPipeline {
 				case HashLinkBuild(build):
 					var patch = build.patchBytes;
 					patch == null ? 0 : patch.length;
-				case WasmBuild(_): 0;
+				case WasmBuild(_) | HashLinkCBuild(_): 0;
 			};
 		allocationPhases.push(AllocationMeter.delta("finalize", allocationBeforeFinalize, AllocationMeter.sample()));
 		return {

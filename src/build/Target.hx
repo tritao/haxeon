@@ -82,9 +82,9 @@ class Target {
 	}
 
 	/**
-	 * The target names, for messages and help. A target names where a program runs; the compiler's backend (`hl`, `wasm32`,
-	 * `wasm-gc`) follows from it (`project.CompilerInputs.compilerTarget`). Architectures are spelled `x86_64` and `arm64`, as
-	 * `toString` writes them; `aarch64`, `amd64`, `x64` and the i386 family are read too.
+	 * The target names, for messages and help. A target names where a program runs; the compiler's backend (`hl`, `hlc`,
+	 * `wasm32`, `wasm-gc`) follows from it (`project.CompilerInputs.compilerTarget`). Architectures are spelled `x86_64` and
+	 * `arm64`, as `toString` writes them; `aarch64`, `amd64`, `x64` and the i386 family are read too.
 	 */
 	public static final NAMES = "host, android, wasm32, or OS-ARCH[-ABI] such as linux-x86_64 or macos-arm64";
 
@@ -96,6 +96,8 @@ class Target {
 		// Haxe names its targets by what the compiler generates; Haxeon's by where the program runs.
 		if (normalized == "hl" || normalized == "hashlink")
 			throw new InternalError('Unknown target "$value": HashLink on this machine is the target "host". Valid: $NAMES');
+		if (normalized == "hlc")
+			throw new InternalError('Unknown target "$value": "hlc" is a compiler backend, which the compiler takes as --target=hlc. Valid: $NAMES');
 		if (["js", "cpp", "cs", "java", "jvm", "python", "lua", "php", "neko", "swf", "flash", "interp", "eval"]
 			.indexOf(normalized) >= 0)
 			throw new InternalError('Unknown target "$value": Haxeon builds HashLink and WebAssembly programs. Valid: $NAMES');

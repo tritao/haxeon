@@ -4,6 +4,7 @@ import compiler.Compiler.CompileResult;
 import compiler.abi.AbiChangeSchema;
 import compiler.backend.BackendTargets;
 import compiler.backend.MemoryContract.MemoryContractCodec;
+import compiler.backend.c.HlcBuild;
 import compiler.compilation.BackendArtifact.BackendArtifacts;
 import compiler.core.AllocationMeter;
 import compiler.core.AllocationMeter.PhaseAllocation;
@@ -68,6 +69,8 @@ class CompilerDriver {
 		for (warning in compiler.warnings(result.moduleNames))
 			warned(printer.warning(warning));
 		try {
+			if (target == HashLinkC)
+				return writeC(compiler, result, request, report);
 			// Checked before anything is written: a module its host cannot call is not published.
 			var entryIdOutput = request.entryIdOutput,
 				mainId = entryIdOutput == null ? -1 : entryId(result, request.entry);
@@ -269,6 +272,28 @@ class CompilerDriver {
 		report(allocationReport("driver allocation phases:", driverAllocations));
 	}
 
+	/**
+	 * A C build (docs/design/AOT_BACKEND.md): the sources go to `OUTPUT.c/`; with a C compiler and SDK the executable is linked
+	 * at `OUTPUT`. Like a Wasm module, it has no live host: writing it publishes it.
+	 */
+	static function writeC(owner:compiler.Compiler, result:CompileResult, request:CompilerRequest,
+			report:String->Void):CompileResult {
+		var files = BackendArtifacts.c(result.artifact).files, directory = request.output + ".c";
+		var changed = HlcBuild.write(files, directory);
+		var options = request.options, cCompiler = options.cCompiler, sdk = options.cSdk;
+		if (cCompiler != null) {
+			if (sdk == null)
+				throw new InternalError("--c-compiler requires --c-sdk");
+			var compiled = HlcBuild.compile(files, directory, request.output, cCompiler, sdk);
+			report('compiled $compiled of ${files.length} C files');
+		}
+		var status = owner.publicationStatus();
+		if (status.hasPendingRevision && status.pendingRevision == result.revision)
+			owner.acknowledgePublication(result.revision);
+		report('wrote ${files.length} C files ($changed changed) -> $directory');
+		return result;
+	}
+
 	/** Keep the last patch available until the live host has had a chance to observe its stamp. */
 	/** The modules the compile read, as JSON: `[name, path, sha256 of the module's text]` (for the generated identity table, of its file), sorted by name. */
 	static function inputsReport(session:compiler.Compiler, names:Array<String>, request:CompilerRequest):String {
@@ -422,8 +447,8 @@ class CompilerDriver {
 	}
 
 	public static function targetDefines(target:String):Array<String> {
-		var result = ["haxeon", "target=" + target];
-		switch BackendTargets.parse(target) {
+		var result = ["haxeon", "target=" + target], backend = BackendTargets.parse(target);
+		switch backend {
 			case Wasm32:
 				result.push("wasm");
 				result.push("wasm32");
@@ -433,7 +458,10 @@ class CompilerDriver {
 			case WasmGc:
 				result.push("wasm");
 				result.push("wasmgc");
-			case HashLink:
+			case HashLink | HashLinkC:
+				// Haxe defines `hlc` when it compiles HashLink to C.
+				if (backend == HashLinkC)
+					result.push("hlc");
 				// Standard Haxe's names for a system target with threads, which HashLink's
 				// sys.thread provides: code guarding shared state with `#if target.threaded`
 				// must not compile its locks away here.

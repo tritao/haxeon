@@ -313,7 +313,7 @@ class EnumTagStorageMain {
 						case HashLink: HashLink;
 						case Wasm32: Wasm32;
 						case WasmGc: WasmGc;
-						case Wasm64: throw "Unsupported target";
+						case Wasm64 | HashLinkC: throw "Unsupported target";
 					};
 					var p = arrays ? arrayProgram(laneTarget) : variant == 2 ? nativeProgram() : program();
 					p = compiler.ir.codec.CanonicalIrCodec.decode(compiler.ir.codec.CanonicalIrCodec.encode(p));
@@ -327,7 +327,7 @@ class EnumTagStorageMain {
 						case HashLink: HashLink;
 						case Wasm32: Wasm32;
 						case WasmGc: WasmGc;
-						case Wasm64: throw "Unsupported target";
+						case Wasm64 | HashLinkC: throw "Unsupported target";
 					};
 					var shape = new compiler.ir.IrValueLaneLayout(compiler.ir.IrObjectTable.of([]),
 						target == HashLink ? 64 : 32,

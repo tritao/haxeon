@@ -32,10 +32,12 @@ symbol table and the program it lowered. That assembly decides everything the ru
 - the type table (`HlCode.types`: objects with field order and prototypes, virtuals, enums, enum tags, functions),
 - globals and their types, constants (String literals), natives and their slots, function slots and the entry point.
 
-The C backend reuses those decisions; it never lays out a type itself. It then lowers each function's body to C
-(`HlcFunctionLower`), resolving names through the same symbol table (`requireObjectField`-style lookups, function slots,
-global indices, type indices), and writes the module image (below). The bytecode `HlLower` produced alongside is not
-used except as the image's function signatures; a later step skips lowering bodies to bytecode for `hlc`.
+The C backend reuses those decisions; it never lays out a type itself. `HlcModule` lowers each function's body to C
+(`HlcFunctionLower`), resolving names through the same symbol table (function slots, global indices, type indices, field
+indices), and writes the module image (below). The bytecode `HlLower` produced alongside is not used except as the
+image's function signatures; a later step skips lowering bodies to bytecode for `hlc`. The assembler keeps the program it
+lowered for this (`HlModuleAssembler.keepsProgram`), so the C backend sees exactly the functions the slots were given,
+after `IrSharedRuntimeCalls`.
 
 Lowering decisions that are semantics, not encoding, must be the same in both backends: which receivers get a null check
 (`IrNonNullFacts`), the pseudo-calls that are not functions (`IrReceiverCheck`, `IrReferenceIdentity`,
@@ -60,25 +62,29 @@ same initialization without JIT, function pointers given) and static per-signatu
 `hl2c` generates, and may later emit the type tables as static C data to skip decoding.
 
 Layout checks: the generated code accesses object fields through C structs and globals at offsets computed by the backend
-(`hl_module_alloc`'s rule). At startup, before running anything, the image checks each struct's field offsets against
-`hl_get_obj_rt(t)->fields_indexes` and each global's offset against `globals_indexes`, and aborts on a difference. The
-runtime structs the backend assumes (`varray` with its `data` pointer, `vclosure`, `venum`, `vvirtual`) come from the
-fork's `hl.h`, never from copies, and the generated header asserts their sizes statically.
+(`hl_module_alloc`'s rule). At startup, before running anything, the entry point checks each struct's field offsets
+against `hl_get_obj_rt(t)->fields_indexes` and each global's offset against `globals_indexes`, and exits on a difference.
+The runtime's own structures (`varray` with its `data` pointer, `vclosure`, `venum`, `vvirtual`) are never copied: the
+generated code includes the fork's `hl.h` from the SDK and uses its macros (`hl_aptr`, `hl_vfields`), and enum payloads
+are read at the runtime's constructor offsets, so a change in the fork's layouts is a C compile error or a startup check
+failure, never silent corruption.
 
 ## The C shape
 
-- `hlc/hlc.h`: the one generated header: `#include <hl.h>`, a struct per object type (fields flattened from the base
-  down, as `hl_get_obj_rt` lays them out with no tail padding between a base and its subclass), a prototype per function,
-  the globals' offsets, `extern hl_type *hlc_types` and the slot table.
-- One `.c` file per Haxe module (functions grouped by the module their provenance names; generated code in its own file),
-  so C builds run in parallel and an edit recompiles only the files whose text changed: the writer leaves an unchanged
-  file untouched, so its timestamp stays. Measured on the compiler with `hl2c`, per-module files build in a fraction of
-  a unity build's time and memory.
-- `hlc/image.c`: the module image and the slot table (function pointers by slot).
-- `hlc/main.c`: `main`, from the runtime support (`native/aot/hlc_main.c`, linked from the SDK).
+The sources go to `OUTPUT.c/`:
 
-Functions are named from their Haxe names (`Point_sum`), deduplicated with a numeric suffix, so names are stable across
-builds and readable in debuggers, `perf` and crash backtraces.
+- `hlc.h`: the one generated header: `#include <hl.h>`, a struct per object type (fields flattened from the base down, as
+  `hl_get_obj_rt` lays them out with no tail padding between a base and its subclass, `f<index>` by HashLink field
+  index), and a prototype per function.
+- One `.c` file per Haxe source file (each function goes with the source most of its rows come from, so inlined code
+  does not move it), so C builds run in parallel and an edit recompiles only the files whose text changed: the writer
+  leaves an unchanged file untouched, so its timestamp stays. Measured on the compiler with `hl2c`, per-module files
+  build in a fraction of a unity build's time and memory.
+- `image.c`: the module image, the slot table (function pointers by slot), and the layouts to check.
+- `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them.
+
+Functions are named from their Haxe names (`hx_Point_sum`), deduplicated with the slot number, so names are stable across
+builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>` by IR value id.
 
 ## Values, calls and the GC
 
@@ -94,11 +100,19 @@ builds and readable in debuggers, `perf` and crash backtraces.
   declarations that do not conflict with `hl.h`'s; that is milestone 3.
 - **Closures** are `vclosure`s: static closures allocated once per site, instance closures with `hl_alloc_closure_ptr`;
   a call tests `hasValue` as `hl2c` does. Function values from natives and the JIT are the same structure.
-- **Dynamic values.** Boxing goes through `hl_make_dyn`, which shares the runtime's small Int and Bool boxes as the JIT
-  does; casts through `hl_dyn_cast*`, dynamic fields through `hl_dyn_get*`/`hl_dyn_set*`.
+- **Dynamic values.** Scalars stay unboxed by their static type throughout; a value is boxed only where the IR says it
+  becomes Dynamic (a `ToDyn` row: a Dynamic-typed slot, or a type parameter erased to Dynamic at a real boundary), by
+  the runtime's own `hl_make_dyn`. Generated code keeps no box cache of its own (no shared small-Int boxes). Boxes come
+  from Dynamic-typed slots: `Null<Int>`, generic containers and type parameters, `Dynamic`, anonymous structures. The
+  clean fix is not making the box: nullable scalars as flag and value pairs, generics specialized for scalars, which
+  the IR does for every backend, so the JIT and Wasm gain as much. Tagged small Ints inside Dynamic would be a runtime
+  and ABI decision for the fork, not part of this backend. Casts go through `hl_dyn_cast*`, dynamic fields through
+  `hl_dyn_get*`/`hl_dyn_set*`.
 - **Null and bounds checks.** A receiver gets `if (!o) hl_null_access()` unless `IrNonNullFacts` proves it non-null.
   Array accesses call `hl_array_check`/`hl_array_ensure` as the JIT does unless the IR proved the index in range
   (`IrLoopBounds`, milestone 2).
+- **Null access messages.** A failed check before a field access throws the JIT's "Null access .field"
+  (`hl_jit_null_field_access`); others throw "Null access", as the JIT's do.
 - **GC roots.** The collector scans each thread's stack conservatively, as for JIT frames and `hl2c`, so C locals need no
   registration; globals are registered by the module initialization. Stores of pointers into the heap go through
   `hl_gc_store_ref`, which records the write for incremental marking (`gc_write.h`), exactly where the JIT emits its
@@ -124,9 +138,11 @@ as `hlc_main.c` does; milestone 3. The debugger and hot reload are JIT features 
 `--target=hlc` selects the backend as `--target=wasm32` does (`BackendTargets.parse` gives `HashLinkC`). The compile writes
 the C sources into the directory `--output` names plus `.c` (`out/main.c/`). The C compiler is a typed option on the
 request (`CompileOptions.cCompiler`, `--c-compiler=cc`), with the SDK it links against (`CompileOptions.cSdk`,
-`--c-sdk=DIR`: the HashLink build's `hashlink-runtime` directory, which holds `libhl.a`, the headers and the AOT runtime
-support); with both set, the driver compiles each C file (in parallel, `-O2`), links the executable at `--output`, and
-reports the C compiler's diagnostics as a compile error. Neither is read from the environment or from defines. They change
+`--c-sdk=DIR`: the native build's `hlc-sdk` directory, made by the `haxeon-hlc-sdk` target, with the runtime headers in
+`include/`, `libhl.a` and `libffi.a` in `lib/` and the entry point in `src/`); with both set, the driver compiles each C
+file that changed (in parallel, `-O2 -g -fwrapv -fno-strict-aliasing`: Haxe's `Int` wraps, and objects are read through
+each other's structs), links the executable at `--output` with the whole VM library (the loader resolves natives by
+their `hlp_` symbols in the executable itself), and reports the C compiler's diagnostics as a compile error. Neither is read from the environment or from defines. They change
 no IR or C text, so `CompileOptions.key` leaves them out.
 
 ## Testing

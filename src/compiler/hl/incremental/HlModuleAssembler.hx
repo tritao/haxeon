@@ -187,6 +187,12 @@ class HlModuleAssembler {
 	/** The IR given to `assemble` was verified already (a plain build verifies its final IR before any backend). */
 	public var irVerified = false;
 
+	/** Keep the program the last assembly lowered (`lastProgram`), for a backend that lowers it again (the C backend). */
+	public var keepsProgram = false;
+
+	/** The program the last assembly lowered, after the shared runtime calls; null unless `keepsProgram`. */
+	public var lastProgram(default, null):Null<IrProgram> = null;
+
 	/** How many functions the last `assemble` took from `loweredCache`. */
 	public var reusedFunctions = 0;
 
@@ -916,6 +922,8 @@ class HlModuleAssembler {
 		if (livePatching == (loweredCache != null))
 			throw new InternalError('a ${livePatching ? "live" : "plain"} build must use ${livePatching ? "only" : "a"} ${livePatching ? "the published functions" : "lowered cache"}');
 		var liveCache = loweredCache;
+		if (keepsProgram)
+			lastProgram = ordered;
 		if (livePatching) {
 			if (!reuseLowered)
 				published = new HlLoweredCache();

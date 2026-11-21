@@ -61,7 +61,7 @@ command line that starts with an `.hxml` file or one of Haxe's options (`-cp`, `
 `--hl`, `-D`, ...) is built as Haxe would build it: see [Haxe command lines](#haxe-command-lines).
 
 A value the CLI does not take is reported with the values it does, as in `Unknown
-target "hlc". Valid: host, android, wasm32, ...`. Every command exits with 0 when it
+target "solaris". Valid: host, android, wasm32, ...`. Every command exits with 0 when it
 succeeds, 1 when a build, a test or another step fails, 2 for a usage error (an unknown
 command or option, a missing or invalid value) and 70 for an internal error, which is a
 bug in Haxeon. The compiler run directly takes each valued option as `--name=value` or
@@ -593,12 +593,13 @@ Two names describe a build, and Haxeon keeps them apart:
   `OS-ARCH[-ABI]` such as `linux-x86_64`, `macos-arm64` or `windows-x86_64-msvc`. Architectures are spelled `x86_64` and
   `arm64`; `aarch64`, `amd64` and `x64` are read too, and `wasm32-wasi` is `wasm32`. `haxeon platforms` lists them with this
   machine's name.
-- The **backend** says what the compiler generates: `hl` (HashLink bytecode, run by the VM's JIT), `wasm32` (WebAssembly
+- The **backend** says what the compiler generates: `hl` (HashLink bytecode, run by the VM's JIT), `hlc` (C on the HashLink
+  runtime, compiled ahead of time; [AOT_BACKEND.md](../design/AOT_BACKEND.md)), `wasm32` (WebAssembly
   with linear memory) or `wasm-gc` (WebAssembly GC). The compiler takes it as `--target=NAME`, which is Haxe's sense of
   "target"; the project build passes it.
 
 The target chooses the backend: `host`, `android` and the other native targets build `hl`, and `wasm32` builds `wasm32`.
-`wasm-gc` is reached by calling the compiler directly. Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
+`hlc` and `wasm-gc` are reached by calling the compiler directly. Haxe's `--hl FILE.hl` is the target `host` with the backend `hl`,
 and a Haxe target name given to `--target` is refused with Haxeon's (`--target hl` says to use `host`).
 
 ## Language server and FFI tools

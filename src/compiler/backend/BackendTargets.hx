@@ -11,6 +11,7 @@ class BackendTargets {
 	public static function parse(name:Null<String>):Null<BackendTarget>
 		return switch name {
 			case "hl": HashLink;
+			case "hlc": HashLinkC;
 			case "wasm32": Wasm32;
 			case "wasm64": Wasm64;
 			case "wasmgc" | "wasm-gc": WasmGc;
@@ -23,7 +24,14 @@ class BackendTargets {
 
 	public static function isWasm(target:BackendTarget):Bool
 		return switch target {
-			case HashLink: false;
+			case HashLink | HashLinkC: false;
 			case Wasm32 | Wasm64 | WasmGc: true;
+		};
+
+	/** Whether the target runs on the HashLink runtime, with its types, layouts and natives: the JIT's or C's. */
+	public static function isHashLink(target:BackendTarget):Bool
+		return switch target {
+			case HashLink | HashLinkC: true;
+			case Wasm32 | Wasm64 | WasmGc: false;
 		};
 }

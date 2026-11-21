@@ -1,0 +1,92 @@
+package compiler.backend.c;
+
+import compiler.backend.c.HlcModule.HlcFile;
+import compiler.core.InternalError;
+import compiler.ffi.ProcessOutputCapture;
+import sys.FileSystem;
+import sys.io.File;
+
+/**
+ * Writes a C build's sources and, given a C compiler and SDK (`CompileOptions.cCompiler`, `cSdk`), compiles and links them
+ * (docs/design/AOT_BACKEND.md). A file whose text did not change is not written again, and an object newer than its source and
+ * the header is not compiled again, so an edit recompiles only the modules it changed.
+ */
+class HlcBuild {
+	/** Writes `files` into `directory`; returns how many changed. Files of an earlier build that this one lacks are removed. */
+	public static function write(files:Array<HlcFile>, directory:String):Int {
+		FileSystem.createDirectory(directory);
+		var changed = 0, kept:Map<String, Bool> = [];
+		for (file in files) {
+			var path = directory + "/" + file.path;
+			kept.set(file.path, true);
+			if (FileSystem.exists(path) && File.getContent(path) == file.content)
+				continue;
+			File.saveContent(path, file.content);
+			changed++;
+		}
+		for (name in FileSystem.readDirectory(directory))
+			if ((StringTools.endsWith(name, ".c") || StringTools.endsWith(name, ".h")) && !kept.exists(name))
+				FileSystem.deleteFile(directory + "/" + name);
+		return changed;
+	}
+
+	/** Compiles the C files of `directory` and the SDK's runtime support, and links the executable `output`. Returns how many it compiled. */
+	public static function compile(files:Array<HlcFile>, directory:String, output:String, cCompiler:String,
+			sdk:String):Int {
+		var objects = directory + "/obj";
+		FileSystem.createDirectory(objects);
+		var header = directory + "/hlc.h", headerTime = modified(header);
+		var sources = [for (file in files) if (StringTools.endsWith(file.path, ".c")) directory + "/" + file.path];
+		sources.push(sdk + "/src/hlc_main.c");
+		var outputs = [for (source in sources) objects + "/"
+			+ haxe.io.Path.withoutExtension(haxe.io.Path.withoutDirectory(source)) + ".o"];
+		var pending = [
+			for (index in 0...sources.length)
+				if (!FileSystem.exists(outputs[index]) || modified(outputs[index]) <= Math.max(modified(sources[index]),
+				headerTime)) index
+		];
+		var failures:Array<Null<String>> = [for (_ in pending) null];
+		compiler.core.Parallel.forEach(pending.length, 8, function(item) {
+			var index = pending[item];
+			var result = ProcessOutputCapture.capture(cCompiler, [
+				"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-w", '-I$directory', '-I$sdk/include',
+				"-c",
+				sources[index], "-o", outputs[index]
+			], ProcessOutputCapture.defaultDiagnosticLimit);
+			if (result.exitCode != 0)
+				failures[item] = '${sources[index]}:\n${result.stderr}';
+		});
+		for (failure in failures)
+			if (failure != null)
+				throw new InternalError('C compilation failed: $failure');
+		// The whole VM library is linked: the loader resolves natives by name (`hlp_*`) in the executable itself, so nothing in the
+		// generated code references them, and they must be exported.
+		var link = ["-o", output].concat(outputs);
+		if (Sys.systemName() == "Mac")
+			link = link.concat([
+				'-Wl,-force_load,$sdk/lib/libhl.a',
+				'$sdk/lib/libffi.a',
+				"-lm",
+				"-lpthread",
+				"-Wl,-export_dynamic"
+			]);
+		else
+			link = link.concat([
+				"-Wl,--whole-archive",
+				'$sdk/lib/libhl.a',
+				"-Wl,--no-whole-archive",
+				'$sdk/lib/libffi.a',
+				"-lm",
+				"-lpthread",
+				"-ldl",
+				"-Wl,--export-dynamic"
+			]);
+		var result = ProcessOutputCapture.capture(cCompiler, link, ProcessOutputCapture.defaultDiagnosticLimit);
+		if (result.exitCode != 0)
+			throw new InternalError('C link failed:\n${result.stderr}');
+		return pending.length;
+	}
+
+	static function modified(path:String):Float
+		return FileSystem.exists(path) ? FileSystem.stat(path).mtime.getTime() : 0.0;
+}

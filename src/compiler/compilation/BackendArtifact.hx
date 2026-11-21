@@ -27,10 +27,16 @@ typedef WasmArtifact = {
 	final bytes:Bytes;
 }
 
+/** What a C build emits: the sources (docs/design/AOT_BACKEND.md), which the driver writes and may compile. */
+typedef HlcArtifact = {
+	final files:Array<compiler.backend.c.HlcModule.HlcFile>;
+}
+
 /** The artifact of one build, by backend (`CompileResult.artifact`). */
 enum BackendArtifact {
 	HashLinkBuild(build:HlArtifact);
 	WasmBuild(build:WasmArtifact);
+	HashLinkCBuild(build:HlcArtifact);
 }
 
 /** Reads one backend's artifact where a caller knows which backend built it (`using compiler.compilation.BackendArtifact`). */
@@ -40,6 +46,7 @@ class BackendArtifacts {
 		return switch artifact {
 			case HashLinkBuild(build): build;
 			case WasmBuild(_): throw new InternalError("The build emitted a Wasm module, not a HashLink module");
+			case HashLinkCBuild(_): throw new InternalError("The build emitted C, not a HashLink module");
 		};
 
 	/** The Wasm artifact; a build by another backend is an error. */
@@ -47,5 +54,13 @@ class BackendArtifacts {
 		return switch artifact {
 			case WasmBuild(build): build;
 			case HashLinkBuild(_): throw new InternalError("The build emitted a HashLink module, not a Wasm module");
+			case HashLinkCBuild(_): throw new InternalError("The build emitted C, not a Wasm module");
+		};
+
+	/** The C artifact; a build by another backend is an error. */
+	public static function c(artifact:BackendArtifact):HlcArtifact
+		return switch artifact {
+			case HashLinkCBuild(build): build;
+			default: throw new InternalError("The build did not emit C");
 		};
 }

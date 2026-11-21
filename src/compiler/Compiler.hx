@@ -546,8 +546,11 @@ class Compiler {
 		backendTarget = target == null ? HashLink : target;
 		// The session's backend builds for the target; one that builds for another starts over.
 		if (state.backend.backendTarget() != backendTarget)
-			state.backend = BackendTargets.isWasm(backendTarget)
-				? new WasmBackendSession(backendTarget) : new HashLinkBackendSession(new HlModuleAssembler());
+			state.backend = switch backendTarget {
+				case HashLink: new HashLinkBackendSession(new HlModuleAssembler());
+				case HashLinkC: new compiler.compilation.HlcBackendSession();
+				case Wasm32 | Wasm64 | WasmGc: new WasmBackendSession(backendTarget);
+			};
 		for (module in modules) {
 			var affected = scopeChanged;
 			if (!affected)
@@ -656,6 +659,7 @@ class Compiler {
 						patchBytes: null
 					});
 					case WasmBuild(build): WasmBuild(build);
+					case HashLinkCBuild(build): HashLinkCBuild(build);
 				},
 					retyped: [],
 					invalidations: [],
@@ -803,10 +807,10 @@ class Compiler {
 		return switch backendTarget {
 			case Wasm32 | WasmGc: "portable-abi32";
 			case Wasm64: "portable-abi64";
-			case HashLink:
+			case HashLink | HashLinkC:
 				// A `target` define that names no backend names the C ABI itself.
 				var named = defines.get("target");
-				named == null || named == "hl" ? "portable-abi64" : named;
+				named == null || BackendTargets.parse(named) != null ? "portable-abi64" : named;
 		}
 	}
 

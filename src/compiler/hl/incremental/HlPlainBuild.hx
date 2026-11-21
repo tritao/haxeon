@@ -28,14 +28,19 @@ class HlPlainBuild {
 
 	/** Assembles `program` as a plain build with no session: reachable from the entry, a fresh assembler and an empty lowered cache. */
 	public static function assemble(program:IrProgram, developmentMetadata:Bool):HlModuleAssembler.HlAssemblyResult {
-		var plain = reachable(program).program,
-			cache = new HlLoweredCache(),
+		var plain = reachable(program).program;
+		return assembler(developmentMetadata).assemble(plain, [for (fn in plain.functions) fn.name], Patch);
+	}
+
+	/** The fresh assembler of a plain build, with an empty lowered cache. */
+	public static function assembler(developmentMetadata:Bool):HlModuleAssembler {
+		var cache = new HlLoweredCache(),
 			assembler = new HlModuleAssembler(null, cache.debug);
 		assembler.fieldReserve = 0;
 		assembler.developmentMetadata = developmentMetadata;
 		assembler.irVerified = true;
 		assembler.livePatching = false;
 		assembler.loweredCache = cache;
-		return assembler.assemble(plain, [for (fn in plain.functions) fn.name], Patch);
+		return assembler;
 	}
 }
