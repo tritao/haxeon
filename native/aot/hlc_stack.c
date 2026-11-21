@@ -1,17 +1,33 @@
 /* Haxe stack traces for a program Haxeon compiled to C (docs/design/AOT_BACKEND.md). The generated functions are in their own
- * section (`hlc_text`), so a captured frame is the program's exactly when its return address is in that section, as a JIT frame
- * is when it is in the module's code. A frame is named as the JIT names it: the function's identity from the module image, and
- * the Haxe file and line the C compiler's line table gives for the call (`#line` in the generated code). The line table is read
- * from the executable's own DWARF `.debug_line` the first time a frame is resolved. Where the C compiler inlined generated functions
- * into each other (release builds; development builds define HLC_EXACT_FRAMES and inline none), the DWARF inline records restore
- * their frames. */
+ * section (`hlc_text` in ELF, `.text$hlc.2` in PE), so a captured frame is the program's exactly when its return address is in
+ * that section, as a JIT frame is when it is in the module's code. A frame is named as the JIT names it: the function's identity
+ * from the module image, and the Haxe file and line the C compiler's line table gives for the call (`#line` in the generated
+ * code). The line table is read from the executable's own DWARF `.debug_line` the first time a frame is resolved: an ELF
+ * executable's on Linux, or a PE executable's that MinGW built on Windows (GCC writes DWARF there too; the return addresses come
+ * from the system unwinder, which reads the SEH unwind tables GCC writes for every function). Where the C compiler inlined
+ * generated functions into each other (release builds; development builds define HLC_EXACT_FRAMES and inline none), the DWARF
+ * inline records restore their frames. */
 #include <hl.h>
 #include <hlmodule.h>
 
 void hlc_stack_init( hl_module *m, void **functions, int count );
 
+/* The names of the generated functions, sorted, with their slots (image.c): an inlined scope is a frame when its function is one. */
+typedef struct {
+	const char *name;
+	int slot;
+} hlc_function_name;
+extern const hlc_function_name hlc_function_names[];
+extern const int hlc_function_name_count;
+
 #if defined(__linux__) && defined(__ELF__)
-#include <dlfcn.h>
+#define HLC_STACK_ELF
+#elif defined(_WIN32) && defined(__GNUC__)
+#define HLC_STACK_PE
+#endif
+
+#if defined(HLC_STACK_ELF) || defined(HLC_STACK_PE)
+#ifdef HLC_STACK_ELF
 #include <elf.h>
 #include <execinfo.h>
 #include <fcntl.h>
@@ -21,6 +37,19 @@ void hlc_stack_init( hl_module *m, void **functions, int count );
 #include <unistd.h>
 
 extern char __start_hlc_text[], __stop_hlc_text[];
+#define hlc_text_begin __start_hlc_text
+#define hlc_text_end __stop_hlc_text
+#else
+#include <windows.h>
+
+/* The generated code's section is `.text$hlc.2`; the linker sorts `.text$` sections by the name after `$` (GNU ld's
+ * SORT(.text$*), as link.exe groups them), so these two bound it. `.` is in no C symbol name, so no COMDAT section of a
+ * function sorts between them. */
+__attribute__((section(".text$hlc.1"), used, noinline)) void hlc_text_first( void ) {}
+__attribute__((section(".text$hlc.3"), used, noinline)) void hlc_text_last( void ) {}
+#define hlc_text_begin ((char*)hlc_text_first)
+#define hlc_text_end ((char*)hlc_text_last)
+#endif
 
 typedef struct {
 	uintptr_t start;
@@ -54,7 +83,7 @@ static int hlc_line_unit_count, hlc_line_unit_capacity;
 
 static bool hlc_in_text( void *address ) {
 	char *a = (char*)address - 1; // a return address can be just past a call that does not return
-	return a >= __start_hlc_text && a < __stop_hlc_text;
+	return a >= hlc_text_begin && a < hlc_text_end;
 }
 
 static int hlc_compare_starts( const void *a, const void *b ) {
@@ -67,6 +96,24 @@ static int hlc_compare_rows( const void *a, const void *b ) {
 	if( x->address != y->address ) return x->address < y->address ? -1 : 1;
 	// At one address a sequence's end goes before the next sequence's start.
 	return (x->file >= 0) - (y->file >= 0);
+}
+
+/* Sorts the line rows by address, keeping the program order of rows at one address (the last of them is the address's line):
+ * qsort is not stable everywhere (it is not in Windows' C runtime), so this is a merge sort. */
+static void hlc_sort_rows( hlc_line_row *rows, int count ) {
+	hlc_line_row *buffer = (hlc_line_row*)malloc(sizeof(hlc_line_row) * (count ? count : 1)), *from = rows, *to = buffer;
+	for(int width=1;width<count;width*=2) {
+		for(int low=0;low<count;low+=2*width) {
+			int middle = low + width < count ? low + width : count, high = low + 2 * width < count ? low + 2 * width : count;
+			int a = low, b = middle, k = low;
+			while( a < middle && b < high ) to[k++] = hlc_compare_rows(from + b, from + a) < 0 ? from[b++] : from[a++];
+			while( a < middle ) to[k++] = from[a++];
+			while( b < high ) to[k++] = from[b++];
+		}
+		hlc_line_row *swap = from; from = to; to = swap;
+	}
+	if( from != rows ) memcpy(rows, from, sizeof(hlc_line_row) * count);
+	free(buffer);
 }
 
 static uint64 hlc_uleb( const unsigned char **p, const unsigned char *end ) {
@@ -149,7 +196,7 @@ static int hlc_add_file( const char *name ) {
 }
 
 static void hlc_add_row( uintptr_t address, int file, int line ) {
-	if( address < (uintptr_t)__start_hlc_text || address > (uintptr_t)__stop_hlc_text ) return;
+	if( address < (uintptr_t)hlc_text_begin || address > (uintptr_t)hlc_text_end ) return;
 	if( hlc_row_count == hlc_row_capacity ) {
 		hlc_row_capacity = hlc_row_capacity ? hlc_row_capacity * 2 : 4096;
 		hlc_rows = (hlc_line_row*)realloc(hlc_rows, sizeof(hlc_line_row) * hlc_row_capacity);
@@ -172,6 +219,21 @@ typedef struct {
 static hlc_source_path *hlc_sources;
 static char *hlc_sources_base;
 
+static bool hlc_absolute( const char *path ) {
+#ifdef HLC_STACK_PE
+	if( path[0] == '\\' || (path[0] && path[1] == ':') ) return true;
+#endif
+	return path[0] == '/';
+}
+
+/* A copy of `path` to compare with others: on Windows, either separator is `/`. */
+static char *hlc_comparable( char *path ) {
+#ifdef HLC_STACK_PE
+	for(char *c = path;*c;c++) if( *c == '\\' ) *c = '/';
+#endif
+	return path;
+}
+
 static char *hlc_join( const char *a, const char *b ) {
 	size_t la = strlen(a), lb = strlen(b);
 	char *r = (char*)malloc(la + lb + 2);
@@ -190,8 +252,8 @@ static int hlc_compare_sources( const void *a, const void *b ) {
  * same: the file's absolute path is matched against the directives' paths made absolute from `base`. */
 static const char *hlc_source_name( const char *base, const char *dir, int dir_index, const char *name ) {
 	if( !name ) return NULL;
-	const char *written = dir_index == 0 || !dir || name[0] == '/' ? name : hlc_join(dir, name);
-	if( !base || base[0] != '/' ) return written;
+	const char *written = dir_index == 0 || !dir || hlc_absolute(name) ? name : hlc_join(dir, name);
+	if( !base || !hlc_absolute(base) ) return written;
 	if( !hlc_sources_base || strcmp(hlc_sources_base, base) != 0 ) {
 		if( !hlc_sources ) hlc_sources = (hlc_source_path*)malloc(sizeof(hlc_source_path) * (hlc_source_path_count ? hlc_source_path_count : 1));
 		else for(int i=0;i<hlc_source_path_count;i++) free(hlc_sources[i].absolute);
@@ -199,15 +261,15 @@ static const char *hlc_source_name( const char *base, const char *dir, int dir_i
 		hlc_sources_base = strdup(base);
 		for(int i=0;i<hlc_source_path_count;i++) {
 			const char *path = hlc_source_paths[i];
-			hlc_sources[i].absolute = path[0] == '/' ? strdup(path) : hlc_join(base, path);
+			hlc_sources[i].absolute = hlc_comparable(hlc_absolute(path) ? strdup(path) : hlc_join(base, path));
 			hlc_sources[i].path = path;
 		}
 		qsort(hlc_sources, hlc_source_path_count, sizeof(hlc_source_path), hlc_compare_sources);
 	}
 	hlc_source_path key;
-	key.absolute = written[0] == '/' ? (char*)written : hlc_join(base, written);
+	key.absolute = hlc_comparable(hlc_absolute(written) ? strdup(written) : hlc_join(base, written));
 	hlc_source_path *found = (hlc_source_path*)bsearch(&key, hlc_sources, hlc_source_path_count, sizeof(hlc_source_path), hlc_compare_sources);
-	if( key.absolute != written ) free(key.absolute);
+	free(key.absolute);
 	return found ? found->path : written;
 }
 
@@ -341,12 +403,6 @@ static int hlc_function_at( void *address ) {
 	return found < 0 ? -1 : hlc_starts[found].slot;
 }
 
-static int hlc_find_bias( struct dl_phdr_info *info, size_t size, void *data ) {
-	(void)size;
-	*(uintptr_t*)data = (uintptr_t)info->dlpi_addr;
-	return 1; // the first object is the executable
-}
-
 typedef struct {
 	const unsigned char *line,
 		*info, *abbrev, *rnglists, *ranges, *addr, *str, *str_offsets, *line_str;
@@ -369,6 +425,27 @@ static hlc_debug_sections hlc_debug;
 static uintptr_t hlc_bias;
 static int hlc_image_state; // 0 not mapped, 1 mapped, -1 unavailable
 
+/* Keeps a debug section the stack traces read. */
+static void hlc_debug_section( const char *name, const unsigned char *data, size_t size ) {
+	hlc_debug_sections *d = &hlc_debug;
+	if( strcmp(name, ".debug_line") == 0 ) { d->line = data; d->line_size = size; }
+	else if( strcmp(name, ".debug_line_str") == 0 ) { d->line_str = data; d->line_str_size = size; }
+	else if( strcmp(name, ".debug_str") == 0 ) { d->str = data; d->str_size = size; }
+	else if( strcmp(name, ".debug_info") == 0 ) { d->info = data; d->info_size = size; }
+	else if( strcmp(name, ".debug_abbrev") == 0 ) { d->abbrev = data; d->abbrev_size = size; }
+	else if( strcmp(name, ".debug_rnglists") == 0 ) { d->rnglists = data; d->rnglists_size = size; }
+	else if( strcmp(name, ".debug_ranges") == 0 ) { d->ranges = data; d->ranges_size = size; }
+	else if( strcmp(name, ".debug_addr") == 0 ) { d->addr = data; d->addr_size = size; }
+	else if( strcmp(name, ".debug_str_offsets") == 0 ) { d->str_offsets = data; d->str_offsets_size = size; }
+}
+
+#ifdef HLC_STACK_ELF
+static int hlc_find_bias( struct dl_phdr_info *info, size_t size, void *data ) {
+	(void)size;
+	*(uintptr_t*)data = (uintptr_t)info->dlpi_addr;
+	return 1; // the first object is the executable
+}
+
 /* Maps the executable and finds its debug sections; nothing is read until a frame needs it. */
 static bool hlc_open_image( void ) {
 	if( hlc_image_state ) return hlc_image_state > 0;
@@ -384,27 +461,60 @@ static bool hlc_open_image( void ) {
 	if( memcmp(header->e_ident, ELFMAG, SELFMAG) != 0 || header->e_ident[EI_CLASS] != ELFCLASS64 ) return false;
 	const Elf64_Shdr *sections = (const Elf64_Shdr*)(image + header->e_shoff);
 	const char *names = (const char*)image + sections[header->e_shstrndx].sh_offset;
-	hlc_debug_sections *d = &hlc_debug;
 	for(int i=0;i<header->e_shnum;i++) {
-		const char *name = names + sections[i].sh_name;
 		// Compressed debug sections are not read: frames then have no line.
 		if( sections[i].sh_flags & SHF_COMPRESSED ) continue;
-		const unsigned char *data = image + sections[i].sh_offset;
-		size_t size = sections[i].sh_size;
-		if( strcmp(name, ".debug_line") == 0 ) { d->line = data; d->line_size = size; }
-		else if( strcmp(name, ".debug_line_str") == 0 ) { d->line_str = data; d->line_str_size = size; }
-		else if( strcmp(name, ".debug_str") == 0 ) { d->str = data; d->str_size = size; }
-		else if( strcmp(name, ".debug_info") == 0 ) { d->info = data; d->info_size = size; }
-		else if( strcmp(name, ".debug_abbrev") == 0 ) { d->abbrev = data; d->abbrev_size = size; }
-		else if( strcmp(name, ".debug_rnglists") == 0 ) { d->rnglists = data; d->rnglists_size = size; }
-		else if( strcmp(name, ".debug_ranges") == 0 ) { d->ranges = data; d->ranges_size = size; }
-		else if( strcmp(name, ".debug_addr") == 0 ) { d->addr = data; d->addr_size = size; }
-		else if( strcmp(name, ".debug_str_offsets") == 0 ) { d->str_offsets = data; d->str_offsets_size = size; }
+		hlc_debug_section(names + sections[i].sh_name, image + sections[i].sh_offset, sections[i].sh_size);
 	}
 	dl_iterate_phdr(hlc_find_bias, &hlc_bias);
 	hlc_image_state = 1; // the mapping stays: file and function names point into it
 	return true;
 }
+#else
+/* Maps the executable's file and finds its debug sections. Their names are longer than a PE section name's 8 bytes, so they are
+ * `/N`: offset N in the COFF string table, after the symbol table. DWARF addresses are virtual addresses at the image's
+ * preferred base; the bias is where the loader put it instead. */
+static bool hlc_open_image( void ) {
+	if( hlc_image_state ) return hlc_image_state > 0;
+	hlc_image_state = -1;
+	wchar_t path[MAX_PATH * 4];
+	DWORD length = GetModuleFileNameW(NULL, path, MAX_PATH * 4);
+	if( length == 0 || length >= MAX_PATH * 4 ) return false;
+	HANDLE file = CreateFileW(path, GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_DELETE, NULL, OPEN_EXISTING, 0, NULL);
+	if( file == INVALID_HANDLE_VALUE ) return false;
+	LARGE_INTEGER size;
+	HANDLE mapping = GetFileSizeEx(file, &size) ? CreateFileMappingW(file, NULL, PAGE_READONLY, 0, 0, NULL) : NULL;
+	CloseHandle(file);
+	if( !mapping ) return false;
+	const unsigned char *image = (const unsigned char*)MapViewOfFile(mapping, FILE_MAP_READ, 0, 0, 0);
+	CloseHandle(mapping);
+	if( !image ) return false;
+	const IMAGE_DOS_HEADER *dos = (const IMAGE_DOS_HEADER*)image;
+	if( dos->e_magic != IMAGE_DOS_SIGNATURE || dos->e_lfanew <= 0 || dos->e_lfanew > size.QuadPart - (LONGLONG)sizeof(IMAGE_NT_HEADERS64) ) return false;
+	const IMAGE_NT_HEADERS64 *nt = (const IMAGE_NT_HEADERS64*)(image + dos->e_lfanew);
+	if( nt->Signature != IMAGE_NT_SIGNATURE || nt->OptionalHeader.Magic != IMAGE_NT_OPTIONAL_HDR64_MAGIC ) return false;
+	const IMAGE_SECTION_HEADER *sections = IMAGE_FIRST_SECTION(nt);
+	const char *strings = nt->FileHeader.PointerToSymbolTable
+		? (const char*)image + nt->FileHeader.PointerToSymbolTable + nt->FileHeader.NumberOfSymbols * 18 : NULL;
+	for(int i=0;i<nt->FileHeader.NumberOfSections;i++) {
+		char shortName[IMAGE_SIZEOF_SHORT_NAME + 1];
+		const char *name = shortName;
+		memcpy(shortName, sections[i].Name, IMAGE_SIZEOF_SHORT_NAME);
+		shortName[IMAGE_SIZEOF_SHORT_NAME] = 0;
+		if( shortName[0] == '/' ) {
+			if( !strings ) continue;
+			name = strings + atoi(shortName + 1);
+		}
+		DWORD raw = sections[i].SizeOfRawData, virtualSize = sections[i].Misc.VirtualSize;
+		if( (LONGLONG)sections[i].PointerToRawData + raw > size.QuadPart ) continue;
+		// The raw size is rounded up to the file alignment; the virtual size is the section's own.
+		hlc_debug_section(name, image + sections[i].PointerToRawData, virtualSize && virtualSize < raw ? virtualSize : raw);
+	}
+	hlc_bias = (uintptr_t)GetModuleHandleW(NULL) - (uintptr_t)nt->OptionalHeader.ImageBase;
+	hlc_image_state = 1; // the mapping stays: file and function names point into it
+	return true;
+}
+#endif
 
 /* Reads the executable's line table, the first time a frame is named. */
 static void hlc_read_lines( void ) {
@@ -412,7 +522,7 @@ static void hlc_read_lines( void ) {
 	if( !hlc_open_image() || !hlc_debug.line ) return;
 	hlc_strings strings = { hlc_debug.line_str, hlc_debug.str, hlc_debug.line_str_size, hlc_debug.str_size };
 	hlc_read_line_programs(hlc_debug.line, hlc_debug.line_size, &strings, hlc_bias);
-	qsort(hlc_rows, hlc_row_count, sizeof(hlc_line_row), hlc_compare_rows);
+	hlc_sort_rows(hlc_rows, hlc_row_count);
 	hlc_lines_state = 1;
 }
 
@@ -796,7 +906,7 @@ static void hlc_index_units( void ) {
 			int kept = first;
 			for(int i=first;i<hlc_unit_ranges.count;i++) {
 				hlc_range *r = hlc_unit_ranges.items + i;
-				if( r->high > (uintptr_t)__start_hlc_text && r->low < (uintptr_t)__stop_hlc_text ) hlc_unit_ranges.items[kept++] = *r;
+				if( r->high > (uintptr_t)hlc_text_begin && r->low < (uintptr_t)hlc_text_end ) hlc_unit_ranges.items[kept++] = *r;
 			}
 			hlc_unit_ranges.count = kept;
 			if( kept > first ) {
@@ -848,7 +958,7 @@ static void hlc_read_unit_scopes( hlc_unit_entry *entry ) {
 			bool generated = false;
 			for(int i=0;i<s->range_count;i++) {
 				hlc_range *r = hlc_scope_ranges.items + s->first_range + i;
-				if( r->low >= (uintptr_t)__start_hlc_text && r->low < (uintptr_t)__stop_hlc_text ) generated = true;
+				if( r->low >= (uintptr_t)hlc_text_begin && r->low < (uintptr_t)hlc_text_end ) generated = true;
 			}
 			if( generated ) {
 				s->name = hlc_die_name(u, d, &die);
@@ -937,13 +1047,13 @@ static int hlc_scope_of_frame( void *address ) {
 	return -1;
 }
 
-/* The slot of the generated function that starts at `address`, or -1. */
-static int hlc_function_starting( uintptr_t address ) {
-	int low = 0, high = hlc_start_count - 1;
+/* The slot of the generated function of C name `name`, or -1. */
+static int hlc_function_named( const char *name ) {
+	int low = 0, high = hlc_function_name_count - 1;
 	while( low <= high ) {
-		int middle = (low + high) >> 1;
-		if( hlc_starts[middle].start == address ) return hlc_starts[middle].slot;
-		if( hlc_starts[middle].start < address ) low = middle + 1; else high = middle - 1;
+		int middle = (low + high) >> 1, order = strcmp(hlc_function_names[middle].name, name);
+		if( order == 0 ) return hlc_function_names[middle].slot;
+		if( order < 0 ) low = middle + 1; else high = middle - 1;
 	}
 	return -1;
 }
@@ -951,10 +1061,7 @@ static int hlc_function_starting( uintptr_t address ) {
 /* The slot of the generated function a scope is a body of, or -1 for any other (an inlined runtime helper). */
 static int hlc_scope_slot( int scope ) {
 	hlc_scope *s = HLC_SCOPE(scope);
-	if( s->slot == -2 ) {
-		void *f = s->name ? dlsym(RTLD_DEFAULT, s->name) : NULL;
-		s->slot = f ? hlc_function_starting((uintptr_t)f) : -1;
-	}
+	if( s->slot == -2 ) s->slot = s->name ? hlc_function_named(s->name) : -1;
 	return s->slot;
 }
 
@@ -1021,7 +1128,11 @@ static void hlc_push_frame( void **stack, int size, int *count, void *frame ) {
  * function's frame, preceded by the frames of the generated functions the C compiler inlined at the call (their scopes). */
 static int hlc_capture_stack( void **stack, int size ) {
 	void *frames[HL_EXC_MAX_STACK + 64];
+#ifdef HLC_STACK_ELF
 	int captured = backtrace(frames, HL_EXC_MAX_STACK + 64), count = 0;
+#else
+	int captured = RtlCaptureStackBackTrace(0, HL_EXC_MAX_STACK + 64, frames, NULL), count = 0;
+#endif
 	for(int i=0;i<captured;i++) {
 		if( !hlc_in_text(frames[i]) ) continue;
 #ifndef HLC_EXACT_FRAMES
@@ -1068,7 +1179,7 @@ static int hlc_capture_stack( void **stack, int size ) {
 	return 0;
 }
 
-/* Elsewhere frames are not captured yet: exceptions carry no stack. */
+/* Elsewhere frames are not captured yet: exceptions carry no stack (macOS and MSVC: see docs/design/AOT_BACKEND.md). */
 void hlc_stack_init( hl_module *m, void **functions, int count ) {
 	(void)m; (void)functions; (void)count;
 	hl_setup.resolve_symbol = hlc_resolve_symbol;

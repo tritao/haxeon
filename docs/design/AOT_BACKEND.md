@@ -179,8 +179,42 @@ A frame's file is the path the `#line` directive wrote, as the JIT prints the mo
 table keeps a path under its working directory relative to it, so `/work/Main.hx` and `Main.hx` read the same there; the
 image lists the directives' paths (`hlc_source_paths`), and the line table's files are matched to them by absolute path.
 
-Implemented for Linux (ELF); elsewhere exceptions carry no frames yet (Windows has DbgHelp for
-lines, macOS the dSYM). The debugger and hot reload are JIT features and stay so.
+Platforms:
+
+- **Linux (ELF)**: the section is `hlc_text`, bounded by the linker's `__start_`/`__stop_` symbols; frames come from
+  `backtrace`, the debug sections from `/proc/self/exe`, the load bias from `dl_iterate_phdr`.
+- **Windows with MinGW (PE with DWARF)**: GCC writes DWARF into the PE image too, so the same reader serves. The generated
+  functions are in `.text$hlc.2`, which the linker sorts between the markers `hlc_text_first` (`.text$hlc.1`) and
+  `hlc_text_last` (`.text$hlc.3`) in `hlc_stack.c`, as it sorts every `.text$` group by name (`.` is in no C symbol, so no
+  COMDAT section falls between). Frames come from `RtlCaptureStackBackTrace`, which unwinds through the SEH tables GCC writes
+  for every function; the debug sections are read from the mapped executable file (their names are longer than 8 bytes,
+  so they are `/N` into the COFF string table); the bias is the loaded base less the header's `ImageBase`. Paths compare with
+  either separator and with drive letters. An executable links libhl statically and compiles with `HL_IMPORT=extern`
+  (the fork's `hl.h` lets it be defined), so references to libhl are direct rather than through a DLL's import table, and
+  its entry point is `wmain` (`-municode`), as the runtime's arguments are UTF-16 there. Checked by cross-building with
+  MinGW and running the six stack programs under wine in both build modes, against the JIT on Linux.
+- **Windows with MSVC** (not implemented): MSVC writes no DWARF; its line tables and inline records are in the PDB. The
+  section scheme is the same (`__declspec(code_seg(".text$hlc.2"))`, link.exe sorts `.text$` groups as GNU ld does) and the
+  frames the same (`RtlCaptureStackBackTrace`). Naming a frame would go through DbgHelp: `SymInitialize` once, then
+  `SymGetLineFromAddr64` for the file and line, and `SymQueryInlineTrace` with `SymFromInlineContext` and
+  `SymGetLineFromInlineContext` for the inlined frames of a release build; the C name maps to a slot by
+  `hlc_function_names` as with DWARF. DbgHelp needs the PDB next to the executable and is single-threaded (a lock around
+  it). The paths a PDB records are the `#line` paths as written, so no matching against `hlc_source_paths` is needed.
+- **macOS** (not implemented): no machine to test it, so it stays on the unsupported path (no frames). The design: the
+  section is `__TEXT,__hlc_text` with the linker's `section$start$__TEXT$__hlc_text` and `section$end$...` symbols; frames
+  from `backtrace`; the bias from `_dyld_get_image_vmaddr_slide(0)`. The DWARF is not in the executable: the linker leaves
+  it in the object files (the debug map), so the build runs `dsymutil` after linking and the stack reader maps
+  `OUTPUT.dSYM/Contents/Resources/DWARF/<name>`, a Mach-O file whose `__DWARF` segment holds `__debug_line`,
+  `__debug_info` and the others (Mach-O section names are `__debug_*`, at most 16 bytes, so `__debug_str_offs`); the DWARF
+  reader is the same once the sections are found.
+
+Where none of these applies, `hlc_stack_init` installs a capture that returns no frames, so exceptions carry no stack. The
+debugger and hot reload are JIT features and stay so.
+
+A function the C compiler inlined is a frame when its C name is a generated function's: image.c lists the generated
+functions by C name with their slots (`hlc_function_names`, sorted), which needs no exported symbols or `dlsym`. The line
+rows are sorted stably (several rows share an address, and the last is its line), by a merge sort of its own, as `qsort`
+is not stable in every C library.
 
 ## Driver and target selection
 

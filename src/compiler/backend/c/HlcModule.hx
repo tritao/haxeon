@@ -369,6 +369,8 @@ class HlcModule {
 		buffer.add("#else\n#define HLC_NOINLINE\n#endif\n");
 		buffer.add("#if defined(__ELF__) && defined(__GNUC__)\n");
 		buffer.add("#define HLC_FUNCTION __attribute__((section(\"hlc_text\"))) HLC_NOINLINE\n");
+		buffer.add("#elif defined(_WIN32) && defined(__GNUC__)\n");
+		buffer.add("#define HLC_FUNCTION __attribute__((section(\".text$hlc.2\"))) HLC_NOINLINE\n");
 		buffer.add("#else\n#define HLC_FUNCTION HLC_NOINLINE\n#endif\n\n");
 		buffer.add("extern hl_type *hlc_types;\nextern unsigned char *hlc_globals;\nextern void **hlc_slots;\n");
 		buffer.add("void hl_jit_null_field_access( int fhash );\n");
@@ -595,6 +597,14 @@ class HlcModule {
 			buffer.add((slot % 4 == 0 ? "\n\t" : " ")
 				+ (slotTypes[slot] >= 0 && !native[slot] ? '(void*)${cNames[slot]},' : "NULL,"));
 		buffer.add("\n\tNULL};\n\n");
+		// By C name, for the stack capture: a function the C compiler inlined is a frame when it is a generated one.
+		var named = [for (slot in 0...slotTypes.length) if (slotTypes[slot] >= 0 && !native[slot]) slot];
+		named.sort((a, b) -> Reflect.compare(cNames[a], cNames[b]));
+		buffer.add('const int hlc_function_name_count = ${named.length};\n');
+		buffer.add("const struct { const char *name; int slot; } hlc_function_names[] = {");
+		for (slot in named)
+			buffer.add('\n\t{"${cNames[slot]}",$slot},');
+		buffer.add("\n\t{NULL,-1}};\n\n");
 		trampolines(buffer);
 		buffer.add('const int hlc_alloc_count = ${allocationTypes.length};\n');
 		buffer.add('const int hlc_alloc_types[] = {${allocationTypes.concat([-1]).join(",")}};\n');

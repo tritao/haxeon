@@ -91,7 +91,12 @@ static void hlc_check_layouts( hl_module *m ) {
 	}
 }
 
+// The program's arguments are the runtime's characters: UTF-16 on Windows, where the entry point is wmain (-municode).
+#ifdef HL_WIN
+int wmain( int argc, wchar_t *argv[] ) {
+#else
 int main( int argc, char *argv[] ) {
+#endif
 	vdynamic *ret;
 	bool isExc = false;
 	char *error = NULL;

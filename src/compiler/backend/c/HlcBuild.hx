@@ -56,6 +56,9 @@ class HlcBuild {
 		];
 		if (exactFrames)
 			flags.push("-DHLC_EXACT_FRAMES");
+		// libhl is linked statically: its functions are referenced directly, not through a DLL's import table.
+		if (Sys.systemName() == "Windows")
+			flags.push("-DHL_IMPORT=extern");
 		if (ProcessOutputCapture.capture(cCompiler, ["-fno-crossjumping", "--version"], 0).exitCode == 0)
 			flags.push("-fno-crossjumping");
 		// Objects made with other flags or another compiler are all made again.
@@ -93,6 +96,22 @@ class HlcBuild {
 				"-lm",
 				"-lpthread",
 				"-Wl,-export_dynamic"
+			]);
+		else if (Sys.systemName() == "Windows")
+			// MinGW. The entry point is wmain; the main thread gets the 8 MB stack the other platforms give it.
+			link = link.concat([
+				"-Wl,--whole-archive",
+				'$sdk/lib/libhl.a',
+				"-Wl,--no-whole-archive",
+				'$sdk/lib/libffi.a',
+				"-municode",
+				"-Wl,--stack,8388608",
+				"-lws2_32",
+				"-luser32",
+				"-lwinmm",
+				"-ldbghelp",
+				"-lbcrypt",
+				"-ladvapi32"
 			]);
 		else
 			link = link.concat([
