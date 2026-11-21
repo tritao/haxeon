@@ -86,26 +86,20 @@ jobs:
           chrome-version: stable
           install-dependencies: true
 
+      - name: Verify self-hosted compiler convergence
+        if: matrix.platform == 'windows'
+        shell: pwsh
+        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
+
       # A program that cannot start (a missing DLL) or crashes fails with its status, instead of waiting on a loader or error
       # dialog nobody can close: HashLink's own SetErrorMode does not reach the programs the test scripts start through bash.
-      # A program that crashes also leaves a minidump, which the last step prints the stack of.
-      - name: No error dialogs, and crash dumps
+      - name: No error dialogs
         if: matrix.platform == 'windows'
         shell: pwsh
         run: |
           Set-ItemProperty -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\Windows' -Name ErrorMode -Value 2 -Type DWord
           New-Item -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Force | Out-Null
           Set-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting' -Name DontShowUI -Value 1 -Type DWord
-          $dumps = 'HKLM:\SOFTWARE\Microsoft\Windows\Windows Error Reporting\LocalDumps'
-          New-Item -Path $dumps -Force | Out-Null
-          New-ItemProperty -Path $dumps -Name DumpFolder -Value "$env:RUNNER_TEMP\crash-dumps" -PropertyType ExpandString -Force | Out-Null
-          New-ItemProperty -Path $dumps -Name DumpType -Value 1 -PropertyType DWord -Force | Out-Null
-          New-ItemProperty -Path $dumps -Name DumpCount -Value 10 -PropertyType DWord -Force | Out-Null
-
-      - name: Verify self-hosted compiler convergence
-        if: matrix.platform == 'windows'
-        shell: pwsh
-        run: ./.tools/haxe/haxe.exe --cwd . common.hxml --run build.HaxeonBuild bootstrap
 
       # The native GC and JIT helper tests (programs linked with libhl.lib, the static VM core, since e7052822), each alone and
       # with a time limit, while the core step below stalls before its first result on Windows. It does not fail the job.
@@ -207,26 +201,3 @@ jobs:
       - name: Hot reload and GDB metadata gate
         if: matrix.platform == 'test' || matrix.platform == 'linux-arm64'
         run: ./tests/integration/test-gdb-hot-reload.sh
-
-      # The stack of each program that crashed (a status such as -1073740791, 0xC0000409, says no more than that it did),
-      # and the dumps themselves for a closer look.
-      - name: Crash stacks
-        if: failure() && matrix.platform == 'windows'
-        shell: pwsh
-        run: |
-          $dumps = Get-ChildItem "$env:RUNNER_TEMP\crash-dumps" -Filter *.dmp -ErrorAction SilentlyContinue
-          if (-not $dumps) { 'No program crashed.'; exit 0 }
-          $cdb = "${env:ProgramFiles(x86)}\Windows Kits\10\Debuggers\x64\cdb.exe"
-          if (-not (Test-Path $cdb)) { "cdb is not installed; the dumps are in the crash-dumps artifact."; exit 0 }
-          foreach ($dump in $dumps) {
-            "== $($dump.Name)"
-            & $cdb -z $dump.FullName -lines -c '!analyze -v; .ecxr; kn 60; q'
-          }
-
-      - name: Upload crash dumps
-        if: failure() && matrix.platform == 'windows'
-        uses: actions/upload-artifact@v4
-        with:
-          name: crash-dumps
-          path: ${{ runner.temp }}/crash-dumps
-          if-no-files-found: ignore
