@@ -34,6 +34,9 @@ class IrPipelineContext {
 	public var instrumentScope:Null<IrInstrumentation.IrInstrumentationScope> = null;
 	public var verifyMemo:Null<IrVerifyMemo> = null;
 
+	/** The tables the passes over bodies before the inliner reuse. */
+	public final passScratch = new IrPassScratch();
+
 	/** The compile's passes and self-checks (`CompileOptions`): with `checkReuse`, the memoized verification is followed by a full one. */
 	public var options = new compiler.CompileOptions();
 

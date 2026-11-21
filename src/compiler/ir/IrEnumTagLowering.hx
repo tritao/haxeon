@@ -2,6 +2,7 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.ir.Ir;
+import compiler.ir.IrInlineEnumRequests.IrInlineEnumProviders;
 import compiler.ir.SourceProvenance.Located;
 
 /** Select nominal scalar storage independently of payload-enum escape eligibility. */
@@ -370,9 +371,12 @@ class IrEnumTagLowering {
 					}
 	}
 
-	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
-		changedFunctions = IrInlineEnumRequests.resolve(program, changedFunctions);
-		var required:Map<String, Bool> = [];
+	/**
+	 * `escapes` on bodies, for the pipeline's last check before the inliner: each function is read as its body (`bodyIn` with
+	 * `types`), and one that changes becomes its edited copy, frozen (`retained` past this compile when a session keeps it).
+	 * A function nothing changes stays the same object.
+	 */
+	public static function escapeBodies(program:IrProgram, types:IrTypeIds, builder:IrBodyBuilder, retained:Bool):Void {
 		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions),
 			adapterEnums:Map<String, String> = [];
 		var symbols = IrEnumTagStorage.adapterNames(program);
@@ -388,9 +392,32 @@ class IrEnumTagLowering {
 					adapterEnums.set(fn.name, name);
 				default:
 			}
-		if (!symbols.keys().hasNext())
+		var tags = symbols.keys().hasNext();
+		var walk = new IrBodyTagEscapes(program, tags, new IrTagEscapeSignatures(program, existing), adapterEnums,
+			boxNames,
+			unboxNames);
+		var functions = program.functions, result:Null<Array<IrFunction>> = null;
+		for (index in 0...functions.length) {
+			var fn = functions[index], body = fn.bodyIn(types, builder);
+			if (walk.rewrite(body, false)) {
+				var edited = body.thaw(builder);
+				walk.rewrite(edited, true);
+				if (result == null)
+					result = functions.copy();
+				var replacement = IrFunction.ofBody(edited.freeze(retained, builder));
+				result[index] = replacement;
+				existing.set(fn.name, replacement);
+			}
+		}
+		if (result != null)
+			program.functions = result;
+		if (!tags)
 			return;
-		rewriteEscapes(program, required, adapterEnums, existing, changedFunctions, boxNames, unboxNames);
+		addAdapters(program, walk.required, existing, boxNames, unboxNames);
+	}
+
+	static function addAdapters(program:IrProgram, required:Map<String, Bool>, existing:IrFunctionIndex,
+			boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
 		var names = [for (name in required.keys()) name];
 		names.sort(Reflect.compare);
 		if (names.length > 0 && !Lambda.exists(program.natives, native -> native.name == "__std_is_exact_type"))
@@ -412,131 +439,34 @@ class IrEnumTagLowering {
 					}
 	}
 
+	static function finishEscapes(program:IrProgram, changedFunctions:Array<IrFunction>):Void {
+		changedFunctions = IrInlineEnumRequests.resolve(program, changedFunctions);
+		var required:Map<String, Bool> = [];
+		var existing = new IrFunctionIndex("enum-tag-lowering", program.functions),
+			adapterEnums:Map<String, String> = [];
+		var symbols = IrEnumTagStorage.adapterNames(program);
+		var boxNames:Map<String, String> = [],
+			unboxNames:Map<String, String> = [];
+		for (name => pair in symbols) {
+			boxNames.set(name, pair.box);
+			unboxNames.set(name, pair.unbox);
+		}
+		for (fn in program.functions)
+			switch fn.kind {
+				case EnumTagAdapter(EnumTag(name), _):
+					adapterEnums.set(fn.name, name);
+				default:
+			}
+		if (!symbols.keys().hasNext())
+			return;
+		rewriteEscapes(program, required, adapterEnums, existing, changedFunctions, boxNames, unboxNames);
+		addAdapters(program, required, existing, boxNames, unboxNames);
+	}
+
 	static function rewriteEscapes(program:IrProgram, required:Map<String, Bool>, adapterEnums:Map<String, String>,
 			functions:IrFunctionIndex,
 			selectedFunctions:Array<IrFunction>, boxNames:Map<String, String>, unboxNames:Map<String, String>):Void {
-		var signatures:Map<String, Array<IrType>> = [],
-			objects = [for (object in program.objects) object.name => object],
-			globals = [for (field in program.staticFields) field.name => field.type],
-			contracts = [for (entry in program.interfaces) entry.name => entry];
-		for (native in program.natives)
-			signatures.set(native.name, native.arguments);
-		for (native in program.cNatives)
-			signatures.set(native.name, native.arguments);
-		function signature(name:String):Null<Array<IrType>> {
-			if (signatures.exists(name))
-				return signatures.get(name);
-			var fn = functions.get(name);
-			if (fn == null)
-				return null;
-			var arguments = [for (argument in fn.arguments) argument.type];
-			signatures.set(name, arguments);
-			return arguments;
-		}
-		var fieldTypes:Map<String, Map<String, Null<IrType>>> = [];
-		function fieldIndex(name:String):Null<Map<String, Null<IrType>>> {
-			var known = fieldTypes.get(name);
-			if (known != null)
-				return known;
-			var object = objects.get(name);
-			if (object == null)
-				return null;
-			var index:Map<String, Null<IrType>> = [for (field in object.fields) field.name => field.type];
-			fieldTypes.set(name, index);
-			return index;
-		}
-		function fieldType(type:IrType, field:String):Null<IrType> {
-			var name = switch type {
-				case Obj(name):
-					name;
-				default:
-					return null;
-			}, cache = fieldIndex(name);
-			if (cache == null)
-				return null;
-			if (cache.exists(field))
-				return cache.get(field);
-			var object = objects.get(name),
-				owner = object == null ? null : object.base;
-			while (owner != null) {
-				var inherited = fieldIndex(owner);
-				if (inherited != null && inherited.exists(field)) {
-					var type = inherited.get(field);
-					cache.set(field, type);
-					return type;
-				}
-				var parent = objects.get(owner);
-				owner = parent == null ? null : parent.base;
-			}
-			cache.set(field, null);
-			return null;
-		}
-		var interfaceMethods:Map<String, Map<String, Null<Array<IrType>>>> = [];
-		function interfaceArguments(name:String, method:String):Null<Array<IrType>> {
-			var declaration = contracts.get(name);
-			if (declaration == null)
-				return null;
-			var cache = interfaceMethods.get(name);
-			if (cache == null) {
-				cache = [for (entry in declaration.methods) entry.name => entry.arguments];
-				interfaceMethods.set(name, cache);
-			}
-			if (cache.exists(method))
-				return cache.get(method);
-			for (base in declaration.bases) {
-				var inherited = interfaceArguments(base, method);
-				if (inherited != null) {
-					cache.set(method, inherited);
-					return inherited;
-				}
-			}
-			cache.set(method, null);
-			return null;
-		}
-		var objectMethods:Map<String, Map<String, Null<Array<IrType>>>> = [],
-			methodNames:Map<String, Map<String, String>> = [];
-		function methodIndex(name:String):Null<Map<String, String>> {
-			var known = methodNames.get(name);
-			if (known != null)
-				return known;
-			var object = objects.get(name);
-			if (object == null)
-				return null;
-			var index = [for (entry in object.methods) entry.name => entry.functionName.name];
-			methodNames.set(name, index);
-			return index;
-		}
-		function methodArguments(type:IrType, method:String):Null<Array<IrType>> {
-			var name = switch type {
-				case Virtual(name):
-					return interfaceArguments(name, method);
-				case Obj(name):
-					name;
-				default:
-					return null;
-			}, cache = objectMethods.get(name);
-			if (cache == null) {
-				cache = [];
-				objectMethods.set(name, cache);
-			}
-			if (cache.exists(method))
-				return cache.get(method);
-			var owner:Null<String> = name, result:Null<Array<IrType>> = null;
-			while (owner != null) {
-				var methods = methodIndex(owner),
-					target = methods == null ? null : methods.get(method);
-				if (target != null) {
-					var arguments = signature(target);
-					if (arguments != null)
-						result = arguments.slice(1);
-					break;
-				}
-				var object = objects.get(owner);
-				owner = object == null ? null : object.base;
-			}
-			cache.set(method, result);
-			return result;
-		}
+		var lookups = new IrTagEscapeSignatures(program, functions);
 		function isTag(value:IrValue):Bool
 			return switch value.type {
 				case EnumTag(_):
@@ -661,7 +591,7 @@ class IrEnumTagLowering {
 											case Array(EnumTag(_)): IrArrayRuntimeNatives.isStorage(name.name);
 											default: false;
 										});
-										var expected = lane ? null : signature(name.name);
+										var expected = lane ? null : lookups.signature(name.name);
 										if (!needsArguments(arguments, expected))
 											located.value
 												else {
@@ -675,8 +605,8 @@ class IrEnumTagLowering {
 									}
 							}
 						case CNativeCall(output, name,
-							arguments) if (hasTag(arguments) && needsArguments(arguments, signature(name))):
-							var expected = signature(name);
+							arguments) if (hasTag(arguments) && needsArguments(arguments, lookups.signature(name))):
+							var expected = lookups.signature(name);
 							if (expected == null)
 								throw new InternalError('Missing tag escape signature "$name"');
 							changed = true;
@@ -685,7 +615,7 @@ class IrEnumTagLowering {
 									adapt(arguments[index], index < expected.length ? expected[index] : null)
 							]);
 						case MethodCall(output, owner, method, arguments, terminalReceiver) if (hasTag(arguments)):
-							var expected = methodArguments(owner.type, method);
+							var expected = lookups.methodArguments(owner.type, method);
 							if (!needsArguments(arguments, expected)) located.value else {
 								changed = true;
 								MethodCall(output, owner, method, [
@@ -709,7 +639,7 @@ class IrEnumTagLowering {
 								]);
 							}
 						case FieldSet(object, field, value) if (isTag(value)):
-							var expected = fieldType(object.type, field);
+							var expected = lookups.fieldType(object.type, field);
 							if ((switch expected {
 								case Dyn:
 									true;
@@ -720,7 +650,7 @@ class IrEnumTagLowering {
 								FieldSet(object, field, adapt(value, expected));
 							} else located.value;
 						case GlobalSet(name, value) if (isTag(value)):
-							var expected = globals.get(name);
+							var expected = lookups.global(name);
 							if ((switch expected {
 								case Dyn:
 									true;
@@ -759,5 +689,375 @@ class IrEnumTagLowering {
 				}
 			}
 		}
+	}
+}
+
+/** The types an escape check expects where a value leaves its function: arguments of calls, fields, globals. Memoized by name. */
+class IrTagEscapeSignatures {
+	final functions:IrFunctionIndex;
+	final signatures:Map<String, Array<IrType>> = [];
+	final objects:Map<String, IrObject>;
+	final globals:Map<String, IrType>;
+	final contracts:Map<String, IrInterface>;
+	final fieldTypes:Map<String, Map<String, Null<IrType>>> = [];
+	final interfaceMethods:Map<String, Map<String, Null<Array<IrType>>>> = [];
+	final objectMethods:Map<String, Map<String, Null<Array<IrType>>>> = [];
+	final methodNames:Map<String, Map<String, String>> = [];
+
+	public function new(program:IrProgram, functions:IrFunctionIndex) {
+		this.functions = functions;
+		objects = [for (object in program.objects) object.name => object];
+		globals = [for (field in program.staticFields) field.name => field.type];
+		contracts = [for (entry in program.interfaces) entry.name => entry];
+		for (native in program.natives)
+			signatures.set(native.name, native.arguments);
+		for (native in program.cNatives)
+			signatures.set(native.name, native.arguments);
+	}
+
+	/** The argument types of the function or native `name`, or null when there is none. */
+	public function signature(name:String):Null<Array<IrType>> {
+		if (signatures.exists(name))
+			return signatures.get(name);
+		var fn = functions.get(name);
+		if (fn == null)
+			return null;
+		var arguments = [for (argument in fn.arguments) argument.type];
+		signatures.set(name, arguments);
+		return arguments;
+	}
+
+	public function global(name:String):Null<IrType>
+		return globals.get(name);
+
+	function fieldIndex(name:String):Null<Map<String, Null<IrType>>> {
+		var known = fieldTypes.get(name);
+		if (known != null)
+			return known;
+		var object = objects.get(name);
+		if (object == null)
+			return null;
+		var index:Map<String, Null<IrType>> = [for (field in object.fields) field.name => field.type];
+		fieldTypes.set(name, index);
+		return index;
+	}
+
+	/** The declared type of `field` on an object of `type`, inherited ones included, or null. */
+	public function fieldType(type:IrType, field:String):Null<IrType> {
+		var name = switch type {
+			case Obj(name):
+				name;
+			default:
+				return null;
+		}, cache = fieldIndex(name);
+		if (cache == null)
+			return null;
+		if (cache.exists(field))
+			return cache.get(field);
+		var object = objects.get(name),
+			owner = object == null ? null : object.base;
+		while (owner != null) {
+			var inherited = fieldIndex(owner);
+			if (inherited != null && inherited.exists(field)) {
+				var type = inherited.get(field);
+				cache.set(field, type);
+				return type;
+			}
+			var parent = objects.get(owner);
+			owner = parent == null ? null : parent.base;
+		}
+		cache.set(field, null);
+		return null;
+	}
+
+	function interfaceArguments(name:String, method:String):Null<Array<IrType>> {
+		var declaration = contracts.get(name);
+		if (declaration == null)
+			return null;
+		var cache = interfaceMethods.get(name);
+		if (cache == null) {
+			cache = [for (entry in declaration.methods) entry.name => entry.arguments];
+			interfaceMethods.set(name, cache);
+		}
+		if (cache.exists(method))
+			return cache.get(method);
+		for (base in declaration.bases) {
+			var inherited = interfaceArguments(base, method);
+			if (inherited != null) {
+				cache.set(method, inherited);
+				return inherited;
+			}
+		}
+		cache.set(method, null);
+		return null;
+	}
+
+	function methodIndex(name:String):Null<Map<String, String>> {
+		var known = methodNames.get(name);
+		if (known != null)
+			return known;
+		var object = objects.get(name);
+		if (object == null)
+			return null;
+		var index = [for (entry in object.methods) entry.name => entry.functionName.name];
+		methodNames.set(name, index);
+		return index;
+	}
+
+	/** The argument types, receiver left out, of `method` called on a value of `type`, or null. */
+	public function methodArguments(type:IrType, method:String):Null<Array<IrType>> {
+		var name = switch type {
+			case Virtual(name):
+				return interfaceArguments(name, method);
+			case Obj(name):
+				name;
+			default:
+				return null;
+		}, cache = objectMethods.get(name);
+		if (cache == null) {
+			cache = [];
+			objectMethods.set(name, cache);
+		}
+		if (cache.exists(method))
+			return cache.get(method);
+		var owner:Null<String> = name, result:Null<Array<IrType>> = null;
+		while (owner != null) {
+			var methods = methodIndex(owner),
+				target = methods == null ? null : methods.get(method);
+			if (target != null) {
+				var arguments = signature(target);
+				if (arguments != null)
+					result = arguments.slice(1);
+				break;
+			}
+			var object = objects.get(owner);
+			owner = object == null ? null : object.base;
+		}
+		cache.set(method, result);
+		return result;
+	}
+}
+
+/**
+ * `IrEnumTagLowering.finishEscapes` on a body: inline-enum requests become calls of their providers, and, when the program has
+ * tag adapters (`tags`), a tag that escapes where a `Dyn` is expected is boxed by its adapter, as the object version does, with
+ * new values numbered as it numbers them. A walk that does not `edit` only says whether one that does would change the body;
+ * both record the tags that need adapters in `required`.
+ */
+class IrBodyTagEscapes {
+	public final required:Map<String, Bool> = [];
+
+	final tags:Bool;
+	final lookups:IrTagEscapeSignatures;
+	final providers:IrInlineEnumProviders;
+	final adapterEnums:Map<String, String>;
+	final boxNames:Map<String, String>;
+	final unboxNames:Map<String, String>;
+
+	var body:IrBody;
+	var edit = false;
+	var changed = false;
+
+	/** The id of the next boxed value, -1 until the first is made. */
+	var next = -1;
+
+	public function new(program:IrProgram, tags:Bool, lookups:IrTagEscapeSignatures, adapterEnums:Map<String, String>,
+			boxNames:Map<String, String>, unboxNames:Map<String, String>) {
+		this.tags = tags;
+		this.lookups = lookups;
+		this.adapterEnums = adapterEnums;
+		this.boxNames = boxNames;
+		this.unboxNames = unboxNames;
+		providers = new IrInlineEnumProviders(program);
+		body = null;
+	}
+
+	/** Whether `body` changes; it is changed when `edit` is set. */
+	public function rewrite(body:IrBody, edit:Bool):Bool {
+		this.body = body;
+		this.edit = edit;
+		changed = false;
+		next = -1;
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var following = body.nextRow(row);
+				visit(block, row);
+				if (changed && !edit)
+					return true;
+				row = following;
+			}
+		}
+		return changed;
+	}
+
+	static function tagName(type:IrType):Null<String>
+		return switch type {
+			case EnumTag(name): name;
+			default: null;
+		};
+
+	static function isDyn(type:Null<IrType>):Bool
+		return switch type {
+			case Dyn: true;
+			default: false;
+		};
+
+	inline function isTag(value:IrValueId):Bool
+		return tagName(body.valueType(value)) != null;
+
+	function hasTag(row:Int, from:Int):Bool {
+		for (index in from...body.operandCount(row))
+			if (isTag(body.operand(row, index)))
+				return true;
+		return false;
+	}
+
+	function needsArguments(row:Int, from:Int, expected:Null<Array<IrType>>):Bool {
+		if (expected == null)
+			return false;
+		for (index in from...body.operandCount(row))
+			if (index - from < expected.length && isTag(body.operand(row, index)) && isDyn(expected[index - from]))
+				return true;
+		return false;
+	}
+
+	/** Makes `row` a call of `name` with its operands and output. */
+	function call(row:Int, name:String):Void {
+		changed = true;
+		if (edit)
+			body.setOperation(row, IrOpcode.Call, IrSymbol.of(name).id);
+	}
+
+	/** Boxes each tag operand of `row` from `from` on whose expected type is `Dyn`, in a call before the row. */
+	function adapt(block:Int, row:Int, from:Int, expected:Null<Array<IrType>>):Void {
+		changed = true;
+		if (!edit || expected == null)
+			return;
+		for (index in from...body.operandCount(row)) {
+			var value = body.operand(row, index), name = tagName(body.valueType(value));
+			if (name == null || index - from >= expected.length || !isDyn(expected[index - from]))
+				continue;
+			adaptOne(block, row, index, value, name);
+		}
+	}
+
+	function adaptOne(block:Int, row:Int, index:Int, value:IrValueId, name:String):Void {
+		if (next < 0)
+			next = body.presentValueLimit();
+		var boxed = body.newValueAt(next++, "$enum-tag:implicit-box", body.typeId(Dyn));
+		required.set(name, true);
+		body.beginRow();
+		body.pushOperand(value);
+		var made = body.endRow(IrOpcode.Call, boxed, IrSymbol.of(boxNames.get(name)).id, body.provenance(row));
+		body.linkBefore(block, row, made);
+		body.setOperand(row, index, boxed);
+	}
+
+	function visit(block:Int, row:Int):Void {
+		switch body.opcode(row) {
+			case IrOpcode.InlineEnumBox, IrOpcode.InlineEnumUnbox:
+				var count = body.operandCount(row);
+				call(row, providers.provider(body.opcode(row) == IrOpcode.InlineEnumBox, body.typeOperand(row), count,
+					count == 1 ? body.valueType(body.operand(row, 0)) : null, body.valueType(body.output(row))));
+			case _ if (!tags):
+			case IrOpcode.ToDyn:
+				var name = tagName(body.valueType(body.operand(row, 0)));
+				if (name != null) {
+					required.set(name, true);
+					call(row, boxNames.get(name));
+				}
+			case IrOpcode.SafeCast:
+				var name = tagName(body.valueType(body.output(row)));
+				if (name != null) {
+					required.set(name, true);
+					call(row, unboxNames.get(name));
+				}
+			case IrOpcode.EnumTagBox:
+				var name = tagName(body.typeOperand(row));
+				if (name != null) {
+					if (!boxNames.exists(name)
+						|| body.operandCount(row) != 1
+						|| !IrVerifier.sameType(body.valueType(body.operand(row, 0)), EnumTag(name))
+						|| !IrVerifier.sameType(body.valueType(body.output(row)), Dyn))
+						throw new InternalError("Invalid enum tag box signature");
+					required.set(name, true);
+					call(row, boxNames.get(name));
+				}
+			case IrOpcode.EnumTagUnbox:
+				var name = tagName(body.typeOperand(row));
+				if (name != null) {
+					if (!unboxNames.exists(name)
+						|| body.operandCount(row) != 1
+						|| !IrVerifier.sameType(body.valueType(body.operand(row, 0)), Dyn)
+						|| !IrVerifier.sameType(body.valueType(body.output(row)), EnumTag(name)))
+						throw new InternalError("Invalid enum tag unbox signature");
+					required.set(name, true);
+					call(row, unboxNames.get(name));
+				}
+			case IrOpcode.Call:
+				var tagArgument = hasTag(row, 0), output = body.output(row);
+				if (!tagArgument && (!output.exists() || !isTag(output)))
+					return;
+				var name = body.symbol(row).name, adapter = adapterEnums.get(name);
+				if (adapter != null) {
+					required.set(adapter, true);
+					return;
+				}
+				if (!tagArgument)
+					return;
+				// Lane primitives consume tags directly in the subsequent array rewrite.
+				var lane = body.operandCount(row) > 0 && (switch body.valueType(body.operand(row, 0)) {
+					case Array(EnumTag(_)): IrArrayRuntimeNatives.isStorage(name);
+					default: false;
+				});
+				var expected = lane ? null : lookups.signature(name);
+				if (needsArguments(row, 0, expected))
+					adapt(block, row, 0, expected);
+			case IrOpcode.CNativeCall:
+				if (!hasTag(row, 0))
+					return;
+				var name = body.symbol(row).name, expected = lookups.signature(name);
+				if (needsArguments(row, 0, expected))
+					adapt(block, row, 0, expected);
+			case IrOpcode.MethodCall:
+				if (!hasTag(row, 1))
+					return;
+				var expected = lookups.methodArguments(body.valueType(body.operand(row, 0)), body.symbol(row).name);
+				if (needsArguments(row, 1, expected))
+					adapt(block, row, 1, expected);
+			case IrOpcode.CallClosure:
+				if (!hasTag(row, 1))
+					return;
+				var expected = switch body.valueType(body.operand(row, 0)) {
+					case Function(arguments, _): arguments;
+					default: [];
+				};
+				if (needsArguments(row, 1, expected))
+					adapt(block, row, 1, expected);
+			case IrOpcode.FieldSet:
+				var value = body.operand(row, 1), name = tagName(body.valueType(value));
+				if (name != null
+					&& isDyn(lookups.fieldType(body.valueType(body.operand(row, 0)), body.symbol(row).name)))
+					boxOperand(block, row, 1, value, name);
+			case IrOpcode.GlobalSet:
+				var value = body.operand(row, 0), name = tagName(body.valueType(value));
+				if (name != null && isDyn(lookups.global(body.symbol(row).name)))
+					boxOperand(block, row, 0, value, name);
+			case IrOpcode.ArraySet:
+				var value = body.operand(row, 2), name = tagName(body.valueType(value));
+				if (name != null && isDyn(switch body.valueType(body.operand(row, 0)) {
+					case Array(element): element;
+					default: null;
+				}))
+					boxOperand(block, row, 2, value, name);
+			default:
+		}
+	}
+
+	function boxOperand(block:Int, row:Int, index:Int, value:IrValueId, name:String):Void {
+		changed = true;
+		if (edit)
+			adaptOne(block, row, index, value, name);
 	}
 }

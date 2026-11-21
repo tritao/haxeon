@@ -408,20 +408,25 @@ class IrInliner {
 		var count = functions.length, edges:Array<Array<Int>> = [];
 		for (id in 0...count) {
 			var targets:Array<Int> = [];
-			for (block in functions[id].blocks)
-				for (located in block.instructions)
-					switch located.value {
-						case Call(_, callee, _):
-							var target = functionId(callee.id);
+			var body = sourceBody(functions[id]);
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.Call:
+							var target = functionId(body.aux(row));
 							if (target >= 0)
 								targets.push(target);
-						case MethodCall(_, receiver, method, _, _):
-							var callee = resolveMethod(receiver.type, method),
+						case IrOpcode.MethodCall:
+							var callee = resolveMethod(body.valueType(body.operand(row, 0)), body.symbol(row).name),
 								target = callee == null ? null : ids.get(callee);
 							if (target != null)
 								targets.push(target);
 						default:
 					}
+					row = body.nextRow(row);
+				}
+			}
 			edges.push(targets);
 		}
 		var order:Array<Int> = [for (_ in 0...count) -1],
@@ -671,9 +676,21 @@ class IrInliner {
 		var fn = functions[id], known = cache.originals.get(fn.name);
 		if (known != null && known.source == fn)
 			return known.body;
-		var body = IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
+		var body = sourceBody(fn);
 		cache.originals.set(fn.name, {source: fn, body: body});
 		return body;
+	}
+
+	/**
+	 * `fn`'s body as the stages before this one left it, frozen: the one it has (docs/design/IR_CORE_COLUMNS.md, the conversion
+	 * point is before this stage), else its encoding, kept. A body made with other type ids (a session that started its cache
+	 * over) cannot have rows spliced into this run's bodies, so it is encoded again, not kept.
+	 */
+	function sourceBody(fn:IrFunction):IrBody {
+		var known = fn.body;
+		if (known == null)
+			return fn.bodyIn(types, passScratch.bodyBuilder);
+		return known.types == types ? known : IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze(memoizes);
 	}
 
 	/** The cached frozen source body of function `id`, when the cache has one for its source. */
@@ -695,8 +712,7 @@ class IrInliner {
 
 	/** The body function `id`'s inlining edits: its source's, encoded, which nothing else holds. */
 	function workingBody(id:Int):IrBody
-		return memoizes ? originalBody(id).thaw(passScratch.bodyBuilder) : IrBodyBuilder.encode(functions[id], types,
-			passScratch.bodyBuilder);
+		return (memoizes ? originalBody(id) : sourceBody(functions[id])).thaw(passScratch.bodyBuilder);
 
 	/** The source body of the function named `name` (null for none), as copy elision reads its callees. */
 	function pristineBody(name:String):Null<IrBody> {
@@ -707,7 +723,7 @@ class IrInliner {
 			return originalBody(id);
 		var known = pristine[id];
 		if (known == null) {
-			known = IrBodyBuilder.encode(functions[id], types, passScratch.bodyBuilder).freeze(memoizes);
+			known = sourceBody(functions[id]);
 			pristine[id] = known;
 		}
 		return known;
@@ -935,7 +951,7 @@ class IrInliner {
 	function looksInlinable(fn:IrFunction):Bool {
 		if (StringTools.startsWith(fn.name, "__") || fn.name == entryPoint)
 			return false;
-		return countInstructions(fn) <= (fn.inlineHint ? HintBudget : SmallBudget) * 2;
+		return sourceBody(fn).instructionCount() <= (fn.inlineHint ? HintBudget : SmallBudget) * 2;
 	}
 
 	static function fits(fn:IrBody):Bool {
@@ -966,13 +982,6 @@ class IrInliner {
 			return false;
 		var terminator = fn.terminatorRow(0);
 		return terminator >= 0 && fn.opcode(terminator) == IrOpcode.Return;
-	}
-
-	static function countInstructions(fn:IrFunction):Int {
-		var total = 0;
-		for (block in fn.blocks)
-			total += block.instructions.length;
-		return total;
 	}
 
 	/**

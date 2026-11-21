@@ -423,6 +423,16 @@ class IrBody {
 		auxes[row] = value;
 	}
 
+	/**
+	 * Makes `row` another operation, `opcode` with auxiliary field `aux`, keeping its output and operands: for an operation
+	 * whose operands are the same values in the same order, and whose auxiliary field is no run in a pool.
+	 */
+	public function setOperation(row:Int, opcode:IrOpcode, aux:Int):Void {
+		overwriting();
+		opcodes[row] = opcode;
+		auxes[row] = aux;
+	}
+
 	/** Sets entry `index` of the row's run in the int pool. */
 	public function setAuxInt(row:Int, index:Int, value:Int):Void {
 		overwriting();

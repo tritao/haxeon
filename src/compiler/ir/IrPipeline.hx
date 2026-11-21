@@ -507,8 +507,20 @@ class IrPipeline {
 
 	/** Also after the retained HashLink assembly's adapters, which can introduce fresh nominal-tag escapes. */
 	static function enumTagEscapes(program:IrProgram, context:IrPipelineContext):IrProgram {
-		IrEnumTagLowering.escapes(program);
+		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.options.keepSession);
 		return program;
+	}
+
+	/**
+	 * The type ids of the bodies from here to the inliner: its cache's, so it takes the functions' bodies as they are. The
+	 * functions are encoded at the first stage that reads bodies (docs/design/IR_CORE_COLUMNS.md, migration).
+	 */
+	static function bodyTypes(context:IrPipelineContext):IrTypeIds {
+		var cache = context.inlineCache;
+		if (cache == null)
+			throw new InternalError("The stages over bodies need the session's inline cache");
+		return cache.types;
 	}
 
 	/** Runs also when only load/store forwarding is enabled: it compares and publishes the final IR. */
