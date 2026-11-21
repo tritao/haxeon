@@ -35,10 +35,20 @@ class IrPassScratch {
 	/** The tables of `IrLoadStoreForwarding`. */
 	public final loadStore = new IrLoadStoreForwarding.IrLoadStoreScratch();
 
+	/** A third table of Ints by value or block id, and a list of block ids, for the passes over bodies. */
+	public final thirdInts:Array<Int> = [];
+
+	public final blockList:Array<Int> = [];
+
+	/** Two flat lists of tuples of Ints, for the passes over bodies that record a few edits before making them. */
+	public final firstTuples:Array<Int> = [];
+
+	public final secondTuples:Array<Int> = [];
+
 	/** The graph the passes over bodies refill (`IrBodyGraph.reset`). */
 	public final bodyGraph = new IrBodyGraph();
 
-	/** The builder the passes over bodies make their results with (`IrBodyBuilder.startFrom`). */
+	/** The builder that copies and compactions of bodies reuse (`IrBody.freeze`, `IrBody.thaw`). */
 	public final bodyBuilder = new IrBodyBuilder(new IrTypeIds());
 
 	public function new() {}

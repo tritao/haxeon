@@ -84,8 +84,8 @@ class IrDeadPureValues {
 			default: false;
 		};
 
-	/** `run` on a body: the same body when nothing is removed. */
-	public static function runBody(body:IrBody, scratch:IrPassScratch):IrBody {
+	/** `run` on a body, in place; whether it removed anything. */
+	public static function runBody(body:IrBody, scratch:IrPassScratch):Bool {
 		var live = scratch.marked, pending = scratch.pendingIds;
 		live.clear();
 		pending.resize(0);
@@ -96,41 +96,38 @@ class IrDeadPureValues {
 					pending.push(value);
 			}
 		// Terminators are not removable, so their operands are marked with every other row that stays.
-		for (row in 0...body.rowCount())
-			if (!removableOpcode(body.opcode(row)))
-				markOperands(row);
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (!removableOpcode(body.opcode(row)))
+					markOperands(row);
+				row = body.nextRow(row);
+			}
+		}
 		for (index in 0...body.bindingCount()) {
 			var value = body.bindingValue(index);
 			if (live.add(value))
 				pending.push(value);
 		}
 		while (pending.length > 0) {
-			var value = pending[pending.length - 1];
+			var value = IrValueId.of(pending[pending.length - 1]);
 			pending.resize(pending.length - 1);
-			var definition = value < body.valueLimit() ? body.definingRow(value) : -1;
+			var definition = (value:Int) < body.valueLimit() ? body.definingRow(value) : -1;
 			if (definition >= 0)
 				markOperands(definition);
 		}
-		var dead = 0;
-		for (row in 0...body.rowCount()) {
-			var output = body.output(row);
-			if (output >= 0 && !live.has(output) && removableOpcode(body.opcode(row)))
-				dead++;
-		}
-		if (dead == 0)
-			return body;
-		var builder = scratch.bodyBuilder;
-		builder.startFrom(body);
+		var removed = false;
 		for (block in 0...body.blockCount()) {
-			builder.beginBlock(body.blockId(block));
-			for (row in body.firstRow(block)...body.endRow(block)) {
-				var output = body.output(row);
-				if (output < 0 || live.has(output) || !removableOpcode(body.opcode(row)))
-					builder.copyRow(body, row);
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				var next = body.nextRow(row), output = body.output(row);
+				if (output.exists() && !live.has(output) && removableOpcode(body.opcode(row))) {
+					body.removeRow(block, row);
+					removed = true;
+				}
+				row = next;
 			}
 		}
-		for (index in 0...body.bindingCount())
-			builder.copyBinding(body, index, body.bindingValue(index));
-		return builder.finishFrom(body);
+		return removed;
 	}
 }

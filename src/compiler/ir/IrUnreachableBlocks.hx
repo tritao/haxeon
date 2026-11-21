@@ -106,4 +106,114 @@ class IrUnreachableBlocks {
 			}
 		return result;
 	}
+
+	/** `remove` on a body, in place; whether it changed the body. */
+	public static function removeBody(body:IrBody, scratch:IrPassScratch):Bool {
+		var count = body.blockCount(), size = 0;
+		for (block in 0...count)
+			if (body.blockId(block) >= size)
+				size = body.blockId(block) + 1;
+		// By block id: its index (-1 for none), and whether the entry reaches it (1).
+		var indices = IrPassScratch.filledInts(scratch.firstInts, size, -1),
+			reached = IrPassScratch.filledInts(scratch.secondInts, size, 0),
+			work = scratch.pendingIds,
+			targets = scratch.blockList;
+		for (block in 0...count)
+			indices[body.blockId(block)] = block;
+		work.resize(0);
+		reached[body.blockId(0)] = 1;
+		work.push(body.blockId(0));
+		while (work.length > 0) {
+			var id = work[work.length - 1];
+			work.resize(work.length - 1);
+			var block = id >= 0 && id < size ? indices[id] : -1;
+			if (block < 0)
+				continue;
+			bodyEdges(body, block, targets);
+			for (target in targets)
+				if (target >= 0 && target < size && reached[target] == 0) {
+					reached[target] = 1;
+					work.push(target);
+				}
+		}
+		inline function isReached(id:Int):Bool
+			return id >= 0 && id < size && reached[id] == 1;
+		function flows(from:Int, to:Int):Bool {
+			if (!isReached(from) || indices[from] < 0)
+				return false;
+			bodyEdges(body, indices[from], targets);
+			return targets.indexOf(to) >= 0;
+		}
+		var changed = false;
+		for (block in 0...count) {
+			var id = body.blockId(block);
+			if (!isReached(id)) {
+				changed = true;
+				continue;
+			}
+			var row = body.firstRow(block);
+			while (row >= 0) {
+				if (body.opcode(row) == IrOpcode.Phi)
+					for (index in 0...body.operandCount(row))
+						if (!flows(body.auxInt(row, index), id))
+							changed = true;
+				row = body.nextRow(row);
+			}
+		}
+		if (!changed)
+			return false;
+		// Phi inputs are decided against the edges as they are; then the blocks go.
+		var removed = scratch.marked;
+		removed.clear();
+		for (block in 0...count) {
+			var id = body.blockId(block), row = body.firstRow(block);
+			while (row >= 0) {
+				if (!isReached(id)) {
+					if (body.output(row).exists())
+						removed.add(body.output(row));
+				} else if (body.opcode(row) == IrOpcode.Phi) {
+					var index = body.operandCount(row) - 1;
+					while (index >= 0) {
+						if (!flows(body.auxInt(row, index), id))
+							body.removePhiInput(row, index);
+						index--;
+					}
+				}
+				row = body.nextRow(row);
+			}
+		}
+		var block = count - 1;
+		while (block >= 0) {
+			if (!isReached(body.blockId(block)))
+				body.removeBlock(block);
+			block--;
+		}
+		var index = body.bindingCount() - 1;
+		while (index >= 0) {
+			if (removed.has(body.bindingValue(index)))
+				body.removeBinding(index);
+			index--;
+		}
+		return true;
+	}
+
+	/** `edges` of a body's block (an index), into `targets`. */
+	static function bodyEdges(body:IrBody, block:Int, targets:Array<Int>):Void {
+		targets.resize(0);
+		var row = body.firstRow(block);
+		while (row >= 0) {
+			switch body.opcode(row) {
+				case IrOpcode.BeginTry:
+					targets.push(body.auxInt(row, 0));
+					targets.push(body.auxInt(row, 1));
+				case IrOpcode.EndTry:
+					targets.push(body.auxInt(row, 0));
+				default:
+					if (body.opcode(row).isTerminator())
+						for (index in 0...body.successorCount(row))
+							targets.push(body.successor(row, index));
+			}
+			row = body.nextRow(row);
+		}
+	}
 }

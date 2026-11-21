@@ -7,9 +7,9 @@ import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 
 /**
- * Appends the rows of an `IrBody`, block by block, and makes the body (`finish`). A body is never changed once made: a pass that
- * rewrites builds a new one. `encode` makes the body of an `IrFunction` through it. One builder serves many bodies: `finish`
- * copies its columns at their exact size and `reset` empties them without giving their storage back.
+ * Appends the rows of an `IrBody`, block by block, and makes the body (`finish`): `encode` makes the body of an `IrFunction`
+ * through it, and `compact` a copy of a body without what its edits left behind. One builder serves many bodies: `finish` copies
+ * its columns at their exact size and `reset` empties them without giving their storage back.
  */
 @:allow(compiler.ir.IrBody)
 class IrBodyBuilder {
@@ -19,8 +19,18 @@ class IrBodyBuilder {
 	final auxes:Array<Int> = [];
 	final provenances:Array<Int> = [];
 
-	/** Where each row's operands start in `operands`, and one more entry, where the next row's would. */
-	final operandStarts:Array<Int> = [0];
+	/** Where each row's operands start and end in `operands`. */
+	final operandStarts:Array<Int> = [];
+
+	final operandEnds:Array<Int> = [];
+
+	/** Each row's neighbours in its block, -1 at the ends. */
+	final previousRows:Array<Int> = [];
+
+	final nextRows:Array<Int> = [];
+
+	/** Where the operands of the row being built start. */
+	var operandsFrom = 0;
 
 	final operands:Array<Int> = [];
 	final ints:Array<Int> = [];
@@ -30,8 +40,10 @@ class IrBodyBuilder {
 
 	final blockIds:Array<Int> = [];
 
-	/** Each block's first row, and one more entry when finished, the row count. */
-	final blockStarts:Array<Int> = [];
+	/** Each block's first and last row, -1 while it has none. */
+	final blockFirstRows:Array<Int> = [];
+
+	final blockLastRows:Array<Int> = [];
 
 	/** By value id: its type id, or -1 for an id no value has. */
 	final valueTypes:Array<Int> = [];
@@ -59,14 +71,19 @@ class IrBodyBuilder {
 		outputs.resize(0);
 		auxes.resize(0);
 		provenances.resize(0);
-		operandStarts.resize(1);
+		operandStarts.resize(0);
+		operandEnds.resize(0);
+		previousRows.resize(0);
+		nextRows.resize(0);
+		operandsFrom = 0;
 		operands.resize(0);
 		ints.resize(0);
 		floats.resize(0);
 		strings.resize(0);
 		provenancePool.resize(0);
 		blockIds.resize(0);
-		blockStarts.resize(0);
+		blockFirstRows.resize(0);
+		blockLastRows.resize(0);
 		valueTypes.resize(0);
 		valueNames.resize(0);
 		valueRows.resize(0);
@@ -100,13 +117,9 @@ class IrBodyBuilder {
 		return builder.finish(fn.name, fn.kind, fn.result, fn.inlineHint, fn.retention);
 	}
 
-	public inline function rowCount():Int
-		return opcodes.length;
-
 	/**
-	 * Empties the builder for a rewrite of `source`: the new body keeps its arguments, and every value of it under the same id, name
-	 * and type, so rows can be copied as they are and new values numbered from `source.valueLimit()` (`newValue`). Rows, blocks and
-	 * bindings start empty.
+	 * Empties the builder for a copy of `source`: the new body keeps its arguments, and every value of it under the same id, name
+	 * and type, so rows can be copied as they are. Rows, blocks and bindings start empty.
 	 */
 	public function startFrom(source:IrBody):Void {
 		reset(source.types);
@@ -123,17 +136,8 @@ class IrBodyBuilder {
 			argumentIds.push(argument);
 	}
 
-	/** A value that is not in the body yet, with the next id. */
-	public function newValue(name:String, type:IrType):Int {
-		var id = valueTypes.length;
-		valueTypes.push(types.id(type));
-		valueNames.push(name);
-		valueRows.push(-1);
-		return id;
-	}
-
 	/** Appends `id` to the operands of the row being built. */
-	public inline function operandId(id:Int):Void
+	public inline function operandId(id:IrValueId):Void
 		operands.push(id);
 
 	/**
@@ -141,7 +145,7 @@ class IrBodyBuilder {
 	 * a substitution is given). Its pool entries are copied, so the row means here what it meant there.
 	 */
 	public function copyRow(source:IrBody, row:Int, ?substitution:Array<Int>):Void {
-		var start = source.operandStarts[row], end = source.operandStarts[row + 1];
+		var start = source.operandStarts[row], end = source.operandEnds[row];
 		for (index in start...end) {
 			var id = source.operandPool[index];
 			if (substitution != null && id < substitution.length && substitution[id] >= 0)
@@ -184,7 +188,7 @@ class IrBodyBuilder {
 	}
 
 	/** Appends `source`'s debug binding `index`, its value replaced by `value`. */
-	public function copyBinding(source:IrBody, index:Int, value:Int):Void {
+	public function copyBinding(source:IrBody, index:Int, value:IrValueId):Void {
 		bindingIdentities.push(source.bindingIdentities[index]);
 		bindingNames.push(source.bindingNames[index]);
 		bindingPaths.push(source.bindingPaths[index]);
@@ -194,16 +198,31 @@ class IrBodyBuilder {
 	}
 
 	/** The body made, with `source`'s name, kind, result and flags. */
-	public function finishFrom(source:IrBody):IrBody {
-		blockStarts.push(opcodes.length);
-		var body = new IrBody(this, source.name, source.kind, source.result, source.inlineHint, source.retention);
-		blockStarts.pop();
-		return body;
+	public function finishFrom(source:IrBody):IrBody
+		return new IrBody(this, source.name, source.kind, source.result, source.inlineHint, source.retention);
+
+	/** `source` without the rows its edits unlinked or the runs they left: its blocks, rows and bindings in order, rebuilt. */
+	public static function compact(source:IrBody, ?builder:IrBodyBuilder):IrBody {
+		if (builder == null)
+			builder = new IrBodyBuilder(source.types);
+		builder.startFrom(source);
+		for (block in 0...source.blockCount()) {
+			builder.beginBlock(source.blockId(block));
+			var row = source.firstRow(block);
+			while (row >= 0) {
+				builder.copyRow(source, row);
+				row = source.nextRow(row);
+			}
+		}
+		for (index in 0...source.bindingCount())
+			builder.copyBinding(source, index, source.bindingValue(index));
+		return builder.finishFrom(source);
 	}
 
 	public function beginBlock(id:Int):Void {
 		blockIds.push(id);
-		blockStarts.push(opcodes.length);
+		blockFirstRows.push(-1);
+		blockLastRows.push(-1);
 	}
 
 	/** Declares `value` (its name and type kept the first time its id is seen) and gives its id. */
@@ -231,11 +250,18 @@ class IrBodyBuilder {
 	public inline function operand(value:IrValue):Void
 		operands.push(this.value(value));
 
-	/** Ends a row whose operands were added before it; `output` is a value id or -1. */
+	/** Ends a row of the last block begun, whose operands were added before it; `output` is a value id or -1. */
 	public function row(opcode:IrOpcode, output:Int, aux:Int, provenance:SourceProvenance):Void {
-		var row = opcodes.length;
+		var row = opcodes.length, block = blockIds.length - 1, previous = blockLastRows[block];
 		if (output >= 0 && valueRows[output] < 0)
 			valueRows[output] = row;
+		previousRows.push(previous);
+		nextRows.push(-1);
+		if (previous >= 0)
+			nextRows[previous] = row;
+		else
+			blockFirstRows[block] = row;
+		blockLastRows[block] = row;
 		opcodes.push(opcode);
 		outputs.push(output);
 		auxes.push(aux);
@@ -245,7 +271,9 @@ class IrBodyBuilder {
 			last++;
 		}
 		provenances.push(last);
-		operandStarts.push(operands.length);
+		operandStarts.push(operandsFrom);
+		operandEnds.push(operands.length);
+		operandsFrom = operands.length;
 	}
 
 	/** Where the next entry of the int pool goes: the auxiliary field of a row whose run starts there. */
@@ -268,12 +296,8 @@ class IrBodyBuilder {
 	}
 
 	public function finish(name:String, kind:IrFunctionKind, result:IrType, inlineHint:Bool,
-			retention:IrRetention):IrBody {
-		blockStarts.push(opcodes.length);
-		var body = new IrBody(this, name, kind, types.id(result), inlineHint, retention);
-		blockStarts.pop();
-		return body;
-	}
+			retention:IrRetention):IrBody
+		return new IrBody(this, name, kind, types.id(result), inlineHint, retention);
 
 	static inline function symbol(name:String):Int
 		return IrSymbol.of(name).id;

@@ -8,8 +8,14 @@ import compiler.ir.SourceProvenance.Located;
 
 /**
  * A function body as a table (docs/design/IR_CORE_COLUMNS.md): one row per instruction or terminator in parallel `Int` columns
- * (opcode, output value id or -1, operand range in one operand pool, auxiliary field, provenance id), blocks as ranges of rows,
- * values as ids with their name, type and defining row in columns indexed by id. Immutable once built (`IrBodyBuilder`).
+ * (opcode, output value or none, operand range in one operand pool, auxiliary field, provenance id, and the previous and next
+ * row of its block), blocks as linked lists of rows in layout order, and values as `IrValueId`s with their name, type and defining
+ * row in columns indexed by id.
+ *
+ * Passes edit a body in place. Rows never move: a removed row is unlinked, an added one appended and linked where it goes, and a
+ * phi that gains inputs moves its runs to the end of the pools. So every walk follows the links (`firstRow`, `nextRow`), never a
+ * range of row numbers. A body a cache holds is frozen (`freeze`): editing it is an internal error, and a pass that would change
+ * it changes a copy (`thaw`).
  *
  * The auxiliary field by opcode: a constant (`ConstInt`, `ConstBool` 0 or 1, `MemoryStore` size, `MemoryLoad` size << 1 | signed,
  * `Jump` target); an index into the float or string pool (`ConstFloat`, `ConstString`); a type id (`TypeValue`, the intrinsics);
@@ -21,6 +27,9 @@ import compiler.ir.SourceProvenance.Located;
  */
 @:allow(compiler.ir.IrBodyBuilder)
 class IrBody {
+	/** The `nextRow` of a row no block holds any more. */
+	static inline final UNLINKED = -2;
+
 	public final name:String;
 	public final kind:IrFunctionKind;
 	public final inlineHint:Bool;
@@ -32,18 +41,28 @@ class IrBody {
 	/** The program's type ids, which this body's type ids index. */
 	public final types:IrTypeIds;
 
+	/** Whether a cache may hold this body: then it is never edited again. */
+	public var frozen(default, null) = false;
+
+	/** Whether an edit left unlinked rows or garbage runs, which a compaction drops. */
+	var edited = false;
+
 	final opcodes:Array<Int>;
 	final outputs:Array<Int>;
 	final auxes:Array<Int>;
 	final provenances:Array<Int>;
 	final operandStarts:Array<Int>;
+	final operandEnds:Array<Int>;
+	final previousRows:Array<Int>;
+	final nextRows:Array<Int>;
 	final operandPool:Array<Int>;
 	final ints:Array<Int>;
 	final floats:Array<Float>;
 	final strings:Array<String>;
 	final provenancePool:Array<SourceProvenance>;
 	final blockIds:Array<Int>;
-	final blockStarts:Array<Int>;
+	final blockFirstRows:Array<Int>;
+	final blockLastRows:Array<Int>;
 	final valueTypes:Array<Int>;
 	final valueNames:Array<String>;
 	final valueRows:Array<Int>;
@@ -69,13 +88,17 @@ class IrBody {
 		auxes = builder.auxes.copy();
 		provenances = builder.provenances.copy();
 		operandStarts = builder.operandStarts.copy();
+		operandEnds = builder.operandEnds.copy();
+		previousRows = builder.previousRows.copy();
+		nextRows = builder.nextRows.copy();
 		operandPool = builder.operands.copy();
 		ints = builder.ints.copy();
 		floats = builder.floats.copy();
 		strings = builder.strings.copy();
 		provenancePool = builder.provenancePool.copy();
 		blockIds = builder.blockIds.copy();
-		blockStarts = builder.blockStarts.copy();
+		blockFirstRows = builder.blockFirstRows.copy();
+		blockLastRows = builder.blockLastRows.copy();
 		valueTypes = builder.valueTypes.copy();
 		valueNames = builder.valueNames.copy();
 		valueRows = builder.valueRows.copy();
@@ -90,22 +113,23 @@ class IrBody {
 
 	// Rows.
 
-	public inline function rowCount():Int
+	/** Every row number is below it, linked or not: it sizes a table indexed by row. */
+	public inline function rowLimit():Int
 		return opcodes.length;
 
 	public inline function opcode(row:Int):IrOpcode
 		return opcodes[row];
 
-	/** The value id the row defines, or -1. */
-	public inline function output(row:Int):Int
-		return outputs[row];
+	/** The value the row defines; one that does not `exist` when it defines none. */
+	public inline function output(row:Int):IrValueId
+		return IrValueId.of(outputs[row]);
 
 	public inline function operandCount(row:Int):Int
-		return operandStarts[row + 1] - operandStarts[row];
+		return operandEnds[row] - operandStarts[row];
 
-	/** The value id of the row's operand `index`. */
-	public inline function operand(row:Int, index:Int):Int
-		return operandPool[operandStarts[row] + index];
+	/** The row's operand `index`. */
+	public inline function operand(row:Int, index:Int):IrValueId
+		return IrValueId.of(operandPool[operandStarts[row] + index]);
 
 	public inline function aux(row:Int):Int
 		return auxes[row];
@@ -153,7 +177,15 @@ class IrBody {
 			default: throw new InternalError('IR body row $row has no successors');
 		};
 
-	// Blocks, in function order.
+	/** The row after `row` in its block, or -1 after the last. */
+	public inline function nextRow(row:Int):Int
+		return nextRows[row];
+
+	/** The row before `row` in its block, or -1 before the first. */
+	public inline function previousRow(row:Int):Int
+		return previousRows[row];
+
+	// Blocks, in layout order.
 
 	public inline function blockCount():Int
 		return blockIds.length;
@@ -161,60 +193,228 @@ class IrBody {
 	public inline function blockId(block:Int):Int
 		return blockIds[block];
 
+	/** The block's first row, or -1 when it has none. */
 	public inline function firstRow(block:Int):Int
-		return blockStarts[block];
+		return blockFirstRows[block];
 
-	/** The row after the block's last one. */
-	public inline function endRow(block:Int):Int
-		return blockStarts[block + 1];
+	/** The block's last row, or -1 when it has none. */
+	public inline function lastRow(block:Int):Int
+		return blockLastRows[block];
 
 	/** The block's terminator row, or -1 when it has none yet. */
 	public function terminatorRow(block:Int):Int {
-		var last = blockStarts[block + 1] - 1;
-		return last >= blockStarts[block] && opcode(last).isTerminator() ? last : -1;
+		var last = blockLastRows[block];
+		return last >= 0 && opcode(last).isTerminator() ? last : -1;
 	}
 
-	/** The row after the block's last instruction: its terminator row, or its end when it has none. */
-	public function instructionEnd(block:Int):Int {
-		var terminator = terminatorRow(block);
-		return terminator >= 0 ? terminator : blockStarts[block + 1];
+	/** The block's index in the layout, or -1 when it has no block with id `id`. */
+	public function blockIndex(id:Int):Int {
+		for (block in 0...blockIds.length)
+			if (blockIds[block] == id)
+				return block;
+		return -1;
 	}
 
 	// Values.
 
-	/** Every value id is below it. */
+	/** Every value id is below it: it sizes a table indexed by value. */
 	public inline function valueLimit():Int
 		return valueTypes.length;
 
-	public inline function hasValue(value:Int):Bool
-		return value < valueTypes.length && valueTypes[value] >= 0;
+	public inline function hasValue(value:IrValueId):Bool
+		return (value:Int) < valueTypes.length && valueTypes[value] >= 0;
 
-	public inline function valueTypeId(value:Int):Int
+	public inline function valueTypeId(value:IrValueId):Int
 		return valueTypes[value];
 
-	public inline function valueType(value:Int):IrType
+	public inline function valueType(value:IrValueId):IrType
 		return types.type(valueTypes[value]);
 
-	public inline function valueName(value:Int):String
+	public inline function valueName(value:IrValueId):String
 		return valueNames[value];
 
-	/** The row defining the value, or -1 for an argument or a value used without a definition here. */
-	public inline function definingRow(value:Int):Int
+	/** The row defining the value, or -1 for an argument or a value no linked row defines. */
+	public inline function definingRow(value:IrValueId):Int
 		return valueRows[value];
 
 	public inline function argumentCount():Int
 		return argumentIds.length;
 
-	public inline function argument(index:Int):Int
-		return argumentIds[index];
+	public inline function argument(index:Int):IrValueId
+		return IrValueId.of(argumentIds[index]);
 
 	// Debug bindings.
 
 	public inline function bindingCount():Int
 		return bindingIdentities.length;
 
-	public inline function bindingValue(index:Int):Int
-		return bindingValues[index];
+	public inline function bindingValue(index:Int):IrValueId
+		return IrValueId.of(bindingValues[index]);
+
+	// Ownership.
+
+	/**
+	 * This body, frozen, for a cache to hold: compacted first when an edit left garbage, so what is kept holds only what it
+	 * reads.
+	 */
+	public function freeze(?builder:IrBodyBuilder):IrBody {
+		var result = edited ? IrBodyBuilder.compact(this, builder) : this;
+		result.frozen = true;
+		return result;
+	}
+
+	/** A copy of this body that a pass may edit, compacted. */
+	public function thaw(?builder:IrBodyBuilder):IrBody
+		return IrBodyBuilder.compact(this, builder);
+
+	// Edits, in place. Each requires the body not to be frozen.
+
+	inline function editing():Void {
+		if (frozen)
+			throw new InternalError('IR body $name is frozen: a cache holds it, and a pass may only change a copy');
+		edited = true;
+	}
+
+	/** Unlinks `row` from block `block` (an index); its output loses its defining row. */
+	public function removeRow(block:Int, row:Int):Void {
+		editing();
+		var previous = previousRows[row], next = nextRows[row];
+		if (previous >= 0)
+			nextRows[previous] = next;
+		else if (blockFirstRows[block] == row)
+			blockFirstRows[block] = next;
+		else
+			throw new InternalError('IR body row $row is not in block ${blockIds[block]}');
+		if (next >= 0)
+			previousRows[next] = previous;
+		else
+			blockLastRows[block] = previous;
+		previousRows[row] = UNLINKED;
+		nextRows[row] = UNLINKED;
+		var out = outputs[row];
+		if (out >= 0 && valueRows[out] == row)
+			valueRows[out] = -1;
+	}
+
+	/** Removes block `block` (an index) from the layout, and its rows from the body. */
+	public function removeBlock(block:Int):Void {
+		editing();
+		var row = blockFirstRows[block];
+		while (row >= 0) {
+			var next = nextRows[row];
+			var out = outputs[row];
+			if (out >= 0 && valueRows[out] == row)
+				valueRows[out] = -1;
+			previousRows[row] = UNLINKED;
+			nextRows[row] = UNLINKED;
+			row = next;
+		}
+		blockIds.splice(block, 1);
+		blockFirstRows.splice(block, 1);
+		blockLastRows.splice(block, 1);
+	}
+
+	public function setAux(row:Int, value:Int):Void {
+		editing();
+		auxes[row] = value;
+	}
+
+	/** Sets entry `index` of the row's run in the int pool. */
+	public function setAuxInt(row:Int, index:Int, value:Int):Void {
+		editing();
+		ints[auxes[row] + index] = value;
+	}
+
+	/** Removes input `index` of phi `row`, keeping the others in order. */
+	public function removePhiInput(row:Int, index:Int):Void {
+		editing();
+		var start = operandStarts[row], end = operandEnds[row], aux = auxes[row];
+		for (from in index + 1...end - start) {
+			operandPool[start + from - 1] = operandPool[start + from];
+			ints[aux + from - 1] = ints[aux + from];
+		}
+		operandEnds[row] = end - 1;
+	}
+
+	/** Adds an input to phi `row`, `value` from block `block`, after the others. */
+	public function addPhiInput(row:Int, block:Int, value:IrValueId):Void {
+		editing();
+		var start = operandStarts[row], end = operandEnds[row], aux = auxes[row], count = end - start;
+		// The runs grow where they are when both end their pools; otherwise they move to the ends.
+		if (end != operandPool.length || aux + count != ints.length) {
+			var newStart = operandPool.length, newAux = ints.length;
+			for (index in 0...count) {
+				operandPool.push(operandPool[start + index]);
+				ints.push(ints[aux + index]);
+			}
+			operandStarts[row] = newStart;
+			auxes[row] = newAux;
+		}
+		operandPool.push(value);
+		ints.push(block);
+		operandEnds[row] = operandPool.length;
+	}
+
+	public function removeBinding(index:Int):Void {
+		editing();
+		bindingIdentities.splice(index, 1);
+		bindingNames.splice(index, 1);
+		bindingPaths.splice(index, 1);
+		bindingStarts.splice(index, 1);
+		bindingEnds.splice(index, 1);
+		bindingValues.splice(index, 1);
+	}
+
+	/**
+	 * Where this body's layout is broken, or null: each linked row is in one block and reached once, `previousRow` mirrors
+	 * `nextRow`, a terminator only last, operand and int-pool runs inside their pools, a defining row for every linked output and
+	 * none for an unlinked one, distinct block ids.
+	 */
+	public function layoutDifference():Null<String> {
+		var seen:Array<Bool> = [];
+		seen.resize(opcodes.length);
+		var ids:Map<Int, Bool> = [];
+		for (block in 0...blockIds.length) {
+			var id = blockIds[block];
+			if (ids.exists(id))
+				return 'block $id appears twice';
+			ids.set(id, true);
+			var row = blockFirstRows[block], previous = -1;
+			while (row >= 0) {
+				if (row >= opcodes.length)
+					return 'block $id links to row $row, past the rows';
+				if (seen[row])
+					return 'row $row is linked twice (block $id)';
+				seen[row] = true;
+				if (previousRows[row] != previous)
+					return 'row $row of block $id has previous ${previousRows[row]}, not $previous';
+				if (opcode(row).isTerminator() && nextRows[row] != -1)
+					return 'terminator row $row of block $id is not last';
+				if (operandStarts[row] < 0 || operandEnds[row] < operandStarts[row]
+					|| operandEnds[row] > operandPool.length)
+					return 'row $row has operands ${operandStarts[row]}...${operandEnds[row]} outside the pool';
+				for (index in operandStarts[row]...operandEnds[row])
+					if (operandPool[index] < 0 || operandPool[index] >= valueTypes.length
+						|| valueTypes[operandPool[index]] < 0)
+						return 'row $row reads value ${operandPool[index]}, which the body does not have';
+				var out = outputs[row];
+				if (out >= 0 && (out >= valueTypes.length || valueRows[out] != row))
+					return 'row $row defines value $out, whose defining row is ${out < valueRows.length ? valueRows[out] : -1}';
+				if (opcode(row) == IrOpcode.Phi && auxes[row] + operandCount(row) > ints.length)
+					return 'phi row $row has predecessors outside the int pool';
+				previous = row;
+				row = nextRows[row];
+			}
+			if (blockLastRows[block] != previous)
+				return 'block $id ends at row ${blockLastRows[block]}, not $previous';
+		}
+		for (value in 0...valueRows.length) {
+			var row = valueRows[value];
+			if (row >= 0 && (row >= opcodes.length || !seen[row] || outputs[row] != value))
+				return 'value $value has defining row $row, which is not linked or defines another value';
+		}
+		return null;
+	}
 
 	/** The `IrFunction` this body is the table of, equal to the encoded one (`IrFunctionStateEquality.same`). */
 	public function toFunction():IrFunction {
@@ -222,12 +422,13 @@ class IrBody {
 		values.resize(valueTypes.length);
 		var blocks:Array<IrBlock> = [];
 		for (block in 0...blockIds.length) {
-			var end = blockStarts[block + 1], terminator = terminatorRow(block);
-			if (terminator >= 0)
-				end = terminator;
-			var instructions:Array<Located<IrInstruction>> = [];
-			for (row in blockStarts[block]...end)
+			var instructions:Array<Located<IrInstruction>> = [],
+				terminator = terminatorRow(block),
+				row = blockFirstRows[block];
+			while (row >= 0 && row != terminator) {
 				instructions.push(new Located(decodeInstruction(row, values), provenance(row)));
+				row = nextRows[row];
+			}
 			var decoded = new IrBlock(blockIds[block], instructions);
 			if (terminator >= 0)
 				decoded.terminator = new Located(decodeTerminator(terminator, values), provenance(terminator));
@@ -250,8 +451,12 @@ class IrBody {
 	 * Where `fn` and the function its body decodes to first differ, or null when they are equal: every function the compiler makes
 	 * must have a body (`IrVerifier.verifyReusing` with `CompileOptions.checkIrBody`).
 	 */
-	public static function roundTripDifference(fn:IrFunction, types:IrTypeIds):Null<String>
-		return compiler.ir.codec.IrFunctionStateEquality.difference(fn, IrBodyBuilder.encode(fn, types).toFunction());
+	public static function roundTripDifference(fn:IrFunction, types:IrTypeIds):Null<String> {
+		var body = IrBodyBuilder.encode(fn, types), layout = body.layoutDifference();
+		if (layout != null)
+			return 'layout: $layout';
+		return compiler.ir.codec.IrFunctionStateEquality.difference(fn, body.toFunction());
+	}
 
 	function valueOf(id:Int, values:Array<Null<IrValue>>):IrValue {
 		var value = values[id];
@@ -263,7 +468,7 @@ class IrBody {
 	}
 
 	function operandValues(row:Int, from:Int, values:Array<Null<IrValue>>):Array<IrValue>
-		return [for (index in operandStarts[row] + from...operandStarts[row + 1]) valueOf(operandPool[index], values)];
+		return [for (index in operandStarts[row] + from...operandEnds[row]) valueOf(operandPool[index], values)];
 
 	function decodeInstruction(row:Int, values:Array<Null<IrValue>>):IrInstruction {
 		var out = outputs[row] >= 0 ? valueOf(outputs[row], values) : null,

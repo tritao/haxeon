@@ -158,13 +158,16 @@ class IrBodyGraph {
 				pushOnce(body.auxInt(terminator, 0), start);
 			default:
 		}
-		for (row in body.firstRow(block)...terminator)
+		var row = body.firstRow(block);
+		while (row != terminator) {
 			if (body.opcode(row) == IrOpcode.BeginTry) {
 				var handler = body.auxInt(row, 0), after = body.auxInt(row, 1);
 				if (!contains(after))
 					throw new InternalError('Unknown IR block $after');
 				pushOnce(handler, start);
 			}
+			row = body.nextRow(row);
+		}
 		for (index in start...successorTargets.length)
 			if (!contains(successorTargets[index]))
 				throw new InternalError('Unknown IR block ${successorTargets[index]}');

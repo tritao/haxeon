@@ -4,6 +4,7 @@ import compiler.ir.IrBodyBuilder;
 import compiler.ir.IrFunction;
 import compiler.ir.IrSymbol;
 import compiler.ir.IrTypeIds;
+import compiler.ir.IrValueId;
 import compiler.ir.SourceProvenance;
 import compiler.ir.SourceProvenance.Located;
 import compiler.ir.codec.IrFunctionStateEquality;
@@ -154,13 +155,14 @@ class IrBodyMain {
 		check(fn, types);
 		var opcodes:Map<Int, Bool> = [];
 		var body = IrBodyBuilder.encode(fn, types);
-		for (row in 0...body.rowCount())
+		for (row in 0...body.rowLimit())
 			opcodes.set(body.opcode(row), true);
 		for (opcode in 0...compiler.ir.IrOpcode.COUNT)
 			if (!opcodes.exists(opcode))
 				throw 'The test covers no row with opcode $opcode';
 		expect(body.blockCount() == blocks.length, "block count");
 		expect(body.blockId(1) == 10 && body.terminatorRow(blocks.length - 2) == -1
+			&& body.firstRow(blocks.length - 1) == -1
 			&& body.terminatorRow(blocks.length - 1) == -1, "blocks without terminators");
 		var branch = body.terminatorRow(0);
 		expect(body.opcode(branch) == compiler.ir.IrOpcode.Branch && body.successorCount(branch) == 2
@@ -169,15 +171,20 @@ class IrBodyMain {
 		var switchRow = body.terminatorRow(6);
 		expect(body.opcode(switchRow) == compiler.ir.IrOpcode.Switch && body.successorCount(switchRow) == 4
 			&& body.successor(switchRow, 2) == 5 && body.successor(switchRow, 3) == 6, "switch successors");
-		expect(body.definingRow(phi.id) == 0 && body.definingRow(a.id) == -1, "defining rows");
-		expect(body.valueName(phi.id) == "phi" && body.valueTypeId(a.id) == body.valueTypeId(b.id),
-			"value columns");
-		expect(body.operandCount(0) == 2 && body.operand(0, 1) == b.id && body.auxInt(0, 1) == 2, "phi inputs");
-		var methodRow = -1;
-		for (row in 0...body.rowCount())
-			if (body.opcode(row) == compiler.ir.IrOpcode.MethodCall && methodRow < 0)
+		expect(body.definingRow(IrValueId.of(phi.id)) == 0 && body.definingRow(IrValueId.of(a.id)) == -1,
+			"defining rows");
+		expect(body.valueName(IrValueId.of(phi.id)) == "phi"
+			&& body.valueTypeId(IrValueId.of(a.id)) == body.valueTypeId(IrValueId.of(b.id)), "value columns");
+		expect(body.operandCount(0) == 2 && body.operand(0, 1) == IrValueId.of(b.id) && body.auxInt(0, 1) == 2,
+			"phi inputs");
+		var methodRow = -1, row = body.firstRow(0);
+		while (row >= 0 && methodRow < 0) {
+			if (body.opcode(row) == compiler.ir.IrOpcode.MethodCall)
 				methodRow = row;
-		expect(body.symbol(methodRow).name == "get" && body.operand(methodRow, 0) == o.id, "method call");
+			row = body.nextRow(row);
+		}
+		expect(body.symbol(methodRow).name == "get" && body.operand(methodRow, 0) == IrValueId.of(o.id), "method call");
+		edits(body);
 		// A function with no blocks, no arguments and a second value table round-trips too.
 		nextId = 0;
 		check(new IrFunction("Main.empty", [], Void, [], Ordinary), types);
@@ -204,19 +211,58 @@ class IrBodyMain {
 		return result;
 	}
 
-	/** Runs a pass on `fn` and on its body; both must change it, and the same way. */
+	/**
+	 * Runs a pass on `fn` and on its body; both must change it, and the same way. The edited body keeps a sound layout, and
+	 * compacts to an equal function.
+	 */
 	static function samePass(what:String, fn:IrFunction, objectPass:IrFunction->IrFunction,
-			bodyPass:(IrBody, compiler.ir.IrPassScratch) -> IrBody):Void {
+			bodyPass:(IrBody, compiler.ir.IrPassScratch) -> Bool):Void {
 		var types = new IrTypeIds(),
 			scratch = new compiler.ir.IrPassScratch(),
 			body = IrBodyBuilder.encode(fn, types),
-			expected = objectPass(fn),
-			result = bodyPass(body, scratch);
-		if (expected == fn || result == body)
+			expected = objectPass(fn);
+		if (expected == fn || !bodyPass(body, scratch))
 			throw 'IrBody: the $what test function must change';
-		var difference = IrFunctionStateEquality.difference(expected, result.toFunction());
+		var layout = body.layoutDifference();
+		if (layout != null)
+			throw 'IrBody: $what left a broken layout: $layout';
+		var difference = IrFunctionStateEquality.difference(expected, body.toFunction());
 		if (difference != null)
 			throw 'IrBody: $what on a body differs from its object version: $difference';
+		var frozen = body.freeze(scratch.bodyBuilder);
+		if (frozen == body || !frozen.frozen || frozen.layoutDifference() != null
+			|| IrFunctionStateEquality.difference(expected, frozen.toFunction()) != null)
+			throw 'IrBody: $what: the frozen body must be a compacted copy equal to the edited one';
+	}
+
+	/** Edits keep the layout sound and say what changed; a frozen body refuses them; a thawed copy takes them. */
+	static function edits(source:IrBody):Void {
+		var body = source.thaw();
+		var last = body.lastRow(0), before = body.previousRow(last);
+		var removedOutput = body.output(before);
+		body.removeRow(0, before);
+		expect(body.previousRow(last) != before && body.definingRow(removedOutput) == -1
+			&& body.layoutDifference() == null, "removing a row");
+		body.addPhiInput(body.firstRow(0), 7, body.argument(0));
+		expect(body.operandCount(body.firstRow(0)) == 3 && body.auxInt(body.firstRow(0), 2) == 7
+			&& body.layoutDifference() == null, "adding a phi input moves its runs");
+		body.removePhiInput(body.firstRow(0), 0);
+		expect(body.operandCount(body.firstRow(0)) == 2 && body.auxInt(body.firstRow(0), 0) == 2,
+			"removing a phi input");
+		var blocks = body.blockCount();
+		body.removeBlock(blocks - 1);
+		expect(body.blockCount() == blocks - 1 && body.layoutDifference() == null, "removing a block");
+		var frozen = body.freeze();
+		expect(frozen != body && frozen.frozen && frozen.layoutDifference() == null
+			&& IrFunctionStateEquality.difference(body.toFunction(), frozen.toFunction()) == null, "freezing compacts");
+		var refused = false;
+		try
+			frozen.setAux(frozen.firstRow(0), 0)
+		catch (error:compiler.core.InternalError)
+			refused = true;
+		expect(refused, "a frozen body refuses edits");
+		var unedited = source.thaw();
+		expect(unedited.freeze() == unedited, "freezing an unedited body keeps it");
 	}
 
 	static function bodyPasses():Void {
@@ -237,7 +283,7 @@ class IrBodyMain {
 			block(4, [], Jump(3)),
 			block(3, [], Return(x))
 		], Ordinary), fn -> compiler.ir.IrJumpThreading.run(fn),
-			(body, scratch) -> compiler.ir.IrBodyJumpThreading.run(body, scratch));
+			(body, scratch) -> compiler.ir.IrJumpThreading.runBody(body, scratch));
 		var yes = value("yes", Bool),
 			no = value("no", Bool),
 			joined = value("joined", Bool),
@@ -251,7 +297,7 @@ class IrBodyMain {
 			block(4, [ConstInt(one, 1)], Return(one)),
 			block(5, [ConstInt(two, 2)], Return(two))
 		], Ordinary), fn -> compiler.ir.IrJumpThreading.threadConstantBranches(fn),
-			(body, scratch) -> compiler.ir.IrBodyJumpThreading.threadConstantBranches(body, scratch));
+			(body, scratch) -> compiler.ir.IrJumpThreading.threadConstantBranchesBody(body, scratch));
 	}
 
 	static function check(fn:IrFunction, types:IrTypeIds):Void {
