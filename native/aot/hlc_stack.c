@@ -341,37 +341,16 @@ static int hlc_function_at( void *address ) {
 	return found < 0 ? -1 : hlc_starts[found].slot;
 }
 
-#ifndef HLC_EXACT_FRAMES
-/* Inlined frames. Where the C compiler inlined a generated function into another, the return address of a frame lies in the
- * inlined code, and the DWARF inline records (`.debug_info`: DW_TAG_inlined_subroutine, with the call's file and line) restore
- * the frames the inlining removed. Each record is a scope: a function body at some address ranges, inside its caller's scope;
- * a subprogram's scope is the outermost. Scopes are kept in DIE order, each with the index past its subtree, so a lookup
- * descends from the subprogram of an address through the children whose ranges hold it. */
-typedef struct {
-	int parent; // -1 for a subprogram
-	int next; // the index past this scope's subtree
-	int first_range, range_count;
-	const char *name; // the C name of the function this is the body of
-	const char *call_file; // where the parent calls it, for an inlined scope
-	int call_line;
-	int slot; // the generated function's slot, -1 if it is not one, -2 not looked up yet
-} hlc_scope;
+static int hlc_find_bias( struct dl_phdr_info *info, size_t size, void *data ) {
+	(void)size;
+	*(uintptr_t*)data = (uintptr_t)info->dlpi_addr;
+	return 1; // the first object is the executable
+}
 
 typedef struct {
-	uintptr_t low, high;
-	int scope;
-} hlc_range;
-
-static hlc_scope *hlc_scopes;
-static int hlc_scope_count, hlc_scope_capacity;
-static hlc_range *hlc_scope_ranges; // each scope's ranges, by first_range
-static int hlc_scope_range_count, hlc_scope_range_capacity;
-static hlc_range *hlc_subprograms; // the subprograms' ranges, sorted by address
-static int hlc_subprogram_count;
-
-typedef struct {
-	const unsigned char *info, *abbrev, *rnglists, *ranges, *addr, *str, *str_offsets, *line_str;
-	size_t info_size, abbrev_size, rnglists_size, ranges_size, addr_size, str_size, str_offsets_size, line_str_size;
+	const unsigned char *line,
+		*info, *abbrev, *rnglists, *ranges, *addr, *str, *str_offsets, *line_str;
+	size_t line_size, info_size, abbrev_size, rnglists_size, ranges_size, addr_size, str_size, str_offsets_size, line_str_size;
 } hlc_debug_sections;
 
 typedef struct {
@@ -386,13 +365,125 @@ typedef struct {
 	int count;
 } hlc_abbrev;
 
+static hlc_debug_sections hlc_debug;
+static uintptr_t hlc_bias;
+static int hlc_image_state; // 0 not mapped, 1 mapped, -1 unavailable
+
+/* Maps the executable and finds its debug sections; nothing is read until a frame needs it. */
+static bool hlc_open_image( void ) {
+	if( hlc_image_state ) return hlc_image_state > 0;
+	hlc_image_state = -1;
+	int fd = open("/proc/self/exe", O_RDONLY);
+	if( fd < 0 ) return false;
+	struct stat st;
+	if( fstat(fd, &st) != 0 || st.st_size < (off_t)sizeof(Elf64_Ehdr) ) { close(fd); return false; }
+	const unsigned char *image = (const unsigned char*)mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
+	close(fd);
+	if( image == MAP_FAILED ) return false;
+	const Elf64_Ehdr *header = (const Elf64_Ehdr*)image;
+	if( memcmp(header->e_ident, ELFMAG, SELFMAG) != 0 || header->e_ident[EI_CLASS] != ELFCLASS64 ) return false;
+	const Elf64_Shdr *sections = (const Elf64_Shdr*)(image + header->e_shoff);
+	const char *names = (const char*)image + sections[header->e_shstrndx].sh_offset;
+	hlc_debug_sections *d = &hlc_debug;
+	for(int i=0;i<header->e_shnum;i++) {
+		const char *name = names + sections[i].sh_name;
+		// Compressed debug sections are not read: frames then have no line.
+		if( sections[i].sh_flags & SHF_COMPRESSED ) continue;
+		const unsigned char *data = image + sections[i].sh_offset;
+		size_t size = sections[i].sh_size;
+		if( strcmp(name, ".debug_line") == 0 ) { d->line = data; d->line_size = size; }
+		else if( strcmp(name, ".debug_line_str") == 0 ) { d->line_str = data; d->line_str_size = size; }
+		else if( strcmp(name, ".debug_str") == 0 ) { d->str = data; d->str_size = size; }
+		else if( strcmp(name, ".debug_info") == 0 ) { d->info = data; d->info_size = size; }
+		else if( strcmp(name, ".debug_abbrev") == 0 ) { d->abbrev = data; d->abbrev_size = size; }
+		else if( strcmp(name, ".debug_rnglists") == 0 ) { d->rnglists = data; d->rnglists_size = size; }
+		else if( strcmp(name, ".debug_ranges") == 0 ) { d->ranges = data; d->ranges_size = size; }
+		else if( strcmp(name, ".debug_addr") == 0 ) { d->addr = data; d->addr_size = size; }
+		else if( strcmp(name, ".debug_str_offsets") == 0 ) { d->str_offsets = data; d->str_offsets_size = size; }
+	}
+	dl_iterate_phdr(hlc_find_bias, &hlc_bias);
+	hlc_image_state = 1; // the mapping stays: file and function names point into it
+	return true;
+}
+
+/* Reads the executable's line table, the first time a frame is named. */
+static void hlc_read_lines( void ) {
+	hlc_lines_state = -1;
+	if( !hlc_open_image() || !hlc_debug.line ) return;
+	hlc_strings strings = { hlc_debug.line_str, hlc_debug.str, hlc_debug.line_str_size, hlc_debug.str_size };
+	hlc_read_line_programs(hlc_debug.line, hlc_debug.line_size, &strings, hlc_bias);
+	qsort(hlc_rows, hlc_row_count, sizeof(hlc_line_row), hlc_compare_rows);
+	hlc_lines_state = 1;
+}
+
+/* The Haxe file and line of the call before return address `address`. */
+static bool hlc_line_of( void *address, const char **file, int *line ) {
+	if( hlc_lines_state == 0 ) hlc_read_lines();
+	if( hlc_lines_state < 0 ) return false;
+	uintptr_t target = (uintptr_t)address - 1;
+	int low = 0, high = hlc_row_count - 1, found = -1;
+	while( low <= high ) {
+		int middle = (low + high) >> 1;
+		if( hlc_rows[middle].address <= target ) { found = middle; low = middle + 1; } else high = middle - 1;
+	}
+	if( found < 0 || hlc_rows[found].file < 0 ) return false;
+	*file = hlc_files[hlc_rows[found].file];
+	*line = hlc_rows[found].line;
+	return true;
+}
+
+#ifndef HLC_EXACT_FRAMES
+/* Inlined frames. Where the C compiler inlined a generated function into another, the return address of a frame lies in the
+ * inlined code, and the DWARF inline records (`.debug_info`: DW_TAG_inlined_subroutine, with the call's file and line) restore
+ * the frames the inlining removed. Each record is a scope: a function body at some address ranges, inside its caller's scope;
+ * a subprogram's scope is the outermost. A compilation unit's scopes are read the first time a frame is in it (an index of the
+ * units by address is read the first time any frame is captured), kept in DIE order, each with the index past its subtree, so
+ * a lookup descends from the subprogram of an address through the children whose ranges hold it. Scopes are stored in chunks
+ * that never move, so a captured frame can point at one. */
+typedef struct {
+	int parent; // -1 for a subprogram
+	int next; // the index past this scope's subtree
+	int first_range, range_count;
+	const char *name; // the C name of the function this is the body of
+	uint64 stmt_list; // the unit's line program, whose file table call_file indexes
+	int call_file, call_line; // where the parent calls it, for an inlined scope
+	int slot; // the generated function's slot, -1 if it is not one, -2 not looked up yet
+} hlc_scope;
+
+typedef struct {
+	uintptr_t low, high;
+	int tag; // a scope, or a unit
+} hlc_range;
+
+typedef struct {
+	hlc_range *items;
+	int count, capacity;
+} hlc_ranges;
+
+typedef struct {
+	const unsigned char *header; // in .debug_info
+	bool read;
+	hlc_ranges subprograms; // its subprograms' ranges, sorted, once read
+} hlc_unit_entry;
+
+#define HLC_SCOPE_CHUNK 4096
+static hlc_scope **hlc_scope_chunks;
+static int hlc_scope_count, hlc_scope_chunk_count;
+static hlc_ranges hlc_scope_ranges; // each scope's ranges, by first_range
+static hlc_unit_entry *hlc_units;
+static int hlc_unit_count;
+static hlc_ranges hlc_unit_ranges; // the units' ranges in the generated code, sorted
+static int hlc_units_state; // 0 not indexed, 1 indexed, -1 unavailable
+
+#define HLC_SCOPE(i) (hlc_scope_chunks[(i) / HLC_SCOPE_CHUNK] + (i) % HLC_SCOPE_CHUNK)
+
 typedef struct {
 	const unsigned char *start, *end; // the unit, header included
+	const unsigned char *first; // its first DIE
 	int version, offset_size, address_size;
 	hlc_abbrev *abbrevs;
 	int abbrev_count;
-	uint64 addr_base, rnglists_base, str_offsets_base, low_pc;
-	hlc_line_unit *lines;
+	uint64 addr_base, rnglists_base, str_offsets_base, low_pc, stmt_list;
 } hlc_unit;
 
 enum { HLC_VALUE_NONE, HLC_VALUE_NUMBER, HLC_VALUE_ADDRESS, HLC_VALUE_ADDRX, HLC_VALUE_STRING, HLC_VALUE_STRX, HLC_VALUE_REF,
@@ -557,26 +648,26 @@ static const char *hlc_die_name( hlc_unit *u, const hlc_debug_sections *d, const
 	return NULL;
 }
 
-static void hlc_add_scope_range( int scope, uintptr_t low, uintptr_t high ) {
+static void hlc_push_range( hlc_ranges *v, uintptr_t low, uintptr_t high, int tag ) {
 	if( high <= low ) return;
-	if( hlc_scope_range_count == hlc_scope_range_capacity ) {
-		hlc_scope_range_capacity = hlc_scope_range_capacity ? hlc_scope_range_capacity * 2 : 4096;
-		hlc_scope_ranges = (hlc_range*)realloc(hlc_scope_ranges, sizeof(hlc_range) * hlc_scope_range_capacity);
+	if( v->count == v->capacity ) {
+		v->capacity = v->capacity ? v->capacity * 2 : 64;
+		v->items = (hlc_range*)realloc(v->items, sizeof(hlc_range) * v->capacity);
 	}
-	hlc_scope_ranges[hlc_scope_range_count].low = low;
-	hlc_scope_ranges[hlc_scope_range_count].high = high;
-	hlc_scope_ranges[hlc_scope_range_count].scope = scope;
-	hlc_scope_range_count++;
-	hlc_scopes[scope].range_count++;
+	v->items[v->count].low = low;
+	v->items[v->count].high = high;
+	v->items[v->count].tag = tag;
+	v->count++;
 }
 
-/* Adds the address ranges of a DIE to scope `scope`, moved by `bias`. */
-static void hlc_die_ranges( hlc_unit *u, const hlc_debug_sections *d, hlc_die *die, int scope, uintptr_t bias ) {
+/* Adds the address ranges of a DIE to `out`, moved by the executable's bias and tagged `tag`. */
+static void hlc_die_ranges( hlc_unit *u, const hlc_debug_sections *d, hlc_die *die, hlc_ranges *out, int tag ) {
+	uintptr_t bias = hlc_bias;
 	if( die->has_low && die->has_high ) {
 		uint64 low = die->low.kind == HLC_VALUE_ADDRX ? hlc_address(u, d, die->low.number) : die->low.number;
 		uint64 high = die->high.kind == HLC_VALUE_ADDRX ? hlc_address(u, d, die->high.number)
 			: die->high.kind == HLC_VALUE_ADDRESS ? die->high.number : low + die->high.number;
-		hlc_add_scope_range(scope, (uintptr_t)low + bias, (uintptr_t)high + bias);
+		hlc_push_range(out, (uintptr_t)low + bias, (uintptr_t)high + bias, tag);
 		return;
 	}
 	if( !die->has_ranges ) return;
@@ -597,16 +688,16 @@ static void hlc_die_ranges( hlc_unit *u, const hlc_debug_sections *d, hlc_die *d
 			case 0: return; // DW_RLE_end_of_list
 			case 1: base = hlc_address(u, d, hlc_uleb(&p, end)); break;
 			case 2: a = hlc_address(u, d, hlc_uleb(&p, end)); b = hlc_address(u, d, hlc_uleb(&p, end));
-				hlc_add_scope_range(scope, (uintptr_t)a + bias, (uintptr_t)b + bias); break;
+				hlc_push_range(out, (uintptr_t)a + bias, (uintptr_t)b + bias, tag); break;
 			case 3: a = hlc_address(u, d, hlc_uleb(&p, end)); b = a + hlc_uleb(&p, end);
-				hlc_add_scope_range(scope, (uintptr_t)a + bias, (uintptr_t)b + bias); break;
+				hlc_push_range(out, (uintptr_t)a + bias, (uintptr_t)b + bias, tag); break;
 			case 4: a = base + hlc_uleb(&p, end); b = base + hlc_uleb(&p, end);
-				hlc_add_scope_range(scope, (uintptr_t)a + bias, (uintptr_t)b + bias); break;
+				hlc_push_range(out, (uintptr_t)a + bias, (uintptr_t)b + bias, tag); break;
 			case 5: base = hlc_fixed(&p, u->address_size); break;
 			case 6: a = hlc_fixed(&p, u->address_size); b = hlc_fixed(&p, u->address_size);
-				hlc_add_scope_range(scope, (uintptr_t)a + bias, (uintptr_t)b + bias); break;
+				hlc_push_range(out, (uintptr_t)a + bias, (uintptr_t)b + bias, tag); break;
 			case 7: a = hlc_fixed(&p, u->address_size); b = a + hlc_uleb(&p, end);
-				hlc_add_scope_range(scope, (uintptr_t)a + bias, (uintptr_t)b + bias); break;
+				hlc_push_range(out, (uintptr_t)a + bias, (uintptr_t)b + bias, tag); break;
 			default: return;
 			}
 		}
@@ -618,88 +709,69 @@ static void hlc_die_ranges( hlc_unit *u, const hlc_debug_sections *d, hlc_die *d
 			uint64 a = hlc_fixed(&p, u->address_size), b = hlc_fixed(&p, u->address_size);
 			if( a == 0 && b == 0 ) return;
 			if( a == all ) { base = b; continue; }
-			hlc_add_scope_range(scope, (uintptr_t)(base + a) + bias, (uintptr_t)(base + b) + bias);
+			hlc_push_range(out, (uintptr_t)(base + a) + bias, (uintptr_t)(base + b) + bias, tag);
 		}
 	}
 }
 
 static int hlc_new_scope( int parent ) {
-	if( hlc_scope_count == hlc_scope_capacity ) {
-		hlc_scope_capacity = hlc_scope_capacity ? hlc_scope_capacity * 2 : 4096;
-		hlc_scopes = (hlc_scope*)realloc(hlc_scopes, sizeof(hlc_scope) * hlc_scope_capacity);
+	if( hlc_scope_count == hlc_scope_chunk_count * HLC_SCOPE_CHUNK ) {
+		hlc_scope_chunks = (hlc_scope**)realloc(hlc_scope_chunks, sizeof(hlc_scope*) * (hlc_scope_chunk_count + 1));
+		hlc_scope_chunks[hlc_scope_chunk_count++] = (hlc_scope*)malloc(sizeof(hlc_scope) * HLC_SCOPE_CHUNK);
 	}
-	hlc_scope *s = hlc_scopes + hlc_scope_count;
+	hlc_scope *s = HLC_SCOPE(hlc_scope_count);
 	memset(s, 0, sizeof(*s));
 	s->parent = parent;
 	s->next = hlc_scope_count + 1;
-	s->first_range = hlc_scope_range_count;
+	s->first_range = hlc_scope_ranges.count;
 	s->slot = -2;
 	return hlc_scope_count++;
 }
 
-static hlc_line_unit *hlc_lines_at( uint64 offset ) {
-	for(int i=0;i<hlc_line_unit_count;i++) if( hlc_line_units[i].offset == offset ) return hlc_line_units + i;
-	return NULL;
+/* Reads a unit's header at `p`; false for a unit this reader does not read (type and split units, unknown versions). */
+static bool hlc_read_unit_header( const unsigned char *p, hlc_unit *u ) {
+	const hlc_debug_sections *d = &hlc_debug;
+	const unsigned char *end = d->info + d->info_size;
+	memset(u, 0, sizeof(*u));
+	u->start = p;
+	u->offset_size = 4;
+	uint64 length = hlc_fixed(&p, 4);
+	if( length == 0xffffffff ) { length = hlc_fixed(&p, 8); u->offset_size = 8; }
+	u->end = p + length;
+	if( u->end > end || length < 2 ) { u->end = end; return false; }
+	u->version = (int)hlc_fixed(&p, 2);
+	uint64 abbrev_offset;
+	int unit_type = 1;
+	if( u->version >= 5 ) {
+		unit_type = *p++;
+		u->address_size = *p++;
+		abbrev_offset = hlc_fixed(&p, u->offset_size);
+		if( unit_type == 2 || unit_type == 6 ) p += 8 + u->offset_size; // type units: signature and type offset
+		else if( unit_type == 4 || unit_type == 5 ) p += 8; // skeleton and split units: the DWO id
+	} else {
+		abbrev_offset = hlc_fixed(&p, u->offset_size);
+		u->address_size = *p++;
+	}
+	if( (unit_type != 1 && unit_type != 3) || abbrev_offset >= d->abbrev_size || u->version < 2 || u->version > 5 ) return false;
+	u->first = p;
+	u->abbrevs = hlc_read_abbrevs(d, abbrev_offset, &u->abbrev_count);
+	return true;
 }
 
-/* Reads the scopes of one unit's DIE tree, keeping the subprograms in the generated code and the inlined bodies within them. */
-static void hlc_read_unit_scopes( hlc_unit *u, const unsigned char *p, const hlc_debug_sections *d, uintptr_t bias ) {
-	enum { MAX_DEPTH = 256 };
-	int scope_at[MAX_DEPTH]; // the scope a DIE at each depth is in; -2 inside a subprogram outside the generated code
-	int opened[MAX_DEPTH]; // the scope a DIE with children opened at each depth, or -1
-	int depth = 0;
-	scope_at[0] = -1;
-	opened[0] = -1;
-	while( p < u->end ) {
-		uint64 code = hlc_uleb(&p, u->end);
-		if( code == 0 ) {
-			if( depth == 0 ) return;
-			depth--;
-			if( opened[depth] >= 0 ) hlc_scopes[opened[depth]].next = hlc_scope_count;
-			continue;
-		}
-		hlc_abbrev *a = hlc_find_abbrev(u, code);
-		hlc_die die;
-		if( !a || !hlc_read_die(&p, u->end, u, d, a, &die) ) return;
-		int current = scope_at[depth], made = -1, inner = current;
-		if( a->tag == 0x11 ) { // DW_TAG_compile_unit
-			u->low_pc = die.has_low ? (die.low.kind == HLC_VALUE_ADDRX ? hlc_address(u, d, die.low.number) : die.low.number) : 0;
-			if( die.has_stmt_list ) u->lines = hlc_lines_at(die.stmt_list);
-		} else if( a->tag == 0x2e && current == -1 && (die.has_low || die.has_ranges) ) { // DW_TAG_subprogram
-			made = hlc_new_scope(-1);
-			hlc_die_ranges(u, d, &die, made, bias);
-			bool generated = false;
-			for(int i=0;i<hlc_scopes[made].range_count;i++) {
-				hlc_range *r = hlc_scope_ranges + hlc_scopes[made].first_range + i;
-				if( r->low >= (uintptr_t)__start_hlc_text && r->low < (uintptr_t)__stop_hlc_text ) generated = true;
-			}
-			if( generated ) {
-				hlc_scopes[made].name = hlc_die_name(u, d, &die);
-				inner = made;
-			} else {
-				hlc_scope_range_count = hlc_scopes[made].first_range;
-				hlc_scope_count--;
-				made = -1;
-				inner = -2;
-			}
-		} else if( a->tag == 0x1d && current >= 0 ) { // DW_TAG_inlined_subroutine
-			made = hlc_new_scope(current);
-			hlc_die_ranges(u, d, &die, made, bias);
-			hlc_scope *s = hlc_scopes + made;
-			s->name = hlc_die_name(u, d, &die);
-			if( die.has_call && u->lines && die.call_file.number < (uint64)u->lines->count && u->lines->files[die.call_file.number] >= 0 )
-				s->call_file = hlc_files[u->lines->files[die.call_file.number]];
-			s->call_line = (int)die.call_line.number;
-			inner = made;
-		}
-		if( a->children ) {
-			if( depth + 1 >= MAX_DEPTH ) return;
-			opened[depth] = made;
-			depth++;
-			scope_at[depth] = inner;
-			opened[depth] = -1;
-		}
-	}
+static void hlc_free_unit( hlc_unit *u ) {
+	for(int i=0;i<u->abbrev_count;i++) free(u->abbrevs[i].attrs);
+	free(u->abbrevs);
+}
+
+/* Reads a unit's own DIE, the first; returns it in `die`. */
+static bool hlc_read_unit_die( hlc_unit *u, hlc_die *die, const unsigned char **next ) {
+	const unsigned char *p = u->first;
+	hlc_abbrev *a = hlc_find_abbrev(u, hlc_uleb(&p, u->end));
+	if( !a || a->tag != 0x11 || !hlc_read_die(&p, u->end, u, &hlc_debug, a, die) ) return false; // DW_TAG_compile_unit
+	u->low_pc = die->has_low ? (die->low.kind == HLC_VALUE_ADDRX ? hlc_address(u, &hlc_debug, die->low.number) : die->low.number) : 0;
+	u->stmt_list = die->stmt_list;
+	*next = p;
+	return a->children;
 }
 
 static int hlc_compare_ranges( const void *a, const void *b ) {
@@ -707,51 +779,127 @@ static int hlc_compare_ranges( const void *a, const void *b ) {
 	return x < y ? -1 : x > y ? 1 : 0;
 }
 
-static void hlc_read_scopes( const hlc_debug_sections *d, uintptr_t bias ) {
-	const unsigned char *p = d->info, *end = d->info + d->info_size;
+/* The index of the units by the addresses of the generated code they hold: one DIE of each. */
+static void hlc_index_units( void ) {
+	hlc_units_state = -1;
+	if( !hlc_open_image() || !hlc_debug.info || !hlc_debug.abbrev ) return;
+	const unsigned char *p = hlc_debug.info, *end = p + hlc_debug.info_size;
+	int capacity = 0;
 	while( p + 4 <= end ) {
 		hlc_unit u;
-		memset(&u, 0, sizeof(u));
-		u.start = p;
-		u.offset_size = 4;
-		uint64 length = hlc_fixed(&p, 4);
-		if( length == 0xffffffff ) { length = hlc_fixed(&p, 8); u.offset_size = 8; }
-		u.end = p + length;
-		if( u.end > end || length < 2 ) break;
-		u.version = (int)hlc_fixed(&p, 2);
-		uint64 abbrev_offset;
-		int unit_type = 1;
-		if( u.version >= 5 ) {
-			unit_type = *p++;
-			u.address_size = *p++;
-			abbrev_offset = hlc_fixed(&p, u.offset_size);
-			if( unit_type == 2 || unit_type == 6 ) p += 8 + u.offset_size; // type units: signature and type offset
-			else if( unit_type == 4 || unit_type == 5 ) p += 8; // skeleton and split units: the DWO id
-		} else {
-			abbrev_offset = hlc_fixed(&p, u.offset_size);
-			u.address_size = *p++;
+		bool readable = hlc_read_unit_header(p, &u);
+		hlc_die die;
+		const unsigned char *next;
+		if( readable && hlc_read_unit_die(&u, &die, &next) ) {
+			int first = hlc_unit_ranges.count;
+			hlc_die_ranges(&u, &hlc_debug, &die, &hlc_unit_ranges, hlc_unit_count);
+			int kept = first;
+			for(int i=first;i<hlc_unit_ranges.count;i++) {
+				hlc_range *r = hlc_unit_ranges.items + i;
+				if( r->high > (uintptr_t)__start_hlc_text && r->low < (uintptr_t)__stop_hlc_text ) hlc_unit_ranges.items[kept++] = *r;
+			}
+			hlc_unit_ranges.count = kept;
+			if( kept > first ) {
+				if( hlc_unit_count == capacity ) {
+					capacity = capacity ? capacity * 2 : 256;
+					hlc_units = (hlc_unit_entry*)realloc(hlc_units, sizeof(hlc_unit_entry) * capacity);
+				}
+				memset(hlc_units + hlc_unit_count, 0, sizeof(hlc_unit_entry));
+				hlc_units[hlc_unit_count++].header = u.start;
+			}
 		}
-		if( (unit_type == 1 || unit_type == 3) && abbrev_offset < d->abbrev_size && u.version >= 2 && u.version <= 5 ) {
-			u.abbrevs = hlc_read_abbrevs(d, abbrev_offset, &u.abbrev_count);
-			hlc_read_unit_scopes(&u, p, d, bias);
-			for(int i=0;i<u.abbrev_count;i++) free(u.abbrevs[i].attrs);
-			free(u.abbrevs);
-		}
+		if( readable ) hlc_free_unit(&u);
 		p = u.end;
 	}
-	int count = 0;
-	for(int i=0;i<hlc_scope_count;i++) if( hlc_scopes[i].parent < 0 ) count += hlc_scopes[i].range_count;
-	hlc_subprograms = (hlc_range*)malloc(sizeof(hlc_range) * (count ? count : 1));
-	for(int i=0;i<hlc_scope_count;i++)
-		if( hlc_scopes[i].parent < 0 )
-			for(int r=0;r<hlc_scopes[i].range_count;r++) hlc_subprograms[hlc_subprogram_count++] = hlc_scope_ranges[hlc_scopes[i].first_range + r];
-	qsort(hlc_subprograms, hlc_subprogram_count, sizeof(hlc_range), hlc_compare_ranges);
+	qsort(hlc_unit_ranges.items, hlc_unit_ranges.count, sizeof(hlc_range), hlc_compare_ranges);
+	hlc_units_state = 1;
+}
+
+/* Reads the scopes of a unit: its subprograms in the generated code and the bodies inlined within them. */
+static void hlc_read_unit_scopes( hlc_unit_entry *entry ) {
+	enum { MAX_DEPTH = 256 };
+	entry->read = true;
+	hlc_unit unit, *u = &unit;
+	const hlc_debug_sections *d = &hlc_debug;
+	hlc_die die;
+	const unsigned char *p;
+	if( !hlc_read_unit_header(entry->header, u) ) return;
+	if( !hlc_read_unit_die(u, &die, &p) ) { hlc_free_unit(u); return; }
+	int scope_at[MAX_DEPTH]; // the scope a DIE at each depth is in; -2 inside a subprogram outside the generated code
+	int opened[MAX_DEPTH]; // the scope a DIE with children opened at each depth, or -1
+	int depth = 1;
+	scope_at[1] = -1;
+	opened[0] = opened[1] = -1;
+	while( p < u->end && depth > 0 ) {
+		uint64 code = hlc_uleb(&p, u->end);
+		if( code == 0 ) {
+			depth--;
+			if( opened[depth] >= 0 ) HLC_SCOPE(opened[depth])->next = hlc_scope_count;
+			continue;
+		}
+		hlc_abbrev *a = hlc_find_abbrev(u, code);
+		if( !a || !hlc_read_die(&p, u->end, u, d, a, &die) ) break;
+		int current = scope_at[depth], made = -1, inner = current;
+		if( a->tag == 0x2e && current == -1 && (die.has_low || die.has_ranges) ) { // DW_TAG_subprogram
+			made = hlc_new_scope(-1);
+			hlc_die_ranges(u, d, &die, &hlc_scope_ranges, made);
+			hlc_scope *s = HLC_SCOPE(made);
+			s->range_count = hlc_scope_ranges.count - s->first_range;
+			bool generated = false;
+			for(int i=0;i<s->range_count;i++) {
+				hlc_range *r = hlc_scope_ranges.items + s->first_range + i;
+				if( r->low >= (uintptr_t)__start_hlc_text && r->low < (uintptr_t)__stop_hlc_text ) generated = true;
+			}
+			if( generated ) {
+				s->name = hlc_die_name(u, d, &die);
+				for(int i=0;i<s->range_count;i++)
+					hlc_push_range(&entry->subprograms, hlc_scope_ranges.items[s->first_range + i].low,
+						hlc_scope_ranges.items[s->first_range + i].high, made);
+				inner = made;
+			} else {
+				hlc_scope_ranges.count = s->first_range;
+				hlc_scope_count--;
+				made = -1;
+				inner = -2;
+			}
+		} else if( a->tag == 0x1d && current >= 0 ) { // DW_TAG_inlined_subroutine
+			made = hlc_new_scope(current);
+			hlc_die_ranges(u, d, &die, &hlc_scope_ranges, made);
+			hlc_scope *s = HLC_SCOPE(made);
+			s->range_count = hlc_scope_ranges.count - s->first_range;
+			s->name = hlc_die_name(u, d, &die);
+			s->stmt_list = u->stmt_list;
+			s->call_file = die.has_call ? (int)die.call_file.number : -1;
+			s->call_line = (int)die.call_line.number;
+			inner = made;
+		}
+		if( a->children ) {
+			if( depth + 1 >= MAX_DEPTH ) break;
+			opened[depth] = made;
+			depth++;
+			scope_at[depth] = inner;
+			opened[depth] = -1;
+		}
+	}
+	// A unit cut short leaves its open scopes ending at the last one read.
+	for(int i=depth;i>=0;i--) if( opened[i] >= 0 ) HLC_SCOPE(opened[i])->next = hlc_scope_count;
+	qsort(entry->subprograms.items, entry->subprograms.count, sizeof(hlc_range), hlc_compare_ranges);
+	hlc_free_unit(u);
+}
+
+static const hlc_range *hlc_range_at( const hlc_ranges *v, uintptr_t target ) {
+	int low = 0, high = v->count - 1, found = -1;
+	while( low <= high ) {
+		int middle = (low + high) >> 1;
+		if( v->items[middle].low <= target ) { found = middle; low = middle + 1; } else high = middle - 1;
+	}
+	return found < 0 || target >= v->items[found].high ? NULL : v->items + found;
 }
 
 static bool hlc_scope_holds( int scope, uintptr_t target ) {
-	hlc_scope *s = hlc_scopes + scope;
+	hlc_scope *s = HLC_SCOPE(scope);
 	for(int i=0;i<s->range_count;i++) {
-		hlc_range *r = hlc_scope_ranges + s->first_range + i;
+		hlc_range *r = hlc_scope_ranges.items + s->first_range + i;
 		if( target >= r->low && target < r->high ) return true;
 	}
 	return false;
@@ -759,23 +907,34 @@ static bool hlc_scope_holds( int scope, uintptr_t target ) {
 
 /* The innermost scope at the call before return address `address`, or -1. */
 static int hlc_scope_at( void *address ) {
+	if( hlc_units_state == 0 ) hlc_index_units();
+	if( hlc_units_state < 0 ) return -1;
 	uintptr_t target = (uintptr_t)address - 1;
-	int low = 0, high = hlc_subprogram_count - 1, found = -1;
-	while( low <= high ) {
-		int middle = (low + high) >> 1;
-		if( hlc_subprograms[middle].low <= target ) { found = middle; low = middle + 1; } else high = middle - 1;
-	}
-	if( found < 0 || target >= hlc_subprograms[found].high ) return -1;
-	int scope = hlc_subprograms[found].scope;
+	const hlc_range *unit = hlc_range_at(&hlc_unit_ranges, target);
+	if( !unit ) return -1;
+	hlc_unit_entry *entry = hlc_units + unit->tag;
+	if( !entry->read ) hlc_read_unit_scopes(entry);
+	const hlc_range *subprogram = hlc_range_at(&entry->subprograms, target);
+	if( !subprogram ) return -1;
+	int scope = subprogram->tag;
 	for(;;) {
 		int child = scope + 1, inner = -1;
-		while( child < hlc_scopes[scope].next ) {
+		while( child < HLC_SCOPE(scope)->next ) {
 			if( hlc_scope_holds(child, target) ) { inner = child; break; }
-			child = hlc_scopes[child].next;
+			child = HLC_SCOPE(child)->next;
 		}
 		if( inner < 0 ) return scope;
 		scope = inner;
 	}
+}
+
+/* The scope a captured frame points at, or -1 for a return address. */
+static int hlc_scope_of_frame( void *address ) {
+	for(int i=0;i<hlc_scope_chunk_count;i++) {
+		hlc_scope *chunk = hlc_scope_chunks[i];
+		if( (hlc_scope*)address >= chunk && (hlc_scope*)address < chunk + HLC_SCOPE_CHUNK ) return i * HLC_SCOPE_CHUNK + (int)((hlc_scope*)address - chunk);
+	}
+	return -1;
 }
 
 /* The slot of the generated function that starts at `address`, or -1. */
@@ -791,88 +950,24 @@ static int hlc_function_starting( uintptr_t address ) {
 
 /* The slot of the generated function a scope is a body of, or -1 for any other (an inlined runtime helper). */
 static int hlc_scope_slot( int scope ) {
-	hlc_scope *s = hlc_scopes + scope;
+	hlc_scope *s = HLC_SCOPE(scope);
 	if( s->slot == -2 ) {
 		void *f = s->name ? dlsym(RTLD_DEFAULT, s->name) : NULL;
 		s->slot = f ? hlc_function_starting((uintptr_t)f) : -1;
 	}
 	return s->slot;
 }
-#endif
 
-static int hlc_find_bias( struct dl_phdr_info *info, size_t size, void *data ) {
-	(void)size;
-	*(uintptr_t*)data = (uintptr_t)info->dlpi_addr;
-	return 1; // the first object is the executable
+/* The file of the call of an inlined scope. */
+static const char *hlc_call_file( hlc_scope *s ) {
+	if( hlc_lines_state == 0 ) hlc_read_lines();
+	if( s->call_file < 0 ) return NULL;
+	for(int i=0;i<hlc_line_unit_count;i++)
+		if( hlc_line_units[i].offset == s->stmt_list )
+			return s->call_file < hlc_line_units[i].count ? hlc_files[hlc_line_units[i].files[s->call_file]] : NULL;
+	return NULL;
 }
-
-/* Reads the executable's line table and, unless frames are exact, its inline records (`hlc_read_scopes`). */
-static void hlc_read_debug( void ) {
-	hlc_lines_state = -1;
-	int fd = open("/proc/self/exe", O_RDONLY);
-	if( fd < 0 ) return;
-	struct stat st;
-	if( fstat(fd, &st) != 0 || st.st_size < (off_t)sizeof(Elf64_Ehdr) ) { close(fd); return; }
-	const unsigned char *image = (const unsigned char*)mmap(NULL, st.st_size, PROT_READ, MAP_PRIVATE, fd, 0);
-	close(fd);
-	if( image == MAP_FAILED ) return;
-	const Elf64_Ehdr *header = (const Elf64_Ehdr*)image;
-	if( memcmp(header->e_ident, ELFMAG, SELFMAG) != 0 || header->e_ident[EI_CLASS] != ELFCLASS64 ) return;
-	const Elf64_Shdr *sections = (const Elf64_Shdr*)(image + header->e_shoff);
-	const char *names = (const char*)image + sections[header->e_shstrndx].sh_offset;
-	const unsigned char *lines = NULL;
-	size_t lines_size = 0;
-	hlc_strings strings = { NULL, NULL, 0, 0 };
-#ifndef HLC_EXACT_FRAMES
-	hlc_debug_sections d;
-	memset(&d, 0, sizeof(d));
 #endif
-	for(int i=0;i<header->e_shnum;i++) {
-		const char *name = names + sections[i].sh_name;
-		// Compressed debug sections are not read: frames then have no line.
-		if( sections[i].sh_flags & SHF_COMPRESSED ) continue;
-		const unsigned char *data = image + sections[i].sh_offset;
-		size_t size = sections[i].sh_size;
-		if( strcmp(name, ".debug_line") == 0 ) { lines = data; lines_size = size; }
-		else if( strcmp(name, ".debug_line_str") == 0 ) { strings.line_str = data; strings.line_str_size = size; }
-		else if( strcmp(name, ".debug_str") == 0 ) { strings.str = data; strings.str_size = size; }
-#ifndef HLC_EXACT_FRAMES
-		else if( strcmp(name, ".debug_info") == 0 ) { d.info = data; d.info_size = size; }
-		else if( strcmp(name, ".debug_abbrev") == 0 ) { d.abbrev = data; d.abbrev_size = size; }
-		else if( strcmp(name, ".debug_rnglists") == 0 ) { d.rnglists = data; d.rnglists_size = size; }
-		else if( strcmp(name, ".debug_ranges") == 0 ) { d.ranges = data; d.ranges_size = size; }
-		else if( strcmp(name, ".debug_addr") == 0 ) { d.addr = data; d.addr_size = size; }
-		else if( strcmp(name, ".debug_str_offsets") == 0 ) { d.str_offsets = data; d.str_offsets_size = size; }
-#endif
-	}
-	if( !lines ) return;
-	uintptr_t bias = 0;
-	dl_iterate_phdr(hlc_find_bias, &bias);
-	hlc_read_line_programs(lines, lines_size, &strings, bias);
-	qsort(hlc_rows, hlc_row_count, sizeof(hlc_line_row), hlc_compare_rows);
-#ifndef HLC_EXACT_FRAMES
-	d.str = strings.str; d.str_size = strings.str_size;
-	d.line_str = strings.line_str; d.line_str_size = strings.line_str_size;
-	if( d.info && d.abbrev ) hlc_read_scopes(&d, bias);
-#endif
-	hlc_lines_state = 1; // the mapping stays: file and function names point into it
-}
-
-/* The Haxe file and line of the call before return address `address`. */
-static bool hlc_line_of( void *address, const char **file, int *line ) {
-	if( hlc_lines_state == 0 ) hlc_read_debug();
-	if( hlc_lines_state < 0 ) return false;
-	uintptr_t target = (uintptr_t)address - 1;
-	int low = 0, high = hlc_row_count - 1, found = -1;
-	while( low <= high ) {
-		int middle = (low + high) >> 1;
-		if( hlc_rows[middle].address <= target ) { found = middle; low = middle + 1; } else high = middle - 1;
-	}
-	if( found < 0 || hlc_rows[found].file < 0 ) return false;
-	*file = hlc_files[hlc_rows[found].file];
-	*line = hlc_rows[found].line;
-	return true;
-}
 
 static uchar *hlc_frame_name( int slot, const char *file, int line, uchar *out, int *outSize ) {
 	hl_code *code = hlc_module->code;
@@ -896,10 +991,11 @@ static uchar *hlc_frame_name( int slot, const char *file, int line, uchar *out, 
 static uchar *hlc_resolve_symbol( void *address, uchar *out, int *outSize ) {
 	if( !out ) return NULL;
 #ifndef HLC_EXACT_FRAMES
-	if( hlc_scope_count && (hlc_scope*)address >= hlc_scopes && (hlc_scope*)address < hlc_scopes + hlc_scope_count ) {
-		hlc_scope *s = (hlc_scope*)address;
+	int inlined = hlc_scope_of_frame(address);
+	if( inlined >= 0 ) {
+		hlc_scope *s = HLC_SCOPE(inlined);
 		int slot = hlc_scope_slot(s->parent);
-		return slot < 0 ? NULL : hlc_frame_name(slot, s->call_file, s->call_line, out, outSize);
+		return slot < 0 ? NULL : hlc_frame_name(slot, hlc_call_file(s), s->call_line, out, outSize);
 	}
 #endif
 	if( !hlc_in_text(address) ) return NULL;
@@ -926,20 +1022,17 @@ static void hlc_push_frame( void **stack, int size, int *count, void *frame ) {
 static int hlc_capture_stack( void **stack, int size ) {
 	void *frames[HL_EXC_MAX_STACK + 64];
 	int captured = backtrace(frames, HL_EXC_MAX_STACK + 64), count = 0;
-#ifndef HLC_EXACT_FRAMES
-	if( hlc_lines_state == 0 ) hlc_read_debug();
-#endif
 	for(int i=0;i<captured;i++) {
 		if( !hlc_in_text(frames[i]) ) continue;
 #ifndef HLC_EXACT_FRAMES
 		int chain[64], depth = 0, pushed = 0;
-		for(int scope = hlc_scope_count ? hlc_scope_at(frames[i]) : -1;scope >= 0 && depth < 64;scope = hlc_scopes[scope].parent)
+		for(int scope = hlc_scope_at(frames[i]);scope >= 0 && depth < 64;scope = HLC_SCOPE(scope)->parent)
 			chain[depth++] = scope;
 		// A level that is not a generated function (an inlined runtime helper) has no frame of its own: the generated level
 		// around it is named at the line where it calls the helper.
 		for(int level=0;level<depth;level++)
 			if( hlc_scope_slot(chain[level]) >= 0 ) {
-				hlc_push_frame(stack, size, &count, level == 0 ? frames[i] : (void*)(hlc_scopes + chain[level - 1]));
+				hlc_push_frame(stack, size, &count, level == 0 ? frames[i] : (void*)HLC_SCOPE(chain[level - 1]));
 				pushed++;
 			}
 		if( pushed ) continue;

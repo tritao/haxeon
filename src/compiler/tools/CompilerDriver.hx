@@ -286,12 +286,12 @@ class CompilerDriver {
 				throw new InternalError("--c-compiler requires --c-sdk");
 			var compiled = HlcBuild.compile(files, directory, request.output, cCompiler, sdk,
 				request.buildMode == "development");
-			report('compiled $compiled of ${files.length} C files');
+			report('compiled $compiled C files');
 		}
 		var status = owner.publicationStatus();
 		if (status.hasPendingRevision && status.pendingRevision == result.revision)
 			owner.acknowledgePublication(result.revision);
-		report('wrote ${files.length} C files ($changed changed) -> $directory');
+		report('wrote ${files.length} C sources ($changed changed) -> $directory');
 		return result;
 	}
 

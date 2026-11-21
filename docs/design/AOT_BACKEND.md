@@ -1,6 +1,6 @@
 # AOT backend: C from Haxeon's IR on the HashLink runtime
 
-Status: proposed; milestone 1 implemented (`--target=hlc`). Depends on the columnar IR (`IR_CORE_COLUMNS.md`): the backend
+Status: proposed; milestones 1 to 5 implemented (`--target=hlc`). Depends on the columnar IR (`IR_CORE_COLUMNS.md`): the backend
 reads the inliner's bodies as `HlLower` does.
 
 ## Problem
@@ -160,11 +160,15 @@ from. Whether it inlines generated functions into each other follows the build m
   the JIT's are (the IR's inliner has already inlined what it decided to). The parity runner compiles in this mode.
 - **release** lets the C compiler inline. A return address can then lie in code inlined from other generated functions,
   and the stack capture restores their frames from the DWARF inline records (`.debug_info`: each
-  `DW_TAG_inlined_subroutine` with its address ranges, abstract origin and call file and line), read on the first capture:
-  a physical frame becomes the chain of generated functions inlined at its call, innermost first, each named at the line
+  `DW_TAG_inlined_subroutine` with its address ranges, abstract origin and call file and line): a physical frame becomes the chain of generated functions inlined at its call, innermost first, each named at the line
   where its caller calls it. Inlined runtime helpers (`hl.h`, `hlc_new`) are not frames: the generated function around
   them is named at the line of the helper's call. Clones the C compiler makes (`.part`, `.constprop`) are named by their
   abstract origin.
+
+  A capture happens at every throw, caught or not, so it reads little: the first indexes the compilation units by address
+  (one DIE each), and a unit's scopes are read the first time a frame lies in it. The line table is read only when a frame
+  is named. Reading all of `.debug_info` at the first throw cost the AOT-built compiler half a second at start-up, as it
+  throws early and catches.
 
 Each mode keeps its objects (`OUTPUT.c/obj-development`, `obj-release`), made again when the compiler or its flags change;
 the C text is the same. Where the C compiler has the flag (gcc), it compiles with `-fno-crossjumping`: it would otherwise
@@ -220,7 +224,7 @@ no IR or C text, so `CompileOptions.key` leaves them out.
 
 ### State
 
-Milestones 1 to 4 are done. `tests/aot/test-aot-programs.sh --all` passes all 643 programs of `tests/programs` with the
+Milestones 1 to 5 are done. `tests/aot/test-aot-programs.sh --all` passes all 645 programs of `tests/programs` with the
 JIT's exact exit code, stdout and stderr, stack traces included; `tests/aot/programs.txt` lists them and is the runner's
 default, and the `ci` suite `aot-programs` runs it. No IR construct of the programs is unsupported.
 
@@ -262,4 +266,22 @@ measurable: the IR's inliner already took the small calls. What closed merkletre
 before, under load) was the `Null<Int>` unboxing inline, which the JIT had and the C called `hl_dyn_casti` for; its
 remaining time is the collector and `hl_make_dyn`, which the JIT boxes through its shared small-Int table inline.
 
-Next: milestone 5, the compiler built with `hlc`; stack traces on macOS and Windows.
+Milestone 5: the compiler (`compiler.tools.HaxeonCompiler`, release) builds with `hlc` in about two minutes (517 C
+files, about 100 MB with debug information, 18 MB of code), and its self-compile output is byte-identical to the JIT-built
+compiler's (`ba8b4e5ea782` on this base) on the first try: the parity programs had covered what the compiler uses. Bugs
+the compiler's own traces found, each with a program: frames of modules in packages named the bare file
+(`package-stack-trace`), gcc merging the throws of a function it had inlined into itself (same program), and the debug
+information read in full at the first throw (start-up). Measured on the frozen self-compile input (median of 3
+interleaved runs, `HL_GC_MARK_SERIAL=1`, cores 0 to 5, load about 3 to 5), JIT-built against AOT-built: wall 11.84 s
+against 9.26 s; peak RSS 1285 MB against 1277 MB; main-thread instructions 50.9 G against 39.5 G. A hello-world compile,
+which is mostly start-up: 1.15 s against 0.13 s, peak RSS 97 MB against 67 MB (the JIT compiles every function first).
+Built with exact frames (no C inlining) the AOT compiler runs the same (9.0 to 9.1 s, 39.2 G instructions, 25 MB less
+RSS), and with `--inline-allocation` too (9.4 to 9.8 s, 39.3 G): neither C inlining nor inline allocation pays for the
+compiler, so both stay as they are (inlining in release, as traces lose nothing; inline allocation opt-in). The AOT build
+allocates about 4 MB more than the JIT's over the compile (1.936 GB against 1.932 GB), not yet looked into. This base
+predates the scalar-valued maps of the fork and of `origin/main`, so the box counts here are the old ones (about 4.8
+million scalar box requests in a self-compile, nearly all served by the shared Bool and small-Int boxes): the fork pin
+has the new maps API, which this base does not use.
+
+Next: stack traces on macOS and Windows; a `libhl` without the JIT; the type tables as static data; why the AOT build
+allocates more; the self-compile against `origin/main`'s map changes.
