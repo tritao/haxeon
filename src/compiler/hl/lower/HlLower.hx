@@ -1889,7 +1889,7 @@ class HlLower {
 		}
 
 		var scopedAssignments:Array<HlDebugAssignment> = [],
-			lastScopeLocations:Map<String, Int> = [];
+			lastScopeLocations = new haxe.ds.ObjectMap<compiler.ir.IrFunction.IrDebugBinding, Int>();
 		for (index in 0...debugAssignments.length) {
 			var assignment = debugAssignments[index],
 				binding = assignmentBindings[index];
@@ -2056,9 +2056,9 @@ class HlLower {
 	**/
 	static function scopeEndPosition(binding:compiler.ir.IrFunction.IrDebugBinding, locations:Array<HlDebugLocation>,
 			position:Int, instructionCount:Int,
-			lastByScope:Map<String, Int>):Int {
-		var key = binding.identity + ":" + binding.scopeStart + ":" + binding.scopeEnd,
-			cached = lastByScope.get(key),
+			lastByScope:haxe.ds.ObjectMap<compiler.ir.IrFunction.IrDebugBinding, Int>):Int {
+		// Keyed by the binding, whose fields alone decide the search: a function's assignments of a variable share it.
+		var cached = lastByScope.get(binding),
 			lastInScope:Int;
 		if (cached == null) {
 			lastInScope = -1;
@@ -2074,7 +2074,7 @@ class HlLower {
 				}
 				index--;
 			}
-			lastByScope.set(key, lastInScope);
+			lastByScope.set(binding, lastInScope);
 		} else
 			lastInScope = cached;
 		var end = (lastInScope >= position ? lastInScope : position) + 1;
