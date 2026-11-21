@@ -67,10 +67,11 @@ class LambdaCollector {
 		switch expression {
 			case PrivateAccessExpression(inner, _):
 				collectExpression(inner, functionName, module, generatedByModule);
-			case Lambda(_, body, _, _, true) if (compiler.types.analysis.LocalInlineFunctions.expands(expression)):
-				// No function of its own: its body is typed where it is called.
-				collect(body, functionName, module, generatedByModule);
-			case Lambda(_, body, identity, _):
+			case Lambda(_, body, identity, _, isInline):
+				// A local inline function's body is typed where it is called, except where it is called through its closure
+				// (`BodyResolution.callsThroughClosure`): its lambdas are named after either function.
+				if (isInline == true && compiler.types.analysis.LocalInlineFunctions.expands(expression))
+					collect(body, functionName, module, generatedByModule);
 				var lambdaName = LambdaName.of(functionName, identity);
 				var names:Map<String, Bool>;
 				if (generatedByModule.exists(module))

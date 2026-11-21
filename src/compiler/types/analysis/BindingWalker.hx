@@ -42,6 +42,12 @@ class BindingWalker implements AstChildVisitor {
 	/** The local inline functions declared so far and the calls of them being walked; null until one is declared. */
 	var inlining:Null<InlineCalls> = null;
 
+	/**
+	 * The declarations of local inline functions walked as ordinary local functions (`closureInline`), which their calls reach
+	 * through a closure; null for none.
+	 */
+	var closureInlines:Null<Map<String, Bool>> = null;
+
 	function new() {}
 
 	/** The identity of the declaration of `name` at `span`. */
@@ -84,6 +90,8 @@ class BindingWalker implements AstChildVisitor {
 			if (hides && calls != null)
 				index = calls.visibleAtOrBelow(index);
 			if (index >= 0 && isRoot(bindingNames[index], name, rootLength)) {
+				if (hides && calls != null)
+					checkShadowed(calls, index, name, rootLength);
 				resolvedIndex = index;
 				return bindingDeclarations[index];
 			}
@@ -91,6 +99,30 @@ class BindingWalker implements AstChildVisitor {
 		resolvedIndex = -1;
 		return null;
 	}
+
+	/**
+	 * A lambda captures a local by its name, so one that reads a name of an inline function's body, at a call in it, and the
+	 * local of that name visible at the call cannot capture both. The body found the binding at `found`; when another of the
+	 * name is visible at the call and the call is in a lambda its function's declaration is not, each function being walked
+	 * is reported to `closureInline`.
+	 */
+	function checkShadowed(calls:InlineCalls, found:Int, name:String, rootLength:Int):Void {
+		var index = bindingNames.length;
+		while (index > found + 1) {
+			index--;
+			if (isRoot(bindingNames[index], name, rootLength)) {
+				for (declaration in calls.expanding) {
+					var called = calls.functions.get(declaration);
+					if (called != null && lambdaDepth > called.lambdaDepth)
+						closureInline(declaration);
+				}
+				return;
+			}
+		}
+	}
+
+	/** Reports a local inline function whose calls cannot all be walked in place (`checkShadowed`). */
+	function closureInline(declaration:String):Void {}
 
 	/**
 	 * Walks the body of the inline function `declaration` names, if it is one, where it is called with `values`: its parameters
@@ -212,13 +244,18 @@ class BindingWalker implements AstChildVisitor {
 				statement(inner);
 			case VarDeclaration(name, type, initializer, span):
 				switch initializer {
-					case Lambda(arguments, body, _, _, true) if (LocalInlineFunctions.expands(initializer)):
+					case Lambda(arguments, body, _, _, true) if (LocalInlineFunctions.expands(initializer)
+						&& (closureInlines == null || !closureInlines.exists(key(name, span)))):
 						// Its body is walked at each call instead.
 						var declaration = declare(name, span, Local, type, initializer);
 						if (inlining == null)
 							inlining = new InlineCalls();
-						inlining.functions.set(declaration,
-							{arguments: arguments, body: body, height: bindingNames.length});
+						inlining.functions.set(declaration, {
+							arguments: arguments,
+							body: body,
+							height: bindingNames.length,
+							lambdaDepth: lambdaDepth
+						});
 					case Lambda(_, _, _, _):
 						// A local function can call itself, so its name is visible in its own body.
 						declare(name, span, Local, type, initializer);
@@ -455,10 +492,15 @@ class BindingWalker implements AstChildVisitor {
 /** What `BindingWalker` keeps about local inline functions (`LocalInlineFunctions`), in a body that declares one. */
 private class InlineCalls {
 	/**
-	 * The functions declared so far, by declaration: their parameters and body, which each call walks where it is, and how many
-	 * bindings were visible at the declaration, which are all the body sees.
+	 * The functions declared so far, by declaration: their parameters and body, which each call walks where it is, how many
+	 * bindings were visible at the declaration, which are all the body sees, and how many lambdas enclose it.
 	 */
-	public final functions:Map<String, {arguments:Array<AstArgument>, body:Array<AstStatement>, height:Int}> = [];
+	public final functions:Map<String, {
+		arguments:Array<AstArgument>,
+		body:Array<AstStatement>,
+		height:Int,
+		lambdaDepth:Int
+	}> = [];
 
 	/** The declarations of the functions whose bodies are being walked at a call, innermost last. */
 	public final expanding:Array<String> = [];

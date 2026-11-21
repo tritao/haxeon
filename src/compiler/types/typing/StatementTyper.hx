@@ -82,6 +82,12 @@ class StatementTyper {
 		};
 	}
 
+	/** Whether the local inline function `name` declared at `span` is called through a closure (`BodyResolution`). */
+	function callsThroughClosure(name:String, span:SourceSpan):Bool {
+		var resolution = session.currentContext.resolution;
+		return resolution != null && resolution.callsThroughClosure(BindingWalker.key(name, span));
+	}
+
 	/**
 	 * A local inline function (`LocalInlineFunctions`): a local with no value whose calls the typer replaces by its body
 	 * (`CallResolver.typeInlineCall`); as in Haxe, it cannot be assigned (`typeAssignment`).
@@ -136,7 +142,8 @@ class StatementTyper {
 					case VarDeclaration(_, _, wrapped, _): lambda = wrapped;
 					default:
 				}
-			case Lambda(arguments, body, _, lambdaSpan, true) if (LocalInlineFunctions.expands(initializer)):
+			case Lambda(arguments, body, _, lambdaSpan, true) if (LocalInlineFunctions.expands(initializer)
+				&& !callsThroughClosure(name, span)):
 				return declareInlineFunction(name, declared, arguments, body, lambdaSpan, span, scope, temporary);
 			default:
 		}

@@ -20,7 +20,8 @@ typedef InlineBody = {
  *
  * The body becomes an expression the way Haxe's inliner makes it one: a final `return` gives the result, and an `if` whose
  * branch returns takes the statements after it as its other branch. A function this cannot rewrite (a `return` in a loop or a
- * `try`), or with an optional parameter, stays a local function that is called through its closure, which behaves the same.
+ * `try`), or with an optional parameter, stays a local function that is called through its closure, which behaves the same;
+ * so does one called in a lambda that also reads another local named as one its body reads (`BodyResolution.callsThroughClosure`).
  */
 class LocalInlineFunctions {
 	/** Whether the lambda a local function is initialized with is inline and is replaced by its body at each call. */

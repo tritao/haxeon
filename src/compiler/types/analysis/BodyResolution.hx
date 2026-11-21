@@ -105,10 +105,28 @@ class BodyResolution {
 	/** The resolution of a function with `arguments` and `body`. */
 	public static function of(arguments:Array<AstArgument>, body:Array<AstStatement>,
 			?outer:Map<String, String>):BodyResolution {
-		var result = new BodyResolution();
-		new BodyResolver(result).record(arguments, body, outer);
-		return result;
+		var closureInlines:Null<Map<String, Bool>> = null;
+		while (true) {
+			var result = new BodyResolution(), resolver = new BodyResolver(result, closureInlines);
+			resolver.record(arguments, body, outer);
+			if (resolver.newClosureInlines == null) {
+				result.closureInlines = closureInlines;
+				return result;
+			}
+			// Walked again with those functions as closures: that can only move calls of the others into more lambdas.
+			if (closureInlines == null)
+				closureInlines = [];
+			for (declaration in resolver.newClosureInlines.keys())
+				closureInlines.set(declaration, true);
+		}
 	}
+
+	/** The local inline functions the body calls through a closure (`BindingWalker.checkShadowed`), by declaration; null for none. */
+	var closureInlines:Null<Map<String, Bool>> = null;
+
+	/** Whether the local inline function declared as `declaration` is called through a closure rather than inlined. */
+	public function callsThroughClosure(declaration:String):Bool
+		return closureInlines != null && closureInlines.exists(declaration);
 
 	/**
 	 * How many declarations are not the body's own but the `outer` ones it was resolved within (`of`): syntax the typer
@@ -352,9 +370,19 @@ private class BodyResolver extends BindingWalker {
 	/** The `try` depth (`BindingWalker.tryDepth`) of each declaration, by id. */
 	final declarationTryDepths:Array<Int> = [];
 
-	public function new(bindings:BodyResolution) {
+	/** The local inline functions this walk found that must be called through a closure, beyond the ones it was given. */
+	public var newClosureInlines:Null<Map<String, Bool>> = null;
+
+	public function new(bindings:BodyResolution, closureInlines:Null<Map<String, Bool>>) {
 		super();
 		this.bindings = bindings;
+		this.closureInlines = closureInlines;
+	}
+
+	override function closureInline(declaration:String):Void {
+		if (newClosureInlines == null)
+			newClosureInlines = [];
+		newClosureInlines.set(declaration, true);
 	}
 
 	public function record(arguments:Array<AstArgument>, body:Array<AstStatement>,

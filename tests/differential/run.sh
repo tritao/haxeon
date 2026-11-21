@@ -244,6 +244,7 @@ in_background run_case local-function-defaults 0
 in_background run_case local-inline-functions 0
 in_background run_compile_failure local-inline-function-value
 in_background run_compile_failure local-inline-function-recursive
+in_background run_case local-inline-function-shadowed-capture 0
 in_background run_case value-default-arguments 0
 in_background run_case function-value-optional-arguments 0
 in_background run_case local-inference-empty-array 0

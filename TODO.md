@@ -244,6 +244,11 @@ The Haxe code Haxeon rejects or runs differently is listed in
 - **Function type syntax.** The parser rejects Haxe's `?Int->Int` (an
   optional argument in the old syntax) and a parenthesized result
   (`Int->(Int->Int)`).
+- **A local inline function nothing calls is not type-checked.** Its body is
+  typed only where it is called (`LocalInlineFunctions`), so an error in one
+  that is never called goes unreported; Haxe types the body at the declaration
+  and reports it. Typing it once at the declaration too, and discarding the
+  result, would report it.
 - **Lone surrogates.** Printing a String with a lone high surrogate swallows
   the next code unit (the newline of `Sys.println`): the UTF-16 to UTF-8
   conversion takes it as the pair's low half. `String.fromCharCode` of a code
