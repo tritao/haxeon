@@ -265,6 +265,12 @@ class IrInliner {
 	/** By function id, its source body as copy elision reads it, in a compile that keeps no session (else `IrInlineCache.originals`). */
 	final pristine:Array<Null<IrBody>> = [];
 
+	/**
+	 * By function id, its cleaned-up form when the inlining that made its memoized form ran in this compile: the cleanup edits the
+	 * body the inlining did, which no cache holds, once the memo has its own compacted copy.
+	 */
+	final cleanedForms:Array<Null<IrFunction>> = [];
+
 	/** By function id, the instructions of its source body, for the screen of what may be inlined after the body is edited. */
 	final sourceSizes:Array<Int> = [];
 
@@ -388,6 +394,7 @@ class IrInliner {
 			functions.push(byName.get(name));
 			done.push(null);
 			pristine.push(null);
+			cleanedForms.push(null);
 			sourceBodies.push(null);
 			dependenciesOf.push(null);
 			dependencyIdsOf.push(null);
@@ -587,7 +594,8 @@ class IrInliner {
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
 			var clean = cache.cleaned.get(fn.name);
 			if (clean == null || clean.source != inlined) {
-				result = inliner.cleanUp(fn, inlined);
+				var early = inliner.cleanedForms[inliner.ids.get(fn.name)];
+				result = early != null ? early : inliner.cleanUp(fn, inlined);
 				clean = {source: inlined, result: result};
 			} else
 				result = clean.result;
@@ -684,17 +692,21 @@ class IrInliner {
 	}
 
 	/**
-	 * The final cleanup of `fn`'s inlined form: in place when no caller may still inline the form as it is, else on a copy. The
-	 * result is the frozen body, as a function decoded only when something reads its blocks (`IrFunction.ofBody`); a function
-	 * nothing changed is its source, which keeps its body for the backends.
+	 * The final cleanup of `fn`'s inlined form: in place when no caller may still inline the form as it is, else on a copy, or on
+	 * `working`, the body the inlining edited when the memo keeps a compacted copy of it as `inlined`. The result is the frozen
+	 * body, as a function decoded only when something reads its blocks (`IrFunction.ofBody`); a function nothing changed is its
+	 * source, which keeps its body for the backends.
 	 */
-	function cleanUp(fn:IrFunction, inlined:IrBody):IrFunction {
-		var body = inlined.frozen ? inlined.thaw(passScratch.bodyBuilder) : inlined, before = body.edits;
+	function cleanUp(fn:IrFunction, inlined:IrBody, ?working:IrBody):IrFunction {
+		var body = working != null ? working : inlined.frozen ? inlined.thaw(passScratch.bodyBuilder) : inlined,
+			before = body.edits;
 		IrJumpThreading.threadConstantBranchesBody(body, passScratch);
 		IrScalarRefPromotion.runBody(body, passScratch);
 		IrDeadPureValues.runBody(body, passScratch);
 		IrReceiverCheckElision.runBody(body, passScratch);
 		IrJumpThreading.runBody(body, passScratch);
+		if (working != null && body.edits == before)
+			return IrFunction.ofBody(inlined);
 		var id = ids.get(fn.name);
 		if (id != null && sourceBodies[id] == inlined && body.edits == before) {
 			var own = fn.body;
@@ -871,6 +883,8 @@ class IrInliner {
 		}
 		done[id] = result;
 		sourceBodies[id] = result == cachedOriginal(id) ? result : null;
+		if (!unchanged)
+			cleanedForms[id] = cleanUp(original, result, body);
 		dependenciesOf[id] = dependencies;
 		dependencyIdsOf[id] = dependencyIds;
 		objectsOf[id] = objectPrintsOf;
