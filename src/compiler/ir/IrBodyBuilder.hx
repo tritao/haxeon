@@ -219,6 +219,53 @@ class IrBodyBuilder {
 		return builder.finishFrom(source);
 	}
 
+	/** A copy of `source` column for column, for a body no edit touched: the same rows, runs and pools where they were. */
+	public static function copy(source:IrBody, ?builder:IrBodyBuilder):IrBody {
+		if (builder == null)
+			builder = new IrBodyBuilder(source.types);
+		builder.reset(source.types);
+		copyColumn(builder.opcodes, source.opcodes);
+		copyColumn(builder.outputs, source.outputs);
+		copyColumn(builder.auxes, source.auxes);
+		copyColumn(builder.provenances, source.provenances);
+		copyColumn(builder.operandStarts, source.operandStarts);
+		copyColumn(builder.operandEnds, source.operandEnds);
+		copyColumn(builder.previousRows, source.previousRows);
+		copyColumn(builder.nextRows, source.nextRows);
+		copyColumn(builder.operands, source.operandPool);
+		copyColumn(builder.ints, source.ints);
+		for (value in source.floats)
+			builder.floats.push(value);
+		for (value in source.strings)
+			builder.strings.push(value);
+		for (value in source.provenancePool)
+			builder.provenancePool.push(value);
+		copyColumn(builder.blockIds, source.blockIds);
+		copyColumn(builder.blockFirstRows, source.blockFirstRows);
+		copyColumn(builder.blockLastRows, source.blockLastRows);
+		copyColumn(builder.valueTypes, source.valueTypes);
+		for (name in source.valueNames)
+			builder.valueNames.push(name);
+		copyColumn(builder.valueRows, source.valueRows);
+		copyColumn(builder.argumentIds, source.argumentIds);
+		for (index in 0...source.bindingIdentities.length) {
+			builder.bindingIdentities.push(source.bindingIdentities[index]);
+			builder.bindingNames.push(source.bindingNames[index]);
+			builder.bindingPaths.push(source.bindingPaths[index]);
+		}
+		copyColumn(builder.bindingStarts, source.bindingStarts);
+		copyColumn(builder.bindingEnds, source.bindingEnds);
+		copyColumn(builder.bindingValues, source.bindingValues);
+		builder.operandsFrom = builder.operands.length;
+		return builder.finishFrom(source);
+	}
+
+	static function copyColumn(into:Array<Int>, from:Array<Int>):Void {
+		into.resize(from.length);
+		for (index in 0...from.length)
+			into[index] = from[index];
+	}
+
 	public function beginBlock(id:Int):Void {
 		blockIds.push(id);
 		blockFirstRows.push(-1);

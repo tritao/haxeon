@@ -44,8 +44,11 @@ class IrBody {
 	/** Whether a cache may hold this body: then it is never edited again. */
 	public var frozen(default, null) = false;
 
-	/** Whether an edit left unlinked rows or garbage runs, which a compaction drops. */
-	var edited = false;
+	/**
+	 * Whether an edit was made since the body was made (encoded, compacted, copied): one without is row for row what it was made
+	 * from. An edit may leave unlinked rows or garbage runs, which a compaction drops.
+	 */
+	public var edited(default, null) = false;
 
 	final opcodes:Array<Int>;
 	final outputs:Array<Int>;
@@ -216,6 +219,26 @@ class IrBody {
 		return last >= 0 && opcode(last).isTerminator() ? last : -1;
 	}
 
+	/** How many linked rows are instructions, terminators left out. */
+	public function instructionCount():Int {
+		var terminators = 0;
+		for (block in 0...blockIds.length)
+			if (terminatorRow(block) >= 0)
+				terminators++;
+		// A body no edit touched links every row it has.
+		if (!edited)
+			return opcodes.length - terminators;
+		var rows = 0;
+		for (block in 0...blockIds.length) {
+			var row = blockFirstRows[block];
+			while (row >= 0) {
+				rows++;
+				row = nextRows[row];
+			}
+		}
+		return rows - terminators;
+	}
+
 	/** The block's index in the layout, or -1 when it has no block with id `id`. */
 	public function blockIndex(id:Int):Int {
 		for (block in 0...blockIds.length)
@@ -272,9 +295,9 @@ class IrBody {
 		return result;
 	}
 
-	/** A copy of this body that a pass may edit, compacted. */
+	/** A copy of this body that a pass may edit: compacted, or column for column when no edit left anything to drop. */
 	public function thaw(?builder:IrBodyBuilder):IrBody
-		return IrBodyBuilder.compact(this, builder);
+		return edited ? IrBodyBuilder.compact(this, builder) : IrBodyBuilder.copy(this, builder);
 
 	// Edits, in place. Each requires the body not to be frozen.
 
@@ -384,6 +407,54 @@ class IrBody {
 		valueTypes.push(typeId);
 		valueNames.push(name);
 		valueRows.push(-1);
+		return IrValueId.of(id);
+	}
+
+	/**
+	 * One past the highest value id an argument, a linked row (its output or an operand) or a binding names: where an object
+	 * pass starts numbering new values (`IrFunction.nextValueId`), which is below `valueLimit` once rows defining the highest ids
+	 * were unlinked. Transitional: a pass whose object version numbers new values that way takes them from here
+	 * (`newValueAt`), so its output stays the object version's until the object passes are gone.
+	 */
+	public function presentValueLimit():Int {
+		var next = 0;
+		for (id in argumentIds)
+			if (id >= next)
+				next = id + 1;
+		for (block in 0...blockIds.length) {
+			var row = blockFirstRows[block];
+			while (row >= 0) {
+				if (outputs[row] >= next)
+					next = outputs[row] + 1;
+				for (index in operandStarts[row]...operandEnds[row])
+					if (operandPool[index] >= next)
+						next = operandPool[index] + 1;
+				row = nextRows[row];
+			}
+		}
+		for (id in bindingValues)
+			if (id >= next)
+				next = id + 1;
+		return next;
+	}
+
+	/**
+	 * A new value with id `id`, at least `presentValueLimit()`: no linked row or binding names that id any more, so its column
+	 * slot is taken over, or appended when `id` is `valueLimit()`. Transitional, as `presentValueLimit` is.
+	 */
+	public function newValueAt(id:Int, label:String, typeId:Int):IrValueId {
+		if (id == valueTypes.length)
+			return newValue(label, typeId);
+		editing();
+		if (id > valueTypes.length)
+			throw new InternalError('IR body $name: value $id is past the next id ${valueTypes.length}');
+		if (trial != null)
+			throw new InternalError('IR body $name has a trial open, which could not undo this edit');
+		valueTypes[id] = typeId;
+		valueNames[id] = label;
+		valueRows[id] = -1;
+		if (id < aliases.length)
+			aliases[id] = -1;
 		return IrValueId.of(id);
 	}
 

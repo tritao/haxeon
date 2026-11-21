@@ -77,6 +77,12 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    inlining, `IrLoadStoreForwarding`, `IrScalarReplacement`, `IrStrengthReduction`, the cleanup chain, `IrGraph` and
    `IrNonNullFacts` on bodies, the stage's caches holding frozen bodies. Taken together so that HlLower's walks pay for
    the encode. *Checkpoint: allocation, peak, wall and instructions against the object pipeline decide steps 4 to 6.*
+   *The inliner stage runs on bodies*: a function is encoded when it is first inlined, inlining splices and expands callees
+   in place, the stage's passes edit that body, and it is decoded once at the stage's exit (back to its source when nothing
+   changed it). The memo holds frozen bodies; in a compile that keeps a session the cache also holds each source's frozen
+   body while the source is the same object. Until the object passes are gone, a pass that numbers new values as its object
+   version did takes them from `IrBody.newValueAt` (strength reduction after load-store forwarding), which may reuse the id of
+   a value no row or binding names any more. HlLower reading bodies, which removes the exit decode, is the next step.
 4. The program-level passes, from the last back to the first, each moving the conversion before it; `IrBuilder` emits
    rows.
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.

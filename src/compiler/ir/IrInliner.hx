@@ -25,10 +25,11 @@ class InlineMemo {
 	 */
 	public final objects:Map<String, Int>;
 
-	public final result:IrFunction;
+	/** The inlined form, frozen. */
+	public final result:IrBody;
 
 	public function new(source:IrFunction, fingerprint:Int, dependencies:Array<IrFunction>, objects:Map<String, Int>,
-			result:IrFunction) {
+			result:IrBody) {
 		this.source = source;
 		this.fingerprint = fingerprint;
 		this.dependencies = dependencies;
@@ -46,8 +47,17 @@ class IrInlineCache {
 	public var memo:Map<String, InlineMemo> = [];
 	public var published:Map<String, IrFunction> = [];
 
-	/** Final cleanup depends only on the inliner's result and must not affect inlining decisions. */
-	public var cleaned:Map<String, {source:IrFunction, result:IrFunction}> = [];
+	/**
+	 * Final cleanup depends only on the inliner's result and must not affect inlining decisions: each function's cleaned form,
+	 * decoded, kept while its inlined form is the same body.
+	 */
+	public var cleaned:Map<String, {source:IrBody, result:IrFunction}> = [];
+
+	/** The type ids every body the inliner keeps is made with, for the session. */
+	public var types(default, null) = new IrTypeIds();
+
+	/** Each function's source as a frozen body, kept while the source is the same object, so it is encoded once. */
+	public var originals:Map<String, {source:IrFunction, body:IrBody}> = [];
 
 	/**
 	 * The encoding of a published function, kept with the function it belongs to (null when it cannot be encoded). Comparing a
@@ -151,6 +161,9 @@ class IrInlineCache {
 	public function copy():IrInlineCache {
 		var result = new IrInlineCache();
 		result.sources = sources;
+		result.types = types;
+		for (name => entry in originals)
+			result.originals.set(name, entry);
 		for (name => entry in memo)
 			result.memo.set(name, entry);
 		for (name => fn in published)
@@ -211,7 +224,37 @@ class IrInliner {
 	final idsBySymbol:Array<Int> = [];
 
 	final functions:Array<IrFunction> = [];
-	final done:Array<Null<IrFunction>> = [];
+	final done:Array<Null<IrBody>> = [];
+
+	/** The type ids of every body of this run: the cache's. */
+	final types:IrTypeIds;
+
+	final voidType:Int;
+	final receiverCheckSymbol:Int;
+
+	/** By function id, its inlined form when that is its source's encoding, unchanged, else null. */
+	final sourceBodies:Array<Null<IrBody>> = [];
+
+	/** By function id, its source body as copy elision reads it, in a compile that keeps no session (else `IrInlineCache.originals`). */
+	final pristine:Array<Null<IrBody>> = [];
+
+	/** The tables of one splice or expansion: by callee value id its value here, by callee block id its block id here. */
+	final calleeValues:Array<Int> = [];
+
+	final calleeBlocks:Array<Int> = [];
+
+	/** The rows an inlined call puts before the callee's (receiver check, upcasts), or a splice puts in place of the call. */
+	final madeRows:Array<Int> = [];
+
+	final successorIds:Array<Int> = [];
+	final returnedValues:Array<Int> = [];
+	final returnedBlocks:Array<Int> = [];
+
+	/** Copy elision's callbacks, made once. */
+	final bodyLookup:String->Null<IrBody>;
+
+	final methodLookup:IrType->String->Null<String>;
+	final consultLookup:String->Void;
 	final dependenciesOf:Array<Null<Array<IrFunction>>> = [];
 	final dependencyIdsOf:Array<Null<Array<Int>>> = [];
 	final impure:Array<Bool> = [];
@@ -290,6 +333,12 @@ class IrInliner {
 		this.profile = profile;
 		entryPoint = program.entryPoint;
 		this.cache = cache;
+		types = cache.types;
+		voidType = types.id(Void);
+		receiverCheckSymbol = IrSymbol.of(IrReceiverCheck.NAME).id;
+		bodyLookup = pristineBody;
+		methodLookup = resolveMethod;
+		consultLookup = consultName;
 		for (fn in program.functions)
 			byName.set(fn.name, fn);
 		var names = [for (name in byName.keys()) name];
@@ -302,6 +351,8 @@ class IrInliner {
 			ids.set(name, functions.length);
 			functions.push(byName.get(name));
 			done.push(null);
+			pristine.push(null);
+			sourceBodies.push(null);
 			dependenciesOf.push(null);
 			dependencyIdsOf.push(null);
 			impure.push(false);
@@ -354,11 +405,11 @@ class IrInliner {
 				for (located in block.instructions)
 					switch located.value {
 						case Call(_, callee, _):
-							var target = functionId(callee);
+							var target = functionId(callee.id);
 							if (target >= 0)
 								targets.push(target);
 						case MethodCall(_, receiver, method, _, _):
-							var callee = resolveMethod(receiver, method),
+							var callee = resolveMethod(receiver.type, method),
 								target = callee == null ? null : ids.get(callee);
 							if (target != null)
 								targets.push(target);
@@ -465,6 +516,9 @@ class IrInliner {
 	 * Replaces every function that had a call inlined and returns the names whose inlined form differs from the one
 	 * published by the previous compile. Those functions must be re-lowered and patched even when their own source did
 	 * not change, because a callee they inlined did.
+	 *
+	 * The stage runs on bodies (docs/design/IR_CORE_COLUMNS.md): each function is encoded when it is first inlined, inlined,
+	 * forwarded, reduced and cleaned up in place, and decoded once at the end into `program.functions`.
 	 */
 	/** Inlines `program`'s functions as `options` ask (the defaults, without them: every pass on, no reuse checks). */
 	public static function run(program:IrProgram, cache:IrInlineCache, profile:TargetProfile,
@@ -476,24 +530,22 @@ class IrInliner {
 			changed:Array<String> = [],
 			relocated:Array<String> = [];
 		var published:Map<String, IrFunction> = [],
-			cleaned:Map<String, {source:IrFunction, result:IrFunction}> = [],
+			cleaned:Map<String, {source:IrBody, result:IrFunction}> = [],
 			publishedBytes:Map<String, {fn:IrFunction, bytes:Null<Bytes>}> = [],
 			instrumented:Map<String, {source:IrFunction, scope:String, result:IrFunction}> = [];
 		for (fn in program.functions) {
-			var result = inliner.inlinedVersionOf(fn.name);
+			var inlined = inliner.inlinedVersionOf(fn.name), result:IrFunction;
 			// Keep inlining decisions based on the original post-inline bodies. Removing dead values in a memoized callee
 			// would otherwise change the caller's budget and can introduce new allocations through a different expansion.
 			var clean = cache.cleaned.get(fn.name);
-			if (clean == null || clean.source != result) {
-				var source = result;
-				result =
-					IrJumpThreading.run(IrReceiverCheckElision.run(IrDeadPureValues.run(IrScalarRefPromotion.run(IrJumpThreading.threadConstantBranches(result,
-					inliner.passScratch)),
-					inliner.passScratch), inliner.passScratch), inliner.passScratch);
-				clean = {source: source, result: result};
+			if (clean == null || clean.source != inlined) {
+				result = inliner.cleanUp(fn, inlined);
+				clean = {source: inlined, result: result};
 			} else
 				result = clean.result;
-			cleaned.set(fn.name, clean);
+			// A compile that keeps no session has no next compile to reuse the cleaned form in.
+			if (inliner.memoizes)
+				cleaned.set(fn.name, clean);
 			// Probes go in after inlining, into the published form only: a caller that inlines this function inlines it
 			// without them.
 			if (instrument != null) {
@@ -548,6 +600,7 @@ class IrInliner {
 		cache.publishedBytes = publishedBytes;
 		cache.instrumented = instrumented;
 		cache.relocated = relocated;
+		inliner.keepOriginals();
 		return changed;
 	}
 
@@ -564,15 +617,87 @@ class IrInliner {
 		}
 	}
 
-	function functionId(symbol:IrSymbol):Int
-		return symbol.id < idsBySymbol.length ? idsBySymbol[symbol.id] : -1;
+	inline function functionId(symbol:Int):Int
+		return symbol < idsBySymbol.length ? idsBySymbol[symbol] : -1;
 
-	function inlinedVersionOf(name:String):Null<IrFunction> {
+	function inlinedVersionOf(name:String):Null<IrBody> {
 		var id = ids.get(name);
 		return id == null ? null : inlinedVersion(id);
 	}
 
-	function inlinedVersion(id:Int):IrFunction {
+	/**
+	 * The final cleanup of `fn`'s inlined form, decoded: in place when no caller may still inline the form as it is, else on a
+	 * copy. A function nothing changed is its source.
+	 */
+	function cleanUp(fn:IrFunction, inlined:IrBody):IrFunction {
+		var body = inlined.frozen ? inlined.thaw(passScratch.bodyBuilder) : inlined;
+		IrJumpThreading.threadConstantBranchesBody(body, passScratch);
+		IrScalarRefPromotion.runBody(body, passScratch);
+		IrDeadPureValues.runBody(body, passScratch);
+		IrReceiverCheckElision.runBody(body, passScratch);
+		IrJumpThreading.runBody(body, passScratch);
+		var id = ids.get(fn.name);
+		return id != null && sourceBodies[id] == inlined && !body.edited ? fn : body.toFunction();
+	}
+
+	/**
+	 * The body of function `id` as its source has it, frozen: kept in the cache by name while the source is the same object, so
+	 * a compile that keeps a session encodes an unchanged function once.
+	 */
+	function originalBody(id:Int):IrBody {
+		var fn = functions[id], known = cache.originals.get(fn.name);
+		if (known != null && known.source == fn)
+			return known.body;
+		var body = IrBodyBuilder.encode(fn, types, passScratch.bodyBuilder).freeze();
+		cache.originals.set(fn.name, {source: fn, body: body});
+		return body;
+	}
+
+	/** The cached frozen source body of function `id`, when the cache has one for its source. */
+	function cachedOriginal(id:Int):Null<IrBody> {
+		var fn = functions[id], known = cache.originals.get(fn.name);
+		return known != null && known.source == fn ? known.body : null;
+	}
+
+	/** Drops the cached original bodies of functions that are gone or whose source changed. */
+	function keepOriginals():Void {
+		var kept:Map<String, {source:IrFunction, body:IrBody}> = [];
+		for (fn in functions) {
+			var known = cache.originals.get(fn.name);
+			if (known != null && known.source == fn)
+				kept.set(fn.name, known);
+		}
+		cache.originals = kept;
+	}
+
+	/** The body function `id`'s inlining edits: its source's, encoded, which nothing else holds. */
+	function workingBody(id:Int):IrBody
+		return memoizes ? originalBody(id).thaw(passScratch.bodyBuilder) : IrBodyBuilder.encode(functions[id], types,
+			passScratch.bodyBuilder);
+
+	/** The source body of the function named `name` (null for none), as copy elision reads its callees. */
+	function pristineBody(name:String):Null<IrBody> {
+		var id = ids.get(name);
+		if (id == null)
+			return null;
+		if (memoizes)
+			return originalBody(id);
+		var known = pristine[id];
+		if (known == null) {
+			known = IrBodyBuilder.encode(functions[id], types, passScratch.bodyBuilder).freeze();
+			pristine[id] = known;
+		}
+		return known;
+	}
+
+	/** Records a function copy elision consulted in the function being inlined. */
+	function consultName(name:String):Void {
+		var consultedId = ids.get(name);
+		if (consultedId != null && frames.length > 0)
+			frames[frames.length - 1].push(consultedId);
+	}
+
+	function inlinedVersion(id:Int):IrBody {
 		var known = done[id];
 		if (known != null) {
 			consultResult(id);
@@ -597,6 +722,7 @@ class IrInliner {
 			}
 			dependencyIdsOf[id] = memoDependencyIds;
 			objectsOf[id] = memo.objects;
+			sourceBodies[id] = memo.result == cachedOriginal(id) ? memo.result : null;
 			nextMemo.set(name, memo);
 			consultResult(id);
 			return memo.result;
@@ -612,18 +738,30 @@ class IrInliner {
 			objectFrames.push(consultedObjects);
 			table.consulted = consultedObjects;
 		}
-		var result = allowInline ? inlineCalls(original) : profile.packedValueFields
-			? IrScalarReplacement.rewrite(original, table, false, true) : original;
+		var body = workingBody(id);
+		if (allowInline)
+			inlineCalls(body);
+		else if (profile.packedValueFields)
+			IrScalarReplacement.runBody(body, table, passScratch, false, true);
 		if (loadStoreForwarding)
-			result = IrLoadStoreForwarding.run(result, table, passScratch);
+			IrLoadStoreForwarding.runBody(body, table, passScratch);
 		if (strengthReduction)
-			result = IrStrengthReduction.run(result);
+			IrStrengthReduction.runBody(body);
+
+		// A cache or a caller that inlines it holds the result as it is; one only the final cleanup reads is cleaned in place.
+		var result = if (memoizes)
+			body.edited ? body.freeze(passScratch.bodyBuilder) : originalBody(id);
+		else
+			looksInlinable(original) ? body.freeze(passScratch.bodyBuilder) : body;
+		var unchanged = !body.edited;
+
 		var isImpure = frameImpure.pop() == true;
 		frameIds.pop();
 		depth--;
 		visiting[id] = false;
 		if (!memoizes) {
 			done[id] = result;
+			sourceBodies[id] = unchanged ? result : null;
 			return result;
 		}
 		objectFrames.pop();
@@ -642,11 +780,12 @@ class IrInliner {
 		var objectPrintsOf:Map<String, Int> =
 			[for (objectName in consultedObjects.keys()) objectName => printOf(objectName)];
 		if (usable && checkingMemo && memo != null) {
-			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result, result))
+			if (!compiler.ir.codec.IrFunctionStateEquality.same(memo.result.toFunction(), result.toFunction()))
 				throw new InternalError('--check-reuse: the inlined form of $name differs from the one its memo holds');
 			result = memo.result;
 		}
 		done[id] = result;
+		sourceBodies[id] = result == cachedOriginal(id) ? result : null;
 		dependenciesOf[id] = dependencies;
 		dependencyIdsOf[id] = dependencyIds;
 		objectsOf[id] = objectPrintsOf;
@@ -691,20 +830,18 @@ class IrInliner {
 			frameImpure[frameImpure.length - 1] = true;
 	}
 
-	/** The function a call resolves to when it can be inlined, else null. */
-	function calleeOf(instruction:IrInstruction):Null<IrFunction> {
-		// A method call's actuals are its receiver, then its arguments.
-		var id = -1, receiver:Null<IrValue> = null, arguments:Array<IrValue> = null;
-		switch instruction {
-			case Call(_, target, callArguments):
-				id = functionId(target);
-				arguments = callArguments;
-			case MethodCall(_, object, methodName, callArguments, _):
-				var target = resolveMethod(object, methodName), known = target == null ? null : ids.get(target);
+	/** The inlined form of the function the call at `row` resolves to, when it can be inlined there, else null. */
+	function calleeOf(body:IrBody, row:Int):Null<IrBody> {
+		// A method call's actuals are its receiver, then its arguments: its operands, as a call's are its arguments.
+		var id = -1;
+		switch body.opcode(row) {
+			case IrOpcode.Call:
+				id = functionId(body.aux(row));
+			case IrOpcode.MethodCall:
+				var target = resolveMethod(body.valueType(body.operand(row, 0)), IrSymbol.at(body.aux(row) >> 1).name),
+					known = target == null ? null : ids.get(target);
 				if (known != null)
 					id = known;
-				receiver = object;
-				arguments = callArguments;
 			default:
 		}
 		if (id < 0)
@@ -725,19 +862,14 @@ class IrInliner {
 				frameImpure[frameImpure.length - 1] = true;
 			return null;
 		}
+		var count = body.operandCount(row);
 		if (IrTypedInterfaceDispatch.isDispatchEntry(original.name)
 			|| IrTypedInterfaceDispatch.isAdapterEntry(original.name)
-			|| original.arguments.length != arguments.length + (receiver == null ? 0 : 1)
+			|| original.arguments.length != count
 			|| !looksInlinable(original))
 			return null;
-		var offset = 0;
-		if (receiver != null) {
-			if (!bindable(receiver.type, original.arguments[0].type))
-				return null;
-			offset = 1;
-		}
-		for (index in 0...arguments.length)
-			if (!bindable(arguments[index].type, original.arguments[index + offset].type))
+		for (index in 0...count)
+			if (!bindable(body.valueType(body.operand(row, index)), original.arguments[index].type))
 				return null;
 		var candidate = inlinedVersion(id);
 		if (candidate == null || !fits(candidate))
@@ -748,12 +880,12 @@ class IrInliner {
 	}
 
 	/**
-	 * The function a method call reaches, when the receiver's class and all its subclasses run the same one. A value
-	 * class is final, so its methods always resolve. Anything else can be overridden only by a class in this program:
-	 * patches cannot add classes, so a live module cannot introduce another override.
+	 * The function a method call on a receiver of type `receiver` reaches, when the receiver's class and all its subclasses run
+	 * the same one. A value class is final, so its methods always resolve. Anything else can be overridden only by a class in
+	 * this program: patches cannot add classes, so a live module cannot introduce another override.
 	 */
-	public function resolveMethod(receiver:IrValue, method:String):Null<String> {
-		var typeName = switch receiver.type {
+	public function resolveMethod(receiver:IrType, method:String):Null<String> {
+		var typeName = switch receiver {
 			case Obj(name): name;
 			default: return null;
 		};
@@ -783,39 +915,34 @@ class IrInliner {
 		return countInstructions(fn) <= (fn.inlineHint ? HintBudget : SmallBudget) * 2;
 	}
 
-	function fits(fn:IrFunction):Bool {
-		if (fn.blocks.length > MaxBlocks || countInstructions(fn) > (fn.inlineHint ? HintBudget : SmallBudget))
+	static function fits(fn:IrBody):Bool {
+		if (fn.blockCount() > MaxBlocks || fn.instructionCount() > (fn.inlineHint ? HintBudget : SmallBudget))
 			return false;
 		var returns = 0;
-		for (block in fn.blocks) {
-			for (located in block.instructions)
-				switch located.value {
-					case BeginTry(_, _, _), EndTry(_, _), Catch(_):
+		for (block in 0...fn.blockCount()) {
+			var row = fn.firstRow(block);
+			while (row >= 0) {
+				switch fn.opcode(row) {
+					case IrOpcode.BeginTry, IrOpcode.EndTry, IrOpcode.Catch:
 						return false;
 					default:
 				}
-			var terminator = block.terminator;
-			if (terminator == null)
-				return false;
-			switch terminator.value {
-				case Return(_):
-					returns++;
-				default:
+				row = fn.nextRow(row);
 			}
+			var terminator = fn.terminatorRow(block);
+			if (terminator < 0)
+				return false;
+			if (fn.opcode(terminator) == IrOpcode.Return)
+				returns++;
 		}
 		return returns > 0;
 	}
 
-	static function isStraightLine(fn:IrFunction):Bool {
-		if (fn.blocks.length != 1)
+	static function isStraightLine(fn:IrBody):Bool {
+		if (fn.blockCount() != 1)
 			return false;
-		var terminator = fn.blocks[0].terminator;
-		if (terminator == null)
-			return false;
-		return switch terminator.value {
-			case Return(_): true;
-			default: false;
-		};
+		var terminator = fn.terminatorRow(0);
+		return terminator >= 0 && fn.opcode(terminator) == IrOpcode.Return;
 	}
 
 	static function countInstructions(fn:IrFunction):Int {
@@ -825,170 +952,292 @@ class IrInliner {
 		return total;
 	}
 
-	function inlineCalls(fn:IrFunction):IrFunction {
+	/**
+	 * Inlines the calls of `body` in place: a straight-line callee's rows are spliced in place of the call, a branching one's
+	 * blocks expanded after the call's block, which is split there; then the values the calls returned replace their outputs,
+	 * and scalar replacement and copy elision run over the result.
+	 */
+	function inlineCalls(body:IrBody):Void {
 		// Runtime helpers (initializers, the entry) are patched specially; nothing is ever inlined into them.
-		if (StringTools.startsWith(fn.name, "__"))
-			return fn;
+		if (StringTools.startsWith(body.name, "__"))
+			return;
 		var found = false;
-		for (block in fn.blocks) {
-			for (located in block.instructions)
-				if (calleeOf(located.value) != null) {
+		for (block in 0...body.blockCount()) {
+			var row = body.firstRow(block);
+			while (row >= 0 && !found) {
+				if (calleeOf(body, row) != null)
 					found = true;
-					break;
-				}
+				row = body.nextRow(row);
+			}
 			if (found)
 				break;
 		}
 		if (!found)
-			for (block in fn.blocks) {
-				for (located in block.instructions)
-					switch located.value {
-						case ValueInit(out):
-							var object = table.get(compiler.ir.IrTypeTools.valueObjectName(out.type));
-							if (object != null && object.isValue)
-								found = true;
-						default:
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0 && !found) {
+					if (body.opcode(row) == IrOpcode.ValueInit) {
+						var object =
+							table.get(compiler.ir.IrTypeTools.valueObjectName(body.valueType(body.output(row))));
+						if (object != null && object.isValue)
+							found = true;
 					}
+					row = body.nextRow(row);
+				}
 				if (found)
 					break;
 			}
-		if (!found && !IrCopyElision.hasCopies(fn.blocks))
-			return fn;
-		var blocks:Array<IrBlock> = [], nextValue = fn.nextValueId(), nextBlock = 0;
-		for (block in fn.blocks) {
-			var copy = new IrBlock(block.id, block.instructions.copy());
-			copy.terminator = block.terminator;
-			blocks.push(copy);
-			if (block.id >= nextBlock)
-				nextBlock = block.id + 1;
-		}
-		var index = 0, inlines = 0, instructions = countInstructions(fn), substitutions:Map<Int, IrValue> = [];
-		while (index < blocks.length) {
-			var block = blocks[index], position = -1, callee:Null<IrFunction> = null;
-			if (inlines < MaxInlinesPerFunction && instructions < MaxFunctionInstructions)
-				for (candidate in 0...block.instructions.length) {
-					callee = calleeOf(block.instructions[candidate].value);
+		if (!found && !IrCopyElision.hasCopiesBody(body))
+			return;
+		var nextBlock = 0;
+		for (block in 0...body.blockCount())
+			if (body.blockId(block) >= nextBlock)
+				nextBlock = body.blockId(block) + 1;
+		var index = 0, inlines = 0, instructions = body.instructionCount();
+		while (index < body.blockCount()) {
+			var call = -1, callee:Null<IrBody> = null;
+			if (inlines < MaxInlinesPerFunction && instructions < MaxFunctionInstructions) {
+				var row = body.firstRow(index);
+				while (row >= 0) {
+					callee = calleeOf(body, row);
 					if (callee != null) {
-						position = candidate;
+						call = row;
 						break;
 					}
+					row = body.nextRow(row);
 				}
+			}
 			if (callee == null) {
 				index++;
 				continue;
 			}
 			inlines++;
-			instructions += countInstructions(callee);
+			instructions += callee.instructionCount();
 			if (isStraightLine(callee)) {
 				// Splice into the calling block: no new block, no phi. Rescan the block; the spliced calls were not candidates.
-				nextValue = splice(block, position, callee, substitutions, nextValue);
+				spliceCall(body, index, call, callee);
 				continue;
 			}
-			var expansion = expand(blocks, index, position, callee, nextValue, nextBlock,
-				needsReceiverCheck(block.instructions[position].value));
-			nextValue = expansion.nextValue;
-			nextBlock = expansion.nextBlock;
+			nextBlock = expandCall(body, index, call, callee, nextBlock, needsReceiverCheck(body, call));
 			// Continue with the first inlined block; calls left in it were not candidates.
 			index++;
 		}
-		var bindings = fn.debugBindings;
-		if (substitutions.keys().hasNext())
-			bindings = substitute(blocks, substitutions, bindings);
-		var replaced = IrScalarReplacement.run(blocks, table, nextValue);
-		if (profile.packedValueFields)
-			replaced = {
-				substitutions: replaced.substitutions,
-				nextValue: IrScalarReplacement.constructInPlace(blocks, table, replaced.nextValue,
-					replaced.substitutions)
-			};
-		if (replaced.substitutions.keys().hasNext())
-			bindings = substitute(blocks, replaced.substitutions, bindings);
-		var consult = function(name:String):Void {
-			var consultedId = ids.get(name);
-			if (consultedId != null && frames.length > 0)
-				frames[frames.length - 1].push(consultedId);
-		};
-		new IrCopyElision(byName, resolveMethod, consult).run(blocks);
-		return fn.withBlocks(blocks, bindings);
+		body.sweepAliases();
+		IrScalarReplacement.runBody(body, table, passScratch, false, profile.packedValueFields);
+		IrCopyElision.runBody(body, bodyLookup, methodLookup, consultLookup, passScratch);
 	}
 
 	/** Value receivers are non-null values; reference receivers must retain the method call's null check. */
-	function needsReceiverCheck(instruction:IrInstruction):Bool
-		return switch instruction {
-			case MethodCall(_, receiver, _, _, _): switch receiver.type {
-					case Obj(name): var object = table.get(name);
-						object == null || !object.isValue;
-					default: true;
-				};
-			default: false;
+	function needsReceiverCheck(body:IrBody, call:Int):Bool {
+		if (body.opcode(call) != IrOpcode.MethodCall)
+			return false;
+		return switch body.valueType(body.operand(call, 0)) {
+			case Obj(name): var object = table.get(name);
+				object == null || !object.isValue;
+			default: true;
 		};
-
-	/** Replaces the call at `block.instructions[position]` by the callee's instructions; the result is substituted for the call's output. */
-	function splice(block:IrBlock, position:Int, callee:IrFunction, substitutions:Map<Int, IrValue>,
-			nextValue:Int):Int {
-		var call = block.instructions[position],
-			callOutput:IrValue = null,
-			actuals:Array<IrValue> = [];
-		switch call.value {
-			case Call(out, _, arguments):
-				callOutput = out;
-				actuals = arguments;
-			case MethodCall(out, object, _, arguments, _):
-				callOutput = out;
-				actuals = [object].concat(arguments);
-			default:
-				throw new InternalError("Inliner expected a call");
-		}
-		var source = callee.blocks[0],
-			values:Map<Int, IrValue> = [],
-			copies:Array<Located<IrInstruction>> = [];
-		if (needsReceiverCheck(call.value)) {
-			var checked = new IrValue(nextValue++, "$receiver-check", Void);
-			copies.push(new Located(Call(checked, IrSymbol.of(IrReceiverCheck.NAME),
-				[resolve(actuals[0], substitutions)]),
-				call.provenance));
-		}
-		nextValue = bindArguments(callee, [for (actual in actuals) resolve(actual, substitutions)], values, copies,
-			call.provenance, nextValue);
-		for (located in source.instructions) {
-			var output = IrOperands.output(located.value);
-			if (output != null)
-				values.set(output.id, new IrValue(nextValue++, output.name, output.type));
-		}
-		var use = function(value:IrValue):IrValue {
-			var mapped = values.get(value.id);
-			if (mapped == null)
-				throw new InternalError("Inliner found an undefined callee value");
-			return mapped;
-		};
-		var noBlocks = function(id:Int):Int {
-			throw new InternalError("A straight-line callee has no blocks to remap");
-		};
-		for (located in source.instructions)
-			copies.push(new Located(remap(located.value, use, noBlocks), located.provenance));
-		var terminator = source.terminator;
-		if (terminator == null)
-			throw new InternalError("A straight-line callee must end in a terminator");
-		var returned:IrValue = switch terminator.value {
-			case Return(value): use(value);
-			default: throw new InternalError("A straight-line callee must return");
-		};
-		if ((switch (callOutput.type) {
-			case Void: true;
-			default: false;
-		}))
-			copies.push(new Located(ConstVoid(callOutput), call.provenance));
-		else
-			substitutions.set(callOutput.id, returned);
-		block.instructions.splice(position, 1);
-		var at = position;
-		for (copy in copies) {
-			block.instructions.insert(at, copy);
-			at++;
-		}
-		return nextValue;
 	}
 
+	/** Callee rows are copied as they are, so the callee's type ids must be the caller's. */
+	function sameTypeIds(body:IrBody, callee:IrBody):Void {
+		if (body.types != types || callee.types != types)
+			throw new InternalError('Inliner found ${callee.name} or ${body.name} with type ids of another program');
+	}
+
+	/**
+	 * Replaces the call at row `call` of block `block` (an index) by the straight-line callee's rows, values renamed: its
+	 * receiver check and upcasts, its instructions, and a `ConstVoid` for a void call; otherwise the call's output stands for
+	 * the value the callee returned (an alias, swept after the last call is inlined).
+	 */
+	function spliceCall(body:IrBody, block:Int, call:Int, callee:IrBody):Void {
+		sameTypeIds(body, callee);
+		var where = body.provenance(call), output = body.output(call), rows = madeRows;
+		rows.resize(0);
+		var values = IrPassScratch.filledInts(calleeValues, callee.valueLimit(), -1);
+		if (needsReceiverCheck(body, call)) {
+			var checked = body.newValue("$receiver-check", voidType);
+			body.beginRow();
+			body.pushOperand(body.resolve(body.operand(call, 0)));
+			rows.push(body.endRow(IrOpcode.Call, checked, receiverCheckSymbol, where));
+		}
+		bindArgumentValues(body, call, callee, values, rows, where, true);
+		var terminator = callee.terminatorRow(0), row = callee.firstRow(0);
+		while (row >= 0 && row != terminator) {
+			defineCalleeValue(body, callee, row, values);
+			row = callee.nextRow(row);
+		}
+		row = callee.firstRow(0);
+		while (row >= 0 && row != terminator) {
+			rows.push(body.copyRow(callee, row, values));
+			row = callee.nextRow(row);
+		}
+		if (terminator < 0 || callee.opcode(terminator) != IrOpcode.Return)
+			throw new InternalError("A straight-line callee must return");
+		var returned = calleeValue(values, callee.operand(terminator, 0));
+		if (body.valueTypeId(output) == voidType) {
+			body.beginRow();
+			rows.push(body.endRow(IrOpcode.ConstVoid, output, 0, where));
+		} else
+			body.alias(output, returned);
+		for (made in rows)
+			body.linkBefore(block, call, made);
+		body.removeRow(block, call);
+	}
+
+	/** Gives the callee row's output, when it has one, a new value of the caller. */
+	static inline function defineCalleeValue(body:IrBody, callee:IrBody, row:Int, values:Array<Int>):Void {
+		var out = callee.output(row);
+		if (out.exists())
+			values[out] = body.newValue(callee.valueName(out), callee.valueTypeId(out));
+	}
+
+	static function calleeValue(values:Array<Int>, value:IrValueId):IrValueId {
+		var mapped = (value:Int) < values.length ? values[value] : -1;
+		if (mapped < 0)
+			throw new InternalError("Inliner found an undefined callee value");
+		return IrValueId.of(mapped);
+	}
+
+	/**
+	 * Binds the callee's parameters to the call's operands (resolved through the aliases when `resolved`). A call passes an
+	 * object of a subclass where its parameter takes the base class; inlined, that value is upcast first (a row made in `rows`),
+	 * so the body keeps the types it was verified with.
+	 */
+	function bindArgumentValues(body:IrBody, call:Int, callee:IrBody, values:Array<Int>, rows:Array<Int>,
+			where:SourceProvenance, resolved:Bool):Void {
+		for (index in 0...callee.argumentCount()) {
+			var formal = callee.argument(index), actual = body.operand(call, index);
+			if (resolved)
+				actual = body.resolve(actual);
+			var formalType = callee.valueTypeId(formal), actualType = body.valueTypeId(actual);
+			if (formalType == actualType || IrVerifier.sameType(types.type(actualType), types.type(formalType)))
+				values[formal] = actual;
+			else {
+				var upcast = body.newValue(callee.valueName(formal), formalType);
+				body.beginRow();
+				body.pushOperand(actual);
+				rows.push(body.endRow(IrOpcode.Upcast, upcast, 0, where));
+				values[formal] = upcast;
+			}
+		}
+	}
+
+	/**
+	 * Replaces the call at row `call` of block `head` (an index) by a copy of the branching callee. The head keeps the rows
+	 * before the call, then the receiver check and upcasts, and jumps into the copy, whose blocks follow it with new ids; a new
+	 * continuation block merges the returned values with a phi and takes the rows after the call and the head's terminator.
+	 * Gives the next free block id.
+	 */
+	function expandCall(body:IrBody, head:Int, call:Int, callee:IrBody, nextBlock:Int, checkReceiver:Bool):Int {
+		sameTypeIds(body, callee);
+		var where = body.provenance(call), output = body.output(call), headId = body.blockId(head), rows = madeRows;
+		rows.resize(0);
+		var values = IrPassScratch.filledInts(calleeValues, callee.valueLimit(), -1);
+		if (checkReceiver) {
+			var checked = body.newValue("$receiver-check", voidType);
+			body.beginRow();
+			body.pushOperand(body.operand(call, 0));
+			rows.push(body.endRow(IrOpcode.Call, checked, receiverCheckSymbol, where));
+		}
+		bindArgumentValues(body, call, callee, values, rows, where, false);
+		// Every definition first, so phis and back edges can refer to values defined later in block order.
+		var blockLimit = 0;
+		for (block in 0...callee.blockCount())
+			if (callee.blockId(block) >= blockLimit)
+				blockLimit = callee.blockId(block) + 1;
+		var blocks = IrPassScratch.filledInts(calleeBlocks, blockLimit, -1);
+		for (block in 0...callee.blockCount()) {
+			blocks[callee.blockId(block)] = nextBlock++;
+			var terminator = callee.terminatorRow(block), row = callee.firstRow(block);
+			while (row >= 0 && row != terminator) {
+				defineCalleeValue(body, callee, row, values);
+				row = callee.nextRow(row);
+			}
+		}
+		var continuation = nextBlock++;
+		// Everything that used to leave the head will leave the continuation, so successor phis name the new predecessor.
+		var headTerminator = body.terminatorRow(head);
+		if (headTerminator < 0)
+			throw new InternalError("Inliner found a call site without a terminator");
+		var successors = successorIds;
+		successors.resize(0);
+		switch body.opcode(headTerminator) {
+			case IrOpcode.Jump:
+				successors.push(body.aux(headTerminator));
+			case IrOpcode.Branch:
+				successors.push(body.auxInt(headTerminator, 0));
+				successors.push(body.auxInt(headTerminator, 1));
+			default:
+		}
+		var row = body.nextRow(call);
+		while (row >= 0) {
+			if (body.opcode(row) == IrOpcode.BeginTry) {
+				successors.push(body.auxInt(row, 0));
+				successors.push(body.auxInt(row, 1));
+			}
+			row = body.nextRow(row);
+		}
+		for (block in 0...body.blockCount())
+			if (successors.indexOf(body.blockId(block)) >= 0)
+				retargetPhiInputs(body, block, block == head ? call : -1, headId, continuation);
+		// The callee's blocks after the head, then the continuation.
+		var count = callee.blockCount(), after = head + 1 + count;
+		for (block in 0...count)
+			body.addBlock(head + 1 + block, blocks[callee.blockId(block)]);
+		body.addBlock(after, continuation);
+		returnedValues.resize(0);
+		returnedBlocks.resize(0);
+		for (block in 0...count) {
+			var into = head + 1 + block;
+			if (callee.terminatorRow(block) < 0)
+				throw new InternalError("Inliner found a callee block without a terminator");
+			row = callee.firstRow(block);
+			while (row >= 0) {
+				if (callee.opcode(row) == IrOpcode.Return) {
+					returnedBlocks.push(body.blockId(into));
+					returnedValues.push(calleeValue(values, callee.operand(row, 0)));
+					body.beginRow();
+					body.linkBefore(into, -1,
+						body.endRow(IrOpcode.Jump, IrValueId.of(-1), continuation, callee.provenance(row)));
+				} else
+					body.linkBefore(into, -1, body.copyRow(callee, row, values, blocks));
+				row = callee.nextRow(row);
+			}
+		}
+		// The continuation defines the call's output, then runs whatever followed the call.
+		var tail = body.nextRow(call);
+		body.removeRow(head, call);
+		body.beginRow();
+		var merge = if (body.valueTypeId(output) == voidType)
+			body.endRow(IrOpcode.ConstVoid, output, 0, where);
+		else {
+			for (value in returnedValues)
+				body.pushOperand(IrValueId.of(value));
+			var start = body.pushInt(returnedBlocks[0]);
+			for (index in 1...returnedBlocks.length)
+				body.pushInt(returnedBlocks[index]);
+			body.endRow(IrOpcode.Phi, output, start, where);
+		}
+		body.linkBefore(after, -1, merge);
+		body.moveTail(head, tail, after);
+		for (made in rows)
+			body.linkBefore(head, -1, made);
+		body.beginRow();
+		body.linkBefore(head, -1, body.endRow(IrOpcode.Jump, IrValueId.of(-1), blocks[callee.blockId(0)], where));
+		return nextBlock;
+	}
+
+	/** Makes every phi input of block `block` (an index) from block id `from` come from `to`, the rows before `stop` only. */
+	static function retargetPhiInputs(body:IrBody, block:Int, stop:Int, from:Int, to:Int):Void {
+		var row = body.firstRow(block);
+		while (row >= 0 && row != stop) {
+			if (body.opcode(row) == IrOpcode.Phi)
+				for (index in 0...body.operandCount(row))
+					if (body.auxInt(row, index) == from)
+						body.setAuxInt(row, index, to);
+			row = body.nextRow(row);
+		}
+	}
 	/**
 	 * Binds the callee's parameters to the caller's arguments. A call passes an object of a subclass where its parameter
 	 * takes the base class; spliced in, that value is upcast first, so the body keeps the types it was verified with.
