@@ -87,7 +87,7 @@ class ModuleChangeAnalyzerMain {
 
 	static function parseInto(state:ModuleState, source:String):Void {
 		state.source = new SourceFile(state.name + ".hx", source);
-		state.tokens = new Lexer(state.source).tokenize();
+		state.tokens = new Lexer(state.source).tokenizeTable();
 		state.ast = new Parser(state.tokens).parseProgram();
 	}
 

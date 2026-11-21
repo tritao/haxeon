@@ -1,6 +1,6 @@
 # Tokens as a table
 
-Status: proposed, design only (`COMPILER_DATA_LAYOUT.md`, front end).
+Status: implemented (`COMPILER_DATA_LAYOUT.md`, front end); `src/compiler/syntax/TokenTable.hx`.
 
 ## Problem
 
@@ -38,6 +38,19 @@ Each step leaves the compiler's output byte-identical:
    caller keeps tokens.
 4. `TypeArguments.splitAssignments` and the `>=` splitting in the parser become row edits in the table instead of new
    arrays of tokens.
+
+## As built
+
+- `TokenTable` columns `kind`, `text`, `start`, `end`, indexed by `TokenId` (an abstract over `Int`); `TokenKind` is an enum
+  abstract over `Int` with a `toString`. The lexer fills per-thread scratch columns and copies them out at their length.
+- A table never changes. A recovering parse keeps the tokens it inserts itself, as ids past the table's rows.
+- `>=` is two rows, `>` and `=` with no space between, so the parser reads a table as it is; `toTokens()` (and
+  `Lexer.tokenize`) joins them back into one `GreaterEqual` token for tools, and the language service's semantic tokens
+  report them as one operator.
+- Spans are made on demand and not cached: most token spans the parser asked for only bounded a larger span, so the parser
+  merges by offsets (`spanBetween`, `spanTo`, `spanFrom`) and makes a span for a token only where a node keeps it.
+- The table is plain arrays in both builds. A `NativeColumn` would keep its bytes out of the collection trigger, but session
+  tables outlive any arena a one-shot parse could reset, so it waits for a measured need.
 
 ## Checks
 

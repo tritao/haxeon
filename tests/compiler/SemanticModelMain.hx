@@ -8,7 +8,7 @@ class SemanticModelMain {
 	static function main():Void {
 		var source = new SourceFile("Types.hx",
 			"package demo; typedef Count = Missing; class Counter {} function make():Count return 1;");
-		var tokens = new Lexer(source).tokenize(),
+		var tokens = new Lexer(source).tokenizeTable(),
 			program = new Parser(tokens).parseProgram();
 		var model = new SemanticModel(program, source, 7, tokens);
 
@@ -26,7 +26,7 @@ class SemanticModelMain {
 			&& Std.string(make.id) == "Types:function:make", "semantic model should bind declaration positions");
 
 		var emptySource = new SourceFile("Empty.hx", "package demo;");
-		var emptyTokens = new Lexer(emptySource).tokenize(),
+		var emptyTokens = new Lexer(emptySource).tokenizeTable(),
 			emptyProgram = new Parser(emptyTokens).parseProgram();
 		new SemanticModel(emptyProgram, emptySource, 1, emptyTokens);
 

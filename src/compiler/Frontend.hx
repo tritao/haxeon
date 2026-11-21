@@ -15,7 +15,7 @@ class Frontend {
 	}
 
 	public static function compileFile(file:SourceFile):IrProgram {
-		var ast = new Parser(new Lexer(file).tokenize()).parseProgram();
+		var ast = new Parser(new Lexer(file).tokenizeTable()).parseProgram();
 		// They are static fields of the module's class (ModuleFields), and this pipeline has no module.
 		if (ast.fields != null && ast.fields.length > 0)
 			throw new compiler.core.Diagnostic.CompileError(new compiler.core.Diagnostic("E0002",

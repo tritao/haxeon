@@ -5,6 +5,7 @@ import compiler.hl.HlWriterCache;
 import compiler.hl.incremental.HlLoweredCache;
 import compiler.hl.incremental.HlModuleAssembler;
 import compiler.ir.IrInliner.IrInlineCache;
+import compiler.syntax.TokenTable;
 import sys.FileSystem;
 import sys.io.File;
 
@@ -119,9 +120,9 @@ class CompilerMemoryCensus {
 			},
 				{name: "tokens and syntax trees of modules",
 				release: () -> for (state in compiler.modules) {
-					state.tokens = [];
-					state.recoveredTokens = [];
-					state.lastGoodTokens = [];
+					state.tokens = TokenTable.empty;
+					state.recoveredTokens = TokenTable.empty;
+					state.lastGoodTokens = TokenTable.empty;
 					state.ast = null;
 					state.recoveredAst = null;
 					state.lastGoodAst = null;

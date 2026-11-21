@@ -69,7 +69,7 @@ class SemanticWorkspaceMain {
 	static function parsedState(name:String, text:String):ModuleState {
 		var source = new SourceFile(name.split(".").join("/") + ".hx", text);
 		var state = new ModuleState(name, source);
-		state.tokens = new Lexer(source).tokenize();
+		state.tokens = new Lexer(source).tokenizeTable();
 		state.ast = new Parser(state.tokens).parseProgram();
 		state.semanticModel = new SemanticModel(state.parsedAst(), source, state.revision, state.tokens);
 		return state;

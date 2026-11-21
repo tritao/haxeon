@@ -29,8 +29,18 @@ class Lexer {
 		this.source = source == null || source == file.text ? file.bytes : haxe.io.Bytes.ofString(source);
 	}
 
-	public function tokenize():Array<Token> {
-		var tokens = [];
+	/** The file's tokens as objects, for callers that keep them; `tokenizeTable` gives the same tokens as a table. */
+	public function tokenize():Array<Token>
+		return tokenizeTable().toTokens();
+
+	/** The file's tokens, lexed into this thread's scratch columns and copied out at their final length. */
+	public function tokenizeTable():TokenTable {
+		var tokens = scratchColumns.value;
+		if (tokens == null) {
+			tokens = new LexerColumns();
+			scratchColumns.value = tokens;
+		}
+		tokens.clear();
 		// A `#!` line at the very start of the file (only there, as in Haxe) names a script's interpreter.
 		if (position == 0 && source.length >= 2 && source.get(0) == "#".code && source.get(1) == "!".code)
 			while (position < source.length && source.get(position) != "\n".code)
@@ -97,7 +107,7 @@ class Lexer {
 						file.span(start, position)));
 				while (position < source.length && isIdentifierPart(source.get(position)))
 					position++;
-				tokens.push(new Token(TokenKind.RegexLiteral, text(start, position), file.span(start, position)));
+				tokens.add(TokenKind.RegexLiteral, text(start, position), start, position);
 				continue;
 			}
 			if (code == "\"".code || code == "'".code) {
@@ -118,7 +128,7 @@ class Lexer {
 								]
 							}
 						]));
-				tokens.push(new Token(TokenKind.StringLiteral, text(start, position), file.span(start, position)));
+				tokens.add(TokenKind.StringLiteral, text(start, position), start, position);
 				continue;
 			}
 			if (isIdentifierStart(code)) {
@@ -126,7 +136,7 @@ class Lexer {
 				while (position < source.length && isIdentifierPart(source.get(position)))
 					position++;
 				var value = names.intern(source, start, position);
-				tokens.push(new Token(keyword(value), value, file.span(start, position)));
+				tokens.add(keyword(value), value, start, position);
 				continue;
 			}
 			if (isDigit(code)) {
@@ -136,7 +146,7 @@ class Lexer {
 					&& (source.get(position) == "x".code || source.get(position) == "X".code)) {
 					position++;
 					scanNumericDigits(start, true, false, true);
-					tokens.push(new Token(TokenKind.Integer, text(start, position), file.span(start, position)));
+					tokens.add(TokenKind.Integer, text(start, position), start, position);
 					continue;
 				}
 				scanNumericDigits(start, false, true);
@@ -160,7 +170,7 @@ class Lexer {
 						position++;
 					scanNumericDigits(start, false, false, true);
 				}
-				tokens.push(new Token(kind, text(start, position), file.span(start, position)));
+				tokens.add(kind, text(start, position), start, position);
 				continue;
 			}
 			if (code >= 0x80) {
@@ -193,8 +203,11 @@ class Lexer {
 					} else TokenKind.Less;
 				case ">":
 					if (position < source.length && source.get(position) == "=".code) {
+						// Two rows, as the table keeps `>=`.
+						tokens.add(TokenKind.Greater, operatorText(start, position), start, position);
+						start = position;
 						position++;
-						TokenKind.GreaterEqual;
+						TokenKind.Assign;
 					} else TokenKind.Greater;
 				case "!":
 					if (position < source.length && source.get(position) == "=".code) {
@@ -270,10 +283,10 @@ class Lexer {
 				default: throw new CompileError(new Diagnostic("E0001",
 					'Unexpected character "${String.fromCharCode(code)}"', file.span(start, position)));
 			}
-			tokens.push(new Token(kind, operatorText(start, position), file.span(start, position)));
+			tokens.add(kind, operatorText(start, position), start, position);
 		}
-		tokens.push(new Token(TokenKind.Eof, "", file.span(position, position)));
-		return tokens;
+		tokens.add(TokenKind.Eof, "", position, position);
+		return tokens.table(file);
 	}
 
 	/** Advances over a string body, including complete expressions embedded in single-quoted strings. */
@@ -352,6 +365,9 @@ class Lexer {
 
 	@:processWide("one table of identifier names per thread: a name's text never changes, and only its own thread uses a table")
 	static final nameTables = new sys.thread.Tls<Null<NameTable>>();
+
+	@:processWide("one set of scratch columns per thread, cleared by each file it lexes and copied out")
+	static final scratchColumns = new sys.thread.Tls<Null<LexerColumns>>();
 
 	final names:NameTable;
 
@@ -461,4 +477,32 @@ class Lexer {
 				hexadecimal ? "Hexadecimal literal requires at least one digit"
 				: "Exponent requires at least one digit", file.span(start, position)));
 	}
+}
+
+/** The columns a file's tokens are lexed into, reused by the files lexed on one thread (`Lexer.tokenizeTable`). */
+private class LexerColumns {
+	final kinds:Array<TokenKind> = [];
+	final texts:Array<String> = [];
+	final starts:Array<Int> = [];
+	final ends:Array<Int> = [];
+
+	public function new() {}
+
+	public function clear():Void {
+		kinds.resize(0);
+		texts.resize(0);
+		starts.resize(0);
+		ends.resize(0);
+	}
+
+	public inline function add(kind:TokenKind, text:String, start:Int, end:Int):Void {
+		kinds.push(kind);
+		texts.push(text);
+		starts.push(start);
+		ends.push(end);
+	}
+
+	/** The rows as the table of `file`, each column copied at its length. */
+	public function table(file:SourceFile):TokenTable
+		return new TokenTable(file, kinds.copy(), texts.copy(), starts.copy(), ends.copy());
 }

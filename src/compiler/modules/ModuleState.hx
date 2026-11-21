@@ -7,7 +7,7 @@ import compiler.ir.IrFunction;
 import compiler.semantic.SemanticModel;
 import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.Ast.AstProgram;
-import compiler.syntax.Token;
+import compiler.syntax.TokenTable;
 import compiler.types.DeclarationTypes.InferredSignature;
 import compiler.types.TypedAst.TypedFunction;
 
@@ -51,13 +51,13 @@ class ModuleState {
 	public var revision:Int = 1;
 	public var parseVersion:Int = 0;
 	public var typeVersion:Int = 0;
-	public var tokens:Array<Token> = [];
+	public var tokens = TokenTable.empty;
 	public var ast:Null<AstProgram>;
 	public var recoveredAst:Null<AstProgram>;
-	public var recoveredTokens:Array<Token> = [];
+	public var recoveredTokens = TokenTable.empty;
 	public var recoveredSemanticModel:Null<SemanticModel>;
 	public var semanticModel:Null<SemanticModel>;
-	public var lastGoodTokens:Array<Token> = [];
+	public var lastGoodTokens = TokenTable.empty;
 	public var lastGoodAst:Null<AstProgram>;
 	public var lastGoodSemanticModel:Null<SemanticModel>;
 	public var lastGoodSource:Null<SourceFile>;
@@ -183,10 +183,10 @@ class ModuleState {
 		if (revision > 0)
 			editedSinceIrScan = true;
 		revision++;
-		tokens = [];
+		tokens = TokenTable.empty;
 		ast = null;
 		recoveredAst = null;
-		recoveredTokens = [];
+		recoveredTokens = TokenTable.empty;
 		recoveredSemanticModel = null;
 		semanticModel = null;
 		diagnostics = [];

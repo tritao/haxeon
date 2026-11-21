@@ -114,7 +114,8 @@ class LintCommand {
 				continue;
 			var roots = command.rootsFor(path, rootTokens),
 				resolve = (importPath:String) -> command.resolve(roots, importPath);
-			var unused = checkUnused && tokens != null ? UnusedImports.find(tokens, resolve) : [];
+			var unused = checkUnused
+				&& tokens != null ? UnusedImports.find(compiler.syntax.TokenTable.ofTokens(tokens), resolve) : [];
 			var unordered = orderTokens != null ? ImportOrder.find(source, orderTokens,
 				resolve).filter(block -> block.sorted != null) : [];
 			if (unused.length == 0 && unordered.length == 0)

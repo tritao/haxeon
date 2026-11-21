@@ -19,7 +19,9 @@ import compiler.syntax.Ast.AstStatement;
 import compiler.syntax.Ast.AstType;
 import compiler.syntax.Ast.NativeLayoutQueryKind;
 import compiler.core.Source.SourceSpan;
+import compiler.core.Source.SourceFile;
 import compiler.syntax.Token.TokenKind;
+import compiler.syntax.TokenTable.TokenId;
 import compiler.core.Diagnostic.CompileError;
 import haxe.Int64;
 
@@ -139,11 +141,29 @@ private class LambdaUndo {
 	}
 }
 
+/** What a parser reads: a token table, or the tokens a caller already has. */
+abstract ParserTokens(TokenTable) to TokenTable {
+	inline function new(table:TokenTable)
+		this = table;
+
+	@:from static inline function ofTable(table:TokenTable):ParserTokens
+		return new ParserTokens(table);
+
+	@:from static function ofTokens(tokens:Array<Token>):ParserTokens
+		return new ParserTokens(TokenTable.ofTokens(tokens));
+}
+
 /** Recursive-descent parser for the supported Haxe-compatible source subset. */
 class Parser {
 	static inline final MAX_RECOVERY_DIAGNOSTICS = 20;
 
-	final tokens:Array<Token>;
+	final tokens:TokenTable;
+
+	/** The source's tokens; ids from it on name `inserted` tokens. */
+	final tokenCount:Int;
+
+	/** Tokens recovery inserted, which the source lacks; the table is never changed. */
+	final inserted:Array<Token> = [];
 	final finalLocals:Map<String, Bool> = [];
 	var position:Int = 0;
 
@@ -175,37 +195,9 @@ class Parser {
 
 	var recoveryDiagnostics:Array<compiler.core.Diagnostic> = [];
 
-	public function new(tokens:Array<Token>) {
-		this.tokens = typeDelimiterTokens(tokens);
-	}
-
-	/**
-	 * The lexer retains >= for tools. The grammar needs separate > and = tokens:
-	 * a type may end immediately before an initializer (Array<T>=[]). Expressions
-	 * rejoin adjacent tokens into >= and shift assignments, just as they do >>.
-	 * Normalize once into a parser-owned stream so speculative parsing can rewind
-	 * by position alone without mutating cached lexer tokens or their byte spans.
-	 */
-	static function typeDelimiterTokens(tokens:Array<Token>):Array<Token> {
-		var first = -1;
-		for (index in 0...tokens.length)
-			if (tokens[index].kind == TokenKind.GreaterEqual) {
-				first = index;
-				break;
-			}
-		if (first < 0)
-			return tokens;
-		var result = tokens.slice(0, first);
-		for (index in first...tokens.length) {
-			var token = tokens[index];
-			if (token.kind == TokenKind.GreaterEqual) {
-				var span = token.span;
-				result.push(new Token(TokenKind.Greater, ">", new SourceSpan(span.file, span.start, span.start + 1)));
-				result.push(new Token(TokenKind.Assign, "=", new SourceSpan(span.file, span.start + 1, span.end)));
-			} else
-				result.push(token);
-		}
-		return result;
+	public function new(tokens:ParserTokens) {
+		this.tokens = tokens;
+		tokenCount = this.tokens.length;
 	}
 
 	public function parseProgram():AstProgram {
@@ -220,10 +212,10 @@ class Parser {
 		while (check(TokenKind.Import) || isUsingKeyword()) {
 			// `using pack.Tools;` imports what `import pack.Tools;` does and makes the static functions of its classes extensions.
 			if (isUsingKeyword()) {
-				var start = advance().span, path = parseImportPath();
+				var start = spanOf(advance()), path = parseImportPath();
 				if (StringTools.endsWith(path, ".*"))
 					fail(previous(), "A using names a module or type, not a package");
-				usings.push({path: path, span: new SourceSpan(start.file, start.start, previous().span.end)});
+				usings.push({path: path, span: new SourceSpan(start.file, start.start, endOf(previous()))});
 				imports.push({path: path, alias: null});
 				consume(TokenKind.Semicolon);
 				continue;
@@ -231,9 +223,9 @@ class Parser {
 			advance();
 			var path = parseImportPath();
 			var alias:Null<String> = null;
-			if (check(TokenKind.Identifier) && current().text == "as") {
+			if (check(TokenKind.Identifier) && textOf(current()) == "as") {
 				advance();
-				alias = consume(TokenKind.Identifier).text;
+				alias = textOf(consume(TokenKind.Identifier));
 				if (importNames.exists(alias))
 					fail(previous(), 'Duplicate import alias "$alias"');
 				importNames.set(alias, true);
@@ -257,15 +249,15 @@ class Parser {
 					continue;
 				}
 				var visibility = match(TokenKind.Private) ? previous() : match(TokenKind.Public) ? previous() : null;
-				var externDeclaration = check(TokenKind.Identifier) && current().text == "extern";
+				var externDeclaration = check(TokenKind.Identifier) && textOf(current()) == "extern";
 				if (externDeclaration)
 					advance();
 				if (match(TokenKind.Typedef))
-					aliases.push(parseTypeAlias(visibility == null ? previous()
-						.span : visibility.span, visibility != null && visibility.kind == TokenKind.Private, metadata));
+					aliases.push(parseTypeAlias(visibility == null ? spanOf(previous()) : spanOf(visibility),
+						visibility != null && kindOf(visibility) == TokenKind.Private, metadata));
 				else if (match(TokenKind.Enum)) {
-					var start = previous().span;
-					if (check(TokenKind.Identifier) && current().text == "abstract") {
+					var start = spanOf(previous());
+					if (check(TokenKind.Identifier) && textOf(current()) == "abstract") {
 						advance();
 						abstracts.push(parseAbstract(start, false, metadata, true));
 					} else
@@ -276,22 +268,22 @@ class Parser {
 					var isStruct = check(TokenKind.Struct);
 					if (isStruct && externDeclaration)
 						fail(current(), "A struct cannot be declared extern");
-					classes.push(parseClass(visibility != null && visibility.kind == TokenKind.Private, metadata,
+					classes.push(parseClass(visibility != null && kindOf(visibility) == TokenKind.Private, metadata,
 						externDeclaration, isStruct));
 				} else if (check(TokenKind.Var) || check(TokenKind.Final)
 					|| check(TokenKind.Inline) && (peekKind(1) == TokenKind.Var || peekKind(1) == TokenKind.Final)) {
 					// A module-level variable: public unless `private`, as module-level declarations are (a class's field is private).
 					if (externDeclaration)
 						fail(current(), "A module-level variable cannot be declared extern");
-					var start = visibility == null ? current().span : visibility.span,
-						isPublic = visibility == null || visibility.kind == TokenKind.Public,
+					var start = visibility == null ? spanOf(current()) : spanOf(visibility),
+						isPublic = visibility == null || kindOf(visibility) == TokenKind.Public,
 						isInline = match(TokenKind.Inline),
 						isFinal = match(TokenKind.Final);
 					fields.push(parseField(metadata, isPublic, true, isInline, isFinal, start));
 				} else if (visibility != null)
 					fail(current(), "Top-level visibility modifier is not supported for this declaration");
-				else if (check(TokenKind.Identifier) && current().text == "abstract") {
-					var start = advance().span;
+				else if (check(TokenKind.Identifier) && textOf(current()) == "abstract") {
+					var start = spanOf(advance());
 					abstracts.push(parseAbstract(start, externDeclaration, metadata));
 				} else {
 					var inlineFunction = match(TokenKind.Inline);
@@ -320,17 +312,17 @@ class Parser {
 
 	/** `using` before a dotted path: Haxe's keyword, an identifier to this lexer, so a variable may still be named `using`. */
 	function isUsingKeyword():Bool
-		return check(TokenKind.Identifier) && current().text == "using" && isNameToken(peekKind(1));
+		return check(TokenKind.Identifier) && textOf(current()) == "using" && isNameToken(peekKind(1));
 
 	/** Parse a module or package import, including Haxe's trailing `.*`. */
 	function parseImportPath():String {
-		var path = consumeName().text;
+		var path = textOf(consumeName());
 		while (match(TokenKind.Dot)) {
 			if (match(TokenKind.Star)) {
 				path += ".*";
 				break;
 			}
-			path += "." + consumeName().text;
+			path += "." + textOf(consumeName());
 		}
 		return path;
 	}
@@ -346,7 +338,7 @@ class Parser {
 	function synchronizeTopLevel(declarationStart:Int):Void {
 		var braceDepth = 0;
 		for (index in 0...position)
-			switch tokens[index].kind {
+			switch kindAt(index) {
 				case TokenKind.LeftBrace:
 					braceDepth++;
 				case TokenKind.RightBrace:
@@ -359,7 +351,7 @@ class Parser {
 		while (!check(TokenKind.Eof)) {
 			if (braceDepth == 0 && isTopLevelStart(current()))
 				return;
-			switch advance().kind {
+			switch kindOf(advance()) {
 				case TokenKind.LeftBrace:
 					braceDepth++;
 				case TokenKind.RightBrace:
@@ -370,31 +362,31 @@ class Parser {
 		}
 	}
 
-	static function isTopLevelStart(token:Token):Bool
-		return switch token.kind {
+	function isTopLevelStart(token:TokenId):Bool
+		return switch kindOf(token) {
 			case TokenKind.Function, TokenKind.Class, TokenKind.Interface, TokenKind.Enum, TokenKind.Typedef,
 				TokenKind.Public, TokenKind.Private, TokenKind.Var, TokenKind.Final,
 				TokenKind.At: true;
-			case TokenKind.Identifier: token.text == "abstract" || token.text == "extern";
+			case TokenKind.Identifier: textOf(token) == "abstract" || textOf(token) == "extern";
 			default: false;
 		};
 
 	function parseMetadata():Array<compiler.syntax.Ast.AstMetadata> {
 		var result = [];
 		while (match(TokenKind.At)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			consume(TokenKind.Colon);
 			var name = parseQualifiedName(), arguments = [];
 			// Arguments follow the name directly, as in Haxe: with a space, `@:privateAccess (a + b)` is metadata on a parenthesized
 			// expression, not metadata with an argument.
-			if (check(TokenKind.LeftParen) && current().span.start == previous().span.end) {
+			if (check(TokenKind.LeftParen) && startOf(current()) == endOf(previous())) {
 				advance();
 				if (!check(TokenKind.RightParen))
 					do arguments.push(parseExpression()) while (match(TokenKind.Comma));
-				var end = consume(TokenKind.RightParen).span;
+				var end = spanOf(consume(TokenKind.RightParen));
 				result.push({name: name, arguments: arguments, span: start.merge(end)});
 			} else
-				result.push({name: name, arguments: arguments, span: start.merge(previous().span)});
+				result.push({name: name, arguments: arguments, span: spanTo(start, previous())});
 		}
 		return result;
 	}
@@ -402,7 +394,7 @@ class Parser {
 	/** An abstract, or with `isEnum` an enum abstract: the same members, plus its values and `implements`. */
 	function parseAbstract(start:SourceSpan, isExtern:Bool = false, ?metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			isEnum:Bool = false):AstAbstract {
-		var name = consume(TokenKind.Identifier).text,
+		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.LeftParen);
@@ -419,10 +411,10 @@ class Parser {
 			if (isEnum && match(TokenKind.Colon)) fail(previous(),
 				'Enum abstract "$name": use "implements" to declare conformance');
 			var conversion = consume(TokenKind.Identifier);
-			if (conversion.text != "from" && conversion.text != "to")
+			if (textOf(conversion) != "from" && textOf(conversion) != "to")
 				fail(conversion, isEnum ? 'Expected "from", "to" or "implements"' : 'Expected "from" or "to"');
 			var conversionType = parseType();
-			if (conversion.text == "from")
+			if (textOf(conversion) == "from")
 				fromTypes.push(conversionType);
 			else
 				toTypes.push(conversionType);
@@ -435,7 +427,7 @@ class Parser {
 		var nextImplicitInt:Null<Int> = 0;
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata(),
-				memberStart = current().span;
+				memberStart = spanOf(current());
 			var isStatic = false,
 				isInline = false,
 				isFinal = false,
@@ -453,7 +445,7 @@ class Parser {
 					isExternMember = true;
 					advance();
 				} else
-					isPublic = advance().kind == TokenKind.Public;
+					isPublic = kindOf(advance()) == TokenKind.Public;
 			}
 			if (values != null && !isStatic && isEnumAbstractValue(isFinal)) {
 				var value = parseEnumAbstractValue(name, underlying, nextImplicitInt, methodMetadata);
@@ -469,12 +461,12 @@ class Parser {
 				fields.push(parseField(methodMetadata, isPublic, isStatic, isInline, isFinal, memberStart));
 				continue;
 			}
-			var functionStart = consume(TokenKind.Function).span,
-				methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+			var functionStart = spanOf(consume(TokenKind.Function)),
+				methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 			methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
 				externBody(isExtern, isExternMember, isInline), methodMetadata, isInline, isPublic));
 		}
-		var end = consume(TokenKind.RightBrace).span;
+		var end = spanOf(consume(TokenKind.RightBrace));
 		return {
 			name: name,
 			isExtern: isExtern,
@@ -513,46 +505,46 @@ class Parser {
 			var written = previous();
 			switch parseType() {
 				case NamedType(typeName) if (typeName == abstractName):
-				default: fail(written, 'Enum abstract value ${valueName.text} has the type $abstractName');
+				default: fail(written, 'Enum abstract value ${textOf(valueName)} has the type $abstractName');
 			}
 		}
 		var value = if (match(TokenKind.Assign)) parseExpression();
 		else implicitEnumAbstractValue(underlying, valueName, nextImplicitInt);
-		var end = consume(TokenKind.Semicolon).span;
+		var end = spanOf(consume(TokenKind.Semicolon));
 		return {
-			name: valueName.text,
+			name: textOf(valueName),
 			metadata: metadata,
 			value: value,
-			span: valueName.span.merge(end)
+			span: spanOf(valueName).merge(end)
 		};
 	}
 
-	function implicitEnumAbstractValue(underlying:AstType, name:Token, nextInt:Null<Int>):AstExpression {
+	function implicitEnumAbstractValue(underlying:AstType, name:TokenId, nextInt:Null<Int>):AstExpression {
 		return switch underlying {
-			case IntType if (nextInt != null): IntegerLiteral(nextInt, name.span);
+			case IntType if (nextInt != null): IntegerLiteral(nextInt, spanOf(name));
 			case IntType:
-				fail(name, 'Enum abstract value ${name.text} needs an explicit value after a non-literal value');
+				fail(name, 'Enum abstract value ${textOf(name)} needs an explicit value after a non-literal value');
 				null;
-			case StringType: StringLiteral(name.text, name.span);
+			case StringType: StringLiteral(textOf(name), spanOf(name));
 			default:
-				fail(name, 'Enum abstract value ${name.text} needs an explicit value for this underlying type');
+				fail(name, 'Enum abstract value ${textOf(name)} needs an explicit value for this underlying type');
 				null;
 		};
 	}
 
 	function parseTypeAlias(start:SourceSpan, isPrivate:Bool,
 			metadata:Array<compiler.syntax.Ast.AstMetadata>):AstTypeAlias {
-		var name = consume(TokenKind.Identifier).text,
+		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints);
 		consume(TokenKind.Assign);
-		var type = parseType(), end = previous().span;
+		var type = parseType(), end = spanOf(previous());
 		switch type {
 			case AnonymousType(_):
 				if (match(TokenKind.Semicolon))
-					end = previous().span;
+					end = spanOf(previous());
 			default:
-				end = consume(TokenKind.Semicolon).span;
+				end = spanOf(consume(TokenKind.Semicolon));
 		}
 		return {
 			name: name,
@@ -566,7 +558,7 @@ class Parser {
 	}
 
 	function parseEnum(start:SourceSpan, metadata:Array<compiler.syntax.Ast.AstMetadata>):AstEnum {
-		var name = consume(TokenKind.Identifier).text,
+		var name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			cases = [],
@@ -581,8 +573,8 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		while (!check(TokenKind.RightBrace)) {
 			var caseMetadata = parseMetadata(), isStatic = false, isInline = false, isPublic:Null<Bool> = null;
-			while (true) switch current().kind {
-				case TokenKind.Public, TokenKind.Private: isPublic = current().kind == TokenKind.Public;
+			while (true) switch kindOf(current()) {
+				case TokenKind.Public, TokenKind.Private: isPublic = kindOf(current()) == TokenKind.Public;
 					advance();
 				case TokenKind.Static: isStatic = true;
 					advance();
@@ -591,7 +583,7 @@ class Parser {
 				default: break;
 			}
 			if (match(TokenKind.Function)) {
-				var functionStart = previous().span, methodName = consume(TokenKind.Identifier).text;
+				var functionStart = spanOf(previous()), methodName = textOf(consume(TokenKind.Identifier));
 				methods.push(parseFunctionBody(functionStart, methodName, false, isStatic, false, caseMetadata,
 					isInline, isPublic));
 				continue;
@@ -604,10 +596,10 @@ class Parser {
 				if (!check(TokenKind.RightParen))
 					do {
 						var optional = match(TokenKind.Question),
-							parameterStart = current().span,
+							parameterStart = spanOf(current()),
 							name:Null<String> = null;
 						if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Colon) {
-							name = advance().text;
+							name = textOf(advance());
 							advance();
 						}
 						var type = parseType();
@@ -615,20 +607,20 @@ class Parser {
 							name: name,
 							type: type,
 							optional: optional,
-							span: parameterStart.merge(previous().span)
+							span: spanTo(parameterStart, previous())
 						});
 					} while (match(TokenKind.Comma));
 				consume(TokenKind.RightParen);
 			}
 			cases.push({
-				name: caseToken.text,
+				name: textOf(caseToken),
 				metadata: caseMetadata,
 				params: params,
-				span: caseToken.span.merge(previous().span)
+				span: spanBetween(caseToken, previous())
 			});
 			consume(TokenKind.Semicolon);
 		}
-		var end = consume(TokenKind.RightBrace).span;
+		var end = spanOf(consume(TokenKind.RightBrace));
 		return {
 			name: name,
 			typeParameters: typeParameters,
@@ -642,19 +634,19 @@ class Parser {
 	}
 
 	function parseQualifiedName():String {
-		if (recovering && isExpressionTerminator(current().kind)) {
-			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		if (recovering && isExpressionTerminator(kindOf(current()))) {
+			var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
 			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected name", span));
 			return "";
 		}
-		var name = consumeName().text;
+		var name = textOf(consumeName());
 		while (match(TokenKind.Dot)) {
-			if (recovering && isExpressionTerminator(current().kind)) {
-				var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+			if (recovering && isExpressionTerminator(kindOf(current()))) {
+				var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
 				recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected name", span));
 				break;
 			}
-			name += "." + consumeName().text;
+			name += "." + textOf(consumeName());
 		}
 		return name;
 	}
@@ -760,11 +752,11 @@ class Parser {
 		if (!check(TokenKind.RightParen)) {
 			do {
 				// `...values`: an array whose elements a rest parameter receives.
-				var spreadStart = current().span, spread = matchEllipsis() ? spreadStart : null;
+				var spreadStart = current(), spread = matchEllipsis();
 				lambdaPath.pushArgument(callee, arguments.length);
 				var argument = parseExpression();
 				lambdaPath.pop();
-				arguments.push(spread == null ? argument : Spread(argument, spread.merge(expressionSpan(argument))));
+				arguments.push(spread ? Spread(argument, spanFrom(spreadStart, expressionSpan(argument))) : argument);
 			} while (match(TokenKind.Comma));
 		}
 		return arguments;
@@ -798,8 +790,8 @@ class Parser {
 	function parseFunction(allowMissingReturn:Bool, isExtern:Bool = false,
 			?metadata:Array<compiler.syntax.Ast.AstMetadata>,
 			isInline:Bool = false):AstFunction {
-		var start = consume(TokenKind.Function).span,
-			name = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+		var start = spanOf(consume(TokenKind.Function)),
+			name = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 		return parseFunctionBody(start, name, allowMissingReturn, false, isExtern, metadata, isInline);
 	}
 
@@ -837,9 +829,9 @@ class Parser {
 				var argumentType = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
 					defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 				arguments.push({
-					name: argumentToken.text,
+					name: textOf(argumentToken),
 					type: argumentType,
-					span: argumentToken.span.merge(previous().span),
+					span: spanBetween(argumentToken, previous()),
 					optional: optional,
 					defaultValue: defaultValue
 				});
@@ -851,7 +843,7 @@ class Parser {
 			&& name == "new" ? VoidType : InferredType;
 		var statements = [], end:SourceSpan;
 		if (isExtern) {
-			end = consume(TokenKind.Semicolon).span;
+			end = spanOf(consume(TokenKind.Semicolon));
 		} else if (match(TokenKind.LeftBrace)) {
 			var bodyStart = position;
 			while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
@@ -867,10 +859,10 @@ class Parser {
 					synchronizeStatement(bodyStart, statementStart);
 				}
 			}
-			end = consume(TokenKind.RightBrace).span;
+			end = spanOf(consume(TokenKind.RightBrace));
 		} else if (recoveringAtEnd()) {
 			missingFunctionBody();
-			end = current().span;
+			end = spanOf(current());
 		} else {
 			appendStatements(statements, parseStatements());
 			end = statementSpan(statements[statements.length - 1]);
@@ -907,7 +899,7 @@ class Parser {
 	function synchronizeStatement(bodyStart:Int, statementStart:Int):Void {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
-			switch tokens[index].kind {
+			switch kindAt(index) {
 				case TokenKind.LeftBrace:
 					braceDepth++;
 				case TokenKind.RightBrace:
@@ -920,7 +912,7 @@ class Parser {
 		while (!check(TokenKind.Eof)) {
 			if (braceDepth == 0 && check(TokenKind.RightBrace))
 				return;
-			var consumed = advance().kind;
+			var consumed = kindOf(advance());
 			switch consumed {
 				case TokenKind.LeftBrace:
 					braceDepth++;
@@ -941,9 +933,9 @@ class Parser {
 			return result;
 		do {
 			var parameter = consume(TokenKind.Identifier);
-			if (result.indexOf(parameter.text) >= 0)
-				fail(parameter, 'Duplicate type parameter "${parameter.text}"');
-			result.push(parameter.text);
+			if (result.indexOf(textOf(parameter)) >= 0)
+				fail(parameter, 'Duplicate type parameter "${textOf(parameter)}"');
+			result.push(textOf(parameter));
 			// `T:Measured`, `T:Readable & Writable` (Haxe 4's spelling of several constraints) or `T:(Readable, Writable)`.
 			if (match(TokenKind.Colon)) {
 				var grouped = match(TokenKind.LeftParen);
@@ -951,9 +943,9 @@ class Parser {
 					var constraint = parseType();
 					if (constraints != null)
 						constraints.push({
-							parameter: parameter.text,
+							parameter: textOf(parameter),
 							type: constraint,
-							span: parameter.span.merge(previous().span)
+							span: spanBetween(parameter, previous())
 						});
 				} while (grouped ? match(TokenKind.Comma) : match(TokenKind.Ampersand));
 				if (grouped)
@@ -975,8 +967,8 @@ class Parser {
 
 	function parseClass(isPrivate:Bool, metadata:Array<compiler.syntax.Ast.AstMetadata>, isExtern:Bool = false,
 			isStruct:Bool = false):AstClass {
-		var start = consume(isStruct ? TokenKind.Struct : TokenKind.Class).span,
-			name = consume(TokenKind.Identifier).text,
+		var start = spanOf(consume(isStruct ? TokenKind.Struct : TokenKind.Class)),
+			name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			base:Null<AstType> = null,
@@ -1001,11 +993,11 @@ class Parser {
 					continue;
 				}
 				// Haxe's position of a field starts at its first modifier, after its metadata.
-				var modifierStart = current().span;
+				var modifierStart = spanOf(current());
 				var isStatic = false, isInline = false, isFinal = false, isOverride = false, isExternMember = false;
 				var isPublic:Null<Bool> = null;
 				while (true) {
-					if (current().kind == TokenKind.Identifier && current().text == "override") {
+					if (kindOf(current()) == TokenKind.Identifier && textOf(current()) == "override") {
 						isOverride = true;
 						advance();
 						continue;
@@ -1015,9 +1007,9 @@ class Parser {
 						advance();
 						continue;
 					}
-					switch current().kind {
+					switch kindOf(current()) {
 						case TokenKind.Public, TokenKind.Private:
-							isPublic = current().kind == TokenKind.Public;
+							isPublic = kindOf(current()) == TokenKind.Public;
 							advance();
 						case TokenKind.Static:
 							advance();
@@ -1033,8 +1025,8 @@ class Parser {
 					}
 				}
 				if (match(TokenKind.Function)) {
-					var functionStart = previous().span,
-						methodName = check(TokenKind.New) ? advance().text : consume(TokenKind.Identifier).text;
+					var functionStart = spanOf(previous()),
+						methodName = check(TokenKind.New) ? textOf(advance()) : textOf(consume(TokenKind.Identifier));
 					methods.push(parseFunctionBody(functionStart, methodName, true, isStatic,
 						externBody(isExtern, isExternMember, isInline), memberMetadata, isInline, isPublic,
 						isOverride));
@@ -1047,7 +1039,7 @@ class Parser {
 				synchronizeClassMember(bodyStart, memberStart);
 			}
 		}
-		var end = consume(TokenKind.RightBrace).span;
+		var end = spanOf(consume(TokenKind.RightBrace));
 		return {
 			name: name,
 			isStruct: isStruct,
@@ -1070,9 +1062,9 @@ class Parser {
 	 */
 	function parseField(memberMetadata:Array<compiler.syntax.Ast.AstMetadata>, isPublic:Null<Bool>, isStatic:Bool,
 			isInline:Bool, isFinal:Bool, ?start:SourceSpan, ?declarationStart:SourceSpan):AstField {
-		var fieldStart = start == null ? current().span : start;
+		var fieldStart = start == null ? spanOf(current()) : start;
 		match(TokenKind.Var);
-		var fieldName = consume(TokenKind.Identifier).text;
+		var fieldName = textOf(consume(TokenKind.Identifier));
 		var readAccess = null, writeAccess = null;
 		if (match(TokenKind.LeftParen)) {
 			readAccess = parseFieldAccess();
@@ -1096,7 +1088,7 @@ class Parser {
 				fail(current(), 'Field "$fieldName" requires a type or initializer');
 		}
 		// Like local declarations, a braced initializer (block or switch) may omit the trailing semicolon.
-		var end = initializer == null ? consume(TokenKind.Semicolon).span : expressionEnd(initializer);
+		var end = initializer == null ? spanOf(consume(TokenKind.Semicolon)) : expressionEnd(initializer);
 		return {
 			name: fieldName,
 			isPublic: isPublic,
@@ -1115,7 +1107,7 @@ class Parser {
 
 	/** `extern` among a member's modifiers. */
 	inline function isExternModifier():Bool
-		return current().kind == TokenKind.Identifier && current().text == "extern";
+		return kindOf(current()) == TokenKind.Identifier && textOf(current()) == "extern";
 
 	/**
 	 * Whether a method has no body: every method of an extern type, and, as in Haxe, an `extern` member that is not inline (a
@@ -1125,7 +1117,7 @@ class Parser {
 		return externType || externMember && !isInline;
 
 	inline function isMacroModifier():Bool
-		return check(TokenKind.Identifier) && current().text == "macro";
+		return check(TokenKind.Identifier) && textOf(current()) == "macro";
 
 	/** Macro declarations are compile-time only; retain their source tokens but omit them from the runtime AST. */
 	function skipMacroFunction():Void {
@@ -1138,7 +1130,7 @@ class Parser {
 		var parentheses = 0, brackets = 0, bodyDepth = 0;
 		while (!check(TokenKind.Eof)) {
 			var token = advance();
-			switch token.kind {
+			switch kindOf(token) {
 				case TokenKind.LeftParen:
 					parentheses++;
 				case TokenKind.RightParen:
@@ -1152,7 +1144,7 @@ class Parser {
 				case TokenKind.LeftBrace if (parentheses == 0 && brackets == 0):
 					bodyDepth = 1;
 					while (bodyDepth > 0 && !check(TokenKind.Eof))
-						switch advance().kind {
+						switch kindOf(advance()) {
 							case TokenKind.LeftBrace: bodyDepth++;
 							case TokenKind.RightBrace: bodyDepth--;
 							default:
@@ -1173,7 +1165,7 @@ class Parser {
 	function synchronizeClassMember(bodyStart:Int, memberStart:Int):Void {
 		var braceDepth = 0;
 		for (index in bodyStart...position)
-			switch tokens[index].kind {
+			switch kindAt(index) {
 				case TokenKind.LeftBrace:
 					braceDepth++;
 				case TokenKind.RightBrace:
@@ -1186,7 +1178,7 @@ class Parser {
 		while (!check(TokenKind.Eof)) {
 			if (braceDepth == 0 && (check(TokenKind.RightBrace) || isClassMemberStart(current())))
 				return;
-			switch advance().kind {
+			switch kindOf(advance()) {
 				case TokenKind.LeftBrace:
 					braceDepth++;
 				case TokenKind.RightBrace:
@@ -1197,8 +1189,8 @@ class Parser {
 		}
 	}
 
-	static function isClassMemberStart(token:Token):Bool
-		return switch token.kind {
+	function isClassMemberStart(token:TokenId):Bool
+		return switch kindOf(token) {
 			case TokenKind.Function, TokenKind.Var, TokenKind.Public, TokenKind.Private, TokenKind.Static,
 				TokenKind.Inline, TokenKind.Final, TokenKind.At,
 				TokenKind.Identifier: true;
@@ -1207,7 +1199,7 @@ class Parser {
 
 	function parseFieldAccess():AstFieldAccess {
 		var token = advance();
-		var access:Null<AstFieldAccess> = switch token.text {
+		var access:Null<AstFieldAccess> = switch textOf(token) {
 			case "null": NullAccess;
 			case "default": DefaultAccess;
 			case "never": NeverAccess;
@@ -1217,13 +1209,13 @@ class Parser {
 			default: null;
 		};
 		if (access == null)
-			fail(token, 'Unknown property access mode "${token.text}"');
+			fail(token, 'Unknown property access mode "${textOf(token)}"');
 		return access;
 	}
 
 	function parseInterface():AstInterface {
-		var start = consume(TokenKind.Interface).span,
-			name = consume(TokenKind.Identifier).text,
+		var start = spanOf(consume(TokenKind.Interface)),
+			name = textOf(consume(TokenKind.Identifier)),
 			typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 			typeParameters = parseTypeParameters(typeConstraints),
 			bases = [];
@@ -1236,14 +1228,14 @@ class Parser {
 		var methods:Array<AstFunction> = [], fields:Array<AstField> = [];
 		while (!check(TokenKind.RightBrace)) {
 			var methodMetadata = parseMetadata(),
-				memberStart = current().span,
+				memberStart = spanOf(current()),
 				isPublic:Null<Bool> = null,
 				isStatic = false,
 				isFinal = false;
 			while (check(TokenKind.Public) || check(TokenKind.Private) || check(TokenKind.Static)
 				|| check(TokenKind.Inline) || check(TokenKind.Final)) {
 				if (check(TokenKind.Public) || check(TokenKind.Private))
-					isPublic = current().kind == TokenKind.Public;
+					isPublic = kindOf(current()) == TokenKind.Public;
 				else if (check(TokenKind.Static))
 					isStatic = true;
 				else if (check(TokenKind.Final))
@@ -1255,8 +1247,8 @@ class Parser {
 				fields.push(parseField(methodMetadata, isPublic, isStatic, false, isFinal, null, memberStart));
 				continue;
 			}
-			var methodStart = consume(TokenKind.Function).span,
-				methodName = consume(TokenKind.Identifier).text;
+			var methodStart = spanOf(consume(TokenKind.Function)),
+				methodName = textOf(consume(TokenKind.Identifier));
 			var typeConstraints:Array<compiler.syntax.Ast.AstTypeConstraint> = [],
 				typeParameters = parseTypeParameters(typeConstraints);
 			consume(TokenKind.LeftParen);
@@ -1265,10 +1257,10 @@ class Parser {
 				do {
 					var rest = matchEllipsis(),
 						optional = match(TokenKind.Question),
-						argumentName = consume(TokenKind.Identifier).text;
+						argumentName = textOf(consume(TokenKind.Identifier));
 					consume(TokenKind.Colon);
 					var type = restType(rest, parseType()),
-						span = previous().span,
+						span = spanOf(previous()),
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
 						name: argumentName,
@@ -1281,7 +1273,7 @@ class Parser {
 			rejectEarlyRest(arguments);
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : failType("Interface methods require a return type"),
-				end = consume(TokenKind.Semicolon).span;
+				end = spanOf(consume(TokenKind.Semicolon));
 			methods.push({
 				name: methodName,
 				isStatic: false,
@@ -1297,7 +1289,7 @@ class Parser {
 				span: methodStart.merge(end)
 			});
 		}
-		var end = consume(TokenKind.RightBrace).span;
+		var end = spanOf(consume(TokenKind.RightBrace));
 		return {
 			name: name,
 			typeParameters: typeParameters,
@@ -1317,10 +1309,10 @@ class Parser {
 					return PrivateAccessStatement(statement, entry.span.merge(statementSpan(statement)));
 			return statement;
 		}
-		if (check(TokenKind.Identifier) && current().text == "scoped" && peekKind(1) == TokenKind.Var) {
-			var start = advance().span;
+		if (check(TokenKind.Identifier) && textOf(current()) == "scoped" && peekKind(1) == TokenKind.Var) {
+			var start = spanOf(advance());
 			consume(TokenKind.Var);
-			var name = consume(TokenKind.Identifier).text;
+			var name = textOf(consume(TokenKind.Identifier));
 			var type = match(TokenKind.Colon) ? parseType() : null;
 			consume(TokenKind.Assign);
 			var initializer = parseAnchoredExpression(name + "=");
@@ -1331,8 +1323,8 @@ class Parser {
 		if (inlined)
 			advance();
 		if (match(TokenKind.Function)) {
-			var start = inlined ? tokens[position - 2].span : previous().span,
-				name = consume(TokenKind.Identifier).text;
+			var start = inlined ? spanOf(ahead(-2)) : spanOf(previous()),
+				name = textOf(consume(TokenKind.Identifier));
 			// A local function is anchored at its name.
 			lambdaPath.push(name);
 			var identity = openLambda();
@@ -1347,9 +1339,9 @@ class Parser {
 						type = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
-						name: argument.text,
+						name: textOf(argument),
 						type: type,
-						span: argument.span.merge(previous().span),
+						span: spanBetween(argument, previous()),
 						optional: optional,
 						defaultValue: defaultValue
 					});
@@ -1358,28 +1350,28 @@ class Parser {
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : null,
 				body = parseStatementOrBlock(),
-				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
+				end = body.length == 0 ? spanOf(previous()) : statementSpan(body[body.length - 1]),
 				span = start.merge(end),
 				declared = result == null ? null : localFunctionType(arguments, result);
 			closeLambda();
 			return VarDeclaration(name, declared, Lambda(arguments, body, identity, span), span);
 		}
 		if (match(TokenKind.Defer)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			var body = parseStatementOrBlock();
 			return Defer(body, start.merge(statementEnd(body)));
 		}
 		if (match(TokenKind.Break)) {
-			var start = previous().span;
-			return Break(start.merge(consume(TokenKind.Semicolon).span));
+			var start = spanOf(previous());
+			return Break(spanTo(start, consume(TokenKind.Semicolon)));
 		}
 		if (match(TokenKind.Continue)) {
-			var start = previous().span;
-			return Continue(start.merge(consume(TokenKind.Semicolon).span));
+			var start = spanOf(previous());
+			return Continue(spanTo(start, consume(TokenKind.Semicolon)));
 		}
 		if (match(TokenKind.Var)) {
-			var start = previous().span;
-			var name = consume(TokenKind.Identifier).text;
+			var start = spanOf(previous());
+			var name = textOf(consume(TokenKind.Identifier));
 			var type = match(TokenKind.Colon) ? parseType() : null;
 			consume(TokenKind.Assign);
 			var initializer = parseAnchoredExpression(name + "=");
@@ -1387,33 +1379,33 @@ class Parser {
 			return VarDeclaration(name, type, initializer, start.merge(end));
 		}
 		if (match(TokenKind.Return)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			if (check(TokenKind.Semicolon))
-				return ReturnVoid(start.merge(consume(TokenKind.Semicolon).span));
+				return ReturnVoid(spanTo(start, consume(TokenKind.Semicolon)));
 			var expression = parseAnchoredExpression("return");
 			var end = expressionEnd(expression);
 			return Return(expression, start.merge(end));
 		}
 		if (match(TokenKind.Throw)) {
-			var start = previous().span,
+			var start = spanOf(previous()),
 				expression = parseExpression(),
 				end = expressionEnd(expression);
 			return Throw(expression, start.merge(end));
 		}
 		if (match(TokenKind.Try)) {
-			var start = previous().span,
+			var start = spanOf(previous()),
 				tryBranch = parseTryBody(),
 				catches:Array<compiler.syntax.Ast.AstCatch> = [],
-				end = previous().span;
+				end = spanOf(previous());
 			do {
-				var catchStart = consume(TokenKind.Catch).span;
+				var catchStart = spanOf(consume(TokenKind.Catch));
 				consume(TokenKind.LeftParen);
-				var catchName = consume(TokenKind.Identifier).text;
+				var catchName = textOf(consume(TokenKind.Identifier));
 				// As in Haxe, `catch (e)` with no type catches everything.
 				var catchType = match(TokenKind.Colon) ? parseType() : NamedType("Dynamic");
 				consume(TokenKind.RightParen);
 				var catchBranch = parseTryBody();
-				end = catchBranch.length == 0 ? previous().span : statementSpan(catchBranch[catchBranch.length - 1]);
+				end = catchBranch.length == 0 ? spanOf(previous()) : statementSpan(catchBranch[catchBranch.length - 1]);
 				catches.push({
 					name: catchName,
 					type: catchType,
@@ -1424,14 +1416,14 @@ class Parser {
 			return Try(tryBranch, catches, start.merge(end));
 		}
 		if (match(TokenKind.Switch)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			// A parenthesized subject is an ordinary grouped expression, which
 			// also covers a type check such as `switch (value : Kind)`.
 			var expression = parseExpression();
 			consume(TokenKind.LeftBrace);
 			var cases = [];
 			while (match(TokenKind.Case)) {
-				var caseStart = previous().span,
+				var caseStart = spanOf(previous()),
 					values = parseCasePatterns();
 				var guard = parseSwitchGuard();
 				consume(TokenKind.Colon);
@@ -1454,9 +1446,9 @@ class Parser {
 				while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof))
 					appendStatements(defaultBranch, parseStatements());
 			}
-			var end = consume(TokenKind.RightBrace).span;
+			var end = spanOf(consume(TokenKind.RightBrace));
 			if (match(TokenKind.Semicolon))
-				end = previous().span;
+				end = spanOf(previous());
 			return Switch(expression, cases, defaultBranch, hasDefault, start.merge(end));
 		}
 		if (check(TokenKind.Identifier) || check(TokenKind.This)) {
@@ -1464,8 +1456,8 @@ class Parser {
 				savedLambdas = lambdaMark(),
 				target = parseOr();
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
-				var delta = previous().kind == TokenKind.Increment ? 1 : -1,
-					end = consume(TokenKind.Semicolon).span;
+				var delta = kindOf(previous()) == TokenKind.Increment ? 1 : -1,
+					end = spanOf(consume(TokenKind.Semicolon));
 				return switch target {
 					case Variable(name, _):
 						Increment(name, delta, expressionSpan(target).merge(end));
@@ -1541,14 +1533,14 @@ class Parser {
 		if (check(TokenKind.LeftBrace)
 			&& !((peekKind(1) == TokenKind.Identifier || peekKind(1) == TokenKind.StringLiteral)
 			&& peekKind(2) == TokenKind.Colon)) {
-			var start = current().span,
+			var start = spanOf(current()),
 				statements = parseStatementOrBlock(),
-				span = start.merge(previous().span);
+				span = spanTo(start, previous());
 			match(TokenKind.Semicolon);
 			return If(BoolLiteral(true, start), statements, [], span);
 		}
 		if (match(TokenKind.If)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			consume(TokenKind.LeftParen);
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
@@ -1559,7 +1551,7 @@ class Parser {
 			return If(condition, thenBranch, elseBranch, start.merge(end));
 		}
 		if (match(TokenKind.While)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			consume(TokenKind.LeftParen);
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
@@ -1568,22 +1560,22 @@ class Parser {
 			return While(condition, body, start.merge(end));
 		}
 		if (match(TokenKind.Do)) {
-			var start = previous().span, body = parseDoWhileBody();
+			var start = spanOf(previous()), body = parseDoWhileBody();
 			consume(TokenKind.While);
 			consume(TokenKind.LeftParen);
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
-			var end = consume(TokenKind.Semicolon).span;
+			var end = spanOf(consume(TokenKind.Semicolon));
 			return DoWhile(body, condition, start.merge(end));
 		}
 		if (match(TokenKind.For)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			consume(TokenKind.LeftParen);
 			match(TokenKind.Var);
-			var name = consume(TokenKind.Identifier).text, valueName = null;
+			var name = textOf(consume(TokenKind.Identifier)), valueName = null;
 			if (match(TokenKind.Assign)) {
 				consume(TokenKind.Greater);
-				valueName = consume(TokenKind.Identifier).text;
+				valueName = textOf(consume(TokenKind.Identifier));
 			}
 			consume(TokenKind.In);
 			var iterable = parseExpression();
@@ -1638,7 +1630,7 @@ class Parser {
 	function parseAnonymousFunctionBody():Array<AstStatement> {
 		if (check(TokenKind.LeftBrace))
 			return parseStatementOrBlock();
-		var start = current().span;
+		var start = spanOf(current());
 		match(TokenKind.Return);
 		var value = parseExpression();
 		// The terminator belongs to the surrounding expression statement. If
@@ -1667,7 +1659,7 @@ class Parser {
 
 	/** An `if` without an `else` in an expression's place, as Haxe reads it: a statement whose branch ends with the expression. */
 	function parseVoidIf():AstStatement {
-		var start = advance().span;
+		var start = spanOf(advance());
 		consume(TokenKind.LeftParen);
 		var condition = parseExpression();
 		consume(TokenKind.RightParen);
@@ -1689,10 +1681,10 @@ class Parser {
 	 */
 	function ifHasElseAhead():Bool {
 		var cursor = position + 1, depth = 0;
-		if (cursor >= tokens.length || tokens[cursor].kind != TokenKind.LeftParen)
+		if (cursor >= tokens.length || kindAt(cursor) != TokenKind.LeftParen)
 			return false;
 		while (cursor < tokens.length) {
-			switch tokens[cursor].kind {
+			switch kindAt(cursor) {
 				case LeftParen:
 					depth++;
 				case RightParen:
@@ -1705,7 +1697,7 @@ class Parser {
 		}
 		var nested = 0;
 		while (cursor < tokens.length) {
-			switch tokens[cursor].kind {
+			switch kindAt(cursor) {
 				case LeftParen, LeftBracket, LeftBrace:
 					depth++;
 				case RightParen, RightBracket, RightBrace:
@@ -1726,7 +1718,7 @@ class Parser {
 					}
 				case Semicolon:
 					if (depth == 0)
-						return nested == 0 && cursor + 1 < tokens.length && tokens[cursor + 1].kind == TokenKind.Else;
+						return nested == 0 && cursor + 1 < tokens.length && kindAt(cursor + 1) == TokenKind.Else;
 				default:
 			}
 			cursor++;
@@ -1766,27 +1758,28 @@ class Parser {
 		if (!check(TokenKind.Var) && !check(TokenKind.Final))
 			return [parseStatement()];
 		var immutable = check(TokenKind.Final);
-		var start = advance().span, declarations = [];
+		var start = spanOf(advance()), declarations = [];
 		do {
 			var nameToken = consume(TokenKind.Identifier),
 				type = match(TokenKind.Colon) ? parseType() : null;
 			if (match(TokenKind.Assign)) {
-				var initializer = parseAnchoredExpression(nameToken.text + "=");
+				var initializer = parseAnchoredExpression(textOf(nameToken) + "=");
 				var span = start.merge(expressionSpan(initializer));
-				declarations.push(VarDeclaration(nameToken.text, type, initializer, span));
-				if (immutable) finalLocals.set(compiler.types.analysis.BindingWalker.key(nameToken.text, span), true);
+				declarations.push(VarDeclaration(textOf(nameToken), type, initializer, span));
+				if (immutable) finalLocals.set(compiler.types.analysis.BindingWalker.key(textOf(nameToken), span),
+					true);
 			} else {
 				if (immutable) fail(current(), "Local final declarations require an initializer");
 				// Without an annotation, the typer takes the type from the first assignment, as Haxe does.
-				declarations.push(UninitializedDeclaration(nameToken.text, type == null ? InferredType : type,
-					start.merge(previous().span)));
+				declarations.push(UninitializedDeclaration(textOf(nameToken), type == null ? InferredType : type,
+					spanTo(start, previous())));
 			}
 		} while (match(TokenKind.Comma));
 		var lastInitializer = switch declarations[declarations.length - 1] {
 			case VarDeclaration(_, _, initializer, _): initializer;
 			default: null;
 		};
-		var end = lastInitializer != null ? expressionEnd(lastInitializer) : consume(TokenKind.Semicolon).span;
+		var end = lastInitializer != null ? expressionEnd(lastInitializer) : spanOf(consume(TokenKind.Semicolon));
 		if (declarations.length > 0) {
 			var last = declarations.length - 1;
 			switch declarations[last] {
@@ -1830,7 +1823,7 @@ class Parser {
 					"Assignment expression target must be a variable, field, or array element"), span);
 			};
 		}
-		var assignment = current().kind;
+		var assignment = kindOf(current());
 		if (assignment == TokenKind.PlusAssign || assignment == TokenKind.MinusAssign
 			|| assignment == TokenKind.StarAssign
 			|| assignment == TokenKind.SlashAssign || assignment == TokenKind.PercentAssign
@@ -1946,9 +1939,9 @@ class Parser {
 		if ((check(TokenKind.Less) || check(TokenKind.LessEqual) || check(TokenKind.Greater)
 			|| check(TokenKind.EqualEqual) || check(TokenKind.NotEqual))
 			&& shiftAssignmentKind() < 0) {
-			var operation = advance().kind;
+			var operation = kindOf(advance());
 			if (operation == TokenKind.Greater && check(TokenKind.Assign)
-				&& previous().span.end == current().span.start) {
+				&& endOf(previous()) == startOf(current())) {
 				advance();
 				operation = TokenKind.GreaterEqual;
 			}
@@ -1986,30 +1979,30 @@ class Parser {
 	/** 9 for `<<=`, 10 for `>>=`, 11 for `>>>=`, or -1; nothing is consumed. */
 	function shiftAssignmentKind():Int {
 		if (check(TokenKind.Less) && peekKind(1) == TokenKind.LessEqual
-			&& current().span.end == tokens[position + 1].span.start)
+			&& endOf(current()) == startOf(ahead(1)))
 			return 9;
 		if (isAdjacentPair(TokenKind.Greater)
 			&& peekKind(2) == TokenKind.Assign
-			&& tokens[position + 1].span.end == tokens[position + 2].span.start)
+			&& endOf(ahead(1)) == startOf(ahead(2)))
 			return 10;
 		if (isAdjacentTriple(TokenKind.Greater)
 			&& peekKind(3) == TokenKind.Assign
-			&& tokens[position + 2].span.end == tokens[position + 3].span.start)
+			&& endOf(ahead(2)) == startOf(ahead(3)))
 			return 11;
 		return -1;
 	}
 
 	function isAdjacentPair(kind:TokenKind):Bool
-		return check(kind) && peekKind(1) == kind && current().span.end == tokens[position + 1].span.start;
+		return check(kind) && peekKind(1) == kind && endOf(current()) == startOf(ahead(1));
 
 	function isAdjacentTriple(kind:TokenKind):Bool
 		return isAdjacentPair(kind) && peekKind(2) == kind
-			&& tokens[position + 1].span.end == tokens[position + 2].span.start;
+			&& endOf(ahead(1)) == startOf(ahead(2));
 
 	function parseAdditive():AstExpression {
 		var expression = parseMultiplicative();
 		while (check(TokenKind.Plus) || check(TokenKind.Minus)) {
-			var operation = advance().kind;
+			var operation = kindOf(advance());
 			var right = parseMultiplicative();
 			var span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = operation == TokenKind.Plus ? Add(expression, right, span) : Sub(expression, right, span);
@@ -2020,7 +2013,7 @@ class Parser {
 	function parseMultiplicative():AstExpression {
 		var expression = parseModulo();
 		while (check(TokenKind.Star) || check(TokenKind.Slash)) {
-			var operation = advance().kind,
+			var operation = kindOf(advance()),
 				right = parseModulo(),
 				span = expressionSpan(expression).merge(expressionSpan(right));
 			expression = operation == TokenKind.Star ? Mul(expression, right, span) : Div(expression, right, span);
@@ -2060,9 +2053,9 @@ class Parser {
 
 	function parsePrimary():AstExpression {
 		if (match(TokenKind.Backslash))
-			return parseKeyPathLiteral(previous().span);
-		if (recovering && isExpressionTerminator(current().kind)) {
-			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+			return parseKeyPathLiteral(spanOf(previous()));
+		if (recovering && isExpressionTerminator(kindOf(current()))) {
+			var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
 			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected expression", span));
 			return ErrorExpression(span);
 		}
@@ -2074,20 +2067,20 @@ class Parser {
 			return expression;
 		}
 		if (match(TokenKind.Switch))
-			return parseSwitchExpression(previous().span);
+			return parseSwitchExpression(spanOf(previous()));
 		if (match(TokenKind.Try))
-			return parseTryExpression(previous().span);
+			return parseTryExpression(spanOf(previous()));
 		if (match(TokenKind.Throw)) {
-			var start = previous().span, value = parseExpression();
+			var start = spanOf(previous()), value = parseExpression();
 			return ThrowExpression(value, start.merge(expressionSpan(value)));
 		}
-		if (check(TokenKind.Identifier) && current().text == "cast") {
-			var start = advance().span;
+		if (check(TokenKind.Identifier) && textOf(current()) == "cast") {
+			var start = spanOf(advance());
 			if (check(TokenKind.LeftParen) && parenthesesHoldTypedCast()) {
 				advance();
 				var value = parseExpression();
 				consume(TokenKind.Comma);
-				var target = parseType(), end = consume(TokenKind.RightParen).span;
+				var target = parseType(), end = spanOf(consume(TokenKind.RightParen));
 				return parsePostfix(Cast(value, target, start.merge(end)));
 			}
 			// An unsafe cast takes the whole expression to its right, as in Haxe: `cast (x) % 2` casts `(x) % 2`.
@@ -2095,7 +2088,7 @@ class Parser {
 			return Cast(value, null, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Function)) {
-			var start = previous().span, identity = openLambda();
+			var start = spanOf(previous()), identity = openLambda();
 			consume(TokenKind.LeftParen);
 			var arguments:Array<AstArgument> = [];
 			if (!check(TokenKind.RightParen))
@@ -2106,9 +2099,9 @@ class Parser {
 						type = restType(rest, match(TokenKind.Colon) ? parseType() : InferredType),
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
-						name: argument.text,
+						name: textOf(argument),
 						type: type,
-						span: argument.span.merge(previous().span),
+						span: spanBetween(argument, previous()),
 						optional: optional,
 						defaultValue: defaultValue
 					});
@@ -2117,7 +2110,7 @@ class Parser {
 			consume(TokenKind.RightParen);
 			var result = match(TokenKind.Colon) ? parseType() : null,
 				body = parseAnonymousFunctionBody(),
-				end = body.length == 0 ? previous().span : statementSpan(body[body.length - 1]),
+				end = body.length == 0 ? spanOf(previous()) : statementSpan(body[body.length - 1]),
 				span = start.merge(end);
 			closeLambda();
 			if (result == null)
@@ -2131,14 +2124,14 @@ class Parser {
 		}
 		if (check(TokenKind.Identifier) && peekKind(1) == TokenKind.Arrow) {
 			var argument = advance(),
-				start = argument.span,
+				start = spanOf(argument),
 				identity = openLambda();
 			advance();
 			var arguments:Array<AstArgument> = [
 				{
-					name: argument.text,
+					name: textOf(argument),
 					type: InferredType,
-					span: argument.span,
+					span: spanOf(argument),
 					optional: false,
 					defaultValue: null
 				}
@@ -2146,10 +2139,10 @@ class Parser {
 				body = parseArrowFunctionBody();
 			closeLambda();
 			return Lambda(arguments, body, identity,
-				start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+				start.merge(body.length == 0 ? spanOf(previous()) : statementSpan(body[body.length - 1])));
 		}
 		if (match(TokenKind.If)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			consume(TokenKind.LeftParen);
 			var condition = parseExpression();
 			consume(TokenKind.RightParen);
@@ -2160,28 +2153,28 @@ class Parser {
 			return Conditional(condition, whenTrue, whenFalse, start.merge(expressionSpan(whenFalse)));
 		}
 		if (match(TokenKind.Minus)) {
-			var start = previous().span;
+			var start = spanOf(previous());
 			if (match(TokenKind.Integer)) {
 				var token = previous(), value = parseIntegerToken(token, true);
-				return parsePostfix(IntegerLiteral(value, start.merge(token.span)));
+				return parsePostfix(IntegerLiteral(value, spanTo(start, token)));
 			}
 			var value = parsePrimary();
 			return Negate(value, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Not)) {
-			var start = previous().span, value = parsePrimary();
+			var start = spanOf(previous()), value = parsePrimary();
 			return Not(value, start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.BitNot)) {
-			var start = previous().span, value = parsePrimary();
+			var start = spanOf(previous()), value = parsePrimary();
 			return BitXor(value, IntegerLiteral(-1, start), start.merge(expressionSpan(value)));
 		}
 		if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
 			// Prefix `++x`/`--x` update the target and evaluate to its new value (a setter's result, as Haxe's),
 			// lowered like an assignment expression. Field and index targets are
 			// stabilized first so their receiver and index are evaluated once.
-			var start = previous().span,
-				delta = previous().kind == TokenKind.Increment ? 1 : -1,
+			var start = spanOf(previous()),
+				delta = kindOf(previous()) == TokenKind.Increment ? 1 : -1,
 				target = parsePrimary(),
 				span = start.merge(expressionSpan(target)),
 				stabilized = AssignmentTarget.stabilize(target, span, expressionSpan),
@@ -2192,34 +2185,37 @@ class Parser {
 		}
 		if (match(TokenKind.Integer)) {
 			var token = previous();
-			return parsePostfix(IntegerLiteral(parseIntegerToken(token), token.span));
+			return parsePostfix(IntegerLiteral(parseIntegerToken(token), spanOf(token)));
 		}
 		if (match(TokenKind.Float))
-			return parsePostfix(FloatLiteral(Std.parseFloat(normalizeNumericLiteral(previous().text)),
-				previous().span));
+			return parsePostfix(FloatLiteral(Std.parseFloat(normalizeNumericLiteral(textOf(previous()))),
+				spanOf(previous())));
 		if (match(TokenKind.StringLiteral))
 			return parsePostfix(parseStringExpression(previous()));
 		if (match(TokenKind.RegexLiteral)) {
 			var token = previous(),
-				delimiter = token.text.lastIndexOf("/"),
-				pattern = StringTools.replace(token.text.substring(2, delimiter), "\\/", "/"),
-				options = token.text.substring(delimiter + 1);
-			return parsePostfix(New("EReg", [StringLiteral(pattern, token.span), StringLiteral(options, token.span)],
-				token.span));
+				delimiter = textOf(token).lastIndexOf("/"),
+				pattern = StringTools.replace(textOf(token).substring(2, delimiter), "\\/", "/"),
+				options = textOf(token).substring(delimiter + 1);
+			return parsePostfix(New("EReg", [
+				StringLiteral(pattern, spanOf(token)),
+				StringLiteral(options, spanOf(token))
+			],
+				spanOf(token)));
 		}
 		if (match(TokenKind.BoolTrue))
-			return parsePostfix(BoolLiteral(true, previous().span));
+			return parsePostfix(BoolLiteral(true, spanOf(previous())));
 		if (match(TokenKind.BoolFalse))
-			return parsePostfix(BoolLiteral(false, previous().span));
+			return parsePostfix(BoolLiteral(false, spanOf(previous())));
 		if (match(TokenKind.LeftBracket)) {
-			var start = previous().span, values = [];
+			var start = spanOf(previous()), values = [];
 			if (match(TokenKind.For)) {
 				consume(TokenKind.LeftParen);
-				var keyName = consume(TokenKind.Identifier).text,
+				var keyName = textOf(consume(TokenKind.Identifier)),
 					valueName = null;
 				if (match(TokenKind.Assign)) {
 					consume(TokenKind.Greater);
-					valueName = consume(TokenKind.Identifier).text;
+					valueName = textOf(consume(TokenKind.Identifier));
 				}
 				consume(TokenKind.In);
 				var iterable = parseExpression();
@@ -2238,11 +2234,11 @@ class Parser {
 				if (match(TokenKind.Assign)) {
 					consume(TokenKind.Greater);
 					var mapValue = parseComprehensionValue(),
-						end = consume(TokenKind.RightBracket).span;
+						end = spanOf(consume(TokenKind.RightBracket));
 					return parsePostfix(MapComprehension(keyName, valueName, iterable, condition, value, mapValue,
 						start.merge(end)));
 				}
-				var end = consume(TokenKind.RightBracket).span;
+				var end = spanOf(consume(TokenKind.RightBracket));
 				return parsePostfix(ArrayComprehension(keyName, valueName, iterable, condition, value, false,
 					start.merge(end)));
 			}
@@ -2265,7 +2261,7 @@ class Parser {
 							span: expressionSpan(key).merge(expressionSpan(entryValue))
 						});
 					}
-					var end = consume(TokenKind.RightBracket).span;
+					var end = spanOf(consume(TokenKind.RightBracket));
 					return parsePostfix(MapLiteral(entries, start.merge(end)));
 				}
 				values.push(first);
@@ -2273,20 +2269,20 @@ class Parser {
 					if (!check(TokenKind.RightBracket))
 						values.push(parseExpression());
 			}
-			var end = consume(TokenKind.RightBracket).span;
+			var end = spanOf(consume(TokenKind.RightBracket));
 			return parsePostfix(ArrayLiteral(values, start.merge(end)));
 		}
-		if (check(TokenKind.Identifier) && current().text == "null") {
+		if (check(TokenKind.Identifier) && textOf(current()) == "null") {
 			var nullToken = advance();
-			return parsePostfix(NullLiteral(nullToken.span));
+			return parsePostfix(NullLiteral(spanOf(nullToken)));
 		}
 		if (match(TokenKind.New)) {
-			var start = previous().span;
-			if (check(TokenKind.Identifier) && current().text == "List") {
+			var start = spanOf(previous());
+			if (check(TokenKind.Identifier) && textOf(current()) == "List") {
 				advance();
 				var typeArguments = check(TokenKind.Less) ? parseTypeArguments() : [];
 				consume(TokenKind.LeftParen);
-				var end = consume(TokenKind.RightParen).span;
+				var end = spanOf(consume(TokenKind.RightParen));
 				if (typeArguments.length > 0) {
 					if (typeArguments.length != 1)
 						fail(previous(), 'List expects 1 type argument, got ${typeArguments.length}');
@@ -2294,10 +2290,10 @@ class Parser {
 				}
 				return parsePostfix(ArrayLiteral([], start.merge(end)));
 			}
-			if (check(TokenKind.Identifier) && current().text == "Array") {
+			if (check(TokenKind.Identifier) && textOf(current()) == "Array") {
 				advance();
 				if (match(TokenKind.LeftParen)) {
-					var end = consume(TokenKind.RightParen).span;
+					var end = spanOf(consume(TokenKind.RightParen));
 					return parsePostfix(ArrayLiteral([], start.merge(end)));
 				}
 				consume(TokenKind.Less);
@@ -2305,17 +2301,17 @@ class Parser {
 				consume(TokenKind.Greater);
 				consume(TokenKind.LeftParen);
 				if (check(TokenKind.RightParen)) {
-					var end = advance().span;
+					var end = spanOf(advance());
 					return parsePostfix(NewArray(element, IntegerLiteral(0, end), start.merge(end)));
 				}
 				var length = parseExpression();
-				var end = consume(TokenKind.RightParen).span;
+				var end = spanOf(consume(TokenKind.RightParen));
 				return parsePostfix(NewArray(element, length, start.merge(end)));
 			}
-			if (check(TokenKind.Identifier) && current().text == "Map") {
+			if (check(TokenKind.Identifier) && textOf(current()) == "Map") {
 				advance();
 				if (match(TokenKind.LeftParen)) {
-					var end = consume(TokenKind.RightParen).span;
+					var end = spanOf(consume(TokenKind.RightParen));
 					return parsePostfix(MapLiteral([], start.merge(end)));
 				}
 				consume(TokenKind.Less);
@@ -2324,27 +2320,27 @@ class Parser {
 				var value = parseType();
 				consume(TokenKind.Greater);
 				consume(TokenKind.LeftParen);
-				var end = consume(TokenKind.RightParen).span;
+				var end = spanOf(consume(TokenKind.RightParen));
 				return parsePostfix(NewMap(key, value, start.merge(end)));
 			}
 			var typeName = parseQualifiedName();
 			var typeArguments = parseTypeArguments();
 			consume(TokenKind.LeftParen);
 			var arguments = parseCallArguments(typeName);
-			var end = consume(TokenKind.RightParen).span;
+			var end = spanOf(consume(TokenKind.RightParen));
 			return parsePostfix(typeArguments.length == 0 ? New(typeName, arguments,
 				start.merge(end)) : NewGeneric(typeName, typeArguments, arguments, start.merge(end)));
 		}
 		if (check(TokenKind.LeftParen)) {
 			var saved = position,
-				start = current().span,
+				start = spanOf(current()),
 				isLambda = parenthesizedLambdaAhead();
 			if (!isLambda) {
 				advance();
 				var grouped = parseExpression();
 				if (match(TokenKind.Colon)) {
 					var target = parseType(),
-						end = consume(TokenKind.RightParen).span;
+						end = spanOf(consume(TokenKind.RightParen));
 					grouped = CheckType(grouped, target, start.merge(end));
 				} else
 					consume(TokenKind.RightParen);
@@ -2355,14 +2351,14 @@ class Parser {
 			if (!check(TokenKind.RightParen)) {
 				do {
 					var optional = match(TokenKind.Question),
-						argumentStart = current().span,
-						argumentName = consume(TokenKind.Identifier).text;
+						argumentStart = spanOf(current()),
+						argumentName = textOf(consume(TokenKind.Identifier));
 					var argumentType = match(TokenKind.Colon) ? parseType() : InferredType,
 						defaultValue = match(TokenKind.Assign) ? parseExpression() : null;
 					arguments.push({
 						name: argumentName,
 						type: argumentType,
-						span: argumentStart.merge(previous().span),
+						span: spanTo(argumentStart, previous()),
 						optional: optional,
 						defaultValue: defaultValue
 					});
@@ -2373,22 +2369,22 @@ class Parser {
 				var identity = openLambda(), body = parseArrowFunctionBody();
 				closeLambda();
 				return Lambda(arguments, body, identity,
-					start.merge(body.length == 0 ? previous().span : statementSpan(body[body.length - 1])));
+					start.merge(body.length == 0 ? spanOf(previous()) : statementSpan(body[body.length - 1])));
 			}
 			position = saved;
 			advance();
 			var grouped = parseExpression();
 			consume(TokenKind.Colon);
-			var target = parseType(), end = consume(TokenKind.RightParen).span;
+			var target = parseType(), end = spanOf(consume(TokenKind.RightParen));
 			return parsePostfix(CheckType(grouped, target, start.merge(end)));
 		}
 		if (match(TokenKind.This)) {
-			var start = previous().span, end = start, name = "this";
+			var start = spanOf(previous()), end = start, name = "this";
 			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
 				advance();
 				var part = consumeName();
-				name += "." + part.text;
-				end = part.span;
+				name += "." + textOf(part);
+				end = spanOf(part);
 			}
 			var referenceSpan = new SourceSpan(start.file, start.start, end.end);
 			var expression:AstExpression = Variable(name, referenceSpan);
@@ -2402,50 +2398,51 @@ class Parser {
 			&& peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch();
 		if (match(TokenKind.LeftBrace)) {
-			var start = previous().span, fields = [];
+			var start = spanOf(previous()), fields = [];
 			if (!check(TokenKind.RightBrace)) {
 				while (true) {
 					// As in Haxe, a field may be named by a string, as JSON-shaped data names fields that are keywords: `{"package": p}`.
 					var name = check(TokenKind.StringLiteral) ? advance() : consume(TokenKind.Identifier),
-						fieldName = name.kind == TokenKind.StringLiteral ? decodeString(name.text,
-							name.span) : name.text;
+						fieldName = kindOf(name) == TokenKind.StringLiteral ? decodeString(textOf(name),
+							spanOf(name)) : textOf(name);
 					consume(TokenKind.Colon);
 					var value = parseAnchoredExpression("{" + fieldName + "}");
-					fields.push({name: fieldName, value: value, span: name.span.merge(expressionSpan(value))});
+					fields.push({name: fieldName, value: value, span: spanOf(name).merge(expressionSpan(value))});
 					if (!match(TokenKind.Comma) || check(TokenKind.RightBrace))
 						break;
 				}
 			}
-			var end = consume(TokenKind.RightBrace).span;
+			var end = spanOf(consume(TokenKind.RightBrace));
 			return parsePostfix(ObjectLiteral(fields, start.merge(end)));
 		}
 		if (check(TokenKind.Identifier)
 			&& peekKind(1) == TokenKind.Less
-			&& (current().text == "sizeof"
-			|| current().text == "alignof"
-			|| current().text == "offsetof"
-			|| current().text == "typeInfo"))
+			&& (textOf(current()) == "sizeof"
+			|| textOf(current()) == "alignof"
+			|| textOf(current()) == "offsetof"
+			|| textOf(current()) == "typeInfo"))
 			return parseNativeLayoutQuery();
 		// `abstract` in an abstract's method is a value, as `this` is, so `abstract.label()` is a call on it.
-		if (check(TokenKind.Identifier) && current().text == "abstract")
-			return parsePostfix(Variable("abstract", SourceSpan.reference(current().span.file, advance().span.start,
-				previous().span.end, true)));
-		if (isNameToken(current().kind)) {
-			var nameToken = consumeName(), name = nameToken.text, start = nameToken.span, end = start;
+		if (check(TokenKind.Identifier) && textOf(current()) == "abstract")
+			return parsePostfix(Variable("abstract", SourceSpan.reference(spanOf(current()).file, startOf(advance()),
+				endOf(previous()), true)));
+		if (isNameToken(kindOf(current()))) {
+			var nameToken = consumeName(), name = textOf(nameToken), end = nameToken;
 			while (check(TokenKind.Dot) && peekKind(1) != TokenKind.Dot) {
 				advance();
 				var part = consumeName();
-				name += "." + part.text;
-				end = part.span;
+				name += "." + textOf(part);
+				end = part;
 			}
-			var referenceSpan = SourceSpan.reference(start.file, start.start, end.end, name.indexOf(".") < 0);
+			var referenceSpan = SourceSpan.reference(fileOf(nameToken), startOf(nameToken), endOf(end),
+				name.indexOf(".") < 0);
 			var expression:AstExpression = Variable(name, referenceSpan);
 			if (match(TokenKind.LeftParen)) {
 				var arguments = StringTools.endsWith(name, ".match")
 					? parseMatchPattern(name) : parseCallArguments(name);
-				var end = consume(TokenKind.RightParen).span;
+				var close = consume(TokenKind.RightParen);
 				expression = Call(name, arguments,
-					SourceSpan.reference(referenceSpan.file, referenceSpan.start, end.end,
+					SourceSpan.reference(referenceSpan.file, referenceSpan.start, endOf(close),
 					referenceSpan.isBareReference));
 			}
 			return parsePostfix(expression);
@@ -2460,7 +2457,7 @@ class Parser {
 	}
 
 	function parseNativeLayoutQuery():AstExpression {
-		var name = consume(TokenKind.Identifier), kind = switch name.text {
+		var name = consume(TokenKind.Identifier), kind = switch textOf(name) {
 			case "sizeof": SizeOf;
 			case "alignof": AlignOf;
 			case "offsetof": OffsetOf;
@@ -2474,10 +2471,10 @@ class Parser {
 		var field:Null<String> = null;
 		if (kind == OffsetOf) {
 			var token = consume(TokenKind.StringLiteral);
-			field = decodeString(token.text, token.span);
+			field = decodeString(textOf(token), spanOf(token));
 		}
-		var end = consume(TokenKind.RightParen).span;
-		return parsePostfix(NativeLayoutQuery(kind, type, field, name.span.merge(end)));
+		var end = spanOf(consume(TokenKind.RightParen));
+		return parsePostfix(NativeLayoutQuery(kind, type, field, spanOf(name).merge(end)));
 	}
 
 	static function isExpressionTerminator(kind:TokenKind):Bool
@@ -2490,13 +2487,13 @@ class Parser {
 	function parenthesizedLambdaAhead():Bool {
 		var depth = 0, cursor = position;
 		while (cursor < tokens.length) {
-			switch tokens[cursor].kind {
+			switch kindAt(cursor) {
 				case LeftParen:
 					depth++;
 				case RightParen:
 					depth--;
 					if (depth == 0)
-						return cursor + 1 < tokens.length && tokens[cursor + 1].kind == TokenKind.Arrow;
+						return cursor + 1 < tokens.length && kindAt(cursor + 1) == TokenKind.Arrow;
 				default:
 			}
 			cursor++;
@@ -2506,7 +2503,7 @@ class Parser {
 
 	function parseComprehensionValue():AstExpression {
 		if (match(TokenKind.For))
-			return parseNestedArrayComprehension(previous().span);
+			return parseNestedArrayComprehension(spanOf(previous()));
 		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch(true);
 		return parseExpression();
@@ -2587,10 +2584,10 @@ class Parser {
 
 	function parseNestedArrayComprehension(start:SourceSpan):AstExpression {
 		consume(TokenKind.LeftParen);
-		var keyName = consume(TokenKind.Identifier).text, valueName = null;
+		var keyName = textOf(consume(TokenKind.Identifier)), valueName = null;
 		if (match(TokenKind.Assign)) {
 			consume(TokenKind.Greater);
-			valueName = consume(TokenKind.Identifier).text;
+			valueName = textOf(consume(TokenKind.Identifier));
 		}
 		consume(TokenKind.In);
 		var iterable = parseExpression();
@@ -2621,9 +2618,9 @@ class Parser {
 			&& peekKind(2) == TokenKind.Colon))
 			return parseExpression();
 		advance();
-		var start = previous().span, statements = [];
+		var start = spanOf(previous()), statements = [];
 		while (!check(TokenKind.RightBrace) && !check(TokenKind.Eof)) {
-			if (isStatementOnlyStart(current().kind)) {
+			if (isStatementOnlyStart(kindOf(current()))) {
 				appendStatements(statements, parseStatements());
 				continue;
 			}
@@ -2632,7 +2629,7 @@ class Parser {
 				var result = parseExpressionBranch();
 				match(TokenKind.Semicolon);
 				if (check(TokenKind.RightBrace)) {
-					var end = consume(TokenKind.RightBrace).span;
+					var end = spanOf(consume(TokenKind.RightBrace));
 					return BlockExpression(statements, result, start.merge(end));
 				}
 				statements.push(Expression(result, expressionSpan(result)));
@@ -2642,7 +2639,7 @@ class Parser {
 				savedLambdas = lambdaMark(),
 				candidate = tryParseExpression();
 			if (candidate != null && check(TokenKind.RightBrace)) {
-				var end = consume(TokenKind.RightBrace).span;
+				var end = spanOf(consume(TokenKind.RightBrace));
 				return BlockExpression(statements, candidate, start.merge(end));
 			}
 			position = saved;
@@ -2651,11 +2648,11 @@ class Parser {
 		}
 		var trailing = trailingBlockResult(statements);
 		if (trailing != null) {
-			var end = consume(TokenKind.RightBrace).span;
+			var end = spanOf(consume(TokenKind.RightBrace));
 			return BlockExpression(trailing.statements, trailing.result, start.merge(end));
 		}
 		if (comprehensionValue && check(TokenKind.RightBrace)) {
-			var filtered = filteredComprehensionValue(statements, start.merge(current().span));
+			var filtered = filteredComprehensionValue(statements, spanTo(start, current()));
 			if (filtered != null) {
 				consume(TokenKind.RightBrace);
 				return filtered;
@@ -2665,11 +2662,11 @@ class Parser {
 		if (statements.length > 0 && statementTerminates(statements[statements.length - 1])
 			&& check(TokenKind.RightBrace)) {
 			var last = statementSpan(statements[statements.length - 1]),
-				end = consume(TokenKind.RightBrace).span;
+				end = spanOf(consume(TokenKind.RightBrace));
 			return BlockExpression(statements, Unreachable(last), start.merge(end));
 		}
 		if (recoveringAtEnd()) {
-			var span = current().span;
+			var span = spanOf(current());
 			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002",
 				"Expression block requires a result expression",
 				span));
@@ -2715,7 +2712,7 @@ class Parser {
 		consume(TokenKind.LeftBrace);
 		var cases = [];
 		while (match(TokenKind.Case)) {
-			var caseStart = previous().span,
+			var caseStart = spanOf(previous()),
 				values = parseCasePatterns();
 			var guard = parseSwitchGuard();
 			consume(TokenKind.Colon);
@@ -2732,7 +2729,7 @@ class Parser {
 			consume(TokenKind.Colon);
 			fallback = parseSwitchExpressionBranch();
 		}
-		var end = consume(TokenKind.RightBrace).span;
+		var end = spanOf(consume(TokenKind.RightBrace));
 		return parsePostfix(SwitchExpression(subject, cases, fallback, start.merge(end)));
 	}
 
@@ -2826,9 +2823,9 @@ class Parser {
 			end = expressionSpan(value),
 			result = '$' + 'try:${start.start}';
 		do {
-			var catchStart = consume(TokenKind.Catch).span;
+			var catchStart = spanOf(consume(TokenKind.Catch));
 			consume(TokenKind.LeftParen);
-			var name = consume(TokenKind.Identifier).text;
+			var name = textOf(consume(TokenKind.Identifier));
 			// As in Haxe, `catch (e)` with no type catches everything.
 			var type = match(TokenKind.Colon) ? parseType() : NamedType("Dynamic");
 			consume(TokenKind.RightParen);
@@ -2861,10 +2858,10 @@ class Parser {
 	function parseSwitchExpressionBranch():AstExpression {
 		if (check(TokenKind.LeftBrace) && !(peekKind(1) == TokenKind.Identifier && peekKind(2) == TokenKind.Colon))
 			return parseExpressionBranch();
-		var statements = [], start = current().span;
+		var statements = [], start = spanOf(current());
 		while (true) {
 			if (atSwitchBranchEnd() && statements.length == 0)
-				return EmptyExpression(start.merge(current().span));
+				return EmptyExpression(spanTo(start, current()));
 			if (atSwitchBranchEnd() && statements.length > 0) {
 				// Statements that end the branch: it never completes if the last one leaves, else its value is Void.
 				var last = statements[statements.length - 1],
@@ -2872,7 +2869,7 @@ class Parser {
 				return BlockExpression(statements, statementTerminates(last) ? Unreachable(end) : EmptyExpression(end),
 					start.merge(end));
 			}
-			if (isStatementOnlyStart(current().kind)) {
+			if (isStatementOnlyStart(kindOf(current()))) {
 				appendStatements(statements, parseStatements());
 				continue;
 			}
@@ -2945,7 +2942,7 @@ class Parser {
 					case Variable(name, _): name;
 					default: "";
 				});
-				var end = consume(TokenKind.RightParen).span;
+				var end = spanOf(consume(TokenKind.RightParen));
 				expression = switch expression {
 					case Variable(name, start): Call(name, arguments,
 						SourceSpan.reference(start.file, start.start, end.end, start.isBareReference));
@@ -2955,28 +2952,28 @@ class Parser {
 			}
 			if (match(TokenKind.LeftBracket)) {
 				var offset = parseExpression(),
-					end = consume(TokenKind.RightBracket).span;
+					end = spanOf(consume(TokenKind.RightBracket));
 				expression = Index(expression, offset, expressionSpan(expression).merge(end));
 				continue;
 			}
 			if (match(TokenKind.Dot)) {
-				if (recovering && isExpressionTerminator(current().kind)) {
-					var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+				if (recovering && isExpressionTerminator(kindOf(current()))) {
+					var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
 					recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected member name", span));
 					break;
 				}
-				var nameToken = consumeName(), name = nameToken.text;
+				var nameToken = consumeName(), name = textOf(nameToken);
 				if (match(TokenKind.LeftParen)) {
 					var arguments = name == "match" ? parseMatchPattern(name) : parseCallArguments(name);
-					var end = consume(TokenKind.RightParen).span;
+					var end = spanOf(consume(TokenKind.RightParen));
 					expression = MethodCall(expression, name, arguments, expressionSpan(expression).merge(end));
 				} else
-					expression = Member(expression, name, expressionSpan(expression).merge(nameToken.span));
+					expression = Member(expression, name, spanTo(expressionSpan(expression), nameToken));
 				continue;
 			}
 			if (match(TokenKind.Increment) || match(TokenKind.Decrement)) {
-				var end = previous().span,
-					delta = previous().kind == TokenKind.Increment ? 1 : -1;
+				var end = spanOf(previous()),
+					delta = kindOf(previous()) == TokenKind.Increment ? 1 : -1;
 				expression = PostfixIncrement(expression, delta, expressionSpan(expression).merge(end));
 				break;
 			}
@@ -3026,8 +3023,8 @@ class Parser {
 		};
 
 	function parseAtomicType():AstType {
-		if (recovering && isExpressionTerminator(current().kind)) {
-			var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		if (recovering && isExpressionTerminator(kindOf(current()))) {
+			var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
 			recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected type", span));
 			return ErrorType(span);
 		}
@@ -3053,12 +3050,12 @@ class Parser {
 				consume(TokenKind.Colon);
 				var type = parseType();
 				fields.push({
-					name: name.text,
+					name: textOf(name),
 					type: type,
 					optional: optional,
 					isFinal: isFinal,
 					metadata: metadata,
-					span: name.span.merge(previous().span)
+					span: spanBetween(name, previous())
 				});
 				if (!match(TokenKind.Comma))
 					match(TokenKind.Semicolon);
@@ -3077,13 +3074,13 @@ class Parser {
 		if (match(TokenKind.Void))
 			return VoidType;
 		if (check(TokenKind.Identifier))
-			if (current().text == "Array") {
+			if (textOf(current()) == "Array") {
 				advance();
 				consume(TokenKind.Less);
 				var element = parseType();
 				consume(TokenKind.Greater);
 				return ArrayType(element);
-			} else if (current().text == "Map") {
+			} else if (textOf(current()) == "Map") {
 				advance();
 				consume(TokenKind.Less);
 				var key = parseType();
@@ -3091,7 +3088,7 @@ class Parser {
 				var value = parseType();
 				consume(TokenKind.Greater);
 				return MapType(key, value);
-			} else if (current().text == "Null") {
+			} else if (textOf(current()) == "Null") {
 				advance();
 				consume(TokenKind.Less);
 				var element = parseType();
@@ -3102,7 +3099,7 @@ class Parser {
 		if (check(TokenKind.Less) && peekKind(1) == TokenKind.StringLiteral) {
 			advance();
 			var tag = consume(TokenKind.StringLiteral),
-				value = decodeString(tag.text, tag.span);
+				value = decodeString(textOf(tag), spanOf(tag));
 			consume(TokenKind.Greater);
 			return NativeAbstractType(name, value);
 		}
@@ -3124,7 +3121,7 @@ class Parser {
 		if (!match(TokenKind.LeftBrace)) {
 			if (check(TokenKind.Defer))
 				fail(current(), "A defer statement requires an enclosing block");
-			if (check(TokenKind.Identifier) && current().text == "scoped" && peekKind(1) == TokenKind.Var)
+			if (check(TokenKind.Identifier) && textOf(current()) == "scoped" && peekKind(1) == TokenKind.Var)
 				fail(current(), "A scoped binding requires an enclosing block");
 			return parseStatements();
 		}
@@ -3136,25 +3133,25 @@ class Parser {
 	}
 
 	function statementEnd(statements:Array<AstStatement>):SourceSpan
-		return statements.length == 0 ? previous().span : statementSpan(statements[statements.length - 1]);
+		return statements.length == 0 ? spanOf(previous()) : statementSpan(statements[statements.length - 1]);
 
 	inline function match(kind:TokenKind):Bool {
-		if (tokens[position].kind != kind)
+		if (tokens.kind(current()) != kind)
 			return false;
 		position++;
 		return true;
 	}
 
-	function consume(kind:TokenKind):Token {
-		var token = tokens[position];
-		if (token.kind == kind) {
+	function consume(kind:TokenKind):TokenId {
+		var token = current();
+		if (tokens.kind(token) == kind) {
 			position++;
 			return token;
 		}
 		if (recovering && canInsert(kind))
 			return insertMissing(kind);
-		fail(token, 'Expected $kind, got ${token.kind}');
-		return null;
+		fail(token, 'Expected $kind, got ${tokens.kind(token)}');
+		return token;
 	}
 
 	function recoveringAtEnd():Bool
@@ -3182,10 +3179,12 @@ class Parser {
 			default: false;
 		};
 
-	function insertMissing(kind:TokenKind):Token {
+	/** A token recovery inserts, which the cursor never reaches: an id past the source's tokens. */
+	function insertMissing(kind:TokenKind):TokenId {
 		var replacement = tokenText(kind),
-			span = new SourceSpan(current().span.file, current().span.start, current().span.start);
-		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", 'Expected $kind, got ${current().kind}', span,
+			span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
+		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002",
+			'Expected $kind, got ${kindOf(current())}', span,
 			compiler.core.Diagnostic.DiagnosticSeverity.Error,
 			[
 				{
@@ -3194,11 +3193,12 @@ class Parser {
 					edits: [{span: span, replacement: replacement}]
 				}
 			]));
-		return new Token(kind, replacement, span);
+		inserted.push(new Token(kind, replacement, span));
+		return TokenId.ofRow(tokenCount + inserted.length - 1);
 	}
 
 	function missingFunctionBody():Void {
-		var span = new SourceSpan(current().span.file, current().span.start, current().span.start);
+		var span = new SourceSpan(spanOf(current()).file, startOf(current()), startOf(current()));
 		recordRecoveryDiagnostic(new compiler.core.Diagnostic("E0002", "Expected function body", span,
 			compiler.core.Diagnostic.DiagnosticSeverity.Error, [
 				{id: "insert-function-body", title: "Insert function body", edits: [{span: span, replacement: " {}"}]}
@@ -3221,28 +3221,26 @@ class Parser {
 			default: "";
 		};
 
-	function consumeName():Token {
-		return if (isNameToken(current().kind)) advance();
-		else {
-			fail(current(), 'Expected name, got ${current().kind}');
-			null;
-		};
+	function consumeName():TokenId {
+		if (!isNameToken(kindOf(current())))
+			fail(current(), 'Expected name, got ${kindOf(current())}');
+		return advance();
 	}
 
 	function expressionEnd(expression:AstExpression):SourceSpan {
 		if (match(TokenKind.Semicolon))
-			return previous().span;
+			return spanOf(previous());
 		// As in Haxe, an expression whose last token closes a brace needs no semicolon: `var x = try f() catch (e:Dynamic) { 0; }`; nor does
 		// one whose last token ended a statement, as an arrow function with a loop body does: `var f = () -> for (x in xs) g(x);`.
 		if (isBracedExpression(expression)
-			|| previous().kind == TokenKind.RightBrace
-			|| previous().kind == TokenKind.Semicolon
+			|| kindOf(previous()) == TokenKind.RightBrace
+			|| kindOf(previous()) == TokenKind.Semicolon
 			|| (tryBodyDepth > 0 && check(TokenKind.Catch)))
 			return expressionSpan(expression);
 		// `if (c) a else b`: the `then` branch needs no semicolon before its `else`.
 		if (check(TokenKind.Else))
 			return expressionSpan(expression);
-		return consume(TokenKind.Semicolon).span;
+		return spanOf(consume(TokenKind.Semicolon));
 	}
 
 	static function isBracedExpression(expression:AstExpression):Bool
@@ -3262,47 +3260,93 @@ class Parser {
 	}
 
 	inline function check(kind:TokenKind):Bool
-		return tokens[position].kind == kind;
+		return tokens.kind(current()) == kind;
 
-	function advance():Token
-		return tokens[position++];
+	function advance():TokenId
+		return TokenId.ofRow(position++);
 
-	inline function current():Token
-		return tokens[position];
+	inline function current():TokenId
+		return TokenId.ofRow(position);
+
+	/** The token `offset` tokens ahead of the cursor. */
+	inline function ahead(offset:Int):TokenId
+		return TokenId.ofRow(position + offset);
 
 	function peekKind(offset:Int):TokenKind
-		return position + offset < tokens.length ? tokens[position + offset].kind : TokenKind.Eof;
+		return position + offset < tokenCount ? tokens.kind(ahead(offset)) : TokenKind.Eof;
 
-	function previous():Token
-		return tokens[position - 1];
+	inline function kindAt(row:Int):TokenKind
+		return tokens.kind(TokenId.ofRow(row));
 
-	function fail(token:Token, message:String):Void
-		throw new CompileError(new Diagnostic("E0002", message, token.span));
+	function previous():TokenId
+		return TokenId.ofRow(position - 1);
 
-	function parseIntegerToken(token:Token, negative:Bool = false):Int {
+	function spanOf(token:TokenId):SourceSpan
+		return token.row < tokenCount ? tokens.span(token) : inserted[token.row - tokenCount].span;
+
+	function textOf(token:TokenId):String
+		return token.row < tokenCount ? tokens.text(token) : inserted[token.row - tokenCount].text;
+
+	function kindOf(token:TokenId):TokenKind
+		return token.row < tokenCount ? tokens.kind(token) : inserted[token.row - tokenCount].kind;
+
+	/** Where `token` starts and ends: offsets of a source token, without making its span. */
+	function startOf(token:TokenId):Int
+		return token.row < tokenCount ? tokens.start(token) : inserted[token.row - tokenCount].span.start;
+
+	function endOf(token:TokenId):Int
+		return token.row < tokenCount ? tokens.end(token) : inserted[token.row - tokenCount].span.end;
+
+	/** The file of the tokens. */
+	function fileOf(token:TokenId):SourceFile
+		return token.row < tokenCount ? tokens.file : inserted[token.row - tokenCount].span.file;
+
+	/** `spanOf(first).merge(spanOf(last))`, without making either token's span. */
+	function spanBetween(first:TokenId, last:TokenId):SourceSpan {
+		var start = startOf(first), end = endOf(last);
+		return new SourceSpan(fileOf(first), start < startOf(last) ? start : startOf(last),
+			end > endOf(first) ? end : endOf(first));
+	}
+
+	/** `start.merge(spanOf(last))`, without making the token's span. */
+	function spanTo(start:SourceSpan, last:TokenId):SourceSpan {
+		var from = startOf(last), to = endOf(last);
+		return new SourceSpan(start.file, start.start < from ? start.start : from, start.end > to ? start.end : to);
+	}
+
+	/** `spanOf(first).merge(span)`, without making the token's span. */
+	function spanFrom(first:TokenId, span:SourceSpan):SourceSpan {
+		var from = startOf(first), to = endOf(first);
+		return new SourceSpan(fileOf(first), from < span.start ? from : span.start, to > span.end ? to : span.end);
+	}
+
+	function fail(token:TokenId, message:String):Void
+		throw new CompileError(new Diagnostic("E0002", message, spanOf(token)));
+
+	function parseIntegerToken(token:TokenId, negative:Bool = false):Int {
 		var hexadecimal = isHexIntegerToken(token),
 			limit = hexadecimal ? Int64.parseString(negative ? "2147483648" : "4294967295")
 				: Int64.parseString(negative ? "2147483648" : "2147483647"),
 			magnitude = parseIntegerMagnitude(token);
 		if (Int64.compare(magnitude, limit) > 0)
 			fail(token,
-				'Integer literal "${negative ? "-" : ""}${token.text}" is outside the ${hexadecimal && !negative ? "unsigned" : "signed"} 32-bit range');
+				'Integer literal "${negative ? "-" : ""}${textOf(token)}" is outside the ${hexadecimal && !negative ? "unsigned" : "signed"} 32-bit range');
 		var signed = negative ? Int64.sub(Int64.ofInt(0), magnitude) : magnitude;
 		if (hexadecimal && !negative && Int64.compare(signed, Int64.parseString("2147483647")) > 0)
 			signed = Int64.sub(signed, Int64.parseString("4294967296"));
 		return Int64.toInt(signed);
 	}
 
-	static function isHexIntegerToken(token:Token):Bool
-		return StringTools.startsWith(token.text, "0x") || StringTools.startsWith(token.text, "0X");
+	function isHexIntegerToken(token:TokenId):Bool
+		return StringTools.startsWith(textOf(token), "0x") || StringTools.startsWith(textOf(token), "0X");
 
-	function parseIntegerMagnitude(token:Token):Int64 {
+	function parseIntegerMagnitude(token:TokenId):Int64 {
 		if (isHexIntegerToken(token)) {
 			var value = Int64.ofInt(0);
-			var normalized = normalizeNumericLiteral(token.text);
+			var normalized = normalizeNumericLiteral(textOf(token));
 			for (index in 2...normalized.length) {
 				if (Int64.compare(Int64.ushr(value, 60), Int64.ofInt(0)) != 0)
-					fail(token, 'Integer literal "${token.text}" is outside the supported range');
+					fail(token, 'Integer literal "${textOf(token)}" is outside the supported range');
 				var code = normalized.charCodeAt(index),
 					digit = code >= "0".code
 						&& code <= "9".code ? code - "0".code : code >= "A".code
@@ -3310,17 +3354,17 @@ class Parser {
 				value = Int64.or(Int64.shl(value, 4), Int64.ofInt(digit));
 			}
 			if (Int64.compare(value, Int64.ofInt(0)) < 0)
-				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+				fail(token, 'Integer literal "${textOf(token)}" is outside the supported range');
 			return value;
 		}
 		try {
-			var value = Int64.parseString(normalizeNumericLiteral(token.text));
+			var value = Int64.parseString(normalizeNumericLiteral(textOf(token)));
 			if (Int64.compare(value, Int64.ofInt(0)) < 0)
-				fail(token, 'Integer literal "${token.text}" is outside the supported range');
+				fail(token, 'Integer literal "${textOf(token)}" is outside the supported range');
 			return value;
 		} catch (_:Dynamic) {
 			throw new CompileError(new Diagnostic("E0002",
-				'Integer literal "${token.text}" is outside the supported range', token.span));
+				'Integer literal "${textOf(token)}" is outside the supported range', spanOf(token)));
 		}
 	}
 
@@ -3335,9 +3379,9 @@ class Parser {
 			consume(TokenKind.Greater);
 			root = AppliedType(name, arguments);
 			while (match(TokenKind.Dot))
-				fields.push(consume(TokenKind.Identifier).text);
+				fields.push(textOf(consume(TokenKind.Identifier)));
 		}
-		return KeyPathLiteral(root, fields, start.merge(previous().span));
+		return KeyPathLiteral(root, fields, spanTo(start, previous()));
 	}
 
 	public static function expressionSpan(expression:AstExpression):SourceSpan
@@ -3496,15 +3540,15 @@ class Parser {
 	static function invalidEscape(message:String, span:SourceSpan):Void
 		throw new CompileError(new Diagnostic("E0001", 'Invalid escape sequence: $message', span));
 
-	function parseStringExpression(token:Token):AstExpression {
-		var text = token.text;
+	function parseStringExpression(token:TokenId):AstExpression {
+		var text = textOf(token);
 		if (text.charAt(0) != "'" || text.indexOf("$") < 0)
-			return StringLiteral(decodeString(text, token.span), token.span);
+			return StringLiteral(decodeString(text, spanOf(token)), spanOf(token));
 		var parts:Array<AstExpression> = [], literal = new StringBuf(), index = 1, end = text.length - 1;
 		while (index < end) {
 			var character = text.charAt(index);
 			if (character == "\\") {
-				var escape = readEscape(text, index + 1, end, token.span);
+				var escape = readEscape(text, index + 1, end, spanOf(token));
 				literal.add(escape.value);
 				index = escape.next;
 				continue;
@@ -3528,23 +3572,23 @@ class Parser {
 				index++;
 				continue;
 			}
-			appendStringLiteral(parts, literal.toString(), token.span);
+			appendStringLiteral(parts, literal.toString(), spanOf(token));
 			literal = new StringBuf();
 			var expressionStart = index + 1, expressionEnd = expressionStart;
 			if (expressionStart < end && text.charAt(expressionStart) == "{") {
 				expressionStart++;
-				expressionEnd = interpolationEnd(text, expressionStart, end, token.span);
+				expressionEnd = interpolationEnd(text, expressionStart, end, spanOf(token));
 				index = expressionEnd + 1;
 			} else {
 				while (expressionEnd < end && isInterpolationIdentifierPart(text.charCodeAt(expressionEnd)))
 					expressionEnd++;
 				index = expressionEnd;
 			}
-			var expression = parseInterpolatedExpression(text.substring(expressionStart, expressionEnd), token.span,
+			var expression = parseInterpolatedExpression(text.substring(expressionStart, expressionEnd), spanOf(token),
 				haxe.io.Bytes.ofString(text.substring(0, expressionStart)).length);
 			parts.push(Call("Std.string", [expression], expressionSpan(expression)));
 		}
-		appendStringLiteral(parts, literal.toString(), token.span);
+		appendStringLiteral(parts, literal.toString(), spanOf(token));
 		var result = parts[0];
 		for (partIndex in 1...parts.length)
 			result = Add(result, parts[partIndex], expressionSpan(result).merge(expressionSpan(parts[partIndex])));
@@ -3580,13 +3624,10 @@ class Parser {
 	}
 
 	function parseInterpolatedExpression(source:String, outer:SourceSpan, offset:Int):AstExpression {
+		// The expression's tokens, at their places in the outer file.
 		var interpolationFile = new compiler.core.Source.SourceFile(outer.file.path, source),
-			shifted:Array<Token> = [];
-		for (token in new Lexer(interpolationFile).tokenize())
-			shifted.push(new Token(token.kind, token.text,
-				new SourceSpan(outer.file, outer.start + offset + token.span.start,
-				outer.start + offset + token.span.end)));
-		var parser = new Parser(shifted);
+			lexed = new Lexer(interpolationFile).tokenizeTable();
+		var parser = new Parser(lexed.moved(outer.file, outer.start + offset));
 		parser.lambdaMember = lambdaMember;
 		parser.lambdaCounts = lambdaCounts;
 		parser.lambdaUndo = lambdaUndo;

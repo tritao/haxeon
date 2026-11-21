@@ -11,6 +11,7 @@ import compiler.semantic.GenericSpecializationRegistry;
 import compiler.semantic.ModuleCanonicalizer;
 import compiler.semantic.SemanticProgram;
 import compiler.semantic.SemanticWorkspace;
+import compiler.syntax.TokenTable;
 import compiler.types.TypeRegistry;
 import compiler.types.TypedAst.TypedProgram;
 import haxe.io.Bytes;
@@ -107,13 +108,13 @@ class SessionState {
 	 */
 	public function releaseSyntax():Void
 		for (state in modules) {
-			state.tokens = [];
+			state.tokens = TokenTable.empty;
 			state.ast = null;
 			state.recoveredAst = null;
-			state.recoveredTokens = [];
+			state.recoveredTokens = TokenTable.empty;
 			state.recoveredSemanticModel = null;
 			state.semanticModel = null;
-			state.lastGoodTokens = [];
+			state.lastGoodTokens = TokenTable.empty;
 			state.lastGoodAst = null;
 			state.lastGoodSemanticModel = null;
 			state.canonicalFunctions = [];

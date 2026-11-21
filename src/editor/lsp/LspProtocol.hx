@@ -1249,9 +1249,11 @@ class LspProtocol {
 			module = service.compiler.modules.get(ModulePath.fromFile(compilerPath(document)));
 		if (module == null)
 			return null;
-		for (token in module.tokens)
-			if (offset >= token.span.start && offset <= token.span.end && Std.string(token.kind) == "Identifier")
-				return {range: document.range(token.span.start, token.span.end), placeholder: token.text};
+		var tokens = module.tokens;
+		for (token in tokens)
+			if (offset >= tokens.start(token) && offset <= tokens.end(token)
+				&& tokens.kind(token) == compiler.syntax.Token.TokenKind.Identifier)
+				return {range: document.range(tokens.start(token), tokens.end(token)), placeholder: tokens.text(token)};
 		return null;
 	}
 

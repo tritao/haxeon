@@ -11,6 +11,7 @@ import compiler.syntax.Ast.AstFunction;
 import compiler.syntax.ConditionalCompilation;
 import compiler.syntax.Lexer;
 import compiler.syntax.Parser;
+import compiler.syntax.TokenTable;
 import compiler.types.TypeRegistry;
 
 /** Parses modules and derives their normalized source, type, and semantic dependencies. */
@@ -62,7 +63,7 @@ class ModuleAnalyzer {
 			var parsed = sourceParse(state);
 			lookupParses.remove(state.name);
 			state.conditionalDefines = parsed.defines;
-			state.tokens = keepsTokens ? parsed.tokens : [];
+			state.tokens = keepsTokens ? parsed.tokens : TokenTable.empty;
 			state.ast = parsed.ast;
 			declarationOwners.release(state.name);
 			indexDeclarations(state.name, state.parsedAst());
@@ -436,7 +437,7 @@ class ModuleAnalyzer {
 	/** The parse of `state`'s current source, which reads nothing but the source and the defines. */
 	function parseText(state:ModuleState):LookupParse {
 		var conditional = ConditionalCompilation.process(state.source, defines),
-			tokens = new Lexer(state.source, conditional.text).tokenize(),
+			tokens = new Lexer(state.source, conditional.text).tokenizeTable(),
 			program = new Parser(tokens).parseProgram();
 		if (program.packageName == null) {
 			var packageName = ModulePath.packageName(state.name);
@@ -661,7 +662,7 @@ class ModuleAnalyzer {
 private class LookupParse {
 	public final source:compiler.core.Source.SourceFile;
 	public final defines:Array<String>;
-	public final tokens:Array<compiler.syntax.Token>;
+	public final tokens:TokenTable;
 	public final ast:compiler.syntax.Ast.AstProgram;
 
 	public function new(source, defines, tokens, ast) {

@@ -2,8 +2,8 @@ package compiler.service;
 
 import compiler.syntax.Ast.AstProgram;
 import compiler.syntax.Ast.AstType;
-import compiler.syntax.Token;
 import compiler.syntax.Token.TokenKind;
+import compiler.syntax.TokenTable;
 
 /** An import statement whose names the file never mentions. */
 typedef UnusedImport = {
@@ -30,26 +30,28 @@ typedef ImportTarget = {
  * that declare implicit conversions.
  */
 class UnusedImports {
-	public static function find(tokens:Array<Token>, resolve:String->Null<ImportTarget>):Array<UnusedImport> {
+	public static function find(tokens:TokenTable,
+			resolve:String->Null<ImportTarget>):Array<UnusedImport> {
 		var statements:Array<{path:String, alias:Null<String>, wildcard:Bool, first:Int, last:Int}> = [];
 		var index = 0;
 		while (index < tokens.length) {
-			var kind = tokens[index].kind;
+			var kind = tokens.kind(TokenId.ofRow(index));
 			if (kind != TokenKind.Import && kind != TokenKind.Package) {
 				index++;
 				continue;
 			}
 			var first = index, parts:Array<String> = [], alias:Null<String> = null, wildcard = false;
 			index++;
-			while (index < tokens.length && tokens[index].kind != TokenKind.Semicolon
-				&& tokens[index].kind != TokenKind.Eof) {
-				var token = tokens[index];
-				if (token.kind == TokenKind.Star)
+			while (index < tokens.length && tokens.kind(TokenId.ofRow(index)) != TokenKind.Semicolon
+				&& tokens.kind(TokenId.ofRow(index)) != TokenKind.Eof) {
+				var tokenKind = tokens.kind(TokenId.ofRow(index));
+				if (tokenKind == TokenKind.Star)
 					wildcard = true;
-				else if (token.kind == TokenKind.Identifier && token.text == "as" && parts.length > 0)
-					alias = index + 1 < tokens.length ? tokens[index + 1].text : null;
-				else if (token.kind == TokenKind.Identifier && alias == null)
-					parts.push(token.text);
+				else if (tokenKind == TokenKind.Identifier && tokens.text(TokenId.ofRow(index)) == "as"
+					&& parts.length > 0)
+					alias = index + 1 < tokens.length ? tokens.text(TokenId.ofRow(index + 1)) : null;
+				else if (tokenKind == TokenKind.Identifier && alias == null)
+					parts.push(tokens.text(TokenId.ofRow(index)));
 				index++;
 			}
 			if (kind == TokenKind.Import)
@@ -64,12 +66,12 @@ class UnusedImports {
 		var mentioned:Map<String, Bool> = [];
 		var word = ~/[A-Za-z_][A-Za-z0-9_]*/;
 		for (position in 0...tokens.length) {
-			var token = tokens[position];
-			if (token.kind == TokenKind.Identifier && !skipped.exists(position))
-				mentioned.set(token.text, true);
-			else if (token.kind == TokenKind.StringLiteral && token.text.indexOf("$") >= 0) {
+			var tokenKind = tokens.kind(TokenId.ofRow(position));
+			if (tokenKind == TokenKind.Identifier && !skipped.exists(position))
+				mentioned.set(tokens.text(TokenId.ofRow(position)), true);
+			else if (tokenKind == TokenKind.StringLiteral && tokens.text(TokenId.ofRow(position)).indexOf("$") >= 0) {
 				// Interpolation (`$name`, `${expression}`) uses names the lexer keeps inside the string.
-				var rest = token.text;
+				var rest = tokens.text(TokenId.ofRow(position));
 				while (word.match(rest)) {
 					mentioned.set(word.matched(0), true);
 					rest = word.matchedRight();
@@ -84,8 +86,8 @@ class UnusedImports {
 				continue;
 			unused.push({
 				path: statement.path,
-				start: tokens[statement.first].span.start,
-				end: tokens[statement.last].span.end
+				start: tokens.start(TokenId.ofRow(statement.first)),
+				end: tokens.end(TokenId.ofRow(statement.last))
 			});
 		}
 		return unused;

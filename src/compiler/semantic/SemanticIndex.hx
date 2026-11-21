@@ -5,6 +5,7 @@ import compiler.types.TypedAst.TypedFunctionRole;
 import compiler.core.Source.SourceSpan;
 import compiler.modules.ModulePath;
 import compiler.syntax.Token;
+import compiler.syntax.TokenTable;
 import compiler.syntax.Token.TokenKind;
 import compiler.types.DeclarationIndex;
 import compiler.types.DeclarationIndex.DeclarationKind;
@@ -105,7 +106,7 @@ class SemanticIndex {
 	final declaredFunctions:Map<String, AstFunction> = [];
 	final declarationSymbolsBySpan:Map<String, SemanticSymbolId> = [];
 	final recoveredMembers:Map<String, SemanticSymbolId> = [];
-	final tokens:Array<Token>;
+	final tokens:TokenTable;
 	final module:String;
 	var cancellation:Null<CancellationToken>;
 	var currentCaller:Null<SemanticSymbolId>;
@@ -114,7 +115,7 @@ class SemanticIndex {
 	var currentDependencyKind:SemanticDependencyKind = SemanticDependencyKind.Body;
 	var checkpointCount:Int = 0;
 
-	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:Array<Token>) {
+	public function new(path:String, revision:Int, declarations:DeclarationIndex, tokens:TokenTable) {
 		module = ModulePath.fromFile(path);
 		this.revision = revision;
 		this.tokens = tokens;
@@ -361,13 +362,13 @@ class SemanticIndex {
 			declarationTypes.set(currentCaller, recoveredType(fn.result));
 		indexRecoveredStatementUses(fn.statements);
 		for (index in 0...tokens.length) {
-			var token = tokens[index];
+			var token = TokenId.ofRow(index);
 			// Member names belong to the receiver, even when a parameter shares the name.
-			if (index > 0 && tokens[index - 1].kind == TokenKind.Dot)
+			if (index > 0 && tokens.kind(TokenId.ofRow(index - 1)) == TokenKind.Dot)
 				continue;
-			if (token.kind == TokenKind.Identifier && token.span.start >= fn.span.start
-				&& token.span.end <= fn.span.end)
-				bindRecoveredLocal(token.text, token.span);
+			if (tokens.kind(token) == TokenKind.Identifier && tokens.start(token) >= fn.span.start
+				&& tokens.end(token) <= fn.span.end)
+				bindRecoveredLocal(tokens.text(token), tokens.span(token));
 		}
 		currentCaller = null;
 	}
@@ -687,26 +688,26 @@ class SemanticIndex {
 				continue;
 			var declarationBinding = locations(caller.id);
 			for (index in 0...tokens.length) {
-				var token = tokens[index];
-				if (token.span.start < caller.declaration.start
-					|| token.span.end > caller.declaration.end
-					|| token.kind != TokenKind.Identifier
+				var token = TokenId.ofRow(index);
+				if (tokens.start(token) < caller.declaration.start
+					|| tokens.end(token) > caller.declaration.end
+					|| tokens.kind(token) != TokenKind.Identifier
 					|| index + 1 >= tokens.length
-					|| tokens[index + 1].kind != TokenKind.LeftParen
+					|| tokens.kind(TokenId.ofRow(index + 1)) != TokenKind.LeftParen
 					|| declarationBinding.length > 0
-					&& token.span.start == declarationBinding[0].start)
+					&& tokens.start(token) == declarationBinding[0].start)
 					continue;
-				var callee = symbolIdAt(token.span.start);
+				var callee = symbolIdAt(tokens.start(token));
 				if (callee == null)
 					continue;
 				var duplicate = false;
 				for (edge in result)
-					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == token.span.start) {
+					if (edge.caller == caller.id && edge.callee == callee && edge.span.start == tokens.start(token)) {
 						duplicate = true;
 						break;
 					}
 				if (!duplicate)
-					result.push({caller: caller.id, callee: callee, span: token.span});
+					result.push({caller: caller.id, callee: callee, span: tokens.span(token)});
 			}
 		}
 		return result;
@@ -757,14 +758,14 @@ class SemanticIndex {
 		cancellation = token;
 		for (index in 0...tokens.length) {
 			checkpoint();
-			var token = tokens[index];
-			if (token.kind != TokenKind.Identifier || !isTypeReferenceToken(index))
+			var token = TokenId.ofRow(index);
+			if (tokens.kind(token) != TokenKind.Identifier || !isTypeReferenceToken(index))
 				continue;
 			var name = qualifiedTokenName(index), id = resolve(name);
 			if (id == null)
-				id = resolve(token.text);
+				id = resolve(tokens.text(token));
 			if (id != null)
-				bind(id, token.span);
+				bind(id, tokens.span(token));
 		}
 		bindings.sort(function(left, right) return Reflect.compare(left.span.start, right.span.start));
 		checkpoint();
@@ -1107,19 +1108,19 @@ class SemanticIndex {
 			return;
 		var declaration = declarationToken(tokens, fn.span, sourceName(fn.name));
 		for (index in 0...tokens.length) {
-			var token = tokens[index];
-			if (token.span.start < fn.span.start
-				|| token.span.end > fn.span.end
-				|| token.kind != TokenKind.Identifier
+			var token = TokenId.ofRow(index);
+			if (tokens.start(token) < fn.span.start
+				|| tokens.end(token) > fn.span.end
+				|| tokens.kind(token) != TokenKind.Identifier
 				|| index + 1 >= tokens.length
-				|| tokens[index + 1].kind != TokenKind.LeftParen
+				|| tokens.kind(TokenId.ofRow(index + 1)) != TokenKind.LeftParen
 				|| declaration != null
-				&& token.span.start == declaration.span.start)
+				&& tokens.start(token) == declaration.span.start)
 				continue;
-			var callee = resolve(token.text);
+			var callee = resolve(tokens.text(token));
 			if (callee != null) {
 				currentCaller = caller;
-				addCall(callee, token.span, token.text);
+				addCall(callee, tokens.span(token), tokens.text(token));
 			}
 		}
 	}
@@ -1149,7 +1150,7 @@ class SemanticIndex {
 	function isTypeReferenceToken(index:Int):Bool {
 		if (index <= 0)
 			return false;
-		var previous = tokens[index - 1].kind;
+		var previous = tokens.kind(TokenId.ofRow(index - 1));
 		if (previous == TokenKind.Colon
 			|| previous == TokenKind.Extends
 			|| previous == TokenKind.Implements
@@ -1166,22 +1167,24 @@ class SemanticIndex {
 
 	function qualifiedTokenName(index:Int):String {
 		var start = index;
-		while (start >= 2 && tokens[start - 1].kind == TokenKind.Dot && tokens[start - 2].kind == TokenKind.Identifier)
+		while (start >= 2 && tokens.kind(TokenId.ofRow(start - 1)) == TokenKind.Dot
+			&& tokens.kind(TokenId.ofRow(start - 2)) == TokenKind.Identifier)
 			start -= 2;
 		var parts:Array<String> = [];
 		for (cursor in start...index + 1)
-			if (tokens[cursor].kind == TokenKind.Identifier)
-				parts.push(tokens[cursor].text);
+			if (tokens.kind(TokenId.ofRow(cursor)) == TokenKind.Identifier)
+				parts.push(tokens.text(TokenId.ofRow(cursor)));
 		return parts.join(".");
 	}
 
 	function typePathStartsInContext(index:Int):Bool {
 		var start = index;
-		while (start >= 2 && tokens[start - 1].kind == TokenKind.Dot && tokens[start - 2].kind == TokenKind.Identifier)
+		while (start >= 2 && tokens.kind(TokenId.ofRow(start - 1)) == TokenKind.Dot
+			&& tokens.kind(TokenId.ofRow(start - 2)) == TokenKind.Identifier)
 			start -= 2;
 		if (start == 0)
 			return false;
-		var kind = tokens[start - 1].kind;
+		var kind = tokens.kind(TokenId.ofRow(start - 1));
 		return kind == TokenKind.Colon
 			|| kind == TokenKind.Extends
 			|| kind == TokenKind.Implements
@@ -1193,14 +1196,14 @@ class SemanticIndex {
 	function insideTypeArguments(index:Int):Bool {
 		var depth = 0, cursor = index - 1;
 		while (cursor >= 0) {
-			switch tokens[cursor].kind {
-				case Greater:
+			switch tokens.kind(TokenId.ofRow(cursor)) {
+				case TokenKind.Greater:
 					depth++;
-				case Less:
+				case TokenKind.Less:
 					if (depth == 0)
 						return true;
 					depth--;
-				case Semicolon, LeftBrace, RightBrace, Assign:
+				case TokenKind.Semicolon, TokenKind.LeftBrace, TokenKind.RightBrace, TokenKind.Assign:
 					return false;
 				default:
 			}
@@ -1212,7 +1215,7 @@ class SemanticIndex {
 	function precededBy(kind:TokenKind, index:Int):Bool {
 		var cursor = index - 1;
 		while (cursor >= 0) {
-			var candidate = tokens[cursor].kind;
+			var candidate = tokens.kind(TokenId.ofRow(cursor));
 			if (candidate == kind)
 				return true;
 			if (candidate == TokenKind.Semicolon || candidate == TokenKind.LeftBrace
@@ -1229,7 +1232,7 @@ class SemanticIndex {
 	function followedBy(kind:TokenKind, index:Int):Bool {
 		var cursor = index + 1;
 		while (cursor < tokens.length) {
-			var candidate = tokens[cursor].kind;
+			var candidate = tokens.kind(TokenId.ofRow(cursor));
 			if (candidate == kind)
 				return true;
 			if (candidate != TokenKind.Dot && candidate != TokenKind.Identifier)
@@ -1324,16 +1327,16 @@ class SemanticIndex {
 		});
 	}
 
-	static function enumReferenceToken(tokens:Array<Token>, expression:SourceSpan, name:String):Null<Token> {
+	static function enumReferenceToken(tokens:TokenTable, expression:SourceSpan, name:String):Null<Token> {
 		var token = referenceToken(tokens, expression, name);
 		if (token != null)
 			return token;
-		for (candidate in tokens)
-			if (candidate.kind == TokenKind.Identifier
-				&& candidate.text == name
-				&& candidate.span.start >= expression.end
-				&& candidate.span.start <= expression.end + 2)
-				return candidate;
+		for (candidate in 0...tokens.length)
+			if (tokens.kind(TokenId.ofRow(candidate)) == TokenKind.Identifier
+				&& tokens.text(TokenId.ofRow(candidate)) == name
+				&& tokens.start(TokenId.ofRow(candidate)) >= expression.end
+				&& tokens.start(TokenId.ofRow(candidate)) <= expression.end + 2)
+				return tokens.token(TokenId.ofRow(candidate));
 		return null;
 	}
 
@@ -1351,36 +1354,38 @@ class SemanticIndex {
 		return StringTools.startsWith(identity, "$l") && separator >= 0 ? identity.substr(separator + 1) : identity;
 	}
 
-	static function declarationToken(tokens:Array<Token>, declaration:SourceSpan, name:String):Null<Token> {
+	static function declarationToken(tokens:TokenTable, declaration:SourceSpan, name:String):Null<Token> {
 		var index = tokenIndexAtOrAfter(tokens, declaration.start);
 		while (index < tokens.length) {
-			var token = tokens[index++];
-			if (token.span.start >= declaration.end)
+			var token = TokenId.ofRow(index++);
+			if (tokens.start(token) >= declaration.end)
 				break;
-			if (token.span.end <= declaration.end && token.kind == TokenKind.Identifier && token.text == name)
-				return token;
+			if (tokens.end(token) <= declaration.end && tokens.kind(token) == TokenKind.Identifier
+				&& tokens.text(token) == name)
+				return tokens.token(token);
 		}
 		return null;
 	}
 
-	static function referenceToken(tokens:Array<Token>, expression:SourceSpan, name:String):Null<Token> {
+	static function referenceToken(tokens:TokenTable, expression:SourceSpan, name:String):Null<Token> {
 		var index = tokenIndexAtOrAfter(tokens, expression.start);
 		while (index < tokens.length) {
-			var token = tokens[index++];
-			if (token.span.start >= expression.end)
+			var token = TokenId.ofRow(index++);
+			if (tokens.start(token) >= expression.end)
 				break;
-			if (token.span.end <= expression.end && token.kind == TokenKind.Identifier && token.text == name)
-				return token;
+			if (tokens.end(token) <= expression.end && tokens.kind(token) == TokenKind.Identifier
+				&& tokens.text(token) == name)
+				return tokens.token(token);
 		}
 		return null;
 	}
 
 	/** Find the first token whose source range starts at or after an offset. */
-	static function tokenIndexAtOrAfter(tokens:Array<Token>, offset:Int):Int {
+	static function tokenIndexAtOrAfter(tokens:TokenTable, offset:Int):Int {
 		var low = 0, high = tokens.length;
 		while (low < high) {
 			var middle = low + ((high - low) >> 1);
-			if (tokens[middle].span.start < offset)
+			if (tokens.start(TokenId.ofRow(middle)) < offset)
 				low = middle + 1;
 			else
 				high = middle;

@@ -9,6 +9,7 @@ import compiler.core.Diagnostic;
 import compiler.core.Source.SourceFile;
 import compiler.core.Source.SourceSpan;
 import compiler.syntax.Token.TokenKind;
+import compiler.syntax.TokenTable;
 import compiler.Compiler;
 import compiler.modules.ModulePath;
 import compiler.modules.ModuleState;
@@ -344,7 +345,7 @@ class LanguageService {
 				continue;
 			try {
 				var conditional = ConditionalCompilation.process(state.source, editorDefines);
-				var tokens = new Lexer(state.source, conditional.text).tokenize();
+				var tokens = new Lexer(state.source, conditional.text).tokenizeTable();
 				var recovered = new Parser(tokens).parseProgramRecovering();
 				state.recoveredTokens = tokens;
 				state.recoveredAst = recovered.program;
@@ -520,21 +521,22 @@ class LanguageService {
 		for (index in 0...tokens.length) {
 			if (token != null)
 				token.check();
-			var current = tokens[index];
-			if (current.span.start > end)
+			var current = TokenId.ofRow(index);
+			if (tokens.start(current) > end)
 				break;
-			if (current.kind == Var && index + 1 < tokens.length && tokens[index + 1].kind == Identifier) {
-				var name = tokens[index + 1],
-					after = index + 2 < tokens.length ? tokens[index + 2] : null;
-				if (name.span.end >= start && name.span.end <= end && (after == null || after.kind != Colon)) {
-					var context = model.index.completionContext(name.span.end),
+			if (tokens.kind(current) == Var && index + 1 < tokens.length
+				&& tokens.kind(TokenId.ofRow(index + 1)) == Identifier) {
+				var name = TokenId.ofRow(index + 1),
+					typed = index + 2 < tokens.length && tokens.kind(TokenId.ofRow(index + 2)) == Colon;
+				if (tokens.end(name) >= start && tokens.end(name) <= end && !typed) {
+					var context = model.index.completionContext(tokens.end(name)),
 						localType:Null<CompilerType> = null;
 					for (local in context.locals)
-						if (local.name == name.text)
+						if (local.name == tokens.text(name))
 							localType = local.type;
 					if (localType != null)
 						result.push({
-							position: name.span.end,
+							position: tokens.end(name),
 							label: ": " + compilerTypeName(localType),
 							kind: "type",
 							paddingLeft: false,
@@ -542,8 +544,9 @@ class LanguageService {
 						});
 				}
 			}
-			if (current.kind == LeftParen && index > 0
-				&& (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == New))
+			if (tokens.kind(current) == LeftParen && index > 0
+				&& (tokens.kind(TokenId.ofRow(index - 1)) == Identifier
+				|| tokens.kind(TokenId.ofRow(index - 1)) == New))
 				addParameterHints(path, tokens, index, start, end, result);
 		}
 		result.sort(function(left, right) return Reflect.compare(left.position, right.position));
@@ -633,8 +636,8 @@ class LanguageService {
 			var spans:Array<SourceSpan> = [];
 			if (tokens != null)
 				for (token in tokens)
-					if (token.kind != Eof && position >= token.span.start && position <= token.span.end) {
-						spans.push(token.span);
+					if (tokens.kind(token) != Eof && position >= tokens.start(token) && position <= tokens.end(token)) {
+						spans.push(tokens.span(token));
 						break;
 					}
 			for (span in structure.containers)
@@ -661,20 +664,21 @@ class LanguageService {
 		while (index < tokens.length) {
 			if (token != null)
 				token.check();
-			if (tokens[index].kind != Import) {
+			if (tokens.kind(TokenId.ofRow(index)) != Import) {
 				index++;
 				continue;
 			}
 			index++;
-			if (index >= tokens.length || tokens[index].kind != Identifier)
+			if (index >= tokens.length || tokens.kind(TokenId.ofRow(index)) != Identifier)
 				continue;
-			var start = tokens[index].span.start,
-				end = tokens[index].span.end,
-				parts = [tokens[index].text];
+			var start = tokens.start(TokenId.ofRow(index)),
+				end = tokens.end(TokenId.ofRow(index)),
+				parts = [tokens.text(TokenId.ofRow(index))];
 			index++;
-			while (index + 1 < tokens.length && tokens[index].kind == Dot && tokens[index + 1].kind == Identifier) {
-				parts.push(tokens[index + 1].text);
-				end = tokens[index + 1].span.end;
+			while (index + 1 < tokens.length && tokens.kind(TokenId.ofRow(index)) == Dot
+				&& tokens.kind(TokenId.ofRow(index + 1)) == Identifier) {
+				parts.push(tokens.text(TokenId.ofRow(index + 1)));
+				end = tokens.end(TokenId.ofRow(index + 1));
 				index += 2;
 			}
 			var importPath = parts.join("."),
@@ -1090,13 +1094,14 @@ class LanguageService {
 		if (state == null || tokens == null)
 			return result;
 		for (index in 0...tokens.length) {
-			var lexical = tokens[index];
+			var lexical = TokenId.ofRow(index);
 			if (token != null)
 				token.check();
-			if (lexical.kind == Eof)
+			// The `=` of a `>=`, which is one operator with its `>`.
+			if (tokens.kind(lexical) == Eof || index > 0 && tokens.startsGreaterEqual(TokenId.ofRow(index - 1)))
 				continue;
-			var type:Null<String> = switch lexical.kind {
-				case Identifier: var semantic = semanticTokenType(model, lexical.span.start,
+			var type:Null<String> = switch tokens.kind(lexical) {
+				case Identifier: var semantic = semanticTokenType(model, tokens.start(lexical),
 					semanticTypes);
 					semantic == "variable" && isParameterToken(tokens, index) ? "parameter" : semantic;
 				case TypeInt, TypeBool, TypeFloat, TypeString, Void: "type";
@@ -1110,8 +1115,8 @@ class LanguageService {
 				default: "keyword";
 			};
 			if (type != null) {
-				var indexed = model == null ? null : model.index.symbolAt(lexical.span.start), modifiers = [];
-				if (indexed != null && semanticDeclaration(model, indexed.id, lexical.span)) {
+				var indexed = model == null ? null : model.index.symbolAt(tokens.start(lexical)), modifiers = [];
+				if (indexed != null && semanticDeclaration(model, indexed.id, tokens.span(lexical))) {
 					modifiers.push("declaration");
 					if (documentationFor(state, indexed.declaration).deprecated)
 						modifiers.push("deprecated");
@@ -1120,7 +1125,9 @@ class LanguageService {
 					if (hasDeclarationModifier(tokens, index, Final))
 						modifiers.push("readonly");
 				}
-				addSemanticSpan(state.source, lexical.span.start, lexical.span.end, type, modifiers, result);
+				var end = tokens.startsGreaterEqual(lexical)
+					? tokens.end(TokenId.ofRow(index + 1)) : tokens.end(lexical);
+				addSemanticSpan(state.source, tokens.start(lexical), end, type, modifiers, result);
 			}
 		}
 		addCommentTokens(state.source, result);
@@ -1192,11 +1199,11 @@ class LanguageService {
 		if (open < 1)
 			return null;
 		var callee = open - 1;
-		while (callee >= 0 && tokens[callee].kind != Identifier)
+		while (callee >= 0 && tokens.kind(TokenId.ofRow(callee)) != Identifier)
 			callee--;
 		if (callee < 0)
 			return null;
-		var id = model.index.symbolIdAt(tokens[callee].span.start + 1),
+		var id = model.index.symbolIdAt(tokens.start(TokenId.ofRow(callee)) + 1),
 			signature = id == null ? null : compiler.semanticWorkspace.indexedSignature(id);
 		if (signature == null)
 			return null;
@@ -1222,13 +1229,13 @@ class LanguageService {
 		return result;
 	}
 
-	static function callOpenToken(tokens:Array<compiler.syntax.Token>, position:Int):Int {
+	static function callOpenToken(tokens:TokenTable, position:Int):Int {
 		var depth = 0;
 		var index = tokens.length - 1;
-		while (index >= 0 && tokens[index].span.start >= position)
+		while (index >= 0 && tokens.start(TokenId.ofRow(index)) >= position)
 			index--;
 		while (index >= 0) {
-			switch tokens[index].kind {
+			switch tokens.kind(TokenId.ofRow(index)) {
 				case RightParen:
 					depth++;
 				case LeftParen:
@@ -1242,13 +1249,13 @@ class LanguageService {
 		return -1;
 	}
 
-	static function activeCallParameter(tokens:Array<compiler.syntax.Token>, open:Int, position:Int):Int {
+	static function activeCallParameter(tokens:TokenTable, open:Int, position:Int):Int {
 		var depth = 0, active = 0;
 		for (index in open + 1...tokens.length) {
-			var token = tokens[index];
-			if (token.span.start >= position)
+			var token = TokenId.ofRow(index);
+			if (tokens.start(token) >= position)
 				break;
-			switch token.kind {
+			switch tokens.kind(token) {
 				case LeftParen, LeftBracket, LeftBrace:
 					depth++;
 				case RightParen, RightBracket, RightBrace:
@@ -1435,8 +1442,8 @@ class LanguageService {
 				model = effectiveSemanticModel(state);
 			if (tokens != null && model != null)
 				for (token in tokens)
-					if (token.kind == Identifier && token.text == replacement) {
-						var existing = model.index.symbolIdAt(token.span.start + 1);
+					if (tokens.kind(token) == Identifier && tokens.text(token) == replacement) {
+						var existing = model.index.symbolIdAt(tokens.start(token) + 1);
 						if (existing != null && Std.string(existing) != Std.string(target)
 							&& semanticNamesCollide(target, existing))
 							return true;
@@ -1478,8 +1485,8 @@ class LanguageService {
 		if (state == null || tokens == null)
 			return null;
 		for (token in tokens)
-			if (token.kind == Identifier && position >= token.span.start && position <= token.span.end)
-				return token.text;
+			if (tokens.kind(token) == Identifier && position >= tokens.start(token) && position <= tokens.end(token))
+				return tokens.text(token);
 		return null;
 	}
 
@@ -1608,14 +1615,17 @@ class LanguageService {
 			return null;
 		var insertion = 0;
 		for (index in 0...tokens.length)
-			if (tokens[index].kind == Semicolon
+			if (tokens.kind(TokenId.ofRow(index)) == Semicolon
 				&& index > 0
-				&& (tokens[index - 1].kind == Identifier || tokens[index - 1].kind == Package)) {
+				&& (tokens.kind(TokenId.ofRow(index - 1)) == Identifier
+				|| tokens.kind(TokenId.ofRow(index - 1)) == Package)) {
 				var cursor = index - 1;
-				while (cursor >= 0 && (tokens[cursor].kind == Identifier || tokens[cursor].kind == Dot))
+				while (cursor >= 0
+					&& (tokens.kind(TokenId.ofRow(cursor)) == Identifier || tokens.kind(TokenId.ofRow(cursor)) == Dot))
 					cursor--;
-				if (cursor >= 0 && (tokens[cursor].kind == Import || tokens[cursor].kind == Package))
-					insertion = tokens[index].span.end;
+				if (cursor >= 0
+					&& (tokens.kind(TokenId.ofRow(cursor)) == Import || tokens.kind(TokenId.ofRow(cursor)) == Package))
+					insertion = tokens.end(TokenId.ofRow(index));
 			}
 		var replacement = insertion == 0 ? 'import $importPath;\n' : '\nimport $importPath;';
 		return {
@@ -1690,17 +1700,18 @@ class LanguageService {
 		return type;
 	}
 
-	static function isParameterToken(tokens:Array<compiler.syntax.Token>, index:Int):Bool {
-		if (index + 1 >= tokens.length || tokens[index + 1].kind != Colon)
+	static function isParameterToken(tokens:TokenTable, index:Int):Bool {
+		if (index + 1 >= tokens.length || tokens.kind(TokenId.ofRow(index + 1)) != Colon)
 			return false;
 		var depth = 0, cursor = index - 1;
 		while (cursor >= 0) {
-			switch tokens[cursor].kind {
+			switch tokens.kind(TokenId.ofRow(cursor)) {
 				case RightParen:
 					depth++;
 				case LeftParen:
 					if (depth == 0)
-						return cursor > 0 && (tokens[cursor - 1].kind == Identifier || tokens[cursor - 1].kind == New);
+						return cursor > 0 && (tokens.kind(TokenId.ofRow(cursor - 1)) == Identifier
+							|| tokens.kind(TokenId.ofRow(cursor - 1)) == New);
 					depth--;
 				case LeftBrace, RightBrace, Semicolon:
 					return false;
@@ -1711,10 +1722,10 @@ class LanguageService {
 		return false;
 	}
 
-	static function hasDeclarationModifier(tokens:Array<compiler.syntax.Token>, index:Int, modifier:TokenKind):Bool {
+	static function hasDeclarationModifier(tokens:TokenTable, index:Int, modifier:TokenKind):Bool {
 		var cursor = index - 1;
 		while (cursor >= 0) {
-			var kind = tokens[cursor].kind;
+			var kind = tokens.kind(TokenId.ofRow(cursor));
 			if (kind == modifier)
 				return true;
 			if (kind == LeftBrace || kind == RightBrace || kind == Semicolon)
@@ -1793,14 +1804,14 @@ class LanguageService {
 		};
 	}
 
-	function addParameterHints(path:String, tokens:Array<compiler.syntax.Token>, open:Int, start:Int, end:Int,
+	function addParameterHints(path:String, tokens:TokenTable, open:Int, start:Int, end:Int,
 			result:Array<InlayHint>):Void {
-		var signature = signatureHelp(path, tokens[open].span.end);
+		var signature = signatureHelp(path, tokens.end(TokenId.ofRow(open)));
 		if (signature == null || signature.parameters.length == 0)
 			return;
 		var depth = 1, argument = 0, cursor = open + 1, argumentStart = cursor;
 		while (cursor < tokens.length && depth > 0) {
-			var kind = tokens[cursor].kind;
+			var kind = tokens.kind(TokenId.ofRow(cursor));
 			switch kind {
 				case LeftParen, LeftBracket, LeftBrace:
 					depth++;
@@ -1823,20 +1834,20 @@ class LanguageService {
 		}
 	}
 
-	static function addParameterHint(tokens:Array<compiler.syntax.Token>, startIndex:Int, endIndex:Int, argument:Int,
+	static function addParameterHint(tokens:TokenTable, startIndex:Int, endIndex:Int, argument:Int,
 			parameters:Array<String>,
 			rangeStart:Int, rangeEnd:Int, result:Array<InlayHint>):Void {
 		if (argument >= parameters.length || startIndex >= endIndex)
 			return;
-		var first = tokens[startIndex],
+		var first = TokenId.ofRow(startIndex),
 			parameter = parameters[argument],
 			separator = parameter.indexOf(":"),
 			name = separator < 0 ? parameter : parameter.substring(0, separator);
-		if (first.span.start < rangeStart || first.span.start > rangeEnd || first.kind == Identifier
-			&& first.text == name)
+		if (tokens.start(first) < rangeStart || tokens.start(first) > rangeEnd || tokens.kind(first) == Identifier
+			&& tokens.text(first) == name)
 			return;
 		result.push({
-			position: first.span.start,
+			position: tokens.start(first),
 			label: name + ":",
 			kind: "parameter",
 			paddingLeft: false,
@@ -1852,7 +1863,7 @@ class LanguageService {
 		if (ast == null)
 			try {
 				var conditional = ConditionalCompilation.process(state.source, editorDefines);
-				ast = new Parser(new Lexer(state.source, conditional.text).tokenize()).parseProgram();
+				ast = new Parser(new Lexer(state.source, conditional.text).tokenizeTable()).parseProgram();
 			} catch (_:CompileError) {}
 		var result:Array<WorkspaceSymbol> = [];
 		if (ast != null) {
@@ -1910,32 +1921,34 @@ class LanguageService {
 			tokens = effectiveTokens(state),
 			source = state.source;
 		if (tokens != null) {
-			var braces:Array<compiler.syntax.Token> = [],
+			var braces:Array<TokenId> = [],
 				firstImport:Null<Int> = null,
 				lastImport:Null<Int> = null,
 				inImport = false;
-			for (token in tokens)
-				switch token.kind {
+			for (row in 0...tokens.length) {
+				var token = TokenId.ofRow(row);
+				switch tokens.kind(token) {
 					case LeftBrace:
 						braces.push(token);
 					case RightBrace:
 						var open = braces.pop();
 						if (open != null) {
-							var span = source.span(open.span.start, token.span.end);
+							var span = source.span(tokens.start(open), tokens.end(token));
 							folds.push({span: span, kind: "region"});
 							containers.push(span);
 						}
 					case Import:
 						inImport = true;
 						if (firstImport == null)
-							firstImport = token.span.start;
+							firstImport = tokens.start(token);
 					case Semicolon:
 						if (inImport) {
-							lastImport = token.span.end;
+							lastImport = tokens.end(token);
 							inImport = false;
 						}
 					default:
 				}
+			}
 			if (firstImport != null && lastImport != null)
 				folds.push({span: source.span(firstImport, lastImport), kind: "imports"});
 		}
@@ -2034,7 +2047,7 @@ class LanguageService {
 	static function effectiveAst(state:ModuleState):Null<compiler.syntax.Ast.AstProgram>
 		return state.ast != null ? state.ast : state.recoveredAst != null ? state.recoveredAst : state.lastGoodAst;
 
-	static function effectiveTokens(state:ModuleState):Null<Array<compiler.syntax.Token>>
+	static function effectiveTokens(state:ModuleState):TokenTable
 		return state.ast != null ? state.tokens : state.recoveredAst != null
 			? state.recoveredTokens : state.lastGoodTokens;
 

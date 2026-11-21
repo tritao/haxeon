@@ -10,7 +10,7 @@ class UnusedImportsMain {
 		return new Parser(new Lexer(new SourceFile(name, text)).tokenize()).parseProgram();
 
 	static function unused(modules:Map<String, AstProgram>, text:String):Array<String> {
-		var tokens = new Lexer(new SourceFile("subject.hx", text)).tokenize();
+		var tokens = new Lexer(new SourceFile("subject.hx", text)).tokenizeTable();
 		function resolve(path:String):Null<ImportTarget> {
 			var parts = path.split(".");
 			for (count in 0...parts.length) {

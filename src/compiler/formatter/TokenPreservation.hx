@@ -100,12 +100,12 @@ class TokenPreservation {
 		} catch (error:CompileError) {
 			for (token in new Lexer(new SourceFile(path, file.slice(0, error.diagnostic.span.start))).tokenize())
 				if (token.kind != TokenKind.Eof)
-					result.push({kind: Std.string(token.kind), text: token.text});
+					result.push({kind: token.kind.toString(), text: token.text});
 			throw new TokenizationFailure(result, error.diagnostic.format());
 		}
 		for (token in scanned)
 			if (token.kind != TokenKind.Eof)
-				result.push({kind: Std.string(token.kind), text: token.text});
+				result.push({kind: token.kind.toString(), text: token.text});
 	}
 }
 
