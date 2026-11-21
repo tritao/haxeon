@@ -24,7 +24,39 @@ class IrEnumRuntimeSpecializations {
 				visit(result);
 			default:
 		}
+		// A function past the encode point is read as its body, each type once; one before it, as its objects.
+		var visited:Array<Bool> = [], visitedTypes:Null<IrTypeIds> = null;
 		for (fn in functions) {
+			var body = fn.body;
+			if (body != null) {
+				if (body.types != visitedTypes) {
+					visitedTypes = body.types;
+					visited.resize(0);
+				}
+				inline function visitId(id:Int):Void {
+					while (visited.length <= id)
+						visited.push(false);
+					if (!visited[id]) {
+						visited[id] = true;
+						visit(body.types.type(id));
+					}
+				}
+				for (index in 0...body.argumentCount())
+					visitId(body.valueTypeId(body.argument(index)));
+				visitId(body.result);
+				for (block in 0...body.blockCount()) {
+					var row = body.firstRow(block);
+					while (row >= 0) {
+						var output = body.output(row);
+						if (output.exists())
+							visitId(body.valueTypeId(output));
+						if (body.opcode(row) == IrOpcode.TypeValue)
+							visitId(body.aux(row));
+						row = body.nextRow(row);
+					}
+				}
+				continue;
+			}
 			for (argument in fn.arguments) visit(argument.type);
 			visit(fn.result);
 			for (block in fn.blocks) for (located in block.instructions) {

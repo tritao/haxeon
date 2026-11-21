@@ -441,24 +441,33 @@ class IrPipeline {
 		return assembly;
 	}
 
+	/**
+	 * The first stage over bodies: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each function is
+	 * encoded (`IrProgramAssembler.finish` reads every function's body).
+	 */
 	static function runtimeSurface(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.program = IrProgramAssembler.finish(assembly, context);
+		// A session takes last compile's object for a function rebuilt the same, which has its body.
+		var cache = context.inlineCache;
+		if (context.options.keepSession && cache != null)
+			assembly.functions = cache.stableBodySources(assembly.functions);
+		var program = IrProgramAssembler.finish(assembly, context);
+		assembly.program = program;
+		if (!context.options.keepSession) {
+			var types = bodyTypes(context), builder = context.passScratch.bodyBuilder;
+			for (fn in program.functions) {
+				fn.bodyIn(types, builder, false);
+				fn.releaseDecoded();
+			}
+		}
 		return assembly;
 	}
 
-	/**
-	 * The first stage over bodies: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each function is
-	 * encoded.
-	 */
 	static function assemblyEnumTagEscapes(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		var program = assembly.program, retained = context.options.keepSession;
+		var program = assembly.program;
 		if (program == null)
 			throw new InternalError("The enum tag escapes run on the finished program");
-		stableBodySources(program, context);
-		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder, retained);
-		if (!retained)
-			for (fn in program.functions)
-				fn.releaseDecoded();
+		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder,
+			context.options.keepSession);
 		return assembly;
 	}
 
@@ -508,13 +517,6 @@ class IrPipeline {
 	static function scalarClosures(program:IrProgram, context:IrPipelineContext):IrProgram {
 		IrScalarClosures.rewrite(program, bodyTypes(context), context.passScratch, context.options.keepSession);
 		return program;
-	}
-
-	/** A session takes last compile's object for a function rebuilt the same, which has its body, at the conversion point. */
-	static function stableBodySources(program:IrProgram, context:IrPipelineContext):Void {
-		var cache = context.inlineCache;
-		if (context.options.keepSession && cache != null)
-			program.functions = cache.stableBodySources(program.functions);
 	}
 
 	static function scalarReplacementObjects(program:IrProgram, context:IrPipelineContext):IrProgram {

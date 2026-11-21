@@ -678,88 +678,94 @@ class IrProgramAssembler {
 			needsInt64ToInt = false,
 			mapRuntimeNames:Map<String, Bool> = [],
 			mapHandleListings:Map<String, Bool> = [];
-		for (fn in allFunctions)
-			for (block in fn.blocks)
-				for (instruction in block.instructions)
-					switch instruction.value {
-						case Call(_, name, _):
-							if (name.name == "haxe.Int64.toInt")
+		program.prunedFunctions = removedByPrune;
+		program.reachedNatives = reachedNativesAfterPrune;
+		program.objects = objects == null ? [] : objects;
+		program.cNatives = cNatives == null ? [] : cNatives;
+		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true],
+			needsUnreachable = false;
+		var cache = context.inlineCache;
+		if (cache == null)
+			throw new InternalError("The runtime surface reads bodies, whose type ids are the inline cache's");
+		var types = cache.types,
+			builder = context.passScratch.bodyBuilder,
+			retained = context.options.keepSession;
+		for (index in 0...allFunctions.length) {
+			var body = allFunctions[index].bodyIn(types, builder, retained), callsCNatives = false;
+			for (block in 0...body.blockCount()) {
+				var row = body.firstRow(block);
+				while (row >= 0) {
+					switch body.opcode(row) {
+						case IrOpcode.Call:
+							var name = body.symbol(row).name;
+							if (cNativeNames.exists(name))
+								callsCNatives = true;
+							if (name == "haxe.Int64.toInt")
 								needsInt64ToInt = true;
-							if (name.name == "__exception_matches")
+							if (name == "__exception_matches")
 								needsExceptionRuntime = true;
-							if (name.name == "__std_is_of_type")
+							if (name == "__std_is_of_type")
 								needsTypeTestRuntime = true;
-							if (name.name == "__closure_is_of_type")
+							if (name == "__closure_is_of_type")
 								needsClosureTypeTestRuntime = true;
-							if (name.name == "__dynamic_equal")
+							if (name == "__dynamic_equal")
 								needsDynamicEquality = true;
-							if (name.name == "__dynamic_object_type_id")
+							if (name == "__dynamic_object_type_id")
 								needsDynamicObjectTypeId = true;
-							if (name.name == "__std_is_exact_type")
+							if (name == "__std_is_exact_type")
 								needsExactTypeTestRuntime = true;
-							if (name.name == IrExactTypeFacts.TEST)
+							if (name == IrExactTypeFacts.TEST)
 								needsObjectExactTypeTest = true;
-							if (name.name == "__reflect_dynamic_object" || name.name == "__reflect_set_field")
+							if (name == "__reflect_dynamic_object" || name == "__reflect_set_field")
 								needsDynamicObjectRuntime = true;
-							if (name.name == IrArrayFactory.NAME || StringTools.startsWith(name.name, "__array_"))
+							if (name == IrArrayFactory.NAME || StringTools.startsWith(name, "__array_"))
 								needsArrayRuntime = true;
-							if (name.name == "__array_alloc_typed_ref")
+							if (name == "__array_alloc_typed_ref")
 								needsTypedRefArrayRuntime = true;
-							if (name.name == "__array_check_cast")
+							if (name == "__array_check_cast")
 								needsArrayCastRuntime = true;
-							if (StringTools.startsWith(name.name, "__array_")
-								&& StringTools.endsWith(name.name, "_any"))
+							if (StringTools.startsWith(name, "__array_")
+								&& StringTools.endsWith(name, "_any"))
 								needsAnyArrayRuntime = true;
-							if (name.name == "__string_concat" || name.name == "__string_length"
-								|| name.name == "__string_equal"
-								|| name.name == "__string_index_of"
-								|| name.name == "__string_char_at" || name.name == "__string_char_code_at"
-								|| name.name == "__string_from_char_code"
-								|| name.name == "__string_substring" || name.name == "__string_to_lower_case"
-								|| name.name == "__string_to_upper_case")
+							if (name == "__string_concat" || name == "__string_length"
+								|| name == "__string_equal"
+								|| name == "__string_index_of"
+								|| name == "__string_char_at" || name == "__string_char_code_at"
+								|| name == "__string_from_char_code"
+								|| name == "__string_substring" || name == "__string_to_lower_case"
+								|| name == "__string_to_upper_case")
 								needsStringRuntime = true;
-							if (name.name == "__string_from_int"
-								|| name.name == "__string_from_f64"
-								|| StringTools.startsWith(name.name, "__string_concat")
-								&& name.name != "__string_concat")
-								stringFastPathNames.set(name.name, true);
-							if (StringTools.startsWith(name.name, "__map_")) {
-								var operationStart = lastSeparatorCode(name.name, 95);
+							if (name == "__string_from_int"
+								|| name == "__string_from_f64"
+								|| StringTools.startsWith(name, "__string_concat")
+								&& name != "__string_concat")
+								stringFastPathNames.set(name, true);
+							if (StringTools.startsWith(name, "__map_")) {
+								var operationStart = lastSeparatorCode(name, 95);
 								if (operationStart > 0) {
-									mapRuntimeNames.set(name.name.substring(2, operationStart), true);
-									if (name.name.substring(operationStart + 1) == "handles")
-										mapHandleListings.set(name.name.substring(2, operationStart), true);
+									mapRuntimeNames.set(name.substring(2, operationStart), true);
+									if (name.substring(operationStart + 1) == "handles")
+										mapHandleListings.set(name.substring(2, operationStart), true);
 								}
 							}
 						// Dynamic iterators read through the storage element type, like Array<Dynamic> reads.
-						case IteratorNext(output, _) if (IrTypeTools.isDynamic(output.type)):
+						case IrOpcode.IteratorNext if (IrTypeTools.isDynamic(body.valueType(body.output(row)))):
 							needsArrayRuntime = true;
 							needsAnyArrayRuntime = true;
-						default:
-					}
-		program.prunedFunctions = removedByPrune;
-		program.reachedNatives = reachedNativesAfterPrune;
-		var needsUnreachable = false;
-		for (fn in allFunctions)
-			for (block in fn.blocks)
-				if (block.terminator != null)
-					switch block.terminator.value {
-						case Unreachable:
+						case IrOpcode.Unreachable:
 							needsUnreachable = true;
 						default:
 					}
-		program.objects = objects == null ? [] : objects;
-		program.cNatives = cNatives == null ? [] : cNatives;
-		var cNativeNames:Map<String, Bool> = [for (native in program.cNatives) native.name => true];
-		for (fn in allFunctions)
-			for (block in fn.blocks)
-				for (index in 0...block.instructions.length)
-					switch block.instructions[index].value {
-						case Call(output, name, arguments) if (cNativeNames.exists(name.name)):
-							block.instructions[index] = new Located(CNativeCall(output, name.name, arguments),
-								block.instructions[index].provenance);
-						case _:
-					}
+					row = body.nextRow(row);
+				}
+			}
+			if (callsCNatives) {
+				// The function stops being the one the assembly holds, whose array may be a cache's.
+				if (allFunctions == assembly.functions)
+					allFunctions = allFunctions.copy();
+				allFunctions[index] = cNativeCalls(body, cNativeNames, builder, retained);
+			}
+		}
 		program.interfaces = interfaces == null ? [] : interfaces;
 		program.enums = IrEnumRuntimeSpecializations.materialize(enums == null ? [] : enums, allFunctions,
 			objects == null ? [] : objects,
@@ -1095,6 +1101,21 @@ class IrProgramAssembler {
 		entry.returnValue(result);
 		program.functions.push(new IrFunction("__entry", [], Void, entry.blocks, Ordinary));
 		return program;
+	}
+
+	/** `body`'s function with its calls of C natives (`names`) made C native calls: a frozen copy when `retained`, else in place. */
+	static function cNativeCalls(body:IrBody, names:Map<String, Bool>, builder:IrBodyBuilder,
+			retained:Bool):IrFunction {
+		var edited = body.forEditing(builder);
+		for (block in 0...edited.blockCount()) {
+			var row = edited.firstRow(block);
+			while (row >= 0) {
+				if (edited.opcode(row) == IrOpcode.Call && names.exists(edited.symbol(row).name))
+					edited.setOperation(row, IrOpcode.CNativeCall, edited.aux(row));
+				row = edited.nextRow(row);
+			}
+		}
+		return retained ? IrFunction.ofBody(edited.freeze(true, builder)) : IrFunction.ofOwnedBody(edited);
 	}
 
 	/** Add the concrete storage operations required by dynamic array views. */

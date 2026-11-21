@@ -111,8 +111,9 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    (still from their decoding) stay as they were; the helpers it generates are built as functions and encoded, and its
    boundary helpers are expanded with `IrBodyCallExpansion`. *The closed enum tag ABI reads bodies* (release builds), changing
    value types and constants in place. `IrEnumEscapeReach` reads a function's body when it has one and its objects before the
-   encode point. *The assembly's enum tag escapes read bodies* (the target stage's walk, `escapeBodies`), and are the encode
-   point on every target, the end of assembly.
+   encode point. *The assembly's enum tag escapes read bodies* (the target stage's walk, `escapeBodies`). *The runtime
+   surface reads bodies* (`IrProgramAssembler.finish`: the runtime calls, C native calls made in place, the concrete enums),
+   and is the encode point on every target.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
    `setResult`).
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
@@ -123,7 +124,7 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 ## Session caching model
 
 What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
-(the encode point is the assembly's last stage, its enum tag escapes, on every target). Every body a cache holds is
+(the encode point is the assembly's runtime surface, on every target). Every body a cache holds is
 frozen; a body no cache holds is the stages' own (`ofOwnedBody`) and exists only in a one-shot compile. Keys are function
 names; reuse is by object identity of the `IrFunction` an entry was made from.
 
