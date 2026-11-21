@@ -192,7 +192,21 @@ else()
   set_target_properties(hlvm PROPERTIES OUTPUT_NAME hl)
 endif()
 
-# The SDK a `--target=hlc` build compiles against (`--c-sdk`, docs/design/AOT_BACKEND.md): the VM library and libffi in
+# The VM library of executables compiled ahead of time (the hlc SDK's libhl.a): hlvm with no JIT. Its objects are hlvm's
+# but for the JIT's, whose entry points jit_none.c gives as a VM without the JIT (hl_module_init_aot only).
+include(vendor/hashlink/cmake/hl-sources.cmake)
+add_library(hlvm_jit_none OBJECT ${HL_NO_JIT_SOURCES})
+target_include_directories(hlvm_jit_none PRIVATE vendor/hashlink/src)
+set_target_properties(hlvm_jit_none PROPERTIES C_STANDARD 11 C_STANDARD_REQUIRED ON POSITION_INDEPENDENT_CODE ON)
+add_library(hlvm_aot STATIC
+  "$<FILTER:$<TARGET_OBJECTS:hl>,EXCLUDE,/src/(main|jit[a-z0-9_]*)\\.c\\.(o|obj)$>"
+  $<TARGET_OBJECTS:hlvm_jit_none>
+  $<TARGET_OBJECTS:libhl>
+  $<TARGET_OBJECTS:haxeon_runtime_objects>
+)
+set_target_properties(hlvm_aot PROPERTIES OUTPUT_NAME hl-aot)
+
+# The SDK a `--target=hlc` build compiles against (`--c-sdk`, docs/design/AOT_BACKEND.md): the VM library without the JIT and libffi in
 # lib/, the runtime headers in include/, and the entry point the generated C links with in src/.
 set(HAXEON_HLC_SDK_DIR "${CMAKE_BINARY_DIR}/hlc-sdk")
 set(_hlc_sdk_headers
@@ -205,10 +219,10 @@ add_custom_target(haxeon-hlc-sdk ALL
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different ${_hlc_sdk_headers} "${HAXEON_HLC_SDK_DIR}/include"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c"
     "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c" "${HAXEON_HLC_SDK_DIR}/src"
-  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm>" "${HAXEON_HLC_SDK_DIR}/lib"
+  COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:hlvm_aot>" "${HAXEON_HLC_SDK_DIR}/lib/libhl${CMAKE_STATIC_LIBRARY_SUFFIX}"
   COMMAND "${CMAKE_COMMAND}" -E copy_if_different "$<TARGET_FILE:haxeon_pinned_libffi>"
     "${HAXEON_HLC_SDK_DIR}/lib/libffi${CMAKE_STATIC_LIBRARY_SUFFIX}"
-  DEPENDS hlvm "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c"
+  DEPENDS hlvm_aot "${CMAKE_SOURCE_DIR}/native/aot/hlc_main.c" "${CMAKE_SOURCE_DIR}/native/aot/hlc_stack.c"
   COMMENT "Assembling the hlc SDK"
   VERBATIM
 )

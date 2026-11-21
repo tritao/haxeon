@@ -62,7 +62,22 @@ function with its arguments in memory) and `get_wrapper` (the function a closure
 which unpacks its arguments for `hl_wrapper_call`) are generated trampolines, one pair per C calling shape of the program's
 function types (and of each with its first argument bound), keyed by the result's and arguments' shapes (`hlc_signatures`
 in `image.c`, found by binary search); `resolve_symbol` and `capture_stack` are the stack traces below. The type tables could
-later be emitted as static C data to skip decoding.
+later be emitted as static C data to skip decoding (below).
+
+**Static type tables (designed).** Start-up decodes the image: in a hello-world compile by the AOT compiler (about 100 ms
+of processor time), `hl_code_read` is about 19% and `hl_module_init_aot` about 4%. It needs no IR or `HlLower` change: the
+C backend already has the assembled `HlCode` it encodes, so it can emit the `hl_code` itself as static C data (types with
+their `hl_type_obj`, `hl_type_fun`, `hl_type_enum` and `hl_type_virtual` parts, field and constructor arrays, names as
+UTF-16 literals, globals, natives, constants, strings, the one-instruction function stubs, the function identities) and
+give it to `hl_module_alloc` and `hl_module_init_aot` unchanged, which compute the runtime parts (object layouts,
+enum offsets, virtual tables) as now. Two constraints shape it. Field hashes are not a pure function of names:
+`hl_hash_gen` resolves a collision by the order names are first registered, and registers each name for `hl_field_name`;
+so the static code keeps calling it, in `hl_code_read`'s order, at start-up (a fork function that fills the hashes of a
+static `hl_code`), and that registration is itself a good part of the decode (an insertion into a sorted array per name;
+making it a hash table is a separate, simple fork change that helps the JIT too). And `hl_code`'s layout becomes an ABI
+between the generated C and the fork, checked as the object layouts are (`sizeof` and offsets at start-up, or a version
+in `hlmodule.h`). Expected gain: most of the decode except the name registration, on the order of 10 ms per start of the
+compiler, less for small programs (a hello-world executable starts in about 6 ms in all).
 
 Layout checks: the generated code accesses object fields through C structs and globals at offsets computed by the backend
 (`hl_module_alloc`'s rule). At startup, before running anything, the entry point checks each struct's field offsets
@@ -229,7 +244,7 @@ is not stable in every C library.
 the C sources into the directory `--output` names plus `.c` (`out/main.c/`). The C compiler is a typed option on the
 request (`CompileOptions.cCompiler`, `--c-compiler=cc`), with the SDK it links against (`CompileOptions.cSdk`,
 `--c-sdk=DIR`: the native build's `hlc-sdk` directory, made by the `haxeon-hlc-sdk` target, with the runtime headers in
-`include/`, `libhl.a` and `libffi.a` in `lib/` and the entry point in `src/`); with both set, the driver compiles each C
+`include/`, `libhl.a` (the VM library without the JIT) and `libffi.a` in `lib/` and the entry point in `src/`); with both set, the driver compiles each C
 file that changed (as many at once as there are processors, the largest first; `-O2 -g1 -fwrapv -fno-strict-aliasing
 -fno-optimize-sibling-calls`, in a development build `-O0 -g1 ... -DHLC_EXACT_FRAMES`: see Debug information; Haxe's
 `Int` wraps, and objects are read through each other's structs; `-g1` keeps the line tables and inline records the stack
@@ -295,8 +310,17 @@ same benchmarks that costs nothing measurable but merkletrees (recursive small f
 this machine's noise but worth the milestone 5 measurement of inlining with DWARF inline records.
 
 Milestone 4: the executable initializes its module with `hl_module_init_aot` and calls through generated trampolines; the
-JIT is never initialized (it is still linked, as part of `libhl.a`). Not done: a `libhl` without the JIT for platforms that
-forbid writable code (a build of the VM library that leaves the JIT out), and the type tables as static data.
+JIT is never initialized, and since this round not linked either. The SDK's `libhl.a` is `hlvm_aot` (`libhl-aot.a` in the
+build): `hlvm`'s objects but for the JIT's (`jit*.c`), whose entry points the fork's `jit_none.c` gives for a VM without
+it (`HL_NO_JIT_SOURCES` in `cmake/hl-sources.cmake`): `hl_jit_alloc` returns nothing, so a bytecode module cannot be
+initialized or patched, and nothing writes code. `hl_jit_null_field_access`, which compiled code of both kinds calls,
+moved from `jit.c` to `module.c`. The default `hlvm` and `hl` are unchanged. PCRE's own JIT is not compiled in either
+library. Measured: a hello-world executable's code goes from 1.78 MB to 1.60 MB (stripped file 1.82 MB to 1.65 MB), the
+compiler's from 19.64 MB to 19.47 MB; start-up is the same (about 6 ms for hello-world; a hello-world compile by the AOT
+compiler about 0.1 s either way). The hot reload and debugger code stays, inert: the library is linked whole (the loader
+finds natives by name), and leaving those out would need guards in `module.c` and `hlruntime.c` for a few kilobytes.
+
+Type tables as static data: designed, not done (see Runtime image and initialization).
 
 Release builds let the C compiler inline, with the frames restored from DWARF (see Debug information); development builds
 keep exact frames, and the parity runner uses them. In release the four stack programs (throw-string, try-rethrow,
@@ -345,5 +369,11 @@ output. Per-function `optimize("O1")` on the largest functions was measured and 
 file's functions, not one function's size), so it is not done. A declaration change still rebuilds more files than use it
 when it renumbers types or slots, as struct and native names are indices; stable names would fix that.
 
-Next: macOS and MSVC stack traces when they can be built; the type tables as static data; why the AOT build allocates
-more; the self-compile against `origin/main`'s map changes.
+The AOT-built compiler allocates about 4 MB more than the JIT-built one over the self-compile (1.936 against 1.932 GB):
+by the compiler's own phase counts, 3.8 MB of it in `backend-functions` and 0.4 MB in `ir-assembly`, the same with exact
+frames (so not C inlining), and not exceptions (a program throwing and catching allocates the same both ways); scalar
+boxing goes through the same shared boxes (`hl_make_dyn` and the JIT's inline boxing both use `hl_static_ints` and the
+shared Bools). Not found yet; next is an allocation sampler by site under both.
+
+Next: macOS and MSVC stack traces when they can be built; the static type tables; the allocation difference; the
+self-compile against `origin/main`'s map changes.
