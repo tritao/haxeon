@@ -98,7 +98,7 @@ class Target {
 			case "macos", "darwin", "mac": TargetOs.MacOS;
 			case "linux": TargetOs.Linux;
 			case "android": TargetOs.Android;
-			case _: throw new InternalError('Unknown target operating system in "$value"');
+			case _: throw new InternalError('Unknown target "$value". Valid: host, wasm32, android, or an OS-architecture[-ABI] triple such as linux-x86_64-gnu');
 		};
 		var archText = parts.length > 1 ? parts[1] : (os == TargetOs.Android ? "aarch64" : "x86_64"),
 			arch = switch archText {

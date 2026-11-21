@@ -14,11 +14,12 @@ import build.execution.OutputCapture;
 import build.execution.ProcessRunner;
 import build.native.NativeCMakeProvider;
 import compiler.core.InternalError;
+import compiler.core.UsageError;
+import compiler.formatter.Formatter;
+import compiler.formatter.ProjectFormat;
 import compiler.tools.DiagnosticPrinter.DiagnosticFormat;
 import compiler.tools.ReportStyle;
 import compiler.tools.Verbosity;
-import compiler.formatter.Formatter;
-import compiler.formatter.ProjectFormat;
 import haxe.Json;
 import haxe.io.Path;
 import project.PackageLockfile;
@@ -180,12 +181,31 @@ class HaxeonCli {
 			};
 			Sys.exit(status);
 		} catch (error:Dynamic) {
-			Sys.stderr().writeString("haxeon: " + Std.string(error) + "\n");
-			if (Std.isOfType(error, compiler.formatter.TokenPreservation.TokenMismatch))
-				Sys.exit(2);
-			Sys.exit(1);
+			Sys.stderr().writeString("haxeon: " + (expectedFailure(error) ? "" : "internal error: ") + Std.string(error)
+				+ "\n");
+			Sys.exit(exitStatus(error));
 		}
 	}
+
+	/**
+	 * A failure the CLI reports for what the user asked or has (a usage error, a missing file, a failed step), not a bug in it:
+	 * the CLI's own errors and the runtime's I/O errors. Any other exception (a haxe.exceptions one, say) is a bug.
+	 */
+	static function expectedFailure(error:Dynamic):Bool
+		return !Std.isOfType(error, haxe.Exception) || Std.isOfType(error, UsageError)
+			|| Std.isOfType(error, InternalError)
+			|| Std.isOfType(error, compiler.core.Diagnostic.CompileError)
+			|| Std.isOfType(error, compiler.formatter.TokenPreservation.TokenMismatch);
+
+	/** 2 for a usage error, 1 for a failure, 70 (EX_SOFTWARE) for an error the CLI did not expect. */
+	static function exitStatus(error:Dynamic):Int
+		return Std.isOfType(error, UsageError)
+			|| Std.isOfType(error, compiler.formatter.TokenPreservation.TokenMismatch)
+			? 2 : (expectedFailure(error) ? 1 : 70);
+
+	/** The target `--target` names; a name that is none is a usage error that lists the valid ones. */
+	static function parseTarget(value:String):Target
+		return try Target.parse(value) catch (error:haxe.Exception) throw new UsageError(error.message);
 
 	static function init(arguments:Array<String>):Int {
 		var entry = "Main", target = "host";
@@ -194,26 +214,22 @@ class HaxeonCli {
 			var argument = arguments[index++];
 			if (argument == "--entry") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "--entry" requires a value');
+					throw new UsageError('Option "--entry" requires a value');
 				entry = arguments[index++];
 			} else if (argument == "--target") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "--target" requires a value');
+					throw new UsageError('Option "--target" requires a value');
 				target = arguments[index++];
 			} else if (StringTools.startsWith(argument, "--entry="))
 				entry = argument.substr("--entry=".length);
 			else if (StringTools.startsWith(argument, "--target="))
 				target = argument.substr("--target=".length);
 			else
-				throw new InternalError('Unknown init option "$argument"');
+				throw new UsageError('Unknown init option "$argument"');
 		}
 		if (entry.length == 0)
-			throw new InternalError('Option "--entry" requires a value');
-		try {
-			Target.parse(target);
-		} catch (error:Dynamic) {
-			throw new InternalError('Unsupported init target "$target": ${Std.string(error)}');
-		}
+			throw new UsageError('Option "--entry" requires a value');
+		parseTarget(target);
 
 		var projectDirectory = Sys.getCwd(),
 			configPath = Path.join([projectDirectory, CONFIG_FILE]);
@@ -264,13 +280,13 @@ class HaxeonCli {
 			else if (argument == "--stdin")
 				stdin = true;
 			else if (StringTools.startsWith(argument, "-"))
-				throw new InternalError('Unknown fmt option "$argument" (indentation and line width come from the "format" section of haxeon.json)');
+				throw new UsageError('Unknown fmt option "$argument" (indentation and line width come from the "format" section of haxeon.json)');
 			else
 				paths.push(argument);
 		if (stdin && paths.length > 0)
-			throw new InternalError('haxeon fmt --stdin cannot be combined with file paths');
+			throw new UsageError('haxeon fmt --stdin cannot be combined with file paths');
 		if (!stdin && paths.length == 0)
-			throw new InternalError('haxeon fmt requires a file path or --stdin');
+			throw new UsageError('haxeon fmt requires a file path or --stdin');
 		var projects = new ProjectFormat();
 		if (stdin) {
 			var source = Sys.stdin().readAll().toString(),
@@ -318,7 +334,7 @@ class HaxeonCli {
 			throw new InternalError('Project file not found: $manifestPath');
 		var name = options.name == null ? inferPackageName(options.git) : options.name;
 		if (name == null || name.length == 0)
-			throw new InternalError('Git dependencies require a package name (pass it as the final argument or with --name)');
+			throw new UsageError('Git dependencies require a package name (pass it as the final argument or with --name)');
 		var raw:Dynamic;
 		try {
 			raw = Json.parse(File.getContent(manifestPath));
@@ -376,7 +392,7 @@ class HaxeonCli {
 
 	static function packageCommand(arguments:Array<String>):Int {
 		if (arguments.length == 0 || arguments[0] != "check")
-			throw new InternalError('Usage: haxeon package check [--project PATH]');
+			throw new UsageError('Usage: haxeon package check [--project PATH]');
 		var options = parsePackageOptions(arguments.slice(1), false, "package check"),
 			manifestPath = resolvePath(options.projectPath, Sys.getCwd()),
 			project = discoverProject(manifestPath),
@@ -409,19 +425,19 @@ class HaxeonCli {
 			var argument = arguments[index++];
 			if (argument == "--project") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "--project" requires a value');
+					throw new UsageError('Option "--project" requires a value');
 				projectPath = arguments[index++];
 			} else if (StringTools.startsWith(argument, "--project="))
 				projectPath = argument.substr("--project=".length);
 			else if (StringTools.startsWith(argument, "--"))
-				throw new InternalError('Unknown why option "$argument"');
+				throw new UsageError('Unknown why option "$argument"');
 			else if (packageName == null)
 				packageName = argument;
 			else
-				throw new InternalError('Unexpected why argument "$argument"');
+				throw new UsageError('Unexpected why argument "$argument"');
 		}
 		if (packageName == null || packageName.length == 0)
-			throw new InternalError('Usage: haxeon why <package> [--project PATH]');
+			throw new UsageError('Usage: haxeon why <package> [--project PATH]');
 		var project = discoverProject(resolvePath(projectPath, Sys.getCwd())),
 			path = packagePath(project.rootPackage, packageName, project, new Map());
 		if (path == null)
@@ -432,7 +448,7 @@ class HaxeonCli {
 
 	static function doctor(arguments:Array<String>):Int {
 		if (arguments.length != 0)
-			throw new InternalError('Unexpected doctor argument "${arguments[0]}"');
+			throw new UsageError('Unexpected doctor argument "${arguments[0]}"');
 		var home = haxeonHome(), suffix = executableSuffix();
 		var haxePath = Path.join([home, ".tools", "haxe", "haxe" + suffix]);
 		var hashlinkPath = Path.join([HashLinkPath.directory(home), "hl" + suffix]);
@@ -467,7 +483,7 @@ class HaxeonCli {
 
 	static function platforms(arguments:Array<String>):Int {
 		if (arguments.length != 0)
-			throw new InternalError('Unexpected platforms argument "${arguments[0]}"');
+			throw new UsageError('Unexpected platforms argument "${arguments[0]}"');
 		Sys.println("Available through this CLI:");
 		Sys.println('  host     build and run HashLink on the current host (${Sys.systemName()})');
 		Sys.println("  wasm32   build experimental WebAssembly output; run is not wired up");
@@ -478,7 +494,7 @@ class HaxeonCli {
 
 	static function devices(arguments:Array<String>):Int {
 		if (arguments.length != 0)
-			throw new InternalError('Unexpected devices argument "${arguments[0]}"');
+			throw new UsageError('Unexpected devices argument "${arguments[0]}"');
 		var home = haxeonHome();
 		configureAndroidEnvironment(home);
 		var adb = androidExecutable(home, "adb");
@@ -500,7 +516,7 @@ class HaxeonCli {
 			compilers = 3,
 			noTestCache = false;
 		if (subcommand != "plan" && subcommand != "build" && subcommand != "test")
-			throw new InternalError('Usage: haxeon workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME] [--jobs N] [--compilers N] [--no-test-cache] [--actions]');
+			throw new UsageError('Usage: haxeon workspace plan|build|test [--workspace PATH] [--skip-tag TAG] [--only NAME] [--jobs N] [--compilers N] [--no-test-cache] [--actions]');
 		var index = 0;
 		while (index < arguments.length) {
 			var argument = arguments[index++];
@@ -511,7 +527,7 @@ class HaxeonCli {
 			else if (argument == "--workspace" || argument == "--skip-tag" || argument == "--only"
 				|| argument == "--jobs" || argument == "--compilers") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "$argument" requires a value');
+					throw new UsageError('Option "$argument" requires a value');
 				var value = arguments[index++];
 				if (argument == "--workspace")
 					path = value;
@@ -522,14 +538,14 @@ class HaxeonCli {
 				else {
 					var count = Std.parseInt(value);
 					if (count == null || count < 1)
-						throw new InternalError('Option "$argument" requires a positive integer');
+						throw new UsageError('Option "$argument" requires a positive integer');
 					if (argument == "--jobs")
 						jobs = count;
 					else
 						compilers = count;
 				}
 			} else
-				throw new InternalError('Unknown workspace option "$argument"');
+				throw new UsageError('Unknown workspace option "$argument"');
 		}
 		var workspace = WorkspaceManifest.load(resolvePath(path, Sys.getCwd())),
 			selected = [for (member in workspace.projects) {
@@ -633,7 +649,7 @@ class HaxeonCli {
 		return switch command {
 			case "import": runTool("FfiImportMain", arguments);
 			case "audit": runTool("FfiAuditMain", arguments);
-			case _: throw new InternalError('Usage: haxeon ffi import|audit ... (unknown ffi command "$command")');
+			case _: throw new UsageError('Usage: haxeon ffi import|audit ... (unknown ffi command "$command")');
 		};
 	}
 
@@ -700,7 +716,7 @@ class HaxeonCli {
 			projectConfigPath = resolvePath(options.projectPath, Sys.getCwd());
 		if (!FileSystem.exists(projectConfigPath))
 			throw new InternalError('Project file not found: $projectConfigPath (run "haxeon init" to create one)');
-		var requestedTarget:Null<Target> = options.target == null ? null : Target.parse(options.target),
+		var requestedTarget:Null<Target> = options.target == null ? null : parseTarget(options.target),
 			resolveStarted = Sys.time() * 1000.0,
 			project = discoverProject(projectConfigPath, requestedTarget),
 			resolutionMs = Sys.time() * 1000.0 - resolveStarted,
@@ -711,37 +727,37 @@ class HaxeonCli {
 		if (launch && targetInfo.equals(Target.detectHost()))
 			RuntimeLibrary.requireCurrent(haxeonHome());
 		if (options.plan && launch)
-			throw new InternalError('Option "--plan" is only valid with "haxeon build"');
+			throw new UsageError('Option "--plan" is only valid with "haxeon build"');
 		if (options.explain && launch)
-			throw new InternalError('Option "--explain" is only valid with "haxeon build"');
+			throw new UsageError('Option "--explain" is only valid with "haxeon build"');
 		if (options.compilerOnly && launch)
-			throw new InternalError('Option "--compiler-only" is only valid with "haxeon build"');
+			throw new UsageError('Option "--compiler-only" is only valid with "haxeon build"');
 		if (options.watch && !launch)
-			throw new InternalError('Option "--watch" is only valid with "haxeon run"');
+			throw new UsageError('Option "--watch" is only valid with "haxeon run"');
 		// `build --compiler-only --live` publishes the live artifacts (module, .hlp patch, .live.* descriptions) for a host that is not
 		// the desktop's (a phone applies the patch itself); `run --watch --live` is the desktop's loop.
 		if (options.live && !options.watch && !(options.compilerOnly && !launch))
-			throw new InternalError('Option "--live" requires "haxeon run --watch" (or "haxeon build --compiler-only")');
+			throw new UsageError('Option "--live" requires "haxeon run --watch" (or "haxeon build --compiler-only")');
 		if (options.strictLive && !options.live)
-			throw new InternalError('Option "--strict-live" requires "haxeon run --watch --live"');
+			throw new UsageError('Option "--strict-live" requires "haxeon run --watch --live"');
 		// Every target goes through the structured build (HaxeonProjectBuild); an Android build then has Gradle package it.
 		var hostBuild = targetInfo.equals(Target.detectHost())
 			&& Target.parse(project.manifest.target).equals(Target.detectHost()),
 			structuredBuild = hostBuild || targetInfo.isWasm() || targetInfo.isAndroid();
 		if (options.watch && !targetInfo.isAndroid() && !hostBuild)
-			throw new InternalError('Option "--watch" currently requires a host or Android project');
+			throw new UsageError('Option "--watch" currently requires a host or Android project');
 		if (!launch && options.device != null)
-			throw new InternalError('Option "--device" is only valid with "haxeon run --target android"');
+			throw new UsageError('Option "--device" is only valid with "haxeon run --target android"');
 		if (!targetInfo.isAndroid() && options.device != null)
-			throw new InternalError('Option "--device" requires "--target android"');
+			throw new UsageError('Option "--device" requires "--target android"');
 		if (options.gradleInputs != null && (launch || !targetInfo.isAndroid()))
-			throw new InternalError('Option "--gradle-inputs" is only valid with "haxeon build --target android"');
+			throw new UsageError('Option "--gradle-inputs" is only valid with "haxeon build --target android"');
 		if ((options.plan || options.explain || options.timings) && !structuredBuild)
-			throw new InternalError('Plan, explanation, and timing output are available for host, wasm32 and android builds only');
+			throw new UsageError('Plan, explanation, and timing output are available for host, wasm32 and android builds only');
 		if (options.selfHosted && !structuredBuild)
-			throw new InternalError('The self-hosted compiler is available for host, wasm32 and android builds only');
+			throw new UsageError('The self-hosted compiler is available for host, wasm32 and android builds only');
 		if (options.profile && (!launch || !hostBuild))
-			throw new InternalError('Profiling is currently available for "haxeon run" host builds only');
+			throw new UsageError('Profiling is currently available for "haxeon run" host builds only');
 		// The instrument source runs the instrumented build flavor, which builds into a directory of its own.
 		var instrument = options.profile && options.profileSources.indexOf("instrument") >= 0;
 		ProfileCapture.controls = options.profileControls;
@@ -825,7 +841,7 @@ class HaxeonCli {
 				}
 				// Each launch is profiled into its own capture, from launch to exit or relaunch.
 				if (options.profileOutput != null && Path.extension(options.profileOutput) == "hlpc")
-					throw new InternalError('With --watch, --profile-output names the directory that holds one capture per launch, not an .hlpc file');
+					throw new UsageError('With --watch, --profile-output names the directory that holds one capture per launch, not an .hlpc file');
 				var profiling:Null<WatchProfiling> = options.profile ? {
 					profiler: profilerTool(home),
 					root: options.profileOutput == null ? Path.join([Path.directory(output), "profile"])
@@ -911,10 +927,10 @@ class HaxeonCli {
 			return buildStatus;
 		}
 		if (!targetInfo.isAndroid())
-			throw new InternalError('Target "$target" cannot be built yet; build for the host, wasm32 or android');
+			throw new UsageError('Target "$target" cannot be built yet; build for the host, wasm32 or android');
 		// The Android debug host always accepts live patches.
 		if (options.buildModeExplicit && options.buildMode == "release")
-			throw new InternalError("The Android live-patch host requires development build mode");
+			throw new UsageError("The Android live-patch host requires development build mode");
 		// The NDK the project's native packages build with, and later Gradle and adb.
 		configureAndroidEnvironment(home);
 		// The module, its sidecars and the native libraries, as for any target; Gradle only packages them. A watch keeps the
@@ -1265,18 +1281,18 @@ class HaxeonCli {
 				profile = true;
 			} else if (argument == "--profile-output") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "--profile-output" requires a value');
+					throw new UsageError('Option "--profile-output" requires a value');
 				profileOutput = arguments[index++];
 				profile = true;
 			} else if (argument == "-v" || argument == "--verbosity") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "$argument" requires a value');
+					throw new UsageError('Option "$argument" requires a value');
 				verbosity = parseVerbosity(arguments[index++]);
 			} else if (StringTools.startsWith(argument, "--verbosity="))
 				verbosity = parseVerbosity(argument.substr("--verbosity=".length));
 			else if (argument == "--color" || argument == "--diagnostic-format") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "$argument" requires a value');
+					throw new UsageError('Option "$argument" requires a value');
 				if (argument == "--color")
 					color = parseColor(arguments[index++]);
 				else
@@ -1289,7 +1305,7 @@ class HaxeonCli {
 				|| argument == "--output" || argument == "--define"
 				|| argument == "--device" || argument == "--jobs" || argument == "--gradle-inputs") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "$argument" requires a value');
+					throw new UsageError('Option "$argument" requires a value');
 				var value = arguments[index++];
 				switch argument {
 					case "--project":
@@ -1310,7 +1326,7 @@ class HaxeonCli {
 					case "--jobs":
 						var parsedJobs = Std.parseInt(value);
 						if (parsedJobs == null || parsedJobs < 1)
-							throw new InternalError('Option "--jobs" requires a positive integer');
+							throw new UsageError('Option "--jobs" requires a positive integer');
 						jobs = parsedJobs;
 					case _:
 				}
@@ -1328,7 +1344,7 @@ class HaxeonCli {
 			else if (StringTools.startsWith(argument, "--jobs=")) {
 				var parsedJobs = Std.parseInt(argument.substr("--jobs=".length));
 				if (parsedJobs == null || parsedJobs < 1)
-					throw new InternalError('Option "--jobs" requires a positive integer');
+					throw new UsageError('Option "--jobs" requires a positive integer');
 				jobs = parsedJobs;
 			} else if (StringTools.startsWith(argument, "--define="))
 				defines.push(argument.substr("--define=".length));
@@ -1353,14 +1369,14 @@ class HaxeonCli {
 				profileOutput = argument.substr("--profile-output=".length);
 				profile = true;
 			} else
-				throw new InternalError('Unknown build option "$argument"');
+				throw new UsageError('Unknown build option "$argument". See \'haxeon build --help\'.');
 		}
 		if (projectPath.length == 0)
-			throw new InternalError('Option "--project" requires a value');
+			throw new UsageError('Option "--project" requires a value');
 		if (buildMode != "release" && buildMode != "development")
-			throw new InternalError('Unsupported build mode "$buildMode"');
+			throw new UsageError('Unknown build mode "$buildMode". Valid: development, release');
 		if (live && buildModeExplicit && buildMode != "development")
-			throw new InternalError("--live requires development build mode");
+			throw new UsageError("--live requires development build mode");
 		return {
 			projectPath: projectPath,
 			target: target,
@@ -1399,20 +1415,20 @@ class HaxeonCli {
 	static function parseVerbosity(value:String):Verbosity {
 		var level = Verbosity.parse(value);
 		if (level == null)
-			throw new InternalError('Unknown verbosity "$value". Valid: ${Verbosity.NAMES.join(", ")}');
+			throw new UsageError('Unknown verbosity "$value". Valid: ${Verbosity.NAMES.join(", ")}');
 		return level;
 	}
 
 	static function parseColor(value:String):String {
 		if (value != "auto" && value != "always" && value != "never")
-			throw new InternalError('Unknown color mode "$value". Valid: auto, always, never');
+			throw new UsageError('Unknown color mode "$value". Valid: auto, always, never');
 		return value;
 	}
 
 	static function parseDiagnosticFormat(value:String):DiagnosticFormat {
 		var format = DiagnosticFormat.parse(value);
 		if (format == null)
-			throw new InternalError('Unknown diagnostic format "$value". Valid: ${DiagnosticFormat.NAMES.join(", ")}');
+			throw new UsageError('Unknown diagnostic format "$value". Valid: ${DiagnosticFormat.NAMES.join(", ")}');
 		return format;
 	}
 
@@ -1434,16 +1450,16 @@ class HaxeonCli {
 			var argument = arguments[index++];
 			if (argument == "--locked") {
 				if (!allowLocked)
-					throw new InternalError('Unknown $command option "--locked"');
+					throw new UsageError('Unknown $command option "--locked"');
 				locked = true;
 			} else if (argument == "--project") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "--project" requires a value');
+					throw new UsageError('Option "--project" requires a value');
 				projectPath = arguments[index++];
 			} else if (StringTools.startsWith(argument, "--project="))
 				projectPath = argument.substr("--project=".length);
 			else
-				throw new InternalError('Unknown $command option "$argument"');
+				throw new UsageError('Unknown $command option "$argument"');
 		}
 		return {projectPath: projectPath, locked: locked};
 	}
@@ -1458,7 +1474,7 @@ class HaxeonCli {
 			var argument = arguments[index++];
 			if (argument == "--git" || argument == "--rev" || argument == "--name" || argument == "--project") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "$argument" requires a value');
+					throw new UsageError('Option "$argument" requires a value');
 				var value = arguments[index++];
 				switch argument {
 					case "--git":
@@ -1480,16 +1496,16 @@ class HaxeonCli {
 			else if (StringTools.startsWith(argument, "--project="))
 				projectPath = argument.substr("--project=".length);
 			else if (StringTools.startsWith(argument, "--"))
-				throw new InternalError('Unknown add option "$argument"');
+				throw new UsageError('Unknown add option "$argument"');
 			else if (name == null)
 				name = argument;
 			else
-				throw new InternalError('Unexpected add argument "$argument"');
+				throw new UsageError('Unexpected add argument "$argument"');
 		}
 		if (git == null || git.length == 0)
-			throw new InternalError('Option "--git" requires a non-empty URL');
+			throw new UsageError('Option "--git" requires a non-empty URL');
 		if (rev == null || rev.length == 0)
-			throw new InternalError('Option "--rev" requires a non-empty ref');
+			throw new UsageError('Option "--rev" requires a non-empty ref');
 		return {
 			projectPath: projectPath,
 			name: name,
@@ -1504,7 +1520,7 @@ class HaxeonCli {
 			var argument = arguments[index++];
 			if (argument == "--registry" || argument == "--version" || argument == "--project") {
 				if (index >= arguments.length)
-					throw new InternalError('Option "$argument" requires a value');
+					throw new UsageError('Option "$argument" requires a value');
 				var value = arguments[index++];
 				switch argument {
 					case "--registry":
@@ -1522,12 +1538,12 @@ class HaxeonCli {
 			else if (StringTools.startsWith(argument, "--project="))
 				projectPath = argument.substr("--project=".length);
 			else
-				throw new InternalError('Unknown publish option "$argument"');
+				throw new UsageError('Unknown publish option "$argument"');
 		}
 		if (registry == null || registry.length == 0)
-			throw new InternalError('Option "--registry" requires a non-empty registry name');
+			throw new UsageError('Option "--registry" requires a non-empty registry name');
 		if (version == null || version.length == 0)
-			throw new InternalError('Option "--version" requires an exact package version');
+			throw new UsageError('Option "--version" requires an exact package version');
 		return {projectPath: projectPath, registry: registry, version: version};
 	}
 
@@ -1647,7 +1663,7 @@ class HaxeonCli {
 	static function nonNegativeInteger(value:String, option:String):Int {
 		var parsed = Std.parseInt(value);
 		if (parsed == null || parsed < 0 || Std.string(parsed) != StringTools.trim(value))
-			throw new InternalError('Option "$option" takes a whole number of at least 0');
+			throw new UsageError('Option "$option" takes a whole number of at least 0');
 		return parsed;
 	}
 

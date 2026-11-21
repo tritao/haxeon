@@ -17,6 +17,10 @@ class BackendTargets {
 			default: null;
 		};
 
+	/** The names a compile can be asked for, for a message that lists them (`wasm64` parses but is not implemented). */
+	public static function names():Array<String>
+		return ["hl", "wasm32", "wasm-gc"];
+
 	public static function isWasm(target:BackendTarget):Bool
 		return switch target {
 			case HashLink: false;

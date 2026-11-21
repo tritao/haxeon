@@ -152,8 +152,7 @@ def measure_live(hl, compiler, sources, output, log_path):
 
 # The edits the incremental part makes to its copy of the sources: each `old` occurs exactly once in its file. When the code they
 # anchor on changes, pick another anchor of the same kind and update the incremental baseline.
-BODY_EDIT = ("src/compiler/tools/HaxeonCompiler.hx", "Sys.println(failure.formatAll());",
-             "Sys.println(failure.formatAll() + \"!\");")
+BODY_EDIT = ("src/compiler/tools/HaxeonCompiler.hx", '"haxeon compiler: "', '"haxeon compiler! "')
 SIGNATURE_EDIT = ("src/compiler/core/InternalError.hx", "?previous:haxe.Exception) {",
                   "?previous:haxe.Exception, ?guardEdit:Int) {")
 # The body edit is made and taken back this many times, before the signature edit: the session's live bytes settle within the

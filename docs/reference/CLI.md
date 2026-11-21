@@ -56,6 +56,13 @@ mistyped command gets one line naming the closest command, and a Haxe command li
 saying it is not supported yet and to create a project with `haxeon init`; both exit
 with status 2.
 
+A value the CLI does not take is reported with the values it does, as in `Unknown
+target "hlc". Valid: host, wasm32, android, ...`. Every command exits with 0 when it
+succeeds, 1 when a build, a test or another step fails, 2 for a usage error (an unknown
+command or option, a missing or invalid value) and 70 for an internal error, which is a
+bug in Haxeon. The compiler run directly takes each valued option as `--name=value` or
+`--name value`, and exits with 2 for a usage error too.
+
 `haxeon fmt` uses Haxeon's built-in lossless formatter. It rewrites files by
 default, while `--check` reports files that would change; a directory stands for
 the `.hx` files under it. Use `--stdin` for editor or pipeline integration.
