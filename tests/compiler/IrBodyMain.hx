@@ -262,6 +262,45 @@ class IrBodyMain {
 	}
 
 	/**
+	 * A pipeline stage on bodies against its object version: it changes `fn` into a function that is its frozen body, decoding
+	 * to the object result, whose values end where the object result's do (`IrFunction.nextValueId`), so later stages number
+	 * theirs the same; and it gives back a function it leaves as it was as the same object.
+	 */
+	static function sameStage(what:String, fn:IrFunction, expected:IrFunction,
+			stage:(IrFunction, IrTypeIds, compiler.ir.IrPassScratch) -> IrFunction):Void {
+		var types = new IrTypeIds(), scratch = new compiler.ir.IrPassScratch();
+		var result = stage(fn, types, scratch);
+		if (expected == fn || result == fn)
+			throw 'IrBody: the $what test function must change';
+		var body = result.body;
+		if (body == null || !body.frozen || body.layoutDifference() != null)
+			throw 'IrBody: $what must give a function that is its frozen body';
+		var difference = IrFunctionStateEquality.difference(expected, body.toFunction());
+		if (difference != null)
+			throw 'IrBody: $what on a body differs from its object version: $difference';
+		if (body.valueLimit() != expected.nextValueId())
+			throw 'IrBody: $what leaves ${body.valueLimit()} value ids where its object version has ${expected.nextValueId()}';
+		var unchanged = new IrFunction("Main.unchanged", [], Void, [block(0, [], Return(value("nothing", Void)))],
+			Ordinary);
+		if (stage(unchanged, types, scratch) != unchanged)
+			throw 'IrBody: $what must give back a function it does not change';
+	}
+
+	/** A thaw of a frozen body shares its columns until its first edit, which leaves the frozen body as it was. */
+	static function sharedThaw(fn:IrFunction):Void {
+		var types = new IrTypeIds(), frozen = IrBodyBuilder.encode(fn, types).freeze(false);
+		var copy = frozen.thaw(), untouched = frozen.thaw();
+		if (copy.edited || IrFunctionStateEquality.difference(fn, untouched.toFunction()) != null)
+			throw 'IrBody: a thaw must read as the body it was thawed from';
+		copy.removeRow(0, copy.firstRow(0));
+		if (IrFunctionStateEquality.difference(fn, frozen.toFunction()) != null
+			|| IrFunctionStateEquality.difference(fn, untouched.toFunction()) != null)
+			throw 'IrBody: an edit of a thaw changed the frozen body or another thaw of it';
+		if (IrFunctionStateEquality.difference(fn, copy.toFunction()) == null)
+			throw 'IrBody: the edit of a thaw must change it';
+	}
+
+	/**
 	 * Rows made or copied here and linked before, after or into new blocks; a block's tail moved to another. The layout stays
 	 * sound and the decoded function has the rows where they were linked.
 	 */
@@ -416,6 +455,10 @@ class IrBodyMain {
 		], Ordinary), (body, scratch) -> compiler.ir.IrStrengthReduction.runBody(body));
 		scalarReplacement();
 		copyElision();
+		var shared = value("shared", F64);
+		sharedThaw(new IrFunction("Main.shared", [real], F64, [
+			block(0, [ConstFloat(two, 2.0), Div(shared, real, two)], Return(shared))
+		], Ordinary));
 	}
 
 	static function field(name:String, type:IrType, ?nativeSize:Int):IrObjectField
@@ -517,6 +560,10 @@ class IrBodyMain {
 		samePass("construction in place", construct,
 			fn -> compiler.ir.IrScalarReplacement.rewrite(fn, objects, false, true),
 			(body, scratch) -> compiler.ir.IrScalarReplacement.runBody(body, objects, scratch, false, true));
+		sameStage("scalar replacement stage", construct,
+			compiler.ir.IrScalarReplacement.rewrite(construct, objects, false, true),
+			(fn, types, scratch) -> compiler.ir.IrScalarReplacement.rewriteBody(fn, objects, types, scratch, true,
+			false));
 	}
 
 	/** A value copy passed to a callee that only reads it is replaced by its source, and the callee is consulted. */
