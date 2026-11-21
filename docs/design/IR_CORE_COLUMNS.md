@@ -100,7 +100,9 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    changes is its frozen body (`IrFunction.ofBody`), made in place on a thawed copy or rebuilt into a body the stage owns; one
    it leaves as it was stays the same object. Until the object passes are gone, a stage whose object version numbered new
    values from `IrFunction.nextValueId` leaves only the values the decoding would name (`IrBody.keepNamedValues`,
-   `IrBodyBuilder.finishNamed`), so the stages after it number theirs as before.
+   `IrBodyBuilder.finishNamed`), so the stages after it number theirs as before. In a session, a function the passes before
+   the conversion point rebuild the same as last time is replaced by last compile's object (`stableBodySources`), which has
+   its body, as the inliner does with its own inputs.
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
    The codec writes bodies.
 6. The Wasm lowerings read bodies (until then they decode, off the self-compile's path); `IrInstruction`, `Located`
@@ -153,7 +155,8 @@ block ids (phi inputs, try blocks, branch targets) and two int arrays (`StaticDa
   ints). This is the inliner's and the scalar passes' value substitution.
 - **Ownership.** A body reachable from a cache (the inliner's memo and its cleaned and published forms, HlLower's cache,
   the codec) is frozen; editing a frozen body is an internal error, and a pass that would change one changes a copy
-  (`thaw`). The copy-on-write sharing of `IrFunctionRewrite` moves from blocks to functions.
+  (`thaw`). The copy-on-write sharing of `IrFunctionRewrite` moves from blocks to functions: a thaw of a body no edit
+  touched shares its columns until its first edit, so a pass that ends up changing nothing copies nothing.
 - **Compaction** rebuilds a body without unlinked rows or garbage runs, its rows in block order. It runs when a body is
   frozen and when the garbage passes half of its rows, never per edit.
 - **Provenance** is an id into a per-body pool of `SourceProvenance` objects, consecutive rows with the same object
