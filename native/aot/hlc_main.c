@@ -5,7 +5,7 @@
 #include <hl.h>
 #include <hlmodule.h>
 
-extern const unsigned char hlc_image[];
+extern const unsigned long long hlc_image[]; // the image's bytes as little-endian words
 extern const int hlc_image_size;
 extern void *hlc_functions[];
 extern const int hlc_slot_count;
@@ -105,7 +105,7 @@ int main( int argc, char *argv[] ) {
 	hl_setup.sys_nargs = argc - 1;
 	hl_sys_init();
 	hl_register_thread(&ret);
-	hl_code *code = hl_code_read(hlc_image, hlc_image_size, &error);
+	hl_code *code = hl_code_read((const unsigned char*)hlc_image, hlc_image_size, &error);
 	if( code == NULL ) {
 		fprintf(stderr, "hlc: invalid module image: %s\n", error ? error : "?");
 		return 70;

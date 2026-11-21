@@ -50,9 +50,12 @@ class HlcBuild {
 		// it from. No cross-jumping, where the compiler has the flag (gcc; clang has not): identical calls of different Haxe lines
 		// (throws, most often, also in inlined copies of one function) are not merged into one, which would keep one line and
 		// lose the inlined frames of the others.
+		// Debug information is the line tables and the inline records the stack traces read (`-g1`), not the variables and types
+		// a debugger shows, which are most of its compile time. A development build is not optimized, so it builds quickly.
 		var flags = [
-			"-std=gnu11", "-O2", "-g", "-fwrapv", "-fno-strict-aliasing", "-fno-optimize-sibling-calls", "-w",
-			'-I$directory', '-I$sdk/include'
+			"-std=gnu11", exactFrames ? "-O0" : "-O2", "-g1", "-fwrapv", "-fno-strict-aliasing",
+			"-fno-optimize-sibling-calls",
+			"-w", '-I$directory', '-I$sdk/include'
 		];
 		if (exactFrames)
 			flags.push("-DHLC_EXACT_FRAMES");
@@ -69,8 +72,11 @@ class HlcBuild {
 				if (rebuild || !FileSystem.exists(outputs[index])
 				|| modified(outputs[index]) <= Math.max(modified(sources[index]), headerTime)) index
 		];
+		// The largest first: the build's time is the slowest file's, so it starts at once.
+		var sizes = [for (index in pending) index => FileSystem.stat(sources[index]).size];
+		pending.sort((a, b) -> sizes.get(b) - sizes.get(a));
 		var failures:Array<Null<String>> = [for (_ in pending) null];
-		compiler.core.Parallel.forEach(pending.length, 8, function(item) {
+		compiler.core.Parallel.forEach(pending.length, processorCount(), function(item) {
 			var index = pending[item];
 			var result = ProcessOutputCapture.capture(cCompiler, flags.concat([
 				"-c",
@@ -128,6 +134,20 @@ class HlcBuild {
 		if (result.exitCode != 0)
 			throw new InternalError('C link failed:\n${result.stderr}');
 		return pending.length;
+	}
+
+	/** The processors this process may run on, each a C compile at a time. */
+	static function processorCount():Int {
+		var windows = Sys.getEnv("NUMBER_OF_PROCESSORS");
+		if (windows != null && Std.parseInt(windows) != null)
+			return Std.parseInt(windows);
+		for (command in [["nproc"], ["sysctl", "-n", "hw.ncpu"]]) {
+			var result = try ProcessOutputCapture.capture(command[0], command.slice(1), 0) catch (_:Dynamic) null;
+			var count = result == null || result.exitCode != 0 ? null : Std.parseInt(StringTools.trim(result.stdout));
+			if (count != null && count > 0)
+				return count;
+		}
+		return 4;
 	}
 
 	static function modified(path:String):Float

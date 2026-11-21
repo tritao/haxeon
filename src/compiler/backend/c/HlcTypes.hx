@@ -155,14 +155,12 @@ class HlcTypes {
 	}
 
 	/**
-	 * The struct declarations of every object type: a typedef each, then the bodies, an inline (packed) field's struct before
-	 * the struct that holds it. Fields are flattened from the base down: `hl_get_obj_rt` starts a subclass's fields right after
-	 * its base's last one, with none of the tail padding a nested base struct would add.
+	 * The struct definitions of object types `indices` (each a struct type), an inline (packed) field's struct before the struct
+	 * that holds it, which is then defined too. Fields are flattened from the base down: `hl_get_obj_rt` starts a subclass's
+	 * fields right after its base's last one, with none of the tail padding a nested base struct would add. The structs the
+	 * fields point to need only their typedefs.
 	 */
-	public function structDeclarations(buffer:StringBuf):Void {
-		var objects = [for (index in 0...code.types.length) if (isObject(index)) index];
-		for (index in objects)
-			buffer.add('typedef struct ${structName(index)} ${structName(index)};\n');
+	public function structDefinitions(indices:Array<Int>, buffer:StringBuf):Void {
 		var written:Map<Int, Bool> = [];
 		function write(index:Int):Void {
 			if (written.exists(index))
@@ -179,7 +177,7 @@ class HlcTypes {
 					buffer.add('\t${cType(field.type)} f${field.index}; /* ${field.name} */\n');
 			buffer.add("};\n");
 		}
-		for (index in objects)
+		for (index in indices)
 			write(index);
 	}
 

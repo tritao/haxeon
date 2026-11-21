@@ -19,9 +19,9 @@ typedef HlcFile = {
 }
 
 /**
- * The C sources of one HashLink assembly (docs/design/AOT_BACKEND.md): `hlc.h` with the object structs and function
- * prototypes, one file per Haxe source of the functions, and `image.c` with the module image the runtime builds its types
- * from, the slot table and the layout checks. `code`, `symbols` and `slots` are the assembly's; `program` is the program it
+ * The C sources of one HashLink assembly (docs/design/AOT_BACKEND.md): `hlc.h` with what every file shares, one file per
+ * Haxe source of the functions, each with the declarations it uses, and `image.c` with the module image the runtime builds
+ * its types from, the slot table and the layout checks. `code`, `symbols` and `slots` are the assembly's; `program` is the program it
  * lowered.
  */
 class HlcModule {
@@ -40,6 +40,7 @@ class HlcModule {
 	final slotTypes:Array<Int> = [];
 	final slotNames:Array<String> = [];
 	final cNames:Array<String> = [];
+	final cNameSlots:Map<String, Int> = [];
 	final native:Array<Bool> = [];
 
 	/** The C symbol of each native the program calls directly (by slot), null for those called through the slot table. */
@@ -106,6 +107,8 @@ class HlcModule {
 				cName += "_" + slot;
 			used.set(cName, true);
 			cNames[slot] = cName;
+			if (!native[slot])
+				cNameSlots.set(cName, slot);
 		}
 		globalOffsets = types.globalOffsets();
 	}
@@ -186,7 +189,7 @@ class HlcModule {
 
 	/**
 	 * What a C call of slot `slot` calls: the function itself, a native of the VM or the runtime by its C symbol (declared in
-	 * `hlc.h` under a name of its own, so its C types never meet `hl.h`'s), or another native through the slot table.
+	 * the files that call it under a name of its own, so its C types never meet `hl.h`'s), or another native through the slot table.
 	 */
 	public function functionPointer(slot:Int):String {
 		if (!native[slot])
@@ -287,12 +290,21 @@ class HlcModule {
 		var defined:Map<Int, Bool> = [];
 		var bodies = [for (fn in functions) fn.bodyIn(bodyTypes, builder)];
 		var fileNames = sourceFiles(bodies);
+		// A module's functions are split into files of about FILE_SIZE characters, which compile in parallel: a C compiler's
+		// time grows with a file's functions, and the largest modules would otherwise be the whole build's time.
+		var parts:Map<String, Int> = [];
 		for (index in 0...functions.length) {
-			var body = bodies[index], slot = slots.get(functions[index].name), file = fileNames[index];
+			var body = bodies[index], slot = slots.get(functions[index].name), module = fileNames[index];
+			var part = parts.exists(module) ? parts.get(module) : 1;
+			var file = part == 1 ? module : haxe.io.Path.withoutExtension(module) + '.part$part.c';
 			var buffer = files.get(file);
+			if (buffer != null && buffer.length >= FILE_SIZE) {
+				parts.set(module, ++part);
+				file = haxe.io.Path.withoutExtension(module) + '.part$part.c';
+				buffer = null;
+			}
 			if (buffer == null) {
 				buffer = new StringBuf();
-				buffer.add('#include "hlc.h"\n\n');
 				files.set(file, buffer);
 				fileOrder.push(file);
 			}
@@ -311,10 +323,16 @@ class HlcModule {
 		var result:Array<HlcFile> = [{path: "hlc.h", content: header()}];
 		fileOrder.sort(Reflect.compare);
 		for (file in fileOrder)
-			result.push({path: file, content: files.get(file).toString()});
-		result.push({path: "image.c", content: image()});
+			result.push({path: file, content: withDeclarations(files.get(file).toString())});
+		result.push({path: "image.c", content: withDeclarations(image())});
 		return result;
 	}
+
+	static final INCLUDE = '#include "hlc.h"\n\n';
+	static inline final FILE_SIZE = 600000;
+
+	function withDeclarations(text:String):String
+		return INCLUDE + declarations(text) + text;
 
 	/** Each function's file: the Haxe source most of its rows come from, so functions group by module. */
 	function sourceFiles(bodies:Array<compiler.ir.IrBody>):Array<String> {
@@ -381,31 +399,102 @@ class HlcModule {
 		buffer.add("\tmemcpy(&value,&bits,sizeof(value)); return value;\n}\n\n");
 		if (inlineAllocation)
 			buffer.add(ALLOCATION_HELPER);
-		types.structDeclarations(buffer);
-		buffer.add("\n");
-		for (slot in 0...slotTypes.length)
-			if (slotTypes[slot] >= 0 && !native[slot])
-				buffer.add('HLC_FUNCTION ${prototype(slot)}; /* ${slotName(slot)} */\n');
-		buffer.add("\n#if defined(__GNUC__)\n#define HLC_STRING2(x) #x\n#define HLC_STRING(x) HLC_STRING2(x)\n");
+		buffer.add("#if defined(__GNUC__)\n#define HLC_STRING2(x) #x\n#define HLC_STRING(x) HLC_STRING2(x)\n");
 		// Weak where the linker allows it: a native the libraries lack is the loader's error at start-up, as for the JIT, not a
 		// link error.
 		buffer.add("#if defined(__ELF__)\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name) __attribute__((weak))\n");
-		buffer.add("#else\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name)\n#endif\n#endif\n");
-		for (slot in 0...slotTypes.length)
-			if (slotTypes[slot] >= 0 && native[slot] && nativeSymbols[slot] != null) {
-				var signature = types.signature(slotTypes[slot]);
-				var result = types.cType(signature.result),
-					arguments = [for (type in signature.arguments) types.cType(type)].join(",");
-				if (arguments == "")
-					arguments = "void";
-				buffer.add('#if defined(__GNUC__)\nextern $result hlc_native_$slot($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n');
-				buffer.add('#else\n#define hlc_native_$slot (($result (*)($arguments))hlc_slots[$slot])\n#endif\n');
-			}
-		if (readsValueArrays)
-			valueArrayHelper(buffer);
+		buffer.add("#else\n#define HLC_SYMBOL(name) __asm__(HLC_STRING(__USER_LABEL_PREFIX__) name)\n#endif\n#endif\n\n");
+		if (readsValueArrays) {
+			var helper = new StringBuf();
+			valueArrayHelper(helper);
+			var text = helper.toString();
+			buffer.add(declarations(text));
+			buffer.add(text);
+		}
 		buffer.add("\n#endif\n");
 		return buffer.toString();
 	}
+
+	/** A native the program calls by its C symbol, under a name of its own (`functionPointer`). */
+	function nativeDeclaration(slot:Int, buffer:StringBuf):Void {
+		var signature = types.signature(slotTypes[slot]);
+		var result = types.cType(signature.result),
+			arguments = [for (type in signature.arguments) types.cType(type)].join(",");
+		if (arguments == "")
+			arguments = "void";
+		buffer.add('#if defined(__GNUC__)\nextern $result hlc_native_$slot($arguments) HLC_SYMBOL("${nativeSymbols[slot]}");\n');
+		buffer.add('#else\n#define hlc_native_$slot (($result (*)($arguments))hlc_slots[$slot])\n#endif\n');
+	}
+
+	/**
+	 * The declarations C text `text` uses, which go before it in its file: the typedefs and definitions of the structs it names,
+	 * the natives it calls and the prototypes of the generated functions it names. Each file declares only what it uses, so a
+	 * file is not compiled again when a declaration it does not use changes, and no file parses the whole program's.
+	 */
+	function declarations(text:String):String {
+		var functions:Array<Int> = [], natives:Array<Int> = [];
+		for (name in identifiers(text, "hx_")) {
+			var slot = cNameSlots.get(name);
+			if (slot != null)
+				functions.push(slot);
+		}
+		for (name in identifiers(text, "hlc_native_")) {
+			var slot = Std.parseInt(name.substr("hlc_native_".length));
+			if (slot != null && slot < slotTypes.length && native[slot] && nativeSymbols[slot] != null)
+				natives.push(slot);
+		}
+		functions.sort((a, b) -> a - b);
+		natives.sort((a, b) -> a - b);
+		var calls = new StringBuf();
+		for (slot in natives)
+			nativeDeclaration(slot, calls);
+		for (slot in functions)
+			calls.add('HLC_FUNCTION ${prototype(slot)}; /* ${slotName(slot)} */\n');
+		var callText = calls.toString(), definitions = new StringBuf();
+		types.structDefinitions(structsNamed(text + callText), definitions);
+		var definitionText = definitions.toString(), buffer = new StringBuf();
+		for (index in structsNamed(definitionText + text + callText))
+			buffer.add('typedef struct ${types.structName(index)} ${types.structName(index)};\n');
+		buffer.add(definitionText);
+		buffer.add(callText);
+		buffer.add("\n");
+		return buffer.toString();
+	}
+
+	/** The struct types `text` names, ascending. */
+	function structsNamed(text:String):Array<Int> {
+		var indices:Array<Int> = [];
+		for (name in identifiers(text, "hlc_obj")) {
+			var index = Std.parseInt(name.substr("hlc_obj".length));
+			if (index != null && index < code.types.length && types.isObject(index))
+				indices.push(index);
+		}
+		indices.sort((a, b) -> a - b);
+		return indices;
+	}
+
+	/** The distinct C identifiers of `text` that start with `prefix`. */
+	static function identifiers(text:String, prefix:String):Array<String> {
+		var found:Map<String, Bool> = [], result:Array<String> = [], at = text.indexOf(prefix);
+		while (at >= 0) {
+			var end = at + prefix.length;
+			if (at == 0 || !identifierCode(StringTools.fastCodeAt(text, at - 1))) {
+				while (end < text.length && identifierCode(StringTools.fastCodeAt(text, end)))
+					end++;
+				var name = text.substring(at, end);
+				if (!found.exists(name)) {
+					found.set(name, true);
+					result.push(name);
+				}
+			}
+			at = text.indexOf(prefix, end);
+		}
+		return result;
+	}
+
+	static inline function identifierCode(code:Int):Bool
+		return (code >= "a".code && code <= "z".code) || (code >= "A".code && code <= "Z".code)
+			|| (code >= "0".code && code <= "9".code) || code == "_".code;
 
 	/**
 	 * `hlc_new`: an object allocated from the thread's allocation buffer as the JIT's inline allocation does, by the
@@ -580,14 +669,28 @@ class HlcModule {
 		}];
 		var bytes = HlWriter.encode(stubbed).flatten();
 		var buffer = new StringBuf();
-		buffer.add('#include "hlc.h"\n\n');
+		// As little-endian 64-bit words, the byte order of every HashLink target: a C compiler reads an eighth of the numbers it
+		// would read as bytes.
 		buffer.add('const int hlc_image_size = ${bytes.length};\n');
-		buffer.add("const unsigned char hlc_image[] = {");
-		for (index in 0...bytes.length) {
-			if (index % 32 == 0)
+		buffer.add("const unsigned long long hlc_image[] = {");
+		var index = 0;
+		while (index < bytes.length) {
+			if (index % 128 == 0)
 				buffer.add("\n");
-			buffer.add(bytes.get(index));
+			var word = new StringBuf(), started = false;
+			var byte = 7;
+			while (byte >= 0) {
+				var value = index + byte < bytes.length ? bytes.get(index + byte) : 0;
+				if (started || value != 0 || byte == 0) {
+					word.add(started ? StringTools.hex(value, 2) : StringTools.hex(value));
+					started = true;
+				}
+				byte--;
+			}
+			buffer.add("0x");
+			buffer.add(word.toString());
 			buffer.add(",");
+			index += 8;
 		}
 		buffer.add("0};\n\n");
 		buffer.add('const int hlc_slot_count = ${slotTypes.length};\n');

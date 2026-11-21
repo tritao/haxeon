@@ -76,14 +76,21 @@ failure, never silent corruption.
 
 The sources go to `OUTPUT.c/`:
 
-- `hlc.h`: the one generated header: `#include <hl.h>`, a struct per object type (fields flattened from the base down, as
-  `hl_get_obj_rt` lays them out with no tail padding between a base and its subclass, `f<index>` by HashLink field
-  index), and a prototype per function.
+- `hlc.h`: what every file shares, and only that: `#include <hl.h>`, the section and inlining macros, the runtime
+  helpers (`hlc_new`, the value array view).
 - One `.c` file per Haxe source file (each function goes with the source most of its rows come from, so inlined code
   does not move it), so C builds run in parallel and an edit recompiles only the files whose text changed: the writer
   leaves an unchanged file untouched, so its timestamp stays. Measured on the compiler with `hl2c`, per-module files
-  build in a fraction of a unity build's time and memory.
-- `image.c`: the module image, the slot table (function pointers by slot), and the layouts to check.
+  build in a fraction of a unity build's time and memory. A module whose C passes about 600 KB continues in
+  `Module.part2.c` and so on: a C compiler's time grows with a file's functions, and the largest modules were otherwise
+  the build's whole time. Each file starts with the declarations its text uses, found by its identifiers: the typedefs
+  and definitions of the structs it names (a struct per object type, fields flattened from the base down, as
+  `hl_get_obj_rt` lays them out with no tail padding between a base and its subclass, `f<index>` by HashLink field
+  index), the natives it calls and the prototypes of the functions it names. So no file parses the whole program's
+  declarations (one header of all of them was 3 MB, parsed by each of 517 files), and a declaration's change rebuilds
+  only the files that use it.
+- `image.c`: the module image (as little-endian 64-bit words, which a C compiler reads far faster than bytes), the slot
+  table (function pointers by slot), the generated functions by C name, and the layouts to check.
 - `main`: the SDK's `src/hlc_main.c` (`native/aot/hlc_main.c` in the repository), compiled with them.
 
 Functions are named from their Haxe names (`hx_Point_sum`), deduplicated with the slot number, so names are stable across
@@ -99,7 +106,7 @@ builds and readable in debuggers, `perf` and crash backtraces. Values are `v<id>
   value-class method is a direct call. Virtual calls load the method from the type's prototype (`vobj_proto`), interface
   calls from the virtual's field table with the `hl_dyn_call_obj` fallback, as the JIT does.
 - **Natives** of the VM (`std`, `hl_*`) and of the Haxeon runtime (`haxeon_runtime`, `realtime_*`) are direct C calls, by
-  the convention of their libraries' `HL_NAME`: each is declared in `hlc.h` under a name of its own bound to the symbol
+  the convention of their libraries' `HL_NAME`: each is declared in the files that call it under a name of its own bound to the symbol
   (`extern ... hlc_native_17(...) __asm__("hl_alloc_array")`), so its C types never meet `hl.h`'s declaration. The loader
   still resolves every native by its `hlp_` symbol and checks its signature, as for the JIT. Natives of other libraries,
   loaded at run time, and every native where the compiler has no asm labels, are called through the slot table the loader
@@ -223,9 +230,10 @@ the C sources into the directory `--output` names plus `.c` (`out/main.c/`). The
 request (`CompileOptions.cCompiler`, `--c-compiler=cc`), with the SDK it links against (`CompileOptions.cSdk`,
 `--c-sdk=DIR`: the native build's `hlc-sdk` directory, made by the `haxeon-hlc-sdk` target, with the runtime headers in
 `include/`, `libhl.a` and `libffi.a` in `lib/` and the entry point in `src/`); with both set, the driver compiles each C
-file that changed (in parallel, `-O2 -g -fwrapv -fno-strict-aliasing -fno-optimize-sibling-calls`, plus `-DHLC_EXACT_FRAMES` in a
-development build: see Debug information; Haxe's `Int` wraps, and objects are read through
-each other's structs), links the executable at `--output` with the whole VM library (the loader resolves natives by
+file that changed (as many at once as there are processors, the largest first; `-O2 -g1 -fwrapv -fno-strict-aliasing
+-fno-optimize-sibling-calls`, in a development build `-O0 -g1 ... -DHLC_EXACT_FRAMES`: see Debug information; Haxe's
+`Int` wraps, and objects are read through each other's structs; `-g1` keeps the line tables and inline records the stack
+traces read and leaves out the variables and types, most of the debug information's compile time), links the executable at `--output` with the whole VM library (the loader resolves natives by
 their `hlp_` symbols in the executable itself), and reports the C compiler's diagnostics as a compile error. Neither is read from the environment or from defines. They change
 no IR or C text, so `CompileOptions.key` leaves them out.
 
@@ -317,5 +325,25 @@ predates the scalar-valued maps of the fork and of `origin/main`, so the box cou
 million scalar box requests in a self-compile, nearly all served by the shared Bool and small-Int boxes): the fork pin
 has the new maps API, which this base does not use.
 
-Next: stack traces on macOS and Windows; a `libhl` without the JIT; the type tables as static data; why the AOT build
-allocates more; the self-compile against `origin/main`'s map changes.
+Stack traces on Windows: programs built with MinGW have the JIT's traces (see Debug information), checked by
+cross-building the six stack programs and running them under wine in both build modes; MSVC and macOS are designed there
+and take the no-frames path until built.
+
+Build speed. The compiler's C build took about two minutes, of which the Haxe compile is about 27 s; the C compile was
+the rest, at about 630 s of processor time with a few files over 15 s each. Changes: each file declares only what it uses
+(the 3 MB header of every declaration had been parsed by each of 517 files); modules over about 600 KB of C are split
+into parts; files compile as many at once as there are processors, the largest first; `-g1` instead of `-g` (the line
+tables and inline records are all the stack traces read; the six stack programs pass in release, with `--no-inline` and
+with clang); the module image as 64-bit words. And the largest gain was outside the C: HashLink started each compile with
+`fork`, which from the 2.5 GB compiler process copied its page tables and then made it fault on each page it wrote, so
+the C compiles ran one to three at a time for half the build; the fork's `hl_process_run` now starts commands with
+`posix_spawn` on Linux and macOS, falling back to `fork` where it cannot. Measured (16 processors, other work at a load of
+about 5 to 14): a clean release build 110 s before, 64 s after (the C part from about 83 s to about 36 s, all 16 compiles
+busy throughout); a build after editing one function body 26 s before and 28 s after, the Haxe compile and one C file both
+times; a clean development build, now `-O0`, 40 s, whose compiler self-compiles in 15.3 s instead of 9.5 s, with the same
+output. Per-function `optimize("O1")` on the largest functions was measured and gains nothing (the time is spread over a
+file's functions, not one function's size), so it is not done. A declaration change still rebuilds more files than use it
+when it renumbers types or slots, as struct and native names are indices; stable names would fix that.
+
+Next: macOS and MSVC stack traces when they can be built; the type tables as static data; why the AOT build allocates
+more; the self-compile against `origin/main`'s map changes.
