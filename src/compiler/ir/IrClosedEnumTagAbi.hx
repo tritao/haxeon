@@ -5,8 +5,8 @@ import compiler.ir.IrFunction;
 
 /**
  * Project an unobserved nominal tag to its integer ABI, including ordinary integer arrays. On IR bodies
- * (docs/design/IR_CORE_COLUMNS.md, migration): where it runs (release builds), the first stage over bodies, so the conversion
- * point, where each function is encoded. A function's types change in place (`setValueType`, `setResult`).
+ * (docs/design/IR_CORE_COLUMNS.md, migration), in release builds. A function's types change in place (`setValueType`,
+ * `setResult`).
  */
 class IrClosedEnumTagAbi {
 	final closed:Map<String, Bool>;

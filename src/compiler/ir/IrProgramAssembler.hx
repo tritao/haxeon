@@ -2,7 +2,7 @@ package compiler.ir;
 
 import compiler.core.InternalError;
 import compiler.types.TypedAst.TypedFunctionRole;
-import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
+import compiler.ir.IrInliner.IrInlineCache;
 import compiler.runtime.RuntimeType;
 import compiler.types.Type.NominalKind;
 import compiler.types.Type.CompilerType;
@@ -43,7 +43,7 @@ class IrProgramAssembler {
 			enumsFrom(generator, typed),
 			staticFieldsFrom(generator, typed), staticInitializersFrom(generator, typed, null, functions), null,
 			cNativesFrom(generator, typed),
-			reflectableObjectsFrom(typed));
+			reflectableObjectsFrom(typed), new IrInlineCache());
 	}
 
 	/** Objects `Reflect` may inspect by field name: classes and anonymous records, not closure storage. */
@@ -589,7 +589,7 @@ class IrProgramAssembler {
 			?interfaces:Array<IrInterface>, ?enums:Array<IrEnum>, ?staticFields:Array<IrStaticField>,
 			?staticInitializers:Array<IrFunction>,
 			?entryPoint:String, ?cNatives:Array<IrCNative>, ?reflectableObjects:Array<String>,
-			?staticChecks:IrStaticCheckCache,
+			?inlineCache:IrInlineCache,
 			?valueTarget:compiler.ir.IrValueLaneLayout.IrValueLaneTarget, ?exportedFunctions:Array<String>,
 			pruneFromEntry = false,
 			?canonicalObjects:Array<IrObject>, ?options:compiler.CompileOptions,
@@ -617,7 +617,7 @@ class IrProgramAssembler {
 		context.meter = meter;
 		context.entryPoint = entryPoint;
 		context.staticInitializers = staticInitializers;
-		context.staticChecks = staticChecks;
+		context.inlineCache = inlineCache;
 		context.exportedFunctions = exportedFunctions;
 		context.canonicalObjects = canonicalObjects;
 		context.pruneFromEntry = pruneFromEntry;

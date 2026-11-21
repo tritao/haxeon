@@ -1509,7 +1509,7 @@ class FrontendCompilation {
 			ir = IrProgramAssembler.assemble(generator, cached, irNatives, objects, build.interfaces,
 				build.enums, build.staticFields,
 				build.initializers, entryPoint, irCNatives, build.reflectable,
-				context.state.inlineCache.staticChecks, context.valueArrayTarget(),
+				context.state.inlineCache, context.valueArrayTarget(),
 				context.exportedFunctions(), !context.livePatching && !context.isWasmTarget()
 				&& context.options.earlyPrune, [for (object in objects) {
 					if (object.isValue && object.nativeLayout != null) {

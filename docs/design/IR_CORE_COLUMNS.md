@@ -107,12 +107,12 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
    version is gone. *Scalar arguments reads bodies*, and splits value joins itself first (the value phi run that preceded
    it on every target that runs it). Its clones are new bodies (`IrBodyBuilder.startFrom` with new arguments), whose calls it
    redirects in place, deciding each on the body before any row changes. *Value constructors reads bodies*, expanding a
-   branching constructor with the inliner's expansion (`IrBodyCallExpansion`). *The value-array rewrite reads bodies*, and is
-   the encode point on every target: a function's rewrites edit a copy of its body, so the originals its place methods clone
+   branching constructor with the inliner's expansion (`IrBodyCallExpansion`). *The value-array rewrite reads bodies*: a function's rewrites edit a copy of its body, so the originals its place methods clone
    (still from their decoding) stay as they were; the helpers it generates are built as functions and encoded, and its
    boundary helpers are expanded with `IrBodyCallExpansion`. *The closed enum tag ABI reads bodies* (release builds), changing
-   value types and constants in place, and is the encode point where it runs. `IrEnumEscapeReach` reads a function's body when
-   it has one and its objects before the encode point.
+   value types and constants in place. `IrEnumEscapeReach` reads a function's body when it has one and its objects before the
+   encode point. *The assembly's enum tag escapes read bodies* (the target stage's walk, `escapeBodies`), and are the encode
+   point on every target, the end of assembly.
    A pass that changes how a type is represented edits the value types and the result in place (`setValueType`,
    `setResult`).
 5. The generator and `IrLocalsBuilder` emit bodies, with types given ids where they are lowered: no conversion is left.
@@ -123,7 +123,7 @@ encode and a decode per call. Each step leaves the output byte-identical, so the
 ## Session caching model
 
 What a compile that keeps a session holds between builds, from the encode point to the backends, as the migration stands
-(the encode point is the closed enum tag ABI in release builds, else the value-array rewrite, on every target). Every body a cache holds is
+(the encode point is the assembly's last stage, its enum tag escapes, on every target). Every body a cache holds is
 frozen; a body no cache holds is the stages' own (`ofOwnedBody`) and exists only in a one-shot compile. Keys are function
 names; reuse is by object identity of the `IrFunction` an entry was made from.
 

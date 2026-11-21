@@ -148,9 +148,8 @@ private class ValueArrayFunctionIndex {
 
 /**
  * Assemble the per-shape lowering after mutable places have been marked by the frontend. On IR bodies
- * (docs/design/IR_CORE_COLUMNS.md, migration): the first stage over bodies on every target, so the conversion point, where each
- * function is encoded. The rewrites of a function edit a copy of its body, so the originals a place method clones stay as they
- * were; the helpers it generates are built as functions and encoded.
+ * (docs/design/IR_CORE_COLUMNS.md, migration). The rewrites of a function edit a copy of its body, so the originals a place
+ * method clones stay as they were; the helpers it generates are built as functions and encoded.
  */
 class IrValueArrayProgramRewrite {
 	/**

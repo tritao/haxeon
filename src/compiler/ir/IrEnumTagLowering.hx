@@ -372,7 +372,8 @@ class IrEnumTagLowering {
 	}
 
 	/**
-	 * `escapes` on bodies, for the pipeline's last check before the inliner: each function is read as its body (`bodyIn` with
+	 * `escapes` on bodies, at the end of assembly (the conversion point, docs/design/IR_CORE_COLUMNS.md) and as the pipeline's
+	 * last check before the inliner: each function is read as its body (`bodyIn` with
 	 * `types`), and one that changes becomes its edited body: a frozen copy when a session keeps the stage's functions
 	 * (`retained`), else the body edited in place. A function nothing changes stays the same object.
 	 */

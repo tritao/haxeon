@@ -2,7 +2,6 @@ package compiler.ir;
 
 import compiler.ir.Ir.IrObject;
 import compiler.ir.IrInliner.IrInlineCache;
-import compiler.ir.IrStaticNullChecks.IrStaticCheckCache;
 import compiler.ir.IrValueLaneLayout.IrValueLaneTarget;
 import compiler.ir.TargetProfile.TargetKind;
 
@@ -19,7 +18,6 @@ class IrPipelineContext {
 	// Assembly (`IrPipeline.assembly`).
 	public var entryPoint:Null<String> = null;
 	public var staticInitializers:Null<Array<IrFunction>> = null;
-	public var staticChecks:Null<IrStaticCheckCache> = null;
 	public var exportedFunctions:Null<Array<String>> = null;
 	public var canonicalObjects:Null<Array<IrObject>> = null;
 

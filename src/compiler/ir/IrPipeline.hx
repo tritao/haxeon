@@ -381,7 +381,9 @@ class IrPipeline {
 	}
 
 	static function staticNullChecks(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		assembly.functions = IrStaticNullChecks.run(assembly.functions, assembly.objects, context.staticChecks);
+		var cache = context.inlineCache;
+		assembly.functions = IrStaticNullChecks.run(assembly.functions, assembly.objects,
+			cache == null ? null : cache.staticChecks);
 		return assembly;
 	}
 
@@ -444,28 +446,31 @@ class IrPipeline {
 		return assembly;
 	}
 
+	/**
+	 * The first stage over bodies: the conversion point (docs/design/IR_CORE_COLUMNS.md, migration), where each function is
+	 * encoded.
+	 */
 	static function assemblyEnumTagEscapes(assembly:IrAssembly, context:IrPipelineContext):IrAssembly {
-		IrEnumTagLowering.escapes(assembly.program);
+		var program = assembly.program, retained = context.options.keepSession;
+		if (program == null)
+			throw new InternalError("The enum tag escapes run on the finished program");
+		stableBodySources(program, context);
+		IrEnumTagLowering.escapeBodies(program, bodyTypes(context), context.passScratch.bodyBuilder, retained);
+		if (!retained)
+			for (fn in program.functions)
+				fn.releaseDecoded();
 		return assembly;
 	}
 
 	// Target stages.
 
-	/**
-	 * The first stage over bodies where it runs (release builds): the conversion point (docs/design/IR_CORE_COLUMNS.md, migration),
-	 * where each function is encoded.
-	 */
 	static function closedEnumTagAbi(program:IrProgram, context:IrPipelineContext):IrProgram {
-		stableBodySources(program, context);
 		return IrClosedEnumTagAbi.run(program, context.reflectable, bodyTypes(context), context.passScratch,
 			context.options.keepSession);
 	}
 
-	/** The conversion point where `closed-enum-tag-abi` does not run (see there). */
 	static function valueArrayRewrite(program:IrProgram, context:IrPipelineContext):IrProgram {
 		var laneTarget = context.laneTarget;
-		if (!closesEnumTags(program, context))
-			stableBodySources(program, context);
 		var retained = context.options.keepSession;
 		IrValueArrayProgramRewrite.rewriteAll(program, laneTarget == IrValueLaneTarget.HashLink ? 64 : 32, laneTarget,
 			bodyTypes(context), context.passScratch, retained, retained ? context.inlineCache : null);
